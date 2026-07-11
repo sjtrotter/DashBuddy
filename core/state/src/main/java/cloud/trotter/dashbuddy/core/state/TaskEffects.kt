@@ -11,6 +11,7 @@ import cloud.trotter.dashbuddy.domain.pipeline.TransitionTrigger
 import cloud.trotter.dashbuddy.domain.state.Flow
 import cloud.trotter.dashbuddy.domain.state.ParsedFields
 import cloud.trotter.dashbuddy.domain.state.PickupActivity
+import cloud.trotter.dashbuddy.domain.state.Platform
 import cloud.trotter.dashbuddy.domain.state.PlatformRegion
 import cloud.trotter.dashbuddy.domain.state.Task
 import cloud.trotter.dashbuddy.domain.state.TaskPhase
@@ -285,6 +286,9 @@ internal fun EffectMap.pickupConfirmSweepEffects(
         addAll(
             pickupConfirmedEffects(
                 sessionId, task, obs,
+                // #588: the region owns the platform — a shop's measured pace folds into THIS
+                // platform's learned rate, never a shared global.
+                platform = region.platform,
                 confirmedAt = task.completedAt ?: obs.timestamp,
                 jobOfferHashes = jobOfferHashes,
             ),
@@ -303,6 +307,7 @@ private fun EffectMap.pickupConfirmedEffects(
     sessionId: String?,
     prevTask: Task,
     obs: Observation,
+    platform: Platform,
     confirmedAt: Long = obs.timestamp,
     jobOfferHashes: List<String> = emptyList(),
 ): List<AppEffect> = buildList {
@@ -322,11 +327,17 @@ private fun EffectMap.pickupConfirmedEffects(
     )
     // #556: a completed SHOP pickup feeds the learned items/min. In-store time is measured
     // arrived→confirmed (the 0.8/min seed basis); the handler floors out noise.
+    // Residual (pre-existing #556 exposure, traced during #588 review): a #736-style unassigned
+    // shop (a few items measured, then unassign) can still fold one garbage pace sample here once
+    // the close-out sweep (pickupConfirmSweepEffects, above) fires for a job that never reached
+    // dropoff. Mitigated today by MIN_SHOP_SAMPLES=5 diluting a single bad sample, and expected to
+    // tighten once #736's unassignedAt guard lands — see #736.
     val shopItems = prevTask.itemsShopped ?: 0
     val shopArrivedAt = prevTask.arrivedAt
     if (prevTask.activity == PickupActivity.SHOPPING && shopItems > 0 && shopArrivedAt != null) {
         add(
             AppEffect.RecordShopRate(
+                platform = platform,
                 itemsShopped = shopItems,
                 shopDurationMs = confirmedAt - shopArrivedAt,
                 storeName = prevTask.storeName,

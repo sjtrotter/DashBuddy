@@ -191,4 +191,25 @@ class AnalyticsDailyEarningsTest {
         assertTrue(repo.dailyEarnings(AnalyticsPeriod.TODAY, zone).first().isEmpty())
         assertTrue(repo.dailyEarnings(AnalyticsPeriod.LIFETIME, zone).first().isEmpty())
     }
+
+    /**
+     * #660 piece 1 (the #675 review's flagged follow-up site): a `sessionId IS NULL` delivery has no
+     * session start to bucket the per-day chart on, so it lands on the LOCAL DAY of its own
+     * `completedAt` and ADDS to that day's bar alongside any real session gross — never silently
+     * dropped from the chart the way it used to be.
+     */
+    @Test
+    fun `a null-session delivery adds to its own completedAt day's bar (#660)`() = runBlocking {
+        val base = weekStart()
+        // A real dash on Monday (day 0), reported 20.
+        dao.upsertSession(session("M", base, reportedEarnings = 20.0))
+        // An orphan delivery (no session at all) completing on Wednesday (day 2), pay 8.
+        val wednesday = Instant.ofEpochMilli(base).atZone(zone).toLocalDate().plusDays(2)
+        val wednesdayNoon = wednesday.atTime(12, 0).atZone(zone).toInstant().toEpochMilli()
+        dao.upsertDelivery(delivery(99, sessionId = null, completedAt = wednesdayNoon, pay = 8.0))
+
+        val days = repo.dailyEarnings(AnalyticsPeriod.THIS_WEEK, zone).first()
+        assertEquals("Monday keeps its session gross", 20.0, days[0].gross, 1e-9)
+        assertEquals("Wednesday gets the orphan delivery's own-day gross", 8.0, days[2].gross, 1e-9)
+    }
 }

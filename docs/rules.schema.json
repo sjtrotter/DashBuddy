@@ -66,6 +66,10 @@
         "state": { "$ref": "#/$defs/stateBlock" },
         "bind": { "$ref": "#/$defs/bindBlock" },
         "redact": { "$ref": "#/$defs/redactBlock" },
+        "intent": {
+          "type": "string",
+          "description": "Output intent string. Auto-derived from rule ID (RuleCompiler.deriveTargetFromId) if omitted."
+        },
         "reject": {
           "type": "array",
           "description": "Phase 2: Fail-fast negative checks. Any match skips this rule/branch.",
@@ -117,13 +121,17 @@
           "type": "array",
           "items": { "$ref": "#/$defs/effectEntry" }
         },
-        "transitionOverrides": { "$ref": "#/$defs/transitionOverrides" }
+        "transitionOverrides": { "$ref": "#/$defs/transitionOverrides" },
+        "intent": {
+          "type": "string",
+          "description": "Output intent string for this branch. All branches of a rule derive the SAME name from the shared rule id by default (RuleCompiler.deriveTargetFromId reads the rule id, not the branch) — set 'intent' explicitly when a rule's branches represent genuinely different outputs (#241)."
+        }
       }
     },
 
     "clickBranchObject": {
       "type": "object",
-      "description": "A single branch within a multi-branch click rule.",
+      "description": "A single branch within a multi-branch click rule. No 'bind' property: RuleCompiler compiles bindings for SCREEN rules only, so a bind block on a click branch would silently have no effect (#241). No 'parse' property either: RuleCompiler's CLICK branch always compiles the parser to an empty field map, so a parse block on a click branch is silently inert (#241).",
       "required": ["require"],
       "properties": {
         "screenIs": {
@@ -134,13 +142,12 @@
           "type": "string",
           "description": "Output intent string for this branch."
         },
-        "bind": { "$ref": "#/$defs/bindBlock" },
+        "state": { "$ref": "#/$defs/stateBlock" },
         "reject": {
           "type": "array",
           "items": { "$ref": "#/$defs/nodePredicate" }
         },
         "require": { "$ref": "#/$defs/nodePredicate" },
-        "parse": { "$ref": "#/$defs/parseBlock" },
         "validate": {
           "type": "array",
           "items": { "$ref": "#/$defs/validateEntry" }
@@ -183,7 +190,7 @@
 
     "clickRule": {
       "type": "object",
-      "description": "A click classification rule. Predicate operates on the single tapped UiNode. Supports the full pipeline: bind -> reject -> require -> parse -> validate -> effects.",
+      "description": "A click classification rule. Predicate operates on the single tapped UiNode. Supports reject -> require -> validate -> effects. No 'bind' property: RuleCompiler compiles bindings for SCREEN rules only, so a bind block here would silently have no effect (#241). No 'parse' property either: RuleCompiler's CLICK branch always compiles the parser to an empty field map (RuleCompiler.kt), so a parse block on a click rule is silently inert (#241).",
       "required": ["id", "priority"],
       "properties": {
         "id": {
@@ -212,7 +219,7 @@
           "type": "string",
           "description": "Output intent string. Auto-derived from rule ID if omitted."
         },
-        "bind": { "$ref": "#/$defs/bindBlock" },
+        "state": { "$ref": "#/$defs/stateBlock" },
         "reject": {
           "type": "array",
           "description": "Fail-fast negative checks. Any match skips this rule/branch.",
@@ -222,7 +229,6 @@
           "$ref": "#/$defs/nodePredicate",
           "description": "Positive match condition. Must pass for the rule to match."
         },
-        "parse": { "$ref": "#/$defs/parseBlock" },
         "validate": {
           "type": "array",
           "items": { "$ref": "#/$defs/validateEntry" }
@@ -1368,11 +1374,15 @@
         },
         {
           "required": ["hasNoId"],
-          "properties": { "hasNoId": { "type": "boolean", "description": "Node has no viewIdResourceName.", "const": true } }
+          "properties": { "hasNoId": { "type": "boolean", "description": "viewIdResourceName is null/blank iff this equals true; false matches a node that DOES have an id (the value is honored both ways, not coerced to true, #241)." } }
         },
         {
           "required": ["hasText"],
           "properties": { "hasText": { "type": "string", "description": "Exact text match (case-insensitive)." } }
+        },
+        {
+          "required": ["hasAnyText"],
+          "properties": { "hasAnyText": { "type": "string", "description": "Some text anywhere in this subtree (this node or any descendant's text/contentDescription) equals this value, case-insensitive — for buttons whose visible label lives in a nested child node." } }
         },
         {
           "required": ["hasTextCaseSensitive"],
@@ -1416,23 +1426,23 @@
         },
         {
           "required": ["isClickable"],
-          "properties": { "isClickable": { "type": "boolean", "const": true } }
+          "properties": { "isClickable": { "type": "boolean", "description": "Node's clickable state equals this value; false is honored (matches non-clickable nodes), not coerced to true (#241)." } }
         },
         {
           "required": ["isEnabled"],
-          "properties": { "isEnabled": { "type": "boolean", "const": true } }
+          "properties": { "isEnabled": { "type": "boolean", "description": "Node's enabled state equals this value." } }
         },
         {
           "required": ["isChecked"],
-          "properties": { "isChecked": { "type": "boolean", "const": true } }
+          "properties": { "isChecked": { "type": "boolean", "description": "Node's checked state equals this value." } }
         },
         {
           "required": ["hasChildren"],
-          "properties": { "hasChildren": { "type": "boolean", "const": true } }
+          "properties": { "hasChildren": { "type": "boolean", "description": "Node has at least one child iff this value; false matches childless nodes." } }
         },
         {
           "required": ["isLeaf"],
-          "properties": { "isLeaf": { "type": "boolean", "const": true } }
+          "properties": { "isLeaf": { "type": "boolean", "description": "Node has no children iff this value." } }
         },
         {
           "required": ["all"],

@@ -1181,6 +1181,18 @@
         "shape": null,
         "fields": {}
     },
+    "dropoff_multi_order_confirm/gopuff_multi_order_confirm.json": {
+        "ruleId": "doordash.screen.dropoff_multi_order_confirm",
+        "intent": "dropoff_multi_order_confirm",
+        "shape": null,
+        "fields": {}
+    },
+    "dropoff_multi_order_confirm/sprouts_multi_order_confirm.json": {
+        "ruleId": "doordash.screen.dropoff_multi_order_confirm",
+        "intent": "dropoff_multi_order_confirm",
+        "shape": null,
+        "fields": {}
+    },
     "dropoff_navigation/20260128_201025_438_NAVIGATION_VIEW_TO_DROP_OFF.json": {
         "ruleId": "doordash.screen.dropoff_navigation",
         "intent": "dropoff_navigation",

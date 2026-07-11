@@ -3,6 +3,7 @@ package cloud.trotter.dashbuddy.core.pipeline.rules
 import cloud.trotter.dashbuddy.domain.capture.schema.UiNodeSchema
 import cloud.trotter.dashbuddy.domain.model.accessibility.UiNode
 import cloud.trotter.dashbuddy.domain.model.notification.RawNotificationData
+import cloud.trotter.dashbuddy.test.util.SnapshotRedactor
 import cloud.trotter.dashbuddy.test.util.TestResourceLoader
 import cloud.trotter.dashbuddy.test.util.TestRulesetFactory
 import kotlinx.serialization.json.Json
@@ -133,6 +134,126 @@ class CaptureRedactionCorpusTest {
             "marker kept, address masked",
             Regex("""Deliver to door of \[redacted:[0-9a-f]{4}\]""").containsMatchIn(masked),
         )
+    }
+
+    // =========================================================================
+    // #501 — the id-less first-name + last-initial customer-name shape. The
+    // adversarial-review pledge finding: the runtime redact fail-OPEN on common
+    // name shapes (accents, interior caps, hyphen/apostrophe, ALL-CAPS, trailing
+    // space), and the corpus was scrubbed by a DIVERGENT (case-sensitive, trimmed)
+    // masker. FIX 1c (SSOT parity), FIX 2 (injected-synthetic masking), FIX 4
+    // (committed-corpus bare-name guard).
+    // =========================================================================
+
+    /** Every `hasTextMatchesRegex` string value anywhere inside [element]. */
+    private fun collectRegexes(
+        element: kotlinx.serialization.json.JsonElement,
+        out: MutableList<String>,
+    ) {
+        when (element) {
+            is kotlinx.serialization.json.JsonObject -> element.forEach { (k, v) ->
+                if (k == "hasTextMatchesRegex" && v is kotlinx.serialization.json.JsonPrimitive && v.isString) {
+                    out += v.content
+                } else {
+                    collectRegexes(v, out)
+                }
+            }
+            is kotlinx.serialization.json.JsonArray -> element.forEach { collectRegexes(it, out) }
+            else -> {}
+        }
+    }
+
+    /** The `hasTextMatchesRegex` strings in a screen rule's `redact` block (generated asset). */
+    private fun ruleRedactRegexes(ruleId: String): List<String> {
+        val root = Json.parseToJsonElement(File(rulesDir, "doordash.json").readText()).jsonObject
+        val screen = root["screens"]!!.jsonArray.first {
+            it.jsonObject["id"]?.jsonPrimitive?.content == ruleId
+        }.jsonObject
+        val out = mutableListOf<String>()
+        screen["redact"]?.jsonArray?.forEach { collectRegexes(it, out) }
+        return out
+    }
+
+    @Test
+    fun `the id-less name-shape redact pattern is SSOT with SnapshotRedactor (FIX 1c, #362 class)`() {
+        // The canonical name-shape regex on the multi-order-confirm rule must be
+        // byte-identical to SnapshotRedactor's constant — the two copies scrub the
+        // same customer token (runtime envelope vs committed corpus) and must not
+        // drift silently (the #362 duplicated-sha256 class of bug).
+        assertTrue(
+            "multi_order_confirm must carry the canonical name-shape regex identical to " +
+                "SnapshotRedactor.FIRST_LAST_INITIAL_PATTERN; found " +
+                ruleRedactRegexes("doordash.screen.dropoff_multi_order_confirm"),
+            ruleRedactRegexes("doordash.screen.dropoff_multi_order_confirm")
+                .contains(SnapshotRedactor.FIRST_LAST_INITIAL_PATTERN),
+        )
+        // FIX 3 defense-in-depth: the two earlier-priority rules that could win a
+        // modal-over-handoff combined frame carry the SAME pattern.
+        for (id in listOf("doordash.screen.dropoff_navigation", "doordash.screen.dropoff_handoff")) {
+            assertTrue(
+                "$id must carry the canonical name-shape regex (FIX 3 defense-in-depth)",
+                ruleRedactRegexes(id).contains(SnapshotRedactor.FIRST_LAST_INITIAL_PATTERN),
+            )
+        }
+    }
+
+    @Test
+    fun `multi_order_confirm redact masks injected name shapes, keeps the require anchors (FIX 2)`() {
+        val rule = TestRulesetFactory.screenRuleset
+            .ruleById("doordash.screen.dropoff_multi_order_confirm")!!
+        // Accents, interior caps, hyphen/apostrophe, ALL-CAPS (runtime IGNORE_CASE),
+        // and a trailing space (the raw-text alignment) — every shape the pre-fix
+        // masker fell open on.
+        val names = listOf("Brandon C", "José R", "O'Brien M", "Mary-Jo K", "JOSE G", "Brandon C ", "McKenna B")
+        val maskShape = Regex("""\[redacted:[0-9a-f]{4}\]""")
+        for (name in names) {
+            val tree = UiNode(
+                children = listOf(
+                    UiNode(text = "Confirm you have the correct order before drop-off."),
+                    UiNode(text = "Mix-ups frequently occur at drop-off when there are multiple orders in a Dash."),
+                    UiNode(text = name), // the id-less customer-name line
+                    UiNode(text = "SPROUTS FARMERS MARKET #118"),
+                    UiNode(text = "2 items"),
+                ),
+            ).restoreParents()
+            val masked = serialize(rule.redact.apply(tree))
+
+            assertFalse("injected name '$name' must not persist", masked.contains(name.trim()))
+            assertTrue("name '$name' masked to [redacted:<4hex>]", maskShape.containsMatchIn(masked))
+            // Negative: the require anchors + merchant + count must survive untouched.
+            assertTrue("require anchor kept", masked.contains("correct order before drop-off"))
+            assertTrue("mix-ups anchor kept", masked.contains("Mix-ups frequently occur at drop-off"))
+            assertTrue("merchant (driver-owned) kept", masked.contains("SPROUTS FARMERS MARKET #118"))
+            assertTrue("count kept", masked.contains("2 items"))
+        }
+    }
+
+    @Test
+    fun `committed corpus carries no un-masked bare customer-name node (FIX 4)`() {
+        val nameShape = Regex(SnapshotRedactor.FIRST_LAST_INITIAL_PATTERN, RegexOption.IGNORE_CASE)
+        // Folders whose owning rule declares the name-shape redact (FIX 3 included).
+        val folders = listOf("dropoff_multi_order_confirm", "dropoff_navigation", "dropoff_handoff")
+        val leaks = mutableListOf<String>()
+        for (folder in folders) {
+            for ((filename, node, _) in TestResourceLoader.loadSnapshots("snapshots/$folder")) {
+                walkText(node) { text ->
+                    if (!text.contains("[redacted") && nameShape.matches(text)) {
+                        leaks += "$folder/$filename: \"$text\""
+                    }
+                }
+            }
+        }
+        assertTrue(
+            "committed corpus leaks an un-masked bare customer name (the masker's blind spot " +
+                "is now a test failure, not a permanent git leak): $leaks",
+            leaks.isEmpty(),
+        )
+    }
+
+    private fun walkText(node: UiNode, visit: (String) -> Unit) {
+        node.text?.let(visit)
+        node.contentDescription?.let(visit)
+        node.children.forEach { walkText(it, visit) }
     }
 
     @Test

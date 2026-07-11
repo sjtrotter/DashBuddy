@@ -12,6 +12,7 @@ import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -383,6 +384,109 @@ class AnalyticsRepositoryTest {
         val life = dao.deliveryTotals(0, Long.MAX_VALUE).first()
         assertEquals(1, life.deliveries)
         assertEquals(12.0, life.pay, 1e-9)
+    }
+
+    /**
+     * #660 piece 1: a `sessionId IS NULL` delivery's pay used to be invisible to [grossAndUnattributed]
+     * (session-anchored, iterates `session_records`) while still counting in net (via [deliveryTotals]'s
+     * own-`completedAt` fallback, #655) — the seam that let displayed net exceed gross. Proves the fix:
+     * the orphan pay is folded into [PeriodEconomics.grossEarnings] and surfaced as its own
+     * [PeriodEconomics.noSessionPay]/[PeriodEconomics.noSessionDeliveries] "(No session)" bucket.
+     */
+    @Test
+    fun `a null-session delivery's pay is folded into gross as the (No session) bucket (#660)`() = runBlocking {
+        // No session at all — an orphan delivery, pay 12 + cash 3, net 9.
+        dao.upsertDelivery(delivery(1, sessionId = null, jobId = "J1", storeName = "Wendys", pay = 12.0, net = 9.0, completedAt = base + hour, cashTip = 3.0))
+
+        val eco = repo.periodEconomics(AnalyticsPeriod.LIFETIME).first()
+        // Before the fix: gross = 0 (no sessions), net = 9 (deliveryNet) + 3 (cash) = 12 — net > gross.
+        // After the fix: gross also includes the orphan's pay + cash (12 + 3 = 15) ⇒ gross ≥ net.
+        assertEquals("gross folds in the orphan pay + cash", 15.0, eco.grossEarnings, 1e-9)
+        assertEquals("net unchanged: frozen 9 + cash 3", 12.0, eco.netProfit, 1e-9)
+        assertTrue("gross can no longer read below net from this seam", eco.grossEarnings >= eco.netProfit)
+        assertEquals("the bucket surfaces its own pay+cash total", 15.0, eco.noSessionPay, 1e-9)
+        assertEquals("the bucket surfaces its own delivery count", 1, eco.noSessionDeliveries)
+    }
+
+    /** A period with no session-less deliveries reports a zero "(No session)" bucket. */
+    @Test
+    fun `noSessionPay and noSessionDeliveries are zero when every delivery has a session (#660)`() = runBlocking {
+        dao.upsertSession(session("S1", base, reportedEarnings = null, durationMillis = hour, startOdo = 0.0, lastOdo = 5.0, deliveries = 1, jobsCompleted = 1))
+        dao.upsertDelivery(delivery(1, "S1", "J1", "Wendys", pay = 10.0, net = 8.0, completedAt = base + hour))
+
+        val eco = repo.periodEconomics(AnalyticsPeriod.LIFETIME).first()
+        assertEquals(0.0, eco.noSessionPay, 1e-9)
+        assertEquals(0, eco.noSessionDeliveries)
+        assertEquals(10.0, eco.grossEarnings, 1e-9)
+    }
+
+    /** The per-platform periodEconomics variant folds the "(No session)" bucket for that platform only. */
+    @Test
+    fun `per-platform periodEconomics folds the (No session) bucket for its own platform (#660)`() = runBlocking {
+        dao.upsertDelivery(delivery(1, sessionId = null, jobId = "J1", storeName = "Wendys", pay = 10.0, net = 8.0, completedAt = base + hour, platform = "doordash"))
+        dao.upsertDelivery(delivery(2, sessionId = null, jobId = "J2", storeName = "McD", pay = 20.0, net = 15.0, completedAt = base + hour, platform = "uber"))
+
+        val dd = repo.periodEconomics(AnalyticsPeriod.LIFETIME, cloud.trotter.dashbuddy.domain.state.Platform.DoorDash).first()
+        assertEquals(10.0, dd.grossEarnings, 1e-9)
+        assertEquals(1, dd.noSessionDeliveries)
+
+        val uber = repo.periodEconomics(AnalyticsPeriod.LIFETIME, cloud.trotter.dashbuddy.domain.state.Platform.Uber).first()
+        assertEquals(20.0, uber.grossEarnings, 1e-9)
+        assertEquals(1, uber.noSessionDeliveries)
+    }
+
+    /**
+     * #660 piece 1 guard: a mixed population — one normal sessionful dash (reported 50, no orphan
+     * overlap) plus one unrelated null-session orphan (pay 8) in the SAME period — must sum EXACTLY
+     * to `50 + 8 = 58`, and the orphan's own bucket must report EXACTLY its own 8. This pins the two
+     * source queries ([AnalyticsDao.grossAndUnattributed] and [AnalyticsDao.noSessionTotals]) as
+     * disjoint populations that only ever ADD, never merge — a future rewrite of either query into a
+     * single JOIN/COALESCE (to "simplify" the two-query split) could accidentally let the null-session
+     * group get swept into a session's own SUM (or vice versa), which this exact assertion would catch
+     * immediately (a 58/8 split collapsing into e.g. 58/0 or 50/8-double-counted-elsewhere).
+     */
+    @Test
+    fun `mixed session plus unrelated orphan sums exactly, no cross-population leakage (#660)`() = runBlocking {
+        // S1: reported 50, no delivered-pay overlap with the orphan below (unrelated dash).
+        dao.upsertSession(session("S1", base, reportedEarnings = 50.0, durationMillis = hour, startOdo = 0.0, lastOdo = 10.0, deliveries = 1, jobsCompleted = 1))
+        dao.upsertDelivery(delivery(1, "S1", "J1", "Wendys", pay = 50.0, net = 45.0, completedAt = base + hour))
+        // An unrelated orphan delivery — no session at all, pay 8, elsewhere in the same period.
+        dao.upsertDelivery(delivery(2, sessionId = null, jobId = "J2", storeName = "Chipotle", pay = 8.0, net = 6.0, completedAt = base + 2 * hour))
+
+        val eco = repo.periodEconomics(AnalyticsPeriod.LIFETIME).first()
+        assertEquals("gross = S1's reported 50 + the orphan's own 8, exactly", 58.0, eco.grossEarnings, 1e-9)
+        assertEquals("the (No session) bucket reports exactly its own 8, not merged into S1's 50", 8.0, eco.noSessionPay, 1e-9)
+    }
+
+    /**
+     * #660 piece 1 CHARACTERIZATION (adjudicated, documented in [AnalyticsRepository.assemble]'s
+     * KDoc/comment): when the orphan's pay is semantically ALREADY INSIDE a surviving session's
+     * captured `reportedEarnings` — e.g. a mid-dash accessibility-service restart drops this one
+     * delivery's `sessionId`, but the dash's summary screen still gets captured afterward and its
+     * `reportedEarnings` already reflects that delivery's pay — piece 1 has no way to detect the
+     * overlap (the two source queries are structurally disjoint, by design, per the test above) and
+     * so it double-counts: those same 8 dollars land in BOTH the session's own gross-vs-delivered
+     * unattributed delta AND the "(No session)" bucket. This pins that CURRENT, KNOWN behavior
+     * on purpose — it is the seam #660 piece 2 (categorize an orphan into its real session) is
+     * scoped to close. When piece 2 lands, this exact test SHOULD go red (gross should drop to
+     * 100.0 once the orphan is categorized away rather than double-added) — that failure is the
+     * signal piece 2 shipped correctly, not a regression to chase.
+     */
+    @Test
+    fun `CHARACTERIZATION - correlated orphan double-counts into gross until piece 2 lands (#660)`() = runBlocking {
+        // S1 reported 100, but only 92 of that is captured as session-tied delivered pay (unattributed
+        // = 8) — the missing 8 is semantically the SAME delivery re-appearing below as a null-session
+        // orphan (a restart mid-dash lost its sessionId after the summary screen already saw its pay).
+        dao.upsertSession(session("S1", base, reportedEarnings = 100.0, durationMillis = hour, startOdo = 0.0, lastOdo = 10.0, deliveries = 1, jobsCompleted = 1))
+        dao.upsertDelivery(delivery(1, "S1", "J1", "Wendys", pay = 92.0, net = 80.0, completedAt = base + hour))
+        // The correlated orphan: pay 8, no sessionId — its dollars are ALREADY inside S1's reported 100.
+        dao.upsertDelivery(delivery(2, sessionId = null, jobId = "J1", storeName = "Wendys", pay = 8.0, net = 6.0, completedAt = base + 90 * 60_000))
+
+        val eco = repo.periodEconomics(AnalyticsPeriod.LIFETIME).first()
+        // CURRENT (documented) behavior: gross = reported 100 + the orphan's own 8 = 108 (double-counted).
+        assertEquals("pins the documented double-count: 100 (reported, already incl. the 8) + 8 (orphan) = 108", 108.0, eco.grossEarnings, 1e-9)
+        assertEquals("unattributed = reported 100 minus session-tied delivered 92", 8.0, eco.unattributedPay, 1e-9)
+        assertEquals("the (No session) bucket still surfaces its own 8, as designed", 8.0, eco.noSessionPay, 1e-9)
     }
 
     /**

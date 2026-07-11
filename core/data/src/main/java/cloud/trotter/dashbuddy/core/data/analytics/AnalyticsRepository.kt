@@ -82,12 +82,14 @@ class AnalyticsRepository @Inject constructor(
                     analyticsDao.deliveryTotals(start, end),
                     analyticsDao.sessionTotals(start, end),
                     analyticsDao.grossAndUnattributed(start, end),
-                ) { d, s, g ->
+                    analyticsDao.noSessionTotals(start, end),
+                ) { d, s, g, ns ->
                     assemble(
                         deliveredPay = d.pay, deliveryNet = d.net, deliveries = d.deliveries,
                         jobs = d.jobs, miles = s.miles, onlineMillis = s.onlineMillis,
                         gross = g.gross, unattributed = g.unattributed, overAttributed = g.overAttributed,
                         fuelCost = d.fuelCost, nonFuelCost = d.nonFuelCost, cash = d.cash,
+                        noSessionPay = ns.pay + ns.cash, noSessionDeliveries = ns.deliveries,
                     )
                 }
             } else {
@@ -96,10 +98,12 @@ class AnalyticsRepository @Inject constructor(
                     analyticsDao.deliveryTotalsByPlatform(start, end),
                     analyticsDao.sessionTotalsByPlatform(start, end),
                     analyticsDao.grossAndUnattributedByPlatform(start, end),
-                ) { dl, sl, gl ->
+                    analyticsDao.noSessionTotalsByPlatform(start, end),
+                ) { dl, sl, gl, nsl ->
                     val d = dl.find { it.platform == wire }
                     val s = sl.find { it.platform == wire }
                     val g = gl.find { it.platform == wire }
+                    val ns = nsl.find { it.platform == wire }
                     assemble(
                         deliveredPay = d?.pay ?: 0.0, deliveryNet = d?.net ?: 0.0,
                         deliveries = d?.deliveries ?: 0, jobs = d?.jobs ?: 0,
@@ -107,6 +111,8 @@ class AnalyticsRepository @Inject constructor(
                         gross = g?.gross ?: 0.0, unattributed = g?.unattributed ?: 0.0,
                         overAttributed = g?.overAttributed ?: 0.0,
                         fuelCost = d?.fuelCost, nonFuelCost = d?.nonFuelCost, cash = d?.cash ?: 0.0,
+                        noSessionPay = (ns?.pay ?: 0.0) + (ns?.cash ?: 0.0),
+                        noSessionDeliveries = ns?.deliveries ?: 0,
                     )
                 }
             }
@@ -287,7 +293,10 @@ class AnalyticsRepository @Inject constructor(
      * [DailyEarnings] per local calendar day of the window, in order, with gap days present at `0.0`
      * gross (a driver who skipped Tuesday still gets a Tuesday bar). Gross per day = Σ of the
      * reported-authoritative per-session gross ([AnalyticsDao.sessionGrossRows], the same definition as
-     * [grossAndUnattributed]) for the sessions that *started* that day.
+     * [grossAndUnattributed]) for the sessions that *started* that day, **plus** any "(No session)"
+     * bucket pay ([AnalyticsDao.noSessionDailyRows], #660) whose own `completedAt` falls on that day —
+     * the #675 review's flagged follow-up site: a null-session delivery has no session start to anchor
+     * on, so it buckets by its own completion day instead (mirrors [periodEconomics]'s null-session fold).
      *
      * **Session-anchored (#655):** a session's whole gross lands on its start instant's local day, so a
      * midnight-spanning dash counts entirely on its start day — never split across two bars. [zone] is
@@ -297,21 +306,28 @@ class AnalyticsRepository @Inject constructor(
      * one-bar chart adds nothing, and LIFETIME's window is unbounded (its days can't be enumerated). The
      * UI hides the card on an empty list.
      *
-     * Re-emits on new session records (Room invalidation) and at week/month rollover (the boundary flow).
+     * Re-emits on new session/delivery records (Room invalidation) and at week/month rollover (the
+     * boundary flow).
      */
     fun dailyEarnings(period: AnalyticsPeriod, zone: ZoneId = ZoneId.systemDefault()): Flow<List<DailyEarnings>> {
         if (period == AnalyticsPeriod.TODAY || period == AnalyticsPeriod.LIFETIME) return flowOf(emptyList())
         return periodBoundariesFlow(period, zone).flatMapLatest { (start, end) ->
-            analyticsDao.sessionGrossRows(start, end).map { rows ->
+            combine(
+                analyticsDao.sessionGrossRows(start, end),
+                analyticsDao.noSessionDailyRows(start, end),
+            ) { rows, noSessionRows ->
                 // The end bound is exactly the next period's local midnight (PeriodBounds), so iterate
                 // day-by-day up to (but excluding) the end instant's date — a complete, gap-filled axis.
                 val startDate = Instant.ofEpochMilli(start).atZone(zone).toLocalDate()
                 val endDate = Instant.ofEpochMilli(end).atZone(zone).toLocalDate()
                 val byDay = rows.groupBy { Instant.ofEpochMilli(it.startedAt).atZone(zone).toLocalDate() }
+                val noSessionByDay = noSessionRows.groupBy { Instant.ofEpochMilli(it.completedAt).atZone(zone).toLocalDate() }
                 buildList {
                     var date = startDate
                     while (date < endDate) {
-                        add(DailyEarnings(date, byDay[date]?.sumOf { it.gross } ?: 0.0))
+                        val sessionGross = byDay[date]?.sumOf { it.gross } ?: 0.0
+                        val noSessionGross = noSessionByDay[date]?.sumOf { it.gross } ?: 0.0
+                        add(DailyEarnings(date, sessionGross + noSessionGross))
                         date = date.plusDays(1)
                     }
                 }
@@ -381,12 +397,32 @@ class AnalyticsRepository @Inject constructor(
         fuelCost: Double?,
         nonFuelCost: Double?,
         cash: Double,
+        noSessionPay: Double = 0.0,
+        noSessionDeliveries: Int = 0,
     ): PeriodEconomics {
         // Locked accounting (#688): cash tips add to BOTH net and gross. [gross] already includes the
         // cash sum (folded in the DAO's `grossAndUnattributed`); net adds it here (it is deliberately
         // OUTSIDE the frozen delivery `netProfit`, so it can't be lost to a null-net row). The
         // waterfall's cost = gross − net is unchanged (cash cancels), so the 4-step reconcile holds.
         // [overAttributed] (#701) is deliberately NOT folded into [net] — display-only review signal.
+        // [noSessionPay] (#660) is a delivery-side pay/cash sum ALREADY inside [deliveryNet]/[cash]
+        // (deliveryTotals counts a null-session row by its own completedAt, #655) — it is folded into
+        // [gross] here (which was otherwise purely session-anchored and never saw it) so gross can no
+        // longer read below net purely from this seam; it is NOT added a second time to net.
+        //
+        // KNOWN OVERSTATEMENT (#660 piece 1, adjudicated): this fold assumes the orphan delivery's pay
+        // is genuinely NOT already inside any surviving session's `reportedEarnings`. That assumption can
+        // be wrong — e.g. a mid-dash accessibility-service/app restart that loses this one delivery's
+        // `sessionId` while the dash's summary screen still gets captured afterward: the summary's
+        // `reportedEarnings` (folded via [grossAndUnattributed]) already reflects that delivery's pay, so
+        // adding [noSessionPay] on top double-counts those dollars into [PeriodEconomics.grossEarnings],
+        // and the SAME dollars surface in both the unattributed-review callout AND the "(No session)"
+        // callout on the Money tab. This mirrors the pre-existing net-side overlap (an orphan's frozen net
+        // was always folded via [deliveryTotals], with the identical correlated-restart caveat) — it is
+        // not a new class of bug, just newly visible on the gross side now that this bucket folds in. The
+        // real fix is #660 piece 2 (categorize an orphan delivery into its real session via a correction
+        // event), which removes the row from this bucket entirely rather than trying to detect the overlap
+        // here; until then this is a documented, desk-verifiable edge, not a defect to patch in piece 1.
         val net = deliveryNet + unattributed + cash
         val hours = onlineMillis / 3_600_000.0
         return PeriodEconomics(
@@ -397,7 +433,7 @@ class AnalyticsRepository @Inject constructor(
                 jobs = jobs,
                 onlineDuration = onlineMillis,
             ),
-            grossEarnings = gross,
+            grossEarnings = gross + noSessionPay,
             netProfit = net,
             unattributedPay = unattributed,
             netPerHour = NetProfit.perHour(net, hours),
@@ -407,6 +443,8 @@ class AnalyticsRepository @Inject constructor(
             fuelCost = fuelCost,
             nonFuelCost = nonFuelCost,
             overAttributedPay = overAttributed,
+            noSessionPay = noSessionPay,
+            noSessionDeliveries = noSessionDeliveries,
         )
     }
 

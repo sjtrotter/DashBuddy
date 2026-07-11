@@ -49,6 +49,18 @@ data class PeriodEconomics(
      * Money tab renders alongside the unattributed callout, nothing more.
      */
     val overAttributedPay: Double = 0.0,
+    /**
+     * The "(No session)" bucket (#660 piece 1): Σ (realizedPay + cashTip) for deliveries whose source
+     * event carried NO `sessionId` at all — an orphan population [netProfit] already counted (via the
+     * frozen delivery net + cash, both null-session-inclusive) but that [grossEarnings] historically
+     * never saw (it was purely session-anchored), so a session-less completion could make displayed net
+     * exceed gross. **Folded INTO [grossEarnings]** here so that can no longer happen, and kept as its
+     * own field so the UI can still surface it as an explicit review/data-quality flag alongside
+     * [unattributedPay]/[overAttributedPay]. Zero when every delivery in the period belongs to a session.
+     */
+    val noSessionPay: Double = 0.0,
+    /** Count of the deliveries behind [noSessionPay] — the "(No session)" bucket's delivery count. */
+    val noSessionDeliveries: Int = 0,
 ) {
     companion object {
         val EMPTY = PeriodEconomics(
@@ -61,6 +73,8 @@ data class PeriodEconomics(
             fuelCost = null,
             nonFuelCost = null,
             overAttributedPay = 0.0,
+            noSessionPay = 0.0,
+            noSessionDeliveries = 0,
         )
     }
 }

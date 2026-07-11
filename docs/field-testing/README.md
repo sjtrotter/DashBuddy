@@ -73,19 +73,45 @@ card's **mechanical** half, #577 (re-confirmed, 24/24, ~0.55 s — with a new po
 that entry's Bug #1), the #457 path, and #554 ShadowProjector (2/2). The #462/#460 dropoff item
 was found **broken-in-part** (raw PII in capture envelopes) and moved to that entry's Bug #7.)_
 
-- **🆕 NEW — multi-pickup job lands under a REAL store, no WARN storm (#733 / PR).**
+- **🆕 NEW — multi-pickup job lands under a REAL store, no WARN storm (#733 / PR #745).**
   A multi-pickup job (a stacked stack, or a single customer whose order spans two stores like the
   07-08 Willie's + Sonic delivery) previously folded its delivery as "Unknown store" and spammed the
-  log with `D6 join miss` WARNs (129–240/dash). The dropoff-store lineage now (a) resolves a
-  single-dropoff job **structurally** from its pickups even when the customer name renders in a
-  different form on the arrival card, (b) canonicalizes the customer-name hash so multi-drop joins
-  stay stable across surfaces, and (c) fires the join-miss WARN at most **once per hash-change edge**.
+  log with `D6 join miss` WARNs (129–240/dash). The dropoff-store lineage now (a) canonicalizes the
+  customer-name hash (`normalizeCustomerName` before `sha256`) so multi-drop joins stay stable
+  across the surface FORMS a name renders in, (b) resolves a single-customer multi-store job via the
+  constrained multi-match join (earliest-confirmed store, only when unambiguous — two drops sharing
+  a hash fall back rather than guess), and (c) fires the join-miss WARN at most **once per task**.
   **How to tell it's working (desk-side, after a dash):** on a multi-pickup delivery, the
   `delivery_records` row (and the per-store view) shows a real store, not "Unknown store"; and the
   exported `shareable.log` has **at most one** `D6 join miss` line per drop (ideally zero), not the
-  old ×23 burst. Watch a two-store single-customer job especially.
+  old ×23 burst. Watch a two-store single-customer job especially. A nickname-vs-legal-name render
+  that no normalization can bridge may still fold null (documented residual — fix via Adjust dialog).
   - Confirmed: 0/2
-
+- **🆕 NEW — GoPuff / multi-order drop-off confirm card recognized (#501 items 1-2 / PR #743).**
+  The "Confirm you have the correct order before drop-off / Mix-ups frequently occur…" card that
+  appears before a drop on a **multi-order Dash** (GoPuff Drive batches AND ordinary multi-merchant
+  grocery batches) is now a recognized screen (`dropoff_multi_order_confirm`) instead of falling to
+  UNKNOWN. It's recognize-only (no state change) — its only job is to stop hitting the UNKNOWN
+  capture folder. **How to tell it's working (desk-side, after a multi-order dash):** the
+  `Confirm…correct order before drop-off` frames should NO LONGER appear under
+  `captures/.../accessibility.window/UNKNOWN/`; they should sort into
+  `accessibility.window/dropoff_multi_order_confirm/`, and the redacted capture must show the
+  customer name line masked (`[redacted:...]`), with the store name + item count kept. Completes
+  #501 (all 3 items). This is the last recognition piece of #501; watch that it doesn't perturb the
+  dropoff flow (no phantom re-mint around the confirm card).
+  - Confirmed: 0/2
+- **🆕 NEW — per-platform shop-rate learning; shop offers price sanely after the reset (#588 / PR).**
+  The learned shopping pace (items/min) is now keyed per platform, and the old global learned value was
+  **dropped** (restart-learning, no migration) — every platform relearns from its 0.8/min seed over ~5 shops.
+  **How to tell it's working (on a DoorDash dash):** shop pricing may shift toward the 0.8/min seed
+  until ~5 shops relearn the pace on this platform (the discarded value was the dev's own LEARNED mean,
+  not necessarily close to 0.8) — a Shop & Deliver offer's handling time / $/hr should still read sane,
+  not absurd, in the meantime; after ~5 real shops the learned pace takes back over. **Desk-side after
+  the dash:** the shareable INFO log's
+  `ShopRate` lines now carry a `[doordash]` platform tag; there should be no cross-platform bleed if a
+  second platform (Uber/Instacart) is ever shopped. Watch for any shop offer suddenly reading an absurd
+  $/hr (would mean the seed/reset went wrong).
+  - Confirmed: 0/2
 - **🆕 NEW — store entity resolution keys real stores from live dashes (#159 / PR).**
   The read-model now resolves each job's stores (`stores` + `pickup_records` tables) from captured
   pickup/dropoff/payout surfaces. **How to tell it's working (desk-side, after a dash):** on a job with a
@@ -1559,6 +1585,25 @@ Accept and Decline registered on DoorDash — and moved to that session's entry 
   sanity-check after a dash that the session's `captures/` folder is non-empty. If it's ever
   empty, check logcat for "Capture persistence disabled (release build)" — that means a release
   build got dashed by mistake.
+  - Confirmed: 0/2.
+- **"(No session)" bucket keeps gross ≥ net when a delivery lands without a session (#660 piece
+  1).** Only reproducible if a dash produces a `sessionId IS NULL` delivery row (e.g. a straggler
+  DELIVERY_COMPLETED after the app/service restarted mid-dash, or any other path that loses
+  session context) — may not fire on a normal dash. If it does happen: on the Money tab for the
+  period containing that delivery, a new **"(No session): $X across N deliveries not tied to a
+  dash"** callout should appear (same style/placement as the existing unattributed/over-attributed
+  flags), the hero **Gross Earnings** figure should include that delivery's pay (no longer
+  possible for the True-Net chip to show more than Gross), and the per-day chart's bar for that
+  delivery's own completion day should include its pay. If you can't force this edge case, this
+  item can be validated desk-side by inspecting `delivery_records` for any `sessionId IS NULL` row
+  after a dash and confirming the Money tab reflects it as above.
+  - **Known caveat (desk-verifiable, not a bug to report):** if the orphan delivery's pay was
+    ALSO already inside a surviving session's captured `reportedEarnings` (e.g. the restart
+    happened mid-dash and the dash's summary screen still got captured afterward), gross will
+    double-count those dollars — expect to see them flagged in BOTH the unattributed callout
+    and the "(No session)" callout at once. This is a known, documented overstatement (mirrors
+    the pre-existing net-side overlap) that piece 2 (categorizing an orphan into its real
+    session) is the actual fix for — no action needed beyond noting it if seen.
   - Confirmed: 0/2.
 
 ---

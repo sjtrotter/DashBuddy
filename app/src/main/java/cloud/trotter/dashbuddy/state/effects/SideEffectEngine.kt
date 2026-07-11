@@ -321,15 +321,15 @@ class SideEffectEngine @Inject constructor(
             is AppEffect.ResumeOdometer -> odometerEffectHandler.resume()
 
             is AppEffect.RecordShopRate -> {
-                // #556: learn the dasher's shopping pace.
+                // #556/#588: learn the dasher's shopping pace for THIS platform.
                 val minutes = effect.shopDurationMs / 60_000.0
-                strategyRepository.recordShopRate(effect.itemsShopped, minutes)
+                strategyRepository.recordShopRate(effect.platform, effect.itemsShopped, minutes)
                 val perMin = if (minutes > 0) effect.itemsShopped / minutes else 0.0
-                // #551 P7: rate math is a shareable INFO milestone, but the merchant name
-                // (raw third-party UI text) stays on the DEBUG firehose only.
+                // #551 P7: rate math + the platform wire are shareable INFO milestones (the wire is a
+                // registry token, not PII); the merchant name (raw third-party UI text) stays DEBUG-only.
                 Timber.tag("ShopRate").i(
-                    "recorded %d items / %.1f min = %.2f/min",
-                    effect.itemsShopped, minutes, perMin,
+                    "recorded %d items / %.1f min = %.2f/min [%s]",
+                    effect.itemsShopped, minutes, perMin, effect.platform.wire,
                 )
                 Timber.tag("ShopRate").d(
                     "recorded %d items / %.1f min = %.2f/min (store=%s)",
@@ -351,7 +351,9 @@ class SideEffectEngine @Inject constructor(
                 // first load WAITS for real economics rather than scoring
                 // against a guessed default.
                 val config = strategyRepository.evaluationConfig.filterNotNull().first()
-                val result = offerEvaluator.evaluate(effect.parsedOffer, config)
+                // #588: resolve the offer's own platform's learned shop rate + seed into the economy
+                // before scoring — a DoorDash-learned pace never prices an Instacart/Uber shop.
+                val result = offerEvaluator.evaluate(effect.parsedOffer, config.forPlatform(effect.platform))
                 // Emit the loopback observation directly (#402): the old
                 // OfferEvaluationEvent was a 1:1 shim the bridge re-typed.
                 _events.emit(

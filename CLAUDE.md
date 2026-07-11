@@ -343,7 +343,16 @@ history and (F8) the version-bump wipe now also clears `stores`/`pickup_records`
 immutable) serves period economics (`SUM(netProfit)` frozen + `unattributedPay`; all-pay gross =
 reported-total authoritative + the unattributed review flag; per-store; Monday-week boundaries via
 `PeriodBounds`, midnight-reactive) as Room-invalidation Flows to the home glance + the future Analytics hub
-(#315). Period totals are **read-side only** — they never re-enter the pure state machine (the dead
+(#315). **The "(No session)" bucket (#660 piece 1):** `delivery_records` rows whose source event carried
+NO `sessionId` at all were already counted in net (`deliveryTotals`'s own-`completedAt` fallback, #655)
+but invisible to gross (`grossAndUnattributed`/`sessionGrossRows` iterate `session_records` only, so a
+null-session row joined to nothing) — a seam that could let displayed net exceed gross. Fixed by folding
+the same null-session population (`AnalyticsDao.noSessionTotals`/`noSessionTotalsByPlatform`/
+`noSessionDailyRows`) into `PeriodEconomics.grossEarnings` and the per-day chart (bucketed on the
+delivery's own `completedAt` day, since there's no session start to anchor on), and surfacing it as its
+own `noSessionPay`/`noSessionDeliveries` review signal (Money tab callout, same pattern as
+unattributed/over-attributed). Piece 2 (deferred, #660) lets the driver categorize an orphan delivery
+into a real session via a new correction event. Period totals are **read-side only** — they never re-enter the pure state machine (the dead
 `CrossPlatformRegion.PeriodTotals` fields were deleted). The free-tier **CSV export** (#319) is a second
 read-side consumer: `AnalyticsRepository.buildCsvExport` reads raw `deliveriesBetween`/`sessionsBetween`
 rows (row-level, bucketing-free — the driver's own records dumped, not session-anchored periods) and the
