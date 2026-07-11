@@ -53,3 +53,23 @@ data class Task(
     val unassignedAt: Long? = null,
     val recovered: Boolean = false,
 )
+
+/**
+ * The **accountable-dropoff** predicate — a dropoff that may be attributed pay and may hold a job's
+ * final shape open: it is a [TaskPhase.DROPOFF] the dasher did NOT unassign ([unassignedAt] null,
+ * the #736 firewall) AND it bears a customer identity ([customerNameHash] or [customerAddressHash]
+ * non-null, the #498 phantom firewall — a never-activated, customer-TBD placeholder has neither).
+ *
+ * SSOT (Principle 5): both the receipt-split denominator
+ * (`DeliveryCompletionEffects.mintingDropoffTasks`) and the final-shape gate
+ * ([OfferPayFallback.isFinalShape]) filter siblings through THIS one predicate, so the two chains
+ * cannot drift (the #630 review wedge: `isFinalShape` used to include placeholders/unassigned drops
+ * the mint set already excluded, so an un-mintable sibling could hold the gate shut forever — the
+ * mid-stack under-attribution regression). Note the deliberate asymmetry the split still owns: the
+ * #691 estimate's equal-split denominator (`OfferPayFallback.shareFor`) KEEPS placeholders (it is a
+ * per-owed-order split), so it does NOT use this predicate.
+ */
+val Task.isAccountableDropoff: Boolean
+    get() = phase == TaskPhase.DROPOFF &&
+        unassignedAt == null &&
+        (customerNameHash != null || customerAddressHash != null)

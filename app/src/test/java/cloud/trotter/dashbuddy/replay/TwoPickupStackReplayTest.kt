@@ -3,6 +3,8 @@ package cloud.trotter.dashbuddy.replay
 import cloud.trotter.dashbuddy.domain.model.event.AppEventType
 import cloud.trotter.dashbuddy.domain.model.event.payload.DeliveryPayload
 import cloud.trotter.dashbuddy.domain.model.event.payload.PickupPayload
+import cloud.trotter.dashbuddy.domain.pipeline.Observation
+import cloud.trotter.dashbuddy.domain.state.ParsedFields
 import cloud.trotter.dashbuddy.domain.state.Platform
 import cloud.trotter.dashbuddy.domain.state.TaskPhase
 import cloud.trotter.dashbuddy.test.util.SessionReplay
@@ -153,21 +155,41 @@ class TwoPickupStackReplayTest {
 
     @Test
     fun `receipted jobs' dropRealizedPay shares sum to their receipt total (#630 mainline pin)`() {
-        // The #630 no-regression invariant over the whole trace: for every job whose
-        // DELIVERY_COMPLETED rows observed a receipt (any row carries a non-null parsedPay), the
-        // stamped dropRealizedPay shares sum EXACTLY to that receipt's total in integer cents.
+        // The #630 no-regression invariant over the whole trace. Two honesty fixes vs the naive pin:
+        //  (a) DEDUP-AWARE: SessionReplay has NO effects_fired dedup, so a taskId re-emitted (null at a
+        //      non-final PostTask exit, then its share at close) appears TWICE in the raw trace. The
+        //      live engine persists only the FIRST emission per taskId — mirror that here (first wins)
+        //      so the summed Σ matches what actually lands in app_events.
+        //  (b) OBSERVED-RECEIPT total: derive the expected total from the PostTask OBSERVATION's
+        //      parsedPay (the receipt the dasher actually saw), NOT from the row payloads — a #630
+        //      withheld receipt (mid-stack exit stamps parsedPay = null on the row) would otherwise
+        //      silently drop the whole job from the assertion, hiding the exact shape #630 defends.
         // (With THIS fixture the documented address-parse residual means no DELIVERY_COMPLETED is
-        // reached — the assertion is then vacuous — but it pins the mainline the moment the fixture
-        // or the machine closes the job cleanly.)
+        // reached — the assertion is then vacuous, driving it to close is #700 — but it pins the
+        // mainline the moment the fixture or the machine closes a job cleanly.)
         val steps = run()
-        val deliveries = steps.flatMap { it.events }
+
+        // Per job, the receipt total the dasher observed on a PostTask frame (max across the trace —
+        // the FINAL receipt is the largest; keyed on the active job at that step).
+        val observedReceiptByJob = HashMap<String, Double>()
+        steps.forEach { s ->
+            val fields = (s.observation as? Observation.Screen)?.parsed as? ParsedFields.PostTaskFields
+            val total = fields?.parsedPay?.total ?: return@forEach
+            val jobId = dd(s)?.activeJob?.jobId ?: return@forEach
+            observedReceiptByJob[jobId] = maxOf(observedReceiptByJob[jobId] ?: 0.0, total)
+        }
+
+        // DELIVERY_COMPLETED rows, deduped to the FIRST emission per taskId (live-engine persistence).
+        val persistedRows = steps.flatMap { it.events }
             .filter { it.type == AppEventType.DELIVERY_COMPLETED }
             .mapNotNull { it.payload as? DeliveryPayload }
-        deliveries.groupBy { it.jobId }.forEach { (jobId, rows) ->
-            val receiptTotal = rows.firstNotNullOfOrNull { it.parsedPay }?.total ?: return@forEach
+            .distinctBy { it.taskId }
+        persistedRows.groupBy { it.jobId }.forEach { (jobId, rows) ->
+            val receiptTotal = observedReceiptByJob[jobId] ?: return@forEach
             val summed = rows.mapNotNull { it.dropRealizedPay }.sumOf { Math.round(it * 100.0) }
             assertEquals(
-                "job $jobId: Σ dropRealizedPay must equal the observed receipt total (cents-exact)",
+                "job $jobId: Σ dropRealizedPay (first-emission-per-taskId) must equal the OBSERVED " +
+                    "receipt total (cents-exact)",
                 Math.round(receiptTotal * 100.0),
                 summed,
             )

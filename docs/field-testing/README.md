@@ -80,8 +80,13 @@ was found **broken-in-part** (raw PII in capture envelopes) and moved to that en
   **How to tell it's working (desk-side, after a dash with ≥1 stacked job):** in the per-dash
   drill-down, each stacked job's delivery rows sum EXACTLY to its receipt total (no missing-pay row
   where a receipt existed, no ±1¢ mismatch); the Money tab's unattributed callout doesn't grow from
-  stacked jobs. A `#630 mid-stack non-final receipt exit` WARN in the exported log would be the
-  first-ever field sighting of the mid-stack receipt shape — grab the capture session if you see it.
+  stacked jobs. A `#630 mid-stack non-final receipt exit` WARN in the exported log (now also tripped
+  by a pay-bearing *collapsed* receipt, not only an itemized one) would be a genuine field sighting of
+  the mid-stack receipt shape — grab the capture session if you see it. NOTE (PR #754 review): the
+  final-shape gate no longer wedges shut on a never-activated placeholder (#749) or an unassigned
+  sibling (#736), so a normal single-delivered-drop stacked job must attach its full receipt (not fold
+  a $0/NONE row) — watch that a receipted delivery never shows $0 when a placeholder/unassigned
+  sibling exists.
   - Confirmed: 0/2
 
 - **🆕 NEW — unassign an order mid-dash produces NO paid/confirmed artifacts (#736).**

@@ -346,6 +346,122 @@ class EffectMapDropPayTest {
         )
     }
 
+    // =========================================================================
+    // #630 review — the isFinalShape gate must not be WEDGED by an un-mintable sibling
+    // (a never-activated customer-TBD placeholder, #749; or an unassigned drop, #736).
+    // On cd348221 (pre-fix) both wedge the gate shut → the delivered drop mints
+    // dropRealizedPay = null AND postTaskFields = null → the whole receipt folds NONE.
+    // =========================================================================
+
+    /** A never-activated dropoff placeholder — customer-TBD, both identity hashes null (#749). */
+    private fun placeholderDrop(id: String) = Task(
+        taskId = id,
+        jobId = "J",
+        phase = TaskPhase.DROPOFF,
+        customerNameHash = null,
+        customerAddressHash = null,
+        startedAt = 300L,
+        completedAt = null,
+    )
+
+    @Test
+    fun `dangling placeholder sibling does not wedge the gate — delivered drop gets the FULL receipt (#630 review, #749)`() {
+        // Job: one identity-RESOLVED delivered drop + one customer-TBD dangling placeholder that never
+        // activated (both hashes null). The delivered drop exits PostTask with the receipt. The
+        // placeholder can never mint, so it must NOT hold the final-shape gate shut — the delivered
+        // drop is the sole accountable dropoff and takes the whole receipt.
+        val receipt = ParsedPay(appPayComponents = listOf(ParsedPayItem("Base Pay", 12.0)), customerTips = emptyList())
+        val postFields = ParsedFields.PostTaskFields(totalPay = 12.0, parsedPay = receipt, sessionEarnings = 40.0)
+        val delivered = dropoff("dDelivered", "Wendy's", "cW", completedAt = 400L)
+        val placeholder = placeholderDrop("dPlaceholder")
+
+        val regionPrev = PlatformRegion(
+            platform = Platform.DoorDash,
+            mode = Mode.Online,
+            session = Session("s1", startedAt = 100L, runningEarnings = 40.0),
+            activeJob = jobWithTasks(listOf(delivered, placeholder)),
+            activeTask = delivered,
+            recentTasks = listOf(delivered),
+            lastPostTaskFields = postFields,
+            lastAnnouncedPostTaskTaskId = "dDelivered",
+        )
+        val regionNext = regionPrev.copy() // job stays open → only the PostTask-exit mint fires
+
+        val prev = appState(FlowRegion(flow = Flow.PostTask), mapOf(Platform.DoorDash to regionPrev))
+        val next = appState(FlowRegion(flow = Flow.Idle), mapOf(Platform.DoorDash to regionNext))
+
+        val rows = completedRows(prev, next, screenObs(Flow.Idle, timestamp = 3000L))
+        assertEquals("only the delivered drop mints", 1, rows.size)
+        val r = rows.single()
+        assertEquals("dDelivered", r.taskId)
+        assertEquals("the delivered drop takes the WHOLE receipt (placeholder didn't wedge the gate)", 12.0, r.dropRealizedPay!!, 0.001)
+        assertNotNull("the receipt IS attached (final shape restored)", r.parsedPay)
+        assertNotNull(r.totalPay)
+    }
+
+    @Test
+    fun `unassigned sibling does not wedge the gate — survivor gets the FULL receipt (#630 review, #736)`() {
+        // 2-order job: an identity-bearing sibling was UNASSIGNED (unassignedAt set, completedAt null —
+        // the reconcile re-add shape) and sits in recentTasks + job.tasks. The survivor delivers with a
+        // receipt. The abandoned drop can never mint, so it must NOT hold the gate shut — the survivor
+        // is the sole accountable dropoff and takes the whole receipt.
+        val receipt = ParsedPay(appPayComponents = listOf(ParsedPayItem("Base Pay", 9.0)), customerTips = emptyList())
+        val postFields = ParsedFields.PostTaskFields(totalPay = 9.0, parsedPay = receipt, sessionEarnings = 30.0)
+        val survivor = dropoff("dSurvivor", "Chipotle", "cS", completedAt = 400L)
+        val abandoned = dropoff("dAbandoned", "Taco Bell", "cA", completedAt = null).copy(unassignedAt = 500L)
+
+        val regionPrev = PlatformRegion(
+            platform = Platform.DoorDash,
+            mode = Mode.Online,
+            session = Session("s1", startedAt = 100L, runningEarnings = 30.0),
+            activeJob = jobWithTasks(listOf(survivor, abandoned)),
+            activeTask = survivor,
+            recentTasks = listOf(abandoned),
+            lastPostTaskFields = postFields,
+            lastAnnouncedPostTaskTaskId = "dSurvivor",
+        )
+        val regionNext = regionPrev.copy() // job stays open → only the PostTask-exit mint fires
+
+        val prev = appState(FlowRegion(flow = Flow.PostTask), mapOf(Platform.DoorDash to regionPrev))
+        val next = appState(FlowRegion(flow = Flow.Idle), mapOf(Platform.DoorDash to regionNext))
+
+        val rows = completedRows(prev, next, screenObs(Flow.Idle, timestamp = 3000L))
+        assertEquals("only the survivor mints (the abandoned drop is not a target)", 1, rows.size)
+        val r = rows.single()
+        assertEquals("dSurvivor", r.taskId)
+        assertEquals("the survivor takes the WHOLE receipt (unassigned sibling didn't wedge the gate)", 9.0, r.dropRealizedPay!!, 0.001)
+        assertNotNull("the receipt IS attached (final shape restored)", r.parsedPay)
+        assertNotNull(r.totalPay)
+    }
+
+    @Test
+    fun `an abandoned drop as the most-recent recentTask is never a PostTask-exit mint target (#630 review Fix B, #736)`() {
+        // The `recentTasks.lastOrNull { jobId }` fallback selects an UNASSIGNED drop (identity-bearing,
+        // completedAt null). The #736 belt must stop it from minting a fabricated DELIVERY_COMPLETED for
+        // a never-delivered order. On cd348221 (no unassigned guard on this fallback) it mints one.
+        val receipt = ParsedPay(appPayComponents = listOf(ParsedPayItem("Base Pay", 7.0)), customerTips = emptyList())
+        val postFields = ParsedFields.PostTaskFields(totalPay = 7.0, parsedPay = receipt, sessionEarnings = 20.0)
+        val abandoned = dropoff("dAbandoned", "Taco Bell", "cA", completedAt = null).copy(unassignedAt = 500L)
+
+        val regionPrev = PlatformRegion(
+            platform = Platform.DoorDash,
+            mode = Mode.Online,
+            session = Session("s1", startedAt = 100L, runningEarnings = 20.0),
+            activeJob = jobWithTasks(listOf(abandoned)),
+            activeTask = null, // force the recentTasks fallback to resolve the completed task
+            recentTasks = listOf(abandoned),
+            lastPostTaskFields = postFields,
+            lastAnnouncedPostTaskTaskId = "dAbandoned",
+        )
+        val regionNext = regionPrev.copy() // job stays open → close-out doesn't fire; isolate the exit mint
+
+        val prev = appState(FlowRegion(flow = Flow.PostTask), mapOf(Platform.DoorDash to regionPrev))
+        val next = appState(FlowRegion(flow = Flow.Idle), mapOf(Platform.DoorDash to regionNext))
+
+        val rows = completedRows(prev, next, screenObs(Flow.Idle, timestamp = 3000L))
+        assertTrue("no DELIVERY_COMPLETED for an abandoned drop (master: one fabricated row)", rows.isEmpty())
+    }
+
     @Test
     fun `PostTask exit — single delivery carries dropRealizedPay`() {
         val receipt = ParsedPay(

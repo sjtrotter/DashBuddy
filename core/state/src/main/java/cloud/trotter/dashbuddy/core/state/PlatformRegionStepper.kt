@@ -700,6 +700,9 @@ class PlatformRegionStepper @Inject constructor() {
                 // itemized receipt, `apportion(null)` nulls every not-yet-minted drop's share while an
                 // exit-minted drop kept its share → Σ < total. A DIFFERENT task's collapsed receipt is
                 // a genuinely new receipt and still overwrites. `sessionEarnings` still folds below.
+                // Accepted trade: on the same-task skip the collapsed frame's possibly-updated
+                // `totalPay` is DISCARDED (the itemized expanded receipt is authoritative); an EXPANDED
+                // re-render (`parsedPay != null`) is not a downgrade and refreshes both fields normally.
                 val sameTaskCollapsedDowngrade = parsed.parsedPay == null &&
                     r.lastPostTaskFields?.parsedPay != null &&
                     postTaskTaskId != null &&

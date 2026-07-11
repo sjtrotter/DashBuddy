@@ -13,6 +13,7 @@ import cloud.trotter.dashbuddy.domain.state.ParsedFields
 import cloud.trotter.dashbuddy.domain.state.PlatformRegion
 import cloud.trotter.dashbuddy.domain.state.Task
 import cloud.trotter.dashbuddy.domain.state.TaskPhase
+import cloud.trotter.dashbuddy.domain.state.isAccountableDropoff
 import timber.log.Timber
 
 /**
@@ -89,7 +90,15 @@ internal fun EffectMap.diffDeliveryCompletion(
             val identityLess = completedTask != null &&
                 completedTask.customerNameHash == null &&
                 completedTask.customerAddressHash == null
-            if (completedTask != null && completedTask.phase == TaskPhase.DROPOFF && !identityLess) {
+            // #736 belt: the `recentTasks.lastOrNull { jobId }` fallback above can select a drop the
+            // dasher UNASSIGNED (a null-completedAt abandon that the close-out sweep already filters) —
+            // it must never be the PostTask-exit mint target either, or it fabricates a
+            // DELIVERY_COMPLETED for a never-delivered order. Mirrors the close-out's `unassignedAt`
+            // firewall (below) at this second mint site.
+            val unassigned = completedTask?.unassignedAt != null
+            if (completedTask != null && completedTask.phase == TaskPhase.DROPOFF &&
+                !identityLess && !unassigned
+            ) {
                 val retireSince = p.pendingDestructive
                     ?.takeIf { it.kind == DestructiveKind.TASK_RETIRE }?.since
                 // #630 R2: gate the receipt split on the job's FINAL shape (the SAME predicate
@@ -123,7 +132,12 @@ internal fun EffectMap.diffDeliveryCompletion(
                 val receiptForPayload = if (finalShape) p.lastPostTaskFields else null
                 // #630 R4: the mid-stack partial-receipt seam is observable in the field. PII-safe —
                 // counts + jobId only, stable tag (Principle 7; the #691 FIX-6 / #699 D6 precedent).
-                if (!finalShape && p.lastPostTaskFields?.parsedPay != null) {
+                // Gate on the SAME pay-bearing predicate the fold/estimate use (parsedPay != null ||
+                // totalPay > 0.0) so a pay-bearing COLLAPSED receipt (a $X total with no itemized
+                // parsedPay) is not silently skipped by the WARN.
+                val payBearingReceipt = p.lastPostTaskFields
+                    ?.let { it.parsedPay != null || it.totalPay > 0.0 } == true
+                if (!finalShape && payBearingReceipt) {
                     Timber.tag("StateMachine").w(
                         "#630 mid-stack non-final receipt exit: job %s, %d owed dropoffs — " +
                             "dropRealizedPay withheld (partial receipt not split; rides unattributed)",
@@ -369,13 +383,14 @@ private fun EffectMap.receiptSuppressesEstimate(region: PlatformRegion, job: Job
  * findings 1/3).
  *
  * Sourced from the region records at the mint step (`recentTasks` + the active task, deduped by id),
- * scoped to [jobId] + the DROPOFF phase, restricted to identity-bearing, non-unassigned drops (the
- * #498 phantom + #736 unassign firewalls), then filtered to the rows that will actually mint — the
- * SAME amdt#5 qualification the close-out loop applies: already completed before this step, OR the
- * active task just retired under a TASK_RETIRE grace, OR minted by the PostTask-exit block this step
- * ([emittedThisStep]). Both mint blocks call this with identical arguments so a co-firing step agrees
- * on one denominator (and the [DropPayApportioner]'s canonical `taskId` sort makes the remainder cent
- * order-invariant across the two calls, #630 finding 4).
+ * scoped to [jobId] + the **accountable-dropoff** filter ([Task.isAccountableDropoff]: DROPOFF phase,
+ * identity-bearing, non-unassigned — the #498 phantom + #736 unassign firewalls), then filtered to the
+ * rows that will actually mint — the SAME amdt#5 qualification the close-out loop applies: already
+ * completed before this step, OR the active task just retired under a TASK_RETIRE grace, OR minted by
+ * the PostTask-exit block this step ([emittedThisStep]). Both mint blocks call this with identical
+ * arguments so a co-firing step agrees on one denominator (and the [DropPayApportioner]'s canonical
+ * `taskId` sort makes the remainder cent order-invariant across the two calls, #630 finding 4). The
+ * accountable-dropoff filter is the SSOT shared with [OfferPayFallback.isFinalShape] (Principle 5).
  */
 private fun EffectMap.mintingDropoffTasks(
     p: PlatformRegion,
@@ -386,12 +401,7 @@ private fun EffectMap.mintingDropoffTasks(
 ): List<Task> {
     if (jobId == null) return emptyList()
     return (next.recentTasks + listOfNotNull(next.activeTask))
-        .filter {
-            it.jobId == jobId &&
-                it.phase == TaskPhase.DROPOFF &&
-                it.unassignedAt == null &&
-                (it.customerNameHash != null || it.customerAddressHash != null)
-        }
+        .filter { it.jobId == jobId && it.isAccountableDropoff }
         .distinctBy { it.taskId }
         .filter { t ->
             val alreadyCompleted =
