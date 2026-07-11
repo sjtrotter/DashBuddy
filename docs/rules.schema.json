@@ -359,6 +359,11 @@
           "type": "array",
           "description": "Optional leading marker labels to PRESERVE. If the node text starts with one (case-insensitive), the mask is 'prefix + [redacted:<4hex>]' (e.g. 'Deliver to ' → 'Deliver to [redacted:ab12]'), keeping the require anchor so a replayed redacted capture still recognizes; otherwise the whole node is masked. Address nodes take no keepPrefix.",
           "items": { "type": "string" }
+        },
+        "normalize": {
+          "type": "string",
+          "enum": ["customerName"],
+          "description": "Optional (#733). 'customerName' canonicalizes the masked token (first-token + second-token initial, via CustomerNameKey) BEFORE the <4hex> distinctness hash, so the mask hex equals the persisted customerNameHash when the parse chain uses 'normalizeCustomerName' + 'sha256'. Set ONLY on customer-NAME entries; NEVER on address/instruction entries (canonicalizing an address would degrade its mask distinctness)."
         }
       }
     },
@@ -913,6 +918,7 @@
         "parseLeadingInt",
         "parsePercent",
         "sha256",
+        "normalizeCustomerName",
         "trim",
         "lower",
         "upper",

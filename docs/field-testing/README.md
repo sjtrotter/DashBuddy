@@ -73,6 +73,20 @@ card's **mechanical** half, #577 (re-confirmed, 24/24, ~0.55 s — with a new po
 that entry's Bug #1), the #457 path, and #554 ShadowProjector (2/2). The #462/#460 dropoff item
 was found **broken-in-part** (raw PII in capture envelopes) and moved to that entry's Bug #7.)_
 
+- **🆕 NEW — multi-pickup job lands under a REAL store, no WARN storm (#733 / PR #745).**
+  A multi-pickup job (a stacked stack, or a single customer whose order spans two stores like the
+  07-08 Willie's + Sonic delivery) previously folded its delivery as "Unknown store" and spammed the
+  log with `D6 join miss` WARNs (129–240/dash). The dropoff-store lineage now (a) canonicalizes the
+  customer-name hash (`normalizeCustomerName` before `sha256`) so multi-drop joins stay stable
+  across the surface FORMS a name renders in, (b) resolves a single-customer multi-store job via the
+  constrained multi-match join (earliest-confirmed store, only when unambiguous — two drops sharing
+  a hash fall back rather than guess), and (c) fires the join-miss WARN at most **once per task**.
+  **How to tell it's working (desk-side, after a dash):** on a multi-pickup delivery, the
+  `delivery_records` row (and the per-store view) shows a real store, not "Unknown store"; and the
+  exported `shareable.log` has **at most one** `D6 join miss` line per drop (ideally zero), not the
+  old ×23 burst. Watch a two-store single-customer job especially. A nickname-vs-legal-name render
+  that no normalization can bridge may still fold null (documented residual — fix via Adjust dialog).
+  - Confirmed: 0/2
 - **🆕 NEW — GoPuff / multi-order drop-off confirm card recognized (#501 items 1-2 / PR #743).**
   The "Confirm you have the correct order before drop-off / Mix-ups frequently occur…" card that
   appears before a drop on a **multi-order Dash** (GoPuff Drive batches AND ordinary multi-merchant

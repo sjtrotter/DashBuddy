@@ -104,6 +104,15 @@ data class PlatformRegion(
      * making single-platform behavior identical.
      */
     val lastActedFlow: Flow? = null,
+    /**
+     * Edge-gate state for the D6 store-lineage join-miss WARN (#526/#733): the `taskId` of the
+     * dropoff for which the WARN was last emitted. The join-miss log is keyed **once per taskId** —
+     * NOT per (taskId, customerNameHash) edge — because a two-form customer surface alternates the
+     * hash A↔B per frame, and a per-hash key would re-storm the log on every flap (the field ×23).
+     * Kept in region state (not a side channel) so the gate is pure and replay-deterministic.
+     * Default-null so existing snapshots deserialize unchanged.
+     */
+    val lastJoinMissWarnTaskId: String? = null,
 ) {
     /**
      * This platform's current PRESENTED offer — the accepted-pending-consumption survivors

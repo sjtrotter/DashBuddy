@@ -101,14 +101,17 @@ class CaptureRedactionCorpusTest {
         assertEquals("same customer must redact to the same 4hex across rules", navHex, timelineHex)
         assertEquals("same customer must redact to the same 4hex across rules", navHex, verifyHex)
 
-        // The suffix equals the first 4 hex of sha256(token) — the same hash the parse persists.
+        // #733: the suffix equals the first 4 hex of sha256 of the CANONICAL customer-name KEY
+        // (normalizeCustomerName: first token + second-token initial → "jane q"), the same hash the
+        // parse now persists — so the mask cross-references the persisted customerNameHash, and the
+        // three surface forms of one customer redact identically.
         val expected = java.security.MessageDigest.getInstance("SHA-256")
-            .digest("Jane Q Doe".toByteArray(Charsets.UTF_8))
+            .digest("jane q".toByteArray(Charsets.UTF_8))
             .joinToString("") { "%02x".format(it) }
             .take(4)
-        assertEquals("suffix must be first 4 hex of sha256(token)", expected, navHex)
+        assertEquals("suffix must be first 4 hex of sha256(canonical customer-name key)", expected, navHex)
 
-        // A DIFFERENT customer must produce a DIFFERENT suffix (distinctness).
+        // A DIFFERENT customer must produce a DIFFERENT suffix (distinctness): "john s" != "jane q".
         val otherHex = hexOf(
             timelineRule.redact.apply(UiNode(text = "Deliver to John Smith")).text!!,
         )
@@ -273,6 +276,75 @@ class CaptureRedactionCorpusTest {
         }
         // Guard the guard: the 4 known sha256 dropoff/timeline rules must be seen.
         assertTrue("expected at least the 4 known sha256 screen rules", checked >= 4)
+    }
+
+    /**
+     * #745 mask↔hash REVERSE-consistency: for every screen rule that parses `customerNameHash`, any
+     * `redact` entry whose `find` targets the SAME node as a parse-field `find` MUST carry
+     * `normalize: customerName`. Otherwise the capture mask hex (derived from the raw token) would
+     * diverge from the persisted hash (derived from the canonical key) — the #623 invariant breaks and
+     * a customer masks differently on the capture than they hash in the record. Structural: keyed on
+     * exact `find`-JSON equality (the reliable proxy for "same node"). Fails with rule id + entry index.
+     */
+    @Test
+    fun `every redact entry over a hashed customer-name node carries normalize customerName (#745)`() {
+        var checked = 0
+        rulesDir.listFiles { f -> f.extension == "json" }?.forEach { file ->
+            val root = Json.parseToJsonElement(file.readText()).jsonObject
+            root["screens"]?.jsonArray?.forEach { screen ->
+                val rule = screen.jsonObject
+                val id = rule["id"]?.jsonPrimitive?.content ?: "<no-id>"
+                // Collect every `find` predicate used ANYWHERE under this rule's customerNameHash parse.
+                val parseFinds = mutableSetOf<kotlinx.serialization.json.JsonElement>()
+                collectNameHashFinds(rule["parse"], parseFinds)
+                if (parseFinds.isEmpty()) return@forEach
+                val redact = rule["redact"]?.jsonArray ?: return@forEach
+                redact.forEachIndexed { i, entryEl ->
+                    val entry = entryEl.jsonObject
+                    val find = entry["find"] ?: return@forEachIndexed
+                    if (find in parseFinds) {
+                        checked++
+                        val normalize = entry["normalize"]?.jsonPrimitive?.content
+                        assertEquals(
+                            "$id redact[$i] masks the SAME node its customerNameHash parse hashes, so " +
+                                "it MUST carry \"normalize\": \"customerName\" (mask↔hash invariant, #745)",
+                            "customerName", normalize,
+                        )
+                    }
+                }
+            }
+        }
+        assertTrue("expected at least one hashed-customer-name redact entry to verify", checked >= 1)
+    }
+
+    /** Recursively collect every `find` JSON element that appears under a `customerNameHash` field. */
+    private fun collectNameHashFinds(
+        el: kotlinx.serialization.json.JsonElement?,
+        out: MutableSet<kotlinx.serialization.json.JsonElement>,
+    ) {
+        when (el) {
+            is kotlinx.serialization.json.JsonObject -> {
+                el["customerNameHash"]?.let { collectFinds(it, out) }
+                el.values.forEach { collectNameHashFinds(it, out) }
+            }
+            is kotlinx.serialization.json.JsonArray -> el.forEach { collectNameHashFinds(it, out) }
+            else -> {}
+        }
+    }
+
+    /** Collect every `find` value within a subtree (a customerNameHash field's own + coalesce branches). */
+    private fun collectFinds(
+        el: kotlinx.serialization.json.JsonElement,
+        out: MutableSet<kotlinx.serialization.json.JsonElement>,
+    ) {
+        when (el) {
+            is kotlinx.serialization.json.JsonObject -> {
+                el["find"]?.let { out.add(it) }
+                el.forEach { (k, v) -> if (k != "find") collectFinds(v, out) }
+            }
+            is kotlinx.serialization.json.JsonArray -> el.forEach { collectFinds(it, out) }
+            else -> {}
+        }
     }
 
     @Test

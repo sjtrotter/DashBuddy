@@ -85,7 +85,9 @@ class PlatformRegionStepper @Inject constructor() {
         // #438 B3: the offer lifecycle runs FIRST, on THIS platform's owned pendingOffers, so an
         // accept-latched offer is marked accepted-pending-consumption before stepCore's task edge
         // consumes it (the old armAcceptStash mirror, run AFTER stepCore, is retired).
-        reconcileDropoffStore(reconcileJobTasks(stepCore(stepOffers(prev, obs), prevFlow, nextFlow, obs, policy))),
+        reconcileDropoffStore(
+            reconcileJobTasks(stepCore(stepOffers(prev, obs), prevFlow, nextFlow, obs, policy)),
+        ),
         obs,
     )
 
@@ -105,21 +107,39 @@ class PlatformRegionStepper @Inject constructor() {
 
 
     /**
-     * #526: a dropoff's store is resolved from the job's PICKUP lineage, not from the dropoff card's
-     * own text format (which varies per merchant — `Target (02426)` / `Maple Street Biscuit - Alamo
-     * Ranch` — and can't be reliably parsed, see the rule comment). A dropoff always follows its
-     * pickup, and the job already holds the pickups with their authoritative, screen-parsed store
-     * names, so:
-     *  - **one distinct pickup store** (the common single delivery, and same-store stacks) → every
-     *    dropoff is that store. No dropoff parse needed; zero format risk.
-     *  - **multiple pickup stores** (a multi-store stack) → match the dropoff's parsed store *candidate*
-     *    (the rule's best-effort `storeName`) to the pickup with the most shared leading name tokens.
-     *    The match also VALIDATES: a garbage candidate matches no pickup → resolves to null, never a
-     *    wrong store (a wrong store would silently mis-attribute the order/economics).
+     * #526/#733: a dropoff's store is resolved from the job's PICKUP lineage, not from the dropoff
+     * card's own text format (which varies per merchant — `Target (02426)` / `Maple Street Biscuit -
+     * Alamo Ranch` — and can't be reliably parsed, see the rule comment). A dropoff always follows
+     * its pickup, and the job already holds the pickups with their authoritative, screen-parsed store
+     * names. Resolution is the **customer-hash join** (#526 D6, generalized + constrained #733):
+     *  1. **EXACT single-match join** — this drop's `customerNameHash` joins one or more pickups that
+     *     all map to ONE store → resolve it. Unconditional: a single agreed store is correct for this
+     *     drop even if a colliding customer shares the hash. Normalization (#733) keeps the hashes
+     *     cross-surface-stable so a customer's short/full name forms join.
+     *  2. **CONSTRAINED multi-store default** — the matched pickups span ≥2 stores. This drop is then
+     *     genuinely multi-store-fed and resolves to the deterministic multi-store default (the
+     *     earliest-confirmed matched pickup's store, [resolveFromPickupSet]) — but ONLY when this drop
+     *     is the **sole ACTIVATED dropoff** in the job carrying that hash. If ≥2 activated dropoffs
+     *     share the hash (colliding customers whose normalized keys collapse, or a strip-miss), the
+     *     hash is INCONCLUSIVE for those drops → fall through. Fail-null beats fail-wrong.
+     *  3. **TOKEN MATCH (existing)** — a 0-match drop (or an inconclusive collision) falls back to
+     *     matching its parsed store *candidate* to the pickup with the most shared brand tokens; a
+     *     garbage candidate matches nothing → null, never a wrong store.
      *  - **no pickup seen yet** → keep the candidate as-is.
-     * The resolved value is the matched pickup's canonical (offer-aligned) store name, so pickup and
-     * dropoff carry a consistent label. The dropoff card's running-key form still lives on the
-     * payout for the post-session store-entity projector (#159).
+     *
+     * The former **structural single-drop arm** (resolve any job with exactly one dropoff from ALL its
+     * pickups, no hash) was DELETED (#745 review): its premise — placeholder count == physical drops —
+     * is desynchronized by per-order placeholders (`JobAcceptFlow` mints one per ORDER, so a
+     * same-customer 2-order job counts 2 forever) and by the unparsed-offer `dropoffCount=1` fallback,
+     * where it would stamp a WRONG store on a real 2-drop stack, pre-empting the exact hash join. It
+     * was also proven inert on the fielded 07-08 shape — the nav-sheet customer hash actually joins
+     * BOTH pickups, so the multi-match arm does the real work there. "Never a wrong store" holds: we
+     * only ever attribute a store INSIDE the drop's own matched lineage. The dropoff card's full
+     * running-key form set still lives on the payout for the store-entity projector (#159).
+     *
+     * RESIDUAL (#745 review, follow-up filed): the per-order-placeholder desync above means a
+     * same-customer multi-order job never satisfies `isJobPhysicallyComplete` → the #596 T2 guard
+     * never fires → the NEXT offer can fold into an already-finished job. Pre-existing, now flagged.
      */
     private fun reconcileDropoffStore(region: PlatformRegion): PlatformRegion {
         val active = region.activeTask ?: return region
@@ -127,44 +147,60 @@ class PlatformRegionStepper @Inject constructor() {
         val jobPickups = region.recentTasks
             .filter { it.jobId == active.jobId && it.phase == TaskPhase.PICKUP }
 
-        // #526 D6 rule 1 — customer-hash join (priority): the dropoff carries the order's customer,
-        // and so does the pickup (pickup_arrival hashes it, #526 D6a — the SAME stripped/trimmed
-        // token, so the sha256s match). When this drop's customerNameHash matches EXACTLY ONE of the
-        // job's pickup-lineage tasks, attribute that pickup's canonical store — the reliable fix for a
-        // multi-store stack's null-store drop (F2), where the dropoff card parses no store and the
-        // token-match fallback below has no candidate text. Exact-hash, replay-stable, PII-free
-        // (hashes only). A mixed same-store stack keeps last-seen on the pickup, so an unjoined drop
-        // (0 matches) or an ambiguous one (>1) falls through to rule 2 — never a wrong store.
+        // CUSTOMER-HASH JOIN (#526 D6, generalized + constrained #733). The dropoff carries the order's
+        // customer and so does its pickup; with normalization the sha256s match across surfaces.
         val dropHash = active.customerNameHash
         if (dropHash != null) {
             val matched = jobPickups.filter { it.customerNameHash == dropHash && it.storeName != null }
-            if (matched.size == 1) {
-                val resolved = matched.single().storeName!!
-                return if (resolved == active.storeName) region
-                else region.copy(activeTask = active.copy(storeName = resolved))
-            }
-            // #526 FIX5 (D6 observability): a multi-store stack whose drop carries a customer hash but
-            // joins to ZERO pickup-lineage hashes is the signature of cross-surface hash-format drift
-            // — the pickup hashes the raw customer_name ([trim,sha256]); the dropoff hashes
-            // stripPrefixes'd text, and byte-identical rendering is an untested contract. Surface it
-            // (only while the drop is still unresolved, to bound the volume). PII-safe: counts + a
-            // 6-char hash prefix only, no store/customer text (Principle 7).
-            if (matched.isEmpty() && active.storeName == null) {
-                val distinctPickupStores = jobPickups.mapNotNull { it.storeName }
-                    .distinctBy { it.lowercase(Locale.ROOT) }.size
-                if (distinctPickupStores >= 2) {
-                    Timber.tag("StateMachine").w(
-                        "D6 join miss (#526): drop hash %s matched 0 of %d pickup-lineage customer " +
-                            "hashes across %d stores — possible pickup/dropoff hash-format drift",
-                        dropHash.take(6),
-                        jobPickups.count { it.customerNameHash != null },
-                        distinctPickupStores,
-                    )
+            if (matched.isNotEmpty()) {
+                val matchedStores = matched.map { it.storeName!! }.distinctBy { it.lowercase(Locale.ROOT) }
+                if (matchedStores.size == 1) {
+                    // EXACT single-match join — unconditional. All matched pickups agree on one store,
+                    // so it is correct for this drop even if a colliding customer shares the hash.
+                    val resolved = matchedStores.single()
+                    return if (resolved == active.storeName) region
+                    else region.copy(activeTask = active.copy(storeName = resolved))
                 }
+                // Matched pickups span ≥2 stores → the deterministic multi-store default, but ONLY
+                // when this drop is the sole ACTIVATED dropoff carrying this hash. A never-activated
+                // placeholder has no resolved customerNameHash, so it never counts. ≥2 activated drops
+                // sharing the hash → we can't say which store feeds which → inconclusive; fall through.
+                if (activatedDropoffsWithHash(region, dropHash) <= 1) {
+                    val resolved = resolveFromPickupSet(matched, fallback = active.storeName)
+                    return if (resolved == active.storeName) region
+                    else region.copy(activeTask = active.copy(storeName = resolved))
+                }
+                // else: inconclusive collision → fall through to the token rules.
             }
         }
 
-        // Rule 2 (existing): store from the job's pickup lineage by name.
+        // --- fall-through: D6 join-miss WARN gate + token match ---
+        var r = region
+        // #526 FIX5 / #733 part 5 (D6 observability): a multi-store job whose drop joins ZERO
+        // pickup-lineage hashes is the signature of cross-surface hash-form drift a rule forgot to
+        // normalize. Surface it, EDGE-GATED ONCE PER taskId (#745 re-key): a two-form customer surface
+        // flaps the hash A↔B per frame, so a per-(taskId,hash) key would re-storm the log every flap
+        // (the field ×23). The gate lives in region state ([PlatformRegion.lastJoinMissWarnTaskId]) so
+        // it is pure + replay-deterministic. PII-safe: counts + a 6-char hash prefix only (P7). Only
+        // the true 0-match case warns — an inconclusive collision (matched but ambiguous) does not.
+        if (dropHash != null && active.storeName == null &&
+            jobPickups.none { it.customerNameHash == dropHash && it.storeName != null }
+        ) {
+            val distinctPickupStores = jobPickups.mapNotNull { it.storeName }
+                .distinctBy { it.lowercase(Locale.ROOT) }.size
+            if (distinctPickupStores >= 2 && region.lastJoinMissWarnTaskId != active.taskId) {
+                Timber.tag("StateMachine").w(
+                    "D6 join miss (#526/#733): drop hash %s matched 0 of %d pickup-lineage customer " +
+                        "hashes across %d stores — pickup/dropoff hash-form drift",
+                    dropHash.take(6),
+                    jobPickups.count { it.customerNameHash != null },
+                    distinctPickupStores,
+                )
+                r = r.copy(lastJoinMissWarnTaskId = active.taskId)
+            }
+        }
+
+        // Rule 2 (existing): store from the job's pickup lineage by name-token match.
         val pickupStores = jobPickups
             .filter { it.storeName != null }
             .map { it.storeName!! }
@@ -173,13 +209,53 @@ class PlatformRegionStepper @Inject constructor() {
             pickupStores.size == 1 -> pickupStores.single()
             pickupStores.isEmpty() -> active.storeName
             else -> {
-                val cand = active.storeName ?: return region
+                val cand = active.storeName ?: return r
                 // Match the dropoff's candidate to the pickup with the most shared brand tokens
                 // (the SSOT comparison in [StoreNameMatch]); no match → null, never a wrong store.
                 StoreNameMatch.bestMatch(pickupStores, cand)
             }
         }
-        return if (resolved == active.storeName) region else region.copy(activeTask = active.copy(storeName = resolved))
+        return if (resolved == active.storeName) r else r.copy(activeTask = active.copy(storeName = resolved))
+    }
+
+    /**
+     * #733/#745 — the number of DISTINCT **activated** dropoff tasks in this job carrying [hash],
+     * deduped by taskId, across the completed lineage ([PlatformRegion.recentTasks]), the active drop,
+     * and the job's task mirror ([Job.tasks]). A never-activated offer-spawned placeholder is
+     * customer-TBD (`customerNameHash == null`), so filtering on a non-null [hash] excludes it — only
+     * drops a screen has actually resolved onto count. Used to gate the multi-store default: it may
+     * fire only when this is the SOLE activated drop with the hash (else two colliding drops could
+     * each grab a wrong lineage store).
+     */
+    private fun activatedDropoffsWithHash(region: PlatformRegion, hash: String): Int {
+        val ids = HashSet<String>()
+        (region.recentTasks + listOfNotNull(region.activeTask) + region.activeJob?.tasks.orEmpty())
+            .filter { it.phase == TaskPhase.DROPOFF && it.customerNameHash == hash }
+            .forEach { ids += it.taskId }
+        return ids.size
+    }
+
+    /**
+     * #733 — resolve a dropoff's store from a set of its lineage pickups. One distinct store →
+     * that store; ≥2 → the deterministic multi-store default: the EARLIEST-CONFIRMED pickup's store
+     * (fallback earliest-arrived, then earliest-started, then lineage order). All keys are
+     * `obs.timestamp`-derived, so replay-stable. Empty set → [fallback] (keep the drop's own
+     * candidate — no pickup seen yet).
+     */
+    private fun resolveFromPickupSet(pickups: List<Task>, fallback: String?): String? {
+        val withStore = pickups.filter { it.storeName != null }
+        val distinct = withStore.map { it.storeName!! }.distinctBy { it.lowercase(Locale.ROOT) }
+        return when {
+            distinct.isEmpty() -> fallback
+            distinct.size == 1 -> distinct.single()
+            else -> withStore.minWithOrNull(
+                compareBy(
+                    { it.completedAt ?: Long.MAX_VALUE }, // earliest-confirmed (a confirmed pickup completes)
+                    { it.arrivedAt ?: Long.MAX_VALUE },   // else earliest-arrived
+                    { it.startedAt },                     // else earliest-started
+                ),
+            )?.storeName
+        }
     }
 
     /**

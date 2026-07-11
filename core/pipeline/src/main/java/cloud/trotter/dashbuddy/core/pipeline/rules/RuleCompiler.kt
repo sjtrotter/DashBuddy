@@ -350,6 +350,19 @@ object RuleCompiler {
             )
         }
 
+        // #733/#745 lint: POSITIONAL + BIDIRECTIONAL guard on `normalizeCustomerName`.
+        // (a) a `customerNameHash` parse chain that hashes MUST place `normalizeCustomerName`
+        //     immediately BEFORE `sha256` — else the same customer's name renders differently
+        //     across surfaces (pickup "Brandy S" vs arrival "Brandy Smith") and hashes to
+        //     DIFFERENT values, breaking the store-lineage join (the D6 NULL-store bug).
+        // (b) `normalizeCustomerName` may NOT appear anywhere unless immediately FOLLOWED by
+        //     `sha256` — a bare canonicalization would persist the customer's canonical name in
+        //     the clear (a Pledge leak); it is a hash pre-image transform, nothing else.
+        // Keyed on the enumerated CONTRACT field name (#8), not a platform. SCREEN-scoped.
+        if (context == RuleContext.SCREEN) {
+            validateCustomerNameNormalization(obj, id)
+        }
+
         // #419: bound the branch count from the RAW array, before compiling — an
         // over-cap branch list is a linear-scan-per-frame DoS at rule scope, and
         // rejecting here avoids compiling the pathological list at all.
@@ -466,7 +479,18 @@ object RuleCompiler {
             val find = compileNodePred(findSpec)
             val keepPrefix = obj["keepPrefix"]?.jsonArray?.map { it.jsonPrimitive.content }
                 ?: emptyList()
-            CompiledRedactEntry(find, keepPrefix)
+            // #733: opt a customer-NAME entry into canonical-key hashing so the mask hex
+            // stays equal to the persisted `customerNameHash` (the parse normalizes the
+            // same token). Rejected on any other value — fail loud, don't silently no-op.
+            val normalize = obj["normalize"]?.jsonPrimitive?.content?.let { kind ->
+                when (kind) {
+                    "customerName" -> RedactNormalize.CUSTOMER_NAME
+                    else -> throw RuleCompileException(
+                        "redact entry: unknown normalize '$kind' (expected 'customerName')",
+                    )
+                }
+            }
+            CompiledRedactEntry(find, keepPrefix, normalize)
         }
         return CompiledRedact(entries)
     }
@@ -487,6 +511,110 @@ object RuleCompiler {
             is JsonPrimitive -> element.isString && element.content == "sha256"
             is JsonObject -> element.values.any { jsonUsesSha256(it, depth + 1) }
             is JsonArray -> element.any { jsonUsesSha256(it, depth + 1) }
+        }
+    }
+
+    /**
+     * #733/#745 POSITIONAL + BIDIRECTIONAL lint on `normalizeCustomerName`. Reads transform ARRAYS in
+     * ORDER (adjacency matters — a Set loses it). Two independent guards, both fail-closed:
+     *  (a) [assertNameHashChainsNormalizedBeforeSha256] — every `sha256` inside a `customerNameHash`
+     *      parse chain must be immediately preceded by `normalizeCustomerName`.
+     *  (b) [assertNormalizeAlwaysBeforeSha256] — everywhere in the rule, `normalizeCustomerName` must
+     *      be immediately followed by `sha256`; a bare/standalone use would persist the canonical name.
+     * Depth-bounded like [jsonUsesSha256].
+     */
+    private fun validateCustomerNameNormalization(element: JsonElement, id: String) {
+        assertNormalizeAlwaysBeforeSha256(element, id)
+        walkNameHashFields(element, id)
+    }
+
+    /** True when [el] is the plain string transform token [name]. */
+    private fun isTransformName(el: JsonElement?, name: String): Boolean =
+        el is JsonPrimitive && el.isString && el.content == name
+
+    private fun nameHashLintError(id: String): Nothing = throw RuleCompileException(
+        "Screen rule '$id': a `customerNameHash` parse that hashes MUST place " +
+            "`normalizeCustomerName` immediately before `sha256` (#733) — else the same customer's " +
+            "name renders differently across surfaces and hashes distinctly, breaking the " +
+            "store-lineage join. Insert \"normalizeCustomerName\" immediately before \"sha256\".",
+    )
+
+    private fun normalizeOrderLintError(id: String): Nothing = throw RuleCompileException(
+        "Rule '$id': `normalizeCustomerName` must be immediately followed by `sha256` (#745) — a bare " +
+            "canonicalization persists the customer's canonical name in the clear (a Pledge leak); it " +
+            "is a hash pre-image transform only.",
+    )
+
+    /** (b) — wherever `normalizeCustomerName` appears it must be the array element immediately before
+     *  `sha256`. A standalone use (object value, chain tail, wrong neighbour) is rejected. */
+    private fun assertNormalizeAlwaysBeforeSha256(el: JsonElement, id: String, depth: Int = 0) {
+        if (depth > MAX_JSON_DEPTH)
+            throw RuleCompileException("Rule '$id' JSON nesting exceeds MAX_JSON_DEPTH=$MAX_JSON_DEPTH")
+        when (el) {
+            is JsonArray -> {
+                el.forEachIndexed { i, child ->
+                    if (isTransformName(child, "normalizeCustomerName") &&
+                        !isTransformName(el.getOrNull(i + 1), "sha256")
+                    ) {
+                        normalizeOrderLintError(id)
+                    }
+                }
+                el.forEach { assertNormalizeAlwaysBeforeSha256(it, id, depth + 1) }
+            }
+            is JsonObject -> el.values.forEach { v ->
+                // A bare `"transform": "normalizeCustomerName"` (not in an array) can never be followed
+                // by sha256 → reject; otherwise recurse.
+                if (isTransformName(v, "normalizeCustomerName")) normalizeOrderLintError(id)
+                assertNormalizeAlwaysBeforeSha256(v, id, depth + 1)
+            }
+            is JsonPrimitive -> {}
+        }
+    }
+
+    /** (a) — walk to each `customerNameHash` field subtree and check its transform chains. */
+    private fun walkNameHashFields(el: JsonElement, id: String, depth: Int = 0) {
+        if (depth > MAX_JSON_DEPTH)
+            throw RuleCompileException("Rule '$id' JSON nesting exceeds MAX_JSON_DEPTH=$MAX_JSON_DEPTH")
+        when (el) {
+            is JsonObject -> {
+                el["customerNameHash"]?.let { assertNameHashChainsNormalizedBeforeSha256(it, id) }
+                el.values.forEach { walkNameHashFields(it, id, depth + 1) }
+            }
+            is JsonArray -> el.forEach { walkNameHashFields(it, id, depth + 1) }
+            is JsonPrimitive -> {}
+        }
+    }
+
+    /** Within a `customerNameHash` field subtree (incl. coalesce branches), every `transform` chain's
+     *  `sha256` must be immediately preceded by `normalizeCustomerName`; a bare `"sha256"` fails. */
+    private fun assertNameHashChainsNormalizedBeforeSha256(field: JsonElement, id: String, depth: Int = 0) {
+        if (depth > MAX_JSON_DEPTH)
+            throw RuleCompileException("Rule '$id' JSON nesting exceeds MAX_JSON_DEPTH=$MAX_JSON_DEPTH")
+        when (field) {
+            is JsonObject -> {
+                field["transform"]?.let { assertTransformShaPrecededByNormalize(it, id) }
+                field.forEach { (k, v) -> if (k != "transform") assertNameHashChainsNormalizedBeforeSha256(v, id, depth + 1) }
+            }
+            is JsonArray -> field.forEach { assertNameHashChainsNormalizedBeforeSha256(it, id, depth + 1) }
+            is JsonPrimitive -> {}
+        }
+    }
+
+    /** For a `transform` spec: every `sha256` must be preceded (in its own array) by
+     *  `normalizeCustomerName`. A bare `"sha256"` string (no chain) has no predecessor → fails. */
+    private fun assertTransformShaPrecededByNormalize(t: JsonElement, id: String) {
+        when (t) {
+            is JsonPrimitive -> if (isTransformName(t, "sha256")) nameHashLintError(id)
+            is JsonArray -> {
+                t.forEachIndexed { i, e ->
+                    if (isTransformName(e, "sha256") && !isTransformName(t.getOrNull(i - 1), "normalizeCustomerName")) {
+                        nameHashLintError(id)
+                    }
+                }
+                // A nested chain (rare — e.g. a `regex.then` array) — recurse into non-string elements.
+                t.forEach { if (it !is JsonPrimitive) assertTransformShaPrecededByNormalize(it, id) }
+            }
+            is JsonObject -> t.values.forEach { assertTransformShaPrecededByNormalize(it, id) }
         }
     }
 
