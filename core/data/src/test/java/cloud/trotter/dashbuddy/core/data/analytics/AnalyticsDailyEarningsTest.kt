@@ -212,4 +212,28 @@ class AnalyticsDailyEarningsTest {
         assertEquals("Monday keeps its session gross", 20.0, days[0].gross, 1e-9)
         assertEquals("Wednesday gets the orphan delivery's own-day gross", 8.0, days[2].gross, 1e-9)
     }
+
+    /**
+     * #660 piece 2: once the driver categorizes the Wednesday orphan into the Monday dash
+     * (`DELIVERY_SESSION_ASSIGN` → the row carries `sessionId = "M"`), its gross moves OFF its own
+     * completion day and onto the session's start day — a midnight/day-spanning categorize lands the
+     * dollars with the rest of the dash (session-anchored, #655), no longer on the stray Wednesday bar.
+     */
+    @Test
+    fun `a categorized orphan's gross moves from its completion day to the session's start day (#660 piece 2)`() = runBlocking {
+        val base = weekStart()
+        // A real Monday dash whose delivered pay is captured session-tied (reported null → Σ delivered).
+        dao.upsertSession(session("M", base, reportedEarnings = null))
+        dao.upsertDelivery(delivery(1, "M", completedAt = base + hour, pay = 20.0))
+        // The former orphan, completing Wednesday, NOW categorized into the Monday dash (post-apply state).
+        val wednesday = Instant.ofEpochMilli(base).atZone(zone).toLocalDate().plusDays(2)
+        val wednesdayNoon = wednesday.atTime(12, 0).atZone(zone).toInstant().toEpochMilli()
+        dao.upsertDelivery(
+            delivery(99, sessionId = "M", completedAt = wednesdayNoon, pay = 8.0).copy(sessionAssigned = 1),
+        )
+
+        val days = repo.dailyEarnings(AnalyticsPeriod.THIS_WEEK, zone).first()
+        assertEquals("Monday now carries the whole dash: 20 + the categorized 8", 28.0, days[0].gross, 1e-9)
+        assertEquals("Wednesday no longer shows the orphan (it moved to the dash's start day)", 0.0, days[2].gross, 1e-9)
+    }
 }

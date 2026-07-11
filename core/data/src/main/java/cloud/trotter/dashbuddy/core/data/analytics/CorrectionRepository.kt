@@ -4,6 +4,7 @@ import cloud.trotter.dashbuddy.core.data.event.AppEventRepo
 import cloud.trotter.dashbuddy.domain.model.event.AppEvent
 import cloud.trotter.dashbuddy.domain.model.event.AppEventType
 import cloud.trotter.dashbuddy.domain.model.event.payload.DeliveryAdjustmentPayload
+import cloud.trotter.dashbuddy.domain.model.event.payload.DeliverySessionAssignPayload
 import cloud.trotter.dashbuddy.domain.model.event.payload.ManualDeliveryPayload
 import timber.log.Timber
 import javax.inject.Inject
@@ -123,6 +124,44 @@ class CorrectionRepository @Inject constructor(
         )
         // P7: no note/store text — counts/ids only.
         Timber.tag(TAG).i("DELIVERY_ADJUSTMENT appended for delivery seq %d", targetEventSequenceId)
+    }
+
+    /**
+     * Append a driver session-(re)attribution of an orphan "(No session)" delivery (#660 piece 2).
+     * [targetEventSequenceId] is the PK of the target `delivery_record`; [newSessionId] is the dash to
+     * assign it to, or **null to UNASSIGN** it back to the "(No session)" bucket (the undo). The
+     * envelope `sessionId` = [newSessionId] (attribution/liveness only, the corrections convention). The
+     * projector applies the re-attribution — with its fail-closed guards (movable rows only, real ended
+     * target session, platform coherence, cash-bearing-unassign block) — on its next drain; the original
+     * event stays, and it re-prices NOTHING (attribution only).
+     *
+     * Validation is deliberately minimal (the projector guards are the authority, and the repository
+     * cannot see the read model, per the existing read/write split): a non-null [newSessionId] must be
+     * non-blank (a blank id would fold to a dangling attribution).
+     */
+    suspend fun assignDeliverySession(
+        targetEventSequenceId: Long,
+        newSessionId: String?,
+        note: String? = null,
+    ) {
+        require(newSessionId == null || newSessionId.isNotBlank()) { "newSessionId must be non-blank when assigning" }
+        appEventRepo.appendUserEvent(
+            AppEvent(
+                type = AppEventType.DELIVERY_SESSION_ASSIGN,
+                occurredAt = System.currentTimeMillis(),
+                sessionId = newSessionId,
+                payload = DeliverySessionAssignPayload(
+                    targetEventSequenceId = targetEventSequenceId,
+                    newSessionId = newSessionId,
+                    note = note,
+                ),
+            ),
+        )
+        // P7: no note text — counts/ids only.
+        Timber.tag(TAG).i(
+            "DELIVERY_SESSION_ASSIGN appended for delivery seq %d (assigned=%b)",
+            targetEventSequenceId, newSessionId != null,
+        )
     }
 
     private companion object {

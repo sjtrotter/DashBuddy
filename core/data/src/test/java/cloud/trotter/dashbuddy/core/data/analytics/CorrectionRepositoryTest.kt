@@ -2,12 +2,17 @@ package cloud.trotter.dashbuddy.core.data.analytics
 
 import cloud.trotter.dashbuddy.core.data.analytics.CorrectionRepository
 import cloud.trotter.dashbuddy.core.data.event.AppEventRepo
+import cloud.trotter.dashbuddy.domain.model.event.AppEventType
+import cloud.trotter.dashbuddy.domain.model.event.payload.DeliverySessionAssignPayload
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.runTest
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertThrows
 import org.junit.Test
 import org.mockito.kotlin.any
 import org.mockito.kotlin.anyOrNull
+import org.mockito.kotlin.argumentCaptor
 import org.mockito.kotlin.mock
 import org.mockito.kotlin.never
 import org.mockito.kotlin.times
@@ -67,6 +72,45 @@ class CorrectionRepositoryTest {
         repo.adjustDelivery(targetEventSequenceId = 1L, sessionId = "S1", note = "just a note")
         repo.adjust(newPay = 12.0, newTip = 0.0, newCashTip = 0.0, newMiles = 0.0)
         verify(appEventRepo, times(2)).appendUserEvent(any(), anyOrNull())
+    }
+
+    // ── assignDeliverySession (#660 piece 2) ────────────────────────────
+
+    @Test
+    fun `assignDeliverySession appends the assign event with envelope sessionId == newSessionId`() = runTest {
+        repo.assignDeliverySession(targetEventSequenceId = 42L, newSessionId = "S1", note = "was mine")
+
+        val captor = argumentCaptor<cloud.trotter.dashbuddy.domain.model.event.AppEvent>()
+        verify(appEventRepo).appendUserEvent(captor.capture(), anyOrNull())
+        val event = captor.firstValue
+        assertEquals(AppEventType.DELIVERY_SESSION_ASSIGN, event.type)
+        assertEquals("envelope sessionId == newSessionId (attribution/liveness convention)", "S1", event.sessionId)
+        val payload = event.payload as DeliverySessionAssignPayload
+        assertEquals(42L, payload.targetEventSequenceId)
+        assertEquals("S1", payload.newSessionId)
+        assertEquals("note passes through", "was mine", payload.note)
+    }
+
+    @Test
+    fun `assignDeliverySession with a null newSessionId is the unassign (undo) — envelope sessionId null`() = runTest {
+        repo.assignDeliverySession(targetEventSequenceId = 7L, newSessionId = null)
+
+        val captor = argumentCaptor<cloud.trotter.dashbuddy.domain.model.event.AppEvent>()
+        verify(appEventRepo).appendUserEvent(captor.capture(), anyOrNull())
+        val event = captor.firstValue
+        assertNull("unassign carries a null envelope sessionId", event.sessionId)
+        val payload = event.payload as DeliverySessionAssignPayload
+        assertEquals(7L, payload.targetEventSequenceId)
+        assertNull(payload.newSessionId)
+        assertNull(payload.note)
+    }
+
+    @Test
+    fun `assignDeliverySession rejects a blank (non-null) newSessionId and appends nothing`() = runTest {
+        assertThrows(IllegalArgumentException::class.java) {
+            runBlocking { repo.assignDeliverySession(targetEventSequenceId = 1L, newSessionId = "   ") }
+        }
+        verify(appEventRepo, never()).appendUserEvent(any(), anyOrNull())
     }
 
     @Test

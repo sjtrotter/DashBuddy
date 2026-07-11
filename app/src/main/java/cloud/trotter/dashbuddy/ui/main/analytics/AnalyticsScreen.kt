@@ -19,12 +19,15 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import androidx.compose.runtime.getValue
 import cloud.trotter.dashbuddy.R
 import cloud.trotter.dashbuddy.core.designsystem.component.AppSegmented
 import cloud.trotter.dashbuddy.domain.analytics.AnalyticsPeriod
@@ -47,6 +50,8 @@ fun AnalyticsScreen(
     viewModel: AnalyticsViewModel = hiltViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    // "(No session)" categorize flow (#660 piece 2) — opened from the Money-tab callout.
+    var showAssignSheet by remember { mutableStateOf(false) }
 
     Scaffold(
         topBar = {
@@ -106,6 +111,7 @@ fun AnalyticsScreen(
                         recentSessions = uiState.recentSessions,
                         dailyEarnings = uiState.dailyEarnings,
                         onOpenSession = onOpenSession,
+                        onOpenNoSession = { showAssignSheet = true },
                     )
                 }
 
@@ -134,6 +140,15 @@ fun AnalyticsScreen(
                 )
             }
         }
+    }
+
+    if (showAssignSheet) {
+        NoSessionAssignDialog(
+            orphans = uiState.noSessionDeliveries,
+            candidateSessionsFor = viewModel::candidateSessionsFor,
+            onAssign = viewModel::assignToSession,
+            onDismiss = { showAssignSheet = false },
+        )
     }
 }
 

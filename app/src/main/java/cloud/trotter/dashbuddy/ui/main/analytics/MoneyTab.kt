@@ -58,6 +58,7 @@ fun MoneyTab(
     recentSessions: List<SessionRecord>,
     dailyEarnings: List<DailyEarnings>,
     onOpenSession: (String) -> Unit,
+    onOpenNoSession: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Column(modifier = modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(16.dp)) {
@@ -83,10 +84,11 @@ fun MoneyTab(
                 modifier = Modifier.fillMaxWidth(),
             )
         }
-        // "(No session)" bucket (#660 piece 1): deliveries whose source event carried no sessionId at
-        // all. Already folded into [economics.grossEarnings]/[netProfit] above (so gross can't read
-        // below net from this seam) — this callout is the visible data-quality signal, same pattern as
-        // the unattributed/over-attributed flags. Categorizing the bucket into a session is #660 piece 2.
+        // "(No session)" bucket (#660): deliveries whose source event carried no sessionId at all.
+        // Already folded into [economics.grossEarnings]/[netProfit] above (so gross can't read below net
+        // from this seam) — this callout is the visible data-quality signal, same pattern as the
+        // unattributed/over-attributed flags. TAPPABLE (#660 piece 2): opens the categorize flow to
+        // assign an orphan into its real dash, which heals the double-count and empties this bucket.
         if (economics.noSessionPay > UNATTRIBUTED_EPSILON) {
             val deliveryWord = if (economics.noSessionDeliveries == 1) {
                 stringResource(R.string.time_tab_delivery_singular)
@@ -101,7 +103,9 @@ fun MoneyTab(
                     deliveryWord,
                 ),
                 container = AppTheme.colors.warnBg,
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { onOpenNoSession() },
             )
         }
         TopStoresCard(topStores)

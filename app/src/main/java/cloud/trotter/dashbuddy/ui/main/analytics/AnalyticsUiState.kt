@@ -5,6 +5,7 @@ import cloud.trotter.dashbuddy.R
 import cloud.trotter.dashbuddy.domain.analytics.AnalyticsPeriod
 import cloud.trotter.dashbuddy.domain.analytics.DailyEarnings
 import cloud.trotter.dashbuddy.domain.analytics.DecisionEconomics
+import cloud.trotter.dashbuddy.domain.analytics.DeliveryRecord
 import cloud.trotter.dashbuddy.domain.analytics.EarningsHeatmap
 import cloud.trotter.dashbuddy.domain.analytics.PeriodEconomics
 import cloud.trotter.dashbuddy.domain.analytics.SessionRecord
@@ -60,6 +61,11 @@ data class AnalyticsUiState(
     val dailyEarnings: List<DailyEarnings> = emptyList(),
     /** Most recent dash sessions, newest first — each row taps through to the per-dash drill-down (#650). */
     val recentSessions: List<SessionRecord> = emptyList(),
+    /**
+     * The period's orphan "(No session)" deliveries (#660 piece 2) — the categorize flow's list, opened
+     * from the Money-tab callout. Reactive: shrinks as the projector folds a `DELIVERY_SESSION_ASSIGN`.
+     */
+    val noSessionDeliveries: List<DeliveryRecord> = emptyList(),
     /** Offer-decision economics for [selectedPeriod] — the Decisions tab (#315 H3, frozen est.). */
     val decisions: DecisionEconomics = DecisionEconomics.EMPTY,
     /** Time / mileage economics for [selectedPeriod] — the Time tab (#315 H4, measured). */

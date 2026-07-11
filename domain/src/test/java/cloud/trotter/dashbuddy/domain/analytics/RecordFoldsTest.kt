@@ -9,6 +9,7 @@ import cloud.trotter.dashbuddy.domain.model.event.EventMetadata
 import cloud.trotter.dashbuddy.domain.model.event.SequencedAppEvent
 import cloud.trotter.dashbuddy.domain.model.event.payload.AppEventPayload
 import cloud.trotter.dashbuddy.domain.model.event.payload.DeliveryAdjustmentPayload
+import cloud.trotter.dashbuddy.domain.model.event.payload.DeliverySessionAssignPayload
 import cloud.trotter.dashbuddy.domain.model.event.payload.DeliveryPayload
 import cloud.trotter.dashbuddy.domain.model.event.payload.ManualDeliveryPayload
 import cloud.trotter.dashbuddy.domain.model.event.payload.OfferPayload
@@ -1064,6 +1065,57 @@ class RecordFoldsTest {
         // correction's wall-clock time.
         assertEquals(ctx, out.context)
         assertEquals(1_000L, out.context!!.lastEventAt)
+    }
+
+    @Test
+    fun `DELIVERY_SESSION_ASSIGN emits the assign decision, no record, and passes the context through untouched (#660 F2)`() {
+        val s = "M10"
+        val ctx = RecordFolds.foldEvent(dashStart(s, 1_000, odo = 0.0), null, null).context
+        val ev = ev(
+            AppEventType.DELIVERY_SESSION_ASSIGN, s, 5_000,
+            DeliverySessionAssignPayload(targetEventSequenceId = 42L, newSessionId = s, note = "was mine"),
+        )
+        val out = RecordFolds.foldEvent(ev, ctx, null)
+
+        assertNull("a session assign produces no delivery record in the pure fold", out.delivery)
+        assertNull(out.offer)
+        assertNull(out.payAdjustment)
+        assertNull(out.deliveryAdjustment)
+        val adj = out.sessionAssign!!
+        assertEquals(42L, adj.targetEventSequenceId)
+        assertEquals(s, adj.newSessionId)
+        // Bookkeeping about a past row, not session activity: liveness must NOT advance to the
+        // correction's wall-clock time (it would stretch an endedAt-null session's online span).
+        assertEquals(ctx, out.context)
+        assertEquals(1_000L, out.context!!.lastEventAt)
+    }
+
+    @Test
+    fun `a DELIVERY_SESSION_ASSIGN with a null newSessionId is the unassign (undo) decision (#660)`() {
+        val s = "M11"
+        val out = RecordFolds.foldEvent(
+            ev(
+                AppEventType.DELIVERY_SESSION_ASSIGN, sessionId = null, at = 6_000,
+                payload = DeliverySessionAssignPayload(targetEventSequenceId = 7L, newSessionId = null),
+            ),
+            null, null,
+        )
+        val adj = out.sessionAssign!!
+        assertEquals(7L, adj.targetEventSequenceId)
+        assertNull("null newSessionId ⇒ unassign back to the bucket", adj.newSessionId)
+        assertNull(out.delivery)
+    }
+
+    @Test
+    fun `a malformed DELIVERY_SESSION_ASSIGN payload is skipped, not folded (#660)`() {
+        val s = "M12"
+        val bad = SequencedAppEvent(
+            sequenceId = ++seq,
+            event = AppEvent(AppEventType.DELIVERY_SESSION_ASSIGN, occurredAt = 2_000, sessionId = s, payload = null),
+        )
+        val out = RecordFolds.foldEvent(bad, null, null)
+        assertNull(out.sessionAssign)
+        assertNotNull(out.skip)
     }
 
     @Test

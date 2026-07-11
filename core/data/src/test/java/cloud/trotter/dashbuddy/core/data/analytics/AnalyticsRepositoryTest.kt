@@ -60,6 +60,7 @@ class AnalyticsRepositoryTest {
         completedAt: Long,
         platform: String = "doordash",
         cashTip: Double? = null,
+        sessionAssigned: Int = 0,
     ) = DeliveryRecordEntity(
         eventSequenceId = seq,
         sessionId = sessionId,
@@ -84,6 +85,7 @@ class AnalyticsRepositoryTest {
         netProfit = net,
         costBasis = "OFFER_FROZEN",
         cashTip = cashTip,
+        sessionAssigned = sessionAssigned,
     )
 
     private fun session(
@@ -459,34 +461,30 @@ class AnalyticsRepositoryTest {
     }
 
     /**
-     * #660 piece 1 CHARACTERIZATION (adjudicated, documented in [AnalyticsRepository.assemble]'s
-     * KDoc/comment): when the orphan's pay is semantically ALREADY INSIDE a surviving session's
-     * captured `reportedEarnings` — e.g. a mid-dash accessibility-service restart drops this one
-     * delivery's `sessionId`, but the dash's summary screen still gets captured afterward and its
-     * `reportedEarnings` already reflects that delivery's pay — piece 1 has no way to detect the
-     * overlap (the two source queries are structurally disjoint, by design, per the test above) and
-     * so it double-counts: those same 8 dollars land in BOTH the session's own gross-vs-delivered
-     * unattributed delta AND the "(No session)" bucket. This pins that CURRENT, KNOWN behavior
-     * on purpose — it is the seam #660 piece 2 (categorize an orphan into its real session) is
-     * scoped to close. When piece 2 lands, this exact test SHOULD go red (gross should drop to
-     * 100.0 once the orphan is categorized away rather than double-added) — that failure is the
-     * signal piece 2 shipped correctly, not a regression to chase.
+     * #660 piece 2 (the resolved state the piece-1 characterization pinned as red): when the orphan's
+     * pay was semantically ALREADY INSIDE a surviving session's captured `reportedEarnings` — a mid-dash
+     * accessibility-service restart drops this one delivery's `sessionId`, but the dash's summary screen
+     * still gets captured afterward and its `reportedEarnings` already reflects that delivery's pay — the
+     * driver categorizes the orphan into its real dash (`DELIVERY_SESSION_ASSIGN`). The projector's apply
+     * leaves the row with `sessionId = "S1"` + `sessionAssigned = 1` (this is that post-apply state at the
+     * repository level). The double-count HEALS: the row re-enters S1's `GROUP BY sessionId` reconciliation,
+     * gross drops from the piece-1 108.0 to 100.0 (reported-authoritative, no double-add), unattributed
+     * shrinks to 0 (92 + 8 delivered = 100 reported), and the "(No session)" bucket empties. Frozen
+     * economics are untouched — only attribution changed.
      */
     @Test
-    fun `CHARACTERIZATION - correlated orphan double-counts into gross until piece 2 lands (#660)`() = runBlocking {
-        // S1 reported 100, but only 92 of that is captured as session-tied delivered pay (unattributed
-        // = 8) — the missing 8 is semantically the SAME delivery re-appearing below as a null-session
-        // orphan (a restart mid-dash lost its sessionId after the summary screen already saw its pay).
-        dao.upsertSession(session("S1", base, reportedEarnings = 100.0, durationMillis = hour, startOdo = 0.0, lastOdo = 10.0, deliveries = 1, jobsCompleted = 1))
+    fun `correlated orphan reconciles into its session once categorized (#660 piece 2)`() = runBlocking {
+        // S1 reported 100; 92 captured session-tied, and the previously-orphan 8 now categorized into S1.
+        dao.upsertSession(session("S1", base, reportedEarnings = 100.0, durationMillis = hour, startOdo = 0.0, lastOdo = 10.0, deliveries = 2, jobsCompleted = 1))
         dao.upsertDelivery(delivery(1, "S1", "J1", "Wendys", pay = 92.0, net = 80.0, completedAt = base + hour))
-        // The correlated orphan: pay 8, no sessionId — its dollars are ALREADY inside S1's reported 100.
-        dao.upsertDelivery(delivery(2, sessionId = null, jobId = "J1", storeName = "Wendys", pay = 8.0, net = 6.0, completedAt = base + 90 * 60_000))
+        // The orphan AS THE APPLY LEAVES IT: assigned to S1, marker set — no longer sessionId IS NULL.
+        dao.upsertDelivery(delivery(2, sessionId = "S1", jobId = "J1", storeName = "Wendys", pay = 8.0, net = 6.0, completedAt = base + 90 * 60_000, sessionAssigned = 1))
 
         val eco = repo.periodEconomics(AnalyticsPeriod.LIFETIME).first()
-        // CURRENT (documented) behavior: gross = reported 100 + the orphan's own 8 = 108 (double-counted).
-        assertEquals("pins the documented double-count: 100 (reported, already incl. the 8) + 8 (orphan) = 108", 108.0, eco.grossEarnings, 1e-9)
-        assertEquals("unattributed = reported 100 minus session-tied delivered 92", 8.0, eco.unattributedPay, 1e-9)
-        assertEquals("the (No session) bucket still surfaces its own 8, as designed", 8.0, eco.noSessionPay, 1e-9)
+        assertEquals("gross = reported 100 (the 8 is now inside S1's reconciliation, no double-add)", 100.0, eco.grossEarnings, 1e-9)
+        assertEquals("unattributed = reported 100 minus session-tied delivered 100 = 0 (double-count healed)", 0.0, eco.unattributedPay, 1e-9)
+        assertEquals("the (No session) bucket is emptied", 0.0, eco.noSessionPay, 1e-9)
+        assertEquals("no orphan deliveries remain in the bucket", 0, eco.noSessionDeliveries)
     }
 
     /**

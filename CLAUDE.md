@@ -351,8 +351,20 @@ the same null-session population (`AnalyticsDao.noSessionTotals`/`noSessionTotal
 `noSessionDailyRows`) into `PeriodEconomics.grossEarnings` and the per-day chart (bucketed on the
 delivery's own `completedAt` day, since there's no session start to anchor on), and surfacing it as its
 own `noSessionPay`/`noSessionDeliveries` review signal (Money tab callout, same pattern as
-unattributed/over-attributed). Piece 2 (deferred, #660) lets the driver categorize an orphan delivery
-into a real session via a new correction event. Period totals are **read-side only** — they never re-enter the pure state machine (the dead
+unattributed/over-attributed). **Piece 2 (#660, shipped): categorize an orphan into its real dash.** A new
+correction event `DELIVERY_SESSION_ASSIGN` (`DeliverySessionAssignPayload{targetEventSequenceId, newSessionId
+(null⇒unassign/undo), note}`, folded by `RecordFolds.foldDeliverySessionAssign` — context untouched, F2
+liveness discipline) is written by `CorrectionRepository.assignDeliverySession` from the tappable Money-tab
+callout (→ orphan list + ±48h/same-platform/ended-only session picker in `NoSessionAssignDialogs.kt`) and the
+drill-down undo ("assigned by you" caption + "Remove from this dash"). The projector's `applySessionAssign`
+(a third `Adjustment.SessionAssign` in the FIX-1 log-ordered stream) re-attributes **attribution ONLY** —
+`sessionId` + the additive Room-v13→v14 marker `delivery_records.sessionAssigned` via `row.copy`, every frozen
+economy column byte-identical (never re-prices) — behind FIVE fail-closed guards (movable rows only = null-session
+OR already-assigned; real ENDED target session, load-bearing for hydration determinism; platform coherence;
+cash-bearing-unassign block; missing row), each a counted ids-only-WARN skip. The session `deliveries` counter
+rides a **relative** `bumpSessionDeliveries` ±1 (refold-stable). No `PROJECTOR_VERSION` bump (new event type
+can't exist in folded history; the DEFAULT-0 column is correct for all history). The categorized row re-enters
+its session's `GROUP BY sessionId` reconciliation, healing the piece-1 correlated-orphan double-count. Period totals are **read-side only** — they never re-enter the pure state machine (the dead
 `CrossPlatformRegion.PeriodTotals` fields were deleted). The free-tier **CSV export** (#319) is a second
 read-side consumer: `AnalyticsRepository.buildCsvExport` reads raw `deliveriesBetween`/`sessionsBetween`
 rows (row-level, bucketing-free — the driver's own records dumped, not session-anchored periods) and the

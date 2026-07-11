@@ -41,6 +41,7 @@ import org.mockito.kotlin.whenever
 class AnalyticsViewModelTest {
 
     private val analyticsRepository: AnalyticsRepository = mock()
+    private val correctionRepository: cloud.trotter.dashbuddy.core.data.analytics.CorrectionRepository = mock()
 
     /**
      * The Patterns-tab sources (#315 H5) are LIFETIME-scoped and collected unconditionally in the
@@ -69,6 +70,9 @@ class AnalyticsViewModelTest {
         whenever(analyticsRepository.decisionEconomics(eq(period))).thenReturn(flowOf(decisions))
         whenever(analyticsRepository.timeEconomics(eq(period))).thenReturn(flowOf(time))
         whenever(analyticsRepository.dailyEarnings(eq(period), anyOrNull())).thenReturn(flowOf(dailyEarnings))
+        // The VM also collects the "(No session)" orphan list per period (#660 piece 2) in the same
+        // combine, so it must be stubbed or the combine folds a null Flow.
+        whenever(analyticsRepository.noSessionDeliveries(eq(period))).thenReturn(flowOf(emptyList()))
     }
 
     private fun decisions(accepted: Int, declined: Int, timedOut: Int, acceptanceRate: Double?) =
@@ -128,7 +132,7 @@ class AnalyticsViewModelTest {
         offersDeclined = 2, offersTimeout = 0,
     )
 
-    private fun buildViewModel() = AnalyticsViewModel(analyticsRepository)
+    private fun buildViewModel() = AnalyticsViewModel(analyticsRepository, correctionRepository)
 
     @After
     fun tearDown() = Dispatchers.resetMain()

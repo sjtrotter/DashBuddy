@@ -344,6 +344,35 @@ class AnalyticsRepository @Inject constructor(
         analyticsDao.deliveriesForSession(sessionId).map { rows -> rows.map { it.toDomain() } }
 
     /**
+     * The orphan "(No session)" deliveries for [period], newest first (#660 piece 2) — the categorize
+     * flow's list (the Money-tab callout opens it). Reactive: the list re-emits as the projector folds a
+     * `DELIVERY_SESSION_ASSIGN` (the tapped row leaves the bucket, no longer `sessionId IS NULL`). No new
+     * PII surface (store names are driver-owned; no customer hashes on [DeliveryRecord]).
+     */
+    fun noSessionDeliveries(period: AnalyticsPeriod): Flow<List<DeliveryRecord>> =
+        periodBoundariesFlow(period).flatMapLatest { (start, end) ->
+            analyticsDao.noSessionDeliveryRows(start, end).map { rows -> rows.map { it.toDomain() } }
+        }
+
+    /**
+     * The **candidate dashes** an orphan delivery could be categorized into (#660 piece 2): ENDED
+     * sessions within ±48 h of [completedAt], same [platform] (ALL platforms when the orphan's platform
+     * is [Platform.Unknown]), nearest-in-time first. A one-shot snapshot fetched when the driver opens the
+     * picker (not a live surface — the picker is a transient dialog); the projector's ended-session guard
+     * is the authority, this is the UI-policy pre-filter over the existing [AnalyticsDao.sessionsBetween]
+     * raw read (no new DAO query). No economy dependency, no new PII surface (session metadata only).
+     */
+    suspend fun candidateSessionsForOrphan(completedAt: Long, platform: Platform): List<SessionRecord> {
+        val start = completedAt - CANDIDATE_WINDOW_MILLIS
+        val end = completedAt + CANDIDATE_WINDOW_MILLIS
+        return analyticsDao.sessionsBetween(start, end)
+            .map { it.toDomain() }
+            .filter { it.endedAt != null }
+            .filter { platform == Platform.Unknown || it.platform == platform }
+            .sortedBy { kotlin.math.abs(it.startedAt - completedAt) }
+    }
+
+    /**
      * One dash fully expanded (#650 PR A drill-down): the session header + its deliveries in
      * completion order, as a [SessionDetail], or `null` when no session row exists for [sessionId]
      * (the dash was never recorded, or the projector wiped/rebuilt). Read-model only, reactive by
@@ -420,9 +449,12 @@ class AnalyticsRepository @Inject constructor(
         // callout on the Money tab. This mirrors the pre-existing net-side overlap (an orphan's frozen net
         // was always folded via [deliveryTotals], with the identical correlated-restart caveat) — it is
         // not a new class of bug, just newly visible on the gross side now that this bucket folds in. The
-        // real fix is #660 piece 2 (categorize an orphan delivery into its real session via a correction
-        // event), which removes the row from this bucket entirely rather than trying to detect the overlap
-        // here; until then this is a documented, desk-verifiable edge, not a defect to patch in piece 1.
+        // real fix SHIPPED as #660 piece 2 (`DELIVERY_SESSION_ASSIGN` — [CorrectionRepository.assignDeliverySession]
+        // → [AnalyticsProjector.applySessionAssign]): the driver categorizes the orphan into its real dash,
+        // which removes the row from this bucket entirely (its `sessionId` flips non-null) and heals the
+        // double-count via the existing session join, rather than trying to detect the overlap here. Until
+        // the driver categorizes a given orphan this fold remains a documented, desk-verifiable overstatement,
+        // not a defect to patch here (piece 1 kept it visible on purpose so the driver can act on it).
         val net = deliveryNet + unattributed + cash
         val hours = onlineMillis / 3_600_000.0
         return PeriodEconomics(
@@ -514,4 +546,9 @@ class AnalyticsRepository @Inject constructor(
         onTimeDeliveries = delivery.onTime,
         avgDeadlineMarginMillis = delivery.avgDeadlineMarginMillis,
     )
+
+    private companion object {
+        /** ±window around an orphan's `completedAt` for the #660 piece-2 categorize picker (48 h). */
+        private const val CANDIDATE_WINDOW_MILLIS = 48L * 60L * 60L * 1_000L
+    }
 }

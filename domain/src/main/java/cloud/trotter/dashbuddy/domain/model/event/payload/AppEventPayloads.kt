@@ -292,6 +292,31 @@ data class PayAdjustmentPayload(
     val note: String? = null,
 ) : AppEventPayload
 
+/**
+ * Payload for `DELIVERY_SESSION_ASSIGN` (#660 piece 2) — a driver (re-)attribution of an orphan
+ * "(No session)" delivery to its real dash session, or an UNASSIGN back to the bucket (the undo). It
+ * is an **event, never a destructive edit**: the original `DELIVERY_COMPLETED`/`MANUAL_DELIVERY` event
+ * and its provenance stay in the log; the projector re-attributes the target `delivery_record` in place
+ * inside the batch transaction. Because a correction always sequences AFTER its target's completion (and
+ * after the target session's `DASH_STOP`), a from-zero refold replays them in order and reproduces
+ * identical rows/counters.
+ *
+ * It changes **attribution ONLY** — the projector never rewrites pay/net/tip/basis/miles/`originalPayBasis`
+ * or any frozen economy column (the frozen-economics rule; categorizing never re-prices). New in this
+ * correction family: an assign is guarded (movable rows only, real ENDED target session, platform
+ * coherence, cash-bearing-unassign block) so a machine-attributed row is never silently moved out of its
+ * source session's reconciliation.
+ */
+@Serializable
+data class DeliverySessionAssignPayload(
+    /** PK (source `sequenceId`) of the `delivery_record` being (re-)attributed. */
+    val targetEventSequenceId: Long,
+    /** The session to assign the row to; null ⇒ UNASSIGN back to the "(No session)" bucket (undo). */
+    val newSessionId: String? = null,
+    /** Driver-authored free text — driver-owned local data, never in INFO+ logs (P7). */
+    val note: String? = null,
+) : AppEventPayload
+
 /** Wire values for [SessionStartPayload.source] (#366) — mirrors [SessionEndSource]. */
 object SessionStartSource {
     /** Normal user-initiated start. */

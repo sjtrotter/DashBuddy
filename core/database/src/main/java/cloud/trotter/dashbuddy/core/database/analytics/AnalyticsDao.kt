@@ -57,6 +57,17 @@ interface AnalyticsDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun setWatermark(state: AnalyticsProjectionStateEntity)
 
+    /**
+     * Adjust a session's delivery counter by a RELATIVE [delta] (#660 piece 2) — the
+     * `DELIVERY_SESSION_ASSIGN` apply's ±1 as the target row leaves/enters this session. **Relative,
+     * never absolute**, so it composes order-safely with the same transaction's earlier session-context
+     * upserts (the counter's absolute value is folded, not re-derived here) and is identical under an
+     * incremental fold vs a from-zero refold — the ±1 deltas telescope to the same final count either
+     * way. A missing sessionId matches zero rows (a no-op, never a crash).
+     */
+    @Query("UPDATE session_records SET deliveries = deliveries + :delta WHERE sessionId = :sessionId")
+    suspend fun bumpSessionDeliveries(sessionId: String, delta: Int)
+
     // ── Version rebuild (projectorVersion bump ⇒ wipe + refold from 0) ───
 
     @Query("DELETE FROM delivery_records")
@@ -612,6 +623,20 @@ interface AnalyticsDao {
     /** Every delivery in a session, in completion order — the per-dash breakdown. */
     @Query("SELECT * FROM delivery_records WHERE sessionId = :sessionId ORDER BY completedAt ASC")
     fun deliveriesForSession(sessionId: String): Flow<List<DeliveryRecordEntity>>
+
+    /**
+     * Every orphan "(No session)" delivery whose own `completedAt` is in `[start, end)`, newest first —
+     * the #660 piece 2 categorize flow's list (the Money-tab callout opens it). Full rows so the picker
+     * can read the row's `completedAt`/`platform`/`storeName`/`realizedPay`. A `Flow` so the list re-emits
+     * as the projector folds an assign (the tapped row leaves the bucket) — Room invalidation, no manual
+     * refresh. Matches the same null-session population [noSessionTotals] surfaces (`sessionId IS NULL`).
+     */
+    @Query(
+        """SELECT * FROM delivery_records
+           WHERE sessionId IS NULL AND completedAt >= :start AND completedAt < :end
+           ORDER BY completedAt DESC"""
+    )
+    fun noSessionDeliveryRows(start: Long, end: Long): Flow<List<DeliveryRecordEntity>>
 
     /** One session row as a Flow — the #650 drill-down header (re-emits on projector commits). */
     @Query("SELECT * FROM session_records WHERE sessionId = :id")

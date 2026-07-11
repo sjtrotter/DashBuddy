@@ -5,6 +5,7 @@ import cloud.trotter.dashbuddy.domain.model.event.AppEventType
 import cloud.trotter.dashbuddy.domain.model.event.SequencedAppEvent
 import cloud.trotter.dashbuddy.domain.model.event.payload.DeliveryAdjustmentPayload
 import cloud.trotter.dashbuddy.domain.model.event.payload.DeliveryPayload
+import cloud.trotter.dashbuddy.domain.model.event.payload.DeliverySessionAssignPayload
 import cloud.trotter.dashbuddy.domain.model.event.payload.ManualDeliveryPayload
 import cloud.trotter.dashbuddy.domain.model.event.payload.OfferPayload
 import cloud.trotter.dashbuddy.domain.model.event.payload.PayAdjustmentPayload
@@ -260,6 +261,12 @@ data class FoldOutcome(
     val pickup: PickupFold? = null,
     /** A store-resolution trigger (#159) the orchestrator runs against the job's committed rows. */
     val resolution: StoreResolution? = null,
+    /**
+     * A driver DELIVERY_SESSION_ASSIGN decision (#660 piece 2): the pure fold decides WHICH row and
+     * WHICH session (null ⇒ unassign), but cannot read/guard the target `delivery_record` here — the
+     * orchestrator applies the re-attribution (with its fail-closed guards) inside the batch transaction.
+     */
+    val sessionAssign: SessionAssignFold? = null,
 )
 
 /**
@@ -290,6 +297,21 @@ data class DeliveryAdjustmentFold(
     val newTip: Double? = null,
     val newCashTip: Double? = null,
     val newMiles: Double? = null,
+)
+
+/**
+ * A driver's session-(re)attribution decision (#660 piece 2) — the pure fold's output for a
+ * DELIVERY_SESSION_ASSIGN. The orchestrator looks up [targetEventSequenceId] in `delivery_records` and,
+ * subject to its fail-closed guards (movable-rows-only, real ENDED target session, platform coherence,
+ * cash-bearing-unassign block), rewrites ONLY the row's `sessionId` (→ [newSessionId]; null ⇒ unassign
+ * back to the "(No session)" bucket) and its `sessionAssigned` marker — never any frozen economy column.
+ * Because a DELIVERY_SESSION_ASSIGN always sequences after its target's completion AND after the target
+ * session's `DASH_STOP`, a from-zero refold replays them in order and reproduces identical rows/counters.
+ * `note` is intentionally absent — it lives only in the event payload and changes no column.
+ */
+data class SessionAssignFold(
+    val targetEventSequenceId: Long,
+    val newSessionId: String? = null,
 )
 
 /**
@@ -338,6 +360,7 @@ object RecordFolds {
             AppEventType.MANUAL_DELIVERY -> foldManualDelivery(event, context, currentCostPerMile)
             AppEventType.PAY_ADJUSTMENT -> foldPayAdjustment(event, context)
             AppEventType.DELIVERY_ADJUSTMENT -> foldDeliveryAdjustment(event, context)
+            AppEventType.DELIVERY_SESSION_ASSIGN -> foldDeliverySessionAssign(event, context)
             AppEventType.DASH_STOP -> foldDashStop(event, context)
             // Every other session-attributed event just advances the liveness/odometer anchors so
             // the open-session duration and lastOdometer stay honest; the watermark still moves past
@@ -875,6 +898,26 @@ object RecordFolds {
                 newCashTip = p.newCashTip,
                 newMiles = p.newMiles,
             ),
+        )
+    }
+
+    /**
+     * A driver DELIVERY_SESSION_ASSIGN (#660 piece 2) — the pure fold emits the [SessionAssignFold]
+     * decision (which row, which target session / unassign); it CANNOT read/guard the target
+     * `delivery_record` here, so the orchestrator applies the re-attribution (with its fail-closed
+     * guards) inside the batch transaction. The session context passes through UNTOUCHED (the #650
+     * review F2 liveness discipline, identical to [foldPayAdjustment]/[foldDeliveryAdjustment]): a
+     * categorize recorded days later must not stretch a crash-orphaned session's online span, and it
+     * must not synthesize a context (the target session row already exists — the UI can only offer an
+     * ENDED session that folded a DASH_STOP, and the orphan's own delivery row exists too).
+     */
+    private fun foldDeliverySessionAssign(event: SequencedAppEvent, context: SessionFoldContext?): FoldOutcome {
+        val e = event.event
+        val p = e.payload as? DeliverySessionAssignPayload
+            ?: return FoldOutcome(context = context, skip = "DELIVERY_SESSION_ASSIGN: missing/malformed payload")
+        return FoldOutcome(
+            context = context,
+            sessionAssign = SessionAssignFold(p.targetEventSequenceId, p.newSessionId),
         )
     }
 

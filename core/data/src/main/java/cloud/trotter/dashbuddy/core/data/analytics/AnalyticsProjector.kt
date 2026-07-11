@@ -19,6 +19,7 @@ import cloud.trotter.dashbuddy.domain.analytics.PayAdjustmentFold
 import cloud.trotter.dashbuddy.domain.analytics.PayBasis
 import cloud.trotter.dashbuddy.domain.analytics.PickupFold
 import cloud.trotter.dashbuddy.domain.analytics.RecordFolds
+import cloud.trotter.dashbuddy.domain.analytics.SessionAssignFold
 import cloud.trotter.dashbuddy.domain.analytics.SessionFoldContext
 import cloud.trotter.dashbuddy.domain.analytics.StoreResolution
 import cloud.trotter.dashbuddy.domain.evaluation.NetProfit
@@ -193,6 +194,7 @@ class AnalyticsProjector @Inject constructor(
             outcome.resolution?.let { resolutions += ResolutionTask(ev.sequenceId, it) }
             outcome.payAdjustment?.let { adjustments += Adjustment.Pay(ev.sequenceId, it) }
             outcome.deliveryAdjustment?.let { adjustments += Adjustment.Delivery(ev.sequenceId, it) }
+            outcome.sessionAssign?.let { adjustments += Adjustment.SessionAssign(ev.sequenceId, it) }
             outcome.context?.let { ctx ->
                 contexts[ctx.sessionId] = ctx
                 touched += ctx.sessionId
@@ -226,6 +228,7 @@ class AnalyticsProjector @Inject constructor(
                 val skipped = when (adj) {
                     is Adjustment.Pay -> applyPayAdjustment(adj.fold)
                     is Adjustment.Delivery -> applyDeliveryAdjustment(adj.fold)
+                    is Adjustment.SessionAssign -> applySessionAssign(adj.fold)
                 }
                 if (skipped) adjustmentSkips++
             }
@@ -257,6 +260,7 @@ class AnalyticsProjector @Inject constructor(
         val sequenceId: Long
         data class Pay(override val sequenceId: Long, val fold: PayAdjustmentFold) : Adjustment
         data class Delivery(override val sequenceId: Long, val fold: DeliveryAdjustmentFold) : Adjustment
+        data class SessionAssign(override val sequenceId: Long, val fold: SessionAssignFold) : Adjustment
     }
 
     /** A #159 store-resolution trigger carrying its source event's [sequenceId] for the seq-ordered
@@ -384,6 +388,98 @@ class AnalyticsProjector @Inject constructor(
                 storeKeyPinned = if (storeChanged) 1 else row.storeKeyPinned,
             ),
         )
+        return false
+    }
+
+    /**
+     * Apply one driver DELIVERY_SESSION_ASSIGN (#660 piece 2) — (re-)attribute an orphan
+     * "(No session)" delivery to its real ended dash, or UNASSIGN it back to the bucket (the undo).
+     * Returns true iff the apply was SKIPPED (a counted skip + PII-safe WARN, ids only — never a crash).
+     * Changes **attribution ONLY**: `sessionId` + the `sessionAssigned` marker via `row.copy`; every
+     * frozen economy column (pay, net, tip, `payBasis`, `originalPayBasis`, frozen cpm/fuel/nonfuel,
+     * `cashTip`, `storeKey`/pin, miles, `completedAt`) is byte-identical (categorizing never re-prices),
+     * and no `completedAt` edit keeps us out of the #688 VET-F2 anchor-determinism problem entirely.
+     *
+     * Five fail-closed guards (each a counted skip, never a crash):
+     *  1. **Target row exists** (same as the other applies).
+     *  2. **Movable rows only:** `row.sessionId == null || row.sessionAssigned == 1`. A machine- or
+     *     MANUAL-attributed sessionful row is NEVER moved — moving one would silently break its source
+     *     session's reported-vs-delivered reconciliation. (The UI only offers orphan/assigned rows; this
+     *     is the fail-closed backstop.)
+     *  3. **Assign target is a real, ENDED session** (`endedAt != null`). Load-bearing for determinism,
+     *     not hygiene: restart hydration derives `deliveredJobIds`/`receiptedJobIds`/prevDrop anchors from
+     *     `delivery_records` BY sessionId, so assigning into a LIVE session could make a later machine
+     *     `DELIVERY_COMPLETED`'s fold differ between incremental (no orphan row in the in-memory context)
+     *     and from-zero refold at a batch boundary (orphan row visible in the hydrated context). An ended
+     *     session folds no future machine completion, so that divergence class is inert. (Stated residual:
+     *     a pathological post-`DASH_STOP` `DELIVERY_COMPLETED` for the same session could still hydrate
+     *     differently — the same residual class the ended-session assumption already carries elsewhere.)
+     *  4. **Platform coherence:** both platforms known and differing ⇒ skip (a DoorDash drop in an Uber
+     *     dash's reconciliation is never right). No platform re-stamp in v1.
+     *  5. **Cash-bearing unassign block:** `newSessionId == null && row.cashTip != null` ⇒ skip — the
+     *     mirror of the projector's F3 "cash-bearing rows are always sessionful" invariant (a null-session
+     *     cash row would reach net but not gross).
+     *
+     * The session `deliveries` counter is maintained by a RELATIVE ±1 UPDATE ([bumpSessionDeliveries]),
+     * order-safe with the batch's earlier session-context upserts and identical under incremental fold vs
+     * refold. `jobsCompleted` + store resolution are deliberately untouched (job counts are
+     * `COUNT(DISTINCT jobId)` and pick the row up automatically; re-anchoring #159 resolution is a v1
+     * non-goal).
+     */
+    private suspend fun applySessionAssign(adj: SessionAssignFold): Boolean {
+        val row = analyticsDao.deliveryRecord(adj.targetEventSequenceId) ?: run {
+            // P7: counts only, no payload text.
+            Timber.tag(TAG).w("DELIVERY_SESSION_ASSIGN: target row %d not found", adj.targetEventSequenceId)
+            return true
+        }
+        // Guard 2: movable rows only (null-session OR previously driver-assigned).
+        if (row.sessionId != null && row.sessionAssigned != 1) {
+            Timber.tag(TAG).w(
+                "DELIVERY_SESSION_ASSIGN: row %d is machine-attributed (session-bound, not driver-assigned) — skipped",
+                adj.targetEventSequenceId,
+            )
+            return true
+        }
+        val newSessionId = adj.newSessionId
+        if (newSessionId != null) {
+            // Guard 3: real, ENDED target session.
+            val session = analyticsDao.sessionRecord(newSessionId)
+            if (session == null || session.endedAt == null) {
+                Timber.tag(TAG).w(
+                    "DELIVERY_SESSION_ASSIGN: target session for row %d is missing or still live — skipped",
+                    adj.targetEventSequenceId,
+                )
+                return true
+            }
+            // Guard 4: platform coherence (both known and differing).
+            val rowPlatform = Platform.fromWire(row.platform)
+            val sessionPlatform = Platform.fromWire(session.platform)
+            if (rowPlatform != null && rowPlatform != Platform.Unknown &&
+                sessionPlatform != null && sessionPlatform != Platform.Unknown &&
+                rowPlatform != sessionPlatform
+            ) {
+                Timber.tag(TAG).w(
+                    "DELIVERY_SESSION_ASSIGN: row %d platform ≠ target session platform — skipped",
+                    adj.targetEventSequenceId,
+                )
+                return true
+            }
+        } else if (row.cashTip != null) {
+            // Guard 5: cash-bearing unassign block (F3 sessionful-cash invariant).
+            Timber.tag(TAG).w(
+                "DELIVERY_SESSION_ASSIGN: cannot unassign cash-bearing row %d (F3 sessionful-cash invariant) — skipped",
+                adj.targetEventSequenceId,
+            )
+            return true
+        }
+
+        val oldSessionId = row.sessionId
+        // Attribution-only: sessionId + marker via row.copy; every frozen column preserved byte-identically.
+        analyticsDao.upsertDelivery(
+            row.copy(sessionId = newSessionId, sessionAssigned = if (newSessionId != null) 1 else 0),
+        )
+        if (oldSessionId != null) analyticsDao.bumpSessionDeliveries(oldSessionId, -1)
+        if (newSessionId != null) analyticsDao.bumpSessionDeliveries(newSessionId, +1)
         return false
     }
 

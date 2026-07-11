@@ -71,12 +71,19 @@ import cloud.trotter.dashbuddy.core.database.snapshot.AppStateSnapshotEntity
     // metadata.odometer stamps (already in the immutable log) into per-drop milesToStore/milesToDropoff
     // + redistributed realizedMiles/netProfit on stacked drops. Additive ⇒ never wipes app_events or
     // the existing analytics rows.
+    // v13→v14 (#660 piece 2) is additive-only: one new nullable-defaulted INTEGER column on
+    // delivery_records (sessionAssigned — the driver-attribution marker set by DELIVERY_SESSION_ASSIGN,
+    // DEFAULT 0 back-fills existing rows). There is NO `PROJECTOR_VERSION` bump: DELIVERY_SESSION_ASSIGN
+    // is a new event type that cannot exist in already-folded history, and the DEFAULT 0 is correct for
+    // all history — a fresh drain folds new assigns; nothing needs refolding. Additive ⇒ never wipes
+    // app_events or the existing analytics rows.
     autoMigrations = [
         AutoMigration(from = 8, to = 9),
         AutoMigration(from = 9, to = 10),
         AutoMigration(from = 10, to = 11),
         AutoMigration(from = 11, to = 12),
         AutoMigration(from = 12, to = 13),
+        AutoMigration(from = 13, to = 14),
     ],
 )
 @TypeConverters(DataTypeConverters::class)
@@ -104,7 +111,7 @@ abstract class DashBuddyDatabase : RoomDatabase() {
          * this in lockstep with a new `schemas/**/<N>.json`, an `AutoMigration(N-1 → N)`, and its
          * `MigrationTestHelper` case — see the release checklist in CLAUDE.md.
          */
-        const val VERSION = 13
+        const val VERSION = 14
     }
 
 }
