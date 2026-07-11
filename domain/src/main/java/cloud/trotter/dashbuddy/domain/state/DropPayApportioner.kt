@@ -25,7 +25,10 @@ import cloud.trotter.dashbuddy.domain.model.pay.ParsedPayItem
  * The load-bearing property is the **no-double-count invariant**: the shares sum EXACTLY to
  * [ParsedPay.total] (the *receipt* total — tips adjust post-delivery, so this is authoritative over
  * the offer-time [Job.totalPayAmount]). Computed in integer cents, the rounding remainder to the
- * last drop, so summing the emitted shares reproduces the receipt to the cent.
+ * last drop in **canonical `taskId` order** (drops are sorted by `taskId` after dedup, #630 finding
+ * 4), so the remainder assignment is invariant across resume/replay input reorderings — the two mint
+ * sites of a stack can no longer disagree by a cent because they saw the denominator in a different
+ * iteration order.
  *
  * Pure and side-effect-free (no PII: store names are not PII; customer identity is already hashed
  * upstream). Reused from `:core:state` at the DELIVERY_COMPLETED mint sites.
@@ -47,7 +50,7 @@ object DropPayApportioner {
      */
     fun apportion(parsedPay: ParsedPay?, dropoffTasks: List<Task>): Map<String, Double> {
         if (parsedPay == null) return emptyMap()
-        val drops = dropoffTasks.distinctBy { it.taskId }
+        val drops = dropoffTasks.distinctBy { it.taskId }.sortedBy { it.taskId }
         if (drops.isEmpty()) return emptyMap()
 
         val totalCents = toCents(parsedPay.total)
@@ -89,7 +92,7 @@ object DropPayApportioner {
      */
     fun equalSplit(total: Double?, dropoffTasks: List<Task>): Map<String, Double> {
         if (total == null || total <= 0.0) return emptyMap()
-        val drops = dropoffTasks.distinctBy { it.taskId }
+        val drops = dropoffTasks.distinctBy { it.taskId }.sortedBy { it.taskId }
         if (drops.isEmpty()) return emptyMap()
 
         val totalCents = toCents(total)

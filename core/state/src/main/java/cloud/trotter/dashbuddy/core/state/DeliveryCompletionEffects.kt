@@ -92,14 +92,45 @@ internal fun EffectMap.diffDeliveryCompletion(
             if (completedTask != null && completedTask.phase == TaskPhase.DROPOFF && !identityLess) {
                 val retireSince = p.pendingDestructive
                     ?.takeIf { it.kind == DestructiveKind.TASK_RETIRE }?.since
-                // #528: attribute this drop's share of the combined receipt. Read the
-                // receipt from the PREV region's lastPostTaskFields (the singular job
-                // receipt) directly — NOT the per-task pinning — so every drop of a stack
-                // gets a share, not just the announced one.
-                val dropShare = DropPayApportioner.apportion(
-                    parsedPay = p.lastPostTaskFields?.parsedPay,
-                    dropoffTasks = jobDropoffTasks(next, p.activeJob?.jobId),
-                )[completedTask.taskId]
+                // #630 R2: gate the receipt split on the job's FINAL shape (the SAME predicate
+                // #691's requireFinalShape uses — [OfferPayFallback.isFinalShape], one definition).
+                // At a mid-stack, non-final exit the job's `lastPostTaskFields` is only a PARTIAL
+                // receipt (covers the delivered-so-far drops) over a PROVISIONAL denominator, so
+                // splitting it would freeze a wrong share on this drop while later siblings mint
+                // against the FINAL receipt → Σ drifts below the real total (findings 1/3). A
+                // no-activeJob exit is trivially final (its jobId would be null anyway).
+                val finalShape =
+                    p.activeJob?.let { OfferPayFallback.isFinalShape(it, completedTask.taskId) } ?: true
+                // #528/#630 R1: attribute this drop's share of the combined receipt over the
+                // minting-qualified denominator (the exact rows that will ever mint), so the shares
+                // sum to the receipt total. Withhold entirely on a non-final exit (R2/R4).
+                val dropShare = if (finalShape) {
+                    DropPayApportioner.apportion(
+                        parsedPay = p.lastPostTaskFields?.parsedPay,
+                        dropoffTasks = mintingDropoffTasks(
+                            p, next, p.activeJob?.jobId,
+                            retirePending = retireSince != null,
+                            emittedThisStep = emittedThisStep + completedTask.taskId,
+                        ),
+                    )[completedTask.taskId]
+                } else {
+                    null
+                }
+                // #630 R2 (load-bearing): a non-final exit must NOT attach the partial receipt to the
+                // payload either — else the fold's RECEIPT_TOTAL arm stamps the WHOLE partial total on
+                // this row, turning the under-attribution into an OVER-count once siblings mint. With
+                // both nulled the row folds PayBasis.NONE and its dollars ride the unattributed bucket.
+                val receiptForPayload = if (finalShape) p.lastPostTaskFields else null
+                // #630 R4: the mid-stack partial-receipt seam is observable in the field. PII-safe —
+                // counts + jobId only, stable tag (Principle 7; the #691 FIX-6 / #699 D6 precedent).
+                if (!finalShape && p.lastPostTaskFields?.parsedPay != null) {
+                    Timber.tag("StateMachine").w(
+                        "#630 mid-stack non-final receipt exit: job %s, %d owed dropoffs — " +
+                            "dropRealizedPay withheld (partial receipt not split; rides unattributed)",
+                        p.activeJob?.jobId,
+                        p.activeJob?.tasks?.count { it.phase == TaskPhase.DROPOFF } ?: 0,
+                    )
+                }
                 // #691: when the whole job was receipt-less, stamp this drop's equal-split
                 // share of the accepted-offer pay so it folds a real net row (not $0-unattr).
                 // FIX 1: a PostTask-exit mint's job may still be OPEN — stamp only when this is
@@ -115,7 +146,7 @@ internal fun EffectMap.diffDeliveryCompletion(
                     task = completedTask,
                     jobId = p.activeJob?.jobId,
                     completedAt = completedTask.completedAt ?: retireSince ?: obs.timestamp,
-                    postTaskFields = p.lastPostTaskFields,
+                    postTaskFields = receiptForPayload,
                     sessionEarnings = next.session?.runningEarnings ?: p.session?.runningEarnings,
                     dropRealizedPay = dropShare,
                     offerPayShare = offerShare,
@@ -169,7 +200,11 @@ internal fun EffectMap.diffDeliveryCompletion(
         // one over-full row become per-drop shares that sum to the receipt total).
         val dropShares = DropPayApportioner.apportion(
             parsedPay = p.lastPostTaskFields?.parsedPay,
-            dropoffTasks = jobDropoffTasks(next, closedJob.jobId),
+            dropoffTasks = mintingDropoffTasks(
+                p, next, closedJob.jobId,
+                retirePending = retirePending,
+                emittedThisStep = emittedThisStep,
+            ),
         )
         for (task in next.recentTasks) {
             if (task.jobId != closedJob.jobId || task.phase != TaskPhase.DROPOFF) continue
@@ -326,19 +361,42 @@ private fun EffectMap.receiptSuppressesEstimate(region: PlatformRegion, job: Job
 }
 
 /**
- * The job's delivered dropoff tasks — the completion rows the [DropPayApportioner] splits the
- * receipt across (#528). Sourced from the region records at the mint step (`recentTasks` +
- * the active task, deduped by id), scoped to [jobId] and the DROPOFF phase, and restricted to
- * identity-bearing drops so it mirrors the close-out's #498 identity firewall — an identity-
- * less phantom that never mints a completion must not inflate the split denominator.
+ * #630 R1: the job's *minting-qualified* delivered dropoffs — the EXACT set of completion rows the
+ * [DropPayApportioner] splits the receipt across, so the denominator equals the minted-row set and
+ * `Σ dropRealizedPay` sums to the receipt total. Replaces the former `jobDropoffTasks`, which
+ * returned ALL identity-bearing dropoffs of the job (incl. an endSession-force-stamped or otherwise
+ * undelivered drop that entered the denominator but never MINTED → its share evaporated → Σ < total,
+ * findings 1/3).
+ *
+ * Sourced from the region records at the mint step (`recentTasks` + the active task, deduped by id),
+ * scoped to [jobId] + the DROPOFF phase, restricted to identity-bearing, non-unassigned drops (the
+ * #498 phantom + #736 unassign firewalls), then filtered to the rows that will actually mint — the
+ * SAME amdt#5 qualification the close-out loop applies: already completed before this step, OR the
+ * active task just retired under a TASK_RETIRE grace, OR minted by the PostTask-exit block this step
+ * ([emittedThisStep]). Both mint blocks call this with identical arguments so a co-firing step agrees
+ * on one denominator (and the [DropPayApportioner]'s canonical `taskId` sort makes the remainder cent
+ * order-invariant across the two calls, #630 finding 4).
  */
-private fun EffectMap.jobDropoffTasks(region: PlatformRegion, jobId: String?): List<Task> {
+private fun EffectMap.mintingDropoffTasks(
+    p: PlatformRegion,
+    next: PlatformRegion,
+    jobId: String?,
+    retirePending: Boolean,
+    emittedThisStep: Set<String>,
+): List<Task> {
     if (jobId == null) return emptyList()
-    return (region.recentTasks + listOfNotNull(region.activeTask))
+    return (next.recentTasks + listOfNotNull(next.activeTask))
         .filter {
             it.jobId == jobId &&
                 it.phase == TaskPhase.DROPOFF &&
+                it.unassignedAt == null &&
                 (it.customerNameHash != null || it.customerAddressHash != null)
         }
         .distinctBy { it.taskId }
+        .filter { t ->
+            val alreadyCompleted =
+                p.recentTasks.any { it.taskId == t.taskId && it.completedAt != null }
+            val justRetiredUnderGrace = retirePending && p.activeTask?.taskId == t.taskId
+            alreadyCompleted || justRetiredUnderGrace || t.taskId in emittedThisStep
+        }
 }

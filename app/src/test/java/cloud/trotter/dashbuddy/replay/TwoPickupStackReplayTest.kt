@@ -1,6 +1,7 @@
 package cloud.trotter.dashbuddy.replay
 
 import cloud.trotter.dashbuddy.domain.model.event.AppEventType
+import cloud.trotter.dashbuddy.domain.model.event.payload.DeliveryPayload
 import cloud.trotter.dashbuddy.domain.model.event.payload.PickupPayload
 import cloud.trotter.dashbuddy.domain.state.Platform
 import cloud.trotter.dashbuddy.domain.state.TaskPhase
@@ -148,6 +149,29 @@ class TwoPickupStackReplayTest {
                 "no fresh mint)",
             placeholderDropoffIds.containsAll(activeDropIds),
         )
+    }
+
+    @Test
+    fun `receipted jobs' dropRealizedPay shares sum to their receipt total (#630 mainline pin)`() {
+        // The #630 no-regression invariant over the whole trace: for every job whose
+        // DELIVERY_COMPLETED rows observed a receipt (any row carries a non-null parsedPay), the
+        // stamped dropRealizedPay shares sum EXACTLY to that receipt's total in integer cents.
+        // (With THIS fixture the documented address-parse residual means no DELIVERY_COMPLETED is
+        // reached — the assertion is then vacuous — but it pins the mainline the moment the fixture
+        // or the machine closes the job cleanly.)
+        val steps = run()
+        val deliveries = steps.flatMap { it.events }
+            .filter { it.type == AppEventType.DELIVERY_COMPLETED }
+            .mapNotNull { it.payload as? DeliveryPayload }
+        deliveries.groupBy { it.jobId }.forEach { (jobId, rows) ->
+            val receiptTotal = rows.firstNotNullOfOrNull { it.parsedPay }?.total ?: return@forEach
+            val summed = rows.mapNotNull { it.dropRealizedPay }.sumOf { Math.round(it * 100.0) }
+            assertEquals(
+                "job $jobId: Σ dropRealizedPay must equal the observed receipt total (cents-exact)",
+                Math.round(receiptTotal * 100.0),
+                summed,
+            )
+        }
     }
 
     @Test

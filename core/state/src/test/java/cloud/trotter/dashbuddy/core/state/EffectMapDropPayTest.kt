@@ -22,6 +22,7 @@ import cloud.trotter.dashbuddy.domain.state.TaskPhase
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
@@ -168,6 +169,181 @@ class EffectMapDropPayTest {
         val rows = completedRows(prev, next, screenObs(Flow.Idle, timestamp = 3000L))
         assertEquals(1, rows.size)
         assertNull("no receipt → null realized pay", rows.single().dropRealizedPay)
+    }
+
+    // =========================================================================
+    // #630 — mid-stack / multi-receipt hardening
+    // =========================================================================
+
+    /** A job whose owed-dropoff mirror ([Job.tasks]) drives the #630 final-shape gate. */
+    private fun jobWithTasks(tasks: List<Task>) = Job(
+        jobId = "J",
+        offerStoreHint = emptyList(),
+        parentOfferHash = null,
+        tasks = tasks,
+        startedAt = 50L,
+    )
+
+    @Test
+    fun `mid-stack non-final PostTask exit — no share of a partial receipt, receipt not attached (#630 R2)`() {
+        // 3-drop stack: A delivered, B exiting PostTask NOW with the PARTIAL receipt R_AB visible,
+        // C still owed. B's completion must carry NO dropRealizedPay and NO parsedPay/totalPay —
+        // attaching the partial receipt would make the fold stamp RECEIPT_TOTAL with R_AB.total,
+        // converting the under-attribution into an OVER-count once A/C mint their R_ABC shares.
+        val receiptAB = ParsedPay(
+            appPayComponents = listOf(ParsedPayItem("Base Pay", 6.0)),
+            customerTips = listOf(ParsedPayItem("Target", 4.0)),
+        ) // total $10 — covers A+B only
+        val postFieldsAB = ParsedFields.PostTaskFields(totalPay = 10.0, parsedPay = receiptAB, sessionEarnings = 30.0)
+        val dropA = dropoff("dA", "Target", "cA", completedAt = 350L)
+        val dropB = dropoff("dB", "Maple", "cB", completedAt = null)
+        val dropC = dropoff("dC", "Chili's", "cC", completedAt = null) // the still-owed sibling
+
+        val logged = mutableListOf<String>()
+        val tree = object : timber.log.Timber.Tree() {
+            override fun log(priority: Int, tag: String?, message: String, t: Throwable?) { logged += message }
+        }
+        timber.log.Timber.plant(tree)
+        try {
+            val regionPrev = PlatformRegion(
+                platform = Platform.DoorDash,
+                mode = Mode.Online,
+                session = Session("s1", startedAt = 100L, runningEarnings = 30.0),
+                activeJob = jobWithTasks(listOf(dropA, dropB, dropC)),
+                activeTask = dropB,
+                recentTasks = listOf(dropA),
+                lastPostTaskFields = postFieldsAB,
+                lastAnnouncedPostTaskTaskId = "dB",
+            )
+            val regionNext = regionPrev.copy()
+
+            val prev = appState(FlowRegion(flow = Flow.PostTask), mapOf(Platform.DoorDash to regionPrev))
+            val next = appState(FlowRegion(flow = Flow.TaskDropoffNavigation), mapOf(Platform.DoorDash to regionNext))
+
+            val rows = completedRows(prev, next, screenObs(Flow.TaskDropoffNavigation, timestamp = 3000L))
+            assertEquals("only B completes on this exit", 1, rows.size)
+            val b = rows.single()
+            assertEquals("dB", b.taskId)
+            assertNull("no share of a partial receipt (R2)", b.dropRealizedPay)
+            assertNull("the partial receipt must NOT ride the payload (fold RECEIPT_TOTAL over-count)", b.parsedPay)
+            assertNull(b.totalPay)
+            assertNull("estimate independently withheld (requireFinalShape + pay-bearing receipt)", b.offerPayShare)
+            assertTrue(
+                "the non-final receipt exit emits ONE observability WARN (R4)",
+                logged.any { it.contains("#630 mid-stack non-final receipt exit") },
+            )
+        } finally {
+            timber.log.Timber.uproot(tree)
+        }
+    }
+
+    @Test
+    fun `mid-stack shape at close — final receipt splits over the FULL denominator, shortfall visible (#630 R4)`() {
+        // The same stack later closes with the FINAL receipt R_ABC. The close-out splits R_ABC over
+        // the full minted denominator INCLUDING the early-minted B (DD-2: per-row honesty) — B's
+        // re-emission is swallowed live by effects_fired, so its computed share is intentionally NOT
+        // redistributed to A/C: the persisted rows sum to (total − B's share) and the difference
+        // surfaces read-side as unattributed.
+        val receiptABC = ParsedPay(
+            appPayComponents = listOf(ParsedPayItem("Base Pay", 9.0)),
+            customerTips = listOf(
+                ParsedPayItem("Target", 4.0),
+                ParsedPayItem("Maple", 2.0),
+                ParsedPayItem("Chili's", 3.0),
+            ),
+        ) // total $18
+        val postFieldsABC = ParsedFields.PostTaskFields(totalPay = 18.0, parsedPay = receiptABC, sessionEarnings = 48.0)
+        val dropA = dropoff("dA", "Target", "cA", completedAt = 350L)
+        val dropB = dropoff("dB", "Maple", "cB", completedAt = 400L)
+        val dropC = dropoff("dC", "Chili's", "cC", completedAt = 450L)
+
+        val regionPrev = PlatformRegion(
+            platform = Platform.DoorDash,
+            mode = Mode.Online,
+            session = Session("s1", startedAt = 100L, runningEarnings = 48.0),
+            activeJob = jobWithTasks(listOf(dropA, dropB, dropC)),
+            recentTasks = listOf(dropA, dropB, dropC),
+            lastPostTaskFields = postFieldsABC,
+            lastAnnouncedPostTaskTaskId = "dC",
+        )
+        val regionNext = regionPrev.copy(activeJob = null)
+
+        val prev = appState(FlowRegion(flow = Flow.Idle), mapOf(Platform.DoorDash to regionPrev))
+        val next = appState(FlowRegion(flow = Flow.Idle), mapOf(Platform.DoorDash to regionNext))
+
+        val rows = completedRows(prev, next, screenObs(Flow.Idle, timestamp = 5000L))
+        assertEquals("close-out emits all three (B's re-emission dedups live)", 3, rows.size)
+
+        // Tip-exact shares over the FULL 3-drop denominator: base $9/3 = $3 each.
+        val a = rows.single { it.taskId == "dA" }
+        val b = rows.single { it.taskId == "dB" }
+        val c = rows.single { it.taskId == "dC" }
+        assertEquals(7.0, a.dropRealizedPay!!, 0.001)
+        assertEquals(5.0, b.dropRealizedPay!!, 0.001)
+        assertEquals(6.0, c.dropRealizedPay!!, 0.001)
+        assertEquals(
+            "Σ(all computed shares) == final receipt total in cents",
+            cents(receiptABC.total),
+            rows.sumOf { cents(it.dropRealizedPay!!) },
+        )
+        // The persisted invariant: B minted null at the non-final exit (previous test), so the rows
+        // that actually persist sum to total − share(B) — the visible, never-redistributed shortfall.
+        assertEquals(
+            cents(receiptABC.total) - cents(b.dropRealizedPay!!),
+            cents(a.dropRealizedPay!!) + cents(c.dropRealizedPay!!),
+        )
+    }
+
+    @Test
+    fun `endSession force-stamp — the undelivered drop is excluded, shares sum to the receipt (#630 R1)`() {
+        // 3-drop job with a receipt visible; drops 1-2 delivered, drop 3 UNDELIVERED when the dash
+        // ends. endSession force-stamps drop 3's completedAt into recentTasks (T3), but the amdt#5
+        // guard keeps it from MINTING — so the denominator must exclude it too, or its share would
+        // evaporate (Σ < total). The receipt splits fully across the two rows that mint.
+        val receipt = ParsedPay(
+            appPayComponents = listOf(ParsedPayItem("Base Pay", 12.0)),
+            customerTips = emptyList(),
+        ) // total $12, no tips → equal split
+        val postFields = ParsedFields.PostTaskFields(totalPay = 12.0, parsedPay = receipt, sessionEarnings = 40.0)
+        val d1 = dropoff("d1", "Target", "c1", completedAt = 350L)
+        val d2 = dropoff("d2", "Maple", "c2", completedAt = 400L)
+        val d3 = dropoff("d3", "Chili's", "c3", completedAt = null) // active, undelivered
+
+        val regionPrev = PlatformRegion(
+            platform = Platform.DoorDash,
+            mode = Mode.Online,
+            session = Session("s1", startedAt = 100L, runningEarnings = 40.0),
+            activeJob = jobWithTasks(listOf(d1, d2, d3)),
+            activeTask = d3,
+            recentTasks = listOf(d1, d2),
+            lastPostTaskFields = postFields,
+            lastAnnouncedPostTaskTaskId = "d2",
+        )
+        // The endSession shape: session/job/task cleared, d3 force-stamped into recentTasks.
+        val regionNext = regionPrev.copy(
+            session = null,
+            activeJob = null,
+            activeTask = null,
+            recentTasks = listOf(d1, d2, d3.copy(completedAt = 5000L)),
+            lastPostTaskFields = null,
+            lastPostTaskPayHash = null,
+        )
+
+        val prev = appState(FlowRegion(flow = Flow.Idle), mapOf(Platform.DoorDash to regionPrev))
+        val next = appState(FlowRegion(flow = Flow.Idle), mapOf(Platform.DoorDash to regionNext))
+
+        val rows = completedRows(prev, next, screenObs(Flow.Idle, timestamp = 5000L))
+        assertEquals("exactly the two DELIVERED drops mint (amdt#5 excludes the force-stamp)", 2, rows.size)
+        assertTrue(rows.none { it.taskId == "d3" })
+        val r1 = rows.single { it.taskId == "d1" }
+        val r2 = rows.single { it.taskId == "d2" }
+        assertEquals("denominator = 2 (not 3): \$12 / 2", 6.0, r1.dropRealizedPay!!, 0.001)
+        assertEquals(6.0, r2.dropRealizedPay!!, 0.001)
+        assertEquals(
+            "Σ minted shares == the receipt total to the cent (finding 3 fixed)",
+            cents(receipt.total),
+            rows.sumOf { cents(it.dropRealizedPay!!) },
+        )
     }
 
     @Test

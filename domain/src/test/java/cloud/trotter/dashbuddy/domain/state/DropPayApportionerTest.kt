@@ -149,6 +149,69 @@ class DropPayApportionerTest {
         assertSumsToReceipt(shares, receipt)
     }
 
+    // ── #630 finding 4: order invariance (canonical taskId sort inside the apportioner) ──
+
+    /** All permutations of a list (small n only — test helper). */
+    private fun <T> permutations(items: List<T>): List<List<T>> {
+        if (items.size <= 1) return listOf(items)
+        return items.flatMap { head ->
+            permutations(items - head).map { rest -> listOf(head) + rest }
+        }
+    }
+
+    @Test
+    fun `apportion — identical map (incl the remainder cent) for every input-order permutation`() {
+        // Equal-split path with a rounding remainder: $10.01 across 3 drops.
+        val receipt = ParsedPay(
+            appPayComponents = listOf(ParsedPayItem("Base Pay", 10.01)),
+            customerTips = emptyList(),
+        )
+        val drops = listOf(drop("d1", null), drop("d2", null), drop("d3", null))
+
+        val canonical = DropPayApportioner.apportion(receipt, drops)
+        permutations(drops).forEach { perm ->
+            assertEquals(
+                "apportion must be input-order invariant (a resume between a stack's two mint " +
+                    "steps can reorder the denominator, #630 finding 4)",
+                canonical,
+                DropPayApportioner.apportion(receipt, perm),
+            )
+        }
+        assertSumsToReceipt(canonical, receipt)
+    }
+
+    @Test
+    fun `apportion — two half-cent shares pin the extra cent to the FIRST taskId in canonical order`() {
+        // $10.01 across 2 drops = $5.005 each. toCents rounds half-up → the first drop in canonical
+        // (taskId-sorted) order takes 501c, the LAST takes the remainder 500c — regardless of the
+        // caller's input order.
+        val receipt = ParsedPay(
+            appPayComponents = listOf(ParsedPayItem("Base Pay", 10.01)),
+            customerTips = emptyList(),
+        )
+        val forward = DropPayApportioner.apportion(receipt, listOf(drop("d-a", null), drop("d-b", null)))
+        val reversed = DropPayApportioner.apportion(receipt, listOf(drop("d-b", null), drop("d-a", null)))
+
+        assertEquals(5.01, forward.getValue("d-a"), 0.0001)
+        assertEquals(5.00, forward.getValue("d-b"), 0.0001)
+        assertEquals("reversed input order yields the identical assignment", forward, reversed)
+        assertSumsToReceipt(forward, receipt)
+    }
+
+    @Test
+    fun `equalSplit — identical map for every input-order permutation`() {
+        val drops = listOf(drop("d1", null), drop("d2", null), drop("d3", null))
+        val canonical = DropPayApportioner.equalSplit(10.01, drops)
+        permutations(drops).forEach { perm ->
+            assertEquals(
+                "equalSplit must be input-order invariant (#630 finding 4)",
+                canonical,
+                DropPayApportioner.equalSplit(10.01, perm),
+            )
+        }
+        assertEquals(1001L, canonical.values.sumOf { cents(it) })
+    }
+
     // ── #691 equalSplit: the offer-pay fallback for a wholly receipt-less job ──
 
     @Test

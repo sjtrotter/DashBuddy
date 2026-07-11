@@ -53,22 +53,36 @@ object OfferPayFallback {
     ): Result {
         if (suppressedByReceipt) return NONE
 
+        if (requireFinalShape && !isFinalShape(job, mintingTaskId)) {
+            return NONE // mid-stack exit — not the last open owed drop
+        }
+
         // The denominator is the job's OWN owed dropoff set (deduped) — NOT the identity-filtered
         // mint denominator, which shrinks at a mid-stack exit and would hand one drop the full total.
         val ownDropoffs = job.tasks
             .filter { it.phase == TaskPhase.DROPOFF }
             .distinctBy { it.taskId }
-
-        if (requireFinalShape) {
-            val everyOtherDropDone = ownDropoffs
-                .filter { it.taskId != mintingTaskId }
-                .all { it.completedAt != null }
-            if (!everyOtherDropDone) return NONE // mid-stack exit — not the last open owed drop
-        }
-
         val share = DropPayApportioner.equalSplit(job.offerPayTotal, ownDropoffs)[mintingTaskId]
         // Eligible (all gates passed) but the split yielded nothing: pay-less offer or a minting task
         // outside the owed set. Surface it (FIX 6) rather than silently dropping the estimate.
         return Result(share = share, eligibleButUnsplit = share == null)
     }
+
+    /**
+     * The **final-shape** predicate shared by #691 (the offer-pay estimate gate above) and #630 (the
+     * receipt-split gate at the PostTask-exit mint): is [mintingTaskId] the LAST OPEN owed dropoff of
+     * [job] — has every OTHER owed dropoff already completed (`completedAt != null`)?
+     *
+     * The denominator is the job's OWN owed dropoff set (`job.tasks`, deduped) — placeholders
+     * included — so an un-visited or resolved-but-undelivered sibling keeps the shape NON-final and
+     * blocks a mid-stack partial-receipt / partial-estimate split. Excluding [mintingTaskId] sidesteps
+     * the amdt#6 mirror staleness of the just-finishing drop's own `completedAt`. ONE definition so
+     * both mint gates read the same "final shape" (Principle 5).
+     */
+    fun isFinalShape(job: Job, mintingTaskId: String): Boolean =
+        job.tasks
+            .filter { it.phase == TaskPhase.DROPOFF }
+            .distinctBy { it.taskId }
+            .filter { it.taskId != mintingTaskId }
+            .all { it.completedAt != null }
 }

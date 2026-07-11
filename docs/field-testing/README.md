@@ -73,6 +73,17 @@ card's **mechanical** half, #577 (re-confirmed, 24/24, ~0.55 s — with a new po
 that entry's Bug #1), the #457 path, and #554 ShadowProjector (2/2). The #462/#460 dropoff item
 was found **broken-in-part** (raw PII in capture envelopes) and moved to that entry's Bug #7.)_
 
+- **🆕 NEW — stacked receipts still split exactly; ±1¢ drift and collapsed-receipt nulls gone (#630).**
+  The per-drop receipt split is hardened for mid-stack/multi-receipt shapes: a collapsed PostTask
+  re-render can no longer wipe an already-captured itemized receipt (the field-reachable break), the
+  split denominator now equals exactly the rows that mint, and the rounding cent is order-invariant.
+  **How to tell it's working (desk-side, after a dash with ≥1 stacked job):** in the per-dash
+  drill-down, each stacked job's delivery rows sum EXACTLY to its receipt total (no missing-pay row
+  where a receipt existed, no ±1¢ mismatch); the Money tab's unattributed callout doesn't grow from
+  stacked jobs. A `#630 mid-stack non-final receipt exit` WARN in the exported log would be the
+  first-ever field sighting of the mid-stack receipt shape — grab the capture session if you see it.
+  - Confirmed: 0/2
+
 - **🆕 NEW — unassign an order mid-dash produces NO paid/confirmed artifacts (#736).**
   When you unassign an active order via the pickup help / resolution flow ("Unassign order" survey →
   "You've been unassigned from this order" confirmation), the app now recognizes the unassign and
