@@ -209,6 +209,75 @@ class AbandonTaskTest {
     }
 
     @Test
+    fun `a dropoff-phase abandon removes only its OWN placeholder, not a hash-colliding sibling`() {
+        // Fix 4: two sibling drops share a normalized customer hash ("cust"); the dasher unassigns dA.
+        // The old hash-join would remove BOTH (dA and dB) and close the job, dropping the still-owed dB.
+        // A dropoff-phase abandon must retire only its OWN placeholder by taskId.
+        val activeDrop = Task(
+            taskId = "dA", jobId = "job-1", phase = TaskPhase.DROPOFF,
+            customerNameHash = "cust", arrivedAt = 500L, startedAt = 300L,
+        )
+        val sibling = dropoffPlaceholder("dB", customerNameHash = "cust")
+        val next = step(region(activeDrop, job(listOf(activeDrop, sibling))), unassignObs(), prevFlow = Flow.TaskDropoffArrived)
+
+        assertTrue("job stays open — the sibling drop dB is still owed", next.activeJob != null)
+        val dbOutstanding = next.activeJob!!.tasks.any {
+            it.phase == TaskPhase.DROPOFF && it.taskId == "dB" &&
+                it.completedAt == null && it.unassignedAt == null
+        }
+        assertTrue("sibling dB survives as an outstanding drop despite the shared hash", dbOutstanding)
+    }
+
+    @Test
+    fun `same-frame supersession - an overdue TASK_RETIRE lapsing on the unassign frame yields to the abandon`() {
+        // Fix 3(a): a help-flow retire grace whose deadline lapses exactly as the confirmation frame
+        // arrives must NOT commit a completedAt first (the seq-71 fabrication hole) — the abandon wins.
+        val pend = PendingDestructive(DestructiveKind.TASK_RETIRE, since = 900L, deadline = 950L)
+        val prevRegion = region(pickup("pk"), job(listOf(dropoffPlaceholder("dO"))), pending = pend)
+        val nextRegion = step(prevRegion, unassignObs(ts = 1_000L))
+
+        val marked = nextRegion.recentTasks.single { it.taskId == "pk" }
+        assertEquals("the still-active pickup is abandon-marked at the frame", 1_000L, marked.unassignedAt)
+        assertNull("the retire did NOT commit a completedAt — the abandon superseded it", marked.completedAt)
+
+        val effects = effectMap.diff(
+            state(prevRegion, Flow.TaskPickupArrived), state(nextRegion, Flow.TaskUnassigned), unassignObs(ts = 1_000L),
+        )
+        assertFalse("no fabricated PICKUP_CONFIRMED", effects.logTypes().contains(AppEventType.PICKUP_CONFIRMED))
+    }
+
+    @Test
+    fun `cross-frame retro-mark - a grace-retired pickup yields no confirm, one TASK_UNASSIGNED, job closed`() {
+        // Fix 3(b)+(c): the retire grace committed on a PRIOR frame (pickup already in recentTasks with
+        // completedAt set, job still open). The confirmation frame must retro-mark that pickup so the
+        // #596 close-out sweep can't fabricate a PICKUP_CONFIRMED, and still emit exactly one
+        // TASK_UNASSIGNED for it.
+        val retired = pickup("pk", arrivedAt = 400L, completedAt = 900L)
+        val prevRegion = region(activeTask = null, activeJob = job(listOf(retired)), recentTasks = listOf(retired))
+        val nextRegion = step(prevRegion, unassignObs(ts = 1_000L))
+
+        val marked = nextRegion.recentTasks.single { it.taskId == "pk" }
+        assertEquals("retro-marked at the confirmation frame", 1_000L, marked.unassignedAt)
+        assertEquals("completedAt preserved (not nulled)", 900L, marked.completedAt)
+        assertNull("pickup-only job closed on the confirmation frame", nextRegion.activeJob)
+
+        val effects = effectMap.diff(
+            state(prevRegion, Flow.TaskPickupArrived), state(nextRegion, Flow.TaskUnassigned), unassignObs(ts = 1_000L),
+        )
+        assertFalse(
+            "the retire→close-out chain fabricates no PICKUP_CONFIRMED",
+            effects.logTypes().contains(AppEventType.PICKUP_CONFIRMED),
+        )
+        assertEquals(
+            "exactly one TASK_UNASSIGNED for the retro-marked pickup",
+            1, effects.logTypes().count { it == AppEventType.TASK_UNASSIGNED },
+        )
+        val payload = effects.filterIsInstance<AppEffect.LogEvent>()
+            .first { it.event.type == AppEventType.TASK_UNASSIGNED }.event.payload as TaskUnassignedPayload
+        assertEquals("pk", payload.taskId)
+    }
+
+    @Test
     fun `delivered-A then unassign-B still mints A's completion only`() {
         val a = Task(taskId = "dA", jobId = "job-1", phase = TaskPhase.DROPOFF, customerNameHash = "cust-A", arrivedAt = 400L, completedAt = 900L, startedAt = 300L)
         val b = Task(taskId = "dB", jobId = "job-1", phase = TaskPhase.DROPOFF, customerNameHash = "cust-B", arrivedAt = 500L, unassignedAt = 1_000L, startedAt = 300L)

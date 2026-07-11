@@ -30,9 +30,9 @@ import java.io.File
  * close → close-out sweep), so it is faithful to the defect.
  *
  * Fixture: `snapshots/sessions/unassign_help_2026_07_07/` — real device envelopes. The recognized
- * pickup/resolution frames were edge-redacted on capture; the one raw UNKNOWN survey frame's
- * `For Kelly S. • H-E-B` customer line was MANUALLY redacted to `For Sample C. • H-E-B` (the store
- * is merchant data, kept). Verified PII-safe below.
+ * pickup/resolution frames were edge-redacted on capture; the survey frame's raw
+ * `For <customer> • <store>` line was manually redacted to `For Sample C. • H-E-B` (the store is
+ * merchant data, kept). Verified PII-safe below.
  */
 class UnassignReplayTest {
 
@@ -131,9 +131,8 @@ class UnassignReplayTest {
         val files = dir.listFiles { _, name -> name.endsWith(".json") }!!.sortedBy { it.name }
         assertTrue("fixture is non-empty", files.isNotEmpty())
         files.forEach { file ->
-            val raw = file.readText()
-            assertFalse("${file.name} must contain no raw customer name", raw.contains("Kelly", ignoreCase = true))
-            // Any surviving "For <name>" customer line must be the redacted placeholder, never a real name.
+            // Any surviving "For <name>" customer line must be the redacted placeholder, never a real
+            // customer name — the generic placeholder-allowlist walk below subsumes any name-specific check.
             val node = if (file.name.contains("click")) SessionReplay.loadClickFrame("$session/${file.name}").node
             else TestResourceLoader.loadNode(file)
             val texts = mutableListOf<String>()

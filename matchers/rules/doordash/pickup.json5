@@ -633,9 +633,20 @@
       }
     },
     {
-      "comment": "#736 A1 — the platform's own authoritative statement that the dasher UNASSIGNED the order (via help/resolution). STATE-BEARING (task:unassigned) so the state machine can inline-abandon the active task instead of the retire-grace fabricating a PICKUP_CONFIRMED (the seq-71 bug). Requires BOTH anchors so it is structurally unambiguous: the help article ('Unassigning order …') and the resolution panel ('unassign and move on …') each match NEITHER. Uses 'been unassigned' (not 'You've been…') to dodge the apostrophe-variant risk. Priority 107 (< the survey's 108) so the combined confirmation-over-survey frame classifies here; the survey also rejects this anchor as a belt. No parse, no PII → no redact obligation.",
+      "comment": "#736 A1 — the platform's own authoritative statement that the dasher UNASSIGNED the order (via help/resolution). STATE-BEARING (task:unassigned) so the state machine can inline-abandon the active task instead of the retire-grace fabricating a PICKUP_CONFIRMED (the seq-71 bug). Requires BOTH anchors so it is structurally unambiguous: the help article ('Unassigning order …') and the resolution panel ('unassign and move on …') each match NEITHER. Uses 'been unassigned' (not 'You've been…') to dodge the apostrophe-variant risk. Priority 107 (< the survey's 108) so the combined confirmation-over-survey frame classifies here; the survey also rejects this anchor as a belt. Carries the SAME 'For <customer> • <store>' redact as pickup_resolution_options/pickup_unassign_survey: this state-bearing rule wins a combined confirmation-over-survey frame (survey rejects the confirmation anchor), so it must own that frame's customer line too — a redact with no matching node is simply inert (this rule has no parse, so redact-without-parse is legal, per the survey precedent).",
       "id": "doordash.screen.pickup_unassigned_confirmation",
       "priority": 107,
+      "redact": [
+        {
+          "find": {
+            "hasTextStartsWith": "For "
+          },
+          "keepPrefix": [
+            "For "
+          ],
+          "normalize": "customerName"
+        }
+      ],
       "state": {
         "flow": "task:unassigned",
         "modeHint": "online"

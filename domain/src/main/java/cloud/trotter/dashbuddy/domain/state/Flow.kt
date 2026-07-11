@@ -27,9 +27,10 @@ enum class Flow(val wire: String) {
     /**
      * The platform's own authoritative statement that the active task was **abandoned** — the
      * dasher unassigned the order mid-flow (#736). A teardown signal, NOT a task subflow
-     * ([isTaskFlow] stays false for it): it drives an inline abandon of the active task (marker
-     * set, `completedAt` left null so the close-out sweep can never fabricate a `PICKUP_CONFIRMED`),
-     * never a task update. Platform-neutral by construction — any ruleset can declare
+     * ([isTaskFlow] stays false for it): it drives an inline abandon of the active task (marker set,
+     * `completedAt` left null; the close-out sweep's `unassignedAt == null` filter — keyed on that
+     * marker — is what stops a fabricated `PICKUP_CONFIRMED`), never a task update. Platform-neutral
+     * by construction — any ruleset can declare
      * `task:unassigned`; DoorDash specificity lives only in the rule JSON that emits it.
      */
     TaskUnassigned("task:unassigned"),

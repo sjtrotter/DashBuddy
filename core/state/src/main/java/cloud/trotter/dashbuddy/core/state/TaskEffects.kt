@@ -46,13 +46,25 @@ internal fun EffectMap.diffTask(
         val prevTask = prev.activeTask
         val nextTask = next.activeTask
 
-        // #736: the dasher UNASSIGNED the active task — it was prev.activeTask and now sits in
-        // next.recentTasks marked `unassignedAt` (the stepper's inline abandon). Emit ONE
-        // TASK_UNASSIGNED (keyed per taskId for idempotency) + one "Unassigned: <store>" bubble.
+        // #736: the dasher UNASSIGNED a task. Emit ONE TASK_UNASSIGNED (keyed per taskId for
+        // idempotency) + one "Unassigned: <store>" bubble. Two shapes the abandon can take:
+        //  1) INLINE abandon — the task was `prev.activeTask` and now sits in `next.recentTasks`
+        //     marked `unassignedAt` (the stepper's same-frame abandon).
+        //  2) CROSS-FRAME retro-mark — the task already retired on a PRIOR frame (a help-flow retire
+        //     grace committed early), so it was already in `prev.recentTasks` with `unassignedAt` null,
+        //     and the authoritative confirmation stamps `unassignedAt` on it in `next.recentTasks`.
+        // `unassignedAt` on a recentTask is only ever written by `abandonActiveTask`, so a
+        // null→non-null transition uniquely identifies the retro-marked task. The per-taskId key makes
+        // the two shapes idempotent with each other and across frames.
         // The INFO stream stays PII-safe: storeName rides the payload (merchant data at rest), not a
         // raw-text log line; the bubble may name the store (bubbles are not the shareable log, P7).
         val abandonedTask = prevTask?.let { p ->
             next.recentTasks.lastOrNull { it.taskId == p.taskId && it.unassignedAt != null }
+        } ?: run {
+            val prevUnmarked = prev.recentTasks
+                .filter { it.unassignedAt == null }
+                .mapTo(HashSet()) { it.taskId }
+            next.recentTasks.lastOrNull { it.unassignedAt != null && it.taskId in prevUnmarked }
         }
         if (abandonedTask != null) {
             val jobOfferHashes = (
@@ -62,7 +74,7 @@ internal fun EffectMap.diffTask(
             add(
                 logEffect(
                     sessionId, AppEventType.TASK_UNASSIGNED, obs.timestamp,
-                    taskUnassignedPayload(abandonedTask, jobOfferHashes),
+                    taskUnassignedPayload(abandonedTask, jobOfferHashes, obs.timestamp),
                     effectKeyOverride = "log:${AppEventType.TASK_UNASSIGNED}:${abandonedTask.taskId}",
                 ),
             )
@@ -483,10 +495,12 @@ private fun EffectMap.pickupPayload(
 
 /** #736: the TASK_UNASSIGNED payload — the abandoned task's identity/lifecycle anchors, no
  *  customer PII (storeName is merchant data). [Task.unassignedAt] is non-null by construction at
- *  the emit site; falls back to [Task.startedAt] purely for total-ity. */
+ *  the emit site; falls back to [fallbackTs] (the abandon frame's `obs.timestamp`) purely for
+ *  total-ity — the honest abandon moment, never a stale `startedAt`. */
 private fun EffectMap.taskUnassignedPayload(
     task: Task,
     jobOfferHashes: List<String>,
+    fallbackTs: Long,
 ): TaskUnassignedPayload = TaskUnassignedPayload(
     jobId = task.jobId,
     taskId = task.taskId,
@@ -494,7 +508,7 @@ private fun EffectMap.taskUnassignedPayload(
     storeName = task.storeName,
     arrivedAt = task.arrivedAt,
     startedAt = task.startedAt,
-    unassignedAt = task.unassignedAt ?: task.startedAt,
+    unassignedAt = task.unassignedAt ?: fallbackTs,
     jobOfferHashes = jobOfferHashes,
 )
 
