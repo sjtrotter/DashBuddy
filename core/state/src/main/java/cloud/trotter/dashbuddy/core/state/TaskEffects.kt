@@ -5,6 +5,7 @@ import cloud.trotter.dashbuddy.domain.model.chat.ChatPersona
 import cloud.trotter.dashbuddy.domain.model.event.AppEventType
 import cloud.trotter.dashbuddy.domain.model.event.payload.DeliveryPayload
 import cloud.trotter.dashbuddy.domain.model.event.payload.PickupPayload
+import cloud.trotter.dashbuddy.domain.model.event.payload.TaskUnassignedPayload
 import cloud.trotter.dashbuddy.domain.model.pay.displayLabel
 import cloud.trotter.dashbuddy.domain.pipeline.Observation
 import cloud.trotter.dashbuddy.domain.pipeline.TransitionTrigger
@@ -44,6 +45,47 @@ internal fun EffectMap.diffTask(
     return buildList {
         val prevTask = prev.activeTask
         val nextTask = next.activeTask
+
+        // #736: the dasher UNASSIGNED a task. Emit ONE TASK_UNASSIGNED (keyed per taskId for
+        // idempotency) + one "Unassigned: <store>" bubble. Two shapes the abandon can take:
+        //  1) INLINE abandon — the task was `prev.activeTask` and now sits in `next.recentTasks`
+        //     marked `unassignedAt` (the stepper's same-frame abandon).
+        //  2) CROSS-FRAME retro-mark — the task already retired on a PRIOR frame (a help-flow retire
+        //     grace committed early), so it was already in `prev.recentTasks` with `unassignedAt` null,
+        //     and the authoritative confirmation stamps `unassignedAt` on it in `next.recentTasks`.
+        // `unassignedAt` on a recentTask is only ever written by `abandonActiveTask`, so a
+        // null→non-null transition uniquely identifies the retro-marked task. The per-taskId key makes
+        // the two shapes idempotent with each other and across frames.
+        // The INFO stream stays PII-safe: storeName rides the payload (merchant data at rest), not a
+        // raw-text log line; the bubble may name the store (bubbles are not the shareable log, P7).
+        val abandonedTask = prevTask?.let { p ->
+            next.recentTasks.lastOrNull { it.taskId == p.taskId && it.unassignedAt != null }
+        } ?: run {
+            val prevUnmarked = prev.recentTasks
+                .filter { it.unassignedAt == null }
+                .mapTo(HashSet()) { it.taskId }
+            next.recentTasks.lastOrNull { it.unassignedAt != null && it.taskId in prevUnmarked }
+        }
+        if (abandonedTask != null) {
+            val jobOfferHashes = (
+                prev.activeJob?.takeIf { it.jobId == abandonedTask.jobId }
+                    ?: next.activeJob?.takeIf { it.jobId == abandonedTask.jobId }
+                )?.parentOfferHashes ?: emptyList()
+            add(
+                logEffect(
+                    sessionId, AppEventType.TASK_UNASSIGNED, obs.timestamp,
+                    taskUnassignedPayload(abandonedTask, jobOfferHashes, obs.timestamp),
+                    effectKeyOverride = "log:${AppEventType.TASK_UNASSIGNED}:${abandonedTask.taskId}",
+                ),
+            )
+            add(
+                AppEffect.UpdateBubble(
+                    "Unassigned: ${abandonedTask.storeName ?: UNKNOWN_STORE}",
+                    ChatPersona.Navigator,
+                    dedupeScope = abandonedTask.taskId,
+                ),
+            )
+        }
 
         // #526 D5 sweep: a pickup→pickup active-task change emits NOTHING new here — the new
         // pickup's PICKUP_NAV_STARTED fires in the branch just below, and the displaced pickup's
@@ -90,11 +132,16 @@ internal fun EffectMap.diffTask(
         if (prevTask?.phase == TaskPhase.DROPOFF &&
             (nextTask == null || nextTask.taskId != prevTask.taskId)
         ) {
-            val deliveryConfirmed = deliveryPhasePayload(
-                task = prevTask,
-                phaseStartedAt = prevTask.startedAt,
-            )
-            add(logEffect(sessionId, AppEventType.DELIVERY_CONFIRMED, obs.timestamp, deliveryConfirmed))
+            // #736: a dropoff the dasher UNASSIGNED (it landed in recentTasks marked `unassignedAt`)
+            // is an abandon, not a handoff — never mint a DELIVERY_CONFIRMED for it.
+            val wasUnassigned = next.recentTasks.any { it.taskId == prevTask.taskId && it.unassignedAt != null }
+            if (!wasUnassigned) {
+                val deliveryConfirmed = deliveryPhasePayload(
+                    task = prevTask,
+                    phaseStartedAt = prevTask.startedAt,
+                )
+                add(logEffect(sessionId, AppEventType.DELIVERY_CONFIRMED, obs.timestamp, deliveryConfirmed))
+            }
         }
 
         // Task phase changed — pickup → dropoff (pickup confirmed): the
@@ -280,7 +327,12 @@ internal fun EffectMap.pickupConfirmSweepEffects(
 ): List<AppEffect> = buildList {
     if (jobId == null) return@buildList
     val lineage = (region.recentTasks + listOfNotNull(region.activeTask))
-        .filter { it.jobId == jobId && it.phase == TaskPhase.PICKUP && it.arrivedAt != null }
+        // #736: a pickup the dasher UNASSIGNED (marker set, completedAt left null) is NOT a
+        // confirmable pickup — exclude it so a job that closes over an abandoned-but-arrived pickup
+        // can never fabricate a PICKUP_CONFIRMED (the seq-71 fabrication). Load-bearing at the abandon
+        // step itself: closing the single-order job on the confirmation frame fires the #596 close-out
+        // sweep, and this filter is what stops it re-minting.
+        .filter { it.jobId == jobId && it.phase == TaskPhase.PICKUP && it.arrivedAt != null && it.unassignedAt == null }
         .distinctBy { it.taskId }
     for (task in lineage) {
         addAll(
@@ -438,6 +490,25 @@ private fun EffectMap.pickupPayload(
     activity = task.activity,
     // #159 D4/D3: the parsed store address + the job's offer hashes for entity resolution.
     storeAddress = task.storeAddress,
+    jobOfferHashes = jobOfferHashes,
+)
+
+/** #736: the TASK_UNASSIGNED payload — the abandoned task's identity/lifecycle anchors, no
+ *  customer PII (storeName is merchant data). [Task.unassignedAt] is non-null by construction at
+ *  the emit site; falls back to [fallbackTs] (the abandon frame's `obs.timestamp`) purely for
+ *  total-ity — the honest abandon moment, never a stale `startedAt`. */
+private fun EffectMap.taskUnassignedPayload(
+    task: Task,
+    jobOfferHashes: List<String>,
+    fallbackTs: Long,
+): TaskUnassignedPayload = TaskUnassignedPayload(
+    jobId = task.jobId,
+    taskId = task.taskId,
+    phase = task.phase,
+    storeName = task.storeName,
+    arrivedAt = task.arrivedAt,
+    startedAt = task.startedAt,
+    unassignedAt = task.unassignedAt ?: fallbackTs,
     jobOfferHashes = jobOfferHashes,
 )
 

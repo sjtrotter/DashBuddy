@@ -35,5 +35,21 @@ data class Task(
     val odometerAtArrival: Double? = null,
     val startedAt: Long,
     val completedAt: Long? = null,
+    /**
+     * The moment the dasher **abandoned** this task by unassigning the order (#736). Set by
+     * `PlatformRegionStepper.abandonActiveTask` when a `Flow.TaskUnassigned` frame lands; mutually
+     * exclusive with [completedAt] (an abandoned task is NEVER completed). The marker is what the
+     * PICKUP_CONFIRMED close-out sweep filters on (`unassignedAt == null`) — that filter is the
+     * load-bearing defense against a fabricated confirm for an abandoned-but-arrived pickup. (An
+     * abandoned drop is not "invisible" to the #596 physical-completion check per se: with
+     * `completedAt` null it reads as un-accounted, which keeps the job OPEN — never a false complete;
+     * the abandon removes the drop's own placeholder so the job can still close on the single-order
+     * path.) Cleared to null by the resume self-heal when a genuine same-order frame reactivates the
+     * task — but only while the job stayed OPEN; after a single-order abandon the job closes and a
+     * later same-order frame mints a NEW jobId the resume lookup can't reach (documented residual,
+     * #736 review; not widened). `@Serializable` default-null ⇒ old snapshots/journals decode
+     * unchanged (no migration).
+     */
+    val unassignedAt: Long? = null,
     val recovered: Boolean = false,
 )

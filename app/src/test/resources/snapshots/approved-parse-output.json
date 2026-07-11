@@ -3656,6 +3656,12 @@
         "shape": null,
         "fields": {}
     },
+    "pickup_resolution_options/2026-07-07__doordash__pickup_resolution_options__957d56.json": {
+        "ruleId": "doordash.screen.pickup_resolution_options",
+        "intent": "pickup_resolution_options",
+        "shape": null,
+        "fields": {}
+    },
     "pickup_select_issue/2026-06-12__doordash__pickup_select_issue__0a08a9.json": {
         "ruleId": "doordash.screen.pickup_select_issue",
         "intent": "pickup_select_issue",
@@ -3941,6 +3947,24 @@
     "pickup_steps/gopuff_bin_scan_steps.json": {
         "ruleId": "doordash.screen.pickup_steps",
         "intent": "pickup_steps",
+        "shape": null,
+        "fields": {}
+    },
+    "pickup_unassign_survey/2026-07-07__doordash__pickup_unassign_survey__59c1f1.json": {
+        "ruleId": "doordash.screen.pickup_unassign_survey",
+        "intent": "pickup_unassign_survey",
+        "shape": null,
+        "fields": {}
+    },
+    "pickup_unassigned_confirmation/2026-07-07__doordash__pickup_unassigned_confirmation__02b55c.json": {
+        "ruleId": "doordash.screen.pickup_unassigned_confirmation",
+        "intent": "pickup_unassigned_confirmation",
+        "shape": null,
+        "fields": {}
+    },
+    "pickup_unassigned_confirmation/2026-07-07__doordash__pickup_unassigned_confirmation__30a95c.json": {
+        "ruleId": "doordash.screen.pickup_unassigned_confirmation",
+        "intent": "pickup_unassigned_confirmation",
         "shape": null,
         "fields": {}
     },

@@ -24,6 +24,8 @@ class PhasePresentationTest {
             Flow.TaskDropoffNavigation to ("DELIVERING" to PhaseColor.GOOD),
             Flow.TaskDropoffArrived to ("AT DOOR" to PhaseColor.GOOD),
             Flow.PostTask to ("DELIVERED" to PhaseColor.GOOD),
+            // #736: TaskUnassigned is presented as the Idle-equivalent (a transient teardown).
+            Flow.TaskUnassigned to ("WAITING" to PhaseColor.GOOD),
             Flow.SessionEnded to ("DONE" to PhaseColor.NEUTRAL),
         )
         Flow.entries.forEach { flow ->

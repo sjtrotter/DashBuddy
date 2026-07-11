@@ -38,8 +38,6 @@ import timber.log.Timber
  */
 class InfoLogPiiGateReplayTest {
 
-    private val session = "snapshots/sessions/single_delivery_2026_06_16"
-
     /** Raw store/address strings the session's own parse produced — the deny-list, from the data. */
     private fun harvestStoreStrings(steps: List<SessionReplay.ReplayStep>): Set<String> {
         val out = mutableSetOf<String>()
@@ -62,21 +60,50 @@ class InfoLogPiiGateReplayTest {
 
     @Test
     fun `no INFO-plus log line in a reduceMixed replay leaks a raw store string or a sensitive marker`() {
-        val recording = RecordingTree()
-        Timber.plant(recording)
-        val steps = try {
+        val session = "snapshots/sessions/single_delivery_2026_06_16"
+        assertNoPiiLeak(session) {
             val screens = SessionReplay.loadSession(session).map { SessionReplay.ScreenInput(it) }
             val click = SessionReplay.loadClickFrame("$session/02_accept_offer_click.json")
             SessionReplay.reduceMixed(screens + click)
+        }
+    }
+
+    /**
+     * #736 — the same INFO+ PII-safe gate over the unassign-via-help session, so the abandon path's
+     * shareable stream (the TASK_UNASSIGNED log, the D6 join-miss WARN, the #736 close-out WARNs) is
+     * mechanically proven PII-safe by construction, exactly like the single-delivery path above. Same
+     * mixed inputs as [UnassignReplayTest] (screens + the arrival click + a late GRACE_COMMIT timer).
+     */
+    @Test
+    fun `no INFO-plus log line in the unassign reduceMixed replay leaks PII`() {
+        val session = "snapshots/sessions/unassign_help_2026_07_07"
+        assertNoPiiLeak(session) {
+            val screens = SessionReplay.loadSession(session).map { SessionReplay.ScreenInput(it) }
+            val click = SessionReplay.loadClickFrame("$session/01_arrived_at_store_click.json")
+            val timer = SessionReplay.graceCommit(screens.maxOf { it.atMs } + 200_000L)
+            SessionReplay.reduceMixed(screens + click + timer)
+        }
+    }
+
+    /**
+     * Plant a [RecordingTree], drive [reduce] (the session's reduceMixed wiring), then assert no
+     * INFO+ line leaks a raw store string harvested from that session's own parse, or trips the
+     * hardened sensitive-marker scan.
+     */
+    private fun assertNoPiiLeak(session: String, reduce: () -> List<SessionReplay.ReplayStep>) {
+        val recording = RecordingTree()
+        Timber.plant(recording)
+        val steps = try {
+            reduce()
         } finally {
             Timber.uproot(recording)
         }
 
         // Sanity: the harness actually ran (drove the machine and produced parsed store data), so a
         // green result is a real patrol, not a vacuous pass on an empty trace.
-        assertTrue("replay produced no steps — fixture/wiring broken", steps.isNotEmpty())
+        assertTrue("[$session] replay produced no steps — fixture/wiring broken", steps.isNotEmpty())
         val denyList = harvestStoreStrings(steps)
-        assertTrue("harvested no store strings from the parse — deny-list would be vacuous", denyList.isNotEmpty())
+        assertTrue("[$session] harvested no store strings from the parse — deny-list would be vacuous", denyList.isNotEmpty())
 
         val infoPlus = recording.records.filter { it.priority >= Log.INFO }
 
@@ -84,7 +111,7 @@ class InfoLogPiiGateReplayTest {
         for (record in infoPlus) {
             val leak = denyList.firstOrNull { record.message.contains(it, ignoreCase = true) }
             assertNull(
-                "INFO+ leaked raw store string '$leak': [${record.priority}/${record.tag}] ${record.message}",
+                "[$session] INFO+ leaked raw store string '$leak': [${record.priority}/${record.tag}] ${record.message}",
                 leak,
             )
         }
@@ -92,7 +119,7 @@ class InfoLogPiiGateReplayTest {
         // (b) No INFO+ line trips the hardened sensitive-marker scan (banking markers + PAN/SSN).
         for (record in infoPlus) {
             assertNull(
-                "INFO+ line hit a sensitive marker: [${record.priority}/${record.tag}] ${record.message}",
+                "[$session] INFO+ line hit a sensitive marker: [${record.priority}/${record.tag}] ${record.message}",
                 SensitiveTextMarkers.findMarker(record.message),
             )
         }

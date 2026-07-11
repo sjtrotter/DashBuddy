@@ -73,6 +73,19 @@ card's **mechanical** half, #577 (re-confirmed, 24/24, ~0.55 s — with a new po
 that entry's Bug #1), the #457 path, and #554 ShadowProjector (2/2). The #462/#460 dropoff item
 was found **broken-in-part** (raw PII in capture envelopes) and moved to that entry's Bug #7.)_
 
+- **🆕 NEW — unassign an order mid-dash produces NO paid/confirmed artifacts (#736).**
+  When you unassign an active order via the pickup help / resolution flow ("Unassign order" survey →
+  "You've been unassigned from this order" confirmation), the app now recognizes the unassign and
+  **inline-abandons** the task instead of fabricating a pickup confirmation. On the previous build a
+  mid-shop unassign minted a ghost `PICKUP_CONFIRMED` (the 07-07 H-E-B seq-71 bug).
+  **How to tell it's working (on-dash + desk-side):** right after you unassign, expect an
+  **"Unassigned: <store>" bubble**, the job/card clears, and the **next offer works normally**.
+  Desk-side, the exported log / `app_events` for that dash should show **exactly one
+  `TASK_UNASSIGNED`** for that order and **no `PICKUP_CONFIRMED` / `DELIVERY_COMPLETED` /
+  `DELIVERY_CONFIRMED`** for it, no fake "$0 PAID" delivery in the Money tab, and no bogus shop-rate
+  sample. Try it on a shop order (H-E-B-style) where you've already started shopping.
+  - Confirmed: 0/2
+
 - **🆕 NEW — multi-pickup job lands under a REAL store, no WARN storm (#733 / PR #745).**
   A multi-pickup job (a stacked stack, or a single customer whose order spans two stores like the
   07-08 Willie's + Sonic delivery) previously folded its delivery as "Unknown store" and spammed the

@@ -303,11 +303,23 @@ class PlatformRegionStepper @Inject constructor() {
         // provisional transition.
         current.pendingDestructive?.let { pend ->
             if (obs.timestamp > pend.deadline) {
-                // Commit stamped at pend.since — the obs.timestamp of the signal
-                // that armed the grace — not the deadline: the dash/task really
-                // ended when the destructive signal appeared, the grace only
-                // delayed our belief in it (#431).
-                current = commitDestructive(current, pend.kind, pend.since)
+                // #736 same-frame supersession: an incoming `task:unassigned` frame is the
+                // authoritative abandon of the active task. Committing an overdue TASK_RETIRE here
+                // FIRST would stamp `completedAt` on the (arrived) pickup — the seq-71 fabrication
+                // hole — before `abandonActiveTask` runs on this same frame. Drop the retire instead;
+                // the abandon below supersedes it (marks `unassignedAt`, leaves `completedAt` null).
+                // SESSION_END (the graced-offline state) and any other kind still commit normally.
+                val supersededByUnassign = pend.kind == DestructiveKind.TASK_RETIRE &&
+                    (obs as? Observation.FlowObservation)?.flow == Flow.TaskUnassigned
+                current = if (supersededByUnassign) {
+                    current.copy(pendingDestructive = null)
+                } else {
+                    // Commit stamped at pend.since — the obs.timestamp of the signal
+                    // that armed the grace — not the deadline: the dash/task really
+                    // ended when the destructive signal appeared, the grace only
+                    // delayed our belief in it (#431).
+                    commitDestructive(current, pend.kind, pend.since)
+                }
             }
         }
 
@@ -791,6 +803,19 @@ class PlatformRegionStepper @Inject constructor() {
     ): PlatformRegion {
         val parsed = obs.parsed
 
+        // #736: the platform's own authoritative statement that the dasher UNASSIGNED the order
+        // (task:unassigned). Not a task flow — an inline (ungraced) abandon of the active task. A
+        // grace is wrong here: the anchor is a single-purpose platform sentence (no misrecognition
+        // flap to debounce), and a grace would let a legitimate "continue to your next stop" frame
+        // inside the window cancel the pending and stamp completedAt — re-creating the fabrication.
+        // Self-heal (the resume copy sites clear unassignedAt) covers a genuine misread — but ONLY
+        // while the job stayed OPEN (the multi-dropoff / no-hash arms); after a single-order abandon
+        // the job closes and a later same-order frame mints a NEW jobId the resume lookup can't reach.
+        // Documented residual (#736 review), not widened here.
+        if (nextFlowVal == Flow.TaskUnassigned) {
+            return abandonActiveTask(region, obs.timestamp)
+        }
+
         // Task flow → create or update active task
         if (nextFlowVal.isTaskFlow()) {
             val taskPhase = nextFlowVal.toTaskPhase() ?: return region
@@ -893,6 +918,9 @@ class PlatformRegionStepper @Inject constructor() {
                         activeTask = resumable.copy(
                             subPhase = taskSubFlow,
                             completedAt = null,
+                            // #736 resume self-heal: a genuine same-order frame reactivating a task
+                            // that a misread had marked abandoned clears the unassign marker.
+                            unassignedAt = null,
                             storeName = taskFields?.storeName ?: resumable.storeName,
                             storeAddress = taskFields?.storeAddress ?: resumable.storeAddress,
                             customerNameHash = taskFields?.customerNameHash ?: resumable.customerNameHash,
@@ -1092,6 +1120,9 @@ class PlatformRegionStepper @Inject constructor() {
                 activeJob = baseJob,
                 activeTask = baseTask.copy(
                     subPhase = taskSubFlow,
+                    // #736 resume self-heal (defensive twin of the resume path): a live task frame
+                    // clears any stale unassign marker.
+                    unassignedAt = null,
                     storeName = taskFields?.storeName ?: baseTask.storeName,
                     storeAddress = taskFields?.storeAddress ?: baseTask.storeAddress,
                     customerNameHash = taskFields?.customerNameHash ?: baseTask.customerNameHash,
@@ -1184,6 +1215,124 @@ class PlatformRegionStepper @Inject constructor() {
     ): PlatformRegion = when (kind) {
         DestructiveKind.SESSION_END -> endSession(region, timestamp)
         DestructiveKind.TASK_RETIRE -> retireActiveTask(region, timestamp)
+    }
+
+    /**
+     * #736: abandon the active task because the dasher UNASSIGNED the order (a `task:unassigned`
+     * frame). Distinct from [retireActiveTask]: an abandon marks the task with [Task.unassignedAt]
+     * and **leaves [Task.completedAt] null**. The load-bearing defense against a fabricated
+     * `PICKUP_CONFIRMED` is the close-out sweep's `unassignedAt == null` FILTER
+     * (`pickupConfirmSweepEffects`), which excludes an abandoned-but-arrived pickup. (The null
+     * `completedAt` also means [isJobPhysicallyComplete] never counts the drop as delivered — it reads
+     * as un-accounted, which keeps the job OPEN, never a false complete; step 2 below removes the
+     * drop's own placeholder so a single-order job can still close.) The commit is inline (ungraced):
+     * see the call site.
+     *
+     * Steps (all pure, `[timestamp]`-driven):
+     * 1. Move [PlatformRegion.activeTask] → [PlatformRegion.recentTasks] with `unassignedAt` set.
+     * 2. Retire the abandoned order's dropoff placeholder(s) from the job's task mirror: a
+     *    single-dropoff job removes its one drop; a multi-dropoff job removes only placeholders
+     *    whose `customerNameHash` matches the abandoned task's (best-effort — customer-TBD
+     *    placeholders carry no hash, the documented same-store-two-orders residual); no hash on a
+     *    multi-dropoff job removes none and WARNs (PII-safe: ids/counts only). Fail direction is
+     *    absorption (#596 class), never fabrication.
+     * 3. If the job then owns no outstanding dropoff placeholder and no other open task → close it
+     *    (single-order case: the job closes here, on the confirmation frame).
+     * 4. A pending `TASK_RETIRE` is superseded (cleared); a pending `SESSION_END` is preserved;
+     *    `pendingModeResume` is untouched (#605 non-interaction — the sheet is Online).
+     * 5. Idempotent: with no active task and a live job it re-runs step 2/3 best-effort; with
+     *    neither it is a no-op (the second confirmation frame).
+     */
+    internal fun abandonActiveTask(region: PlatformRegion, timestamp: Long): PlatformRegion {
+        val abandoned = region.activeTask
+        // Step 4: the abandon supersedes a pending TASK_RETIRE; a SESSION_END is the graced-offline
+        // state and must survive.
+        val keptPending = region.pendingDestructive?.takeIf { it.kind == DestructiveKind.SESSION_END }
+
+        // Cross-frame retro-mark (#736 review): when the active task is ALREADY gone — the retire
+        // grace committed on a PRIOR frame (a help-flow offer/idle intrusion armed TASK_RETIRE and its
+        // grace fired before this confirmation frame, stamping `completedAt` on the pickup while the
+        // pickup-only job stayed open) — the authoritative confirmation must retro-mark the pickup it
+        // was actually about. Find the most-recently-retired pickup of the active job (`completedAt`
+        // set, `unassignedAt` still null) and set `unassignedAt` WITHOUT touching `completedAt`:
+        // nulling a stamped `completedAt` risks disturbing lineage reconciliation, and the sweep filter
+        // + the DeliveryCompletionEffects belt both key on `unassignedAt`, so the marker alone stops
+        // the fabricated PICKUP_CONFIRMED. Only runs when there is no live task to abandon.
+        val retroTargetId = if (abandoned == null) {
+            region.activeJob?.let { job ->
+                region.recentTasks
+                    .filter {
+                        it.jobId == job.jobId && it.phase == TaskPhase.PICKUP &&
+                            it.completedAt != null && it.unassignedAt == null
+                    }
+                    .maxByOrNull { it.completedAt!! }
+                    ?.taskId
+            }
+        } else {
+            null
+        }
+
+        // Step 1: move the active task to recentTasks, marked unassigned (completedAt stays null); or,
+        // when the task already retired on a prior frame, retro-mark it in place.
+        val recentTasks = when {
+            abandoned != null ->
+                (region.recentTasks + abandoned.copy(unassignedAt = timestamp))
+                    .takeLast(MAX_RECENT_TASKS)
+            retroTargetId != null ->
+                region.recentTasks.map {
+                    if (it.taskId == retroTargetId) it.copy(unassignedAt = timestamp) else it
+                }
+            else -> region.recentTasks
+        }
+        var r = region.copy(
+            activeTask = null,
+            recentTasks = recentTasks,
+            pendingDestructive = keptPending,
+        )
+
+        // Step 2: retire the abandoned order's dropoff placeholder(s) from the job's task mirror.
+        val job = r.activeJob
+        if (job != null) {
+            val dropoffs = job.tasks.filter { it.phase == TaskPhase.DROPOFF }
+            val abandonedHash = abandoned?.customerNameHash
+            val remaining = when {
+                dropoffs.size <= 1 ->
+                    job.tasks.filterNot { it.phase == TaskPhase.DROPOFF }
+                // #736 Fix 4: a DROPOFF-phase abandon retires ITS OWN placeholder by taskId — the
+                // abandoned drop IS the exact one to remove, so a customer-hash join here would
+                // over-remove a colliding sibling drop (two customers whose normalized keys collapse).
+                // The hash join stays only for a PICKUP-phase abandon, where the pickup task carries
+                // the order's customer but is not itself a dropoff placeholder, so it must find the
+                // matching drop(s) by hash.
+                abandoned?.phase == TaskPhase.DROPOFF ->
+                    job.tasks.filterNot { it.phase == TaskPhase.DROPOFF && it.taskId == abandoned.taskId }
+                abandonedHash != null ->
+                    job.tasks.filterNot { it.phase == TaskPhase.DROPOFF && it.customerNameHash == abandonedHash }
+                else -> {
+                    // Multi-dropoff job, no hash to disambiguate which drop the abandoned order owns —
+                    // remove none (absorption over fabrication). PII-safe: ids + counts only (P7).
+                    Timber.tag("StateMachine").w(
+                        "#736 unassign: multi-dropoff job %s (%d drops), abandoned task has no customer " +
+                            "hash — no placeholder removed; job stays open, self-heals on resume",
+                        job.jobId, dropoffs.size,
+                    )
+                    job.tasks
+                }
+            }
+            r = r.copy(activeJob = job.copy(tasks = remaining))
+        }
+
+        // Step 3: if the job now owns no outstanding dropoff placeholder and no other open task, close it.
+        val remainingJob = r.activeJob
+        if (remainingJob != null && r.activeTask == null) {
+            val hasOutstandingDropoff = remainingJob.tasks.any {
+                it.phase == TaskPhase.DROPOFF && it.completedAt == null && it.unassignedAt == null
+            }
+            if (!hasOutstandingDropoff) {
+                r = completeActiveJob(r)
+            }
+        }
+        return r
     }
 
     /**

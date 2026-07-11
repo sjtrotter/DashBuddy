@@ -174,6 +174,9 @@ internal fun EffectMap.diffDeliveryCompletion(
         for (task in next.recentTasks) {
             if (task.jobId != closedJob.jobId || task.phase != TaskPhase.DROPOFF) continue
             val completedAt = task.completedAt ?: continue
+            // #736 belt (redundant with the null completedAt above — an abandoned task never gets
+            // one): a dropoff the dasher UNASSIGNED must never mint a DELIVERY_COMPLETED.
+            if (task.unassignedAt != null) continue
             // #498 identity firewall (guardrail): never complete an identity-less phantom.
             if (task.customerNameHash == null && task.customerAddressHash == null) continue
             // amdt #2 exclusivity: the PostTask-exit block already minted this one.

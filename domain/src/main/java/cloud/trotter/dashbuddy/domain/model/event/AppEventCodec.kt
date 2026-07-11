@@ -11,6 +11,7 @@ import cloud.trotter.dashbuddy.domain.model.event.payload.PickupPayload
 import cloud.trotter.dashbuddy.domain.model.event.payload.SessionPausedPayload
 import cloud.trotter.dashbuddy.domain.model.event.payload.SessionStartPayload
 import cloud.trotter.dashbuddy.domain.model.event.payload.SessionStopPayload
+import cloud.trotter.dashbuddy.domain.model.event.payload.TaskUnassignedPayload
 import kotlinx.serialization.json.Json
 
 /**
@@ -40,6 +41,7 @@ object AppEventCodec {
         is ManualDeliveryPayload -> json.encodeToString(payload)
         is PayAdjustmentPayload -> json.encodeToString(payload)
         is DeliveryAdjustmentPayload -> json.encodeToString(payload)
+        is TaskUnassignedPayload -> json.encodeToString(payload)
     }
 
     /**
@@ -87,6 +89,9 @@ object AppEventCodec {
 
             AppEventType.DELIVERY_ADJUSTMENT ->
                 json.decodeFromString<DeliveryAdjustmentPayload>(payloadJson)
+
+            AppEventType.TASK_UNASSIGNED ->
+                json.decodeFromString<TaskUnassignedPayload>(payloadJson)
 
             AppEventType.ZONE_SWITCH,
             AppEventType.NOTIFICATION_RECEIVED,

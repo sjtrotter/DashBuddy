@@ -92,6 +92,10 @@ class TransitionPolicy @Inject constructor(
 
             Flow.SessionEnded -> Mode.Offline
             Flow.Idle -> null // Idle is ambiguous — could be offline or between offers
+            // #736: the unassign sheet is online, but the rule always ships an explicit
+            // modeHint("online") that wins above (line 82), so this flow-inference arm is dead for
+            // it. Treated as Idle-equivalent (ambiguous → null) for exhaustiveness.
+            Flow.TaskUnassigned -> null
             null -> null
         }
     }

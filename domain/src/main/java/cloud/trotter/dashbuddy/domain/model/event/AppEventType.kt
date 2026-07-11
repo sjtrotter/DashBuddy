@@ -25,6 +25,10 @@ enum class AppEventType {
     DELIVERY_CONFIRMED, // Dasher finished the drop-off (handoff or POD photo done); analogue of PICKUP_CONFIRMED
     DELIVERY_COMPLETED, // PostTask exit (receipt dismissed); carries pay breakdown
 
+    // --- Task abandonment (#736) ---
+    TASK_UNASSIGNED, // The dasher unassigned the order mid-flow (via help). Teardown, NOT a completion:
+                     // no pay/miles ever attributes, and the close-out sweep can never confirm it.
+
     // --- User corrections (#650) ---
     MANUAL_DELIVERY, // A driver-entered missed delivery (durable correction event, never destructive)
     PAY_ADJUSTMENT,  // A driver re-price of an already-recorded delivery (the original event stays)

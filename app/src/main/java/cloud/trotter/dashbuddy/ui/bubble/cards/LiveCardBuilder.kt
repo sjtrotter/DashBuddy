@@ -27,7 +27,9 @@ object LiveCardBuilder {
         val now = state.timestamp
 
         return when (flow) {
-            Flow.Idle -> {
+            // #736: TaskUnassigned is a transient teardown (job already closed) — render the
+            // Idle-equivalent awaiting card until the next real Idle frame arrives.
+            Flow.Idle, Flow.TaskUnassigned -> {
                 if (region.mode != Mode.Online) return null
                 val started = region.idleEnteredAt ?: region.session?.startedAt ?: return null
                 FlowCardSnapshot.Awaiting(
