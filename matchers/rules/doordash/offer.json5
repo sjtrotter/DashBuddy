@@ -5,7 +5,7 @@
     {
       "id": "doordash.screen.offer_popup_confirm_decline",
       "priority": 19,
-      "comment": "#577 quick-decline: bind the confirm dialog's 'Decline offer' button. Its label is on a child text node (textView_prism_button_title, not itself clickable) — bind the labelled node + 'decline' text so we never grab a sibling Cancel/Go-back; clickNodeStrict walks up to the clickable ancestor. The app-owned CONFIRM_DECLINE tap fires (AUTOMATION) only when the dasher enabled quick-declines.",
+      "comment": "#577 quick-decline: bind the confirm dialog's 'Decline offer' button. Its label is on a child text node (textView_prism_button_title, not itself clickable) — clickNodeStrict walks up to the clickable ancestor. #734: anchor the EXACT label 'Decline offer' (was 'decline' substring). The offer popup behind the confirm sheet carries its own bare 'Decline' button under the SAME textView_prism_button_title id; a substring match let both survive the app-owned label check, so the actuation ranker saw a 2-candidate tie and clicked the first-in-tree node (luck, not verification). The exact 'Decline offer' anchor is unique to the confirm sheet's button (every corpus frame renders it verbatim), so the bound target — and thus the ranker's EXACT_TEXT tier — resolves the single correct node; a genuine tie now aborts to manual (#425 fail-closed). The app-owned CONFIRM_DECLINE tap fires (AUTOMATION) only when the dasher enabled quick-declines.",
       "state": {
         "flow": "offer:presented",
         "modeHint": "online"
@@ -18,7 +18,7 @@
                 "hasIdSuffix": "textView_prism_button_title"
               },
               {
-                "hasTextContaining": "decline"
+                "hasText": "Decline offer"
               }
             ]
           },

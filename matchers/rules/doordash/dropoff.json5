@@ -1185,14 +1185,27 @@
         }
       },
       "bind": {
+        // #734: bind ONLY the per-delivery pay-breakdown expandable ('This offer' /
+        // 'DoorDash pay'), never the dash-stats expandable. The collapsed summary renders
+        // TWO nodes sharing the expandable_view id — the online-time/stats section AND the
+        // pay section — so the old `any:[expandable_view, expandable_layout]` bound the
+        // first-in-tree (stats) node, and at fire time the app-owned actuation ranker saw a
+        // 2-candidate tie (both share the id, EXPAND_EARNINGS is label-free) and clicked the
+        // first. Anchor on the stats section's stable 'Total online time' row (present in
+        // every frame) and NEGATE it: the pay expandable never carries that text, so this
+        // selects exactly the pay node. Only the pay expandable_view is clickable in the
+        // field; clickNodeStrict taps it directly. A residual fire-time tie (shared id) now
+        // aborts to manual (#425 fail-closed).
         "expandButton": {
           "find": {
-            "any": [
+            "all": [
               {
                 "hasIdSuffix": "expandable_view"
               },
               {
-                "hasIdSuffix": "expandable_layout"
+                "not": {
+                  "hasAnyText": "Total online time"
+                }
               }
             ]
           },

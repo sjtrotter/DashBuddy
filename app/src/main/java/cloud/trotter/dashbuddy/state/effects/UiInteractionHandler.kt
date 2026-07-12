@@ -30,7 +30,11 @@ import javax.inject.Singleton
  *    survives label verification, [ClickCandidateRanker] picks the strongest
  *    match (exact stored text, then max bounds overlap) instead of a
  *    since-abandoned exact-bounds `==` comparison that broke under an
- *    animating sheet's temporal drift.
+ *    animating sheet's temporal drift. If the ranker cannot decide
+ *    ([ClickCandidateRanker.Tier.UNRESOLVED]) among >1 survivor, the tap is
+ *    **aborted to manual** (#734) — clicking the first-in-tree candidate is
+ *    luck, not verification. The paired ruleset fix keeps the bound target
+ *    predicates tight enough that this decisive path resolves a single node.
  * 4. **Strict click** — self-or-ancestor only. The old clickable-*sibling*
  *    fallback is deliberately absent here: the verified node's sibling can be
  *    the opposite button (Accept sits beside Decline in the offer footer).
@@ -144,13 +148,21 @@ class UiInteractionHandler @Inject constructor(
         val target = verified[ranked.index]
         when {
             ranked.tier == ClickCandidateRanker.Tier.UNRESOLVED && verified.size > 1 -> {
+                // #734: an ambiguous target must NOT be clicked. Picking the
+                // first-in-tree candidate is luck, not verification, and breaks
+                // #425's fail-closed promise (a wrong click on a decline/accept
+                // surface acts against the dasher's intent). Abort to manual,
+                // matching the empty-candidate and label-fail arms above — the
+                // under-constrained predicate is tightened at the ruleset so the
+                // decisive single-candidate path is normally reached first.
                 // WARN carries counts only — raw third-party UI text is DEBUG-tier
                 // by Principle 7 (the WARN slice is user-exportable), #618 review F1.
                 Timber.tag("Effects").w(
-                    "No decisive match among %d verified candidates for: %s — clicking first",
+                    "No decisive match among %d verified candidates for: %s — refusing to click (fail closed)",
                     verified.size, description,
                 )
                 Timber.tag("Effects").d("Unresolved-tie candidate labels for %s: %s", description, facts.map { it.labels })
+                return false
             }
             verified.size == 1 -> Timber.tag("Effects").d("Single verified candidate for %s — clicking it", description)
             else -> Timber.tag("Effects").d(
