@@ -99,7 +99,7 @@ class OdometerRepository @Inject constructor(
 
     fun startTracking() {
         if (trackingJob?.isActive == true) return
-        Timber.Forest.i("Starting GPS Tracking...")
+        Timber.tag(TAG).i("Starting GPS Tracking...")
         trackingJob = scope.launch {
             locationDataSource.locationUpdates.collect { processLocation(it) }
         }
@@ -107,7 +107,7 @@ class OdometerRepository @Inject constructor(
 
     fun stopTracking() {
         if (trackingJob?.isActive == true) {
-            Timber.Forest.i("Stopping GPS Tracking.")
+            Timber.tag(TAG).i("Stopping GPS Tracking.")
             trackingJob?.cancel()
             trackingJob = null
             lastCoords = null
@@ -141,4 +141,8 @@ class OdometerRepository @Inject constructor(
      * (#314). Unaffected by the #438 B5 per-session anchor change (it reads [_meters] only).
      */
     fun getCurrentMiles(): Double = _meters.value * metersToMiles
+
+    private companion object {
+        private const val TAG = "Odometer"
+    }
 }

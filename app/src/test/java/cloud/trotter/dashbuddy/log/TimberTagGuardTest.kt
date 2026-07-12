@@ -52,27 +52,53 @@ import java.io.File
  */
 class TimberTagGuardTest {
 
-    /** Module `src/main` roots to scan — every module that can carry `Timber` calls. */
-    private val roots = listOf(
-        "app/src/main",
-        "core/database/src/main",
-        "core/data/src/main",
-        "core/datastore/src/main",
-        "core/designsystem/src/main",
-        "core/location/src/main",
-        "core/network/src/main",
-        "core/pipeline/src/main",
-        "core/state/src/main",
-        "domain/src/main",
+    /** Modules that can carry `Timber` calls. */
+    private val modules = listOf(
+        "app",
+        "core/database",
+        "core/data",
+        "core/datastore",
+        "core/designsystem",
+        "core/location",
+        "core/network",
+        "core/pipeline",
+        "core/state",
+        "domain",
     )
 
+    /** Source-set directory-name prefixes to skip — test code is out of scope for this guard. */
+    private val excludedSourceSetPrefixes = listOf("test", "androidTest")
+
     /**
-     * Matches `Timber` immediately followed by (only whitespace, then) `.i(`/`.w(`/`.e(` — i.e.
-     * a bare, untagged call. `Timber.tag("X").i(` does NOT match: the `.tag("X").` text between
-     * `Timber` and `.i(` is not whitespace, so the whitespace-only gap this pattern requires is
-     * broken. See the class doc for the multiline case.
+     * `src/<sourceSet>` roots to scan, per module — every **main-type** source set (`main`,
+     * `debug`, `release`, …), not just `main`. A release/debug-only file (e.g. a build-variant
+     * Hilt module) can carry `Timber` calls just as easily as `main`'s, so scanning only `main`
+     * would leave a real blind spot. `test`/`androidTest` (and any variant sharing that prefix,
+     * e.g. `testDebug`) are excluded — test code is out of scope for this guard.
      */
-    private val bareCallRegex = Regex("""Timber\s*\.\s*(?:i|w|e)\s*\(""")
+    private val roots: List<String> by lazy {
+        modules.flatMap { module ->
+            val srcDir = File(repoRoot, "$module/src")
+            val sourceSets = srcDir.listFiles { f -> f.isDirectory }?.toList() ?: emptyList()
+            sourceSets
+                .filter { dir -> excludedSourceSetPrefixes.none { dir.name.startsWith(it) } }
+                .map { dir -> "$module/src/${dir.name}" }
+        }
+    }
+
+    /**
+     * Matches `Timber` immediately followed by (only whitespace, then) `.i(`/`.w(`/`.e(`/`.wtf(`
+     * — i.e. a bare, untagged call. `Timber.tag("X").i(` does NOT match: the `.tag("X").` text
+     * between `Timber` and `.i(` is not whitespace, so the whitespace-only gap this pattern
+     * requires is broken. See the class doc for the multiline case.
+     *
+     * An optional `.Forest` segment is folded in — `Timber` IS the `Forest` companion object, so
+     * `Timber.Forest.i(...)` is byte-identical semantics to `Timber.i(...)` and would otherwise
+     * escape this scanner (a real live pattern found in `core/data` repositories, #764 review
+     * fix). `Timber.Forest.tag("X").i(` still does NOT match: the `.tag("X").` text breaks the
+     * whitespace-only gap the same way it does for the non-`Forest` form.
+     */
+    private val bareCallRegex = Regex("""Timber\s*(?:\.\s*Forest\s*)?\.\s*(?:i|w|e|wtf)\s*\(""")
 
     private val repoRoot: File by lazy { locateRepoRoot() }
 
@@ -84,20 +110,33 @@ class TimberTagGuardTest {
         allowlistFile.relativeTo(repoRoot).path.replace(File.separatorChar, '/')
     }
 
-    /** repo-relative path -> allowlisted (frozen) bare-call count. */
+    /**
+     * repo-relative path -> allowlisted (frozen) bare-call count. Fails loud on a duplicated
+     * path line — silently letting the last one win (the old `.associate` behavior) would hide a
+     * copy-paste mistake behind whichever count happened to be listed last, corrupting the
+     * ratchet SSOT without any signal.
+     */
     private val allowlist: Map<String, Int> by lazy {
+        val result = mutableMapOf<String, Int>()
         allowlistFile.readLines()
             .map { it.trim() }
             .filter { it.isNotEmpty() && !it.startsWith("#") }
-            .associate { line ->
+            .forEach { line ->
                 val parts = line.split(Regex("\\s+"))
                 require(parts.size == 2) {
                     "Malformed $allowlistRelPath line: '$line' (expected '<path> <count>')"
                 }
+                val path = parts[0]
                 val count = parts[1].toIntOrNull()
                     ?: error("Malformed count in $allowlistRelPath line: '$line'")
-                parts[0] to count
+                require(!result.containsKey(path)) {
+                    "Duplicate $allowlistRelPath entry for '$path' — merge the lines into one " +
+                        "(the allowlist is a map, not a log; a duplicate key silently shadows " +
+                        "one of the counts)"
+                }
+                result[path] = count
             }
+        result
     }
 
     /** repo-relative path -> live count of bare (untagged) Timber.i/w/e( sites found today. */

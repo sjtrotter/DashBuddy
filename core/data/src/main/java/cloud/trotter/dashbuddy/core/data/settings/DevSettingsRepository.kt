@@ -61,7 +61,11 @@ class DevSettingsRepository @Inject constructor(
     suspend fun setLogLevel(priority: Int) = dataSource.setLogLevel(priority)
 
     suspend fun clearPreferences() {
-        Timber.Forest.w("Clearing Developer Preferences")
+        Timber.tag(TAG).w("Clearing Developer Preferences")
         dataSource.clear()
+    }
+
+    private companion object {
+        private const val TAG = "DevSettings"
     }
 }
