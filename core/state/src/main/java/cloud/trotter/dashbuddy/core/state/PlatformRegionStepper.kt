@@ -339,6 +339,14 @@ class PlatformRegionStepper @Inject constructor() {
                     // that armed the grace — not the deadline: the dash/task really
                     // ended when the destructive signal appeared, the grace only
                     // delayed our belief in it (#431).
+                    //
+                    // #732: this pend.since stamp (not "now") is the SOURCE of the
+                    // sequenceId/occurredAt ordering invariant — the committed event
+                    // appends to the log AFTER any intervening non-graced events but
+                    // carries an EARLIER domain timestamp than they do. See
+                    // AppEventEntity's class KDoc ("sequenceId vs occurredAt") for the
+                    // full invariant; this is a documented, accepted tradeoff (Option
+                    // B), not a bug to silently "fix" by re-stamping here.
                     commitDestructive(current, pend.kind, pend.since)
                 }
             }
