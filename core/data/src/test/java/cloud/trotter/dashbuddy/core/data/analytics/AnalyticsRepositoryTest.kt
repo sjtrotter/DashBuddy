@@ -535,4 +535,24 @@ class AnalyticsRepositoryTest {
         val eco = repo.periodEconomics(AnalyticsPeriod.LIFETIME).first()
         assertEquals("overAttributed compares cash-free delivered pay: 18 − 10 = 8, cash never counted", 8.0, eco.overAttributedPay, 1e-9)
     }
+
+    /**
+     * #660 review Fix 4: a mid-dash-restart orphan completes hours INTO the dash that contains it, so
+     * the candidate picker must rank by distance to the session SPAN — the containing dash first — not
+     * by distance to its start instant (which would rank a short LATER dash above the one it belongs to).
+     */
+    @Test
+    fun `candidateSessionsForOrphan ranks the containing dash first, not the nearest-start dash (span sort, #660)`() = runBlocking {
+        // Dash A: 9am → 3pm (a long dash). Dash B: starts 4pm (a short later dash).
+        dao.upsertSession(session("A", base, reportedEarnings = 60.0, durationMillis = 6 * hour, startOdo = 0.0, lastOdo = 40.0, deliveries = 5, jobsCompleted = 5))
+        dao.upsertSession(session("B", base + 7 * hour, reportedEarnings = 12.0, durationMillis = hour, startOdo = 0.0, lastOdo = 6.0, deliveries = 1, jobsCompleted = 1))
+
+        // The orphan completes at 2:50pm — INSIDE A's span, but closer to B's START instant.
+        val orphanCompletedAt = base + 5 * hour + 50 * 60_000L
+        val candidates = repo.candidateSessionsForOrphan(orphanCompletedAt, cloud.trotter.dashbuddy.domain.state.Platform.DoorDash)
+
+        assertEquals("both ended dashes are candidates", 2, candidates.size)
+        assertEquals("the dash whose span CONTAINS the orphan ranks first (span distance 0)", "A", candidates[0].sessionId)
+        assertEquals("B", candidates[1].sessionId)
+    }
 }

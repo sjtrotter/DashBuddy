@@ -28,6 +28,7 @@ import cloud.trotter.dashbuddy.core.designsystem.theme.AppTheme
 import cloud.trotter.dashbuddy.domain.analytics.DeliveryRecord
 import cloud.trotter.dashbuddy.domain.analytics.SessionRecord
 import cloud.trotter.dashbuddy.domain.format.Formats
+import cloud.trotter.dashbuddy.domain.format.formatClockTime
 import cloud.trotter.dashbuddy.domain.format.formatShortDate
 
 /**
@@ -117,7 +118,10 @@ private fun OrphanListDialog(
                                     color = c.text,
                                 )
                                 Text(
-                                    text = formatShortDate(o.completedAt),
+                                    // Date AND time-of-day (#660 review) — two same-store same-day
+                                    // orphans must be distinguishable; both route through the
+                                    // domain time-format SSOT.
+                                    text = "${formatShortDate(o.completedAt)} · ${formatClockTime(o.completedAt)}",
                                     style = MaterialTheme.typography.bodySmall,
                                     color = c.text3,
                                 )

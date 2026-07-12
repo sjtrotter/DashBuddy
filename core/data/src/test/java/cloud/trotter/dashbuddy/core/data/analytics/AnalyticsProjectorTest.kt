@@ -1114,7 +1114,12 @@ class AnalyticsProjectorTest {
         insert(AppEventType.DELIVERY_SESSION_ASSIGN, "S1", 6_000, DeliverySessionAssignPayload(orphanSeq, "S1"))
         insert(AppEventType.DELIVERY_SESSION_ASSIGN, null, 7_000, DeliverySessionAssignPayload(orphanSeq, null))
         insert(AppEventType.DELIVERY_SESSION_ASSIGN, "S2", 8_000, DeliverySessionAssignPayload(orphanSeq, "S2"))
-        projector().catchUp()
+        // Drain INCREMENTALLY (one event per batch, #660 review Fix 3) so each assign/unassign/re-assign
+        // hydrates from committed DB state — a real batch-boundary path. The prior single-drain
+        // "incremental" side was two identical from-zero folds and could not catch batch-boundary
+        // divergence at all.
+        val live = projector()
+        while (live.processBatch(limit = 1) != null) { /* one event at a time */ }
 
         val deliveriesBefore = analyticsDao.deliveriesBetween(Long.MIN_VALUE, Long.MAX_VALUE)
         val sessionsBefore = analyticsDao.sessionsBetween(Long.MIN_VALUE, Long.MAX_VALUE)
@@ -1128,6 +1133,58 @@ class AnalyticsProjectorTest {
             deliveriesBefore, analyticsDao.deliveriesBetween(Long.MIN_VALUE, Long.MAX_VALUE),
         )
         assertEquals(sessionsBefore, analyticsDao.sessionsBetween(Long.MIN_VALUE, Long.MAX_VALUE))
+    }
+
+    @Test
+    fun `an assigned orphan stays invisible to a later-batch correction's hydration (jobsCompleted determinism, #660)`() = runBlocking {
+        // #660 review Fix 1: after an orphan is categorized into ended S1, a LATER-batch correction that
+        // re-hydrates S1 must NOT count the assigned orphan's (distinct) job — jobsCompleted is
+        // deliveredJobIds.size, and hydrating it off the DB (which now shows the orphan session-bound)
+        // would inflate it and pass-through-upsert the inflated counter, diverging from a from-zero
+        // refold whose in-memory context (untouched by the assign fold) never sees the orphan. The
+        // sessionAssigned=0 filter on deliveredJobIdsInSession is the fix.
+        val machineSeq = seedCorrectableSession(sid = "S1", deliveryPay = 10.0, reportedEarnings = 20.0)
+        val orphanSeq = insertOrphanDelivery(pay = 8.0, jobId = "ORPHAN")
+        // Batch 1: fold the machine session + the orphan.
+        projector().catchUp()
+        assertEquals("S1 starts with exactly one machine job", 1, analyticsDao.sessionRecord("S1")!!.jobsCompleted)
+
+        // Batch 2 (separate drain): assign the orphan into ended S1 — commits sessionId + marker + the
+        // relative counter bump.
+        insert(
+            AppEventType.DELIVERY_SESSION_ASSIGN, "S1", 6_000,
+            DeliverySessionAssignPayload(targetEventSequenceId = orphanSeq, newSessionId = "S1"),
+        )
+        projector().catchUp()
+
+        // Batch 3 (separate drain): an innocuous note-only DELIVERY_ADJUSTMENT on an S1 MACHINE row
+        // re-hydrates the S1 context and pass-through-upserts it. The assigned orphan's job must stay
+        // out of the hydrated deliveredJobIds.
+        insert(
+            AppEventType.DELIVERY_ADJUSTMENT, "S1", 7_000,
+            DeliveryAdjustmentPayload(targetEventSequenceId = machineSeq, sessionId = "S1", note = "annotated"),
+        )
+        projector().catchUp()
+
+        assertEquals(
+            "a later-batch correction must not count the assigned orphan's job — jobsCompleted stays 1",
+            1, analyticsDao.sessionRecord("S1")!!.jobsCompleted,
+        )
+        // The delivery COUNTER still reflects the assigned orphan (the relative ±1 bump, not the
+        // distinct-job set) — the two are maintained independently.
+        assertEquals("the delivery counter still includes the assigned orphan", 2, analyticsDao.sessionRecord("S1")!!.deliveries)
+
+        // A from-zero refold (single drain; its in-memory context never sees the orphan) must reproduce
+        // byte-identical session + delivery rows — the equality that batch-boundary divergence breaks.
+        val sessionsBefore = analyticsDao.sessionsBetween(Long.MIN_VALUE, Long.MAX_VALUE)
+        val deliveriesBefore = analyticsDao.deliveriesBetween(Long.MIN_VALUE, Long.MAX_VALUE)
+        analyticsDao.setWatermark(AnalyticsProjectionStateEntity(watermarkSequenceId = 99, projectorVersion = 99))
+        projector().catchUp()
+        assertEquals(
+            "session rows rebuild byte-identically from the log (incremental ≡ refold)",
+            sessionsBefore, analyticsDao.sessionsBetween(Long.MIN_VALUE, Long.MAX_VALUE),
+        )
+        assertEquals(deliveriesBefore, analyticsDao.deliveriesBetween(Long.MIN_VALUE, Long.MAX_VALUE))
     }
 
     @Test

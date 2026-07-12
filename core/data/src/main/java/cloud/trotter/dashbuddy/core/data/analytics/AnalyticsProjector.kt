@@ -411,9 +411,16 @@ class AnalyticsProjector @Inject constructor(
      *     `delivery_records` BY sessionId, so assigning into a LIVE session could make a later machine
      *     `DELIVERY_COMPLETED`'s fold differ between incremental (no orphan row in the in-memory context)
      *     and from-zero refold at a batch boundary (orphan row visible in the hydrated context). An ended
-     *     session folds no future machine completion, so that divergence class is inert. (Stated residual:
-     *     a pathological post-`DASH_STOP` `DELIVERY_COMPLETED` for the same session could still hydrate
-     *     differently — the same residual class the ended-session assumption already carries elsewhere.)
+     *     session folds no future machine completion, so that divergence class is inert. The stronger,
+     *     rules-independent backstop is at the DAO: the three hydration reads
+     *     ([AnalyticsDao.deliveredJobIdsInSession]/[AnalyticsDao.receiptedJobIdsInSession]/
+     *     [AnalyticsDao.lastDeliveryInSession], plus the #159 [AnalyticsDao.jobIdsForSession] resolution
+     *     enumerator) all filter `sessionAssigned = 0`, so a driver-assigned orphan is INVISIBLE to
+     *     machine-fold hydration and #159 resolution regardless of the session's ended state — a later-batch
+     *     correction on the same session (e.g. a note edit that re-hydrates + pass-through-upserts the
+     *     context) can no longer inflate `jobsCompleted` off the orphan's job, and incremental ≡ refold
+     *     holds even under the pathological post-`DASH_STOP` `DELIVERY_COMPLETED` shape the ended-session
+     *     assumption alone left as a residual.
      *  4. **Platform coherence:** both platforms known and differing ⇒ skip (a DoorDash drop in an Uber
      *     dash's reconciliation is never right). No platform re-stamp in v1.
      *  5. **Cash-bearing unassign block:** `newSessionId == null && row.cashTip != null` ⇒ skip — the

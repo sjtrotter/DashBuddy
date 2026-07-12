@@ -494,6 +494,7 @@
     <string name="money_tab_unattributed_callout_format">%1$s not attributed to any delivery — bonuses/adjustments; review coming (#650)</string>
     <string name="money_tab_over_attributed_callout_format">attributed exceeds reported by %1$s — review estimates/corrections</string>
     <string name="money_tab_no_session_callout_format">(No session): %1$s across %2$s %3$s not tied to a dash — data-quality flag (#660)</string>
+    <string name="money_tab_no_session_callout_click_label">Assign to a dash</string>
     <string name="money_tab_recent_sessions_title">RECENT SESSIONS</string>
     <string name="money_tab_no_sessions_recorded_yet">No sessions recorded yet.</string>
     <string name="money_tab_cash_marker_format">+%1$s cash</string>
@@ -532,6 +533,7 @@
     <string name="session_detail_save_button">Save</string>
     <string name="session_detail_assigned_by_you">assigned by you</string>
     <string name="session_detail_remove_from_dash">Remove from this dash</string>
+    <string name="session_detail_remove_cash_locked_supporting">Clear the cash tip first, then remove</string>
 
     <!-- main/analytics/NoSessionAssignDialogs.kt (#660 piece 2) -->
     <string name="no_session_assign_title">(No session) deliveries</string>

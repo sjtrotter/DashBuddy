@@ -570,9 +570,22 @@ private fun AdjustDeliveryDialog(
                 MoneyField(note, { note = it }, stringResource(R.string.session_detail_field_note_optional), numeric = false)
                 // #660 piece 2 undo: only a driver-assigned row can be removed back to the bucket (a
                 // machine row is never movable by the projector guard). Attribution-only — never re-prices.
+                // A cash-bearing row's unassign is REFUSED by the projector's F3 sessionful-cash guard
+                // (a null-session cash row would reach net but not gross), so disable the action with a
+                // hint rather than showing a control whose tap silently no-ops (#660 review).
                 if (target.sessionAssigned) {
-                    TextButton(onClick = onUnassign, modifier = Modifier.align(Alignment.Start)) {
-                        Text(stringResource(R.string.session_detail_remove_from_dash))
+                    val cashLocked = target.cashTip != null
+                    Column(Modifier.align(Alignment.Start)) {
+                        TextButton(onClick = onUnassign, enabled = !cashLocked) {
+                            Text(stringResource(R.string.session_detail_remove_from_dash))
+                        }
+                        if (cashLocked) {
+                            Text(
+                                text = stringResource(R.string.session_detail_remove_cash_locked_supporting),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = AppTheme.colors.text3,
+                            )
+                        }
                     }
                 }
             }

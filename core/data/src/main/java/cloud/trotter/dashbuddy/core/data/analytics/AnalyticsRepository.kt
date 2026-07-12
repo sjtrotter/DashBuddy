@@ -357,10 +357,17 @@ class AnalyticsRepository @Inject constructor(
     /**
      * The **candidate dashes** an orphan delivery could be categorized into (#660 piece 2): ENDED
      * sessions within ±48 h of [completedAt], same [platform] (ALL platforms when the orphan's platform
-     * is [Platform.Unknown]), nearest-in-time first. A one-shot snapshot fetched when the driver opens the
-     * picker (not a live surface — the picker is a transient dialog); the projector's ended-session guard
-     * is the authority, this is the UI-policy pre-filter over the existing [AnalyticsDao.sessionsBetween]
+     * is [Platform.Unknown]), nearest-in-**span** first. A one-shot snapshot fetched when the driver opens
+     * the picker (not a live surface — the picker is a transient dialog); the projector's ended-session
+     * guard is the authority, this is the UI-policy pre-filter over the existing [AnalyticsDao.sessionsBetween]
      * raw read (no new DAO query). No economy dependency, no new PII surface (session metadata only).
+     *
+     * **Ranked by distance to the session's [startedAt, endedAt] SPAN, not to its start instant** — a
+     * mid-dash-restart orphan completes hours INTO its real dash, so sorting on `abs(startedAt −
+     * completedAt)` would rank a short later dash above the long dash that actually contains the orphan.
+     * A completion inside the span scores 0 (the containing dash always wins); otherwise it scores the
+     * gap to the nearer endpoint. Tie-break by [startedAt] so the ordering is deterministic when two
+     * candidates are equidistant. `endedAt` is non-null here (the ENDED filter above ran first).
      */
     suspend fun candidateSessionsForOrphan(completedAt: Long, platform: Platform): List<SessionRecord> {
         val start = completedAt - CANDIDATE_WINDOW_MILLIS
@@ -369,7 +376,19 @@ class AnalyticsRepository @Inject constructor(
             .map { it.toDomain() }
             .filter { it.endedAt != null }
             .filter { platform == Platform.Unknown || it.platform == platform }
-            .sortedBy { kotlin.math.abs(it.startedAt - completedAt) }
+            .sortedWith(compareBy({ spanDistance(it, completedAt) }, { it.startedAt }))
+    }
+
+    /** Distance from [completedAt] to a session's `[startedAt, endedAt]` span: 0 when inside the span,
+     *  else the gap to the nearer endpoint. `endedAt` is non-null at every call site (ENDED-filtered). */
+    private fun spanDistance(session: SessionRecord, completedAt: Long): Long {
+        val startedAt = session.startedAt
+        val endedAt = session.endedAt ?: startedAt
+        return when {
+            completedAt < startedAt -> startedAt - completedAt
+            completedAt > endedAt -> completedAt - endedAt
+            else -> 0L
+        }
     }
 
     /**
