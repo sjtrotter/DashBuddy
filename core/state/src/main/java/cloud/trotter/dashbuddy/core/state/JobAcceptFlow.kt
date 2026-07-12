@@ -97,7 +97,9 @@ internal fun PlatformRegionStepper.consumeAcceptIntoJob(
 
     // #596 T2: an accept while the active job is already physically complete is an INDEPENDENT
     // offer, not an add-on — do NOT fold it into a never-closed job (the 06-30 job-61 case: one
-    // never-closed job swallowed three offers, $19 of $45.75 unattributed). Close the old job and
+    // never-closed job swallowed three offers, $19 of $45.75 unattributed). #749 restored this guard
+    // for a same-customer multi-order job, whose leftover TBD placeholder used to defeat the
+    // completeness predicate here (`isJobPhysicallyComplete`'s per-customer coverage arm). Close the old job and
     // mint a fresh one. At accept time the final drop may still be inside its TASK_RETIRE grace
     // (activeTask not yet retired); commit that retire inline first (honest completion = pend.since,
     // matching retireActiveTask) so the completeness check sees the finished drop. Skipped when the

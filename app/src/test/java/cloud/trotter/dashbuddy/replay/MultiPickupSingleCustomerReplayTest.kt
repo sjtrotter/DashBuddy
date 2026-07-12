@@ -9,6 +9,7 @@ import cloud.trotter.dashbuddy.test.util.SessionReplay
 import cloud.trotter.dashbuddy.test.util.SnapshotSecurityScanner
 import cloud.trotter.dashbuddy.test.util.TestResourceLoader
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.io.File
@@ -63,6 +64,23 @@ class MultiPickupSingleCustomerReplayTest {
         val activeDropIds = steps.mapNotNull { dd(it)?.activeTask }
             .filter { it.phase == TaskPhase.DROPOFF }.map { it.taskId }.toSet()
         assertEquals("exactly one active dropoff task (never re-minted)", 1, activeDropIds.size)
+    }
+
+    @Test
+    fun `the job closes after the trailing grace timer (#749 non-regression guard)`() {
+        // The 07-08 shape mints 2 dropoff placeholders (one per store) but only ONE activates — the
+        // leftover TBD defeats isJobPhysicallyComplete for the job's lifetime (the desync #749 fixes).
+        //
+        // NB: this assertion is GREEN on master too (verified), NOT the discriminating RED evidence the
+        // #749 spec §6 anticipated. This fixture ends in a nav/PostTask exit with no CHAINED offer, so
+        // on master the job already closes via the UNCONDITIONAL PostTask-exit close (which only
+        // excludes Flow.OfferPresented) — that path masks the T1/T2 desync here. Reproducing the actual
+        // failure ROUTE needs a trailing independent offer (Route A) or a receipt-skip-into-idle (Route
+        // B); the discriminating RED-on-master proofs are the machine-level unit cases 9 (T2) and 10
+        // (T1) in :core:state JobCloseOutTest. This stays as a cheap non-regression guard: the fix must
+        // not stop the same-customer job from closing.
+        val steps = run()
+        assertNull("the same-customer job still closes after the trailing grace commit", dd(steps.last())?.activeJob)
     }
 
     @Test

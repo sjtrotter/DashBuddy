@@ -137,9 +137,13 @@ class PlatformRegionStepper @Inject constructor() {
      * only ever attribute a store INSIDE the drop's own matched lineage. The dropoff card's full
      * running-key form set still lives on the payout for the store-entity projector (#159).
      *
-     * RESIDUAL (#745 review, follow-up filed): the per-order-placeholder desync above means a
-     * same-customer multi-order job never satisfies `isJobPhysicallyComplete` → the #596 T2 guard
-     * never fires → the NEXT offer can fold into an already-finished job. Pre-existing, now flagged.
+     * The per-order-placeholder desync above (a same-customer multi-order job carries a leftover TBD
+     * dropoff placeholder that never activates, since the one physical drop resumes a single taskId)
+     * used to defeat `isJobPhysicallyComplete` for the job's whole lifetime → the #596 T2 guard never
+     * fired → the NEXT offer folded into an already-finished job. FIXED by #749: `JobCompleteness`'s
+     * per-customer coverage arm proves completion from the pickup side (pickups map 1:1 to orders at
+     * distinct stores, so their hash set is the job's customer set) when every customer hash has a
+     * finished, arrived drop — so the placeholder count no longer matters.
      */
     private fun reconcileDropoffStore(region: PlatformRegion): PlatformRegion {
         val active = region.activeTask ?: return region
@@ -1465,65 +1469,9 @@ class PlatformRegionStepper @Inject constructor() {
     }
 }
 
-/**
- * #596: is [job] *physically complete* — every dropoff delivered, nothing outstanding — so it may
- * close on its next exit signal even when DoorDash skips the post-delivery receipt (the only
- * job-exit the pre-#596 machine had)?
- *
- * Completion truth is computed from [recentTasks] + [justRetired], **never** [Job.tasks]: the
- * `Job.tasks` mirror re-runs after `stepCore`, so at the moment a retire/accept consults it, its
- * copy of the just-finished drop is stale (`completedAt` still null — amdt #6). The mirror is used
- * only for the *placeholder set* (which dropoffs the job owns — reliable, since offer-spawned
- * placeholders persist there until resolved+completed).
- *
- * Complete ⇔ every DROPOFF placeholder the job owns is accounted — its taskId appears in
- * [recentTasks] with `completedAt != null`, or it IS [justRetired] — with no unresolved
- * customer-TBD placeholder outstanding, and at least one dropoff actually finished. A zero-dropoff
- * job never qualifies (a healed pickup-only job, or a job whose drops haven't rendered yet).
- *
- * Accounted additionally requires ARRIVAL evidence (`arrivedAt != null`, #615 review): a
- * grace-stamped `completedAt` alone is not delivery proof — a drop retired EN ROUTE (a transient
- * idle flash → offer → accept inside the grace window, or a mid-route cancel) must never read as
- * delivered, close the job, and mint a false completion. Fail direction is safe: a missed ARRIVED
- * frame keeps the job open (the old, lesser bug — absorption), never fabricates a delivery.
- */
-internal fun isJobPhysicallyComplete(
-    job: Job,
-    recentTasks: List<Task>,
-    justRetired: Task?,
-): Boolean {
-    // #752: an UNASSIGNED dropoff is never "delivered" even when a retire grace stamped its
-    // `completedAt` (and, in the arrived-then-unassigned shape, its `arrivedAt`). The cross-frame
-    // retro-mark now stamps `unassignedAt` on grace-retired DROPOFFs too, so this predicate — which
-    // pre-#752 could only ever see completedAt-null unassigned drops — must exclude the marker
-    // explicitly, or a retro-marked drop would read as accounted+finished and produce a false
-    // job-complete. Fail direction stays safe (absorption): a genuinely delivered drop keeps
-    // `unassignedAt` null and still counts.
-    val completedDropoffIds = recentTasks
-        .filter {
-            it.jobId == job.jobId && it.phase == TaskPhase.DROPOFF &&
-                it.completedAt != null && it.arrivedAt != null && it.unassignedAt == null
-        }
-        .mapTo(HashSet()) { it.taskId }
-    val retiredDropoffId = justRetired
-        ?.takeIf {
-            it.jobId == job.jobId && it.phase == TaskPhase.DROPOFF &&
-                it.completedAt != null && it.arrivedAt != null && it.unassignedAt == null
-        }
-        ?.taskId
-
-    // Every dropoff the job owns must be accounted; any outstanding (incl. a customer-TBD
-    // placeholder that never resolved) → not complete, so a later independent offer can't fold in.
-    val allDropoffsAccounted = job.tasks
-        .filter { it.phase == TaskPhase.DROPOFF }
-        .all { it.taskId in completedDropoffIds || it.taskId == retiredDropoffId }
-    if (!allDropoffsAccounted) return false
-
-    // …and at least one dropoff actually finished (guards zero-dropoff jobs).
-    val finished = completedDropoffIds.size +
-        (if (retiredDropoffId != null && retiredDropoffId !in completedDropoffIds) 1 else 0)
-    return finished >= 1
-}
+// #596/#749: `isJobPhysicallyComplete` (the strict arm + the per-customer coverage arm) lives in
+// `JobCompleteness.kt` — moved out of this file because it grew past the #237 size ceiling. Both
+// call sites (T1 `retireActiveTask`, T2 `consumeAcceptIntoJob`) call the same `internal` predicate.
 
 // =========================================================================
 // FLOW EXTENSION HELPERS
