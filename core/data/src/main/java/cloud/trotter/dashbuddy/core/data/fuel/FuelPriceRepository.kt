@@ -36,7 +36,7 @@ class FuelPriceRepository @Inject constructor(
             try {
                 save(newPrice)
             } catch (e: Exception) {
-                Timber.Forest.e(e, "GasPriceRepository failed to persist fetched price")
+                Timber.tag(TAG).e(e, "GasPriceRepository failed to persist fetched price")
                 throw e
             }
             newPrice
@@ -47,7 +47,7 @@ class FuelPriceRepository @Inject constructor(
             val userLocation = locationDataSource.getUserLocation()
             gasDataSource.getFuelPrice(userLocation, fuelType)
         } catch (e: Exception) {
-            Timber.Forest.e(e, "GasPriceRepository failed to fetch price only")
+            Timber.tag(TAG).e(e, "GasPriceRepository failed to fetch price only")
             Result.failure(e)
         }
     }
@@ -61,8 +61,12 @@ class FuelPriceRepository @Inject constructor(
             )
             gasDataSource.getFuelPrice(userLocation, fuelType)
         } catch (e: Exception) {
-            Timber.Forest.e(e, "GasPriceRepository failed to update price")
+            Timber.tag(TAG).e(e, "GasPriceRepository failed to update price")
             Result.failure(e)
         }
+    }
+
+    private companion object {
+        private const val TAG = "FuelPrice"
     }
 }

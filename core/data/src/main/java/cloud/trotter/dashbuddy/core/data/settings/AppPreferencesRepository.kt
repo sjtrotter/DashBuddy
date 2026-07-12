@@ -313,7 +313,11 @@ class AppPreferencesRepository @Inject constructor(
     suspend fun resetEconomyDefaults() = dataSource.resetEconomyDefaults()
 
     suspend fun clearPreferences() {
-        Timber.Forest.w("Clearing App Preferences")
+        Timber.tag(TAG).w("Clearing App Preferences")
         dataSource.clear()
+    }
+
+    private companion object {
+        private const val TAG = "AppPrefs"
     }
 }

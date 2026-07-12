@@ -1,0 +1,47 @@
+# Frozen debt list for TimberTagGuardTest (#764, CLAUDE.md Principle 7).
+#
+# Each line is "<repo-relative .kt path> <count>" — count is the number of bare
+# (untagged) Timber.i(/w(/e( call sites TimberTagGuardTest currently finds in that file.
+# This is a STRICT ratchet in both directions:
+#   - a file NOT listed here may have ZERO untagged sites (any new one fails the build);
+#   - a listed file's actual count may not EXCEED its number here (a new untagged call in
+#     an already-listed file is a regression and fails the build);
+#   - a listed file's actual count may not fall BELOW its number here either — lower the
+#     number (or delete the line once it hits 0) as sites get tagged, so the list only
+#     shrinks and never goes stale.
+#
+# Frozen 2026-07-12 from the state left by the three manual cleanup passes #679/#692/#763.
+# To fix an entry: add Timber.tag("YourTag") immediately ahead of the call
+# (Timber.tag("X").i(...) or Timber.tag("X")\n    .i(...) both satisfy the guard), then lower
+# or remove the line below.
+
+app/src/main/java/cloud/trotter/dashbuddy/DashBuddyApplication.kt 3
+app/src/main/java/cloud/trotter/dashbuddy/di/DispatchersModule.kt 1
+app/src/main/java/cloud/trotter/dashbuddy/state/effects/OdometerEffectHandler.kt 8
+app/src/main/java/cloud/trotter/dashbuddy/state/effects/ScreenShotHandler.kt 8
+app/src/main/java/cloud/trotter/dashbuddy/ui/main/setup/wizard/WizardViewModel.kt 1
+app/src/main/java/cloud/trotter/dashbuddy/util/AccNodeUtils.kt 3
+core/data/src/main/java/cloud/trotter/dashbuddy/core/data/capability/RuleCapabilityRepository.kt 2
+core/data/src/main/java/cloud/trotter/dashbuddy/core/data/capture/DiskCaptureBus.kt 1
+core/data/src/main/java/cloud/trotter/dashbuddy/core/data/capture/NoOpCaptureBus.kt 1
+core/data/src/main/java/cloud/trotter/dashbuddy/core/data/event/AppEventRepo.kt 2
+core/data/src/main/java/cloud/trotter/dashbuddy/core/data/strategy/StrategyRepository.kt 1
+core/database/src/main/java/cloud/trotter/dashbuddy/core/database/DataTypeConverters.kt 1
+core/datastore/src/main/java/cloud/trotter/dashbuddy/core/datastore/strategy/StrategyDataSource.kt 1
+core/location/src/main/java/cloud/trotter/dashbuddy/core/location/FusedLocationDataSource.kt 6
+core/network/src/main/java/cloud/trotter/dashbuddy/core/network/vehicle/efficiency/epa/EpaVehicleDataSource.kt 5
+core/pipeline/src/main/java/cloud/trotter/dashbuddy/core/pipeline/CaptureWriter.kt 5
+core/pipeline/src/main/java/cloud/trotter/dashbuddy/core/pipeline/FrameGate.kt 1
+core/pipeline/src/main/java/cloud/trotter/dashbuddy/core/pipeline/PipelineStats.kt 1
+core/pipeline/src/main/java/cloud/trotter/dashbuddy/core/pipeline/PipelineSupervision.kt 1
+core/pipeline/src/main/java/cloud/trotter/dashbuddy/core/pipeline/accessibility/AccessibilityPipeline.kt 2
+core/pipeline/src/main/java/cloud/trotter/dashbuddy/core/pipeline/accessibility/input/AccessibilityListener.kt 1
+core/pipeline/src/main/java/cloud/trotter/dashbuddy/core/pipeline/accessibility/mapper/AccessibilityNodeMapper.kt 1
+core/pipeline/src/main/java/cloud/trotter/dashbuddy/core/pipeline/rules/JsonRuleInterpreter.kt 14
+core/pipeline/src/main/java/cloud/trotter/dashbuddy/core/pipeline/rules/ParsedFieldsFactory.kt 2
+core/pipeline/src/main/java/cloud/trotter/dashbuddy/core/pipeline/rules/Ruleset.kt 2
+core/state/src/main/java/cloud/trotter/dashbuddy/core/state/EffectMap.kt 1
+core/state/src/main/java/cloud/trotter/dashbuddy/core/state/ObservationJournal.kt 3
+core/state/src/main/java/cloud/trotter/dashbuddy/core/state/OfferEffects.kt 4
+core/state/src/main/java/cloud/trotter/dashbuddy/core/state/SnapshotStore.kt 2
+core/state/src/main/java/cloud/trotter/dashbuddy/core/state/StateManagerV2.kt 8

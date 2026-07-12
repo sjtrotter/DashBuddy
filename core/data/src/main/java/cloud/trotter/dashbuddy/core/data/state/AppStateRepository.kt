@@ -17,7 +17,11 @@ class AppStateRepository @Inject constructor(
     }
 
     suspend fun clearPreferences() {
-        Timber.Forest.w("Clearing App State Preferences")
+        Timber.tag(TAG).w("Clearing App State Preferences")
         dataSource.clear()
+    }
+
+    private companion object {
+        private const val TAG = "AppState"
     }
 }
