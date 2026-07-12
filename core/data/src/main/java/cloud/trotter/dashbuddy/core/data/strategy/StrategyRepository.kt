@@ -191,7 +191,10 @@ class StrategyRepository @Inject constructor(
     }.stateIn(scope, SharingStarted.Eagerly, null)
 
 
-    /** #556/#588: fold a completed shop's measured pace into [platform]'s learned items/min (atomic). */
+    /**
+     * #556/#588: fold a completed shop's measured pace into [platform]'s learned items/min (atomic).
+     * Returns the post-fold [LearnedShopRate] (#731) so the caller can log the relearn trajectory.
+     */
     suspend fun recordShopRate(platform: Platform, items: Int, minutes: Double) =
         dataSource.recordShopRate(platform, items, minutes)
 

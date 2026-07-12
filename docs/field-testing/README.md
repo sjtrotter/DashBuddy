@@ -53,6 +53,11 @@ PRs / closed issues) that were validated only against captured data and need
 eyes on a live dash. A field-testing agent reads this section at the start of a
 session and reports it to the developer.
 
+**Desk-first:** most items below are resolvable (fully or half) from a post-dash
+data pull alone — the per-item SQL/grep/capture checks live in
+[`desk-validation-playbook.md`](desk-validation-playbook.md) (audit 2026-07-12).
+Run the playbook against the pull before burning dev-eyes on anything.
+
 **Each item needs two independent field confirmations before it's considered
 validated** — one dash can pass by luck or miss the edge case. Track progress
 with a `- Confirmed: N/2` sub-line (note the date/conditions of each sighting).
@@ -72,6 +77,20 @@ heads-up **buttons** (≥16 clean fires from the floating banner — the field g
 card's **mechanical** half, #577 (re-confirmed, 24/24, ~0.55 s — with a new posture caution, see
 that entry's Bug #1), the #457 path, and #554 ShadowProjector (2/2). The #462/#460 dropoff item
 was found **broken-in-part** (raw PII in capture envelopes) and moved to that entry's Bug #7.)_
+
+- **🆕 NEW — notification-listener rebind rate is now quantified (#731 instrumentation / PR).**
+  The NLS connect/disconnect lifecycle now rides `PipelineStats` counters and leveled log lines
+  (tag `Pipeline`): the FIRST disconnect per process announces the degradation at WARN, every
+  subsequent disconnect and all connects ride INFO — all with running counts — so the
+  field-observed 129–240 cycles/day flap is measurable from a pull without drowning the WARN slice.
+  **How to tell it's working (desk-side only):** after a dash,
+  `grep -i 'notification listener' shareable.log` shows the paired lines with running counts
+  (`connects − disconnects ≈ process deaths` per process — a kill never logs its disconnect), and
+  the periodic `PipelineStats` summary carries `notifListenerConnects=`/`notifListenerDisconnects=`
+  (corroboration only — it emits per 50 forwarded observations, so it's quiet while idle).
+  The counts themselves feed the #731 root-cause call (battery-optimization kills vs other) — high
+  counts are the *expected* finding, not a failure of this item.
+  - Confirmed: 0/2
 
 - **🆕 NEW — a same-customer double-order job closes at its receipt; the next offer is its OWN job (#749).**
   A job where **both orders go to the same customer** (the offer card literally says so — e.g. Willie's +
@@ -210,7 +229,10 @@ was found **broken-in-part** (raw PII in capture envelopes) and moved to that en
   the dash:** the shareable INFO log's
   `ShopRate` lines now carry a `[doordash]` platform tag; there should be no cross-platform bleed if a
   second platform (Uber/Instacart) is ever shopped. Watch for any shop offer suddenly reading an absurd
-  $/hr (would mean the seed/reset went wrong).
+  $/hr (would mean the seed/reset went wrong). The same INFO line now also carries the post-fold
+  `→ learned X.XX/min (n=N)` suffix (the desk window into the DataStore-only learned mean — watch `n`
+  climb from the reset and the mean converge off the 0.8 seed; `learned ?/min (n=0)` means nothing
+  learned yet, not a zeroed mean).
   - Confirmed: 0/2
 - **🆕 NEW — store entity resolution keys real stores from live dashes (#159 / PR).**
   The read-model now resolves each job's stores (`stores` + `pickup_records` tables) from captured
@@ -324,7 +346,10 @@ was found **broken-in-part** (raw PII in capture envelopes) and moved to that en
   same-platform): tapping the current banner acts on the **current** offer, and resolving one offer
   leaves the other's banner untouched — a tap must never act on a **replaced/older** offer (that path
   now WARN-aborts to manual rather than acting on the wrong one). A banner that acts on the wrong
-  offer, or a stale banner that survives its offer, is a B4 regression — capture it.
+  offer, or a stale banner that survives its offer, is a B4 regression — capture it. **Desk-side:**
+  each tap's `OfferActionReceiver:` INFO line now carries `(offer=<hash>)` (the full hash, same
+  rendering as OfferEffects) — exact-match it to the resolved `OFFER_ACCEPTED`/`OFFER_DECLINED`
+  event's hash; a mismatch is the wrong-offer regression, no eyes needed.
   - Confirmed: 0/2
 - **🆕 NEW — odometer arbitration holds single-platform (#438 B5 / PR).** The GPS odometer moved off
   each platform's own diff onto one cross-platform decision (starts once when a dash opens, pauses
@@ -2485,7 +2510,9 @@ replay test). Lower: #565 Walgreens, then the design calls (#6 decline fallback,
      "every screen to value is a place to lose someone" becomes literally true with money attached.
    - **Status:** Open — **strategic/design note only**, no work item filed, no code changes. Bookmark
      for the #141 monetization launch; near-term, only ensure economy config is deferred behind
-     defaults rather than gating the first dash.
+     defaults rather than gating the first dash. *[Editor's note 2026-07-12: #141 has since closed —
+     it was the cloud-data-platform RFC, not the pricing plan; the paid-tier launch plan lives in
+     CLAUDE.md pillar 1. The "funnel teardown at paid-tier launch" bookmark itself still stands.]*
 
 10. **Voice accept/decline of offers — hands-free, on-device. Feasibility / overhead note (dasher
     asked "what would the overhead be").** Let the driver say "accept" / "decline" instead of

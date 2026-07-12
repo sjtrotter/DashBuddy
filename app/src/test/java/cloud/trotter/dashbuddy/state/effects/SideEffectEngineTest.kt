@@ -14,6 +14,7 @@ import cloud.trotter.dashbuddy.domain.config.EvidenceCategory
 import cloud.trotter.dashbuddy.domain.config.EvidenceConfig
 import cloud.trotter.dashbuddy.domain.config.OfferAutomationConfig
 import cloud.trotter.dashbuddy.domain.evaluation.EvaluationConfig
+import cloud.trotter.dashbuddy.domain.evaluation.LearnedShopRate
 import cloud.trotter.dashbuddy.domain.evaluation.OfferEvaluation
 import cloud.trotter.dashbuddy.domain.evaluation.OfferEvaluator
 import cloud.trotter.dashbuddy.domain.model.cards.FlowCardSnapshot
@@ -93,6 +94,9 @@ class SideEffectEngineTest {
     private val strategyRepository: StrategyRepository = mock {
         on { this.evidenceConfig } doReturn this@SideEffectEngineTest.evidenceConfig
         on { this.evaluationConfig } doReturn this@SideEffectEngineTest.evaluationConfig
+        // #731: recordShopRate now returns the post-fold learned pace — stub it so RecordShopRate
+        // effects don't NPE on the (non-nullable) LearnedShopRate result.
+        on { recordShopRate(any(), any(), any()) } doReturn LearnedShopRate(0.8, 5)
     }
     private val screenShotHandler: ScreenShotHandler = mock()
     private val uiInteractionHandler: UiInteractionHandler = mock()
@@ -796,6 +800,9 @@ class SideEffectEngineTest {
             tree.assertLevelContains(Log.INFO, "24 items")
             // #588: the platform wire is a registry token (PII-safe) and rides the INFO milestone.
             tree.assertLevelContains(Log.INFO, "doordash")
+            // #731: the post-fold learned pace (stubbed above) rides the same INFO line — counts/
+            // rates only, PII-safe by construction.
+            tree.assertLevelContains(Log.INFO, "learned 0.80/min (n=5)")
             // The DEBUG firehose still names the store.
             tree.assertLevelContains(Log.DEBUG, "H-E-B")
         } finally {

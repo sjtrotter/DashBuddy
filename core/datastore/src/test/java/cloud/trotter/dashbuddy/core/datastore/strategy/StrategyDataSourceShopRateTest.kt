@@ -4,6 +4,7 @@ import androidx.datastore.preferences.core.PreferenceDataStoreFactory
 import androidx.datastore.preferences.core.doublePreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.intPreferencesKey
+import cloud.trotter.dashbuddy.domain.evaluation.LearnedShopRate
 import cloud.trotter.dashbuddy.domain.evaluation.ShopRate
 import cloud.trotter.dashbuddy.domain.state.Platform
 import kotlinx.coroutines.CoroutineScope
@@ -58,8 +59,14 @@ class StrategyDataSourceShopRateTest {
         assertNull(rates[Platform.WalmartSpark])
 
         // Recording MORE DoorDash shops must not perturb Instacart's mean or count.
-        repeat(3) { src.recordShopRate(Platform.DoorDash, items = 12, minutes = 30.0) } // 0.4/min, drags DD down
+        // #731: recordShopRate now RETURNS the post-fold LearnedShopRate — assert the last call's
+        // return value reflects the fold, not just what a subsequent read of the flow shows.
+        var lastReturned: LearnedShopRate? = null
+        repeat(3) {
+            lastReturned = src.recordShopRate(Platform.DoorDash, items = 12, minutes = 30.0) // 0.4/min, drags DD down
+        }
         advanceUntilIdle()
+        assertEquals(8, lastReturned!!.sampleCount)
         val after = src.learnedShopRates.first()
         assertEquals("Instacart untouched", 1.5, after.getValue(Platform.Instacart).itemsPerMin!!, 1e-9)
         assertEquals("Instacart untouched", 5, after.getValue(Platform.Instacart).sampleCount)

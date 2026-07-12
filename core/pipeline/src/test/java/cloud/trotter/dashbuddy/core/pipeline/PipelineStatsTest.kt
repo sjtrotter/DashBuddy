@@ -44,4 +44,21 @@ class PipelineStatsTest {
         assertTrue(summary.contains("restarts=2"))
         assertTrue(summary.contains("mappingFailures=1"))
     }
+
+    /** #731 — quantify the field-observed notification-listener rebind (129-240x/day). */
+    @Test
+    fun `notif listener connect and disconnect counters track independently and appear in the summary`() {
+        val stats = PipelineStats()
+
+        assertEquals(1L, stats.onNotifListenerConnected())
+        assertEquals(2L, stats.onNotifListenerConnected())
+        assertEquals(1L, stats.onNotifListenerDisconnected())
+
+        assertEquals(2L, stats.notifListenerConnectCount)
+        assertEquals(1L, stats.notifListenerDisconnectCount)
+
+        val summary = stats.summary()
+        assertTrue(summary.contains("notifListenerConnects=2"))
+        assertTrue(summary.contains("notifListenerDisconnects=1"))
+    }
 }
