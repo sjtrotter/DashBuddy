@@ -256,7 +256,10 @@ was found **broken-in-part** (raw PII in capture envelopes) and moved to that en
   hours/days you actually earn the most, cells you barely dashed should read as "too little time" (dim,
   distinct from a worked-but-earned-nothing cell), and the "best hour so far" line should feel right.
   Framing check: all copy is "YOUR net $/hr" — flag any wording that reads as a platform-pay claim.
-  - Confirmed: 0/2
+  - Confirmed: 0/2. **2026-07-12 partial dev sighting (post-#763 build):** the heatmap section (B)
+    renders well and the dev likes it; the store-cards section (A) was flagged for UX polish — too
+    word-dense, and "p95" means nothing to a dasher (issue filed from this feedback). Data-correctness
+    halves (running keys match reality, sane dwell) still unverified — this item stays open for those.
 - **🆕 NEW — GoPuff zone-arrival screens recognized (recognize-only, no state effect) (#501 item 3 / PR #738).**
   The GoPuff "Navigate to zone" / "Arrived at store" screens (the `go_to_store_action_view` CTA card)
   are now recognized as `pickup_zone_arrival` instead of landing in UNKNOWN. **How to tell it's working
@@ -302,7 +305,10 @@ was found **broken-in-part** (raw PII in capture envelopes) and moved to that en
   Frozen-economics invariant: any of this only changes FUTURE offer $/hr, never a past delivery's recorded
   net. Anything that shows a bare icon changing modes silently, a stepper visible in AUTO mode, or a refresh
   icon visible in MANUAL mode is a regression — capture it.
-  - Confirmed: 0/2
+  - Confirmed: 1/2 (2026-07-12, dev exercised the idle-card gas control on the post-#763 build:
+    "works fine" — first live exercise of the interactions after two dashes with no bubble-initiated
+    fetch in any log. Second confirmation should re-touch the full cycle: AUTO refresh → take-manual
+    → Resume auto, plus the Settings → Personal Economy agreement check.)
 - **🆕 NEW — over-attribution review flag on the Money tab + per-dash drill-down (#701).**
   The Money tab's unattributed-pay callout ("$X not attributed…") now has a mirror: when a
   session's **captured delivery pay exceeds** the platform's reported summary total (the
@@ -1730,6 +1736,34 @@ Accept and Decline registered on DoorDash — and moved to that session's entry 
     the pre-existing net-side overlap) that piece 2 (categorizing an orphan into its real
     session) is the actual fix for — no action needed beyond noting it if seen.
   - Confirmed: 0/2.
+
+---
+
+## 2026-07-12 — post-install device look (no dash; first hands-on with the post-#763 build)
+
+- **Date:** 2026-07-12
+- **Platform(s) tested:** none (device UI review only — no dash run)
+- **Branch under test:** `master` at `76966bc1` (post-#763 merge; carries the whole 07-11→12
+  wave incl. Room v11→v14 migrations + projector v6 refold on first launch)
+- **Field conditions:** dev installed the build and reviewed the bubble idle card and the
+  Analytics → Patterns tab on-device.
+
+### Field UX context
+
+1. **Patterns tab, heatmap section: liked.** The net-$/hr hour×day graph ("the net$/hr thingy
+   graph") reads well as-is. (Partial sighting noted on the #315 H5 checklist item — the
+   data-correctness half still needs verification.)
+2. **Patterns tab, store-cards section: needs work.** Too word-dense for a glance surface, and
+   the statistical vocabulary doesn't land — "p95" means nothing to the dev, and it won't mean
+   anything to a dasher either. One possibility: fewer numbers per card with plain-language
+   labels (e.g. "usual wait" / "worst waits" instead of avg/median/p95), progressive disclosure
+   for the rest. Issue filed from this feedback (dasher-friendly store-card copy + density).
+   - **Status:** Open — issue filed 2026-07-12.
+3. **#722 gas control validated (first confirmation).** Dev exercised the idle-card gas control:
+   "works fine." Checklist item moved to 1/2.
+4. **#728 reconfirmed.** Dev restated the direction: gas control and vehicle control should be
+   **separate cards**, and the idle-bubble layout overall "could use some polish." #728 (already
+   build-ready) is promoted to the front of the build queue.
 
 ---
 
