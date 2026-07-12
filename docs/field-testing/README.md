@@ -78,6 +78,20 @@ card's **mechanical** half, #577 (re-confirmed, 24/24, ~0.55 s — with a new po
 that entry's Bug #1), the #457 path, and #554 ShadowProjector (2/2). The #462/#460 dropoff item
 was found **broken-in-part** (raw PII in capture envelopes) and moved to that entry's Bug #7.)_
 
+- **🆕 NEW — quick-decline auto-confirm + earnings auto-expand no longer "click first" on an ambiguous target (#734 / PR).**
+  Two actuation surfaces used to resolve **2 verified candidates** and tap the first-in-tree one (luck, not
+  verification): the offer confirm-decline sheet (`CONFIRM_DECLINE`) and the collapsed delivery-summary chevron
+  (`EXPAND_EARNINGS`). The rule bindings are now tightened (confirm sheet anchors the exact "Decline offer"
+  label; the summary binds the pay/"This offer" expandable, never the "Total online time" stats one), and an
+  ambiguous target now **aborts to manual** instead of clicking.
+  **How to tell it's working (needs quick-declines enabled; watch a few declines + a couple completions):** the
+  quick-decline still auto-confirms the "Are you sure?" sheet (declines take effect), and the post-delivery
+  earnings breakdown still auto-expands to the **pay** section (not the online-time stats). **Desk-side:**
+  `grep -iE 'refusing to click \(fail closed\)|No decisive match' shareable.log` — a WARN there means the tie
+  path fired and correctly aborted (the dev then finishes it by hand); the *count* dropping toward zero vs the
+  07-07/07-08 dashes (which saw 4× confirm + 3× expand ties) is the win. No wrong-button taps in the event log.
+  - Confirmed: 0/2
+
 - **🆕 NEW — notification-listener rebind rate is now quantified (#731 instrumentation / PR).**
   The NLS connect/disconnect lifecycle now rides `PipelineStats` counters and leveled log lines
   (tag `Pipeline`): the FIRST disconnect per process announces the degradation at WARN, every
