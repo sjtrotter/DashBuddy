@@ -212,9 +212,13 @@ class ActuationBindingResolutionTest {
             // EXPAND_EARNINGS is label-free, so both expandable_view nodes survive label
             // verification (the shared id can't be narrowed). The ranker must therefore
             // EITHER resolve the correct (pay) node via bounds, OR — on a degenerate frame
-            // whose pay rect is collapsed/zero-area — return an UNRESOLVED tie, which the
-            // handler now ABORTS to manual (#734). It must NEVER decisively resolve the
-            // stats node (a wrong click).
+            // whose pay rect is inverted/zero-area (3 of the 11 bound corpus frames:
+            // 165530_687 inverted, 180901_024 + 201237_957 zero-height) — return an
+            // UNRESOLVED tie, which the handler now ABORTS to manual (#734): a per-frame
+            // availability cost (~27% of bound corpus frames), mitigated per capture burst
+            // (most bursts contain a decisive sibling frame) and always preferable to the
+            // old behavior, which decisively clicked the WRONG (stats) node on exactly
+            // these frames. It must NEVER decisively resolve the stats node (a wrong click).
             val r = resolve(node, ref, action.verification)
             if (r.decisive) {
                 decisiveFrames++

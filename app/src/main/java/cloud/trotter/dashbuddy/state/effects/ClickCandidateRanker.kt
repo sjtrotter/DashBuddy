@@ -35,10 +35,11 @@ import cloud.trotter.dashbuddy.domain.pipeline.NodeRef
  *   is greater than zero. An exact bounds match is just the IoU == 1.0 case,
  *   so this tier subsumes the old exact-match fast path without a separate
  *   branch — a small amount of drift still resolves correctly.
- * - **[Tier.UNRESOLVED]** — nothing above was decisive. Falls back to the
- *   first candidate (same behavior as before the fix), but the caller logs
- *   this at WARN — it is now the genuinely exceptional case, not the common
- *   one Principle 7 warns will drown the WARN channel.
+ * - **[Tier.UNRESOLVED]** — nothing above was decisive. When more than one
+ *   verified candidate remains, the caller ABORTS to manual (no click) and
+ *   logs at WARN (#734 — fail-closed, matching the other fail arms); a single
+ *   surviving candidate still clicks. Ties are the genuinely exceptional case
+ *   by construction, so the WARN channel is not drowned (Principle 7).
  *
  * `pathFingerprint` (T3 in the #600 build plan) is intentionally NOT
  * implemented here. `Ruleset.buildNodeRef` computes it by walking the
