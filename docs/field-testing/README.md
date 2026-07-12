@@ -73,6 +73,20 @@ card's **mechanical** half, #577 (re-confirmed, 24/24, ~0.55 s — with a new po
 that entry's Bug #1), the #457 path, and #554 ShadowProjector (2/2). The #462/#460 dropoff item
 was found **broken-in-part** (raw PII in capture envelopes) and moved to that entry's Bug #7.)_
 
+- **🆕 NEW — a same-customer double-order job closes at its receipt; the next offer is its OWN job (#749).**
+  A job where **both orders go to the same customer** (the offer card literally says so — e.g. Willie's +
+  Sonic to one person) mints two dropoff placeholders but only ONE physical drop. Before #749 that leftover
+  placeholder kept the job "open" forever, so the **next offer folded into the finished job** and its pay
+  showed up as **unattributed** (the job-61 class — $19 of $45.75 swallowed). The fix proves completion from
+  the pickup side (`JobCompleteness` per-customer coverage arm).
+  **How to tell it's working (needs a same-customer multi-order offer, then a NEXT offer after it):** after
+  the single drop completes, the job **closes** (the bubble/HUD returns to idle/waiting, not a lingering
+  active task); the **next offer you accept starts a fresh job** (its own store/economics on the card, not
+  appended to the finished one); in the Money-tab drill-down the two orders appear under **their own dashes/
+  rows** and there's **no unattributed-pay spike** for that stretch. Watch especially the hand-off between a
+  same-customer double and the very next accept.
+  - Confirmed: 0/2
+
 - **🆕 NEW — categorize a "(No session)" orphan delivery into its real dash (#660 piece 2).**
   The Money-tab "(No session): $X across N deliveries" callout is now **tappable** — it opens an
   orphan list; tapping a delivery opens a session picker (ended dashes within ±48 h of the drop, same
