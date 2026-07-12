@@ -72,7 +72,7 @@ class UiInteractionHandler @Inject constructor(
         description: String,
         allowRetry: Boolean = false,
     ): Boolean {
-        Timber.i("UiInteractionHandler: attempting verified click (%s)", description)
+        Timber.tag("Effects").i("UiInteractionHandler: attempting verified click (%s)", description)
 
         if (expectedPackage.isNullOrEmpty()) {
             Timber.tag("Effects").w("No package scope for %s — refusing to click (fail closed)", description)
@@ -150,10 +150,10 @@ class UiInteractionHandler @Inject constructor(
                     "No decisive match among %d verified candidates for: %s — clicking first",
                     verified.size, description,
                 )
-                Timber.d("Unresolved-tie candidate labels for %s: %s", description, facts.map { it.labels })
+                Timber.tag("Effects").d("Unresolved-tie candidate labels for %s: %s", description, facts.map { it.labels })
             }
-            verified.size == 1 -> Timber.d("Single verified candidate for %s — clicking it", description)
-            else -> Timber.d(
+            verified.size == 1 -> Timber.tag("Effects").d("Single verified candidate for %s — clicking it", description)
+            else -> Timber.tag("Effects").d(
                 "Resolved click target for %s via %s tier (%d candidate(s))",
                 description, ranked.tier, verified.size,
             )
@@ -275,7 +275,7 @@ internal suspend fun awaitLiveRoots(
         delay(delayMs)
         val roots = source()
         if (roots.isNotEmpty()) {
-            Timber.d("Live window for %s reappeared after a %dms retry", expectedPackage, delayMs)
+            Timber.tag("Effects").d("Live window for %s reappeared after a %dms retry", expectedPackage, delayMs)
             return roots
         }
     }

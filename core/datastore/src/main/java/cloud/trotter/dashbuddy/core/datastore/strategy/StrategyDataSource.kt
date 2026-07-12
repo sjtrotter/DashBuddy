@@ -125,21 +125,22 @@ class StrategyDataSource @Inject constructor(
      * caller log the relearn trajectory instead of it being invisible to desk analysis.
      */
     suspend fun recordShopRate(platform: Platform, items: Int, minutes: Double): LearnedShopRate {
-        lateinit var result: LearnedShopRate
-        ds.edit { p ->
+        val prefs = ds.edit { p ->
             val (avg, n) = ShopRate.fold(p[shopRateKey(platform)], p[shopSamplesKey(platform)] ?: 0, items, minutes)
             if (avg != null) {
                 p[shopRateKey(platform)] = avg
                 p[shopSamplesKey(platform)] = n
             }
-            result = LearnedShopRate(avg, n)
             // #588 FIX 3b: one-time tidy — drop the old un-suffixed global keys now that shop-rate
             // learning is per-platform. Idempotent (a no-op once they're gone); rides the next fold
             // rather than a dedicated migration step since a fold happens on every real shop anyway.
             p.remove(legacyGlobalShopRateKey)
             p.remove(legacyGlobalShopSamplesKey)
         }
-        return result
+        // edit() returns the post-transform snapshot, so this read-back cannot desync from what was
+        // persisted: an in-band fold just wrote these keys; an out-of-band fold is a no-op and the
+        // untouched keys ARE the prior pair ShopRate.fold would have returned.
+        return LearnedShopRate(prefs[shopRateKey(platform)], prefs[shopSamplesKey(platform)] ?: 0)
     }
 
     suspend fun setEvidenceMaster(enabled: Boolean) {

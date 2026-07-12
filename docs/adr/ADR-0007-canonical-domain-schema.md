@@ -578,7 +578,9 @@ unchanged (no code touched yet). Implementation PRs that follow will run
   `presentedZoneId` for the matcher OTA story.
 - RFC #194 (academic federation) — consumes the privacy-class taxonomy and
   the Aggregation Catalog as its query surface.
-- Issue #141 monetization plan — the managed-cloud sync tier ingests the
-  same canonical schema.
+- The managed-cloud sync tier (CLAUDE.md pillar 1) ingests the same canonical
+  schema. *(Its former tracker #141 — actually the cloud-data-platform RFC, not
+  the pricing plan — closed 2026-07-12; the cloud work is folded into the
+  #192/#193/#194 pillar epics.)*
 - `LEGAL.md` — framing pledge enforced field-by-field in the federation
   lens.

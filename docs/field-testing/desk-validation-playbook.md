@@ -15,6 +15,12 @@ and 3), #159, #691-mechanism. **desk-partial** (data half here; UI half needs de
 > `app.log` matters: some decision logs are DEBUG by design (reducer steps). Pull it,
 > not just the exported bug report.
 
+> **SSOT caution:** the item list above is a dated snapshot (the README checklist is the
+> live SSOT), and the grep strings below are literal copies of log messages verified
+> against the code on 2026-07-12. A later rename of a log string breaks its grep
+> *silently* — if a grep returns nothing where a hit was plausible, verify the string
+> against the code before reading "no hits" as "invariant held".
+
 ## SQL checks
 
 ```sql
@@ -97,9 +103,9 @@ SELECT taskId, realizedMiles FROM delivery_records;
 | #630/#756 | `grep '#630 mid-stack non-final receipt exit'` | ideally none; a hit = pull that capture session (and it's the #756 promotion trigger) |
 | #733 | `grep -c 'D6 join miss'` | ≤1 per drop, ideally 0 |
 | #688B | `grep 'projector version'` | the one-time 5→6 refold line on first post-install launch |
-| #588 | `grep 'ShopRate'` | every line tagged `[<platform.wire>]`; the trailing `→ learned …/min (n=…)` shows the relearn trajectory (seed-reset visible as n resetting) |
-| #438 B4 | `grep 'OfferActionReceiver:'` | each tap line carries `(offer=<8-hex>)`; join it to the resolved `OFFER_*` event's hash — a mismatch = acted on the wrong offer |
-| #731 | `grep -i 'notification listener'` + the `PipelineStats` summary | disconnects at WARN + connects at INFO, each with a running count; the `PipelineStats` summary line quantifies rebinds/day |
+| #588 | `grep 'ShopRate'` | every line tagged `[<platform.wire>]`; the trailing `→ learned …/min (n=…)` shows the relearn trajectory (seed-reset visible as n resetting). `learned ?/min (n=0)` = nothing learned yet (an out-of-band sample folds nothing) — NOT a zeroed mean |
+| #438 B4 | `grep 'OfferActionReceiver:'` | each tap line carries `(offer=<hash>)` (full hash, same rendering as OfferEffects) — exact-match it to the resolved `OFFER_*` event's hash; a mismatch = acted on the wrong offer |
+| #731 | `grep -i 'notification listener'` | the per-event lines are the PRIMARY record: first disconnect per process at WARN, the rest (and all connects) at INFO, each with a running count. `grep -c` them for the flap rate; per process, `connects − disconnects ≈ process deaths` (itself a diagnostic — a kill never logs its disconnect). The `PipelineStats` summary fields (`notifListenerConnects=`/`Disconnects=`) are corroboration ONLY — the summary emits per 50 forwarded observations, i.e. only while actively sensing, so it is blind exactly when the idle-time flap is worst |
 | #159 | `grep 'downgrade averted'` / `grep 'store-chain resolved'` | monotonic backstop held / shadow resolution milestones |
 
 ## Capture-tree checks

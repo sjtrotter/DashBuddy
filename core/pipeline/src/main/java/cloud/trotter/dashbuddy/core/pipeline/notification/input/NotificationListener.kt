@@ -36,7 +36,7 @@ class NotificationListener : NotificationListenerService() {
         // froze at the last value for the process lifetime.
         if (sbn.packageName !in platformPreferences.enabledPackages.value) return
 
-        Timber.d(
+        Timber.tag("Pipeline").d(
             "\uD83D\uDCEC Notification from %s: clearable=%s ongoing=%s channel=%s",
             sbn.packageName, sbn.isClearable, sbn.isOngoing, sbn.notification.channelId,
         )
@@ -49,9 +49,17 @@ class NotificationListener : NotificationListenerService() {
 
     override fun onListenerDisconnected() {
         super.onListenerDisconnected()
-        // #731: WARN — a disconnect opens an offer-miss window until the system rebinds; the
-        // running count quantifies the field-observed 129-240x/day flap.
+        // #731: a disconnect opens an offer-miss window until the system rebinds — a genuine
+        // degradation, but field-observed at 129-240x/day, which would drown the exportable WARN
+        // slice (Principle 7's "must not be drowned" clause; ~1.3k WARNs on the whole 06-19 dash).
+        // Edge-gate like the D6 join-miss WARN: the FIRST disconnect per process announces the
+        // degradation class at WARN; the rest ride INFO (still exported) with the running count,
+        // which is what the desk flap analysis actually consumes.
         val count = pipelineStats.onNotifListenerDisconnected()
-        Timber.tag("Pipeline").w("Notification listener disconnected (count=%d this process)", count)
+        if (count == 1L) {
+            Timber.tag("Pipeline").w("Notification listener disconnected (count=%d this process)", count)
+        } else {
+            Timber.tag("Pipeline").i("Notification listener disconnected (count=%d this process)", count)
+        }
     }
 }

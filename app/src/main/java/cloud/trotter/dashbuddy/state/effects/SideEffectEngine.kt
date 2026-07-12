@@ -38,6 +38,7 @@ import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import timber.log.Timber
+import java.util.Locale
 import java.util.concurrent.ConcurrentHashMap
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -329,15 +330,18 @@ class SideEffectEngine @Inject constructor(
                 // registry token, not PII); the merchant name (raw third-party UI text) stays DEBUG-only.
                 // #731: the learned running mean lives only in the strategy DataStore, invisible to a
                 // post-dash data pull — surface it here so the relearn trajectory is desk-visible.
+                // A never-learned mean renders "?" (an out-of-band sample folds nothing) — never a
+                // fake 0.00; Locale.ROOT keeps the desk grep stable on comma-decimal locales.
+                val learnedStr =
+                    learned.itemsPerMin?.let { String.format(Locale.ROOT, "%.2f", it) } ?: "?"
                 Timber.tag("ShopRate").i(
-                    "recorded %d items / %.1f min = %.2f/min [%s] → learned %.2f/min (n=%d)",
+                    "recorded %d items / %.1f min = %.2f/min [%s] → learned %s/min (n=%d)",
                     effect.itemsShopped, minutes, perMin, effect.platform.wire,
-                    learned.itemsPerMin ?: 0.0, learned.sampleCount,
+                    learnedStr, learned.sampleCount,
                 )
-                Timber.tag("ShopRate").d(
-                    "recorded %d items / %.1f min = %.2f/min (store=%s)",
-                    effect.itemsShopped, minutes, perMin, effect.storeName ?: "?",
-                )
+                // The INFO line above owns the rate math (one format string, not a drifting twin);
+                // DEBUG adds only the merchant name, which is PII-tier.
+                Timber.tag("ShopRate").d("recorded shop store=%s", effect.storeName ?: "?")
             }
 
             is AppEffect.ProcessTipNotification -> tipEffectHandler.process(engineScope, effect)

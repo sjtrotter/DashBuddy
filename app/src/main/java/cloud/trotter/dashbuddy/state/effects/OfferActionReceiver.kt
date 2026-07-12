@@ -34,11 +34,13 @@ class OfferActionReceiver : BroadcastReceiver() {
 
     override fun onReceive(context: Context, intent: Intent) {
         val uiInput = uiInputFrom(intent) ?: return
-        // #731 desk-observability: the offer-hash prefix (PII-safe, #598) lets a desk pull join
-        // this tap to the resolved OFFER_ACCEPTED/OFFER_DECLINED event's hash (#438 B4).
+        // #731 desk-observability: the offer hash (PII-safe by construction) lets a desk pull join
+        // this tap to the resolved OFFER_ACCEPTED/OFFER_DECLINED event's hash (#438 B4). Logged in
+        // FULL — the same rendering as OfferEffects' offerHash= lines — so the join is an exact
+        // grep, not a prefix special case.
         Timber.tag("Effects").i(
             "OfferActionReceiver: %s on %s (offer=%s)",
-            uiInput.action, uiInput.targetPlatform?.wire ?: "?", uiInput.offerHash?.take(8) ?: "?",
+            uiInput.action, uiInput.targetPlatform?.wire ?: "?", uiInput.offerHash ?: "?",
         )
         // #457: dismiss the heads-up immediately — the dasher acted. (Offer resolution also fires
         // CancelOfferNotification, but cancel now so the banner/shade entry doesn't linger.)
