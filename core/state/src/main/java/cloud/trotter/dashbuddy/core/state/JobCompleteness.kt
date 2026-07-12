@@ -119,8 +119,15 @@ internal fun isJobPhysicallyComplete(
  *    `completedAt != null && arrivedAt != null` (#615 arrival gate);
  *  - `A` = ALL observed dropoff hashes (mirror ∪ recent ∪ retired — no activated drop outstanding).
  *
- * Complete ⇔ `|P_pick| ≥ 1 ∧ |P_pick| == |P_drop| ∧ every pickup has ≥1 observed hash ∧ C ⊆ F ∧
+ * Complete ⇔ `|P_pick| ≥ 1 ∧ |P_pick| == |P_drop| ∧ every pickup hashed AND CONFIRMED ∧ C ⊆ F ∧
  * A ⊆ F ∧ F ≠ ∅`. Every gate fails toward absorption (stay open), never toward a fabricated close.
+ *
+ * Every pickup must be CONFIRMED (`completedAt != null` on some observed copy), not merely hashed
+ * (#759 review F1): a pickup stamps its hash at activation/arrival — minutes before pickup-confirm —
+ * so a hashed-but-unconfirmed pickup means its order's items are still IN THE STORE, physically owed
+ * regardless of what the dropoff side shows. Without this gate a deliver-before-last-pickup ordering
+ * (a same-customer distinct-store add-on: drop 1 delivered, pickup 2 arrived-but-not-picked-up)
+ * satisfies every other gate (`C ⊆ F` trivially — same hash) and reads complete mid-route.
  */
 private fun perCustomerCoverage(
     job: Job,
@@ -146,8 +153,12 @@ private fun perCustomerCoverage(
         allCopies.asSequence().filter { it.taskId == taskId }.mapNotNull { it.customerNameHash }.toSet()
 
     // Every pickup placeholder must have resolved a customer hash (a hash-less GoPuff bin-scan pickup
-    // proves no customer coverage → strict-only).
-    if (pickupIds.any { observedHashes(it).isEmpty() }) return false
+    // proves no customer coverage → strict-only) AND be CONFIRMED (#759 review F1: a hash lands at
+    // activation/arrival, before pickup-confirm — an unconfirmed pickup's order is still in the store,
+    // physically owed, so it can never serve as completion evidence).
+    fun isConfirmed(taskId: String): Boolean =
+        allCopies.any { it.taskId == taskId && it.completedAt != null }
+    if (pickupIds.any { observedHashes(it).isEmpty() || !isConfirmed(it) }) return false
 
     // C = the job's customer set, from the pickups (1:1 with orders under the gate above).
     val customerHashes: Set<String> = pickupIds.flatMapTo(HashSet()) { observedHashes(it) }

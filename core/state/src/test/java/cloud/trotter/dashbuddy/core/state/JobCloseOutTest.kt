@@ -195,6 +195,25 @@ class JobCloseOutTest {
     }
 
     @Test
+    fun `coverage — an unconfirmed pickup blocks the arm even when its customer looks delivered (F1)`() {
+        // #759 review F1, the deliver-before-last-pickup ordering: a same-customer distinct-store
+        // add-on where drop 1 is DELIVERED but pickup 2 is only ARRIVED (its hash lands at
+        // activation/arrival, minutes before pickup-confirm) — order 2's items are still in the
+        // store, physically owed. Every OTHER gate passes (counts 2/2, both pickups hashed,
+        // C={H}⊆F, A={H}⊆F, F≠∅): only the all-pickups-CONFIRMED gate blocks. Discriminator:
+        // FAILS on c0a5f966 (the hash-only gate read this shape complete mid-route).
+        val delivered = dropoff("d1", "job-1", customer = "cust-1", completedAt = 3_000L)
+        val tbd = dropoff("d2", "job-1", customer = null, completedAt = null)
+        val pConfirmed = pickup("p1", "job-1", customer = "cust-1", store = "Willie's")
+        val pArrivedOnly = pickup("p2", "job-1", customer = "cust-1", store = "Sonic", completedAt = null)
+        val job = jobWithDropoffs("job-1", tasks = listOf(delivered, tbd, pConfirmed, pArrivedOnly))
+        assertFalse(
+            "an arrived-but-unconfirmed pickup is outstanding physical work — never completion evidence",
+            isJobPhysicallyComplete(job, recentTasks = listOf(delivered, pConfirmed), justRetired = null),
+        )
+    }
+
+    @Test
     fun `coverage — a same-store two-customer stack with one drop delivered stays incomplete (case 2)`() {
         // 1 combined pickup, 2 physical drops (two customers). Pickups do NOT map 1:1 to orders, so
         // coverage is unproven → strict-only → the outstanding second drop keeps it open. Mid-stack
@@ -204,6 +223,24 @@ class JobCloseOutTest {
         val combinedPickup = pickup("p1", "job-1", customer = "cust-a", store = "H-E-B")
         val job = jobWithDropoffs("job-1", tasks = listOf(delivered, outstanding, combinedPickup))
         assertFalse(isJobPhysicallyComplete(job, recentTasks = listOf(delivered, combinedPickup), justRetired = null))
+    }
+
+    @Test
+    fun `coverage — the pickup-to-drop count gate is the SOLE blocker on a TBD-second-drop stack (case 2b)`() {
+        // #759 review F2 (mutation pin for `|P_pick| == |P_drop|`): case 2's same-store 2-customer
+        // shape, but the outstanding drop is a never-activated TBD placeholder (customer=null, absent
+        // from recentTasks). The hash gates are then vacuously satisfied (the confirmed pickup is
+        // hashed; C={cust-a}⊆F; the TBD contributes nothing to A, so A⊆F; F≠∅) — deleting the count
+        // gate would read this mid-stack job COMPLETE. The count mismatch (1 pickup vs 2 drops) must
+        // be what keeps it open.
+        val delivered = dropoff("d1", "job-1", customer = "cust-a", completedAt = 3_000L)
+        val tbd = dropoff("d2", "job-1", customer = null, completedAt = null)
+        val combinedPickup = pickup("p1", "job-1", customer = "cust-a", store = "H-E-B")
+        val job = jobWithDropoffs("job-1", tasks = listOf(delivered, tbd, combinedPickup))
+        assertFalse(
+            "1 pickup vs 2 dropoff placeholders — coverage unprovable, count gate must block",
+            isJobPhysicallyComplete(job, recentTasks = listOf(delivered, combinedPickup), justRetired = null),
+        )
     }
 
     @Test
@@ -265,6 +302,31 @@ class JobCloseOutTest {
             job.tasks.first { it.taskId == "job-1-p2" },
         )
         assertFalse(isJobPhysicallyComplete(job, recentTasks = recent, justRetired = null))
+    }
+
+    @Test
+    fun `coverage — an activated drop with a hash outside the pickup set keeps the job open (F3, A-gate pin)`() {
+        // #759 review F3 (mutation pin for `A ⊆ F`): the #749 shape with d1(H) finished AND d2
+        // ACTIVATED carrying a drifted hash X (a strip-miss / collision-split second drop). X is
+        // observed on a dropoff (in A) but has no finished drop (not in F). Every other gate passes:
+        // counts 2/2, both pickups hashed+confirmed, C={H}⊆F={H}, F≠∅ — deleting the A-gate would
+        // close the job while the X drop is live mid-route. A ⊄ F must block.
+        val job = singleCustomerTwoStoreJob("job-1", customer = "cust-1")
+        val deliveredDrop = job.tasks.first { it.taskId == "job-1-d1" }.copy(completedAt = 3_000L)
+        val activatedDrifted = job.tasks.first { it.taskId == "job-1-d2" }
+            .copy(customerNameHash = "cust-X", completedAt = null)
+        val mirrored = job.copy(
+            tasks = job.tasks.map { if (it.taskId == "job-1-d2") activatedDrifted else it },
+        )
+        val recent = listOf(
+            deliveredDrop,
+            job.tasks.first { it.taskId == "job-1-p1" },
+            job.tasks.first { it.taskId == "job-1-p2" },
+        )
+        assertFalse(
+            "an activated dropoff hash outside F is outstanding work — the A-gate must block",
+            isJobPhysicallyComplete(mirrored, recentTasks = recent, justRetired = null),
+        )
     }
 
     @Test
@@ -411,6 +473,32 @@ class JobCloseOutTest {
             "job-old", r.activeJob?.jobId,
         )
         assertEquals("the new job carries only the new offer", 1, r.activeJob?.acceptedOffers?.size)
+    }
+
+    @Test
+    fun `T2 — an OFFER-armed retire over a COVERAGE-complete job still folds in as an add-on (F4)`() {
+        // #759 review F4 (amdt-4 ordering pin): the deliberation gate (`armedFromFlow ==
+        // OfferPresented` → return@run) must fire BEFORE the completeness check — for a job that is
+        // coverage-complete (not strict-complete: the leftover TBD defeats the strict arm; a finished
+        // d1 copy sits in recentTasks from an earlier grace-retire, since resumed). If the ordering
+        // flipped, the coverage arm would close the job and re-mint, stealing the add-on.
+        val job = singleCustomerTwoStoreJob("job-old", customer = "cust-1")
+        val finishedCopy = job.tasks.first { it.taskId == "job-old-d1" }.copy(completedAt = 1_400L)
+        val resumedActive = job.tasks.first { it.taskId == "job-old-d1" } // completedAt null — resumed
+        val region = onlineRegion(job).copy(
+            activeTask = resumedActive,
+            recentTasks = listOf(
+                finishedCopy,
+                job.tasks.first { it.taskId == "job-old-p1" },
+                job.tasks.first { it.taskId == "job-old-p2" },
+            ),
+            pendingDestructive = PendingDestructive(
+                kind = DestructiveKind.TASK_RETIRE, since = 1_500L, deadline = 11_500L, armedFromFlow = Flow.OfferPresented,
+            ),
+        )
+        val r = stepAccept(region, acceptedOffer("offer-2"), acceptObs(2_000L, "Chipotle"))
+        assertEquals("deliberating on THIS offer — it folds in, coverage-complete or not", "job-old", r.activeJob?.jobId)
+        assertEquals(2, r.activeJob?.acceptedOffers?.size)
     }
 
     @Test

@@ -140,10 +140,16 @@ class PlatformRegionStepper @Inject constructor() {
      * The per-order-placeholder desync above (a same-customer multi-order job carries a leftover TBD
      * dropoff placeholder that never activates, since the one physical drop resumes a single taskId)
      * used to defeat `isJobPhysicallyComplete` for the job's whole lifetime → the #596 T2 guard never
-     * fired → the NEXT offer folded into an already-finished job. FIXED by #749: `JobCompleteness`'s
-     * per-customer coverage arm proves completion from the pickup side (pickups map 1:1 to orders at
-     * distinct stores, so their hash set is the job's customer set) when every customer hash has a
-     * finished, arrived drop — so the placeholder count no longer matters.
+     * fired → the NEXT offer folded into an already-finished job. FIXED by #749 for the
+     * **distinct-store class**: `JobCompleteness`'s per-customer coverage arm proves completion from
+     * the pickup side (pickups map 1:1 to orders at distinct stores, so their hash set is the job's
+     * customer set) when every pickup is hashed AND confirmed and every customer hash has a finished,
+     * arrived drop — the placeholder count no longer matters there. RESIDUAL family members where the
+     * coverage gate deliberately fails (absorption direction — the T2 fold-in class can recur; both
+     * pre-existing on master, #759 review F5): (a) duplicated-store-hint shapes — a same-store
+     * multi-order job has |P_pick| < |P_drop|, so coverage is unprovable from counts; (b) the unassign
+     * composition — a #752 dropoff-placeholder retire after an unassign leaves e.g. pickups 2 vs
+     * drops 1, the count gate fails, and a same-customer job on that path stays strict-only.
      */
     private fun reconcileDropoffStore(region: PlatformRegion): PlatformRegion {
         val active = region.activeTask ?: return region
