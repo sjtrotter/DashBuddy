@@ -48,7 +48,7 @@ class AnalyticsMigration13to14Test {
                     milesToStore, milesToDropoff)
                    VALUES (1, NULL, 'doordash', 'J1', 'T1', 'Target', 'ch', 'ah', 100, NULL, 3000,
                            NULL, 10.0, 'RECEIPT_TOTAL', NULL, NULL, 105.0, 5.0, 1.0, 0.25, 0.10, 0.15,
-                           8.75, 'OFFER_FROZEN', NULL, 'RECEIPT_TOTAL', 'doordash|target|1', 0,
+                           8.75, 'OFFER_FROZEN', NULL, 'RECEIPT_TOTAL', 'doordash|target|1', NULL, 0,
                            NULL, NULL)""",
             )
             db.execSQL(
