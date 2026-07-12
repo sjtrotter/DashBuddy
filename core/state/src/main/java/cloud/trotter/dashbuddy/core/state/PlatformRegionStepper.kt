@@ -267,7 +267,14 @@ class PlatformRegionStepper @Inject constructor() {
      */
     private fun reconcileJobTasks(region: PlatformRegion): PlatformRegion {
         val job = region.activeJob ?: return region
-        val lineage = region.recentTasks.filter { it.jobId == job.jobId } +
+        // #752 review Fix 2: an UNASSIGNED (abandoned) task is a RESOLVED lifecycle fact — it belongs
+        // in `recentTasks` only, NEVER in `job.tasks` (the OUTSTANDING-placeholder mirror). Without
+        // this filter, `abandonActiveTask`'s step-2 placeholder retire is immediately undone here (the
+        // abandoned task re-enters `job.tasks` via the lineage copy), leaving a permanently
+        // unaccountable drop that keeps a multi-drop job from ever closing (job-61 absorption class).
+        // Excluding it is model-correct: it is no longer owed, so it must not count as an outstanding
+        // dropoff (step 3 close check / `isJobPhysicallyComplete`) nor as a job placeholder.
+        val lineage = region.recentTasks.filter { it.jobId == job.jobId && it.unassignedAt == null } +
             listOfNotNull(region.activeTask?.takeIf { it.jobId == job.jobId })
         val lineageIds = lineage.mapTo(HashSet()) { it.taskId }
         // #503 slice 3: preserve pre-created (offer-spawned, not-yet-activated) subtasks — those on
@@ -829,7 +836,7 @@ class PlatformRegionStepper @Inject constructor() {
         // the job closes and a later same-order frame mints a NEW jobId the resume lookup can't reach.
         // Documented residual (#736 review), not widened here.
         if (nextFlowVal == Flow.TaskUnassigned) {
-            return abandonActiveTask(region, obs.timestamp)
+            return abandonActiveTask(region, obs.timestamp, prevFlowVal)
         }
 
         // Task flow → create or update active task
@@ -1258,10 +1265,17 @@ class PlatformRegionStepper @Inject constructor() {
      *    (single-order case: the job closes here, on the confirmation frame).
      * 4. A pending `TASK_RETIRE` is superseded (cleared); a pending `SESSION_END` is preserved;
      *    `pendingModeResume` is untouched (#605 non-interaction — the sheet is Online).
-     * 5. Idempotent: with no active task and a live job it re-runs step 2/3 best-effort; with
-     *    neither it is a no-op (the second confirmation frame).
+     * 5. Idempotent, with the retro-mark EDGE-GATED (#752 review): the cross-frame retro-mark (step 1)
+     *    only runs on the edge INTO `TaskUnassigned` (prev flow ≠ `TaskUnassigned`), so a SECOND
+     *    consecutive `task:unassigned` frame does NOT re-select and mark a further task — it re-runs
+     *    steps 2/3 best-effort (placeholder retire + close check) and, with neither an active task nor
+     *    a retro target, is otherwise a no-op.
      */
-    internal fun abandonActiveTask(region: PlatformRegion, timestamp: Long): PlatformRegion {
+    internal fun abandonActiveTask(
+        region: PlatformRegion,
+        timestamp: Long,
+        prevFlowVal: Flow,
+    ): PlatformRegion {
         val abandoned = region.activeTask
         // Step 4: the abandon supersedes a pending TASK_RETIRE; a SESSION_END is the graced-offline
         // state and must survive.
@@ -1282,7 +1296,15 @@ class PlatformRegionStepper @Inject constructor() {
         // the sweep filter + the DeliveryCompletionEffects belt + `isJobPhysicallyComplete` all key on
         // `unassignedAt`, so the marker alone suppresses the fabricated completion. Only runs when
         // there is no live task to abandon.
-        val retroTargetId = if (abandoned == null) {
+        //
+        // #752 review Fix 1: EDGE-GATE the retro-mark on the flow edge. A multi-order job stays open
+        // after frame 1's abandon, so a SECOND consecutive `task:unassigned` frame would re-run this
+        // selector and walk `unassignedAt` onto the NEXT most-recently-completed task (a legitimately
+        // confirmed pickup, or worse a receipt-skipped delivered drop whose pending mint then gets
+        // belt-suppressed → real pay lost to unattributed). The retro-mark is a one-shot for the
+        // edge INTO `TaskUnassigned`; skip it when the previous flow was already `TaskUnassigned`
+        // (steps 2/3 still re-run best-effort, per the idempotency contract).
+        val retroTarget: Task? = if (abandoned == null && prevFlowVal != Flow.TaskUnassigned) {
             region.activeJob?.let { job ->
                 region.recentTasks
                     .filter {
@@ -1290,11 +1312,11 @@ class PlatformRegionStepper @Inject constructor() {
                             it.completedAt != null && it.unassignedAt == null
                     }
                     .maxByOrNull { it.completedAt!! }
-                    ?.taskId
             }
         } else {
             null
         }
+        val retroTargetId = retroTarget?.taskId
 
         // Step 1: move the active task to recentTasks, marked unassigned (completedAt stays null); or,
         // when the task already retired on a prior frame, retro-mark it in place.
@@ -1322,6 +1344,15 @@ class PlatformRegionStepper @Inject constructor() {
             val remaining = when {
                 dropoffs.size <= 1 ->
                     job.tasks.filterNot { it.phase == TaskPhase.DROPOFF }
+                // #752 review Fix 2: a CROSS-FRAME retro-mark onto a DROPOFF must retire that drop's
+                // own placeholder by taskId (the abandon-keyed arms below can't — `abandoned` is null
+                // in the retro shape). Without this the marked drop stays a live placeholder in
+                // `job.tasks`, now permanently unaccountable under the `unassignedAt` guard in
+                // `isJobPhysicallyComplete`, so the job never closes and the next offer folds into the
+                // dead job (job-61 absorption class). Keyed on the exact retro-target taskId — never a
+                // customer-hash join that could over-remove a colliding sibling.
+                retroTarget?.phase == TaskPhase.DROPOFF ->
+                    job.tasks.filterNot { it.phase == TaskPhase.DROPOFF && it.taskId == retroTarget.taskId }
                 // #736 Fix 4: a DROPOFF-phase abandon retires ITS OWN placeholder by taskId — the
                 // abandoned drop IS the exact one to remove, so a customer-hash join here would
                 // over-remove a colliding sibling drop (two customers whose normalized keys collapse).

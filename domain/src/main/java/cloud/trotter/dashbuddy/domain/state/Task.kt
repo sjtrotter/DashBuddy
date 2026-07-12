@@ -38,7 +38,9 @@ data class Task(
     /**
      * The moment the dasher **abandoned** this task by unassigning the order (#736). Set by
      * `PlatformRegionStepper.abandonActiveTask` when a `Flow.TaskUnassigned` frame lands; mutually
-     * exclusive with [completedAt] (an abandoned task is NEVER completed). The marker is what the
+     * exclusive with [completedAt] on the INLINE abandon path (that task is never completed), but the
+     * CROSS-FRAME retro-mark deliberately pairs them (see below) — [unassignedAt] is the firewall, not
+     * a null `completedAt`. The marker is what the
      * PICKUP_CONFIRMED close-out sweep filters on (`unassignedAt == null`) — that filter is the
      * load-bearing defense against a fabricated confirm for an abandoned-but-arrived pickup. Mutual
      * exclusion with [completedAt] holds for the INLINE abandon; the CROSS-FRAME retro-mark (#752)

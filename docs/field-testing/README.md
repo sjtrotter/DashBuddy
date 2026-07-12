@@ -134,9 +134,11 @@ was found **broken-in-part** (raw PII in capture envelopes) and moved to that en
   **How to tell it's working (on-dash + desk-side):** unassign an order you've already picked up (mid
   drive to the customer). Expect the **"Unassigned: <store>" bubble**, the card clears, and the next
   offer works normally. Desk-side, the exported log / `app_events` should show **exactly one
-  `TASK_UNASSIGNED`** (phase DROPOFF) for that order and **no `DELIVERY_COMPLETED` / `DELIVERY_CONFIRMED`**
-  for it — no phantom "$0 PAID" delivery in the Money tab. The sibling pickup of a stacked job should
-  still show its normal `PICKUP_CONFIRMED`.
+  `TASK_UNASSIGNED`** (phase DROPOFF) for that order and **no `DELIVERY_COMPLETED`** for it — no phantom
+  "$0 PAID" delivery in the Money tab. (In the cross-frame shape a `DELIVERY_CONFIRMED` from the earlier
+  grace retire may already have fired on the prior frame — that's read-model row-inert and expected, so
+  don't treat its presence as a failure.) The sibling pickup of a stacked job should still show its
+  normal `PICKUP_CONFIRMED`.
   - Confirmed: 0/2
 
 - **🆕 NEW — multi-pickup job lands under a REAL store, no WARN storm (#733 / PR #745).**
