@@ -3,13 +3,17 @@ package cloud.trotter.dashbuddy.ui.main.analytics
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import cloud.trotter.dashbuddy.core.data.analytics.AnalyticsRepository
+import cloud.trotter.dashbuddy.core.data.analytics.CorrectionRepository
 import cloud.trotter.dashbuddy.domain.analytics.AnalyticsPeriod
 import cloud.trotter.dashbuddy.domain.analytics.DailyEarnings
 import cloud.trotter.dashbuddy.domain.analytics.DecisionEconomics
+import cloud.trotter.dashbuddy.domain.analytics.DeliveryRecord
 import cloud.trotter.dashbuddy.domain.analytics.PeriodEconomics
+import cloud.trotter.dashbuddy.domain.analytics.SessionRecord
 import cloud.trotter.dashbuddy.domain.analytics.StoreEconomics
 import cloud.trotter.dashbuddy.domain.analytics.TimeEconomics
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -17,6 +21,8 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.launch
+import timber.log.Timber
 import javax.inject.Inject
 
 /**
@@ -42,7 +48,8 @@ import javax.inject.Inject
 @OptIn(ExperimentalCoroutinesApi::class)
 @HiltViewModel
 class AnalyticsViewModel @Inject constructor(
-    analyticsRepository: AnalyticsRepository,
+    private val analyticsRepository: AnalyticsRepository,
+    private val correctionRepository: CorrectionRepository,
 ) : ViewModel() {
 
     /** UDF intent targets — the selected review window and tab. */
@@ -62,9 +69,15 @@ class AnalyticsViewModel @Inject constructor(
                 analyticsRepository.perStoreEconomics(period),
                 analyticsRepository.decisionEconomics(period),
                 analyticsRepository.timeEconomics(period),
-                analyticsRepository.dailyEarnings(period),
-            ) { economics, stores, decisions, time, daily ->
-                PeriodData(period, economics, stores, decisions, time, daily)
+                // The typed `combine` tops out at 5 flows, so the per-day chart + the "(No session)"
+                // orphan list (#660 piece 2) ride ONE nested sub-combine into the 5th slot. Both are
+                // period-anchored, so they re-anchor atomically with everything else on a period switch.
+                combine(
+                    analyticsRepository.dailyEarnings(period),
+                    analyticsRepository.noSessionDeliveries(period),
+                ) { daily, orphans -> daily to orphans },
+            ) { economics, stores, decisions, time, (daily, orphans) ->
+                PeriodData(period, economics, stores, decisions, time, daily, orphans)
             }
         },
         analyticsRepository.recentSessions(RECENT_SESSIONS_LIMIT),
@@ -82,6 +95,7 @@ class AnalyticsViewModel @Inject constructor(
             decisions = data.decisions,
             time = data.time,
             dailyEarnings = data.dailyEarnings,
+            noSessionDeliveries = data.orphanDeliveries,
             storeReportCards = storeCards,
             earningsHeatmap = heatmap,
         )
@@ -97,6 +111,38 @@ class AnalyticsViewModel @Inject constructor(
         selectedTab.value = tab
     }
 
+    /**
+     * The candidate dashes an orphan could be categorized into (#660 piece 2) — a one-shot suspend read
+     * the picker runs in a `produceState` when the driver taps an orphan. Delegates to the repository's
+     * ±48 h / same-platform / ended-only policy (the pre-filter; the projector's ended-session guard is
+     * the authority).
+     */
+    suspend fun candidateSessionsFor(orphan: DeliveryRecord): List<SessionRecord> =
+        analyticsRepository.candidateSessionsForOrphan(orphan.completedAt, orphan.platform)
+
+    /**
+     * UDF intent (#660 piece 2) — categorize an orphan delivery into [newSessionId] by appending a
+     * `DELIVERY_SESSION_ASSIGN`. The projector applies it (with its fail-closed guards) and Room
+     * invalidation refreshes the callout + the orphan list — no optimistic local mutation.
+     */
+    fun assignToSession(targetEventSequenceId: Long, newSessionId: String) {
+        viewModelScope.launch {
+            // Fail-closed backstop — a rejected append (blank id) must not crash the launch (parity with
+            // the SessionDetail corrections). Alpha-acceptable silent reject; the projector is authoritative.
+            try {
+                correctionRepository.assignDeliverySession(
+                    targetEventSequenceId = targetEventSequenceId,
+                    newSessionId = newSessionId,
+                )
+            } catch (e: CancellationException) {
+                throw e // cooperative cancellation — never swallow it
+            } catch (e: Exception) {
+                // P7: counts/ids only.
+                Timber.tag(TAG).w(e, "assignToSession rejected for delivery seq %d", targetEventSequenceId)
+            }
+        }
+    }
+
     /** One period switch's worth of read-model, re-anchored atomically under [flatMapLatest]. */
     private data class PeriodData(
         val period: AnalyticsPeriod,
@@ -105,10 +151,12 @@ class AnalyticsViewModel @Inject constructor(
         val decisions: DecisionEconomics,
         val time: TimeEconomics,
         val dailyEarnings: List<DailyEarnings>,
+        val orphanDeliveries: List<DeliveryRecord>,
     )
 
     private companion object {
         const val TOP_STORES = 5
         const val RECENT_SESSIONS_LIMIT = 10
+        const val TAG = "AnalyticsVm"
     }
 }

@@ -57,6 +57,17 @@ interface AnalyticsDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun setWatermark(state: AnalyticsProjectionStateEntity)
 
+    /**
+     * Adjust a session's delivery counter by a RELATIVE [delta] (#660 piece 2) — the
+     * `DELIVERY_SESSION_ASSIGN` apply's ±1 as the target row leaves/enters this session. **Relative,
+     * never absolute**, so it composes order-safely with the same transaction's earlier session-context
+     * upserts (the counter's absolute value is folded, not re-derived here) and is identical under an
+     * incremental fold vs a from-zero refold — the ±1 deltas telescope to the same final count either
+     * way. A missing sessionId matches zero rows (a no-op, never a crash).
+     */
+    @Query("UPDATE session_records SET deliveries = deliveries + :delta WHERE sessionId = :sessionId")
+    suspend fun bumpSessionDeliveries(sessionId: String, delta: Int)
+
     // ── Version rebuild (projectorVersion bump ⇒ wipe + refold from 0) ───
 
     @Query("DELETE FROM delivery_records")
@@ -108,11 +119,17 @@ interface AnalyticsDao {
     suspend fun pickupRecordCount(): Int
 
     /** Distinct jobIds referenced by a session's pickup OR delivery rows — a session-level trigger
-     *  (DASH_STOP / inferred close) enumerates its jobs to re-resolve each (#159 L2). */
+     *  (DASH_STOP / inferred close) enumerates its jobs to re-resolve each (#159 L2).
+     *
+     *  The delivery-half is filtered `sessionAssigned = 0` (#660 piece 2 posture: a driver-assigned
+     *  orphan NEVER perturbs machine-fold hydration): the v1 decision is "no #159 store resolution
+     *  re-run on assign", so a refold's same-batch phase inversion must not enumerate the assigned
+     *  orphan's job here and run resolution over it. Pickup rows are never driver-assigned (only
+     *  `delivery_records` carries `sessionAssigned`), so only the delivery UNION arm needs the filter. */
     @Query(
         """SELECT DISTINCT jobId FROM (
               SELECT jobId FROM pickup_records WHERE sessionId = :sessionId
-              UNION SELECT jobId FROM delivery_records WHERE sessionId = :sessionId)
+              UNION SELECT jobId FROM delivery_records WHERE sessionId = :sessionId AND sessionAssigned = 0)
            ORDER BY jobId ASC"""
     )
     suspend fun jobIdsForSession(sessionId: String): List<String>
@@ -613,6 +630,20 @@ interface AnalyticsDao {
     @Query("SELECT * FROM delivery_records WHERE sessionId = :sessionId ORDER BY completedAt ASC")
     fun deliveriesForSession(sessionId: String): Flow<List<DeliveryRecordEntity>>
 
+    /**
+     * Every orphan "(No session)" delivery whose own `completedAt` is in `[start, end)`, newest first —
+     * the #660 piece 2 categorize flow's list (the Money-tab callout opens it). Full rows so the picker
+     * can read the row's `completedAt`/`platform`/`storeName`/`realizedPay`. A `Flow` so the list re-emits
+     * as the projector folds an assign (the tapped row leaves the bucket) — Room invalidation, no manual
+     * refresh. Matches the same null-session population [noSessionTotals] surfaces (`sessionId IS NULL`).
+     */
+    @Query(
+        """SELECT * FROM delivery_records
+           WHERE sessionId IS NULL AND completedAt >= :start AND completedAt < :end
+           ORDER BY completedAt DESC"""
+    )
+    fun noSessionDeliveryRows(start: Long, end: Long): Flow<List<DeliveryRecordEntity>>
+
     /** One session row as a Flow — the #650 drill-down header (re-emits on projector commits). */
     @Query("SELECT * FROM session_records WHERE sessionId = :id")
     fun sessionRecordFlow(id: String): Flow<SessionRecordEntity?>
@@ -637,8 +668,15 @@ interface AnalyticsDao {
     @Query("SELECT * FROM session_records WHERE sessionId = :id")
     suspend fun sessionRecord(id: String): SessionRecordEntity?
 
-    /** The prevDropAnchor for a mid-session restart: (odometerAtCompletion, completedAt). */
-    @Query("SELECT * FROM delivery_records WHERE sessionId = :id ORDER BY eventSequenceId DESC LIMIT 1")
+    /** The prevDropAnchor for a mid-session restart: (odometerAtCompletion, completedAt).
+     *
+     *  Filtered `sessionAssigned = 0` (#660 piece 2 posture: a driver-assigned orphan is INVISIBLE to
+     *  machine-fold hydration). A categorized orphan must never become the prevDrop odometer/time anchor
+     *  a later machine `DELIVERY_COMPLETED` reads — its economics were frozen against a different session's
+     *  offer, so anchoring off it would desync incremental fold from a from-zero refold at a batch boundary
+     *  (the refold's in-memory context, whose assign leaves it untouched, never sees the orphan). Inert on
+     *  today's ended-session assigns (an ended session folds no future completion), correct by construction. */
+    @Query("SELECT * FROM delivery_records WHERE sessionId = :id AND sessionAssigned = 0 ORDER BY eventSequenceId DESC LIMIT 1")
     suspend fun lastDeliveryInSession(id: String): DeliveryRecordEntity?
 
     /**
@@ -662,8 +700,15 @@ interface AnalyticsDao {
      * The distinct delivered jobIds already recorded for a session — rehydrates the fold's
      * distinct-job set on a mid-session restart so `jobsCompleted` counts a stacked job once even
      * across a process death (PR2).
+     *
+     * Filtered `sessionAssigned = 0` (#660 piece 2 posture: a driver-assigned orphan is INVISIBLE to
+     * machine-fold hydration). `jobsCompleted` is `deliveredJobIds.size`, so a categorized orphan's job
+     * counted here would inflate the counter the moment a LATER-batch correction re-hydrates the session
+     * and pass-through-upserts it — a divergence from a from-zero refold (whose in-memory context, left
+     * untouched by the assign fold, never sees the orphan). The assign's own delivery-count ±1 rides the
+     * relative [bumpSessionDeliveries]; the distinct-job set must exclude the assigned row to match refold.
      */
-    @Query("SELECT DISTINCT jobId FROM delivery_records WHERE sessionId = :id")
+    @Query("SELECT DISTINCT jobId FROM delivery_records WHERE sessionId = :id AND sessionAssigned = 0")
     suspend fun deliveredJobIdsInSession(id: String): List<String>
 
     /**
@@ -679,9 +724,15 @@ interface AnalyticsDao {
      * `originalPayBasis`, closing the #691 VET F1 hydration wrinkle even for re-priced rows; the
      * COALESCE covers legacy rows whose `originalPayBasis` is still null (pre-`PROJECTOR_VERSION` 4
      * refold). Deliberately excludes `USER_CORRECTED` itself and the estimate/none bases.
+     *
+     * Filtered `sessionAssigned = 0` (#660 piece 2 posture: a driver-assigned orphan is INVISIBLE to
+     * machine-fold hydration). A categorized orphan's receipt evidence must not enter this session's
+     * #691 mixed-receipt guard set — it belonged to a different job/dash, and letting it deny a later
+     * sibling's offer-pay estimate would (like the distinct-job set above) split incremental fold from
+     * from-zero refold at a batch boundary.
      */
     @Query(
-        "SELECT DISTINCT jobId FROM delivery_records WHERE sessionId = :id " +
+        "SELECT DISTINCT jobId FROM delivery_records WHERE sessionId = :id AND sessionAssigned = 0 " +
             "AND COALESCE(originalPayBasis, payBasis) IN ('" + PayBasis.DROP_SHARE + "', '" +
             PayBasis.RECEIPT_TOTAL + "', '" + PayBasis.SUSPECT_FULL_RECEIPT + "')"
     )

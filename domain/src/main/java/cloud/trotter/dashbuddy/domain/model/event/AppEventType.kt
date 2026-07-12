@@ -34,6 +34,8 @@ enum class AppEventType {
     PAY_ADJUSTMENT,  // A driver re-price of an already-recorded delivery (the original event stays)
     DELIVERY_ADJUSTMENT, // A driver multi-field edit of an already-recorded delivery (#688) — widens
                          // PAY_ADJUSTMENT (store/pay/tip/cash-tip/miles/note); the original event stays
+    DELIVERY_SESSION_ASSIGN, // A driver assigns/unassigns an orphan "(No session)" delivery's session
+                             // (#660 piece 2) — changes ATTRIBUTION only (never pay/net); the original event stays
 
     // --- System / Generic ---
     SCREEN_VIEWED, // For generic screen transitions like "Earnings Screen"

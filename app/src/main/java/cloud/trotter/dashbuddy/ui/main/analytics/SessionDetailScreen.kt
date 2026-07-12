@@ -96,6 +96,7 @@ fun SessionDetailScreen(
                 detail = detail,
                 onAddManualDelivery = viewModel::addManualDelivery,
                 onAdjustDelivery = viewModel::adjustDelivery,
+                onUnassignDelivery = viewModel::unassignDelivery,
                 modifier = Modifier
                     .padding(padding)
                     .verticalScroll(rememberScrollState())
@@ -123,6 +124,7 @@ private fun DashDetailContent(
         newMiles: Double?,
         note: String?,
     ) -> Unit,
+    onUnassignDelivery: (targetEventSequenceId: Long) -> Unit,
     modifier: Modifier,
 ) {
     // Correction dialog state — hoisted here, stateless children below (Principle 1 / 3).
@@ -181,6 +183,10 @@ private fun DashDetailContent(
             onDismiss = { adjustTarget = null },
             onConfirm = { store, newPay, newTip, newCashTip, newMiles, note ->
                 onAdjustDelivery(target.eventSequenceId, store, newPay, newTip, newCashTip, newMiles, note)
+                adjustTarget = null
+            },
+            onUnassign = {
+                onUnassignDelivery(target.eventSequenceId)
                 adjustTarget = null
             },
         )
@@ -314,6 +320,15 @@ private fun DeliveryRow(delivery: DeliveryRecord, onAdjust: () -> Unit) {
             )
             travelLine(delivery)?.let {
                 Text(text = it, style = MaterialTheme.typography.bodySmall, color = c.text3)
+            }
+            // #660 piece 2 disclosure: a driver-categorized orphan (parity with the OFFER_PAY
+            // "est. offer pay" disclosure family) — this row was assigned here by the driver, not captured.
+            if (delivery.sessionAssigned) {
+                Text(
+                    text = stringResource(R.string.session_detail_assigned_by_you),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = c.accent,
+                )
             }
         }
         Column(horizontalAlignment = Alignment.End) {
@@ -495,6 +510,7 @@ private fun AdjustDeliveryDialog(
         newMiles: Double?,
         note: String?,
     ) -> Unit,
+    onUnassign: () -> Unit,
 ) {
     // All field state is keyed on [target] (F6): a mid-edit Room re-emission that produces a DIFFERENT
     // target snapshot re-initialises the fields from it, so the change-diff below never compares an
@@ -552,6 +568,26 @@ private fun AdjustDeliveryDialog(
                 MoneyField(cashTip, { cashTip = it }, stringResource(R.string.session_detail_field_cash_tip))
                 MoneyField(miles, { miles = it }, stringResource(R.string.session_detail_stat_miles))
                 MoneyField(note, { note = it }, stringResource(R.string.session_detail_field_note_optional), numeric = false)
+                // #660 piece 2 undo: only a driver-assigned row can be removed back to the bucket (a
+                // machine row is never movable by the projector guard). Attribution-only — never re-prices.
+                // A cash-bearing row's unassign is REFUSED by the projector's F3 sessionful-cash guard
+                // (a null-session cash row would reach net but not gross), so disable the action with a
+                // hint rather than showing a control whose tap silently no-ops (#660 review).
+                if (target.sessionAssigned) {
+                    val cashLocked = target.cashTip != null
+                    Column(Modifier.align(Alignment.Start)) {
+                        TextButton(onClick = onUnassign, enabled = !cashLocked) {
+                            Text(stringResource(R.string.session_detail_remove_from_dash))
+                        }
+                        if (cashLocked) {
+                            Text(
+                                text = stringResource(R.string.session_detail_remove_cash_locked_supporting),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = AppTheme.colors.text3,
+                            )
+                        }
+                    }
+                }
             }
         },
         confirmButton = {

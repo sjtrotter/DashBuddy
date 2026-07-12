@@ -173,4 +173,17 @@ data class DeliveryRecordEntity(
      * preceded the completion (missed arrival, phantom-class completion, all pre-v13 history).
      */
     val milesToDropoff: Double? = null,
+
+    // ── Session-attribution marker (#660 piece 2, v14) ──────────────────────
+    /**
+     * Driver-attribution sticky bit (#660 piece 2). Set to 1 when a `DELIVERY_SESSION_ASSIGN` assigns
+     * this orphan ("(No session)") row into a real ended dash; 0 when machine-attributed, unassigned
+     * (back in the bucket), or MANUAL. The projector's apply guard only ever MOVES a row that is either
+     * null-session OR already `sessionAssigned = 1` — the fail-closed backstop that keeps a machine
+     * row's source-session reconciliation from being silently broken by one wrong tap (undo/re-assign
+     * are safe only because of this marker). Drives the drill-down's "assigned by you" caption + undo.
+     * Derived from the `DELIVERY_SESSION_ASSIGN` event ⇒ a from-zero refold re-derives it. Default 0
+     * (SQL column default so the additive AutoMigration back-fills existing rows).
+     */
+    @ColumnInfo(defaultValue = "0") val sessionAssigned: Int = 0,
 )

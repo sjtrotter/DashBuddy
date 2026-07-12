@@ -120,6 +120,31 @@ class SessionDetailViewModel @Inject constructor(
         }
     }
 
+    /**
+     * Remove a driver-assigned delivery from this dash (#660 piece 2, the undo) — writes a
+     * `DELIVERY_SESSION_ASSIGN` with `newSessionId = null`, returning the row to the "(No session)"
+     * bucket where it can be re-assigned correctly. Only offered for a `sessionAssigned` row (a machine
+     * row is never movable by the projector's guard). The projector applies it and the read-model Flow
+     * refreshes the screen (the row leaves this dash) — no optimistic local mutation.
+     */
+    fun unassignDelivery(targetEventSequenceId: Long) {
+        viewModelScope.launch {
+            // F4c: fail-closed backstop — a rejected unassign (e.g. the cash-bearing block) must not
+            // crash the launch. Alpha-acceptable silent reject; the projector guard is the authority.
+            try {
+                correctionRepository.assignDeliverySession(
+                    targetEventSequenceId = targetEventSequenceId,
+                    newSessionId = null,
+                )
+            } catch (e: CancellationException) {
+                throw e // cooperative cancellation — never swallow it
+            } catch (e: Exception) {
+                // P7: counts/ids only.
+                Timber.tag(TAG).w(e, "unassignDelivery rejected for delivery seq %d", targetEventSequenceId)
+            }
+        }
+    }
+
     private companion object {
         private const val TAG = "SessionDetailVm"
     }

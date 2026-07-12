@@ -20,6 +20,7 @@ import cloud.trotter.dashbuddy.domain.model.event.AppEventType
 import cloud.trotter.dashbuddy.domain.model.event.payload.AppEventPayload
 import cloud.trotter.dashbuddy.domain.model.event.payload.DeliveryAdjustmentPayload
 import cloud.trotter.dashbuddy.domain.model.event.payload.DeliveryPayload
+import cloud.trotter.dashbuddy.domain.model.event.payload.DeliverySessionAssignPayload
 import cloud.trotter.dashbuddy.domain.model.event.payload.ManualDeliveryPayload
 import cloud.trotter.dashbuddy.domain.model.event.payload.OfferPayload
 import cloud.trotter.dashbuddy.domain.model.event.payload.PayAdjustmentPayload
@@ -903,6 +904,287 @@ class AnalyticsProjectorTest {
         analyticsDao.setWatermark(AnalyticsProjectionStateEntity(watermarkSequenceId = seq + 1, projectorVersion = 99))
         projector().catchUp()
         assertEquals("live == from-zero refold", liveRow, analyticsDao.deliveryRecord(seq))
+    }
+
+    // ── DELIVERY_SESSION_ASSIGN (#660 piece 2) ──────────────────────────
+
+    /** An orphan "(No session)" completion — a real DELIVERY_COMPLETED whose event carried no sessionId. */
+    private suspend fun insertOrphanDelivery(at: Long = 5_000, jobId: String = "ORPHAN", pay: Double = 8.0): Long =
+        insert(
+            AppEventType.DELIVERY_COMPLETED, sessionId = null, at = at,
+            DeliveryPayload(
+                jobId = jobId, taskId = "OT-$at", storeName = "Chipotle", customerHash = "co",
+                phaseStartedAt = at - 600, completedAt = at, totalPay = pay,
+            ),
+            odometer = null,
+        )
+
+    @Test
+    fun `a DELIVERY_SESSION_ASSIGN moves an orphan into its dash, bumps the counter, and touches no frozen column (#660)`() = runBlocking {
+        seedCorrectableSession(sid = "S1", deliveryPay = 10.0, reportedEarnings = 20.0) // S1 ends with 1 delivery
+        val orphanSeq = insertOrphanDelivery(pay = 8.0)
+        projector().catchUp()
+
+        val before = analyticsDao.deliveryRecord(orphanSeq)!!
+        assertNull("the orphan starts session-less", before.sessionId)
+        assertEquals(0, before.sessionAssigned)
+        assertEquals("S1 has its one machine delivery before the assign", 1, analyticsDao.sessionRecord("S1")!!.deliveries)
+
+        insert(
+            AppEventType.DELIVERY_SESSION_ASSIGN, "S1", 6_000,
+            DeliverySessionAssignPayload(targetEventSequenceId = orphanSeq, newSessionId = "S1", note = "was mine"),
+        )
+        projector().catchUp()
+
+        val after = analyticsDao.deliveryRecord(orphanSeq)!!
+        assertEquals("S1", after.sessionId)
+        assertEquals("the driver-assigned marker is set", 1, after.sessionAssigned)
+        assertEquals("session counter +1 (header/list agree)", 2, analyticsDao.sessionRecord("S1")!!.deliveries)
+        // Frozen economics byte-identical: ONLY sessionId + the marker changed.
+        assertEquals("attribution-only edit — every other column is byte-identical", before.copy(sessionId = "S1", sessionAssigned = 1), after)
+        assertEquals(before.realizedPay, after.realizedPay)
+        assertEquals(before.netProfit, after.netProfit)
+        assertEquals(before.payBasis, after.payBasis)
+        assertEquals(before.originalPayBasis, after.originalPayBasis)
+        assertEquals(before.frozenCostPerMile, after.frozenCostPerMile)
+        assertEquals(before.frozenFuelPerMile, after.frozenFuelPerMile)
+        assertEquals(before.frozenNonFuelPerMile, after.frozenNonFuelPerMile)
+        assertEquals(before.cashTip, after.cashTip)
+        assertEquals(before.storeKey, after.storeKey)
+    }
+
+    @Test
+    fun `assigning into a still-live session is skipped and the row is unchanged (ended-session guard, #660)`() = runBlocking {
+        // A LIVE session: DASH_START with no DASH_STOP.
+        insert(
+            AppEventType.DASH_START, "LIVE", 1_000,
+            SessionStartPayload("LIVE", Platform.DoorDash.name, 1_000, SessionStartSource.INTERACTION, "x"),
+            odometer = 100.0,
+        )
+        val orphanSeq = insertOrphanDelivery(at = 2_000)
+        projector().catchUp()
+        val before = analyticsDao.deliveryRecord(orphanSeq)!!
+
+        insert(
+            AppEventType.DELIVERY_SESSION_ASSIGN, "LIVE", 3_000,
+            DeliverySessionAssignPayload(targetEventSequenceId = orphanSeq, newSessionId = "LIVE"),
+        )
+        projector().catchUp() // must not throw
+
+        assertEquals("a live target session is refused — row untouched", before, analyticsDao.deliveryRecord(orphanSeq))
+        assertEquals("the watermark advanced past the skipped assign", 3L, analyticsDao.getWatermark()!!.watermarkSequenceId)
+    }
+
+    @Test
+    fun `assigning a missing target row is skipped without crashing (#660)`() = runBlocking {
+        seedCorrectableSession(sid = "S1")
+        projector().catchUp()
+
+        insert(
+            AppEventType.DELIVERY_SESSION_ASSIGN, "S1", 6_000,
+            DeliverySessionAssignPayload(targetEventSequenceId = 9_999, newSessionId = "S1"),
+        )
+        projector().catchUp() // must not throw
+        assertEquals("watermark advanced past the skipped assign", 5L, analyticsDao.getWatermark()!!.watermarkSequenceId)
+    }
+
+    @Test
+    fun `a machine-attributed sessionful row is never moved (movable-rows-only guard, #660)`() = runBlocking {
+        val machineSeq = seedCorrectableSession(sid = "S1", deliveryPay = 10.0) // its delivery is sessionful, sessionAssigned = 0
+        // A second ended dash to try to move it into.
+        seedCorrectableSession(sid = "S2", deliveryPay = 5.0)
+        projector().catchUp()
+        val before = analyticsDao.deliveryRecord(machineSeq)!!
+
+        insert(
+            AppEventType.DELIVERY_SESSION_ASSIGN, "S2", 7_000,
+            DeliverySessionAssignPayload(targetEventSequenceId = machineSeq, newSessionId = "S2"),
+        )
+        projector().catchUp() // must not throw
+
+        assertEquals("a machine-attributed row is never re-attributed", before, analyticsDao.deliveryRecord(machineSeq))
+        assertEquals("S1 still owns its one delivery", 1, analyticsDao.sessionRecord("S1")!!.deliveries)
+        assertEquals("S2's counter is unmoved", 1, analyticsDao.sessionRecord("S2")!!.deliveries)
+    }
+
+    @Test
+    fun `a platform-mismatched assign is skipped (platform-coherence guard, #660)`() = runBlocking {
+        // An Uber ended session.
+        insert(
+            AppEventType.DASH_START, "U1", 1_000,
+            SessionStartPayload("U1", Platform.Uber.name, 1_000, SessionStartSource.INTERACTION, "x"),
+        )
+        insert(
+            AppEventType.DASH_STOP, "U1", 2_000,
+            SessionStopPayload("U1", endedAt = 2_000, source = SessionEndSource.SUMMARY_SCREEN, totalEarnings = 10.0),
+        )
+        projector().catchUp()
+        // A movable (null-session) row that carries a KNOWN doordash platform — direct-seeded, since a
+        // genuine orphan folds Unknown; this exercises the defensive coherence backstop.
+        val row = DeliveryRecordEntity(
+            eventSequenceId = 500, sessionId = null, platform = "doordash", jobId = "J", taskId = "T",
+            storeName = "Wendys", customerHash = null, addressHash = null, phaseStartedAt = 1_500,
+            arrivedAt = null, completedAt = 1_800, deadlineMillis = null, realizedPay = 8.0,
+            payBasis = "RECEIPT_TOTAL", tip = null, basePay = null, odometerAtCompletion = null,
+            realizedMiles = null, realizedMinutes = null, frozenCostPerMile = null, netProfit = null,
+            costBasis = "NONE",
+        )
+        analyticsDao.upsertDelivery(row)
+
+        insert(
+            AppEventType.DELIVERY_SESSION_ASSIGN, "U1", 3_000,
+            DeliverySessionAssignPayload(targetEventSequenceId = 500, newSessionId = "U1"),
+        )
+        projector().catchUp() // must not throw
+
+        assertEquals("a doordash row is not moved into an uber dash", row, analyticsDao.deliveryRecord(500))
+    }
+
+    @Test
+    fun `a cash-bearing row cannot be unassigned (F3 sessionful-cash invariant, #660)`() = runBlocking {
+        seedCorrectableSession(sid = "S1")
+        projector().catchUp()
+        // An assigned, cash-bearing row (direct-seed: sessionAssigned = 1, cashTip set, session-bound).
+        val row = DeliveryRecordEntity(
+            eventSequenceId = 500, sessionId = "S1", platform = "doordash", jobId = "J", taskId = "T",
+            storeName = "Wendys", customerHash = null, addressHash = null, phaseStartedAt = 1_500,
+            arrivedAt = null, completedAt = 1_800, deadlineMillis = null, realizedPay = 8.0,
+            payBasis = "RECEIPT_TOTAL", tip = null, basePay = null, odometerAtCompletion = null,
+            realizedMiles = null, realizedMinutes = null, frozenCostPerMile = null, netProfit = null,
+            costBasis = "NONE", cashTip = 3.0, sessionAssigned = 1,
+        )
+        analyticsDao.upsertDelivery(row)
+
+        insert(
+            AppEventType.DELIVERY_SESSION_ASSIGN, null, 6_000,
+            DeliverySessionAssignPayload(targetEventSequenceId = 500, newSessionId = null),
+        )
+        projector().catchUp() // must not throw
+
+        assertEquals("a cash-bearing row is never unassigned back to the bucket", row, analyticsDao.deliveryRecord(500))
+    }
+
+    @Test
+    fun `assign then unassign returns the row to the bucket and restores the counter (undo, #660)`() = runBlocking {
+        seedCorrectableSession(sid = "S1", deliveryPay = 10.0)
+        val orphanSeq = insertOrphanDelivery(pay = 8.0)
+        insert(
+            AppEventType.DELIVERY_SESSION_ASSIGN, "S1", 6_000,
+            DeliverySessionAssignPayload(targetEventSequenceId = orphanSeq, newSessionId = "S1"),
+        )
+        insert(
+            AppEventType.DELIVERY_SESSION_ASSIGN, null, 7_000,
+            DeliverySessionAssignPayload(targetEventSequenceId = orphanSeq, newSessionId = null),
+        )
+        projector().catchUp()
+
+        val row = analyticsDao.deliveryRecord(orphanSeq)!!
+        assertNull("the row is back in the (No session) bucket", row.sessionId)
+        assertEquals("the marker is cleared", 0, row.sessionAssigned)
+        assertEquals("S1's counter is restored (+1 then −1)", 1, analyticsDao.sessionRecord("S1")!!.deliveries)
+    }
+
+    @Test
+    fun `an assign then a same-batch cash edit compose in log order (F3 sees the session, #660)`() = runBlocking {
+        seedCorrectableSession(sid = "S1")
+        projector().catchUp()
+        val orphanSeq = insertOrphanDelivery(pay = 8.0)
+        // Assign THEN a cash edit on the same row, both in ONE later batch.
+        insert(
+            AppEventType.DELIVERY_SESSION_ASSIGN, "S1", 6_000,
+            DeliverySessionAssignPayload(targetEventSequenceId = orphanSeq, newSessionId = "S1"),
+        )
+        insert(
+            AppEventType.DELIVERY_ADJUSTMENT, "S1", 6_100,
+            DeliveryAdjustmentPayload(targetEventSequenceId = orphanSeq, sessionId = "S1", newCashTip = 4.0),
+        )
+        projector().catchUp()
+
+        val row = analyticsDao.deliveryRecord(orphanSeq)!!
+        assertEquals("S1", row.sessionId)
+        assertEquals("the cash edit's F3 sessionful-check passes — assign committed first (log order)", 4.0, row.cashTip!!, 1e-9)
+    }
+
+    @Test
+    fun `wiping and refolding reproduces byte-identical rows across assign, unassign, and re-assign (#660 rebuild-faithful)`() = runBlocking {
+        seedCorrectableSession(sid = "S1", deliveryPay = 10.0, reportedEarnings = 20.0)
+        seedCorrectableSession(sid = "S2", deliveryPay = 5.0, reportedEarnings = 9.0)
+        val orphanSeq = insertOrphanDelivery(pay = 8.0)
+        // assign → unassign → re-assign to a DIFFERENT dash: the ±1 counters must telescope identically.
+        insert(AppEventType.DELIVERY_SESSION_ASSIGN, "S1", 6_000, DeliverySessionAssignPayload(orphanSeq, "S1"))
+        insert(AppEventType.DELIVERY_SESSION_ASSIGN, null, 7_000, DeliverySessionAssignPayload(orphanSeq, null))
+        insert(AppEventType.DELIVERY_SESSION_ASSIGN, "S2", 8_000, DeliverySessionAssignPayload(orphanSeq, "S2"))
+        // Drain INCREMENTALLY (one event per batch, #660 review Fix 3) so each assign/unassign/re-assign
+        // hydrates from committed DB state — a real batch-boundary path. The prior single-drain
+        // "incremental" side was two identical from-zero folds and could not catch batch-boundary
+        // divergence at all.
+        val live = projector()
+        while (live.processBatch(limit = 1) != null) { /* one event at a time */ }
+
+        val deliveriesBefore = analyticsDao.deliveriesBetween(Long.MIN_VALUE, Long.MAX_VALUE)
+        val sessionsBefore = analyticsDao.sessionsBetween(Long.MIN_VALUE, Long.MAX_VALUE)
+
+        // Force a version-mismatch wipe + from-zero refold.
+        analyticsDao.setWatermark(AnalyticsProjectionStateEntity(watermarkSequenceId = 99, projectorVersion = 99))
+        projector().catchUp()
+
+        assertEquals(
+            "assign/unassign/re-assign rebuild byte-identically from the log",
+            deliveriesBefore, analyticsDao.deliveriesBetween(Long.MIN_VALUE, Long.MAX_VALUE),
+        )
+        assertEquals(sessionsBefore, analyticsDao.sessionsBetween(Long.MIN_VALUE, Long.MAX_VALUE))
+    }
+
+    @Test
+    fun `an assigned orphan stays invisible to a later-batch correction's hydration (jobsCompleted determinism, #660)`() = runBlocking {
+        // #660 review Fix 1: after an orphan is categorized into ended S1, a LATER-batch correction that
+        // re-hydrates S1 must NOT count the assigned orphan's (distinct) job — jobsCompleted is
+        // deliveredJobIds.size, and hydrating it off the DB (which now shows the orphan session-bound)
+        // would inflate it and pass-through-upsert the inflated counter, diverging from a from-zero
+        // refold whose in-memory context (untouched by the assign fold) never sees the orphan. The
+        // sessionAssigned=0 filter on deliveredJobIdsInSession is the fix.
+        val machineSeq = seedCorrectableSession(sid = "S1", deliveryPay = 10.0, reportedEarnings = 20.0)
+        val orphanSeq = insertOrphanDelivery(pay = 8.0, jobId = "ORPHAN")
+        // Batch 1: fold the machine session + the orphan.
+        projector().catchUp()
+        assertEquals("S1 starts with exactly one machine job", 1, analyticsDao.sessionRecord("S1")!!.jobsCompleted)
+
+        // Batch 2 (separate drain): assign the orphan into ended S1 — commits sessionId + marker + the
+        // relative counter bump.
+        insert(
+            AppEventType.DELIVERY_SESSION_ASSIGN, "S1", 6_000,
+            DeliverySessionAssignPayload(targetEventSequenceId = orphanSeq, newSessionId = "S1"),
+        )
+        projector().catchUp()
+
+        // Batch 3 (separate drain): an innocuous note-only DELIVERY_ADJUSTMENT on an S1 MACHINE row
+        // re-hydrates the S1 context and pass-through-upserts it. The assigned orphan's job must stay
+        // out of the hydrated deliveredJobIds.
+        insert(
+            AppEventType.DELIVERY_ADJUSTMENT, "S1", 7_000,
+            DeliveryAdjustmentPayload(targetEventSequenceId = machineSeq, sessionId = "S1", note = "annotated"),
+        )
+        projector().catchUp()
+
+        assertEquals(
+            "a later-batch correction must not count the assigned orphan's job — jobsCompleted stays 1",
+            1, analyticsDao.sessionRecord("S1")!!.jobsCompleted,
+        )
+        // The delivery COUNTER still reflects the assigned orphan (the relative ±1 bump, not the
+        // distinct-job set) — the two are maintained independently.
+        assertEquals("the delivery counter still includes the assigned orphan", 2, analyticsDao.sessionRecord("S1")!!.deliveries)
+
+        // A from-zero refold (single drain; its in-memory context never sees the orphan) must reproduce
+        // byte-identical session + delivery rows — the equality that batch-boundary divergence breaks.
+        val sessionsBefore = analyticsDao.sessionsBetween(Long.MIN_VALUE, Long.MAX_VALUE)
+        val deliveriesBefore = analyticsDao.deliveriesBetween(Long.MIN_VALUE, Long.MAX_VALUE)
+        analyticsDao.setWatermark(AnalyticsProjectionStateEntity(watermarkSequenceId = 99, projectorVersion = 99))
+        projector().catchUp()
+        assertEquals(
+            "session rows rebuild byte-identically from the log (incremental ≡ refold)",
+            sessionsBefore, analyticsDao.sessionsBetween(Long.MIN_VALUE, Long.MAX_VALUE),
+        )
+        assertEquals(deliveriesBefore, analyticsDao.deliveriesBetween(Long.MIN_VALUE, Long.MAX_VALUE))
     }
 
     @Test

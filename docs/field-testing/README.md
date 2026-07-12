@@ -73,6 +73,24 @@ card's **mechanical** half, #577 (re-confirmed, 24/24, ~0.55 s — with a new po
 that entry's Bug #1), the #457 path, and #554 ShadowProjector (2/2). The #462/#460 dropoff item
 was found **broken-in-part** (raw PII in capture envelopes) and moved to that entry's Bug #7.)_
 
+- **🆕 NEW — categorize a "(No session)" orphan delivery into its real dash (#660 piece 2).**
+  The Money-tab "(No session): $X across N deliveries" callout is now **tappable** — it opens an
+  orphan list; tapping a delivery opens a session picker (ended dashes within ±48 h of the drop, same
+  platform, nearest first). Confirming assigns the orphan to that dash. A `DELIVERY_SESSION_ASSIGN`
+  correction is written; the projector re-attributes the row (attribution ONLY — pay/net are never
+  re-priced) and the read-model refreshes reactively.
+  **How to tell it's working (needs a real orphan on-device — a mid-dash service/app restart that
+  dropped a delivery's `sessionId` while the dash summary still captured its pay):** the callout shows
+  a nonzero "(No session)" amount; tapping it lists the orphan(s); picking the correct dash makes the
+  **callout shrink by that delivery's pay** (and empty entirely once all orphans are categorized) with
+  no manual refresh; the target dash's **drill-down gains a row tagged "assigned by you"** and its
+  **header delivery count goes up by one** (header and list agree — no mismatch); and if the orphan's
+  dollars were already inside that dash's reported summary, the Money-tab **gross drops** (the
+  double-count heals) rather than staying inflated. Undo path: open the assigned row's Adjust dialog →
+  **"Remove from this dash"** returns it to the bucket. Frozen economics must be untouched by all of
+  this (the row's net/pay/est-offer-pay disclosure are the same before and after). PR for #660 piece 2.
+  - Confirmed: 0/2
+
 - **🆕 NEW — per-leg mileage: stacked drops each carry their own miles (#688 phase B).**
   Delivery rows now fold `milesToStore`/`milesToDropoff` from the lifecycle odometer stamps, and a
   drop's miles become the leg sum (to-store + to-dropoff) instead of the old lump-on-one-row

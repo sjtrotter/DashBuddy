@@ -22,6 +22,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import cloud.trotter.dashbuddy.R
@@ -58,6 +59,7 @@ fun MoneyTab(
     recentSessions: List<SessionRecord>,
     dailyEarnings: List<DailyEarnings>,
     onOpenSession: (String) -> Unit,
+    onOpenNoSession: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Column(modifier = modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(16.dp)) {
@@ -83,16 +85,20 @@ fun MoneyTab(
                 modifier = Modifier.fillMaxWidth(),
             )
         }
-        // "(No session)" bucket (#660 piece 1): deliveries whose source event carried no sessionId at
-        // all. Already folded into [economics.grossEarnings]/[netProfit] above (so gross can't read
-        // below net from this seam) — this callout is the visible data-quality signal, same pattern as
-        // the unattributed/over-attributed flags. Categorizing the bucket into a session is #660 piece 2.
-        if (economics.noSessionPay > UNATTRIBUTED_EPSILON) {
+        // "(No session)" bucket (#660): deliveries whose source event carried no sessionId at all.
+        // Already folded into [economics.grossEarnings]/[netProfit] above (so gross can't read below net
+        // from this seam) — this callout is the visible data-quality signal, same pattern as the
+        // unattributed/over-attributed flags. TAPPABLE (#660 piece 2): opens the categorize flow to
+        // assign an orphan into its real dash, which heals the double-count and empties this bucket.
+        // Gated on the COUNT, not the pay (#660 review): a pay-less orphan ($0.00 captured) is still a
+        // categorizable data-quality item — the count is the population, the pay is just its magnitude.
+        if (economics.noSessionDeliveries > 0) {
             val deliveryWord = if (economics.noSessionDeliveries == 1) {
                 stringResource(R.string.time_tab_delivery_singular)
             } else {
                 stringResource(R.string.time_tab_delivery_plural)
             }
+            val clickLabel = stringResource(R.string.money_tab_no_session_callout_click_label)
             AppCallout(
                 text = stringResource(
                     R.string.money_tab_no_session_callout_format,
@@ -101,7 +107,9 @@ fun MoneyTab(
                     deliveryWord,
                 ),
                 container = AppTheme.colors.warnBg,
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable(onClickLabel = clickLabel, role = Role.Button) { onOpenNoSession() },
             )
         }
         TopStoresCard(topStores)
