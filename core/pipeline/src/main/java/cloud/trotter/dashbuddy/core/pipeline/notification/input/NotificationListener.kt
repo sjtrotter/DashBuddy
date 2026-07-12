@@ -21,11 +21,11 @@ class NotificationListener : NotificationListenerService() {
     lateinit var pipelineStats: PipelineStats
 
     override fun onListenerConnected() {
-        // #731: the system rebinds this listener 129-240x/day per field observation — WARN (not
-        // INFO) because a rebind opens an offer-miss window until reconnect, per the connect side
-        // pairing with onListenerDisconnected below.
+        // #731: the connect is the RECOVERY half of a rebind cycle (and fires once at every normal
+        // startup), so it stays INFO; the degradation signal is the disconnect WARN below. The
+        // count still rides the exportable INFO+ slice for desk analysis of the flap rate.
         val count = pipelineStats.onNotifListenerConnected()
-        Timber.tag("Pipeline").w("Notification listener connected (count=%d this process)", count)
+        Timber.tag("Pipeline").i("Notification listener connected (count=%d this process)", count)
     }
 
     override fun onNotificationPosted(sbn: StatusBarNotification?) {

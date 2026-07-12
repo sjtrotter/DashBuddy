@@ -50,8 +50,10 @@ The DoorDash ICA §15.4 prohibits reverse-engineering of the platform; DashBuddy
 do that and our written material must not suggest otherwise. See `LEGAL.md` for the
 good-faith ICA interpretation that governs scope decisions.
 
-Cross-references: monetization plan #141; matchers infra RFC #192; aggregation RFC #193;
-academic federation RFC #194.
+Cross-references: matchers infra RFC #192; aggregation RFC #193; academic federation RFC #194.
+(Monetization pricing is recorded in pillar 1 above — its former pointer #141 was actually the
+cloud-data-platform RFC, closed 2026-07-12 with its un-built cloud half folded into the pillar
+epics.)
 
 ## Build Commands
 
@@ -520,7 +522,8 @@ Every new feature or refactor holds to these — they are forefront design input
    `:core:state` / `:core:pipeline` / `:domain` edits. DoorDash-heavy field testing *masks*
    violations (a global slot never collides while only one platform runs), so this is enforced at
    PR-review time — see *Every PR gets a design-goal review* under Git Workflow, and the drift
-   catalog in #585 (+ the per-platform ownership pack #438) for the known seams and receipts.
+   catalog in #585 (closed 2026-07-12; the six unshipped items now live in #762) plus the
+   per-platform ownership pack #438 for the known seams and receipts.
 
 If a change genuinely can't satisfy one of these, say so explicitly in the PR description instead
 of silently violating it. The design-goal review below exists to catch exactly that before merge.

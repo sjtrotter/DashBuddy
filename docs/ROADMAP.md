@@ -28,8 +28,9 @@ Companion: `docs/design/analytics-roadmap.md` (the analytics-specific phases).
 
 ## Needs design / field data first (actionable-soon)
 
-- **#245** ADR-0007 canonical domain schema — high-leverage; unblocks #141 (cloud RFC) + #251
-  (Uber multi-offer) → which unblocks #110 (expanded offer overlay).
+- **#245** ADR-0007 canonical domain schema — high-leverage; unblocks #251
+  (Uber multi-offer) → which unblocks #110 (expanded offer overlay). (Formerly also gated #141,
+  closed 2026-07-12 — its un-built cloud half folded into the #192/#193/#194 pillar epics.)
 - **#526** pickup placeholders + swap (PR #546 is the dev-gated partial; reshaped scope; wait for
   multi-pickup field data). **#630** mid-stack under-attribution (same family). **#527** job
   lifetime. **#528** GPS $/mi slices B/C.
@@ -50,7 +51,7 @@ Companion: `docs/design/analytics-roadmap.md` (the analytics-specific phases).
 - **#246 LEGAL counsel** ← the pacing gate for: #170 (disclosure flow), #637→#636→#638 (matchers
   repo creation — PARKED by the 2026-07-03 keep-in-tree decision), and transitively #641.
 - **#416 signature verification** ← gates #640 (OTA fetch). **#419** is buildable now (above).
-- **#251** ← #245. **#110** ← #251 + #96. **#99** ← #56. **#588** ← #438. **#141** ← #245.
+- **#251** ← #245. **#110** ← #251 + #96. **#99** ← #56.
 - **#192 epic** (matchers distribution) — in-tree M1 done (#635/#639); repo-era work parked.
 - **#193/#194** academic pillar RFCs — future.
 
