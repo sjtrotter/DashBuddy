@@ -131,8 +131,9 @@ class GracedCommitOrderingInvariantTest {
         )
         assertTrue(
             "the INVERSION: the committed domain timestamp (armedAt) is EARLIER than the " +
-                "intervening frame's own timestamp, even though the intervening frame was " +
-                "processed — and would append to app_events — BEFORE this commit did",
+                "intervening frame's own timestamp — a later-timestamped observation was " +
+                "processed before this commit appended (the intervening UiInput logs no " +
+                "app_events row of its own)",
             retiredTask.completedAt!! < interveningAt,
         )
     }
