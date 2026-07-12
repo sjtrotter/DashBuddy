@@ -78,6 +78,19 @@ card's **mechanical** half, #577 (re-confirmed, 24/24, ~0.55 s — with a new po
 that entry's Bug #1), the #457 path, and #554 ShadowProjector (2/2). The #462/#460 dropoff item
 was found **broken-in-part** (raw PII in capture envelopes) and moved to that entry's Bug #7.)_
 
+- **🆕 NEW — idle bubble: gas + vehicle are now two separate full-width cards (#728 / PR #767).**
+  The cramped one-row `JustInTimeActions` (the layout the dev called "a nightmare to try to operate")
+  is now a stacked pair of full-width cards on the idle dashboard card: one for the #722 mode-adaptive
+  gas control, one for Vehicle — every touch target ≥48dp (stepper −/+, refresh, "Resume auto" chip,
+  and the whole vehicle card is the tap surface).
+  **How to tell it's working (on-device, no dash needed):** open the bubble while OFFLINE — two
+  visually distinct cards instead of one crowded row; every control comfortably tappable with a thumb;
+  gas behavior itself unchanged (AUTO refresh / take-manual / Resume auto per the #722 item above);
+  Vehicle tap still opens Personal Economy. Watch for: content clipping on the MANUAL gas row (known
+  residual on very narrow windows — strictly better than before, but capture it if seen), and any
+  visual double-ripple or dead tap zone on the vehicle card.
+  - Confirmed: 0/2
+
 - **🆕 NEW — quick-decline auto-confirm + earnings auto-expand no longer "click first" on an ambiguous target (#734 / PR).**
   Two actuation surfaces used to resolve **2 verified candidates** and tap the first-in-tree one (luck, not
   verification): the offer confirm-decline sheet (`CONFIRM_DECLINE`) and the collapsed delivery-summary chevron
@@ -1772,12 +1785,14 @@ Accept and Decline registered on DoorDash — and moved to that session's entry 
    anything to a dasher either. One possibility: fewer numbers per card with plain-language
    labels (e.g. "usual wait" / "worst waits" instead of avg/median/p95), progressive disclosure
    for the rest. Issue filed from this feedback (dasher-friendly store-card copy + density).
-   - **Status:** Open — issue filed 2026-07-12.
+   - **Status:** Open — filed #765 (2026-07-12).
 3. **#722 gas control validated (first confirmation).** Dev exercised the idle-card gas control:
    "works fine." Checklist item moved to 1/2.
 4. **#728 reconfirmed.** Dev restated the direction: gas control and vehicle control should be
    **separate cards**, and the idle-bubble layout overall "could use some polish." #728 (already
    build-ready) is promoted to the front of the build queue.
+   - **Status:** Shipped in #767 (2026-07-12, same day) — two full-width cards, ≥48dp targets;
+     checklist item added (0/2).
 
 ---
 
@@ -1800,7 +1815,11 @@ Accept and Decline registered on DoorDash — and moved to that session's entry 
    PICKUP_CONFIRMED occurredAt 19:24 appended after Sonic's 19:35 PICKUP_ARRIVED — an 11-min
    inversion from the pickup-confirm grace). Not corrupting today (folds are seq-ordered), a
    latent event-sourcing fidelity trap.
-   - **Status:** Open (filed #732).
+   - **Status:** Shipped in #769 (2026-07-12) — Option B (dev-decided): the invariant is documented
+     at the `AppEventEntity` contract (sequenceId authoritative; the sole inversion carrier is
+     PICKUP_CONFIRMED via the grace-armed `Task.completedAt`, appended at the close-out sweep),
+     consumers audited (all sequenceId-ordered or insensitive), and a characterization test pins the
+     shape so a silent re-stamp trips it. No behavior change.
 3. **#733 — D6 join miss → NULL-store delivery (TOP finding).** The Sonic Drive-In + Willie's
    Grill & Icehouse two-pickup single-customer job ($19.50): the dropoff's customer hash matched
    **0 of 2** pickup-lineage hashes ("possible pickup/dropoff hash-format drift" per the WARN,
@@ -1810,7 +1829,9 @@ Accept and Decline registered on DoorDash — and moved to that session's entry 
 4. **#734 — actuation 2-candidate label ties.** `confirm_decline` (×4) and `expand_earnings` (×3)
    across the two dashes resolved 2 verified candidates and clicked the first. No observed
    misfire, but a tie should abort to manual per the #425 posture.
-   - **Status:** Open (filed #734).
+   - **Status:** Shipped in #770 (2026-07-12) — bindings tightened from the corpus (the old
+     `expandButton` bind was decisively tapping the WRONG node — the stats section) and an
+     unresolved tie now aborts to manual per the #425 posture. Checklist item above.
 
 ### Validations (data-side)
 

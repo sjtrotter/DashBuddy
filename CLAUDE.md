@@ -298,7 +298,12 @@ clicks a third-party app, #425), `OfferActionReceiver` (notification Accept/Decl
 ### 5. Analytics Read-Model (`core/data/.../analytics/`, `core/database/.../analytics/`, #314)
 
 Analytics is a **CQRS read-model** projected from the durable `app_events` log — the event log is the
-source of truth; the read-model tables are a rebuildable cache. `AnalyticsProjector` (`:core:data`, started
+source of truth; the read-model tables are a rebuildable cache. **Ordering contract (#732, documented
++ pin-tested, dev-decided Option B — no re-stamp):** `sequenceId` is the authoritative fold/order key;
+`occurredAt` may lag it (sole carrier: `PICKUP_CONFIRMED`, whose `occurredAt` is the grace-armed
+`Task.completedAt`, appended at the close-out sweep — unbounded by the grace window). Consumers order
+by `sequenceId`; "when did it really happen" reads the payload's own domain timestamp. Authoritative
+KDoc at `AppEventEntity`; `GracedCommitOrderingInvariantTest` trips any silent re-stamp. `AnalyticsProjector` (`:core:data`, started
 from `DashBuddyApplication`, runs every launch off-main + supervised) folds `app_events` → three Room v10
 tables (`delivery_records`/`session_records`/`offer_records`) via the pure `RecordFolds`/`SessionFoldContext`
 (`:domain`). The fold is **exactly-once** — records + a watermark advance in one `db.withTransaction`, record
@@ -498,7 +503,12 @@ Every new feature or refactor holds to these — they are forefront design input
      failure, recovery failure). Always shipped/exported.
 
    Every component logs under its own **stable tag** (`Timber.tag("Pipeline")`, `"StateMachine"`,
-   `"Effects"`…), never the catch-all `App`. The INFO-must-be-PII-safe rule is **fail-closed and
+   `"Effects"`…), never the catch-all `App`. The tag rule is **enforced by a ratchet guard**
+   (#764, `TimberTagGuardTest` in `:app` unit tests): any new bare `Timber.i/w/e/wtf(` (incl. the
+   `Timber.Forest.*` form) in a main-type source set fails the build; the frozen allowlist
+   (`app/src/test/resources/timber-tag-guard-allowlist.txt`, 30 files) is the visible debt list —
+   tag a file's sites, shrink its entry (counts dropping below the frozen number also fail, so the
+   list only burns down). The INFO-must-be-PII-safe rule is **fail-closed and
    tested** (reuse `SensitiveTextMarkers`): a raw merchant/customer string in an INFO+ line is a
    privacy defect of the same class as leaking it to disk — gate the shareable-export sink behind that
    test, do not trust call-site discipline. When a change adds or moves a log site, state its level and
