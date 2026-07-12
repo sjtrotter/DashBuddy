@@ -423,8 +423,12 @@ class EffectMap @Inject constructor(
     }
 
     // Pure domain emission (#354): payload encoding + device metadata happen at the
-    // executor edge. occurredAt is the OBSERVATION timestamp, so the LogEvent's
-    // idempotency key is identical between live execution and recovery replay (#300).
+    // executor edge. occurredAt is normally the OBSERVATION timestamp, so the LogEvent's
+    // default idempotency key ("log:<type>:<occurredAt>") is identical between live
+    // execution and recovery replay (#300). Exception: PICKUP_CONFIRMED passes
+    // Task.completedAt (which can be grace-armed, #732) instead of obs.timestamp — it
+    // stays idempotent because it always supplies its own effectKeyOverride (taskId-scoped,
+    // see AppEffect.kt ~L44) rather than relying on the default occurredAt-derived key.
     internal fun logEffect(
         sessionId: String?,
         type: AppEventType,

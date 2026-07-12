@@ -93,6 +93,11 @@ class AppEventRepo @Inject constructor(
 
     // ── Entity ↔ domain mapping ─────────────────────────────────────────
 
+    // #732: this is the event-append path — `occurredAt` below is carried through verbatim
+    // from the domain [AppEvent] (which for a graced destructive commit is `pend.since`, the
+    // grace-ARM time, not "now"), while `sequenceId` is minted by Room on THIS insert. See
+    // AppEventEntity's class KDoc ("sequenceId vs occurredAt") for the resulting ordering
+    // invariant and which column each consumer must key on.
     private fun AppEvent.toEntity(metadataJson: String?) = AppEventEntity(
         aggregateId = sessionId,
         eventType = type,
