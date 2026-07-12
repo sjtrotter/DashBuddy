@@ -402,6 +402,39 @@ class OfferPayFallbackEffectMapTest {
     }
 
     @Test
+    fun `#752 — an unassigned drop excluded from job tasks still counts in the estimate denominator`() {
+        // #752 review F1: the reconcile now structurally removes an UNASSIGNED drop from job.tasks
+        // (the outstanding-placeholder mirror), so a receipt-less 2-order job with one unassigned drop
+        // presents at the close-out with only the survivor in job.tasks. The quoted-order denominator
+        // must UNION the lifecycle record back in: the survivor's estimate is total/2 ($6.48 of
+        // $12.95), never the FULL quote — the unassigned order was still quoted, and paying the
+        // survivor for it would over-count the estimate.
+        val survivor = dropoff("d1", "H-E-B", "cA", completedAt = 400L)
+        val unassigned = dropoff("d2", "H-E-B", "cB", completedAt = null)
+            .copy(unassignedAt = 900L) // inline-abandon shape; the retro shape (completedAt set) is equivalent
+        val regionPrev = PlatformRegion(
+            platform = Platform.DoorDash,
+            mode = Mode.Online,
+            session = Session("s1", startedAt = 100L, runningEarnings = 40.0),
+            // job.tasks holds ONLY the survivor — the post-#752-reconcile shape.
+            activeJob = job(offerPay = 12.95, tasks = listOf(survivor)),
+            recentTasks = listOf(survivor, unassigned),
+            lastPostTaskFields = null,
+        )
+        val regionNext = regionPrev.copy(activeJob = null)
+
+        val prev = appState(FlowRegion(flow = Flow.Idle), mapOf(Platform.DoorDash to regionPrev))
+        val next = appState(FlowRegion(flow = Flow.Idle), mapOf(Platform.DoorDash to regionNext))
+
+        val rows = completedRows(prev, next, screenObs(Flow.Idle, timestamp = 3000L))
+        assertEquals("only the survivor mints (the unassigned drop is firewalled)", 1, rows.size)
+        assertEquals(
+            "survivor's estimate is total/2 over the quoted orders, not the full quote",
+            6.48, rows.single().offerPayShare!!, 0.0001,
+        )
+    }
+
+    @Test
     fun `an accepted-never-delivered job mints no completion and no offer dollars`() {
         // The seq-53 counter-fixture shape: an accepted offer whose job never completes a dropoff.
         // No mint fires → no offerPayShare is ever stamped. Here the job is open with a PICKUP only

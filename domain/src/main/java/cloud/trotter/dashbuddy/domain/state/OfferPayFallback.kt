@@ -34,6 +34,11 @@ object OfferPayFallback {
      * The fallback share for [mintingTaskId] of [job].
      *
      * @param job the closing/exiting job.
+     * @param recentTasks the region's task lifecycle history — the denominator's second source
+     *   ([owedDropoffs]): `job.tasks` no longer retains an UNASSIGNED drop (the #752 reconcile keeps
+     *   the placeholder mirror to outstanding work), so the owed-order count must union it back in
+     *   from the lifecycle record or a 2-order job with one unassigned drop would split the FULL
+     *   quote over 1 (estimate over-count).
      * @param mintingTaskId the dropoff being completed at this mint.
      * @param suppressedByReceipt the receipt-evidence verdict: the job showed a PAY-BEARING receipt
      *   attributable to itself → NOT eligible (a real receipt is truth; an estimate would over-count
@@ -47,6 +52,7 @@ object OfferPayFallback {
      */
     fun shareFor(
         job: Job,
+        recentTasks: List<Task>,
         mintingTaskId: String,
         suppressedByReceipt: Boolean,
         requireFinalShape: Boolean,
@@ -57,19 +63,31 @@ object OfferPayFallback {
             return NONE // mid-stack exit — not the last open owed drop
         }
 
-        // The denominator is the job's OWN owed dropoff set (deduped) — every owed order, so this
-        // DELIBERATELY KEEPS placeholders and unassigned drops (it is a per-owed-order equal split
-        // over the offer's order count, NOT the mint set). This is the intentional asymmetry with
-        // [isFinalShape] / `mintingDropoffTasks`, which filter to accountable drops via
-        // [Task.isAccountableDropoff] — do NOT collapse the two chains onto one filter.
-        val ownDropoffs = job.tasks
-            .filter { it.phase == TaskPhase.DROPOFF }
-            .distinctBy { it.taskId }
-        val share = DropPayApportioner.equalSplit(job.offerPayTotal, ownDropoffs)[mintingTaskId]
+        val share = DropPayApportioner.equalSplit(job.offerPayTotal, owedDropoffs(job, recentTasks))[mintingTaskId]
         // Eligible (all gates passed) but the split yielded nothing: pay-less offer or a minting task
         // outside the owed set. Surface it (FIX 6) rather than silently dropping the estimate.
         return Result(share = share, eligibleButUnsplit = share == null)
     }
+
+    /**
+     * The estimate denominator — every order the accepted-offer quote covered: a per-owed-order equal
+     * split over the offer's order count, NOT the mint set, so it DELIBERATELY KEEPS placeholders and
+     * unassigned drops (an unassigned order was still quoted; dropping it would over-attribute the
+     * survivors). This is the intentional asymmetry with [isFinalShape] / `mintingDropoffTasks`,
+     * which filter to accountable drops via [Task.isAccountableDropoff] — do NOT collapse the two
+     * chains onto one filter.
+     *
+     * Sourced from the UNION of `job.tasks` dropoffs ∪ [recentTasks] dropoffs of this job (ANY
+     * marker state — unassigned included), deduped by taskId: since the #752 reconcile, `job.tasks`
+     * is the OUTSTANDING-placeholder mirror and structurally cannot retain an unassigned drop, so
+     * the lifecycle record is the only place that order still exists. The union restores the stable
+     * per-owed-order-at-accept count (total/N) regardless of where the reconcile keeps tasks, and is
+     * robust to future task-set churn. Public so the caller's observability WARNs count the same set.
+     */
+    fun owedDropoffs(job: Job, recentTasks: List<Task>): List<Task> =
+        (job.tasks.filter { it.phase == TaskPhase.DROPOFF } +
+            recentTasks.filter { it.jobId == job.jobId && it.phase == TaskPhase.DROPOFF })
+            .distinctBy { it.taskId }
 
     /**
      * The **final-shape** predicate shared by #691 (the offer-pay estimate gate above) and #630 (the

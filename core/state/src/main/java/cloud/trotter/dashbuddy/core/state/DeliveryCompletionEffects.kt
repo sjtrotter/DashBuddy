@@ -142,7 +142,8 @@ internal fun EffectMap.diffDeliveryCompletion(
                         "#630 mid-stack non-final receipt exit: job %s, %d owed dropoffs — " +
                             "dropRealizedPay withheld (partial receipt not split; rides unattributed)",
                         p.activeJob?.jobId,
-                        p.activeJob?.tasks?.count { it.phase == TaskPhase.DROPOFF } ?: 0,
+                        // The union count (#752): job.tasks alone no longer includes unassigned drops.
+                        p.activeJob?.let { OfferPayFallback.owedDropoffs(it, p.recentTasks).size } ?: 0,
                     )
                 }
                 // #691: when the whole job was receipt-less, stamp this drop's equal-split
@@ -223,8 +224,11 @@ internal fun EffectMap.diffDeliveryCompletion(
         for (task in next.recentTasks) {
             if (task.jobId != closedJob.jobId || task.phase != TaskPhase.DROPOFF) continue
             val completedAt = task.completedAt ?: continue
-            // #736 belt (redundant with the null completedAt above — an abandoned task never gets
-            // one): a dropoff the dasher UNASSIGNED must never mint a DELIVERY_COMPLETED.
+            // #736 belt: a dropoff the dasher UNASSIGNED must never mint a DELIVERY_COMPLETED. Once
+            // redundant with the null-completedAt filter above (an INLINE abandon never stamps one),
+            // this is now LOAD-BEARING for #752's cross-frame retro-mark, which stamps `unassignedAt`
+            // on a grace-retired dropoff that DOES carry a `completedAt` — the marker is the only thing
+            // suppressing the fabricated completion for that never-delivered order.
             if (task.unassignedAt != null) continue
             // #498 identity firewall (guardrail): never complete an identity-less phantom.
             if (task.customerNameHash == null && task.customerAddressHash == null) continue
@@ -324,6 +328,7 @@ private fun EffectMap.offerPayShareFor(
     if (job == null) return null
     val result = OfferPayFallback.shareFor(
         job = job,
+        recentTasks = region.recentTasks,
         mintingTaskId = taskId,
         suppressedByReceipt = receiptSuppressesEstimate(region, job),
         requireFinalShape = requireFinalShape,
@@ -332,12 +337,14 @@ private fun EffectMap.offerPayShareFor(
         // The drop is estimate-ELIGIBLE (receipt-less, final shape) yet got NO share — a pay-less
         // offer or a minting task outside the owed set (the quoted>delivered halving class). WARN
         // it so the silent-denominator miss is observable. PII-safe: counts + jobId only, no
-        // store/customer text, stable tag (Principle 7; the #699 D6 join-miss precedent).
+        // store/customer text, stable tag (Principle 7; the #699 D6 join-miss precedent). The count
+        // is the SAME union set the split uses ([OfferPayFallback.owedDropoffs] — job.tasks no
+        // longer retains unassigned drops post-#752), so the WARN describes the real denominator.
         Timber.tag("StateMachine").w(
             "#691 offer-pay estimate eligible but unsplit: job %s, %d owed dropoffs, offerTotal=%s " +
                 "— no share stamped; these dollars ride the unattributed bucket",
             job.jobId,
-            job.tasks.count { it.phase == TaskPhase.DROPOFF },
+            OfferPayFallback.owedDropoffs(job, region.recentTasks).size,
             if (job.offerPayTotal == null) "null" else "present",
         )
     }
