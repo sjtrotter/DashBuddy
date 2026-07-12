@@ -2,13 +2,13 @@ package cloud.trotter.dashbuddy.ui.bubble
 
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
@@ -32,6 +32,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import cloud.trotter.dashbuddy.R
+import cloud.trotter.dashbuddy.core.designsystem.component.AppCard
 import cloud.trotter.dashbuddy.core.designsystem.time.rememberNow
 import cloud.trotter.dashbuddy.domain.analytics.SessionRecord
 import cloud.trotter.dashbuddy.domain.evaluation.UserEconomy
@@ -165,6 +166,13 @@ private fun LastSessionSummary(session: SessionRecord, focusedPlatform: Platform
     }
 }
 
+/**
+ * #728: the old single-Row layout crammed both just-in-time actions together at tiny (28dp)
+ * touch targets — "looks bad and is a nightmare to try to operate" per field feedback. This is
+ * the bubble idle card, a glance surface operated around driving (Reactive UI rule 5, the
+ * strictest operability bar in the app), so each action gets its own full-width [AppCard] with
+ * generous internal padding instead of sharing a cramped Row.
+ */
 @Composable
 private fun JustInTimeActions(
     gasPrice: Float?,
@@ -176,22 +184,29 @@ private fun JustInTimeActions(
     onResumeAutoGasPrice: () -> Unit,
     onOpenVehicleSettings: () -> Unit,
 ) {
-    Row(
+    Column(
         modifier = Modifier.fillMaxWidth(),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        GasQuickEdit(
-            gasPrice = gasPrice,
-            isGasPriceAuto = isGasPriceAuto,
-            isRefreshing = isGasPriceRefreshing,
-            showRefreshError = showGasPriceRefreshError,
-            onSetGasPrice = onSetGasPrice,
-            onRefreshGasPrice = onRefreshGasPrice,
-            onResumeAutoGasPrice = onResumeAutoGasPrice,
-        )
-        Spacer(modifier = Modifier.width(4.dp))
-        VehicleAction(onClick = onOpenVehicleSettings)
+        AppCard(modifier = Modifier.fillMaxWidth()) {
+            GasQuickEdit(
+                gasPrice = gasPrice,
+                isGasPriceAuto = isGasPriceAuto,
+                isRefreshing = isGasPriceRefreshing,
+                showRefreshError = showGasPriceRefreshError,
+                onSetGasPrice = onSetGasPrice,
+                onRefreshGasPrice = onRefreshGasPrice,
+                onResumeAutoGasPrice = onResumeAutoGasPrice,
+            )
+        }
+        AppCard(
+            modifier = Modifier
+                .fillMaxWidth()
+                .heightIn(min = 48.dp)
+                .clickable(onClick = onOpenVehicleSettings),
+        ) {
+            VehicleAction()
+        }
     }
 }
 
@@ -227,9 +242,10 @@ private fun GasQuickEdit(
             GasPriceAutoDisplay(price = current, onTakeManualControl = { onSetGasPrice(current) })
             GasRefreshButton(isRefreshing = isRefreshing, onClick = onRefreshGasPrice)
         } else {
+            // 48dp touch target (#728) — was 28dp, too small to reliably tap while driving.
             IconButton(
                 onClick = { onSetGasPrice((current - GAS_STEP).coerceAtLeast(0f)) },
-                modifier = Modifier.size(28.dp),
+                modifier = Modifier.size(48.dp),
             ) {
                 Icon(
                     imageVector = Icons.Filled.Remove,
@@ -252,7 +268,7 @@ private fun GasQuickEdit(
             }
             IconButton(
                 onClick = { onSetGasPrice(current + GAS_STEP) },
-                modifier = Modifier.size(28.dp),
+                modifier = Modifier.size(48.dp),
             ) {
                 Icon(
                     imageVector = Icons.Filled.Add,
@@ -278,9 +294,12 @@ private fun GasQuickEdit(
 private fun GasPriceAutoDisplay(price: Float, onTakeManualControl: () -> Unit) {
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center,
+        // 48dp touch target (#728) — was a bare 6/2dp pad, too small to reliably tap.
         modifier = Modifier
             .clip(RoundedCornerShape(6.dp))
             .clickable(onClick = onTakeManualControl)
+            .heightIn(min = 48.dp)
             .padding(horizontal = 6.dp, vertical = 2.dp),
     ) {
         Row(
@@ -314,7 +333,7 @@ private fun GasRefreshButton(isRefreshing: Boolean, onClick: () -> Unit) {
     IconButton(
         onClick = onClick,
         enabled = !isRefreshing,
-        modifier = Modifier.size(28.dp),
+        modifier = Modifier.size(48.dp),
     ) {
         if (isRefreshing) {
             CircularProgressIndicator(
@@ -343,46 +362,56 @@ private fun ResumeAutoChip(isRefreshing: Boolean, onClick: () -> Unit) {
         shape = RoundedCornerShape(6.dp),
         color = MaterialTheme.colorScheme.secondaryContainer,
     ) {
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(4.dp),
-            modifier = Modifier.padding(horizontal = 8.dp, vertical = 5.dp),
+        // 48dp touch target (#728) — was a bare 8/5dp pad, too small to reliably tap; the Box
+        // forces the surface to at least 48dp and centers the (shorter) content within it.
+        Box(
+            modifier = Modifier.heightIn(min = 48.dp),
+            contentAlignment = Alignment.Center,
         ) {
-            if (isRefreshing) {
-                CircularProgressIndicator(
-                    modifier = Modifier.size(12.dp),
-                    strokeWidth = 2.dp,
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                modifier = Modifier.padding(horizontal = 8.dp, vertical = 5.dp),
+            ) {
+                if (isRefreshing) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(12.dp),
+                        strokeWidth = 2.dp,
+                        color = MaterialTheme.colorScheme.onSecondaryContainer,
+                    )
+                } else {
+                    Icon(
+                        imageVector = Icons.Filled.Refresh,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onSecondaryContainer,
+                        modifier = Modifier.size(12.dp),
+                    )
+                }
+                Text(
+                    text = stringResource(R.string.bubble_mode_idle_gas_resume_auto),
+                    style = MaterialTheme.typography.labelSmall,
+                    fontWeight = FontWeight.Medium,
                     color = MaterialTheme.colorScheme.onSecondaryContainer,
                 )
-            } else {
-                Icon(
-                    imageVector = Icons.Filled.Refresh,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.onSecondaryContainer,
-                    modifier = Modifier.size(12.dp),
-                )
             }
-            Text(
-                text = stringResource(R.string.bubble_mode_idle_gas_resume_auto),
-                style = MaterialTheme.typography.labelSmall,
-                fontWeight = FontWeight.Medium,
-                color = MaterialTheme.colorScheme.onSecondaryContainer,
-            )
         }
     }
 }
 
+/**
+ * Vehicle deep-link content (#728) — the tap target is now the whole [AppCard] the caller wraps
+ * this in (see [JustInTimeActions]), so this composable renders content only, no Surface/onClick
+ * of its own.
+ */
 @Composable
-private fun VehicleAction(onClick: () -> Unit) {
-    Surface(
-        onClick = onClick,
-        shape = RoundedCornerShape(6.dp),
-        color = MaterialTheme.colorScheme.surfaceVariant,
+private fun VehicleAction() {
+    Box(
+        modifier = Modifier.fillMaxWidth(),
+        contentAlignment = Alignment.CenterStart,
     ) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(4.dp),
-            modifier = Modifier.padding(horizontal = 8.dp, vertical = 5.dp),
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
         ) {
             Icon(
                 imageVector = Icons.Filled.DirectionsCar,
