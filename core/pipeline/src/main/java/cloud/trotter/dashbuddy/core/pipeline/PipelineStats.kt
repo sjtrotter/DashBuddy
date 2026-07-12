@@ -36,6 +36,8 @@ class PipelineStats @Inject constructor() {
     private val scrubbedUnknownCaptures = AtomicLong()
     private val redactBackstopScrubs = AtomicLong()
     private val notifRedactBackstopScrubs = AtomicLong()
+    private val notifListenerConnects = AtomicLong()
+    private val notifListenerDisconnects = AtomicLong()
 
     val droppedSensitiveCount: Long get() = droppedSensitive.get()
     val droppedNoiseCount: Long get() = droppedNoise.get()
@@ -49,6 +51,8 @@ class PipelineStats @Inject constructor() {
     val scrubbedUnknownCaptureCount: Long get() = scrubbedUnknownCaptures.get()
     val redactBackstopScrubCount: Long get() = redactBackstopScrubs.get()
     val notifRedactBackstopScrubCount: Long get() = notifRedactBackstopScrubs.get()
+    val notifListenerConnectCount: Long get() = notifListenerConnects.get()
+    val notifListenerDisconnectCount: Long get() = notifListenerDisconnects.get()
 
     /** A frame the shared content gate dropped (sensitive or noise, #399). */
     fun onContentGateDrop(parsed: ParsedFields) {
@@ -105,6 +109,14 @@ class PipelineStats @Inject constructor() {
     /** The supervised upstream crashed and is resubscribing. Returns the restart ordinal. */
     fun onPipelineRestart(): Long = restarts.incrementAndGet()
 
+    /** The system (re)bound the notification listener service (#731). Returns the running
+     *  connect count for this process. */
+    fun onNotifListenerConnected(): Long = notifListenerConnects.incrementAndGet()
+
+    /** The system tore down the notification listener (#731) — opens an offer-miss window until
+     *  reconnect, so this is a degradation, not a milestone. Returns the running disconnect count. */
+    fun onNotifListenerDisconnected(): Long = notifListenerDisconnects.incrementAndGet()
+
     /** An observation was forwarded to the state machine. */
     fun onForwarded() {
         val n = forwarded.incrementAndGet()
@@ -127,6 +139,8 @@ class PipelineStats @Inject constructor() {
             " unknownScrubbed=${scrubbedUnknownCaptures.get()}" +
             " redactBackstopScrubs=${redactBackstopScrubs.get()}" +
             " notifRedactBackstopScrubs=${notifRedactBackstopScrubs.get()}" +
+            " notifListenerConnects=${notifListenerConnects.get()}" +
+            " notifListenerDisconnects=${notifListenerDisconnects.get()}" +
             " restarts=${restarts.get()}"
 
     companion object {

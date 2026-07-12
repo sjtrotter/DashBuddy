@@ -119,20 +119,27 @@ class StrategyDataSource @Inject constructor(
      * #556/#588: fold one measured shop ([items] over [minutes] in-store) into [platform]'s running
      * mean, atomically (read-modify-write inside one edit, so back-to-back stacked shops can't race).
      * Out-of-band samples (below the [ShopRate] floors) are no-ops. Only [platform]'s key pair moves.
+     *
+     * Returns the post-fold [LearnedShopRate] (#731 desk-observability) — the running mean lives
+     * ONLY in this datastore, which a post-dash data pull never includes, so surfacing it lets the
+     * caller log the relearn trajectory instead of it being invisible to desk analysis.
      */
-    suspend fun recordShopRate(platform: Platform, items: Int, minutes: Double) {
+    suspend fun recordShopRate(platform: Platform, items: Int, minutes: Double): LearnedShopRate {
+        lateinit var result: LearnedShopRate
         ds.edit { p ->
             val (avg, n) = ShopRate.fold(p[shopRateKey(platform)], p[shopSamplesKey(platform)] ?: 0, items, minutes)
             if (avg != null) {
                 p[shopRateKey(platform)] = avg
                 p[shopSamplesKey(platform)] = n
             }
+            result = LearnedShopRate(avg, n)
             // #588 FIX 3b: one-time tidy — drop the old un-suffixed global keys now that shop-rate
             // learning is per-platform. Idempotent (a no-op once they're gone); rides the next fold
             // rather than a dedicated migration step since a fold happens on every real shop anyway.
             p.remove(legacyGlobalShopRateKey)
             p.remove(legacyGlobalShopSamplesKey)
         }
+        return result
     }
 
     suspend fun setEvidenceMaster(enabled: Boolean) {

@@ -323,13 +323,16 @@ class SideEffectEngine @Inject constructor(
             is AppEffect.RecordShopRate -> {
                 // #556/#588: learn the dasher's shopping pace for THIS platform.
                 val minutes = effect.shopDurationMs / 60_000.0
-                strategyRepository.recordShopRate(effect.platform, effect.itemsShopped, minutes)
+                val learned = strategyRepository.recordShopRate(effect.platform, effect.itemsShopped, minutes)
                 val perMin = if (minutes > 0) effect.itemsShopped / minutes else 0.0
                 // #551 P7: rate math + the platform wire are shareable INFO milestones (the wire is a
                 // registry token, not PII); the merchant name (raw third-party UI text) stays DEBUG-only.
+                // #731: the learned running mean lives only in the strategy DataStore, invisible to a
+                // post-dash data pull — surface it here so the relearn trajectory is desk-visible.
                 Timber.tag("ShopRate").i(
-                    "recorded %d items / %.1f min = %.2f/min [%s]",
+                    "recorded %d items / %.1f min = %.2f/min [%s] → learned %.2f/min (n=%d)",
                     effect.itemsShopped, minutes, perMin, effect.platform.wire,
+                    learned.itemsPerMin ?: 0.0, learned.sampleCount,
                 )
                 Timber.tag("ShopRate").d(
                     "recorded %d items / %.1f min = %.2f/min (store=%s)",

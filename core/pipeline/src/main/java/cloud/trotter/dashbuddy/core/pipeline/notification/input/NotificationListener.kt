@@ -2,6 +2,7 @@ package cloud.trotter.dashbuddy.core.pipeline.notification.input
 
 import android.service.notification.NotificationListenerService
 import android.service.notification.StatusBarNotification
+import cloud.trotter.dashbuddy.core.pipeline.PipelineStats
 import cloud.trotter.dashbuddy.domain.settings.PlatformPreferences
 import dagger.hilt.android.AndroidEntryPoint
 import timber.log.Timber
@@ -16,8 +17,15 @@ class NotificationListener : NotificationListenerService() {
     @Inject
     lateinit var platformPreferences: PlatformPreferences
 
+    @Inject
+    lateinit var pipelineStats: PipelineStats
+
     override fun onListenerConnected() {
-        Timber.i("Notification Listener Connected!")
+        // #731: the system rebinds this listener 129-240x/day per field observation — WARN (not
+        // INFO) because a rebind opens an offer-miss window until reconnect, per the connect side
+        // pairing with onListenerDisconnected below.
+        val count = pipelineStats.onNotifListenerConnected()
+        Timber.tag("Pipeline").w("Notification listener connected (count=%d this process)", count)
     }
 
     override fun onNotificationPosted(sbn: StatusBarNotification?) {
@@ -41,6 +49,9 @@ class NotificationListener : NotificationListenerService() {
 
     override fun onListenerDisconnected() {
         super.onListenerDisconnected()
-        Timber.i("Notification Listener Disconnected.")
+        // #731: WARN — a disconnect opens an offer-miss window until the system rebinds; the
+        // running count quantifies the field-observed 129-240x/day flap.
+        val count = pipelineStats.onNotifListenerDisconnected()
+        Timber.tag("Pipeline").w("Notification listener disconnected (count=%d this process)", count)
     }
 }

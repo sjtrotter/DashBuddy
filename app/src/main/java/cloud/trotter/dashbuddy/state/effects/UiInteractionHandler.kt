@@ -75,7 +75,7 @@ class UiInteractionHandler @Inject constructor(
         Timber.i("UiInteractionHandler: attempting verified click (%s)", description)
 
         if (expectedPackage.isNullOrEmpty()) {
-            Timber.w("No package scope for %s — refusing to click (fail closed)", description)
+            Timber.tag("Effects").w("No package scope for %s — refusing to click (fail closed)", description)
             return false
         }
         // #602: a notification-action tap can land here ~tens of ms after the
@@ -94,7 +94,7 @@ class UiInteractionHandler @Inject constructor(
         }
         val roots = if (allowRetry) awaitLiveRoots(expectedPackage, source = rootsSource) else rootsSource()
         if (roots.isEmpty()) {
-            Timber.w(
+            Timber.tag("Effects").w(
                 "No live windows for package %s after %d retries over %dms — cannot click (%s)",
                 expectedPackage, RETRY_DELAYS_MS.size, RETRY_DELAYS_MS.sum(), description,
             )
@@ -103,7 +103,7 @@ class UiInteractionHandler @Inject constructor(
 
         val candidates = findCandidates(roots, ref)
         if (candidates.isEmpty()) {
-            Timber.w(
+            Timber.tag("Effects").w(
                 "Could not find any live node for: %s (id=%s, text=%s, bounds=%s)",
                 description, ref.viewIdSuffix, ref.text, ref.boundsInScreen,
             )
@@ -119,7 +119,7 @@ class UiInteractionHandler @Inject constructor(
             if (expectation.matchesLabels(labels)) node to labels else null
         }
         if (labeledCandidates.isEmpty()) {
-            Timber.w(
+            Timber.tag("Effects").w(
                 "%d candidate(s) for %s but NONE passed label verification (%s) — refusing to click",
                 candidates.size, description, expectation.labelPattern,
             )
@@ -146,7 +146,7 @@ class UiInteractionHandler @Inject constructor(
             ranked.tier == ClickCandidateRanker.Tier.UNRESOLVED && verified.size > 1 -> {
                 // WARN carries counts only — raw third-party UI text is DEBUG-tier
                 // by Principle 7 (the WARN slice is user-exportable), #618 review F1.
-                Timber.w(
+                Timber.tag("Effects").w(
                     "No decisive match among %d verified candidates for: %s — clicking first",
                     verified.size, description,
                 )
