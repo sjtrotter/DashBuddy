@@ -259,11 +259,15 @@ class PlatformRegionStepper @Inject constructor() {
     }
 
     /**
-     * Step 1 of the #503 job-container re-model (additive): mirror the active job's task lineage
-     * onto [Job.tasks] after every core step — the completed tasks still in [PlatformRegion.recentTasks]
-     * plus the active task. Pure derivation from existing region state; nothing reads [Job.tasks] yet,
-     * so this changes no behavior. Later slices make the list authoritative (resume from it; create
-     * dropoff subtasks onto it from the offer).
+     * Step 1 of the #503 job-container re-model (additive): mirror the active job's **non-unassigned**
+     * task lineage onto [Job.tasks] after every core step — the completed tasks still in
+     * [PlatformRegion.recentTasks] plus the active task, EXCLUDING any task marked
+     * [Task.unassignedAt] (#752: an abandoned task is a resolved lifecycle fact, `recentTasks`-only —
+     * it must never re-enter the outstanding-placeholder mirror, or the abandon's placeholder retire
+     * is undone every step and the job can never close). This runs on EVERY step, so the exclusion is
+     * an every-step semantic of the mirror, not an abandon-frame special case. Pure derivation from
+     * existing region state. Later slices made the list authoritative (resume from it; create dropoff
+     * subtasks onto it from the offer).
      */
     private fun reconcileJobTasks(region: PlatformRegion): PlatformRegion {
         val job = region.activeJob ?: return region
@@ -1304,6 +1308,13 @@ class PlatformRegionStepper @Inject constructor() {
         // belt-suppressed → real pay lost to unattributed). The retro-mark is a one-shot for the
         // edge INTO `TaskUnassigned`; skip it when the previous flow was already `TaskUnassigned`
         // (steps 2/3 still re-run best-effort, per the idempotency contract).
+        //
+        // Documented A-B-A residual (#752 re-verification, edge-gate + documentation ruled the right
+        // trade): a state-bearing interlude between two confirmation frames — most plausibly an
+        // OfferPresented overlay over the confirmation — re-opens the gate, so the second frame can
+        // re-run the retro walk onto a further task; symmetrically, a GENUINE second unassign whose
+        // frames are separated only by recognize-only screens is swallowed by the gate. Both are
+        // never-fielded multi-order shapes; fail direction stays absorption, never fabrication.
         val retroTarget: Task? = if (abandoned == null && prevFlowVal != Flow.TaskUnassigned) {
             region.activeJob?.let { job ->
                 region.recentTasks
