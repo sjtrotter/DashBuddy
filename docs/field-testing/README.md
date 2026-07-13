@@ -117,7 +117,12 @@ was found **broken-in-part** (raw PII in capture envelopes) and moved to that en
   (corroboration only — it emits per 50 forwarded observations, so it's quiet while idle).
   The counts themselves feed the #731 root-cause call (battery-optimization kills vs other) — high
   counts are the *expected* finding, not a failure of this item.
-  - Confirmed: 0/2
+  - Confirmed: 1/2 (2026-07-13 desk pass: the counter lines work — `connected (count=1 this
+    process)` on 07-12 — and they measured the headline finding: the flap has VANISHED
+    (156/142/192 lines/day on 07-07/08/09 → 0 disconnects across ~5.5 h on 07-12). Root-cause
+    evidence now points environmental (old install's battery/standby state; reset by reinstall) —
+    see the 2026-07-13 log entry. Second confirmation = counters on the next pull, flap still absent
+    or quantified.)
 
 - **🆕 NEW — a same-customer double-order job closes at its receipt; the next offer is its OWN job (#749).**
   A job where **both orders go to the same customer** (the offer card literally says so — e.g. Willie's +
@@ -171,7 +176,10 @@ was found **broken-in-part** (raw PII in capture envelopes) and moved to that en
   partition delta with blank leg columns (and the session's already-closed store legs are retired so
   no later drop re-claims them). An order unassigned mid-dash (#736) contributes NO per-drop leg
   miles — its distance stays session-level only.
-  - Confirmed: 0/2
+  - Confirmed: 1/2 (2026-07-13 desk pass on the 07-12 pull: all 6 new drops carry both legs summing
+    to realizedMiles; Σ ≤ span held on every session incl. two boundary-exact cases; the v5→6 refold
+    retroactively fixed the 07-05 Bill Miller/Mama Margies lump — 3.20/3.55 mi per drop. A LIVE
+    stacked job on-build is still unfielded — that's the second confirmation.)
 
 - **🆕 NEW — stacked receipts still split exactly; ±1¢ drift and collapsed-receipt nulls gone (#630).**
   The per-drop receipt split is hardened for mid-stack/multi-receipt shapes: a collapsed PostTask
@@ -232,7 +240,10 @@ was found **broken-in-part** (raw PII in capture envelopes) and moved to that en
   exported `shareable.log` has **at most one** `D6 join miss` line per drop (ideally zero), not the
   old ×23 burst. Watch a two-store single-customer job especially. A nickname-vs-legal-name render
   that no normalization can bridge may still fold null (documented residual — fix via Adjust dialog).
-  - Confirmed: 0/2
+  - Confirmed: 1/2 (2026-07-13 desk pass: ZERO D6 join-miss WARNs on 07-12 — all 23 in the log are
+    dated 07-08, pre-fix — and every drop landed under a real store. Caveat: no multi-pickup job was
+    fielded, so the constrained multi-match join's hard case still needs a live stack for the
+    second confirmation.)
 - **🆕 NEW — GoPuff / multi-order drop-off confirm card recognized (#501 items 1-2 / PR #743).**
   The "Confirm you have the correct order before drop-off / Mix-ups frequently occur…" card that
   appears before a drop on a **multi-order Dash** (GoPuff Drive batches AND ordinary multi-merchant
@@ -260,7 +271,10 @@ was found **broken-in-part** (raw PII in capture envelopes) and moved to that en
   `→ learned X.XX/min (n=N)` suffix (the desk window into the DataStore-only learned mean — watch `n`
   climb from the reset and the mean converge off the 0.8 seed; `learned ?/min (n=0)` means nothing
   learned yet, not a zeroed mean).
-  - Confirmed: 0/2
+  - Confirmed: 1/2 (2026-07-13 desk pass: every 07-12 ShopRate line `[doordash]`-tagged with the
+    `→ learned` suffix; n climbed 1→4 over the day's shops, mean 0.49→0.67/min converging off the
+    seed; 5 shop offers accepted+completed with no absurd pricing in evidence. Second confirmation:
+    another dash's trajectory continuing to converge, or the dev's eyes on a shop offer's $/hr.)
 - **🆕 NEW — store entity resolution keys real stores from live dashes (#159 / PR).**
   The read-model now resolves each job's stores (`stores` + `pickup_records` tables) from captured
   pickup/dropoff/payout surfaces. **How to tell it's working (desk-side, after a dash):** on a job with a
@@ -283,7 +297,8 @@ was found **broken-in-part** (raw PII in capture envelopes) and moved to that en
   hours/days you actually earn the most, cells you barely dashed should read as "too little time" (dim,
   distinct from a worked-but-earned-nothing cell), and the "best hour so far" line should feel right.
   Framing check: all copy is "YOUR net $/hr" — flag any wording that reads as a platform-pay claim.
-  - Confirmed: 0/2. **2026-07-12 partial dev sighting (post-#763 build):** the heatmap section (B)
+  - Confirmed: 0/2. **2026-07-13 desk pass:** data half sane — pickup dwell all minutes-scale
+    (1.8–53 min across 15 visits). **2026-07-12 partial dev sighting (post-#763 build):** the heatmap section (B)
     renders well and the dev likes it; the store-cards section (A) was flagged for UX polish — too
     word-dense, and "p95" means nothing to a dasher (issue filed from this feedback). Data-correctness
     halves (running keys match reality, sane dwell) still unverified — this item stays open for those.
@@ -383,7 +398,10 @@ was found **broken-in-part** (raw PII in capture envelopes) and moved to that en
   each tap's `OfferActionReceiver:` INFO line now carries `(offer=<hash>)` (the full hash, same
   rendering as OfferEffects) — exact-match it to the resolved `OFFER_ACCEPTED`/`OFFER_DECLINED`
   event's hash; a mismatch is the wrong-offer regression, no eyes needed.
-  - Confirmed: 0/2
+  - Confirmed: 1/2 (2026-07-13 desk pass: all 5 notification-tap `(offer=<hash>)` lines on 07-12
+    exact-match their resolved OFFER_DECLINED events — including 3 taps in rapid succession on
+    distinct offers, the fast-replacement shape. Second confirmation: dev eyes on banner posting/
+    dismissal UX, or another pull's tap set.)
 - **🆕 NEW — odometer arbitration holds single-platform (#438 B5 / PR).** The GPS odometer moved off
   each platform's own diff onto one cross-platform decision (starts once when a dash opens, pauses
   when parked at a stop, resumes on leaving, stops when the dash ends). Single-platform behavior
@@ -430,9 +448,12 @@ was found **broken-in-part** (raw PII in capture envelopes) and moved to that en
   **NOTE (expected, not a bug):** net for a receipt-less shop is now **pay − mileage cost**, which is
   **LOWER** than the old unattributed-callout number (that number was raw pay with no cost) — a lower,
   more honest figure is correct. (#691 / PR)
-  - Confirmed (mechanism): 1/2 — 07-08 desk analysis: first live firing. The H-E-B shop delivery
-    folded **payBasis OFFER_PAY at $14.25** (not a $0-unattributed row), session reconciled exactly.
-    The drill-down's "est. offer pay" qualifier display still needs dev eyes; (2)/(4)/(5) unexercised.
+  - Confirmed (mechanism): 2/2 — RETIRED for the mechanism half. 07-08: first firing (OFFER_PAY
+    $14.25, session reconciled exactly). 07-12 (2026-07-13 desk pass): second independent firing —
+    receipt-less H-E-B shop folded OFFER_PAY $10.75 alongside a RECEIPT_TOTAL sibling in the same
+    session, reconciled to the cent; regression watch (5) also clean (no $0-coerced rows despite
+    collapsed-summary frames). Item stays open ONLY for the dev-eyes halves: (1) the "est. offer
+    pay" qualifier display, (2) a receipt-less stack's equal halves, (4) Uber-scope sanity.
   - **(4) 🆕 UBER SCOPE (PR #702 round 2): Uber deliveries now show est. offer pay platform-wide.**
     Uber has no post-trip receipt rules at all (`uber.screen.post_trip` has no parse), so EVERY Uber
     delivery now folds an OFFER_PAY estimate (the platform-agnostic mechanism working as designed, P8).
@@ -1763,6 +1784,96 @@ Accept and Decline registered on DoorDash — and moved to that session's entry 
     the pre-existing net-side overlap) that piece 2 (categorizing an orphan into its real
     session) is the actual fix for — no action needed beyond noting it if seen.
   - Confirmed: 0/2.
+
+---
+
+## 2026-07-13 — desk analysis of the 07-10 & 07-12 dashes (pulled db/logs/captures; playbook-first)
+
+- **Date:** 2026-07-13 (dashes analyzed: 07-10 evening — 2 sessions, first-ever desk pass on them;
+  07-12 afternoon/evening — 3 sessions)
+- **Platform(s) tested:** DoorDash
+- **Branch under test:** 07-10 = the 07-10 morning reinstall (pre-wave); 07-12 = `master` @
+  `76966bc1` (post-#763 — carries the whole 07-11→12 wave: #736/#745/#749/#752 unassign+lineage,
+  #688B per-leg mileage, #159 stores, #733 hash join, #588 shop-rate reset, #660p2, #630, #763
+  observability; does NOT carry #767/#768/#769/#770, which merged after install)
+- **Field conditions:** 5 dashes total in pull, $99.80 reported across the two days; heavy H-E-B
+  shop volume (4 distinct physical H-E-Bs) + first Parry's Pizzeria sighting; no unassigns, no
+  multi-pickup stacks, no GoPuff, no orphaned deliveries this pull. Data at
+  `~/dashbuddy/logs/2026/07/13/` (db, 3 rotated app.logs, shareable.log, 1539 captures).
+  Desk-validation playbook run FIRST per protocol; checklist confirmations recorded there.
+
+### Bugs
+
+1. **Chat INFO line leaks the raw merchant name into the exportable log (Principle 7).**
+   `INFO/Chat: message posted [H-E-B's customer] (27 chars)` — 9 hits across 07-07→07-12 in
+   `shareable.log` (also `[Willie's Grill & Icehouse]`, `[Parry’s Pizzeria & Taphouse's customer]`).
+   The chat persona label is "<store>'s customer" (#568 vocabulary), so the merchant name rides the
+   INFO milestone into the exported bug report. The sink scrubber keys on customer markers
+   (`SensitiveTextMarkers`), not store names — so this is a call-site leak of exactly the class the
+   #551 campaign cleaned (`Pickup: H-E-B` was the original receipt). Likely fix direction: drop or
+   genericize the persona in the INFO line (the char count is the useful part); the DEBUG firehose
+   can keep the persona.
+   - **Status:** Open — filed #772 (2026-07-13).
+
+### Open questions / investigations
+
+2. **All four physical H-E-Bs conflate into ONE chain-only store entity (`doordash|h-e-b|`).**
+   `pickup_records` holds four distinct street addresses (Alamo Ranch / N Loop 1604 W / W I-10 /
+   Babcock Rd) but `stores` has a single H-E-B row with an EMPTY running key — the exact
+   `…|h-e-b|` shape the #159 checklist item warns about. This looks like the **named
+   same-chain-two-locations residual** from the #159 design vet, not a regression: the running key
+   comes from payout-receipt store forms, and H-E-B receipts evidently say just "H-E-B" (Parry's,
+   by contrast, keyed live with `…|stone oak`; Sonic with `…|5703`). Consequence: the dev's
+   DOMINANT store folds 11 deliveries across 4 physical locations into one Patterns report card
+   with blended dwell stats. The address evidence to disambiguate already exists in
+   `pickup_records.storeAddress`. One possibility: an address-derived running-key fallback when the
+   receipt form is chain-bare — needs a design pass against D2/F5/F7 (keys must stay
+   refold-deterministic).
+   - **Status:** Open — filed #773 (2026-07-13).
+
+3. **#731 NotificationListener flap has VANISHED — environmental root-cause now strongly supported.**
+   Flap lines/day: 156 (07-07) → 142 (07-08) → 192 (07-09) → 8 (07-10: two disconnect/connect
+   pairs at 02:24/02:55, i.e. BEFORE the 03:19 reinstall, then clean) → **07-12: one connect at
+   process start, zero disconnects across ~5.5 h of dashing** (the #763 counter line
+   `connected (count=1 this process)` is working). Hypothesis strengthened: the old install's
+   battery/standby state drove the flap; the fresh install reset it. No code defect in evidence.
+   If the flap returns, the #763 counters will quantify it; until then #731 stays data-gated —
+   suggest parking it pending a recurrence rather than building anything.
+
+### Verification TODOs (desk-resolved — checklist updated)
+
+4. **Money path: perfect reconciliation.** Delivered (incl. cash) == reported EXACTLY on **all 13
+   lifetime sessions** — zero unattributed, zero over-attribution, no "(No session)" bucket. The
+   07-12 mixed-basis session (est. OFFER_PAY $10.75 + RECEIPT_TOTAL $17.00) reconciled to the cent.
+5. **#688B per-leg mileage: every invariant held.** All 6 new drops carry both legs summing to
+   `realizedMiles`; Σ per-drop ≤ session span on every session (two boundary-exact cases:
+   21.80=21.80, 12.75≤12.76); the v5→6 refold retroactively repartitioned history — the 07-05
+   Bill Miller/Mama Margies stack now reads 3.20/3.55 mi per drop instead of the old 6.76/0.0.
+6. **#733: the D6 storm is gone.** 0 join-miss WARNs on 07-12 (all 23 in the log are dated 07-08,
+   pre-fix); every drop landed under a real store. (No multi-pickup job fielded, so the join's
+   hard case is still unexercised.)
+7. **#588 shop-rate relearn: textbook.** `[doordash]`-tagged, `n` climbing 1→4 over the day's 4
+   shops, learned mean 0.49→0.67/min converging off the 0.8 seed toward the dev's real pace.
+8. **#438 B4: zero wrong-offer taps.** All 5 notification-tap `(offer=<hash>)` lines exact-match
+   their resolved `OFFER_DECLINED` events (3 in rapid succession 19:22–19:23 on distinct offers).
+9. **#438 B3 machine half again clean:** all 5 new drops costed `OFFER_FROZEN` at cpm 0.351.
+10. **Log health (Principle 7): zero ERROR lines; WARN = 3 shapes only** (16 tie WARNs — see #11 —
+   plus 7 normal `GRACE_COMMIT` wakes). The channel is legible. Capture redaction spot-check clean
+   (per-customer `[redacted:xxxx]` masks, no raw names in envelopes).
+11. **#734 premise re-confirmed a 3rd time (pre-fix build):** 12× `confirm_decline` + 4×
+   `expand_earnings` "No decisive match among 2 verified candidates … clicking first" WARNs on
+   07-12. The build predates #770 (merged later that evening), so this is the last dataset that
+   should ever show "clicking first" — the next pull validates the abort-to-manual flip.
+
+### Field UX context
+
+12. **Recognition gaps, all low-volume/known families:** 69 window UNKNOWNs on 07-12 = 23 empty
+   transitional trees + the #550 shopping sub-flow (Scan Failed / Enter PLU), the help/resolution
+   flow ("Tell us what happened…"), offer-popup PROMO variants (Silver-priority / "paid more as a
+   Pro" banners — the offers themselves still recognized on sibling frames), an earnings-history
+   screen, and one regular-dash "Navigate to zone" frame. 59 click UNKNOWNs are the same shopping
+   family (Found empty shelf / Add to cart / Confirm) + nav taps. Nothing new worth a rule PR ahead
+   of the #550 family work.
 
 ---
 
