@@ -360,7 +360,7 @@ delivery's own `completedAt` day, since there's no session start to anchor on), 
 own `noSessionPay`/`noSessionDeliveries` review signal (Money tab callout, same pattern as
 unattributed/over-attributed). **Piece 2 (#660, shipped): categorize an orphan into its real dash.** A new
 correction event `DELIVERY_SESSION_ASSIGN` (`DeliverySessionAssignPayload{targetEventSequenceId, newSessionId
-(null⇒unassign/undo), note}`, folded by `RecordFolds.foldDeliverySessionAssign` — context untouched, F2
+(null⇒unassign/undo), note}`, folded by `CorrectionFolds.foldDeliverySessionAssign` (#761 split; `RecordFolds.foldEvent` stays the dispatcher) — context untouched, F2
 liveness discipline) is written by `CorrectionRepository.assignDeliverySession` from the tappable Money-tab
 callout (→ orphan list + ±48h/same-platform/ended-only session picker in `NoSessionAssignDialogs.kt`) and the
 drill-down undo ("assigned by you" caption + "Remove from this dash"). The projector's `applySessionAssign`
