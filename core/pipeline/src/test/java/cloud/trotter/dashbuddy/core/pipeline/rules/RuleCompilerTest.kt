@@ -1158,6 +1158,168 @@ class RuleCompilerTest {
         RuleCompiler.compileRules<UiNode>(parseJson(rule).jsonArray, RuleContext.SCREEN)
     }
 
+    // =========================================================================
+    // Rule→state contract: per-flow required fields (#762 D6)
+    //
+    // The production StateMachineContract.REQUIRED_FIELDS_BY_FLOW is empirically
+    // EMPTY today (every task:* flow has a legitimately parse-less shipped rule,
+    // incl. the deliberately-PII-free GoPuff bin-scan branch), so the end-to-end
+    // compileRules path can't trip it. The check itself is unit-tested against a
+    // synthetic required set — validateFlowFields takes `required` as a parameter
+    // for exactly this reason.
+    // =========================================================================
+
+    @Test(expected = RuleCompileException::class)
+    fun `validateFlowFields rejects a flow missing a required parse field (#762 D6)`() {
+        RuleCompiler.validateFlowFields(
+            flowWire = "task:pickup:navigation",
+            required = setOf("storeName"),
+            declaredFields = setOf("phase", "subFlow"),
+            ruleId = "test.screen.pickup_nav",
+        )
+    }
+
+    @Test(expected = RuleCompileException::class)
+    fun `validateFlowFields rejects a NO-parse-block rule for a flow with required fields (#762 D6)`() {
+        // The pre-#762 gap: validateShapeFields only ran when parseAs != null, so a
+        // task-flow rule with no parse block got zero validation. Empty declaredFields
+        // IS the no-parse-block case at the call site.
+        RuleCompiler.validateFlowFields(
+            flowWire = "task:pickup:navigation",
+            required = setOf("storeName"),
+            declaredFields = emptySet(),
+            ruleId = "test.screen.parseless",
+        )
+    }
+
+    @Test
+    fun `validateFlowFields passes when required fields are declared`() {
+        RuleCompiler.validateFlowFields(
+            flowWire = "task:pickup:navigation",
+            required = setOf("storeName"),
+            declaredFields = setOf("storeName", "phase"),
+            ruleId = "test.screen.good",
+        )
+    }
+
+    @Test
+    fun `validateFlowFields is a no-op for a flow with no contract entry or no flow`() {
+        RuleCompiler.validateFlowFields("task:dropoff:arrived", null, emptySet(), "test.rule")
+        RuleCompiler.validateFlowFields("task:dropoff:arrived", emptySet(), emptySet(), "test.rule")
+        RuleCompiler.validateFlowFields(null, setOf("storeName"), emptySet(), "test.rule")
+    }
+
+    @Test
+    fun `a parse-less screen rule with a task flow compiles under the (empty) production contract`() {
+        // Backfill guarantee: the shipped shape — e.g. the GoPuff bin-scan branch, which
+        // deliberately has NO parse (no PII) and emits task:pickup:arrived — stays legal.
+        val ruleJson = """[{
+            "id": "test.screen.binscan_like",
+            "priority": 10,
+            "state": { "flow": "task:pickup:arrived" },
+            "require": { "exists": { "hasText": "Pickup steps" } }
+        }]"""
+        val rules = RuleCompiler.compileRules<UiNode>(
+            Json.parseToJsonElement(ruleJson).jsonArray, RuleContext.SCREEN,
+        )
+        assertEquals(1, rules.size)
+    }
+
+    // =========================================================================
+    // Rule→state contract: effect-bearing notification intents (#762 D1)
+    // =========================================================================
+
+    @Test
+    fun `notification rule with an effect-bearing intent but no parse fields is rejected (#762 D1)`() {
+        // The live drift shape: uber.notification.tip_received relabeled to additional_tip
+        // with `parse: { as: "notification" }` and no fields — recognized, then silently
+        // dropped by the effect guard. Must die at compile instead. The violation is
+        // isolable (non-sensitive) so compileRules SKIPS the rule rather than the file.
+        val ruleJson = """[{
+            "id": "test.notification.tip_no_fields",
+            "priority": 10,
+            "intent": "additional_tip",
+            "require": { "titleMatchesRegex": "received a \\$\\d" },
+            "parse": { "as": "notification" }
+        }]"""
+        val compiled = RuleCompiler.compileRules<RawNotificationData>(
+            Json.parseToJsonElement(ruleJson).jsonArray, RuleContext.NOTIFICATION,
+        )
+        assertTrue("the under-parsed effect-intent rule must be skipped, not compiled", compiled.isEmpty())
+    }
+
+    @Test(expected = RuleCompileException::class)
+    fun `effect-bearing intent missing a SUBSET of required fields throws (#762 D1)`() {
+        RuleCompiler.validateEffectIntentFields(
+            intent = "additional_tip",
+            declaredFields = setOf("amount", "storeName"), // deliveredAt missing
+            ruleId = "test.notification.partial",
+        )
+    }
+
+    @Test
+    fun `notification rule with an effect-bearing intent and all required fields compiles`() {
+        // Mirrors the working doordash.notification.additional_tip shape.
+        val ruleJson = """[{
+            "id": "test.notification.tip_full",
+            "priority": 10,
+            "intent": "additional_tip",
+            "require": { "anyFieldMatchesRegex": "added \\$(\\d+\\.\\d{2}) tip" },
+            "parse": {
+                "as": "notification",
+                "fields": {
+                    "amount": { "from": "fullString", "find": "\\$(\\d+\\.\\d{2})", "group": 1, "transform": "parseCurrency" },
+                    "storeName": { "from": "fullString", "find": "past (.+?) order delivered", "group": 1, "transform": "trim" },
+                    "deliveredAt": { "from": "fullString", "find": "delivered at (.+)", "group": 1, "transform": "trim" }
+                }
+            }
+        }]"""
+        val rules = RuleCompiler.compileRules<RawNotificationData>(
+            Json.parseToJsonElement(ruleJson).jsonArray, RuleContext.NOTIFICATION,
+        )
+        assertEquals(1, rules.size)
+    }
+
+    @Test
+    fun `notification rule with an UNKNOWN intent and no fields compiles - informational (#762 D1)`() {
+        // Unknown intents are informational by construction and must stay legal — rejecting
+        // them would break OTA/data-driven recognition (a future ruleset must be free to
+        // introduce new informational intents without an app change).
+        val ruleJson = """[{
+            "id": "test.notification.tip_received_informational",
+            "priority": 10,
+            "intent": "tip_received",
+            "require": { "titleMatchesRegex": "received a \\$\\d" },
+            "parse": { "as": "notification" }
+        }]"""
+        val rules = RuleCompiler.compileRules<RawNotificationData>(
+            Json.parseToJsonElement(ruleJson).jsonArray, RuleContext.NOTIFICATION,
+        )
+        assertEquals(1, rules.size)
+    }
+
+    @Test
+    fun `effect-intent contract applies per BRANCH - an under-parsed branch is caught (#762 D1)`() {
+        // Branch parse inheritance: a branch inherits the rule-level parse unless it overrides.
+        // A branch that overrides with a field-less parse while declaring the effect intent
+        // must be rejected (isolable → rule skipped).
+        val ruleJson = """[{
+            "id": "test.notification.branchy_tip",
+            "priority": 10,
+            "branches": [
+                {
+                    "intent": "additional_tip",
+                    "require": { "titleContains": "tip" },
+                    "parse": { "as": "notification" }
+                }
+            ]
+        }]"""
+        val compiled = RuleCompiler.compileRules<RawNotificationData>(
+            Json.parseToJsonElement(ruleJson).jsonArray, RuleContext.NOTIFICATION,
+        )
+        assertTrue("the under-parsed branch must skip the rule", compiled.isEmpty())
+    }
+
     @Test
     fun `a top-level redact on a branched rule still compiles (#624)`() {
         // The reject is scoped to branches[] entries; a whole-rule top-level redact

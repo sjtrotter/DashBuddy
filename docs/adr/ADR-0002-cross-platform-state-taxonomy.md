@@ -425,3 +425,29 @@ configuration") rather than this ADR. It is a runtime / UX concern downstream
 of the multi-platform architecture, not part of the rule format itself, and
 the design (user opt-in per platform, never auto-derived from installed
 rulesets) belongs in its own decision record.
+
+---
+
+## Amendment 2026-07-14 — the "prerequisite parsed fields" guard now exists (#762 D6/D1)
+
+§"What stays in Kotlin" above lists *"Transition guards (valid from-states, prerequisite parsed
+fields)"* as a Kotlin responsibility. The prerequisite-parsed-fields half is now **enforced at rule
+compile time** rather than discovered at runtime:
+
+- **`StateMachineContract.REQUIRED_FIELDS_BY_FLOW`** (`:domain`) — per-flow required parse fields
+  for screen rules. A rule (or branch, post parse-inheritance) declaring a listed flow must parse
+  the listed fields, **even when it has no `parse` block at all** (previously the shape contract
+  only ran when `parse.as` was present, so a parse-less task-flow rule got zero validation). The
+  map is empirically empty at time of writing — every `task:*` flow has a legitimately parse-less
+  shipped rule (e.g. the deliberately PII-free GoPuff bin-scan branch) — so it encodes what is
+  true, not an aspiration; the mechanism is the deliverable.
+- **`StateMachineContract.EFFECT_INTENTS`** (`:domain`) — effect-bearing notification intents
+  (SSOT constants in `NotificationIntent`) mapped to the parse fields their Kotlin effect consumer
+  requires (`additional_tip` → `amount`/`storeName`/`deliveredAt`). A rule declaring such an
+  intent without the fields is rejected at compile — closing the recognized-then-silently-dropped
+  class. Intents *not* in the map remain informational by construction and are never rejected
+  (the OTA/data-driven recognition contract).
+
+Both checks live in `RuleCompiler` (fail-closed, isolable per #293 item 4) and keep the
+trust-boundary posture of this ADR: the DSL still cannot express transition logic; Kotlin now
+verifies at load that the DSL delivers the data its transitions and effects depend on.
