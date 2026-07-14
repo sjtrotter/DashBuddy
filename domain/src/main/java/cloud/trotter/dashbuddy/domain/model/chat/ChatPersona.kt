@@ -6,6 +6,12 @@ sealed class ChatPersona {
     abstract val id: String
     abstract val displayName: String
 
+    /**
+     * Principle-7 label for INFO+ (shareable) log lines: the persona KIND, never raw
+     * merchant/customer text. Name-bearing personas MUST override this to a constant.
+     */
+    open val logLabel: String get() = displayName
+
     data object Dispatcher : ChatPersona() {
         override val id = "bot_dispatcher"
         override val displayName = "Dispatch"
@@ -24,11 +30,13 @@ sealed class ChatPersona {
     data class Merchant(val merchantName: String) : ChatPersona() {
         override val id = "merchant_${merchantName.lowercase().replace(" ", "_")}"
         override val displayName = merchantName
+        override val logLabel = "Merchant"
     }
 
     data class Customer(val customerName: String) : ChatPersona() {
         override val id = "customer_${customerName.lowercase().replace(" ", "_")}"
         override val displayName = customerName
+        override val logLabel = "Customer"
     }
 
     data object GoodOffer : ChatPersona() {
