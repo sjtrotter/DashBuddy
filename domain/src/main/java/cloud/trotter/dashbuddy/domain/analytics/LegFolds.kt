@@ -12,7 +12,7 @@ import cloud.trotter.dashbuddy.domain.state.TaskPhase
  * stamps and threaded [SessionFoldContext]. The leg-anchor-only lifecycle events (`PICKUP_ARRIVED` /
  * `DELIVERY_ARRIVED` / `DELIVERY_CONFIRMED`) and the `TASK_UNASSIGNED` leg purge live here; the
  * `DELIVERY_COMPLETED` **consumption** side (which store leg a drop claims, the legacy-basis retire)
- * stays in [RecordFolds.foldDeliveryCompleted] with the rest of the record mint. Shared session
+ * stays in [DeliveryFolds.foldDeliveryCompleted] (#761 split) with the rest of the record mint. Shared session
  * helpers ([resolveContext] / [advance]) are the ONE top-level definition in `RecordFolds.kt`.
  */
 internal object LegFolds {
@@ -93,7 +93,7 @@ internal object LegFolds {
 }
 
 // ── #688 phase B leg helpers (pure; all mirror the partition-anchor conventions in RecordFolds) ──
-// Top-level `internal` extensions so both [RecordFolds] (foldPickupConfirmed's anchor advance,
+// Top-level `internal` extensions so both [DeliveryFolds] (foldPickupConfirmed's anchor advance,
 // foldDeliveryCompleted's inline consume) and [LegFolds] share ONE definition (Fix 6 file split).
 
 /**
