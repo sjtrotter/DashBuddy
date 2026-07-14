@@ -20,6 +20,13 @@ enum class OfferQuality {
     /** A merchant BLOCK rule hard-declined the offer before scoring. */
     BLOCKED,
 
+    /**
+     * The dasher turned off shopping orders ([EvaluationConfig.allowShopping] = false)
+     * and this offer contains a shop-for-items leg, so it was hard-declined before
+     * scoring (#762 D12).
+     */
+    SHOP_DECLINED,
+
     /** No verdict — e.g. no scoring rules are enabled. */
     UNKNOWN,
 }

@@ -188,14 +188,14 @@ fun WizardScreen(
                             option3Desc = stringResource(R.string.wizard_screen_goal_option3_desc),
                             selectedIndex = when (state.strategy) {
                                 OfferStrategy.CHERRY_PICKER -> 0
-                                OfferStrategy.PROTECT_PLATINUM -> 1
+                                OfferStrategy.PROTECT_STATUS -> 1
                                 OfferStrategy.MANUAL -> 2
                             },
                             onOptionSelected = { index ->
                                 viewModel.updateStrategy(
                                     when (index) {
                                         0 -> OfferStrategy.CHERRY_PICKER
-                                        1 -> OfferStrategy.PROTECT_PLATINUM
+                                        1 -> OfferStrategy.PROTECT_STATUS
                                         else -> OfferStrategy.MANUAL
                                     }
                                 )

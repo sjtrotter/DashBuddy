@@ -8,6 +8,12 @@ import cloud.trotter.dashbuddy.domain.state.Platform
 data class EvaluationConfig(
     val protectStatsMode: Boolean = false,
     val rules: List<ScoringRule> = emptyList(),
+    /**
+     * When `false`, the evaluator hard-declines any offer with a shop-for-items leg before scoring
+     * ([OfferEvaluator]; #762 D12) — the driver has opted out of shopping (no Red Card / won't shop),
+     * so the Settings "Allow Shopping Orders" toggle's promise is enforced at the verdict edge. Takes
+     * precedence over [protectStatsMode] (a capability constraint beats the acceptance-rate goal).
+     */
     val allowShopping: Boolean = true,
     /**
      * #588: **unresolved** shop-pace fields until [forPlatform] runs. [shopRates] is per-platform, so
