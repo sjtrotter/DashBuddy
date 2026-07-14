@@ -514,10 +514,13 @@ class SideEffectEngine @Inject constructor(
     private fun captureEvidence(effect: AppEffect.CaptureScreenshot): Boolean {
         val config = strategyRepository.evidenceConfig.value
         if (!config.allows(effect.category)) {
+            // #772: filenamePrefix can carry template-expanded rule data (uber.json5's
+            // "Offer - {storeName}") — raw merchant text stays off the INFO+ stream.
             Timber.tag("Effects").i(
-                "Evidence capture suppressed (%s, category=%s) — EvidenceConfig denies it",
-                effect.filenamePrefix, effect.category,
+                "Evidence capture suppressed (category=%s) — EvidenceConfig denies it",
+                effect.category,
             )
+            Timber.tag("Effects").d("Suppressed capture prefix: %s", effect.filenamePrefix)
             return false
         }
         screenShotHandler.capture(engineScope, effect)

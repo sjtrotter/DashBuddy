@@ -1784,6 +1784,10 @@ Accept and Decline registered on DoorDash — and moved to that session's entry 
     the pre-existing net-side overlap) that piece 2 (categorizing an orphan into its real
     session) is the actual fix for — no action needed beyond noting it if seen.
   - Confirmed: 0/2.
+- **#772 chat INFO scrub — grep the pull's `shareable.log` for `message posted [` and
+  `offer posted [`: expect only persona kind labels (Merchant/Customer/Dispatch/…), never a raw
+  store name. Desk-resolvable (playbook).**
+  - Confirmed: 0/2.
 
 ---
 
