@@ -136,7 +136,10 @@ class ScreenShotHandler @Inject constructor(
             contentValues.put(MediaStore.Images.Media.IS_PENDING, 0)
             resolver.update(uri, contentValues, null, null)
 
-            Timber.i("Screenshot saved to Gallery: Pictures/DashBuddy/$displayName")
+            // #772: the filename embeds the rule-declared prefix, which can carry template-expanded
+            // merchant text ("Offer - {storeName}") — the name stays on the DEBUG firehose only.
+            Timber.i("Screenshot saved to Gallery (Pictures/DashBuddy)")
+            Timber.d("Screenshot file: %s", displayName)
 
         } catch (e: IOException) {
             Timber.e(e, "Failed to write screenshot to MediaStore")
