@@ -1,6 +1,7 @@
 package cloud.trotter.dashbuddy.test.suites
 
 import cloud.trotter.dashbuddy.core.pipeline.CaptureBackstopCorpusTest
+import cloud.trotter.dashbuddy.core.pipeline.SensitiveMarkerAssetCoverageTest
 import cloud.trotter.dashbuddy.core.pipeline.accessibility.event.type.view.clicked.ClickClassifierTest
 import cloud.trotter.dashbuddy.core.pipeline.notification.NotificationClassifierTest
 import cloud.trotter.dashbuddy.core.pipeline.recognition.matchers.GoldenSnapshotRegressionTest
@@ -46,6 +47,10 @@ import org.junit.runners.Suite
  *   PII across the corpus + notification redact blocks mask name/body, keep store.
  * - [CaptureBackstopCorpusTest] — the #624 recognized-frame customer-marker
  *   backstop finds ZERO leaks over the redacted corpus (false-positive pin).
+ * - [SensitiveMarkerAssetCoverageTest] — #762 D10: every `parse.as == "sensitive"` rule's text
+ *   anchor across ALL platforms' generated assets is independently caught by the rules-INDEPENDENT
+ *   [cloud.trotter.dashbuddy.core.pipeline.SensitiveTextMarkers] backstop (a documented,
+ *   shrink-only ledger excuses pre-existing DoorDash debt out of D10's Uber scope).
  * - [OfferPipelineTest] — Layer 2 (#105): a real `offer_popup/` snapshot through the SAME
  *   production ruleset, feeding the recognized `ParsedOffer` into `OfferEvaluator` and pinning the
  *   resulting `OfferEvaluation` — proves the recognition→parse→evaluate wiring, not just the
@@ -66,5 +71,6 @@ import org.junit.runners.Suite
     ClickClassifierTest::class,
     CaptureRedactionCorpusTest::class,
     CaptureBackstopCorpusTest::class,
+    SensitiveMarkerAssetCoverageTest::class,
 )
 class AllMatchersSuite
