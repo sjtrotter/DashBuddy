@@ -1,14 +1,16 @@
 package cloud.trotter.dashbuddy.domain.model.order
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
  * Recognition is data, not code (CLAUDE.md): the text-matching helpers
- * (`fromTypeName`/`orderTypeCount`/`allTypeNames`) were superseded by the JSON rule engine and
- * deleted, so their tests are gone too. `ParsedFieldsFactory` now resolves the order type from
- * parse output via the intrinsic [OrderType.valueOf]. What remains is the [OrderType.isShoppingOrder]
- * flag and the [OrderType.typeName] label.
+ * (`fromTypeName`/`orderTypeCount`/`allTypeNames`/`typeName`) were superseded by the JSON rule
+ * engine and deleted, so their tests are gone too. `ParsedFieldsFactory` now resolves the order
+ * type from parse output via the intrinsic [OrderType.valueOf]; an unrecognized string maps to
+ * [OrderType.UNKNOWN]. What remains is the [OrderType.isShoppingOrder] flag.
  */
 class OrderTypeTest {
 
@@ -18,22 +20,17 @@ class OrderTypeTest {
 
     @Test
     fun `isShoppingOrder - SHOP_FOR_ITEMS is a shopping order`() {
-        assert(OrderType.SHOP_FOR_ITEMS.isShoppingOrder)
+        assertTrue(OrderType.SHOP_FOR_ITEMS.isShoppingOrder)
     }
 
     @Test
     fun `isShoppingOrder - PICKUP is not a shopping order`() {
-        assert(!OrderType.PICKUP.isShoppingOrder)
+        assertFalse(OrderType.PICKUP.isShoppingOrder)
     }
 
     @Test
-    fun `isShoppingOrder - RESTAURANT_PICKUP is not a shopping order`() {
-        assert(!OrderType.RESTAURANT_PICKUP.isShoppingOrder)
-    }
-
-    @Test
-    fun `isShoppingOrder - RETAIL_PICKUP is not a shopping order`() {
-        assert(!OrderType.RETAIL_PICKUP.isShoppingOrder)
+    fun `isShoppingOrder - UNKNOWN degrades to non-shopping`() {
+        assertFalse(OrderType.UNKNOWN.isShoppingOrder)
     }
 
     // -------------------------------------------------------------------------
@@ -48,9 +45,10 @@ class OrderTypeTest {
     }
 
     @Test
-    fun `every type exposes a non-blank typeName`() {
-        OrderType.entries.forEach { type ->
-            assert(type.typeName.isNotBlank()) { "typeName for $type should be non-blank" }
-        }
+    fun `the enum shape is exactly PICKUP, SHOP_FOR_ITEMS, UNKNOWN`() {
+        assertEquals(
+            listOf(OrderType.PICKUP, OrderType.SHOP_FOR_ITEMS, OrderType.UNKNOWN),
+            OrderType.entries.toList(),
+        )
     }
 }
