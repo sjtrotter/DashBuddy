@@ -127,8 +127,17 @@ object StoreKeys {
         val firstToken = address?.trim()?.takeIf { it.isNotEmpty() }
             ?.split(WHITESPACE)?.firstOrNull()
             ?: return null
-        return if (firstToken.isNotEmpty() && firstToken.all { it in '0'..'9' }) "@$firstToken" else null
+        // Length cap: a real US street number is 1–6 digits; an untrusted-UI degenerate like a
+        // 20-digit run is not a street number — fail-null, never a garbage key (#773
+        // adversarial-review finding 3, same fail-toward-conflation philosophy as F-3).
+        return if (firstToken.length in 1..MAX_STREET_NUMBER_DIGITS && firstToken.all { it in '0'..'9' }) {
+            "@$firstToken"
+        } else {
+            null
+        }
     }
+
+    private const val MAX_STREET_NUMBER_DIGITS = 6
 
     /**
      * The deterministic entity key: `platform + "|" + normalizedChain + "|" + runningKey`

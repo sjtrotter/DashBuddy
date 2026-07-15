@@ -159,6 +159,15 @@ class StoreKeysTest {
     }
 
     @Test
+    fun `addressRunningKey caps the digit-run length — a degenerate long run fails null`() {
+        // Real US street numbers are 1-6 digits; a 20-digit run from untrusted UI text is
+        // not a street number (#773 adversarial-review finding 3 — fail toward conflation).
+        assertNull(StoreKeys.addressRunningKey("00000000000000000000 Main St"))
+        assertNull(StoreKeys.addressRunningKey("1234567 Main St"))
+        assertEquals("@123456", StoreKeys.addressRunningKey("123456 Main St"))
+    }
+
+    @Test
     fun `addressRunningKey fails null on a range address`() {
         assertNull(StoreKeys.addressRunningKey("2500-2504 Broadway"))
     }

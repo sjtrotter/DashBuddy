@@ -27,7 +27,16 @@ data class StoreChainLink(
     val customerHashes: List<String>,
     /** Realized tip attributed to this store from the payout, when present. */
     val realizedTip: Double?,
-)
+) {
+    /**
+     * The `receiptKey ?: addressKey ?: null` ladder — the SAME derivation
+     * [AnchorResolution.resolvedRunningKey] applies, mirrored here so link consumers (and the
+     * shadow log, which field-verifies persisted-key parity) never re-derive it by hand
+     * (#773 adversarial-review finding 2).
+     */
+    val resolvedRunningKey: String?
+        get() = StoreKeys.normalizeRunningKey(runningKey) ?: addressKey
+}
 
 /** The full store chain for one job — every order/store linked across offer → pickup → dropoff → payout. */
 data class JobStoreChain(

@@ -64,7 +64,11 @@ class ShadowStoreChainLogger @Inject constructor(
                 append(" offer=").append(l.offerName ?: "—")
                 append(" dropoff=").append(l.dropoffName ?: "—")
                 append(" payout=").append(l.payoutName ?: "—")
-                append(" key=").append(l.runningKey ?: "—")
+                // Resolved (ladder) key = what the projector persists — the shadow's whole job is
+                // parity with persisted keys, and on the chain-bare #773 shape the raw receipt
+                // token is null while the persisted key is the @-address fragment. (The raw
+                // payout form is already on the line via payout=.)
+                append(" key=").append(l.resolvedRunningKey ?: "—")
                 l.realizedTip?.let { append(" tip=").append(it) }
                 append(" custs=").append(l.customerHashes.map { it.take(6) })
             }
