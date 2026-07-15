@@ -78,7 +78,32 @@ card's **mechanical** half, #577 (re-confirmed, 24/24, ~0.55 s — with a new po
 that entry's Bug #1), the #457 path, and #554 ShadowProjector (2/2). The #462/#460 dropoff item
 was found **broken-in-part** (raw PII in capture envelopes) and moved to that entry's Bug #7.)_
 
-- **🆕 NEW — per-location store cards: the four H-E-Bs split apart on the Patterns tab (#773 / PR #781).**
+- **🆕 NEW — Uber active-job skeleton: accepts become costed jobs at trip start; honest "ON JOB" badge (#762 D2 / PR #784). NEEDS UBER ENABLED.**
+  `active_trip` (the coarse `on_job_view` screen) now declares the phase-less `task:active` flow, and the
+  accept grace is per-platform (Uber 600s vs the old global 120s). Together: an accepted Uber offer is
+  consumed into a fully-costed job within seconds of accept instead of expiring into an uncosted corpse
+  on any >2-min drive, and the badge/HUD show "ON JOB" instead of a stale OFFER card for the whole
+  pickup drive.
+  **How to tell it's working (any Uber trip):** immediately after accepting, the badge flips to ON JOB
+  (not stuck on OFFER) and the live offer card clears; the trip's job carries offer economics (desk-side:
+  the job's `OFFER_ACCEPTED`/job-mint events appear at accept time, not at the store, and the folded
+  delivery is NOT a "no economics" row). Also watch: a **mid-trip stacked offer that you DECLINE or
+  ignore** must NOT produce an `OFFER_ACCEPTED` event (desk-side grep) — the ambient-screen guard.
+  While parked at the store, the odometer arbiter now sees interleaved `task:active` frames as "moving"
+  (leg unknown ⇒ can't claim parked) — watch Uber mileage for dwell-drift inflation vs the odometer span.
+  **Capture-first on the same dash** (feeds #785/#786 — see those issues): notification envelopes for a
+  full trip incl. every update of the ongoing status notification, one multi-order/stacked job, the
+  decline affordance frames, any "Going to <digit-leading store>" push.
+  - Confirmed: 0/2
+
+- **🆕 NEW — WATCH (accepted residual): coarse-only Uber trip may leave its job open past the receipt (#762 D2 / PR #784).**
+  A marker-less `on_job_view` frame between the post-trip receipt and idle walks the flow
+  PostTask→TaskActive→Idle and suppresses the receipt-exit job close when NO leg screen ever activated
+  a task (coarse-only trip). Chosen fail direction is absorption (job stays open; closes at session end)
+  — this item quantifies whether the frame shape actually occurs in the field.
+  **How to tell (desk-side):** after an Uber dash, any job whose deliveries completed but whose job-close
+  event only arrived at `DASH_STOP`; if seen, capture the post-trip → idle frame sequence.
+  - Confirmed: 0/2
   Chain-bare receipts (H-E-B shows no store code) now fall back to an address-derived running key
   (`@<street number>`), so same-chain locations resolve to distinct `storeKey`s instead of one
   conflated chain row. The projector refolds all history onto the new keys (v7) on first launch of
