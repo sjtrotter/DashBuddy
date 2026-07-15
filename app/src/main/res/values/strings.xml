@@ -670,6 +670,7 @@
     <string name="dashboard_status_heading_to_pickup">Heading to Pickup</string>
     <string name="dashboard_status_heading_to_dropoff">Heading to Drop-off</string>
     <string name="dashboard_status_delivery_complete">Delivery Complete</string>
+    <string name="dashboard_status_active_job">On an active job</string>
 
     <!-- ui/main/analytics/AnalyticsUiState.kt -->
     <string name="analytics_tab_money">Money</string>

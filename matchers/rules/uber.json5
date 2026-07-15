@@ -511,6 +511,10 @@
       "id": "uber.screen.active_trip",
       "priority": 100,
       "state": {
+        // #762 D2: a coarse in-job surface — `on_job_view` cannot tell pickup from dropoff, so it
+        // declares the phase-less `task:active` flow (consumes the accepted offer into a job, holds
+        // mode Online). NOT a leg claim; see ADR-0002 amendment 2026-07-15.
+        "flow": "task:active",
         "modeHint": "online"
       },
       "require": {

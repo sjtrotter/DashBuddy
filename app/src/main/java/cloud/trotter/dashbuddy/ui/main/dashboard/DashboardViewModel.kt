@@ -111,6 +111,8 @@ class DashboardViewModel @Inject constructor(
             Flow.TaskPickupNavigation, Flow.TaskPickupArrived -> R.string.dashboard_status_heading_to_pickup
             Flow.TaskDropoffNavigation, Flow.TaskDropoffArrived -> R.string.dashboard_status_heading_to_dropoff
             Flow.PostTask -> R.string.dashboard_status_delivery_complete
+            // #762 D2: a coarse in-job surface (leg unknown) — honest "active job" status.
+            Flow.TaskActive -> R.string.dashboard_status_active_job
             // #736: order unassigned mid-flow — Idle-equivalent (back to looking for offers).
             Flow.TaskUnassigned -> R.string.dashboard_status_looking_for_offers
             Flow.SessionEnded -> R.string.dashboard_status_session_complete
