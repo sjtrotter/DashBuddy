@@ -18,13 +18,25 @@ data class StoreChainLink(
     val dropoffName: String?,
     /** The payout-line form — the running-key representation (`Target (02426)`), the #159 runningKey carrier. */
     val payoutName: String?,
-    /** The running key teased out of [payoutName]: the store number (`02426`) or area (`Alamo Ranch`). */
+    /** The RAW running key teased out of [payoutName]: the store number (`02426`) or area (`Alamo Ranch`). */
     val runningKey: String?,
+    /** The address-derived `@`-prefixed key (#773), the chain-bare fallback; null unless the receipt was
+     *  chain-bare AND the store's pickup address gave a leading street number. */
+    val addressKey: String? = null,
     /** Hashed customers delivered to this store on this job (dedup-safe; never raw PII). */
     val customerHashes: List<String>,
     /** Realized tip attributed to this store from the payout, when present. */
     val realizedTip: Double?,
-)
+) {
+    /**
+     * The `receiptKey ?: addressKey ?: null` ladder — the SAME derivation
+     * [AnchorResolution.resolvedRunningKey] applies, mirrored here so link consumers (and the
+     * shadow log, which field-verifies persisted-key parity) never re-derive it by hand
+     * (#773 adversarial-review finding 2).
+     */
+    val resolvedRunningKey: String?
+        get() = StoreKeys.normalizeRunningKey(runningKey) ?: addressKey
+}
 
 /** The full store chain for one job — every order/store linked across offer → pickup → dropoff → payout. */
 data class JobStoreChain(
@@ -48,15 +60,28 @@ object StoreResolver {
     /** One payout store line — the store form ([type]) and its realized amount ([amount], shadow-only). */
     data class PayoutForm(val type: String, val amount: Double? = null)
 
-    /** One anchor's resolved cross-surface forms. Running key is the RAW extracted token ([StoreKeys]). */
+    /** One anchor's resolved cross-surface forms. [runningKey] is the RAW receipt token ([StoreKeys]);
+     *  [addressKey] is the `@`-prefixed address fallback (#773). [resolvedRunningKey] is the deterministic
+     *  ladder both adapters key on. */
     data class AnchorResolution(
         val canonical: String,
         val offerForm: String?,
         val dropoffForm: String?,
         val payoutForm: String?,
         val runningKey: String?,
+        val addressKey: String? = null,
         val realizedTip: Double?,
-    )
+    ) {
+        /**
+         * The #773 precedence ladder (the ONE ladder SSOT both adapters key on): the
+         * canonicalized **receipt** key ([StoreKeys.normalizeRunningKey], which strips any masquerading
+         * `@`) wins; else the **address**-derived `@`-key ([StoreKeys.addressRunningKey], already
+         * canonical, bypasses the receipt canonicalizer so its `@` survives); else null (chain-only).
+         * Address-derived keys are provenance-marked by their leading `@` (F-1) — no extra column.
+         */
+        val resolvedRunningKey: String?
+            get() = StoreKeys.normalizeRunningKey(runningKey) ?: addressKey
+    }
 
     /**
      * Resolve every distinct pickup anchor against the offer / dropoff / payout surfaces. Each payout
@@ -70,15 +95,18 @@ object StoreResolver {
      * per-anchor best-line semantics (the spec's D4 intent), so the pre-PR shadow logs are NOT
      * line-for-line comparable to this output.
      *
-     * TODO(#159 phase-2): the unimplemented D4 bullet — match a payout line to a store by address / running
-     *  key when brand tokens share ZERO overlap (grocery payout lines that are bare order numbers). Today
-     *  such a line matches no anchor and is dropped; phase-2 adds the address/key fallback join.
+     * **Address fallback (#773):** [anchorAddresses] maps an anchor to its (caller-selected) store
+     * address; when a receipt yields no running key the anchor's [AnchorResolution.addressKey] carries
+     * the address-derived `@`-fragment ([StoreKeys.addressRunningKey]), and [AnchorResolution.resolvedRunningKey]
+     * applies the `receiptKey ?: addressKey ?: null` ladder — so a chain-bare grocery payout keys per
+     * location instead of collapsing every visit into one chain-only bucket.
      */
     fun resolveAnchors(
         anchors: List<String>,
         offerForms: List<String>,
         dropoffForms: List<String>,
         payoutForms: List<PayoutForm>,
+        anchorAddresses: Map<String, String?> = emptyMap(),
     ): List<AnchorResolution> {
         val cleanAnchors = anchors.filter { it.isNotBlank() }.distinct()
         if (cleanAnchors.isEmpty()) return emptyList()
@@ -101,6 +129,7 @@ object StoreResolver {
                 dropoffForm = StoreNameMatch.bestMatch(cleanDropoffs, canonical),
                 payoutForm = keyForm?.type,
                 runningKey = keyForm?.type?.let { StoreKeys.extractRunningKey(it) },
+                addressKey = StoreKeys.addressRunningKey(anchorAddresses[canonical]),
                 realizedTip = matched.mapNotNull { it.amount }.takeIf { it.isNotEmpty() }?.sum(),
             )
         }
@@ -120,10 +149,13 @@ object StoreResolver {
 object StoreChainProjector {
 
     fun project(job: Job, payout: ParsedPay?): JobStoreChain {
-        val pickupStores = job.tasks
-            .filter { it.phase == TaskPhase.PICKUP && !it.storeName.isNullOrBlank() }
-            .map { it.storeName!! }
-            .distinct()
+        val pickupTasks = job.tasks.filter { it.phase == TaskPhase.PICKUP && !it.storeName.isNullOrBlank() }
+        val pickupStores = pickupTasks.map { it.storeName!! }.distinct()
+        // Per-anchor address (#773): the FIRST pickup of this store carrying a non-null address — the
+        // Job-side analog of the runner's first-non-null-by-eventSequenceId row selection.
+        val anchorAddresses: Map<String, String?> = pickupStores.associateWith { store ->
+            pickupTasks.firstOrNull { it.storeName == store && it.storeAddress != null }?.storeAddress
+        }
         val offerHints = job.offerStoreHint
         val dropoffStores = job.tasks
             .filter { it.phase == TaskPhase.DROPOFF && !it.storeName.isNullOrBlank() }
@@ -132,7 +164,7 @@ object StoreChainProjector {
             .filter { it.type.isNotBlank() }
             .map { StoreResolver.PayoutForm(it.type, it.amount) }
 
-        val links = StoreResolver.resolveAnchors(pickupStores, offerHints, dropoffStores, payoutForms)
+        val links = StoreResolver.resolveAnchors(pickupStores, offerHints, dropoffStores, payoutForms, anchorAddresses)
             .map { r ->
                 val customerHashes = job.tasks
                     .filter { it.phase == TaskPhase.DROPOFF && it.storeName == r.canonical && it.customerNameHash != null }
@@ -144,6 +176,7 @@ object StoreChainProjector {
                     dropoffName = r.dropoffForm,
                     payoutName = r.payoutForm,
                     runningKey = r.runningKey,
+                    addressKey = r.addressKey,
                     customerHashes = customerHashes,
                     realizedTip = r.realizedTip,
                 )

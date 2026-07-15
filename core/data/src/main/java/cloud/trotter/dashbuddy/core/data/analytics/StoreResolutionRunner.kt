@@ -2,7 +2,6 @@ package cloud.trotter.dashbuddy.core.data.analytics
 
 import cloud.trotter.dashbuddy.core.database.analytics.AnalyticsDao
 import cloud.trotter.dashbuddy.core.database.analytics.OfferRecordEntity
-import cloud.trotter.dashbuddy.core.database.analytics.PickupRecordEntity
 import cloud.trotter.dashbuddy.core.database.analytics.StoreEntity
 import cloud.trotter.dashbuddy.domain.analytics.StoreResolution
 import cloud.trotter.dashbuddy.domain.model.event.AppEventType
@@ -73,7 +72,16 @@ internal class StoreResolutionRunner(private val dao: AnalyticsDao) {
         val offerRows = candidateOffers(task, jobId, jobFirstAt)
         val offerForms = offerRows.mapNotNull { it.merchantName }
 
-        val resolved = StoreResolver.resolveAnchors(anchors, offerForms, dropoffForms, payoutForms)
+        // Per-anchor address (#773): FIRST-NON-NULL storeAddress by eventSequenceId (pickups are
+        // ORDER BY eventSequenceId ASC), THEN fail — the address fallback key comes from that ONE row,
+        // never from a later row whose extraction would succeed (first-non-null-then-fail, F-3). The
+        // display-address seed (upsertStore) reads this SAME map, so an `@`-keyed card never shows a
+        // different location's address than the one that keyed it.
+        val anchorAddresses: Map<String, String?> = anchors.associateWith { anchor ->
+            pickups.firstOrNull { it.storeName == anchor && it.storeAddress != null }?.storeAddress
+        }
+
+        val resolved = StoreResolver.resolveAnchors(anchors, offerForms, dropoffForms, payoutForms, anchorAddresses)
         // FIX 7: key platform = the trigger's own platform when it is REAL, else the pickup row's
         // platform. This makes `StoreResolution.platform` load-bearing: a DASH_STOP re-resolution of an
         // `_unknown`-started session (its DASH_STOP carried the corrected platform) upgrades the key to
@@ -85,10 +93,11 @@ internal class StoreResolutionRunner(private val dao: AnalyticsDao) {
         val anchorKey = HashMap<String, String>()
         for (r in resolved) {
             val normChain = StoreKeys.normalizedChain(r.canonical)
-            val runKey = StoreKeys.normalizeRunningKey(r.runningKey)
+            // The #773 ladder SSOT: normalized receipt key ?: address `@`-key ?: null (chain-only).
+            val runKey = r.resolvedRunningKey
             val key = StoreKeys.storeKey(platform, normChain, runKey)
             anchorKey[r.canonical] = key
-            upsertStore(key, platform, normChain, runKey, r, pickups)
+            upsertStore(key, platform, normChain, runKey, r, anchorAddresses[r.canonical])
         }
 
         // Stamp pickup rows by their own anchor (storeName == the anchor). FIX 6 monotonic backstop:
@@ -120,20 +129,42 @@ internal class StoreResolutionRunner(private val dao: AnalyticsDao) {
     }
 
     /**
-     * FIX 6 monotonic-key backstop: true iff [newKey] is CHAIN-ONLY (empty running-key segment) and the
-     * row's [current] key is a KEYED variant of the same platform+chain — i.e. this would downgrade an
-     * already-keyed row. Resolution is row-sourced and monotonic by design, so this only fires on a rare
-     * evidence loss; keeping the keyed value guards against a silent regression. The storeKey strings
-     * are merchant-derived, so the observability note is DEBUG (keys) + a merchant-free WARN counter (P7).
+     * FIX 6 monotonic-key backstop, ladder-aware (#773): true iff [newKey] would lower the row's key
+     * TIER **within the same platform+chain** — receipt (`platform|chain|02426`) > address
+     * (`platform|chain|@12125`) > chain-only (`platform|chain|`). Resolution is row-sourced and monotonic
+     * by design, so this only fires on a rare evidence loss (a payout-less re-run losing a receipt line, or
+     * a receipt-keyed row seeing only address evidence on a later pass); keeping the higher-tier value
+     * guards against a silent regression.
+     *
+     * The **same platform+chain guard is load-bearing** (FIX 7): the platform upgrade
+     * `_unknown|heb|` → `doordash|heb|` crosses platforms (different prefix), so it is NOT a downgrade and
+     * stays allowed. The genuinely new #773 edge blocked here is receipt→address; `@`→chain-only and
+     * receipt→chain-only were already blocked. The storeKey strings are merchant-derived, so the
+     * observability note is DEBUG (keys) + a merchant-free WARN counter (P7).
      */
-    private fun isMonotonicDowngrade(current: String?, newKey: String): Boolean {
-        if (current == null || !newKey.endsWith("|")) return false
-        val downgrade = current != newKey && current.startsWith(newKey)
+    // `internal` (not private) so the ladder can be unit-tested directly — the 5 tier transitions
+    // (chain-only→@ upgrade, receipt→@ blocked, @→receipt allowed, platform-upgrade allowed, no-churn)
+    // are pure key-string logic that would be awkward to reconstruct end-to-end through the fold.
+    internal fun isMonotonicDowngrade(current: String?, newKey: String): Boolean {
+        if (current == null) return false
+        // Only compare within the same platform+chain prefix (everything up to the last '|').
+        if (current.substringBeforeLast('|') != newKey.substringBeforeLast('|')) return false
+        val downgrade = keyTier(newKey) < keyTier(current)
         if (downgrade) {
-            Timber.tag(TAG).d("store-key: kept keyed %s over chain-only recompute %s", current, newKey)
+            Timber.tag(TAG).d("store-key: kept tier-%d %s over lower-tier recompute %s", keyTier(current), current, newKey)
             Timber.tag(TAG).w("store-key downgrade averted (monotonic backstop)")
         }
         return downgrade
+    }
+
+    /** The #773 running-key tier of a storeKey: chain-only (0) < address `@` (1) < receipt (2). */
+    internal fun keyTier(key: String): Int {
+        val seg = key.substringAfterLast('|')
+        return when {
+            seg.isEmpty() -> 0
+            seg.startsWith("@") -> 1
+            else -> 2
+        }
     }
 
     private suspend fun candidateOffers(
@@ -159,11 +190,13 @@ internal class StoreResolutionRunner(private val dao: AnalyticsDao) {
         normalizedChain: String,
         runningKey: String?,
         r: StoreResolver.AnchorResolution,
-        pickups: List<PickupRecordEntity>,
+        selectedAddress: String?,
     ) {
         val prior = dao.store(storeKey)
-        val address = prior?.address
-            ?: pickups.firstOrNull { it.storeName == r.canonical && it.storeAddress != null }?.storeAddress
+        // The display-address seed uses the SAME row selection as the address key source (#773) — the
+        // caller's first-non-null-by-eventSequenceId anchorAddresses entry — so an `@`-keyed store's
+        // card can never display a different location's address than the one that keyed it.
+        val address = prior?.address ?: selectedAddress
         val store = StoreEntity(
             storeKey = storeKey,
             platform = platform,

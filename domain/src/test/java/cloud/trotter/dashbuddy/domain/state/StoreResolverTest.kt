@@ -72,4 +72,45 @@ class StoreResolverTest {
         val r = StoreResolver.resolveAnchors(emptyList(), emptyList(), emptyList(), emptyList())
         assertEquals(0, r.size)
     }
+
+    // ── #773 address fallback ladder (resolvedRunningKey) ───────────────
+
+    @Test
+    fun `a receipt running key WINS over an address key (ladder — receipt first)`() {
+        val r = StoreResolver.resolveAnchors(
+            anchors = listOf("Target"),
+            offerForms = emptyList(),
+            dropoffForms = emptyList(),
+            payoutForms = payout("Target (02426)" to 2.25),
+            anchorAddresses = mapOf("Target" to "12125 Alamo Rnch Pkwy, San Antonio, TX"),
+        ).single()
+        assertEquals("02426", r.runningKey) // raw receipt token unchanged
+        assertEquals("02426", r.resolvedRunningKey) // ladder picks the receipt tier
+    }
+
+    @Test
+    fun `a chain-bare receipt falls back to the address key`() {
+        val r = StoreResolver.resolveAnchors(
+            anchors = listOf("H-E-B"),
+            offerForms = emptyList(),
+            dropoffForms = emptyList(),
+            payoutForms = emptyList(), // grocery: chain-bare, no running key on the receipt
+            anchorAddresses = mapOf("H-E-B" to "12125 Alamo Rnch Pkwy, San Antonio, TX 78240, USA"),
+        ).single()
+        assertNull(r.runningKey)
+        assertEquals("@12125", r.addressKey)
+        assertEquals("@12125", r.resolvedRunningKey)
+    }
+
+    @Test
+    fun `neither a receipt key nor a usable address yields a null resolved key (chain-only)`() {
+        val r = StoreResolver.resolveAnchors(
+            anchors = listOf("H-E-B"),
+            offerForms = emptyList(),
+            dropoffForms = emptyList(),
+            payoutForms = emptyList(),
+            anchorAddresses = mapOf("H-E-B" to "The Rim Shopping Center"), // no leading street number
+        ).single()
+        assertNull(r.resolvedRunningKey)
+    }
 }
