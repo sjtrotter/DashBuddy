@@ -1,7 +1,6 @@
 package cloud.trotter.dashbuddy.core.pipeline.rules
 
 import cloud.trotter.dashbuddy.domain.model.accessibility.ParsedTime
-import cloud.trotter.dashbuddy.domain.model.offer.OfferBadge
 import cloud.trotter.dashbuddy.domain.model.offer.ParsedOffer
 import cloud.trotter.dashbuddy.domain.model.order.OrderBadge
 import cloud.trotter.dashbuddy.domain.model.order.OrderType
@@ -249,8 +248,17 @@ object ParsedFieldsFactory {
             }
             ParsedOrder(
                 orderIndex = idx,
-                orderType = o.str("orderType")?.let {
-                    try { OrderType.valueOf(it) } catch (_: Exception) { null }
+                // Distinguish two cases: an ABSENT orderType is the neutral bare-delivery default
+                // (PICKUP, silent); a PRESENT-but-unrecognized string is a real gap between the
+                // rule-source vocabulary and [OrderType] → UNKNOWN + a WARN. The string is
+                // rule-source vocabulary, not PII, so it's safe to log verbatim.
+                orderType = o.str("orderType")?.let { raw ->
+                    try {
+                        OrderType.valueOf(raw)
+                    } catch (_: IllegalArgumentException) {
+                        Timber.tag("Rules").w("ParsedFieldsFactory: unrecognized orderType '$raw' -> UNKNOWN")
+                        OrderType.UNKNOWN
+                    }
                 } ?: OrderType.PICKUP,
                 storeName = o.str("storeName") ?: "",
                 itemCount = o.int("itemCount") ?: 1,
