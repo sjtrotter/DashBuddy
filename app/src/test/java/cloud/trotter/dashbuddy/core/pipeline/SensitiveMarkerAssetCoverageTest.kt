@@ -45,9 +45,9 @@ import java.io.File
  * task's own example) without conflating the two inside an `any`/OR group:
  *  - [Req.Leaf] — a literal text predicate (`hasText*`, `hasDesc*`, `hasStateDescription*`,
  *    `allTextContains`, notification `title/text/bigText/tickerText/anyField*Contains`,
- *    `hasAction`) — COVERED iff some [SensitiveTextMarkers.KEYWORDS] entry is a
- *    case-insensitive substring of it (mirrors [SensitiveTextMarkers.findMarker]'s own
- *    `contains`; `contentDescription` is included because [UiNode.allText] folds it in too),
+ *    `hasAction`) — COVERED iff [SensitiveTextMarkers.findMarker] fires on it (the production
+ *    matcher itself, not a mirrored `contains` — so the guard tracks any future semantics
+ *    change; `contentDescription` is included because [UiNode.allText] folds it in too),
  *    else GAP.
  *  - [Req.NonText] — a predicate with no literal text (`hasId*`, `hasClassName*`, boolean
  *    flags, `channelId*`, `categoryEquals`, and `hasTextMatchesRegex`/`*MatchesRegex` since a
@@ -113,7 +113,10 @@ class SensitiveMarkerAssetCoverageTest {
 
     private fun evaluate(req: Req): Coverage = when (req) {
         is Req.Leaf ->
-            if (KEYWORDS.any { kw -> req.text.contains(kw, ignoreCase = true) }) Coverage.COVERED
+            // Delegate to the production matcher itself (P5 — adversarial-review finding 2):
+            // if findMarker's semantics ever change (word boundaries, normalization), the
+            // guard tracks them instead of silently diverging from a hand-mirrored contains().
+            if (SensitiveTextMarkers.findMarker(req.text) != null) Coverage.COVERED
             else Coverage.GAP
         is Req.NonText -> Coverage.EXEMPT
         is Req.AnyOf -> {
@@ -200,8 +203,6 @@ class SensitiveMarkerAssetCoverageTest {
     }
 
     companion object {
-        private val KEYWORDS = SensitiveTextMarkers.KEYWORDS
-
         private val TEXT_LEAF_KEYS = setOf(
             // node text predicates (screens)
             "hasText", "hasTextCaseSensitive", "hasTextContaining", "hasTextStartsWith", "hasAnyText",
@@ -217,8 +218,13 @@ class SensitiveMarkerAssetCoverageTest {
         /** Array-of-strings predicates with AND semantics (all present together when it fires). */
         private val AND_ARRAY_KEYS = setOf("allTextContainsAll", "anyFieldContainsAll")
 
-        /** Tree→node bridges and negation: transparent to text-anchor extraction. */
-        private val PASSTHROUGH_KEYS = setOf("exists", "notExists", "not")
+        /**
+         * Tree→node bridges: transparent to text-anchor extraction. Negation (`not`/`notExists`)
+         * is deliberately NOT here — a negated text predicate guarantees its text is ABSENT when
+         * the rule fires, so treating a covered leaf under it as COVERED would be a false pass;
+         * negation falls to the [Req.NonText]/EXEMPT arm instead (adversarial-review finding 1).
+         */
+        private val PASSTHROUGH_KEYS = setOf("exists")
 
         /**
          * Pre-existing coverage gaps NOT fixed by #762 D10 (D10 is scoped to Uber — see the
