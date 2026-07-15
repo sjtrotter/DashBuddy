@@ -787,7 +787,15 @@ class AnalyticsProjector @Inject constructor(
          * stack while the session total is ~conserved. Phase-A driver edits (`DELIVERY_ADJUSTMENT`)
          * replay after their targets on the refold, so a driver's corrected total survives. Precedented
          * side effect (as v2/v3/v4): `CURRENT_FALLBACK` rows re-stamp against today's economy.
+         * v7 (#773): store resolution gains the address-derived running-key FALLBACK — when a receipt is
+         * chain-bare (no `(code)`/` - Area` key) the from-zero refold now keys the store off its pickup
+         * address's leading street number (`@12125`), so a chain's per-location visits split into distinct
+         * `stores`/`storeKey` rows instead of collapsing into one chain-only "location unknown" bucket. The
+         * refold re-keys the address-bearing subset of history (pre-#159 folds carry no pickup address, so
+         * those stay chain-only — a partial, honest backfill). Purely a projection re-key: `app_events`,
+         * every frozen economy column, and pay/net/miles are untouched. Precedented side effect (as
+         * v2/v3/v4/v6): the refold also re-stamps `CURRENT_FALLBACK` rows against today's economy.
          */
-        private const val PROJECTOR_VERSION = 6
+        private const val PROJECTOR_VERSION = 7
     }
 }

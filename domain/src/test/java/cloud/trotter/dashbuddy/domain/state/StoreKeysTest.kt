@@ -121,6 +121,67 @@ class StoreKeysTest {
     }
 
     @Test
+    fun `normalizeRunningKey strips a leading at-sign so a receipt key cannot masquerade as address-tier (F-1)`() {
+        // A payout parenthetical like "Joe's (@joescafe)" would otherwise mint a receipt key starting
+        // with '@' and be misread as an address-derived key. The receipt canonicalizer strips it.
+        assertEquals("joescafe", StoreKeys.normalizeRunningKey("@joescafe"))
+        assertEquals("12125", StoreKeys.normalizeRunningKey("@12125"))
+        assertEquals("x", StoreKeys.normalizeRunningKey("@@x"))
+        assertNull("an at-only token collapses to null, not an empty @-key", StoreKeys.normalizeRunningKey("@"))
+    }
+
+    // ── addressRunningKey (#773 address fallback) ───────────────────────
+
+    @Test
+    fun `addressRunningKey pulls the leading street number, at-prefixed`() {
+        assertEquals("@12125", StoreKeys.addressRunningKey("12125 Alamo Rnch Pkwy, San Antonio, TX 78240, USA"))
+        assertEquals("@7330", StoreKeys.addressRunningKey("7330 N Loop 1604 W, San Antonio, TX 78249"))
+    }
+
+    @Test
+    fun `addressRunningKey yields the SAME fragment across both fielded render formats of one address`() {
+        // The 07-13 render variance lives in the address TAIL (ZIP5 vs ZIP+4, USA vs United States); the
+        // leading street number is invariant, so both renders of the SAME location key identically.
+        val zip5Usa = StoreKeys.addressRunningKey("1200 Bandera Rd, San Antonio, TX 78240, USA")
+        val zip4UnitedStates = StoreKeys.addressRunningKey("1200 Bandera Rd, San Antonio, TX 78249-2900, United States")
+        assertEquals("@1200", zip5Usa)
+        assertEquals(zip5Usa, zip4UnitedStates)
+    }
+
+    @Test
+    fun `addressRunningKey handles the short address form`() {
+        assertEquals("@1200", StoreKeys.addressRunningKey("1200 Bandera Rd"))
+    }
+
+    @Test
+    fun `addressRunningKey fails null on a hyphenated house number`() {
+        assertNull(StoreKeys.addressRunningKey("12125-A Alamo Ranch Pkwy"))
+    }
+
+    @Test
+    fun `addressRunningKey fails null on a range address`() {
+        assertNull(StoreKeys.addressRunningKey("2500-2504 Broadway"))
+    }
+
+    @Test
+    fun `addressRunningKey fails null on a suffixed house number`() {
+        assertNull(StoreKeys.addressRunningKey("12125B Alamo Ranch Pkwy"))
+    }
+
+    @Test
+    fun `addressRunningKey fails null on a non-numeric first line`() {
+        assertNull(StoreKeys.addressRunningKey("The Rim Shopping Center, San Antonio, TX"))
+        assertNull(StoreKeys.addressRunningKey("Alamo Ranch Pkwy"))
+    }
+
+    @Test
+    fun `addressRunningKey fails null on degenerate input`() {
+        assertNull(StoreKeys.addressRunningKey(null))
+        assertNull(StoreKeys.addressRunningKey(""))
+        assertNull(StoreKeys.addressRunningKey("   "))
+    }
+
+    @Test
     fun `storeKey composes platform, chain, and running key with empty segment while unknown`() {
         assertEquals("doordash|target|02426", StoreKeys.storeKey("doordash", "target", "02426"))
         assertEquals("doordash|heb|", StoreKeys.storeKey("doordash", "heb", null))

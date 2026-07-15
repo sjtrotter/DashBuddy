@@ -288,7 +288,15 @@ private fun StoreRow(card: StoreReportCard) {
                 modifier = Modifier.weight(1f),
             )
             if (card.locationKnown && card.runningKey != null) {
-                AppChip(text = card.runningKey!!, uppercase = false)
+                // #773: an address-derived key (`@12125`) is a provenance marker, not a label — show the
+                // street line of the store address instead of the raw `@number`. (#765 redesigns this card.)
+                val runningKey = card.runningKey!!
+                val chipText = if (runningKey.startsWith("@")) {
+                    card.address?.substringBefore(",")?.trim()?.takeIf { it.isNotEmpty() } ?: runningKey
+                } else {
+                    runningKey
+                }
+                AppChip(text = chipText, uppercase = false)
             } else {
                 AppChip(
                     text = stringResource(R.string.patterns_tab_location_unknown),

@@ -89,12 +89,46 @@ object StoreKeys {
     }
 
     /**
-     * Canonicalize a running key for the [storeKey]: `Locale.ROOT` lowercase + whitespace-collapse so
-     * "Alamo Ranch" and "alamo ranch" don't fork one store into two entities (F7). Null/blank → null
-     * (an empty key segment, the chain-only provisional form).
+     * Canonicalize a **receipt-derived** running key for the [storeKey]: `Locale.ROOT` lowercase +
+     * whitespace-collapse so "Alamo Ranch" and "alamo ranch" don't fork one store into two entities
+     * (F7). Null/blank → null (an empty key segment, the chain-only provisional form).
+     *
+     * **`@`-strip (#773 F-1, prefix soundness):** an `@` prefix is the provenance marker of an
+     * ADDRESS-derived key ([addressRunningKey]). [extractRunningKey]'s parenthetical / ` - `-tail
+     * captures pass arbitrary untrusted merchant text, so a payout form like `"Joe's (@joescafe)"`
+     * could otherwise mint a receipt-tier key that STARTS WITH `@` and masquerade as address-tier. This
+     * canonicalizer runs on the receipt path only and strips any leading `@`, so a legitimate
+     * address key (minted by [addressRunningKey], which bypasses this function) is the ONLY source of a
+     * `@`-prefixed running key — provenance-by-prefix is sound, with no extra column.
      */
     fun normalizeRunningKey(raw: String?): String? =
-        raw?.let { collapse(it) }?.ifEmpty { null }
+        raw?.let { collapse(it).trimStart('@').trim() }?.ifEmpty { null }
+
+    /**
+     * The **address-derived** running key (#773): the leading street-NUMBER token of [address],
+     * `@`-prefixed — the fallback location discriminator for a **chain-bare** payout (a receipt that
+     * carries no `(code)` / ` - Area` running key, e.g. grocery). Used ONLY when [extractRunningKey]
+     * yields nothing, so an address-keyed store's running key always carries the `@` provenance marker
+     * ([normalizeRunningKey] guarantees no receipt key can).
+     *
+     * Accept the FIRST whitespace token of the trimmed [address] iff it is a **pure ASCII digit-run**
+     * (`"12125 Alamo Rnch Pkwy, San Antonio, TX 78240, USA"` → `"@12125"`; `"7330 N Loop 1604 W…"` →
+     * `"@7330"`) — returning `"@" + token`. Anything else is **fail-null** (F-3, the conservative
+     * reading — fail toward conflation, never a truncated/garbage fragment): a hyphenated house number
+     * (`"12125-A"`), a range (`"2500-2504"`), a suffixed number (`"12125B"`), a non-numeric first line
+     * (a mall/plaza name), or a degenerate/blank input all → null.
+     *
+     * Street-number-only by design (F7 churn defense): render variance lives in the address TAIL
+     * (`ZIP+4`/`ZIP5`, `USA`/`United States`) and street names are abbreviation-prone, but the leading
+     * number is the fragment most invariant across renders of the SAME location. `Locale.ROOT` — the
+     * ASCII digit-run check is locale-independent by construction.
+     */
+    fun addressRunningKey(address: String?): String? {
+        val firstToken = address?.trim()?.takeIf { it.isNotEmpty() }
+            ?.split(WHITESPACE)?.firstOrNull()
+            ?: return null
+        return if (firstToken.isNotEmpty() && firstToken.all { it in '0'..'9' }) "@$firstToken" else null
+    }
 
     /**
      * The deterministic entity key: `platform + "|" + normalizedChain + "|" + runningKey`
