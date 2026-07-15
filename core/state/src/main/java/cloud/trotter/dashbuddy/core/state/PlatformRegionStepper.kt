@@ -629,6 +629,15 @@ class PlatformRegionStepper @Inject constructor() {
 
         // Post-task: keep job alive through PostTask for payout capture
         // Job ends when we leave PostTask for non-task flow
+        //
+        // #762 D2 accepted residual (adversarial finding 2): on a coarse-only trip a marker-less
+        // `task:active` frame BETWEEN post-trip and idle walks the acted flow PostTask → TaskActive
+        // → Idle, so this edge never fires (the intermediate next IS a task flow; by the idle frame
+        // prev is TaskActive) — and a coarse trip has no activeTask, so no TASK_RETIRE close-out
+        // either: the job stays open until session end or the next accept's #596 T2 close+mint.
+        // Deliberately NOT closed with a grace here: zero Uber corpus to validate the shape, a
+        // wrong close on a stacked job is fabrication, and an open job fails toward absorption —
+        // the preferred failure direction. See ADR-0002 amendment 2026-07-15 (residual).
         if (prevFlowVal == Flow.PostTask && !nextFlowVal.isTaskFlow() && nextFlowVal != Flow.PostTask && nextFlowVal != Flow.OfferPresented) {
             return completeActiveJob(current)
         }
@@ -723,12 +732,16 @@ class PlatformRegionStepper @Inject constructor() {
 // FLOW EXTENSION HELPERS
 // =========================================================================
 
-// #762 D2: [Flow.TaskActive] IS a task flow (so an accept consumes into a job, and entering/leaving
-// it is not a "left the task family" edge that would arm a retire) but is DELIBERATELY phase-less —
-// [toTaskPhase]/[toTaskSubFlow] return null for it. Every phase/subflow consumer already guards
-// `toTaskPhase() ?: return`/`toTaskSubFlow() ?: return`, so a `task:active` observation never mints,
-// displaces, or resumes a task (verified: TaskLifecycle.kt:52-53 and healActiveLifecycle both
-// early-return on the null phase). See the enum KDoc + ADR-0002 amendment 2026-07-15.
+// #762 D2: [Flow.TaskActive] IS a task flow (so an accept consumes into a job) but is DELIBERATELY
+// phase-less — [toTaskPhase]/[toTaskSubFlow] return null for it. Every phase/subflow consumer
+// already guards `toTaskPhase() ?: return`/`toTaskSubFlow() ?: return`, so a `task:active`
+// observation never mints, displaces, or resumes a task (verified: TaskLifecycle.kt:52-53 and
+// healActiveLifecycle both early-return on the null phase). Retire semantics, precisely: a
+// `task:active` frame BETWEEN phased task flows is not a "left the task family" edge (arms
+// nothing), and an interposed `task:active` frame neither cancels nor early-commits a pending
+// TASK_RETIRE (the null-phase early-return happens before the same-phase update's grace clear) —
+// but leaving `task:active` TO a non-task flow (e.g. idle) still arms the normal retire grace,
+// exactly as leaving any task flow does. See the enum KDoc + ADR-0002 amendment 2026-07-15.
 internal fun Flow.isTaskFlow(): Boolean = this in setOf(
     Flow.TaskPickupNavigation,
     Flow.TaskPickupArrived,

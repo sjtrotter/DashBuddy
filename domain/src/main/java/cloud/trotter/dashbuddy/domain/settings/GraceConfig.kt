@@ -109,7 +109,15 @@ fun interface GraceConfigProvider {
     /** The current per-platform override snapshot — one atomic read per use site. */
     fun snapshot(): Map<Platform, GraceConfig>
 
-    /** The config for [platform]: a user override if present, else its per-platform code default. */
+    /**
+     * The config for [platform]: a user override if present, else its per-platform code default.
+     *
+     * NOTE for a future per-platform grace editor (adversarial finding 6): a PARTIAL user override
+     * must be merged against [GraceConfig.codeDefault]`(platform)`, never built on a bare
+     * `GraceConfig()` — an override map entry replaces the code default WHOLESALE here, so a
+     * partial Uber entry constructed from field defaults (say, editing only `gracePeriodMs`) would
+     * silently reset `acceptGraceMs` from 600s back to the 120s field default.
+     */
     fun forPlatform(platform: Platform): GraceConfig =
         snapshot()[platform] ?: GraceConfig.codeDefault(platform)
 

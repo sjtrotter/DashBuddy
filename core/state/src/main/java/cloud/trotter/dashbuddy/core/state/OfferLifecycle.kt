@@ -142,28 +142,51 @@ private fun PlatformRegionStepper.pushOrReplaceOffer(
  * `OFFER_ACCEPTED`/`DECLINED`/`TIMEOUT` event fires from [OfferEffects] at THIS edge (not at
  * consumption). Existing survivors pass through untouched — the mint consumes them.
  *
- * "Accepted" ⇔ the accept latch is set OR the destination is a task flow — reaching a task screen IS
- * the acceptance (the platform only advances to pickup/dropoff after an accept), so an offer→task
- * edge mints the full offer-shaped job even when no accept CLICK was captured (the pre-B3
- * `prevFlow.pendingOffer` accept-adjacent read did this unconditionally). A committed decline (#594
- * FIX2b) NEVER survives — that revocation must not fold phantom economics into a job.
+ * "Accepted" ⇔ the accept latch is set OR the destination flow implies acceptance
+ * ([destinationImpliesAccept]) — reaching a PHASED task screen IS the acceptance (the platform only
+ * advances to pickup/dropoff after an accept), so an offer→task edge mints the full offer-shaped job
+ * even when no accept CLICK was captured (the pre-B3 `prevFlow.pendingOffer` accept-adjacent read
+ * did this unconditionally). The coarse `task:active` destination is guarded (#762 D2 finding 1 —
+ * see the helper). A committed decline (#594 FIX2b) NEVER survives — that revocation must not fold
+ * phantom economics into a job.
  */
 private fun PlatformRegionStepper.resolveOnLeave(
     region: PlatformRegion,
     obs: Observation.FlowObservation,
 ): PlatformRegion {
     if (region.pendingOffers.none { it.acceptedAt == null }) return region
-    val leavingToTask = obs.flow?.isTaskFlow() == true
+    val destination = obs.flow
     val newOffers = region.pendingOffers.mapNotNull { offer ->
         when {
             offer.acceptedAt != null -> offer // existing survivor — consumption is the mint's job
             offer.declineCommittedAt != null -> null // committed decline (#594 FIX2b) — never survives
-            offer.isAcceptLatched() || leavingToTask ->
+            offer.isAcceptLatched() || destinationImpliesAccept(destination, offer) ->
                 offer.copy(acceptedAt = offer.acceptClickAt ?: obs.timestamp)
             else -> null // declined / timed out → resolved away
         }
     }
     return region.copy(pendingOffers = newOffers)
+}
+
+/**
+ * Does leaving offer-presentation TO [destination] imply this offer was click-lessly ACCEPTED?
+ *
+ * A **phased** task flow (pickup/dropoff navigation/arrived) does, unconditionally — the platform
+ * only advances to those screens after an accept. The coarse [Flow.TaskActive] is different (#762
+ * D2, adversarial finding 1): on a coarse platform it is the AMBIENT screen (Uber's `on_job_view`
+ * is up for the whole trip), so mid-trip it is also exactly what re-renders when a stacked offer's
+ * overlay vanishes after a **decline or timeout** — and Uber ships no decline click rule, so no
+ * decline latch can flag that case. Returning to the surface you were already on is not an accept:
+ * a `task:active` destination implies acceptance only when the offer's own
+ * [PendingOffer.returnFlow] was NOT already a task flow (e.g. `Idle` — a job appearing where there
+ * was none IS the legitimate click-less accept). Without this guard, a declined/timed-out mid-trip
+ * offer would be stamped accepted the moment `on_job_view` re-renders — a phantom `OFFER_ACCEPTED`
+ * plus phantom add-on economics and never-resolvable placeholders (the job-61 absorption class),
+ * unrescuable by `OFFER_EXPIRY` once `acceptedAt` is set.
+ */
+private fun destinationImpliesAccept(destination: Flow?, offer: PendingOffer): Boolean {
+    if (destination?.isTaskFlow() != true) return false
+    return destination != Flow.TaskActive || !offer.returnFlow.isTaskFlow()
 }
 
 /**

@@ -472,9 +472,37 @@ true — so it (a) **consumes an accepted offer into a costed job** on the offer
 **deliberately phase-less**: `toTaskPhase()` and `toTaskSubFlow()` return `null`, so it is
 **structurally inert to task lineage** — it never mints, displaces, completes, or resumes a task.
 The task lifecycle already early-returns on a null phase (`toTaskPhase() ?: return region`), and
-because it counts as a task flow, entering or leaving it is *not* a "left the task family" edge, so
-it never arms or commits a `TASK_RETIRE`. Interleaving a `task:active` frame between two real leg
-frames is a no-op.
+because it counts as a task flow, a `task:active` frame **between phased task flows** is never a
+"left the task family" edge — it arms no `TASK_RETIRE`, and an interposed `task:active` frame
+neither cancels nor early-commits an already-pending retire. (Leaving `task:active` **to** a
+non-task flow such as `idle` *does* arm the normal retire grace, exactly as leaving any task flow
+does — that edge is correct and unchanged.) Interleaving a `task:active` frame between two real leg
+frames is therefore a no-op **for task lineage**. It is deliberately NOT a no-op for the odometer
+arbiter: `task:active` stamps `lastActedFlow`, and `OdometerArbiter` treats only the two ARRIVED
+sub-flows as stationary, so a coarse frame flips a parked region back to moving (GPS resumes). That
+is a real, intended behavior change: with the leg unknown we cannot claim the driver is parked, and
+resuming GPS is the honest, mileage-safe default (a wrongly-paused odometer loses miles; a
+wrongly-resumed one merely samples a parked car).
+
+**Ambient-screen accept guard (adversarial finding 1).** On a coarse platform `task:active` is the
+*ambient* screen — mid-trip, it is what re-renders when a stacked offer's overlay vanishes after a
+decline or timeout (and Uber ships no decline click rule, so no decline latch can flag that). So the
+offer lifecycle's click-less accept inference is guarded: leaving offer-presentation to
+`task:active` implies acceptance only when the offer's own `returnFlow` was **not** already a task
+flow (a job appearing where there was none — e.g. from `Idle` — is the legitimate click-less
+accept; returning to the surface you were already on is not). Phased task-flow destinations remain
+unconditional acceptance evidence.
+
+**Accepted residual (adversarial finding 2): the coarse post-trip walk can suppress the
+PostTask-exit job close.** On a coarse-only trip a marker-less `on_job_view` frame between
+post-trip and idle walks the region's acted flow `PostTask → TaskActive → Idle`; the PostTask-exit
+close edge (`prev == PostTask && next` not a task flow) never fires — the intermediate next IS a
+task flow, and by the idle frame prev is already `TaskActive` — and a coarse trip carries no
+`activeTask`, so no `TASK_RETIRE` close-out fires either: the job stays open until session end or
+the next accept's #596 T2 close+mint. Deliberately NOT patched with a graced close in this change:
+there is zero Uber corpus to validate the shape against, a wrong close on a stacked job would be
+fabrication, and an open job fails toward **absorption** — the codebase's preferred failure
+direction. Tracked for field validation.
 
 **A peer `TaskPhase.TRANSIT` was considered and REJECTED** after adversarial review:
 

@@ -5,7 +5,9 @@ import cloud.trotter.dashbuddy.domain.model.offer.ParsedOffer
 import cloud.trotter.dashbuddy.domain.model.order.OrderType
 import cloud.trotter.dashbuddy.domain.model.order.ParsedOrder
 import cloud.trotter.dashbuddy.domain.pipeline.Observation
+import cloud.trotter.dashbuddy.domain.pipeline.ObservationPayload
 import cloud.trotter.dashbuddy.domain.pipeline.TimeoutType
+import cloud.trotter.dashbuddy.domain.state.DestructiveKind
 import cloud.trotter.dashbuddy.domain.state.Flow
 import cloud.trotter.dashbuddy.domain.state.FlowRegion
 import cloud.trotter.dashbuddy.domain.state.Mode
@@ -155,10 +157,9 @@ class ActiveFlowTest {
             r = next; prev = nextPrev
             val t = r.activeTask
             assertNotNull("active task still present after task:active #$i", t)
-            assertEquals("same task id (no re-mint/displace) #$i", pickupId, t!!.taskId)
-            assertEquals("still PICKUP phase #$i", TaskPhase.PICKUP, t.phase)
-            assertNotNull("arrivedAt intact #$i", t.arrivedAt)
-            assertNull("not completed #$i", t.completedAt)
+            // Finding 5a: WHOLE-task equality (incl. subPhase) — a regression where
+            // toTaskPhase(TaskActive) starts returning a phase would mutate the task here.
+            assertEquals("task byte-identical to pre-interleave (incl. subPhase) #$i", pickup, t)
             assertNull("no retire/destructive armed #$i", r.pendingDestructive)
             assertTrue("no task moved to recentTasks #$i", r.recentTasks.isEmpty())
         }
@@ -169,6 +170,111 @@ class ActiveFlowTest {
         val completedPickup = afterDrop.recentTasks.firstOrNull { it.taskId == pickupId }
         assertNotNull("pickup displaced to recentTasks by the real dropoff frame", completedPickup)
         assertNotNull("pickup completed by the real transition (not by task:active)", completedPickup!!.completedAt)
+    }
+
+    // =====================================================================
+    // (b2) AMBIENT-SCREEN ACCEPT GUARD (adversarial finding 1)
+    // =====================================================================
+
+    @Test
+    fun `a mid-trip offer with no clicks is NOT stamped accepted when the ambient task-active screen re-renders`() {
+        // The phantom-accept red probe: driver mid-trip on a coarse platform (job already minted,
+        // ambient screen = task:active), a stacked offer appears (returnFlow = task:active), the
+        // dasher declines it / lets it time out (Uber has NO decline click rule → no latch), and the
+        // ambient on_job_view re-renders. Pre-fix, resolveOnLeave's unconditional leavingToTask
+        // stamped it accepted → phantom OFFER_ACCEPTED + phantom add-on economics.
+        val r = drive(
+            region(Platform.Uber),
+            offerObs(1_000L, "o1", "Bill Miller BBQ", pay = 16.0),
+            acceptClick(1_050L),
+            activeTripObs(1_200L),                          // job minted; ambient flow = task:active
+            offerObs(2_000L, "o2", "Mama Margies", pay = 9.0), // stacked offer over the ambient screen
+            activeTripObs(2_500L),                          // overlay vanished — NO clicks captured
+        )
+        val job = r.activeJob
+        assertNotNull(job)
+        assertEquals("only the first offer's economics — no phantom add-on", 1, job!!.acceptedOffers.size)
+        assertEquals("gross unchanged", 16.0, job.totalPayAmount, 0.001)
+        assertNull("no survivor minted from the un-clicked offer", r.pendingOffers.firstOrNull { it.acceptedAt != null })
+        assertTrue("the un-clicked offer resolved away (timeout/decline)", r.pendingOffers.isEmpty())
+    }
+
+    @Test
+    fun `an offer presented over Idle is click-lessly accepted by a following task-active frame (positive control)`() {
+        // The legitimate click-less accept this flow exists for: a job appearing where there was
+        // none. Fresh region → returnFlow = Idle → the task:active destination still infers accept.
+        val r = drive(
+            region(Platform.Uber),
+            offerObs(1_000L, "o1", "Bill Miller BBQ", pay = 12.0), // returnFlow = Idle (no prior acted flow)
+            activeTripObs(1_500L),                                 // no accept click captured
+        )
+        val job = r.activeJob
+        assertNotNull("job minted from the click-less accept", job)
+        assertEquals("economics consumed", 1, job!!.acceptedOffers.size)
+        assertEquals(12.0, job.totalPayAmount, 0.001)
+    }
+
+    @Test
+    fun `OFFER_EXPIRY still resolves an un-clicked mid-trip offer (no frame after the overlay vanishes)`() {
+        val midTrip = drive(
+            region(Platform.Uber),
+            offerObs(1_000L, "o1", "Bill Miller BBQ", pay = 16.0),
+            acceptClick(1_050L),
+            activeTripObs(1_200L),
+            offerObs(2_000L, "o2", "Mama Margies", pay = 9.0),
+        )
+        // The overlay vanishes without a frame; the hash-carrying safety timer fires. Because the
+        // guard never stamped acceptedAt, expireOffer's accepted/latched no-op does not trip.
+        val expired = stepper.step(
+            midTrip, FlowRegion(flow = Flow.OfferPresented), FlowRegion(flow = Flow.OfferPresented),
+            Observation.Timeout(
+                timestamp = 130_000L, type = TimeoutType.OFFER_EXPIRY,
+                payload = ObservationPayload.OfferExpiry("o2"),
+            ),
+            policy,
+        )
+        assertTrue("the timer resolves the presented offer", expired.pendingOffers.none { it.offerHash == "o2" })
+        assertNull("no survivor", expired.pendingOffers.firstOrNull { it.acceptedAt != null })
+        assertEquals("job economics untouched", 1, expired.activeJob!!.acceptedOffers.size)
+    }
+
+    // =====================================================================
+    // (b3) PENDING RETIRE × task:active (adversarial finding 5b)
+    // =====================================================================
+
+    @Test
+    fun `a pending TASK_RETIRE survives a task-active frame - neither cancelled nor committed early`() {
+        // Arm the idle-flash retire grace on a live pickup...
+        val onPickup = drive(
+            region(Platform.Uber),
+            offerObs(1_000L, "o1", "Bill Miller BBQ"),
+            acceptClick(1_050L),
+            pickupObs(1_200L, "Bill Miller BBQ", TaskSubFlow.NAVIGATION),
+        )
+        val idle = Observation.Screen(
+            timestamp = 2_000L, captureId = null, ruleId = "idle",
+            metadata = ReplayMetadata.EMPTY, flow = Flow.Idle, modeHint = Mode.Online,
+            parsed = ParsedFields.None,
+        )
+        val armed = stepper.step(
+            onPickup, FlowRegion(flow = Flow.TaskPickupNavigation, activePlatform = Platform.Uber),
+            FlowRegion(flow = Flow.Idle, activePlatform = Platform.Uber), idle, policy,
+        )
+        val pend = armed.pendingDestructive
+        assertEquals("retire grace armed by the idle flash", DestructiveKind.TASK_RETIRE, pend?.kind)
+
+        // ...then a task:active frame INSIDE the grace window: the pending must ride through
+        // untouched — not cancelled (the null-phase early-return precedes the same-phase grace
+        // clear) and not committed early (deadline not passed).
+        val after = stepper.step(
+            armed, FlowRegion(flow = Flow.Idle, activePlatform = Platform.Uber),
+            FlowRegion(flow = Flow.TaskActive, activePlatform = Platform.Uber),
+            activeTripObs(2_500L), policy,
+        )
+        assertEquals("pending retire unchanged — neither cancelled nor re-armed", pend, after.pendingDestructive)
+        assertNotNull("task not retired early", after.activeTask)
+        assertNull("no completedAt stamped", after.activeTask!!.completedAt)
+        assertTrue("nothing moved to recentTasks", after.recentTasks.isEmpty())
     }
 
     // =====================================================================
