@@ -53,8 +53,9 @@ class PlatformPreferencesRepository @Inject constructor(
     /**
      * Per-platform grace/timing overrides (#438 item 6). No persistence store or
      * settings-UI writer exists yet, so this materializes to an empty map today —
-     * every platform resolves to [GraceConfig.DEFAULT] (behavior identical to the
-     * former compile-time constants). When a dev-settings editor lands it swaps
+     * every platform resolves to its per-platform code default
+     * ([GraceConfig.codeDefault]: [GraceConfig.DEFAULT] for most, Uber's wider
+     * `acceptGraceMs` per #762 D2). When a dev-settings editor lands it swaps
      * this for a DataStore-backed flow; the read seam is already in place.
      * CONSTRAINT: that swap MUST use `stateIn(scope, SharingStarted.Eagerly, …)`
      * like [enabledPackages] above — the consumer is a synchronous `.value` read

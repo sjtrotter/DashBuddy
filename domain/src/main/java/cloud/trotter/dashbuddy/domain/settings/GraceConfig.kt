@@ -30,6 +30,18 @@ data class GraceConfig(
     val pauseTimeoutBufferMs: Long = PAUSE_TIMEOUT_BUFFER_MS,
     /** Settle delay before the EXPAND_EARNINGS tap (waits on the dialog animation). */
     val expandSettleMs: Long = EXPAND_SETTLE_MS,
+    /**
+     * How long an accepted-pending-consumption offer stays consumable by the task-edge mint
+     * (#438 B3, formerly `PlatformRegionStepper.ACCEPT_GRACE_MS`; #762 D2 made it per-platform).
+     * An accept is normally followed by the task flow within a couple of minutes; a generous window
+     * recovers the F3 teardown race while a stale survivor still can't leak into an unrelated later
+     * job. This is a per-platform grace value (Principle 8): on a platform with a fine-grained task
+     * flow (DoorDash) the survivor is consumed within seconds by the first pickup frame, so the
+     * default is 120s; on a coarse platform (Uber, whose `on_job_view`/`task:active` frame consumes
+     * the accept within seconds too) it is widened to a realistic full-drive fallback for a MISSED
+     * consume frame — see [Companion.codeDefault].
+     */
+    val acceptGraceMs: Long = DEFAULT_ACCEPT_GRACE_MS,
 ) {
     companion object {
         const val DEFAULT_GRACE_MS = 10_000L
@@ -38,8 +50,38 @@ data class GraceConfig(
         const val PAUSE_TIMEOUT_BUFFER_MS = 1_000L
         const val EXPAND_SETTLE_MS = 500L
 
+        /**
+         * Default accept-consumption grace (DoorDash and any platform without an override): a fine-
+         * grained task flow consumes the accepted survivor within a couple of minutes. SSOT for the
+         * former `PlatformRegionStepper.ACCEPT_GRACE_MS`.
+         */
+        const val DEFAULT_ACCEPT_GRACE_MS = 120_000L
+
+        /**
+         * Uber's accept-consumption grace (#762 D2): 10 min. On Uber no fine-grained task flow
+         * exists between accept and the store — the coarse `task:active` (`on_job_view`) surface
+         * usually consumes the accept within seconds via its first frame, so this wide window is a
+         * belt-and-suspenders fallback for a MISSED consume frame that must still span a realistic
+         * drive rather than expire mid-trip.
+         */
+        const val UBER_ACCEPT_GRACE_MS = 600_000L
+
         /** Code-constant default applied to any platform without an override. */
         val DEFAULT = GraceConfig()
+
+        /**
+         * Per-platform **code defaults** (before any user override), keyed by [Platform] (Principle
+         * 8 — data keyed by platform, never `== Platform.X` in logic). A platform absent here uses
+         * [DEFAULT]; the only current divergence is Uber's wider [acceptGraceMs]. A future
+         * per-platform grace editor's DataStore override still wins over this in
+         * [GraceConfigProvider.forPlatform].
+         */
+        private val CODE_DEFAULTS: Map<Platform, GraceConfig> = mapOf(
+            Platform.Uber to GraceConfig(acceptGraceMs = UBER_ACCEPT_GRACE_MS),
+        )
+
+        /** The code default for [platform] — its [CODE_DEFAULTS] entry, else [DEFAULT]. */
+        fun codeDefault(platform: Platform): GraceConfig = CODE_DEFAULTS[platform] ?: DEFAULT
     }
 }
 
@@ -67,9 +109,9 @@ fun interface GraceConfigProvider {
     /** The current per-platform override snapshot — one atomic read per use site. */
     fun snapshot(): Map<Platform, GraceConfig>
 
-    /** The config for [platform], falling back to [GraceConfig.DEFAULT]. */
+    /** The config for [platform]: a user override if present, else its per-platform code default. */
     fun forPlatform(platform: Platform): GraceConfig =
-        snapshot()[platform] ?: GraceConfig.DEFAULT
+        snapshot()[platform] ?: GraceConfig.codeDefault(platform)
 
     companion object {
         /** Code-constant defaults — the test / fallback provider (no overrides). */

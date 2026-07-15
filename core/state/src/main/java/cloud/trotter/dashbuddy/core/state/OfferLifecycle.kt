@@ -23,11 +23,15 @@ import timber.log.Timber
  * semantics per platform); the N>1 correlation contract (#251/vet M5) is defined here so #251's
  * capture only adds ruleset data, not `:core:state` logic.
  */
-internal fun PlatformRegionStepper.stepOffers(region: PlatformRegion, obs: Observation): PlatformRegion {
+internal fun PlatformRegionStepper.stepOffers(
+    region: PlatformRegion,
+    obs: Observation,
+    policy: TransitionPolicy,
+): PlatformRegion {
     // Accept-grace lazy expiry: an accepted-pending-consumption survivor older than the grace never
     // got minted (the F3-failure case) — drop the corpse so it can't ride the snapshot. The accept
     // was already logged at the edge, so NO further event fires (WARN only, Principle 7).
-    val pruned = pruneExpiredSurvivors(region, obs)
+    val pruned = pruneExpiredSurvivors(region, obs, policy)
 
     return when (obs) {
         is Observation.FlowObservation -> when (obs.flow) {
@@ -43,14 +47,27 @@ internal fun PlatformRegionStepper.stepOffers(region: PlatformRegion, obs: Obser
     }
 }
 
-/** True once an accepted-pending-consumption survivor has out-lived the accept grace. */
-internal fun PlatformRegionStepper.isOfferAcceptExpired(offer: PendingOffer, obs: Observation): Boolean {
+/**
+ * True once an accepted-pending-consumption survivor has out-lived the accept grace. The grace is
+ * per-platform (#762 D2, `[acceptGraceMs]` from `TransitionPolicy.acceptGraceMs(platform)`) — passed
+ * in rather than read from a global const so a coarse platform (Uber) can span a realistic drive.
+ */
+internal fun PlatformRegionStepper.isOfferAcceptExpired(
+    offer: PendingOffer,
+    obs: Observation,
+    acceptGraceMs: Long,
+): Boolean {
     val acceptedAt = offer.acceptedAt ?: return false
-    return obs.timestamp - acceptedAt > PlatformRegionStepper.ACCEPT_GRACE_MS
+    return obs.timestamp - acceptedAt > acceptGraceMs
 }
 
-private fun PlatformRegionStepper.pruneExpiredSurvivors(region: PlatformRegion, obs: Observation): PlatformRegion {
-    val expired = region.pendingOffers.filter { it.acceptedAt != null && isOfferAcceptExpired(it, obs) }
+private fun PlatformRegionStepper.pruneExpiredSurvivors(
+    region: PlatformRegion,
+    obs: Observation,
+    policy: TransitionPolicy,
+): PlatformRegion {
+    val acceptGraceMs = policy.acceptGraceMs(region.platform)
+    val expired = region.pendingOffers.filter { it.acceptedAt != null && isOfferAcceptExpired(it, obs, acceptGraceMs) }
     if (expired.isEmpty()) return region
     expired.forEach {
         Timber.tag("StateMachine").w(

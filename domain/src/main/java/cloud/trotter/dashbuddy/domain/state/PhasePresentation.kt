@@ -94,6 +94,11 @@ val Flow.presentation: PhasePresentation
             longLabel = "WAITING", longColor = PhaseColor.GOOD,
             shortLabel = "AWAIT", shortColor = PhaseColor.NEUTRAL,
         )
+        // #762 D2: a coarse in-job surface (leg unknown) — honest "active job" badge; no leg claimed.
+        Flow.TaskActive -> PhasePresentation(
+            longLabel = "ON JOB", longColor = PhaseColor.GOOD,
+            shortLabel = "ON JOB", shortColor = PhaseColor.GOOD,
+        )
         Flow.SessionEnded -> PhasePresentation(
             longLabel = "DONE", longColor = PhaseColor.NEUTRAL,
             shortLabel = "DONE", shortColor = PhaseColor.NEUTRAL,
