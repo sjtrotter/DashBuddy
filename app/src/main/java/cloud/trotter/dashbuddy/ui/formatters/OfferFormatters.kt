@@ -127,6 +127,7 @@ fun OfferQuality.displayLabel(): String = when (this) {
     OfferQuality.BAD -> "BAD OFFER"
     OfferQuality.PROTECTED -> "Protected!"
     OfferQuality.BLOCKED -> "Blocked"
+    OfferQuality.SHOP_DECLINED -> "Shopping off"
     OfferQuality.UNKNOWN -> "No verdict"
 }
 
