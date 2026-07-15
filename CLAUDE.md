@@ -344,7 +344,14 @@ resolution reads that from the committed rows so a payout-less `DASH_STOP` re-ru
 a downgrade. A driver `newStoreName` correction sets a sticky `storeKeyPinned` (H1, never re-keyed). Per-store
 reads group on the resolved key, unresolved rows fall back to `normalizedChain(storeName)` (F9); the #315
 Patterns tab (store report card + dwell percentiles) is the consumer. `PROJECTOR_VERSION` 4→5 refolds all
-history and (F8) the version-bump wipe now also clears `stores`/`pickup_records`. `NetProfit`
+history and (F8) the version-bump wipe now also clears `stores`/`pickup_records`. **#773 (address
+running-key fallback, `PROJECTOR_VERSION` 6→7):** a chain-bare receipt (H-E-B renders no parenthetical
+code) now falls back to an address-derived key — `StoreKeys.addressRunningKey` takes the leading
+pure-ASCII street-number token (1–6 digits, fail-null on ranges/suffixes/non-numeric), `@`-prefixed
+(`@12125`) so provenance is self-describing; the resolution ladder is receipt key > address(`@`) key >
+chain-only with tier-aware monotonic upgrades (an address key never downgrades a receipt key), and
+`normalizeRunningKey` strips a leading `@` from receipt-path keys so a payout parenthetical can't
+masquerade as address-tier. `NetProfit`
 (`:domain`) is the one shared cost-math SSOT for both the offer estimate and the frozen realized net.
 `AnalyticsRepository` (`:core:data`, **DAO-only — no economy dependency**, so historical net is structurally
 immutable) serves period economics (`SUM(netProfit)` frozen + `unattributedPay`; all-pay gross =
@@ -527,8 +534,12 @@ Every new feature or refactor holds to these — they are forefront design input
    offer slots, lifecycle-edge anchors, learned rate models — is either ruleset data validated at
    load or state keyed by `Platform`, never a global tuned to whichever platform we field-test
    most. New rule↔state vocabulary goes through the enumerated, load-validated contract
-   (`StateMachineContract` + `REQUIRED_FIELDS_BY_SHAPE`), not a magic string consumed by a Kotlin
-   `when`. The acceptance test: adding a platform means shipping a ruleset + corpus with **zero**
+   (`StateMachineContract` — `REQUIRED_FIELDS_BY_SHAPE`, plus #762's `EFFECT_INTENTS`
+   (effect-bearing notification intent → its required parse fields) and `REQUIRED_FIELDS_BY_FLOW`
+   (deliberately empty today — every `task:*` flow has a legitimate parse-less rule), both enforced
+   at compile by `RuleCompiler` as *declaration* checks, fail-loud per file; unknown intents stay
+   informational by construction, so an OTA ruleset can't smuggle an effect), not a magic string
+   consumed by a Kotlin `when`. The acceptance test: adding a platform means shipping a ruleset + corpus with **zero**
    `:core:state` / `:core:pipeline` / `:domain` edits. DoorDash-heavy field testing *masks*
    violations (a global slot never collides while only one platform runs), so this is enforced at
    PR-review time — see *Every PR gets a design-goal review* under Git Workflow, and the drift
