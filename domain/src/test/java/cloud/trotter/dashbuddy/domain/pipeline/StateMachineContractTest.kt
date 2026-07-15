@@ -24,4 +24,21 @@ class StateMachineContractTest {
             )
         }
     }
+
+    /**
+     * A typo'd flow key in [StateMachineContract.REQUIRED_FIELDS_BY_FLOW] would silently no-op
+     * (the compiler looks keys up by the rule's resolved flow, so an unknown key never matches
+     * anything) — exactly the fail-open drift class the contract exists to prevent (#762 D6,
+     * adversarial-review finding). Every key must be a real Flow wire value.
+     */
+    @Test
+    fun `REQUIRED_FIELDS_BY_FLOW keys are all valid Flow wire values`() {
+        for (key in StateMachineContract.REQUIRED_FIELDS_BY_FLOW.keys) {
+            assertTrue(
+                "'$key' in REQUIRED_FIELDS_BY_FLOW is not a SUPPORTED_FLOWS wire value — " +
+                    "a typo'd key silently no-ops instead of enforcing",
+                key in StateMachineContract.SUPPORTED_FLOWS,
+            )
+        }
+    }
 }

@@ -450,4 +450,6 @@ compile time** rather than discovered at runtime:
 
 Both checks live in `RuleCompiler` (fail-closed, isolable per #293 item 4) and keep the
 trust-boundary posture of this ADR: the DSL still cannot express transition logic; Kotlin now
-verifies at load that the DSL delivers the data its transitions and effects depend on.
+verifies at load that the DSL *declares* the fields its transitions and effects depend on
+(declaration, not extraction success — a declared field whose predicate never matches still
+nulls at runtime, where the effect guard's null-checks remain the second layer).
