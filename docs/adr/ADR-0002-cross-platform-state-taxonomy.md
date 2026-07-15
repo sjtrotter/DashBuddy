@@ -453,3 +453,60 @@ trust-boundary posture of this ADR: the DSL still cannot express transition logi
 verifies at load that the DSL *declares* the fields its transitions and effects depend on
 (declaration, not extraction success — a declared field whose predicate never matches still
 nulls at runtime, where the effect guard's null-checks remain the second layer).
+
+---
+
+## Amendment 2026-07-15 — the phase-less active-job flow (`task:active`) — and why there is no `TRANSIT` phase
+
+A platform whose in-job surface is **coarse** — Uber's `on_job_view`, a single screen shown for the
+whole trip — cannot honestly declare a leg. It does not distinguish "driving to the store" from
+"driving to the customer" from "standing at the counter"; it only says, in effect, *you are on a
+job*. The taxonomy needs a token for exactly that observation, and forcing it into a pickup- or
+dropoff-phased flow would be a lie the state machine then acts on.
+
+**The decision:** a new `Flow` value **`Flow.TaskActive`** (wire `task:active`), meaning **"in an
+active job, leg unknown."** It is a **task flow** for job-lifecycle purposes — `isTaskFlow()` is
+true — so it (a) **consumes an accepted offer into a costed job** on the offer→`task:active` edge
+(the same `acceptInputsFromPending` mint the phased flows use), (b) **holds mode Online**
+(`resolveMode` maps it there), and (c) feeds the UI an honest "ON JOB" badge. But it is
+**deliberately phase-less**: `toTaskPhase()` and `toTaskSubFlow()` return `null`, so it is
+**structurally inert to task lineage** — it never mints, displaces, completes, or resumes a task.
+The task lifecycle already early-returns on a null phase (`toTaskPhase() ?: return region`), and
+because it counts as a task flow, entering or leaving it is *not* a "left the task family" edge, so
+it never arms or commits a `TASK_RETIRE`. Interleaving a `task:active` frame between two real leg
+frames is a no-op.
+
+**A peer `TaskPhase.TRANSIT` was considered and REJECTED** after adversarial review:
+
+- As a **task flow** it would have to map to a real `TaskPhase`, and every coarse frame would then
+  churn the displacement machinery — minting/displacing a "transit" task and stamping fabricated
+  `completedAt` values on the previous task on each frame, exactly the re-mint/ghost class the
+  #498/#503/#526 work spent months eliminating.
+- As a **non-task flow** (to avoid that) it would instead read every coarse frame as *leaving* the
+  task family, arming `TASK_RETIRE` graces and committing mid-drive task retirements — a delivery
+  in progress would be repeatedly "completed."
+- The word "transit" is itself **dishonest** on a catch-all screen: `on_job_view` matches while the
+  driver is parked at the store counter as much as while driving. Naming the state after a leg it
+  cannot verify is precisely the failure `task:active` avoids.
+- **"En route to a known leg" already has an encoding** — `<destination>:navigation`
+  (`task:pickup:navigation` / `task:dropoff:navigation`). A `TRANSIT` phase would be a *second*
+  encoding of "moving toward a stop," violating SSOT.
+
+`task:active` is therefore **not** "transit"; it is the honest absence of leg information.
+
+**Precedent.** `Flow.TaskUnassigned` (#736) established that a `Flow` value can live outside the
+pickup/dropoff task-subflow family and still drive job lifecycle (there, an inline abandon).
+`task:active` is the second such value — a task flow with no `TaskPhase`.
+
+**Not in scope here.** Richer per-leg Uber recognition — deriving pickup vs. dropoff from
+**notification** content — is a separate, corpus-gated enrichment tracked under #762, not part of
+this amendment. `task:active` is the floor: an honest active-job state that a coarse surface can
+always declare, which any future per-leg signal only refines.
+
+**Accept-grace is per-platform.** Related to this flow: the accept-consumption grace (how long an
+accepted-pending-consumption offer stays consumable by the task-edge mint) is now a **per-platform**
+value on `GraceConfig.acceptGraceMs` (DoorDash 120s; Uber 600s — a coarse platform needs a window
+that spans a realistic drive as a belt-and-suspenders fallback for a missed `task:active` frame),
+read through `TransitionPolicy.acceptGraceMs(platform)`. This replaces the former global
+`PlatformRegionStepper.ACCEPT_GRACE_MS` constant (Principle 8 — grace timing is per-platform, never
+a global tuned to the field-test platform).
