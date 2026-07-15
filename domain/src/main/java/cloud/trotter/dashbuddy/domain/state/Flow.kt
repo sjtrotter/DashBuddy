@@ -34,6 +34,22 @@ enum class Flow(val wire: String) {
      * `task:unassigned`; DoorDash specificity lives only in the rule JSON that emits it.
      */
     TaskUnassigned("task:unassigned"),
+    /**
+     * "In an active job, leg unknown" — declared by a platform's **coarse** in-job surface that
+     * cannot distinguish pickup from dropoff legs (e.g. a screen that only says "on trip", Uber's
+     * `on_job_view`). Deliberately **phase-less**: [toTaskPhase] maps it to `null`, so it is
+     * structurally inert to task mint/displace/resume (the task lifecycle early-returns on a null
+     * phase). It exists to (a) **consume an accepted offer into a job** — it counts as a task flow
+     * for job-lifecycle purposes ([isTaskFlow] is true), (b) **hold mode Online**, and (c) give the
+     * UI an honest "active job" state.
+     *
+     * It is **NOT** "transit": the declaring screen may be showing while the driver stands at the
+     * counter, so labelling it a leg would be dishonest. "En route to a known leg" is already
+     * `<destination>:navigation`; a peer `TaskPhase.TRANSIT` was considered and rejected (see
+     * ADR-0002 amendment 2026-07-15). Platform-neutral by construction — any ruleset can declare
+     * `task:active`; platform specificity lives only in the rule JSON that emits it.
+     */
+    TaskActive("task:active"),
     SessionEnded("session:ended"),
     ;
 

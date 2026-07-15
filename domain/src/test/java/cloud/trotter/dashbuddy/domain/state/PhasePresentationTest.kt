@@ -26,6 +26,8 @@ class PhasePresentationTest {
             Flow.PostTask to ("DELIVERED" to PhaseColor.GOOD),
             // #736: TaskUnassigned is presented as the Idle-equivalent (a transient teardown).
             Flow.TaskUnassigned to ("WAITING" to PhaseColor.GOOD),
+            // #762 D2: TaskActive — the coarse in-job surface, honest "on job" badge (leg unknown).
+            Flow.TaskActive to ("ON JOB" to PhaseColor.GOOD),
             Flow.SessionEnded to ("DONE" to PhaseColor.NEUTRAL),
         )
         Flow.entries.forEach { flow ->

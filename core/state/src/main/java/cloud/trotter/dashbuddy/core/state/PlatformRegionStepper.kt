@@ -46,13 +46,10 @@ class PlatformRegionStepper @Inject constructor() {
         /** Max completed tasks retained per platform during a session. */
         const val MAX_RECENT_TASKS = 20
 
-        /**
-         * #438 B3 (was #526 D1): how long an accepted-pending-consumption offer stays consumable by
-         * the mint. An accept is always followed by the task flow within a couple of minutes; a
-         * generous window recovers the F3 teardown race while a stale survivor still can't leak into
-         * an unrelated later job.
-         */
-        const val ACCEPT_GRACE_MS = 120_000L
+        // #762 D2: the accept-consumption grace moved to the per-platform SSOT
+        // `GraceConfig.acceptGraceMs` (DoorDash 120s, Uber 600s) — read via
+        // `TransitionPolicy.acceptGraceMs(platform)`, threaded to the offer lifecycle. The former
+        // global `ACCEPT_GRACE_MS` const is deleted (Principle 8 — grace timing is per-platform).
     }
 
     /**
@@ -82,7 +79,7 @@ class PlatformRegionStepper @Inject constructor() {
         // accept-latched offer is marked accepted-pending-consumption before stepCore's task edge
         // consumes it (the old armAcceptStash mirror, run AFTER stepCore, is retired).
         reconcileDropoffStore(
-            reconcileJobTasks(stepCore(stepOffers(prev, obs), prevFlow, nextFlow, obs, policy)),
+            reconcileJobTasks(stepCore(stepOffers(prev, obs, policy), prevFlow, nextFlow, obs, policy)),
         ),
         obs,
     )
@@ -478,7 +475,7 @@ class PlatformRegionStepper @Inject constructor() {
         r = updateRatings(r, obs)
 
         // Job lifecycle
-        r = updateJobLifecycle(r, prev, next, obs)
+        r = updateJobLifecycle(r, prev, next, obs, policy)
 
         // Task lifecycle
         r = updateTaskLifecycle(r, prev, next, obs, policy)
@@ -589,6 +586,7 @@ class PlatformRegionStepper @Inject constructor() {
         prevFlowVal: Flow,
         nextFlowVal: Flow,
         obs: Observation.FlowObservation,
+        policy: TransitionPolicy,
     ): PlatformRegion {
         // #438 B3: consume THIS region's own accepted-pending-consumption offer on a task flow — the
         // SINGLE mint source (richer than the old accept stash: the owned offer carries full fields +
@@ -604,7 +602,7 @@ class PlatformRegionStepper @Inject constructor() {
         var current = region
         val accepted = current.pendingOffers.lastOrNull { it.acceptedAt != null }
         if (nextFlowVal.isTaskFlow() && accepted != null) {
-            if (!isOfferAcceptExpired(accepted, obs)) {
+            if (!isOfferAcceptExpired(accepted, obs, policy.acceptGraceMs(current.platform))) {
                 val consumed = current.copy(pendingOffers = current.pendingOffers.filterNot { it === accepted })
                 return consumeAcceptIntoJob(consumed, obs, acceptInputsFromPending(accepted, accepted.acceptedAt))
             }
@@ -631,6 +629,15 @@ class PlatformRegionStepper @Inject constructor() {
 
         // Post-task: keep job alive through PostTask for payout capture
         // Job ends when we leave PostTask for non-task flow
+        //
+        // #762 D2 accepted residual (adversarial finding 2): on a coarse-only trip a marker-less
+        // `task:active` frame BETWEEN post-trip and idle walks the acted flow PostTask → TaskActive
+        // → Idle, so this edge never fires (the intermediate next IS a task flow; by the idle frame
+        // prev is TaskActive) — and a coarse trip has no activeTask, so no TASK_RETIRE close-out
+        // either: the job stays open until session end or the next accept's #596 T2 close+mint.
+        // Deliberately NOT closed with a grace here: zero Uber corpus to validate the shape, a
+        // wrong close on a stacked job is fabrication, and an open job fails toward absorption —
+        // the preferred failure direction. See ADR-0002 amendment 2026-07-15 (residual).
         if (prevFlowVal == Flow.PostTask && !nextFlowVal.isTaskFlow() && nextFlowVal != Flow.PostTask && nextFlowVal != Flow.OfferPresented) {
             return completeActiveJob(current)
         }
@@ -725,16 +732,28 @@ class PlatformRegionStepper @Inject constructor() {
 // FLOW EXTENSION HELPERS
 // =========================================================================
 
+// #762 D2: [Flow.TaskActive] IS a task flow (so an accept consumes into a job) but is DELIBERATELY
+// phase-less — [toTaskPhase]/[toTaskSubFlow] return null for it. Every phase/subflow consumer
+// already guards `toTaskPhase() ?: return`/`toTaskSubFlow() ?: return`, so a `task:active`
+// observation never mints, displaces, or resumes a task (verified: TaskLifecycle.kt:52-53 and
+// healActiveLifecycle both early-return on the null phase). Retire semantics, precisely: a
+// `task:active` frame BETWEEN phased task flows is not a "left the task family" edge (arms
+// nothing), and an interposed `task:active` frame neither cancels nor early-commits a pending
+// TASK_RETIRE (the null-phase early-return happens before the same-phase update's grace clear) —
+// but leaving `task:active` TO a non-task flow (e.g. idle) still arms the normal retire grace,
+// exactly as leaving any task flow does. See the enum KDoc + ADR-0002 amendment 2026-07-15.
 internal fun Flow.isTaskFlow(): Boolean = this in setOf(
     Flow.TaskPickupNavigation,
     Flow.TaskPickupArrived,
     Flow.TaskDropoffNavigation,
     Flow.TaskDropoffArrived,
+    Flow.TaskActive,
 )
 
 internal fun Flow.toTaskPhase(): TaskPhase? = when (this) {
     Flow.TaskPickupNavigation, Flow.TaskPickupArrived -> TaskPhase.PICKUP
     Flow.TaskDropoffNavigation, Flow.TaskDropoffArrived -> TaskPhase.DROPOFF
+    // TaskActive is phase-less by design → null (structurally inert to task lineage).
     else -> null
 }
 

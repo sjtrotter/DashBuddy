@@ -4,6 +4,7 @@ import cloud.trotter.dashbuddy.domain.model.cards.FlowCardSnapshot
 import cloud.trotter.dashbuddy.domain.state.AppState
 import cloud.trotter.dashbuddy.domain.state.Flow
 import cloud.trotter.dashbuddy.domain.state.Mode
+import cloud.trotter.dashbuddy.domain.state.PlatformRegion
 import cloud.trotter.dashbuddy.domain.state.TaskPhase
 import cloud.trotter.dashbuddy.domain.state.UNKNOWN_STORE
 
@@ -56,40 +57,19 @@ object LiveCardBuilder {
                 )
             }
 
-            Flow.TaskPickupNavigation, Flow.TaskPickupArrived -> {
-                val task = region.activeTask ?: return null
-                if (task.phase != TaskPhase.PICKUP) return null
-                FlowCardSnapshot.Pickup(
-                    phaseStartedAt = task.startedAt,
-                    taskId = task.taskId,
-                    jobId = task.jobId,
-                    storeName = task.storeName ?: UNKNOWN_STORE,
-                    arrivedAt = task.arrivedAt,
-                    deadlineMillis = task.deadlineMillis,
-                    itemsRemaining = task.itemsRemaining,
-                    itemsShopped = task.itemsShopped,
-                    activity = task.activity,
-                    netPay = region.activeJob?.blendedNetPay,
-                    estMinutes = region.activeJob?.blendedEstMinutes,
-                    distanceMiles = region.activeJob?.blendedDistanceMiles,
-                )
-            }
+            Flow.TaskPickupNavigation, Flow.TaskPickupArrived -> pickupCard(region)
 
-            Flow.TaskDropoffNavigation, Flow.TaskDropoffArrived -> {
-                val task = region.activeTask ?: return null
-                if (task.phase != TaskPhase.DROPOFF) return null
-                FlowCardSnapshot.Delivery(
-                    phaseStartedAt = task.startedAt,
-                    taskId = task.taskId,
-                    jobId = task.jobId,
-                    storeName = task.storeName,
-                    customerHash = task.customerNameHash,
-                    arrivedAt = task.arrivedAt,
-                    deadlineMillis = task.deadlineMillis,
-                    netPay = region.activeJob?.blendedNetPay,
-                    estMinutes = region.activeJob?.blendedEstMinutes,
-                    distanceMiles = region.activeJob?.blendedDistanceMiles,
-                )
+            Flow.TaskDropoffNavigation, Flow.TaskDropoffArrived -> deliveryCard(region)
+
+            // #762 D2: a coarse in-job surface declares no leg. If a real leg frame already resolved
+            // an active task, keep showing its card (more honest than a blank HUD); otherwise there
+            // is no leg to render — the "ON JOB" status badge carries the honest active-job signal.
+            // No new FlowCardSnapshot type is minted (smallest honest thing); the richer per-leg Uber
+            // card is the deferred notification-driven enrichment (#762).
+            Flow.TaskActive -> when (region.activeTask?.phase) {
+                TaskPhase.PICKUP -> pickupCard(region)
+                TaskPhase.DROPOFF -> deliveryCard(region)
+                null -> null
             }
 
             Flow.PostTask -> {
@@ -110,5 +90,43 @@ object LiveCardBuilder {
 
             Flow.SessionEnded -> null
         }
+    }
+
+    /** The live PICKUP card for the region's active task, or null if it isn't a pickup. */
+    private fun pickupCard(region: PlatformRegion): FlowCardSnapshot? {
+        val task = region.activeTask ?: return null
+        if (task.phase != TaskPhase.PICKUP) return null
+        return FlowCardSnapshot.Pickup(
+            phaseStartedAt = task.startedAt,
+            taskId = task.taskId,
+            jobId = task.jobId,
+            storeName = task.storeName ?: UNKNOWN_STORE,
+            arrivedAt = task.arrivedAt,
+            deadlineMillis = task.deadlineMillis,
+            itemsRemaining = task.itemsRemaining,
+            itemsShopped = task.itemsShopped,
+            activity = task.activity,
+            netPay = region.activeJob?.blendedNetPay,
+            estMinutes = region.activeJob?.blendedEstMinutes,
+            distanceMiles = region.activeJob?.blendedDistanceMiles,
+        )
+    }
+
+    /** The live DELIVERY card for the region's active task, or null if it isn't a dropoff. */
+    private fun deliveryCard(region: PlatformRegion): FlowCardSnapshot? {
+        val task = region.activeTask ?: return null
+        if (task.phase != TaskPhase.DROPOFF) return null
+        return FlowCardSnapshot.Delivery(
+            phaseStartedAt = task.startedAt,
+            taskId = task.taskId,
+            jobId = task.jobId,
+            storeName = task.storeName,
+            customerHash = task.customerNameHash,
+            arrivedAt = task.arrivedAt,
+            deadlineMillis = task.deadlineMillis,
+            netPay = region.activeJob?.blendedNetPay,
+            estMinutes = region.activeJob?.blendedEstMinutes,
+            distanceMiles = region.activeJob?.blendedDistanceMiles,
+        )
     }
 }

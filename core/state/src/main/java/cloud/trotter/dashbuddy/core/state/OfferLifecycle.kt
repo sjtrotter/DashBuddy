@@ -23,11 +23,15 @@ import timber.log.Timber
  * semantics per platform); the N>1 correlation contract (#251/vet M5) is defined here so #251's
  * capture only adds ruleset data, not `:core:state` logic.
  */
-internal fun PlatformRegionStepper.stepOffers(region: PlatformRegion, obs: Observation): PlatformRegion {
+internal fun PlatformRegionStepper.stepOffers(
+    region: PlatformRegion,
+    obs: Observation,
+    policy: TransitionPolicy,
+): PlatformRegion {
     // Accept-grace lazy expiry: an accepted-pending-consumption survivor older than the grace never
     // got minted (the F3-failure case) — drop the corpse so it can't ride the snapshot. The accept
     // was already logged at the edge, so NO further event fires (WARN only, Principle 7).
-    val pruned = pruneExpiredSurvivors(region, obs)
+    val pruned = pruneExpiredSurvivors(region, obs, policy)
 
     return when (obs) {
         is Observation.FlowObservation -> when (obs.flow) {
@@ -43,14 +47,27 @@ internal fun PlatformRegionStepper.stepOffers(region: PlatformRegion, obs: Obser
     }
 }
 
-/** True once an accepted-pending-consumption survivor has out-lived the accept grace. */
-internal fun PlatformRegionStepper.isOfferAcceptExpired(offer: PendingOffer, obs: Observation): Boolean {
+/**
+ * True once an accepted-pending-consumption survivor has out-lived the accept grace. The grace is
+ * per-platform (#762 D2, `[acceptGraceMs]` from `TransitionPolicy.acceptGraceMs(platform)`) — passed
+ * in rather than read from a global const so a coarse platform (Uber) can span a realistic drive.
+ */
+internal fun PlatformRegionStepper.isOfferAcceptExpired(
+    offer: PendingOffer,
+    obs: Observation,
+    acceptGraceMs: Long,
+): Boolean {
     val acceptedAt = offer.acceptedAt ?: return false
-    return obs.timestamp - acceptedAt > PlatformRegionStepper.ACCEPT_GRACE_MS
+    return obs.timestamp - acceptedAt > acceptGraceMs
 }
 
-private fun PlatformRegionStepper.pruneExpiredSurvivors(region: PlatformRegion, obs: Observation): PlatformRegion {
-    val expired = region.pendingOffers.filter { it.acceptedAt != null && isOfferAcceptExpired(it, obs) }
+private fun PlatformRegionStepper.pruneExpiredSurvivors(
+    region: PlatformRegion,
+    obs: Observation,
+    policy: TransitionPolicy,
+): PlatformRegion {
+    val acceptGraceMs = policy.acceptGraceMs(region.platform)
+    val expired = region.pendingOffers.filter { it.acceptedAt != null && isOfferAcceptExpired(it, obs, acceptGraceMs) }
     if (expired.isEmpty()) return region
     expired.forEach {
         Timber.tag("StateMachine").w(
@@ -125,28 +142,51 @@ private fun PlatformRegionStepper.pushOrReplaceOffer(
  * `OFFER_ACCEPTED`/`DECLINED`/`TIMEOUT` event fires from [OfferEffects] at THIS edge (not at
  * consumption). Existing survivors pass through untouched — the mint consumes them.
  *
- * "Accepted" ⇔ the accept latch is set OR the destination is a task flow — reaching a task screen IS
- * the acceptance (the platform only advances to pickup/dropoff after an accept), so an offer→task
- * edge mints the full offer-shaped job even when no accept CLICK was captured (the pre-B3
- * `prevFlow.pendingOffer` accept-adjacent read did this unconditionally). A committed decline (#594
- * FIX2b) NEVER survives — that revocation must not fold phantom economics into a job.
+ * "Accepted" ⇔ the accept latch is set OR the destination flow implies acceptance
+ * ([destinationImpliesAccept]) — reaching a PHASED task screen IS the acceptance (the platform only
+ * advances to pickup/dropoff after an accept), so an offer→task edge mints the full offer-shaped job
+ * even when no accept CLICK was captured (the pre-B3 `prevFlow.pendingOffer` accept-adjacent read
+ * did this unconditionally). The coarse `task:active` destination is guarded (#762 D2 finding 1 —
+ * see the helper). A committed decline (#594 FIX2b) NEVER survives — that revocation must not fold
+ * phantom economics into a job.
  */
 private fun PlatformRegionStepper.resolveOnLeave(
     region: PlatformRegion,
     obs: Observation.FlowObservation,
 ): PlatformRegion {
     if (region.pendingOffers.none { it.acceptedAt == null }) return region
-    val leavingToTask = obs.flow?.isTaskFlow() == true
+    val destination = obs.flow
     val newOffers = region.pendingOffers.mapNotNull { offer ->
         when {
             offer.acceptedAt != null -> offer // existing survivor — consumption is the mint's job
             offer.declineCommittedAt != null -> null // committed decline (#594 FIX2b) — never survives
-            offer.isAcceptLatched() || leavingToTask ->
+            offer.isAcceptLatched() || destinationImpliesAccept(destination, offer) ->
                 offer.copy(acceptedAt = offer.acceptClickAt ?: obs.timestamp)
             else -> null // declined / timed out → resolved away
         }
     }
     return region.copy(pendingOffers = newOffers)
+}
+
+/**
+ * Does leaving offer-presentation TO [destination] imply this offer was click-lessly ACCEPTED?
+ *
+ * A **phased** task flow (pickup/dropoff navigation/arrived) does, unconditionally — the platform
+ * only advances to those screens after an accept. The coarse [Flow.TaskActive] is different (#762
+ * D2, adversarial finding 1): on a coarse platform it is the AMBIENT screen (Uber's `on_job_view`
+ * is up for the whole trip), so mid-trip it is also exactly what re-renders when a stacked offer's
+ * overlay vanishes after a **decline or timeout** — and Uber ships no decline click rule, so no
+ * decline latch can flag that case. Returning to the surface you were already on is not an accept:
+ * a `task:active` destination implies acceptance only when the offer's own
+ * [PendingOffer.returnFlow] was NOT already a task flow (e.g. `Idle` — a job appearing where there
+ * was none IS the legitimate click-less accept). Without this guard, a declined/timed-out mid-trip
+ * offer would be stamped accepted the moment `on_job_view` re-renders — a phantom `OFFER_ACCEPTED`
+ * plus phantom add-on economics and never-resolvable placeholders (the job-61 absorption class),
+ * unrescuable by `OFFER_EXPIRY` once `acceptedAt` is set.
+ */
+private fun destinationImpliesAccept(destination: Flow?, offer: PendingOffer): Boolean {
+    if (destination?.isTaskFlow() != true) return false
+    return destination != Flow.TaskActive || !offer.returnFlow.isTaskFlow()
 }
 
 /**

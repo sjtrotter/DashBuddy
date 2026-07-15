@@ -1722,6 +1722,7 @@
         "task:pickup:arrived",
         "task:dropoff:navigation",
         "task:dropoff:arrived",
+        "task:active",
         "post:task",
         "session:ended"
       ]

@@ -72,6 +72,14 @@ class TransitionPolicy @Inject constructor(
         graceConfig.forPlatform(platform).pauseResumeGraceMs
 
     /**
+     * Accept-consumption grace for [platform] (#438 B3 / #762 D2): how long an accepted-pending-
+     * consumption offer stays consumable by the task-edge mint. Per-platform (DoorDash 120s, Uber
+     * 600s) — see [GraceConfig.acceptGraceMs].
+     */
+    fun acceptGraceMs(platform: Platform): Long =
+        graceConfig.forPlatform(platform).acceptGraceMs
+
+    /**
      * Determine what mode a flow + modeHint combination implies.
      * Returns null if no mode signal is present.
      *
@@ -88,6 +96,8 @@ class TransitionPolicy @Inject constructor(
             Flow.TaskPickupArrived,
             Flow.TaskDropoffNavigation,
             Flow.TaskDropoffArrived,
+            // #762 D2: a coarse in-job surface implies Online exactly as the phased task flows do.
+            Flow.TaskActive,
             Flow.PostTask -> Mode.Online
 
             Flow.SessionEnded -> Mode.Offline
