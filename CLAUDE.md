@@ -543,7 +543,10 @@ Every new feature or refactor holds to these — they are forefront design input
    `:core:state` / `:core:pipeline` / `:domain` edits. DoorDash-heavy field testing *masks*
    violations (a global slot never collides while only one platform runs), so this is enforced at
    PR-review time — see *Every PR gets a design-goal review* under Git Workflow, and the drift
-   catalog in #585 (closed 2026-07-12; the six unshipped items now live in #762) plus the
+   catalog in #585 (closed 2026-07-12) → #762 (closed 2026-07-15 — all six items shipped; D2
+   resolved as the phase-less `task:active` flow + per-platform accept grace after an adversarial
+   vetting round REJECTED a peer `TaskPhase.TRANSIT`, see ADR-0002's 2026-07-15 amendment; the
+   corpus-gated Uber notification-flow enrichment lives on as #785) plus the
    per-platform ownership pack #438 for the known seams and receipts.
 
 If a change genuinely can't satisfy one of these, say so explicitly in the PR description instead
