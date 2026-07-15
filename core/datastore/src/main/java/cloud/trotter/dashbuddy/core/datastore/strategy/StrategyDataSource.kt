@@ -98,6 +98,14 @@ class StrategyDataSource @Inject constructor(
         }
     }
 
+    // #762 D12 — prefs-ownership decision record (NOT an oversight): `protectStatsMode`,
+    // `allowShopping`, and `quickDeclinesEnabled` are deliberately GLOBAL (one value across all
+    // platforms), not keyed by [Platform] like the shop-rate keys above. Rationale: the alpha fields
+    // exactly one platform (DoorDash), so a global is the correct single-user shape today, and these
+    // three are dasher-capability / preference facts ("I protect my acceptance rate", "I don't shop",
+    // "confirm my declines") that plausibly hold platform-wide anyway. Whether any of them should
+    // become per-[Platform] (e.g. a dasher who shops on one platform but not another) is a decision
+    // deferred until a 2nd platform actually ships — treat globality as intentional, not debt to fix.
     val protectStatsMode: Flow<Boolean> = ds.data.map { it[Keys.PROTECT_STATS_MODE] ?: false }
     val allowShopping: Flow<Boolean> = ds.data.map { it[Keys.ALLOW_SHOPPING] ?: true }
 

@@ -118,6 +118,71 @@ class OfferEvaluatorTest {
     }
 
     // -------------------------------------------------------------------------
+    // Allow Shopping toggle (#762 D12)
+    // -------------------------------------------------------------------------
+
+    @Test
+    fun `allowShopping off - shop offer hard-declines before scoring`() {
+        val cfg = EvaluationConfig(
+            allowShopping = false,
+            rules = listOf(metricRule(MetricType.PAYOUT, 7.0f)),
+            userEconomy = noCostEconomy,
+        )
+        // A generous shop offer that would otherwise ACCEPT.
+        val result = evaluator.evaluate(offer(pay = 30.0, orderType = OrderType.SHOP_FOR_ITEMS), cfg)
+        assertEquals(OfferAction.DECLINE, result.action)
+        assertEquals(0.0, result.score, 0.0001)
+        assertEquals(OfferQuality.SHOP_DECLINED, result.qualityLevel)
+    }
+
+    @Test
+    fun `allowShopping off - non-shop offer is unaffected`() {
+        val cfg = EvaluationConfig(
+            allowShopping = false,
+            rules = listOf(metricRule(MetricType.PAYOUT, 7.0f)),
+            userEconomy = noCostEconomy,
+        )
+        val result = evaluator.evaluate(offer(pay = 10.0, orderType = OrderType.PICKUP), cfg)
+        assertEquals(OfferAction.ACCEPT, result.action)
+    }
+
+    @Test
+    fun `allowShopping on (default) - shop offer scores normally`() {
+        // allowShopping defaults to true; a shop offer flows through metric scoring.
+        val cfg = config(metricRule(MetricType.PAYOUT, 7.0f))
+        val result = evaluator.evaluate(offer(pay = 10.0, orderType = OrderType.SHOP_FOR_ITEMS), cfg)
+        assertEquals(OfferAction.ACCEPT, result.action)
+    }
+
+    @Test
+    fun `allowShopping off - overrides protectStatsMode for a shop offer`() {
+        // Capability constraint beats the acceptance-rate goal: even in protect-stats mode, a shop
+        // offer is declined when shopping is off.
+        val cfg = EvaluationConfig(
+            protectStatsMode = true,
+            allowShopping = false,
+            rules = emptyList(),
+            userEconomy = noCostEconomy,
+        )
+        val result = evaluator.evaluate(offer(pay = 10.0, orderType = OrderType.SHOP_FOR_ITEMS), cfg)
+        assertEquals(OfferAction.DECLINE, result.action)
+        assertEquals(OfferQuality.SHOP_DECLINED, result.qualityLevel)
+    }
+
+    @Test
+    fun `allowShopping off - protectStatsMode still accepts a non-shop offer`() {
+        val cfg = EvaluationConfig(
+            protectStatsMode = true,
+            allowShopping = false,
+            rules = emptyList(),
+            userEconomy = noCostEconomy,
+        )
+        val result = evaluator.evaluate(offer(pay = 1.0, orderType = OrderType.PICKUP), cfg)
+        assertEquals(OfferAction.ACCEPT, result.action)
+        assertEquals(OfferQuality.PROTECTED, result.qualityLevel)
+    }
+
+    // -------------------------------------------------------------------------
     // Empty / Disabled Rules
     // -------------------------------------------------------------------------
 

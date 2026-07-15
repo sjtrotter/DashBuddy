@@ -95,7 +95,7 @@
     <string name="wizard_desc_economy_costs">Tell us your real costs so we can show your true net pay. Tap any section to set your actual numbers — defaults are sensible estimates.</string>
 
     <string name="wizard_title_goal">Primary Goal</string>
-    <string name="wizard_desc_goal">Are you cherry-picking for maximum profit, or trying to protect your Platinum/Top Dasher status?</string>
+    <string name="wizard_desc_goal">Are you cherry-picking for maximum profit, or trying to protect your acceptance-rate status?</string>
 
     <string name="wizard_title_shopping">Shop &amp; Deliver</string>
     <string name="wizard_desc_shopping">Do you currently accept Red Card shopping orders?</string>
@@ -395,7 +395,7 @@
     <!-- setup/wizard/WizardScreen.kt -->
     <string name="wizard_screen_goal_option1_title">Cherry Picker</string>
     <string name="wizard_screen_goal_option1_desc">Maximize profit. Auto-decline unprofitable offers.</string>
-    <string name="wizard_screen_goal_option2_title">Protect Platinum</string>
+    <string name="wizard_screen_goal_option2_title">Protect Status</string>
     <string name="wizard_screen_goal_option2_desc">Maintain high acceptance rate. Do not auto-decline anything.</string>
     <string name="wizard_screen_goal_option3_title">Manual Mode</string>
     <string name="wizard_screen_goal_option3_desc">Just show me the math. I will make my own decisions.</string>

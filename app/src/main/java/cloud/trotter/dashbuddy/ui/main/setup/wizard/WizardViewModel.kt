@@ -81,7 +81,7 @@ class WizardViewModel @Inject constructor(
 
             val currentProtectMode = strategyRepository.protectStatsMode.first()
             val currentStrategy =
-                if (currentProtectMode) OfferStrategy.PROTECT_PLATINUM else OfferStrategy.MANUAL
+                if (currentProtectMode) OfferStrategy.PROTECT_STATUS else OfferStrategy.MANUAL
 
             val rules = strategyRepository.scoringRules.first()
             val minPayoutRule = rules.filterIsInstance<ScoringRule.MetricRule>()
@@ -508,14 +508,14 @@ class WizardViewModel @Inject constructor(
             }
 
             val isCherryPicker = finalState.strategy == OfferStrategy.CHERRY_PICKER
-            val isPlatinum = finalState.strategy == OfferStrategy.PROTECT_PLATINUM
+            val isProtectStatus = finalState.strategy == OfferStrategy.PROTECT_STATUS
 
             // Only write what the wizard actually collects (#347): the strategy-derived
             // toggles and the SHOPPING step's preference. The threshold values are NOT
             // wizard inputs — preserve their current values so a re-run + Finish
             // round-trips losslessly instead of resetting tuned automation config.
             val currentAutomation = strategyRepository.automationConfig.first()
-            strategyRepository.setProtectStatsMode(isPlatinum)
+            strategyRepository.setProtectStatsMode(isProtectStatus)
             strategyRepository.setMasterAutomation(isCherryPicker)
             strategyRepository.updateAutomation(
                 autoAccept = currentAutomation.autoAcceptEnabled,

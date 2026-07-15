@@ -328,6 +328,100 @@ class StoreResolutionProjectorTest {
         assertEquals("poisoned pickup row gone after rebuild (F8)", 0, dao.pickupRecordsForJob("JGHOST").size)
     }
 
+    // ── #773: address-derived running-key fallback for chain-bare receipts ──
+
+    private val hebAddress = "12125 Alamo Rnch Pkwy, San Antonio, TX 78240, USA"
+    private val hebAddressKey = "doordash|h-e-b|@12125"
+
+    @Test
+    fun `#773 — a chain-bare grocery receipt keys the store off its pickup address`() = runBlocking {
+        insert(AppEventType.DASH_START, "S1", 1000, start("S1", 1000))
+        val pu = insert(AppEventType.PICKUP_CONFIRMED, "S1", 1100, pickup("J1", "pH", "H-E-B", 1100, hebAddress))
+        val d = insert(
+            AppEventType.DELIVERY_COMPLETED, "S1", 1200,
+            // chain-bare receipt: the payout store form carries no (code)/ - Area running key.
+            delivery("J1", "dH", "H-E-B", 1200, receipt("H-E-B" to 3.0), totalPay = 8.0),
+        )
+        insert(AppEventType.DASH_STOP, "S1", 1300, stop("S1", 1300))
+        projector().catchUp()
+
+        val store = dao.store(hebAddressKey)
+        assertNotNull("H-E-B keyed by its street number (@12125)", store)
+        assertEquals("h-e-b", store!!.normalizedChain)
+        assertEquals("@12125", store.runningKey)
+        assertEquals("the display address is seeded from the SAME row that keyed the store", hebAddress, store.address)
+        assertEquals(hebAddressKey, dao.deliveryRecord(d)!!.storeKey)
+        assertEquals(hebAddressKey, dao.pickupRecordsForJob("J1").single { it.eventSequenceId == pu }.storeKey)
+        // pay/net untouched by resolution.
+        assertEquals(8.0, dao.deliveryRecord(d)!!.realizedPay!!, 0.001)
+    }
+
+    @Test
+    fun `#773 F1 — a chain-bare address job folds identically incremental vs from-zero refold across a batch boundary`() = runBlocking {
+        // Batch boundary BETWEEN the pickups and the close (the F1 divergence-prone shape): the pickup
+        // resolves in one batch, the DELIVERY_COMPLETED/DASH_STOP close in the next.
+        insert(AppEventType.DASH_START, "S1", 1000, start("S1", 1000))
+        insert(AppEventType.PICKUP_CONFIRMED, "S1", 1100, pickup("J1", "pH", "H-E-B", 1100, hebAddress))
+        insert(AppEventType.DELIVERY_COMPLETED, "S1", 1200, delivery("J1", "dH", "H-E-B", 1200, receipt("H-E-B" to 3.0), totalPay = 8.0))
+        insert(AppEventType.DASH_STOP, "S1", 1300, stop("S1", 1300))
+
+        // Incremental: limit 2 lands DASH_START+pH in b1, dH+DASH_STOP in b2 — pickup and close split.
+        val p = projector()
+        while (p.processBatch(limit = 2) != null) { /* drain */ }
+        val incDelivery = dao.deliveryRecordByTask("dH")?.storeKey
+        val incPickup = dao.pickupRecordsForJob("J1").single().storeKey
+        val incVisible = dao.storeReportRows().first().map { it.storeKey }.toSet()
+
+        wipeAndResetWatermark()
+        projector().catchUp()
+        val refDelivery = dao.deliveryRecordByTask("dH")?.storeKey
+        val refPickup = dao.pickupRecordsForJob("J1").single().storeKey
+        val refVisible = dao.storeReportRows().first().map { it.storeKey }.toSet()
+
+        assertEquals(hebAddressKey, incDelivery)
+        assertEquals("delivery storeKey identical incremental vs refold", refDelivery, incDelivery)
+        assertEquals("pickup storeKey identical incremental vs refold", refPickup, incPickup)
+        assertEquals("read-visible store set identical incremental vs refold", refVisible, incVisible)
+        assertEquals(setOf(hebAddressKey), incVisible)
+    }
+
+    @Test
+    fun `#773 acceptance — four same-chain jobs at distinct addresses key to four @-rows, an address-less job stays chain-only`() = runBlocking {
+        insert(AppEventType.DASH_START, "S1", 1000, start("S1", 1000))
+        val addrs = listOf(
+            "100 Bandera Rd, San Antonio, TX 78228, USA",
+            "200 Culebra Rd, San Antonio, TX 78228",
+            "300 Marbach Rd, San Antonio, TX 78227-1000, United States",
+            "400 SW Loop 410, San Antonio, TX 78227",
+        )
+        var t = 1100L
+        addrs.forEachIndexed { i, addr ->
+            insert(AppEventType.PICKUP_CONFIRMED, "S1", t, pickup("J$i", "pH$i", "H-E-B", t, addr)); t += 50
+            insert(AppEventType.DELIVERY_COMPLETED, "S1", t, delivery("J$i", "dH$i", "H-E-B", t, receipt("H-E-B" to 3.0), totalPay = 8.0)); t += 50
+        }
+        // A fifth H-E-B job with NO pickup address → stays the chain-only "location unknown" bucket.
+        insert(AppEventType.PICKUP_CONFIRMED, "S1", t, pickup("J4", "pH4", "H-E-B", t)); t += 50
+        insert(AppEventType.DELIVERY_COMPLETED, "S1", t, delivery("J4", "dH4", "H-E-B", t, receipt("H-E-B" to 3.0), totalPay = 8.0)); t += 50
+        insert(AppEventType.DASH_STOP, "S1", t, stop("S1", t))
+        projector().catchUp()
+
+        // Four distinct located rows, each seeded with its own address.
+        listOf("@100" to addrs[0], "@200" to addrs[1], "@300" to addrs[2], "@400" to addrs[3]).forEach { (frag, addr) ->
+            val s = dao.store("doordash|h-e-b|$frag")
+            assertNotNull("located H-E-B $frag exists", s)
+            assertEquals(addr, s!!.address)
+        }
+        // The address-less job keeps its own chain-only bucket (no phantom merge).
+        val chainOnly = dao.store("doordash|h-e-b|")
+        assertNotNull("address-less job keeps the chain-only 'location unknown' bucket", chainOnly)
+        assertNull(chainOnly!!.runningKey)
+
+        val hebRunningKeys = dao.allStores().filter { it.normalizedChain == "h-e-b" }.map { it.runningKey }.toSet()
+        assertEquals(setOf("@100", "@200", "@300", "@400", null), hebRunningKeys)
+        assertEquals("doordash|h-e-b|@100", dao.deliveryRecordByTask("dH0")?.storeKey)
+        assertEquals("doordash|h-e-b|", dao.deliveryRecordByTask("dH4")?.storeKey)
+    }
+
     // ── FIX 12d: F4 offer-link guards ──
 
     private fun offerAccepted(offerHash: String, merchant: String, at: Long) =

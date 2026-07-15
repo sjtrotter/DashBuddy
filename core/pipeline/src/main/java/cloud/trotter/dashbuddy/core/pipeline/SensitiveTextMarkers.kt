@@ -66,6 +66,22 @@ object SensitiveTextMarkers {
         "Driver's License",
         "provide their signature",
         "A recipient signature is required",
+        // uber.screen.sensitive.* (#762 D10) — Uber's sensitive rules (matchers/rules/uber.json5)
+        // anchor on these strings, which had NO overlapping keyword above (case-insensitive
+        // substring checked): the wallet balance card ("Uber Pro Card"), the cashout destination
+        // screen ("Transfer to bank"), and the tax-document identity screen ("Tax information").
+        // The rules were DoorDash-seeded, so an Uber banking screen whose only sensitive wording
+        // was one of these phrases (no co-occurring "Instant Pay"/"Cash out"/"Social Security")
+        // was invisible to every scrub layer this list backs: the UNKNOWN-capture scan when the
+        // uber ruleset fails to load or misses a variant, and the shareable-log scrub sink
+        // (#551), where rules never apply at all. "Card number" closes the same gap for the
+        // low-confidence `uber.screen.sensitive.catchall` net (its `allTextContainsAny` list
+        // carries "card number" verbatim, previously its one entry with no keyword overlap).
+        // Drift-guarded by SensitiveMarkerAssetCoverageTest (asset-derived, all platforms).
+        "Uber Pro Card",
+        "Transfer to bank",
+        "Tax information",
+        "Card number",
     )
 
     /**

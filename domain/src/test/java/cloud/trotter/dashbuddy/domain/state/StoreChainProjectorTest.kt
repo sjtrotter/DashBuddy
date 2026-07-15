@@ -141,6 +141,37 @@ class StoreChainProjectorTest {
     }
 
     @Test
+    fun `M5 — the Job adapter feeds the address fallback into the same resolved key as the row adapter (#773)`() {
+        // A chain-bare grocery job: pickup carries an address, the payout has no running key. Both adapters
+        // must resolve the SAME address-derived `@`-key — the shadow log stays a valid oracle for the
+        // persisted path when the address fallback fires.
+        val pickupTask = Task(
+            taskId = "p1", jobId = "job-1", phase = TaskPhase.PICKUP, storeName = "H-E-B",
+            storeAddress = "12125 Alamo Rnch Pkwy, San Antonio, TX 78240, USA", startedAt = 100L, completedAt = 200L,
+        )
+        val j = job(tasks = listOf(pickupTask, dropoff("d1", "H-E-B", "cust-1")), offerHints = listOf("H-E-B"))
+
+        // Job adapter: address flows from task.storeAddress.
+        val jobLink = StoreChainProjector.project(j, payout = null).links.single()
+        assertEquals("@12125", jobLink.addressKey)
+        assertNull("chain-bare receipt → no raw receipt key", jobLink.runningKey)
+
+        // Row adapter: the SAME surfaces as neutral lists + the per-anchor address map.
+        val rowResolved = StoreResolver.resolveAnchors(
+            anchors = listOf("H-E-B"),
+            offerForms = listOf("H-E-B"),
+            dropoffForms = listOf("H-E-B"),
+            payoutForms = emptyList(),
+            anchorAddresses = mapOf("H-E-B" to "12125 Alamo Rnch Pkwy, San Antonio, TX 78240, USA"),
+        ).single()
+
+        // Both adapters key on the SAME ladder result.
+        val jobResolvedKey = StoreKeys.normalizeRunningKey(jobLink.runningKey) ?: jobLink.addressKey
+        assertEquals("row adapter ≡ Job adapter resolved key (address fallback)", rowResolved.resolvedRunningKey, jobResolvedKey)
+        assertEquals("@12125", jobResolvedKey)
+    }
+
+    @Test
     fun `null payout still yields the pickup-anchored links`() {
         val j = job(
             tasks = listOf(pickup("p1", "Chipotle"), dropoff("d1", "Chipotle", "cust-1")),

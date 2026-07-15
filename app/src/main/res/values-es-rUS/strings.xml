@@ -88,7 +88,7 @@
     <string name="wizard_desc_gas">¿Cuánto pagas actualmente por galón?</string>
 
     <string name="wizard_title_goal">Objetivo Principal</string>
-    <string name="wizard_desc_goal">¿Estás seleccionando ofertas detalladamente para obtener la máxima ganancia, o intentas proteger tu estado de Platinum/Top Dasher?</string>
+    <string name="wizard_desc_goal">¿Estás seleccionando ofertas detalladamente para obtener la máxima ganancia, o intentas proteger tu estado según tu tasa de aceptación?</string>
 
     <string name="wizard_title_shopping">Comprar y Entregar</string>
     <string name="wizard_desc_shopping">¿Actualmente aceptas pedidos de compras con la Tarjeta Roja (Red Card)?</string>

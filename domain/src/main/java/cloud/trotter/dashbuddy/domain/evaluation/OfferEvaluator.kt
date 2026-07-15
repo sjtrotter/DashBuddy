@@ -52,6 +52,33 @@ class OfferEvaluator() {
 
         val merchants = joinedStores.takeIf { it.isNotBlank() } ?: "Unknown Store"
 
+        // Shopping opt-out (#762 D12): if the dasher turned off shopping orders, a shop-for-items
+        // offer is a capability constraint (no Red Card / won't shop), so hard-decline it BEFORE any
+        // other verdict — including protect-stats. Placed first so the Settings toggle's promise ("If
+        // off, Red Card orders are auto-declined") is literally true in every mode. Only the DECLINE
+        // *verdict* is set here; the actual auto-decline is the app-owned automation gate consuming
+        // this action downstream (rules never actuate, #425). A non-shop offer is unaffected.
+        if (!config.allowShopping && isShop) {
+            return OfferEvaluation(
+                action = OfferAction.DECLINE,
+                score = 0.0,
+                qualityLevel = OfferQuality.SHOP_DECLINED,
+                payAmount = grossPay,
+                fuelCostEstimate = fuelCost,
+                nonFuelCostEstimate = nonFuelCost,
+                totalOperatingCost = operatingCost,
+                operatingCostPerMile = economy.operatingCostPerMile,
+                netPayAmount = netPay,
+                distanceMiles = dist,
+                dollarsPerMile = dpm,
+                dollarsPerHour = activeHourly,
+                estimatedTimeMinutes = estTimeMinutes,
+                itemCount = items,
+                merchantName = merchants,
+                isUsingDefaults = economy.isUsingDefaults,
+            )
+        }
+
         if (config.protectStatsMode) {
             return OfferEvaluation(
                 action = OfferAction.ACCEPT,
