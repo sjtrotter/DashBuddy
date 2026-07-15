@@ -303,6 +303,16 @@ The `storeKey` must be a pure, stable function of the resolved surfaces or refol
 - **Extraction precedence stays deterministic:** when a payout form carries both a parenthetical
   code and a ` - Area` suffix, the parenthetical wins (today's `StoreChainProjector` behavior) —
   keep and test it.
+- **Address tier (#773, shipped PR #781):** a chain-bare receipt (H-E-B renders no parenthetical
+  code — four San Antonio H-E-Bs conflated to one `heb|` row, field-quantified 07-13) falls back
+  to an **address-derived running key**: `StoreKeys.addressRunningKey` takes the leading
+  pure-ASCII street-number token of the address line (1–6 digits; fail-null on ranges, suffixes,
+  hyphenated numbers, non-numeric first lines — fail-toward-conflation, never fabrication),
+  prefixed `@` (`@12125`) so the key's provenance is self-describing. The resolution ladder is
+  **receipt key > address(`@`) key > chain-only**, tier-aware in `isMonotonicDowngrade` (a later
+  receipt key upgrades an address key; an address key never downgrades a receipt key), and
+  `normalizeRunningKey` strips a leading `@` on the receipt path so a payout parenthetical can
+  never masquerade as address-tier. `PROJECTOR_VERSION` 6→7 refolds all history onto the ladder.
 - **Accepted residual (no alias table, D2):** a store whose payout form flips between
   `(02426)`-style and ` - Area`-style across sessions forks into two entities. Named, not fixed —
   a phase-2 alias table (or the OTA lookup) is the home for cross-form unification.

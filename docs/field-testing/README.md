@@ -78,6 +78,30 @@ card's **mechanical** half, #577 (re-confirmed, 24/24, ~0.55 s — with a new po
 that entry's Bug #1), the #457 path, and #554 ShadowProjector (2/2). The #462/#460 dropoff item
 was found **broken-in-part** (raw PII in capture envelopes) and moved to that entry's Bug #7.)_
 
+- **🆕 NEW — per-location store cards: the four H-E-Bs split apart on the Patterns tab (#773 / PR #781).**
+  Chain-bare receipts (H-E-B shows no store code) now fall back to an address-derived running key
+  (`@<street number>`), so same-chain locations resolve to distinct `storeKey`s instead of one
+  conflated chain row. The projector refolds all history onto the new keys (v7) on first launch of
+  the new build.
+  **How to tell it's working (desk-side, after any dash touching ≥2 locations of one chain — or
+  immediately from the refolded history):** the Patterns tab shows separate store cards per H-E-B
+  location, each with a street-line chip (e.g. "12125 Alamo Ranch Pkwy"); dwell percentiles and
+  visit counts split per location instead of pooling. Watch for: a location whose card shows NO
+  street chip (address failed the strict street-number parse → chain-only fallback, expected for
+  mall/named-plaza addresses — capture the address shape if it looks parseable), and any store that
+  *forks* into two cards across dashes (a receipt-code appearing later should upgrade, not split).
+  - Confirmed: 0/2
+
+- **🆕 NEW — "Shopping off" declines shop offers at the verdict edge (#762 D12 / PR #778).**
+  With `allowShopping` off, a shop-type offer now gets a structural `SHOP_DECLINED` verdict (label
+  "Shopping off") from the evaluator itself — full economics still computed and shown, score 0,
+  decline recommendation — instead of relying on downstream handling.
+  **How to tell it's working (needs the strategy toggle off; watch any shop offer):** the offer
+  card/bubble shows the "Shopping off" quality label with the decline recommendation while the pay/
+  mileage numbers still render; non-shop offers are completely unaffected. Flip the toggle back on
+  and a shop offer scores normally again (the gate reads live strategy prefs).
+  - Confirmed: 0/2
+
 - **🆕 NEW — idle bubble: gas + vehicle are now two separate full-width cards (#728 / PR #767).**
   The cramped one-row `JustInTimeActions` (the layout the dev called "a nightmare to try to operate")
   is now a stacked pair of full-width cards on the idle dashboard card: one for the #722 mode-adaptive
