@@ -23,6 +23,7 @@ import cloud.trotter.dashbuddy.domain.state.Flow
 import cloud.trotter.dashbuddy.domain.state.FlowRegion
 import cloud.trotter.dashbuddy.domain.state.Job
 import cloud.trotter.dashbuddy.domain.state.Mode
+import cloud.trotter.dashbuddy.domain.state.NotificationIntent
 import cloud.trotter.dashbuddy.domain.state.OfferIntent
 import cloud.trotter.dashbuddy.domain.state.ParsedFields
 import cloud.trotter.dashbuddy.domain.state.PendingDestructive
@@ -1800,17 +1801,40 @@ class EffectMapTest {
 
     @Test
     fun `additional_tip notification emits ProcessTipNotification`() {
+        // Drives the SSOT const (#762 D1) so the test proves rule intent and effect branch
+        // resolve through the SAME definition — a drifted literal on either side goes red.
         val (platform, onlineRegion) = stateWithPlatform()
         val state = AppState(regions = Regions(platforms = mapOf(platform to onlineRegion)))
 
         val effects = effectMap.diff(state, state, notificationObs(
-            intent = "additional_tip",
+            intent = NotificationIntent.ADDITIONAL_TIP,
             amount = 5.0,
             storeName = "Chipotle",
             deliveredAt = "2024-01-01",
         ))
 
         assertTrue("Should emit ProcessTipNotification", effects.any { it is AppEffect.ProcessTipNotification })
+    }
+
+    @Test
+    fun `additional_tip notification with a missing required field fires nothing`() {
+        // The Kotlin effect guard is null-checked; the compile-time contract
+        // (StateMachineContract.EFFECT_INTENTS) exists so a shipped rule can't reach this state —
+        // but the runtime guard stays fail-closed for a field that parsed to null anyway.
+        val (platform, onlineRegion) = stateWithPlatform()
+        val state = AppState(regions = Regions(platforms = mapOf(platform to onlineRegion)))
+
+        val effects = effectMap.diff(state, state, notificationObs(
+            intent = NotificationIntent.ADDITIONAL_TIP,
+            amount = 5.0,
+            storeName = null, // parsed but missing → the effect must not fire half-formed
+            deliveredAt = "2024-01-01",
+        ))
+
+        assertTrue(
+            "No ProcessTipNotification on a null required field",
+            effects.none { it is AppEffect.ProcessTipNotification },
+        )
     }
 
     @Test

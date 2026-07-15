@@ -816,6 +816,12 @@
       ]
     },
     {
+      // #762 D1: intent stays "tip_received" = INFORMATIONAL (not in StateMachineContract.EFFECT_INTENTS),
+      // so this compiles with no parse fields. Promotion to the effect-bearing "additional_tip" intent
+      // is CORPUS-GATED: the corpus has no real Uber tip-notification fixture, and the effect
+      // (AppEffect.ProcessTipNotification) requires amount+storeName+deliveredAt — the DoorDash push
+      // carries all three, but there's no evidence the Uber push does. Do NOT fabricate parse regexes;
+      // relabel + add the parse.fields only once a real Uber tip capture proves the fields are derivable.
       "id": "uber.notification.tip_received",
       "priority": 8,
       "require": {

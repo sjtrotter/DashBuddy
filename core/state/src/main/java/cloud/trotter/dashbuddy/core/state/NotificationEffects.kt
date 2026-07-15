@@ -1,6 +1,7 @@
 package cloud.trotter.dashbuddy.core.state
 
 import cloud.trotter.dashbuddy.domain.pipeline.Observation
+import cloud.trotter.dashbuddy.domain.state.NotificationIntent
 import cloud.trotter.dashbuddy.domain.state.ParsedFields
 
 /**
@@ -21,7 +22,7 @@ internal fun EffectMap.diffNotification(obs: Observation): List<AppEffect> {
 
     return buildList {
         when (fields.intent) {
-            "additional_tip" -> {
+            NotificationIntent.ADDITIONAL_TIP -> {
                 val amount = fields.amount
                 val storeName = fields.storeName
                 val deliveredAt = fields.deliveredAt

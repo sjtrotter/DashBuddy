@@ -3,6 +3,7 @@ package cloud.trotter.dashbuddy.core.pipeline.rules
 import cloud.trotter.dashbuddy.domain.model.accessibility.UiNode
 import cloud.trotter.dashbuddy.domain.model.notification.NotifTextField
 import cloud.trotter.dashbuddy.domain.model.notification.RawNotificationData
+import cloud.trotter.dashbuddy.domain.pipeline.StateMachineContract
 import cloud.trotter.dashbuddy.domain.state.Flow
 import cloud.trotter.dashbuddy.domain.state.Mode
 import kotlinx.serialization.json.JsonArray
@@ -662,10 +663,31 @@ object RuleCompiler {
         val parseBlock = obj["parse"]?.jsonObject ?: ruleParseBlock
         val parseAs = parseBlock?.get("as")?.jsonPrimitive?.content ?: ruleParseAs
 
-        // --- Shape contract validation (M3) ---
+        // --- Parse-field contract validation (shape M3 + per-flow D6 + effect-intent D1) ---
+        // Declared field names, hoisted once: the SAME set feeds all three checks, and each must be
+        // able to see "no parse block ⇒ zero declared fields" (a missing required field for a flow
+        // or effect-intent is exactly the no-parse case the #762 guard must catch).
+        val declaredFields = parseBlock?.get("fields")?.jsonObject?.keys ?: emptySet()
         if (parseAs != null) {
-            val declaredFields = parseBlock?.get("fields")?.jsonObject?.keys ?: emptySet()
             ParsedFieldsFactory.validateShapeFields(parseAs, declaredFields, ruleId)
+        }
+        // #762 D6: a SCREEN rule/branch that drives a flow with declared required fields must parse
+        // them, even absent a parse block. Screen-scoped because flows are a screen-rule contribution.
+        if (context == RuleContext.SCREEN) {
+            val flowWire = (branchState.flow ?: ruleFlow)?.wire
+            if (flowWire != null) {
+                validateFlowFields(
+                    flowWire,
+                    StateMachineContract.REQUIRED_FIELDS_BY_FLOW[flowWire],
+                    declaredFields,
+                    ruleId,
+                )
+            }
+        }
+        // #762 D1: a NOTIFICATION rule/branch whose resolved intent is effect-bearing must declare
+        // the fields the effect consumer needs. Unknown intents stay legal (informational).
+        if (context == RuleContext.NOTIFICATION) {
+            validateEffectIntentFields(intent, declaredFields, ruleId)
         }
 
         val parser: (TInput, Bindings) -> Map<String, Any?> = when (context) {
@@ -796,6 +818,64 @@ object RuleCompiler {
         }
 
         return ParsedStateBlock(flow, modeHint)
+    }
+
+    // ==========================================================================
+    //  Rule→state contract validation (#762 D6/D1)
+    // ==========================================================================
+
+    /**
+     * D6 — per-flow required parse fields (#762). A SCREEN rule/branch that drives [flowWire] must
+     * declare every field in [required] in its parse block; enforced **even when the rule has no
+     * parse block** ([declaredFields] empty). [required] is passed in (rather than looked up here)
+     * so the check is unit-testable against a synthetic contract independent of the — currently
+     * empty — production [StateMachineContract.REQUIRED_FIELDS_BY_FLOW]. A `null`/empty [required]
+     * (the common case: flow not in the contract) is a no-op.
+     *
+     * Fail-closed and **isolable** (mirrors [ParsedFieldsFactory.validateShapeFields]): the worst
+     * case of skipping a malformed non-sensitive rule is one screen surface degrading to UNKNOWN →
+     * scrubbed — safe — while the sensitive belt in [compileRules] still rejects the whole file if
+     * the offending rule is sensitive-layer.
+     */
+    fun validateFlowFields(
+        flowWire: String?,
+        required: Set<String>?,
+        declaredFields: Set<String>,
+        ruleId: String?,
+    ) {
+        if (flowWire == null || required.isNullOrEmpty()) return
+        val missing = required - declaredFields
+        if (missing.isNotEmpty()) {
+            throw RuleCompileException(
+                "Rule '${ruleId ?: "?"}' drives flow '$flowWire' but its parse block is missing " +
+                    "required field(s): ${missing.joinToString(", ") { "'$it'" }} — the flow's " +
+                    "lifecycle handling consumes them, and a missing field silently misfolds rather " +
+                    "than failing loud. Declare them in parse.fields (or relax the contract).",
+                isolable = true,
+            )
+        }
+    }
+
+    /**
+     * D1 — effect-bearing notification intent field contract (#762). A NOTIFICATION rule/branch
+     * whose resolved [intent] is a key in [StateMachineContract.EFFECT_INTENTS] must declare every
+     * field the effect consumer reads. An intent NOT in the map is **informational by construction**
+     * and is always allowed with no fields — never reject an unknown intent (the OTA/data-driven
+     * recognition contract, [cloud.trotter.dashbuddy.domain.state.NotificationIntent]). Fail-closed
+     * and isolable, like [validateFlowFields].
+     */
+    fun validateEffectIntentFields(intent: String, declaredFields: Set<String>, ruleId: String?) {
+        val required = StateMachineContract.EFFECT_INTENTS[intent] ?: return
+        val missing = required - declaredFields
+        if (missing.isNotEmpty()) {
+            throw RuleCompileException(
+                "Notification rule '${ruleId ?: "?"}' declares effect-bearing intent '$intent' but " +
+                    "its parse block is missing field(s): ${missing.joinToString(", ") { "'$it'" }}. " +
+                    "The effect that consumes '$intent' requires them; an intent with no effect " +
+                    "consumer is informational and needs no fields.",
+                isolable = true,
+            )
+        }
     }
 
     // ==========================================================================
