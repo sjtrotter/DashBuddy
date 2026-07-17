@@ -63,9 +63,12 @@ import java.io.File
  * one synthetic `dropoff_photo`-arrived observation carrying **frame 11's own real parsed Mama
  * Margies fields** (the suppressed arrival), and two `GRACE_COMMIT` timers. This is a hand-authored
  * correct-behaviour invariant (never `replay == db`): given the machine is driven the way the device
- * really was, the current lineage code (#749 per-customer coverage close + the #596 close-out sweep)
- * closes the job and mints exactly two distinct `DELIVERY_COMPLETED`, both offer-minted placeholders
- * consumed, both (customer-hash, store) pairs intact — the assertion #700 restores.
+ * really was, the **strict #596/#615 arm** of `isJobPhysicallyComplete` (both placeholders resolved,
+ * finished, and arrived → the final retire's T1 closes the job) plus the #596 close-out sweep mint
+ * exactly two distinct `DELIVERY_COMPLETED`, both offer-minted placeholders consumed, both
+ * (customer-hash, store) pairs intact — the assertion #700 restores. The #749 per-customer coverage
+ * arm is deliberately NOT exercised here (it short-circuits away when the strict arm succeeds,
+ * mutation-verified — severing it leaves this suite green); its own tests own that arm.
  *
  * Fixture: `snapshots/sessions/two_pickup_stack_2026_07_05/` — real device envelopes, edge-redacted
  * (customers appear only as `[redacted:4ee5]` / `[redacted:d290]` markers; the SAME marker on a
@@ -93,12 +96,15 @@ class TwoPickupStackReplayTest {
     // ---------------------------------------------------------------------------------------------
 
     /** A drive leg away from the just-arrived drop — a real navigation screen the capture layer
-     *  deduped. Its non-task `idle` flow is what arms the drop's `TASK_RETIRE` grace. */
+     *  deduped. Labelled `navigation_generic`, the production rule that matches these suppressed
+     *  mid-dash nav frames (its online branch is flow `idle` + modeHint `online` — a combination
+     *  the classifier really emits; `idle_map` would be modeHint `offline`, impossible here). Its
+     *  non-task `idle` flow is what arms the drop's `TASK_RETIRE` grace. */
     private fun driveAway(atMs: Long): SessionReplay.RawInput = SessionReplay.RawInput(
         Observation.Screen(
-            timestamp = atMs, captureId = null, ruleId = "doordash.screen.idle_map",
+            timestamp = atMs, captureId = null, ruleId = "doordash.screen.navigation_generic",
             metadata = ReplayMetadata.EMPTY, flow = Flow.Idle, modeHint = Mode.Online,
-            parsed = ParsedFields.IdleFields(), target = "idle_map",
+            parsed = ParsedFields.IdleFields(), target = "navigation_generic",
         ),
         atMs = atMs,
     )
@@ -279,8 +285,10 @@ class TwoPickupStackReplayTest {
     }
 
     // =============================================================================================
-    // #700 — the two drops drive to a clean job close, both completions minted. See the class KDoc
-    // for the reconstruction rationale (db-proven suppressed frames stood in for by `runToClose()`).
+    // #700 — the two drops drive to a clean job close, both completions minted. The close fires via
+    // the STRICT #596/#615 arm of `isJobPhysicallyComplete` (both placeholders resolved + finished +
+    // arrived; the #749 coverage arm short-circuits away, deliberately unexercised here). See the
+    // class KDoc for the reconstruction rationale (db-proven suppressed frames → `runToClose()`).
     // =============================================================================================
 
     @Test
