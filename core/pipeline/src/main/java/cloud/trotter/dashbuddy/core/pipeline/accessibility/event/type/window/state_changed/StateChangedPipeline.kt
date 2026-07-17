@@ -20,9 +20,20 @@ class StateChangedPipeline @Inject constructor(
             Timber.d("⚡ STATE_CHANGED from %s  types=0x%02x", it.className, it.contentChangeTypes)
         }
         .mapNotNull { event ->
+            // Check-before-map (#435 item 3): read the active window's package first and
+            // skip the full tree mapping for a non-target window (bubble overlay, launcher).
+            val activePkg = source.getActiveWindowPackage()
+            if (activePkg !in Platform.watchedPackages) {
+                Timber.v(
+                    "🚫 Skip active window (pre-map): non-target pkg=%s (event pkg=%s)",
+                    activePkg, event.packageName,
+                )
+                return@mapNotNull null
+            }
             val snapshot = source.getCurrentRootSnapshot() ?: return@mapNotNull null
             // Attribute to the on-screen window, not the event; drop non-target windows (e.g. our
-            // own bubble overlay) so we don't recognize our own UI as the platform (#4).
+            // own bubble overlay) so we don't recognize our own UI as the platform (#4). Retained
+            // as a post-map re-check: the active root can swap between the package read and the map.
             if (snapshot.packageName !in Platform.watchedPackages) {
                 Timber.v(
                     "🚫 Skip active window: non-target pkg=%s (event pkg=%s)",

@@ -15,6 +15,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.mockito.kotlin.any
 import org.mockito.kotlin.anyOrNull
+import org.mockito.kotlin.doReturn
 import org.mockito.kotlin.mock
 import org.mockito.kotlin.never
 import org.mockito.kotlin.times
@@ -27,7 +28,7 @@ import org.mockito.kotlin.verify
  */
 class CaptureScrubTest {
 
-    private val captureBus: CaptureBus = mock()
+    private val captureBus: CaptureBus = mock { on { isEnabled } doReturn true }
     private val stats = PipelineStats()
     private val writer = CaptureWriter(captureBus, stats, NoRedaction)
 

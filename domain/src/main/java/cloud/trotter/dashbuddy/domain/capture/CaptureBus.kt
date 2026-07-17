@@ -13,6 +13,16 @@ package cloud.trotter.dashbuddy.domain.capture
 interface CaptureBus {
 
     /**
+     * Whether this bus persists envelopes (#435 item 5). When `false` — the release
+     * [NoOpCaptureBus], which discards every offer — [CaptureWriter] skips the entire
+     * tree→DTO→JSON→reparse→pretty-print envelope build structurally, since there is
+     * nothing to build for a sink that throws the result away. Defaults `true`, so the
+     * debug [DiskCaptureBus] and every test fake keep exercising the full build path
+     * (envelope content / redaction are debug-tested and must stay byte-identical).
+     */
+    val isEnabled: Boolean get() = true
+
+    /**
      * Write a capture envelope to disk.
      *
      * @param captureId  UUID assigned to this capture by the pipeline.

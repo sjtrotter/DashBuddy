@@ -50,7 +50,7 @@ import org.robolectric.annotation.Config
 @Config(sdk = [35])
 class NotificationPipelineSensitiveOrderingTest {
 
-    private val captureBus: CaptureBus = mock()
+    private val captureBus: CaptureBus = mock { on { isEnabled } doReturn true }
     private val platformPrefs: PlatformPreferences = mock {
         on { enabledPlatforms } doReturn MutableStateFlow(setOf<Platform>(Platform.DoorDash))
         on { enabledPackages } doReturn MutableStateFlow(setOf("com.doordash.driverapp"))
