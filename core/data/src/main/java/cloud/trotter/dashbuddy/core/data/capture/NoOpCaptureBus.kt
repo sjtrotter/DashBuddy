@@ -17,6 +17,13 @@ class NoOpCaptureBus @Inject constructor() : CaptureBus {
         Timber.i("Capture persistence disabled (release build) — no envelopes will be written")
     }
 
+    /**
+     * Release builds never persist (#435 item 5): reporting `false` lets [CaptureWriter]
+     * skip the full envelope-build pipeline whose only output would be discarded by
+     * [offer]. Structural, not a call-site guard — the sink itself declares it is off.
+     */
+    override val isEnabled: Boolean = false
+
     override fun offer(
         captureId: String,
         source: String,

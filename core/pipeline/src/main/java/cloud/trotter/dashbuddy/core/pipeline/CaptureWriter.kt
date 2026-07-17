@@ -39,6 +39,12 @@ class CaptureWriter @Inject constructor(
         obs: Observation.Screen,
         event: PipelineEvent.Screen,
     ): Observation.Screen {
+        // #435 item 5: a disabled bus (release NoOpCaptureBus) discards every offer,
+        // so skip the full tree→DTO→JSON→reparse→pretty-print envelope build here —
+        // it would only be thrown away. The returned obs is unchanged (captureId stays
+        // null, exactly as when the bus deduped/skipped), so downstream is identical.
+        // Structural skip: the bus DECLARES it is off; not a per-call-site guess.
+        if (!captureBus.isEnabled) return obs
         // Fail-closed backstop (#432): the sensitive gate upstream only sees
         // screens a RULE recognized as sensitive. An UNRECOGNIZED sensitive
         // screen classifies UNKNOWN and would be captured verbatim for triage
@@ -129,6 +135,8 @@ class CaptureWriter @Inject constructor(
         event: PipelineEvent.Click,
         screenTarget: String?,
     ): Observation.Click {
+        // #435 item 5: skip the envelope build for a disabled bus (see captureScreen).
+        if (!captureBus.isEnabled) return obs
         // Same fail-closed backstop as captureScreen (#432), added with #597:
         // an UNKNOWN click envelope carries the raw tapped node, and a tap on
         // an unruled sensitive surface must not persist its text. (Rule-matched
@@ -180,6 +188,8 @@ class CaptureWriter @Inject constructor(
         obs: Observation.Notification,
         raw: RawNotificationData,
     ): Observation.Notification {
+        // #435 item 5: skip the envelope build for a disabled bus (see captureScreen).
+        if (!captureBus.isEnabled) return obs
         // Same fail-closed backstop as captureScreen (#432) for UNKNOWN
         // notification bodies. Scans the flat text fields AND actionLabels
         // (#666 item 2c — a push action button label is serialized into the

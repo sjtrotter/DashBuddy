@@ -80,6 +80,23 @@ class AccessibilitySource @Inject constructor() {
      */
     fun getService(): AccessibilityService? = serviceRef?.get()
 
+    /**
+     * The package owning the active window, read from the native root WITHOUT mapping
+     * the tree (#435 item 3). A full [getCurrentRootSnapshot] converts every node with
+     * one binder IPC apiece; the active-window pipelines drop non-target windows (our
+     * own bubble overlay, the launcher, …) by package, so reading just the package
+     * first lets them skip that whole mapping pass for a window they'll discard anyway.
+     * Cheap: `rootInActiveWindow` fetches only the root node, not the subtree.
+     *
+     * This mirrors [WindowsChangedPipeline], which already reads `nativeRoot.packageName`
+     * before converting. [getCurrentRootSnapshot] re-reads the active root and re-derives
+     * the package, so a rare root swap between the two calls is still caught by the
+     * caller's post-map package re-check — the #4 overlay-drop guarantee is unchanged.
+     *
+     * SAFE to call from background threads.
+     */
+    fun getActiveWindowPackage(): String? = getLiveNativeRoot()?.packageName?.toString()
+
     /** Active-window root snapshot: the converted [UiNode] tree + the **real package** owning it. */
     data class RootSnapshot(val tree: UiNode, val packageName: String?)
 

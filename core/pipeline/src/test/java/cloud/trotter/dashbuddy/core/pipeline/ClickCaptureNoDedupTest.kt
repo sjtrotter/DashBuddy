@@ -13,6 +13,7 @@ import org.mockito.kotlin.any
 import org.mockito.kotlin.anyOrNull
 import org.mockito.kotlin.argumentCaptor
 import org.mockito.kotlin.eq
+import org.mockito.kotlin.doReturn
 import org.mockito.kotlin.mock
 import org.mockito.kotlin.times
 import org.mockito.kotlin.verify
@@ -28,7 +29,7 @@ import org.mockito.kotlin.whenever
  */
 class ClickCaptureNoDedupTest {
 
-    private val captureBus: CaptureBus = mock()
+    private val captureBus: CaptureBus = mock { on { isEnabled } doReturn true }
     private val writer = CaptureWriter(captureBus, PipelineStats(), NoRedaction)
 
     private fun clickObs(t: Long) = Observation.Click(

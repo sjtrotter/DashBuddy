@@ -47,6 +47,26 @@ class Ruleset<TInput>(rules: List<CompiledRule<TInput>>) {
     private val evalOrder: List<CompiledRule<TInput>> =
         sorted.filterNot { it.overrideable } + sorted.filter { it.overrideable }
 
+    /**
+     * [evalOrder] pre-partitioned by the rule-id platform namespace (#435 item 1).
+     *
+     * [matchFirst] used to allocate a fresh filtered list per event via a linear
+     * `id.startsWith("$platformWire.")` scan over every rule — on the recognition
+     * hot path, once per frame. The partition is a pure function of the immutable
+     * rule set, so it is computed ONCE here and looked up by key at match time.
+     *
+     * Platform-agnostic (principle 8): the key is the rule-id's own namespace
+     * prefix — the first dotted segment (`doordash` in `doordash.screen.offer`) —
+     * NOT a hardcoded platform literal. `groupBy` preserves [evalOrder]'s encounter
+     * order within each group, so each partition keeps the non-overrideable-first,
+     * priority-ordered sequence [matchFirst] relies on (#419). Using
+     * `substringBefore('.', "")` makes a dotless id group under `""` (never a valid
+     * `platformWire`), byte-identical to the old `startsWith` filter which likewise
+     * never matched a dotless id.
+     */
+    private val evalOrderByPlatform: Map<String, List<CompiledRule<TInput>>> =
+        evalOrder.groupBy { it.id.substringBefore('.', "") }
+
     /** Rule lookup by id (#598) — the capture-redaction seam fetches a
      *  recognized rule's compiled `redact` block without exposing the list. */
     private val byId: Map<String, CompiledRule<TInput>> = sorted.associateBy { it.id }
@@ -76,7 +96,8 @@ class Ruleset<TInput>(rules: List<CompiledRule<TInput>>) {
         screenTarget: String? = null,
     ): RuleMatchResult? {
         val rules = if (platformWire != null) {
-            evalOrder.filter { it.id.startsWith("$platformWire.") }
+            // Pre-partitioned at construction (#435 item 1) — no per-frame filter alloc.
+            evalOrderByPlatform[platformWire] ?: emptyList()
         } else {
             evalOrder
         }

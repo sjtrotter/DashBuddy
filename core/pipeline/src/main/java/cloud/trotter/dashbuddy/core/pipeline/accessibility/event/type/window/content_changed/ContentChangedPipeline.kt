@@ -37,10 +37,21 @@ class ContentChangedPipeline @Inject constructor(
             // Reset for the next debounce window; the accumulated bitmask itself is
             // logged above (#439 — TreeSnapshot no longer carries it, never consumed).
             pendingChangeTypes.set(0)
+            // Check-before-map (#435 item 3): read the active window's package first and
+            // skip the full tree mapping for a non-target window (bubble overlay, launcher).
+            val activePkg = source.getActiveWindowPackage()
+            if (activePkg !in Platform.watchedPackages) {
+                Timber.v(
+                    "🚫 Skip active window (pre-map): non-target pkg=%s (event pkg=%s)",
+                    activePkg, event.packageName,
+                )
+                return@mapNotNull null
+            }
             val snapshot = source.getCurrentRootSnapshot() ?: return@mapNotNull null
             // Attribute to the window actually on screen, not the triggering event. Drop snapshots
             // of non-target windows (our own bubble overlay, launcher, etc.) so we never recognize
-            // our own UI as the platform — the #4 self-recognition feedback loop.
+            // our own UI as the platform — the #4 self-recognition feedback loop. Retained as a
+            // post-map re-check: the active root can swap between the package read and the map.
             if (snapshot.packageName !in Platform.watchedPackages) {
                 Timber.v(
                     "🚫 Skip active window: non-target pkg=%s (event pkg=%s)",

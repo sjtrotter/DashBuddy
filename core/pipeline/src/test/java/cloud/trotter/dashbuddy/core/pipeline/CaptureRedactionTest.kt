@@ -19,6 +19,7 @@ import org.junit.Test
 import org.mockito.kotlin.any
 import org.mockito.kotlin.anyOrNull
 import org.mockito.kotlin.argumentCaptor
+import org.mockito.kotlin.doReturn
 import org.mockito.kotlin.mock
 import org.mockito.kotlin.whenever
 
@@ -30,7 +31,7 @@ import org.mockito.kotlin.whenever
  */
 class CaptureRedactionTest {
 
-    private val captureBus: CaptureBus = mock()
+    private val captureBus: CaptureBus = mock { on { isEnabled } doReturn true }
     private val stats = PipelineStats()
 
     /** A dropoff-shaped redact block: name node keeps its marker, address masked whole. */
