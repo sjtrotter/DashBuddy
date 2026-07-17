@@ -37,18 +37,31 @@ class AccessibilitySource @Inject constructor() {
     }
 
     /**
-     * All live window roots (native), active window first. Needed for clicks: the node to tap
-     * (e.g. DoorDash's Accept/Decline button) may be in a window other than the active one —
-     * when the user taps the bubble, the *bubble* is the active window, so a search limited to
+     * All live window roots (native), **active window first, deduped**. Needed for clicks: the
+     * node to tap (e.g. DoorDash's Accept/Decline button) may be in a window other than the active
+     * one — when the user taps the bubble, the *bubble* is the active window, so a search limited to
      * [getLiveNativeRoot] misses the underlying app's nodes. Requires
      * `flagRetrieveInteractiveWindows` (set in the service config).
+     *
+     * `rootInActiveWindow` is also enumerated inside `service.windows` (the active window's root
+     * added a second time), so without deduping the active window's node would appear **twice** —
+     * the correct click target then ties with ITSELF and the fail-closed disambiguator aborts the
+     * tap (#788). We dedup with `==` (i.e. `AccessibilityNodeInfo.equals`, which compares
+     * `windowId` + `sourceNodeId` — the two fetches of the same active-window root are equal), NOT
+     * a hash-based `distinct()`: `AccessibilityNodeInfo` does not guarantee a `hashCode` consistent
+     * with that `equals`. Active-window-FIRST ordering is preserved (load-bearing: [findCandidates]
+     * and the active-window scoping in `UiInteractionHandler` rely on it) — `rootInActiveWindow` is
+     * added first and kept, its later twin dropped. The list is a handful of windows, so the O(n²)
+     * scan is trivial.
      */
     fun getLiveWindowRoots(): List<AccessibilityNodeInfo> {
         val service = serviceRef?.get() ?: return emptyList()
         val roots = mutableListOf<AccessibilityNodeInfo>()
         service.rootInActiveWindow?.let { roots.add(it) }
         (service.windows ?: emptyList()).forEach { window -> window.root?.let { roots.add(it) } }
-        return roots
+        val deduped = mutableListOf<AccessibilityNodeInfo>()
+        for (root in roots) if (deduped.none { it == root }) deduped.add(root)
+        return deduped
     }
 
     // --- 2. The Service Connection (Pull) ---
