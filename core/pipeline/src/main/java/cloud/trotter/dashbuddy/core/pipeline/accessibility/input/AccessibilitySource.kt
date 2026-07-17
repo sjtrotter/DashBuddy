@@ -49,10 +49,11 @@ class AccessibilitySource @Inject constructor() {
      * tap (#788). We dedup with `==` (i.e. `AccessibilityNodeInfo.equals`, which compares
      * `windowId` + `sourceNodeId` — the two fetches of the same active-window root are equal), NOT
      * a hash-based `distinct()`: `AccessibilityNodeInfo` does not guarantee a `hashCode` consistent
-     * with that `equals`. Active-window-FIRST ordering is preserved (load-bearing: [findCandidates]
-     * and the active-window scoping in `UiInteractionHandler` rely on it) — `rootInActiveWindow` is
-     * added first and kept, its later twin dropped. The list is a handful of windows, so the O(n²)
-     * scan is trivial.
+     * with that `equals`. Active-window-FIRST ordering is preserved for stability/diagnostics —
+     * `rootInActiveWindow` is added first and kept, its later twin dropped. (Nothing consumes list
+     * position anymore: `UiInteractionHandler`'s #788 scoping identifies the active window by `==`
+     * against a fresh [getLiveNativeRoot], not by index.) The list is a handful of windows, so the
+     * O(n²) scan is trivial.
      */
     fun getLiveWindowRoots(): List<AccessibilityNodeInfo> {
         val service = serviceRef?.get() ?: return emptyList()

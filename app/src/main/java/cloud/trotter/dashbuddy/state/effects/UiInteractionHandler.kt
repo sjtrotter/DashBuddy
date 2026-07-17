@@ -30,9 +30,10 @@ import javax.inject.Singleton
  *    active (topmost) window: the confirm sheet, the earnings summary. A twin
  *    node sharing the same view id can survive underneath it in a *lower*
  *    window (the offer popup's bare "Decline" behind the confirm sheet's
- *    "Decline offer"). Since [AccessibilitySource.getLiveWindowRoots] lists the
- *    active window first, when any label-verified candidate is in the active
- *    window we drop the other-window candidates before disambiguation — the
+ *    "Decline offer"). Each candidate's source root is compared (`==`) against
+ *    [AccessibilitySource.getLiveNativeRoot]; when any label-verified candidate
+ *    is in the active window we drop the other-window candidates before
+ *    disambiguation — the
  *    implicit "click the first (active-window) candidate" that worked in the
  *    field pre-#770, made explicit. When the active window contributes none
  *    (e.g. the dasher's bubble holds focus and the target is in a background
@@ -120,10 +121,10 @@ class UiInteractionHandler @Inject constructor(
         // `getLiveNativeRoot()` returns `rootInActiveWindow` — the same node
         // `getLiveWindowRoots()` puts first — so a root in `roots` that `==` this
         // (AccessibilityNodeInfo.equals = windowId+sourceNodeId) IS the active
-        // window. Null when the active window belongs to another package (e.g. the
-        // dasher's bubble holds focus) — it was package-filtered out of `roots`, so
-        // no candidate matches and scoping is a no-op (we fall through to all
-        // windows, as before).
+        // window. When the active window belongs to another package (e.g. the
+        // dasher's bubble holds focus), this is non-null but owned by that other
+        // package — it was package-filtered out of `roots`, so it matches nothing
+        // and scoping no-ops (we fall through to all windows, as before).
         val activeRoot = accessibilitySource.getLiveNativeRoot()
         val candidates = findCandidates(roots, activeRoot, ref)
         if (candidates.isEmpty()) {

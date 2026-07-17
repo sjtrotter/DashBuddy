@@ -78,6 +78,21 @@ card's **mechanical** half, #577 (re-confirmed, 24/24, ~0.55 s — with a new po
 that entry's Bug #1), the #457 path, and #554 ShadowProjector (2/2). The #462/#460 dropoff item
 was found **broken-in-part** (raw PII in capture envelopes) and moved to that entry's Bug #7.)_
 
+- **🆕 NEW — Automation taps un-broken: active-window candidate scoping + window-root dedup (#788, fixes the 07-16 regression).**
+  Both automation taps died on 07-16 with `No decisive match among 2 verified candidates` — the active
+  window's root was enumerated TWICE (tying with itself) and a viewId twin in a lower window (the offer
+  popup's "Decline" behind the confirm sheet) survived to the ranker. Now `getLiveWindowRoots` dedups the
+  twin and the handler prefers active-window candidates before disambiguation; same-window ambiguity still
+  aborts fail-closed (#734).
+  **What to watch:** quick-decline auto-confirm fires again (~0.5s after Decline) and the post-delivery
+  summary auto-expands — the two taps that were dead. **Desk-side:** the `Effects` DEBUG line
+  `Dropped N other-window candidate(s)` appearing on tap fires, and the #734 WARN abort
+  (`No decisive match among …`) appearing ONLY on genuine same-window ties (expected: rare/never on
+  these two surfaces). The fix's central assumption — cross-instance `AccessibilityNodeInfo.equals`
+  behaving as documented on real framework nodes — is untestable off-device (unit tests use mocks), which
+  is exactly why this needs field confirmation.
+  - Confirmed: 0/2
+
 - **🆕 NEW — Uber active-job skeleton: accepts become costed jobs at trip start; honest "ON JOB" badge (#762 D2 / PR #784). NEEDS UBER ENABLED.**
   `active_trip` (the coarse `on_job_view` screen) now declares the phase-less `task:active` flow, and the
   accept grace is per-platform (Uber 600s vs the old global 120s). Together: an accepted Uber offer is
