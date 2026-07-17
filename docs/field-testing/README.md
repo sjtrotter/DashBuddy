@@ -115,7 +115,10 @@ was found **broken-in-part** (raw PII in capture envelopes) and moved to that en
   street chip (address failed the strict street-number parse → chain-only fallback, expected for
   mall/named-plaza addresses — capture the address shape if it looks parseable), and any store that
   *forks* into two cards across dashes (a receipt-code appearing later should upgrade, not split).
-  - Confirmed: 0/2
+  - Confirmed: 1/2 (2026-07-16 desk pass: the dash's H-E-B drop keyed `doordash|h-e-b|@12125`;
+    `stores` now holds FOUR distinct H-E-Bs by street number (@12125/@12777/@5910/@7330) + the
+    documented legacy chain-only fallback row; v7 refold ran clean. Second confirmation = dev eyes
+    on the Patterns tab cards, or another dash splitting cleanly.)
 
 - **🆕 NEW — "Shopping off" declines shop offers at the verdict edge (#762 D12 / PR #778).**
   With `allowShopping` off, a shop-type offer now gets a structural `SHOP_DECLINED` verdict (label
@@ -139,39 +142,6 @@ was found **broken-in-part** (raw PII in capture envelopes) and moved to that en
   residual on very narrow windows — strictly better than before, but capture it if seen), and any
   visual double-ripple or dead tap zone on the vehicle card.
   - Confirmed: 0/2
-
-- **🆕 NEW — quick-decline auto-confirm + earnings auto-expand no longer "click first" on an ambiguous target (#734 / PR).**
-  Two actuation surfaces used to resolve **2 verified candidates** and tap the first-in-tree one (luck, not
-  verification): the offer confirm-decline sheet (`CONFIRM_DECLINE`) and the collapsed delivery-summary chevron
-  (`EXPAND_EARNINGS`). The rule bindings are now tightened (confirm sheet anchors the exact "Decline offer"
-  label; the summary binds the pay/"This offer" expandable, never the "Total online time" stats one), and an
-  ambiguous target now **aborts to manual** instead of clicking.
-  **How to tell it's working (needs quick-declines enabled; watch a few declines + a couple completions):** the
-  quick-decline still auto-confirms the "Are you sure?" sheet (declines take effect), and the post-delivery
-  earnings breakdown still auto-expands to the **pay** section (not the online-time stats). **Desk-side:**
-  `grep -iE 'refusing to click \(fail closed\)|No decisive match' shareable.log` — a WARN there means the tie
-  path fired and correctly aborted (the dev then finishes it by hand); the *count* dropping toward zero vs the
-  07-07/07-08 dashes (which saw 4× confirm + 3× expand ties) is the win. No wrong-button taps in the event log.
-  - Confirmed: 0/2
-
-- **🆕 NEW — notification-listener rebind rate is now quantified (#731 instrumentation / PR).**
-  The NLS connect/disconnect lifecycle now rides `PipelineStats` counters and leveled log lines
-  (tag `Pipeline`): the FIRST disconnect per process announces the degradation at WARN, every
-  subsequent disconnect and all connects ride INFO — all with running counts — so the
-  field-observed 129–240 cycles/day flap is measurable from a pull without drowning the WARN slice.
-  **How to tell it's working (desk-side only):** after a dash,
-  `grep -i 'notification listener' shareable.log` shows the paired lines with running counts
-  (`connects − disconnects ≈ process deaths` per process — a kill never logs its disconnect), and
-  the periodic `PipelineStats` summary carries `notifListenerConnects=`/`notifListenerDisconnects=`
-  (corroboration only — it emits per 50 forwarded observations, so it's quiet while idle).
-  The counts themselves feed the #731 root-cause call (battery-optimization kills vs other) — high
-  counts are the *expected* finding, not a failure of this item.
-  - Confirmed: 1/2 (2026-07-13 desk pass: the counter lines work — `connected (count=1 this
-    process)` on 07-12 — and they measured the headline finding: the flap has VANISHED
-    (156/142/192 lines/day on 07-07/08/09 → 0 disconnects across ~5.5 h on 07-12). Root-cause
-    evidence now points environmental (old install's battery/standby state; reset by reinstall) —
-    see the 2026-07-13 log entry. Second confirmation = counters on the next pull, flap still absent
-    or quantified.)
 
 - **🆕 NEW — a same-customer double-order job closes at its receipt; the next offer is its OWN job (#749).**
   A job where **both orders go to the same customer** (the offer card literally says so — e.g. Willie's +
@@ -306,24 +276,6 @@ was found **broken-in-part** (raw PII in capture envelopes) and moved to that en
   #501 (all 3 items). This is the last recognition piece of #501; watch that it doesn't perturb the
   dropoff flow (no phantom re-mint around the confirm card).
   - Confirmed: 0/2
-- **🆕 NEW — per-platform shop-rate learning; shop offers price sanely after the reset (#588 / PR).**
-  The learned shopping pace (items/min) is now keyed per platform, and the old global learned value was
-  **dropped** (restart-learning, no migration) — every platform relearns from its 0.8/min seed over ~5 shops.
-  **How to tell it's working (on a DoorDash dash):** shop pricing may shift toward the 0.8/min seed
-  until ~5 shops relearn the pace on this platform (the discarded value was the dev's own LEARNED mean,
-  not necessarily close to 0.8) — a Shop & Deliver offer's handling time / $/hr should still read sane,
-  not absurd, in the meantime; after ~5 real shops the learned pace takes back over. **Desk-side after
-  the dash:** the shareable INFO log's
-  `ShopRate` lines now carry a `[doordash]` platform tag; there should be no cross-platform bleed if a
-  second platform (Uber/Instacart) is ever shopped. Watch for any shop offer suddenly reading an absurd
-  $/hr (would mean the seed/reset went wrong). The same INFO line now also carries the post-fold
-  `→ learned X.XX/min (n=N)` suffix (the desk window into the DataStore-only learned mean — watch `n`
-  climb from the reset and the mean converge off the 0.8 seed; `learned ?/min (n=0)` means nothing
-  learned yet, not a zeroed mean).
-  - Confirmed: 1/2 (2026-07-13 desk pass: every 07-12 ShopRate line `[doordash]`-tagged with the
-    `→ learned` suffix; n climbed 1→4 over the day's shops, mean 0.49→0.67/min converging off the
-    seed; 5 shop offers accepted+completed with no absurd pricing in evidence. Second confirmation:
-    another dash's trajectory continuing to converge, or the dev's eyes on a shop offer's $/hr.)
 - **🆕 NEW — store entity resolution keys real stores from live dashes (#159 / PR).**
   The read-model now resolves each job's stores (`stores` + `pickup_records` tables) from captured
   pickup/dropoff/payout surfaces. **How to tell it's working (desk-side, after a dash):** on a job with a
@@ -1836,9 +1788,34 @@ Accept and Decline registered on DoorDash — and moved to that session's entry 
 - **#772 chat INFO scrub — grep the pull's `shareable.log` for `message posted [` and
   `offer posted [`: expect only persona kind labels (Merchant/Customer/Dispatch/…), never a raw
   store name. Desk-resolvable (playbook).**
-  - Confirmed: 0/2.
+  - Confirmed: 1/2 (2026-07-16 desk pass: 14 `message posted [...]` INFO lines, all abstract
+    persona labels + char counts, zero raw names.)
 
 ---
+
+## 2026-07-16 — DoorDash dash (first field run of the 07-12→07-15 merge train; desk synthesis same evening)
+
+**Platform(s) tested:** DoorDash (Uber installed + enabled in-app but never went Online — 0 Uber sessions/captures this dash, so all Uber checklist items and the #785/#786 capture-first list remain open).
+**Branch under test:** `master` at `8b924140` (post-#784 — first field exposure of #767/#768/#769/#770/#778–#784).
+**Field conditions:** single ~40-min session (16:24–17:04), one offer timed out, one H-E-B Shop & Deliver (9 items) accepted → shopped → delivered, receipt shown.
+
+### Bugs
+
+1. **#734 tie-abort (PR #770) is BROKEN in the field — fast-decline and post-delivery auto-expand are dead (dev-observed live, desk-confirmed).** Both automation taps fired and aborted fail-closed: `confirm_decline` 16:25:17 and `expand_earnings` 17:04:17, each `No decisive match among 2 verified candidates … refusing to click (fail closed)`. The #770 binding-tightening did NOT reduce the candidate count — the fielded frames are recognition-hash-identical to the pre-#770 07-10/07-12 frames, so the same trees still tie, and the new abort turns the old lucky-first-click into a guaranteed no-click. Desk root-cause (hypothesis, evidence-backed — filed as **#788**): the tightening was architecturally unreachable — a rule `bind` only picks which node becomes the `NodeRef` fingerprint; at fire time `UiInteractionHandler.findCandidates` rebuilds candidates from `ref.viewIdSuffix` alone **across ALL live windows** and re-filters only by the action's label regex, so the bind's `hasText`/`not:` predicates never reach the candidate filter. Evidence: the confirm sheet's 2nd candidate is the offer window's own "Decline" button **behind** the modal (`textView_prism_button_title` in the 16:25:16 `offer_popup` capture); the summary's 2nd `expandable_view` is off-window (the captured window holds exactly one). The ranker then can't recover: EXPAND_EARNINGS has no label and a **blank `ref.text`**, so disambiguation is bounds-IoU only — against bounds that demonstrably drift 233–2365 px between same-hash frames (and one live zero-area rect mid-animation) → UNRESOLVED → abort, every time. One caveat: by the code trace, confirm_decline's EXACT_TEXT tier *should* have resolved ("Decline offer" ≠ "Decline"); its persistent failure implies a transient live twin at fire time — hypothesis, needs a fire-time capture. **If the hypothesis holds, one direction might be** scoping candidates to the recognized window and re-applying the bind's discriminator at fire time (handler change — rule JSON alone cannot fix it); #770's own test replays a single-window corpus tree so it structurally cannot see either failure. Item moved here from the checklist; triage in #788.
+
+### Verification (validated / progressed this dash)
+
+2. **Money path spotless again:** session reconciles to the cent ($20.26 = $20.26); the drop folded `RECEIPT_TOTAL`, net $18.23 against frozen cpm; legs 2.40 + 3.33 = 5.73 mi = odometer span exactly. `PROJECTOR_VERSION` 6→7 wipe+refold ran once on first launch, all 15 historical delivery rows intact. 0 ERROR, 0 restarts, no WARN storm.
+3. **#731 NLS counters — VALIDATED 2/2, retired from the checklist.** Second clean confirmation: 2 connects (running counts render), 0 disconnects across the dash; `PipelineStats notifListenerConnects=1 Disconnects=0`. The flap remains absent post-reinstall (environmental root-cause holds). #731 can move to closed-pending-recurrence; the counters stay as the tripwire.
+4. **#588 ShopRate — desk half VALIDATED 2/2, retired from the checklist.** `recorded 9 items / 15.0 min = 0.60/min [doordash] → learned 0.65/min (n=5)` — platform-tagged, n 4→5, converging off seed, sane pricing on the fielded shop.
+5. **#773/#159 address keys — first confirmation (→1/2).** The four San Antonio H-E-Bs now key distinctly by street number (@12125/@12777/@5910/@7330); this dash's drop resolved to `@12125`. Patterns-tab render half still needs dev eyes.
+6. **#772 chat scrub — first confirmation (→1/2).** All 14 chat INFO lines abstract-labeled, zero raw names.
+7. **#688B and #733 held again** on this dash's shapes (legs exact; 0 D6 join-miss) but their second confirmations still need a live stacked / multi-pickup job — unchanged at 1/2.
+
+### Meta
+
+8. **Recognition-hash ≠ geometry.** The capture content hash keys on text, so "identical" frames can drift hundreds of px in bounds — relevant to any future bounds-anchored logic (#788 evidence).
+9. **UNKNOWN backlog:** 35 UNKNOWN frames on 07-16, clustered at transition moments of otherwise-recognized flows; candidate for a routine InboxProcessor pass, not a regression.
 
 ## 2026-07-13 — desk analysis of the 07-10 & 07-12 dashes (pulled db/logs/captures; playbook-first)
 
