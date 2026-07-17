@@ -78,6 +78,18 @@ card's **mechanical** half, #577 (re-confirmed, 24/24, ~0.55 s — with a new po
 that entry's Bug #1), the #457 path, and #554 ShadowProjector (2/2). The #462/#460 dropoff item
 was found **broken-in-part** (raw PII in capture envelopes) and moved to that entry's Bug #7.)_
 
+- **🆕 NEW — Recognition hot-path pack: pre-map package skip must not drop real frames (#435 / PR #791).**
+  ContentChanged/StateChanged now read the active window's package FIRST and skip the full tree
+  mapping when it isn't a watched platform (bubble overlay, launcher). The skip must only ever fire
+  for windows we were going to drop anyway — recognition of the platform app must be unaffected.
+  **What to watch:** recognition frames still land normally with overlays around (our bubble over
+  the DoorDash map, the offer popup, the quick-decline confirm sheet) and there are NO missing /
+  late screens while the platform app is foreground — screen changes keep reflecting in the HUD at
+  the usual cadence. **Desk-side:** the VERBOSE `🚫 Skip active window (pre-map)` lines name ONLY
+  non-target packages (launcher, dashbuddy, systemui) — never a watched platform package — and
+  recognized-frame counts per session look normal vs prior dashes.
+  - Confirmed: 0/2
+
 - **🆕 NEW — Automation taps un-broken: active-window candidate scoping + window-root dedup (#788, fixes the 07-16 regression).**
   Both automation taps died on 07-16 with `No decisive match among 2 verified candidates` — the active
   window's root was enumerated TWICE (tying with itself) and a viewId twin in a lower window (the offer

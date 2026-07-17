@@ -63,6 +63,14 @@ class Ruleset<TInput>(rules: List<CompiledRule<TInput>>) {
      * `substringBefore('.', "")` makes a dotless id group under `""` (never a valid
      * `platformWire`), byte-identical to the old `startsWith` filter which likewise
      * never matched a dotless id.
+     *
+     * DELIBERATE divergence from `Platform.fromRuleId` (the registry's prefix
+     * resolver): `fromRuleId` uses `substringBefore('.')` with NO default, so a
+     * dotless id resolves the whole id as its wire — while this partition buckets
+     * a dotless id under `""`, preserving the old filter's exclusion semantics.
+     * Real rule ids are always `<wire>.<section>.<name>` (wires are non-empty and
+     * dot-free — see the `Platform` KDoc), so the divergence is unreachable in
+     * practice; documented at both sites so neither is "unified" blindly.
      */
     private val evalOrderByPlatform: Map<String, List<CompiledRule<TInput>>> =
         evalOrder.groupBy { it.id.substringBefore('.', "") }

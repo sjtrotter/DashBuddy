@@ -15,6 +15,11 @@ import java.util.Locale
  * chat gerund — "Dashing"/"Ubering"; `null` falls back to a generic verb at
  * the UI edge). No UI/Android types — this is pure copy + a phrase, derived
  * everywhere it's shown.
+ *
+ * [wire] values are assumed **non-empty and dot-free** — they are used as the
+ * platform namespace prefix of rule ids (`<wire>.<section>.<name>`), so a wire
+ * containing a `.` or an empty wire would break prefix-based resolution
+ * ([fromRuleId], `Ruleset.evalOrderByPlatform`).
  */
 enum class Platform(
     val wire: String,
@@ -34,7 +39,18 @@ enum class Platform(
         private val byWire = entries.associateBy { it.wire }
         private val byName = entries.associateBy { it.name.lowercase(Locale.ROOT) }
 
-        /** Resolve the platform prefix from a rule id, or [Unknown]. */
+        /**
+         * Resolve the platform prefix from a rule id, or [Unknown].
+         *
+         * Note a deliberate divergence from `Ruleset.evalOrderByPlatform`'s
+         * partition key (#435): `substringBefore('.')` with no default means a
+         * DOTLESS id resolves the whole id as its wire (so a literal `"doordash"`
+         * would resolve to [DoorDash]), whereas the Ruleset partition buckets a
+         * dotless id under `""` — matching the old `startsWith("$wire.")` filter,
+         * which never matched a dotless id. Real rule ids are always
+         * `<wire>.<section>.<name>`, so the divergence is unreachable in practice;
+         * it is documented so neither side is "fixed" to match the other blindly.
+         */
         fun fromRuleId(ruleId: String?): Platform {
             val prefix = ruleId?.substringBefore('.') ?: return Unknown
             return byWire[prefix] ?: Unknown
