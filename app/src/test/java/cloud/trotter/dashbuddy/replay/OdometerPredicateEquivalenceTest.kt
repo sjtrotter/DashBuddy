@@ -173,7 +173,9 @@ class OdometerPredicateEquivalenceTest {
             listOf(
                 "receipt_skip_2026_06_29" to 2,
                 "receipt_skip_2026_06_29" to 3,
-                "two_pickup_stack_2026_07_05" to 9,
+                // #700 added frames 12 (dropoff_photo) + 13 (nav_arriving) before frame 11, so the
+                // mamamargies-drive divergence frame shifted from screen-step 9 to 11 (same shape).
+                "two_pickup_stack_2026_07_05" to 11,
             ),
             divergences.sortedWith(compareBy({ it.first }, { it.second })),
         )
