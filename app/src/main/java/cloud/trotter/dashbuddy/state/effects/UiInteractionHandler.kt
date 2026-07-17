@@ -26,16 +26,28 @@ import javax.inject.Singleton
  *    the action's [TargetExpectation] (e.g. DECLINE_OFFER only taps a node
  *    labeled "Decline"). Platform buttons usually label via a child TextView,
  *    so collection walks a bounded subtree.
- * 3. **Evidence-ranked disambiguation** (#600) — when more than one live node
- *    survives label verification, [ClickCandidateRanker] picks the strongest
- *    match (exact stored text, then max bounds overlap) instead of a
- *    since-abandoned exact-bounds `==` comparison that broke under an
+ * 3. **Active-window scoping** (#788) — the tap target normally lives in the
+ *    active (topmost) window: the confirm sheet, the earnings summary. A twin
+ *    node sharing the same view id can survive underneath it in a *lower*
+ *    window (the offer popup's bare "Decline" behind the confirm sheet's
+ *    "Decline offer"). Each candidate's source root is compared (`==`) against
+ *    [AccessibilitySource.getLiveNativeRoot]; when any label-verified candidate
+ *    is in the active window we drop the other-window candidates before
+ *    disambiguation — the
+ *    implicit "click the first (active-window) candidate" that worked in the
+ *    field pre-#770, made explicit. When the active window contributes none
+ *    (e.g. the dasher's bubble holds focus and the target is in a background
+ *    platform window) we keep them all and let the ranker decide.
+ * 4. **Evidence-ranked disambiguation** (#600) — when more than one live node
+ *    survives label verification *and active-window scoping*, [ClickCandidateRanker]
+ *    picks the strongest match (exact stored text, then max bounds overlap)
+ *    instead of a since-abandoned exact-bounds `==` comparison that broke under an
  *    animating sheet's temporal drift. If the ranker cannot decide
  *    ([ClickCandidateRanker.Tier.UNRESOLVED]) among >1 survivor, the tap is
  *    **aborted to manual** (#734) — clicking the first-in-tree candidate is
- *    luck, not verification. The paired ruleset fix keeps the bound target
- *    predicates tight enough that this decisive path resolves a single node.
- * 4. **Strict click** — self-or-ancestor only. The old clickable-*sibling*
+ *    luck, not verification. The abort is reserved for genuine SAME-window
+ *    ambiguity: two distinct verified candidates within the active window.
+ * 5. **Strict click** — self-or-ancestor only. The old clickable-*sibling*
  *    fallback is deliberately absent here: the verified node's sibling can be
  *    the opposite button (Accept sits beside Decline in the offer footer).
  *
@@ -105,7 +117,16 @@ class UiInteractionHandler @Inject constructor(
             return false
         }
 
-        val candidates = findCandidates(roots, ref)
+        // #788: the active (topmost) window's root, used to scope candidates below.
+        // `getLiveNativeRoot()` returns `rootInActiveWindow` — the same node
+        // `getLiveWindowRoots()` puts first — so a root in `roots` that `==` this
+        // (AccessibilityNodeInfo.equals = windowId+sourceNodeId) IS the active
+        // window. When the active window belongs to another package (e.g. the
+        // dasher's bubble holds focus), this is non-null but owned by that other
+        // package — it was package-filtered out of `roots`, so it matches nothing
+        // and scoping no-ops (we fall through to all windows, as before).
+        val activeRoot = accessibilitySource.getLiveNativeRoot()
+        val candidates = findCandidates(roots, activeRoot, ref)
         if (candidates.isEmpty()) {
             Timber.tag("Effects").w(
                 "Could not find any live node for: %s (id=%s, text=%s, bounds=%s)",
@@ -118,9 +139,9 @@ class UiInteractionHandler @Inject constructor(
         // the ranker below wants them too (for WARN diagnostics), so this avoids
         // walking each candidate's subtree twice (collectLabels is bounded but
         // not free).
-        val labeledCandidates = candidates.mapNotNull { node ->
-            val labels = collectLabels(node)
-            if (expectation.matchesLabels(labels)) node to labels else null
+        val labeledCandidates = candidates.mapNotNull { candidate ->
+            val labels = collectLabels(candidate.node)
+            if (expectation.matchesLabels(labels)) candidate to labels else null
         }
         if (labeledCandidates.isEmpty()) {
             Timber.tag("Effects").w(
@@ -130,16 +151,37 @@ class UiInteractionHandler @Inject constructor(
             return false
         }
 
+        // #788: scope to the active window. A verified twin in a lower window (the
+        // offer popup's "Decline" behind the confirm sheet) would otherwise tie
+        // with the real target and abort the tap. If the active window contributed
+        // any verified candidate, drop the rest before disambiguation; otherwise
+        // (no active-window candidate — the target lives in a background platform
+        // window) keep them all. Genuine SAME-window ambiguity still fails closed
+        // below.
+        val activeWindowCandidates = labeledCandidates.filter { it.first.inActiveWindow }
+        val scopedCandidates = if (activeWindowCandidates.isNotEmpty()) {
+            val dropped = labeledCandidates.size - activeWindowCandidates.size
+            if (dropped > 0) {
+                Timber.tag("Effects").d(
+                    "Dropped %d other-window candidate(s) for %s (active window has %d)",
+                    dropped, description, activeWindowCandidates.size,
+                )
+            }
+            activeWindowCandidates
+        } else {
+            labeledCandidates
+        }
+
         // Disambiguate (#600): rank the label-verified survivors by evidence —
         // exact stored text, then max bounds overlap — instead of exact-bounds
         // `==`, which dies to the temporal drift of an animating sheet (see
         // ClickCandidateRanker's KDoc for the full grounding).
-        val verified = labeledCandidates.map { it.first }
-        val facts = labeledCandidates.map { (node, labels) ->
+        val verified = scopedCandidates.map { it.first.node }
+        val facts = scopedCandidates.map { (candidate, labels) ->
             val liveBounds = Rect()
-            node.getBoundsInScreen(liveBounds)
+            candidate.node.getBoundsInScreen(liveBounds)
             ClickCandidateRanker.CandidateFacts(
-                text = node.text?.toString(),
+                text = candidate.node.text?.toString(),
                 labels = labels,
                 bounds = liveBounds.toBoundingBox(),
             )
@@ -174,29 +216,48 @@ class UiInteractionHandler @Inject constructor(
     }
 
     /**
+     * A live candidate node plus whether it came from the active (topmost)
+     * window's root — the flag the active-window scoping in [performVerifiedClick]
+     * (#788) reads.
+     */
+    private data class Candidate(val node: AccessibilityNodeInfo, val inActiveWindow: Boolean)
+
+    /**
      * Search the scoped roots, strongest strategy first (so a weak bounds
-     * match in one window can't beat a viewId match in another). The target
-     * may live in a window other than the active one — e.g. DoorDash's offer
-     * while the bubble holds focus.
+     * match in one window can't beat a viewId match in another), tagging each
+     * hit with whether its source window is the active one ([activeRoot], `==`
+     * by [AccessibilityNodeInfo.equals]). The target may live in a window other
+     * than the active one — e.g. DoorDash's offer while the bubble holds focus —
+     * so candidates from every scoped root are collected; the caller's
+     * active-window scoping (#788) prefers the active window's, if any.
      */
     private fun findCandidates(
         roots: List<AccessibilityNodeInfo>,
+        activeRoot: AccessibilityNodeInfo?,
         ref: NodeRef,
-    ): List<AccessibilityNodeInfo> {
-        val candidates = mutableListOf<AccessibilityNodeInfo>()
+    ): List<Candidate> {
+        val candidates = mutableListOf<Candidate>()
+        fun addFrom(root: AccessibilityNodeInfo, nodes: List<AccessibilityNodeInfo>) {
+            val inActive = activeRoot != null && root == activeRoot
+            for (node in nodes) candidates.add(Candidate(node, inActive))
+        }
         // Strategy 1: find by view ID
         val targetId = ref.viewIdSuffix
         if (!targetId.isNullOrEmpty()) {
-            for (root in roots) candidates.addAll(root.findAccessibilityNodeInfosByViewId(targetId))
+            for (root in roots) addFrom(root, root.findAccessibilityNodeInfosByViewId(targetId))
         }
         // Strategy 2: find by text
         val targetText = ref.text
         if (candidates.isEmpty() && !targetText.isNullOrEmpty()) {
-            for (root in roots) candidates.addAll(root.findAccessibilityNodeInfosByText(targetText))
+            for (root in roots) addFrom(root, root.findAccessibilityNodeInfosByText(targetText))
         }
         // Strategy 3: walk each tree matching by bounds + className
         if (candidates.isEmpty()) {
-            for (root in roots) findNodeByBounds(root, ref.boundsInScreen, ref.classNameHint, candidates)
+            for (root in roots) {
+                val found = mutableListOf<AccessibilityNodeInfo>()
+                findNodeByBounds(root, ref.boundsInScreen, ref.classNameHint, found)
+                addFrom(root, found)
+            }
         }
         return candidates
     }
