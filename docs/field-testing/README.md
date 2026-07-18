@@ -79,7 +79,7 @@ that entry's Bug #1), the #457 path, and #554 ShadowProjector (2/2). The #462/#4
 was found **broken-in-part** (raw PII in capture envelopes) and moved to that entry's Bug #7.)_
 
 - **🆕 NEW — Capability consent surface: honest copy + revoke aborts automation to manual (#422 PR 3).**
-  Settings → Data &amp; Privacy → **Automation &amp; Consent** now lists, per bundled ruleset source, every
+  Settings → Data & Privacy → **Automation & Consent** now lists, per bundled ruleset source, every
   automation tap the rules enable (Accept, Decline, Confirm a decline, Open the pay breakdown) with a
   Google-Play-consistent disclosure header and one grant/revoke switch each. Bundled (asset) capabilities
   show as on by default; the switch writes through the same grant store the fail-closed engine gate (#417)

@@ -239,7 +239,7 @@
     <!-- settings/CapabilityConsentScreen.kt (#422) — Google-Play-consistent automation disclosure -->
     <string name="consent_title">Automation &amp; Consent</string>
     <string name="consent_disclosure_heading">How DashBuddy uses the Accessibility service</string>
-    <string name="consent_disclosure_body">DashBuddy uses Android\'s Accessibility service to read the screens of the delivery apps you turn on, so it can recognize offers, pickups, and deliveries. This recognition runs entirely on your phone.\n\nDashBuddy can also tap buttons in a delivery app for you — but only the specific actions you allow below, only inside that delivery app, only on a button whose label matches the action, and only when you ask for it (you press the button) or when you have armed automation. Nothing here acts on its own until you turn it on, and turning an action off means DashBuddy will not tap it — you do it manually.</string>
+    <string name="consent_disclosure_body">DashBuddy uses Android\'s Accessibility service to read the screens of the delivery apps you turn on, so it can recognize offers, pickups, and deliveries. This recognition runs entirely on your phone.\n\nDashBuddy can also tap buttons in a delivery app for you — but only the specific actions you allow below, only inside that delivery app, and only on a button whose label matches the action — except the icon-only pay-details arrow, which is verified by app boundary only. Accept and Decline taps fire when you press the button in DashBuddy or when you have armed that automation. Actions bundled with DashBuddy start on — the pay-details tap runs whenever a completed delivery\'s pay breakdown is collapsed. Turn any action off below and DashBuddy will not tap it — you do it manually.</string>
     <string name="consent_empty">No automation actions are available yet. They appear here once your delivery-app rules load and a rule enables an action such as Accept or Decline.</string>
     <string name="consent_platform_unknown">Delivery app</string>
     <string name="consent_source_bundled_format">%1$s · bundled with DashBuddy</string>
@@ -253,7 +253,7 @@
     <string name="consent_cap_confirm_decline_title">Confirm a decline</string>
     <string name="consent_cap_confirm_decline_desc">Lets DashBuddy tap the second \"Decline\" button on %1$s\'s confirmation dialog, so a decline you started finishes in one step. It only fires when you have turned on quick declines, and only inside the %1$s app.</string>
     <string name="consent_cap_expand_title">Open the pay breakdown</string>
-    <string name="consent_cap_expand_desc">Lets DashBuddy tap the arrow that expands the pay details on a completed %1$s delivery, so it can read the payout for your records. A read-only tap inside the %1$s app — it changes nothing.</string>
+    <string name="consent_cap_expand_desc">Lets DashBuddy tap the arrow that expands the pay details on a completed %1$s delivery, so it can read the payout for your records. It only opens the pay details — it doesn\'t change your delivery, your pay, or any setting.</string>
 
     <!-- settings/components/FakeOfferCard.kt -->
     <string name="fake_offer_score_format" translatable="false">"%1$s  ·  %2$dpts"</string>

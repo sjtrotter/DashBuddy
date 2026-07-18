@@ -484,7 +484,7 @@ Every new feature or refactor holds to these — they are forefront design input
      capability key (#417): rule loads enumerate capabilities and reconcile them into the
      grant store *before* rules go live; bundled (asset) sources auto-grant, remote sources
      never will. A dasher-pressed Accept/Decline is its own consent (integrity checks still
-     apply). The consent surface (#422 PR 3) — Settings → Data &amp; Privacy → **Automation &amp;
+     apply). The consent surface (#422 PR 3) — Settings → Data & Privacy → **Automation &
      Consent** — lists each enumerated capability per ruleset source with Play-consistent
      disclosure copy and a grant/revoke switch (`CapabilityConsentScreen`/`ViewModel`, writing
      through `RuleCapabilityGrants.setGranted`); it is a consent *record*, never a second gate —
