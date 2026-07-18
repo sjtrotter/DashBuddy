@@ -28,6 +28,7 @@ import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -38,6 +39,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import cloud.trotter.dashbuddy.R
@@ -263,12 +265,22 @@ private fun positiveRamp(fraction: Float, c: AppColors): Color =
  * statistical vocabulary). Tapping a card opens [StoreDetailSheet] with the full detail (pickups,
  * gross, the dwell distribution with its precise stat terms, first/last seen). Selection is a
  * local [rememberSaveable] `selectedStoreKey` (UDF — state down, the tap event up); the sheet body
- * re-derives from the same [cards] list, so a projector re-emit keeps it fresh with no extra state.
+ * re-derives from the same [cards] list, so a projector re-emit keeps it fresh with no extra state
+ * (a selection whose store leaves the list is explicitly cleared).
  */
 @Composable
 private fun StoresCard(cards: List<StoreReportCard>) {
     val c = AppTheme.colors
     var selectedStoreKey by rememberSaveable { mutableStateOf<String?>(null) }
+
+    // If the selected store leaves the list (e.g. a projector refold re-keys it), clear the
+    // selection explicitly — otherwise the stale key would linger in rememberSaveable and could
+    // silently re-open the sheet if that key ever reappeared.
+    LaunchedEffect(cards, selectedStoreKey) {
+        if (selectedStoreKey != null && cards.none { it.storeKey == selectedStoreKey }) {
+            selectedStoreKey = null
+        }
+    }
 
     AppCard(modifier = Modifier.fillMaxWidth()) {
         Text(text = stringResource(R.string.patterns_tab_stores_title), style = MaterialTheme.typography.labelMedium, color = c.text3)
@@ -297,8 +309,8 @@ private fun StoresCard(cards: List<StoreReportCard>) {
         }
     }
 
-    // The selected store is looked up from the live list by key, so the sheet re-derives on re-emit
-    // (and silently closes if the store vanishes from a refold). Dismiss = swipe/scrim (M3 default).
+    // The selected store is looked up from the live list by key, so the sheet re-derives on re-emit;
+    // a vanished store is explicitly cleared by the LaunchedEffect above. Dismiss = swipe/scrim (M3 default).
     selectedStoreKey?.let { key ->
         cards.firstOrNull { it.storeKey == key }?.let { card ->
             StoreDetailSheet(card = card, onDismiss = { selectedStoreKey = null })
@@ -316,10 +328,12 @@ private fun StoresCard(cards: List<StoreReportCard>) {
 @Composable
 private fun StoreRow(card: StoreReportCard, onClick: () -> Unit) {
     val c = AppTheme.colors
+    // The row itself is the explicit button (role + onClickLabel); the chevron is decorative.
+    val detailsLabel = stringResource(R.string.patterns_tab_store_details_cd, card.chainDisplay)
     Column(
         Modifier
             .fillMaxWidth()
-            .clickable(onClick = onClick),
+            .clickable(onClickLabel = detailsLabel, role = Role.Button, onClick = onClick),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(
@@ -332,7 +346,7 @@ private fun StoreRow(card: StoreReportCard, onClick: () -> Unit) {
             Spacer(Modifier.width(4.dp))
             Icon(
                 imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
-                contentDescription = stringResource(R.string.patterns_tab_store_details_cd, card.chainDisplay),
+                contentDescription = null,
                 tint = c.text3,
                 modifier = Modifier.size(20.dp),
             )
