@@ -60,7 +60,7 @@
         },
         "overrideable": {
           "type": "boolean",
-          "description": "CI/CD gate: when false, the split-repo pipeline requires human review before shipping changes to this rule. Not enforced at runtime. Default: true.",
+          "description": "Match-order control, ENFORCED AT RUNTIME (#419): Ruleset.matchFirst evaluates every overrideable:false rule (priority-ordered) before any overrideable rule, so a non-overrideable match can never be pre-empted by another rule's priority; priority only orders within a partition. Also a CI/CD gate: the split-repo pipeline requires human review before shipping changes to this rule. Default: true.",
           "default": true
         },
         "state": { "$ref": "#/$defs/stateBlock" },
@@ -208,7 +208,7 @@
         },
         "overrideable": {
           "type": "boolean",
-          "description": "CI/CD gate: when false, the split-repo pipeline requires human review before shipping changes to this rule. Not enforced at runtime. Default: true.",
+          "description": "Match-order control, ENFORCED AT RUNTIME (#419): Ruleset.matchFirst evaluates every overrideable:false rule (priority-ordered) before any overrideable rule, so a non-overrideable match can never be pre-empted by another rule's priority; priority only orders within a partition. Also a CI/CD gate: the split-repo pipeline requires human review before shipping changes to this rule. Default: true.",
           "default": true
         },
         "screenIs": {
@@ -267,7 +267,7 @@
         },
         "overrideable": {
           "type": "boolean",
-          "description": "CI/CD gate: when false, the split-repo pipeline requires human review before shipping changes to this rule. Not enforced at runtime. Default: true.",
+          "description": "Match-order control, ENFORCED AT RUNTIME (#419): Ruleset.matchFirst evaluates every overrideable:false rule (priority-ordered) before any overrideable rule, so a non-overrideable match can never be pre-empted by another rule's priority; priority only orders within a partition. Also a CI/CD gate: the split-repo pipeline requires human review before shipping changes to this rule. Default: true.",
           "default": true
         },
         "intent": {
