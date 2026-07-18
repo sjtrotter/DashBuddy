@@ -78,6 +78,18 @@ card's **mechanical** half, #577 (re-confirmed, 24/24, ~0.55 s — with a new po
 that entry's Bug #1), the #457 path, and #554 ShadowProjector (2/2). The #462/#460 dropoff item
 was found **broken-in-part** (raw PII in capture envelopes) and moved to that entry's Bug #7.)_
 
+- **🆕 NEW — DasherDirect "Transfer out" balance screen now blocked as sensitive (#794, Pledge surface).**
+  The DasherDirect "Transfer out" amount-entry screen (heading "Transfer out" over "$X.XX available")
+  evaded BOTH defense layers on the 2026-07-17 dash and leaked the plaintext balance to two UNKNOWN
+  debug captures. Now covered on two layers: a `sensitive.transfer_out` rule branch (priority-0 block)
+  AND a "Transfer out" `SensitiveTextMarkers` backstop keyword.
+  **What to watch:** navigating the DasherDirect Transfer-out flow no longer produces UNKNOWN captures
+  carrying any balance/"Transfer out"/"available" text. **Desk-side:** grep the pull's UNKNOWN capture
+  tree for "Transfer out" — must be ZERO hits after this build (it was 53 window + 24 click hits on the
+  07-17 pull); and `sensitiveDropped` in `PipelineStats` should increment on those DasherDirect windows
+  rather than `unknownCaptured`.
+  - Confirmed: 0/2 (#794)
+
 - **🆕 NEW — Recognition hot-path pack: pre-map package skip must not drop real frames (#435 / PR #791).**
   ContentChanged/StateChanged now read the active window's package FIRST and skip the full tree
   mapping when it isn't a watched platform (bubble overlay, launcher). The skip must only ever fire

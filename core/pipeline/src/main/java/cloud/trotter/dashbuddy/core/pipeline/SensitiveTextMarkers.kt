@@ -55,6 +55,14 @@ object SensitiveTextMarkers {
         // sensitive.savings branch, these markers are the fail-closed backstop.
         "Savings jar",
         "You transferred",
+        // DasherDirect "Transfer out" balance screen (#794) — leaked the plaintext
+        // balance to two UNKNOWN captures on the 2026-07-17 dash (copy "Transfer out"
+        // / "$X.XX available" is missed by "Transfer to bank" and "Available Balance").
+        // The rule-side block is the sensitive.transfer_out branch; this marker is the
+        // fail-closed backstop and the shareable-log scrub anchor. "Transfer out" appears
+        // on no recognized customer-facing surface in the corpus (verified per the #738
+        // uniqueness discipline), so it cannot over-block a delivery screen.
+        "Transfer out",
         // Alcohol-delivery DOCUMENT-capture surfaces only (#463): the license-scan
         // camera (an image of a government ID) and the signature pad/handoff.
         // The ID-CHECK instruction screen and the alcohol arrival card are NOT
