@@ -158,7 +158,9 @@ explicit `RuleCompileException` (verified while writing this tutorial: reusing `
 priority `60` for a new rule in a *different* DoorDash sub-file failed the build with "Duplicate
 priority 60 in screen rules"). Before picking a number, skim the neighboring rules in the file
 you're editing and pick something unused nearby — the exact value doesn't matter, only its
-ordering relative to rules it must beat or lose to.
+ordering relative to rules it must beat or lose to. Likewise, a duplicate rule **id** across
+sub-files fails the canonicalize build loud (#639) — the likelier mistake when copying an existing
+rule as a template, so change the `id` first thing.
 
 ### require / bind / parse
 
@@ -312,7 +314,9 @@ Once both are green (and the rest of the suite, which they will be if you didn't
 else), commit the new/updated rule file **and** the snapshot(s) that moved out of `INBOX/` into
 their intent folder, **and** the regenerated `approved-parse-output.json` if it changed. Never
 commit anything still sitting in `snapshots/INBOX/` — that folder is gitignored intake, not a
-corpus location.
+corpus location. And treat a rule (`.json5`) change as a **code** change for CI purposes — it
+alters compiled recognition behavior and generated assets, so never use `[skip ci]` on a rule PR
+(that escape is strictly docs-only).
 
 ---
 
