@@ -38,10 +38,12 @@ class LoadAtomicityTest {
     private class RecordingGrants : RuleCapabilityGrants {
         val reconcileCalls = mutableListOf<List<RuleCapability>>()
         override val grantedKeys: StateFlow<Set<String>> = MutableStateFlow(emptySet())
+        override val capabilities: StateFlow<List<RuleCapability>> = MutableStateFlow(emptyList())
         override suspend fun reconcile(capabilities: List<RuleCapability>) {
             reconcileCalls += capabilities
         }
         override suspend fun isActionGranted(ruleId: String?, action: RuleAction): Boolean = false
+        override suspend fun setGranted(key: String, granted: Boolean) = Unit
     }
 
     private fun interpreter(grants: RuleCapabilityGrants) =
