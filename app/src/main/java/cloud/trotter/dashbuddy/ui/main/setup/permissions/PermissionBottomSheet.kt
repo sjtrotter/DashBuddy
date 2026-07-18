@@ -2,6 +2,7 @@ package cloud.trotter.dashbuddy.ui.main.setup.permissions
 
 import android.Manifest
 import android.content.Intent
+import android.os.Build
 import android.provider.Settings
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -153,7 +154,18 @@ fun PermissionsBottomSheet(
                         }
 
                         is PermissionType.PostNotifications -> {
-                            notifLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                                notifLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                            } else {
+                                // POST_NOTIFICATIONS doesn't exist pre-33 — the runtime
+                                // request insta-denies with no dialog. Deep-link the app's
+                                // notification settings instead (ON_RESUME re-checks state).
+                                val intent =
+                                    Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).apply {
+                                        putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName)
+                                    }
+                                context.startActivity(intent)
+                            }
                         }
 
                         is PermissionType.Bubbles -> {

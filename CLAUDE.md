@@ -78,8 +78,9 @@ epics.)
 ./gradlew :core:database:build
 ```
 
-Dependencies are managed via the version catalog at `gradle/libs.versions.toml`. Min SDK is 35,
-target SDK is 36, Kotlin 2.3.20, JVM 21.
+Dependencies are managed via the version catalog at `gradle/libs.versions.toml`. Min SDK is 30
+(guarded: `bubblePreference` API 31 falls back to `areBubblesAllowed` below 31), target SDK is 36,
+Kotlin 2.3.20, JVM 21.
 
 ## Module Structure
 

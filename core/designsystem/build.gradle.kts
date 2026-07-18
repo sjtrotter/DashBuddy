@@ -10,7 +10,7 @@ android {
     }
 
     defaultConfig {
-        minSdk = 35
+        minSdk = 30
 
         consumerProguardFiles("consumer-rules.pro")
     }
