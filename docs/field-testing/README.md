@@ -78,6 +78,16 @@ card's **mechanical** half, #577 (re-confirmed, 24/24, ~0.55 s — with a new po
 that entry's Bug #1), the #457 path, and #554 ShadowProjector (2/2). The #462/#460 dropoff item
 was found **broken-in-part** (raw PII in capture envelopes) and moved to that entry's Bug #7.)_
 
+- **🆕 NEW — Patterns tab store cards: glanceable face + detail bottom sheet (#765 / PR #799).**
+  The store report cards were redesigned: the card **face** now shows only store name + location chip
+  and three plain-language numbers (Net / Usual wait / Deliveries) — no "median"/"p95" vocabulary —
+  with a `>` chevron affordance. Tapping a card opens a **bottom sheet** with the full detail (pickups,
+  gross, the dwell distribution labeled "Usual wait (median)" / "Longest waits (p95)" / "Average wait",
+  and first/last-seen). **What to watch:** open Analytics → Patterns; the store cards read at a glance
+  (2–3 numbers, no stats jargon on the face); tapping a card opens the sheet with the fuller breakdown;
+  swipe/scrim dismisses it; "usual wait" on the face matches the median in the sheet; a location-unknown
+  (chain-only) card still shows its "partial" note inside the sheet.
+  - Confirmed: 0/2
 - **🆕 NEW — Recognition hot-path pack: pre-map package skip must not drop real frames (#435 / PR #791).**
   ContentChanged/StateChanged now read the active window's package FIRST and skip the full tree
   mapping when it isn't a watched platform (bubble overlay, launcher). The skip must only ever fire
