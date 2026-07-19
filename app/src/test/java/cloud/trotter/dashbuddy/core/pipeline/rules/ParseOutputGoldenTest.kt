@@ -177,7 +177,6 @@ class ParseOutputGoldenTest {
         "earnings",
         "offer",
         "photo_capture",
-        "pickup_issue_menu",
         "pickup_picked_up",
         "pickup_pre_arrival_multi",
         "pickup_verification_info",
@@ -196,12 +195,11 @@ class ParseOutputGoldenTest {
         "shop_and_pay_checkout",
         "shop_and_pay_list",
         "shopping_checkout",
-        "splash",
-        // Uber — zero snapshots in the corpus today (#433)
+        // Uber — first captures landed 2026-07-18/19 (home_dashboard, splash); the rest
+        // still have zero snapshots in the corpus (#433)
         "active_trip",
         "awaiting_offer",
         "earnings_activity",
-        "home_dashboard",
         "post_trip",
         "session_summary",
     )
