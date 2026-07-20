@@ -198,8 +198,12 @@ class ActuationBindingResolutionTest {
 
             // The independently-computed expected target: the sole expandable_view whose
             // subtree does NOT carry the stats section's stable 'Total online time' row.
+            // Suffix-match the id (not exact-equality): corpus fixtures mix suffix-form
+            // ids (legacy captures) with full-form `com.doordash.driverapp:id/expandable_view`
+            // (modern envelope captures), and recognition itself keys on `hasIdSuffix`.
             val payNode = node.findNodes {
-                it.viewIdResourceName == "expandable_view" && !subtreeHasText(it, "Total online time")
+                it.viewIdResourceName?.endsWith("expandable_view") == true &&
+                    !subtreeHasText(it, "Total online time")
             }.singleOrNull()
             assertNotNull("$filename: exactly one pay-section expandable_view must exist", payNode)
 

@@ -78,6 +78,13 @@ card's **mechanical** half, #577 (re-confirmed, 24/24, ~0.55 s — with a new po
 that entry's Bug #1), the #457 path, and #554 ShadowProjector (2/2). The #462/#460 dropoff item
 was found **broken-in-part** (raw PII in capture envelopes) and moved to that entry's Bug #7.)_
 
+- **🆕 NEW — #801 / PR #817 — bubble session-earnings freshness on 0.230.0.** The collapsed receipt
+  no longer refreshes session `runningEarnings` (the 0.230.0 digit-wheel is unparseable); the figure now
+  rides the dash-control "This dash" label parse alone. After a delivery on 0.230.0, verify the bubble's
+  session-earnings figure still updates post-receipt; watch for a stale figure. Desk-side:
+  `sessionEarnings=null` on collapsed parses is EXPECTED on 0.230.0; the dash-control parse lines are the
+  live source.
+  - Confirmed: 0/2
 - **🆕 NEW — Capability consent surface: honest copy + revoke aborts automation to manual (#422 PR 3).**
   Settings → Data & Privacy → **Automation & Consent** now lists, per bundled ruleset source, every
   automation tap the rules enable (Accept, Decline, Confirm a decline, Open the pay breakdown) with a

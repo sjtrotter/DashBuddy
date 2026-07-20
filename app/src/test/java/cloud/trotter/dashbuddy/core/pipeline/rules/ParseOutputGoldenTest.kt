@@ -263,10 +263,12 @@ class ParseOutputGoldenTest {
     @Test
     fun `dedupeKey templates reference fields the rule actually parses`() {
         val template = Regex("\\{(\\w+)}")
-        // (ruleId, field) → did ANY corpus match of that rule parse it non-null?
-        // Unsubstituted braces surviving in a matched effect's dedupeKey mean
-        // the field was null on THAT match; only never-non-null-anywhere is a
-        // violation (a sometimes-null field is legitimate).
+        // dedupeKeys are scanned POST-resolution, so a `{field}` token only
+        // reaches `template.findAll` on a frame where that field parsed null (it
+        // survived interpolation). A frame that parsed the field non-null resolved
+        // its key and registers nothing. So the effective bar here is "null on ≥1
+        // frame" — a (ruleId, field) lands in `dead` iff SOME corpus frame left its
+        // token unresolved (matching [knownDeadDedupeTemplates]'s KDoc).
         val seen = mutableMapOf<Pair<String, String>, Boolean>()
         val exampleKey = mutableMapOf<Pair<String, String>, String>()
 
