@@ -14,8 +14,9 @@ import timber.log.Timber
  * closes when its `jobId` leaves the active slot — cleared to null (T1 retire / PostTask-exit /
  * #736 abandon step-3) OR replaced by a fresh `jobId` (T2 close+mint). ALL of those in-scope close
  * paths route through `PlatformRegionStepper.completeActiveJob`. [endSession] ALSO clears
- * `activeJob`, but it uniquely nulls the session in the same step; the `next.session == null` guard
- * keeps it out of scope (v1 — an offline-mid-job dash is its own class; #810 B1, noted in-code).
+ * `activeJob`; it is kept out of scope (v1 — an offline-mid-job dash is its own class) by requiring the
+ * session to SURVIVE the step with the SAME id, not merely be present — one frame can commit a
+ * stale-grace end (session A) AND mint a fresh session B in the same step (see the guard).
  *
  * Detection is the pure `:domain` [detectAcceptMismatch]; this only decides the close edge, then logs
  * ONE `JOB_ACCEPT_MISMATCH` (keyed per `jobId`, so at-most-once — a job closes single-shot) + one
@@ -34,12 +35,18 @@ internal fun EffectMap.diffJobClose(
     val closingJob = prev.activeJob ?: return emptyList()
     // No close this step (same job survives, or an add-on `existing.copy` kept the jobId).
     if (next.activeJob?.jobId == closingJob.jobId) return emptyList()
-    // endSession's simultaneous session-null is the out-of-scope marker (v1).
-    if (next.session == null) return emptyList()
+    // endSession is out of scope (v1). Guard on session IDENTITY, not mere presence: a single frame
+    // can both commit a stale-grace `endSession` (session A → null, job → null) AND mint a FRESH
+    // session B in the mode arm (app killed mid-job while the offline grace pended; the next dash's
+    // first Online frame commits the stale end + starts the new dash in one step). That step shows
+    // `next.session != null` (session B) yet the job died with session A — a presence check would
+    // fire the tripwire for the out-of-scope offline-mid-job class, mis-attributed to the new session.
+    // The job only truly *closed within its own session* when that session survives the step.
+    if (next.session == null || next.session?.sessionId != prev.session?.sessionId) return emptyList()
 
     val payload = detectAcceptMismatch(closingJob, next.recentTasks) ?: return emptyList()
 
-    val sessionId = next.session?.sessionId ?: prev.session?.sessionId
+    val sessionId = next.session?.sessionId
     return buildList {
         // WARN (P7): counts + jobId + hash PREFIXES only — no store/customer/raw text. Stable tag,
         // matching the #691/#699 D6 join-miss precedent (the state module logs under "StateMachine").

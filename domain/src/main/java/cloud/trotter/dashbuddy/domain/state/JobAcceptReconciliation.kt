@@ -36,6 +36,15 @@ import cloud.trotter.dashbuddy.domain.model.event.payload.JobAcceptMismatchPaylo
  *
  * Returns a fully-built [JobAcceptMismatchPayload] (the payload IS the detection result — one SSOT,
  * no parallel data class) when `nAccepts > accounted`, else null.
+ *
+ * **Known false-positive residual (documented, not gated).** The PostTask-exit and #736 abandon-step-3
+ * closes do not enforce an arrival gate, yet a delivered drop is counted here only with `arrivedAt !=
+ * null`. So a genuine 2-accept 2-drop stack whose FIRST drop's ARRIVAL frame was suppressed on-device
+ * (the #700 capture-dedup class — the same suppression this feature's own replay fixture had to
+ * synthesize) closes via the receipt edge with that drop un-accounted → the tripwire trips. It is
+ * semi-legitimate (that same drop also minted no `DELIVERY_COMPLETED`, so it really is under-recorded)
+ * and fails toward ONE spurious review callout, never a mutation. The desk playbook should treat a lone
+ * mismatch WARN on an otherwise-reconciling stack as this residual, not a new bug.
  */
 fun detectAcceptMismatch(job: Job, recentTasks: List<Task>): JobAcceptMismatchPayload? {
     val nAccepts = job.acceptedOffers.size
