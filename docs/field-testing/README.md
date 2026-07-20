@@ -117,6 +117,11 @@ was found **broken-in-part** (raw PII in capture envelopes) and moved to that en
   full trip incl. every update of the ongoing status notification, one multi-order/stacked job, the
   decline affordance frames, any "Going to <digit-leading store>" push.
   - Confirmed: 0/2
+  - (2026-07-19: first attempt — INCONCLUSIVE: Uber app restart churn; the only accept happened during
+    a capture gap so no job minted; the one recognized offer timed out cleanly. Watch: offer-capture
+    fragility during Uber app instability.)
+  - (2026-07-19: decline affordance capture-first — WARN "No declineButton target bound for uber"
+    fired; confirmed still open, feeds #786.)
 
 - **🆕 NEW — WATCH (accepted residual): coarse-only Uber trip may leave its job open past the receipt (#762 D2 / PR #784).**
   A marker-less `on_job_view` frame between the post-trip receipt and idle walks the flow
@@ -126,6 +131,7 @@ was found **broken-in-part** (raw PII in capture envelopes) and moved to that en
   **How to tell (desk-side):** after an Uber dash, any job whose deliveries completed but whose job-close
   event only arrived at `DASH_STOP`; if seen, capture the post-trip → idle frame sequence.
   - Confirmed: 0/2
+  - (2026-07-19: N/A — no job existed)
 
 - **🆕 NEW — "Shopping off" declines shop offers at the verdict edge (#762 D12 / PR #778).**
   With `allowShopping` off, a shop-type offer now gets a structural `SHOP_DECLINED` verdict (label
@@ -1754,6 +1760,33 @@ Accept and Decline registered on DoorDash — and moved to that session's entry 
     the pre-existing net-side overlap) that piece 2 (categorizing an orphan into its real
     session) is the actual fix for — no action needed beyond noting it if seen.
   - Confirmed: 0/2.
+
+---
+
+## 2026-07-19 afternoon/evening — four sessions incl. the FIRST Uber attempt (desk-analyzed 2026-07-20)
+
+- **Date:** 2026-07-19 (13:10–19:20; the morning session was logged in the previous entry)
+- **Platform(s) tested:** DoorDash + **Uber (first real drive attempt — brief, concurrent with DoorDash, messy)**
+- **Branch under test:** still the 2026-07-17 install (#767–#791)
+- **Field conditions:** 4 sessions: Uber 13:10–13:32 ($0, one offer timed out), DoorDash $42.19 (3 del) + $85.82 (3 del) + a $0 early-offline. All 6 deliveries single-drop H-E-B shop orders with receipts. One mid-session chat-driven unassign (the $28.50 60-item shop).
+
+### Verification results (desk pass, receipts in the 2026-07-20 analysis)
+
+1. **Money path: exact again** ($42.19 and $85.82 both reconcile to the cent; independent corroboration from the recognized `earnings_deposit` notifications naming exactly the three moneyed sessions of the day). Zero orphans/over-attribution; frozen-econ invariants exact; 0 ERROR, 0 restarts, 0 NLS disconnects; projector v7 caught up.
+2. **#788 held under load** (17+ automation taps incl. one Uber decline; zero tie-aborts; one CORRECT fail-closed abort — see Bug #3). **#773 keyed 3 more H-E-Bs by street number.** Per-leg mileage Σ = odometer span exactly on both moneyed sessions.
+3. **Uber D2 (#762/#784): attempted but INCONCLUSIVE.** The Uber app itself was unstable (repeated splash/restarts). The one recognized offer (54th St Grill, $8.01/32mi, −$2.28/hr — correctly unappealing) OFFER_TIMEOUT'd cleanly. A Cheba Hut trip was accepted DURING a restart gap — DashBuddy never saw the offer screen, so no job was minted and the D2 accept-consumption path never ran. Capture wins: first real `trip_en_route_pickup` notification envelopes, active_trip frames, splash corpus (#785 fodder). **#786 field-confirmed still open:** `No 'declineButton' target bound for uber` WARN fired.
+4. **Not exercised:** #630, #733, #749, #752 (dropoff-phase), #691, #660p2, #778.
+
+### Bugs
+
+1. **[MEDIUM, state — filed #810]** The chat/resolution-path pickup unassign fired NO `TASK_UNASSIGNED` — #736's shipped vocabulary keys on the confirmation screen, which this path never rendered. The next accept **silently reused the abandoned job/task** (same taskId across both accepts); money reconciled only by same-store luck, and the orphaned accept inflates offersAccepted. Second #736 commit shape; replay captures complete (session 114).
+2. **[MEDIUM, privacy — extended #806]** "Current task" bottom-sheet fell to UNKNOWN carrying plaintext `Pickup for <FirstName> <I>` — "Pickup for " is missing from the `CustomerTextMarkers` SSOT (which has "Deliver to "). Same id-less UNKNOWN class #806 owns; marker addition + sheet recognition both requested there. File purged.
+3. **[LOW, actuation — filed #811]** One confirm_decline tap aborted fail-closed on a label variant (`NONE passed label verification`) — the #770 "copy change degrades quick-decline silently to manual" residual, first field sighting. Fail direction correct; allowlist needs the variant.
+4. **[INFO]** Uber offer capture is fragile during Uber-app instability (the Cheba Hut accept escaped entirely) — can't be separated from app-restart churn this session; watch on the next (hopefully stabler) Uber dash.
+
+### Open questions / investigations
+
+1. Whether the #810 fix should ride the offer-supersession guard (the #596 T2 accept-time cousin) or a resolution-menu recognition signal — design pass on the issue.
 
 ---
 
