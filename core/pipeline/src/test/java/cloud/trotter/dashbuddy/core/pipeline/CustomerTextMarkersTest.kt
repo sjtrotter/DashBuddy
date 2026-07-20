@@ -34,6 +34,15 @@ class CustomerTextMarkersTest {
     }
 
     @Test
+    fun `the Pickup for task-detail marker is detected (#806)`() {
+        // The DoorDash pickup / "Current task" bottom-sheet lead-in that leaked the
+        // customer name to UNKNOWN captures; redacted on recognized captures already.
+        assertEquals("Pickup for ", CustomerTextMarkers.unredactedMarker("Pickup for Jane D."))
+        // Already-redacted form (VET V1) is skipped so a rule's own output can't re-trip.
+        assertNull(CustomerTextMarkers.unredactedMarker("Pickup for [redacted:ab12]"))
+    }
+
+    @Test
     fun `an already-redacted node is skipped (VET V1)`() {
         // The distinctness suffix form and the plain form both contain "[redacted".
         assertNull(CustomerTextMarkers.unredactedMarker("Deliver to [redacted:ab12]"))

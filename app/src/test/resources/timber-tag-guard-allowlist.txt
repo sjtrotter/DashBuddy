@@ -29,7 +29,6 @@ core/database/src/main/java/cloud/trotter/dashbuddy/core/database/DataTypeConver
 core/datastore/src/main/java/cloud/trotter/dashbuddy/core/datastore/strategy/StrategyDataSource.kt 1
 core/location/src/main/java/cloud/trotter/dashbuddy/core/location/FusedLocationDataSource.kt 6
 core/network/src/main/java/cloud/trotter/dashbuddy/core/network/vehicle/efficiency/epa/EpaVehicleDataSource.kt 5
-core/pipeline/src/main/java/cloud/trotter/dashbuddy/core/pipeline/CaptureWriter.kt 5
 core/pipeline/src/main/java/cloud/trotter/dashbuddy/core/pipeline/FrameGate.kt 1
 core/pipeline/src/main/java/cloud/trotter/dashbuddy/core/pipeline/PipelineStats.kt 1
 core/pipeline/src/main/java/cloud/trotter/dashbuddy/core/pipeline/PipelineSupervision.kt 1
