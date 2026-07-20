@@ -175,7 +175,6 @@ class ParseOutputGoldenTest {
         "delivery_confirmation",
         "dropoff_pre_arrival_completion",
         "earnings",
-        "offer",
         "photo_capture",
         "pickup_picked_up",
         "pickup_pre_arrival_multi",
@@ -195,10 +194,13 @@ class ParseOutputGoldenTest {
         "shop_and_pay_checkout",
         "shop_and_pay_list",
         "shopping_checkout",
-        // Uber — first captures landed 2026-07-18/19 (home_dashboard, splash); the rest
-        // still have zero snapshots in the corpus (#433)
-        "active_trip",
-        "awaiting_offer",
+        // Uber — first captures landed 2026-07-18/19 (home_dashboard, splash); active_trip +
+        // awaiting_offer landed 2026-07-19 (the first real Uber dash). offer stays uncovered:
+        // its 07-19 capture was set aside because uber.screen.offer's "Offer - {storeName}"
+        // effect template references a field the rule doesn't parse on the fielded frame — a
+        // dead effect-arg template (#606/#801-analog), filed for a rule-side pass. The rest still
+        // have zero snapshots in the corpus (#433).
+        "offer",
         "earnings_activity",
         "post_trip",
         "session_summary",

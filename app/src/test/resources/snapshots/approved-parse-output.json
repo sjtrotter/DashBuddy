@@ -5,6 +5,12 @@
         "shape": null,
         "fields": {}
     },
+    "active_trip/2026-07-19_13-30-50-341__uber__accessibility.window__active_trip__483515.json": {
+        "ruleId": "uber.screen.active_trip",
+        "intent": "active_trip",
+        "shape": null,
+        "fields": {}
+    },
     "alcohol_id_check/2026-06-12__doordash__alcohol_id_check__007cce.json": {
         "ruleId": "doordash.screen.alcohol_id_check",
         "intent": "alcohol_id_check",
@@ -32,6 +38,30 @@
     "app_startup/c85de491.json": {
         "ruleId": "doordash.screen.app_startup",
         "intent": "app_startup",
+        "shape": null,
+        "fields": {}
+    },
+    "awaiting_offer/2026-07-19_13-10-11-827__uber__accessibility.window__awaiting_offer__97a349.json": {
+        "ruleId": "uber.screen.awaiting_offer",
+        "intent": "awaiting_offer",
+        "shape": null,
+        "fields": {}
+    },
+    "awaiting_offer/2026-07-19_13-11-04-358__uber__accessibility.window__awaiting_offer__16be1e.json": {
+        "ruleId": "uber.screen.awaiting_offer",
+        "intent": "awaiting_offer",
+        "shape": null,
+        "fields": {}
+    },
+    "awaiting_offer/2026-07-19_13-19-31-938__uber__accessibility.window__awaiting_offer__0c399b.json": {
+        "ruleId": "uber.screen.awaiting_offer",
+        "intent": "awaiting_offer",
+        "shape": null,
+        "fields": {}
+    },
+    "awaiting_offer/2026-07-19_13-25-09-205__uber__accessibility.window__awaiting_offer__2d7503.json": {
+        "ruleId": "uber.screen.awaiting_offer",
+        "intent": "awaiting_offer",
         "shape": null,
         "fields": {}
     },
@@ -1769,6 +1799,12 @@
         "shape": null,
         "fields": {}
     },
+    "dropoff_photo/2026-07-19_14-10-35-663__doordash__accessibility.window__dropoff_photo__d0b411.json": {
+        "ruleId": "doordash.screen.dropoff_photo",
+        "intent": "dropoff_photo",
+        "shape": null,
+        "fields": {}
+    },
     "dropoff_pin_entry/2026-07-17_20-47-13-290__doordash__accessibility.window__dropoff_pin_entry__07a781.json": {
         "ruleId": "doordash.screen.dropoff_pin_entry",
         "intent": "dropoff_pin_entry",
@@ -2330,6 +2366,18 @@
         "shape": null,
         "fields": {}
     },
+    "home_dashboard/2026-07-19_13-09-38-048__uber__accessibility.window__home_dashboard__e39f91.json": {
+        "ruleId": "uber.screen.home_dashboard",
+        "intent": "home_dashboard",
+        "shape": null,
+        "fields": {}
+    },
+    "home_dashboard/2026-07-19_13-32-02-456__uber__accessibility.window__home_dashboard__5a3613.json": {
+        "ruleId": "uber.screen.home_dashboard",
+        "intent": "home_dashboard",
+        "shape": null,
+        "fields": {}
+    },
     "idle_map/2026-07-17_18-08-53-720__doordash__accessibility.window__idle_map__81c084.json": {
         "ruleId": "doordash.screen.idle_map",
         "intent": "idle_map",
@@ -2625,6 +2673,20 @@
         }
     },
     "idle_scheduled_dash_ready/2026-07-18_18-49-10-257__doordash__accessibility.window__idle_scheduled_dash_ready__ef102d.json": {
+        "ruleId": "doordash.screen.idle_scheduled_dash_ready",
+        "intent": "idle_scheduled_dash_ready",
+        "shape": "idle",
+        "fields": {
+            "isHeadingBackToZone": false,
+            "sessionPay": null,
+            "sessionType": null,
+            "spotSaveDeadline": null,
+            "startingSession": true,
+            "waitTimeEstimate": null,
+            "zoneName": null
+        }
+    },
+    "idle_scheduled_dash_ready/2026-07-19_15-34-46-724__doordash__accessibility.window__idle_scheduled_dash_ready__4e5bf6.json": {
         "ruleId": "doordash.screen.idle_scheduled_dash_ready",
         "intent": "idle_scheduled_dash_ready",
         "shape": "idle",
@@ -4067,6 +4129,18 @@
         "shape": null,
         "fields": {}
     },
+    "pickup_resolution_options/2026-07-19_14-18-17-996__doordash__accessibility.window__pickup_resolution_options__8e6753.json": {
+        "ruleId": "doordash.screen.pickup_resolution_options",
+        "intent": "pickup_resolution_options",
+        "shape": null,
+        "fields": {}
+    },
+    "pickup_resolution_options/2026-07-19_14-20-58-371__doordash__accessibility.window__pickup_resolution_options__d67fdc.json": {
+        "ruleId": "doordash.screen.pickup_resolution_options",
+        "intent": "pickup_resolution_options",
+        "shape": null,
+        "fields": {}
+    },
     "pickup_select_issue/2026-06-12__doordash__pickup_select_issue__0a08a9.json": {
         "ruleId": "doordash.screen.pickup_select_issue",
         "intent": "pickup_select_issue",
@@ -5216,6 +5290,18 @@
         "shape": null,
         "fields": {}
     },
+    "shopping_item_status/2026-07-19_16-31-08-462__doordash__accessibility.window__shopping_item_status__1605b1.json": {
+        "ruleId": "doordash.screen.shopping_item_status",
+        "intent": "shopping_item_status",
+        "shape": null,
+        "fields": {}
+    },
+    "shopping_item_status/2026-07-19_17-24-25-195__doordash__accessibility.window__shopping_item_status__21722c.json": {
+        "ruleId": "doordash.screen.shopping_item_status",
+        "intent": "shopping_item_status",
+        "shape": null,
+        "fields": {}
+    },
     "shopping_wrong_item/2026-06-12__doordash__shopping_wrong_item__41a0c3.json": {
         "ruleId": "doordash.screen.shopping_wrong_item",
         "intent": "shopping_wrong_item",
@@ -5349,6 +5435,30 @@
         "fields": {}
     },
     "splash/2026-07-19_07-15-00-109__uber__accessibility.window__splash__f7e86d.json": {
+        "ruleId": "uber.screen.splash",
+        "intent": "splash",
+        "shape": null,
+        "fields": {}
+    },
+    "splash/2026-07-19_13-28-54-143__uber__accessibility.window__splash__f88ebd.json": {
+        "ruleId": "uber.screen.splash",
+        "intent": "splash",
+        "shape": null,
+        "fields": {}
+    },
+    "splash/2026-07-19_13-30-36-006__uber__accessibility.window__splash__334d6f.json": {
+        "ruleId": "uber.screen.splash",
+        "intent": "splash",
+        "shape": null,
+        "fields": {}
+    },
+    "splash/2026-07-19_13-31-05-262__uber__accessibility.window__splash__05f9ff.json": {
+        "ruleId": "uber.screen.splash",
+        "intent": "splash",
+        "shape": null,
+        "fields": {}
+    },
+    "splash/2026-07-19_13-31-50-295__uber__accessibility.window__splash__c145ff.json": {
         "ruleId": "uber.screen.splash",
         "intent": "splash",
         "shape": null,
