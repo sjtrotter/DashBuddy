@@ -221,9 +221,14 @@ class CaptureRedactionCorpusTest {
             ruleRedactRegexes("doordash.screen.dropoff_multi_order_confirm")
                 .contains(SnapshotRedactor.FIRST_LAST_INITIAL_PATTERN),
         )
-        // FIX 3 defense-in-depth: the two earlier-priority rules that could win a
-        // modal-over-handoff combined frame carry the SAME pattern.
-        for (id in listOf("doordash.screen.dropoff_navigation", "doordash.screen.dropoff_handoff")) {
+        // FIX 3 defense-in-depth + #803: the earlier-priority rules that could win a
+        // modal-over-handoff combined frame, AND the pin_entry surface whose id-less
+        // body carries the same name shape, all carry the SAME canonical pattern.
+        for (id in listOf(
+            "doordash.screen.dropoff_navigation",
+            "doordash.screen.dropoff_handoff",
+            "doordash.screen.dropoff_pin_entry",
+        )) {
             assertTrue(
                 "$id must carry the canonical name-shape regex (FIX 3 defense-in-depth)",
                 ruleRedactRegexes(id).contains(SnapshotRedactor.FIRST_LAST_INITIAL_PATTERN),
@@ -288,6 +293,94 @@ class CaptureRedactionCorpusTest {
         node.text?.let(visit)
         node.contentDescription?.let(visit)
         node.children.forEach { walkText(it, visit) }
+    }
+
+    // =========================================================================
+    // #803 — the id-less delivery-instructions-body blind class. The rule redact
+    // is the PRIMARY (runtime-edge) control: it masks the WHOLE offending node, so
+    // a gate-code / PIN fragment takes the embedded customer name with it. These
+    // build a synthetic live (un-redacted) capture, confirm recognition still lands
+    // on the surface, then assert its redact masks the body while the require
+    // anchors survive — redaction is capture-only, never touching parse (both rules
+    // are parse-less; the goldens are byte-identical).
+    // =========================================================================
+
+    @Test
+    fun `dropoff_pin_entry redact masks the id-less instructions body PIN, gate code, and embedded name (#803)`() {
+        val tree = UiNode(
+            viewIdResourceName = "com.dd:id/drop_off_workflow_host_fragment",
+            children = listOf(
+                UiNode(text = "Hand it to customer"),
+                // The id-less free-text instructions body — the blind class: no viewId,
+                // an embedded full name, plus the gate code + PIN that reached disk raw.
+                UiNode(text = "John Smith gate code 8834 pin 4821"),
+                UiNode(viewIdResourceName = "com.dd:id/step_title", text = "Collect PIN from customer"),
+                UiNode(viewIdResourceName = "com.dd:id/step_description", text = "Ask John for the entry code"),
+            ),
+        ).restoreParents()
+
+        val match = TestRulesetFactory.screenRuleset.matchFirst(tree)
+        assertEquals("doordash.screen.dropoff_pin_entry", match?.ruleId)
+        val rule = TestRulesetFactory.screenRuleset.ruleById(match!!.ruleId)!!
+        assertFalse("pin_entry must now carry a redact block", rule.redact.isEmpty())
+
+        val masked = serialize(rule.redact.apply(tree))
+        assertFalse("PIN must not persist", masked.contains("4821"))
+        assertFalse("gate code must not persist", masked.contains("8834"))
+        assertFalse("embedded customer name must not persist", masked.contains("John Smith"))
+        assertFalse("step_description instruction must not persist", masked.contains("Ask John"))
+        assertTrue("require anchor (step_title) kept", masked.contains("Collect PIN from customer"))
+    }
+
+    @Test
+    fun `dropoff_pin_entry redact masks pin colon-fused variants and a bare gate code (#803 F1-F3)`() {
+        // Each body is the id-less instructions node; the token variant must mask the
+        // WHOLE body (embedded name "Casey Doe" included). Covers the colon / fused /
+        // bare-gate shapes the first-cut regex missed.
+        val bodies = listOf(
+            "Casey Doe PIN: 4821 at the back",
+            "Casey Doe pin:4821",
+            "Casey Doe Pin4821",
+            "Casey Doe gate 4821 then knock", // bare gate, no "code" token
+            "Casey Doe Gate: 4821",
+        )
+        val rule = TestRulesetFactory.screenRuleset.ruleById("doordash.screen.dropoff_pin_entry")!!
+        for (body in bodies) {
+            val tree = UiNode(
+                viewIdResourceName = "com.dd:id/drop_off_workflow_host_fragment",
+                children = listOf(
+                    UiNode(text = "Hand it to customer"),
+                    UiNode(text = body),
+                    UiNode(viewIdResourceName = "com.dd:id/step_title", text = "Collect PIN from customer"),
+                ),
+            ).restoreParents()
+            val masked = serialize(rule.redact.apply(tree))
+            assertFalse("'$body' -> code must not persist: $masked", masked.contains("4821"))
+            assertFalse("'$body' -> embedded name must not persist: $masked", masked.contains("Casey Doe"))
+        }
+    }
+
+    @Test
+    fun `dropoff_handoff redact masks the id-less instructions body gate code and PIN (#803)`() {
+        val tree = UiNode(
+            viewIdResourceName = "com.dd:id/drop_off_workflow_host_fragment",
+            children = listOf(
+                UiNode(text = "hand it to customer"),
+                UiNode(text = "Meet me at the back. gate code 5567 pin 9032"),
+                UiNode(viewIdResourceName = "com.dd:id/step_description", text = "Text Jane on arrival"),
+                UiNode(text = "Complete Delivery"), // arrival CTA discriminator
+            ),
+        ).restoreParents()
+
+        val match = TestRulesetFactory.screenRuleset.matchFirst(tree)
+        assertEquals("doordash.screen.dropoff_handoff", match?.ruleId)
+        val rule = TestRulesetFactory.screenRuleset.ruleById(match!!.ruleId)!!
+
+        val masked = serialize(rule.redact.apply(tree))
+        assertFalse("gate code must not persist", masked.contains("5567"))
+        assertFalse("PIN must not persist", masked.contains("9032"))
+        assertFalse("step_description instruction must not persist", masked.contains("Text Jane"))
+        assertTrue("arrival CTA anchor kept", masked.contains("Complete Delivery"))
     }
 
     @Test

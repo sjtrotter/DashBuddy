@@ -15,6 +15,33 @@ object SnapshotSecurityScanner {
 
     private val SENSITIVE_KEYWORDS = SensitiveTextMarkers.KEYWORDS
 
+    /**
+     * Regex SHAPES that mark PII a bare keyword can't (the #803 blind class). Each
+     * pairs a pattern with a synthetic "keyword" label for the trigger report.
+     *
+     * - `pin \d{3,}` — a residence-entry PIN embedded in a free-text delivery-
+     *   instructions body. This is the exact fragment that reached a corpus
+     *   candidate id-less (no viewId → no rule/test id-scrub) and survived every
+     *   layer; making it a corpus-gate failure stops recurrence in ANY future
+     *   fixture. A `[\s:#]` separator class + no trailing `\b` (byte-aligned with the
+     *   rule redact + [SnapshotRedactor.PIN]) catches "PIN: 4821"/"Pin4821";
+     *   digit-adjacency (≥3 digits) keeps "PIN pad"/"pin it"/"opinion" clean.
+     * - `gate \d{3,}` — a bare residence gate code ("gate 4821", no "code" token) in
+     *   the same free-text body (#803 F1/F3). Same separator class + digit-adjacency.
+     *
+     * Deliberately NOT added: an embedded full-name bigram (`[A-Z][a-z]+ [A-Z][a-z]+`).
+     * The scanner runs over the whole committed corpus, which legitimately carries
+     * merchant/street/UI two-word capitalized phrases ("Maple Street", "Farmers
+     * Market", "Complete Delivery"); a bigram scan would false-positive heavily on
+     * driver-owned, non-PII text. The whole-value first-name+last-initial name shape
+     * is already owned by [SnapshotRedactor.FIRST_LAST_INITIAL_PATTERN] and pinned by
+     * `CaptureRedactionCorpusTest` (FIX 4), so it needs no scanner duplicate.
+     */
+    private val SENSITIVE_SHAPES: List<Pair<Regex, String>> = listOf(
+        Regex("""(?i)\bpin[\s:#]*\d{3,}""") to "pin-code-shape",
+        Regex("""(?i)\bgate[\s:#]*\d{3,}""") to "gate-code-shape",
+    )
+
     data class ScanResult(
         val isToxic: Boolean,
         val triggers: List<Pair<String, String>> = emptyList()
@@ -48,6 +75,10 @@ object SnapshotSecurityScanner {
 
         if (keyword != null) {
             results.add(text to keyword)
+        }
+        // #803: keyword-invisible PII shapes (e.g. a "pin 4821" fragment).
+        SENSITIVE_SHAPES.firstOrNull { (re, _) -> re.containsMatchIn(text) }?.let { (_, label) ->
+            results.add(text to label)
         }
         node.children.forEach { walkAndFind(it, results) }
     }

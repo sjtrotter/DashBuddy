@@ -249,6 +249,93 @@
     {
       "id": "doordash.screen.dropoff_pin_entry",
       "priority": 63,
+      "comment": "#803: the id-less delivery-instructions body on this PIN-collect surface carried a customer full name + residence gate code + PIN past EVERY redaction layer — id-less (no viewId predicate), embedded mid-body (no whole-value name/marker match). The rule predicate vocabulary is per-node only (no sibling/parent relation), so the id-less free-text body cannot be isolated by STRUCTURE alone. These CONTENT-shape predicates instead mask the WHOLE offending node whenever it carries a gate code / PIN / address / whole-value name: a gate-code OR PIN fragment masks the entire body (embedded name included), which closes the FIELDED leak at the runtime capture edge. A bare embedded name with NO other PII anchor is the documented residual (the test-side pin keyword + SnapshotSecurityScanner shape + the #806 UNKNOWN CustomerTextMarkers path are the complementary controls). Mirrors dropoff_handoff's id-less shape set + the shared FIRST_LAST_INITIAL SSOT. Capture-only: never affects recognition/parse (this rule has no parse block; goldens unchanged).",
+      "redact": [
+        {
+          "find": {
+            "hasIdSuffix": "step_description"
+          }
+        },
+        {
+          "find": {
+            "hasTextContaining": "gate code"
+          }
+        },
+        {
+          "comment": "#803 F1/F3: bare 'gate 4821' (no 'code' token) — word-bounded, digit-adjacent (3+); the [\\s:#] separator class covers 'gate: 4821' / 'gate#4821' / 'Gate4821'. Masks the whole body incl. any embedded name.",
+          "find": {
+            "hasTextMatchesRegex": "\\bgate[\\s:#]*\\d{3}"
+          }
+        },
+        {
+          "comment": "#803 F1/F3: 'pin 4821' / 'PIN: 4821' / 'pin:4821' / 'Pin4821'. The [\\s:#] separator class covers the colon variants the first cut missed; dropping the trailing \\b closes the fused 'Pin4821' shape. 'pinch'/'opinion' stay clean — the next char is constrained to [\\s:#] or a digit. Aligned byte-for-byte with SnapshotRedactor.PIN + the scanner shape (three-layer parity, #362 class).",
+          "find": {
+            "hasTextMatchesRegex": "\\bpin[\\s:#]*\\d{3}"
+          }
+        },
+        {
+          "find": {
+            "all": [
+              {
+                "hasTextMatchesRegex": "^\\d{1,5}\\s+\\S"
+              },
+              {
+                "hasNoId": true
+              }
+            ]
+          }
+        },
+        {
+          "find": {
+            "all": [
+              {
+                "hasTextMatchesRegex": "\\d{5}"
+              },
+              {
+                "hasNoId": true
+              }
+            ]
+          }
+        },
+        {
+          "find": {
+            "hasTextStartsWith": "Apt "
+          },
+          "keepPrefix": [
+            "Apt "
+          ]
+        },
+        {
+          "find": {
+            "hasTextStartsWith": "\""
+          }
+        },
+        {
+          "find": {
+            "all": [
+              {
+                "hasTextMatchesRegex": "^#?\\s?\\d{1,4}[A-Za-z]?$"
+              },
+              {
+                "hasNoId": true
+              }
+            ]
+          }
+        },
+        {
+          "comment": "id-less whole-value first-name + last-initial — same canonical SSOT as SnapshotRedactor.FIRST_LAST_INITIAL_PATTERN / dropoff_multi_order_confirm.",
+          "find": {
+            "all": [
+              {
+                "hasTextMatchesRegex": "^\\s{0,8}[\\p{L}][\\p{L}'-]{0,20}( [\\p{L}][\\p{L}'-]{0,20}){0,3} [A-Z]\\.?\\s{0,8}$"
+              },
+              {
+                "hasNoId": true
+              }
+            ]
+          }
+        }
+      ],
       "state": {
         "flow": "task:dropoff:arrived"
       },
@@ -279,6 +366,29 @@
       "comment": "#603: the 'hand it to customer' instruction is present the ENTIRE drive (en-route AND at-door), so keying on it alone fired a FALSE task:dropoff:arrived the moment nav started. The completion CTA ('Continue'/'Complete Delivery'/'Mark as delivered'/complete_delivery_steps_button) only appears once the dasher is actually at the door, so it is the real arrival discriminator. The en-route workflow-sheet frame (which lacks the CTA) then falls through to dropoff_pre_arrival (priority 73). KEEP THIS CTA SET IN SYNC with dropoff_navigation's reject and dropoff_pre_arrival_completion's require — all three describe the same 'delivery can be completed now' signal.",
       "priority": 64,
       "redact": [
+        {
+          "comment": "#803: same id-less instructions-body class as dropoff_pin_entry — mask the id-bearing step_description node and any node carrying a gate code / PIN fragment (masks the whole body, embedded name included). The rest of this block already handles the id-less address/name/quoted-note shapes.",
+          "find": {
+            "hasIdSuffix": "step_description"
+          }
+        },
+        {
+          "find": {
+            "hasTextContaining": "gate code"
+          }
+        },
+        {
+          "comment": "#803 F1/F3: bare 'gate 4821' (no 'code' token) — word-bounded, digit-adjacent (3+); [\\s:#] covers 'gate: 4821'/'gate#4821'/'Gate4821'.",
+          "find": {
+            "hasTextMatchesRegex": "\\bgate[\\s:#]*\\d{3}"
+          }
+        },
+        {
+          "comment": "#803 F1/F3: 'pin 4821' / 'PIN: 4821' / 'pin:4821' / 'Pin4821'. [\\s:#] separator + dropped trailing \\b close the colon + fused variants; 'pinch'/'opinion' stay clean. SSOT with SnapshotRedactor.PIN + the scanner shape.",
+          "find": {
+            "hasTextMatchesRegex": "\\bpin[\\s:#]*\\d{3}"
+          }
+        },
         {
           "find": {
             "any": [
