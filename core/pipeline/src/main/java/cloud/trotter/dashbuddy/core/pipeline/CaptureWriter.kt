@@ -55,7 +55,7 @@ class CaptureWriter @Inject constructor(
             val marker = SensitiveTextMarkers.findMarker(event.tree)
             if (marker != null) {
                 stats.onScrubbedUnknownCapture()
-                Timber.w("Capture scrubbed: UNKNOWN screen hit sensitive marker '%s'", marker)
+                Timber.tag("Pipeline").w("Capture scrubbed: UNKNOWN screen hit sensitive marker '%s'", marker)
                 return obs
             }
         }
@@ -76,33 +76,50 @@ class CaptureWriter @Inject constructor(
         // must MASK it in the serialized envelope. The redacted copy is
         // envelope-only — recognition, parse, the state machine, and the dedup
         // contentHash all ran / run on the ORIGINAL tree (event.tree). UNKNOWN
-        // frames have no ruleId and are governed by the SensitiveTextMarkers
-        // backstop above instead.
+        // frames have no ruleId, so this consults nothing (redactedTree == event.tree).
         val redact = obs.ruleId?.let { redactionSource.redactFor(it) }
         val redactedTree = redact?.apply(event.tree) ?: event.tree
-        // #624 recognized-frame customer-PII backstop (defense-in-depth): the
-        // #598 sha256→redact compile gate only fires for a rule that HASHES PII.
-        // A recognized rule that ships raw customer text with NO redact block (or
-        // a future downloaded rule that simply omits one) stays silent. Scan the
-        // envelope-bound tree for a customer-PII marker whose node was NOT already
-        // redacted and scrub it, so a rule that FORGOT to redact still ships a
-        // scrubbed capture. UNKNOWN frames are handled by SensitiveTextMarkers above.
-        val payloadTree = if (obs.target != UNKNOWN_TARGET) {
+        // Customer-PII text-marker backstop over the envelope-bound tree, for BOTH
+        // frame classes (one marker SSOT, cross-platform DATA — principle 8):
+        //  - RECOGNIZED (#624 defense-in-depth): the #598 sha256→redact compile gate
+        //    only fires for a rule that HASHES PII, so a recognized rule that ships
+        //    raw customer text with NO redact block (or a future CDN rule that omits
+        //    one) stays silent. Scrub the offending node so a forgotten redact still
+        //    ships a scrubbed capture.
+        //  - UNKNOWN (#806): a customer-bearing surface no rule recognized (the
+        //    "Deliver to "/"Pickup for " task-detail views) would otherwise persist
+        //    name/address/gate-code verbatim. SensitiveTextMarkers above (dasher-
+        //    banking) correctly ignores customer content, so this scan is the ONLY
+        //    customer control on the UNKNOWN screen path. Fail toward privacy:
+        //    scrubbing a benign marker-shaped string is the accepted cost.
+        // The VET V1 already-redacted skip keeps a rule's OWN redact output from
+        // re-tripping. FrameGate's UNKNOWN suppressor already dedups UNKNOWN frames
+        // upstream, so the WARN below is at most one per admitted frame — no storm.
+        val payloadTree = run {
             val marker = CustomerTextMarkers.firstUnredactedMarker(redactedTree)
-            if (marker != null) {
-                stats.onRedactBackstopScrub()
-                // Principle 7: log the MARKER + rule id only — NEVER the leaked value.
-                Timber.w(
-                    "Capture backstop: recognized frame carried un-redacted customer marker '%s' " +
-                        "(ruleId=%s) — scrubbing node from envelope",
-                    marker, obs.ruleId,
-                )
-                CustomerTextMarkers.scrub(redactedTree)
-            } else {
-                redactedTree
+            when {
+                marker == null -> redactedTree
+                obs.target == UNKNOWN_TARGET -> {
+                    stats.onUnknownCustomerScrub()
+                    // Principle 7: log the MARKER PREFIX only — NEVER the leaked value.
+                    Timber.tag("Pipeline").w(
+                        "Capture backstop: UNKNOWN screen carried customer marker '%s' — " +
+                            "scrubbing node from envelope",
+                        marker,
+                    )
+                    CustomerTextMarkers.scrub(redactedTree)
+                }
+                else -> {
+                    stats.onRedactBackstopScrub()
+                    // Principle 7: log the MARKER + rule id only — NEVER the leaked value.
+                    Timber.tag("Pipeline").w(
+                        "Capture backstop: recognized frame carried un-redacted customer marker " +
+                            "'%s' (ruleId=%s) — scrubbing node from envelope",
+                        marker, obs.ruleId,
+                    )
+                    CustomerTextMarkers.scrub(redactedTree)
+                }
             }
-        } else {
-            redactedTree
         }
         val capture = EnvelopeBuilder.build(
             pipelineId = AccessibilityPipeline.SCREEN_PIPELINE_ID,
@@ -146,9 +163,33 @@ class CaptureWriter @Inject constructor(
             val marker = SensitiveTextMarkers.findMarker(event.node)
             if (marker != null) {
                 stats.onScrubbedUnknownCapture()
-                Timber.w("Capture scrubbed: UNKNOWN click hit sensitive marker '%s'", marker)
+                Timber.tag("Pipeline").w("Capture scrubbed: UNKNOWN click hit sensitive marker '%s'", marker)
                 return obs
             }
+        }
+        // #806 customer-PII backstop for the UNKNOWN click node: a tap on a
+        // "Deliver to <name>"/"Pickup for <name>" row on an unrecognized screen would
+        // otherwise persist the raw customer text in the click envelope. Rule-matched
+        // clicks are app-vocabulary buttons (Accept/Decline/confirm) whose labels carry
+        // no PII, so — like the recognized-screen path — only UNKNOWN clicks are scanned
+        // (recognized clicks stay byte-identical). Fail toward privacy. The dedup hash
+        // below is still on the ORIGINAL node (the scrub is envelope-only).
+        val payloadNode = if (obs.target == UNKNOWN_TARGET) {
+            val marker = CustomerTextMarkers.firstUnredactedMarker(event.node)
+            if (marker != null) {
+                stats.onUnknownCustomerScrub()
+                // Principle 7: log the MARKER PREFIX only — NEVER the leaked value.
+                Timber.tag("Pipeline").w(
+                    "Capture backstop: UNKNOWN click node carried customer marker '%s' — " +
+                        "scrubbing node from envelope",
+                    marker,
+                )
+                CustomerTextMarkers.scrub(event.node)
+            } else {
+                event.node
+            }
+        } else {
+            event.node
         }
         val platform = Platform.fromPackage(event.packageName).wire
         val capture = EnvelopeBuilder.build(
@@ -157,7 +198,7 @@ class CaptureWriter @Inject constructor(
             platform = platform,
             ruleId = obs.ruleId,
             classificationName = obs.target,
-            payload = ClickCapturePayload(node = event.node, screenTarget = screenTarget),
+            payload = ClickCapturePayload(node = payloadNode, screenTarget = screenTarget),
             contentHash = clickDedupHash(event.node, screenTarget),
             metadata = obs.metadata,
         )
@@ -201,7 +242,7 @@ class CaptureWriter @Inject constructor(
                 ?: raw.actionLabels.firstNotNullOfOrNull { SensitiveTextMarkers.findMarker(it) }
             if (marker != null) {
                 stats.onScrubbedUnknownCapture()
-                Timber.w("Capture scrubbed: UNKNOWN notification hit sensitive marker '%s'", marker)
+                Timber.tag("Pipeline").w("Capture scrubbed: UNKNOWN notification hit sensitive marker '%s'", marker)
                 return obs
             }
         }
@@ -212,37 +253,52 @@ class CaptureWriter @Inject constructor(
         // serialized envelope only. The masked copy is envelope-only — recognition
         // and parse ran on the ORIGINAL raw, and its contentHash is the dedup
         // identity, captured BEFORE masking (a masked .copy() recomputes a
-        // DIFFERENT hash). UNKNOWN notifications have no ruleId and are governed by
-        // the SensitiveTextMarkers backstop above instead.
+        // DIFFERENT hash). UNKNOWN notifications have no ruleId so this rule-declared
+        // redact is a no-op for them; their customer-PII control is the marker
+        // backstop below (#806) plus the SensitiveTextMarkers drop above.
         val originalContentHash = raw.contentHash
         val notifRedact = obs.ruleId?.let { redactionSource.notifRedactFor(it) }
         val redactedRaw = notifRedact?.apply(raw) ?: raw
-        // #632 recognized-notification customer-PII backstop (defense-in-depth):
-        // the notif analogue of the #624 screen backstop. The #598 sha256→redact
-        // compile gate only fires for a rule that HASHES PII; a recognized
-        // notification rule that ships raw customer text with NO redact block (or a
-        // future downloaded rule that omits one) stays silent. Scan the masked flat
-        // fields for a customer-PII marker whose field was NOT already redacted and
-        // scrub the whole field, so a rule that FORGOT to redact still ships a
-        // scrubbed envelope. The contentHash is still originalContentHash (the dedup
-        // identity, #620 VET V7). UNKNOWN notifications are handled by
-        // SensitiveTextMarkers above; here they have no ruleId so nothing changes.
-        val payloadRaw = if (obs.target != UNKNOWN_TARGET) {
+        // Customer-PII notification backstop over the envelope-bound raw, for BOTH
+        // frame classes (one marker SSOT — the scan covers all 5 flat text fields via
+        // RawNotificationData.textFields() AND actionLabels, #666):
+        //  - RECOGNIZED (#632 defense-in-depth): the notif analogue of the #624 screen
+        //    backstop. The #598 sha256→redact compile gate only fires for a rule that
+        //    HASHES PII; a recognized notification rule that ships raw customer text
+        //    with NO redact block (or a future CDN rule that omits one) stays silent.
+        //    Scrub the offending whole field so a forgotten redact still ships clean.
+        //  - UNKNOWN (#806): an unrecognized customer-bearing push (a "Message from
+        //    <name>"/"Meet at door for <name>" body an OTA rule doesn't cover yet)
+        //    would otherwise persist the customer name verbatim. SensitiveTextMarkers
+        //    above (dasher-banking) ignores customer content, so this scan is the only
+        //    customer control on the UNKNOWN notification path. Fail toward privacy.
+        // The contentHash is still originalContentHash (the dedup identity, #620 VET
+        // V7) either way. UNKNOWN notifs have no ruleId so redactedRaw == raw.
+        val payloadRaw = run {
             val marker = CustomerTextMarkers.firstUnredactedMarkerInNotif(redactedRaw)
-            if (marker != null) {
-                stats.onNotifRedactBackstopScrub()
-                // Principle 7: log the MARKER + rule id only — NEVER the leaked value.
-                Timber.w(
-                    "Capture backstop: recognized notification carried un-redacted customer " +
-                        "marker '%s' (ruleId=%s) — scrubbing field from envelope",
-                    marker, obs.ruleId,
-                )
-                CustomerTextMarkers.scrubNotif(redactedRaw)
-            } else {
-                redactedRaw
+            when {
+                marker == null -> redactedRaw
+                obs.target == UNKNOWN_TARGET -> {
+                    stats.onUnknownCustomerScrub()
+                    // Principle 7: log the MARKER PREFIX only — NEVER the leaked value.
+                    Timber.tag("Pipeline").w(
+                        "Capture backstop: UNKNOWN notification carried customer marker '%s' — " +
+                            "scrubbing field from envelope",
+                        marker,
+                    )
+                    CustomerTextMarkers.scrubNotif(redactedRaw)
+                }
+                else -> {
+                    stats.onNotifRedactBackstopScrub()
+                    // Principle 7: log the MARKER + rule id only — NEVER the leaked value.
+                    Timber.tag("Pipeline").w(
+                        "Capture backstop: recognized notification carried un-redacted customer " +
+                            "marker '%s' (ruleId=%s) — scrubbing field from envelope",
+                        marker, obs.ruleId,
+                    )
+                    CustomerTextMarkers.scrubNotif(redactedRaw)
+                }
             }
-        } else {
-            redactedRaw
         }
         val capture = EnvelopeBuilder.build(
             pipelineId = NotificationPipeline.PIPELINE_ID,

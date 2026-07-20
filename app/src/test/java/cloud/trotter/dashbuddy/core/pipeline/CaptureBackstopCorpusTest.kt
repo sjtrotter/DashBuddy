@@ -47,7 +47,11 @@ class CaptureBackstopCorpusTest {
                 } catch (_: Exception) {
                     return@forEach
                 }
-                // UNKNOWN frames route through SensitiveTextMarkers, not this backstop.
+                // This test validates the RECOGNIZED path only (rule → its redact →
+                // backstop scan). UNKNOWN frames are also scrubbed by this backstop now
+                // (#806, on the CaptureWriter UNKNOWN screen/notif/click paths), but the
+                // committed corpus here is all recognized, redacted fixtures — an
+                // unmatched frame has no rule redact to mirror, so it's skipped.
                 val match = screenRuleset.matchFirst(node) ?: return@forEach
                 // Mirror captureScreen: recognized rule's redact first, then backstop scan.
                 val redacted = screenRuleset.ruleById(match.ruleId)

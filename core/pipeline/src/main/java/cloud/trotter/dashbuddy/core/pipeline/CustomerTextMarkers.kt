@@ -14,9 +14,16 @@ import cloud.trotter.dashbuddy.domain.model.notification.RawNotificationData
  * The two SSOTs differ in both target and action:
  * - [SensitiveTextMarkers] guards the UNKNOWN path against the DASHER's OWN
  *   sensitive screens (banking/identity) by DROPPING the whole capture.
- * - This SSOT guards RECOGNIZED frames whose rule SHOULD have declared a
- *   `redact` block but didn't, and it SCRUBS only the offending node/field to
- *   `[redacted]` (the capture still ships, minus the leaked PII).
+ * - This SSOT guards CUSTOMER PII by SCRUBBING only the offending node/field to
+ *   `[redacted]` (the capture still ships, minus the leaked PII), on both frame
+ *   classes: RECOGNIZED frames whose rule SHOULD have declared a `redact` block
+ *   but didn't (#624/#632), and — since #806 — UNKNOWN screen, notification, AND
+ *   click envelopes, customer-bearing surfaces no rule recognized (the "Deliver
+ *   to "/"Pickup for " task-detail views) that would otherwise persist
+ *   name/address/gate-code verbatim, since [SensitiveTextMarkers]
+ *   (dasher-banking) correctly ignores customer content.
+ *   The UNKNOWN-path scan is fail-toward-privacy: a benign marker-shaped string
+ *   is scrubbed too (losing triage-useful text is the accepted cost).
  *
  * Why it's needed: the #598 `sha256`→`redact` compile gate only fires for a rule
  * that HASHES PII in its parse. A rule that ships raw customer text WITHOUT
@@ -52,6 +59,7 @@ object CustomerTextMarkers {
     val MARKERS: List<String> = listOf(
         // DoorDash screen + notification vocabulary.
         "Deliver to ",
+        "Pickup for ", // DoorDash pickup / "Current task" task-detail views -> customer name (#806).
         "Order for ",
         "Verify items for ",
         "Delivery for ",

@@ -11,10 +11,12 @@ import cloud.trotter.dashbuddy.domain.pipeline.Observation
 import cloud.trotter.dashbuddy.domain.pipeline.UNKNOWN_TARGET
 import cloud.trotter.dashbuddy.domain.state.ParsedFields
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.mockito.kotlin.any
 import org.mockito.kotlin.anyOrNull
+import org.mockito.kotlin.argumentCaptor
 import org.mockito.kotlin.doReturn
 import org.mockito.kotlin.mock
 import org.mockito.kotlin.never
@@ -161,5 +163,76 @@ class CaptureScrubTest {
 
         verify(captureBus, times(1)).offer(any(), any(), anyOrNull(), any(), any(), anyOrNull())
         assertEquals(0L, stats.scrubbedUnknownCaptureCount)
+    }
+
+    // #806: the UNKNOWN customer-PII scrub now covers the notification and click
+    // paths too (not just screens) — an unrecognized customer-bearing push / a tap
+    // on an unrecognized "Deliver to <name>" row must not persist raw customer text.
+
+    /** The envelope JSON offered to the bus (5th positional arg of offer). */
+    private fun offeredEnvelope(): String {
+        val cap = argumentCaptor<String>()
+        verify(captureBus).offer(any(), any(), anyOrNull(), any(), cap.capture(), anyOrNull())
+        return cap.lastValue
+    }
+
+    @Test
+    fun `UNKNOWN notification with a customer marker in the title is scrubbed`() {
+        writer.captureNotification(unknownNotifObs(), rawNotif(title = "Message from Jane"))
+        val json = offeredEnvelope()
+        assertFalse("leaked customer name scrubbed", json.contains("Jane"))
+        assertTrue("field became [redacted]", json.contains("[redacted]"))
+        assertEquals(1L, stats.unknownCustomerScrubCount)
+        // The sensitive-DROP counter is untouched — this is a customer scrub, not a drop.
+        assertEquals(0L, stats.scrubbedUnknownCaptureCount)
+        assertEquals(0L, stats.notifRedactBackstopScrubCount)
+    }
+
+    @Test
+    fun `UNKNOWN notification with a customer marker in the body is scrubbed`() {
+        val raw = rawNotif(title = "New order").copy(text = "Meet at door for Jane Q Doe")
+        writer.captureNotification(unknownNotifObs(), raw)
+        val json = offeredEnvelope()
+        assertFalse("leaked customer name scrubbed", json.contains("Jane Q Doe"))
+        assertTrue("field became [redacted]", json.contains("[redacted]"))
+        assertEquals(1L, stats.unknownCustomerScrubCount)
+    }
+
+    @Test
+    fun `UNKNOWN notification with a customer marker ONLY in an action label is scrubbed`() {
+        val raw = rawNotif(title = "New order", actionLabels = listOf("Message from Bob", "Dismiss"))
+        writer.captureNotification(unknownNotifObs(), raw)
+        val json = offeredEnvelope()
+        assertFalse("leaked customer name scrubbed", json.contains("Bob"))
+        assertTrue("action label became [redacted]", json.contains("[redacted]"))
+        assertTrue("clean action label intact", json.contains("Dismiss"))
+        assertEquals(1L, stats.unknownCustomerScrubCount)
+    }
+
+    @Test
+    fun `UNKNOWN click node with a customer marker is scrubbed`() {
+        val node = UiNode(text = "Deliver to Jane D.", isClickable = true)
+        writer.captureClick(
+            unknownClickObs(),
+            PipelineEvent.Click(timestamp = 1_000L, node = node, packageName = "com.doordash.driverapp"),
+            screenTarget = null,
+        )
+        val json = offeredEnvelope()
+        assertFalse("leaked customer name scrubbed", json.contains("Jane D."))
+        assertTrue("node became [redacted]", json.contains("[redacted]"))
+        assertEquals(1L, stats.unknownCustomerScrubCount)
+        assertEquals(0L, stats.scrubbedUnknownCaptureCount)
+    }
+
+    @Test
+    fun `a benign UNKNOWN click node with no customer marker persists unchanged`() {
+        val node = UiNode(text = "Some new button", isClickable = true)
+        writer.captureClick(
+            unknownClickObs(),
+            PipelineEvent.Click(timestamp = 1_000L, node = node, packageName = "com.doordash.driverapp"),
+            screenTarget = null,
+        )
+        assertTrue(offeredEnvelope().contains("Some new button"))
+        assertEquals(0L, stats.unknownCustomerScrubCount)
     }
 }

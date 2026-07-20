@@ -176,16 +176,70 @@ class CaptureRedactionTest {
     }
 
     @Test
-    fun `UNKNOWN frame is not scrubbed by the recognized-frame backstop`() {
-        // The #624 backstop only guards RECOGNIZED frames; UNKNOWN frames route
-        // through the SensitiveTextMarkers drop path instead. A benign UNKNOWN
-        // marker-shaped string must not trip the recognized-frame scrub.
+    fun `UNKNOWN screen carrying a customer marker is scrubbed by the 806 backstop`() {
+        // #806: an UNKNOWN customer-bearing surface (the "Deliver to "/"Pickup for "
+        // task-detail views) that no rule recognized would otherwise persist raw
+        // customer name/address/gate-code. The customer backstop now guards the
+        // UNKNOWN screen path too (SensitiveTextMarkers only covers dasher-banking),
+        // scrubbing the offending node before the envelope hits disk.
         whenever(captureBus.offer(any(), any(), anyOrNull(), any(), any(), anyOrNull()))
             .thenReturn("cap-1")
-        val tree = UiNode(children = listOf(UiNode(text = "Order for pickup nearby")))
+        val tree = UiNode(
+            children = listOf(
+                UiNode(text = "Pickup for Jane D."),
+                UiNode(text = "1600 Secret Ave, Apt 4"),
+                UiNode(text = "Gate code- #4821"),
+                UiNode(text = "Directions"),
+            ),
+        )
         val obs = recognizedObs(UNKNOWN_TARGET, UNKNOWN_TARGET).copy(ruleId = null)
         writer(sourceFor("x", dropoffRedact)).captureScreen(obs, screenEvent(tree))
-        assertTrue(capturedEnvelope().contains("Order for pickup nearby"))
+
+        val json = capturedEnvelope()
+        assertFalse("leaked customer name scrubbed", json.contains("Jane D."))
+        assertTrue("scrubbed node became [redacted]", json.contains("[redacted]"))
+        // Non-marker node untouched (only marker-bearing nodes scrub).
+        assertTrue("non-marker node intact", json.contains("Directions"))
+        // KNOWN RESIDUAL until #806 direction 1 (recognize + redact these surfaces):
+        // a prefix scan can only own nodes that START with a customer lead-in marker.
+        // The address and gate-code lines carry no such prefix, so they persist RAW on
+        // an UNKNOWN frame by design — direction 2 (this backstop) is a best-effort net,
+        // not a full control. Recognition rules (direction 1) are the control that
+        // removes these frames from UNKNOWN entirely; pinned here so the residual is
+        // honest and a future direction-1 fix flips these assertions deliberately.
+        assertTrue("address line persists RAW (residual until #806 dir 1)", json.contains("1600 Secret Ave, Apt 4"))
+        assertTrue("gate code persists RAW (residual until #806 dir 1)", json.contains("Gate code- #4821"))
+        // Counted on the #806 path, NOT the recognized-frame counter.
+        assertEquals(1L, stats.unknownCustomerScrubCount)
+        assertEquals(0L, stats.redactBackstopScrubCount)
+    }
+
+    @Test
+    fun `UNKNOWN screen Deliver to leak class is scrubbed by the 806 backstop`() {
+        // The original #806 find: unrecognized "Deliver to <name>" task-detail views.
+        whenever(captureBus.offer(any(), any(), anyOrNull(), any(), any(), anyOrNull()))
+            .thenReturn("cap-1")
+        val tree = UiNode(children = listOf(UiNode(text = "Deliver to Jane Q. Doe")))
+        val obs = recognizedObs(UNKNOWN_TARGET, UNKNOWN_TARGET).copy(ruleId = null)
+        writer(sourceFor("x", dropoffRedact)).captureScreen(obs, screenEvent(tree))
+
+        val json = capturedEnvelope()
+        assertFalse("leaked customer name scrubbed", json.contains("Jane Q. Doe"))
+        assertTrue("scrubbed node became [redacted]", json.contains("[redacted]"))
+        assertEquals(1L, stats.unknownCustomerScrubCount)
+    }
+
+    @Test
+    fun `a clean UNKNOWN screen with no customer marker persists unchanged`() {
+        // Fail-toward-privacy only fires on a marker hit; a benign UNKNOWN frame is
+        // untouched and never consults the redaction source (ruleId is null).
+        whenever(captureBus.offer(any(), any(), anyOrNull(), any(), any(), anyOrNull()))
+            .thenReturn("cap-1")
+        val tree = UiNode(children = listOf(UiNode(text = "Some benign promo")))
+        val obs = recognizedObs(UNKNOWN_TARGET, UNKNOWN_TARGET).copy(ruleId = null)
+        writer(sourceFor("x", dropoffRedact)).captureScreen(obs, screenEvent(tree))
+        assertTrue(capturedEnvelope().contains("Some benign promo"))
+        assertEquals(0L, stats.unknownCustomerScrubCount)
         assertEquals(0L, stats.redactBackstopScrubCount)
     }
 

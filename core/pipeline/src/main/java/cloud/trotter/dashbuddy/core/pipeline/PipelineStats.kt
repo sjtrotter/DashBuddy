@@ -35,6 +35,7 @@ class PipelineStats @Inject constructor() {
     private val droppedAwaitingRules = AtomicLong()
     private val scrubbedUnknownCaptures = AtomicLong()
     private val redactBackstopScrubs = AtomicLong()
+    private val unknownCustomerScrubs = AtomicLong()
     private val notifRedactBackstopScrubs = AtomicLong()
     private val notifListenerConnects = AtomicLong()
     private val notifListenerDisconnects = AtomicLong()
@@ -50,6 +51,7 @@ class PipelineStats @Inject constructor() {
     val droppedAwaitingRulesCount: Long get() = droppedAwaitingRules.get()
     val scrubbedUnknownCaptureCount: Long get() = scrubbedUnknownCaptures.get()
     val redactBackstopScrubCount: Long get() = redactBackstopScrubs.get()
+    val unknownCustomerScrubCount: Long get() = unknownCustomerScrubs.get()
     val notifRedactBackstopScrubCount: Long get() = notifRedactBackstopScrubs.get()
     val notifListenerConnectCount: Long get() = notifListenerConnects.get()
     val notifListenerDisconnectCount: Long get() = notifListenerDisconnects.get()
@@ -99,6 +101,14 @@ class PipelineStats @Inject constructor() {
         redactBackstopScrubs.incrementAndGet()
     }
 
+    /** An UNKNOWN screen carrying a customer-PII marker (a customer-bearing surface
+     *  no rule recognized); the offending node was scrubbed in the envelope by the
+     *  #806 UNKNOWN-screen customer backstop. Distinct from [onScrubbedUnknownCapture]
+     *  (which DROPS the whole capture for the dasher's own sensitive screens). */
+    fun onUnknownCustomerScrub() {
+        unknownCustomerScrubs.incrementAndGet()
+    }
+
     /** A RECOGNIZED NOTIFICATION whose rule shipped an un-redacted customer marker;
      *  the offending flat field was scrubbed in the envelope by the #632
      *  defense-in-depth notification backstop (the notif analogue of #624). */
@@ -138,6 +148,7 @@ class PipelineStats @Inject constructor() {
             " awaitingRulesDropped=${droppedAwaitingRules.get()}" +
             " unknownScrubbed=${scrubbedUnknownCaptures.get()}" +
             " redactBackstopScrubs=${redactBackstopScrubs.get()}" +
+            " unknownCustomerScrubs=${unknownCustomerScrubs.get()}" +
             " notifRedactBackstopScrubs=${notifRedactBackstopScrubs.get()}" +
             " notifListenerConnects=${notifListenerConnects.get()}" +
             " notifListenerDisconnects=${notifListenerDisconnects.get()}" +
