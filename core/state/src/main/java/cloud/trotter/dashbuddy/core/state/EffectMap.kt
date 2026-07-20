@@ -208,6 +208,9 @@ class EffectMap @Inject constructor(
             addAll(diffTask(p, next, obs))
             addAll(diffPostTask(p, next, actedNextFlow, obs))
             addAll(diffNotification(obs))
+            // #810 B1: the job-close accept-reconciliation tripwire — diffs the activeJob close
+            // (any in-scope close routes through completeActiveJob; endSession is excluded inside).
+            addAll(diffJobClose(p, next, obs))
 
             // #438 B5/#240: the DELIVERY_COMPLETED mint (PostTask-exit + the #596 close-out
             // sweep) extracted to DeliveryCompletionEffects.kt as one unit — both blocks share the

@@ -13,6 +13,7 @@ import cloud.trotter.dashbuddy.domain.model.event.payload.SessionPausedPayload
 import cloud.trotter.dashbuddy.domain.model.event.payload.SessionStartPayload
 import cloud.trotter.dashbuddy.domain.model.event.payload.SessionStopPayload
 import cloud.trotter.dashbuddy.domain.model.event.payload.TaskUnassignedPayload
+import cloud.trotter.dashbuddy.domain.model.event.payload.JobAcceptMismatchPayload
 import kotlinx.serialization.json.Json
 
 /**
@@ -44,6 +45,7 @@ object AppEventCodec {
         is DeliveryAdjustmentPayload -> json.encodeToString(payload)
         is DeliverySessionAssignPayload -> json.encodeToString(payload)
         is TaskUnassignedPayload -> json.encodeToString(payload)
+        is JobAcceptMismatchPayload -> json.encodeToString(payload)
     }
 
     /**
@@ -97,6 +99,9 @@ object AppEventCodec {
 
             AppEventType.TASK_UNASSIGNED ->
                 json.decodeFromString<TaskUnassignedPayload>(payloadJson)
+
+            AppEventType.JOB_ACCEPT_MISMATCH ->
+                json.decodeFromString<JobAcceptMismatchPayload>(payloadJson)
 
             AppEventType.ZONE_SWITCH,
             AppEventType.NOTIFICATION_RECEIVED,

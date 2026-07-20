@@ -29,6 +29,14 @@ enum class AppEventType {
     TASK_UNASSIGNED, // The dasher unassigned the order mid-flow (via help). Teardown, NOT a completion:
                      // no pay/miles ever attributes, and the close-out sweep can never confirm it.
 
+    // --- Job-close reconciliation tripwire (#810 B1) ---
+    JOB_ACCEPT_MISMATCH, // A job closed with MORE accepted offers than accounted physical orders (delivered
+                         // drops + unassign-marked orders) — the invisible-unassign class (seq-114): an offer
+                         // died with no capturable commit surface, so no TASK_UNASSIGNED ever fired. A pure
+                         // tripwire: read-model-inert (the projector's liveness `else` arm), NO state mutation,
+                         // NO re-attribution — it only makes the silent seam observable. Payload = hashes +
+                         // counts only (PII-safe, P7).
+
     // --- User corrections (#650) ---
     MANUAL_DELIVERY, // A driver-entered missed delivery (durable correction event, never destructive)
     PAY_ADJUSTMENT,  // A driver re-price of an already-recorded delivery (the original event stays)
