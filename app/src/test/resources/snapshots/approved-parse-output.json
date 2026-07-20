@@ -850,6 +850,38 @@
         "shape": null,
         "fields": {}
     },
+    "delivery_summary_collapsed/2026-07-17_19-54-53-408__doordash__accessibility.window__delivery_summary_collapsed__692508.json": {
+        "ruleId": "doordash.screen.delivery_summary_collapsed",
+        "intent": "delivery_summary_collapsed",
+        "shape": "post_task",
+        "fields": {
+            "appPay": null,
+            "customerTips": null,
+            "expandButtonId": "expandable_view",
+            "isExpanded": false,
+            "offersAccepted": null,
+            "offersTotal": null,
+            "parsedPay": null,
+            "sessionEarnings": null,
+            "totalPay": 17.72
+        }
+    },
+    "delivery_summary_collapsed/2026-07-17_21-01-53-772__doordash__accessibility.window__delivery_summary_collapsed__4d9ab2.json": {
+        "ruleId": "doordash.screen.delivery_summary_collapsed",
+        "intent": "delivery_summary_collapsed",
+        "shape": "post_task",
+        "fields": {
+            "appPay": null,
+            "customerTips": null,
+            "expandButtonId": "expandable_view",
+            "isExpanded": false,
+            "offersAccepted": null,
+            "offersTotal": null,
+            "parsedPay": null,
+            "sessionEarnings": null,
+            "totalPay": 13.45
+        }
+    },
     "delivery_summary_collapsed/20260128_163015_182_DELIVERY_SUMMARY_COLLAPSED.json": {
         "ruleId": "doordash.screen.delivery_summary_collapsed",
         "intent": "delivery_summary_collapsed",
