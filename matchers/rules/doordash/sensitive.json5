@@ -82,6 +82,32 @@
           }
         },
         {
+          // DasherDirect "Transfer out" balance/amount-entry screen (#794): heading
+          // "Transfer out" over a "$<balance> available" line, an amount EditText, and a
+          // "Continue" button — the dasher's own bank balance. A one-variant coverage gap
+          // that leaked the plaintext balance to two UNKNOWN debug captures on 2026-07-17
+          // (the copy is "Transfer out"/"$X.XX available", which the "Transfer to bank" rule
+          // and "Available Balance" marker both miss). Anchored on the "Transfer out" heading
+          // AND a co-present "available" balance line (the same AND shape as sensitive.withdraw
+          // /sensitive.savings) — "Transfer out" appears on no recognized customer-facing
+          // surface in the corpus, so the pair cannot catch offer/pickup/dropoff/chat screens.
+          "intent": "sensitive.transfer_out",
+          "require": {
+            "all": [
+              {
+                "exists": {
+                  "hasText": "Transfer out"
+                }
+              },
+              {
+                "exists": {
+                  "hasTextContaining": "available"
+                }
+              }
+            ]
+          }
+        },
+        {
           "intent": "sensitive.savings",
           "require": {
             "any": [

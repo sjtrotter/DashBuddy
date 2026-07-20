@@ -173,16 +173,11 @@ class ParseOutputGoldenTest {
         // DoorDash — rules added from triage/synthetic fixtures, no capture yet
         "customer_chat",
         "delivery_confirmation",
-        "dropoff_geofence_warning",
-        "dropoff_pin_entry",
         "dropoff_pre_arrival_completion",
         "earnings",
-        "nav_arriving",
         "offer",
         "photo_capture",
-        "pickup_issue_menu",
         "pickup_picked_up",
-        "pickup_post_arrival_multi",
         "pickup_pre_arrival_multi",
         "pickup_verification_info",
         "pickup_verification_items",
@@ -200,12 +195,11 @@ class ParseOutputGoldenTest {
         "shop_and_pay_checkout",
         "shop_and_pay_list",
         "shopping_checkout",
-        "splash",
-        // Uber — zero snapshots in the corpus today (#433)
+        // Uber — first captures landed 2026-07-18/19 (home_dashboard, splash); the rest
+        // still have zero snapshots in the corpus (#433)
         "active_trip",
         "awaiting_offer",
         "earnings_activity",
-        "home_dashboard",
         "post_trip",
         "session_summary",
     )
