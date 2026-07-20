@@ -27,6 +27,28 @@ interface RuleCapabilityGrants {
     val grantedKeys: StateFlow<Set<String>>
 
     /**
+     * The capabilities the CURRENTLY loaded rulesets enumerate — the same list
+     * the last [reconcile] published, replaced wholesale on each rule load. The
+     * consent surface (#422 PR 3) joins this with [grantedKeys] to render one
+     * chip per capability with its provenance ([RuleCapability.source]) and grant
+     * state. Read-only projection of the enumeration the gate already holds — the
+     * UI is a consent *record*, never a second enforcement point.
+     */
+    val capabilities: StateFlow<List<RuleCapability>>
+
+    /**
+     * Grant ([granted] = true) or revoke ([granted] = false) one capability
+     * [key] from the consent surface (#422 PR 3). Both sides write atomically:
+     * granting adds [key] to the granted set and clears any prior denial;
+     * **revoking persists an explicit denial** so the next rule load's asset
+     * auto-grant can't silently undo it (the point of the separate denied set).
+     * A revocation surfaces on [grantedKeys] immediately, so the fail-closed
+     * fire-time gate ([isActionGranted]) suppresses the very next automation
+     * tap — revocation is fail-closed.
+     */
+    suspend fun setGranted(key: String, granted: Boolean)
+
+    /**
      * Publish the capabilities the just-loaded rulesets enable — REPLACING
      * the previous enumeration — and apply the source auto-grant policy:
      * capabilities from a bundled asset source ([ASSET_SOURCE_PREFIX]) are

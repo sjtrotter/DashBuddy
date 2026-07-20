@@ -35,31 +35,44 @@ class RuleCapabilityRepository @Inject constructor(
 ) : RuleCapabilityGrants {
 
     /**
-     * Capabilities enabled by the CURRENTLY loaded rulesets, keyed by
-     * (ruleId, action). Set by [reconcile] before the loader swaps the
-     * compiled rules live, so the gate never sees rules without their
-     * enumeration.
+     * Capabilities enabled by the CURRENTLY loaded rulesets — the SSOT for both
+     * the fire-time gate ([isActionGranted] filters it by (ruleId, action)) and
+     * the consent surface ([capabilities] exposes it). Set by [reconcile] before
+     * the loader swaps the compiled rules live, so the gate never sees rules
+     * without their enumeration.
      */
-    private val enumerated =
-        MutableStateFlow<Map<Pair<String, RuleAction>, List<RuleCapability>>>(emptyMap())
+    private val enumerated = MutableStateFlow<List<RuleCapability>>(emptyList())
+
+    override val capabilities: StateFlow<List<RuleCapability>> = enumerated
 
     override val grantedKeys: StateFlow<Set<String>> = dataSource.granted
         .stateIn(scope, SharingStarted.Eagerly, emptySet())
 
     override suspend fun reconcile(capabilities: List<RuleCapability>) {
-        enumerated.value = capabilities.groupBy { it.ruleId to it.action }
+        enumerated.value = capabilities
         dataSource.update { granted, denied ->
             (granted + autoGrantSelection(capabilities, denied)) to denied
         }
-        Timber.i(
-            "RuleCapabilityRepository: reconciled %d capabilit(ies) from rule load",
+        Timber.tag(TAG).i(
+            "reconciled %d capabilit(ies) from rule load",
             capabilities.size,
         )
     }
 
+    override suspend fun setGranted(key: String, granted: Boolean) {
+        dataSource.update { grantedKeys, deniedKeys ->
+            applyGrantChange(key, granted, grantedKeys, deniedKeys)
+        }
+        // INFO milestone — a consent change is user-meaningful and PII-safe (the
+        // key is a sha256 hash, no store/customer text).
+        Timber.tag(TAG).i("consent %s for capability key %s", if (granted) "granted" else "revoked", key)
+    }
+
     override suspend fun isActionGranted(ruleId: String?, action: RuleAction): Boolean {
         if (ruleId == null) return false // no provenance → not consentable
-        val keys = enumerated.value[ruleId to action]?.map { it.key }
+        val keys = enumerated.value
+            .filter { it.ruleId == ruleId && it.action == action }
+            .map { it.key }
         val granted = try {
             // Authoritative read at fire time — the persisted store, not a
             // cached copy, so a revocation suppresses the very next fire.
@@ -67,10 +80,14 @@ class RuleCapabilityRepository @Inject constructor(
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
-            Timber.e(e, "Grant read failed — denying %s for '%s' (fail closed)", action.wire, ruleId)
+            Timber.tag(TAG).e(e, "Grant read failed — denying %s for '%s' (fail closed)", action.wire, ruleId)
             return false
         }
         return actionKeysCovered(keys, granted)
+    }
+
+    private companion object {
+        const val TAG = "Consent"
     }
 }
 
@@ -89,6 +106,23 @@ fun autoGrantSelection(capabilities: List<RuleCapability>, denied: Set<String>):
         .map { it.key }
         .filterNot { it in denied }
         .toSet()
+
+/**
+ * Consent grant/revoke set transform (#422 PR 3), pure and top-level so it is
+ * testable without DataStore. Granting a [key] adds it to [granted] and clears
+ * any prior denial; **revoking persists an explicit denial** so the next rule
+ * load's asset auto-grant ([autoGrantSelection] excludes denied keys) cannot
+ * silently re-grant it. Returns the new (granted, denied) pair for one atomic
+ * [RuleCapabilityDataSource.update].
+ */
+fun applyGrantChange(
+    key: String,
+    grant: Boolean,
+    granted: Set<String>,
+    denied: Set<String>,
+): Pair<Set<String>, Set<String>> =
+    if (grant) (granted + key) to (denied - key)
+    else (granted - key) to (denied + key)
 
 /**
  * ALL-keys-granted semantics (#417): when one (rule, action) pair enumerates

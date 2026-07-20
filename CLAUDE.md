@@ -485,7 +485,12 @@ Every new feature or refactor holds to these — they are forefront design input
      capability key (#417): rule loads enumerate capabilities and reconcile them into the
      grant store *before* rules go live; bundled (asset) sources auto-grant, remote sources
      never will. A dasher-pressed Accept/Decline is its own consent (integrity checks still
-     apply). Consent UI = #422 PR 3.
+     apply). The consent surface (#422 PR 3) — Settings → Data & Privacy → **Automation &
+     Consent** — lists each enumerated capability per ruleset source with Play-consistent
+     disclosure copy and a grant/revoke switch (`CapabilityConsentScreen`/`ViewModel`, writing
+     through `RuleCapabilityGrants.setGranted`); it is a consent *record*, never a second gate —
+     enforcement stays at the `PerformRuleAction` seam, and a revoke persists an explicit denial
+     so the next asset load can't silently re-grant it (fail-closed).
    When a change touches recognition, capture, network, or effects, state its security/privacy
    posture in the PR — what's trusted, what's gated, what's scrubbed.
 7. **Semantic, PII-safe logging.** Log levels carry *meaning*, not volume convenience, and the log is

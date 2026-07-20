@@ -236,6 +236,25 @@
     <string name="data_export_log_success_format">Exported dashbuddy-log.txt — %1$d line(s) were auto-scrubbed.</string>
     <string name="data_export_log_error_format">Log export failed: %1$s</string>
 
+    <!-- settings/CapabilityConsentScreen.kt (#422) — Google-Play-consistent automation disclosure -->
+    <string name="consent_title">Automation &amp; Consent</string>
+    <string name="consent_disclosure_heading">How DashBuddy uses the Accessibility service</string>
+    <string name="consent_disclosure_body">DashBuddy uses Android\'s Accessibility service to read the screens of the delivery apps you turn on, so it can recognize offers, pickups, and deliveries. This recognition runs entirely on your phone.\n\nDashBuddy can also tap buttons in a delivery app for you — but only the specific actions you allow below, only inside that delivery app, and only on a button whose label matches the action — except the icon-only pay-details arrow, which is verified by app boundary only. Accept and Decline taps fire when you press the button in DashBuddy or when you have armed that automation. Actions bundled with DashBuddy start on — the pay-details tap runs whenever a completed delivery\'s pay breakdown is collapsed. Turn any action off below and DashBuddy will not tap it — you do it manually.</string>
+    <string name="consent_empty">No automation actions are available yet. They appear here once your delivery-app rules load and a rule enables an action such as Accept or Decline.</string>
+    <string name="consent_platform_unknown">Delivery app</string>
+    <string name="consent_source_bundled_format">%1$s · bundled with DashBuddy</string>
+    <string name="consent_source_bundled_note">These automation rules ship inside the app and are on by default. Turn any off to require a manual tap instead.</string>
+    <string name="consent_source_downloaded_format">%1$s · downloaded rules</string>
+    <string name="consent_source_downloaded_note">Downloaded rules are never turned on automatically. Each action stays off until you turn it on here.</string>
+    <string name="consent_cap_accept_title">Accept offers</string>
+    <string name="consent_cap_accept_desc">Lets DashBuddy tap the Accept button in the %1$s app for you — when you press Accept in DashBuddy, or when you have armed auto-accept. It only taps a button labeled \"Accept\" inside the %1$s app, and never without your go-ahead.</string>
+    <string name="consent_cap_decline_title">Decline offers</string>
+    <string name="consent_cap_decline_desc">Lets DashBuddy tap the Decline button in the %1$s app for you — when you press Decline in DashBuddy, or when you have armed auto-decline. It only taps a button labeled \"Decline\" inside the %1$s app, and never without your go-ahead.</string>
+    <string name="consent_cap_confirm_decline_title">Confirm a decline</string>
+    <string name="consent_cap_confirm_decline_desc">Lets DashBuddy tap the second \"Decline\" button on %1$s\'s confirmation dialog, so a decline you started finishes in one step. It only fires when you have turned on quick declines, and only inside the %1$s app.</string>
+    <string name="consent_cap_expand_title">Open the pay breakdown</string>
+    <string name="consent_cap_expand_desc">Lets DashBuddy tap the arrow that expands the pay details on a completed %1$s delivery, so it can read the payout for your records. It only opens the pay details — it doesn\'t change your delivery, your pay, or any setting.</string>
+
     <!-- settings/components/FakeOfferCard.kt -->
     <string name="fake_offer_score_format" translatable="false">"%1$s  ·  %2$dpts"</string>
     <string name="fake_offer_pay_line_format" translatable="false">"%1$s gross  →  %2$s net"</string>
@@ -320,6 +339,8 @@
     <string name="settings_home_item_evidence_subtitle">Manage screenshots and logs</string>
     <string name="settings_home_item_export_title">Export Data (CSV)</string>
     <string name="settings_home_item_export_subtitle">Mileage &amp; earnings for a spreadsheet or tax prep</string>
+    <string name="settings_home_item_consent_title">Automation &amp; Consent</string>
+    <string name="settings_home_item_consent_subtitle">Control which taps DashBuddy may perform for you</string>
     <string name="settings_home_group_app_system">App System</string>
     <string name="settings_home_item_general_title">General</string>
     <string name="settings_home_item_general_subtitle">Theme, Pro Mode, and Defaults</string>

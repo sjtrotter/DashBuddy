@@ -39,6 +39,7 @@ import timber.log.Timber
 import cloud.trotter.dashbuddy.ui.main.ratings.RatingsScreen
 import cloud.trotter.dashbuddy.ui.main.settings.AboutScreen
 import cloud.trotter.dashbuddy.ui.main.settings.EconomySettingsScreen
+import cloud.trotter.dashbuddy.ui.main.settings.CapabilityConsentScreen
 import cloud.trotter.dashbuddy.ui.main.settings.DataExportScreen
 import cloud.trotter.dashbuddy.ui.main.settings.EvidenceSettingsScreen
 import cloud.trotter.dashbuddy.ui.main.settings.GeneralSettingsScreen
@@ -182,6 +183,13 @@ class MainActivity : ComponentActivity() {
                         // 3a. Export Data (CSV, #319)
                         composable(Screen.DataExport.route) {
                             DataExportScreen(
+                                onBack = { navController.popBackStack() }
+                            )
+                        }
+
+                        // 3c. Automation & Consent (capability grants, #422)
+                        composable(Screen.ConsentSettings.route) {
+                            CapabilityConsentScreen(
                                 onBack = { navController.popBackStack() }
                             )
                         }

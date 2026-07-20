@@ -78,6 +78,23 @@ card's **mechanical** half, #577 (re-confirmed, 24/24, ~0.55 s — with a new po
 that entry's Bug #1), the #457 path, and #554 ShadowProjector (2/2). The #462/#460 dropoff item
 was found **broken-in-part** (raw PII in capture envelopes) and moved to that entry's Bug #7.)_
 
+- **🆕 NEW — Capability consent surface: honest copy + revoke aborts automation to manual (#422 PR 3).**
+  Settings → Data & Privacy → **Automation & Consent** now lists, per bundled ruleset source, every
+  automation tap the rules enable (Accept, Decline, Confirm a decline, Open the pay breakdown) with a
+  Google-Play-consistent disclosure header and one grant/revoke switch each. Bundled (asset) capabilities
+  show as on by default; the switch writes through the same grant store the fail-closed engine gate (#417)
+  reads at fire time.
+  **What to watch:** (1) the screen lists the DoorDash capabilities with plain, accurate copy — each says
+  what DashBuddy taps, inside which app, and that it never acts without your go-ahead (no marketing fluff).
+  (2) **Revocation is fail-closed:** turn OFF "Confirm a decline" (or "Open the pay breakdown"), then on the
+  next dash confirm that automation *aborts to manual* — the quick-decline second tap no longer fires
+  (you confirm the decline yourself) / the summary no longer auto-expands — while the same action left ON
+  still fires. Turning it back ON restores the tap. **Desk-side:** the `Consent` INFO line
+  `consent revoked/granted for capability key <sha256>` on each toggle (PII-safe — hash only), and the
+  `Effects` WARN `Denied <action> — no granted capability for rule '…' (fail closed)` when a revoked
+  action would have fired.
+  - Confirmed: 0/2
+
 - **🆕 NEW — DasherDirect "Transfer out" balance screen now blocked as sensitive (#794, Pledge surface).**
   The DasherDirect "Transfer out" amount-entry screen (heading "Transfer out" over "$X.XX available")
   evaded BOTH defense layers on the 2026-07-17 dash and leaked the plaintext balance to two UNKNOWN

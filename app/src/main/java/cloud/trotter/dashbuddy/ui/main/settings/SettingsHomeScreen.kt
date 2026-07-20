@@ -23,6 +23,7 @@ import androidx.compose.material.icons.filled.FileDownload
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.RocketLaunch
+import androidx.compose.material.icons.filled.Security
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material3.Icon
@@ -133,6 +134,12 @@ fun SettingsHomeScreen(
                     title = stringResource(R.string.settings_home_item_export_title),
                     subtitle = stringResource(R.string.settings_home_item_export_subtitle),
                     onClick = { onNavigate(Screen.DataExport.route) }
+                )
+                SettingsNavItem(
+                    icon = Icons.Default.Security,
+                    title = stringResource(R.string.settings_home_item_consent_title),
+                    subtitle = stringResource(R.string.settings_home_item_consent_subtitle),
+                    onClick = { onNavigate(Screen.ConsentSettings.route) }
                 )
             }
 

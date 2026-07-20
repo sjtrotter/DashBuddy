@@ -31,6 +31,7 @@ sealed class Screen(val route: String) {
     data object StrategySettings : Screen("settings/strategy")
     data object EvidenceSettings : Screen("settings/evidence")
     data object DataExport : Screen("settings/data-export")
+    data object ConsentSettings : Screen("settings/consent")
     data object EconomySettings : Screen("settings/economy")
     data object GeneralSettings : Screen("settings/general")
     data object DeveloperSettings : Screen("settings/developer")
@@ -47,6 +48,7 @@ sealed class Screen(val route: String) {
         val allRoutes: Set<String> by lazy { setOf(
             Dashboard.route, Analytics.route, SettingsHome.route, AboutSettings.route,
             StrategySettings.route, EvidenceSettings.route, DataExport.route,
+            ConsentSettings.route,
             EconomySettings.route, GeneralSettings.route, DeveloperSettings.route,
             PlatformSettings.route,
         ) }

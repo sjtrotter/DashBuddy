@@ -80,4 +80,41 @@ class RuleCapabilityPolicyTest {
         assertFalse(actionKeysCovered(null, granted = setOf("k1")))
         assertFalse(actionKeysCovered(emptyList(), granted = setOf("k1")))
     }
+
+    // =========================================================================
+    // applyGrantChange — the consent grant/revoke set transform (#422 PR 3)
+    // =========================================================================
+
+    @Test
+    fun `granting adds the key and clears any prior denial`() {
+        val (granted, denied) = applyGrantChange(
+            key = "k1",
+            grant = true,
+            granted = setOf("k0"),
+            denied = setOf("k1", "k2"),
+        )
+        assertEquals(setOf("k0", "k1"), granted)
+        assertEquals(setOf("k2"), denied)
+    }
+
+    @Test
+    fun `revoking removes the grant and persists an explicit denial`() {
+        // The explicit denial is what keeps the next load's asset auto-grant from
+        // silently re-granting a revoked capability (fail-closed revocation).
+        val (granted, denied) = applyGrantChange(
+            key = "k1",
+            grant = false,
+            granted = setOf("k1", "k2"),
+            denied = emptySet(),
+        )
+        assertEquals(setOf("k2"), granted)
+        assertEquals(setOf("k1"), denied)
+
+        // And the persisted denial excludes it from a subsequent asset auto-grant.
+        val reGranted = autoGrantSelection(
+            listOf(cap("k1", "asset:rules/doordash.json")),
+            denied = denied,
+        )
+        assertTrue(reGranted.isEmpty())
+    }
 }
