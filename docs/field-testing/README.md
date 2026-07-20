@@ -78,6 +78,30 @@ card's **mechanical** half, #577 (re-confirmed, 24/24, ~0.55 s — with a new po
 that entry's Bug #1), the #457 path, and #554 ShadowProjector (2/2). The #462/#460 dropoff item
 was found **broken-in-part** (raw PII in capture envelopes) and moved to that entry's Bug #7.)_
 
+- **🆕 NEW — #806 / PR #815 — UNKNOWN-path customer scrub (screen + notification + click).** The
+  `CustomerTextMarkers` backstop now scrubs UNKNOWN envelopes too (plus a new "Pickup for " marker), so
+  an unrecognized customer-bearing surface can no longer persist a marker-prefixed name raw.
+  **What to watch / desk-side:** grep the pull's UNKNOWN capture tree for `Deliver to ` / `Pickup for ` /
+  `Message from ` followed by a real name — every hit must be `[redacted]`; the `PipelineStats` summary's
+  UNKNOWN-customer-scrub counter should increment on such frames, with a `Pipeline` WARN naming the marker
+  prefix only. Known residual (by design, pinned in tests): prefix-less address/gate-code lines on UNKNOWN
+  frames persist until the #806 direction-1 recognition rules land.
+  - Confirmed: 0/2
+- **🆕 NEW — #810 B1 / PR #818 — JOB_ACCEPT_MISMATCH close tripwire.** A job closing with more accepted
+  offers than accounted physical orders now emits one `JOB_ACCEPT_MISMATCH` event + a `StateMachine` WARN
+  (the 07-19 session-114 invisible-unassign class is no longer silent).
+  **What to watch:** if a dash includes a chat/support-path unassign (no confirmation screen), expect the
+  WARN at job close. **Desk-side:** `SELECT * FROM app_events WHERE eventType='JOB_ACCEPT_MISMATCH'` —
+  should be non-empty iff an invisible unassign (or the documented #700 suppressed-arrival residual)
+  occurred; a normal dash must produce ZERO rows (false-positive watch).
+  - Confirmed: 0/2
+- **🆕 NEW — #809 / PR #820 + #803 / PR #821 — pickup/dropoff PII redacts (desk-resolvable).** New
+  redacts: `pickup_select_issue` (+ its issue-list variant, now recognized) masks the fused
+  `For <name> • <store>` header to `For [redacted:<4hex>]`; `dropoff_pin_entry`/`dropoff_handoff` mask
+  gate-code/PIN-bearing instruction bodies (incl. `PIN: NNNN` / fused `PinNNNN` variants).
+  **Desk-side:** in the next pull, every capture of these four surfaces must show the masked forms — grep
+  for `For [A-Z][a-z]+ [A-Z]\.` and `pin[\s:#]*\d` over the recognized capture tree → zero raw hits.
+  - Confirmed: 0/2
 - **🆕 NEW — #801 / PR #817 — bubble session-earnings freshness on 0.230.0.** The collapsed receipt
   no longer refreshes session `runningEarnings` (the 0.230.0 digit-wheel is unparseable); the figure now
   rides the dash-control "This dash" label parse alone. After a delivery on 0.230.0, verify the bubble's
@@ -1804,13 +1828,17 @@ Accept and Decline registered on DoorDash — and moved to that session's entry 
 ### Bugs
 
 1. **[MEDIUM, state — filed #810]** The chat/resolution-path pickup unassign fired NO `TASK_UNASSIGNED` — #736's shipped vocabulary keys on the confirmation screen, which this path never rendered. The next accept **silently reused the abandoned job/task** (same taskId across both accepts); money reconciled only by same-store luck, and the orphaned accept inflates offersAccepted. Second #736 commit shape; replay captures complete (session 114).
+   - **Status:** Partially closed — design pass 2026-07-20 on #810 proved the unassign committed via the support-chat path with NO capturable dasher-side surface (recognition can't be the load-bearing fix) and REJECTED the accept-time store-differs guard. Shipped: B1 `JOB_ACCEPT_MISMATCH` close tripwire (#818, replay-pinned on this session's shape) + B3 issue-list variant recognition/redact (#820). Open: B2 orphan offer_record resolution (dev decision, on #810) + #816 (timeline owed-set reconciliation, capture-first).
 2. **[MEDIUM, privacy — extended #806]** "Current task" bottom-sheet fell to UNKNOWN carrying plaintext `Pickup for <FirstName> <I>` — "Pickup for " is missing from the `CustomerTextMarkers` SSOT (which has "Deliver to "). Same id-less UNKNOWN class #806 owns; marker addition + sheet recognition both requested there. File purged.
+   - **Status:** Partially closed — "Pickup for " marker + the full UNKNOWN screen/notification/click scrub shipped in #815 (2026-07-20); the sheet/task-detail recognition (direction 1) stays open on #806, capture-gated.
 3. **[LOW, actuation — filed #811]** One confirm_decline tap aborted fail-closed on a label variant (`NONE passed label verification`) — the #770 "copy change degrades quick-decline silently to manual" residual, first field sighting. Fail direction correct; allowlist needs the variant.
+   - **Status:** Premise REFUTED (2026-07-20 investigation, receipts on #811) — no label variant exists; the WARN was the second fire of a benign teardown double-fire and the offer WAS auto-declined (13:38:12.391 `Offer Declined`). Quick-decline never degraded. Disposition (close as not-a-bug vs re-scope to a teardown-frame effect dedup) pending dev decision on #811.
 4. **[INFO]** Uber offer capture is fragile during Uber-app instability (the Cheba Hut accept escaped entirely) — can't be separated from app-restart churn this session; watch on the next (hopefully stabler) Uber dash.
 
 ### Open questions / investigations
 
 1. Whether the #810 fix should ride the offer-supersession guard (the #596 T2 accept-time cousin) or a resolution-menu recognition signal — design pass on the issue.
+   - **Answered (design pass 2026-07-20, on #810):** NEITHER as the load-bearing fix — the fielded unassign had no capturable commit surface (support-chat path), and the accept-time store-differs guard fails both directions (misses same-store, misfires on genuine cross-store add-ons; rejected permanently). Shipped instead: the B1 close-reconciliation tripwire (#818); the platform-authoritative general fix is #816 (timeline owed-set reconciliation, capture-first).
 
 ---
 
