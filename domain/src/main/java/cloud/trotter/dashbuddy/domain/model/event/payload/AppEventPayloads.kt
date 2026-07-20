@@ -194,6 +194,41 @@ data class TaskUnassignedPayload(
 ) : AppEventPayload
 
 /**
+ * Payload for `JOB_ACCEPT_MISMATCH` (#810 B1) — emitted once when a job closes carrying MORE accepted
+ * offers than accounted physical orders. This is the seq-114 invisible-unassign signal: an accepted
+ * offer died without a capturable dasher-side commit surface (a support-chat unassign renders no
+ * confirmation screen/click), so no `TASK_UNASSIGNED` ever fired and the seam was previously silent.
+ *
+ * It is a **tripwire, not a guess**: the machine does NOT mutate state, re-attribute pay, or decide
+ * which offer died (that attribution is structurally ambiguous — deferred to #810 B2). The payload
+ * carries only the shape of the mismatch so the desk playbook / a future review affordance can see it.
+ *
+ * **PII-safe by construction (P7):** `sha256` hashes and counts only — no store names, no raw text.
+ * `acceptedCount`/`accountedCount` are the raw mismatch numbers (the WARN reads them); the hash lists
+ * are the offer↔job and delivered-customer links, mirroring the other phase payloads.
+ *
+ * **Read-model-inert:** the projector routes it through the liveness `else` arm (the `TASK_UNASSIGNED`
+ * precedent) — it mints no record and needs no `PROJECTOR_VERSION` bump (a new type can't exist in
+ * already-folded history).
+ */
+@Serializable
+data class JobAcceptMismatchPayload(
+    val jobId: String,
+    /** `job.acceptedOffers.size` — the accepted-offer count at close (the mismatch numerator). */
+    val acceptedCount: Int,
+    /** Distinct delivered dropoffs + distinct unassign-marked orders (the mismatch denominator). */
+    val accountedCount: Int,
+    /** Every offer hash that contributed to the closing job (the add-on chain). */
+    val acceptedOfferHashes: List<String> = emptyList(),
+    /** Customer hashes of the drops that DID deliver — the accounted, hashed customer set. */
+    val deliveredCustomerHashes: List<String> = emptyList(),
+    /** Never-activated TBD dropoff placeholders left outstanding at close (customer-less, undelivered). */
+    val leftoverTbdPlaceholders: Int = 0,
+    /** Orders the dasher explicitly unassigned via help (#736) — accounted, not part of the signal. */
+    val unassignedCount: Int = 0,
+) : AppEventPayload
+
+/**
  * Payload for `MANUAL_DELIVERY` (#650) — a driver-entered missed delivery: a real drop the capture
  * pipeline never saw (an unrecognized screen, a crash, an offer taken outside the app). It is an
  * **event, never a destructive edit**: the projector folds it into a `delivery_record` (payBasis

@@ -25,6 +25,7 @@ import cloud.trotter.dashbuddy.domain.model.pay.ParsedPayItem
 import cloud.trotter.dashbuddy.domain.state.Flow
 import cloud.trotter.dashbuddy.domain.state.Platform
 import cloud.trotter.dashbuddy.domain.model.event.payload.TaskUnassignedPayload
+import cloud.trotter.dashbuddy.domain.model.event.payload.JobAcceptMismatchPayload
 import cloud.trotter.dashbuddy.domain.state.TaskPhase
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
@@ -176,6 +177,15 @@ class RecordFoldsTest {
         odometer = odo,
     )
 
+    private fun jobAcceptMismatch(sid: String, at: Long, jobId: String) = ev(
+        AppEventType.JOB_ACCEPT_MISMATCH, sid, at,
+        JobAcceptMismatchPayload(
+            jobId = jobId, acceptedCount = 2, accountedCount = 1,
+            acceptedOfferHashes = listOf("hA", "hB"), deliveredCustomerHashes = listOf("cust1"),
+            leftoverTbdPlaceholders = 1, unassignedCount = 0,
+        ),
+    )
+
     // Thread a session's events, returning the outcomes in order and the final context.
     private fun foldSession(events: List<SequencedAppEvent>, currentCpm: Double? = null): Pair<List<FoldOutcome>, SessionFoldContext?> {
         var ctx: SessionFoldContext? = null
@@ -185,6 +195,37 @@ class RecordFoldsTest {
             o
         }
         return outcomes to ctx
+    }
+
+    @Test
+    fun `JOB_ACCEPT_MISMATCH is read-model-inert - no record, liveness still advances (#810 B1)`() {
+        val s = "S1"
+        val (outcomes, ctx) = foldSession(
+            listOf(
+                dashStart(s, 1_000, odo = 100.0),
+                delivery(s, 3_000, "J1", "T1", totalPay = 10.0, parsedPay = parsedPay(base = 7.0, tip = 3.0), odo = 105.0),
+                // The tripwire event lands after the delivery — it must mint NOTHING.
+                jobAcceptMismatch(s, 3_500, "J1"),
+                dashStop(s, 4_000, odo = 110.0, earnings = 10.0),
+            ),
+        )
+
+        // The delivered drop still folds normally (the tripwire never disturbs it).
+        assertNotNull("the real delivery still folds to a record", outcomes[1].delivery)
+
+        // The mismatch fold mints no record of any kind (the liveness `else` arm, TASK_UNASSIGNED precedent).
+        val mismatch = outcomes[2]
+        assertNull("no delivery record", mismatch.delivery)
+        assertNull("no offer record", mismatch.offer)
+        assertNull("no pickup record", mismatch.pickup)
+        assertNull("no store resolution", mismatch.resolution)
+        assertNull("no pay adjustment", mismatch.payAdjustment)
+        assertNull("no delivery adjustment", mismatch.deliveryAdjustment)
+        assertNull("no session assign", mismatch.sessionAssign)
+        assertNull("not a skip — it advances liveness like any session-attributed event", mismatch.skip)
+        // Liveness advanced to the event's time (the `else` arm's `ctx.advance`).
+        assertNotNull("context carries through", mismatch.context)
+        assertEquals("liveness advanced to the mismatch event time", 3_500L, mismatch.context!!.lastEventAt)
     }
 
     @Test

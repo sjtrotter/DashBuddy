@@ -4,7 +4,10 @@ import cloud.trotter.dashbuddy.domain.evaluation.OfferAction
 import cloud.trotter.dashbuddy.domain.evaluation.OfferEvaluation
 import cloud.trotter.dashbuddy.domain.model.event.payload.AppEventPayload
 import cloud.trotter.dashbuddy.domain.model.event.payload.DeliveryPayload
+import cloud.trotter.dashbuddy.domain.model.event.payload.JobAcceptMismatchPayload
 import cloud.trotter.dashbuddy.domain.model.event.payload.OfferPayload
+import cloud.trotter.dashbuddy.domain.model.event.payload.TaskUnassignedPayload
+import cloud.trotter.dashbuddy.domain.state.TaskPhase
 import cloud.trotter.dashbuddy.domain.model.event.payload.OfferReceivedPayload
 import cloud.trotter.dashbuddy.domain.model.event.payload.PickupPayload
 import cloud.trotter.dashbuddy.domain.model.event.payload.SessionEndSource
@@ -86,6 +89,16 @@ class AppEventCodecTest {
                 sessionId = "s1", endedAt = 8_000L,
                 source = SessionEndSource.SUMMARY_SCREEN, totalEarnings = 41.25,
                 sessionDurationMillis = 3_600_000L, offersAccepted = 7, offersTotal = 9,
+            ),
+            AppEventType.TASK_UNASSIGNED to TaskUnassignedPayload(
+                jobId = "j1", taskId = "t1", phase = TaskPhase.PICKUP, storeName = "Wendy's",
+                arrivedAt = 4_000L, startedAt = 3_000L, unassignedAt = 5_000L,
+                jobOfferHashes = listOf("h1"),
+            ),
+            AppEventType.JOB_ACCEPT_MISMATCH to JobAcceptMismatchPayload(
+                jobId = "j1", acceptedCount = 2, accountedCount = 1,
+                acceptedOfferHashes = listOf("hA", "hB"), deliveredCustomerHashes = listOf("c1"),
+                leftoverTbdPlaceholders = 1, unassignedCount = 0,
             ),
         )
 
