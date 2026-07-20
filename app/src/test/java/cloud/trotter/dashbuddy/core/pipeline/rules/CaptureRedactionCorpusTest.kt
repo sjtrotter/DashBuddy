@@ -136,6 +136,40 @@ class CaptureRedactionCorpusTest {
         )
     }
 
+    @Test
+    fun `every For-family redact masks the fused customer header, keeps the For marker (#809)`() {
+        // #809: the four pickup "For <customer> • <store>" surfaces each ship a
+        // `redact` with keepPrefix ["For "] + normalize customerName. Nothing else
+        // pinned them — the #598 sha256 compile gate needs a sha256 parse (these are
+        // recognize-only), and CustomerTextMarkers has no bare "For " marker — so a
+        // deleted redact block on any of them went unnoticed (mutation-verified: the
+        // full suite stayed green). This is the teeth: an injected fused header node
+        // must mask to "For [redacted:<4hex>]" with no name residue. This is a PIN for
+        // these four explicit ids, NOT a discovery gate — a FIFTH "For "-surface rule
+        // added without redact won't appear in this list; that gap is caught at
+        // author/review time, not here.
+        val forFamily = listOf(
+            "doordash.screen.pickup_select_issue",
+            "doordash.screen.pickup_resolution_options",
+            "doordash.screen.pickup_unassigned_confirmation",
+            "doordash.screen.pickup_unassign_survey",
+        )
+        val maskShape = Regex("""^For \[redacted:[0-9a-f]{4}\]$""")
+        for (id in forFamily) {
+            val rule = TestRulesetFactory.screenRuleset.ruleById(id)!!
+            assertFalse("$id must carry a non-empty redact block (#809)", rule.redact.isEmpty())
+            val masked = rule.redact
+                .apply(UiNode(text = "For Jane Q Doe • STORENAME").restoreParents())
+                .text!!
+            assertFalse("$id: customer first name must not persist", masked.contains("Jane"))
+            assertFalse("$id: customer last name must not persist", masked.contains("Doe"))
+            assertTrue(
+                "$id: fused header must mask to 'For [redacted:<4hex>]' (store tail dropped); got '$masked'",
+                maskShape.matches(masked),
+            )
+        }
+    }
+
     // =========================================================================
     // #501 — the id-less first-name + last-initial customer-name shape. The
     // adversarial-review pledge finding: the runtime redact fail-OPEN on common

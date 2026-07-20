@@ -575,22 +575,63 @@
       }
     },
     {
+      "comment": "The pickup 'Select an issue' list. #809: carries the SAME 'For <customer> • <store>' redact as its sibling resolution surfaces (pickup_resolution_options / pickup_unassign_survey). Recognize-only (no parse), so redact-without-parse is legal (the survey precedent); the fused header node's post-'For ' remainder — customer name AND the ' • <store>' tail — is masked to '[redacted:<4hex>]', so the store tail does NOT survive. That is fine here: no anchor or parse rides the header line (the anchors are the separate 'Select an issue' + option nodes), and no other rule reads this surface's store from that node. B3 (#810 design): a SECOND branch recognizes the option-set variant that lacks 'Order already picked up'.",
       "id": "doordash.screen.pickup_select_issue",
       "priority": 102,
-      "require": {
-        "all": [
-          {
-            "exists": {
-              "hasTextContaining": "Select an issue"
-            }
+      "redact": [
+        {
+          "find": {
+            "hasTextStartsWith": "For "
           },
-          {
-            "exists": {
-              "hasTextContaining": "Order already picked up"
-            }
+          "keepPrefix": [
+            "For "
+          ],
+          "normalize": "customerName"
+        }
+      ],
+      "branches": [
+        {
+          "comment": "Original 'Select an issue' list reached via the already-picked-up path.",
+          "require": {
+            "all": [
+              {
+                "exists": {
+                  "hasTextContaining": "Select an issue"
+                }
+              },
+              {
+                "exists": {
+                  "hasTextContaining": "Order already picked up"
+                }
+              }
+            ]
           }
-        ]
-      }
+        },
+        {
+          "comment": "#809 B3 — the 'Select an issue' variant option-set (Red Card issues / vehicle crash / 'It's something else' / 'I have an issue') that lacks the 'Order already picked up' option; session-114 (2026-07-19 14:20:59) fell to UNKNOWN. Same surface, same intent, recognize-only. The reject of 'Resolution options' is load-bearing: the deeper combined resolution panel (pickup_resolution_options, priority 103) scrolls this SAME issue list above its own 'Resolution options' content, so it also carries 'Select an issue' + 'It's something else' — and because 102 evaluates before 103, without this belt a resolution frame would misclassify as select_issue. Anchor discipline (#738): 'Select an issue' + 'It's something else' + reject 'Resolution options' is corpus-unique (verified: no non-resolution frame carries both anchors).",
+          "reject": [
+            {
+              "exists": {
+                "hasTextContaining": "Resolution options"
+              }
+            }
+          ],
+          "require": {
+            "all": [
+              {
+                "exists": {
+                  "hasTextContaining": "Select an issue"
+                }
+              },
+              {
+                "exists": {
+                  "hasTextContaining": "It's something else"
+                }
+              }
+            ]
+          }
+        }
+      ]
     },
     {
       "comment": "Deeper than pickup_select_issue — the resolution panel reached after picking an issue. Keyed on its own distinctive strings so it never overlaps the issue list.",
