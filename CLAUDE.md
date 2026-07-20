@@ -203,11 +203,15 @@ first token + second-token initial), so a customer's mask/hash is stable across 
 DoorDash renders their name in ("Brandy S" vs "Brandy Smith"). Coverage spans the recognized offer/pickup/dropoff/chat/
 nav/camera **screen** surfaces AND **notification** envelopes (#620 — chat title/body,
 order-ready customer name via a per-field notif `redact`; store names kept). A rules-independent
-**recognized-frame** backstop (`CustomerTextMarkers`, #624/#632/#666 — distinct from `SensitiveTextMarkers`,
-which drops the dasher's banking screens) scrubs a node (screen tree) or whole field (notification —
-#632, incl. `actionLabels` — #666) that ships a customer-PII marker a rule forgot to redact; the
-marker SSOT is cross-platform DATA ("Deliver to "/"Message from " for DoorDash, "Leave the order at
-"/"Meet at door for " for Uber pushes, #585 — not DoorDash-only), with a documented residual for
+customer-PII **marker backstop** (`CustomerTextMarkers`, #624/#632/#666/#806 — distinct from
+`SensitiveTextMarkers`, which drops the dasher's banking screens) scrubs a node (screen tree) or whole
+field (notification — #632, incl. `actionLabels` — #666) that ships a customer-PII marker — on the
+**recognized** path (a rule forgot to redact) AND, since #806, on the **UNKNOWN screen / notification /
+click** envelopes too (a customer-bearing surface no rule recognized — the "Deliver to "/"Pickup for "
+task-detail views — that `SensitiveTextMarkers` correctly ignores; fail toward privacy), before the
+envelope hits disk; the
+marker SSOT is cross-platform DATA ("Deliver to "/"Pickup for "/"Message from " for DoorDash, "Leave the
+order at "/"Meet at door for " for Uber pushes, #585 — not DoorDash-only), with a documented residual for
 shapes a prefix scan can't own (a name-at-start body, and store-ambiguous prefixes like Uber's
 "Going to " that precede stores AND addresses) where the rule-declared `redact` is the primary
 control; the compiler rejects branch-level `redact` and skips a file with duplicate rule ids (#624),
@@ -222,7 +226,9 @@ backstop both also scan `actionLabels` now (#666) — a push action button label
 the envelope the same as the text fields and was previously excluded from every scrub layer.
 UNKNOWN frames and UNKNOWN clicks remain the documented
 debug-only exception (behind the release `NoOpCaptureBus` #346 + the `SensitiveTextMarkers`
-backstop); the id-less building-name line residual is still tracked. `PipelineV2.events` is a HOT `shareIn` stream — one upstream pass feeds
+drop backstop + the #806 `CustomerTextMarkers` scrub on the UNKNOWN screen/notification/click
+envelopes); the prefix-less residual (a name-at-start body, an address/gate-code line with no
+customer lead-in) persists on UNKNOWN frames until the surface is recognized (#806 direction 1). `PipelineV2.events` is a HOT `shareIn` stream — one upstream pass feeds
 all collectors, so side effects (captures, dedup state) can never double-run (#361). The merged
 upstream is supervised — a crash logs + counts a restart and resubscribes with backoff instead of
 silencing all sensing (#430) — and `PipelineStats` counts every gate decision, mapping failure,

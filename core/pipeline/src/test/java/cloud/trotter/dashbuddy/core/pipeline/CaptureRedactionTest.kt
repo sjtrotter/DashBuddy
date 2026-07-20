@@ -198,9 +198,17 @@ class CaptureRedactionTest {
         val json = capturedEnvelope()
         assertFalse("leaked customer name scrubbed", json.contains("Jane D."))
         assertTrue("scrubbed node became [redacted]", json.contains("[redacted]"))
-        // Non-marker nodes on an UNKNOWN frame are untouched (only marker-bearing
-        // nodes scrub) — address/gate-code lines lack a customer lead-in prefix.
+        // Non-marker node untouched (only marker-bearing nodes scrub).
         assertTrue("non-marker node intact", json.contains("Directions"))
+        // KNOWN RESIDUAL until #806 direction 1 (recognize + redact these surfaces):
+        // a prefix scan can only own nodes that START with a customer lead-in marker.
+        // The address and gate-code lines carry no such prefix, so they persist RAW on
+        // an UNKNOWN frame by design — direction 2 (this backstop) is a best-effort net,
+        // not a full control. Recognition rules (direction 1) are the control that
+        // removes these frames from UNKNOWN entirely; pinned here so the residual is
+        // honest and a future direction-1 fix flips these assertions deliberately.
+        assertTrue("address line persists RAW (residual until #806 dir 1)", json.contains("1600 Secret Ave, Apt 4"))
+        assertTrue("gate code persists RAW (residual until #806 dir 1)", json.contains("Gate code- #4821"))
         // Counted on the #806 path, NOT the recognized-frame counter.
         assertEquals(1L, stats.unknownCustomerScrubCount)
         assertEquals(0L, stats.redactBackstopScrubCount)
