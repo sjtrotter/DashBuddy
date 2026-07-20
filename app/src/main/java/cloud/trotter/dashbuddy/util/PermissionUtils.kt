@@ -6,6 +6,7 @@ import android.app.NotificationManager
 import android.content.ComponentName
 import android.content.Context
 import android.content.pm.PackageManager
+import android.os.Build
 import android.view.accessibility.AccessibilityManager
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
@@ -71,6 +72,12 @@ object PermissionUtils {
         val notificationManager =
             context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
 
-        return notificationManager.bubblePreference == NotificationManager.BUBBLE_PREFERENCE_ALL
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            notificationManager.bubblePreference == NotificationManager.BUBBLE_PREFERENCE_ALL
+        } else {
+            // bubblePreference is API 31+; on API 30 fall back to the closest
+            // semantic equivalent — "are bubbles allowed for this app".
+            notificationManager.areBubblesAllowed()
+        }
     }
 }

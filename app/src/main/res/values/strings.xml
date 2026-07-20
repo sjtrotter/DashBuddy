@@ -387,10 +387,16 @@
     <string name="patterns_tab_store_deliveries_label">Deliveries</string>
     <string name="patterns_tab_store_gross_label">Gross</string>
     <string name="patterns_tab_store_net_label">Net</string>
-    <string name="patterns_tab_store_dwell_format">dwell avg %1$s · median %2$s · p95 %3$s</string>
-    <string name="patterns_tab_store_dwell_partial_suffix"> (partial)</string>
+    <!-- #765: card face shows "usual wait" (the median dwell, no stat vocabulary). -->
+    <string name="patterns_tab_store_usual_wait_label">Usual wait</string>
+    <string name="patterns_tab_store_details_cd">Details for %1$s</string>
     <string name="patterns_tab_store_dwell_none">no pickup dwell recorded yet</string>
     <string name="patterns_tab_store_seen_format">first %1$s · last %2$s</string>
+    <!-- #765: detail bottom sheet — dasher-friendly wait labels, stat term kept secondary. -->
+    <string name="patterns_tab_store_detail_wait_title">Wait times</string>
+    <string name="patterns_tab_store_detail_median">Usual wait (median)</string>
+    <string name="patterns_tab_store_detail_p95">Longest waits (p95)</string>
+    <string name="patterns_tab_store_detail_avg">Average wait</string>
 
     <!-- setup/wizard/WizardScreen.kt -->
     <string name="wizard_screen_goal_option1_title">Cherry Picker</string>

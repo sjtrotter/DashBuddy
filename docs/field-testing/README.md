@@ -90,37 +90,16 @@ was found **broken-in-part** (raw PII in capture envelopes) and moved to that en
   rather than `unknownCaptured`.
   - Confirmed: 0/2 (#794)
 
-- **🆕 NEW — Recognition hot-path pack: pre-map package skip must not drop real frames (#435 / PR #791).**
-  ContentChanged/StateChanged now read the active window's package FIRST and skip the full tree
-  mapping when it isn't a watched platform (bubble overlay, launcher). The skip must only ever fire
-  for windows we were going to drop anyway — recognition of the platform app must be unaffected.
-  **What to watch:** recognition frames still land normally with overlays around (our bubble over
-  the DoorDash map, the offer popup, the quick-decline confirm sheet) and there are NO missing /
-  late screens while the platform app is foreground — screen changes keep reflecting in the HUD at
-  the usual cadence. **Desk-side:** the VERBOSE `🚫 Skip active window (pre-map)` lines never reach
-  the pulled DEBUG firehose by design, so the desk check is 'recognized-frame counts per session
-  look normal vs prior dashes' — drop the expectation of seeing the 🚫 lines in a pull; they're
-  device-logcat-only.
-  - Confirmed: 1/2 (2026-07-17: negative half clean — 350+ frames forwarded, mappingFailures=0,
-    all 5 deliveries recognized)
-
-- **🆕 NEW — Automation taps un-broken: active-window candidate scoping + window-root dedup (#788, fixes the 07-16 regression).**
-  Both automation taps died on 07-16 with `No decisive match among 2 verified candidates` — the active
-  window's root was enumerated TWICE (tying with itself) and a viewId twin in a lower window (the offer
-  popup's "Decline" behind the confirm sheet) survived to the ranker. Now `getLiveWindowRoots` dedups the
-  twin and the handler prefers active-window candidates before disambiguation; same-window ambiguity still
-  aborts fail-closed (#734).
-  **What to watch:** quick-decline auto-confirm fires again (~0.5s after Decline) and the post-delivery
-  summary auto-expands — the two taps that were dead. **Desk-side:** the `Effects` DEBUG line
-  `Dropped N other-window candidate(s)` appearing on tap fires, and the #734 WARN abort
-  (`No decisive match among …`) appearing ONLY on genuine same-window ties (expected: rare/never on
-  these two surfaces). The fix's central assumption — cross-instance `AccessibilityNodeInfo.equals`
-  behaving as documented on real framework nodes — is untestable off-device (unit tests use mocks), which
-  is exactly why this needs field confirmation.
-  - Confirmed: 1/2 (2026-07-17: 10 clean verified-candidate taps — 3×decline_offer, 3×confirm_decline,
-    4×expand_earnings — zero tie-aborts; window-root dedup collapsed the twin upstream so no
-    'Dropped other-window candidate' line was even needed, cleaner than anticipated)
-
+- **🆕 NEW — Patterns tab store cards: glanceable face + detail bottom sheet (#765 / PR #799).**
+  The store report cards were redesigned: the card **face** now shows only store name + location chip
+  and three plain-language numbers (Net / Usual wait / Deliveries) — no "median"/"p95" vocabulary —
+  with a `>` chevron affordance. Tapping a card opens a **bottom sheet** with the full detail (pickups,
+  gross, the dwell distribution labeled "Usual wait (median)" / "Longest waits (p95)" / "Average wait",
+  and first/last-seen). **What to watch:** open Analytics → Patterns; the store cards read at a glance
+  (2–3 numbers, no stats jargon on the face); tapping a card opens the sheet with the fuller breakdown;
+  swipe/scrim dismisses it; "usual wait" on the face matches the median in the sheet; a location-unknown
+  (chain-only) card still shows its "partial" note inside the sheet.
+  - Confirmed: 0/2
 - **🆕 NEW — Uber active-job skeleton: accepts become costed jobs at trip start; honest "ON JOB" badge (#762 D2 / PR #784). NEEDS UBER ENABLED.**
   `active_trip` (the coarse `on_job_view` screen) now declares the phase-less `task:active` flow, and the
   accept grace is per-platform (Uber 600s vs the old global 120s). Together: an accepted Uber offer is
@@ -219,19 +198,6 @@ was found **broken-in-part** (raw PII in capture envelopes) and moved to that en
   sibling exists.
   - Confirmed: 1/2 (2026-07-17: Pei Wei 2-order stack split 6.72+6.73=13.45 exactly; no tripwire WARN)
 
-- **🆕 NEW — unassign an order mid-dash produces NO paid/confirmed artifacts (#736).**
-  When you unassign an active order via the pickup help / resolution flow ("Unassign order" survey →
-  "You've been unassigned from this order" confirmation), the app now recognizes the unassign and
-  **inline-abandons** the task instead of fabricating a pickup confirmation. On the previous build a
-  mid-shop unassign minted a ghost `PICKUP_CONFIRMED` (the 07-07 H-E-B seq-71 bug).
-  **How to tell it's working (on-dash + desk-side):** right after you unassign, expect an
-  **"Unassigned: <store>" bubble**, the job/card clears, and the **next offer works normally**.
-  Desk-side, the exported log / `app_events` for that dash should show **exactly one
-  `TASK_UNASSIGNED`** for that order and **no `PICKUP_CONFIRMED` / `DELIVERY_COMPLETED` /
-  `DELIVERY_CONFIRMED`** for it, no fake "$0 PAID" delivery in the Money tab, and no bogus shop-rate
-  sample. Try it on a shop order (H-E-B-style) where you've already started shopping.
-  - Confirmed: 0/2
-
 - **🆕 NEW — unassign an order AFTER pickup (dropoff phase) also produces NO paid artifact (#752 / PR #757).**
   Companion to #736: when the unassign happens while a **dropoff** is active (or was just grace-retired
   en route to the customer — e.g. a help/idle screen interrupted the drive, the retire grace fired,
@@ -279,17 +245,14 @@ was found **broken-in-part** (raw PII in capture envelopes) and moved to that en
   #501 (all 3 items). This is the last recognition piece of #501; watch that it doesn't perturb the
   dropoff flow (no phantom re-mint around the confirm card).
   - Confirmed: 0/2
-- **🆕 NEW — store entity resolution keys real stores from live dashes (#159 / PR).**
-  The read-model now resolves each job's stores (`stores` + `pickup_records` tables) from captured
-  pickup/dropoff/payout surfaces. **How to tell it's working (desk-side, after a dash):** on a job with a
-  payout receipt, the `stores` table should hold one keyed row per store (`storeKey` ending in a real
-  running key like `…|target|02426`, not an empty `…|target|` segment) and the delivery/pickup rows for
-  that job should carry that `storeKey`. **Watch especially the multi-store stack** (e.g. the Target+Maple
-  case): BOTH stores should be keyed from the single end-of-job receipt, not one keyed + one chain-only.
-  And a payout-less close (`DASH_STOP` with no summary) must NOT downgrade an already-keyed store back to
-  chain-only. No UI yet (the #315 Patterns tab is the consumer) — verify via the DB / a CSV-adjacent read.
-  - Confirmed: 1/2 (2026-07-17: all stores keyed with real running keys; multi-store-from-one-receipt
-    case still unfielded)
+- **🆕 NEW — multi-store-from-one-receipt keying: both stores keyed from a single end-of-job receipt, no downgrade on payout-less close (#159 / PR #739).**
+  Narrowed scope: the basic-keying half retired 2/2 (07-17 + 07-18/19 — all deliveries carry real running
+  keys, no more empty `…|target|` segments). What's left is the harder multi-store case. **How to tell it's
+  working (desk-side, after a multi-store stack — e.g. the Target+Maple case):** BOTH stores should be
+  keyed from the single end-of-job receipt, not one keyed + one chain-only. And a payout-less close
+  (`DASH_STOP` with no summary) must NOT downgrade an already-keyed store back to chain-only. No UI yet
+  (the #315 Patterns tab is the consumer) — verify via the DB / a CSV-adjacent read.
+  - Confirmed: 0/2 (multi-store-from-one-receipt case still unfielded)
 - **🆕 NEW — Analytics → Patterns tab: store report cards + net-$/hr heatmap (#315 H5 / PR).**
   The Patterns tab (Analytics hub, no period selector — it's lifetime/rate-based) now renders two real
   sections: (A) **store report cards** newest-visited-first, one per resolved store — chain name + a
@@ -387,8 +350,9 @@ was found **broken-in-part** (raw PII in capture envelopes) and moved to that en
   - Confirmed: 1/2 (07-07 + 07-08 desk analysis: the machine half — (4) accepts mint jobs WITH
     economics (every delivery costed OFFER_FROZEN), (5) outcomes correct incl. a first-fielded
     OFFER_TIMEOUT, and the Sonic+Willie's two-pickup stack minted both pickup placeholders —
-    clean on BOTH dashes. Second confirmation should be dev-eyes on (1)–(3): card visuals,
-    heads-up notification, TTS.)
+    clean on BOTH dashes. 2026-07-18: 25 offers across the day all resolved coherently — data half
+    reinforced. Second confirmation should be dev-eyes on (1)–(3): card visuals, heads-up
+    notification, TTS.)
 - **🆕 NEW — heads-up banner acts on the RIGHT offer (#438 B4 / PR).** Each offer's heads-up
   notification now has its own id + its own Accept/Decline intents (distinct per offer), so
   concurrent or fast-replacement offers no longer clobber one another. On a normal DoorDash dash,
@@ -1793,6 +1757,35 @@ Accept and Decline registered on DoorDash — and moved to that session's entry 
 
 ---
 
+## 2026-07-18 (+ 07-19 morning) — five-session day; second field run of the #767–#791 build (desk-analyzed 2026-07-19)
+
+- **Date:** 2026-07-18 (four sessions) + 2026-07-19 morning (one session)
+- **Platform(s) tested:** DoorDash. Uber was opened for ~1 minute on 07-19 (~07:15, home dashboard + go-online screens captured) but **never driven** — zero Uber events/sessions; the standing "drive Uber" want remains unmet.
+- **Branch under test:** the 2026-07-17 install (master @ `064b3fd4` era, #767–#791). The 07-18 merge wave (#793/#797/#799/#800/#802/#805) is NOT on this build.
+- **Field conditions:** 5 sessions, $133.57 total ($113.07 on 07-18 across 4 sessions + $20.50 on 07-19), 7 deliveries — all single-drop single-store jobs (no stacks). 25 offers → 9 accepted / 14 declined / 2 timeout. Two pickup-phase unassigns (both H-E-B). One session ended early_offline with $0.
+
+### Verification results (desk pass, receipts in the 2026-07-19 analysis)
+
+1. **Money path: exact to the cent on all four earning sessions** ($26.45 / $55.12 / $31.50 / $20.50 = reported exactly). Zero orphans, zero over-attribution, all DROP_SHARE. Frozen-econ invariant exact (fuel+nonfuel == cpm, diff 0.0) on all 7 rows. Event stream: 0 ERROR, 0 restarts, 16 benign WARNs; projector v7 caught up (watermark 398).
+2. **VALIDATED 2/2 → retired from the checklist this entry:**
+   - **#788** automation taps — 30 clean `Single verified candidate` fires (1 accept, 14 confirm_decline, 6 decline, 9 expand), zero aborts, second consecutive clean dash.
+   - **#736** pickup-phase unassign — TWO clean unassigns in one pull (07-18 seq359 + 07-19 seq376): one `TASK_UNASSIGNED` each, zero fabricated confirms/completions, event arithmetic exact (9 accepts − 2 unassigns = 7 completed). The dropoff-phase retro-mark (#752) remains unexercised.
+   - **#435** pre-map skip — negative half: `mappingFailures=0` across 23 stats lines, 1500 frames forwarded, all deliveries recognized. (Positive half is device-logcat-only by design — retired on the negative evidence.)
+   - **#159** basic store keying — all deliveries carry real running keys; remaining scope narrowed to the multi-store-from-one-receipt case (still unfielded).
+3. **#773 second field receipt** (already retired 07-17): SIX distinct H-E-Bs now keyed by street number (`@12125/@7330/@5910/@9255/@5601/@12777`) — the 07-13 "4 H-E-Bs conflate to one chain row" world is fully gone.
+4. **#731: fourth consecutive clean night** (connects=1/disconnects=0) — environmental root-cause stands; stays parked.
+5. **Not exercised:** #630 (stays 1/2), #733 (1/2), #752, #749, #691, #660p2, #778 (shopping stayed on), #722, and every Uber item (#762 D2 skeleton, coarse-close WATCH, #785/#786 captures).
+
+### Bugs
+
+1. **[HIGH, privacy — second field receipt for #794, fix already merged as PR #802]** The DasherDirect "Transfer out" screen leaked again on this pre-fix build (2 UNKNOWN captures, balance amount masked here). Both frames verified to carry exactly PR #802's anchor pair, so the merged fix covers the shape. Files purged from device + pull. The #794 checklist item's confirmations must come from a post-#802 install.
+2. **[MED-HIGH, privacy — filed #806]** Five unrecognized DoorDash **task-detail** screens ("Deliver to"/"Pickup for" detail views) leaked raw customer name, full address, and a gate code to UNKNOWN captures. Structural gap: customer hashing requires recognition, and the `CustomerTextMarkers` backstop covers recognized frames + notifications, not UNKNOWN screens. Files purged; surface is trivially re-capturable when the rule is built.
+3. **[LOW, recognition — added to #796]** New "Dasher Rewards / Quality Rate" program family (8+ UNKNOWN frames) — recognize-only candidate.
+
+### Open questions / investigations
+
+1. Whether the #802 sensitive block should be joined by an UNKNOWN-screen `CustomerTextMarkers` scrub (the #806 fix-direction question — probably both, see the issue).
+
 ## 2026-07-17 — three-session evening dash; first field run of the #767–#791 build (desk-analyzed 2026-07-18)
 
 - **Date:** 2026-07-17
@@ -1815,7 +1808,7 @@ Accept and Decline registered on DoorDash — and moved to that session's entry 
 
 ### Bugs
 
-1. **[MED-HIGH, privacy — filed #794]** DasherDirect **"Transfer out"** screen variant evaded BOTH the sensitive rule block and the `SensitiveTextMarkers` backstop → plaintext balance ("$6.93 available") written to two UNKNOWN debug captures. Copy drift is the likely cause (screen says "Transfer out"/"$X available"; markers say "Transfer to bank"/"Available Balance"). ~44 sibling DasherDirect frames in the same window WERE blocked — single-variant coverage gap. Debug-only exposure (release = NoOpCaptureBus), never forwarded to the state machine.
+1. **[MED-HIGH, privacy — filed #794]** DasherDirect **"Transfer out"** screen variant evaded BOTH the sensitive rule block and the `SensitiveTextMarkers` backstop → plaintext balance ("$X.XX available", amount masked here) written to two UNKNOWN debug captures. Copy drift is the likely cause (screen says "Transfer out"/"$X available"; markers say "Transfer to bank"/"Available Balance"). ~44 sibling DasherDirect frames in the same window WERE blocked — single-variant coverage gap. Debug-only exposure (release = NoOpCaptureBus), never forwarded to the state machine.
 2. **[MED, recognition — filed #795]** CVS **PIN-required delivery** confirmation sub-flow entirely UNKNOWN (~6 frames: "Enter PIN…" + intro). Delivery completed correctly regardless; a whole confirmation surface is invisible to recognition. The PIN itself must be treated as do-not-parse when the rule is written.
 3. **[LOW-MED, recognition — filed #796]** Batch of UNKNOWN families: drop-off issue/resolution menu, "How was this task?" feedback, pickup receipt-photo, CVS barcode-scan shopping sub-flow (#550-class), CVS "Navigate to zone".
 4. **[LOW — noted on #501]** One `dropoff_multi_order_confirm` variant ("Confirm you have the correct order before drop-off.") slipped to UNKNOWN while its sibling recognized.
