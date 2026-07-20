@@ -262,8 +262,15 @@
           }
         },
         {
+          "comment": "#803 F1/F3: bare 'gate 4821' (no 'code' token) — word-bounded, digit-adjacent (3+); the [\\s:#] separator class covers 'gate: 4821' / 'gate#4821' / 'Gate4821'. Masks the whole body incl. any embedded name.",
           "find": {
-            "hasTextMatchesRegex": "\\bpin\\b\\s*#?\\s*\\d{3}"
+            "hasTextMatchesRegex": "\\bgate[\\s:#]*\\d{3}"
+          }
+        },
+        {
+          "comment": "#803 F1/F3: 'pin 4821' / 'PIN: 4821' / 'pin:4821' / 'Pin4821'. The [\\s:#] separator class covers the colon variants the first cut missed; dropping the trailing \\b closes the fused 'Pin4821' shape. 'pinch'/'opinion' stay clean — the next char is constrained to [\\s:#] or a digit. Aligned byte-for-byte with SnapshotRedactor.PIN + the scanner shape (three-layer parity, #362 class).",
+          "find": {
+            "hasTextMatchesRegex": "\\bpin[\\s:#]*\\d{3}"
           }
         },
         {
@@ -371,8 +378,15 @@
           }
         },
         {
+          "comment": "#803 F1/F3: bare 'gate 4821' (no 'code' token) — word-bounded, digit-adjacent (3+); [\\s:#] covers 'gate: 4821'/'gate#4821'/'Gate4821'.",
           "find": {
-            "hasTextMatchesRegex": "\\bpin\\b\\s*#?\\s*\\d{3}"
+            "hasTextMatchesRegex": "\\bgate[\\s:#]*\\d{3}"
+          }
+        },
+        {
+          "comment": "#803 F1/F3: 'pin 4821' / 'PIN: 4821' / 'pin:4821' / 'Pin4821'. [\\s:#] separator + dropped trailing \\b close the colon + fused variants; 'pinch'/'opinion' stay clean. SSOT with SnapshotRedactor.PIN + the scanner shape.",
+          "find": {
+            "hasTextMatchesRegex": "\\bpin[\\s:#]*\\d{3}"
           }
         },
         {

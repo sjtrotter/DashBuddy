@@ -23,7 +23,11 @@ object SnapshotSecurityScanner {
      *   instructions body. This is the exact fragment that reached a corpus
      *   candidate id-less (no viewId → no rule/test id-scrub) and survived every
      *   layer; making it a corpus-gate failure stops recurrence in ANY future
-     *   fixture. Digit-adjacency (≥3 digits) keeps "PIN pad"/"pin it" clean.
+     *   fixture. A `[\s:#]` separator class + no trailing `\b` (byte-aligned with the
+     *   rule redact + [SnapshotRedactor.PIN]) catches "PIN: 4821"/"Pin4821";
+     *   digit-adjacency (≥3 digits) keeps "PIN pad"/"pin it"/"opinion" clean.
+     * - `gate \d{3,}` — a bare residence gate code ("gate 4821", no "code" token) in
+     *   the same free-text body (#803 F1/F3). Same separator class + digit-adjacency.
      *
      * Deliberately NOT added: an embedded full-name bigram (`[A-Z][a-z]+ [A-Z][a-z]+`).
      * The scanner runs over the whole committed corpus, which legitimately carries
@@ -34,7 +38,8 @@ object SnapshotSecurityScanner {
      * `CaptureRedactionCorpusTest` (FIX 4), so it needs no scanner duplicate.
      */
     private val SENSITIVE_SHAPES: List<Pair<Regex, String>> = listOf(
-        Regex("""(?i)\bpin\b[\s:#]*#?\s*\d{3,}""") to "pin-code-shape",
+        Regex("""(?i)\bpin[\s:#]*\d{3,}""") to "pin-code-shape",
+        Regex("""(?i)\bgate[\s:#]*\d{3,}""") to "gate-code-shape",
     )
 
     data class ScanResult(

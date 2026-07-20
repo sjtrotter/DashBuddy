@@ -24,7 +24,11 @@ class InstructionsBodyPiiScrubTest {
 
     @Test
     fun `pin followed by digits is masked, keeping the lead-in`() {
-        for (raw in listOf("pin 4821", "PIN: 4821", "PIN #4821", "Your pin 4821 opens the gate")) {
+        // Space, colon (spaced + fused), hash, fully fused (no separator), and mid-body.
+        for (raw in listOf(
+            "pin 4821", "PIN: 4821", "pin:4821", "PIN #4821", "Pin4821",
+            "Your pin 4821 opens the gate",
+        )) {
             val out = scrubText(raw)
             assertFalse("digits must not survive in '$raw' -> $out", out.contains("4821"))
             assertTrue("pin lead-in kept in '$raw' -> $out", out.contains(SnapshotRedactor.MASK))
@@ -56,6 +60,14 @@ class InstructionsBodyPiiScrubTest {
             "trigger names the pin shape",
             result.triggers.any { it.second == "pin-code-shape" },
         )
+    }
+
+    @Test
+    fun `scanner flags pin colon and fused variants and a bare gate code`() {
+        for (body in listOf("PIN: 1234", "Pin1234", "gate 4821", "Gate: 4821")) {
+            val tree = UiNode(text = body).restoreParents()
+            assertTrue("'$body' must be flagged", SnapshotSecurityScanner.scan(tree).isToxic)
+        }
     }
 
     @Test

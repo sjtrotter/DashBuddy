@@ -114,15 +114,18 @@ object SnapshotRedactor {
     private val FIRST_LAST_INITIAL = Regex(FIRST_LAST_INITIAL_PATTERN, RegexOption.IGNORE_CASE)
     private val APT = Regex("""(?i)\b(apt|suite|ste|unit|bldg|building|gate code|gate)\b[:#\s]*[A-Za-z0-9\-]+""")
     /**
-     * A residence-entry PIN, e.g. "pin 4821" / "PIN: 4821" / "PIN #4821" (#803). Kept
-     * SEPARATE from [APT]'s alternation (never folded in) because "pin" needs a
-     * **digit-adjacency** guard the APT shape lacks — `[:#\s]*[A-Za-z0-9-]+` would
-     * mask "PIN pad" / "pin it". Word-bounded (`\bpin\b`, so "shopping"/"opinion"
-     * don't match) and requires ≥3 trailing digits, so only an actual code is masked;
-     * the "pin" lead-in is kept, the digits become [MASK]. The paired
-     * [SnapshotSecurityScanner] shape is the corpus gate that catches recurrence.
+     * A residence-entry PIN, e.g. "pin 4821" / "PIN: 4821" / "pin:4821" / "Pin4821"
+     * (#803). Kept SEPARATE from [APT]'s alternation (never folded in) because "pin"
+     * needs a **digit-adjacency** guard the APT shape lacks — `[:#\s]*[A-Za-z0-9-]+`
+     * would mask "PIN pad" / "pin it". Word-bounded lead-in (`\bpin`, so
+     * "shopping"/"opinion" don't match), a `[\s:#]` separator class (covers the colon
+     * variants), and **no trailing `\b`** so the fused "Pin4821" shape is caught too —
+     * "pinch"/"opinion" stay clean because the char after "pin" is constrained to
+     * `[\s:#]` or a digit. Requires ≥3 trailing digits; the "pin" lead-in is kept, the
+     * digits become [MASK]. Byte-aligned with the rule-side `\bpin[\s:#]*\d{3}` and the
+     * [SnapshotSecurityScanner] shape (three-layer parity, #362 class).
      */
-    private val PIN = Regex("""(?i)\b(pin)\b[\s:#]*#?\s*\d{3,}""")
+    private val PIN = Regex("""(?i)\b(pin)[\s:#]*\d{3,}""")
     /** A quoted free-text customer note, e.g. "Corner House, please leave at door." — customer-entered, mask whole. */
     private val QUOTED_NOTE = Regex(""""[^"]{6,}"""")
 
