@@ -113,6 +113,16 @@ object SnapshotRedactor {
         "^\\s{0,8}[\\p{L}][\\p{L}'-]{0,20}( [\\p{L}][\\p{L}'-]{0,20}){0,3} [A-Z]\\.?\\s{0,8}$"
     private val FIRST_LAST_INITIAL = Regex(FIRST_LAST_INITIAL_PATTERN, RegexOption.IGNORE_CASE)
     private val APT = Regex("""(?i)\b(apt|suite|ste|unit|bldg|building|gate code|gate)\b[:#\s]*[A-Za-z0-9\-]+""")
+    /**
+     * A residence-entry PIN, e.g. "pin 4821" / "PIN: 4821" / "PIN #4821" (#803). Kept
+     * SEPARATE from [APT]'s alternation (never folded in) because "pin" needs a
+     * **digit-adjacency** guard the APT shape lacks — `[:#\s]*[A-Za-z0-9-]+` would
+     * mask "PIN pad" / "pin it". Word-bounded (`\bpin\b`, so "shopping"/"opinion"
+     * don't match) and requires ≥3 trailing digits, so only an actual code is masked;
+     * the "pin" lead-in is kept, the digits become [MASK]. The paired
+     * [SnapshotSecurityScanner] shape is the corpus gate that catches recurrence.
+     */
+    private val PIN = Regex("""(?i)\b(pin)\b[\s:#]*#?\s*\d{3,}""")
     /** A quoted free-text customer note, e.g. "Corner House, please leave at door." — customer-entered, mask whole. */
     private val QUOTED_NOTE = Regex(""""[^"]{6,}"""")
 
@@ -195,6 +205,7 @@ object SnapshotRedactor {
         t = CARD.replace(t, "[card]")
         t = QUOTED_NOTE.replace(t, "\"[note]\"")
         t = APT.replace(t) { it.value.substringBefore(it.groupValues[1]) + it.groupValues[1] + " " + MASK }
+        t = PIN.replace(t) { it.groupValues[1] + " " + MASK }
         t = FULL_ADDRESS.replace(t, "[address]")
         t = STREET.replace(t, "[address]")
         t = CITY_STATE_ZIP.replace(t, "[address]")

@@ -256,6 +256,66 @@ class CaptureRedactionCorpusTest {
         node.children.forEach { walkText(it, visit) }
     }
 
+    // =========================================================================
+    // #803 — the id-less delivery-instructions-body blind class. The rule redact
+    // is the PRIMARY (runtime-edge) control: it masks the WHOLE offending node, so
+    // a gate-code / PIN fragment takes the embedded customer name with it. These
+    // build a synthetic live (un-redacted) capture, confirm recognition still lands
+    // on the surface, then assert its redact masks the body while the require
+    // anchors survive — redaction is capture-only, never touching parse (both rules
+    // are parse-less; the goldens are byte-identical).
+    // =========================================================================
+
+    @Test
+    fun `dropoff_pin_entry redact masks the id-less instructions body PIN, gate code, and embedded name (#803)`() {
+        val tree = UiNode(
+            viewIdResourceName = "com.dd:id/drop_off_workflow_host_fragment",
+            children = listOf(
+                UiNode(text = "Hand it to customer"),
+                // The id-less free-text instructions body — the blind class: no viewId,
+                // an embedded full name, plus the gate code + PIN that reached disk raw.
+                UiNode(text = "John Smith gate code 8834 pin 4821"),
+                UiNode(viewIdResourceName = "com.dd:id/step_title", text = "Collect PIN from customer"),
+                UiNode(viewIdResourceName = "com.dd:id/step_description", text = "Ask John for the entry code"),
+            ),
+        ).restoreParents()
+
+        val match = TestRulesetFactory.screenRuleset.matchFirst(tree)
+        assertEquals("doordash.screen.dropoff_pin_entry", match?.ruleId)
+        val rule = TestRulesetFactory.screenRuleset.ruleById(match!!.ruleId)!!
+        assertFalse("pin_entry must now carry a redact block", rule.redact.isEmpty())
+
+        val masked = serialize(rule.redact.apply(tree))
+        assertFalse("PIN must not persist", masked.contains("4821"))
+        assertFalse("gate code must not persist", masked.contains("8834"))
+        assertFalse("embedded customer name must not persist", masked.contains("John Smith"))
+        assertFalse("step_description instruction must not persist", masked.contains("Ask John"))
+        assertTrue("require anchor (step_title) kept", masked.contains("Collect PIN from customer"))
+    }
+
+    @Test
+    fun `dropoff_handoff redact masks the id-less instructions body gate code and PIN (#803)`() {
+        val tree = UiNode(
+            viewIdResourceName = "com.dd:id/drop_off_workflow_host_fragment",
+            children = listOf(
+                UiNode(text = "hand it to customer"),
+                UiNode(text = "Meet me at the back. gate code 5567 pin 9032"),
+                UiNode(viewIdResourceName = "com.dd:id/step_description", text = "Text Jane on arrival"),
+                UiNode(text = "Complete Delivery"), // arrival CTA discriminator
+            ),
+        ).restoreParents()
+
+        val match = TestRulesetFactory.screenRuleset.matchFirst(tree)
+        assertEquals("doordash.screen.dropoff_handoff", match?.ruleId)
+        val rule = TestRulesetFactory.screenRuleset.ruleById(match!!.ruleId)!!
+
+        val masked = serialize(rule.redact.apply(tree))
+        assertFalse("gate code must not persist", masked.contains("5567"))
+        assertFalse("PIN must not persist", masked.contains("9032"))
+        assertFalse("step_description instruction must not persist", masked.contains("Text Jane"))
+        assertTrue("arrival CTA anchor kept", masked.contains("Complete Delivery"))
+    }
+
     @Test
     fun `every screen rule that hashes PII declares a redact block`() {
         var checked = 0
