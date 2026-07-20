@@ -236,9 +236,20 @@ class ParseOutputGoldenTest {
      *   the extractor regressed. The expanded key still differentiates per
      *   delivery via its `{totalPay}` half, so dedupe works; clean up the dead
      *   half when the summary rules are next touched.
-     * - `delivery_summary_collapsed:totalPay` — the mirror image: collapsed
-     *   receipts parse sessionEarnings but never the per-delivery totalPay
-     *   (it's behind the expand); the `{sessionEarnings}` half differentiates.
+     * - `delivery_summary_collapsed:totalPay` — dedupeKeys are scanned
+     *   POST-resolution here, so a `{field}` token only reaches this lint on a
+     *   frame where the field parsed null (it survived interpolation). Most
+     *   collapsed cards DO parse `totalPay` (it resolves and never registers),
+     *   but two expand-only corpus frames render no `final_value`, so their
+     *   `delivery-ss-collapsed-{totalPay}` survives and pins this entry. The
+     *   `{totalPay}` parse is NOT dead — do not delete it; this mirrors the
+     *   same-key entry in [knownDeadArgTemplates]. (#801: 0.230.0 also dropped
+     *   the `earnings_ticker` id, so the collapsed dedupeKey was retired from
+     *   `{totalPay}-{sessionEarnings}` to `{totalPay}` — keeping the
+     *   `{sessionEarnings}` half would have made the new 0.230.0 frames, which
+     *   parse `sessionEarnings` null, register a *new* dead
+     *   `collapsed:sessionEarnings` entry; dropping it is what keeps this set
+     *   unchanged.)
      * (The third original entry, `offer_popup:offerHash`, was the #427 bug —
      * fixed by the reserved `{parsedHash}` token, resolved post-factory by the
      * classifier via [DedupeTokens].)

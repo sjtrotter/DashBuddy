@@ -1175,6 +1175,18 @@
               }
             ]
           },
+          // #801: the "This dash so far" session total. Pre-0.230.0 this was a single
+          // settled TextView with a stable `earnings_ticker` id; DoorDash 0.230.0 dropped
+          // that id and now renders the total as an id-less ANIMATED digit-wheel ("$",
+          // "1","7",".","7","5" as separate nodes under an id=None container). Captures land
+          // mid-animation — the 07-17 corpus frames read "$0.00" and a doubled-digit
+          // "$016.603" for the same wheel — so the digits do NOT reliably reconstruct the
+          // value. NOT broadened onto that ticker (an unreliable read is worse than null);
+          // the id-anchored find below simply returns null on 0.230.0 (graceful — the field
+          // is already optional) while still parsing older-version replays. The dead
+          // `{sessionEarnings}` dedupe half was retired below in favour of `{totalPay}`,
+          // which 0.230.0 DOES render (the `final_value` id survives). See ParseOutputGoldenTest
+          // dedupeKey lint (the #427/#606 dead-template class).
           "sessionEarnings": {
             "find": {
               "hasIdSuffix": "earnings_ticker"
@@ -1218,7 +1230,7 @@
             "prefix": "Delivery - {totalPay}",
             "category": "delivery_summary"
           },
-          "dedupeKey": "delivery-ss-collapsed-{totalPay}-{sessionEarnings}",
+          "dedupeKey": "delivery-ss-collapsed-{totalPay}",
           "throttleMs": 60000
         }
       ]
