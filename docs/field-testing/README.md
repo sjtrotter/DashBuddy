@@ -1811,6 +1811,72 @@ Accept and Decline registered on DoorDash — and moved to that session's entry 
 
 ---
 
+## 2026-07-22 — dash in progress; DoorDash + SECOND Uber attempt (logged live from the field via chat; desk analysis pending)
+
+- **Date:** 2026-07-22 (entry written mid-dash from the developer's live narration; numbers below are
+  as-reported from the field, not yet desk-verified against a data pull)
+- **Platform(s) tested:** DoorDash + **Uber (second real attempt — two deliveries actually completed this time)**
+- **Branch under test:** not stated — presumably the most recent install; latest `master` at the time of
+  logging is `77cf03a` (post-#822 merge). Developer to correct if the device build is older.
+- **Field conditions:** concurrent DoorDash + Uber. On DoorDash, an H-E-B Shop & Deliver ($34.45 / 10 mi)
+  surfaced the items-vs-units parse conflation (see Bug #3). On Uber, offers were received and at least
+  two were accepted and delivered to completion.
+
+### Bugs
+
+1. **[HIGH, uber offer lifecycle]** **Every Uber offer this session was recorded as a timeout** —
+   including at least two offers that were actually accepted and driven to completed deliveries. One
+   hypothesis chain (desk-unverified): the accept was never registered, so each offer's per-offer
+   `OFFER_EXPIRY` timer lapsed and resolved it as `OFFER_TIMEOUT`. Two candidate gaps, not mutually
+   exclusive: (a) `uber.click.accept_offer` (requires text "Accept"/"Match" on the offer screen) may not
+   match how the fielded Uber accept control actually presents — if the accept is a swipe/gesture or the
+   node text differs, no click latch is ever set; (b) the click-less D2 inference (leaving
+   offer-presentation to `task:active`, i.e. `uber.screen.active_trip`'s `on_job_view`) only infers an
+   accept from a non-task `returnFlow` — if the offer overlay vanished into an unrecognized frame or a
+   splash/restart gap first, the edge never qualifies. Would need to confirm from the capture pull which
+   frame followed each offer and whether any accept-click observation exists at all.
+   - **Status:** Open.
+2. **[HIGH, analytics — likely downstream of #1, not independent]** **Two completed Uber deliveries
+   produced no records at all.** Consistent with Bug #1's hypothesis: no registered accept → no
+   job/tasks minted → no `DELIVERY_COMPLETED` events in `app_events` → the projector has nothing to
+   fold; the analytics layer is likely behaving correctly on empty input. Desk check to confirm: the
+   Uber session's `app_events` should show offers + timeouts and zero task-lifecycle events. If task
+   events DO exist and records are still missing, this becomes its own analytics bug.
+   - **Status:** Open.
+3. **[MEDIUM, offer-engine — filed #823 same-dash]** DoorDash offer count conflates items and units:
+   the H-E-B offer showed 64 (units) but ~30 unique items; `parseItemCount` grabs the first number with
+   no label discrimination, inflating the shop-time estimate (~80 min vs ~37) and roughly halving the
+   displayed $/hr. Desk-verified during the dash from the capture corpus (offers render
+   `(9 items • 11 units)`, `(4 items)`, and units-only shapes). Also confirmed: the post-arrival shop
+   screen's true counts are parsed live (`itemsRemaining`/`itemsShopped`) and displayed, but the frozen
+   accept-time `estMinutes` is never corrected from them.
+   - **Status:** Filed as #823 (three-phase plan) + a same-day scope pivot recorded on the issue:
+     possibly skip the offer-time list-peek capture dependency and instead re-evaluate at store arrival
+     (a natural unassign decision point). Stacked-offers edge case (multiple peek lists) noted there.
+
+### Field UX context
+
+1. **Uber pay processing lags (~1 hour).** The developer is entering the completed Uber deliveries
+   manually via the drill-down correction path (`MANUAL_DELIVERY`, #650) as Uber finishes processing
+   each one. Desk check afterwards: the manual rows should carry `MANUAL` basis and attach to the Uber
+   session correctly, and (per Bug #2) they'll be the ONLY delivery rows for this session.
+2. Contrast with the 07-19 first attempt: this time offers were being **recognized and recorded
+   consistently** (albeit as timeouts) — the 07-19 app-instability capture fragility (that entry's
+   INFO #4) was not the blocker. Accept detection is now the visible frontier for Uber (#762 D2 / #785
+   territory).
+
+### Verification TODOs
+
+1. Post-dash pull: per-offer frame sequence around each accept moment — is there ANY
+   `uber.click.accept_offer` observation? What flow did each offer resolve to (unrecognized frame,
+   `active_trip`, splash)? Did any `on_job_view` frames appear at all during the two real trips?
+2. Check the Uber session's `app_events`: expected shape under the Bug #1 hypothesis is
+   OFFER_PRESENTED/OFFER_TIMEOUT pairs only, zero OFFER_ACCEPTED/task-lifecycle rows.
+3. Confirm the manual `MANUAL_DELIVERY` corrections reconcile the session's money once Uber finishes
+   processing (Σ manual rows vs the app's own session total).
+
+---
+
 ## 2026-07-19 afternoon/evening — four sessions incl. the FIRST Uber attempt (desk-analyzed 2026-07-20)
 
 - **Date:** 2026-07-19 (13:10–19:20; the morning session was logged in the previous entry)
