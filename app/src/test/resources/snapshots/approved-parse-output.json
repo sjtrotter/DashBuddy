@@ -11,6 +11,18 @@
         "shape": null,
         "fields": {}
     },
+    "active_trip/2026-07-21_18-42-40-415__uber__accessibility.window__active_trip__55d215.json": {
+        "ruleId": "uber.screen.active_trip",
+        "intent": "active_trip",
+        "shape": null,
+        "fields": {}
+    },
+    "active_trip/2026-07-21_19-14-49-677__uber__accessibility.window__active_trip__6f786c.json": {
+        "ruleId": "uber.screen.active_trip",
+        "intent": "active_trip",
+        "shape": null,
+        "fields": {}
+    },
     "alcohol_id_check/2026-06-12__doordash__alcohol_id_check__007cce.json": {
         "ruleId": "doordash.screen.alcohol_id_check",
         "intent": "alcohol_id_check",
@@ -242,6 +254,12 @@
     "chat_conversation/ec65790b.json": {
         "ruleId": "doordash.screen.chat_conversation",
         "intent": "chat_conversation",
+        "shape": null,
+        "fields": {}
+    },
+    "customer_chat/2026-07-21_19-14-40-650__uber__accessibility.window__customer_chat__f6a65f.json": {
+        "ruleId": "uber.screen.customer_chat",
+        "intent": "customer_chat",
         "shape": null,
         "fields": {}
     },
@@ -841,6 +859,12 @@
     "dash_time_picker/2026-07-16_13-36-15-282__doordash__accessibility.window__dash_time_picker__dc6142.json": {
         "ruleId": "doordash.screen.dash_time_picker",
         "intent": "dash_time_picker",
+        "shape": null,
+        "fields": {}
+    },
+    "delivery_confirmation/2026-07-21_19-15-09-578__uber__accessibility.window__delivery_confirmation__6fa6c7.json": {
+        "ruleId": "uber.screen.delivery_confirmation",
+        "intent": "delivery_confirmation",
         "shape": null,
         "fields": {}
     },
@@ -2338,6 +2362,12 @@
         "shape": null,
         "fields": {}
     },
+    "earnings_activity/2026-07-21_19-16-35-575__uber__accessibility.window__earnings_activity__721388.json": {
+        "ruleId": "uber.screen.earnings_activity",
+        "intent": "earnings_activity",
+        "shape": null,
+        "fields": {}
+    },
     "end_dash_confirm/2026-02-24_20-42-56__UNKNOWN__a9057da6.json": {
         "ruleId": "doordash.screen.end_dash_confirm",
         "intent": "end_dash_confirm",
@@ -2945,6 +2975,38 @@
         "intent": "notifications_view",
         "shape": null,
         "fields": {}
+    },
+    "offer/2026-07-21_18-38-01-067__uber__accessibility.window__offer__e14380.json": {
+        "ruleId": "uber.screen.offer",
+        "intent": "offer",
+        "shape": "offer",
+        "fields": {
+            "parsedOffer": "ParsedOffer(offerHash=6c0dcd4a19f333e13f16e048392035568d130793baa3bdb085fc8bafc93f829d, itemCount=0, payAmount=15.01, payTextRaw=null, distanceMiles=40.0, distanceTextRaw=null, dueByTimeText=null, dueByTimeMillis=null, timeToCompleteMinutes=40, badges=[], initialCountdownSeconds=null, orders=[ParsedOrder(orderIndex=0, orderType=PICKUP, storeName=Costco Wholesale (Sonterra Park), itemCount=1, isItemCountEstimated=true, badges=[])], rawExtractedTexts=null)"
+        }
+    },
+    "offer/2026-07-21_18-38-16-682__uber__accessibility.window__offer__9e2877.json": {
+        "ruleId": "uber.screen.offer",
+        "intent": "offer",
+        "shape": "offer",
+        "fields": {
+            "parsedOffer": "ParsedOffer(offerHash=0cbd89d58948c410312de7a26d24fd69980c961e2b523d6607c0afc6c2a3ab31, itemCount=0, payAmount=10.08, payTextRaw=null, distanceMiles=30.0, distanceTextRaw=null, dueByTimeText=null, dueByTimeMillis=null, timeToCompleteMinutes=30, badges=[], initialCountdownSeconds=null, orders=[ParsedOrder(orderIndex=0, orderType=PICKUP, storeName=Buttermilk Sky Pie, itemCount=1, isItemCountEstimated=true, badges=[])], rawExtractedTexts=null)"
+        }
+    },
+    "offer/2026-07-21_18-40-26-194__uber__accessibility.window__offer__2d8f1d.json": {
+        "ruleId": "uber.screen.offer",
+        "intent": "offer",
+        "shape": "offer",
+        "fields": {
+            "parsedOffer": "ParsedOffer(offerHash=de8679f6fc77daa69d1f0fcb46bcc5ee73ea2afd07afc6456c2e81d8bbb84ce4, itemCount=0, payAmount=8.54, payTextRaw=null, distanceMiles=33.0, distanceTextRaw=null, dueByTimeText=null, dueByTimeMillis=null, timeToCompleteMinutes=33, badges=[], initialCountdownSeconds=null, orders=[ParsedOrder(orderIndex=0, orderType=PICKUP, storeName=BJ's Restaurant & Brewhouse (San Antonio #480), itemCount=1, isItemCountEstimated=true, badges=[])], rawExtractedTexts=null)"
+        }
+    },
+    "offer/2026-07-21_18-44-21-714__uber__accessibility.window__offer__3e789f.json": {
+        "ruleId": "uber.screen.offer",
+        "intent": "offer",
+        "shape": "offer",
+        "fields": {
+            "parsedOffer": "ParsedOffer(offerHash=e50642a868468ff9fc782f4e505e9c1c69fc76b1f9893c40ae5cafc973d80eac, itemCount=0, payAmount=7.9, payTextRaw=null, distanceMiles=19.0, distanceTextRaw=null, dueByTimeText=null, dueByTimeMillis=null, timeToCompleteMinutes=null, badges=[], initialCountdownSeconds=null, orders=[ParsedOrder(orderIndex=0, orderType=PICKUP, storeName=Thai Buri (8728401), itemCount=1, isItemCountEstimated=true, badges=[])], rawExtractedTexts=null)"
+        }
     },
     "offer_popup/20260128_163448_533_OFFER_POPUP.json": {
         "ruleId": "doordash.screen.offer_popup",
@@ -4527,6 +4589,12 @@
         "shape": null,
         "fields": {}
     },
+    "pickup_verification_items/2026-07-21_18-50-10-664__uber__accessibility.window__pickup_verification_items__c5e132.json": {
+        "ruleId": "uber.screen.pickup_verification_items",
+        "intent": "pickup_verification_items",
+        "shape": null,
+        "fields": {}
+    },
     "pickup_verify_items/2026-06-12_19-58-10__doordash__pickup_verify_items__74398e.json": {
         "ruleId": "doordash.screen.pickup_verify_items",
         "intent": "pickup_verify_items",
@@ -4995,6 +5063,12 @@
     "schedule/2026-04-19_08-48-01__SCHEDULE_VIEW__746b925a.json": {
         "ruleId": "doordash.screen.schedule",
         "intent": "schedule",
+        "shape": null,
+        "fields": {}
+    },
+    "session_summary/2026-07-21_19-15-20-384__uber__accessibility.window__session_summary__fbdfa9.json": {
+        "ruleId": "uber.screen.session_summary",
+        "intent": "session_summary",
         "shape": null,
         "fields": {}
     },
