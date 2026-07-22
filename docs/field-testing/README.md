@@ -1886,6 +1886,11 @@ Accept and Decline registered on DoorDash — and moved to that session's entry 
    - **Status:** Open — re-scoped to (1) Bug #4's swap fix and (2) a storeName extraction miss on
      one fielded offer shape; the "different format" concern itself is resolved (format was
      identical, inputs were wrong).
+   - **Raw addendum (field, verbatim uncertainty — deliberately NOT hypothesized):** the Uber
+     spoken read also seemed to carry *more data* than the DoorDash one — or a *second offer* was
+     being read — or something else; unclear from the driver's seat. Developer's instruction: let
+     the captures speak. Desk check: count `SpeakOffer` firings vs offers presented in the session
+     window, and diff the actual spoken strings (Tts DEBUG firehose lines) against the template.
 
 ### Field UX context
 
