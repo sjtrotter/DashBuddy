@@ -171,15 +171,12 @@ class ParseOutputGoldenTest {
      */
     private val knownUncoveredIntents = setOf(
         // DoorDash — rules added from triage/synthetic fixtures, no capture yet
-        "customer_chat",
-        "delivery_confirmation",
         "dropoff_pre_arrival_completion",
         "earnings",
         "photo_capture",
         "pickup_picked_up",
         "pickup_pre_arrival_multi",
         "pickup_verification_info",
-        "pickup_verification_items",
         "pickup_verification_pin",
         "pickup_verify",
         // #501 item 3 — GoPuff (Drive) zone-arrival, recognize-only (dev decision 2026-07-07).
@@ -195,15 +192,14 @@ class ParseOutputGoldenTest {
         "shop_and_pay_list",
         "shopping_checkout",
         // Uber — first captures landed 2026-07-18/19 (home_dashboard, splash); active_trip +
-        // awaiting_offer landed 2026-07-19 (the first real Uber dash). offer stays uncovered:
-        // its 07-19 capture was set aside because uber.screen.offer's "Offer - {storeName}"
-        // effect template references a field the rule doesn't parse on the fielded frame — a
-        // dead effect-arg template (#606/#801-analog), filed for a rule-side pass. The rest still
-        // have zero snapshots in the corpus (#433).
-        "offer",
-        "earnings_activity",
+        // awaiting_offer landed 2026-07-19. The 2026-07-21 dash (second Uber attempt) closed the
+        // rest: offer, earnings_activity, session_summary, customer_chat, delivery_confirmation,
+        // and pickup_verification_items all landed corpus. The uber.screen.offer "Offer -
+        // {storeName}" effect template is still a dead effect-arg on the fielded frames — now
+        // exercised by the offer corpus and PINNED in knownDeadArgTemplates (#606/#801-analog,
+        // filed for a rule-side pass) rather than dodged by withholding the capture. Only post_trip
+        // still has zero snapshots in the corpus (#433).
         "post_trip",
-        "session_summary",
     )
 
     @Test
@@ -344,6 +340,12 @@ class ParseOutputGoldenTest {
      */
     private val knownDeadArgTemplates = setOf(
         "doordash.screen.delivery_summary_collapsed:totalPay",
+        // uber.screen.offer's "Offer - {storeName}" effect arg fails to interpolate on the
+        // fielded offer frames (the rule doesn't parse storeName off that layout) — surfaced by
+        // the 2026-07-21 offer corpus, which was previously withheld precisely to dodge this
+        // (see knownUncoveredIntents). Pinned here (not fixed) — corpus PR; filed for a rule-side
+        // pass (#606/#801-analog). #827's fused time/miles parse pass is the natural place to fix it.
+        "uber.screen.offer:storeName",
     )
 
     @Test
