@@ -1906,8 +1906,14 @@ Accept and Decline registered on DoorDash — and moved to that session's entry 
    - **Status:** RESOLVED as re-scoped (desk 07-22): the spoken template is byte-identical across
      platforms (receipts in the analysis); the divergence was Bug #4's swapped inputs. The storeName
      miss ("Unknown Store", offer seq 615) rides **#827 Part 2** — its frame was recognition-deduped so
-     the missed node needs a fresh capture. Raw addendum ANSWERED: 18 SpeakOffer for 17 offers — Uber
-     re-presented the same offer hash (one store spoken 3×); no second offer, no template overrun.
+     the missed node needs a fresh capture. Raw addendum ANSWERED — with a dev framing correction
+     (2026-07-22): Uber presented each offer ONCE; DashBuddy recognized the ticking card as a stream of
+     REPLACEMENT offers (content changes each tick → new offerHash → replace → re-eval → re-SPEAK: 18
+     reads / 17 recorded "offers", one store spoken 3×; every "offer" lived only 3–10 s before a
+     TIMEOUT("replaced")). No second offer, no template overrun — but the churn is OURS, not Uber's:
+     filed **#830** (identity stability / TTS dedup / outcome inflation; #827's parse fix is the
+     prerequisite — the swapped ticking minutes are the dominant churn driver). Also note the recorded
+     offer/timeout COUNTS for this session are inflated by the churn variants.
    - **Raw addendum (field, verbatim uncertainty — deliberately NOT hypothesized):** the Uber
      spoken read also seemed to carry *more data* than the DoorDash one — or a *second offer* was
      being read — or something else; unclear from the driver's seat. Developer's instruction: let
@@ -1960,8 +1966,15 @@ Accept and Decline registered on DoorDash — and moved to that session's entry 
    latter's net) — expected #650-era behavior, but worth a look when Uber manual entry becomes routine.
 
 **Issues filed this pass:** #825 (uber active_trip redact, HIGH), #826 (Uber accept undetectable — the
-D2 blocker), #827 (uber offer time/miles swap + storeName miss). **#823** got its desk receipts (the
-64-unit H-E-B offer + all fielded `(N items • M units)` shapes confirmed).
+D2 blocker), #827 (uber offer time/miles swap + storeName miss), and — after the dev's framing
+correction on the triple-read — **#830** (Uber offer identity churn: replacement storm → repeated
+reads, inflated offer/timeout counts, destroyed accept window; #827 lands first). **#823** got its
+desk receipts (the 64-unit H-E-B offer + all fielded `(N items • M units)` shapes confirmed) and a
+design recommendation (2026-07-22 comment): Phase 1 + a learned items:units ratio for units-only
+offers ships now; Phase 2 grows into the primary deliverable (arrival re-evaluation + advisory,
+frozen-economics-preserving); Phase 3 offer-time peek DEMOTED — the pull proves two deliberate manual
+peek taps produced zero distinct capturable frames (the surface may expand in-window and stay
+classified as offer_popup), on top of the actuation-consent/mis-tap/scroll/stacked-list costs.
 
 ---
 
