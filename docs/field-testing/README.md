@@ -1873,17 +1873,19 @@ Accept and Decline registered on DoorDash — and moved to that session's entry 
    finding while logging: the composition path is ALREADY platform-agnostic by design — one effect
    site (`OfferEffects.kt` eval-landed edge → `SpeakOffer` + `PostOfferNotification`) and one TTS
    template (`TtsEffectHandler.formatEvaluation`: verdict, merchant, $/hr, net, miles, score) with no
-   platform branching. So a divergent read is itself a symptom, with two candidate explanations
-   (need the pull + what exactly was heard/shown to distinguish): (a) the eval-landed edge never
-   fired for the Uber offers (e.g. the offer resolved/was superseded before the async evaluation
-   landed, or the eval loopback failed on degraded parse fields), so whatever the developer
-   heard/saw came from a DIFFERENT surface (outcome bubble text, a notification body) rather than
-   the offer template; or (b) the same template fired but with degraded inputs — "Unknown Store"
-   merchant fallback, Bug #4's swapped time/miles feeding garbage $/hr, near-zero score — making it
-   *sound* structurally different. Either way the invariant to enforce once diagnosed: one format,
-   all platforms (Development Principle 8; the fix lands in parse/lifecycle, never a platform branch
-   in the formatter).
-   - **Status:** Open.
+   platform branching. **Field follow-up same session resolved the fork:** the read WAS spoken —
+   that's how the developer noticed minutes being parsed as miles — so the eval-landed edge and the
+   shared template both fired correctly, and the divergence was entirely **degraded inputs**, not a
+   different code path. Bug #5 therefore mostly collapses into Bug #4 (the time/miles swap poisoning
+   the spoken miles and $/hr), PLUS one new data point: **at least one Uber offer spoke the
+   "Unknown Store" fallback** — the `uber.screen.offer` `storeName` extraction (an exclusion-list
+   TextView finder: not price/"+"/min/Accept/Match/"Delivery"/etc.) missed on a real offer shape.
+   Desk check: find that offer's capture, see which node held the store name and which exclusion (or
+   node structure) blocked it. The TTS/format layer itself needs NO change — fixes land in the Uber
+   parse only (Development Principle 8 holds: no platform branch in the formatter).
+   - **Status:** Open — re-scoped to (1) Bug #4's swap fix and (2) a storeName extraction miss on
+     one fielded offer shape; the "different format" concern itself is resolved (format was
+     identical, inputs were wrong).
 
 ### Field UX context
 
