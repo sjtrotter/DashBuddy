@@ -1868,6 +1868,22 @@ Accept and Decline registered on DoorDash — and moved to that session's entry 
    economics on any Uber offer that DOES get accepted (est time and distance both wrong → garbage
    $/hr and $/mi), independent of the accept-detection Bug #1.
    - **Status:** Open.
+5. **[MEDIUM, uber offer UX]** **The Uber offer read differs from the DoorDash one** — developer
+   expects the identical terse format ("quick real-numbers stats") regardless of platform. Desk-side
+   finding while logging: the composition path is ALREADY platform-agnostic by design — one effect
+   site (`OfferEffects.kt` eval-landed edge → `SpeakOffer` + `PostOfferNotification`) and one TTS
+   template (`TtsEffectHandler.formatEvaluation`: verdict, merchant, $/hr, net, miles, score) with no
+   platform branching. So a divergent read is itself a symptom, with two candidate explanations
+   (need the pull + what exactly was heard/shown to distinguish): (a) the eval-landed edge never
+   fired for the Uber offers (e.g. the offer resolved/was superseded before the async evaluation
+   landed, or the eval loopback failed on degraded parse fields), so whatever the developer
+   heard/saw came from a DIFFERENT surface (outcome bubble text, a notification body) rather than
+   the offer template; or (b) the same template fired but with degraded inputs — "Unknown Store"
+   merchant fallback, Bug #4's swapped time/miles feeding garbage $/hr, near-zero score — making it
+   *sound* structurally different. Either way the invariant to enforce once diagnosed: one format,
+   all platforms (Development Principle 8; the fix lands in parse/lifecycle, never a platform branch
+   in the formatter).
+   - **Status:** Open.
 
 ### Field UX context
 
