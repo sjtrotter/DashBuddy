@@ -86,7 +86,10 @@ was found **broken-in-part** (raw PII in capture envelopes) and moved to that en
   UNKNOWN-customer-scrub counter should increment on such frames, with a `Pipeline` WARN naming the marker
   prefix only. Known residual (by design, pinned in tests): prefix-less address/gate-code lines on UNKNOWN
   frames persist until the #806 direction-1 recognition rules land.
-  - Confirmed: 0/2
+  - Confirmed: 1/2 (2026-07-21 dash, desk 07-22: `unknownCustomerScrubs=3` — "Pickup for "/"Deliver to "
+    UNKNOWN scrubs fired with prefix-only WARNs; the documented bare-node/prefix-less residual leaked as
+    expected on two DoorDash UNKNOWN sheets — recorded on #806 — and a NEW recognized-frame Uber variant
+    was found and filed as #825.)
 - **🆕 NEW — #810 B1 / PR #818 — JOB_ACCEPT_MISMATCH close tripwire.** A job closing with more accepted
   offers than accounted physical orders now emits one `JOB_ACCEPT_MISMATCH` event + a `StateMachine` WARN
   (the 07-19 session-114 invisible-unassign class is no longer silent).
@@ -94,7 +97,8 @@ was found **broken-in-part** (raw PII in capture envelopes) and moved to that en
   WARN at job close. **Desk-side:** `SELECT * FROM app_events WHERE eventType='JOB_ACCEPT_MISMATCH'` —
   should be non-empty iff an invisible unassign (or the documented #700 suppressed-arrival residual)
   occurred; a normal dash must produce ZERO rows (false-positive watch).
-  - Confirmed: 0/2
+  - Confirmed: 1/2 (2026-07-21 dash, desk 07-22: FALSE-POSITIVE half — zero rows on a normal 6-delivery
+    DoorDash day, correct silence. The true-positive half still needs an invisible-unassign dash.)
 - **🆕 NEW — #809 / PR #820 + #803 / PR #821 — pickup/dropoff PII redacts (desk-resolvable).** New
   redacts: `pickup_select_issue` (+ its issue-list variant, now recognized) masks the fused
   `For <name> • <store>` header to `For [redacted:<4hex>]`; `dropoff_pin_entry`/`dropoff_handoff` mask
@@ -136,7 +140,8 @@ was found **broken-in-part** (raw PII in capture envelopes) and moved to that en
   tree for "Transfer out" — must be ZERO hits after this build (it was 53 window + 24 click hits on the
   07-17 pull); and `sensitiveDropped` in `PipelineStats` should increment on those DasherDirect windows
   rather than `unknownCaptured`.
-  - Confirmed: 0/2 (#794)
+  - Confirmed: 1/2 (2026-07-21 dash, desk 07-22 — post-#802 build: a "Transfer out" UNKNOWN click was
+    scrubbed at the marker layer; zero banking/balance text anywhere in the pull.)
 
 - **🆕 NEW — Patterns tab store cards: glanceable face + detail bottom sheet (#765 / PR #799).**
   The store report cards were redesigned: the card **face** now shows only store name + location chip
@@ -164,7 +169,12 @@ was found **broken-in-part** (raw PII in capture envelopes) and moved to that en
   **Capture-first on the same dash** (feeds #785/#786 — see those issues): notification envelopes for a
   full trip incl. every update of the ongoing status notification, one multi-order/stacked job, the
   decline affordance frames, any "Going to <digit-leading store>" push.
-  - Confirmed: 0/2
+  - Confirmed: 0/2. **BLOCKED-as-fielded (desk 07-22, second Uber attempt):** the consume path is
+    unreachable because the accept itself is undetectable — the fielded accept-click node is TEXTLESS, so
+    `uber.click.accept_offer` never latches and every offer resolves `OFFER_TIMEOUT` before `active_trip`
+    appears (one job still minted from ambient frames: store "Unknown", uncosted — the exact corpse shape).
+    Filed **#826** (accept detection, the D2 blocker) + **#827** (offer time/miles parse swap — poisons the
+    economics this item would validate). Keep the item; it becomes testable when #826 lands.
   - (2026-07-19: first attempt — INCONCLUSIVE: Uber app restart churn; the only accept happened during
     a capture gap so no job minted; the one recognized offer timed out cleanly. Watch: offer-capture
     fragility during Uber app instability.)
@@ -1811,13 +1821,15 @@ Accept and Decline registered on DoorDash — and moved to that session's entry 
 
 ---
 
-## 2026-07-22 — dash in progress; DoorDash + SECOND Uber attempt (logged live from the field via chat; desk analysis pending)
+## 2026-07-22 — dash in progress; DoorDash + SECOND Uber attempt (logged live from the field via chat; desk-analyzed 2026-07-22, results inline + at entry end)
 
 - **Date:** 2026-07-22 (entry written mid-dash from the developer's live narration; numbers below are
   as-reported from the field, not yet desk-verified against a data pull)
 - **Platform(s) tested:** DoorDash + **Uber (second real attempt — two deliveries actually completed this time)**
-- **Branch under test:** not stated — presumably the most recent install; latest `master` at the time of
-  logging is `77cf03a` (post-#822 merge). Developer to correct if the device build is older.
+- **Branch under test:** desk-confirmed the post-#822 build (07-20 install: #802/#805/#815/#817/#818/
+  #820/#821 all present — evidenced by the "Transfer out" marker block, the #815 scrub counters, Room v14
+  + projector v7). The dash itself was 2026-07-21 (five sessions 13:10–19:15); the entry was live-logged
+  under the 07-22 date the analysis ran.
 - **Field conditions:** concurrent DoorDash + Uber. On DoorDash, an H-E-B Shop & Deliver ($34.45 / 10 mi)
   surfaced the items-vs-units parse conflation (see Bug #3). On Uber, offers were received and at least
   two were accepted and delivered to completion.
@@ -1835,14 +1847,22 @@ Accept and Decline registered on DoorDash — and moved to that session's entry 
    accept from a non-task `returnFlow` — if the offer overlay vanished into an unrecognized frame or a
    splash/restart gap first, the edge never qualifies. Would need to confirm from the capture pull which
    frame followed each offer and whether any accept-click observation exists at all.
-   - **Status:** Open.
+   - **Status:** CONFIRMED, hypothesis (a) — desk 07-22: ZERO `uber.click.accept_offer` observations
+     exist; the fielded accept control produces a TEXTLESS click node (17 textless UNKNOWN uber clicks,
+     several coincident with offer→trip transitions), so the text-gated rule can never latch. (b) also
+     failed as a backstop but only because each offer had ALREADY timed out before `active_trip` appeared.
+     Filed **#826** (design pass: non-text accept signal / expiry-grace interplay / #785 notification
+     corroboration).
 2. **[HIGH, analytics — likely downstream of #1, not independent]** **Two completed Uber deliveries
    produced no records at all.** Consistent with Bug #1's hypothesis: no registered accept → no
    job/tasks minted → no `DELIVERY_COMPLETED` events in `app_events` → the projector has nothing to
    fold; the analytics layer is likely behaving correctly on empty input. Desk check to confirm: the
    Uber session's `app_events` should show offers + timeouts and zero task-lifecycle events. If task
    events DO exist and records are still missing, this becomes its own analytics bug.
-   - **Status:** Open.
+   - **Status:** CONFIRMED downstream of #1, with one refinement (desk 07-22): NOT zero task events —
+     ONE job was minted from ambient task frames (`job-uber-…-3`, PICKUP_NAV→DELIVERY_CONFIRMED) but
+     store "Unknown", uncosted, and never DELIVERY_COMPLETED (session ended early_offline mid-delivery),
+     so the projector correctly folded nothing. Analytics is NOT independently buggy; rides #826.
 3. **[MEDIUM, offer-engine — filed #823 same-dash]** DoorDash offer count conflates items and units:
    the H-E-B offer showed 64 (units) but ~30 unique items; `parseItemCount` grabs the first number with
    no label discrimination, inflating the shop-time estimate (~80 min vs ~37) and roughly halving the
@@ -1883,9 +1903,11 @@ Accept and Decline registered on DoorDash — and moved to that session's entry 
    Desk check: find that offer's capture, see which node held the store name and which exclusion (or
    node structure) blocked it. The TTS/format layer itself needs NO change — fixes land in the Uber
    parse only (Development Principle 8 holds: no platform branch in the formatter).
-   - **Status:** Open — re-scoped to (1) Bug #4's swap fix and (2) a storeName extraction miss on
-     one fielded offer shape; the "different format" concern itself is resolved (format was
-     identical, inputs were wrong).
+   - **Status:** RESOLVED as re-scoped (desk 07-22): the spoken template is byte-identical across
+     platforms (receipts in the analysis); the divergence was Bug #4's swapped inputs. The storeName
+     miss ("Unknown Store", offer seq 615) rides **#827 Part 2** — its frame was recognition-deduped so
+     the missed node needs a fresh capture. Raw addendum ANSWERED: 18 SpeakOffer for 17 offers — Uber
+     re-presented the same offer hash (one store spoken 3×); no second offer, no template overrun.
    - **Raw addendum (field, verbatim uncertainty — deliberately NOT hypothesized):** the Uber
      spoken read also seemed to carry *more data* than the DoorDash one — or a *second offer* was
      being read — or something else; unclear from the driver's seat. Developer's instruction: let
@@ -1912,6 +1934,34 @@ Accept and Decline registered on DoorDash — and moved to that session's entry 
    OFFER_PRESENTED/OFFER_TIMEOUT pairs only, zero OFFER_ACCEPTED/task-lifecycle rows.
 3. Confirm the manual `MANUAL_DELIVERY` corrections reconcile the session's money once Uber finishes
    processing (Σ manual rows vs the app's own session total).
+
+### Desk analysis (2026-07-22, pull `~/dashbuddy/logs/2026/07/22/` — receipts for everything above)
+
+1. **Money path: DoorDash exact to the cent again** — $71.66 / $34.95 / $20.70 all reconcile exactly
+   (6 deliveries, 6 single-drop jobs, all DROP_SHARE on OFFER_FROZEN cpm ~$0.35); zero orphans, zero
+   unattributed. The Uber session's two **manual** rows carry MANUAL basis, attach to the correct
+   session, Σ $15.94 (Field-UX #1 confirmed). 0 ERROR, 0 restarts, 0 NLS disconnects (#731 stays
+   parked); projector v7 watermark caught up.
+2. **Checklist advanced:** #815 UNKNOWN scrub → 1/2; #810-B1 tripwire false-positive half → 1/2 (zero
+   rows on a normal day); #794/#802 Transfer-out block → 1/2. #820/#821 redact surfaces not exercised
+   (but `dropoff_handoff` rendered fully masked: name/address/apt all `[redacted:*]`). #762-D2 item
+   BLOCKED-as-fielded (see the annotated checklist item; #826/#827 filed).
+3. **PII sweep:** three customer-PII leaks in debug captures, no dasher-banking anywhere. NEW class
+   instance: `uber.screen.active_trip` (RECOGNIZED) persists a raw customer name as a bare node — no
+   rule redact, prefix backstop structurally blind → filed **#825** (HIGH, Pledge). Two DoorDash
+   UNKNOWN sheets ("Current dash" overview, "Close sheet" dropoff detail) leaked bare-node
+   name/address/gate-unit — the documented #806 direction-1 residual, now with fresh fixture frames in
+   the pull (recorded on #806). #815's marker-prefixed scrubs fired correctly on the same frames.
+4. **One more #811-family sighting:** a single confirm_decline fail-closed abort (label "Decline
+   offer" present but verification refused on a stale frame) — consistent with the refuted-premise
+   analysis on #811; disposition still pending there.
+5. **Manual-row mileage note (open question):** MANUAL delivery rows (miles=null) inherit
+   odometer-partition miles asymmetrically (P. Terry's 1.52 mi vs Thai Buri 12.14 mi, denting the
+   latter's net) — expected #650-era behavior, but worth a look when Uber manual entry becomes routine.
+
+**Issues filed this pass:** #825 (uber active_trip redact, HIGH), #826 (Uber accept undetectable — the
+D2 blocker), #827 (uber offer time/miles swap + storeName miss). **#823** got its desk receipts (the
+64-unit H-E-B offer + all fielded `(N items • M units)` shapes confirmed).
 
 ---
 
