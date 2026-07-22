@@ -1853,6 +1853,21 @@ Accept and Decline registered on DoorDash — and moved to that session's entry 
    - **Status:** Filed as #823 (three-phase plan) + a same-day scope pivot recorded on the issue:
      possibly skip the offer-time list-peek capture dependency and instead re-evaluate at store arrival
      (a natural unassign decision point). Stacked-offers edge case (multiple peek lists) noted there.
+4. **[MEDIUM, uber offer parse]** **Uber offer TIME and MILES get swapped** — time interpreted as
+   miles and vice versa (developer observed live; which offers/values TBD from the pull). A strong
+   desk-side hypothesis from reading `uber.screen.offer`'s parse: the `distance` finder's regex
+   `\d[\d.]*\s*mi` **also matches "38 min"** ("mi" is a prefix of "min"), and Uber renders time and
+   distance fused in one node (e.g. "38 min (6.2 mi) total"). Both fields' transforms take the
+   *leading* number of whatever node their finder lands on (`parseDistance` grabs the first numeric,
+   `timeToCompleteMinutes` uses `parseLeadingInt`), so on a fused node whichever value is written
+   first wins BOTH fields — "38 min (6.2 mi)" parses as distance=38 *and* time=38; a "6.2 mi (25
+   min)"-ordered variant would parse time=6. If this holds, the fix direction might be anchoring the
+   distance regex against the `min` suffix (e.g. `mi\b` semantics) and/or extracting each value from
+   the capture group adjacent to its own unit rather than the node's leading number — to be confirmed
+   against the session's offer captures before touching the rule. Note this also poisons the #762 D2
+   economics on any Uber offer that DOES get accepted (est time and distance both wrong → garbage
+   $/hr and $/mi), independent of the accept-detection Bug #1.
+   - **Status:** Open.
 
 ### Field UX context
 
