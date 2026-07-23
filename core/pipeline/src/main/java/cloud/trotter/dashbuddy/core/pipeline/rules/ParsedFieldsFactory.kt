@@ -281,10 +281,20 @@ object ParsedFieldsFactory {
             ?: sha256OrNull(hashInput)
             ?: "offer-${hashInput.hashCode()}"
 
+        // Presentation identity (#830) — hash of the STABLE subset only (store names + order
+        // count + order types), excluding the pay/distance/time economics that already feed
+        // [offerHash] and that tick on a live-re-quoting card (Uber). Platform-agnostic: pure data,
+        // no Platform branch. Fail-CLOSED (#362): a null key (digest failure) leaves it null so the
+        // state machine falls back to today's replace-on-any-hash-change — a false MERGE is never
+        // possible, only a false SPLIT that degrades to prior behavior. NEVER the plaintext input.
+        val orderTypes = orders.joinToString(",") { it.orderType.name }
+        val presentationKey = sha256OrNull("$storeNames|${orders.size}|$orderTypes")
+
         return ParsedFields.OfferFields(
             activity = f.str("activity"),
             parsedOffer = ParsedOffer(
                 offerHash = offerHash,
+                presentationKey = presentationKey,
                 // #461: the offer's item count is the SHOP item count — sum only the shop orders'
                 // CONFIRMED counts. A pickup order has no items but defaults to itemCount=1
                 // (isItemCountEstimated), so the old `sumOf{itemCount}.coerceAtLeast(1)` added a

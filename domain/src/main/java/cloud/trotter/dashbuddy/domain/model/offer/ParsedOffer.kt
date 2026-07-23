@@ -12,6 +12,27 @@ data class ParsedOffer(
      *  for quick comparison or grouping. */
     val offerHash: String,
 
+    /**
+     * Presentation identity — a hash of the STABLE subset of the offer
+     * (store names + order count + order types), excluding the ticking economics
+     * (pay / distance / time-to-complete) that ALREADY feed [offerHash] (#830).
+     *
+     * On a platform whose offer card live-re-quotes (Uber re-renders pay/miles/minutes
+     * every few seconds), the full-content [offerHash] churns on every re-render while
+     * this key stays byte-identical for the SAME physical presentation. The state
+     * machine uses it to treat a churned re-render as an *enrich-as-variant* of the
+     * offer already on screen rather than a brand-new offer (no replace-storm, no
+     * OFFER_TIMEOUT("replaced"), no re-speak, no discarded click latches).
+     *
+     * Nullable + fail-closed (#362): a null key (sha256 failure, or a rule that
+     * emitted no offer fields) degrades to today's replace-on-any-hash-change
+     * behavior — never a false MERGE. Platform-agnostic: derived purely from parsed
+     * data, no [cloud.trotter.dashbuddy.domain.state.Platform] branch; a stable card
+     * (DoorDash) simply enriches same-store re-quotes and replaces on a store change,
+     * exactly as before for the fielded corpus.
+     */
+    val presentationKey: String? = null,
+
     // -- Order Details --
     /** For "Shop for items" orders, the number of items. Set to 1 for pickup order types. */
     val itemCount: Int = 1,
