@@ -275,13 +275,23 @@ class JsonRuleInterpreter @Inject constructor(
     }
 
     /**
-     * Load a single ruleset and replace all current rules.
-     * Kept for backward compatibility with CDN hot-reload path.
+     * Load a single **signature-verified** ruleset and replace all current rules
+     * (the CDN hot-reload / side-load path, #192).
      *
-     * [source] is NOT asset-prefixed here, so nothing a remote caller loads
-     * is ever auto-granted (#417) — its capabilities reconcile as pending.
+     * Fail-closed BY CONSTRUCTION (#416): this path only accepts a
+     * [VerifiedRulesetBytes], which [RulesetVerifier] mints ONLY after a detached
+     * signature over the exact bundle bytes verifies against the configured source's
+     * pinned public key. There is no `load(String)` overload — an unverified remote
+     * bundle cannot reach compile. (Bundled asset rulesets skip this: they load via
+     * [loadDefaults], already covered by the APK signature.)
+     *
+     * The verified [VerifiedRulesetBytes.source] is NOT asset-prefixed, so nothing a
+     * remote caller loads is ever auto-granted (#417) — its capabilities reconcile
+     * as pending.
      */
-    suspend fun load(jsonString: String, source: String = "unknown") {
+    suspend fun load(verified: VerifiedRulesetBytes) {
+        val jsonString = verified.json
+        val source = verified.source
         val result = loadSingle(jsonString, source) ?: return
 
         // #419 (2a): a REPLACEMENT bundle must not silently drop sensitive-screen

@@ -464,7 +464,11 @@ Every new feature or refactor holds to these — they are forefront design input
      accessibility tree comes from another app; once the matchers split (#192) lands, rule JSON
      comes from a CDN. Both get bounded ingestion (size/depth/node/regex caps), fail-closed
      validation, and — for any remote rule source — **signature/integrity verification before
-     compile**, which does not exist yet and is a hard prerequisite for that path.
+     compile** (#416, in-tree): `RulesetVerifier` (ECDSA P-256/SHA-256, no new crypto dep) gates
+     `JsonRuleInterpreter.load`, which now accepts only a `VerifiedRulesetBytes` mintable solely by
+     a passing signature check — compile-from-remote-bytes is structurally unreachable without
+     verification against the *configured source's* pinned key; bundled assets are exempt (APK
+     signature covers them). Signing tooling: `matchers/tools/`.
    - **The dasher's sensitive screens are blocked, never parsed or stored** (the dasher's banking /
      DasherDirect / payment / own identity docs) — plus **document-image capture surfaces** (the
      license-scan camera, the signature pad), regardless of whose, since they're an image of an ID /
