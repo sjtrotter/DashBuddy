@@ -2987,7 +2987,7 @@
         "intent": "offer",
         "shape": "offer",
         "fields": {
-            "parsedOffer": "ParsedOffer(offerHash=6c0dcd4a19f333e13f16e048392035568d130793baa3bdb085fc8bafc93f829d, itemCount=0, payAmount=15.01, payTextRaw=null, distanceMiles=40.0, distanceTextRaw=null, dueByTimeText=null, dueByTimeMillis=null, timeToCompleteMinutes=40, badges=[], initialCountdownSeconds=null, orders=[ParsedOrder(orderIndex=0, orderType=PICKUP, storeName=Costco Wholesale (Sonterra Park), itemCount=1, isItemCountEstimated=true, badges=[])], rawExtractedTexts=null)"
+            "parsedOffer": "ParsedOffer(offerHash=0e9b7f0d5d3885e6a37895cc7eefae3b69a2f16a6957932e0ffbcba647a81676, itemCount=0, payAmount=15.01, payTextRaw=null, distanceMiles=17.5, distanceTextRaw=null, dueByTimeText=null, dueByTimeMillis=null, timeToCompleteMinutes=40, badges=[], initialCountdownSeconds=null, orders=[ParsedOrder(orderIndex=0, orderType=PICKUP, storeName=Costco Wholesale (Sonterra Park), itemCount=1, isItemCountEstimated=true, badges=[])], rawExtractedTexts=null)"
         }
     },
     "offer/2026-07-21_18-38-16-682__uber__accessibility.window__offer__9e2877.json": {
@@ -2995,7 +2995,7 @@
         "intent": "offer",
         "shape": "offer",
         "fields": {
-            "parsedOffer": "ParsedOffer(offerHash=0cbd89d58948c410312de7a26d24fd69980c961e2b523d6607c0afc6c2a3ab31, itemCount=0, payAmount=10.08, payTextRaw=null, distanceMiles=30.0, distanceTextRaw=null, dueByTimeText=null, dueByTimeMillis=null, timeToCompleteMinutes=30, badges=[], initialCountdownSeconds=null, orders=[ParsedOrder(orderIndex=0, orderType=PICKUP, storeName=Buttermilk Sky Pie, itemCount=1, isItemCountEstimated=true, badges=[])], rawExtractedTexts=null)"
+            "parsedOffer": "ParsedOffer(offerHash=fc2cbdc99f2158deb74425dfaf2bf6c2b7395083e2fab646da70449fe5d9e05f, itemCount=0, payAmount=10.08, payTextRaw=null, distanceMiles=12.3, distanceTextRaw=null, dueByTimeText=null, dueByTimeMillis=null, timeToCompleteMinutes=30, badges=[], initialCountdownSeconds=null, orders=[ParsedOrder(orderIndex=0, orderType=PICKUP, storeName=Buttermilk Sky Pie, itemCount=1, isItemCountEstimated=true, badges=[])], rawExtractedTexts=null)"
         }
     },
     "offer/2026-07-21_18-40-26-194__uber__accessibility.window__offer__2d8f1d.json": {
@@ -3003,7 +3003,7 @@
         "intent": "offer",
         "shape": "offer",
         "fields": {
-            "parsedOffer": "ParsedOffer(offerHash=de8679f6fc77daa69d1f0fcb46bcc5ee73ea2afd07afc6456c2e81d8bbb84ce4, itemCount=0, payAmount=8.54, payTextRaw=null, distanceMiles=33.0, distanceTextRaw=null, dueByTimeText=null, dueByTimeMillis=null, timeToCompleteMinutes=33, badges=[], initialCountdownSeconds=null, orders=[ParsedOrder(orderIndex=0, orderType=PICKUP, storeName=BJ's Restaurant & Brewhouse (San Antonio #480), itemCount=1, isItemCountEstimated=true, badges=[])], rawExtractedTexts=null)"
+            "parsedOffer": "ParsedOffer(offerHash=554490d501c5d175c5a3aa235d53a57b6912ed72b7162dc68159d1972f9fa8bf, itemCount=0, payAmount=8.54, payTextRaw=null, distanceMiles=12.8, distanceTextRaw=null, dueByTimeText=null, dueByTimeMillis=null, timeToCompleteMinutes=33, badges=[], initialCountdownSeconds=null, orders=[ParsedOrder(orderIndex=0, orderType=PICKUP, storeName=BJ's Restaurant & Brewhouse (San Antonio #480), itemCount=1, isItemCountEstimated=true, badges=[])], rawExtractedTexts=null)"
         }
     },
     "offer/2026-07-21_18-44-21-714__uber__accessibility.window__offer__3e789f.json": {
@@ -3011,7 +3011,7 @@
         "intent": "offer",
         "shape": "offer",
         "fields": {
-            "parsedOffer": "ParsedOffer(offerHash=e50642a868468ff9fc782f4e505e9c1c69fc76b1f9893c40ae5cafc973d80eac, itemCount=0, payAmount=7.9, payTextRaw=null, distanceMiles=19.0, distanceTextRaw=null, dueByTimeText=null, dueByTimeMillis=null, timeToCompleteMinutes=null, badges=[], initialCountdownSeconds=null, orders=[ParsedOrder(orderIndex=0, orderType=PICKUP, storeName=Thai Buri (8728401), itemCount=1, isItemCountEstimated=true, badges=[])], rawExtractedTexts=null)"
+            "parsedOffer": "ParsedOffer(offerHash=b3dd7bb57085615c51d4de209190f9a34a35e855f691f69ebc9be536a176abb4, itemCount=0, payAmount=7.9, payTextRaw=null, distanceMiles=3.9, distanceTextRaw=null, dueByTimeText=null, dueByTimeMillis=null, timeToCompleteMinutes=19, badges=[], initialCountdownSeconds=null, orders=[ParsedOrder(orderIndex=0, orderType=PICKUP, storeName=Thai Buri (8728401), itemCount=1, isItemCountEstimated=true, badges=[])], rawExtractedTexts=null)"
         }
     },
     "offer_popup/20260128_163448_533_OFFER_POPUP.json": {

@@ -78,6 +78,19 @@ card's **mechanical** half, #577 (re-confirmed, 24/24, ~0.55 s — with a new po
 that entry's Bug #1), the #457 path, and #554 ShadowProjector (2/2). The #462/#460 dropoff item
 was found **broken-in-part** (raw PII in capture envelopes) and moved to that entry's Bug #7.)_
 
+- **🆕 NEW — #827 (Part 1) + #813 — Uber offer time/miles parse + storeName + dropoff redact.** The
+  Uber offer's fused `NN min (NN.N mi) total` node now parses distance from the parenthetical miles
+  (was reading the *minutes* value as miles, ≈2.7× on every offer), minutes from the `min` token
+  (robust to the `+ NN min` add-on lead-in), a top-level `storeName` (so the `Offer - <store>`
+  screenshot filename interpolates instead of literal `{storeName}`), and redacts the dropoff
+  intersection line (`<St> & <St>, <City>`) in the capture envelope.
+  **What to watch / desk-side:** after an Uber offer, the offer screenshot should be named
+  `Offer - <real store>.png` (not `Offer - {storeName}.png`); the offer's estimated $/hr and $/mi
+  should be sane (a 17.5 mi offer no longer reads as 40 mi). **Desk:** in the pull's `offer_records`,
+  Uber `distanceMiles` should match the `(NN.N mi)` on the card, not the minutes; grep the recognized
+  Uber offer capture tree for `& .*, San Antonio` / `, [A-Z][a-z]+$` intersection lines → every hit
+  must be `[redacted:<4hex>]`, while store names (which contain no `, `) stay raw.
+  - Confirmed: 0/2
 - **🆕 NEW — #806 / PR #815 — UNKNOWN-path customer scrub (screen + notification + click).** The
   `CustomerTextMarkers` backstop now scrubs UNKNOWN envelopes too (plus a new "Pickup for " marker), so
   an unrecognized customer-bearing surface can no longer persist a marker-prefixed name raw.

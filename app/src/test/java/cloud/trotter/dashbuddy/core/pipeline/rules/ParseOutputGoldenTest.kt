@@ -195,10 +195,9 @@ class ParseOutputGoldenTest {
         // awaiting_offer landed 2026-07-19. The 2026-07-21 dash (second Uber attempt) closed the
         // rest: offer, earnings_activity, session_summary, customer_chat, delivery_confirmation,
         // and pickup_verification_items all landed corpus. The uber.screen.offer "Offer -
-        // {storeName}" effect template is still a dead effect-arg on the fielded frames — now
-        // exercised by the offer corpus and PINNED in knownDeadArgTemplates (#606/#801-analog,
-        // filed for a rule-side pass) rather than dodged by withholding the capture. Only post_trip
-        // still has zero snapshots in the corpus (#433).
+        // {storeName}" effect template was a dead effect-arg on the fielded frames; #813 gave the
+        // rule a top-level storeName parse so it now interpolates (pin removed from
+        // knownDeadArgTemplates). Only post_trip still has zero snapshots in the corpus (#433).
         "post_trip",
     )
 
@@ -341,12 +340,10 @@ class ParseOutputGoldenTest {
      */
     private val knownDeadArgTemplates = setOf(
         "doordash.screen.delivery_summary_collapsed:totalPay",
-        // uber.screen.offer's "Offer - {storeName}" effect arg fails to interpolate on the
-        // fielded offer frames (the rule doesn't parse storeName off that layout) — surfaced by
-        // the 2026-07-21 offer corpus, which was previously withheld precisely to dodge this
-        // (see knownUncoveredIntents). Pinned here (not fixed) — corpus PR; filed for a rule-side
-        // pass (#606/#801-analog). #827's fused time/miles parse pass is the natural place to fix it.
-        "uber.screen.offer:storeName",
+        // uber.screen.offer:storeName was FIXED in #813: the rule now parses a
+        // top-level storeName (scoped to the offer card) so "Offer - {storeName}"
+        // interpolates on every fielded offer frame. Pin removed (the lint asserts
+        // known == dead, so a stale pin fails).
     )
 
     @Test
