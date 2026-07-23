@@ -436,6 +436,11 @@ class CaptureRedactionCorpusTest {
                     viewIdResourceName = "com.ubercab.driver:id/map_marker_title",
                     text = "Apt 8888",
                 ),
+                // #825 review HIGH-2: the map pin carries the address in contentDescription ONLY.
+                UiNode(
+                    viewIdResourceName = "com.ubercab.driver:id/map_marker_pin_head",
+                    contentDescription = "42 Nowhere Ln, Springfield ZZ",
+                ),
             ),
         ).restoreParents()
 
@@ -463,14 +468,23 @@ class CaptureRedactionCorpusTest {
     }
 
     @Test
-    fun `uber active_trip name redact is SSOT with SnapshotRedactor FIRST_LAST_INITIAL (#825)`() {
-        assertTrue(
-            "active_trip must carry the canonical id-less name-shape regex byte-identical to " +
-                "SnapshotRedactor.FIRST_LAST_INITIAL_PATTERN; found " +
-                ruleRedactRegexes("uber.screen.active_trip", "uber.json"),
-            ruleRedactRegexes("uber.screen.active_trip", "uber.json")
-                .contains(SnapshotRedactor.FIRST_LAST_INITIAL_PATTERN),
-        )
+    fun `every uber trip-surface name redact is SSOT with SnapshotRedactor FIRST_LAST_INITIAL (#825, MED-5)`() {
+        // All four surfaces copy the id-less name-shape regex; pin every copy to the SSOT so a
+        // silent drift on any one (the #362 duplicated-regex class) turns the build red.
+        for (id in listOf(
+            "uber.screen.active_trip",
+            "uber.screen.splash",
+            "uber.screen.customer_chat",
+            "uber.screen.pickup_verification_items",
+        )) {
+            assertTrue(
+                "$id must carry the canonical id-less name-shape regex byte-identical to " +
+                    "SnapshotRedactor.FIRST_LAST_INITIAL_PATTERN; found " +
+                    ruleRedactRegexes(id, "uber.json"),
+                ruleRedactRegexes(id, "uber.json")
+                    .contains(SnapshotRedactor.FIRST_LAST_INITIAL_PATTERN),
+            )
+        }
     }
 
     @Test
@@ -514,14 +528,40 @@ class CaptureRedactionCorpusTest {
                     viewIdResourceName = "com.ubercab.driver:id/ub__chat_header_title",
                     text = "Casey T.",
                 ),
+                // HIGH-1: the chat header also renders as "<Name I.> says:" in headline_text.
+                UiNode(
+                    viewIdResourceName = "com.ubercab.driver:id/headline_text",
+                    text = "Casey T. says:",
+                ),
                 UiNode(text = "• Leave at door\n• Gate code 8888"), // delivery instructions
+                // MED-3: chat wins over active_trip, so the trip underlay's id-bearing address
+                // must be scrubbed here too.
+                UiNode(
+                    viewIdResourceName = "com.ubercab.driver:id/ub__nav_address_view_poi_text",
+                    text = "42 Nowhere Ln",
+                ),
+                // HIGH-2: the map pin carries the address in contentDescription only.
+                UiNode(
+                    viewIdResourceName = "com.ubercab.driver:id/map_marker_pin_head",
+                    contentDescription = "42 Nowhere Ln, Springfield ZZ",
+                ),
                 UiNode(text = "Verify order"), // benign — survives
             ),
         ).restoreParents()
         val masked = serialize(rule.redact.apply(tree))
         assertFalse("chat header customer name must not persist", masked.contains("Casey"))
+        assertFalse("headline_text customer name must not persist (HIGH-1)", masked.contains("Casey"))
         assertFalse("gate code must not persist", masked.contains("8888"))
+        assertFalse("trip-underlay address must not persist (MED-3/HIGH-2)", masked.contains("Nowhere"))
         assertTrue("benign chrome kept", masked.contains("Verify order"))
+
+        // HIGH-1 normalize proof: "<Name> says:" must mask to the SAME distinctness hex as the bare
+        // name — i.e. customerNameKey strips the " says:" tail (→ "casey t"), so the chat header and
+        // its "says:" echo are ONE customer, not two.
+        val headline = rule.redact.apply(
+            UiNode(viewIdResourceName = "com.ubercab.driver:id/headline_text", text = "Casey T. says:"),
+        ).text!!
+        assertEquals("headline_text normalizes the ' says:' tail to the canonical key", "[redacted:$uberNameHex]", headline)
     }
 
     @Test

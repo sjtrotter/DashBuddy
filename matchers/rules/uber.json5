@@ -261,7 +261,7 @@
     {
       "id": "uber.screen.splash",
       "priority": 40,
-      "comment": "#813 (found by the #825 audit): splash anchors on rootSplashBackground ALONE and can win classification over a live trip underlay whose nav/address nodes carry customer street names and (id-less) name/address lines — with no redact those shipped raw to the capture envelope. Same capture-only content-shape SSOT set as active_trip (#803/#825), plus id anchors for the nav maneuver / current-street / destination-address views the trip underlay renders. Disk-only; never a recognition regression (splash has no parse block).",
+      "comment": "#813 (found by the #825 audit): splash anchors on rootSplashBackground ALONE and can win classification over a live trip underlay whose nav/address nodes carry customer street names and (id-less) name/address lines — with no redact those shipped raw to the capture envelope. Carries the FULL cross-platform content-shape SSOT set from doordash.screen.dropoff_pin_entry (#803) — gate code / PIN / street / zip / apt / quoted note / bare unit / whole-value first-name+last-initial — plus id anchors for the nav maneuver / current-street / destination-address views and the map pin head (address in contentDescription) the trip underlay renders. Capture-only; never a recognition regression (splash has no parse block).",
       "redact": [
         {
           "find": {
@@ -312,6 +312,23 @@
         },
         {
           "find": {
+            "hasTextStartsWith": "\""
+          }
+        },
+        {
+          "find": {
+            "all": [
+              {
+                "hasTextMatchesRegex": "^#?\\s?\\d{1,4}[A-Za-z]?$"
+              },
+              {
+                "hasNoId": true
+              }
+            ]
+          }
+        },
+        {
+          "find": {
             "all": [
               {
                 "hasTextMatchesRegex": "^\\s{0,8}[\\p{L}][\\p{L}'-]{0,20}( [\\p{L}][\\p{L}'-]{0,20}){0,3} [A-Z]\\.?\\s{0,8}$"
@@ -346,6 +363,11 @@
         {
           "find": {
             "hasIdSuffix": "key_info_label"
+          }
+        },
+        {
+          "find": {
+            "hasIdSuffix": "map_marker_pin_head"
           }
         }
       ],
@@ -402,7 +424,7 @@
     {
       "id": "uber.screen.pickup_verification_items",
       "priority": 52,
-      "comment": "#825 audit: this verify-order surface carries a bare (id-less) customer first-name + last-initial line with no lead-in marker, past every scrub layer. Same capture-only content-shape SSOT set as active_trip (#803/#825). Disk-only; never a recognition regression (no parse block).",
+      "comment": "#825 audit: this verify-order surface carries a bare (id-less) customer first-name + last-initial line with no lead-in marker, past every scrub layer. Carries the FULL cross-platform content-shape SSOT set from doordash.screen.dropoff_pin_entry (#803) — gate code / PIN / street / zip / apt / quoted note / bare unit / whole-value first-name+last-initial. The active_trip/customer_chat nav-destination id anchors are DELIBERATELY OMITTED: this is a task:pickup:arrived surface, so the nav destination is the STORE (not customer PII). Capture-only; never a recognition regression (no parse block).",
       "redact": [
         {
           "find": {
@@ -454,6 +476,18 @@
         {
           "find": {
             "hasTextStartsWith": "\""
+          }
+        },
+        {
+          "find": {
+            "all": [
+              {
+                "hasTextMatchesRegex": "^#?\\s?\\d{1,4}[A-Za-z]?$"
+              },
+              {
+                "hasNoId": true
+              }
+            ]
           }
         },
         {
@@ -504,12 +538,19 @@
     {
       "id": "uber.screen.customer_chat",
       "priority": 55,
-      "comment": "#825 audit: the chat surface renders the customer name in ub__chat_header_title and carries the delivery-instruction supporting text (gate code) plus the underlying trip card's bare name/address — none of it was redacted. Same capture-only content-shape SSOT set as active_trip (#803/#825) + the chat-header id anchor. Chat MESSAGE bodies (free customer-typed text) beyond a name shape are the documented residual (a message that is neither a name shape nor a gate/pin/address token is not isolable by a per-node predicate). Disk-only; never a recognition regression.",
+      "comment": "#825 audit: the chat surface renders the customer name in ub__chat_header_title AND headline_text ('<Name I.> says:'), carries the delivery-instruction supporting text (gate code), and — because this rule (priority 55) WINS the frame over active_trip (100) and only the winning rule's redact applies — must ALSO scrub the underlying trip card's id-bearing nav destination address / on-card name (its hasNoId content shapes can't reach those). Carries the FULL cross-platform content-shape SSOT set from doordash.screen.dropoff_pin_entry (#803) — gate code / PIN / street / zip / apt / quoted note / bare unit / whole-value first-name+last-initial — plus id anchors: chat header + headline (normalize customerName strips the ' says:' tail via customerNameKey), nav destination views, on-card label, map pin head (address in contentDescription). Chat MESSAGE bodies (free customer-typed text) beyond a name shape are the documented residual (a message that is neither a name shape nor a gate/pin/address token is not isolable by a per-node predicate). Capture-only; never a recognition regression.",
       "redact": [
         {
           "find": {
             "hasIdSuffix": "ub__chat_header_title"
           }
+        },
+        {
+          "comment": "#825 review HIGH-1: the chat header ALSO renders as headline_text '<Name I.> says:' — the name regex is whole-value anchored so the ' says:' tail defeats it. normalize:customerName gives the stable per-customer hex (customerNameKey('Casey T. says:') → 'casey t', tail stripped).",
+          "find": {
+            "hasIdSuffix": "headline_text"
+          },
+          "normalize": "customerName"
         },
         {
           "find": {
@@ -567,6 +608,18 @@
           "find": {
             "all": [
               {
+                "hasTextMatchesRegex": "^#?\\s?\\d{1,4}[A-Za-z]?$"
+              },
+              {
+                "hasNoId": true
+              }
+            ]
+          }
+        },
+        {
+          "find": {
+            "all": [
+              {
                 "hasTextMatchesRegex": "^\\s{0,8}[\\p{L}][\\p{L}'-]{0,20}( [\\p{L}][\\p{L}'-]{0,20}){0,3} [A-Z]\\.?\\s{0,8}$"
               },
               {
@@ -575,6 +628,27 @@
             ]
           },
           "normalize": "customerName"
+        },
+        {
+          "comment": "#825 review MED-3: chat (priority 55) wins over active_trip (100), so the trip underlay's id-bearing customer address / on-card name / map pin must be scrubbed HERE too.",
+          "find": {
+            "hasIdSuffix": "ub__nav_address_view_poi_text"
+          }
+        },
+        {
+          "find": {
+            "hasIdSuffix": "ub__nav_address_view_address_text"
+          }
+        },
+        {
+          "find": {
+            "hasIdSuffix": "key_info_label"
+          }
+        },
+        {
+          "find": {
+            "hasIdSuffix": "map_marker_pin_head"
+          }
         }
       ],
       "state": {
@@ -820,7 +894,7 @@
           "normalize": "customerName"
         },
         {
-          "comment": "#825 uber id anchors: the nav destination address view (poi = street line, address = city/state) and the on-card key info label carry the customer address / name with a stable viewId.",
+          "comment": "#825 uber id anchors: the nav destination address view (poi = street line, address = city/state) and the on-card key info label carry the customer address / name with a stable viewId. map_marker_pin_head carries the customer address in contentDescription ONLY (no text) — the content-shape entries above scan node.text, so only an id-keyed entry reaches the desc (CompiledRedact.maskNode masks desc on an id match).",
           "find": {
             "hasIdSuffix": "ub__nav_address_view_poi_text"
           }
@@ -833,6 +907,11 @@
         {
           "find": {
             "hasIdSuffix": "key_info_label"
+          }
+        },
+        {
+          "find": {
+            "hasIdSuffix": "map_marker_pin_head"
           }
         }
       ],
