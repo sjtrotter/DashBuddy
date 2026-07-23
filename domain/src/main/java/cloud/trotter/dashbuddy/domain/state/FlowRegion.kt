@@ -63,6 +63,13 @@ data class FlowRegion(
  *   the mint can consume it — including across the F3 teardown race where a `waiting_for_offer`
  *   frame lands between the accept click and the first task frame. Consumed by the task edge
  *   (`acceptInputsFromPending`), cleared on supersession/revocation/session-end/accept-grace lapse.
+ * @param firstEvalLandedAt Set (once) to the `obs.timestamp` of the FIRST evaluation that lands on
+ *   this physical presentation (#830). Speak-once marker: `AppEffect.SpeakOffer` fires only when the
+ *   previous state's marker was null, so a live-re-quoting card that churns through several
+ *   enrich-as-variants (each re-evaluated) is read aloud ONCE per presentation while the heads-up
+ *   notification still live-updates on every landing. PRESERVED across enrich-as-variant (the
+ *   presentation is the same physical offer); reset only when the presentation is replaced/resolved
+ *   and a fresh [PendingOffer] is minted.
  */
 @Serializable
 data class PendingOffer(
@@ -77,6 +84,7 @@ data class PendingOffer(
     val declineCommittedAt: Long? = null,
     val acceptClickAt: Long? = null,
     val acceptedAt: Long? = null,
+    val firstEvalLandedAt: Long? = null,
 ) {
     /**
      * The offer's own platform (#438 item 7/8a), from its [sourceRuleId] via the [Platform]

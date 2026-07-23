@@ -79,11 +79,13 @@ private fun PlatformRegionStepper.pruneExpiredSurvivors(
 }
 
 /**
- * Own `OfferPresented` frame: push a new offer, replace a different-hash one, or enrich the same
- * one. Mirrors the pre-B3 `FlowRegionStepper.stepOffer` scalar logic on the owned list. Any push
- * clears ALL accepted survivors: a different hash supersedes a stale accept, and the same hash
- * re-presenting revokes it (#526 FIX2b) — the pre-B3 `armAcceptStash` supersession + revocation
- * rules as lifecycle rules.
+ * Own `OfferPresented` frame: push a new offer, replace a different-*presentation* one, enrich the
+ * same hash, or **enrich-as-variant** a churned re-render of the presentation already on screen
+ * (#830). Mirrors the pre-B3 `FlowRegionStepper.stepOffer` scalar logic on the owned list, plus the
+ * presentation-scoped identity that stops a live-re-quoting card's replace-storm. A genuine REPLACE
+ * (different presentation) clears ALL accepted survivors: a different offer supersedes a stale
+ * accept, and the same offer re-presenting revokes it (#526 FIX2b) — the pre-B3 `armAcceptStash`
+ * supersession + revocation rules as lifecycle rules.
  */
 private fun PlatformRegionStepper.pushOrReplaceOffer(
     region: PlatformRegion,
@@ -108,9 +110,32 @@ private fun PlatformRegionStepper.pushOrReplaceOffer(
                 ) else it
             }
 
+        // Different hash but the SAME non-null presentation as the offer currently on screen
+        // (#830) → ENRICH-AS-VARIANT, not replace. A live-re-quoting card (Uber) re-renders
+        // pay/miles/minutes every few seconds; each re-render churns [offerHash] while
+        // [ParsedOffer.presentationKey] (store+shape) stays identical for the SAME physical offer.
+        // Update to the fresh variant (offerHash + offerFields + refreshed targets) and CLEAR the
+        // evaluation (economics moved → re-eval), but KEEP `presentedAt` (the physical presentation
+        // epoch — so the expiry TTL can't be extended by churn), KEEP all click latches
+        // (acceptClickAt/declineCommittedAt/lastClickIntent — an accept tap on variant N is NOT
+        // erased by variant N+1), KEEP `returnFlow`, and KEEP `firstEvalLandedAt` (speak-once). We
+        // correlate ONLY against the currently-presented offer via [presentedOffer], so a resolved
+        // / expired presentation can never be resurrected, and an accepted survivor (excluded from
+        // [presentedOffer]) is never mistaken for a live variant.
+        presented != null && isSamePresentation(presented, offerFields) ->
+            region.pendingOffers.map {
+                if (it === presented) presented.copy(
+                    offerHash = newHash,
+                    offerFields = offerFields,
+                    targets = obs.targets.ifEmpty { presented.targets },
+                    sourceRuleId = obs.ruleId ?: presented.sourceRuleId,
+                    evaluation = null,
+                ) else it
+            }
+
         // New or replaced offer → push it; the old presented offer and EVERY accepted survivor
-        // drop. A different-hash survivor is superseded (a new offer on screen invalidates a
-        // stale accept — the pre-B3 armAcceptStash supersession rule); a SAME-hash
+        // drop. A different-presentation survivor is superseded (a new offer on screen invalidates
+        // a stale accept — the pre-B3 armAcceptStash supersession rule); a SAME-hash
         // re-presentation means the prior accept did NOT take server-side, so the survivor is
         // REVOKED (#526 FIX2b) — retaining it would let a later-declined re-present fold
         // phantom economics + a never-resolvable dropoff placeholder into the job
@@ -169,6 +194,24 @@ private fun PlatformRegionStepper.resolveOnLeave(
 }
 
 /**
+ * Is [incoming] a churned re-render of the [presented] offer's SAME physical presentation (#830)?
+ *
+ * True iff both carry a non-null [cloud.trotter.dashbuddy.domain.model.offer.ParsedOffer.presentationKey]
+ * and they match. Fail-CLOSED: a null key on either side (sha256 failure, or a legacy/hand-built
+ * offer that never derived one) is NOT a match, so identity degrades to today's replace-on-any-
+ * hash-change — a false MERGE is structurally impossible, only a false SPLIT back to prior behavior.
+ * Platform-agnostic: reads parsed data only, no [cloud.trotter.dashbuddy.domain.state.Platform] branch.
+ */
+private fun isSamePresentation(
+    presented: PendingOffer,
+    incoming: ParsedFields.OfferFields,
+): Boolean {
+    val presentedKey = presented.offerFields.parsedOffer.presentationKey ?: return false
+    val incomingKey = incoming.parsedOffer.presentationKey ?: return false
+    return presentedKey == incomingKey
+}
+
+/**
  * Does leaving offer-presentation TO [destination] imply this offer was click-lessly ACCEPTED?
  *
  * A **phased** task flow (pickup/dropoff navigation/arrived) does, unconditionally — the platform
@@ -219,8 +262,22 @@ private fun PlatformRegionStepper.latchOfferClick(
 
 /**
  * Land an async offer evaluation onto the matching presented offer, correlated BY offerHash within
- * the own list (a since-replaced offer must not inherit another's economics, #345). A null hash
- * (legacy replayed stubs) lands on the current presented offer, as before.
+ * the own list (a since-replaced offer must not inherit another's economics, #345 — the correlation
+ * stays hash-EXACT; a #830 enrich-as-variant re-eval is covered by the fresh EvaluateOffer the
+ * variant emits, never by a presentationKey-fallback landing). A null hash (legacy replayed stubs)
+ * lands on the current presented offer, as before.
+ *
+ * Eval-race (review F4): an in-flight eval for variant N that lands AFTER variant N+1 exists misses
+ * (hash mismatch) and is simply dropped — the enrich already emitted a fresh EvaluateOffer for
+ * N+1, so N+1 gets its own landing. This cannot starve the read: starvation would require the churn
+ * period to be shorter than the in-process eval-loopback latency (sub-millisecond compute) versus
+ * the observed 3-10 s re-quote ticks, and the SAME exposure existed pre-#830 on the replace path
+ * (every replacement dropped the outgoing offer's in-flight eval identically). SpeakOffer still
+ * fires exactly once via [PendingOffer.firstEvalLandedAt] regardless of which variant lands first.
+ *
+ * Also stamps the speak-once marker [PendingOffer.firstEvalLandedAt] on the FIRST landing per
+ * physical presentation (#830) — set only when still null, so a variant re-eval landing later never
+ * moves it; [OfferEffects] reads the PREVIOUS state's marker to fire `SpeakOffer` exactly once.
  */
 private fun PlatformRegionStepper.landOfferEval(
     region: PlatformRegion,
@@ -234,7 +291,10 @@ private fun PlatformRegionStepper.landOfferEval(
         it.acceptedAt == null && (evalHash == null || it.offerHash == evalHash)
     } ?: return region
     return region.copy(pendingOffers = region.pendingOffers.map {
-        if (it === target) target.copy(evaluation = evaluation) else it
+        if (it === target) target.copy(
+            evaluation = evaluation,
+            firstEvalLandedAt = target.firstEvalLandedAt ?: obs.timestamp,
+        ) else it
     })
 }
 

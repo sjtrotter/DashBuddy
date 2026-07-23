@@ -56,25 +56,51 @@ internal fun EffectMap.diffOfferLifecycle(
         addAll(armOfferExpiry(nextOffer, platform, obs))
     }
 
-    // Offer replaced (different hash). Resolution log for the old offer stays here (the new offer's
-    // OFFER_RECEIVED is intentionally NOT re-emitted — the rule-declared screenshot/log dedup by
-    // offerHash owns that, matching pre-B3).
+    // Offer's presented hash changed. TWO sub-cases (#830):
+    //   (a) REPLACE — a genuinely different presentation (different or null presentationKey): resolve
+    //       the OLD offer (OFFER_TIMEOUT "Replaced by new offer" + cancel its heads-up + bubble),
+    //       exactly as pre-#830. The new offer's OFFER_RECEIVED is intentionally NOT re-emitted (the
+    //       rule-declared screenshot/log dedup by offerHash owns that, matching pre-B3).
+    //   (b) ENRICH-AS-VARIANT — a churned re-render of the SAME physical presentation
+    //       (matching non-null presentationKey): the offer did NOT leave, so NO OFFER_TIMEOUT and no
+    //       "offer replaced" bubble — that would log a phantom outcome + a resolution card for an
+    //       offer still on screen.
+    // BOTH cancel the OLD hash's heads-up banner, re-evaluate the new variant (economics moved by
+    // definition), and re-ARM the OFFER_EXPIRY timer with the NEW hash:
+    //   * Heads-up cancel — [cloud.trotter.dashbuddy.ui.bubble.BubbleManager.offerNotificationId] is
+    //     keyed PER offerHash, so a churned variant's fresh heads-up posts under a NEW id on its
+    //     eval-land; the OLD hash's banner would otherwise strand until the OS timeout AND a tap on
+    //     it would carry a stale hash that no longer matches the presented offer (→ abort to manual,
+    //     #438 B3 MED-1). Dismissing it keeps exactly ONE live offer banner per presentation — the
+    //     #457 intent, applied to the churned hash. (This is the ONE deviation from #830's design
+    //     comment, which said enrich emits no cancel; the comment assumed the heads-up updates
+    //     in place, which the per-hash notification id does not provide.)
+    //   * Timer re-arm — the outstanding timer's payload carries the OLD hash and would match
+    //     nothing on fire, so a churning offer would otherwise never time out. For the variant the
+    //     deadline stays anchored on the ORIGINAL presentedAt ([armOfferExpiry] computes
+    //     `presentedAt + ttl`, and enrich KEPT presentedAt) so churn can never extend an offer's
+    //     TTL; the (type,platform) timer key makes the re-arm a supersede.
     if (prevOffer != null && nextOffer != null && prevOffer.offerHash != nextOffer.offerHash) {
-        val outcome = resolveOfferOutcome(obs, prevOffer)
-        add(logEffect(sessionId, outcome, obs.timestamp, offerPayload(prevOffer, outcome, obs.timestamp, "Replaced by new offer")))
-        // #601: surface the replaced offer's disposition, suffixed so it reads as the OLD offer's.
-        add(AppEffect.UpdateBubble("${outcomeCardText(outcome)} (offer replaced)", persona = ChatPersona.Dispatcher))
-        // #457: dismiss the OLD offer's heads-up now so a tap can't resolve against the NEW offer.
+        val replaced = !samePresentation(prevOffer, nextOffer)
+        if (replaced) {
+            val outcome = resolveOfferOutcome(obs, prevOffer)
+            add(logEffect(sessionId, outcome, obs.timestamp, offerPayload(prevOffer, outcome, obs.timestamp, "Replaced by new offer")))
+            // #601: surface the replaced offer's disposition, suffixed so it reads as the OLD offer's.
+            add(AppEffect.UpdateBubble("${outcomeCardText(outcome)} (offer replaced)", persona = ChatPersona.Dispatcher))
+        }
+        // #457/#830: dismiss the OLD hash's heads-up (dead offer on replace, stale-hash banner on a
+        // churn) so a tap can't resolve against a hash that is no longer presented.
         add(AppEffect.CancelOfferNotification(prevOffer.offerHash))
         val offer = nextOffer.offerFields
         add(AppEffect.EvaluateOffer(offer.parsedOffer, nextOffer.offerHash, nextOffer.platform))
-        // Re-arm expiry for the new offer (the old offer's timer is superseded by the (type,platform)
-        // key — a single re-arm; the old fire would no-op on the new hash regardless).
         addAll(armOfferExpiry(nextOffer, platform, obs))
     }
 
     // Evaluation landed (async loopback) → the heads-up notification + spoken read, both off the
-    // evaluation. Keyed on eval arriving in state (same offer, null → non-null).
+    // evaluation. Keyed on eval arriving in state (same offer, null → non-null). This block fires on
+    // the eval-land STEP, where the presented hash is stable (the #830 enrich-as-variant step CLEARS
+    // the evaluation, so `landedEval` is null there — the eval lands on a LATER loopback step whose
+    // hash matches), so the same-hash condition still holds for every landing, variant or not.
     val landedEval = nextOffer?.evaluation
     if (prevOffer != null && nextOffer != null && landedEval != null &&
         prevOffer.offerHash == nextOffer.offerHash && prevOffer.evaluation == null
@@ -89,8 +115,12 @@ internal fun EffectMap.diffOfferLifecycle(
             expiresAt = expiresAt,
             countdownSeconds = parsedOffer.initialCountdownSeconds,
         )
+        // The heads-up notification live-updates on EVERY landing (a re-quoted card should show the
+        // fresh numbers — a feature). The spoken read fires ONCE per physical presentation (#830):
+        // only when the PREVIOUS state had no eval-landed marker, so a churning offer that
+        // re-evaluates on each variant is read aloud exactly once, not on every re-quote.
         add(AppEffect.PostOfferNotification(landedEval, offerCard, nextOffer.offerHash, nextOffer.platform))
-        add(AppEffect.SpeakOffer(landedEval))
+        if (prevOffer.firstEvalLandedAt == null) add(AppEffect.SpeakOffer(landedEval))
     }
 
     // Offer resolved (accepted/declined/timeout) — the presented offer left presentation this step
@@ -171,6 +201,21 @@ private fun EffectMap.armOfferExpiry(
 
 private fun EffectMap.cancelOfferExpiry(platform: Platform): List<AppEffect> =
     listOf(AppEffect.CancelTimeout(TimeoutType.OFFER_EXPIRY, platform))
+
+/**
+ * Are these two presented offers the SAME physical presentation (#830)? Mirrors the stepper's
+ * `isSamePresentation`: true iff both carry a non-null, matching
+ * [cloud.trotter.dashbuddy.domain.model.offer.ParsedOffer.presentationKey]. Fail-CLOSED — a null key
+ * on either side reads as NOT the same, so the effect diff falls back to the pre-#830 replace
+ * treatment (OFFER_TIMEOUT "Replaced by new offer" + re-speak). Kept in lockstep with the stepper so
+ * a hash change the stepper enriched-as-variant is diffed as an enrich here, and one it replaced is
+ * diffed as a replace — the two must never disagree.
+ */
+private fun samePresentation(prev: PendingOffer, next: PendingOffer): Boolean {
+    val prevKey = prev.offerFields.parsedOffer.presentationKey ?: return false
+    val nextKey = next.offerFields.parsedOffer.presentationKey ?: return false
+    return prevKey == nextKey
+}
 
 /**
  * HUD-initiated accept/decline (bubble buttons / own-notification actions) → perform the app-owned
