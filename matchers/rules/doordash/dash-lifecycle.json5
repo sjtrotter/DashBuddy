@@ -948,6 +948,48 @@
           "throttleMs": 60000
         }
       ]
+    },
+    {
+      "comment": "#796 — the transient 'Navigate to zone' map/loading overlay: a 'Navigate to zone' banner + a '<STATE>: <zone name>' label + the Safety/Help actions, usually over a `loading_view`, shown while the app is routing the dasher toward a zone. RECOGNIZE-ONLY (dev decision 2026-07-17, batch #796): no state.flow, no parse — this is a mid-transition loading overlay, not a lifecycle anchor. This is DISTINCT from doordash.screen.dash_along_the_way (111), the idle order-less repositioning card, which additionally carries 'We'll look for orders along the way' / 'Spot saved until' / the navigate_button+bottom_view_info_title id-form — guards these frames legitimately lack. Priority 125 evaluates AFTER dash_along_the_way (111), so any frame dash_along_the_way matches is claimed by it first (all 11 'Navigate to zone' corpus frames live in dash_along_the_way and are claimed there); this rule only catches the leftover loading overlay, changing NO existing corpus classification. The rejects are load-bearing for PRIVACY: a variant of this overlay that also carries a pickup order card (user_name / user_name_label 'Delivery for <customer>' + 'Order includes') carries a customer name in an id-less/marker-less split-node shape and is DELIBERATELY left UNKNOWN (rejected here) rather than recognized without a redact — that pickup-card-over-zone compound is a separate pickup-recognition gap flagged for follow-up, out of scope for this recognize-only batch. The idle-card rejects ('We'll look for orders along the way' / 'Spot saved until') are belt-and-suspenders on top of the priority ordering. Alternative considered and deferred: folding this into dash_along_the_way's idle/online state — plausible (it is a repositioning-to-zone moment) but the loading overlay lacks the order-less-repositioning confirmation this batch treats as recognize-only.",
+      "id": "doordash.screen.dash_navigate_to_zone_loading",
+      "priority": 125,
+      "reject": [
+        {
+          "exists": {
+            "hasIdSuffix": "user_name"
+          }
+        },
+        {
+          "exists": {
+            "hasIdSuffix": "user_name_label"
+          }
+        },
+        {
+          "exists": {
+            "hasIdSuffix": "customer_name_label"
+          }
+        },
+        {
+          "exists": {
+            "hasTextContaining": "Order includes"
+          }
+        },
+        {
+          "exists": {
+            "hasTextContaining": "We'll look for orders along the way"
+          }
+        },
+        {
+          "exists": {
+            "hasTextContaining": "Spot saved until"
+          }
+        }
+      ],
+      "require": {
+        "exists": {
+          "hasTextContaining": "Navigate to zone"
+        }
+      }
     }
   ],
   "clicks": [

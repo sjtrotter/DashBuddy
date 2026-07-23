@@ -211,6 +211,79 @@
           "share your location"
         ]
       }
+    },
+    {
+      "comment": "#796 — the post-task 'How was this task?' feedback prompt (a thumbs-up/thumbs-down header, either bare or expanded into the issue-category picker: 'App issues'/'Navigation issues'/'Pick up issues'/'Drop off issues'/'Earnings'/'Safety issues'/'Other' + a free-text field + Submit). RECOGNIZE-ONLY (dev decision 2026-07-17, batch #796): no state.flow, no parse. Anchor 'How was this task?' is corpus-unique (0 other snapshots) and covers both the bare and expanded shapes. PRIVACY: no customer PII (fixed feedback-category labels only; the free-text field is empty in the captured frames).",
+      "id": "doordash.screen.task_feedback",
+      "priority": 59,
+      "require": {
+        "exists": {
+          "hasTextContaining": "How was this task"
+        }
+      }
+    },
+    {
+      "comment": "#796 — the one-time 'Introducing Quality Rate' announcement card ('You can now see your Quality Rate in the app…' + Got it). Part of the Dasher Rewards / Quality Rate program surface. RECOGNIZE-ONLY (dev decision 2026-07-17, batch #796): no state.flow, no parse. Anchor 'Introducing Quality Rate' is corpus-unique (0 other snapshots). PRIVACY: no PII (program copy only).",
+      "id": "doordash.screen.quality_rate_intro",
+      "priority": 115,
+      "require": {
+        "exists": {
+          "hasTextContaining": "Introducing Quality Rate"
+        }
+      }
+    },
+    {
+      "comment": "#796 — a performance-metric DETAIL screen (Completion rate / On-time rate / Quality rate): a metric header + score, a 'Last 100 orders' breakdown, a 'View all orders' button, and an 'About <metric> rate' explainer. RECOGNIZE-ONLY (dev decision 2026-07-17, batch #796): no state.flow, no parse — the app already ships doordash.screen.ratings (the combined ratings hub); these are the single-metric drill-downs, which that rule's four-way 'ratings'+'acceptance rate'+'completion rate'+'overall' conjunct legitimately does NOT match. Anchored on 'Last 100 orders' + 'View all orders' together (both corpus-unique, 0 other snapshots); the sibling list modal shares 'Last 100 orders' but has NO 'View all orders' button, so the two never collide. PRIVACY: no customer PII — merchant/store names + dates only, both driver-owned and kept.",
+      "id": "doordash.screen.performance_rate_detail",
+      "priority": 116,
+      "require": {
+        "all": [
+          {
+            "exists": {
+              "hasTextContaining": "Last 100 orders"
+            }
+          },
+          {
+            "exists": {
+              "hasTextContaining": "View all orders"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "comment": "#796 — the 'Last 100 orders' LIST modal reached from a metric detail's 'View all orders' (a tab row All / Completed / Unassigned / Excluded over a store+date order list, with a Close affordance). RECOGNIZE-ONLY (dev decision 2026-07-17, batch #796): no state.flow, no parse. Anchored on 'Last 100 orders' + the exact-text tabs 'All' and 'Excluded' (both corpus-unique). The metric-detail screen also renders 'Last 100 orders' but has no exact 'All'/'Excluded' tab nodes (its 'excluded' appears only fused as '0 orders excluded'), so the exact-text tab conjunct keeps the two apart; hasText (exact) not hasTextContaining is load-bearing here. PRIVACY: no customer PII — merchant/store names + dates only, driver-owned and kept.",
+      "id": "doordash.screen.performance_orders_list",
+      "priority": 117,
+      "require": {
+        "all": [
+          {
+            "exists": {
+              "hasTextContaining": "Last 100 orders"
+            }
+          },
+          {
+            "exists": {
+              "hasText": "All"
+            }
+          },
+          {
+            "exists": {
+              "hasText": "Excluded"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "comment": "#796 — the 'Dasher Rewards' program screens ('What are Dasher Rewards?' explainer AND the tier/rewards board — 'Available rewards' / 'How to unlock Silver level' + the reward-row recycler). RECOGNIZE-ONLY (dev decision 2026-07-17, batch #796): no state.flow, no parse. Anchored on the viewId `reward_info_epoxy_recyclerview` — corpus-unique (0 other snapshots) and present on BOTH sub-screens, so one rule covers them. This id is deliberately used INSTEAD of the 'Dasher Rewards' text (which also appears in the existing ratings/ hub snapshots, 9 corpus frames) and INSTEAD of `reward_name_text_view` (which also appears in ratings, 4 frames) — the recycler-container id is the clean generic anchor that isolates the standalone program screens. PRIVACY: no customer PII (program copy + the dasher's own aggregate rating figures, which are the dasher's own data).",
+      "id": "doordash.screen.dasher_rewards",
+      "priority": 118,
+      "require": {
+        "exists": {
+          "hasIdSuffix": "reward_info_epoxy_recyclerview"
+        }
+      }
     }
   ]
 }

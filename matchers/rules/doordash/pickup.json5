@@ -979,6 +979,45 @@
           }
         ]
       }
+    },
+    {
+      "comment": "#796 — the pickup RECEIPT-PHOTO instruction screen ('Receipt photo' title over 'We'll share this photo with the customer to confirm you picked up the correct order.', with either the two example cards + Continue/No receipt, or the Retake/Confirm pickup post-capture variant). RECOGNIZE-ONLY (dev decision 2026-07-17, batch #796): no state.flow, no parse — the task:pickup flow is already established; this is a confirmation affordance, not a lifecycle anchor. Anchors 'Receipt photo' + 'share this photo with the customer' are corpus-unique (0 other snapshots), so priority is behaviorally inert. PRIVACY: the frames carry no customer PII (the copy names 'the customer' / 'merchant name' generically; no receipt image text is in the tree). NOTE — this is the RECEIPT-photo instruction/confirmation surface, distinct from the dasher's document-image capture surfaces (license scan / signature pad) that are blocked as sensitive; a receipt photo is a merchant artifact, not an identity document.",
+      "id": "doordash.screen.pickup_receipt_photo",
+      "priority": 119,
+      "require": {
+        "all": [
+          {
+            "exists": {
+              "hasTextContaining": "Receipt photo"
+            }
+          },
+          {
+            "exists": {
+              "hasTextContaining": "share this photo with the customer"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "comment": "#796 (#550-class) — the barcode-scan FAILURE screen of the shopping sub-flow. Two shapes share one body: the full-screen 'Item barcode not recognized' + 'Scan again' variant AND the 'Scan Failed' prism bottom-sheet (prism_sheet_title/prism_sheet_message + 'Enter PLU instead'/'Scan Again'); both carry the body 'You can't buy items with barcodes that are not recognized in our database…'. RECOGNIZE-ONLY (dev decision 2026-07-17, batch #796): no state.flow, no parse. Anchored on the body substring 'not recognized in our database' (corpus-unique, 0 other snapshots) so ONE rule covers both title shapes; per the #796 no-merchant-anchor constraint the anchor is generic DoorDash copy, not a store literal. PRIVACY: no customer PII (scan-error copy only).",
+      "id": "doordash.screen.pickup_barcode_scan_failed",
+      "priority": 123,
+      "require": {
+        "exists": {
+          "hasTextContaining": "not recognized in our database"
+        }
+      }
+    },
+    {
+      "comment": "#796 (#550-class) — the 'Confirm barcode scanned' confirmation of the shopping sub-flow (a '<merchant> requires scanning of the barcode' sub-line over Confirm / Scan again). RECOGNIZE-ONLY (dev decision 2026-07-17, batch #796): no state.flow, no parse. Anchored on the GENERIC 'Confirm barcode scanned' title (corpus-unique, 0 other snapshots) — the only merchant-literal on this screen is the '<merchant> requires scanning…' sub-line, which is DELIBERATELY NOT used as an anchor per the #796 no-store-anchor constraint (store names are kept in the capture but never matched on). Distinct from doordash.screen.pickup_qr_confirm ('Confirm that the code was scanned' / 'Scan code again'). PRIVACY: no customer PII (store name kept, driver-owned).",
+      "id": "doordash.screen.pickup_barcode_confirm",
+      "priority": 124,
+      "require": {
+        "exists": {
+          "hasTextContaining": "Confirm barcode scanned"
+        }
+      }
     }
   ],
   "clicks": [

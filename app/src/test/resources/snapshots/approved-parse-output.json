@@ -493,6 +493,12 @@
             "zoneName": null
         }
     },
+    "dash_navigate_to_zone_loading/dash_navigate_to_zone_loading.json": {
+        "ruleId": "doordash.screen.dash_navigate_to_zone_loading",
+        "intent": "dash_navigate_to_zone_loading",
+        "shape": null,
+        "fields": {}
+    },
     "dash_paused/2026-02-09_09-41-00__DASH_PAUSED__f8b86141.json": {
         "ruleId": "doordash.screen.dash_paused",
         "intent": "dash_paused",
@@ -865,6 +871,18 @@
     "dash_time_picker/2026-07-16_13-36-15-282__doordash__accessibility.window__dash_time_picker__dc6142.json": {
         "ruleId": "doordash.screen.dash_time_picker",
         "intent": "dash_time_picker",
+        "shape": null,
+        "fields": {}
+    },
+    "dasher_rewards/dasher_rewards_about.json": {
+        "ruleId": "doordash.screen.dasher_rewards",
+        "intent": "dasher_rewards",
+        "shape": null,
+        "fields": {}
+    },
+    "dasher_rewards/dasher_rewards_board.json": {
+        "ruleId": "doordash.screen.dasher_rewards",
+        "intent": "dasher_rewards",
         "shape": null,
         "fields": {}
     },
@@ -1441,6 +1459,18 @@
     "dropoff_handoff/20260128_180855_435_DROPOFF_DETAILS_PRE_ARRIVAL.json": {
         "ruleId": "doordash.screen.dropoff_handoff",
         "intent": "dropoff_handoff",
+        "shape": null,
+        "fields": {}
+    },
+    "dropoff_issue_menu/dropoff_issue_menu.json": {
+        "ruleId": "doordash.screen.dropoff_issue_menu",
+        "intent": "dropoff_issue_menu",
+        "shape": null,
+        "fields": {}
+    },
+    "dropoff_issue_resolution/dropoff_issue_resolution.json": {
+        "ruleId": "doordash.screen.dropoff_issue_resolution",
+        "intent": "dropoff_issue_resolution",
         "shape": null,
         "fields": {}
     },
@@ -3242,6 +3272,24 @@
         "shape": null,
         "fields": {}
     },
+    "performance_orders_list/performance_orders_list.json": {
+        "ruleId": "doordash.screen.performance_orders_list",
+        "intent": "performance_orders_list",
+        "shape": null,
+        "fields": {}
+    },
+    "performance_rate_detail/performance_rate_completion.json": {
+        "ruleId": "doordash.screen.performance_rate_detail",
+        "intent": "performance_rate_detail",
+        "shape": null,
+        "fields": {}
+    },
+    "performance_rate_detail/performance_rate_quality.json": {
+        "ruleId": "doordash.screen.performance_rate_detail",
+        "intent": "performance_rate_detail",
+        "shape": null,
+        "fields": {}
+    },
     "pickup_arrival/20260128_190230_416_PICKUP_DETAILS_POST_ARRIVAL_PICKUP_SINGLE.json": {
         "ruleId": "doordash.screen.pickup_arrival",
         "intent": "pickup_arrival",
@@ -3556,6 +3604,24 @@
             "storeName": "Torchy's Tacos",
             "subFlow": "ARRIVED"
         }
+    },
+    "pickup_barcode_confirm/pickup_barcode_confirm.json": {
+        "ruleId": "doordash.screen.pickup_barcode_confirm",
+        "intent": "pickup_barcode_confirm",
+        "shape": null,
+        "fields": {}
+    },
+    "pickup_barcode_scan_failed/pickup_barcode_not_recognized.json": {
+        "ruleId": "doordash.screen.pickup_barcode_scan_failed",
+        "intent": "pickup_barcode_scan_failed",
+        "shape": null,
+        "fields": {}
+    },
+    "pickup_barcode_scan_failed/pickup_barcode_scan_failed_sheet.json": {
+        "ruleId": "doordash.screen.pickup_barcode_scan_failed",
+        "intent": "pickup_barcode_scan_failed",
+        "shape": null,
+        "fields": {}
     },
     "pickup_barcode_scan_issue/gopuff_barcode_scan_issue.json": {
         "ruleId": "doordash.screen.pickup_barcode_scan_issue",
@@ -4217,6 +4283,18 @@
         "shape": null,
         "fields": {}
     },
+    "pickup_receipt_photo/pickup_receipt_photo_confirm.json": {
+        "ruleId": "doordash.screen.pickup_receipt_photo",
+        "intent": "pickup_receipt_photo",
+        "shape": null,
+        "fields": {}
+    },
+    "pickup_receipt_photo/pickup_receipt_photo_intro.json": {
+        "ruleId": "doordash.screen.pickup_receipt_photo",
+        "intent": "pickup_receipt_photo",
+        "shape": null,
+        "fields": {}
+    },
     "pickup_resolution_options/2026-06-12__doordash__pickup_resolution_options__56f6eb.json": {
         "ruleId": "doordash.screen.pickup_resolution_options",
         "intent": "pickup_resolution_options",
@@ -4694,6 +4772,12 @@
     "promos/2026-07-18_15-24-47-887__doordash__accessibility.window__promos__31322b.json": {
         "ruleId": "doordash.screen.promos",
         "intent": "promos",
+        "shape": null,
+        "fields": {}
+    },
+    "quality_rate_intro/quality_rate_intro.json": {
+        "ruleId": "doordash.screen.quality_rate_intro",
+        "intent": "quality_rate_intro",
         "shape": null,
         "fields": {}
     },
@@ -5591,6 +5675,18 @@
     "splash/2026-07-19_13-31-50-295__uber__accessibility.window__splash__c145ff.json": {
         "ruleId": "uber.screen.splash",
         "intent": "splash",
+        "shape": null,
+        "fields": {}
+    },
+    "task_feedback/task_feedback_categories.json": {
+        "ruleId": "doordash.screen.task_feedback",
+        "intent": "task_feedback",
+        "shape": null,
+        "fields": {}
+    },
+    "task_feedback/task_feedback_thumbs.json": {
+        "ruleId": "doordash.screen.task_feedback",
+        "intent": "task_feedback",
         "shape": null,
         "fields": {}
     },
