@@ -4,6 +4,7 @@ import cloud.trotter.dashbuddy.domain.model.accessibility.UiNode
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonArray
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -93,6 +94,24 @@ class CustomerNameNormalizationTest {
         assertTrue(masked!!.startsWith("[redacted"))
     }
 
+    @Test
+    fun `795 plainMask masks a small-space secret to the plain constant, no distinctness hash`() {
+        // The default (hashed) mask leaks a 4-digit PIN: 10 000 values map into 65 536
+        // 4-hex buckets, mostly injectively, so the suffix is brute-force reversible.
+        val hashed = CompiledRedact.mask("9315", emptyList(), normalize = null, plainMask = false)
+        assertEquals("[redacted:${hashPrefix("9315")}]", hashed)
+        // plainMask drops the suffix entirely — nothing left to reverse.
+        val plain = CompiledRedact.mask("9315", emptyList(), normalize = null, plainMask = true)
+        assertEquals(CompiledRedact.REDACTED, plain)
+        assertFalse(Regex("""[0-9a-f]{4}]""").containsMatchIn(plain!!))
+    }
+
+    @Test
+    fun `795 plainMask still honors keepPrefix, dropping only the hash`() {
+        val masked = CompiledRedact.mask("PIN 9315", listOf("PIN "), normalize = null, plainMask = true)
+        assertEquals("PIN ${CompiledRedact.REDACTED}", masked)
+    }
+
     // =====================================================================
     // compile-time lint
     // =====================================================================
@@ -123,6 +142,37 @@ class CustomerNameNormalizationTest {
             }]
             """.trimIndent(),
         )
+    }
+
+    @Test(expected = RuleCompileException::class)
+    fun `795 a redact entry combining plainMask and normalize fails compile`() {
+        // Both shape the distinctness hash; a plain mask has none, so the combination is a
+        // contradiction — reject loud rather than silently ignore one.
+        compile(
+            """
+            [{
+              "id": "test.redact.plain-and-normalize",
+              "priority": 9999,
+              "redact": [ { "find": { "hasIdSuffix": "x" }, "plainMask": true, "normalize": "customerName" } ],
+              "require": { "exists": { "hasText": "x" } }
+            }]
+            """.trimIndent(),
+        )
+    }
+
+    @Test
+    fun `795 a redact entry with plainMask alone compiles`() {
+        val rules = compile(
+            """
+            [{
+              "id": "test.redact.plain",
+              "priority": 9999,
+              "redact": [ { "find": { "hasTextMatchesRegex": "^\\d{1,6}$" }, "plainMask": true } ],
+              "require": { "exists": { "hasText": "x" } }
+            }]
+            """.trimIndent(),
+        )
+        assertTrue(rules.single().redact.entries.single().plainMask)
     }
 
     @Test

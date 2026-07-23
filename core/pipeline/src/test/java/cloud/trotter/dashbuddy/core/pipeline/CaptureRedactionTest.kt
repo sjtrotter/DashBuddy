@@ -51,6 +51,24 @@ class CaptureRedactionTest {
         ),
     )
 
+    /**
+     * #795: a PIN-keypad redact block — id-less pure-digit nodes (the whole-PIN
+     * EditText echo + each pressed digit), masked with `plainMask` so no reversible
+     * `<4hex>` distinctness suffix is emitted for the bounded 4-digit secret.
+     */
+    private val pinKeypadRedact = CompiledRedact(
+        listOf(
+            CompiledRedactEntry(
+                find = RuleCompiler.compileNodePred(
+                    Json.parseToJsonElement(
+                        """{"all":[{"hasTextMatchesRegex":"^\\d{1,6}$"},{"hasNoId":true}]}""",
+                    ),
+                ),
+                plainMask = true,
+            ),
+        ),
+    )
+
     private fun sourceFor(ruleId: String, redact: CompiledRedact) = object : ScreenRedactionSource {
         override fun redactFor(id: String): CompiledRedact? = redact.takeIf { id == ruleId }
     }
@@ -116,6 +134,43 @@ class CaptureRedactionTest {
             Regex(""""text": "\[redacted:[0-9a-f]{4}\]"""").containsMatchIn(json),
         )
         assertTrue("non-PII node intact", json.contains("Directions"))
+    }
+
+    @Test
+    fun `795 PIN keypad digits are plain-masked with no reversible distinctness hash`() {
+        whenever(captureBus.offer(any(), any(), anyOrNull(), any(), any(), anyOrNull()))
+            .thenReturn("cap-1")
+        // The "Enter PIN" keypad renders the entered PIN as raw node text: an id-less
+        // EditText carrying the whole PIN plus one id-less TextView per pressed digit.
+        val tree = UiNode(
+            children = listOf(
+                UiNode(text = "Enter PIN"),
+                UiNode(text = "1234"),
+                UiNode(text = "1"),
+                UiNode(text = "2"),
+                UiNode(viewIdResourceName = "com.doordash:id/textView_prism_button_title", text = "Submit"),
+            ),
+        )
+        writer(sourceFor("doordash.screen.dropoff_pin_keypad", pinKeypadRedact))
+            .captureScreen(
+                recognizedObs("doordash.screen.dropoff_pin_keypad", "dropoff_pin_keypad"),
+                screenEvent(tree),
+            )
+
+        val json = capturedEnvelope()
+        // The PIN must be gone AND must carry NO `<4hex>` suffix: a 4-digit space (10 000
+        // values) is reversible from 4 hex (65 536 buckets, mostly injective), so the plain
+        // constant is the only safe mask (#795).
+        assertFalse("PIN digits must not persist", Regex(""""text": ?"1234"""").containsMatchIn(json))
+        assertFalse(
+            "PIN must not carry a reversible distinctness hash",
+            Regex("""\[redacted:[0-9a-f]{4}]""").containsMatchIn(json),
+        )
+        assertTrue("digit node masked to the plain constant", json.contains("[redacted]"))
+        assertTrue(
+            "non-digit anchors intact",
+            json.contains("Enter PIN") && json.contains("Submit"),
+        )
     }
 
     @Test

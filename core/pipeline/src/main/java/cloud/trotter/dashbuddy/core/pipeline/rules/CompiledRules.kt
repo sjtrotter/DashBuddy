@@ -184,6 +184,18 @@ data class CompiledRedactEntry(
     val find: (UiNode) -> Boolean,
     val keepPrefix: List<String> = emptyList(),
     val normalize: RedactNormalize? = null,
+    /**
+     * When true, mask to the plain [CompiledRedact.REDACTED] constant with NO
+     * `<4hex>` distinctness suffix (#795). The suffix is safe for a large plaintext
+     * space (a customer name is one of billions — 16 bits of an already-one-way hash
+     * leaks nothing usable, #623), but a node whose ENTIRE text is a small-space
+     * secret — a 4-digit delivery PIN keypad node (10 000 possibilities < the 65 536
+     * the 4 hex chars distinguish, so the prefix is very often INJECTIVE over the
+     * space → the exact PIN is recoverable by brute force) — must be masked WITHOUT
+     * the distinctness hash. Mutually exclusive with [normalize] (both are
+     * hash-shaping knobs; a plain mask has no hash to shape) — rejected at compile.
+     */
+    val plainMask: Boolean = false,
 )
 
 /**
@@ -209,9 +221,9 @@ data class CompiledRedact(
     private fun maskNode(node: UiNode): UiNode {
         val match = entries.firstOrNull { it.find(node) }
         val maskedText =
-            if (match != null) mask(node.text, match.keepPrefix, match.normalize) else node.text
+            if (match != null) mask(node.text, match.keepPrefix, match.normalize, match.plainMask) else node.text
         val maskedDesc =
-            if (match != null) mask(node.contentDescription, match.keepPrefix, match.normalize) else node.contentDescription
+            if (match != null) mask(node.contentDescription, match.keepPrefix, match.normalize, match.plainMask) else node.contentDescription
         return node.copy(
             text = maskedText,
             contentDescription = maskedDesc,
@@ -258,15 +270,23 @@ data class CompiledRedact(
             value: String?,
             keepPrefix: List<String>,
             normalize: RedactNormalize? = null,
+            plainMask: Boolean = false,
         ): String? {
             if (value == null) return null
             val prefix = keepPrefix.firstOrNull { value.startsWith(it, ignoreCase = true) }
-            val stripped = if (prefix != null) value.substring(prefix.length).trim() else value.trim()
-            val token = when (normalize) {
-                RedactNormalize.CUSTOMER_NAME -> customerNameKey(stripped)
-                null -> stripped
+            // [plainMask] (#795): a small-space secret (a PIN keypad node) must NOT get the
+            // distinctness suffix — the 4 hex chars are reversible over a 4-digit space. Emit
+            // the plain [REDACTED] constant (keepPrefix still honored), skipping the hash entirely.
+            val hex = if (plainMask) {
+                null
+            } else {
+                val stripped = if (prefix != null) value.substring(prefix.length).trim() else value.trim()
+                val token = when (normalize) {
+                    RedactNormalize.CUSTOMER_NAME -> customerNameKey(stripped)
+                    null -> stripped
+                }
+                token?.let { sha256OrNull(it) }?.take(4)
             }
-            val hex = token?.let { sha256OrNull(it) }?.take(4)
             val masked = if (hex != null) "[redacted:$hex]" else REDACTED
             return if (prefix != null) prefix + masked else masked
         }

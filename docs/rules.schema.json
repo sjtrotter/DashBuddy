@@ -364,6 +364,10 @@
           "type": "string",
           "enum": ["customerName"],
           "description": "Optional (#733). 'customerName' canonicalizes the masked token (first-token + second-token initial, via CustomerNameKey) BEFORE the <4hex> distinctness hash, so the mask hex equals the persisted customerNameHash when the parse chain uses 'normalizeCustomerName' + 'sha256'. Set ONLY on customer-NAME entries; NEVER on address/instruction entries (canonicalizing an address would degrade its mask distinctness)."
+        },
+        "plainMask": {
+          "type": "boolean",
+          "description": "Optional (#795). When true, mask to the plain '[redacted]' constant with NO '<4hex>' distinctness suffix. The suffix is safe for a large plaintext space (a customer name leaks nothing usable in 16 bits, #623) but is REVERSIBLE over a small-space secret whose ENTIRE node text is the secret — a 4-digit delivery PIN keypad node has only 10 000 possibilities, fewer than the 65 536 the 4 hex chars distinguish, so the prefix is very often injective and the exact PIN is brute-forceable. Set on such secret nodes. Mutually exclusive with 'normalize' (both shape the hash; a plain mask has none) — rejected at compile."
         }
       }
     },
