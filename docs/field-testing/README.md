@@ -95,6 +95,29 @@ was found **broken-in-part** (raw PII in capture envelopes) and moved to that en
      choice must never re-prompt.
   - Issue: #843. Confirmed: 0/2
 
+- **🆕 NEW — #428-B / PR #845 — multi-language TTS (system locale + settings override).**
+  **What to watch:** Settings → Voice → Spoken offer language set to Español → the next offer reads
+  in Spanish (voice AND words together); System default on an English phone stays English; if the
+  es voice pack is missing the read falls back to English (one WARN in the log, never silence).
+  **Desk:** grep for the `Tts` tag language-apply lines; no per-utterance WARN spam.
+  - Confirmed: 0/2
+- **🆕 NEW — #810-B2 / PR #847 — orphan offer resolution (inference + attestation).**
+  **What to watch:** after any dash where the `JOB_ACCEPT_MISMATCH` WARN fires (chat-path unassign
+  class), the Money tab shows the review callout; the drill-down lists the job's accepted offers
+  and attesting one marks it unassigned (undo stays reachable while the group is listed).
+  **Desk:** `SELECT * FROM offer_records WHERE outcomeResolved IS NOT NULL` — cross-store orphans
+  auto-resolve as `UNASSIGNED_INFERRED` (projector v8 retro-processes history; the session-114
+  same-store orphan must sit UNRESOLVED awaiting attestation, never auto-stamped); Decisions-tab
+  accepted counts exclude resolved rows. NOTE: the v14→v15 migration's instrumented test needs the
+  standard device run at the next reinstall.
+  - Confirmed: 0/2
+- **🆕 NEW — #823 Phase 1 / PR #848 — units-denominated shop-offer time estimate.**
+  **What to watch:** a shop offer showing "(N units)" should produce a saner est time / $-per-hour
+  than before (the 64-unit H-E-B class would have modeled ~30 items at the 0.469 fielded ratio,
+  not 64) — the CARD still shows the platform's raw units count (deliberate).
+  **Desk:** `ShopRate`-tag INFO lines gain items-per-unit learn entries (`n=N`) after units-offer
+  completions; single-shop-pickup only (stacks deliberately skip).
+  - Confirmed: 0/2
 - **🆕 NEW — #830 / PR #839 — presentation-scoped offer identity (+ the #826 accept chain).** The
   ticking Uber card no longer mints replacement offers: a re-render with the same store/order shape
   ENRICHES the pending offer in place (keeps its presentation epoch and click latches; heads-up
