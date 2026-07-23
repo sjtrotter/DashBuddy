@@ -1873,6 +1873,18 @@
         "shape": null,
         "fields": {}
     },
+    "dropoff_pin_intro/2026-07-17_20-43-11-084__doordash__accessibility.window__UNKNOWN__89b149.json": {
+        "ruleId": "doordash.screen.dropoff_pin_intro",
+        "intent": "dropoff_pin_intro",
+        "shape": null,
+        "fields": {}
+    },
+    "dropoff_pin_keypad/2026-07-17_20-47-16-260__doordash__accessibility.window__UNKNOWN__ba8737.json": {
+        "ruleId": "doordash.screen.dropoff_pin_keypad",
+        "intent": "dropoff_pin_keypad",
+        "shape": null,
+        "fields": {}
+    },
     "dropoff_pre_arrival/2026-06-12__doordash__dropoff_pre_arrival_711__335996.json": {
         "ruleId": "doordash.screen.dropoff_pre_arrival",
         "intent": "dropoff_pre_arrival",

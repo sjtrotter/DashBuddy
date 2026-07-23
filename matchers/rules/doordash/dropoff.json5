@@ -362,6 +362,65 @@
       }
     },
     {
+      "id": "doordash.screen.dropoff_pin_keypad",
+      "priority": 109,
+      "comment": "#795: the 'Enter PIN' 4-digit keypad MODAL of the PIN-required delivery confirmation sub-flow — distinct from dropoff_pin_entry, which is the 'Collect PIN from customer' STEP card, and matched by neither its 'collect pin from customer' nor 'ask the customer for the unique' anchor. RECOGNIZE-ONLY (no state.flow, no parse — mirrors dropoff_multi_order_confirm / pickup_wait_survey): the delivery already completes via the generic dropoff path and this transient sheet is a confirmation, not a lifecycle anchor, so recognizing it only graduates the frame out of UNKNOWN without any phase perturbation (and avoids a #603-class false-arrival off a sheet the dasher can open before arriving). Priority is behaviorally inert — the anchors ('Enter PIN' exact + the 'Before dropping off the order' body, both corpus-unique) match no other rule; 109 is simply the first free value across ALL doordash screen rules (51-108 are dense). PRIVACY (#795 Pledge): the entered PIN renders as raw node text — an id-less EditText carries the whole PIN and each pressed digit is echoed in its own id-less TextView. The redact masks every pure-digit id-less node to a PLAIN '[redacted]' (plainMask) — NOT the '[redacted:<4hex>]' distinctness form, because a 4-digit PIN (10 000 values) is reversible from 4 hex (65 536 buckets, mostly injective over so small a space). The PIN is never parsed/stored (no parse block); capture-only, goldens unaffected by the redact.",
+      "redact": [
+        {
+          "comment": "#795: mask the entered PIN — the whole-PIN EditText and each echoed single-digit TextView are id-less pure-digit nodes. plainMask drops the distinctness hash (a bounded PIN is recoverable from 4 hex). The rule's require anchors are non-digit text nodes, so masking these leaves replay recognition unchanged.",
+          "find": {
+            "all": [
+              {
+                "hasTextMatchesRegex": "^\\d{1,6}$"
+              },
+              {
+                "hasNoId": true
+              }
+            ]
+          },
+          "plainMask": true
+        }
+      ],
+      "require": {
+        "all": [
+          {
+            "exists": {
+              "hasIdSuffix": "drop_off_workflow_host_fragment"
+            }
+          },
+          {
+            "exists": {
+              "hasText": "Enter PIN"
+            }
+          },
+          {
+            "exists": {
+              "hasTextContaining": "Before dropping off the order"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "doordash.screen.dropoff_pin_intro",
+      "priority": 112,
+      "comment": "#795: the informational bottom sheet that precedes the PIN keypad — 'You'll need a PIN from the customer to confirm delivery' + 'To protect your Dasher rating...'. RECOGNIZE-ONLY (no state.flow, no parse — mirrors dropoff_multi_order_confirm): a pre-arrival advisory sheet, not a lifecycle anchor; recognizing it only graduates the frame out of UNKNOWN. NO redact — the sheet carries only generic DoorDash copy, no customer name/address/PIN (verified against both captured frames, text and contentDescription). Anchors are corpus-unique; 112 is the next free screen priority after 109 (behaviorally inert).",
+      "require": {
+        "all": [
+          {
+            "exists": {
+              "hasTextContaining": "need a PIN from the customer to confirm delivery"
+            }
+          },
+          {
+            "exists": {
+              "hasTextContaining": "To protect your Dasher rating"
+            }
+          }
+        ]
+      }
+    },
+    {
       "id": "doordash.screen.dropoff_handoff",
       "comment": "#603: the 'hand it to customer' instruction is present the ENTIRE drive (en-route AND at-door), so keying on it alone fired a FALSE task:dropoff:arrived the moment nav started. The completion CTA ('Continue'/'Complete Delivery'/'Mark as delivered'/complete_delivery_steps_button) only appears once the dasher is actually at the door, so it is the real arrival discriminator. The en-route workflow-sheet frame (which lacks the CTA) then falls through to dropoff_pre_arrival (priority 73). KEEP THIS CTA SET IN SYNC with dropoff_navigation's reject and dropoff_pre_arrival_completion's require — all three describe the same 'delivery can be completed now' signal.",
       "priority": 64,
