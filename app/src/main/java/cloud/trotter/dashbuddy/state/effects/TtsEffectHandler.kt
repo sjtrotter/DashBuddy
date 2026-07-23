@@ -1,15 +1,20 @@
 package cloud.trotter.dashbuddy.state.effects
 
 import android.content.Context
+import android.content.res.Configuration
 import android.media.AudioAttributes
 import android.media.AudioFocusRequest
 import android.media.AudioManager
 import android.speech.tts.TextToSpeech
 import android.speech.tts.UtteranceProgressListener
 import cloud.trotter.dashbuddy.R
+import cloud.trotter.dashbuddy.core.data.settings.AppPreferencesRepository
+import cloud.trotter.dashbuddy.domain.di.ApplicationScope
 import cloud.trotter.dashbuddy.domain.evaluation.OfferAction
 import cloud.trotter.dashbuddy.domain.evaluation.OfferEvaluation
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.launch
 import timber.log.Timber
 import java.util.Locale
 import java.util.concurrent.atomic.AtomicLong
@@ -20,6 +25,8 @@ import cloud.trotter.dashbuddy.domain.format.Formats
 @Singleton
 class TtsEffectHandler @Inject constructor(
     @param:ApplicationContext private val context: Context,
+    private val appPreferencesRepository: AppPreferencesRepository,
+    @param:ApplicationScope private val appScope: CoroutineScope,
 ) {
     private var tts: TextToSpeech? = null
 
@@ -29,6 +36,26 @@ class TtsEffectHandler @Inject constructor(
 
     @Volatile
     private var isReady = false
+
+    /**
+     * #428 Half B — the settings language override (BCP-47 tag; null ⇒ follow system locale),
+     * kept current by the reactive [AppPreferencesRepository.ttsLanguageTag] collector below.
+     */
+    @Volatile
+    private var overrideTag: String? = null
+
+    /**
+     * The locale actually installed on the engine (== the effective locale, or English if that was
+     * unavailable). The SPOKEN COPY is resolved through this exact locale so the words and the voice
+     * always match — a Spanish override changes both, and a fallback to an English voice also falls
+     * the words back to English.
+     */
+    @Volatile
+    private var spokenLocale: Locale = Locale.getDefault()
+
+    /** Edge-gate for the fallback WARN: only log when the unavailable target changes (never per
+     *  utterance). Guarded by [applyLanguage]'s lock. */
+    private var lastFallbackTag: String? = null
 
     private val audioManager = context.getSystemService(Context.AUDIO_SERVICE) as AudioManager
 
@@ -44,7 +71,6 @@ class TtsEffectHandler @Inject constructor(
     init {
         tts = TextToSpeech(context) { status ->
             if (status == TextToSpeech.SUCCESS) {
-                tts?.language = Locale.US
                 tts?.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
                     override fun onStart(utteranceId: String?) {}
                     override fun onDone(utteranceId: String?) {
@@ -60,10 +86,47 @@ class TtsEffectHandler @Inject constructor(
                     }
                 })
                 isReady = true
+                // #428 Half B: install the effective language now the engine is up (replaces the
+                // former unconditional Locale.US).
+                applyLanguage()
                 Timber.tag("Tts").i("engine initialized")
             } else {
                 Timber.tag("Tts").w("init failed with status %d", status)
             }
+        }
+        // Observe the override reactively so a settings change re-languages the live engine AND the
+        // spoken copy with no restart (Reactive UI / UDF: the pref is the single source of truth).
+        appScope.launch {
+            appPreferencesRepository.ttsLanguageTag.collect { tag ->
+                overrideTag = tag
+                applyLanguage()
+            }
+        }
+    }
+
+    /**
+     * Resolves the effective locale (override > system) and installs it on the engine, falling back
+     * to English (with ONE edge-gated WARN) if the requested language is unavailable / missing voice
+     * data — never a silent drop. No-ops until the engine is ready; the init callback re-runs it.
+     * Synchronized so the init callback and the pref collector can't interleave.
+     */
+    @Synchronized
+    private fun applyLanguage() {
+        val engine = tts ?: return
+        if (!isReady) return
+        val target = TtsLocale.effectiveLocale(overrideTag, Locale.getDefault())
+        val outcome = TtsLocale.applyLanguage(target) { engine.setLanguage(it) }
+        spokenLocale = outcome.applied
+        if (outcome.fellBack) {
+            val targetTag = target.toLanguageTag()
+            if (lastFallbackTag != targetTag) {
+                lastFallbackTag = targetTag
+                Timber.tag("Tts").w(
+                    "language %s unavailable — speaking English instead", targetTag
+                )
+            }
+        } else {
+            lastFallbackTag = null
         }
     }
 
@@ -91,11 +154,13 @@ class TtsEffectHandler @Inject constructor(
     }
 
     private fun formatEvaluation(eval: OfferEvaluation): String {
-        // #428 Half A: the verdict word + template connectives moved to strings.xml (string
-        // ownership, NOT locale-selected TTS — the engine still speaks Locale.US regardless of
-        // device locale; per-language reading is a separate, out-of-scope design issue).
-        // Formats.decimal(...) numeric formatting is unchanged — only the literal words moved.
-        val verdict = context.getString(
+        // #428 Half B: the verdict word + template connectives are resolved through the EFFECTIVE
+        // locale's resources (via a localized Context) so the settings override changes the words as
+        // well as the voice. Formats.decimal(...) numeric formatting is unchanged — the SSOT locale
+        // policy in :domain (#358/#456/#467) still owns number/money formatting; the es voice reads
+        // those digits.
+        val localized = localizedContext(spokenLocale)
+        val verdict = localized.getString(
             when (eval.action) {
                 OfferAction.ACCEPT -> R.string.tts_verdict_accept
                 OfferAction.DECLINE -> R.string.tts_verdict_decline
@@ -103,7 +168,7 @@ class TtsEffectHandler @Inject constructor(
                 else -> R.string.tts_verdict_offer
             }
         )
-        return context.getString(
+        return localized.getString(
             R.string.tts_offer_evaluation_template,
             verdict,
             eval.merchantName.trim(),
@@ -114,4 +179,11 @@ class TtsEffectHandler @Inject constructor(
         )
     }
 
+    /** A [Context] whose resources resolve against [locale] — so the spoken strings match the
+     *  engine voice regardless of the device default (#428 Half B). */
+    private fun localizedContext(locale: Locale): Context {
+        val config = Configuration(context.resources.configuration)
+        config.setLocale(locale)
+        return context.createConfigurationContext(config)
+    }
 }

@@ -30,6 +30,8 @@ class AppPreferencesRepository @Inject constructor(
     val appTheme = dataSource.appTheme
     /** Driving / glance mode (#318) — the HUD honors this, the main app window never does. */
     val glanceMode = dataSource.glanceMode
+    /** Spoken-offer language override (#428 Half B); null ⇒ follow the system locale. */
+    val ttsLanguageTag = dataSource.ttsLanguageTag
 
     val fuelType: Flow<FuelType> = dataSource.fuelType.map { savedType ->
         try {
@@ -203,6 +205,13 @@ class AppPreferencesRepository @Inject constructor(
     suspend fun setProMode(enabled: Boolean) = dataSource.setProMode(enabled)
     suspend fun setTheme(theme: String) = dataSource.setTheme(theme)
     suspend fun setGlanceMode(enabled: Boolean) = dataSource.setGlanceMode(enabled)
+
+    /**
+     * #428 Half B — set (or clear, null) the spoken-offer language override (BCP-47 tag). Null
+     * follows the system locale. The [TtsEffectHandler] observes [ttsLanguageTag] reactively, so
+     * the change re-languages the live engine + spoken copy without a restart.
+     */
+    suspend fun setTtsLanguageTag(tag: String?) = dataSource.setTtsLanguageTag(tag)
 
     suspend fun updateEconomySettings(
         year: String, make: String, model: String, trim: String,

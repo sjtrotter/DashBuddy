@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  #428 Half B — Spanish spoken-offer (TTS) copy. Language-level (values-es) so every Spanish
+  region variant AND the "es" settings override resolve it (the existing values-es-rUS folder
+  keeps its own broader UI translations; Android merges per-string). Only the SPOKEN strings are
+  translated here — the app UI stays English-only by design (this feature localizes audio, not
+  the visual UI). The positional args (%1$s..%6$s) MUST match values/strings.xml exactly.
+-->
+<resources>
+    <!-- state/effects/TtsEffectHandler.kt — verdict words spoken before the economics. -->
+    <string name="tts_verdict_accept">Aceptar</string>
+    <string name="tts_verdict_decline">Rechazar</string>
+    <string name="tts_verdict_review">Revisar</string>
+    <string name="tts_verdict_offer">Oferta</string>
+    <!-- %1$s verdict word, %2$s merchant name, %3$s $/hr, %4$s net pay, %5$s miles, %6$s score. -->
+    <string name="tts_offer_evaluation_template">%1$s. %2$s. %3$s dólares por hora neto. Neto %4$s, %5$s millas, puntuación %6$s.</string>
+</resources>

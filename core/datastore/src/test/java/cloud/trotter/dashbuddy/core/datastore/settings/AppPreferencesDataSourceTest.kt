@@ -84,4 +84,29 @@ class AppPreferencesDataSourceTest {
         assertEquals(3.61f, source.gasPrice.first())
         assertEquals(true, source.isGasPriceAuto.first())
     }
+
+    // #428 Half B — the spoken-offer language override.
+
+    @Test
+    fun `ttsLanguageTag defaults to null (follow system)`() = runTest {
+        val dispatcher = StandardTestDispatcher(testScheduler)
+        val source = newSource(dispatcher, "prefs-tts1.preferences_pb")
+
+        assertEquals(null, source.ttsLanguageTag.first())
+    }
+
+    @Test
+    fun `setTtsLanguageTag round-trips and clears on null`() = runTest {
+        val dispatcher = StandardTestDispatcher(testScheduler)
+        val source = newSource(dispatcher, "prefs-tts2.preferences_pb")
+
+        source.setTtsLanguageTag("es")
+        advanceUntilIdle()
+        assertEquals("es", source.ttsLanguageTag.first())
+
+        // null clears back to the system-locale default.
+        source.setTtsLanguageTag(null)
+        advanceUntilIdle()
+        assertEquals(null, source.ttsLanguageTag.first())
+    }
 }

@@ -173,6 +173,15 @@
     <string name="general_settings_section_driving">Driving</string>
     <string name="general_settings_glance_mode_label">Driving glance mode</string>
     <string name="general_settings_glance_mode_subtitle">Larger HUD text while on a session</string>
+    <!-- Spoken-offer language (#428 Half B) — voice + words follow this. -->
+    <string name="general_settings_section_voice">Voice</string>
+    <string name="general_settings_tts_language_label">Spoken offer language</string>
+    <string name="general_settings_tts_language_subtitle">Language the offer read-aloud uses</string>
+    <!-- Language options. The option LABELS are translated; the endonym "Español" reads the same in
+         every locale. "System default" follows the phone's language. -->
+    <string name="tts_language_option_system">System default</string>
+    <string name="tts_language_option_english">English</string>
+    <string name="tts_language_option_spanish">Español</string>
 
     <!-- components/economy/EconomyAccordionRow.kt -->
     <string name="economy_accordion_content_desc_collapse">Collapse</string>
@@ -645,19 +654,22 @@
     <string name="evidence_settings_session_label">Save Session Summary</string>
     <string name="evidence_settings_session_subtitle">End of session earnings report</string>
 
-    <!-- #428 Half A: non-Compose copy routed through strings.xml (string ownership, NOT i18n —
-         the TTS engine still speaks the device-default voice; per-language reading is a
-         separate, out-of-scope design issue). -->
+    <!-- #428 Half A extracted the spoken copy to strings.xml; Half B makes it translatable —
+         the effective TTS locale (settings override > system) selects both the voice AND these
+         words via a localized Context (see TtsEffectHandler). See values-es for the Spanish set. -->
 
     <!-- state/effects/TtsEffectHandler.kt -->
-    <!-- Locale-locked by design: the TTS engine speaks Locale.US regardless of device locale
-         (see the in-code comment on TtsEffectHandler), so these are NOT translation candidates. -->
-    <string name="tts_verdict_accept" translatable="false">Accept</string>
-    <string name="tts_verdict_decline" translatable="false">Decline</string>
-    <string name="tts_verdict_review" translatable="false">Review</string>
-    <string name="tts_verdict_offer" translatable="false">Offer</string>
-    <!-- %1$s verdict word, %2$s merchant name, %3$s $/hr, %4$s net pay, %5$s miles, %6$s score -->
-    <string name="tts_offer_evaluation_template" translatable="false">%1$s. %2$s. %3$s dollars an hour net. Net %4$s, %5$s miles, score %6$s.</string>
+    <!-- Verdict words spoken before the economics. Translatable (#428 Half B). NOTE: these are the
+         SPOKEN verdict, unrelated to the RuleAction tap-label allowlists (button text) which stay
+         locale-anchored English by design. -->
+    <string name="tts_verdict_accept">Accept</string>
+    <string name="tts_verdict_decline">Decline</string>
+    <string name="tts_verdict_review">Review</string>
+    <string name="tts_verdict_offer">Offer</string>
+    <!-- %1$s verdict word, %2$s merchant name, %3$s $/hr, %4$s net pay, %5$s miles, %6$s score.
+         Translations MUST keep the same six positional args (a translated %-mismatch is the #719
+         HIGH-1 crash class). The merchant name and the numbers are runtime args — never translated. -->
+    <string name="tts_offer_evaluation_template">%1$s. %2$s. %3$s dollars an hour net. Net %4$s, %5$s miles, score %6$s.</string>
 
     <!-- state/effects/TipEffectHandler.kt -->
     <!-- %1$s tip amount, %2$s store name -->
