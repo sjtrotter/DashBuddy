@@ -78,6 +78,19 @@ card's **mechanical** half, #577 (re-confirmed, 24/24, ~0.55 s — with a new po
 that entry's Bug #1), the #457 path, and #554 ShadowProjector (2/2). The #462/#460 dropoff item
 was found **broken-in-part** (raw PII in capture envelopes) and moved to that entry's Bug #7.)_
 
+- **🆕 NEW — #830 / PR #839 — presentation-scoped offer identity (+ the #826 accept chain).** The
+  ticking Uber card no longer mints replacement offers: a re-render with the same store/order shape
+  ENRICHES the pending offer in place (keeps its presentation epoch and click latches; heads-up
+  updates; TTS speaks once).
+  **What to watch (Uber dash):** each physical offer is spoken ONCE (no triple reads), no rapid
+  "offer replaced" bubble storms, and — the big one — accepting an offer and driving it should now
+  produce a costed job (this + #827 unblocks the #762-D2 accept inference that 07-21 proved
+  unreachable). **Desk:** `offer_records` shows ~one row per physical offer (07-21 showed 17 rows
+  for far fewer offers, every lifetime 3–10 s); Uber `OFFER_TIMEOUT` with description "Replaced by
+  new offer" ≈ 0; an accepted trip has `OFFER_ACCEPTED` + non-null economics instead of the
+  "Unknown Store uncosted corpse". Churn *rate* post-#827 is also worth noting in the log
+  (pay/miles still tick — enrichment should absorb it silently).
+  - Confirmed: 0/2
 - **🆕 NEW — #825 / PR #833 — Uber recognized-surface customer redact wave.** `active_trip`,
   `customer_chat`, `splash`, and `pickup_verification_items` now carry full redact blocks (content
   shapes + uber id anchors incl. the chat `headline_text` "<Name> says:" header and the
