@@ -197,7 +197,10 @@ only, so recognized captures are PII-hashed-at-edge on disk (#598). The mask is
 `[redacted:<4hex>]` (#623) — the first 4 hex of the sha256 of the stripped/trimmed (and, for a
 customer-NAME entry flagged `normalize: customerName`, canonical-key-**normalized**, #733) customer
 token, so two customers redact distinctly (per-customer replay fidelity) without persisting raw
-PII; fail-closed to plain `[redacted]`. The mask token is derived by the SAME canonical form the
+PII; fail-closed to plain `[redacted]`. A redact entry may instead opt into a hash-less plain
+`[redacted]` via `plainMask` (#795 — for bounded secrets like a 4-digit delivery PIN, where 4 hex
+over a 10^4 space is brute-recoverable; compile-rejects `plainMask`+`normalize` together). The
+mask token is otherwise derived by the SAME canonical form the
 parse's `customerNameHash` chain uses (`normalizeCustomerName` before `sha256`, `CustomerNameKey` =
 first token + second-token initial), so a customer's mask/hash is stable across the surface FORMS
 DoorDash renders their name in ("Brandy S" vs "Brandy Smith"). Coverage spans the recognized offer/pickup/dropoff/chat/

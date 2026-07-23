@@ -78,6 +78,35 @@ card's **mechanical** half, #577 (re-confirmed, 24/24, ~0.55 s — with a new po
 that entry's Bug #1), the #457 path, and #554 ShadowProjector (2/2). The #462/#460 dropoff item
 was found **broken-in-part** (raw PII in capture envelopes) and moved to that entry's Bug #7.)_
 
+- **🆕 NEW — #825 / PR #833 — Uber recognized-surface customer redact wave.** `active_trip`,
+  `customer_chat`, `splash`, and `pickup_verification_items` now carry full redact blocks (content
+  shapes + uber id anchors incl. the chat `headline_text` "<Name> says:" header and the
+  `map_marker_pin_head` address that rides `contentDescription` only).
+  **What to watch:** nothing visible on-dash — this is capture-side. **Desk:** in the next pull,
+  every RECOGNIZED uber envelope must show `[redacted:<4hex>]`/`[redacted]` on customer
+  name/street/gate nodes and zero raw customer tokens (grep the recognized uber captures with the
+  CLAUDE.local.md name/address recipe; the 07-21 pull's 4 leaking active_trip frames are the
+  before-picture). Chat header masks must be per-customer-stable (same hex as the bare name).
+  - Confirmed: 0/2
+- **🆕 NEW — #795 / PR #834 — PIN-required delivery confirmation flow + plainMask.** The Enter-PIN
+  keypad modal and intro sheet now recognize (`dropoff_pin_keypad`/`dropoff_pin_intro`,
+  recognize-only), and the entered PIN masks to a **plain** `[redacted]` (no 4-hex suffix — a
+  bounded PIN is brute-recoverable from 4 hex).
+  **What to watch:** on the next PIN-required delivery (CVS-class), the delivery completes as
+  before. **Desk:** those frames land in their intent folders instead of UNKNOWN; in the keypad
+  frames' envelopes the PIN digits appear ONLY as plain `[redacted]` — no `[redacted:hhhh]` token
+  on any pure-digit node, no raw PIN anywhere.
+  - Confirmed: 0/2
+- **🆕 NEW — #796 / PR #837 — DoorDash recognition-gap batch (11 rules).** Dropoff issue
+  menu/resolution, task feedback, receipt photo, barcode confirm/failed, navigate-to-zone loading,
+  and the Quality Rate / Dasher Rewards family now recognize (all recognize-only; zero state
+  impact expected).
+  **What to watch:** nothing on-dash. **Desk:** the UNKNOWN family census should drop these
+  families to ~zero; `dropoff_issue_resolution` envelopes must mask the fused header as
+  `For [redacted:<4hex>]` (marker kept, name+store masked). The known residual: the
+  pickup-card-over-zone COMPOUND frame stays UNKNOWN deliberately (PII-bearing; follow-up gap
+  noted on #796) — its customer name is covered by the #806/#815 UNKNOWN scrub, verify it masks.
+  - Confirmed: 0/2
 - **🆕 NEW — #827 (Part 1) + #813 — Uber offer time/miles parse + storeName + dropoff redact.** The
   Uber offer's fused `NN min (NN.N mi) total` node now parses distance from the parenthetical miles
   (was reading the *minutes* value as miles, ≈2.7× on every offer), minutes from the `min` token
