@@ -245,6 +245,11 @@ data class CompiledRedact(
          * becomes `[redacted:<4hex>]`, where `<4hex>` is the first four hex chars
          * of the sha256 of the keepPrefix-STRIPPED, TRIMMED token.
          *
+         * When [plainMask] is set (#795) the suffix is SKIPPED entirely and the
+         * masked portion is the plain [REDACTED] constant (keepPrefix still honored)
+         * — for a small-space secret (a 4-digit PIN keypad node) whose `<4hex>` form
+         * would be reversible; see [CompiledRedactEntry.plainMask].
+         *
          * Frame-invariance: the token hashed is the customer string itself (after
          * stripping the marker prefix and trimming, and — when [normalize] is set —
          * canonicalizing via [customerNameKey], #733), NOT the whole node text — so
