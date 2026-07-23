@@ -153,6 +153,7 @@ class CaptureRedactionCorpusTest {
             "doordash.screen.pickup_resolution_options",
             "doordash.screen.pickup_unassigned_confirmation",
             "doordash.screen.pickup_unassign_survey",
+            "doordash.screen.dropoff_issue_resolution",
         )
         val maskShape = Regex("""^For \[redacted:[0-9a-f]{4}\]$""")
         for (id in forFamily) {
