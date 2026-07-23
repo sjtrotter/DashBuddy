@@ -68,6 +68,10 @@ object PermissionUtils {
     }
 
     // Bubble Permissions
+    // DEPRECATION suppressed, not cleared: areBubblesAllowed() is the documented minSdk-30
+    // fallback (#122/#793) — bubblePreference exists only on API 31+, so the deprecated call
+    // IS the pre-31 path and must stay until minSdk >= 31.
+    @Suppress("DEPRECATION")
     fun hasFullBubblePreference(context: Context): Boolean {
         val notificationManager =
             context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager

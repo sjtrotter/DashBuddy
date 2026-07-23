@@ -104,8 +104,8 @@ internal object DeliveryFolds {
         val receipt = p.parsedPay
         val soleDrop = !suspectFullReceipt && receipt != null &&
             (p.dropRealizedPay == null || kotlin.math.abs(p.dropRealizedPay - receipt.total) < 0.005)
-        val tip = if (soleDrop) receipt?.totalTip else null
-        val basePay = if (soleDrop) receipt?.totalBasePay else null
+        val tip = if (soleDrop) receipt.totalTip else null
+        val basePay = if (soleDrop) receipt.totalBasePay else null
 
         // Partition deltas. Anchor = the previous completion (or DASH_START) in the same session.
         // Floor the per-row delta at 0 like the session-level SUM (MAX(…,0)): a mid-session odometer

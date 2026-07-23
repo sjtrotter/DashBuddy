@@ -28,7 +28,7 @@ internal const val EMPTY_VALUE = "—"
  * `AnalyticsScreen.tabOptions()`. The [AppSegmented][cloud.trotter.dashbuddy.core.designsystem.component.AppSegmented]
  * selection there is keyed off the enum itself, never the resolved label string.
  */
-enum class AnalyticsTab(@StringRes val labelRes: Int) {
+enum class AnalyticsTab(@param:StringRes val labelRes: Int) {
     Money(R.string.analytics_tab_money),
     Patterns(R.string.analytics_tab_patterns),
     Decisions(R.string.analytics_tab_decisions),

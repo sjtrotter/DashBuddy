@@ -69,8 +69,8 @@ class CaptureRedactionTest {
         ),
     )
 
-    private fun sourceFor(ruleId: String, redact: CompiledRedact) = object : ScreenRedactionSource {
-        override fun redactFor(id: String): CompiledRedact? = redact.takeIf { id == ruleId }
+    private fun sourceFor(forRuleId: String, redact: CompiledRedact) = object : ScreenRedactionSource {
+        override fun redactFor(ruleId: String): CompiledRedact? = redact.takeIf { ruleId == forRuleId }
     }
 
     private fun writer(source: ScreenRedactionSource) = CaptureWriter(captureBus, stats, source)

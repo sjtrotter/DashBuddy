@@ -335,7 +335,7 @@ class RecordFoldsTest {
         assertEquals(0.10, d.frozenFuelPerMile!!, 1e-9)
         assertEquals(0.15, d.frozenNonFuelPerMile!!, 1e-9)
         // The invariant the 4-step waterfall relies on: fuel + non-fuel ≈ frozenCostPerMile.
-        assertEquals(d.frozenCostPerMile!!, d.frozenFuelPerMile!! + d.frozenNonFuelPerMile!!, 1e-9)
+        assertEquals(d.frozenCostPerMile!!, d.frozenFuelPerMile + d.frozenNonFuelPerMile, 1e-9)
     }
 
     @Test
@@ -630,7 +630,7 @@ class RecordFoldsTest {
             currentCostPerMile = null,
         )
         assertEquals(Platform.Unknown.wire, out.delivery!!.platform)
-        assertNull(out.delivery!!.sessionId)
+        assertNull(out.delivery.sessionId)
         assertNull("no session context is created for a session-less event", out.context)
     }
 
@@ -663,7 +663,7 @@ class RecordFoldsTest {
             currentCostPerMile = null,
         )
         assertEquals("DASH_STOP's platform stamp refines an _unknown session", Platform.DoorDash, stopOut.context!!.platform)
-        assertEquals("doordash", stopOut.context!!.platform.wire)
+        assertEquals("doordash", stopOut.context.platform.wire)
     }
 
     @Test
@@ -887,7 +887,7 @@ class RecordFoldsTest {
             currentCostPerMile = 0.25,
         )
         assertEquals(PayBasis.NONE, out.delivery!!.payBasis)
-        assertNull(out.delivery!!.realizedPay)
+        assertNull(out.delivery.realizedPay)
     }
 
     // ── User corrections (#650) ─────────────────────────────────────────
@@ -1226,7 +1226,7 @@ class RecordFoldsTest {
         assertEquals(2.4, d.milesToDropoff!!, 1e-9)
         assertEquals(2.9, d.realizedMiles!!, 1e-9)
         // Invariant: realizedMiles == milesToStore + milesToDropoff when milesToDropoff != null.
-        assertEquals(d.milesToStore!! + d.milesToDropoff!!, d.realizedMiles!!, 1e-9)
+        assertEquals(d.milesToStore + d.milesToDropoff, d.realizedMiles, 1e-9)
         // Net computed against the leg-sum miles, not the legacy delta.
         assertEquals(10.0 - 2.9 * 0.25, d.netProfit!!, 1e-9)
     }
@@ -1266,7 +1266,7 @@ class RecordFoldsTest {
         assertEquals(3.39, dB.milesToDropoff!!, 1e-6)
         assertEquals(0.16 + 3.39, dB.realizedMiles!!, 1e-6)
         // The collapsed 6.75/0.0 shape is gone; Σ ≈ the old single lump.
-        assertEquals(6.75, dA.realizedMiles!! + dB.realizedMiles!!, 1e-6)
+        assertEquals(6.75, dA.realizedMiles + dB.realizedMiles, 1e-6)
     }
 
     @Test
@@ -1470,8 +1470,8 @@ class RecordFoldsTest {
         val span = ctx!!.lastOdometer!! - ctx.startOdometer!! // 103.9 − 100.0 = 3.9
         assertEquals(3.9, span, 1e-9)
         assertTrue(
-            "Σ per-drop miles (${dA.realizedMiles!! + dB.realizedMiles!!}) must not exceed span ($span)",
-            dA.realizedMiles!! + dB.realizedMiles!! <= span + 1e-9,
+            "Σ per-drop miles (${dA.realizedMiles + dB.realizedMiles}) must not exceed span ($span)",
+            dA.realizedMiles + dB.realizedMiles <= span + 1e-9,
         )
     }
 
@@ -1563,8 +1563,8 @@ class RecordFoldsTest {
         val span = ctx!!.lastOdometer!! - ctx.startOdometer!! // 104.0 − 100.0 = 4.0
         assertEquals(4.0, span, 1e-9)
         assertTrue(
-            "Σ per-drop miles (${d1.realizedMiles!! + d2.realizedMiles!!}) must not exceed span ($span)",
-            d1.realizedMiles!! + d2.realizedMiles!! <= span + 1e-9,
+            "Σ per-drop miles (${d1.realizedMiles + d2.realizedMiles}) must not exceed span ($span)",
+            d1.realizedMiles + d2.realizedMiles <= span + 1e-9,
         )
     }
 }
