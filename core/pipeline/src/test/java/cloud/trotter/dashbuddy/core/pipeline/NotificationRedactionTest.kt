@@ -40,9 +40,9 @@ class NotificationRedactionTest {
             Json.parseToJsonElement(json).jsonArray, RuleContext.NOTIFICATION,
         ).single().notifRedact
 
-    private fun sourceFor(ruleId: String, redact: CompiledNotifRedact) = object : ScreenRedactionSource {
-        override fun redactFor(id: String): CompiledRedact? = null
-        override fun notifRedactFor(id: String): CompiledNotifRedact? = redact.takeIf { id == ruleId }
+    private fun sourceFor(forRuleId: String, redact: CompiledNotifRedact) = object : ScreenRedactionSource {
+        override fun redactFor(ruleId: String): CompiledRedact? = null
+        override fun notifRedactFor(ruleId: String): CompiledNotifRedact? = redact.takeIf { ruleId == forRuleId }
     }
 
     private fun writer(source: ScreenRedactionSource) = CaptureWriter(captureBus, stats, source)

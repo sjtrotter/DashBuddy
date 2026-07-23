@@ -91,7 +91,7 @@ class OdometerPredicateEquivalenceTest {
         if (prevLive && !nextLive) add(Gps.OFF)  // StopOdometer (session end)
         if (!nextLive) return@buildList
         val pt = prev?.activeTask
-        val nt = next?.activeTask
+        val nt = next.activeTask
         // Emission ORDER is faithful to master's diffTask (adversarial-review MED): the task-change
         // Resumes fire BEFORE the arrival Pause, so a mint+arrive-in-one-frame step (teardown_ghost's
         // offer → pickup_shopping) folds to OFF — Resume then Pause — exactly as real master did.
@@ -99,7 +99,7 @@ class OdometerPredicateEquivalenceTest {
         if (nt != null && nt.phase == TaskPhase.PICKUP && pt?.taskId != nt.taskId) add(Gps.ON)    // Resume (new pickup nav)
         if (nt?.phase == TaskPhase.DROPOFF && nt.taskId != pt?.taskId) add(Gps.ON)                // Resume (new dropoff leg)
         if (nt?.arrivedAt != null && pt?.arrivedAt == null) add(Gps.OFF)                          // PauseOdometer (arrival)
-        if (next?.lastActedFlow == Flow.PostTask && prev?.lastActedFlow != Flow.PostTask) add(Gps.ON) // Resume (PostTask entry)
+        if (next.lastActedFlow == Flow.PostTask && prev?.lastActedFlow != Flow.PostTask) add(Gps.ON) // Resume (PostTask entry)
     }
 
     /** The GPS ground truth per step, straight from the arbiter (property 2's SSOT). */

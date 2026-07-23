@@ -370,7 +370,6 @@ object RecordFolds {
         val p = e.payload as? SessionStartPayload
             ?: return FoldOutcome(context = context, skip = "DASH_START: missing/malformed payload")
         val sid = e.sessionId ?: p.sessionId
-            ?: return FoldOutcome(context = context, skip = "DASH_START: no sessionId")
         val platform = Platform.fromName(p.platform) ?: Platform.Unknown
         val odo = event.metadata?.odometer
         // A RECOVERY (or any duplicate) re-start of a session that was ALREADY STARTED WITH A REAL

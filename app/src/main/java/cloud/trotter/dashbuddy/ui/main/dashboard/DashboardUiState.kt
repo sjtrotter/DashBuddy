@@ -31,7 +31,7 @@ data class DashboardUiState(
      * carries resolved copy. Not i18n: the app still ships English-only; this is a string-
      * ownership move (SSOT), not locale selection.
      */
-    @StringRes val statusText: Int = R.string.dashboard_status_offline,
+    @param:StringRes val statusText: Int = R.string.dashboard_status_offline,
     /**
      * True while a dash session is active (focused region present, mode != Offline),
      * registry-resolved (never a `== DoorDash` literal). Drives the bubble pointer only.
