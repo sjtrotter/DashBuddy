@@ -267,6 +267,14 @@ private fun PlatformRegionStepper.latchOfferClick(
  * variant emits, never by a presentationKey-fallback landing). A null hash (legacy replayed stubs)
  * lands on the current presented offer, as before.
  *
+ * Eval-race (review F4): an in-flight eval for variant N that lands AFTER variant N+1 exists misses
+ * (hash mismatch) and is simply dropped — the enrich already emitted a fresh EvaluateOffer for
+ * N+1, so N+1 gets its own landing. This cannot starve the read: starvation would require the churn
+ * period to be shorter than the in-process eval-loopback latency (sub-millisecond compute) versus
+ * the observed 3-10 s re-quote ticks, and the SAME exposure existed pre-#830 on the replace path
+ * (every replacement dropped the outgoing offer's in-flight eval identically). SpeakOffer still
+ * fires exactly once via [PendingOffer.firstEvalLandedAt] regardless of which variant lands first.
+ *
  * Also stamps the speak-once marker [PendingOffer.firstEvalLandedAt] on the FIRST landing per
  * physical presentation (#830) — set only when still null, so a variant re-eval landing later never
  * moves it; [OfferEffects] reads the PREVIOUS state's marker to fire `SpeakOffer` exactly once.

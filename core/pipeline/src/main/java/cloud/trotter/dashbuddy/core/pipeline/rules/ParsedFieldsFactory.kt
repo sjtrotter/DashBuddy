@@ -287,8 +287,16 @@ object ParsedFieldsFactory {
         // no Platform branch. Fail-CLOSED (#362): a null key (digest failure) leaves it null so the
         // state machine falls back to today's replace-on-any-hash-change — a false MERGE is never
         // possible, only a false SPLIT that degrades to prior behavior. NEVER the plaintext input.
+        //
+        // Fail-closed on a CONTENT-FREE key too (review F1): a partially-rendered frame that
+        // extracted pay but NO orders (or all-blank store names) would otherwise hash the constant
+        // "|0|" (or "|N|" over empty stores) — one key every such offer on every platform shares, so
+        // two genuinely different order-less offers would enrich-MERGE (offer 2 inheriting offer 1's
+        // presentedAt + click latches → a phantom OFFER_ACCEPTED with offer 2's economics). No stable
+        // subset → no presentation identity → null → replace.
         val orderTypes = orders.joinToString(",") { it.orderType.name }
-        val presentationKey = sha256OrNull("$storeNames|${orders.size}|$orderTypes")
+        val presentationKey = if (orders.isEmpty() || orders.all { it.storeName.isBlank() }) null
+        else sha256OrNull("$storeNames|${orders.size}|$orderTypes")
 
         return ParsedFields.OfferFields(
             activity = f.str("activity"),
