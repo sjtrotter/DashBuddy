@@ -74,6 +74,10 @@ internal fun PlatformRegionStepper.acceptInputsFromPending(pending: PendingOffer
             netPay = eval?.netPayAmount,
             estMinutes = eval?.estimatedTimeMinutes ?: parsedOffer?.timeToCompleteMinutes?.toDouble(),
             distanceMiles = eval?.distanceMiles ?: parsedOffer?.distanceMiles,
+            // #823 Phase 1: capture the offer's quoted UNITS count when it was units-denominated, so
+            // the pickup-confirmed shop-rate site can pair it with the ground-truth items shopped and
+            // learn the items:units ratio. Null for an items-denominated / non-shop offer.
+            offerUnitCount = parsedOffer?.takeIf { it.itemCountIsUnits }?.itemCount,
             // The honest accept moment (the accept-click time); falls back to the consume frame.
             acceptedAt = acceptedAt ?: pending?.acceptClickAt ?: pending?.presentedAt ?: 0L,
         ),

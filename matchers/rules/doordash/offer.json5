@@ -214,6 +214,17 @@
                 "read": "text",
                 "transform": "parseItemCount"
               },
+              "itemCountUnit": {
+                // #823 Phase 1: denomination of the count above — "UNITS" for a units-only
+                // "(64 units)" render, "ITEMS" otherwise. Read from the SAME node as itemCount so
+                // the pair can never disagree about which token was read; the evaluator uses it to
+                // convert a units count to an items-equivalent for the #556 shop-time estimate only.
+                "find": {
+                  "hasIdSuffix": "display_name_secondary"
+                },
+                "read": "text",
+                "transform": "parseItemCountUnit"
+              },
               "isRedCard": {
                 "presence": {
                   "exists": {

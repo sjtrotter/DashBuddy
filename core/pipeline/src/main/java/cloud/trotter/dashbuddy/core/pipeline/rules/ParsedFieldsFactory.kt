@@ -2,6 +2,7 @@ package cloud.trotter.dashbuddy.core.pipeline.rules
 
 import cloud.trotter.dashbuddy.domain.model.accessibility.ParsedTime
 import cloud.trotter.dashbuddy.domain.model.offer.ParsedOffer
+import cloud.trotter.dashbuddy.domain.model.order.CountUnit
 import cloud.trotter.dashbuddy.domain.model.order.OrderBadge
 import cloud.trotter.dashbuddy.domain.model.order.OrderType
 import cloud.trotter.dashbuddy.domain.model.order.ParsedOrder
@@ -264,6 +265,14 @@ object ParsedFieldsFactory {
                 itemCount = o.int("itemCount") ?: 1,
                 isItemCountEstimated = o.int("itemCount") == null,
                 badges = badges,
+                // #823 Phase 1: which label the count was denominated by. UNITS only when the rule
+                // parsed "UNITS" (a units-only "(64 units)") AND a real count was read (not the
+                // estimated default) — an estimated/absent count is meaningless to denominate.
+                countUnit = if (o.int("itemCount") != null && o.str("itemCountUnit") == "UNITS") {
+                    CountUnit.UNITS
+                } else {
+                    CountUnit.ITEMS
+                },
             )
         }
 
@@ -311,6 +320,17 @@ object ParsedFieldsFactory {
                 itemCount = orders
                     .filter { it.orderType == OrderType.SHOP_FOR_ITEMS && !it.isItemCountEstimated }
                     .sumOf { it.itemCount },
+                // #823 Phase 1: the summed shop count is units-denominated iff there is at least one
+                // contributing (confirmed) shop order AND every one of them was units-denominated —
+                // the units-only shape this converts for the time estimate. A mixed stack (some items,
+                // some units) stays false → no ratio applied → unchanged behaviour (Phase 1 scopes the
+                // fielded units-only single-shop offer; mixing denominations in one summed number is a
+                // pre-existing shape this deliberately does not touch).
+                itemCountIsUnits = orders
+                    .filter { it.orderType == OrderType.SHOP_FOR_ITEMS && !it.isItemCountEstimated }
+                    .let { shopOrders ->
+                        shopOrders.isNotEmpty() && shopOrders.all { it.countUnit == CountUnit.UNITS }
+                    },
                 payAmount = payAmount,
                 distanceMiles = distance,
                 dueByTimeText = deliveryTimeText,

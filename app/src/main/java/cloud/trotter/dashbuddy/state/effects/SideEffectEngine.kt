@@ -344,6 +344,26 @@ class SideEffectEngine @Inject constructor(
                 Timber.tag("ShopRate").d("recorded shop store=%s", effect.storeName ?: "?")
             }
 
+            is AppEffect.RecordItemsPerUnitRatio -> {
+                // #823 Phase 1: learn the dasher's items:units ratio for THIS platform from a
+                // units-denominated shop's ground truth (items actually shopped vs the offer's units).
+                val learned = strategyRepository.recordItemsPerUnitRatio(
+                    effect.platform, effect.offerUnitCount, effect.itemsShopped,
+                )
+                val sampleRatio =
+                    if (effect.offerUnitCount > 0) effect.itemsShopped.toDouble() / effect.offerUnitCount else 0.0
+                // #551 P7: ratio + counts + platform wire are shareable INFO milestones (all numeric /
+                // registry tokens, no raw store/customer text). A never-learned mean renders "?"
+                // (an out-of-band sample folds nothing); Locale.ROOT keeps the desk grep stable.
+                val learnedStr =
+                    learned.ratio?.let { String.format(Locale.ROOT, "%.2f", it) } ?: "?"
+                Timber.tag("ShopRate").i(
+                    "items:units %d items / %d units = %.2f [%s] → learned %s (n=%d)",
+                    effect.itemsShopped, effect.offerUnitCount, sampleRatio, effect.platform.wire,
+                    learnedStr, learned.sampleCount,
+                )
+            }
+
             is AppEffect.ProcessTipNotification -> tipEffectHandler.process(engineScope, effect)
 
             // --- LOOPBACKS (Produces Events) ---
@@ -665,6 +685,7 @@ class SideEffectEngine @Inject constructor(
         is AppEffect.PauseOdometer,
         is AppEffect.ResumeOdometer,
         is AppEffect.RecordShopRate,
+        is AppEffect.RecordItemsPerUnitRatio,
         is AppEffect.StartSession,
         is AppEffect.EndSession,
         is AppEffect.ProcessTipNotification,

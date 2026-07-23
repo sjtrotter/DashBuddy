@@ -10,6 +10,7 @@ import cloud.trotter.dashbuddy.domain.model.pay.displayLabel
 import cloud.trotter.dashbuddy.domain.pipeline.Observation
 import cloud.trotter.dashbuddy.domain.pipeline.TransitionTrigger
 import cloud.trotter.dashbuddy.domain.state.Flow
+import cloud.trotter.dashbuddy.domain.state.Job
 import cloud.trotter.dashbuddy.domain.state.ParsedFields
 import cloud.trotter.dashbuddy.domain.state.PickupActivity
 import cloud.trotter.dashbuddy.domain.state.Platform
@@ -154,17 +155,16 @@ internal fun EffectMap.diffTask(
             // displaced prevTask + any earlier displaced pickups), each at its own completion
             // time, BEFORE the dropoff's DELIVERY_NAV_STARTED (CONFIRMED-before-NAV). Per-task
             // keys make this idempotent with the close-out sweep below.
+            // #159 FIX 9 / #823 F3: resolve the confirming job PREV-first (next's active job may have
+            // already swapped to a stacked next job on this edge, which would drop both the offer
+            // hashes AND the units-ratio sample); fall back to next's, then null when truly gone.
+            val sweepJob = prev.activeJob?.takeIf { it.jobId == prevTask.jobId }
+                ?: next.activeJob?.takeIf { it.jobId == prevTask.jobId }
             addAll(
                 pickupConfirmSweepEffects(
                     sessionId, next, prevTask.jobId, obs,
-                    // #159 FIX 9: source the job's offer hashes from the job matching prevTask.jobId in
-                    // PREV state first (next's active job may have already swapped to a stacked next job on
-                    // this edge, which would drop the hashes to empty); fall back to next's, then empty
-                    // only when the job is truly gone from both.
-                    jobOfferHashes = (
-                        prev.activeJob?.takeIf { it.jobId == prevTask.jobId }
-                            ?: next.activeJob?.takeIf { it.jobId == prevTask.jobId }
-                        )?.parentOfferHashes ?: emptyList(),
+                    jobOfferHashes = sweepJob?.parentOfferHashes ?: emptyList(),
+                    ratioJob = sweepJob,
                 ),
             )
             addAll(deliveryNavStartedEffects(sessionId, nextTask, obs))
@@ -324,6 +324,15 @@ internal fun EffectMap.pickupConfirmSweepEffects(
     // #159 D3: the job's contributing offer hashes, carried onto each PICKUP_CONFIRMED payload for the
     // offer↔job link. Passed by the caller (the job is in scope there); empty ⇒ temporal fallback (F12).
     jobOfferHashes: List<String> = emptyList(),
+    // #823 Phase 1 (F3): the job whose units-denominated offer teaches the items:units ratio, resolved
+    // by the CALLER (prev-first on the pickup→dropoff edge, where next's activeJob may already have
+    // swapped to a stacked job — mirrors the [jobOfferHashes] resolution). Null ⇒ no ratio learning.
+    // The close-out site (DeliveryCompletionEffects) passes null DELIBERATELY: a pickup-only close is
+    // an abnormal completion, not a units-ratio-learning surface — that path folds the shop PACE
+    // (RecordShopRate) but never the ratio. Do NOT switch this to `region.activeJob`: on both callers
+    // `region` is `next`, whose activeJob is null/other-job by construction there, so it would learn
+    // nothing on the normal edge AND silently open the close-out (suspicious-sample) path.
+    ratioJob: Job? = null,
 ): List<AppEffect> = buildList {
     if (jobId == null) return@buildList
     val lineage = (region.recentTasks + listOfNotNull(region.activeTask))
@@ -334,6 +343,21 @@ internal fun EffectMap.pickupConfirmSweepEffects(
         // sweep, and this filter is what stops it re-minting.
         .filter { it.jobId == jobId && it.phase == TaskPhase.PICKUP && it.arrivedAt != null && it.unassignedAt == null }
         .distinctBy { it.taskId }
+    // #823 Phase 1: resolve THIS job's units-denominated offer count for the items:units-ratio
+    // learning. Two independent ambiguity guards, BOTH required:
+    //  (1) a SINGLE accepted offer that was units-denominated (`acceptedOffers.singleOrNull()`) — a
+    //      stack of offers can't say which offer's units pair with which pickup's items;
+    //  (2) at most ONE shopping pickup in the swept lineage (F2) — one units-denominated offer can
+    //      itself carry ≥2 shop orders at distinct stores → ≥2 SHOPPING pickups, each of which would
+    //      otherwise fold its OWN itemsShopped against the offer's SUMMED unit count → N biased-low
+    //      samples. When >1 shopping pickup sweeps, no per-pickup unit split exists, so learn nothing.
+    // Null ⇒ no ratio learning (fail-safe: a missing sample beats a mis-attributed one, the
+    // MIN_SAMPLES philosophy).
+    val singleShopPickup = lineage.count { it.activity == PickupActivity.SHOPPING } <= 1
+    val offerUnitCount = ratioJob
+        ?.takeIf { it.jobId == jobId && singleShopPickup }
+        ?.acceptedOffers?.singleOrNull()
+        ?.offerUnitCount
     for (task in lineage) {
         addAll(
             pickupConfirmedEffects(
@@ -343,6 +367,7 @@ internal fun EffectMap.pickupConfirmSweepEffects(
                 platform = region.platform,
                 confirmedAt = task.completedAt ?: obs.timestamp,
                 jobOfferHashes = jobOfferHashes,
+                offerUnitCount = offerUnitCount,
             ),
         )
     }
@@ -362,6 +387,11 @@ private fun EffectMap.pickupConfirmedEffects(
     platform: Platform,
     confirmedAt: Long = obs.timestamp,
     jobOfferHashes: List<String> = emptyList(),
+    // #823 Phase 1: the job's units-denominated offer's quoted unit count, when unambiguous (a single
+    // units-only shop offer). Non-null ⇒ this shop's ground-truth items can teach the items:units
+    // ratio; null (items-denominated / stacked / absent) ⇒ no ratio sample. Resolved by the caller
+    // (which holds the job); see [pickupConfirmSweepEffects].
+    offerUnitCount: Int? = null,
 ): List<AppEffect> = buildList {
     add(
         logEffect(
@@ -397,6 +427,21 @@ private fun EffectMap.pickupConfirmedEffects(
                 taskId = prevTask.taskId,
             ),
         )
+        // #823 Phase 1: if the accepted offer was units-denominated, this shop's ground-truth items
+        // (shopItems) vs the quoted units teaches the per-platform items:units ratio. Guarded on an
+        // unambiguous single units offer by the caller (offerUnitCount non-null); the handler floors
+        // out-of-band samples.
+        if (offerUnitCount != null && offerUnitCount > 0) {
+            add(
+                AppEffect.RecordItemsPerUnitRatio(
+                    platform = platform,
+                    offerUnitCount = offerUnitCount,
+                    itemsShopped = shopItems,
+                    jobId = prevTask.jobId,
+                    taskId = prevTask.taskId,
+                ),
+            )
+        }
     }
 }
 

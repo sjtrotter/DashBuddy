@@ -52,6 +52,25 @@ data class UserEconomy(
      */
     val shopSeedItemsPerMin: Double = DEFAULT_SHOP_ITEMS_PER_MIN,
 
+    /**
+     * Learned **items:units ratio** (#823 Phase 1) — how many physical items one DoorDash "unit" is
+     * worth, so a units-only offer (`(64 units)`) can be converted to an items-equivalent before the
+     * #556 shop-time pace divide. Null until enough units-shops are measured; the conversion falls
+     * back to [itemsPerUnitRatioSeed]. Like [learnedShopItemsPerMinute] this is a MEASURED value kept
+     * in the strategy store (never a user-set economy field, so a vehicle-class reseed can't touch
+     * it). Resolved per-platform by [EvaluationConfig.forPlatform].
+     */
+    val learnedItemsPerUnitRatio: Double? = null,
+    /** Number of measured units-shops behind [learnedItemsPerUnitRatio]; gates trusting it (#823). */
+    val itemsPerUnitRatioSampleCount: Int = 0,
+    /**
+     * The cold-start seed items:units ratio for the offer's platform (#823), used until this platform
+     * has its own [ItemsPerUnitRatio.MIN_SAMPLES] measured units-shops. Resolved from
+     * [ItemsPerUnitRatioSeeds] by [EvaluationConfig.forPlatform] at eval time; defaults to the generic
+     * corpus seed off-config so a hand-built economy (and every existing test) behaves as before.
+     */
+    val itemsPerUnitRatioSeed: Double = DEFAULT_ITEMS_PER_UNIT_RATIO,
+
     // Maintenance (paired: cost + interval/lifetime). Defaults are zero so a
     // hand-constructed UserEconomy is cost-free for tests. Production paths
     // populate these from the VehicleClass preset via the repository.
@@ -124,6 +143,20 @@ data class UserEconomy(
             ?.takeIf { shopRateSampleCount >= MIN_SHOP_SAMPLES && it > 0.0 }
             ?: shopSeedItemsPerMin
 
+    /**
+     * Items:units ratio for the units→items-equivalent conversion (#823 Phase 1): the learned ratio
+     * once [ItemsPerUnitRatio.MIN_SAMPLES] units-shops have been measured for this platform (and it
+     * is in the sane [ItemsPerUnitRatio.MIN_RATIO]..[ItemsPerUnitRatio.MAX_RATIO] band), else this
+     * platform's [itemsPerUnitRatioSeed]. Always > 0.
+     */
+    val effectiveItemsPerUnitRatio: Double
+        get() = learnedItemsPerUnitRatio
+            ?.takeIf {
+                itemsPerUnitRatioSampleCount >= ItemsPerUnitRatio.MIN_SAMPLES &&
+                    it in ItemsPerUnitRatio.MIN_RATIO..ItemsPerUnitRatio.MAX_RATIO
+            }
+            ?: itemsPerUnitRatioSeed
+
     fun isUserSet(field: EconomyField): Boolean = field in userSetFields
 
     /** True when at least one [EconomyField] is still at its class/default value. */
@@ -145,6 +178,13 @@ data class UserEconomy(
 
         /** Measured shops required before the learned pace overrides [DEFAULT_SHOP_ITEMS_PER_MIN]. */
         const val MIN_SHOP_SAMPLES = 5
+
+        /**
+         * Cold-start items:units ratio seed (#823 Phase 1) — how many physical items one DoorDash
+         * "unit" is worth. The domain default; production resolves the per-platform seed via
+         * [ItemsPerUnitRatioSeeds]. See that object for the corpus derivation (≈ 0.75–0.81 → 0.78).
+         */
+        const val DEFAULT_ITEMS_PER_UNIT_RATIO = ItemsPerUnitRatioSeeds.DOORDASH_CORPUS_SEED
         const val DEFAULT_ANNUAL_MI = 10_000.0
         const val DEFAULT_PHONE_PLAN_TOTAL = 80.0
         const val DEFAULT_PHONE_PLAN_LINES = 1

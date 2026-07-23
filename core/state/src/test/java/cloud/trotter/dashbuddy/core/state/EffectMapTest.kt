@@ -16,6 +16,7 @@ import cloud.trotter.dashbuddy.domain.pipeline.Observation
 import cloud.trotter.dashbuddy.domain.pipeline.RequestedEffect
 import cloud.trotter.dashbuddy.domain.pipeline.TimeoutType
 import cloud.trotter.dashbuddy.domain.pipeline.TransitionTrigger
+import cloud.trotter.dashbuddy.domain.state.AcceptedOfferEconomics
 import cloud.trotter.dashbuddy.domain.state.AppState
 import cloud.trotter.dashbuddy.domain.state.CrossPlatformRegion
 import cloud.trotter.dashbuddy.domain.state.DestructiveKind
@@ -1090,6 +1091,85 @@ class EffectMapTest {
             "the sample is idempotent per platform-scoped pickup task",
             "shop_rate:instacart:task-1", rec.effectKey,
         )
+    }
+
+    @Test
+    fun `a units-denominated single-shop offer emits RecordItemsPerUnitRatio pairing offer units with shopped items (#823)`() {
+        val (platform, _) = stateWithPlatform(platform = Platform.Instacart)
+        val session = Session("sess-1", startedAt = 100L)
+        val arrivedAt = 100_000L
+        val confirmAt = arrivedAt + 30 * 60_000L
+        // A units-only offer: (64 units) → offerUnitCount = 64 on the accepted economics.
+        val unitsJob = Job(
+            jobId = "job-1", offerStoreHint = emptyList(), parentOfferHash = "off-1", startedAt = 900L,
+            acceptedOffers = listOf(AcceptedOfferEconomics(offerHash = "off-1", offerUnitCount = 64, acceptedAt = 900L)),
+        )
+        val shopPickup = Task(
+            taskId = "task-1", jobId = "job-1", phase = TaskPhase.PICKUP, storeName = "H-E-B",
+            activity = PickupActivity.SHOPPING, itemsShopped = 30, arrivedAt = arrivedAt, startedAt = 900L,
+        )
+        val prev = AppState(regions = Regions(
+            flow = FlowRegion(flow = Flow.TaskPickupArrived),
+            platforms = mapOf(platform to PlatformRegion(platform, mode = Mode.Online, session = session, activeJob = unitsJob, activeTask = shopPickup)),
+        ))
+        val dropoff = Task(taskId = "task-2", jobId = "job-1", phase = TaskPhase.DROPOFF, startedAt = confirmAt)
+        val next = AppState(regions = Regions(
+            flow = FlowRegion(flow = Flow.TaskDropoffNavigation),
+            platforms = mapOf(platform to PlatformRegion(platform, mode = Mode.Online, session = session,
+                activeJob = unitsJob, activeTask = dropoff, recentTasks = listOf(shopPickup.copy(completedAt = confirmAt)))),
+        ))
+
+        val effects = effectMap.diff(prev, next, screenObs(
+            flow = Flow.TaskDropoffNavigation, timestamp = confirmAt,
+            parsed = ParsedFields.TaskFields(phase = TaskPhase.DROPOFF, subFlow = TaskSubFlow.NAVIGATION),
+        ))
+
+        val rec = effects.filterIsInstance<AppEffect.RecordItemsPerUnitRatio>().single()
+        assertEquals(64, rec.offerUnitCount)
+        assertEquals(30, rec.itemsShopped)
+        assertEquals("task-1", rec.taskId)
+        assertEquals(platform, rec.platform)
+        assertEquals("items_per_unit_ratio:instacart:task-1", rec.effectKey)
+    }
+
+    @Test
+    fun `a units offer with TWO shopping pickups in the swept lineage folds NO ratio sample (#823 F2)`() {
+        // One units-denominated offer can carry ≥2 shop orders at distinct stores → ≥2 SHOPPING
+        // pickups, each of which would fold its own itemsShopped against the offer's SUMMED unit
+        // count (biased low). F2: when >1 shopping pickup sweeps, learn nothing.
+        val (platform, _) = stateWithPlatform(platform = Platform.Instacart)
+        val session = Session("sess-1", startedAt = 100L)
+        val arrivedAt = 100_000L
+        val confirmAt = arrivedAt + 30 * 60_000L
+        val unitsJob = Job(
+            jobId = "job-1", offerStoreHint = emptyList(), parentOfferHash = "off-1", startedAt = 900L,
+            acceptedOffers = listOf(AcceptedOfferEconomics(offerHash = "off-1", offerUnitCount = 64, acceptedAt = 900L)),
+        )
+        val shop1 = Task(taskId = "task-1", jobId = "job-1", phase = TaskPhase.PICKUP, storeName = "H-E-B",
+            activity = PickupActivity.SHOPPING, itemsShopped = 20, arrivedAt = arrivedAt, startedAt = 900L)
+        val shop2 = Task(taskId = "task-2", jobId = "job-1", phase = TaskPhase.PICKUP, storeName = "Sprouts",
+            activity = PickupActivity.SHOPPING, itemsShopped = 10, arrivedAt = arrivedAt + 60_000L, startedAt = 900L)
+        val prev = AppState(regions = Regions(
+            flow = FlowRegion(flow = Flow.TaskPickupArrived),
+            platforms = mapOf(platform to PlatformRegion(platform, mode = Mode.Online, session = session, activeJob = unitsJob, activeTask = shop2)),
+        ))
+        val dropoff = Task(taskId = "task-3", jobId = "job-1", phase = TaskPhase.DROPOFF, startedAt = confirmAt)
+        val next = AppState(regions = Regions(
+            flow = FlowRegion(flow = Flow.TaskDropoffNavigation),
+            platforms = mapOf(platform to PlatformRegion(platform, mode = Mode.Online, session = session,
+                activeJob = unitsJob, activeTask = dropoff,
+                recentTasks = listOf(shop1.copy(completedAt = confirmAt), shop2.copy(completedAt = confirmAt)))),
+        ))
+
+        val effects = effectMap.diff(prev, next, screenObs(
+            flow = Flow.TaskDropoffNavigation, timestamp = confirmAt,
+            parsed = ParsedFields.TaskFields(phase = TaskPhase.DROPOFF, subFlow = TaskSubFlow.NAVIGATION),
+        ))
+
+        // The shop PACE still folds for each pickup (that's per-pickup honest), but NO ratio sample.
+        assertTrue("two shopping pickups → the ambiguous ratio is not learned",
+            effects.none { it is AppEffect.RecordItemsPerUnitRatio })
+        assertEquals("shop-pace still records per pickup", 2, effects.filterIsInstance<AppEffect.RecordShopRate>().size)
     }
 
     @Test

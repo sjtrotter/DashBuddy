@@ -4,6 +4,7 @@ import androidx.datastore.preferences.core.PreferenceDataStoreFactory
 import androidx.datastore.preferences.core.doublePreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.intPreferencesKey
+import cloud.trotter.dashbuddy.domain.evaluation.ItemsPerUnitRatio
 import cloud.trotter.dashbuddy.domain.evaluation.LearnedShopRate
 import cloud.trotter.dashbuddy.domain.evaluation.ShopRate
 import cloud.trotter.dashbuddy.domain.state.Platform
@@ -112,5 +113,55 @@ class StrategyDataSourceShopRateTest {
                 "under DoorDash or any other platform",
             src.learnedShopRates.first().isEmpty(),
         )
+    }
+
+    @Test
+    fun `items-units ratio learns per platform, clamps out-of-band samples, and one platform never moves another (#823)`() = runTest {
+        val dispatcher = StandardTestDispatcher(testScheduler)
+        val ds = PreferenceDataStoreFactory.create(
+            scope = CoroutineScope(dispatcher + Job()),
+            produceFile = { File(tmp.root, "strategy_ratio.preferences_pb") },
+        )
+        val src = StrategyDataSource(ds)
+
+        // DoorDash: five 39-item / 50-unit shops → 0.78 exactly, past the trust gate.
+        var lastDd: cloud.trotter.dashbuddy.domain.evaluation.LearnedItemsPerUnitRatio? = null
+        repeat(5) { lastDd = src.recordItemsPerUnitRatio(Platform.DoorDash, units = 50, items = 39) }
+        // Uber: three 30-item / 64-unit shops → 0.46875, in-band above the 0.3 floor (F1).
+        repeat(3) { src.recordItemsPerUnitRatio(Platform.Uber, units = 64, items = 30) }
+        advanceUntilIdle()
+
+        assertEquals(5, lastDd!!.sampleCount)
+        val ratios = src.learnedItemsPerUnitRatios.first()
+        assertEquals(0.78, ratios.getValue(Platform.DoorDash).ratio!!, 1e-9)
+        assertEquals(5, ratios.getValue(Platform.DoorDash).sampleCount)
+        // The fielded H-E-B ratio folds at its exact value (0.46875), NOT the floor.
+        assertEquals(0.46875, ratios.getValue(Platform.Uber).ratio!!, 1e-9)
+        assertEquals(3, ratios.getValue(Platform.Uber).sampleCount)
+        // A platform that never recorded is absent — the eval seam owns the seed fallback.
+        assertNull(ratios[Platform.Instacart])
+
+        // Recording more Uber shops must not perturb DoorDash's entry.
+        src.recordItemsPerUnitRatio(Platform.Uber, units = 64, items = 30)
+        advanceUntilIdle()
+        val after = src.learnedItemsPerUnitRatios.first()
+        assertEquals("DoorDash untouched", 0.78, after.getValue(Platform.DoorDash).ratio!!, 1e-9)
+        assertEquals("DoorDash untouched", 5, after.getValue(Platform.DoorDash).sampleCount)
+    }
+
+    @Test
+    fun `a below-floor items-units sample is a no-op and creates no entry (#823)`() = runTest {
+        val dispatcher = StandardTestDispatcher(testScheduler)
+        val ds = PreferenceDataStoreFactory.create(
+            scope = CoroutineScope(dispatcher + Job()),
+            produceFile = { File(tmp.root, "strategy_ratio2.preferences_pb") },
+        )
+        val src = StrategyDataSource(ds)
+
+        src.recordItemsPerUnitRatio(Platform.DoorDash, units = 0, items = 30) // no units
+        src.recordItemsPerUnitRatio(Platform.DoorDash, units = 50, items = ItemsPerUnitRatio.MIN_ITEMS - 1)
+        advanceUntilIdle()
+
+        assertTrue("no entry from noise", src.learnedItemsPerUnitRatios.first().isEmpty())
     }
 }

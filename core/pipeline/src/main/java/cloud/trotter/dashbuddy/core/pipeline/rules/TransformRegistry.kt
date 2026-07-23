@@ -100,6 +100,7 @@ object TransformRegistry {
             "parseCurrency" -> parseCurrency(value)
             "parseDistance" -> parseDistance(value)
             "parseItemCount" -> parseItemCount(value)
+            "parseItemCountUnit" -> parseItemCountUnit(value)
             "parseDeadline" -> parseDeadlineMillis(value)
             "parseTime" -> parseTimeTextToMillis(value)
             "parseDuration" -> parseDuration(value)
@@ -229,7 +230,7 @@ object TransformRegistry {
     // ========================================================================
 
     private val knownPlainTransforms = setOf(
-        "parseCurrency", "parseDistance", "parseItemCount", "parseDeadline",
+        "parseCurrency", "parseDistance", "parseItemCount", "parseItemCountUnit", "parseDeadline",
         "parseTime", "parseDuration", "parseHrMin", "parseMinutes", "parseLeadingInt",
         "parsePercent", "sha256", "normalizeCustomerName", "trim", "lower", "upper",
         "toDouble", "toInt", "stripDeadlinePrefix",
@@ -361,6 +362,20 @@ object TransformRegistry {
     private fun parseItemCount(text: String): Int? {
         return Regex("\\((\\d+)\\s*(?:item|order|unit)", RegexOption.IGNORE_CASE)
             .find(text)?.groupValues?.get(1)?.toIntOrNull()
+    }
+
+    /**
+     * Denomination of the FIRST count token [parseItemCount] reads (#823 Phase 1): "UNITS" when that
+     * count is bound to "unit(s)" (a units-only offer like "(64 units)" or "(1 unit)"), else "ITEMS"
+     * (an items figure — "(4 items)", or the leading "9 items" of "(9 items • 11 units)"). Anchored
+     * on the SAME `(<number><word>` shape as [parseItemCount] so the two never disagree about which
+     * token was read; returns null when no count token is present (leaves the field absent → the
+     * factory's ITEMS default). "order" reads as ITEMS (an order count is not a unit multiplier).
+     */
+    private fun parseItemCountUnit(text: String): String? {
+        val word = Regex("\\(\\d+\\s*(item|order|unit)", RegexOption.IGNORE_CASE)
+            .find(text)?.groupValues?.get(1)?.lowercase(Locale.ROOT) ?: return null
+        return if (word.startsWith("unit")) "UNITS" else "ITEMS"
     }
 
     /**

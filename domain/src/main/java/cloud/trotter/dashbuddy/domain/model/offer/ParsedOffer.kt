@@ -37,6 +37,18 @@ data class ParsedOffer(
     /** For "Shop for items" orders, the number of items. Set to 1 for pickup order types. */
     val itemCount: Int = 1,
 
+    /**
+     * True when [itemCount] is a **units** count, not an item count (#823 Phase 1) — i.e. the
+     * contributing shop order(s) rendered a units-only quantity (`(64 units)`) with no items figure.
+     * The [OfferEvaluator] converts a units-denominated count into an items-equivalent (units ×
+     * learned per-platform ratio) for the #556 shop-time estimate; the offer card/TTS and the
+     * offer-model still surface [itemCount] verbatim (the platform-shown number). False for an
+     * items-denominated / estimated / non-shop offer, so those price exactly as before. Aggregated
+     * from the per-order [cloud.trotter.dashbuddy.domain.model.order.CountUnit] by
+     * `ParsedFieldsFactory`; `@Serializable` default keeps old snapshots decoding unchanged.
+     */
+    val itemCountIsUnits: Boolean = false,
+
     /** The numeric value of the guaranteed pay for the offer. */
     val payAmount: Double? = null,
 
