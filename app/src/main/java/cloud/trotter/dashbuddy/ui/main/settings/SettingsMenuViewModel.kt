@@ -24,6 +24,8 @@ class SettingsMenuViewModel @Inject constructor(
     val isProMode = appPreferencesRepository.isProMode
     /** Driving / glance mode (#318) — surfaced on General settings. */
     val glanceMode = appPreferencesRepository.glanceMode
+    /** Spoken-offer language override (#428 Half B) — surfaced on General settings; null ⇒ system. */
+    val ttsLanguageTag = appPreferencesRepository.ttsLanguageTag
     /** Surfaced on Settings home so the Personal Economy nav row shows live $/mi. */
     val userEconomy = appPreferencesRepository.userEconomy
 
@@ -65,5 +67,10 @@ class SettingsMenuViewModel @Inject constructor(
 
     fun setGlanceMode(enabled: Boolean) = viewModelScope.launch {
         appPreferencesRepository.setGlanceMode(enabled)
+    }
+
+    /** #428 Half B — set (or clear, null ⇒ system) the spoken-offer language override. */
+    fun setTtsLanguage(tag: String?) = viewModelScope.launch {
+        appPreferencesRepository.setTtsLanguageTag(tag)
     }
 }

@@ -33,6 +33,10 @@ class AppPreferencesDataSource @Inject constructor(
         val APP_THEME = stringPreferencesKey("app_theme")
         // Driving / glance mode (#318) — bumps the HUD's LocalGlance multiplier.
         val GLANCE_MODE = booleanPreferencesKey("glance_mode")
+        // Spoken-offer (TTS) language override (#428 Half B) — a BCP-47 tag (e.g. "es").
+        // Absent/null ⇒ follow the system locale; present ⇒ force that language for both the
+        // engine voice and the spoken word resolution.
+        val TTS_LANGUAGE_TAG = stringPreferencesKey("tts_language_tag")
         val FUEL_TYPE = stringPreferencesKey("fuel_type")
         // Legacy key (pre-v2 schema, "CAR"/"E_BIKE"). VEHICLE_CLASS supersedes it.
         val VEHICLE_TYPE = stringPreferencesKey("vehicle_type")
@@ -87,6 +91,8 @@ class AppPreferencesDataSource @Inject constructor(
     val isProMode: Flow<Boolean> = ds.data.map { it[Keys.IS_PRO_MODE] ?: false }
     val appTheme: Flow<String?> = ds.data.map { it[Keys.APP_THEME] }
     val glanceMode: Flow<Boolean> = ds.data.map { it[Keys.GLANCE_MODE] ?: false }
+    /** #428 Half B — spoken-offer language override (BCP-47 tag); null ⇒ follow system locale. */
+    val ttsLanguageTag: Flow<String?> = ds.data.map { it[Keys.TTS_LANGUAGE_TAG] }
     val fuelType: Flow<String?> = ds.data.map { it[Keys.FUEL_TYPE] }
     /**
      * Reads `vehicle_class` first; falls back to legacy `vehicle_type` (mapping
@@ -194,6 +200,16 @@ class AppPreferencesDataSource @Inject constructor(
 
     suspend fun setGlanceMode(enabled: Boolean) {
         ds.edit { it[Keys.GLANCE_MODE] = enabled }
+    }
+
+    /**
+     * #428 Half B — set (or clear) the spoken-offer language override. A non-null [tag] is a
+     * BCP-47 language tag (e.g. "es"); null clears the key so TTS falls back to the system locale.
+     */
+    suspend fun setTtsLanguageTag(tag: String?) {
+        ds.edit {
+            if (tag == null) it.remove(Keys.TTS_LANGUAGE_TAG) else it[Keys.TTS_LANGUAGE_TAG] = tag
+        }
     }
 
     suspend fun updateEconomySettings(
