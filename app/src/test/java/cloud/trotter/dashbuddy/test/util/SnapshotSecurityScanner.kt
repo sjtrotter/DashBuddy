@@ -7,13 +7,16 @@ import cloud.trotter.dashbuddy.domain.model.accessibility.UiNode
  * Scans a [UiNode] tree for sensitive keywords (PII, financial data).
  *
  * Used by [InboxProcessorTest] to prevent accidental commits of raw
- * banking/identity data in snapshot files. The keyword list is the
- * production [SensitiveTextMarkers] SSOT (#432) — test toxicity and the
- * runtime UNKNOWN-capture scrub agree by construction.
+ * banking/identity data in snapshot files.
+ *
+ * SSOT PARITY (#590): the marker/shape decision DELEGATES to the production
+ * fail-closed backstop [SensitiveTextMarkers.findMarker], so the commit gate is
+ * provably ≥ the runtime UNKNOWN-capture scrub — `findMarker(tree)!=null ⇒
+ * scan(tree).isToxic` (pinned by `SnapshotSecurityScannerParityTest`). The scanner
+ * adds only the corpus-gate EXTRA pin/gate shapes (#803) on top; it never
+ * re-implements the keyword list, so the two copies can't diverge.
  */
 object SnapshotSecurityScanner {
-
-    private val SENSITIVE_KEYWORDS = SensitiveTextMarkers.KEYWORDS
 
     /**
      * Regex SHAPES that mark PII a bare keyword can't (the #803 blind class). Each
@@ -49,6 +52,23 @@ object SnapshotSecurityScanner {
 
     fun scan(node: UiNode): ScanResult {
         val triggers = mutableListOf<Pair<String, String>>()
+
+        // SSOT PARITY (#590): delegate the marker/shape decision to the production
+        // fail-closed backstop rather than re-implementing its keyword list. This is
+        // the load-bearing guarantee `findMarker(tree)!=null ⇒ scan.isToxic`:
+        //  - it scans the whole tree's `allText` (text AND contentDescription), so a
+        //    desc-borne marker the old per-node `node.text` walk missed is caught;
+        //  - it NFKC-normalizes both sides, so homoglyph/whitespace-mutated markers hit;
+        //  - it scans the space-joined blob, so a marker split across sibling nodes rejoins;
+        //  - it owns the SSN/card-PAN shapes the scanner never had.
+        // A future marker addition lands here automatically — the two copies can't diverge.
+        SensitiveTextMarkers.findMarker(node)?.let { marker ->
+            triggers.add(node.allText.joinToString(" ") to "sensitive-marker:$marker")
+        }
+
+        // Scanner-specific EXTRA corpus-gate shapes NOT in the production backstop
+        // (the #803 id-less instructions-body pin/gate class). Kept on top of parity,
+        // never in place of it.
         walkAndFind(node, triggers)
         return ScanResult(isToxic = triggers.isNotEmpty(), triggers = triggers)
     }
@@ -69,16 +89,18 @@ object SnapshotSecurityScanner {
         println("     ACTION: Redact these values in the JSON file immediately.")
     }
 
+    /**
+     * Walk the tree for the scanner-specific EXTRA shapes (#803 pin/gate). Marker/
+     * keyword parity is owned by the [SensitiveTextMarkers.findMarker] delegation in
+     * [scan]; this only adds the corpus-gate shapes the production backstop doesn't
+     * carry. Scans both text and contentDescription so a shape hiding in a desc node
+     * is caught too (parity discipline extended to the extras).
+     */
     private fun walkAndFind(node: UiNode, results: MutableList<Pair<String, String>>) {
-        val text = node.text ?: ""
-        val keyword = SENSITIVE_KEYWORDS.firstOrNull { text.contains(it, ignoreCase = true) }
-
-        if (keyword != null) {
-            results.add(text to keyword)
-        }
-        // #803: keyword-invisible PII shapes (e.g. a "pin 4821" fragment).
-        SENSITIVE_SHAPES.firstOrNull { (re, _) -> re.containsMatchIn(text) }?.let { (_, label) ->
-            results.add(text to label)
+        for (field in listOfNotNull(node.text, node.contentDescription)) {
+            SENSITIVE_SHAPES.firstOrNull { (re, _) -> re.containsMatchIn(field) }?.let { (_, label) ->
+                results.add(field to label)
+            }
         }
         node.children.forEach { walkAndFind(it, results) }
     }
