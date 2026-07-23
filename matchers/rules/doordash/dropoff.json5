@@ -1187,6 +1187,16 @@
           "isExpanded": {
             "literal": true
           },
+          // #819: mirror of the #801 collapsed-rule fix. Pre-0.230.0 the "This dash so
+          // far" session total was a single settled TextView with a stable
+          // `earnings_ticker` id; DoorDash 0.230.0 dropped that id here too, so this
+          // id-anchored find now gracefully returns null on 0.230.0 (the field is
+          // already optional) while still parsing older-version replays — NOT
+          // broadened onto the unreliable id-less animated digit-wheel (see the
+          // collapsed rule's comment below for why). The dead `{sessionEarnings}`
+          // dedupeKey half is retired in favour of `{totalPay}` (which 0.230.0 DOES
+          // render — the `final_value` id survives). See ParseOutputGoldenTest
+          // dedupeKey lint (the #427/#606/#801 dead-template class).
           "sessionEarnings": {
             "find": {
               "hasIdSuffix": "earnings_ticker"
@@ -1214,7 +1224,7 @@
             "prefix": "DeliveryBreakdown - {totalPay}",
             "category": "delivery_summary"
           },
-          "dedupeKey": "delivery-ss-expanded-{totalPay}-{sessionEarnings}",
+          "dedupeKey": "delivery-ss-expanded-{totalPay}",
           "throttleMs": 60000
         }
       ]
