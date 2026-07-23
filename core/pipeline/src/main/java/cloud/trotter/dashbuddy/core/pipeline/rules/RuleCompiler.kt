@@ -491,7 +491,18 @@ object RuleCompiler {
                     )
                 }
             }
-            CompiledRedactEntry(find, keepPrefix, normalize)
+            // #795: `plainMask` suppresses the <4hex> distinctness suffix so a small-space
+            // secret (a PIN keypad node) redacts to plain `[redacted]`, not a reversible hash.
+            // It is mutually exclusive with `normalize` (both shape the hash; a plain mask has
+            // no hash to shape) — fail loud rather than silently ignore one.
+            val plainMask = obj["plainMask"]?.jsonPrimitive?.booleanOrNull ?: false
+            if (plainMask && normalize != null) {
+                throw RuleCompileException(
+                    "redact entry: `plainMask` and `normalize` are mutually exclusive — a plain " +
+                        "mask emits `[redacted]` with no distinctness hash for `normalize` to shape.",
+                )
+            }
+            CompiledRedactEntry(find, keepPrefix, normalize, plainMask)
         }
         return CompiledRedact(entries)
     }

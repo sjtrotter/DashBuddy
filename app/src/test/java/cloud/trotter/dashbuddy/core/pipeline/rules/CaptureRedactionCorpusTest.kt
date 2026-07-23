@@ -368,6 +368,55 @@ class CaptureRedactionCorpusTest {
     }
 
     @Test
+    fun `dropoff_pin_keypad plain-masks the entered PIN with no reversible distinctness hash (#795)`() {
+        // The "Enter PIN" keypad renders the entered PIN as raw node text: an id-less
+        // EditText carrying the whole PIN plus one id-less TextView per pressed digit.
+        val tree = UiNode(
+            viewIdResourceName = "com.dd:id/drop_off_workflow_host_fragment",
+            children = listOf(
+                UiNode(text = "Enter PIN"),
+                UiNode(
+                    text = "Before dropping off the order, enter a 4-digit PIN provided by " +
+                        "the customer to confirm you've successfully delivered their order.",
+                ),
+                UiNode(text = "1234"), // the whole-PIN EditText echo
+                UiNode(text = "1"),
+                UiNode(text = "2"),
+                UiNode(text = "3"),
+                UiNode(text = "4"),
+                UiNode(viewIdResourceName = "com.dd:id/textView_prism_button_title", text = "Submit"),
+            ),
+        ).restoreParents()
+
+        // matchFirst on the production ruleset must land on THIS rule — gives the
+        // require anchors mutation teeth (sever the redact and this whole case still
+        // exercises the live rule, not a hand-built entry).
+        val match = TestRulesetFactory.screenRuleset.matchFirst(tree)
+        assertEquals("doordash.screen.dropoff_pin_keypad", match?.ruleId)
+        val rule = TestRulesetFactory.screenRuleset.ruleById(match!!.ruleId)!!
+        assertFalse("pin_keypad must carry a redact block", rule.redact.isEmpty())
+
+        val masked = serialize(rule.redact.apply(tree))
+        // Every PIN digit node is gone: the whole-PIN EditText echo + all four single
+        // digits. Five id-less pure-digit nodes → at least five plain masks.
+        assertFalse("whole-PIN node must not persist", masked.contains("1234"))
+        assertTrue(
+            "every id-less digit node plain-masked (EditText + 4 digits)",
+            Regex("""\[redacted]""").findAll(masked).count() >= 5,
+        )
+        // The plain constant is present but the reversible `<4hex>` distinctness form is
+        // NOT — this gives the `plainMask: true` flag itself mutation teeth (a 4-digit
+        // PIN is recoverable from 4 hex, so the hashed form would leak it).
+        assertFalse(
+            "PIN must not carry a reversible distinctness hash",
+            Regex("""\[redacted:[0-9a-f]{4}]""").containsMatchIn(masked),
+        )
+        // The require/anchor texts survive unmasked.
+        assertTrue("Enter PIN anchor kept", masked.contains("Enter PIN"))
+        assertTrue("Submit anchor kept", masked.contains("Submit"))
+    }
+
+    @Test
     fun `dropoff_handoff redact masks the id-less instructions body gate code and PIN (#803)`() {
         val tree = UiNode(
             viewIdResourceName = "com.dd:id/drop_off_workflow_host_fragment",
