@@ -1,0 +1,1130 @@
+{
+  "formatVersion": 1,
+  "database": {
+    "version": 15,
+    "identityHash": "2678f7bffa4140465b061b9ecc83a91d",
+    "entities": [
+      {
+        "tableName": "app_events",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`sequenceId` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `aggregateId` TEXT, `eventType` TEXT NOT NULL, `eventPayload` TEXT NOT NULL, `occurredAt` INTEGER NOT NULL, `metadata` TEXT)",
+        "fields": [
+          {
+            "fieldPath": "sequenceId",
+            "columnName": "sequenceId",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "aggregateId",
+            "columnName": "aggregateId",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "eventType",
+            "columnName": "eventType",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "eventPayload",
+            "columnName": "eventPayload",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "occurredAt",
+            "columnName": "occurredAt",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "metadata",
+            "columnName": "metadata",
+            "affinity": "TEXT"
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": true,
+          "columnNames": [
+            "sequenceId"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_app_events_aggregateId",
+            "unique": false,
+            "columnNames": [
+              "aggregateId"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_app_events_aggregateId` ON `${TABLE_NAME}` (`aggregateId`)"
+          },
+          {
+            "name": "index_app_events_eventType",
+            "unique": false,
+            "columnNames": [
+              "eventType"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_app_events_eventType` ON `${TABLE_NAME}` (`eventType`)"
+          },
+          {
+            "name": "index_app_events_occurredAt",
+            "unique": false,
+            "columnNames": [
+              "occurredAt"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_app_events_occurredAt` ON `${TABLE_NAME}` (`occurredAt`)"
+          }
+        ]
+      },
+      {
+        "tableName": "app_state_snapshots",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`correlationVersion` INTEGER NOT NULL, `capturedAt` INTEGER NOT NULL, `sessionId` TEXT, `stateJson` TEXT NOT NULL, PRIMARY KEY(`correlationVersion`))",
+        "fields": [
+          {
+            "fieldPath": "correlationVersion",
+            "columnName": "correlationVersion",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "capturedAt",
+            "columnName": "capturedAt",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "sessionId",
+            "columnName": "sessionId",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "stateJson",
+            "columnName": "stateJson",
+            "affinity": "TEXT",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "correlationVersion"
+          ]
+        }
+      },
+      {
+        "tableName": "chat_messages",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `dashId` TEXT, `text` TEXT NOT NULL, `timestamp` INTEGER NOT NULL, `personaType` TEXT NOT NULL, `personaName` TEXT NOT NULL, PRIMARY KEY(`id`))",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "dashId",
+            "columnName": "dashId",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "text",
+            "columnName": "text",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "timestamp",
+            "columnName": "timestamp",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "personaType",
+            "columnName": "personaType",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "personaName",
+            "columnName": "personaName",
+            "affinity": "TEXT",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_chat_messages_dashId",
+            "unique": false,
+            "columnNames": [
+              "dashId"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_chat_messages_dashId` ON `${TABLE_NAME}` (`dashId`)"
+          }
+        ]
+      },
+      {
+        "tableName": "effects_fired",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `effectKey` TEXT NOT NULL, `firedAt` INTEGER NOT NULL, `correlationVersion` INTEGER NOT NULL)",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "effectKey",
+            "columnName": "effectKey",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "firedAt",
+            "columnName": "firedAt",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "correlationVersion",
+            "columnName": "correlationVersion",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": true,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_effects_fired_effectKey",
+            "unique": true,
+            "columnNames": [
+              "effectKey"
+            ],
+            "orders": [],
+            "createSql": "CREATE UNIQUE INDEX IF NOT EXISTS `index_effects_fired_effectKey` ON `${TABLE_NAME}` (`effectKey`)"
+          }
+        ]
+      },
+      {
+        "tableName": "observations",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`sequenceId` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `occurredAt` INTEGER NOT NULL, `sessionId` TEXT, `pipelineId` TEXT NOT NULL, `ruleId` TEXT, `platform` TEXT, `flow` TEXT, `modeHint` TEXT, `parsedJson` TEXT NOT NULL, `captureId` TEXT, `metadataJson` TEXT NOT NULL, `correlationVersion` INTEGER NOT NULL, `timeoutType` TEXT, `payloadJson` TEXT)",
+        "fields": [
+          {
+            "fieldPath": "sequenceId",
+            "columnName": "sequenceId",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "occurredAt",
+            "columnName": "occurredAt",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "sessionId",
+            "columnName": "sessionId",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "pipelineId",
+            "columnName": "pipelineId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "ruleId",
+            "columnName": "ruleId",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "platform",
+            "columnName": "platform",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "flow",
+            "columnName": "flow",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "modeHint",
+            "columnName": "modeHint",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "parsedJson",
+            "columnName": "parsedJson",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "captureId",
+            "columnName": "captureId",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "metadataJson",
+            "columnName": "metadataJson",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "correlationVersion",
+            "columnName": "correlationVersion",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "timeoutType",
+            "columnName": "timeoutType",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "payloadJson",
+            "columnName": "payloadJson",
+            "affinity": "TEXT"
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": true,
+          "columnNames": [
+            "sequenceId"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_observations_sessionId",
+            "unique": false,
+            "columnNames": [
+              "sessionId"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_observations_sessionId` ON `${TABLE_NAME}` (`sessionId`)"
+          },
+          {
+            "name": "index_observations_occurredAt",
+            "unique": false,
+            "columnNames": [
+              "occurredAt"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_observations_occurredAt` ON `${TABLE_NAME}` (`occurredAt`)"
+          },
+          {
+            "name": "index_observations_correlationVersion",
+            "unique": false,
+            "columnNames": [
+              "correlationVersion"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_observations_correlationVersion` ON `${TABLE_NAME}` (`correlationVersion`)"
+          }
+        ]
+      },
+      {
+        "tableName": "delivery_records",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`eventSequenceId` INTEGER NOT NULL, `sessionId` TEXT, `platform` TEXT NOT NULL, `jobId` TEXT NOT NULL, `taskId` TEXT NOT NULL, `storeName` TEXT, `customerHash` TEXT, `addressHash` TEXT, `phaseStartedAt` INTEGER NOT NULL, `arrivedAt` INTEGER, `completedAt` INTEGER NOT NULL, `deadlineMillis` INTEGER, `realizedPay` REAL, `payBasis` TEXT NOT NULL, `tip` REAL, `basePay` REAL, `odometerAtCompletion` REAL, `realizedMiles` REAL, `realizedMinutes` REAL, `frozenCostPerMile` REAL, `frozenFuelPerMile` REAL, `frozenNonFuelPerMile` REAL, `netProfit` REAL, `costBasis` TEXT NOT NULL, `cashTip` REAL, `originalPayBasis` TEXT, `storeKey` TEXT, `payoutStoreForms` TEXT, `storeKeyPinned` INTEGER NOT NULL DEFAULT 0, `milesToStore` REAL, `milesToDropoff` REAL, `sessionAssigned` INTEGER NOT NULL DEFAULT 0, PRIMARY KEY(`eventSequenceId`))",
+        "fields": [
+          {
+            "fieldPath": "eventSequenceId",
+            "columnName": "eventSequenceId",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "sessionId",
+            "columnName": "sessionId",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "platform",
+            "columnName": "platform",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "jobId",
+            "columnName": "jobId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "taskId",
+            "columnName": "taskId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "storeName",
+            "columnName": "storeName",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "customerHash",
+            "columnName": "customerHash",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "addressHash",
+            "columnName": "addressHash",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "phaseStartedAt",
+            "columnName": "phaseStartedAt",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "arrivedAt",
+            "columnName": "arrivedAt",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "completedAt",
+            "columnName": "completedAt",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "deadlineMillis",
+            "columnName": "deadlineMillis",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "realizedPay",
+            "columnName": "realizedPay",
+            "affinity": "REAL"
+          },
+          {
+            "fieldPath": "payBasis",
+            "columnName": "payBasis",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "tip",
+            "columnName": "tip",
+            "affinity": "REAL"
+          },
+          {
+            "fieldPath": "basePay",
+            "columnName": "basePay",
+            "affinity": "REAL"
+          },
+          {
+            "fieldPath": "odometerAtCompletion",
+            "columnName": "odometerAtCompletion",
+            "affinity": "REAL"
+          },
+          {
+            "fieldPath": "realizedMiles",
+            "columnName": "realizedMiles",
+            "affinity": "REAL"
+          },
+          {
+            "fieldPath": "realizedMinutes",
+            "columnName": "realizedMinutes",
+            "affinity": "REAL"
+          },
+          {
+            "fieldPath": "frozenCostPerMile",
+            "columnName": "frozenCostPerMile",
+            "affinity": "REAL"
+          },
+          {
+            "fieldPath": "frozenFuelPerMile",
+            "columnName": "frozenFuelPerMile",
+            "affinity": "REAL"
+          },
+          {
+            "fieldPath": "frozenNonFuelPerMile",
+            "columnName": "frozenNonFuelPerMile",
+            "affinity": "REAL"
+          },
+          {
+            "fieldPath": "netProfit",
+            "columnName": "netProfit",
+            "affinity": "REAL"
+          },
+          {
+            "fieldPath": "costBasis",
+            "columnName": "costBasis",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "cashTip",
+            "columnName": "cashTip",
+            "affinity": "REAL"
+          },
+          {
+            "fieldPath": "originalPayBasis",
+            "columnName": "originalPayBasis",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "storeKey",
+            "columnName": "storeKey",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "payoutStoreForms",
+            "columnName": "payoutStoreForms",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "storeKeyPinned",
+            "columnName": "storeKeyPinned",
+            "affinity": "INTEGER",
+            "notNull": true,
+            "defaultValue": "0"
+          },
+          {
+            "fieldPath": "milesToStore",
+            "columnName": "milesToStore",
+            "affinity": "REAL"
+          },
+          {
+            "fieldPath": "milesToDropoff",
+            "columnName": "milesToDropoff",
+            "affinity": "REAL"
+          },
+          {
+            "fieldPath": "sessionAssigned",
+            "columnName": "sessionAssigned",
+            "affinity": "INTEGER",
+            "notNull": true,
+            "defaultValue": "0"
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "eventSequenceId"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_delivery_records_completedAt",
+            "unique": false,
+            "columnNames": [
+              "completedAt"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_delivery_records_completedAt` ON `${TABLE_NAME}` (`completedAt`)"
+          },
+          {
+            "name": "index_delivery_records_platform_completedAt",
+            "unique": false,
+            "columnNames": [
+              "platform",
+              "completedAt"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_delivery_records_platform_completedAt` ON `${TABLE_NAME}` (`platform`, `completedAt`)"
+          },
+          {
+            "name": "index_delivery_records_sessionId",
+            "unique": false,
+            "columnNames": [
+              "sessionId"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_delivery_records_sessionId` ON `${TABLE_NAME}` (`sessionId`)"
+          },
+          {
+            "name": "index_delivery_records_sessionId_jobId",
+            "unique": false,
+            "columnNames": [
+              "sessionId",
+              "jobId"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_delivery_records_sessionId_jobId` ON `${TABLE_NAME}` (`sessionId`, `jobId`)"
+          },
+          {
+            "name": "index_delivery_records_jobId",
+            "unique": false,
+            "columnNames": [
+              "jobId"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_delivery_records_jobId` ON `${TABLE_NAME}` (`jobId`)"
+          },
+          {
+            "name": "index_delivery_records_storeName",
+            "unique": false,
+            "columnNames": [
+              "storeName"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_delivery_records_storeName` ON `${TABLE_NAME}` (`storeName`)"
+          },
+          {
+            "name": "index_delivery_records_storeKey",
+            "unique": false,
+            "columnNames": [
+              "storeKey"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_delivery_records_storeKey` ON `${TABLE_NAME}` (`storeKey`)"
+          }
+        ]
+      },
+      {
+        "tableName": "session_records",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`sessionId` TEXT NOT NULL, `platform` TEXT NOT NULL, `startedAt` INTEGER NOT NULL, `endedAt` INTEGER, `lastEventAt` INTEGER NOT NULL, `endSource` TEXT, `startSource` TEXT, `startOdometer` REAL, `lastOdometer` REAL, `reportedEarnings` REAL, `reportedDurationMillis` INTEGER, `offersReceived` INTEGER NOT NULL, `offersAccepted` INTEGER NOT NULL, `offersDeclined` INTEGER NOT NULL, `offersTimeout` INTEGER NOT NULL, `deliveries` INTEGER NOT NULL, `jobsCompleted` INTEGER NOT NULL, `legStateJson` TEXT, PRIMARY KEY(`sessionId`))",
+        "fields": [
+          {
+            "fieldPath": "sessionId",
+            "columnName": "sessionId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "platform",
+            "columnName": "platform",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "startedAt",
+            "columnName": "startedAt",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "endedAt",
+            "columnName": "endedAt",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "lastEventAt",
+            "columnName": "lastEventAt",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "endSource",
+            "columnName": "endSource",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "startSource",
+            "columnName": "startSource",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "startOdometer",
+            "columnName": "startOdometer",
+            "affinity": "REAL"
+          },
+          {
+            "fieldPath": "lastOdometer",
+            "columnName": "lastOdometer",
+            "affinity": "REAL"
+          },
+          {
+            "fieldPath": "reportedEarnings",
+            "columnName": "reportedEarnings",
+            "affinity": "REAL"
+          },
+          {
+            "fieldPath": "reportedDurationMillis",
+            "columnName": "reportedDurationMillis",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "offersReceived",
+            "columnName": "offersReceived",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "offersAccepted",
+            "columnName": "offersAccepted",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "offersDeclined",
+            "columnName": "offersDeclined",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "offersTimeout",
+            "columnName": "offersTimeout",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "deliveries",
+            "columnName": "deliveries",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "jobsCompleted",
+            "columnName": "jobsCompleted",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "legStateJson",
+            "columnName": "legStateJson",
+            "affinity": "TEXT"
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "sessionId"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_session_records_startedAt",
+            "unique": false,
+            "columnNames": [
+              "startedAt"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_session_records_startedAt` ON `${TABLE_NAME}` (`startedAt`)"
+          },
+          {
+            "name": "index_session_records_platform_startedAt",
+            "unique": false,
+            "columnNames": [
+              "platform",
+              "startedAt"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_session_records_platform_startedAt` ON `${TABLE_NAME}` (`platform`, `startedAt`)"
+          }
+        ]
+      },
+      {
+        "tableName": "offer_records",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`eventSequenceId` INTEGER NOT NULL, `sessionId` TEXT, `platform` TEXT NOT NULL, `offerHash` TEXT NOT NULL, `outcome` TEXT NOT NULL, `presentedAt` INTEGER NOT NULL, `decidedAt` INTEGER NOT NULL, `payAmount` REAL, `distanceMiles` REAL, `itemCount` INTEGER NOT NULL, `merchantName` TEXT, `score` REAL, `action` TEXT, `quality` TEXT, `estNetPay` REAL, `estDollarsPerHour` REAL, `estDollarsPerMile` REAL, `estTimeMinutes` REAL, `estOperatingCostPerMile` REAL, `estFuelPerMile` REAL, `estNonFuelPerMile` REAL, `storeKey` TEXT, `linkedJobId` TEXT, `outcomeResolved` TEXT, PRIMARY KEY(`eventSequenceId`))",
+        "fields": [
+          {
+            "fieldPath": "eventSequenceId",
+            "columnName": "eventSequenceId",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "sessionId",
+            "columnName": "sessionId",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "platform",
+            "columnName": "platform",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "offerHash",
+            "columnName": "offerHash",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "outcome",
+            "columnName": "outcome",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "presentedAt",
+            "columnName": "presentedAt",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "decidedAt",
+            "columnName": "decidedAt",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "payAmount",
+            "columnName": "payAmount",
+            "affinity": "REAL"
+          },
+          {
+            "fieldPath": "distanceMiles",
+            "columnName": "distanceMiles",
+            "affinity": "REAL"
+          },
+          {
+            "fieldPath": "itemCount",
+            "columnName": "itemCount",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "merchantName",
+            "columnName": "merchantName",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "score",
+            "columnName": "score",
+            "affinity": "REAL"
+          },
+          {
+            "fieldPath": "action",
+            "columnName": "action",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "quality",
+            "columnName": "quality",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "estNetPay",
+            "columnName": "estNetPay",
+            "affinity": "REAL"
+          },
+          {
+            "fieldPath": "estDollarsPerHour",
+            "columnName": "estDollarsPerHour",
+            "affinity": "REAL"
+          },
+          {
+            "fieldPath": "estDollarsPerMile",
+            "columnName": "estDollarsPerMile",
+            "affinity": "REAL"
+          },
+          {
+            "fieldPath": "estTimeMinutes",
+            "columnName": "estTimeMinutes",
+            "affinity": "REAL"
+          },
+          {
+            "fieldPath": "estOperatingCostPerMile",
+            "columnName": "estOperatingCostPerMile",
+            "affinity": "REAL"
+          },
+          {
+            "fieldPath": "estFuelPerMile",
+            "columnName": "estFuelPerMile",
+            "affinity": "REAL"
+          },
+          {
+            "fieldPath": "estNonFuelPerMile",
+            "columnName": "estNonFuelPerMile",
+            "affinity": "REAL"
+          },
+          {
+            "fieldPath": "storeKey",
+            "columnName": "storeKey",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "linkedJobId",
+            "columnName": "linkedJobId",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "outcomeResolved",
+            "columnName": "outcomeResolved",
+            "affinity": "TEXT"
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "eventSequenceId"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_offer_records_decidedAt",
+            "unique": false,
+            "columnNames": [
+              "decidedAt"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_offer_records_decidedAt` ON `${TABLE_NAME}` (`decidedAt`)"
+          },
+          {
+            "name": "index_offer_records_platform_decidedAt",
+            "unique": false,
+            "columnNames": [
+              "platform",
+              "decidedAt"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_offer_records_platform_decidedAt` ON `${TABLE_NAME}` (`platform`, `decidedAt`)"
+          },
+          {
+            "name": "index_offer_records_sessionId",
+            "unique": false,
+            "columnNames": [
+              "sessionId"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_offer_records_sessionId` ON `${TABLE_NAME}` (`sessionId`)"
+          },
+          {
+            "name": "index_offer_records_offerHash",
+            "unique": false,
+            "columnNames": [
+              "offerHash"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_offer_records_offerHash` ON `${TABLE_NAME}` (`offerHash`)"
+          },
+          {
+            "name": "index_offer_records_linkedJobId",
+            "unique": false,
+            "columnNames": [
+              "linkedJobId"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_offer_records_linkedJobId` ON `${TABLE_NAME}` (`linkedJobId`)"
+          }
+        ]
+      },
+      {
+        "tableName": "analytics_projection_state",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER NOT NULL, `watermarkSequenceId` INTEGER NOT NULL, `projectorVersion` INTEGER NOT NULL, PRIMARY KEY(`id`))",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "watermarkSequenceId",
+            "columnName": "watermarkSequenceId",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "projectorVersion",
+            "columnName": "projectorVersion",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "id"
+          ]
+        }
+      },
+      {
+        "tableName": "stores",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`storeKey` TEXT NOT NULL, `platform` TEXT NOT NULL, `normalizedChain` TEXT NOT NULL, `chainDisplay` TEXT NOT NULL, `runningKey` TEXT, `offerNameForm` TEXT, `pickupNameForm` TEXT, `payoutNameForm` TEXT, `address` TEXT, PRIMARY KEY(`storeKey`))",
+        "fields": [
+          {
+            "fieldPath": "storeKey",
+            "columnName": "storeKey",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "platform",
+            "columnName": "platform",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "normalizedChain",
+            "columnName": "normalizedChain",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "chainDisplay",
+            "columnName": "chainDisplay",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "runningKey",
+            "columnName": "runningKey",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "offerNameForm",
+            "columnName": "offerNameForm",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "pickupNameForm",
+            "columnName": "pickupNameForm",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "payoutNameForm",
+            "columnName": "payoutNameForm",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "address",
+            "columnName": "address",
+            "affinity": "TEXT"
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "storeKey"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_stores_normalizedChain",
+            "unique": false,
+            "columnNames": [
+              "normalizedChain"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_stores_normalizedChain` ON `${TABLE_NAME}` (`normalizedChain`)"
+          }
+        ]
+      },
+      {
+        "tableName": "pickup_records",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`eventSequenceId` INTEGER NOT NULL, `sessionId` TEXT, `platform` TEXT NOT NULL, `jobId` TEXT NOT NULL, `taskId` TEXT NOT NULL, `storeName` TEXT NOT NULL, `storeKey` TEXT, `phaseStartedAt` INTEGER NOT NULL, `arrivedAt` INTEGER, `confirmedAt` INTEGER, `deadlineMillis` INTEGER, `activity` TEXT, `storeAddress` TEXT, PRIMARY KEY(`eventSequenceId`))",
+        "fields": [
+          {
+            "fieldPath": "eventSequenceId",
+            "columnName": "eventSequenceId",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "sessionId",
+            "columnName": "sessionId",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "platform",
+            "columnName": "platform",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "jobId",
+            "columnName": "jobId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "taskId",
+            "columnName": "taskId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "storeName",
+            "columnName": "storeName",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "storeKey",
+            "columnName": "storeKey",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "phaseStartedAt",
+            "columnName": "phaseStartedAt",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "arrivedAt",
+            "columnName": "arrivedAt",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "confirmedAt",
+            "columnName": "confirmedAt",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "deadlineMillis",
+            "columnName": "deadlineMillis",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "activity",
+            "columnName": "activity",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "storeAddress",
+            "columnName": "storeAddress",
+            "affinity": "TEXT"
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "eventSequenceId"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_pickup_records_sessionId",
+            "unique": false,
+            "columnNames": [
+              "sessionId"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_pickup_records_sessionId` ON `${TABLE_NAME}` (`sessionId`)"
+          },
+          {
+            "name": "index_pickup_records_jobId",
+            "unique": false,
+            "columnNames": [
+              "jobId"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_pickup_records_jobId` ON `${TABLE_NAME}` (`jobId`)"
+          },
+          {
+            "name": "index_pickup_records_storeKey",
+            "unique": false,
+            "columnNames": [
+              "storeKey"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_pickup_records_storeKey` ON `${TABLE_NAME}` (`storeKey`)"
+          }
+        ]
+      }
+    ],
+    "setupQueries": [
+      "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '2678f7bffa4140465b061b9ecc83a91d')"
+    ]
+  }
+}

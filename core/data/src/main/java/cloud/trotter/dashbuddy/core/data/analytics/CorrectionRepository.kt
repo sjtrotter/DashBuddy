@@ -6,6 +6,8 @@ import cloud.trotter.dashbuddy.domain.model.event.AppEventType
 import cloud.trotter.dashbuddy.domain.model.event.payload.DeliveryAdjustmentPayload
 import cloud.trotter.dashbuddy.domain.model.event.payload.DeliverySessionAssignPayload
 import cloud.trotter.dashbuddy.domain.model.event.payload.ManualDeliveryPayload
+import cloud.trotter.dashbuddy.domain.model.event.payload.OfferOutcomeCorrectionPayload
+import cloud.trotter.dashbuddy.domain.model.event.payload.OfferOutcomeResolution
 import timber.log.Timber
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -161,6 +163,42 @@ class CorrectionRepository @Inject constructor(
         Timber.tag(TAG).i(
             "DELIVERY_SESSION_ASSIGN appended for delivery seq %d (assigned=%b)",
             targetEventSequenceId, newSessionId != null,
+        )
+    }
+
+    /**
+     * Append a driver attestation that an accepted offer was invisibly unassigned (#810 B2 Tier 2), or
+     * an UNDO. [targetOfferEventSequenceId] is the PK of the target `offer_record` (its source
+     * `OFFER_ACCEPTED` sequenceId). [attested] `true` stamps `outcomeResolved = UNASSIGNED_ATTESTED`
+     * (the accepted orphan leaves the counted-accept population); `false` clears it back to a normal
+     * counted accept (the undo). The projector applies the stamp — with its fail-closed guards (row
+     * exists, is an accepted offer, known value) — on its next drain; the original `OFFER_ACCEPTED`
+     * event and its `outcome` column stay, and it re-prices NOTHING.
+     *
+     * The event carries NO `sessionId` (it targets an offer row by PK; attribution/liveness is not
+     * touched, mirroring the corrections convention that a re-price/attest is bookkeeping, not activity).
+     */
+    suspend fun correctOfferOutcome(
+        targetOfferEventSequenceId: Long,
+        attested: Boolean,
+        note: String? = null,
+    ) {
+        appEventRepo.appendUserEvent(
+            AppEvent(
+                type = AppEventType.OFFER_OUTCOME_CORRECTION,
+                occurredAt = System.currentTimeMillis(),
+                sessionId = null,
+                payload = OfferOutcomeCorrectionPayload(
+                    targetOfferEventSequenceId = targetOfferEventSequenceId,
+                    resolvedOutcome = if (attested) OfferOutcomeResolution.UNASSIGNED_ATTESTED else null,
+                    note = note,
+                ),
+            ),
+        )
+        // P7: no note text — counts/ids only.
+        Timber.tag(TAG).i(
+            "OFFER_OUTCOME_CORRECTION appended for offer seq %d (attested=%b)",
+            targetOfferEventSequenceId, attested,
         )
     }
 

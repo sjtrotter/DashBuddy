@@ -44,6 +44,9 @@ enum class AppEventType {
                          // PAY_ADJUSTMENT (store/pay/tip/cash-tip/miles/note); the original event stays
     DELIVERY_SESSION_ASSIGN, // A driver assigns/unassigns an orphan "(No session)" delivery's session
                              // (#660 piece 2) — changes ATTRIBUTION only (never pay/net); the original event stays
+    OFFER_OUTCOME_CORRECTION, // A driver attests (or undoes) which accepted offer was invisibly unassigned
+                              // (#810 B2 Tier 2) — stamps offer_records.outcomeResolved only (never pay/net);
+                              // the original OFFER_ACCEPTED event/outcome stays
 
     // --- System / Generic ---
     SCREEN_VIEWED, // For generic screen transitions like "Earnings Screen"

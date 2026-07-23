@@ -38,7 +38,7 @@ class StoreReadsTest {
             .allowMainThreadQueries()
             .build()
         dao = db.analyticsDao()
-        repo = AnalyticsRepository(dao)
+        repo = AnalyticsRepository(dao, db.appEventDao())
     }
 
     @After

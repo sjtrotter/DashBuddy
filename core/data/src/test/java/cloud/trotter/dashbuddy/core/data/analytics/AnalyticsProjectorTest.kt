@@ -667,7 +667,7 @@ class AnalyticsProjectorTest {
         val deliverySeq = seedCorrectableSession(deliveryPay = 10.0, reportedEarnings = 20.0)
         projector().catchUp()
 
-        val repo = AnalyticsRepository(analyticsDao)
+        val repo = AnalyticsRepository(analyticsDao, eventDao)
         assertEquals("before: reported 20 − captured 10", 10.0, repo.sessionDetail("S1").first()!!.unattributedPay, 1e-9)
 
         // The driver re-prices the captured delivery up to $15 (a mis-captured tip).

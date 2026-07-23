@@ -73,6 +73,8 @@ class AnalyticsViewModelTest {
         // The VM also collects the "(No session)" orphan list per period (#660 piece 2) in the same
         // combine, so it must be stubbed or the combine folds a null Flow.
         whenever(analyticsRepository.noSessionDeliveries(eq(period))).thenReturn(flowOf(emptyList()))
+        // The orphan-OFFER groups (#810 B2 Tier 2) ride the same 5th-slot sub-combine — stub too.
+        whenever(analyticsRepository.orphanOfferGroups(eq(period))).thenReturn(flowOf(emptyList()))
     }
 
     private fun decisions(accepted: Int, declined: Int, timedOut: Int, acceptanceRate: Double?) =

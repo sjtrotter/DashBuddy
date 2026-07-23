@@ -352,6 +352,48 @@ data class DeliverySessionAssignPayload(
     val note: String? = null,
 ) : AppEventPayload
 
+/**
+ * The wire vocabulary of `offer_records.outcomeResolved` (#810 B2) — the SSOT both the projector
+ * writes and the read-side count-exclusion / UI derive from. A `null` column means "a normal offer /
+ * not resolved"; a non-null value marks a resolved accepted orphan whose ORIGINAL `outcome` column is
+ * never rewritten.
+ */
+object OfferOutcomeResolution {
+    /** Tier 1 — the projector's store-evidence join proved a single cross-store orphan at fold time. */
+    const val UNASSIGNED_INFERRED = "UNASSIGNED_INFERRED"
+
+    /** Tier 2 — the driver attested this accepted offer was invisibly unassigned. */
+    const val UNASSIGNED_ATTESTED = "UNASSIGNED_ATTESTED"
+}
+
+/**
+ * Payload for `OFFER_OUTCOME_CORRECTION` (#810 B2 Tier 2) — a driver attestation of which accepted
+ * offer was invisibly unassigned (the seq-114 class: an accepted offer whose job produced no matching
+ * delivery and whose same-store shape the projector's Tier-1 join could NOT disambiguate). It is an
+ * **event, never a destructive edit**: the original `OFFER_ACCEPTED` event and its `outcome` column
+ * stay in the log; the projector stamps ONLY `offer_records.outcomeResolved` on the target row inside
+ * the batch transaction. Because a correction always sequences AFTER its target's `OFFER_ACCEPTED`
+ * (and after the `JOB_ACCEPT_MISMATCH` that surfaced it), a from-zero refold replays it in order and
+ * reproduces the identical stamp.
+ *
+ * It changes **outcome-resolution ONLY** — never pay/net/score or any frozen estimate column. The
+ * target is identified by the offer_record PK ([targetOfferEventSequenceId] = the source
+ * `OFFER_ACCEPTED` event's `sequenceId`), the same by-PK convention as the delivery corrections.
+ */
+@Serializable
+data class OfferOutcomeCorrectionPayload(
+    /** PK (source `OFFER_ACCEPTED` `sequenceId`) of the `offer_record` being resolved. */
+    val targetOfferEventSequenceId: Long,
+    /**
+     * The resolution to stamp — [OfferOutcomeResolution.UNASSIGNED_ATTESTED], or **null to UNDO**
+     * (clear a prior attestation back to a normal counted accept). Only these two shapes are valid;
+     * the projector guards an unknown value.
+     */
+    val resolvedOutcome: String? = null,
+    /** Driver-authored free text — driver-owned local data, never in INFO+ logs (P7). */
+    val note: String? = null,
+) : AppEventPayload
+
 /** Wire values for [SessionStartPayload.source] (#366) — mirrors [SessionEndSource]. */
 object SessionStartSource {
     /** Normal user-initiated start. */
