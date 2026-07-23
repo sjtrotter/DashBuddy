@@ -24,6 +24,17 @@ internal class TreeBudget(
     var truncated = false
         private set
 
+    /**
+     * True once the NODE budget is spent — no node can be admitted at ANY depth
+     * from here on. Distinct from [truncated], which also flips when a single deep
+     * branch hits the depth cap (a local cut that leaves shallower siblings
+     * admissible). The mapper's breadth short-circuit keys on THIS so a deep branch
+     * never suppresses an admissible sibling, but an exhausted budget stops all
+     * further getChild() IPC.
+     */
+    val nodesExhausted: Boolean
+        get() = nodes >= maxNodes
+
     /** True if a node at [depth] may be ingested; flags truncation otherwise. */
     fun admit(depth: Int): Boolean {
         if (depth > maxDepth || nodes >= maxNodes) {
@@ -73,6 +84,14 @@ fun AccessibilityNodeInfo?.toUiNode(): UiNode? {
     return root.restoreParents()
 }
 
+/**
+ * Text-length cap (#590): a pathological node text can't ride verbatim into the
+ * [UiNode] / capture envelope. `take` is safe on any String and a no-op below the
+ * cap, so every real screen string is untouched.
+ */
+private fun String.capText(): String =
+    if (length <= TreeBudget.MAX_TEXT_LENGTH) this else take(TreeBudget.MAX_TEXT_LENGTH)
+
 private fun convert(
     node: AccessibilityNodeInfo,
     depth: Int,
@@ -82,8 +101,16 @@ private fun convert(
 
     val childCount = node.childCount
     var nullChildren = 0
-    val children = ArrayList<UiNode>(childCount)
+    val children = ArrayList<UiNode>(childCount.coerceAtMost(TreeBudget.MAX_TREE_NODES))
     for (i in 0 until childCount) {
+        // Breadth short-circuit (#590): once the NODE budget is exhausted, no further
+        // child can be admitted, so stop issuing getChild() binder IPC. Without this
+        // a node reporting a hostile childCount (e.g. 50 000, or Int.MAX_VALUE) drives
+        // one IPC per reported child even though the tree is already full. Keyed on
+        // nodesExhausted (not truncated) so a deep branch hitting the depth cap does
+        // NOT suppress this node's still-admissible shallower siblings.
+        if (budget.nodesExhausted) break
+
         val childAccNode = node.getChild(i)
         if (childAccNode != null) {
             convert(childAccNode, depth + 1, budget)?.let(children::add)
@@ -107,10 +134,10 @@ private fun convert(
     node.getBoundsInScreen(bounds)
 
     return UiNode(
-        text = node.text?.toString(),
-        contentDescription = node.contentDescription?.toString(),
+        text = node.text?.toString()?.capText(),
+        contentDescription = node.contentDescription?.toString()?.capText(),
         stateDescription = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-            node.stateDescription?.toString()
+            node.stateDescription?.toString()?.capText()
         } else null,
         viewIdResourceName = node.viewIdResourceName,
         className = node.className?.toString(),
