@@ -62,6 +62,8 @@ class AccessibilityNodeMapperPropertyTest {
         text: String? = null,
         desc: String? = null,
         state: String? = null,
+        viewId: String? = null,
+        className: String? = null,
     ): AccessibilityNodeInfo {
         val m = mock<AccessibilityNodeInfo>()
         whenever(m.childCount).thenReturn(children.size)
@@ -72,6 +74,8 @@ class AccessibilityNodeMapperPropertyTest {
         whenever(m.text).thenReturn(text)
         whenever(m.contentDescription).thenReturn(desc)
         whenever(m.stateDescription).thenReturn(state)
+        whenever(m.viewIdResourceName).thenReturn(viewId)
+        whenever(m.className).thenReturn(className)
         return m
     }
 
@@ -86,6 +90,23 @@ class AccessibilityNodeMapperPropertyTest {
         whenever(m.getChild(anyInt())).thenAnswer {
             ipc.incrementAndGet()
             leaf
+        }
+        whenever(m.text).thenReturn("root")
+        return m
+    }
+
+    /**
+     * A node that REPORTS [fanCount] children but every `getChild(i)` returns NULL —
+     * the fielded stale-child shape (the 👻 NULL CHILDREN case). A null child never
+     * calls admit(), so the node budget never fills; only the loop-index bound can
+     * stop the IPC. Counts every getChild call.
+     */
+    private fun nullFan(ipc: AtomicInteger, fanCount: Int): AccessibilityNodeInfo {
+        val m = mock<AccessibilityNodeInfo>()
+        whenever(m.childCount).thenReturn(fanCount)
+        whenever(m.getChild(anyInt())).thenAnswer {
+            ipc.incrementAndGet()
+            null
         }
         whenever(m.text).thenReturn("root")
         return m
@@ -129,6 +150,12 @@ class AccessibilityNodeMapperPropertyTest {
             }
             n.stateDescription?.let {
                 assertTrue("state length ${it.length} exceeds MAX_TEXT_LENGTH", it.length <= TreeBudget.MAX_TEXT_LENGTH)
+            }
+            n.viewIdResourceName?.let {
+                assertTrue("viewId length ${it.length} exceeds MAX_TEXT_LENGTH", it.length <= TreeBudget.MAX_TEXT_LENGTH)
+            }
+            n.className?.let {
+                assertTrue("className length ${it.length} exceeds MAX_TEXT_LENGTH", it.length <= TreeBudget.MAX_TEXT_LENGTH)
             }
         }
     }
@@ -193,8 +220,28 @@ class AccessibilityNodeMapperPropertyTest {
             text = "x".repeat(100_000),
             desc = "d".repeat(100_000),
             state = "s".repeat(100_000),
+            viewId = "v".repeat(100_000),   // #590 review F2 — id/className also serialized
+            className = "c".repeat(100_000),
         )
         assertWithinCaps(root.toUiNode())
+    }
+
+    @Test
+    fun `hostile all-null childCount does not force one IPC per reported child`() {
+        // The #590 review F1 probe: a node reporting a huge childCount whose children
+        // all resolve to null (the fielded stale-child shape). nodesExhausted never
+        // flips (null children never consume budget), so only the loop-index bound
+        // stops the binder IPC. Pre-F1 this drove exactly `fanCount` getChild calls.
+        val ipc = AtomicInteger(0)
+        val root = nullFan(ipc, fanCount = 200_000)
+        val mapped = root.toUiNode()
+        println("[#590 F1] all-null fan(200000) → getChild IPC = ${ipc.get()} (cap MAX_TREE_NODES=${TreeBudget.MAX_TREE_NODES})")
+        assertWithinCaps(mapped)
+        assertTrue(
+            "getChild IPC ${ipc.get()} for a 200 000 all-null fan is not bounded by the caps " +
+                "(bound=$ipcBound) — the loop-index short-circuit is missing (F1)",
+            ipc.get() <= ipcBound,
+        )
     }
 
     @Test

@@ -65,7 +65,11 @@ internal class TreeBudget(
          * the serialized capture envelope. Legitimate screen text nodes (labels,
          * addresses, instruction bodies) never approach 4 KiB; the cap truncates a
          * pathological string while leaving every real screen untouched. Applied to
-         * `text`, `contentDescription`, and `stateDescription` at conversion.
+         * EVERY serialized string field — `text`, `contentDescription`,
+         * `stateDescription`, `viewIdResourceName`, `className` — at conversion (#590
+         * review F2: ids/classnames are tiny for legit frames and `matchesId` is an
+         * `endsWith` on short snippets, so the cap is behavior-free there while
+         * closing the same balloon-capture threat for a hostile mocked value).
          */
         const val MAX_TEXT_LENGTH = 4_096
     }
@@ -103,13 +107,18 @@ private fun convert(
     var nullChildren = 0
     val children = ArrayList<UiNode>(childCount.coerceAtMost(TreeBudget.MAX_TREE_NODES))
     for (i in 0 until childCount) {
-        // Breadth short-circuit (#590): once the NODE budget is exhausted, no further
-        // child can be admitted, so stop issuing getChild() binder IPC. Without this
-        // a node reporting a hostile childCount (e.g. 50 000, or Int.MAX_VALUE) drives
-        // one IPC per reported child even though the tree is already full. Keyed on
-        // nodesExhausted (not truncated) so a deep branch hitting the depth cap does
-        // NOT suppress this node's still-admissible shallower siblings.
-        if (budget.nodesExhausted) break
+        // Breadth short-circuit (#590): stop issuing getChild() binder IPC once no
+        // further child could be kept, so a node reporting a hostile childCount (e.g.
+        // 50 000, or Int.MAX_VALUE) can't drive one IPC per reported child. TWO bounds:
+        //  - nodesExhausted (not truncated) once the NODE budget is spent — but this
+        //    only flips when children MATERIALIZE and consume budget, so a hostile fan
+        //    of ALL-NULL children (getChild(i)==null never calls admit(), a FIELDED
+        //    shape — see the 👻 NULL CHILDREN log) would still spin every index;
+        //  - i >= MAX_TREE_NODES caps the loop index itself, so even an all-null fan
+        //    issues at most MAX_TREE_NODES binder calls (#590 review F1).
+        // nodesExhausted stays keyed on node budget (not truncated) so a deep branch
+        // hitting the depth cap does NOT suppress this node's shallower siblings.
+        if (budget.nodesExhausted || i >= TreeBudget.MAX_TREE_NODES) break
 
         val childAccNode = node.getChild(i)
         if (childAccNode != null) {
@@ -139,8 +148,8 @@ private fun convert(
         stateDescription = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
             node.stateDescription?.toString()?.capText()
         } else null,
-        viewIdResourceName = node.viewIdResourceName,
-        className = node.className?.toString(),
+        viewIdResourceName = node.viewIdResourceName?.capText(),
+        className = node.className?.toString()?.capText(),
         isClickable = node.isClickable,
         isEnabled = node.isEnabled,
         isChecked = node.checked,
