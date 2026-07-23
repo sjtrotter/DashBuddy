@@ -5,6 +5,7 @@ import cloud.trotter.dashbuddy.domain.model.event.SequencedAppEvent
 import cloud.trotter.dashbuddy.domain.model.event.payload.DeliveryAdjustmentPayload
 import cloud.trotter.dashbuddy.domain.model.event.payload.DeliverySessionAssignPayload
 import cloud.trotter.dashbuddy.domain.model.event.payload.ManualDeliveryPayload
+import cloud.trotter.dashbuddy.domain.model.event.payload.OfferOutcomeCorrectionPayload
 import cloud.trotter.dashbuddy.domain.model.event.payload.PayAdjustmentPayload
 
 /**
@@ -165,6 +166,26 @@ internal object CorrectionFolds {
         return FoldOutcome(
             context = context,
             sessionAssign = SessionAssignFold(p.targetEventSequenceId, p.newSessionId),
+        )
+    }
+
+    /**
+     * A driver OFFER_OUTCOME_CORRECTION (#810 B2 Tier 2) — the pure fold emits the
+     * [OfferOutcomeCorrectionFold] decision (which offer row, which resolution / undo); it CANNOT
+     * read/guard the target `offer_record` here, so the orchestrator applies the stamp (with its
+     * fail-closed guards) inside the batch transaction. The session context passes through UNTOUCHED
+     * (the #650 review F2 liveness discipline, identical to the delivery corrections): an attestation
+     * recorded days later must not stretch a crash-orphaned session's online span, and it must not
+     * synthesize a context (the target's offer row already exists — the UI can only offer an accepted
+     * offer surfaced by a `JOB_ACCEPT_MISMATCH`).
+     */
+    fun foldOfferOutcomeCorrection(event: SequencedAppEvent, context: SessionFoldContext?): FoldOutcome {
+        val e = event.event
+        val p = e.payload as? OfferOutcomeCorrectionPayload
+            ?: return FoldOutcome(context = context, skip = "OFFER_OUTCOME_CORRECTION: missing/malformed payload")
+        return FoldOutcome(
+            context = context,
+            offerOutcomeCorrection = OfferOutcomeCorrectionFold(p.targetOfferEventSequenceId, p.resolvedOutcome),
         )
     }
 }

@@ -5,6 +5,8 @@ import cloud.trotter.dashbuddy.domain.evaluation.OfferEvaluation
 import cloud.trotter.dashbuddy.domain.model.event.payload.AppEventPayload
 import cloud.trotter.dashbuddy.domain.model.event.payload.DeliveryPayload
 import cloud.trotter.dashbuddy.domain.model.event.payload.JobAcceptMismatchPayload
+import cloud.trotter.dashbuddy.domain.model.event.payload.OfferOutcomeCorrectionPayload
+import cloud.trotter.dashbuddy.domain.model.event.payload.OfferOutcomeResolution
 import cloud.trotter.dashbuddy.domain.model.event.payload.OfferPayload
 import cloud.trotter.dashbuddy.domain.model.event.payload.TaskUnassignedPayload
 import cloud.trotter.dashbuddy.domain.state.TaskPhase
@@ -99,6 +101,10 @@ class AppEventCodecTest {
                 jobId = "j1", acceptedCount = 2, accountedCount = 1,
                 acceptedOfferHashes = listOf("hA", "hB"), deliveredCustomerHashes = listOf("c1"),
                 leftoverTbdPlaceholders = 1, unassignedCount = 0,
+            ),
+            AppEventType.OFFER_OUTCOME_CORRECTION to OfferOutcomeCorrectionPayload(
+                targetOfferEventSequenceId = 42L,
+                resolvedOutcome = OfferOutcomeResolution.UNASSIGNED_ATTESTED, note = "chat unassign",
             ),
         )
 

@@ -540,6 +540,8 @@
     <string name="money_tab_over_attributed_callout_format">attributed exceeds reported by %1$s — review estimates/corrections</string>
     <string name="money_tab_no_session_callout_format">(No session): %1$s across %2$s %3$s not tied to a dash — data-quality flag (#660)</string>
     <string name="money_tab_no_session_callout_click_label">Assign to a dash</string>
+    <string name="money_tab_orphan_offers_callout_format">%1$s accepted offer(s) have no matching delivery — mark which was unassigned (#810)</string>
+    <string name="money_tab_orphan_offers_callout_click_label">Resolve orphan offers</string>
     <string name="money_tab_recent_sessions_title">RECENT SESSIONS</string>
     <string name="money_tab_no_sessions_recorded_yet">No sessions recorded yet.</string>
     <string name="money_tab_cash_marker_format">+%1$s cash</string>
@@ -591,6 +593,15 @@
     <string name="no_session_assign_session_deliveries_format">%1$s · %2$s %3$s</string>
     <string name="no_session_assign_close">Close</string>
     <string name="no_session_assign_back">Back</string>
+
+    <!-- main/analytics/OrphanOfferAttestDialog.kt (#810 B2 Tier 2) -->
+    <string name="orphan_offers_title">Unassigned offers</string>
+    <string name="orphan_offers_subtitle">These offers were accepted but never delivered. Tap the one that was unassigned; tap a resolved row to undo.</string>
+    <string name="orphan_offers_empty">No unresolved orphan offers in this period.</string>
+    <string name="orphan_offers_group_header">%1$s accepted, %2$s unassigned</string>
+    <string name="orphan_offers_resolved_caption">Unassigned · tap to undo</string>
+    <string name="orphan_offers_unknown_store">Unknown store</string>
+    <string name="orphan_offers_close">Close</string>
 
     <!-- bubble/cards/FlowCardItem.kt -->
     <string name="flow_card_content_desc_collapse">Collapse</string>

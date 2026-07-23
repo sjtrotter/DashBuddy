@@ -77,6 +77,14 @@ import cloud.trotter.dashbuddy.core.database.snapshot.AppStateSnapshotEntity
     // is a new event type that cannot exist in already-folded history, and the DEFAULT 0 is correct for
     // all history — a fresh drain folds new assigns; nothing needs refolding. Additive ⇒ never wipes
     // app_events or the existing analytics rows.
+    // v14→v15 (#810 B2) is additive-only: one new nullable TEXT column on offer_records
+    // (outcomeResolved — the resolved fate of an accepted orphan offer, "UNASSIGNED_INFERRED" from the
+    // projector store-evidence join or "UNASSIGNED_ATTESTED" from a driver OFFER_OUTCOME_CORRECTION;
+    // NULL for every normal offer, back-filled NULL on existing rows). The `PROJECTOR_VERSION` 7→8
+    // refold this bump triggers re-processes the `JOB_ACCEPT_MISMATCH` events already in the log (the
+    // seq-114 orphan), stamping `UNASSIGNED_INFERRED` on any cross-store single orphan and leaving the
+    // same-store fielded shape NULL for Tier-2 driver attestation. Additive ⇒ never wipes app_events or
+    // the existing analytics rows.
     autoMigrations = [
         AutoMigration(from = 8, to = 9),
         AutoMigration(from = 9, to = 10),
@@ -84,6 +92,7 @@ import cloud.trotter.dashbuddy.core.database.snapshot.AppStateSnapshotEntity
         AutoMigration(from = 11, to = 12),
         AutoMigration(from = 12, to = 13),
         AutoMigration(from = 13, to = 14),
+        AutoMigration(from = 14, to = 15),
     ],
 )
 @TypeConverters(DataTypeConverters::class)
@@ -111,7 +120,7 @@ abstract class DashBuddyDatabase : RoomDatabase() {
          * this in lockstep with a new `schemas/**/<N>.json`, an `AutoMigration(N-1 → N)`, and its
          * `MigrationTestHelper` case — see the release checklist in CLAUDE.md.
          */
-        const val VERSION = 14
+        const val VERSION = 15
     }
 
 }

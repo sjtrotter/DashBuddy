@@ -2,9 +2,11 @@ package cloud.trotter.dashbuddy.core.data.analytics
 
 import cloud.trotter.dashbuddy.core.database.analytics.AnalyticsDao
 import cloud.trotter.dashbuddy.core.database.analytics.DeliveryTimeTotalsRow
+import cloud.trotter.dashbuddy.core.database.analytics.OfferRecordEntity
 import cloud.trotter.dashbuddy.core.database.analytics.OutcomeCountRow
 import cloud.trotter.dashbuddy.core.database.analytics.ScoreOutcomeRow
 import cloud.trotter.dashbuddy.core.database.analytics.SessionTotalsRow
+import cloud.trotter.dashbuddy.core.database.event.AppEventDao
 import cloud.trotter.dashbuddy.domain.analytics.AnalyticsPeriod
 import cloud.trotter.dashbuddy.domain.analytics.DailyEarnings
 import cloud.trotter.dashbuddy.domain.analytics.DecisionEconomics
@@ -20,8 +22,12 @@ import cloud.trotter.dashbuddy.domain.analytics.SessionSpan
 import cloud.trotter.dashbuddy.domain.analytics.StoreEconomics
 import cloud.trotter.dashbuddy.domain.analytics.StoreReportCard
 import cloud.trotter.dashbuddy.domain.analytics.TimeEconomics
+import cloud.trotter.dashbuddy.domain.analytics.OrphanOfferCandidate
+import cloud.trotter.dashbuddy.domain.analytics.OrphanOfferGroup
 import cloud.trotter.dashbuddy.domain.evaluation.NetProfit
+import cloud.trotter.dashbuddy.domain.model.event.AppEventCodec
 import cloud.trotter.dashbuddy.domain.model.event.AppEventType
+import cloud.trotter.dashbuddy.domain.model.event.payload.JobAcceptMismatchPayload
 import cloud.trotter.dashbuddy.domain.state.Platform
 import cloud.trotter.dashbuddy.domain.state.StoreKeys
 import java.time.Instant
@@ -62,6 +68,10 @@ import javax.inject.Singleton
 @OptIn(ExperimentalCoroutinesApi::class)
 class AnalyticsRepository @Inject constructor(
     private val analyticsDao: AnalyticsDao,
+    // #810 B2: the Tier-2 orphan-attestation surface reads the `JOB_ACCEPT_MISMATCH` events (the
+    // source-of-truth log) to enumerate a job's accepted offers — a DAO read, no economy dependency,
+    // so the "net is the frozen stored value" posture above is preserved.
+    private val appEventDao: AppEventDao,
 ) {
 
     /**
@@ -353,6 +363,74 @@ class AnalyticsRepository @Inject constructor(
         periodBoundariesFlow(period).flatMapLatest { (start, end) ->
             analyticsDao.noSessionDeliveryRows(start, end).map { rows -> rows.map { it.toDomain() } }
         }
+
+    /**
+     * The orphan-offer mismatches for [period] (#810 B2 Tier 2) — the driver-attestation surface. Joins
+     * each `JOB_ACCEPT_MISMATCH` event (whose payload carries the closing job's accepted offer hashes +
+     * the mismatch counts) to the ACCEPTED `offer_records`. The projector's Tier-1 store-evidence join
+     * has already auto-resolved every cross-store orphan (`outcomeResolved = UNASSIGNED_INFERRED`), so
+     * this surface is the same-store residue.
+     *
+     * A group is listed while its mismatch owes ≥1 orphan (`orphansOwed > 0`) and its accepted offers
+     * are present — **including once its orphans are resolved** (review F3): keeping a resolved group
+     * visible is what makes the mis-tap UNDO reachable in the primary 1-owed/2-accept shape (the
+     * callout gates on the still-OWED count via [OrphanOfferGroup.owedRemaining], so a fully-resolved
+     * group no longer contributes to the callout, but its rows stay in the dialog for undo). Residual:
+     * if EVERY listed group is fully resolved the callout hides, so re-opening to undo the very last
+     * resolution isn't reachable until a new mismatch appears (documented).
+     *
+     * Reactive: re-emits as the projector folds a mismatch, folds an `OFFER_OUTCOME_CORRECTION`, or
+     * Tier-1 resolves one. Period-anchored on the mismatch event's `occurredAt` (the close time),
+     * consistent with the Money-tab window. No new PII surface — store/pay/time are merchant/decision
+     * data; no customer hashes.
+     */
+    fun orphanOfferGroups(period: AnalyticsPeriod): Flow<List<OrphanOfferGroup>> =
+        periodBoundariesFlow(period).flatMapLatest { (start, end) ->
+            combine(
+                appEventDao.getEventsByType(AppEventType.JOB_ACCEPT_MISMATCH),
+                analyticsDao.acceptedOfferRecords(AppEventType.OFFER_ACCEPTED.name),
+            ) { mismatchRows, offerRows ->
+                val offersByKey: Map<Pair<String, String?>, OfferRecordEntity> =
+                    offerRows.associateBy { it.offerHash to it.sessionId }
+                mismatchRows.mapNotNull { row ->
+                    if (row.occurredAt < start || row.occurredAt >= end) return@mapNotNull null
+                    val payload = decodeMismatch(row.eventType, row.eventPayload) ?: return@mapNotNull null
+                    val sid = row.aggregateId
+                    val candidates = payload.acceptedOfferHashes
+                        .mapNotNull { offersByKey[it to sid] }
+                        .map { it.toOrphanCandidate() }
+                    val owed = (payload.acceptedCount - payload.accountedCount).coerceAtLeast(0)
+                    // List every owed mismatch whose offers we found — resolved OR open (F3: keep the
+                    // undo reachable). owedRemaining (owed − resolved) drives the callout downstream.
+                    if (owed > 0 && candidates.isNotEmpty()) {
+                        OrphanOfferGroup(
+                            jobId = payload.jobId,
+                            sessionId = sid,
+                            orphansOwed = owed,
+                            offers = candidates.sortedBy { it.decidedAt },
+                        )
+                    } else {
+                        null
+                    }
+                }.sortedByDescending { g -> g.offers.maxOfOrNull { it.decidedAt } ?: 0L }
+            }
+        }
+
+    /** Decode a `JOB_ACCEPT_MISMATCH` payload for the Tier-2 read; fail-null on a malformed row. */
+    private fun decodeMismatch(type: AppEventType, payloadJson: String): JobAcceptMismatchPayload? =
+        try {
+            AppEventCodec.decodePayload(type, payloadJson) as? JobAcceptMismatchPayload
+        } catch (_: Exception) {
+            null
+        }
+
+    private fun OfferRecordEntity.toOrphanCandidate() = OrphanOfferCandidate(
+        offerEventSequenceId = eventSequenceId,
+        storeName = merchantName,
+        payAmount = payAmount,
+        decidedAt = decidedAt,
+        resolved = outcomeResolved != null,
+    )
 
     /**
      * The **candidate dashes** an orphan delivery could be categorized into (#660 piece 2): ENDED

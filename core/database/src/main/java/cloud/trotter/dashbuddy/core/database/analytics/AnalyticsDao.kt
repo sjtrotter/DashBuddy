@@ -106,6 +106,19 @@ interface AnalyticsDao {
     @Query("SELECT * FROM offer_records WHERE eventSequenceId = :eventSequenceId")
     suspend fun offerRecord(eventSequenceId: Long): OfferRecordEntity?
 
+    /**
+     * Stamp an accepted orphan offer's resolved fate (#810 B2) — [resolved] is one of
+     * `OfferOutcomeResolution.*` (Tier 1 `UNASSIGNED_INFERRED` / Tier 2 `UNASSIGNED_ATTESTED`) or
+     * null (undo). The `IS NOT` value guard makes an identical re-stamp match ZERO rows (no Room
+     * invalidation churn on a re-drain), and it never touches the original `outcome` column
+     * (provenance stays visible — the #688 edit-trail pattern).
+     */
+    @Query(
+        "UPDATE offer_records SET outcomeResolved = :resolved " +
+            "WHERE eventSequenceId = :eventSequenceId AND outcomeResolved IS NOT :resolved"
+    )
+    suspend fun stampOfferOutcomeResolved(eventSequenceId: Long, resolved: String?)
+
     /** All store entities (resolution debug / rebuild-equivalence assertions). */
     @Query("SELECT * FROM stores ORDER BY storeKey ASC")
     suspend fun allStores(): List<StoreEntity>
@@ -173,6 +186,12 @@ interface AnalyticsDao {
      *  already holds a claim never nominates a second temporal offer (the DASH_STOP re-run defect). */
     @Query("SELECT COUNT(*) FROM offer_records WHERE linkedJobId = :jobId")
     suspend fun offerLinkCountForJob(jobId: String): Int
+
+    /** Every ACCEPTED offer row (#810 B2) — the Tier-2 orphan-attestation surface joins these to the
+     *  `JOB_ACCEPT_MISMATCH` events' `acceptedOfferHashes`. Reactive: re-emits as `outcomeResolved`
+     *  changes. [acceptedOutcome] is `AppEventType.OFFER_ACCEPTED.name` (bound, not a magic literal). */
+    @Query("SELECT * FROM offer_records WHERE outcome = :acceptedOutcome")
+    fun acceptedOfferRecords(acceptedOutcome: String): Flow<List<OfferRecordEntity>>
 
     /** Nominate the most recent accepted, not-already-claimed offer at-or-before [atOrBefore] in a
      *  session — the temporal fallback (#159 F4). Nomination is NOT a link; the projector stamps only
@@ -522,15 +541,21 @@ interface AnalyticsDao {
      * true in SQL, so the two clauses are disjoint (no double count), and LIFETIME `(0, MAX)` keeps
      * every row. GROUP BY outcome only (no per-offer list yet). Estimates are the offer's frozen
      * decision-time snapshot, not realized net.
+     *
+     * **#810 B2 orphan exclusion:** `outcomeResolved IS NULL` drops accepted offers resolved as
+     * invisibly-unassigned (Tier-1 `UNASSIGNED_INFERRED` or Tier-2 `UNASSIGNED_ATTESTED`) — a resolved
+     * orphan never delivered, so counting it would inflate `accepted` (and thus `received`). The
+     * original `outcome` column is untouched; only this read excludes it.
      */
     @Query(
         """SELECT outcome,
                   COUNT(*) AS count,
                   COALESCE(SUM(estNetPay), 0) AS estNetSum
            FROM offer_records
-           WHERE sessionId IN (SELECT sessionId FROM session_records
-                               WHERE startedAt >= :start AND startedAt < :end)
-              OR (sessionId IS NULL AND decidedAt >= :start AND decidedAt < :end)
+           WHERE outcomeResolved IS NULL
+              AND (sessionId IN (SELECT sessionId FROM session_records
+                                 WHERE startedAt >= :start AND startedAt < :end)
+                   OR (sessionId IS NULL AND decidedAt >= :start AND decidedAt < :end))
            GROUP BY outcome"""
     )
     fun offerOutcomes(start: Long, end: Long): Flow<List<OutcomeCountRow>>
@@ -538,8 +563,8 @@ interface AnalyticsDao {
     /**
      * Per-outcome count + `AVG(score)` + `AVG(estDollarsPerHour)` for a period — the score-vs-outcome
      * read (#315 H3). Same session-anchored WHERE shape + null-session `decidedAt` fallback as
-     * [offerOutcomes]/[deliveryTotals]. `AVG` skips nulls and yields null for an all-null group (no
-     * fabricated 0). Frozen estimates.
+     * [offerOutcomes]/[deliveryTotals], and the same `outcomeResolved IS NULL` orphan exclusion (#810
+     * B2). `AVG` skips nulls and yields null for an all-null group (no fabricated 0). Frozen estimates.
      */
     @Query(
         """SELECT outcome,
@@ -547,9 +572,10 @@ interface AnalyticsDao {
                   AVG(score) AS avgScore,
                   AVG(estDollarsPerHour) AS avgEstPerHour
            FROM offer_records
-           WHERE sessionId IN (SELECT sessionId FROM session_records
-                               WHERE startedAt >= :start AND startedAt < :end)
-              OR (sessionId IS NULL AND decidedAt >= :start AND decidedAt < :end)
+           WHERE outcomeResolved IS NULL
+              AND (sessionId IN (SELECT sessionId FROM session_records
+                                 WHERE startedAt >= :start AND startedAt < :end)
+                   OR (sessionId IS NULL AND decidedAt >= :start AND decidedAt < :end))
            GROUP BY outcome"""
     )
     fun offerScoreOutcomes(start: Long, end: Long): Flow<List<ScoreOutcomeRow>>

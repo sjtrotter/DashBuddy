@@ -34,6 +34,7 @@ import cloud.trotter.dashbuddy.core.designsystem.component.AppChip
 import cloud.trotter.dashbuddy.core.designsystem.component.AppStatTile
 import cloud.trotter.dashbuddy.core.designsystem.theme.AppTheme
 import cloud.trotter.dashbuddy.domain.analytics.DailyEarnings
+import cloud.trotter.dashbuddy.domain.analytics.OrphanOfferGroup
 import cloud.trotter.dashbuddy.domain.analytics.PeriodEconomics
 import cloud.trotter.dashbuddy.domain.analytics.SessionRecord
 import cloud.trotter.dashbuddy.domain.analytics.StoreEconomics
@@ -58,8 +59,10 @@ fun MoneyTab(
     topStores: List<StoreEconomics>,
     recentSessions: List<SessionRecord>,
     dailyEarnings: List<DailyEarnings>,
+    orphanOfferGroups: List<OrphanOfferGroup>,
     onOpenSession: (String) -> Unit,
     onOpenNoSession: () -> Unit,
+    onOpenOrphanOffers: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Column(modifier = modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(16.dp)) {
@@ -110,6 +113,23 @@ fun MoneyTab(
                 modifier = Modifier
                     .fillMaxWidth()
                     .clickable(onClickLabel = clickLabel, role = Role.Button) { onOpenNoSession() },
+            )
+        }
+        // Orphan-offer mismatches (#810 B2 Tier 2): accepted offers whose job produced no matching
+        // delivery — the invisible-unassign class the projector's Tier-1 store-evidence join could NOT
+        // auto-resolve (a same-store tie). TAPPABLE: opens the attestation dialog where the driver marks
+        // which accepted offer was unassigned, which un-inflates the accepted-offer counts. Same
+        // review-flag pattern as the callouts above; gated on the still-OWED count (F3 — a fully-resolved
+        // group stays in the dialog for undo but no longer drives the callout).
+        val orphanCount = orphanOfferGroups.sumOf { it.owedRemaining }
+        if (orphanCount > 0) {
+            val clickLabel = stringResource(R.string.money_tab_orphan_offers_callout_click_label)
+            AppCallout(
+                text = stringResource(R.string.money_tab_orphan_offers_callout_format, Formats.commaInt(orphanCount)),
+                container = AppTheme.colors.warnBg,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable(onClickLabel = clickLabel, role = Role.Button) { onOpenOrphanOffers() },
             )
         }
         TopStoresCard(topStores)

@@ -8,6 +8,7 @@ import cloud.trotter.dashbuddy.domain.analytics.AnalyticsPeriod
 import cloud.trotter.dashbuddy.domain.analytics.DailyEarnings
 import cloud.trotter.dashbuddy.domain.analytics.DecisionEconomics
 import cloud.trotter.dashbuddy.domain.analytics.DeliveryRecord
+import cloud.trotter.dashbuddy.domain.analytics.OrphanOfferGroup
 import cloud.trotter.dashbuddy.domain.analytics.PeriodEconomics
 import cloud.trotter.dashbuddy.domain.analytics.SessionRecord
 import cloud.trotter.dashbuddy.domain.analytics.StoreEconomics
@@ -70,14 +71,16 @@ class AnalyticsViewModel @Inject constructor(
                 analyticsRepository.decisionEconomics(period),
                 analyticsRepository.timeEconomics(period),
                 // The typed `combine` tops out at 5 flows, so the per-day chart + the "(No session)"
-                // orphan list (#660 piece 2) ride ONE nested sub-combine into the 5th slot. Both are
-                // period-anchored, so they re-anchor atomically with everything else on a period switch.
+                // orphan list (#660 piece 2) + the orphan-OFFER groups (#810 B2 Tier 2) ride ONE nested
+                // sub-combine into the 5th slot. All period-anchored, so they re-anchor atomically with
+                // everything else on a period switch.
                 combine(
                     analyticsRepository.dailyEarnings(period),
                     analyticsRepository.noSessionDeliveries(period),
-                ) { daily, orphans -> daily to orphans },
-            ) { economics, stores, decisions, time, (daily, orphans) ->
-                PeriodData(period, economics, stores, decisions, time, daily, orphans)
+                    analyticsRepository.orphanOfferGroups(period),
+                ) { daily, orphans, offerGroups -> Triple(daily, orphans, offerGroups) },
+            ) { economics, stores, decisions, time, (daily, orphans, offerGroups) ->
+                PeriodData(period, economics, stores, decisions, time, daily, orphans, offerGroups)
             }
         },
         analyticsRepository.recentSessions(RECENT_SESSIONS_LIMIT),
@@ -96,6 +99,7 @@ class AnalyticsViewModel @Inject constructor(
             time = data.time,
             dailyEarnings = data.dailyEarnings,
             noSessionDeliveries = data.orphanDeliveries,
+            orphanOfferGroups = data.orphanOfferGroups,
             storeReportCards = storeCards,
             earningsHeatmap = heatmap,
         )
@@ -143,6 +147,28 @@ class AnalyticsViewModel @Inject constructor(
         }
     }
 
+    /**
+     * UDF intent (#810 B2 Tier 2) — attest that an accepted offer was invisibly unassigned (or UNDO)
+     * by appending an `OFFER_OUTCOME_CORRECTION`. The projector stamps `offer_records.outcomeResolved`
+     * (with its fail-closed guards) and Room invalidation refreshes the callout + the open-mismatch
+     * list — no optimistic local mutation. [attested] false is the undo (clears the resolution).
+     */
+    fun resolveOrphanOffer(offerEventSequenceId: Long, attested: Boolean) {
+        viewModelScope.launch {
+            try {
+                correctionRepository.correctOfferOutcome(
+                    targetOfferEventSequenceId = offerEventSequenceId,
+                    attested = attested,
+                )
+            } catch (e: CancellationException) {
+                throw e // cooperative cancellation — never swallow it
+            } catch (e: Exception) {
+                // P7: counts/ids only.
+                Timber.tag(TAG).w(e, "resolveOrphanOffer rejected for offer seq %d", offerEventSequenceId)
+            }
+        }
+    }
+
     /** One period switch's worth of read-model, re-anchored atomically under [flatMapLatest]. */
     private data class PeriodData(
         val period: AnalyticsPeriod,
@@ -152,6 +178,7 @@ class AnalyticsViewModel @Inject constructor(
         val time: TimeEconomics,
         val dailyEarnings: List<DailyEarnings>,
         val orphanDeliveries: List<DeliveryRecord>,
+        val orphanOfferGroups: List<OrphanOfferGroup>,
     )
 
     private companion object {

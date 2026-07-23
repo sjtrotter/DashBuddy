@@ -2,6 +2,7 @@ package cloud.trotter.dashbuddy.domain.analytics
 
 import cloud.trotter.dashbuddy.domain.model.event.AppEventType
 import cloud.trotter.dashbuddy.domain.model.event.SequencedAppEvent
+import cloud.trotter.dashbuddy.domain.model.event.payload.JobAcceptMismatchPayload
 import cloud.trotter.dashbuddy.domain.model.event.payload.OfferPayload
 import cloud.trotter.dashbuddy.domain.model.event.payload.SessionStartPayload
 import cloud.trotter.dashbuddy.domain.model.event.payload.SessionStopPayload
@@ -259,6 +260,19 @@ data class FoldOutcome(
      * orchestrator applies the re-attribution (with its fail-closed guards) inside the batch transaction.
      */
     val sessionAssign: SessionAssignFold? = null,
+    /**
+     * A JOB_ACCEPT_MISMATCH Tier-1 orphan-reconcile trigger (#810 B2): the pure fold cannot read the
+     * job's committed offer/delivery rows here, so the orchestrator runs the store-evidence join
+     * ([JobAcceptMismatchResolver]) against them inside the batch transaction and stamps
+     * `outcomeResolved = UNASSIGNED_INFERRED` on a single cross-store orphan (else leaves it for Tier 2).
+     */
+    val offerReconcile: OfferReconcileFold? = null,
+    /**
+     * A driver OFFER_OUTCOME_CORRECTION decision (#810 B2 Tier 2): the pure fold decides WHICH offer
+     * row and WHICH resolution (null ⇒ undo), but cannot read/guard the target `offer_record` here —
+     * the orchestrator applies the stamp inside the batch transaction.
+     */
+    val offerOutcomeCorrection: OfferOutcomeCorrectionFold? = null,
 )
 
 /**
@@ -304,6 +318,35 @@ data class DeliveryAdjustmentFold(
 data class SessionAssignFold(
     val targetEventSequenceId: Long,
     val newSessionId: String? = null,
+)
+
+/**
+ * A Tier-1 orphan-reconcile decision (#810 B2) — the pure fold's output for a `JOB_ACCEPT_MISMATCH`.
+ * The orchestrator loads the closing [jobId]'s accepted `offer_records` (by [acceptedOfferHashes] +
+ * [sessionId]) and its delivered `delivery_records`, runs [JobAcceptMismatchResolver.resolveOrphan]
+ * over their store evidence, and — only when a single cross-store orphan is proven — stamps that offer
+ * row's `outcomeResolved = UNASSIGNED_INFERRED`. Every ambiguous shape falls through untouched to Tier
+ * 2. Because the mismatch event always sequences AFTER the job's offers/deliveries, a from-zero refold
+ * replays it against the same committed rows and reproduces the identical stamp (or non-stamp).
+ * A `sessionId`-less mismatch cannot scope its session-keyed offer lookup, so the orchestrator no-ops.
+ */
+data class OfferReconcileFold(
+    val jobId: String,
+    val sessionId: String?,
+    val acceptedOfferHashes: List<String>,
+)
+
+/**
+ * A driver's offer-outcome attestation (#810 B2 Tier 2) — the pure fold's output for an
+ * `OFFER_OUTCOME_CORRECTION`. The orchestrator looks up [targetOfferEventSequenceId] in `offer_records`
+ * and, subject to its fail-closed guards (row exists, is an ACCEPTED offer, known resolution value),
+ * stamps ONLY `outcomeResolved` to [resolvedOutcome] (null ⇒ undo back to a normal counted accept) —
+ * never any frozen estimate column. Because the correction always sequences after its target's
+ * `OFFER_ACCEPTED`, a from-zero refold replays it in order and reproduces the identical stamp.
+ */
+data class OfferOutcomeCorrectionFold(
+    val targetOfferEventSequenceId: Long,
+    val resolvedOutcome: String? = null,
 )
 
 /**
@@ -353,6 +396,11 @@ object RecordFolds {
             AppEventType.PAY_ADJUSTMENT -> CorrectionFolds.foldPayAdjustment(event, context)
             AppEventType.DELIVERY_ADJUSTMENT -> CorrectionFolds.foldDeliveryAdjustment(event, context)
             AppEventType.DELIVERY_SESSION_ASSIGN -> CorrectionFolds.foldDeliverySessionAssign(event, context)
+            AppEventType.OFFER_OUTCOME_CORRECTION -> CorrectionFolds.foldOfferOutcomeCorrection(event, context)
+            // #810 B2 Tier 1: emit the orphan-reconcile trigger (the orchestrator runs the store-evidence
+            // join against committed rows in-transaction) AND still advance liveness exactly as the old
+            // read-model-inert `else` arm did (the #810 B1 tripwire mints no record itself).
+            AppEventType.JOB_ACCEPT_MISMATCH -> foldJobAcceptMismatch(event, context)
             AppEventType.DASH_STOP -> foldDashStop(event, context)
             // Every other session-attributed event just advances the liveness/odometer anchors so
             // the open-session duration and lastOdometer stay honest; the watermark still moves past
@@ -483,6 +531,29 @@ object RecordFolds {
                 )
         }
         return FoldOutcome(context = newCtx, offer = offer)
+    }
+
+    /**
+     * #810 B2 Tier 1 — fold a `JOB_ACCEPT_MISMATCH` tripwire (B1). It mints no record (the #810 B1
+     * event is read-model-inert), so this preserves the old `else`-arm liveness advance verbatim; it
+     * additionally emits an [OfferReconcileFold] the orchestrator runs against committed rows. A
+     * missing/malformed payload degrades to a plain liveness advance (never a crash) — the tripwire's
+     * own record-inertness is unaffected.
+     */
+    private fun foldJobAcceptMismatch(event: SequencedAppEvent, context: SessionFoldContext?): FoldOutcome {
+        val e = event.event
+        val sid = e.sessionId
+        val ctx = sid?.let { resolveContext(context, it, e.occurredAt).advance(e.occurredAt, event.metadata?.odometer) }
+        val p = e.payload as? JobAcceptMismatchPayload
+            ?: return FoldOutcome(context = ctx ?: context, skip = "JOB_ACCEPT_MISMATCH: missing/malformed payload")
+        return FoldOutcome(
+            context = ctx ?: context,
+            offerReconcile = OfferReconcileFold(
+                jobId = p.jobId,
+                sessionId = sid,
+                acceptedOfferHashes = p.acceptedOfferHashes,
+            ),
+        )
     }
 
     private fun foldDashStop(event: SequencedAppEvent, context: SessionFoldContext?): FoldOutcome {

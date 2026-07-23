@@ -7,6 +7,7 @@ import cloud.trotter.dashbuddy.domain.analytics.DailyEarnings
 import cloud.trotter.dashbuddy.domain.analytics.DecisionEconomics
 import cloud.trotter.dashbuddy.domain.analytics.DeliveryRecord
 import cloud.trotter.dashbuddy.domain.analytics.EarningsHeatmap
+import cloud.trotter.dashbuddy.domain.analytics.OrphanOfferGroup
 import cloud.trotter.dashbuddy.domain.analytics.PeriodEconomics
 import cloud.trotter.dashbuddy.domain.analytics.SessionRecord
 import cloud.trotter.dashbuddy.domain.analytics.StoreEconomics
@@ -66,6 +67,13 @@ data class AnalyticsUiState(
      * from the Money-tab callout. Reactive: shrinks as the projector folds a `DELIVERY_SESSION_ASSIGN`.
      */
     val noSessionDeliveries: List<DeliveryRecord> = emptyList(),
+    /**
+     * The period's still-open orphan-offer mismatches (#810 B2 Tier 2) — accepted offers whose job
+     * produced no matching delivery and whose same-store shape the projector's Tier-1 join could not
+     * resolve. The Money-tab callout opens the attestation dialog; reactive — shrinks as the driver
+     * attests (or Tier-1 resolves) an orphan.
+     */
+    val orphanOfferGroups: List<OrphanOfferGroup> = emptyList(),
     /** Offer-decision economics for [selectedPeriod] — the Decisions tab (#315 H3, frozen est.). */
     val decisions: DecisionEconomics = DecisionEconomics.EMPTY,
     /** Time / mileage economics for [selectedPeriod] — the Time tab (#315 H4, measured). */

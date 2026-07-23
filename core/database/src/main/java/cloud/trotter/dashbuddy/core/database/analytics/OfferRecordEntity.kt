@@ -77,4 +77,18 @@ data class OfferRecordEntity(
      * for money.
      */
     val linkedJobId: String? = null,
+
+    // ── Orphan-offer resolution (#810 B2, v15) ──────────────────────────────
+    /**
+     * The resolved fate of an ACCEPTED offer whose job produced no matching delivery — the
+     * invisible-unassign class (#810). Null for every normal offer; non-null ONLY on an accepted
+     * orphan that has been resolved, and the ORIGINAL [outcome] column is never rewritten (provenance
+     * stays visible — the #688 edit-trail pattern). Two values:
+     *  - `"UNASSIGNED_INFERRED"` — Tier 1, the projector's store-evidence join proved a single
+     *    cross-store orphan at fold time (`JobAcceptMismatchResolver`).
+     *  - `"UNASSIGNED_ATTESTED"` — Tier 2, the driver attested it via an `OFFER_OUTCOME_CORRECTION`.
+     * Read-side offer counts (the Decisions tab funnel + score aggregates) exclude rows where this is
+     * non-null, so a resolved orphan no longer inflates `accepted`/`received`. Null again ⇒ undo.
+     */
+    val outcomeResolved: String? = null,
 )

@@ -226,6 +226,13 @@ class RecordFoldsTest {
         // Liveness advanced to the event's time (the `else` arm's `ctx.advance`).
         assertNotNull("context carries through", mismatch.context)
         assertEquals("liveness advanced to the mismatch event time", 3_500L, mismatch.context!!.lastEventAt)
+        // #810 B2 Tier 1: it now ALSO emits an orphan-reconcile trigger (still no record row) so the
+        // orchestrator can run the store-evidence join against committed rows in-transaction.
+        val reconcile = mismatch.offerReconcile
+        assertNotNull("emits the Tier-1 orphan-reconcile trigger", reconcile)
+        assertEquals("carries the closing job id", "J1", reconcile!!.jobId)
+        assertEquals("carries the session for the offer lookup", s, reconcile.sessionId)
+        assertEquals("carries both accepted offer hashes", listOf("hA", "hB"), reconcile.acceptedOfferHashes)
     }
 
     @Test

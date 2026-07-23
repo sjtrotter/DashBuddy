@@ -423,6 +423,30 @@ per-drop net redistributes within a stack while session/period/IRS/CSV mileage t
 leg columns are provenance and are never rewritten, so leg-sum ≠ realizedMiles IS the visible edit trail.
 CSV gains `miles_to_store`/`miles_to_dropoff`. `newCompletedAt` stays banned on `DELIVERY_ADJUSTMENT`.
 Session-categorize of an unattributed remainder is deferred (#650 follow-up). Related: #653/#655/#703.
+**Orphan-offer resolution (#810 B2, Room v14→v15 additive `offer_records.outcomeResolved`, `PROJECTOR_VERSION`
+7→8):** an accepted offer whose job produced no matching delivery (the invisible-unassign class B1's
+`JOB_ACCEPT_MISMATCH` tripwire surfaces) is resolved in two tiers, both write-only to the new nullable
+`outcomeResolved` column (original `outcome` never rewritten — the #688 edit-trail pattern). **Tier 1
+(projector, automatic):** folding a `JOB_ACCEPT_MISMATCH` emits an `OfferReconcileFold` the orchestrator runs
+resolve-from-rows in-transaction — the pure `JobAcceptMismatchResolver` joins the closing job's delivered-drop
+store evidence (`delivery_records.storeName` + `payoutStoreForms`, normalized via `StoreKeys`) against each
+accepted `offer_record`'s parsed store; EXACTLY one store-unaccounted offer while all others are accounted →
+stamp `UNASSIGNED_INFERRED`; any other shape (same-store tie, multiple/zero unaccounted, no evidence) is
+INCONCLUSIVE → Tier 2 (fail-null beats fail-wrong, #745). The refold retro-resolves the seq-114 orphan (which,
+being same-store, lands in Tier 2). **Tier 2 (driver attestation):** a Money-tab callout (`orphanOfferGroups`,
+read by joining the `JOB_ACCEPT_MISMATCH` events to accepted `offer_records`) opens `OrphanOfferAttestDialog`;
+the driver picks the unassigned offer → `CorrectionRepository.correctOfferOutcome` appends a new
+`OFFER_OUTCOME_CORRECTION` event → `CorrectionFolds.foldOfferOutcomeCorrection` → the orchestrator stamps
+`UNASSIGNED_ATTESTED` (null ⇒ undo), rebuild-faithfully (correction sequences after its target). **Read-side
+exclusion:** `AnalyticsDao.offerOutcomes`/`offerScoreOutcomes` (the Decisions-tab funnel + score aggregates)
+gain `outcomeResolved IS NULL`, so a resolved orphan no longer inflates `accepted`/`received`. The session-level
+`session_records.offersAccepted` live counter (bubble ModeCard + CSV) is a DIFFERENT fold and is left as-is
+(a retrospective analytics resolution doesn't rewrite the per-dash counter — a documented residual). The
+Tier-1 reconcile reads only delivered rows sequenced BEFORE the mismatch event and the state machine emits
+`JOB_ACCEPT_MISMATCH` AFTER the closing job's final `DELIVERY_COMPLETED` (`EffectMap` emission order, #810 B2
+review F1) so the store evidence is complete by construction and the fold is paging-independent (historical
+logs carrying the old mismatch-first order deterministically fall to Tier 2). The only state-machine touch is
+that emission-ORDER within one close step (no new events, no reducer change).
 
 ## Development Principles
 

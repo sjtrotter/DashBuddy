@@ -13,8 +13,11 @@ import cloud.trotter.dashbuddy.core.database.analytics.SessionRecordEntity
 import cloud.trotter.dashbuddy.core.database.event.AppEventDao
 import cloud.trotter.dashbuddy.domain.analytics.DeliveryAdjustmentFold
 import cloud.trotter.dashbuddy.domain.analytics.DeliveryFold
+import cloud.trotter.dashbuddy.domain.analytics.JobAcceptMismatchResolver
 import cloud.trotter.dashbuddy.domain.analytics.LegStateCodec
 import cloud.trotter.dashbuddy.domain.analytics.OfferFold
+import cloud.trotter.dashbuddy.domain.analytics.OfferOutcomeCorrectionFold
+import cloud.trotter.dashbuddy.domain.analytics.OfferReconcileFold
 import cloud.trotter.dashbuddy.domain.analytics.PayAdjustmentFold
 import cloud.trotter.dashbuddy.domain.analytics.PayBasis
 import cloud.trotter.dashbuddy.domain.analytics.PickupFold
@@ -23,6 +26,8 @@ import cloud.trotter.dashbuddy.domain.analytics.SessionAssignFold
 import cloud.trotter.dashbuddy.domain.analytics.SessionFoldContext
 import cloud.trotter.dashbuddy.domain.analytics.StoreResolution
 import cloud.trotter.dashbuddy.domain.evaluation.NetProfit
+import cloud.trotter.dashbuddy.domain.model.event.AppEventType
+import cloud.trotter.dashbuddy.domain.model.event.payload.OfferOutcomeResolution
 import cloud.trotter.dashbuddy.domain.state.Platform
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
@@ -195,6 +200,8 @@ class AnalyticsProjector @Inject constructor(
             outcome.payAdjustment?.let { adjustments += Adjustment.Pay(ev.sequenceId, it) }
             outcome.deliveryAdjustment?.let { adjustments += Adjustment.Delivery(ev.sequenceId, it) }
             outcome.sessionAssign?.let { adjustments += Adjustment.SessionAssign(ev.sequenceId, it) }
+            outcome.offerReconcile?.let { adjustments += Adjustment.OfferReconcile(ev.sequenceId, it) }
+            outcome.offerOutcomeCorrection?.let { adjustments += Adjustment.OfferOutcomeCorrect(ev.sequenceId, it) }
             outcome.context?.let { ctx ->
                 contexts[ctx.sessionId] = ctx
                 touched += ctx.sessionId
@@ -229,6 +236,8 @@ class AnalyticsProjector @Inject constructor(
                     is Adjustment.Pay -> applyPayAdjustment(adj.fold)
                     is Adjustment.Delivery -> applyDeliveryAdjustment(adj.fold)
                     is Adjustment.SessionAssign -> applySessionAssign(adj.fold)
+                    is Adjustment.OfferReconcile -> applyOfferReconcile(adj.fold, adj.sequenceId)
+                    is Adjustment.OfferOutcomeCorrect -> applyOfferOutcomeCorrection(adj.fold)
                 }
                 if (skipped) adjustmentSkips++
             }
@@ -261,6 +270,8 @@ class AnalyticsProjector @Inject constructor(
         data class Pay(override val sequenceId: Long, val fold: PayAdjustmentFold) : Adjustment
         data class Delivery(override val sequenceId: Long, val fold: DeliveryAdjustmentFold) : Adjustment
         data class SessionAssign(override val sequenceId: Long, val fold: SessionAssignFold) : Adjustment
+        data class OfferReconcile(override val sequenceId: Long, val fold: OfferReconcileFold) : Adjustment
+        data class OfferOutcomeCorrect(override val sequenceId: Long, val fold: OfferOutcomeCorrectionFold) : Adjustment
     }
 
     /** A #159 store-resolution trigger carrying its source event's [sequenceId] for the seq-ordered
@@ -487,6 +498,107 @@ class AnalyticsProjector @Inject constructor(
         )
         if (oldSessionId != null) analyticsDao.bumpSessionDeliveries(oldSessionId, -1)
         if (newSessionId != null) analyticsDao.bumpSessionDeliveries(newSessionId, +1)
+        return false
+    }
+
+    /**
+     * #810 B2 Tier 1 — resolve a `JOB_ACCEPT_MISMATCH` orphan from committed store evidence
+     * (resolve-from-rows, the #159 pattern). Reads the closing job's accepted `offer_records` (by the
+     * payload's offer hashes + session) and its delivered `delivery_records`, runs the pure
+     * [JobAcceptMismatchResolver] over their store names, and stamps `UNASSIGNED_INFERRED` on the ONE
+     * cross-store orphan it proves. **Any ambiguity is a no-op** (INCONCLUSIVE → Tier 2) — it re-prices
+     * nothing and mutates only the new `outcomeResolved` column.
+     *
+     * **Paging-independence (review F1).** The evidence read is scoped to `eventSequenceId <
+     * [mismatchSeq]` — the rows sequenced BEFORE this mismatch event. The state machine now emits
+     * `JOB_ACCEPT_MISMATCH` AFTER the closing job's final `DELIVERY_COMPLETED` (both on the same close
+     * step; EffectMap review F1), so all of the job's delivered rows sort before the mismatch and this
+     * bound is a no-op on today's order — but it makes the reconcile deterministic across page
+     * boundaries AND for HISTORICAL logs carrying the OLD (mismatch-first) order: there the closing
+     * drop's row is `> mismatchSeq`, excluded, so the evidence is short one store and the mismatch
+     * deterministically falls to Tier 2 (fail-null) whether folded incrementally or from-zero.
+     *
+     * **Missing-evidence guard (review F2).** If ANY delivered row has NO usable store evidence (blank
+     * `storeName` AND empty decoded `payoutStoreForms`), the delivered-store set is incomplete and a
+     * DELIVERED offer could be mis-stamped as the orphan — so bail to INCONCLUSIVE (Tier 2).
+     *
+     * Returns true only for the defensive skips (no sessionId / no offer hashes / <2 accepted rows) — an
+     * INCONCLUSIVE resolution is a valid processed no-op, not a skip.
+     */
+    private suspend fun applyOfferReconcile(fold: OfferReconcileFold, mismatchSeq: Long): Boolean {
+        val sid = fold.sessionId ?: run {
+            Timber.tag(TAG).w("JOB_ACCEPT_MISMATCH reconcile: job has no sessionId — skipped")
+            return true
+        }
+        if (fold.acceptedOfferHashes.isEmpty()) {
+            Timber.tag(TAG).w("JOB_ACCEPT_MISMATCH reconcile: no accepted offer hashes on the mismatch — skipped")
+            return true
+        }
+        val acceptedRows = analyticsDao.offerRecordsByHashes(
+            fold.acceptedOfferHashes, sid, AppEventType.OFFER_ACCEPTED.name,
+        )
+        // Need ≥2 accepted rows to have an orphan to disambiguate (the resolver also guards this).
+        if (acceptedRows.size < 2) {
+            Timber.tag(TAG).w(
+                "JOB_ACCEPT_MISMATCH reconcile: %d accepted offer row(s) found (<2) — skipped",
+                acceptedRows.size,
+            )
+            return true
+        }
+        // F1: evidence is only the rows sequenced before this mismatch (paging + historical-order safe).
+        val deliveredRows = analyticsDao.deliveryRecordsForJob(fold.jobId)
+            .filter { it.eventSequenceId < mismatchSeq }
+        // F2: a delivered row with NO store evidence would silently shrink the delivered-store set and
+        // could make the resolver stamp a DELIVERED offer as the orphan — fail-null to Tier 2 instead.
+        val anyEvidenceless = deliveredRows.any {
+            it.storeName.isNullOrBlank() && StoreResolutionRunner.decodeForms(it.payoutStoreForms).isEmpty()
+        }
+        if (anyEvidenceless) return false
+        val deliveredForms = deliveredRows.flatMap { row ->
+            buildList {
+                row.storeName?.let { add(it) }
+                addAll(StoreResolutionRunner.decodeForms(row.payoutStoreForms))
+            }
+        }
+        val orphanSeq = JobAcceptMismatchResolver.resolveOrphan(
+            acceptedOffers = acceptedRows.map {
+                JobAcceptMismatchResolver.AcceptedOffer(it.eventSequenceId, it.merchantName)
+            },
+            deliveredStoreForms = deliveredForms,
+        ) ?: return false // INCONCLUSIVE (same-store tie / multi-unmatched / no evidence) → Tier 2.
+        analyticsDao.stampOfferOutcomeResolved(orphanSeq, OfferOutcomeResolution.UNASSIGNED_INFERRED)
+        return false
+    }
+
+    /**
+     * #810 B2 Tier 2 — apply a driver `OFFER_OUTCOME_CORRECTION` by-PK: stamp `offer_records
+     * .outcomeResolved` (`UNASSIGNED_ATTESTED`, or null to UNDO), never any frozen estimate column.
+     * Returns true iff SKIPPED (a counted skip + PII-safe WARN). Three fail-closed guards: target row
+     * exists, it is an ACCEPTED offer (only an accept can be an orphan), and the resolution value is
+     * known (`UNASSIGNED_ATTESTED` or null). Because the correction sequences after its target's
+     * `OFFER_ACCEPTED`, a from-zero refold reproduces the identical stamp.
+     */
+    private suspend fun applyOfferOutcomeCorrection(fold: OfferOutcomeCorrectionFold): Boolean {
+        val row = analyticsDao.offerRecord(fold.targetOfferEventSequenceId) ?: run {
+            Timber.tag(TAG).w("OFFER_OUTCOME_CORRECTION: target offer row %d not found", fold.targetOfferEventSequenceId)
+            return true
+        }
+        if (row.outcome != AppEventType.OFFER_ACCEPTED.name) {
+            Timber.tag(TAG).w(
+                "OFFER_OUTCOME_CORRECTION: offer row %d is not an accepted offer — skipped",
+                fold.targetOfferEventSequenceId,
+            )
+            return true
+        }
+        val resolved = fold.resolvedOutcome
+        if (resolved != null && resolved != OfferOutcomeResolution.UNASSIGNED_ATTESTED) {
+            Timber.tag(TAG).w(
+                "OFFER_OUTCOME_CORRECTION: unknown resolution value for offer row %d — skipped",
+                fold.targetOfferEventSequenceId,
+            )
+            return true
+        }
+        analyticsDao.stampOfferOutcomeResolved(fold.targetOfferEventSequenceId, resolved)
         return false
     }
 
@@ -795,7 +907,16 @@ class AnalyticsProjector @Inject constructor(
          * those stay chain-only — a partial, honest backfill). Purely a projection re-key: `app_events`,
          * every frozen economy column, and pay/net/miles are untouched. Precedented side effect (as
          * v2/v3/v4/v6): the refold also re-stamps `CURRENT_FALLBACK` rows against today's economy.
+         * v8 (#810 B2): the from-zero refold re-processes the `JOB_ACCEPT_MISMATCH` tripwire events
+         * already in the log (the seq-114 orphan) through the Tier-1 store-evidence join, stamping
+         * `offer_records.outcomeResolved = UNASSIGNED_INFERRED` on any single cross-store orphan and
+         * leaving the fielded same-store shape NULL (for Tier-2 driver attestation). A new event type
+         * (`OFFER_OUTCOME_CORRECTION`) folds on a fresh drain and cannot exist in already-folded history,
+         * so the bump exists for the Tier-1 retro-resolve, not the correction. Purely a projection re-key
+         * of the new nullable column: `app_events`, every frozen economy column, and pay/net/miles are
+         * untouched. Precedented side effect (as v2/v3/v4/v6/v7): the refold also re-stamps
+         * `CURRENT_FALLBACK` rows against today's economy.
          */
-        private const val PROJECTOR_VERSION = 7
+        private const val PROJECTOR_VERSION = 8
     }
 }

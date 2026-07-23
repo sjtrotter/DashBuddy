@@ -4,6 +4,8 @@ import cloud.trotter.dashbuddy.core.data.analytics.CorrectionRepository
 import cloud.trotter.dashbuddy.core.data.event.AppEventRepo
 import cloud.trotter.dashbuddy.domain.model.event.AppEventType
 import cloud.trotter.dashbuddy.domain.model.event.payload.DeliverySessionAssignPayload
+import cloud.trotter.dashbuddy.domain.model.event.payload.OfferOutcomeCorrectionPayload
+import cloud.trotter.dashbuddy.domain.model.event.payload.OfferOutcomeResolution
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
@@ -111,6 +113,34 @@ class CorrectionRepositoryTest {
             runBlocking { repo.assignDeliverySession(targetEventSequenceId = 1L, newSessionId = "   ") }
         }
         verify(appEventRepo, never()).appendUserEvent(any(), anyOrNull())
+    }
+
+    // ── correctOfferOutcome (#810 B2 Tier 2) ────────────────────────────
+
+    @Test
+    fun `correctOfferOutcome attested appends an ATTESTED correction with no envelope sessionId`() = runTest {
+        repo.correctOfferOutcome(targetOfferEventSequenceId = 42L, attested = true, note = "chat unassign")
+
+        val captor = argumentCaptor<cloud.trotter.dashbuddy.domain.model.event.AppEvent>()
+        verify(appEventRepo).appendUserEvent(captor.capture(), anyOrNull())
+        val event = captor.firstValue
+        assertEquals(AppEventType.OFFER_OUTCOME_CORRECTION, event.type)
+        assertNull("an offer-outcome correction targets an offer by PK — no session envelope", event.sessionId)
+        val payload = event.payload as OfferOutcomeCorrectionPayload
+        assertEquals(42L, payload.targetOfferEventSequenceId)
+        assertEquals(OfferOutcomeResolution.UNASSIGNED_ATTESTED, payload.resolvedOutcome)
+        assertEquals("chat unassign", payload.note)
+    }
+
+    @Test
+    fun `correctOfferOutcome undo appends a null-resolution correction`() = runTest {
+        repo.correctOfferOutcome(targetOfferEventSequenceId = 7L, attested = false)
+
+        val captor = argumentCaptor<cloud.trotter.dashbuddy.domain.model.event.AppEvent>()
+        verify(appEventRepo).appendUserEvent(captor.capture(), anyOrNull())
+        val payload = captor.firstValue.payload as OfferOutcomeCorrectionPayload
+        assertEquals(7L, payload.targetOfferEventSequenceId)
+        assertNull("undo clears the resolution", payload.resolvedOutcome)
     }
 
     @Test

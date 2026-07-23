@@ -52,6 +52,7 @@ fun AnalyticsScreen(
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     // "(No session)" categorize flow (#660 piece 2) — opened from the Money-tab callout.
     var showAssignSheet by remember { mutableStateOf(false) }
+    var showOrphanOfferSheet by remember { mutableStateOf(false) }
 
     Scaffold(
         topBar = {
@@ -110,8 +111,10 @@ fun AnalyticsScreen(
                         topStores = uiState.topStores,
                         recentSessions = uiState.recentSessions,
                         dailyEarnings = uiState.dailyEarnings,
+                        orphanOfferGroups = uiState.orphanOfferGroups,
                         onOpenSession = onOpenSession,
                         onOpenNoSession = { showAssignSheet = true },
+                        onOpenOrphanOffers = { showOrphanOfferSheet = true },
                     )
                 }
 
@@ -148,6 +151,14 @@ fun AnalyticsScreen(
             candidateSessionsFor = viewModel::candidateSessionsFor,
             onAssign = viewModel::assignToSession,
             onDismiss = { showAssignSheet = false },
+        )
+    }
+
+    if (showOrphanOfferSheet) {
+        OrphanOfferAttestDialog(
+            groups = uiState.orphanOfferGroups,
+            onResolve = viewModel::resolveOrphanOffer,
+            onDismiss = { showOrphanOfferSheet = false },
         )
     }
 }
