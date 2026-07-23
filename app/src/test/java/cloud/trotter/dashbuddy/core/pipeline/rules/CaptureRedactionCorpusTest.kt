@@ -198,8 +198,8 @@ class CaptureRedactionCorpusTest {
     }
 
     /** The `hasTextMatchesRegex` strings in a screen rule's `redact` block (generated asset). */
-    private fun ruleRedactRegexes(ruleId: String): List<String> {
-        val root = Json.parseToJsonElement(File(rulesDir, "doordash.json").readText()).jsonObject
+    private fun ruleRedactRegexes(ruleId: String, platformFile: String = "doordash.json"): List<String> {
+        val root = Json.parseToJsonElement(File(rulesDir, platformFile).readText()).jsonObject
         val screen = root["screens"]!!.jsonArray.first {
             it.jsonObject["id"]?.jsonPrimitive?.content == ruleId
         }.jsonObject
@@ -271,7 +271,14 @@ class CaptureRedactionCorpusTest {
     fun `committed corpus carries no un-masked bare customer-name node (FIX 4)`() {
         val nameShape = Regex(SnapshotRedactor.FIRST_LAST_INITIAL_PATTERN, RegexOption.IGNORE_CASE)
         // Folders whose owning rule declares the name-shape redact (FIX 3 included).
-        val folders = listOf("dropoff_multi_order_confirm", "dropoff_navigation", "dropoff_handoff")
+        // #825 added the uber trip surfaces (active_trip/splash/customer_chat/
+        // pickup_verification_items) to the set — each now carries the id-less
+        // name-shape redact, so a future un-masked bare name in their corpus is a
+        // test failure, not a permanent git leak.
+        val folders = listOf(
+            "dropoff_multi_order_confirm", "dropoff_navigation", "dropoff_handoff",
+            "active_trip", "splash", "customer_chat", "pickup_verification_items",
+        )
         val leaks = mutableListOf<String>()
         for (folder in folders) {
             for ((filename, node, _) in TestResourceLoader.loadSnapshots("snapshots/$folder")) {
@@ -381,6 +388,156 @@ class CaptureRedactionCorpusTest {
         assertFalse("PIN must not persist", masked.contains("9032"))
         assertFalse("step_description instruction must not persist", masked.contains("Text Jane"))
         assertTrue("arrival CTA anchor kept", masked.contains("Complete Delivery"))
+    }
+
+    // =========================================================================
+    // #825 — the uber `active_trip` bare-node customer-PII Pledge leak. The
+    // fielded on-job card renders the customer first-name+last-initial, street,
+    // gate code and unit as id-less nodes with NO lead-in marker, so the
+    // CustomerTextMarkers prefix backstop can't scrub them and the rule declared
+    // no `redact` — raw customer PII shipped to 4 recognized capture envelopes on
+    // 07-21. These pin the fix at the runtime capture edge: an injected synthetic
+    // live (un-redacted) capture must mask every PII node while the recognition
+    // anchors survive. Redaction is capture-only (these rules are parse-less; the
+    // goldens are byte-identical). Same cross-platform content-shape SSOT as #803.
+    // =========================================================================
+
+    private val uberNameHex = java.security.MessageDigest.getInstance("SHA-256")
+        .digest("casey t".toByteArray(Charsets.UTF_8))
+        .joinToString("") { "%02x".format(it) }
+        .take(4)
+
+    @Test
+    fun `uber active_trip redact masks the bare name, street, gate code, unit, and id-anchored address (#825)`() {
+        val rule = TestRulesetFactory.screenRuleset.ruleById("uber.screen.active_trip")!!
+        assertFalse("active_trip must now carry a redact block", rule.redact.isEmpty())
+
+        val tree = UiNode(
+            viewIdResourceName = "com.ubercab.driver:id/on_job_view", // recognition anchor
+            children = listOf(
+                UiNode(text = "Dropoff • 1 order"), // benign — must survive
+                UiNode(text = "Casey T."), // bare id-less customer name
+                UiNode(text = "42 Nowhere Ln"), // bare id-less street (fabricated)
+                UiNode(text = "Gate code 8888"), // customer gate code (fabricated)
+                UiNode(text = "Expected by 7:17 PM"), // benign — must survive
+                UiNode(
+                    viewIdResourceName = "com.ubercab.driver:id/ub__nav_address_view_poi_text",
+                    text = "42 Nowhere Ln",
+                ),
+                UiNode(
+                    viewIdResourceName = "com.ubercab.driver:id/ub__nav_address_view_address_text",
+                    text = "Springfield, ZZ 00000",
+                ),
+                UiNode(
+                    viewIdResourceName = "com.ubercab.driver:id/key_info_label",
+                    text = "Casey T.",
+                ),
+                UiNode(
+                    viewIdResourceName = "com.ubercab.driver:id/map_marker_title",
+                    text = "Apt 8888",
+                ),
+            ),
+        ).restoreParents()
+
+        val masked = serialize(rule.redact.apply(tree))
+        assertFalse("customer first name must not persist", masked.contains("Casey"))
+        assertFalse("street name must not persist", masked.contains("Nowhere"))
+        assertFalse("gate/unit number must not persist", masked.contains("8888"))
+        assertFalse("zip must not persist", masked.contains("00000"))
+        // Recognition anchors + benign chrome survive untouched (replay-safe).
+        assertTrue("on_job_view anchor kept", masked.contains("on_job_view"))
+        assertTrue("benign order line kept", masked.contains("Dropoff • 1 order"))
+        assertTrue("benign ETA kept", masked.contains("Expected by 7:17 PM"))
+        assertTrue("apt marker kept", masked.contains("Apt [redacted:"))
+    }
+
+    @Test
+    fun `uber active_trip bare-name redact carries the normalize customerName distinctness hex (#825)`() {
+        val rule = TestRulesetFactory.screenRuleset.ruleById("uber.screen.active_trip")!!
+        // The bare id-less name node masks via the normalize:customerName entry, so
+        // its 4hex equals sha256 of the canonical key ("casey t") — per-customer
+        // stable across the surface forms the name renders in.
+        val masked = rule.redact.apply(UiNode(text = "Casey T.")).text!!
+        assertFalse("name must not persist", masked.contains("Casey"))
+        assertEquals("normalize:customerName distinctness hex", "[redacted:$uberNameHex]", masked)
+    }
+
+    @Test
+    fun `uber active_trip name redact is SSOT with SnapshotRedactor FIRST_LAST_INITIAL (#825)`() {
+        assertTrue(
+            "active_trip must carry the canonical id-less name-shape regex byte-identical to " +
+                "SnapshotRedactor.FIRST_LAST_INITIAL_PATTERN; found " +
+                ruleRedactRegexes("uber.screen.active_trip", "uber.json"),
+            ruleRedactRegexes("uber.screen.active_trip", "uber.json")
+                .contains(SnapshotRedactor.FIRST_LAST_INITIAL_PATTERN),
+        )
+    }
+
+    @Test
+    fun `uber splash redact masks trip-underlay street, address, and bare name (#813 via #825)`() {
+        val rule = TestRulesetFactory.screenRuleset.ruleById("uber.screen.splash")!!
+        assertFalse("splash must now carry a redact block", rule.redact.isEmpty())
+        val tree = UiNode(
+            viewIdResourceName = "com.ubercab.driver:id/rootSplashBackground", // recognition anchor
+            children = listOf(
+                UiNode(
+                    viewIdResourceName = "com.ubercab.driver:id/ub__nav_maneuver_text",
+                    text = "Turn right onto Nowhere Canyon Drive",
+                ),
+                UiNode(
+                    viewIdResourceName = "com.ubercab.driver:id/ub__current_street_name_tv",
+                    text = "Nowhere Canyon Drive",
+                ),
+                UiNode(
+                    viewIdResourceName = "com.ubercab.driver:id/ub__nav_address_view_address_text",
+                    text = "Springfield, ZZ 00000",
+                ),
+                UiNode(text = "Casey T."), // bare id-less name
+                UiNode(text = "42 Nowhere Ln"), // bare id-less street (fabricated)
+            ),
+        ).restoreParents()
+        val masked = serialize(rule.redact.apply(tree))
+        assertFalse("customer name must not persist", masked.contains("Casey"))
+        assertFalse("street name must not persist", masked.contains("Nowhere"))
+        assertFalse("zip must not persist", masked.contains("00000"))
+        assertTrue("rootSplashBackground anchor kept", masked.contains("rootSplashBackground"))
+    }
+
+    @Test
+    fun `uber customer_chat redact masks the chat header name and gate-code instructions (#825)`() {
+        val rule = TestRulesetFactory.screenRuleset.ruleById("uber.screen.customer_chat")!!
+        assertFalse("customer_chat must now carry a redact block", rule.redact.isEmpty())
+        val tree = UiNode(
+            viewIdResourceName = "com.ubercab.driver:id/on_job_view",
+            children = listOf(
+                UiNode(
+                    viewIdResourceName = "com.ubercab.driver:id/ub__chat_header_title",
+                    text = "Casey T.",
+                ),
+                UiNode(text = "• Leave at door\n• Gate code 8888"), // delivery instructions
+                UiNode(text = "Verify order"), // benign — survives
+            ),
+        ).restoreParents()
+        val masked = serialize(rule.redact.apply(tree))
+        assertFalse("chat header customer name must not persist", masked.contains("Casey"))
+        assertFalse("gate code must not persist", masked.contains("8888"))
+        assertTrue("benign chrome kept", masked.contains("Verify order"))
+    }
+
+    @Test
+    fun `uber pickup_verification_items redact masks the bare customer name (#825)`() {
+        val rule = TestRulesetFactory.screenRuleset.ruleById("uber.screen.pickup_verification_items")!!
+        assertFalse("pickup_verification_items must now carry a redact block", rule.redact.isEmpty())
+        val tree = UiNode(
+            viewIdResourceName = "com.ubercab.driver:id/on_job_view",
+            children = listOf(
+                UiNode(text = "Verify order"), // recognition anchor — survives
+                UiNode(text = "Casey T."), // bare id-less customer name
+            ),
+        ).restoreParents()
+        val masked = serialize(rule.redact.apply(tree))
+        assertFalse("customer name must not persist", masked.contains("Casey"))
+        assertTrue("Verify order anchor kept", masked.contains("Verify order"))
     }
 
     @Test

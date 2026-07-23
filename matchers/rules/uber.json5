@@ -261,6 +261,94 @@
     {
       "id": "uber.screen.splash",
       "priority": 40,
+      "comment": "#813 (found by the #825 audit): splash anchors on rootSplashBackground ALONE and can win classification over a live trip underlay whose nav/address nodes carry customer street names and (id-less) name/address lines — with no redact those shipped raw to the capture envelope. Same capture-only content-shape SSOT set as active_trip (#803/#825), plus id anchors for the nav maneuver / current-street / destination-address views the trip underlay renders. Disk-only; never a recognition regression (splash has no parse block).",
+      "redact": [
+        {
+          "find": {
+            "hasTextContaining": "gate code"
+          }
+        },
+        {
+          "find": {
+            "hasTextMatchesRegex": "\\bgate[\\s:#]*\\d{3}"
+          }
+        },
+        {
+          "find": {
+            "hasTextMatchesRegex": "\\bpin[\\s:#]*\\d{3}"
+          }
+        },
+        {
+          "find": {
+            "all": [
+              {
+                "hasTextMatchesRegex": "^\\d{1,5}\\s+\\S"
+              },
+              {
+                "hasNoId": true
+              }
+            ]
+          }
+        },
+        {
+          "find": {
+            "all": [
+              {
+                "hasTextMatchesRegex": "\\d{5}"
+              },
+              {
+                "hasNoId": true
+              }
+            ]
+          }
+        },
+        {
+          "find": {
+            "hasTextStartsWith": "Apt "
+          },
+          "keepPrefix": [
+            "Apt "
+          ]
+        },
+        {
+          "find": {
+            "all": [
+              {
+                "hasTextMatchesRegex": "^\\s{0,8}[\\p{L}][\\p{L}'-]{0,20}( [\\p{L}][\\p{L}'-]{0,20}){0,3} [A-Z]\\.?\\s{0,8}$"
+              },
+              {
+                "hasNoId": true
+              }
+            ]
+          },
+          "normalize": "customerName"
+        },
+        {
+          "find": {
+            "hasIdSuffix": "ub__nav_address_view_poi_text"
+          }
+        },
+        {
+          "find": {
+            "hasIdSuffix": "ub__nav_address_view_address_text"
+          }
+        },
+        {
+          "find": {
+            "hasIdSuffix": "ub__nav_maneuver_text"
+          }
+        },
+        {
+          "find": {
+            "hasIdSuffix": "ub__current_street_name_tv"
+          }
+        },
+        {
+          "find": {
+            "hasIdSuffix": "key_info_label"
+          }
+        }
+      ],
       "require": {
         "exists": {
           "hasIdSuffix": "rootSplashBackground"
@@ -314,6 +402,74 @@
     {
       "id": "uber.screen.pickup_verification_items",
       "priority": 52,
+      "comment": "#825 audit: this verify-order surface carries a bare (id-less) customer first-name + last-initial line with no lead-in marker, past every scrub layer. Same capture-only content-shape SSOT set as active_trip (#803/#825). Disk-only; never a recognition regression (no parse block).",
+      "redact": [
+        {
+          "find": {
+            "hasTextContaining": "gate code"
+          }
+        },
+        {
+          "find": {
+            "hasTextMatchesRegex": "\\bgate[\\s:#]*\\d{3}"
+          }
+        },
+        {
+          "find": {
+            "hasTextMatchesRegex": "\\bpin[\\s:#]*\\d{3}"
+          }
+        },
+        {
+          "find": {
+            "all": [
+              {
+                "hasTextMatchesRegex": "^\\d{1,5}\\s+\\S"
+              },
+              {
+                "hasNoId": true
+              }
+            ]
+          }
+        },
+        {
+          "find": {
+            "all": [
+              {
+                "hasTextMatchesRegex": "\\d{5}"
+              },
+              {
+                "hasNoId": true
+              }
+            ]
+          }
+        },
+        {
+          "find": {
+            "hasTextStartsWith": "Apt "
+          },
+          "keepPrefix": [
+            "Apt "
+          ]
+        },
+        {
+          "find": {
+            "hasTextStartsWith": "\""
+          }
+        },
+        {
+          "find": {
+            "all": [
+              {
+                "hasTextMatchesRegex": "^\\s{0,8}[\\p{L}][\\p{L}'-]{0,20}( [\\p{L}][\\p{L}'-]{0,20}){0,3} [A-Z]\\.?\\s{0,8}$"
+              },
+              {
+                "hasNoId": true
+              }
+            ]
+          },
+          "normalize": "customerName"
+        }
+      ],
       "state": {
         "flow": "task:pickup:arrived",
         "modeHint": "online"
@@ -348,6 +504,79 @@
     {
       "id": "uber.screen.customer_chat",
       "priority": 55,
+      "comment": "#825 audit: the chat surface renders the customer name in ub__chat_header_title and carries the delivery-instruction supporting text (gate code) plus the underlying trip card's bare name/address — none of it was redacted. Same capture-only content-shape SSOT set as active_trip (#803/#825) + the chat-header id anchor. Chat MESSAGE bodies (free customer-typed text) beyond a name shape are the documented residual (a message that is neither a name shape nor a gate/pin/address token is not isolable by a per-node predicate). Disk-only; never a recognition regression.",
+      "redact": [
+        {
+          "find": {
+            "hasIdSuffix": "ub__chat_header_title"
+          }
+        },
+        {
+          "find": {
+            "hasTextContaining": "gate code"
+          }
+        },
+        {
+          "find": {
+            "hasTextMatchesRegex": "\\bgate[\\s:#]*\\d{3}"
+          }
+        },
+        {
+          "find": {
+            "hasTextMatchesRegex": "\\bpin[\\s:#]*\\d{3}"
+          }
+        },
+        {
+          "find": {
+            "all": [
+              {
+                "hasTextMatchesRegex": "^\\d{1,5}\\s+\\S"
+              },
+              {
+                "hasNoId": true
+              }
+            ]
+          }
+        },
+        {
+          "find": {
+            "all": [
+              {
+                "hasTextMatchesRegex": "\\d{5}"
+              },
+              {
+                "hasNoId": true
+              }
+            ]
+          }
+        },
+        {
+          "find": {
+            "hasTextStartsWith": "Apt "
+          },
+          "keepPrefix": [
+            "Apt "
+          ]
+        },
+        {
+          "find": {
+            "hasTextStartsWith": "\""
+          }
+        },
+        {
+          "find": {
+            "all": [
+              {
+                "hasTextMatchesRegex": "^\\s{0,8}[\\p{L}][\\p{L}'-]{0,20}( [\\p{L}][\\p{L}'-]{0,20}){0,3} [A-Z]\\.?\\s{0,8}$"
+              },
+              {
+                "hasNoId": true
+              }
+            ]
+          },
+          "normalize": "customerName"
+        }
+      ],
       "state": {
         "modeHint": "online"
       },
@@ -510,6 +739,103 @@
     {
       "id": "uber.screen.active_trip",
       "priority": 100,
+      "comment": "#825 (HIGH Pledge): the fielded on-job card renders the customer's first-name + last-initial, street, gate code and unit as BARE (id-less) nodes — no 'Deliver to '/'Pickup for ' lead-in in the same node — so CustomerTextMarkers' prefix backstop structurally cannot scrub them, and this rule declared no `redact`, so raw customer PII shipped to the capture envelope (4 recognized frames on 07-21). Redaction is capture-only (never touches recognition/parse/dedup — this rule has no parse block, goldens byte-identical). The id-less CONTENT-shape entries are the same cross-platform SSOT set proven on doordash.screen.dropoff_pin_entry (#803): whole-node mask of any node carrying a gate code / PIN / street / zip / unit / quoted note / whole-value first-name+last-initial. Plus uber id anchors for the nav destination address view and the on-card name label. Accepted over-mask (privacy-first, disk-only): a store nav address on a PICKUP leg (this flow is phase-less) or a numeric chrome node (e.g. an ETA) may also mask — safe, never a recognition regression. Residual: a bare city/state line with no zip ('San Antonio, TX') is kept (matches the corpus keep-decision; not identifying alone) and an id-less possessive landmark note is the documented prefix-less residual.",
+      "redact": [
+        {
+          "find": {
+            "hasTextContaining": "gate code"
+          }
+        },
+        {
+          "find": {
+            "hasTextMatchesRegex": "\\bgate[\\s:#]*\\d{3}"
+          }
+        },
+        {
+          "find": {
+            "hasTextMatchesRegex": "\\bpin[\\s:#]*\\d{3}"
+          }
+        },
+        {
+          "find": {
+            "all": [
+              {
+                "hasTextMatchesRegex": "^\\d{1,5}\\s+\\S"
+              },
+              {
+                "hasNoId": true
+              }
+            ]
+          }
+        },
+        {
+          "find": {
+            "all": [
+              {
+                "hasTextMatchesRegex": "\\d{5}"
+              },
+              {
+                "hasNoId": true
+              }
+            ]
+          }
+        },
+        {
+          "find": {
+            "hasTextStartsWith": "Apt "
+          },
+          "keepPrefix": [
+            "Apt "
+          ]
+        },
+        {
+          "find": {
+            "hasTextStartsWith": "\""
+          }
+        },
+        {
+          "find": {
+            "all": [
+              {
+                "hasTextMatchesRegex": "^#?\\s?\\d{1,4}[A-Za-z]?$"
+              },
+              {
+                "hasNoId": true
+              }
+            ]
+          }
+        },
+        {
+          "comment": "id-less whole-value first-name + last-initial — same canonical SSOT as SnapshotRedactor.FIRST_LAST_INITIAL_PATTERN / dropoff_multi_order_confirm. normalize customerName gives a per-customer-stable mask hex across the surface FORMS the name renders in.",
+          "find": {
+            "all": [
+              {
+                "hasTextMatchesRegex": "^\\s{0,8}[\\p{L}][\\p{L}'-]{0,20}( [\\p{L}][\\p{L}'-]{0,20}){0,3} [A-Z]\\.?\\s{0,8}$"
+              },
+              {
+                "hasNoId": true
+              }
+            ]
+          },
+          "normalize": "customerName"
+        },
+        {
+          "comment": "#825 uber id anchors: the nav destination address view (poi = street line, address = city/state) and the on-card key info label carry the customer address / name with a stable viewId.",
+          "find": {
+            "hasIdSuffix": "ub__nav_address_view_poi_text"
+          }
+        },
+        {
+          "find": {
+            "hasIdSuffix": "ub__nav_address_view_address_text"
+          }
+        },
+        {
+          "find": {
+            "hasIdSuffix": "key_info_label"
+          }
+        }
+      ],
       "state": {
         // #762 D2: a coarse in-job surface — `on_job_view` cannot tell pickup from dropoff, so it
         // declares the phase-less `task:active` flow (consumes the accepted offer into a job, holds

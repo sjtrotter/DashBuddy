@@ -17,6 +17,12 @@
         "shape": null,
         "fields": {}
     },
+    "active_trip/2026-07-21_19-07-46-239__uber__accessibility.window__active_trip__f2a555.json": {
+        "ruleId": "uber.screen.active_trip",
+        "intent": "active_trip",
+        "shape": null,
+        "fields": {}
+    },
     "active_trip/2026-07-21_19-14-49-677__uber__accessibility.window__active_trip__6f786c.json": {
         "ruleId": "uber.screen.active_trip",
         "intent": "active_trip",
