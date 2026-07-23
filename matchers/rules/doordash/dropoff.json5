@@ -1526,6 +1526,47 @@
           }
         ]
       }
+    },
+    {
+      "comment": "#796 — DoorDash 'Drop-off issues' help/resolution MENU (opened from the in-dropoff Help action: a 'Drop-off issues' title over two options, 'Reached drop-off location' and 'Have not reached drop-off location'). RECOGNIZE-ONLY (dev decision 2026-07-17, recognition-gap batch #796): no state.flow, no parse — a transient help overlay opened over an already-established task:dropoff flow, not a lifecycle anchor, so recognizing it only graduates the recurring UNKNOWN capture with no risk of perturbing task lineage. Anchors are corpus-unique (grep of app/src/test/resources/snapshots shows 0 other frames carry 'Drop-off issues' or 'Have not reached drop-off location'), so priority is behaviorally inert. PRIVACY: the menu frames carry no customer PII (option labels only); the sibling resolution screen that DOES carry a name is doordash.screen.dropoff_issue_resolution, which redacts it.",
+      "id": "doordash.screen.dropoff_issue_menu",
+      "priority": 113,
+      "require": {
+        "all": [
+          {
+            "exists": {
+              "hasTextContaining": "Drop-off issues"
+            }
+          },
+          {
+            "exists": {
+              "hasTextContaining": "Have not reached drop-off location"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "comment": "#796 — the 'Reached drop-off location' RESOLUTION screen (reached from the Drop-off issues menu when the dasher marks they reached the location but could not complete: intro 'If you delivered this order but didn't complete it at the drop-off location, let us know why.' over a reason list — 'Provided address or map pin is wrong', 'Customer changed delivery location', … — plus a 'For <customer> • <store>' attribution line and Continue / Contact Support). RECOGNIZE-ONLY (dev decision 2026-07-17, batch #796): no state.flow, no parse. Anchor 'complete it at the drop-off location' is corpus-unique (0 other snapshots) and distinct from the menu rule's 'Have not reached drop-off location', so the two never collide. PRIVACY: the 'For <FirstName L> • <store>' line is a FUSED id-less node carrying a customer first-name + last-initial (no viewId, no 'Deliver to '/'Message from ' marker prefix — the documented split-node residual that both the by-id redact and CustomerTextMarkers miss). The redact below masks the whole tail after the 'For ' prefix; the fused store name is lost from THIS node (acceptable — privacy-first governs the fused case where no control can isolate the store, #598/#803). keepPrefix 'For ' preserves replay recognition; normalize customerName derives the stable mask key.",
+      "id": "doordash.screen.dropoff_issue_resolution",
+      "priority": 114,
+      "redact": [
+        {
+          "comment": "The id-less fused 'For <FirstName L> • <store>' attribution line. hasTextStartsWith 'For ' targets only this node on this screen (no reason label or button starts with 'For '); keepPrefix keeps the literal 'For ' so replay recognition is unchanged, and everything after it (name + store) is masked to a single [redacted:<4hex>] token.",
+          "find": {
+            "hasTextStartsWith": "For "
+          },
+          "keepPrefix": [
+            "For "
+          ],
+          "normalize": "customerName"
+        }
+      ],
+      "require": {
+        "exists": {
+          "hasTextContaining": "complete it at the drop-off location"
+        }
+      }
     }
   ],
   "clicks": [
