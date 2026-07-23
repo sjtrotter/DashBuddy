@@ -25,6 +25,14 @@ subprojects {
     // gated: CI runs JDK 21, where --sun-misc-unsafe-memory-access doesn't exist (23+)
     // and the notices don't fire anyway.
     tasks.withType<Test>().configureEach {
+        // #590 property tests are memory-hungry by design — the recursion-fuzz suite
+        // builds 100k-deep JSON structures and the mapper/classify fuzzers churn large
+        // Mockito-inline mock graphs — and share one forked worker. Gradle's default
+        // 512m test heap sat right at the edge (RuleCompileRecursionPropertyTest OOM'd
+        // once a sibling fuzzer's footprint landed in the same JVM). Raise it so the
+        // whole module fits deterministically; version-independent, so CI (JDK 21) gets
+        // the same headroom.
+        maxHeapSize = "2g"
         if (JavaVersion.current() >= JavaVersion.VERSION_24) {
             jvmArgs("--enable-native-access=ALL-UNNAMED", "--sun-misc-unsafe-memory-access=allow")
         }

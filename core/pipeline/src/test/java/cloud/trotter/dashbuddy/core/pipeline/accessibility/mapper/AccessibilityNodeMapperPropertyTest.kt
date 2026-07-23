@@ -162,9 +162,10 @@ class AccessibilityNodeMapperPropertyTest {
     private class TreeCase(val root: AccessibilityNodeInfo, val ipc: AtomicInteger)
 
     private val treeArb: Arb<TreeCase> = arbitrary { rs ->
-        // depth up to 90 (can exceed MAX_TREE_DEPTH), materialization budget 500 (cheap).
+        // depth up to 75 (exceeds MAX_TREE_DEPTH=60), materialization budget 120 —
+        // kept lean so the Mockito-inline mock graph doesn't pressure the shared worker.
         val ipc = AtomicInteger(0)
-        val root = buildTree(rs, maxDepth = 90, budget = intArrayOf(500), ipc = ipc)
+        val root = buildTree(rs, maxDepth = 75, budget = intArrayOf(120), ipc = ipc)
         TreeCase(root, ipc)
     }
 
@@ -172,7 +173,7 @@ class AccessibilityNodeMapperPropertyTest {
 
     @Test
     fun `property - generated trees stay within depth-node-text caps, bound IPC, never throw`() = runTest {
-        checkAll(300, treeArb) { case ->
+        checkAll(200, treeArb) { case ->
             val mapped = case.root.toUiNode()   // must not throw
             assertWithinCaps(mapped)
             assertTrue(
