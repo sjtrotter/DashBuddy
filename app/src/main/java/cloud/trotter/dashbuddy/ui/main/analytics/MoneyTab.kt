@@ -119,9 +119,10 @@ fun MoneyTab(
         // delivery — the invisible-unassign class the projector's Tier-1 store-evidence join could NOT
         // auto-resolve (a same-store tie). TAPPABLE: opens the attestation dialog where the driver marks
         // which accepted offer was unassigned, which un-inflates the accepted-offer counts. Same
-        // review-flag pattern as the callouts above; gated on there being an open, still-owed mismatch.
-        if (orphanOfferGroups.isNotEmpty()) {
-            val orphanCount = orphanOfferGroups.sumOf { it.orphansOwed }
+        // review-flag pattern as the callouts above; gated on the still-OWED count (F3 — a fully-resolved
+        // group stays in the dialog for undo but no longer drives the callout).
+        val orphanCount = orphanOfferGroups.sumOf { it.owedRemaining }
+        if (orphanCount > 0) {
             val clickLabel = stringResource(R.string.money_tab_orphan_offers_callout_click_label)
             AppCallout(
                 text = stringResource(R.string.money_tab_orphan_offers_callout_format, Formats.commaInt(orphanCount)),

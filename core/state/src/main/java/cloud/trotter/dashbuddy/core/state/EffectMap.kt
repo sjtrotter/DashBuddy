@@ -208,14 +208,20 @@ class EffectMap @Inject constructor(
             addAll(diffTask(p, next, obs))
             addAll(diffPostTask(p, next, actedNextFlow, obs))
             addAll(diffNotification(obs))
-            // #810 B1: the job-close accept-reconciliation tripwire — diffs the activeJob close
-            // (any in-scope close routes through completeActiveJob; endSession is excluded inside).
-            addAll(diffJobClose(p, next, obs))
 
             // #438 B5/#240: the DELIVERY_COMPLETED mint (PostTask-exit + the #596 close-out
             // sweep) extracted to DeliveryCompletionEffects.kt as one unit — both blocks share the
             // emittedThisStep dual-mint-exclusivity set (amdt #2), so they moved together.
             addAll(diffDeliveryCompletion(p, next, actedPrevFlow, actedNextFlow, obs))
+            // #810 B1: the job-close accept-reconciliation tripwire — diffs the activeJob close
+            // (any in-scope close routes through completeActiveJob; endSession is excluded inside).
+            // Emitted AFTER diffDeliveryCompletion (#810 B2 review F1) so the JOB_ACCEPT_MISMATCH
+            // event sequences AFTER the closing job's final DELIVERY_COMPLETED (the #596 close-out
+            // sweep mints that drop on this SAME close step). This makes the B2 Tier-1 store-evidence
+            // reconcile paging-independent — the projector's evidence read sees every delivered row of
+            // the job by construction. Behaviorally inert to B1 (diffJobClose only diffs prev/next +
+            // emits a log effect; the sweep's emittedThisStep set is local to diffDeliveryCompletion).
+            addAll(diffJobClose(p, next, obs))
         }
     }
 

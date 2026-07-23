@@ -440,8 +440,12 @@ the driver picks the unassigned offer → `CorrectionRepository.correctOfferOutc
 exclusion:** `AnalyticsDao.offerOutcomes`/`offerScoreOutcomes` (the Decisions-tab funnel + score aggregates)
 gain `outcomeResolved IS NULL`, so a resolved orphan no longer inflates `accepted`/`received`. The session-level
 `session_records.offersAccepted` live counter (bubble ModeCard + CSV) is a DIFFERENT fold and is left as-is
-(a retrospective analytics resolution doesn't rewrite the per-dash counter — a documented residual). No
-state-machine changes.
+(a retrospective analytics resolution doesn't rewrite the per-dash counter — a documented residual). The
+Tier-1 reconcile reads only delivered rows sequenced BEFORE the mismatch event and the state machine emits
+`JOB_ACCEPT_MISMATCH` AFTER the closing job's final `DELIVERY_COMPLETED` (`EffectMap` emission order, #810 B2
+review F1) so the store evidence is complete by construction and the fold is paging-independent (historical
+logs carrying the old mismatch-first order deterministically fall to Tier 2). The only state-machine touch is
+that emission-ORDER within one close step (no new events, no reducer change).
 
 ## Development Principles
 

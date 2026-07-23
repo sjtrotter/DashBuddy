@@ -365,17 +365,24 @@ class AnalyticsRepository @Inject constructor(
         }
 
     /**
-     * The still-open orphan-offer mismatches for [period] (#810 B2 Tier 2) — the driver-attestation
-     * surface. Joins each `JOB_ACCEPT_MISMATCH` event (whose payload carries the closing job's accepted
-     * offer hashes + the mismatch counts) to the ACCEPTED `offer_records`, and keeps only the groups
-     * still owed a resolution (`resolvedCount < orphansOwed` with at least one unresolved offer). The
-     * projector's Tier-1 store-evidence join has already auto-resolved every cross-store orphan
-     * (`outcomeResolved = UNASSIGNED_INFERRED`), so this surface is the same-store residue only.
+     * The orphan-offer mismatches for [period] (#810 B2 Tier 2) — the driver-attestation surface. Joins
+     * each `JOB_ACCEPT_MISMATCH` event (whose payload carries the closing job's accepted offer hashes +
+     * the mismatch counts) to the ACCEPTED `offer_records`. The projector's Tier-1 store-evidence join
+     * has already auto-resolved every cross-store orphan (`outcomeResolved = UNASSIGNED_INFERRED`), so
+     * this surface is the same-store residue.
      *
-     * Reactive: re-emits as the projector folds a mismatch, folds an `OFFER_OUTCOME_CORRECTION`
-     * (an attestation shrinks the open set), or Tier-1 resolves one. Period-anchored on the mismatch
-     * event's `occurredAt` (the close time), consistent with the Money-tab window. No new PII surface —
-     * store/pay/time are merchant/decision data; no customer hashes.
+     * A group is listed while its mismatch owes ≥1 orphan (`orphansOwed > 0`) and its accepted offers
+     * are present — **including once its orphans are resolved** (review F3): keeping a resolved group
+     * visible is what makes the mis-tap UNDO reachable in the primary 1-owed/2-accept shape (the
+     * callout gates on the still-OWED count via [OrphanOfferGroup.owedRemaining], so a fully-resolved
+     * group no longer contributes to the callout, but its rows stay in the dialog for undo). Residual:
+     * if EVERY listed group is fully resolved the callout hides, so re-opening to undo the very last
+     * resolution isn't reachable until a new mismatch appears (documented).
+     *
+     * Reactive: re-emits as the projector folds a mismatch, folds an `OFFER_OUTCOME_CORRECTION`, or
+     * Tier-1 resolves one. Period-anchored on the mismatch event's `occurredAt` (the close time),
+     * consistent with the Money-tab window. No new PII surface — store/pay/time are merchant/decision
+     * data; no customer hashes.
      */
     fun orphanOfferGroups(period: AnalyticsPeriod): Flow<List<OrphanOfferGroup>> =
         periodBoundariesFlow(period).flatMapLatest { (start, end) ->
@@ -393,9 +400,9 @@ class AnalyticsRepository @Inject constructor(
                         .mapNotNull { offersByKey[it to sid] }
                         .map { it.toOrphanCandidate() }
                     val owed = (payload.acceptedCount - payload.accountedCount).coerceAtLeast(0)
-                    val resolvedCount = candidates.count { it.resolved }
-                    // Still open iff fewer orphans resolved than owed AND ≥1 candidate remains to attest.
-                    if (owed > 0 && resolvedCount < owed && candidates.any { !it.resolved }) {
+                    // List every owed mismatch whose offers we found — resolved OR open (F3: keep the
+                    // undo reachable). owedRemaining (owed − resolved) drives the callout downstream.
+                    if (owed > 0 && candidates.isNotEmpty()) {
                         OrphanOfferGroup(
                             jobId = payload.jobId,
                             sessionId = sid,

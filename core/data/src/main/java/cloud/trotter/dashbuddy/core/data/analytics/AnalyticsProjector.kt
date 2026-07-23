@@ -236,7 +236,7 @@ class AnalyticsProjector @Inject constructor(
                     is Adjustment.Pay -> applyPayAdjustment(adj.fold)
                     is Adjustment.Delivery -> applyDeliveryAdjustment(adj.fold)
                     is Adjustment.SessionAssign -> applySessionAssign(adj.fold)
-                    is Adjustment.OfferReconcile -> applyOfferReconcile(adj.fold)
+                    is Adjustment.OfferReconcile -> applyOfferReconcile(adj.fold, adj.sequenceId)
                     is Adjustment.OfferOutcomeCorrect -> applyOfferOutcomeCorrection(adj.fold)
                 }
                 if (skipped) adjustmentSkips++
@@ -507,25 +507,54 @@ class AnalyticsProjector @Inject constructor(
      * payload's offer hashes + session) and its delivered `delivery_records`, runs the pure
      * [JobAcceptMismatchResolver] over their store names, and stamps `UNASSIGNED_INFERRED` on the ONE
      * cross-store orphan it proves. **Any ambiguity is a no-op** (INCONCLUSIVE → Tier 2) — it re-prices
-     * nothing and mutates only the new `outcomeResolved` column. Runs inside the batch transaction after
-     * the delivery/offer upserts, so a same-batch job is already committed; deterministic on a from-zero
-     * refold because the mismatch event sequences after the job's offers/deliveries.
+     * nothing and mutates only the new `outcomeResolved` column.
+     *
+     * **Paging-independence (review F1).** The evidence read is scoped to `eventSequenceId <
+     * [mismatchSeq]` — the rows sequenced BEFORE this mismatch event. The state machine now emits
+     * `JOB_ACCEPT_MISMATCH` AFTER the closing job's final `DELIVERY_COMPLETED` (both on the same close
+     * step; EffectMap review F1), so all of the job's delivered rows sort before the mismatch and this
+     * bound is a no-op on today's order — but it makes the reconcile deterministic across page
+     * boundaries AND for HISTORICAL logs carrying the OLD (mismatch-first) order: there the closing
+     * drop's row is `> mismatchSeq`, excluded, so the evidence is short one store and the mismatch
+     * deterministically falls to Tier 2 (fail-null) whether folded incrementally or from-zero.
+     *
+     * **Missing-evidence guard (review F2).** If ANY delivered row has NO usable store evidence (blank
+     * `storeName` AND empty decoded `payoutStoreForms`), the delivered-store set is incomplete and a
+     * DELIVERED offer could be mis-stamped as the orphan — so bail to INCONCLUSIVE (Tier 2).
      *
      * Returns true only for the defensive skips (no sessionId / no offer hashes / <2 accepted rows) — an
      * INCONCLUSIVE resolution is a valid processed no-op, not a skip.
      */
-    private suspend fun applyOfferReconcile(fold: OfferReconcileFold): Boolean {
+    private suspend fun applyOfferReconcile(fold: OfferReconcileFold, mismatchSeq: Long): Boolean {
         val sid = fold.sessionId ?: run {
             Timber.tag(TAG).w("JOB_ACCEPT_MISMATCH reconcile: job has no sessionId — skipped")
             return true
         }
-        if (fold.acceptedOfferHashes.isEmpty()) return true
+        if (fold.acceptedOfferHashes.isEmpty()) {
+            Timber.tag(TAG).w("JOB_ACCEPT_MISMATCH reconcile: no accepted offer hashes on the mismatch — skipped")
+            return true
+        }
         val acceptedRows = analyticsDao.offerRecordsByHashes(
             fold.acceptedOfferHashes, sid, AppEventType.OFFER_ACCEPTED.name,
         )
         // Need ≥2 accepted rows to have an orphan to disambiguate (the resolver also guards this).
-        if (acceptedRows.size < 2) return true
-        val deliveredForms = analyticsDao.deliveryRecordsForJob(fold.jobId).flatMap { row ->
+        if (acceptedRows.size < 2) {
+            Timber.tag(TAG).w(
+                "JOB_ACCEPT_MISMATCH reconcile: %d accepted offer row(s) found (<2) — skipped",
+                acceptedRows.size,
+            )
+            return true
+        }
+        // F1: evidence is only the rows sequenced before this mismatch (paging + historical-order safe).
+        val deliveredRows = analyticsDao.deliveryRecordsForJob(fold.jobId)
+            .filter { it.eventSequenceId < mismatchSeq }
+        // F2: a delivered row with NO store evidence would silently shrink the delivered-store set and
+        // could make the resolver stamp a DELIVERED offer as the orphan — fail-null to Tier 2 instead.
+        val anyEvidenceless = deliveredRows.any {
+            it.storeName.isNullOrBlank() && StoreResolutionRunner.decodeForms(it.payoutStoreForms).isEmpty()
+        }
+        if (anyEvidenceless) return false
+        val deliveredForms = deliveredRows.flatMap { row ->
             buildList {
                 row.storeName?.let { add(it) }
                 addAll(StoreResolutionRunner.decodeForms(row.payoutStoreForms))

@@ -16,7 +16,14 @@ data class OrphanOfferGroup(
     val orphansOwed: Int,
     /** The job's accepted offers — the pick-from list (store/pay/time; resolved state carried). */
     val offers: List<OrphanOfferCandidate>,
-)
+) {
+    /**
+     * Orphans still awaiting resolution (`orphansOwed − resolved`, floored at 0) — the Money-tab
+     * callout gates/counts on this so a fully-resolved group (still listed in the dialog for undo, F3)
+     * no longer contributes to the callout.
+     */
+    val owedRemaining: Int get() = (orphansOwed - offers.count { it.resolved }).coerceAtLeast(0)
+}
 
 /** One accepted offer the driver can attest as unassigned (or undo), within an [OrphanOfferGroup]. */
 data class OrphanOfferCandidate(

@@ -114,6 +114,16 @@ class OrphanOfferResolutionTest {
         ),
     )
 
+    private suspend fun declined(sid: String, at: Long, hash: String, merchant: String): Long = insert(
+        AppEventType.OFFER_DECLINED, sid, at,
+        OfferPayload(
+            offerHash = hash,
+            parsedOffer = ParsedOffer(offerHash = hash, payAmount = 12.0, distanceMiles = 3.0),
+            evaluation = eval(merchant), outcome = AppEventType.OFFER_DECLINED,
+            presentedAt = at - 30, decidedAt = at, returnFlow = Flow.Idle,
+        ),
+    )
+
     private suspend fun mismatch(sid: String, at: Long, jobId: String, hashes: List<String>, accounted: Int) = insert(
         AppEventType.JOB_ACCEPT_MISMATCH, sid, at,
         JobAcceptMismatchPayload(
@@ -228,6 +238,89 @@ class OrphanOfferResolutionTest {
         )
         projector().catchUp() // must not throw
         assertEquals("the real accept is untouched", 1, acceptedCount())
+    }
+
+    @Test
+    fun `an attestation targeting a DECLINED offer is a no-op (only an accept can be an orphan)`() = runBlocking {
+        val s = "S1"
+        start(s)
+        val declinedSeq = declined(s, 2_000, "hD", "H-E-B")
+        stop(s, 3_000)
+        projector().catchUp()
+
+        insert(
+            AppEventType.OFFER_OUTCOME_CORRECTION, null, 4_000,
+            OfferOutcomeCorrectionPayload(declinedSeq, OfferOutcomeResolution.UNASSIGNED_ATTESTED),
+        )
+        projector().catchUp() // must not throw
+        assertNull("a declined offer is never resolvable as an orphan", analyticsDao.offerRecord(declinedSeq)!!.outcomeResolved)
+    }
+
+    @Test
+    fun `an attestation with an unknown resolution value is a no-op`() = runBlocking {
+        val s = "S1"
+        start(s)
+        val aSeq = accept(s, 2_000, "hA", "H-E-B")
+        stop(s, 3_000)
+        projector().catchUp()
+
+        insert(
+            AppEventType.OFFER_OUTCOME_CORRECTION, null, 4_000,
+            OfferOutcomeCorrectionPayload(aSeq, "SOME_GARBAGE_VALUE"),
+        )
+        projector().catchUp() // must not throw
+        assertNull("an unknown resolution value is rejected", analyticsDao.offerRecord(aSeq)!!.outcomeResolved)
+        assertEquals("count unchanged", 1, acceptedCount())
+    }
+
+    @Test
+    fun `Tier 1 bails to INCONCLUSIVE when a delivered row carries no store evidence (review F2)`() = runBlocking {
+        // 3 accepts: O(H-E-B, the true orphan), Y(H-E-B, delivered), X(Chipotle, delivered but its
+        // delivery row has a BLANK store + no payout forms). Without the guard the evidence set = {heb}
+        // and the resolver would wrongly stamp X (a DELIVERED offer) as the orphan; the guard bails.
+        val s = "S1"
+        start(s)
+        val oSeq = accept(s, 2_000, "hO", "H-E-B")
+        val ySeq = accept(s, 2_050, "hY", "H-E-B")
+        val xSeq = accept(s, 2_100, "hX", "Chipotle")
+        delivered(s, 3_000, "J1", "T-Y", "H-E-B")
+        delivered(s, 3_100, "J1", "T-X", "")   // blank store, no payout forms → evidenceless
+        mismatch(s, 3_500, "J1", listOf("hO", "hY", "hX"), accounted = 2)
+        stop(s, 4_000)
+
+        projector().catchUp()
+
+        assertNull("no auto-resolve on O", analyticsDao.offerRecord(oSeq)!!.outcomeResolved)
+        assertNull("no auto-resolve on Y", analyticsDao.offerRecord(ySeq)!!.outcomeResolved)
+        assertNull("the delivered Chipotle offer is NEVER mis-stamped as the orphan", analyticsDao.offerRecord(xSeq)!!.outcomeResolved)
+    }
+
+    @Test
+    fun `Tier 1 is paging-independent for a mismatch sequenced BEFORE its final delivery (review F1)`() = runBlocking {
+        // The OLD emission order (historical logs): JOB_ACCEPT_MISMATCH sequences BEFORE the closing
+        // job's final DELIVERY_COMPLETED. The seq-scoped evidence read excludes that later-sequenced
+        // delivery, so the reconcile deterministically falls to Tier 2 (fail-null) — the SAME outcome
+        // under paged incremental folding and a from-zero refold (the invariant the reviewer's probe broke).
+        val s = "S1"
+        start(s)
+        val hebSeq = accept(s, 2_000, "hA", "H-E-B")
+        accept(s, 2_100, "hB", "Whataburger")
+        mismatch(s, 3_000, "J1", listOf("hA", "hB"), accounted = 1)   // BEFORE the delivery
+        delivered(s, 3_100, "J1", "T1", "Whataburger")                // sequences after the mismatch
+        stop(s, 4_000)
+
+        // Paged incremental fold across small batch boundaries.
+        val live = projector()
+        while (live.processBatch(limit = 2) != null) { /* drain in pages */ }
+        val liveHeb = analyticsDao.offerRecord(hebSeq)!!.outcomeResolved
+
+        // From-zero refold.
+        analyticsDao.setWatermark(AnalyticsProjectionStateEntity(watermarkSequenceId = 999, projectorVersion = 99))
+        projector().catchUp()
+        val refoldHeb = analyticsDao.offerRecord(hebSeq)!!.outcomeResolved
+
+        assertEquals("incremental ≡ from-zero refold under the old order", liveHeb, refoldHeb)
+        assertNull("the later-sequenced delivery isn't evidence → deterministic Tier 2", refoldHeb)
     }
 
     // ── Determinism ─────────────────────────────────────────────────────

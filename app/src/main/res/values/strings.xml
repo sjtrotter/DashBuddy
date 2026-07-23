@@ -578,7 +578,7 @@
 
     <!-- main/analytics/OrphanOfferAttestDialog.kt (#810 B2 Tier 2) -->
     <string name="orphan_offers_title">Unassigned offers</string>
-    <string name="orphan_offers_subtitle">These offers were accepted but never delivered. Tap the one that was unassigned; tap again to undo.</string>
+    <string name="orphan_offers_subtitle">These offers were accepted but never delivered. Tap the one that was unassigned; tap a resolved row to undo.</string>
     <string name="orphan_offers_empty">No unresolved orphan offers in this period.</string>
     <string name="orphan_offers_group_header">%1$s accepted, %2$s unassigned</string>
     <string name="orphan_offers_resolved_caption">Unassigned · tap to undo</string>
