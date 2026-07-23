@@ -38,9 +38,18 @@ class ItemsPerUnitRatioTest {
     }
 
     @Test
-    fun `a below-band sample is clamped to the floor before folding`() {
-        // The dev's H-E-B: 30 items shopped for a 64-unit offer → 0.469, below MIN_RATIO → 0.5.
+    fun `the fielded H-E-B ratio is in-band and folds at its exact value`() {
+        // The dev's H-E-B: 30 items shopped for a 64-unit offer → 0.46875, ABOVE the 0.3 floor
+        // (F1: the floor must not clamp the sole real measurement, else it becomes the estimator).
         val (avg, n) = ItemsPerUnitRatio.fold(null, 0, units = 64, items = 30)
+        assertEquals(0.46875, avg!!, 1e-9)
+        assertEquals(1, n)
+    }
+
+    @Test
+    fun `a degenerate below-floor sample is clamped to the floor before folding`() {
+        // A stale mid-shop snapshot: 10 items for a 64-unit offer → 0.156, below MIN_RATIO → 0.3.
+        val (avg, n) = ItemsPerUnitRatio.fold(null, 0, units = 64, items = 10)
         assertEquals(ItemsPerUnitRatio.MIN_RATIO, avg!!, 1e-9)
         assertEquals(1, n)
     }

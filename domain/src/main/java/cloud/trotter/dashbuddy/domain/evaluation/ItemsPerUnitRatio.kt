@@ -42,22 +42,36 @@ object ItemsPerUnitRatioSeeds {
 
 /**
  * Folds measured (units-denominated) shops into the dasher's learned items:units ratio (#823
- * Phase 1). Pure and order-independent (a running incremental mean), the exact discipline of
- * [ShopRate] — a units-only offer quoted [units], the shop screen later reported [items] actually
- * shopped, and their ratio is one sample of "how many physical items a DoorDash unit is worth".
+ * Phase 1). Pure and order-independent (a running incremental mean) — a units-only offer quoted
+ * [units], the shop screen later reported [items] actually shopped, and their ratio is one sample of
+ * "how many physical items a DoorDash unit is worth". The learn signal is `itemsShopped:units`,
+ * dimensionally consistent with #556's pace numerator (itemsShopped/minute), so a
+ * `units × ratio` prediction estimates E[itemsShopped] — the exact quantity the pace model divides.
  *
- * Each sample's ratio is **clamped to [MIN_RATIO]..[MAX_RATIO]** before folding, so a single
- * outlier basket (a very-multi-pack order) can't drag the mean out of a sane band; the seed itself
- * lives inside that band. [MIN_SAMPLES] gates trusting the learned mean over the seed, exactly like
- * the shop-rate trust gate.
+ * Like [ShopRate] it has validity floors ([MIN_ITEMS], units > 0) and a [MIN_SAMPLES] trust gate,
+ * but it adds something ShopRate does NOT have — a **per-sample clamp** to [MIN_RATIO]..[MAX_RATIO]
+ * before folding, so a single stale/outlier sample (a mid-shop itemsShopped snapshot, or a
+ * very-multi-pack basket) can't drag the mean out of a plausible band. The band is asymmetric on
+ * purpose: [MAX_RATIO] = 1.0 is **structural** — a unit is a pack of ≥1 items, so items ≤ units and
+ * the ratio can never exceed 1. [MIN_RATIO] has **no** structural anchor; it is only outlier
+ * rejection, so it is set LOW (0.3): the sole fielded measurement (30 items / 64 units ≈ 0.47) sits
+ * below the old 0.5 floor, and a floor above the population center would clamp every sample and pin
+ * the learned mean AT the floor — the clamp would silently become the estimator and the learning
+ * would be dead weight. 0.3 admits the real multi-pack range while still rejecting a degenerate
+ * snapshot (e.g. 10/64 ≈ 0.16 → 0.3, not 0.16). The [UserEconomy.effectiveItemsPerUnitRatio] trust
+ * band rides these same constants (one SSOT, no second copy).
  */
 object ItemsPerUnitRatio {
 
     /** Min items shopped in a measured sample before it counts — a 1–2 item shop is noise. */
     const val MIN_ITEMS = 3
 
-    /** Sane band for the ratio (#823): a DoorDash unit is between half an item and one item. */
-    const val MIN_RATIO = 0.5
+    /**
+     * Plausible band for the ratio (#823). [MAX_RATIO] = 1.0 is structural (items ≤ units always);
+     * [MIN_RATIO] = 0.3 is outlier rejection only, set below the fielded ~0.47 so the floor never
+     * becomes the estimator (see class KDoc).
+     */
+    const val MIN_RATIO = 0.3
     const val MAX_RATIO = 1.0
 
     /** Measured units-shops required before the learned ratio overrides the seed. */

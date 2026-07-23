@@ -203,6 +203,11 @@ internal fun EffectMap.diffDeliveryCompletion(
             .any { it.jobId == closedJob.jobId && it.phase == TaskPhase.DROPOFF }
         if (!jobHadDropoff) {
             addAll(
+                // #823 F3a: no `ratioJob` — the items:units ratio is DELIBERATELY not learned on this
+                // pickup-only close-out (an abnormal completion that never reached a dropoff is not a
+                // trustworthy items:units sample). The shop PACE still folds here via RecordShopRate.
+                // (Structurally reinforced: `region` is `next`, whose activeJob != closedJob by the
+                // guard above, so even the old region-internal lookup could never have learned here.)
                 pickupConfirmSweepEffects(
                     sessionId, next, closedJob.jobId, obs,
                     jobOfferHashes = closedJob.parentOfferHashes,

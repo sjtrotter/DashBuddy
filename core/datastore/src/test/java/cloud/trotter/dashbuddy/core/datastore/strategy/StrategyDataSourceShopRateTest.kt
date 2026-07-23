@@ -127,7 +127,7 @@ class StrategyDataSourceShopRateTest {
         // DoorDash: five 39-item / 50-unit shops → 0.78 exactly, past the trust gate.
         var lastDd: cloud.trotter.dashbuddy.domain.evaluation.LearnedItemsPerUnitRatio? = null
         repeat(5) { lastDd = src.recordItemsPerUnitRatio(Platform.DoorDash, units = 50, items = 39) }
-        // Uber: three 30-item / 64-unit shops → 0.469 CLAMPED to 0.5.
+        // Uber: three 30-item / 64-unit shops → 0.46875, in-band above the 0.3 floor (F1).
         repeat(3) { src.recordItemsPerUnitRatio(Platform.Uber, units = 64, items = 30) }
         advanceUntilIdle()
 
@@ -135,8 +135,8 @@ class StrategyDataSourceShopRateTest {
         val ratios = src.learnedItemsPerUnitRatios.first()
         assertEquals(0.78, ratios.getValue(Platform.DoorDash).ratio!!, 1e-9)
         assertEquals(5, ratios.getValue(Platform.DoorDash).sampleCount)
-        // The below-band Uber samples fold at the clamped floor, not their raw 0.469.
-        assertEquals(ItemsPerUnitRatio.MIN_RATIO, ratios.getValue(Platform.Uber).ratio!!, 1e-9)
+        // The fielded H-E-B ratio folds at its exact value (0.46875), NOT the floor.
+        assertEquals(0.46875, ratios.getValue(Platform.Uber).ratio!!, 1e-9)
         assertEquals(3, ratios.getValue(Platform.Uber).sampleCount)
         // A platform that never recorded is absent — the eval seam owns the seed fallback.
         assertNull(ratios[Platform.Instacart])

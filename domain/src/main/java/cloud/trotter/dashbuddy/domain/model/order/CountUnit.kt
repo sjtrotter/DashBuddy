@@ -12,10 +12,12 @@ package cloud.trotter.dashbuddy.domain.model.order
  * so the evaluator can convert a units-denominated count into an items-equivalent before the pace
  * divide (see `OfferEvaluator` + `UserEconomy.effectiveItemsPerUnitRatio`).
  *
- * Recognition is **data, not code** (CLAUDE.md): the platform ruleset emits this as a parse-output
- * string that `ParsedFieldsFactory` resolves via [valueOf]; there is no `when (platform)`.
- * [ITEMS] is the neutral default — an items-denominated or estimated/absent count behaves exactly as
- * before, so only the units-only shape changes anything.
+ * Recognition is **data, not code** (CLAUDE.md): the platform ruleset emits a parse-output string
+ * that `ParsedFieldsFactory` resolves **fail-neutrally** — [UNITS] only on an exact `== "UNITS"`
+ * match (paired with a real, non-estimated count), everything else (including an unrecognized
+ * string) falls to [ITEMS]; there is no `valueOf` throw and no `when (platform)`. [ITEMS] is the
+ * neutral default — an items-denominated or estimated/absent count behaves exactly as before, so
+ * only the units-only shape changes anything.
  */
 enum class CountUnit {
     /** The count is a physical **item** count (`(4 items)`, or the items figure of `(9 items • 11 units)`). */
