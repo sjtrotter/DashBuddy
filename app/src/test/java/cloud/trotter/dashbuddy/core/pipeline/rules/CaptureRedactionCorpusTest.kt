@@ -56,6 +56,55 @@ class CaptureRedactionCorpusTest {
     }
 
     /**
+     * #813 — the uber.screen.offer redact is a PRIMARY privacy control for the
+     * offer card's dropoff intersection line (a prefix-less address line the
+     * `CustomerTextMarkers` backstop structurally can't own), and it had no
+     * automated coverage: `CaptureRedactionCorpusTest`'s other cases never touch
+     * this rule, and the marker-based backstop test is blind to it by
+     * construction. This is the teeth — a later predicate edit or Uber shape
+     * change that silently un-masks every offer dropoff line goes RED here.
+     *
+     * Runs the PRODUCTION redact over a real committed offer frame and asserts
+     * the dropoff line masks while the store name, pay, and the fused time/mi
+     * node stay raw (the over-match guard — store names never carry a ", ", the
+     * same discriminator the storeName parse uses).
+     */
+    @Test
+    fun `uber offer redact masks the dropoff intersection line, keeps store pay and time`() {
+        val rule = TestRulesetFactory.screenRuleset.ruleById("uber.screen.offer")!!
+        assertFalse("offer rule must declare a redact block", rule.redact.isEmpty())
+
+        // A real committed offer frame: store "Costco Wholesale (Sonterra Park)",
+        // dropoff "Sample St & Sample Ave, San Antonio", pay "$15.01", fused
+        // "40 min (17.5 mi) total". (The intersection is already anonymized in
+        // the corpus; the redact predicate matches the ", <City>" shape, not any
+        // literal street.)
+        val fixture = File("src/test/resources/snapshots/offer")
+            .listFiles { _, n -> n.contains("uber") && n.endsWith(".json") }!!
+            .first { it.readText().contains("Costco Wholesale") }
+        val real = TestResourceLoader.loadNode(fixture)
+
+        val redactedJson = serialize(rule.redact.apply(real))
+
+        // Dropoff intersection line is masked (customer-area PII).
+        assertFalse(
+            "dropoff intersection line must not persist raw",
+            redactedJson.contains("Sample St & Sample Ave, San Antonio"),
+        )
+        assertTrue(
+            "the masked dropoff line carries a [redacted:<4hex>] token",
+            Regex("""\[redacted:[0-9a-f]{4}]""").containsMatchIn(redactedJson),
+        )
+        // Over-match guard: store name, pay, and the fused time/mi node stay RAW.
+        assertTrue(
+            "store name kept (no ', ' → not matched)",
+            redactedJson.contains("Costco Wholesale (Sonterra Park)"),
+        )
+        assertTrue("pay kept", redactedJson.contains("\$15.01"))
+        assertTrue("fused time/mi node kept", redactedJson.contains("40 min (17.5 mi) total"))
+    }
+
+    /**
      * #623 frame-invariance ACROSS RULES (VET V5): the SAME customer token, seen
      * under three different production redact blocks (each with a different marker
      * prefix / node predicate), must redact to the SAME 4hex distinctness suffix —

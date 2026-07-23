@@ -353,8 +353,11 @@
       // redact is the primary control. Anchored on the trailing ", <City>" address
       // shape — the pickup store TextView never contains a ", " (the same
       // discriminator the storeName parse uses), so store names are NOT
-      // over-redacted. Documented residual: a dropoff line rendered without a city
-      // tail would be missed, but every fielded shape carries ", <City>".
+      // over-redacted. Documented residuals: (1) a dropoff line rendered without a
+      // city tail would be missed, but every fielded shape carries ", <City>";
+      // (2) the `find` selects on node.text only (hasTextMatchesRegex is a text
+      // containsMatchIn), so a desc-only rendering of the line would escape
+      // selection — all fielded fixtures render it as text.
       "redact": [
         {
           "find": {
