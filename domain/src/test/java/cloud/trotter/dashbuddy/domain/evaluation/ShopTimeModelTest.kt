@@ -1,6 +1,7 @@
 package cloud.trotter.dashbuddy.domain.evaluation
 
 import cloud.trotter.dashbuddy.domain.model.offer.ParsedOffer
+import cloud.trotter.dashbuddy.domain.model.order.CountUnit
 import cloud.trotter.dashbuddy.domain.model.order.OrderType
 import cloud.trotter.dashbuddy.domain.model.order.ParsedOrder
 import cloud.trotter.dashbuddy.domain.model.vehicle.VehicleClass
@@ -25,6 +26,14 @@ class ShopTimeModelTest {
     private fun offer(pay: Double, dist: Double, itemCount: Int, type: OrderType) = ParsedOffer(
         offerHash = "h", payAmount = pay, distanceMiles = dist, itemCount = itemCount,
         orders = listOf(ParsedOrder(0, type, "Store", itemCount, false, emptySet())),
+    )
+
+    // #823 Phase 1: a units-denominated shop offer (`(N units)`) — same shape, itemCountIsUnits=true.
+    private fun unitsOffer(pay: Double, dist: Double, units: Int) = ParsedOffer(
+        offerHash = "h", payAmount = pay, distanceMiles = dist, itemCount = units, itemCountIsUnits = true,
+        orders = listOf(
+            ParsedOrder(0, OrderType.SHOP_FOR_ITEMS, "Store", units, false, emptySet(), CountUnit.UNITS),
+        ),
     )
 
     @Test
@@ -100,5 +109,74 @@ class ShopTimeModelTest {
         // a sub-floor 2-item / 0.5-min blip is ignored (no poisoning)
         val (avg2, n2) = ShopRate.fold(avg, n, 2, 0.5)
         assertEquals(2, n2); assertEquals(0.9, avg2!!, 1e-9)
+    }
+
+    // ===================================================================================
+    // #823 Phase 1 — units→items-equivalent conversion for the shop-time estimate.
+    // ===================================================================================
+
+    @Test
+    fun `a units-denominated offer converts units to items-equivalent for the time estimate (seed)`() {
+        // The dev's H-E-B: $34.45, 10.1 mi, "(64 units)". drive 10.1*2.5=25.25; seed ratio 0.78 →
+        // 64*0.78=49.92 items-equiv; shop 49.92/0.8=62.4. est = 87.65 (vs the raw-64 → 105.25 bug).
+        val r = evaluator.evaluate(unitsOffer(34.45, 10.1, 64), config)
+        assertEquals(25.25 + (64 * 0.78) / 0.8, r.estimatedTimeMinutes, 0.01)
+        assertEquals(87.65, r.estimatedTimeMinutes, 0.01)
+    }
+
+    @Test
+    fun `the same count denominated in ITEMS is unchanged (no ratio applied)`() {
+        // itemCountIsUnits=false → the raw 64 feeds the pace divide exactly as before #823.
+        val r = evaluator.evaluate(offer(34.45, 10.1, 64, OrderType.SHOP_FOR_ITEMS), config)
+        assertEquals(25.25 + 64 / 0.8, r.estimatedTimeMinutes, 0.01)
+        assertEquals(105.25, r.estimatedTimeMinutes, 0.01)
+    }
+
+    @Test
+    fun `a units offer surfaces the platform-shown count, not a faked items number`() {
+        // The card/TTS read OfferEvaluation.itemCount — it must stay the units figure DoorDash showed
+        // (64), never the ratio-scaled 49.92. Only the TIME estimate uses the conversion.
+        val r = evaluator.evaluate(unitsOffer(34.45, 10.1, 64), config)
+        assertEquals(64.0, r.itemCount, 0.0)
+    }
+
+    @Test
+    fun `a learned per-platform ratio overrides the seed once past the trust gate`() {
+        val cfg = config.copy(
+            itemsPerUnitRatios = mapOf(
+                Platform.DoorDash to LearnedItemsPerUnitRatio(0.5, ItemsPerUnitRatio.MIN_SAMPLES),
+            ),
+        )
+        // 64*0.5=32 items-equiv; shop 32/0.8=40; drive 25.25. est = 65.25.
+        val r = evaluator.evaluate(unitsOffer(34.45, 10.1, 64), cfg.forPlatform(Platform.DoorDash))
+        assertEquals(25.25 + (64 * 0.5) / 0.8, r.estimatedTimeMinutes, 0.01)
+    }
+
+    @Test
+    fun `effectiveItemsPerUnitRatio gates the learned value on samples and band, else the seed`() {
+        val warm = economy.copy(learnedItemsPerUnitRatio = 0.6, itemsPerUnitRatioSampleCount = ItemsPerUnitRatio.MIN_SAMPLES)
+        assertEquals(0.6, warm.effectiveItemsPerUnitRatio, 0.0)
+        // Below the sample floor → seed.
+        val cold = economy.copy(learnedItemsPerUnitRatio = 0.6, itemsPerUnitRatioSampleCount = 2)
+        assertEquals(UserEconomy.DEFAULT_ITEMS_PER_UNIT_RATIO, cold.effectiveItemsPerUnitRatio, 0.0)
+        // Out-of-band learned value (should be impossible via the clamped fold, but the gate is
+        // defence-in-depth) → seed.
+        val oob = economy.copy(learnedItemsPerUnitRatio = 1.5, itemsPerUnitRatioSampleCount = ItemsPerUnitRatio.MIN_SAMPLES)
+        assertEquals(UserEconomy.DEFAULT_ITEMS_PER_UNIT_RATIO, oob.effectiveItemsPerUnitRatio, 0.0)
+        // Never learned → seed.
+        assertEquals(UserEconomy.DEFAULT_ITEMS_PER_UNIT_RATIO, economy.effectiveItemsPerUnitRatio, 0.0)
+    }
+
+    @Test
+    fun `forPlatform resolves a platform with no ratio samples to its seed, never another platform's (#823 P8)`() {
+        val cfg = config.copy(
+            itemsPerUnitRatios = mapOf(
+                Platform.DoorDash to LearnedItemsPerUnitRatio(0.6, ItemsPerUnitRatio.MIN_SAMPLES + 2),
+            ),
+        )
+        assertEquals(0.6, cfg.forPlatform(Platform.DoorDash).userEconomy.effectiveItemsPerUnitRatio, 0.0)
+        val ic = cfg.forPlatform(Platform.Instacart).userEconomy
+        assertEquals(ItemsPerUnitRatioSeeds.seedFor(Platform.Instacart), ic.effectiveItemsPerUnitRatio, 0.0)
+        assertEquals(0, ic.itemsPerUnitRatioSampleCount)
     }
 }

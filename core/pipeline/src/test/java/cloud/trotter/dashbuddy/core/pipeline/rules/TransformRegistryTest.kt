@@ -142,4 +142,34 @@ class TransformRegistryTest {
         assertNull(TransformRegistry.apply("parseDeadline", "no time here"))
         assertNull(TransformRegistry.apply("parseTime", "garbage"))
     }
+
+    // #823 Phase 1 — item-count denomination. parseItemCountUnit reads the FIRST count token's label
+    // off the SAME node as parseItemCount, so the pair never disagrees about which number was read.
+
+    @Test
+    fun `parseItemCountUnit reads UNITS for a units-only render`() {
+        assertEquals("UNITS", TransformRegistry.apply("parseItemCountUnit", "(64 units)"))
+        assertEquals("UNITS", TransformRegistry.apply("parseItemCountUnit", "(1 unit)"))
+    }
+
+    @Test
+    fun `parseItemCountUnit reads ITEMS when the leading count is items`() {
+        assertEquals("ITEMS", TransformRegistry.apply("parseItemCountUnit", "(4 items)"))
+        // Items•units: parseItemCount grabs the leading "9", so its denomination is ITEMS.
+        assertEquals("ITEMS", TransformRegistry.apply("parseItemCountUnit", "(9 items • 11 units)"))
+    }
+
+    @Test
+    fun `parseItemCount and parseItemCountUnit agree on the token they read`() {
+        assertEquals(9, TransformRegistry.apply("parseItemCount", "(9 items • 11 units)"))
+        assertEquals("ITEMS", TransformRegistry.apply("parseItemCountUnit", "(9 items • 11 units)"))
+        assertEquals(64, TransformRegistry.apply("parseItemCount", "(64 units)"))
+        assertEquals("UNITS", TransformRegistry.apply("parseItemCountUnit", "(64 units)"))
+    }
+
+    @Test
+    fun `parseItemCountUnit returns null when no count token is present`() {
+        assertNull(TransformRegistry.apply("parseItemCountUnit", "H-E-B"))
+        assertNull(TransformRegistry.apply("parseItemCountUnit", "no count here"))
+    }
 }

@@ -175,8 +175,11 @@ class StrategyRepository @Inject constructor(
         protectStatsMode,
         allowShopping,
         appPreferencesRepository.userEconomy,
-        dataSource.learnedShopRates,
-    ) { rules, protect, shop, economy, shopRates ->
+        // #823: combine the two per-platform learned-rate maps into one source so the outer combine
+        // stays within the 5-arg typed overload (shop pace + items:units ratio both live in the
+        // strategy store; both are consumed at eval time by EvaluationConfig.forPlatform).
+        combine(dataSource.learnedShopRates, dataSource.learnedItemsPerUnitRatios) { s, r -> s to r },
+    ) { rules, protect, shop, economy, (shopRates, itemsPerUnitRatios) ->
         EvaluationConfig(
             protectStatsMode = protect,
             rules = rules,
@@ -187,6 +190,8 @@ class StrategyRepository @Inject constructor(
             // Instacart shop). It lives in the strategy store, not the user-economy store, so it's never
             // reseeded by a vehicle-class change (#556).
             shopRates = shopRates,
+            // #823 Phase 1: same per-platform discipline for the items:units ratio.
+            itemsPerUnitRatios = itemsPerUnitRatios,
         )
     }.stateIn(scope, SharingStarted.Eagerly, null)
 
@@ -197,6 +202,14 @@ class StrategyRepository @Inject constructor(
      */
     suspend fun recordShopRate(platform: Platform, items: Int, minutes: Double) =
         dataSource.recordShopRate(platform, items, minutes)
+
+    /**
+     * #823 Phase 1: fold a completed units-shop's measured items:units ratio into [platform]'s learned
+     * ratio (atomic). Returns the post-fold [cloud.trotter.dashbuddy.domain.evaluation.LearnedItemsPerUnitRatio]
+     * so the caller can log the relearn trajectory (desk-observability, mirrors [recordShopRate]).
+     */
+    suspend fun recordItemsPerUnitRatio(platform: Platform, units: Int, items: Int) =
+        dataSource.recordItemsPerUnitRatio(platform, units, items)
 
     suspend fun clearPreferences() {
         Timber.w("Clearing Strategy Preferences")

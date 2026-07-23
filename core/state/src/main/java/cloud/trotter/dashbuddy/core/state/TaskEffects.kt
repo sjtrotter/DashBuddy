@@ -326,6 +326,15 @@ internal fun EffectMap.pickupConfirmSweepEffects(
     jobOfferHashes: List<String> = emptyList(),
 ): List<AppEffect> = buildList {
     if (jobId == null) return@buildList
+    // #823 Phase 1: resolve THIS job's units-denominated offer count for the items:units-ratio
+    // learning — only when the job is a SINGLE accepted offer that was units-denominated
+    // (`acceptedOffers.singleOrNull()`), so a stack (which offer's units pair with which pickup's
+    // items is ambiguous) contributes no sample. Null ⇒ no ratio learning (fail-safe: a missing
+    // sample beats a mis-attributed one, the MIN_SAMPLES philosophy).
+    val offerUnitCount = region.activeJob
+        ?.takeIf { it.jobId == jobId }
+        ?.acceptedOffers?.singleOrNull()
+        ?.offerUnitCount
     val lineage = (region.recentTasks + listOfNotNull(region.activeTask))
         // #736: a pickup the dasher UNASSIGNED (marker set, completedAt left null) is NOT a
         // confirmable pickup — exclude it so a job that closes over an abandoned-but-arrived pickup
@@ -343,6 +352,7 @@ internal fun EffectMap.pickupConfirmSweepEffects(
                 platform = region.platform,
                 confirmedAt = task.completedAt ?: obs.timestamp,
                 jobOfferHashes = jobOfferHashes,
+                offerUnitCount = offerUnitCount,
             ),
         )
     }
@@ -362,6 +372,11 @@ private fun EffectMap.pickupConfirmedEffects(
     platform: Platform,
     confirmedAt: Long = obs.timestamp,
     jobOfferHashes: List<String> = emptyList(),
+    // #823 Phase 1: the job's units-denominated offer's quoted unit count, when unambiguous (a single
+    // units-only shop offer). Non-null ⇒ this shop's ground-truth items can teach the items:units
+    // ratio; null (items-denominated / stacked / absent) ⇒ no ratio sample. Resolved by the caller
+    // (which holds the job); see [pickupConfirmSweepEffects].
+    offerUnitCount: Int? = null,
 ): List<AppEffect> = buildList {
     add(
         logEffect(
@@ -397,6 +412,21 @@ private fun EffectMap.pickupConfirmedEffects(
                 taskId = prevTask.taskId,
             ),
         )
+        // #823 Phase 1: if the accepted offer was units-denominated, this shop's ground-truth items
+        // (shopItems) vs the quoted units teaches the per-platform items:units ratio. Guarded on an
+        // unambiguous single units offer by the caller (offerUnitCount non-null); the handler floors
+        // out-of-band samples.
+        if (offerUnitCount != null && offerUnitCount > 0) {
+            add(
+                AppEffect.RecordItemsPerUnitRatio(
+                    platform = platform,
+                    offerUnitCount = offerUnitCount,
+                    itemsShopped = shopItems,
+                    jobId = prevTask.jobId,
+                    taskId = prevTask.taskId,
+                ),
+            )
+        }
     }
 }
 

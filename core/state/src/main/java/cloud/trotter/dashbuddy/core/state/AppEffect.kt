@@ -138,6 +138,22 @@ sealed class AppEffect {
         // per-platform-unique already, the wire prefix keeps the namespace disjoint (mirrors #438-B4).
         override val effectKey: String get() = "shop_rate:${platform.wire}:$taskId"
     }
+
+    /**
+     * #823 Phase 1: a units-denominated Shop & Deliver pickup just completed — fold its measured
+     * items:units ratio ([itemsShopped] actually shopped vs the offer's quoted [offerUnitCount]) into
+     * the learned per-platform ratio. Emitted alongside [RecordShopRate] only when the job's accepted
+     * offer was units-denominated. Idempotent per task (same keying discipline).
+     */
+    data class RecordItemsPerUnitRatio(
+        val platform: Platform,
+        val offerUnitCount: Int,
+        val itemsShopped: Int,
+        val jobId: String,
+        val taskId: String,
+    ) : AppEffect() {
+        override val effectKey: String get() = "items_per_unit_ratio:${platform.wire}:$taskId"
+    }
     /**
      * Evaluate the pending offer. [offerHash] rides the async round-trip so the result
      * can be correlated back — a replaced offer must never inherit the previous offer's

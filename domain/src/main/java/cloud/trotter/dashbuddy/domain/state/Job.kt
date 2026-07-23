@@ -22,6 +22,14 @@ data class AcceptedOfferEconomics(
     val estMinutes: Double? = null,
     /** Quoted distance in miles. */
     val distanceMiles: Double? = null,
+    /**
+     * The offer's **units** count when it was units-denominated (#823 Phase 1) — non-null ⟺ the
+     * accepted offer rendered a units-only shop quantity (`(64 units)`). Carried from accept time so
+     * the pickup-confirmed shop-rate site can pair it with the ground-truth items actually shopped
+     * and fold one items:units-ratio learning sample. Null for an items-denominated / non-shop offer
+     * (no ratio to learn). Additive `@Serializable` default ⇒ old snapshots decode unchanged.
+     */
+    val offerUnitCount: Int? = null,
     val acceptedAt: Long,
 )
 

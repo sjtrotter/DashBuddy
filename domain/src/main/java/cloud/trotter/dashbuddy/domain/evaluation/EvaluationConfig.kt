@@ -33,6 +33,14 @@ data class EvaluationConfig(
      * never price an Instacart / Uber shop.
      */
     val shopRates: Map<Platform, LearnedShopRate> = emptyMap(),
+    /**
+     * #823 Phase 1: the learned **items:units ratio** per platform — the units→items-equivalent
+     * factor an offer's own platform selects at eval time via [forPlatform]. Keyed by [Platform]
+     * (never a global, P8), so a DoorDash-learned ratio can never convert an Uber shop's units. A
+     * platform absent from the map has no learned ratio yet and resolves to its
+     * [ItemsPerUnitRatioSeeds] seed.
+     */
+    val itemsPerUnitRatios: Map<Platform, LearnedItemsPerUnitRatio> = emptyMap(),
 ) {
     /**
      * #588: resolve THIS offer's [platform]'s learned pace + seed into [userEconomy], producing the
@@ -48,11 +56,18 @@ data class EvaluationConfig(
      */
     fun forPlatform(platform: Platform): EvaluationConfig {
         val learned = shopRates[platform]
+        val learnedRatio = itemsPerUnitRatios[platform]
         return copy(
             userEconomy = userEconomy.copy(
                 learnedShopItemsPerMinute = learned?.itemsPerMin,
                 shopRateSampleCount = learned?.sampleCount ?: 0,
                 shopSeedItemsPerMin = ShopRateSeeds.seedFor(platform),
+                // #823 Phase 1: resolve THIS platform's items:units ratio (learned + seed) into the
+                // economy, symmetric to the shop-pace resolution above. A platform with no samples
+                // yields its seed, never another platform's learned ratio.
+                learnedItemsPerUnitRatio = learnedRatio?.ratio,
+                itemsPerUnitRatioSampleCount = learnedRatio?.sampleCount ?: 0,
+                itemsPerUnitRatioSeed = ItemsPerUnitRatioSeeds.seedFor(platform),
             ),
         )
     }

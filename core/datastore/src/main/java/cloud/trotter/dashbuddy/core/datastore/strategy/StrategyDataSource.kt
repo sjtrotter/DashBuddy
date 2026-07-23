@@ -9,6 +9,8 @@ import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import cloud.trotter.dashbuddy.core.datastore.di.StrategyPreferences
 import cloud.trotter.dashbuddy.core.datastore.strategy.dto.ScoringRuleDto
+import cloud.trotter.dashbuddy.domain.evaluation.ItemsPerUnitRatio
+import cloud.trotter.dashbuddy.domain.evaluation.LearnedItemsPerUnitRatio
 import cloud.trotter.dashbuddy.domain.evaluation.LearnedShopRate
 import cloud.trotter.dashbuddy.domain.evaluation.ShopRate
 import cloud.trotter.dashbuddy.domain.state.Platform
@@ -59,6 +61,16 @@ class StrategyDataSource @Inject constructor(
         doublePreferencesKey("learned_shop_items_per_min:${platform.wire}")
     private fun shopSamplesKey(platform: Platform) =
         intPreferencesKey("shop_rate_sample_count:${platform.wire}")
+
+    // #823 Phase 1: learned items:units ratio, keyed **per platform** (P8) exactly like the shop-rate
+    // keys above — a DoorDash-learned ratio can never convert an Uber shop's units. A measured value
+    // (not a user-set economy field), kept in the strategy store so a vehicle-class reseed can't touch
+    // it; folded into the evaluator's UserEconomy by StrategyRepository. Keys derive from
+    // [Platform.wire], so a new platform needs zero datastore change.
+    private fun itemsPerUnitRatioKey(platform: Platform) =
+        doublePreferencesKey("learned_items_per_unit_ratio:${platform.wire}")
+    private fun itemsPerUnitRatioSamplesKey(platform: Platform) =
+        intPreferencesKey("items_per_unit_ratio_sample_count:${platform.wire}")
 
     // #588 FIX 3b: the pre-#588 GLOBAL un-suffixed keys (one shared mean before shop-rate learning
     // went per-platform). Deliberately DROPPED, not migrated (#588 design decision — an old global
@@ -124,6 +136,20 @@ class StrategyDataSource @Inject constructor(
     }
 
     /**
+     * #823 Phase 1: the learned items:units ratio per platform (running mean + sample count). A
+     * platform with no recorded units-shops is omitted — the eval seam
+     * ([cloud.trotter.dashbuddy.domain.evaluation.EvaluationConfig.forPlatform]) owns the per-platform
+     * seed fallback, so a missing entry is the seed, never another platform's ratio.
+     */
+    val learnedItemsPerUnitRatios: Flow<Map<Platform, LearnedItemsPerUnitRatio>> = ds.data.map { prefs ->
+        Platform.entries.mapNotNull { platform ->
+            val avg = prefs[itemsPerUnitRatioKey(platform)]
+            val n = prefs[itemsPerUnitRatioSamplesKey(platform)] ?: 0
+            if (avg == null && n == 0) null else platform to LearnedItemsPerUnitRatio(avg, n)
+        }.toMap()
+    }
+
+    /**
      * #556/#588: fold one measured shop ([items] over [minutes] in-store) into [platform]'s running
      * mean, atomically (read-modify-write inside one edit, so back-to-back stacked shops can't race).
      * Out-of-band samples (below the [ShopRate] floors) are no-ops. Only [platform]'s key pair moves.
@@ -149,6 +175,29 @@ class StrategyDataSource @Inject constructor(
         // persisted: an in-band fold just wrote these keys; an out-of-band fold is a no-op and the
         // untouched keys ARE the prior pair ShopRate.fold would have returned.
         return LearnedShopRate(prefs[shopRateKey(platform)], prefs[shopSamplesKey(platform)] ?: 0)
+    }
+
+    /**
+     * #823 Phase 1: fold one measured units-shop ([units] quoted on the offer, [items] actually
+     * shopped) into [platform]'s learned items:units ratio, atomically (read-modify-write inside one
+     * edit). Out-of-band samples (below the [ItemsPerUnitRatio] floors) are no-ops. Only [platform]'s
+     * key pair moves. Returns the post-fold [LearnedItemsPerUnitRatio] (desk-observability, mirrors
+     * [recordShopRate]) — the running mean lives ONLY in this datastore, invisible to a post-dash
+     * data pull, so surfacing it lets the caller log the relearn trajectory.
+     */
+    suspend fun recordItemsPerUnitRatio(platform: Platform, units: Int, items: Int): LearnedItemsPerUnitRatio {
+        val prefs = ds.edit { p ->
+            val (avg, n) = ItemsPerUnitRatio.fold(
+                p[itemsPerUnitRatioKey(platform)], p[itemsPerUnitRatioSamplesKey(platform)] ?: 0, units, items,
+            )
+            if (avg != null) {
+                p[itemsPerUnitRatioKey(platform)] = avg
+                p[itemsPerUnitRatioSamplesKey(platform)] = n
+            }
+        }
+        return LearnedItemsPerUnitRatio(
+            prefs[itemsPerUnitRatioKey(platform)], prefs[itemsPerUnitRatioSamplesKey(platform)] ?: 0,
+        )
     }
 
     suspend fun setEvidenceMaster(enabled: Boolean) {
