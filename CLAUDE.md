@@ -300,7 +300,8 @@ state into `AppEffect`s.
 runs the evaluation loopback (offer eval → `OfferEvaluationEvent` back into the machine), and owns
 the fail-closed action gates (#417): live `PermissionTierChecker` + the capability consent gate on
 automation-triggered `RuleAction`s (grant store: `RuleCapabilityRepository` over the
-`rule_capability_grants` DataStore; asset rules auto-grant at load).
+`rule_capability_grants` DataStore; **no auto-grant (#843)** — `reconcile` only publishes the
+enumeration, every capability lands *undecided* until the user opts in via the consent prompt).
 Handlers: `OdometerEffectHandler`, `ScreenShotHandler`, `TipEffectHandler`, `TtsEffectHandler`,
 `UiInteractionHandler` (package-scoped, label-verified `RuleAction` taps — the only path that ever
 clicks a third-party app, #425), `OfferActionReceiver` (notification Accept/Decline actions).
@@ -495,15 +496,21 @@ Every new feature or refactor holds to these — they are forefront design input
      taps are app-owned `RuleAction`s aimed by ruleset target bindings and verified at fire
      time (package scope + label allowlist + strict click); any failed check aborts to manual.
      Automation-initiated taps must additionally be covered by a granted, content-pinned
-     capability key (#417): rule loads enumerate capabilities and reconcile them into the
-     grant store *before* rules go live; bundled (asset) sources auto-grant, remote sources
-     never will. A dasher-pressed Accept/Decline is its own consent (integrity checks still
-     apply). The consent surface (#422 PR 3) — Settings → Data & Privacy → **Automation &
-     Consent** — lists each enumerated capability per ruleset source with Play-consistent
-     disclosure copy and a grant/revoke switch (`CapabilityConsentScreen`/`ViewModel`, writing
-     through `RuleCapabilityGrants.setGranted`); it is a consent *record*, never a second gate —
-     enforcement stays at the `PerformRuleAction` seam, and a revoke persists an explicit denial
-     so the next asset load can't silently re-grant it (fail-closed).
+     capability key (#417): rule loads enumerate capabilities and publish them to the grant
+     store *before* rules go live, but **grant NOTHING — there is no auto-grant (#843)**. Every
+     capability, bundled (asset) OR remote, lands *undecided* (three states: granted / denied /
+     undecided; only an explicit user act grants; the gate fires only on granted). Per Google
+     Play policy the user opts into EACH automation individually. A dasher-pressed Accept/Decline
+     is its own consent (integrity checks still apply). Consent is collected by a **prompt**
+     (`ConsentPromptSheet`, #843 — the app's front door, joining the a11y/notification permission
+     chain: fires on app foreground whenever `capabilities − granted − denied ≠ ∅`, one Allow /
+     Don't-allow row per undecided capability, no "allow all"; "Not now" defers, a denial is
+     durable) and reviewed/revoked in Settings → Data & Privacy → **Automation & Consent**
+     (`CapabilityConsentScreen`/`ViewModel`, writing through `RuleCapabilityGrants.setGranted`);
+     the settings screen is a consent *record*, never a second gate — enforcement stays at the
+     `PerformRuleAction` seam, and a denial persists so a later load can't silently re-grant it
+     (fail-closed). A one-shot schema migration (`RuleCapabilityDataSource`, #843) clears any
+     pre-#843 auto-granted keys on upgrade (denials preserved) so the prompt re-collects consent.
    When a change touches recognition, capture, network, or effects, state its security/privacy
    posture in the PR — what's trusted, what's gated, what's scrubbed.
 7. **Semantic, PII-safe logging.** Log levels carry *meaning*, not volume convenience, and the log is

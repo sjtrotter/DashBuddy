@@ -245,16 +245,25 @@
     <string name="data_export_log_success_format">Exported dashbuddy-log.txt — %1$d line(s) were auto-scrubbed.</string>
     <string name="data_export_log_error_format">Log export failed: %1$s</string>
 
-    <!-- settings/CapabilityConsentScreen.kt (#422) — Google-Play-consistent automation disclosure -->
+    <!-- settings/CapabilityConsentScreen.kt (#422/#843) — Google-Play-consistent automation record -->
     <string name="consent_title">Automation &amp; Consent</string>
-    <string name="consent_disclosure_heading">How DashBuddy uses the Accessibility service</string>
-    <string name="consent_disclosure_body">DashBuddy uses Android\'s Accessibility service to read the screens of the delivery apps you turn on, so it can recognize offers, pickups, and deliveries. This recognition runs entirely on your phone.\n\nDashBuddy can also tap buttons in a delivery app for you — but only the specific actions you allow below, only inside that delivery app, and only on a button whose label matches the action — except the icon-only pay-details arrow, which is verified by app boundary only. Accept and Decline taps fire when you press the button in DashBuddy or when you have armed that automation. Actions bundled with DashBuddy start on — the pay-details tap runs whenever a completed delivery\'s pay breakdown is collapsed. Turn any action off below and DashBuddy will not tap it — you do it manually.</string>
+    <string name="consent_disclosure_heading">Review or change what DashBuddy is allowed to tap</string>
+    <string name="consent_disclosure_body">DashBuddy uses Android\'s Accessibility service to read the screens of the delivery apps you turn on, so it can recognize offers, pickups, and deliveries. This recognition runs entirely on your phone.\n\nDashBuddy can also tap buttons in a delivery app for you — but only the specific actions you allow, only inside that delivery app, and only on a button whose label matches the action (except the icon-only pay-details arrow, which is verified by app boundary only). Nothing is turned on for you: each action below stays off until you allow it, and DashBuddy asks you the first time it can offer one. Turn any action off and DashBuddy will not tap it — you do it manually.</string>
     <string name="consent_empty">No automation actions are available yet. They appear here once your delivery-app rules load and a rule enables an action such as Accept or Decline.</string>
     <string name="consent_platform_unknown">Delivery app</string>
-    <string name="consent_source_bundled_format">%1$s · bundled with DashBuddy</string>
-    <string name="consent_source_bundled_note">These automation rules ship inside the app and are on by default. Turn any off to require a manual tap instead.</string>
+    <string name="consent_source_bundled_format">%1$s · built-in rules</string>
+    <string name="consent_source_bundled_note">These automations ship inside the app. None are turned on for you — each stays off until you allow it.</string>
     <string name="consent_source_downloaded_format">%1$s · downloaded rules</string>
     <string name="consent_source_downloaded_note">Downloaded rules are never turned on automatically. Each action stays off until you turn it on here.</string>
+
+    <!-- setup/consent/ConsentPromptSheet.kt (#843) — prompted per-capability consent -->
+    <string name="consent_prompt_heading">Allow DashBuddy to tap for you?</string>
+    <string name="consent_prompt_body">Your delivery-app rules can automate these taps. Nothing is turned on until you allow it — choose each one individually, or tap \"Not now\" to decide later.</string>
+    <string name="consent_prompt_source_bundled_format">Built-in %1$s rules</string>
+    <string name="consent_prompt_source_downloaded_format">Downloaded %1$s rules</string>
+    <string name="consent_prompt_allow">Allow</string>
+    <string name="consent_prompt_deny">Don\'t allow</string>
+    <string name="consent_prompt_not_now">Not now</string>
     <string name="consent_cap_accept_title">Accept offers</string>
     <string name="consent_cap_accept_desc">Lets DashBuddy tap the Accept button in the %1$s app for you — when you press Accept in DashBuddy, or when you have armed auto-accept. It only taps a button labeled \"Accept\" inside the %1$s app, and never without your go-ahead.</string>
     <string name="consent_cap_decline_title">Decline offers</string>

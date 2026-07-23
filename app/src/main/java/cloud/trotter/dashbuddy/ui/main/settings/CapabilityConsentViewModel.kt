@@ -58,9 +58,10 @@ data class ConsentSourceGroup(
     /** The platform whose rules this source carries — display only. */
     val platform: Platform,
     /**
-     * True for a bundled (asset) source — auto-granted by default (#417). False
-     * for a downloaded (CDN/fork) source, which is never auto-granted: its
-     * capabilities render pending until the user turns each on here.
+     * True for a bundled (asset) source — shipped inside the APK. Since #843
+     * killed auto-grant this is display-only provenance: bundled and downloaded
+     * sources are BOTH off until the user turns each on (here or via the consent
+     * prompt). It only selects the header/note copy ("built-in" vs "downloaded").
      */
     val isBundled: Boolean,
     val capabilities: List<ConsentCapabilityRow>,

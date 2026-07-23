@@ -58,4 +58,9 @@ dependencies {
     testImplementation(libs.robolectric)
     testImplementation(libs.mockito.kotlin)
     testImplementation(libs.kotlinx.coroutines.test)
+    // #843 — RuleCapabilityRepositoryTest drives a real Preferences DataStore
+    // (reconcile-never-grants / undecided-never-fires / migration). :core:datastore
+    // depends on datastore-preferences via `implementation`, so it is not on this
+    // module's test classpath transitively — declare it here.
+    testImplementation(libs.androidx.datastore.preferences)
 }

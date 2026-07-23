@@ -35,13 +35,16 @@ class CapabilityConsentViewModelTest {
     private class FakeGrants : RuleCapabilityGrants {
         private val _capabilities = MutableStateFlow<List<RuleCapability>>(emptyList())
         private val _granted = MutableStateFlow<Set<String>>(emptySet())
+        private val _denied = MutableStateFlow<Set<String>>(emptySet())
         override val capabilities: StateFlow<List<RuleCapability>> = _capabilities
         override val grantedKeys: StateFlow<Set<String>> = _granted
+        override val deniedKeys: StateFlow<Set<String>> = _denied
 
         val setGrantedCalls = mutableListOf<Pair<String, Boolean>>()
 
         fun setEnumeration(caps: List<RuleCapability>) { _capabilities.value = caps }
         fun setGrantedKeys(keys: Set<String>) { _granted.value = keys }
+        fun setDeniedKeys(keys: Set<String>) { _denied.value = keys }
 
         override suspend fun reconcile(capabilities: List<RuleCapability>) = error("unused")
         override suspend fun isActionGranted(ruleId: String?, action: RuleAction) = error("unused")
@@ -49,7 +52,13 @@ class CapabilityConsentViewModelTest {
         override suspend fun setGranted(key: String, granted: Boolean) {
             setGrantedCalls += key to granted
             // Mirror the real store so the UI reflects the change reactively.
-            _granted.value = if (granted) _granted.value + key else _granted.value - key
+            if (granted) {
+                _granted.value = _granted.value + key
+                _denied.value = _denied.value - key
+            } else {
+                _granted.value = _granted.value - key
+                _denied.value = _denied.value + key
+            }
         }
     }
 

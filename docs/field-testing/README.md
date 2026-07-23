@@ -78,6 +78,23 @@ card's **mechanical** half, #577 (re-confirmed, 24/24, ~0.55 s — with a new po
 that entry's Bug #1), the #457 path, and #554 ShadowProjector (2/2). The #462/#460 dropoff item
 was found **broken-in-part** (raw PII in capture envelopes) and moved to that entry's Bug #7.)_
 
+- **🆕 NEW — #843 — prompted per-capability automation consent (no auto-grant).** Automations are
+  no longer pre-granted; each must be consented to individually via a prompt at the app's front
+  door (Google Play policy). On upgrade, a one-shot migration clears the old auto-grants, so every
+  automation starts OFF.
+  **What to watch (first app-open after installing this build):**
+  1. On first open (once accessibility/notification permissions are in), a **consent sheet**
+     appears listing each automation **individually** — Accept, Decline, Confirm-decline, Open
+     pay breakdown — each with its own Allow / Don't-allow buttons and a source line ("Built-in
+     DoorDash rules"). There is **no "allow all"** button; "Not now" dismisses and it should
+     re-appear next time you foreground the app while anything is still undecided.
+  2. Before you grant anything, **quick-decline / auto-expand should do nothing** (stay MANUAL) —
+     the automation is off until consented.
+  3. Grant **exactly one** automation (e.g. Decline) and leave the others "Not now": on the next
+     offer, only that one fires; the un-granted ones still require a manual tap. A "Don't allow"
+     choice must never re-prompt.
+  - Issue: #843. Confirmed: 0/2
+
 - **🆕 NEW — #830 / PR #839 — presentation-scoped offer identity (+ the #826 accept chain).** The
   ticking Uber card no longer mints replacement offers: a re-render with the same store/order shape
   ENRICHES the pending offer in place (keeps its presentation epoch and click latches; heads-up
