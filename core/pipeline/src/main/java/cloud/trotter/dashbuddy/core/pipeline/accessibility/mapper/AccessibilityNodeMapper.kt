@@ -47,6 +47,16 @@ internal class TreeBudget(
     companion object {
         const val MAX_TREE_DEPTH = 60
         const val MAX_TREE_NODES = 4_000
+
+        /**
+         * Per-string ingestion cap (#590). Third-party text is untrusted: a node
+         * reporting a 100 000-char `text` would ride verbatim into the [UiNode] and
+         * the serialized capture envelope. Legitimate screen text nodes (labels,
+         * addresses, instruction bodies) never approach 4 KiB; the cap truncates a
+         * pathological string while leaving every real screen untouched. Applied to
+         * `text`, `contentDescription`, and `stateDescription` at conversion.
+         */
+        const val MAX_TEXT_LENGTH = 4_096
     }
 }
 
