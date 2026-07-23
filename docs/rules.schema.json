@@ -919,6 +919,7 @@
         "parseTime",
         "parseDuration",
         "parseHrMin",
+        "parseMinutes",
         "parseLeadingInt",
         "parsePercent",
         "sha256",

@@ -104,6 +104,7 @@ object TransformRegistry {
             "parseTime" -> parseTimeTextToMillis(value)
             "parseDuration" -> parseDuration(value)
             "parseHrMin" -> parseHrMin(value)
+            "parseMinutes" -> parseMinutes(value)
             "parseLeadingInt" -> parseLeadingInt(value)
             "parsePercent" -> parsePercent(value)
             "sha256" -> sha256OrNull(value)
@@ -229,7 +230,7 @@ object TransformRegistry {
 
     private val knownPlainTransforms = setOf(
         "parseCurrency", "parseDistance", "parseItemCount", "parseDeadline",
-        "parseTime", "parseDuration", "parseHrMin", "parseLeadingInt",
+        "parseTime", "parseDuration", "parseHrMin", "parseMinutes", "parseLeadingInt",
         "parsePercent", "sha256", "normalizeCustomerName", "trim", "lower", "upper",
         "toDouble", "toInt", "stripDeadlinePrefix",
     )
@@ -321,10 +322,37 @@ object TransformRegistry {
 
     /**
      * Parses distance: "5.5 mi", "Additional 2.6 mi", "500 ft" (converts ft to mi).
+     *
+     * Unit-anchored (#827): read the number bound to its OWN "mi" token with a
+     * word boundary so "mi" can NEVER match inside "min". Uber fuses time and
+     * distance in one node — e.g. "40 min (17.5 mi) total" — and the old
+     * leading-number read returned the 40-*minute* value as 40.0 miles (the real
+     * 17.5 mi discarded, then re-modeled ≈2.7× on every offer). Falls back to a
+     * "ft" number (converted), then any leading number for legacy single-value
+     * nodes ("5.5 mi", "500 ft") — byte-identical to the old behaviour there.
      */
     private fun parseDistance(text: String): Double? {
+        Regex("(\\d+(?:\\.\\d+)?)\\s*mi\\b", RegexOption.IGNORE_CASE).find(text)?.let {
+            return it.groupValues[1].toDoubleOrNull()
+        }
+        Regex("(\\d+(?:\\.\\d+)?)\\s*ft\\b", RegexOption.IGNORE_CASE).find(text)?.let {
+            return it.groupValues[1].toDoubleOrNull()?.div(5280.0)
+        }
         val num = Regex("(\\d+(?:\\.\\d+)?)").find(text)?.value?.toDoubleOrNull() ?: return null
         return if (text.contains("ft", true)) num / 5280.0 else num
+    }
+
+    /**
+     * Parses whole minutes bound to their OWN "min" token (#827): "40 min
+     * (17.5 mi) total" -> 40, "+ 19 min (+ 3.9 mi) total" -> 19. Unlike
+     * [parseLeadingInt] (which reads the node's leading token and returns null on
+     * the "+ 19 min" add-on shape because the leading token is "+"), this anchors
+     * on the unit, so it is robust to any lead-in and can never pick up the miles
+     * value. Returns null when no "min" token is present.
+     */
+    private fun parseMinutes(text: String): Int? {
+        return Regex("(\\d+)\\s*min\\b", RegexOption.IGNORE_CASE)
+            .find(text)?.groupValues?.get(1)?.toIntOrNull()
     }
 
     /**

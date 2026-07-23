@@ -120,6 +120,19 @@
             "flow": "offer:presented",
             "modeHint": "online"
           },
+          "bind": {
+            // #813: scope storeName to the offer card so the top-level find can't
+            // stray onto a map_marker_title annotation (an earlier-in-tree store
+            // pin, sometimes a dropoff) or the "New requests" browse pill — both
+            // live OUTSIDE primary_touch_area. The card store TextView is id-less,
+            // so the read below reuses the same negation predicate the orders[]
+            // extract uses; binding the card is what makes the first-match safe.
+            "offerCard": {
+              "find": {
+                "hasIdSuffix": "primary_touch_area"
+              }
+            }
+          },
           "require": {
             "all": [
               {
@@ -156,19 +169,94 @@
                 "read": "text",
                 "transform": "parseCurrency"
               },
+              // #827: Uber fuses time+distance in ONE node ("40 min (17.5 mi)
+              // total"). The finder is word-boundary anchored (mi\\b) so it
+              // targets the "(17.5 mi)" parenthetical and can never latch the "mi"
+              // inside "min"; parseDistance is likewise unit-anchored, reading the
+              // number bound to its own "mi" token rather than the node's leading
+              // number (which was the 40-minute value).
               "distance": {
                 "find": {
-                  "hasTextMatchesRegex": "\\d[\\d.]*\\s*mi"
+                  "hasTextMatchesRegex": "\\d[\\d.]*\\s*mi\\b"
                 },
                 "read": "text",
                 "transform": "parseDistance"
               },
+              // #827: parseMinutes reads the number bound to its own "min" token —
+              // robust to the "+ 19 min" add-on lead-in (parseLeadingInt returned
+              // null there because the leading token is "+") and structurally
+              // unable to pick up the miles value. The finder is min\\b anchored so
+              // it targets the singular "N min" total node and skips a plural
+              // "N mins away" ETA line (both can co-occur; the ETA line would
+              // otherwise be found first and parse null).
               "timeToCompleteMinutes": {
                 "find": {
-                  "hasTextMatchesRegex": "\\d+\\s*min"
+                  "hasTextMatchesRegex": "\\d+\\s*min\\b"
                 },
                 "read": "text",
-                "transform": "parseLeadingInt"
+                "transform": "parseMinutes"
+              },
+              // #813: top-level storeName so the "Offer - {storeName}" screenshot
+              // prefix interpolates (it resolves against the raw parse map, which
+              // never held the nested orders[].storeName). Scoped to the offer
+              // card (bind above); same negation predicate as orders[] — the store
+              // TextView is the first card text that is not a price/badge/label,
+              // the duration ("min"), or the dropoff line (", <city>").
+              "storeName": {
+                "from": "offerCard",
+                "find": {
+                  "all": [
+                    {
+                      "hasClassName": "android.widget.TextView"
+                    },
+                    {
+                      "not": {
+                        "any": [
+                          {
+                            "hasTextMatchesRegex": "^\\$"
+                          },
+                          {
+                            "hasTextMatchesRegex": "^\\+"
+                          },
+                          {
+                            "hasTextContaining": "min"
+                          },
+                          {
+                            "hasText": "Accept"
+                          },
+                          {
+                            "hasText": "Match"
+                          },
+                          {
+                            "hasText": "Delivery"
+                          },
+                          {
+                            "hasTextContaining": "Exclusive"
+                          },
+                          {
+                            "hasTextContaining": "Guaranteed"
+                          },
+                          {
+                            "hasTextContaining": "Includes"
+                          },
+                          {
+                            "hasTextContaining": "Add a"
+                          },
+                          {
+                            "hasTextContaining": "Shop &"
+                          },
+                          {
+                            "hasTextMatchesRegex": "^\\d+ items?"
+                          },
+                          {
+                            "hasTextContaining": ", "
+                          }
+                        ]
+                      }
+                    }
+                  ]
+                },
+                "read": "text"
               },
               "orders": {
                 "each": {
@@ -255,6 +343,26 @@
               "throttleMs": 60000
             }
           ]
+        }
+      ],
+      // #813(b): the offer card's dropoff line — a street intersection or single
+      // road followed by ", <City>" ("Sample St & Sample Ave, San Antonio",
+      // "Sample Rd, San Antonio") — is customer-area PII that shipped RAW to the
+      // capture envelope. It carries no lead-in prefix, so the CustomerTextMarkers
+      // backstop ("Deliver to "/"Pickup for ") can't own it; this rule-declared
+      // redact is the primary control. Anchored on the trailing ", <City>" address
+      // shape — the pickup store TextView never contains a ", " (the same
+      // discriminator the storeName parse uses), so store names are NOT
+      // over-redacted. Documented residuals: (1) a dropoff line rendered without a
+      // city tail would be missed, but every fielded shape carries ", <City>";
+      // (2) the `find` selects on node.text only (hasTextMatchesRegex is a text
+      // containsMatchIn), so a desc-only rendering of the line would escape
+      // selection — all fielded fixtures render it as text.
+      "redact": [
+        {
+          "find": {
+            "hasTextMatchesRegex": ",\\s[A-Z][a-zA-Z]+(\\s[A-Z][a-zA-Z]+){0,4}$"
+          }
         }
       ]
     },
