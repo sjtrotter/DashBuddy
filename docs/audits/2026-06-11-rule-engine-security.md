@@ -52,6 +52,25 @@ or mismatched bundles and keep the last-good ruleset. The "switch sources via
 configuration" forkability must verify against the *configured* source's key,
 not skip verification.
 
+**RESOLVED 2026-07-23 (#416, in-tree build).** `RulesetVerifier` (ECDSA P-256 /
+SHA-256, no new crypto dependency) gates the remote-replace path:
+`JsonRuleInterpreter.load` now accepts only a `VerifiedRulesetBytes`, a value type
+that can be minted *solely* by a successful signature check, so
+compile-from-remote-bytes is **structurally unreachable** without verification —
+fail-closed by construction, not call-site discipline. Verification is always
+against the *configured source's* pinned key (base64-DER SPKI); an unconfigured
+source, tampered payload, wrong key, garbage/oversized bundle all reject and keep
+last-good. An `asset:`-prefixed source id is rejected on the verified path (it would
+otherwise inherit the #417 auto-grant). Bundled asset rulesets are exempt (already
+covered by the APK signature). Signing tooling: `matchers/tools/sign-ruleset.sh` +
+README.
+
+**Residual (deferred to #192):** the gate proves *authenticity* but not *freshness* —
+there is no version/monotonicity/expiry field, so an OLD but validly-signed bundle
+that is re-served (stale cache / MITM replay) verifies and swaps in (a downgrade to a
+superseded ruleset). Freshness pinning (signed monotonic `ruleset_version`, or the
+corpus↔rules SHA pin N5/#638) ships with the CDN wiring under #192.
+
 ### S2 — `isPermissionGranted` is a hardcoded `true` (HIGH, gates #192 / multi-user)
 `SideEffectEngine.isPermissionGranted(tier)` returns `true` for every
 `PermissionTier`. The tier system is fully built (verbs carry tiers; the engine

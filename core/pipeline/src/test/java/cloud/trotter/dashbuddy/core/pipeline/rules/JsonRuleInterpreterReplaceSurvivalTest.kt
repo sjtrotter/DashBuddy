@@ -22,6 +22,13 @@ class JsonRuleInterpreterReplaceSurvivalTest {
 
     private val interpreter = JsonRuleInterpreter(mock<Context>(), mock<RuleCapabilityGrants>())
 
+    // #416: load() now only accepts signature-verified bytes. Tests sign their own
+    // bundles with a runtime keypair (no committed private key) and mint through the
+    // real RulesetVerifier — exercising the whole gate.
+    private val signingKey = TestRulesetSigning.keyPair()
+    private fun load(json: String, source: String) =
+        TestRulesetSigning.verified(json, source, signingKey)
+
     /** A single-child tree carrying [text] (exists/hasText searches the subtree). */
     private fun screen(text: String) = UiNode(children = listOf(UiNode(text = text)))
 
@@ -60,7 +67,7 @@ class JsonRuleInterpreterReplaceSurvivalTest {
 
     @Test
     fun `a replacement that omits sensitive rules is rejected and the previous block survives`() = runTest {
-        interpreter.load(goodBundle, "good")
+        interpreter.load(load(goodBundle, "good"))
         assertTrue("good bundle should be live", interpreter.isLoaded)
         assertEquals(
             "sensitive",
@@ -68,7 +75,7 @@ class JsonRuleInterpreterReplaceSurvivalTest {
         )
 
         // A sensitive-omitting replacement must NOT go live.
-        interpreter.load(replacementWithoutSensitive, "evil-replacement")
+        interpreter.load(load(replacementWithoutSensitive, "evil-replacement"))
 
         // The previous bundle's sensitive block is still in force.
         assertEquals(
@@ -80,9 +87,9 @@ class JsonRuleInterpreterReplaceSurvivalTest {
 
     @Test
     fun `a replacement that keeps sensitive rules loads normally`() = runTest {
-        interpreter.load(goodBundle, "good")
+        interpreter.load(load(goodBundle, "good"))
         // Same platform, still ships the sensitive rule → allowed to swap.
-        interpreter.load(goodBundle, "good-again")
+        interpreter.load(load(goodBundle, "good-again"))
         assertEquals(
             "sensitive",
             interpreter.screenRuleset?.matchFirst(bankingScreen)?.shape,
