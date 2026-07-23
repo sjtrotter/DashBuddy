@@ -1,5 +1,6 @@
 package cloud.trotter.dashbuddy.core.pipeline.rules
 
+import cloud.trotter.dashbuddy.domain.capability.RuleCapabilityGrants
 import timber.log.Timber
 import java.security.KeyFactory
 import java.security.PublicKey
@@ -44,15 +45,26 @@ import java.util.Base64
  *
  * ## Fail direction
  * Every branch fails CLOSED — an oversized bundle, an unconfigured source, an
- * undecodable signature, a verification mismatch, or any crypto exception returns
- * `null` (reject). The caller keeps the last-good ruleset. Logs at ERROR under the
- * stable `Rules` tag (Principle 7); the untrusted bundle is treated as hostile — the
- * log carries only sizes / the source id, **never** any bundle content.
+ * `asset:`-prefixed (auto-grant) source id, an over-long or undecodable signature, a
+ * verification mismatch, or any exception during verify returns `null` (reject). The
+ * caller keeps the last-good ruleset. Logs at ERROR under the stable `Rules` tag
+ * (Principle 7); the untrusted bundle is treated as hostile — the log carries only
+ * sizes / the source id, **never** any bundle content.
  *
- * @param keysBySource source id → its pinned public key. Built by [fromConfig] from
- *   base64-DER config; a source absent here has no key and is always rejected.
+ * ## Known residual — no freshness / rollback protection (deferred to #192)
+ * This gate proves a bundle was signed by the pinned key; it does NOT prove the bundle
+ * is the *latest* one. An attacker who can serve bytes (a stale CDN cache, a MITM
+ * replaying an older signed bundle) could re-serve an OLD but validly-signed bundle,
+ * which verifies and swaps in — a downgrade to a superseded ruleset. There is no
+ * version/monotonicity/expiry field yet. Freshness pinning (a signed, monotonic
+ * `ruleset_version` or a corpus↔rules SHA pin, N5/#638) is tracked with the CDN wiring
+ * under #192; until then the swap is authenticity-verified but not rollback-protected.
+ *
+ * @param keysBySource source id → its pinned public key. Constructed only via
+ *   [fromConfig] (the primary constructor is private) from base64-DER config; a source
+ *   absent here has no key and is always rejected.
  */
-class RulesetVerifier(private val keysBySource: Map<String, PublicKey>) {
+class RulesetVerifier private constructor(private val keysBySource: Map<String, PublicKey>) {
 
     /**
      * Verify [signatureBase64] (a detached ECDSA-P256-SHA256 signature, base64) over
@@ -86,6 +98,19 @@ class RulesetVerifier(private val keysBySource: Map<String, PublicKey>) {
             val factory = KeyFactory.getInstance("EC")
             val decoded = HashMap<String, PublicKey>(keys.size)
             for (entry in keys) {
+                // A remote source must NEVER claim the `asset:` prefix: RuleCapabilityGrants
+                // AUTO-GRANTS capabilities for asset-prefixed sources (#417). A config entry
+                // that pinned a key for an `asset:`-prefixed id would let a remote bundle's
+                // taps auto-grant. Drop such entries so the id can never resolve a key
+                // (verify() re-checks this too — defense in depth).
+                if (entry.sourceId.startsWith(RuleCapabilityGrants.ASSET_SOURCE_PREFIX)) {
+                    Timber.tag(RulesetCrypto.TAG).e(
+                        "dropping pinned key for source '%s' — the '%s' prefix is reserved for bundled " +
+                            "assets (auto-grant); a remote source must not claim it (fail closed)",
+                        entry.sourceId, RuleCapabilityGrants.ASSET_SOURCE_PREFIX,
+                    )
+                    continue
+                }
                 try {
                     val der = Base64.getDecoder().decode(entry.publicKeyBase64Der)
                     decoded[entry.sourceId] = factory.generatePublic(X509EncodedKeySpec(der))
@@ -115,6 +140,14 @@ internal object RulesetCrypto {
      * rejected at compile can't burn crypto work first.
      */
     const val MAX_BUNDLE_BYTES = 1_000_000
+
+    /**
+     * Max accepted length of the base64 signature string, checked BEFORE decode. A real
+     * P-256 DER signature base64-encodes to ~100 chars (raw DER ≤ ~72 bytes); 512 is a
+     * generous ceiling that still rejects a hostile multi-MB "signature" before it
+     * allocates in the base64 decoder.
+     */
+    const val MAX_SIGNATURE_B64_CHARS = 512
 }
 
 /**
@@ -146,25 +179,47 @@ class VerifiedRulesetBytes private constructor(
          * The SINGLE construction site. Verify [signatureBase64] (detached
          * ECDSA-P256-SHA256, base64) over [bundleBytes] against [key], and mint on
          * success; return `null` on ANY failure (fail closed). Bounded ingestion is
-         * enforced here — even a direct caller can't feed an unbounded blob into crypto.
+         * enforced here — even the in-module caller can't feed an unbounded blob into
+         * crypto.
          *
-         * Production code goes through [RulesetVerifier.verify], which binds the
-         * CONFIGURED key so app code can never present an arbitrary one; this overload
-         * exists for a caller that already resolved the pinned key (and for tests that
-         * generate their own keypair).
+         * **`internal` on purpose:** the ONLY production caller is [RulesetVerifier.verify],
+         * which binds the CONFIGURED key so app code can never present an arbitrary key
+         * (self-signed key confusion — a key delivered alongside the bundle). Exposing a
+         * public `verify(key, …)` would make the key binding disciplinary rather than
+         * structural; keeping this internal + [RulesetVerifier]'s constructor private forces
+         * every path through [fromConfig]'s pinned keys. Reachable from `:core:pipeline`
+         * tests (same module) which generate their own keypair.
          */
-        fun verify(
+        internal fun verify(
             key: PublicKey,
             source: String,
             bundleBytes: ByteArray,
             signatureBase64: String,
         ): VerifiedRulesetBytes? {
+            // Defense in depth (fromConfig also drops these): a remote source must never
+            // claim the `asset:` prefix, which RuleCapabilityGrants auto-grants (#417).
+            if (source.startsWith(RuleCapabilityGrants.ASSET_SOURCE_PREFIX)) {
+                Timber.tag(RulesetCrypto.TAG).e(
+                    "rejected remote bundle: source '%s' uses the reserved '%s' auto-grant prefix",
+                    source, RuleCapabilityGrants.ASSET_SOURCE_PREFIX,
+                )
+                return null
+            }
             // Bounded ingestion BEFORE any crypto: an attacker-supplied blob must not
             // reach the (allocating) base64 decode / signature update.
             if (bundleBytes.size > RulesetCrypto.MAX_BUNDLE_BYTES) {
                 Timber.tag(RulesetCrypto.TAG).e(
                     "rejected remote bundle for source '%s': %d bytes exceeds cap %d (before verify)",
                     source, bundleBytes.size, RulesetCrypto.MAX_BUNDLE_BYTES,
+                )
+                return null
+            }
+            // Cap the signature string BEFORE base64-decode — a real P-256 DER sig is
+            // ~100 chars; a multi-MB "signature" must not allocate in the decoder.
+            if (signatureBase64.length > RulesetCrypto.MAX_SIGNATURE_B64_CHARS) {
+                Timber.tag(RulesetCrypto.TAG).e(
+                    "rejected remote bundle for source '%s': signature length %d exceeds cap %d (before decode)",
+                    source, signatureBase64.length, RulesetCrypto.MAX_SIGNATURE_B64_CHARS,
                 )
                 return null
             }
@@ -186,15 +241,15 @@ class VerifiedRulesetBytes private constructor(
                 // signed payload; a non-UTF-8 bundle fails downstream JSON parse, not
                 // integrity.
                 VerifiedRulesetBytes(bundleBytes.toString(Charsets.UTF_8), source)
-            } catch (e: IllegalArgumentException) {
-                // Base64 decode failure (garbage / missing signature).
+            } catch (e: Exception) {
+                // Broad catch on PURPOSE (still fail-closed + logged): the input is a
+                // HOSTILE, attacker-shaped signature/DER. Beyond the expected
+                // IllegalArgumentException (bad base64) and GeneralSecurityException, some
+                // JCE providers throw unchecked (ArrayIndexOutOfBounds / NegativeArraySize /
+                // provider-internal RuntimeExceptions) on malformed ASN.1 DER — a narrower
+                // catch would let one of those escape and fail OPEN into the loader's caller.
                 Timber.tag(RulesetCrypto.TAG).e(
-                    e, "rejected remote bundle for source '%s': malformed signature encoding", source,
-                )
-                null
-            } catch (e: java.security.GeneralSecurityException) {
-                Timber.tag(RulesetCrypto.TAG).e(
-                    e, "rejected remote bundle for source '%s': crypto failure during verify", source,
+                    e, "rejected remote bundle for source '%s': verify failed (%s)", source, e.javaClass.simpleName,
                 )
                 null
             }

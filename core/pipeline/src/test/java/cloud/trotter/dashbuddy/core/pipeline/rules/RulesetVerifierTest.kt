@@ -90,6 +90,31 @@ class RulesetVerifierTest {
     }
 
     @Test
+    fun `an asset-prefixed source id is rejected (auto-grant seam, #417)`() {
+        val pair = TestRulesetSigning.keyPair()
+        val assetSource = "asset:rules/doordash.json"
+        // Even if a config entry tried to pin a key for an asset-prefixed id, fromConfig
+        // drops it — so the source resolves no key AND the verify() re-check would fire.
+        val verifier = verifierFor(RuleSourceKey(assetSource, TestRulesetSigning.publicKeyBase64Der(pair)))
+        val assetBytes = bundle.toByteArray(Charsets.UTF_8)
+        val sig = TestRulesetSigning.signBase64(assetBytes, pair.private)
+
+        assertNull(
+            "a remote bundle must never verify under the reserved 'asset:' auto-grant prefix",
+            verifier.verify(assetSource, assetBytes, sig),
+        )
+    }
+
+    @Test
+    fun `an over-long signature string is rejected before decode`() {
+        val pair = TestRulesetSigning.keyPair()
+        val verifier = verifierFor(RuleSourceKey(source, TestRulesetSigning.publicKeyBase64Der(pair)))
+        val huge = "A".repeat(RulesetCrypto.MAX_SIGNATURE_B64_CHARS + 1)
+
+        assertNull("an over-cap signature must be rejected before base64 decode", verifier.verify(source, bytes, huge))
+    }
+
+    @Test
     fun `a malformed pinned key drops that source to fail-closed`() {
         // fromConfig cannot decode the key => the source has no usable key.
         val verifier = verifierFor(RuleSourceKey(source, "not-a-real-der-key"))

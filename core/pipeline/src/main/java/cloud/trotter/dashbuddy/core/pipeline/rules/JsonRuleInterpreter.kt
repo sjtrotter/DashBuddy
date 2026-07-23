@@ -189,9 +189,14 @@ class JsonRuleInterpreter @Inject constructor(
      * Parse and compile a single rules JSON string.
      * Used by [loadDefaults] and will be used by the CDN fetch path in Phase A3+.
      *
+     * `internal` (#416 review F4): compiling raw JSON is a module-internal step — the
+     * only public entry points are [loadDefaults] (bundled assets, APK-signature covered)
+     * and [load] (which takes a signature-verified [VerifiedRulesetBytes]). Reachable from
+     * `:core:pipeline` tests (same module).
+     *
      * @return compiled rule lists, or null if validation/compilation fails.
      */
-    fun loadSingle(jsonString: String, source: String = "unknown"): CompiledRuleBundle? {
+    internal fun loadSingle(jsonString: String, source: String = "unknown"): CompiledRuleBundle? {
         if (jsonString.length > MAX_FILE_BYTES) {
             Timber.e("JsonRuleInterpreter: $source exceeds size limit (${jsonString.length} bytes)")
             return null

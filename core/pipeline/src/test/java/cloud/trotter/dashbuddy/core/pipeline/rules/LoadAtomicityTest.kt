@@ -101,7 +101,7 @@ class LoadAtomicityTest {
     fun `a dup-id whole-file reject reconciles NO capabilities and loads no rules`() = runTest {
         val grants = RecordingGrants()
         val interp = interpreter(grants)
-        interp.load(verified(dupIdFile, "asset:rules/doordash.json"))
+        interp.load(verified(dupIdFile, "cdn:rules/doordash"))
 
         assertFalse("a rejected file must not go live", interp.isLoaded)
         assertTrue(
@@ -114,7 +114,7 @@ class LoadAtomicityTest {
     fun `a sensitive-coverage reject reconciles NO capabilities and loads no rules`() = runTest {
         val grants = RecordingGrants()
         val interp = interpreter(grants)
-        interp.load(verified(noSensitiveFile, "asset:rules/doordash.json"))
+        interp.load(verified(noSensitiveFile, "cdn:rules/doordash"))
 
         assertFalse("a coverage-rejected file must not go live", interp.isLoaded)
         assertTrue(
@@ -127,7 +127,7 @@ class LoadAtomicityTest {
     fun `a valid file goes live and reconciles exactly once (positive control)`() = runTest {
         val grants = RecordingGrants()
         val interp = interpreter(grants)
-        interp.load(verified(validFile, "asset:rules/doordash.json"))
+        interp.load(verified(validFile, "cdn:rules/doordash"))
 
         assertTrue("a valid bundle must go live", interp.isLoaded)
         assertNotNull(interp.screenRuleset)
@@ -139,12 +139,12 @@ class LoadAtomicityTest {
         val grants = RecordingGrants()
         val interp = interpreter(grants)
 
-        interp.load(verified(validFile, "asset:rules/doordash.json"))
+        interp.load(verified(validFile, "cdn:rules/doordash"))
         val goodRuleset = interp.screenRuleset
         assertEquals(1, grants.reconcileCalls.size)
 
         // The failing load must be a no-op on the live state.
-        interp.load(verified(dupIdFile, "asset:rules/doordash.json"))
+        interp.load(verified(dupIdFile, "cdn:rules/doordash"))
 
         assertTrue("previous good bundle must remain live", interp.isLoaded)
         assertEquals("live ruleset must be unchanged by the rejected load", goodRuleset, interp.screenRuleset)
