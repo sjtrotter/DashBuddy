@@ -53,6 +53,9 @@ class DashBuddyApplication : Application(), Configuration.Provider {
     lateinit var jsonRuleInterpreter: JsonRuleInterpreter
 
     @Inject
+    lateinit var ruleCapabilityRepository: cloud.trotter.dashbuddy.core.data.capability.RuleCapabilityRepository
+
+    @Inject
     lateinit var shadowStoreChainLogger: cloud.trotter.dashbuddy.state.shadow.ShadowStoreChainLogger
 
     @Inject
@@ -117,7 +120,17 @@ class DashBuddyApplication : Application(), Configuration.Provider {
         // 2. Compile the JSON rulesets off the main thread (#361): ~95KB of
         // parse+regex-compile work. The classifier tolerates a null ruleset
         // (classifies UNKNOWN) for the instants before the swap lands.
-        applicationScope.launch { jsonRuleInterpreter.loadDefaults() }
+        //
+        // First run the one-shot consent-schema migration (#843): clear any
+        // pre-#843 auto-granted capabilities (keep explicit denials) so nothing
+        // fires against a stale grant, THEN load the rules. Ordering it before
+        // loadDefaults means the reconcile publishes the enumeration into a
+        // store that already reflects the no-auto-grant policy; the consent
+        // prompt then collects fresh, explicit consent.
+        applicationScope.launch {
+            ruleCapabilityRepository.migrateConsentSchemaIfNeeded()
+            jsonRuleInterpreter.loadDefaults()
+        }
 
         // 3. Initialize State
         stateManagerV2.initialize()

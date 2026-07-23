@@ -48,15 +48,38 @@ class RuleCapabilityRepository @Inject constructor(
     override val grantedKeys: StateFlow<Set<String>> = dataSource.granted
         .stateIn(scope, SharingStarted.Eagerly, emptySet())
 
+    override val deniedKeys: StateFlow<Set<String>> = dataSource.denied
+        .stateIn(scope, SharingStarted.Eagerly, emptySet())
+
     override suspend fun reconcile(capabilities: List<RuleCapability>) {
+        // Publish the enumeration ONLY — grants NOTHING (#843). Bundled and
+        // remote sources are enumerated identically; every capability lands
+        // undecided until the user opts in through the consent prompt. The
+        // fire-time gate stays fail-closed for anything not in the granted set,
+        // so leaving the persisted store untouched here is the whole point.
         enumerated.value = capabilities
-        dataSource.update { granted, denied ->
-            (granted + autoGrantSelection(capabilities, denied)) to denied
-        }
         Timber.tag(TAG).i(
-            "reconciled %d capabilit(ies) from rule load",
+            "reconciled %d capabilit(ies) from rule load (none granted — awaiting consent)",
             capabilities.size,
         )
+    }
+
+    /**
+     * One-shot consent-schema migration (#843), delegated to the persisted
+     * store. The single-user alpha upgrade path: clear any pre-#843
+     * auto-granted keys, keep explicit denials, stamp the version marker so it
+     * runs once. Called at app startup BEFORE the rulesets go live, so no
+     * automation can fire against a stale grant. See
+     * [RuleCapabilityDataSource.migrateConsentSchemaIfNeeded].
+     */
+    suspend fun migrateConsentSchemaIfNeeded() {
+        if (dataSource.migrateConsentSchemaIfNeeded()) {
+            // INFO milestone — PII-safe (no keys, just a count-free status).
+            Timber.tag(TAG).i(
+                "consent-schema migration ran: cleared auto-granted capabilities; " +
+                    "denials preserved; automation stays off until re-consented (#843)",
+            )
+        }
     }
 
     override suspend fun setGranted(key: String, granted: Boolean) {
@@ -92,28 +115,13 @@ class RuleCapabilityRepository @Inject constructor(
 }
 
 /**
- * Auto-grant policy (#417/#422): bundled (asset-source) capabilities are
- * granted on load so the single-user alpha has zero consent friction; any
- * other source (CDN/fork — #192) is NEVER auto-granted and stays pending
- * until the user approves it. An explicitly denied key is excluded — a
- * revocation must not be silently undone by the next rule load.
- *
- * Pure and top-level so policy is testable without Android.
- */
-fun autoGrantSelection(capabilities: List<RuleCapability>, denied: Set<String>): Set<String> =
-    capabilities.asSequence()
-        .filter { it.source.startsWith(RuleCapabilityGrants.ASSET_SOURCE_PREFIX) }
-        .map { it.key }
-        .filterNot { it in denied }
-        .toSet()
-
-/**
- * Consent grant/revoke set transform (#422 PR 3), pure and top-level so it is
- * testable without DataStore. Granting a [key] adds it to [granted] and clears
- * any prior denial; **revoking persists an explicit denial** so the next rule
- * load's asset auto-grant ([autoGrantSelection] excludes denied keys) cannot
- * silently re-grant it. Returns the new (granted, denied) pair for one atomic
- * [RuleCapabilityDataSource.update].
+ * Consent grant/revoke set transform (#422 PR 3 / #843), pure and top-level so
+ * it is testable without DataStore. Granting a [key] adds it to [granted] and
+ * clears any prior denial; **denying persists an explicit denial** so the
+ * capability leaves "undecided" and the consent prompt never re-asks (a denial
+ * is durable, not a deferral). Since #843 killed auto-grant, granting here is
+ * the ONLY way a key enters [granted]. Returns the new (granted, denied) pair
+ * for one atomic [RuleCapabilityDataSource.update].
  */
 fun applyGrantChange(
     key: String,

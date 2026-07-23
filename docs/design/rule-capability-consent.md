@@ -140,13 +140,22 @@ for that action; the *grant* check is for automation-initiated fires. Target
 verification (the dynamic half) applies to **both** — integrity is never
 skipped.
 
-### Source policy (unchanged)
+### Source policy (superseded by #843 — no auto-grant)
 
-- **Asset source** (bundled rules the developer ships) → auto-grant on load;
-  no consent friction in the single-user alpha.
-- **CDN / fork source** (#192) → never auto-grant; every capability pending
-  until approved. A downloaded rule can recognize screens immediately but
-  cannot aim a tap without an explicit, content-pinned grant.
+**As of #843 there is NO auto-grant, from any source.** `reconcile()` only
+publishes the enumeration; every capability — bundled OR downloaded — lands
+**undecided** until the user explicitly opts in. Per Google Play policy each
+automation is consented to individually. Consent is collected by the
+**prompt** (`ConsentPromptSheet`, the app's front door — same rhythm as the
+a11y/notification permission prompts), and reviewed/revoked in the settings
+record. A one-shot schema migration clears any pre-#843 auto-granted keys on
+upgrade (denials preserved) so the prompt re-collects honest consent.
+
+`ASSET_SOURCE_PREFIX` survives as display-only provenance: bundled = "built-in"
+(covered by the APK signature), downloaded = a future CDN/fork source (#192),
+which additionally gates on signature verification (#416) before it may even be
+enumerated. Neither is granted without a user act. A rule can recognize screens
+immediately but cannot aim a tap without an explicit, content-pinned grant.
 
 ## Lifecycle (current state)
 
@@ -176,7 +185,9 @@ skipped.
    auto-decline is a staged plan over *intents* (offer screen → confirm
    screen), each step aimed by that screen's own bound target, with in-flight
    state + timeout + abort-to-manual.
-3. **Asset auto-grant** — keep for the alpha? (recommend yes.)
+3. **Asset auto-grant** — RESOLVED by #843: removed. Bundled sources are
+   prompted, not auto-granted (Google Play per-automation consent). The
+   original alpha recommendation ("keep") is superseded.
 4. **Persist explicit denials** vs treat absence as deny (recommend persist).
 5. **Revocation immediacy** — reactive grant flow should suppress immediately
    (recommend yes).

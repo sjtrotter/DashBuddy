@@ -52,6 +52,7 @@ import cloud.trotter.dashbuddy.domain.analytics.AnalyticsPeriod
 import cloud.trotter.dashbuddy.domain.analytics.PeriodEconomics
 import cloud.trotter.dashbuddy.domain.format.Formats
 import cloud.trotter.dashbuddy.ui.main.navigation.Screen
+import cloud.trotter.dashbuddy.ui.main.setup.consent.ConsentPromptSheet
 import cloud.trotter.dashbuddy.ui.main.setup.permissions.PermissionsBottomSheet
 import cloud.trotter.dashbuddy.util.PermissionUtils
 
@@ -85,6 +86,15 @@ fun DashboardScreen(
         PermissionsBottomSheet(
             onAllGranted = { showPermissionSheet = false }
         )
+    }
+
+    // Prompted automation consent (#843): once essential permissions are in, the
+    // app-foreground front door asks for per-capability automation consent — the
+    // same rhythm the permission sheet uses. Self-gating: renders nothing when no
+    // capability is undecided. Held back while the permission gate is up so the
+    // two sheets never stack.
+    if (hasPermissions == true && !showPermissionSheet) {
+        ConsentPromptSheet()
     }
 
     Scaffold(

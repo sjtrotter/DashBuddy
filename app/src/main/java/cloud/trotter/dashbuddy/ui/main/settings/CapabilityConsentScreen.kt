@@ -27,7 +27,6 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import cloud.trotter.dashbuddy.R
-import cloud.trotter.dashbuddy.domain.action.RuleAction
 import cloud.trotter.dashbuddy.domain.state.Platform
 
 /**
@@ -177,27 +176,4 @@ private fun ConsentSourceSection(
             }
         }
     }
-}
-
-/** App-owned disclosure copy for one action, in the platform app's name. */
-private data class CapabilityCopy(val title: String, val description: String)
-
-@Composable
-private fun capabilityCopy(action: RuleAction, platformName: String): CapabilityCopy = when (action) {
-    RuleAction.ACCEPT_OFFER -> CapabilityCopy(
-        stringResource(R.string.consent_cap_accept_title),
-        stringResource(R.string.consent_cap_accept_desc, platformName),
-    )
-    RuleAction.DECLINE_OFFER -> CapabilityCopy(
-        stringResource(R.string.consent_cap_decline_title),
-        stringResource(R.string.consent_cap_decline_desc, platformName),
-    )
-    RuleAction.CONFIRM_DECLINE -> CapabilityCopy(
-        stringResource(R.string.consent_cap_confirm_decline_title),
-        stringResource(R.string.consent_cap_confirm_decline_desc, platformName),
-    )
-    RuleAction.EXPAND_EARNINGS -> CapabilityCopy(
-        stringResource(R.string.consent_cap_expand_title),
-        stringResource(R.string.consent_cap_expand_desc, platformName),
-    )
 }
