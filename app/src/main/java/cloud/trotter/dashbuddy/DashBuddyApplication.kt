@@ -127,6 +127,14 @@ class DashBuddyApplication : Application(), Configuration.Provider {
         // loadDefaults means the reconcile publishes the enumeration into a
         // store that already reflects the no-auto-grant policy; the consent
         // prompt then collects fresh, explicit consent.
+        //
+        // The sequencing is a LOAD-BEARING fail-closed coupling, not incidental:
+        // if the migration THROWS, loadDefaults must NOT run — rules going live
+        // over an un-migrated store could tap against a stale auto-grant. Do NOT
+        // wrap the migration in a try/catch to "let the rules load anyway": that
+        // silently re-opens the stale-grant window this migration exists to shut.
+        // A failed migration correctly leaves rules unloaded (the #432 gate keeps
+        // sensing fail-closed); the next launch retries the whole sequence.
         applicationScope.launch {
             ruleCapabilityRepository.migrateConsentSchemaIfNeeded()
             jsonRuleInterpreter.loadDefaults()

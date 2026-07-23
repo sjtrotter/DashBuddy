@@ -24,7 +24,7 @@ import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
@@ -61,7 +61,10 @@ fun ConsentPromptSheet(
 
     // "Not now" defers for THIS foreground only; ON_RESUME re-arms so the sheet
     // returns on the next app-foreground while anything stays undecided.
-    var deferred by remember { mutableStateOf(false) }
+    // rememberSaveable, not remember: a rotation / process-death / nav-return
+    // within the same foreground must NOT re-show the modal the user just
+    // deferred — that is the exact fatigue the deferral exists to prevent (F1).
+    var deferred by rememberSaveable { mutableStateOf(false) }
     LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { deferred = false }
 
     // Trigger predicate: any undecided capability AND the user hasn't deferred.

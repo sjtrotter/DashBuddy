@@ -69,8 +69,9 @@ interface RuleCapabilityGrants {
      * bundled (asset) source is enumerated exactly like a future remote source,
      * landing every capability as UNDECIDED until the user opts in through the
      * consent prompt. Per Google Play policy the user must consent to EACH
-     * automation individually; no capability arrives pre-granted, so [source]
-     * is recorded for provenance/display only, never as a grant trigger.
+     * automation individually; no capability arrives pre-granted, so
+     * [RuleCapability.source] is recorded for provenance/display only, never as
+     * a grant trigger.
      *
      * Called by the rule loader BEFORE the compiled rules go live, so the
      * consent surface and the fire-time gate see the current enumeration; the

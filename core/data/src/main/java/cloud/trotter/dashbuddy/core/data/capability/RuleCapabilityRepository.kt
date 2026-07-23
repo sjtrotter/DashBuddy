@@ -73,7 +73,12 @@ class RuleCapabilityRepository @Inject constructor(
      * [RuleCapabilityDataSource.migrateConsentSchemaIfNeeded].
      */
     suspend fun migrateConsentSchemaIfNeeded() {
-        if (dataSource.migrateConsentSchemaIfNeeded()) {
+        // Snapshot BEFORE the migration so the INFO line reflects reality: a fresh
+        // install stamps the marker (ran == true) but had nothing to clear, and a
+        // misleading "cleared auto-granted capabilities" would then pollute the
+        // shareable log every first launch. Only log when real grants were cleared.
+        val hadGrants = dataSource.granted.first().isNotEmpty()
+        if (dataSource.migrateConsentSchemaIfNeeded() && hadGrants) {
             // INFO milestone — PII-safe (no keys, just a count-free status).
             Timber.tag(TAG).i(
                 "consent-schema migration ran: cleared auto-granted capabilities; " +
