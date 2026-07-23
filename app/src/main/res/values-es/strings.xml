@@ -13,5 +13,5 @@
     <string name="tts_verdict_review">Revisar</string>
     <string name="tts_verdict_offer">Oferta</string>
     <!-- %1$s verdict word, %2$s merchant name, %3$s $/hr, %4$s net pay, %5$s miles, %6$s score. -->
-    <string name="tts_offer_evaluation_template">%1$s. %2$s. %3$s dólares por hora neto. Neto %4$s, %5$s millas, puntuación %6$s.</string>
+    <string name="tts_offer_evaluation_template">%1$s. %2$s. %3$s dólares por hora netos. Neto %4$s, %5$s millas, puntuación %6$s.</string>
 </resources>

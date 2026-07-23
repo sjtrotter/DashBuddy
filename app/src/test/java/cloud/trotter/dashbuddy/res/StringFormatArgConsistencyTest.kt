@@ -40,10 +40,21 @@ class StringFormatArgConsistencyTest {
         val default = parse(File("src/main/res/values/strings.xml"))
         val es = parse(File("src/main/res/values-es/strings.xml"))
 
-        // The whole point of this PR's es file is the spoken-offer set — make sure it's actually here.
-        assertTrue(
-            "values-es should translate the spoken-offer template",
-            es.containsKey("tts_offer_evaluation_template"),
+        // Every spoken-offer string MUST be translated in values-es — a name present in default but
+        // MISSING from es would silently regress to the English word inside the Spanish voice, which
+        // the both-files positional-arg check below can't catch (it only compares shared names).
+        val requiredTtsNames = listOf(
+            "tts_verdict_accept",
+            "tts_verdict_decline",
+            "tts_verdict_review",
+            "tts_verdict_offer",
+            "tts_offer_evaluation_template",
+        )
+        val missing = requiredTtsNames.filter { it !in es }
+        assertEquals(
+            "values-es is missing spoken-offer translations (would speak English in the es voice): $missing",
+            emptyList<String>(),
+            missing,
         )
 
         val mismatches = es.keys

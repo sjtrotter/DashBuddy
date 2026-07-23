@@ -33,6 +33,15 @@ object TtsLocale {
      * (`LANG_MISSING_DATA` / `LANG_NOT_SUPPORTED`) means it is not, so we fall back to English
      * rather than silently dropping speech. If [target] is already English and even that fails,
      * there is nothing better to try — we report the fallback without a redundant second call.
+     *
+     * Two edges worth naming:
+     * - The English fallback's OWN [setLang] return is not checked: if English is also unavailable
+     *   (a doubly-broken engine) the engine keeps whatever language it last had, while the spoken
+     *   WORDS still switch to English via [ApplyOutcome.applied]. Rare, and the settings UI only
+     *   ever writes en/es/null, so a genuinely unresolvable target is not reachable from the UI.
+     * - A parseable-but-unavailable tag (valid BCP-47, no installed voice) falls back to ENGLISH
+     *   here — not to the system locale. Only an ill-formed/blank tag degrades to system, and that
+     *   happens earlier, in [effectiveLocale], before this function is reached.
      */
     fun applyLanguage(target: Locale, setLang: (Locale) -> Int): ApplyOutcome {
         if (setLang(target) >= TextToSpeech.LANG_AVAILABLE) {

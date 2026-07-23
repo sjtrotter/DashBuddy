@@ -14,6 +14,7 @@ import cloud.trotter.dashbuddy.domain.evaluation.OfferAction
 import cloud.trotter.dashbuddy.domain.evaluation.OfferEvaluation
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
 import timber.log.Timber
 import java.util.Locale
@@ -96,8 +97,12 @@ class TtsEffectHandler @Inject constructor(
         }
         // Observe the override reactively so a settings change re-languages the live engine AND the
         // spoken copy with no restart (Reactive UI / UDF: the pref is the single source of truth).
+        // distinctUntilChanged() is load-bearing: the app-prefs DataStore emits on EVERY write to the
+        // store (theme, glance, economy edits, the EIA gas-price writer), so without it an unrelated
+        // write would re-run applyLanguage() and issue a redundant engine setLanguage() — possibly
+        // mid-utterance (same-value re-set is engine-dependent, not guaranteed inert).
         appScope.launch {
-            appPreferencesRepository.ttsLanguageTag.collect { tag ->
+            appPreferencesRepository.ttsLanguageTag.distinctUntilChanged().collect { tag ->
                 overrideTag = tag
                 applyLanguage()
             }
