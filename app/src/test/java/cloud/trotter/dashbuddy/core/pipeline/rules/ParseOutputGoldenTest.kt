@@ -227,11 +227,6 @@ class ParseOutputGoldenTest {
 
     /**
      * Dead dedupeKey templates already known (ratchet — may only shrink):
-     * - `delivery_summary_expanded:sessionEarnings` — never parses non-null on
-     *   any expanded-summary capture; either the screen stopped showing it or
-     *   the extractor regressed. The expanded key still differentiates per
-     *   delivery via its `{totalPay}` half, so dedupe works; clean up the dead
-     *   half when the summary rules are next touched.
      * - `delivery_summary_collapsed:totalPay` — dedupeKeys are scanned
      *   POST-resolution here, so a `{field}` token only reaches this lint on a
      *   frame where the field parsed null (it survived interpolation). Most
@@ -249,10 +244,16 @@ class ParseOutputGoldenTest {
      * (The third original entry, `offer_popup:offerHash`, was the #427 bug —
      * fixed by the reserved `{parsedHash}` token, resolved post-factory by the
      * classifier via [DedupeTokens].)
+     * (`delivery_summary_expanded:sessionEarnings` was the mirror-image dead half on the
+     * EXPANDED rule — retired by #819, same treatment as #801's collapsed-rule fix above:
+     * the expanded dedupeKey dropped `{sessionEarnings}` in favour of `{totalPay}` alone,
+     * so the field no longer appears in any dedupeKey template and can't register here
+     * regardless of its parse outcome. The `sessionEarnings` parse itself is untouched —
+     * still id-anchored, still gracefully null on 0.230.0 — it just no longer drives
+     * dedupe.)
      * Entries are "ruleId:field".
      */
     private val knownDeadDedupeTemplates = setOf(
-        "doordash.screen.delivery_summary_expanded:sessionEarnings",
         "doordash.screen.delivery_summary_collapsed:totalPay",
     )
 
