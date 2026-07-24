@@ -1,4 +1,4 @@
-package cloud.trotter.dashbuddy.ui.main.setup.wizard.cards
+package cloud.trotter.dashbuddy.feature.setup.wizard.cards
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Column
@@ -18,9 +18,9 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import cloud.trotter.dashbuddy.R
-import cloud.trotter.dashbuddy.ui.main.setup.wizard.components.WizardCardHeader
-import cloud.trotter.dashbuddy.ui.main.setup.wizard.model.WizardStep
+import cloud.trotter.dashbuddy.feature.setup.R
+import cloud.trotter.dashbuddy.feature.setup.wizard.components.WizardCardHeader
+import cloud.trotter.dashbuddy.feature.setup.wizard.model.WizardStep
 
 @Composable
 fun MetricSliderCard(
