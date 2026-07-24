@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Setup wizard strings (#98) — moved verbatim from :app. Owned by :feature:setup. -->
+    <string name="wizard_phase_economy">Part 1: The Economy</string>
+    <string name="wizard_phase_strategy">Part 2: The Strategy</string>
+    <string name="wizard_title_vehicle">Your Vehicle</string>
+    <string name="wizard_desc_vehicle">What car are you driving? We will automatically look up its fuel efficiency to calculate your true profit.</string>
+    <string name="wizard_title_gas">Gas Price</string>
+    <string name="wizard_desc_gas">What are you currently paying per gallon?</string>
+    <string name="wizard_title_economy_costs">Operating Costs</string>
+    <string name="wizard_desc_economy_costs">Tell us your real costs so we can show your true net pay. Tap any section to set your actual numbers — defaults are sensible estimates.</string>
+    <string name="wizard_title_goal">Primary Goal</string>
+    <string name="wizard_desc_goal">Are you cherry-picking for maximum profit, or trying to protect your acceptance-rate status?</string>
+    <string name="wizard_title_shopping">Shop &amp; Deliver</string>
+    <string name="wizard_desc_shopping">Do you currently accept Red Card shopping orders?</string>
+    <string name="wizard_title_min_payout">Minimum Payout</string>
+    <string name="wizard_desc_min_payout">What is the absolute lowest payout you will even look at before declining?</string>
+    <string name="wizard_title_hourly">Target Hourly</string>
+    <string name="wizard_desc_hourly">What is your target active hourly wage?</string>
+    <string name="wizard_title_distance">Max Distance</string>
+    <string name="wizard_desc_distance">How many miles are you willing to drive for a single order?</string>
+    <string name="wizard_bottom_bar_back">Back</string>
+    <string name="wizard_bottom_bar_finish_and_save">Finish &amp; Save</string>
+    <string name="wizard_bottom_bar_next">Next</string>
+    <string name="wizard_top_bar_step_of_total">Step %1$d of %2$d</string>
+    <string name="wizard_top_bar_skip_setup">Skip Setup</string>
+    <string name="wizard_metric_slider_default_footer">We\'ll use this to score your offers on the HUD.</string>
+    <string name="wizard_gas_price_fuel_type_question">What type of fuel do you use?</string>
+    <string name="wizard_gas_price_ev_title">Manual EV Charging Costs</string>
+    <string name="wizard_gas_price_ev_desc">Because public Superchargers and home charging rates vary wildly, please set your average equivalent \'per-gallon\' cost manually.</string>
+    <string name="wizard_gas_price_auto_update_title">Auto-Update Gas Prices</string>
+    <string name="wizard_gas_price_auto_update_desc">We\'ll fetch the regional average for your fuel type daily.</string>
+    <string name="wizard_gas_price_current_regional_average">Current Regional Average</string>
+    <string name="wizard_vehicle_card_type_car">🚗 Car</string>
+    <string name="wizard_vehicle_card_type_ebike">🚲 E-Bike</string>
+    <string name="wizard_vehicle_card_year_label">Year</string>
+    <string name="wizard_vehicle_card_make_label">Make</string>
+    <string name="wizard_vehicle_card_model_label">Model</string>
+    <string name="wizard_vehicle_card_trim_label">Trim / Options</string>
+    <string name="wizard_vehicle_card_content_desc_search">Search</string>
+    <string name="wizard_vehicle_card_lookup_mpg">Lookup my MPG on Google</string>
+    <string name="wizard_vehicle_card_mpg_format" translatable="false">%1$s MPG</string>
+    <string name="wizard_vehicle_card_mpg_slider_hint">Slide to match your vehicle\'s combined MPG.</string>
+    <string name="wizard_vehicle_card_ebike_note">Awesome! We will ignore gas expenses and set your cost-per-mile to $0.</string>
+</resources>

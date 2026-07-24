@@ -19,7 +19,6 @@ app/src/main/java/cloud/trotter/dashbuddy/DashBuddyApplication.kt 3
 app/src/main/java/cloud/trotter/dashbuddy/di/DispatchersModule.kt 1
 app/src/main/java/cloud/trotter/dashbuddy/state/effects/OdometerEffectHandler.kt 8
 app/src/main/java/cloud/trotter/dashbuddy/state/effects/ScreenShotHandler.kt 8
-app/src/main/java/cloud/trotter/dashbuddy/ui/main/setup/wizard/WizardViewModel.kt 1
 app/src/main/java/cloud/trotter/dashbuddy/util/AccNodeUtils.kt 3
 core/data/src/main/java/cloud/trotter/dashbuddy/core/data/capture/DiskCaptureBus.kt 1
 core/data/src/main/java/cloud/trotter/dashbuddy/core/data/capture/NoOpCaptureBus.kt 1

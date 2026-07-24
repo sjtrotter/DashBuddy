@@ -1,4 +1,4 @@
-package cloud.trotter.dashbuddy.ui.main.setup.wizard.components
+package cloud.trotter.dashbuddy.feature.setup.wizard.components
 
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable

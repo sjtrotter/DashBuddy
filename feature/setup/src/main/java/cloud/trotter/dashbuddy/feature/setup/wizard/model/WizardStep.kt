@@ -1,4 +1,4 @@
-package cloud.trotter.dashbuddy.ui.main.setup.wizard.model
+package cloud.trotter.dashbuddy.feature.setup.wizard.model
 
 import androidx.annotation.StringRes
 import androidx.compose.material.icons.Icons
@@ -10,7 +10,7 @@ import androidx.compose.material.icons.filled.ShoppingCart
 import androidx.compose.material.icons.filled.Timer
 import androidx.compose.material.icons.filled.TrackChanges
 import androidx.compose.ui.graphics.vector.ImageVector
-import cloud.trotter.dashbuddy.R
+import cloud.trotter.dashbuddy.feature.setup.R
 
 enum class WizardStep(
     val phase: WizardPhase,

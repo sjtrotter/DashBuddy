@@ -1,4 +1,4 @@
-package cloud.trotter.dashbuddy.ui.main.setup.wizard.components
+package cloud.trotter.dashbuddy.feature.setup.wizard.components
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
@@ -12,7 +12,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
-import cloud.trotter.dashbuddy.R
+import cloud.trotter.dashbuddy.feature.setup.R
 
 @Composable
 fun WizardBottomBar(

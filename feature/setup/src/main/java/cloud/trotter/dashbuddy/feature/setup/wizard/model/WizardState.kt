@@ -1,4 +1,4 @@
-package cloud.trotter.dashbuddy.ui.main.setup.wizard.model
+package cloud.trotter.dashbuddy.feature.setup.wizard.model
 
 import cloud.trotter.dashbuddy.domain.config.OfferStrategy
 import cloud.trotter.dashbuddy.domain.evaluation.EconomyField
@@ -68,7 +68,7 @@ data class WizardState(
 /**
  * Projects the wizard's in-memory economy edits onto a [UserEconomy] — the single
  * owner of this conversion (#357). The ECONOMY_COSTS card uses it to drive live
- * $/mi summaries and "(default)" badges; [cloud.trotter.dashbuddy.ui.main.setup.wizard.WizardViewModel.saveAndFinish]
+ * $/mi summaries and "(default)" badges; [cloud.trotter.dashbuddy.feature.setup.wizard.WizardViewModel.saveAndFinish]
  * hands it to `AppPreferencesRepository.persistUserSetEconomy`, which persists each
  * user-set field through the same atomic write the settings screen uses. Carries
  * [userSetEconomyFields] so the repository persists exactly the fields the user touched.

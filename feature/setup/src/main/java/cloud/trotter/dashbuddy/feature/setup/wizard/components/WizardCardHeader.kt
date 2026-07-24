@@ -1,4 +1,4 @@
-package cloud.trotter.dashbuddy.ui.main.setup.wizard.components
+package cloud.trotter.dashbuddy.feature.setup.wizard.components
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
@@ -21,7 +21,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import cloud.trotter.dashbuddy.domain.model.vehicle.VehicleClass
-import cloud.trotter.dashbuddy.ui.main.setup.wizard.model.WizardStep
+import cloud.trotter.dashbuddy.feature.setup.wizard.model.WizardStep
 
 /**
  * Reusable header for Wizard cards.

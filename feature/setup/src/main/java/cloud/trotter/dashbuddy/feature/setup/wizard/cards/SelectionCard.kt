@@ -1,4 +1,4 @@
-package cloud.trotter.dashbuddy.ui.main.setup.wizard.cards
+package cloud.trotter.dashbuddy.feature.setup.wizard.cards
 
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
@@ -9,9 +9,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import cloud.trotter.dashbuddy.ui.main.setup.wizard.components.ChoiceRow
-import cloud.trotter.dashbuddy.ui.main.setup.wizard.components.WizardCardHeader
-import cloud.trotter.dashbuddy.ui.main.setup.wizard.model.WizardStep
+import cloud.trotter.dashbuddy.feature.setup.wizard.components.ChoiceRow
+import cloud.trotter.dashbuddy.feature.setup.wizard.components.WizardCardHeader
+import cloud.trotter.dashbuddy.feature.setup.wizard.model.WizardStep
 
 /**
  * A reusable card that displays 2 (or optionally 3) distinct choices to the user.

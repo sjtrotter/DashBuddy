@@ -1,4 +1,4 @@
-package cloud.trotter.dashbuddy.ui.main.setup.wizard
+package cloud.trotter.dashbuddy.feature.setup.wizard
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -14,9 +14,9 @@ import cloud.trotter.dashbuddy.domain.evaluation.ScoringRule
 import cloud.trotter.dashbuddy.domain.model.vehicle.FuelType
 import cloud.trotter.dashbuddy.domain.model.vehicle.VehicleOption
 import cloud.trotter.dashbuddy.domain.model.vehicle.VehicleClass
-import cloud.trotter.dashbuddy.ui.main.setup.wizard.model.WizardState
-import cloud.trotter.dashbuddy.ui.main.setup.wizard.model.WizardStep
-import cloud.trotter.dashbuddy.ui.main.setup.wizard.model.toUserEconomy
+import cloud.trotter.dashbuddy.feature.setup.wizard.model.WizardState
+import cloud.trotter.dashbuddy.feature.setup.wizard.model.WizardStep
+import cloud.trotter.dashbuddy.feature.setup.wizard.model.toUserEconomy
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll

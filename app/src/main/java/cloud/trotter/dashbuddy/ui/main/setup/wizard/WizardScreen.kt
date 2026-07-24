@@ -39,14 +39,15 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import cloud.trotter.dashbuddy.R
 import cloud.trotter.dashbuddy.domain.config.OfferStrategy
+import cloud.trotter.dashbuddy.feature.setup.wizard.WizardViewModel
+import cloud.trotter.dashbuddy.feature.setup.wizard.cards.GasPriceCard
+import cloud.trotter.dashbuddy.feature.setup.wizard.cards.MetricSliderCard
+import cloud.trotter.dashbuddy.feature.setup.wizard.cards.SelectionCard
+import cloud.trotter.dashbuddy.feature.setup.wizard.cards.VehicleCard
+import cloud.trotter.dashbuddy.feature.setup.wizard.components.WizardBottomBar
+import cloud.trotter.dashbuddy.feature.setup.wizard.components.WizardTopBar
+import cloud.trotter.dashbuddy.feature.setup.wizard.model.WizardStep
 import cloud.trotter.dashbuddy.ui.main.setup.wizard.cards.EconomyCostsCard
-import cloud.trotter.dashbuddy.ui.main.setup.wizard.cards.GasPriceCard
-import cloud.trotter.dashbuddy.ui.main.setup.wizard.cards.MetricSliderCard
-import cloud.trotter.dashbuddy.ui.main.setup.wizard.cards.SelectionCard
-import cloud.trotter.dashbuddy.ui.main.setup.wizard.cards.VehicleCard
-import cloud.trotter.dashbuddy.ui.main.setup.wizard.components.WizardBottomBar
-import cloud.trotter.dashbuddy.ui.main.setup.wizard.components.WizardTopBar
-import cloud.trotter.dashbuddy.ui.main.setup.wizard.model.WizardStep
 import kotlinx.coroutines.launch
 import cloud.trotter.dashbuddy.domain.format.Formats
 

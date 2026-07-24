@@ -19,10 +19,10 @@ import cloud.trotter.dashbuddy.domain.model.vehicle.VehicleClass
 import cloud.trotter.dashbuddy.ui.components.economy.EconomyEditor
 import cloud.trotter.dashbuddy.ui.components.economy.TrueCostFooter
 import cloud.trotter.dashbuddy.ui.components.economy.VehicleClassPicker
-import cloud.trotter.dashbuddy.ui.main.setup.wizard.components.WizardCardHeader
-import cloud.trotter.dashbuddy.ui.main.setup.wizard.model.WizardState
-import cloud.trotter.dashbuddy.ui.main.setup.wizard.model.WizardStep
-import cloud.trotter.dashbuddy.ui.main.setup.wizard.model.toUserEconomy
+import cloud.trotter.dashbuddy.feature.setup.wizard.components.WizardCardHeader
+import cloud.trotter.dashbuddy.feature.setup.wizard.model.WizardState
+import cloud.trotter.dashbuddy.feature.setup.wizard.model.WizardStep
+import cloud.trotter.dashbuddy.feature.setup.wizard.model.toUserEconomy
 
 /**
  * The ECONOMY_COSTS wizard step. Chrome only: the card, header, scroll, and

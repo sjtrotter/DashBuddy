@@ -1,4 +1,4 @@
-package cloud.trotter.dashbuddy.ui.main.setup.wizard.components
+package cloud.trotter.dashbuddy.feature.setup.wizard.components
 
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.layout.Arrangement
@@ -16,7 +16,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
-import cloud.trotter.dashbuddy.R
+import cloud.trotter.dashbuddy.feature.setup.R
 
 @Composable
 fun WizardTopBar(
