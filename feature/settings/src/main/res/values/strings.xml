@@ -1,0 +1,90 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- common_content_desc_back is a shared common string with a copy in :app (its 6 stayed -->
+    <!-- consumers). This feature-module copy exists only because non-transitive R classes hide -->
+    <!-- :app's R from a library. On APK resource merge the :app copy WINS, so editing THIS copy -->
+    <!-- is silently ignored at runtime — edit the :app copy and keep this one byte-identical. -->
+    <!-- SSOT follow-up: a shared common-strings home (:core:designsystem res). See #99 notes. -->
+    <string name="common_content_desc_back">Back</string>
+    <string name="general_settings_title">General</string>
+    <string name="general_settings_section_driving">Driving</string>
+    <string name="general_settings_glance_mode_label">Driving glance mode</string>
+    <string name="general_settings_glance_mode_subtitle">Larger HUD text while on a session</string>
+    <string name="general_settings_section_voice">Voice</string>
+    <string name="general_settings_tts_language_label">Spoken offer language</string>
+    <string name="general_settings_tts_language_subtitle">Language the offer read-aloud uses</string>
+    <string name="tts_language_option_system">System default</string>
+    <string name="tts_language_option_english">English</string>
+    <string name="tts_language_option_spanish">Español</string>
+    <string name="platform_settings_title">Gig Apps</string>
+    <string name="platform_settings_description">Choose which gig apps DashBuddy monitors. Only apps with full rule support will provide live session tracking. Other enabled apps will capture data for future updates.</string>
+    <string name="platform_settings_installed">Installed</string>
+    <string name="platform_settings_not_installed">Not installed</string>
+    <string name="reorderable_rule_content_desc_reorder">Reorder</string>
+    <string name="reorderable_rule_merchant_coming_soon">Merchant Rule (Coming Soon)</string>
+    <string name="reorderable_rule_dollar_per_mile_format" translatable="false">%1$s/mi</string>
+    <string name="reorderable_rule_distance_format" translatable="false">%1$s mi</string>
+    <string name="reorderable_rule_item_count_format">%1$d items</string>
+    <string name="data_export_title">Export Data</string>
+    <string name="data_export_csv_heading">Export your mileage &amp; earnings to CSV</string>
+    <string name="data_export_csv_desc">Pick a folder and DashBuddy writes three spreadsheet files into it:\n• deliveries.csv — one row per delivery\n• sessions.csv — one row per session\n• summary.csv — totals + estimated IRS mileage deduction\n\nThis is your own data, on-device — nothing is uploaded. Exports all history (a date-range picker is coming later).</string>
+    <string name="data_export_csv_button">"  Choose folder &amp; export"</string>
+    <string name="data_export_csv_success_format">Exported %1$d files to the chosen folder.</string>
+    <string name="data_export_csv_error_format">Export failed: %1$s</string>
+    <string name="data_export_log_heading">Export a bug report</string>
+    <string name="data_export_log_desc">Pick a folder and DashBuddy writes dashbuddy-log.txt into it — the log the developer needs to diagnose an issue.\n\nINFO+ milestones only — no raw store, customer, or address text. Every line is auto-scrubbed at the sink before it\'s written, so a leaked name can\'t reach the file. On-device, nothing is uploaded.</string>
+    <string name="data_export_log_button">"  Choose folder &amp; export log"</string>
+    <string name="data_export_log_success_format">Exported dashbuddy-log.txt — %1$d line(s) were auto-scrubbed.</string>
+    <string name="data_export_log_error_format">Log export failed: %1$s</string>
+    <string name="consent_title">Automation &amp; Consent</string>
+    <string name="consent_disclosure_heading">Review or change what DashBuddy is allowed to tap</string>
+    <string name="consent_disclosure_body">DashBuddy uses Android\'s Accessibility service to read the screens of the delivery apps you turn on, so it can recognize offers, pickups, and deliveries. This recognition runs entirely on your phone.\n\nDashBuddy can also tap buttons in a delivery app for you — but only the specific actions you allow, only inside that delivery app, and only on a button whose label matches the action (except the icon-only pay-details arrow, which is verified by app boundary only). Nothing is turned on for you: each action below stays off until you allow it, and DashBuddy asks you the first time it can offer one. Turn any action off and DashBuddy will not tap it — you do it manually.</string>
+    <string name="consent_empty">No automation actions are available yet. They appear here once your delivery-app rules load and a rule enables an action such as Accept or Decline.</string>
+    <string name="consent_platform_unknown">Delivery app</string>
+    <string name="consent_source_bundled_format">%1$s · built-in rules</string>
+    <string name="consent_source_bundled_note">These automations ship inside the app. None are turned on for you — each stays off until you allow it.</string>
+    <string name="consent_source_downloaded_format">%1$s · downloaded rules</string>
+    <string name="consent_source_downloaded_note">Downloaded rules are never turned on automatically. Each action stays off until you turn it on here.</string>
+    <string name="consent_cap_accept_title">Accept offers</string>
+    <string name="consent_cap_accept_desc">Lets DashBuddy tap the Accept button in the %1$s app for you — when you press Accept in DashBuddy, or when you have armed auto-accept. It only taps a button labeled \"Accept\" inside the %1$s app, and never without your go-ahead.</string>
+    <string name="consent_cap_decline_title">Decline offers</string>
+    <string name="consent_cap_decline_desc">Lets DashBuddy tap the Decline button in the %1$s app for you — when you press Decline in DashBuddy, or when you have armed auto-decline. It only taps a button labeled \"Decline\" inside the %1$s app, and never without your go-ahead.</string>
+    <string name="consent_cap_confirm_decline_title">Confirm a decline</string>
+    <string name="consent_cap_confirm_decline_desc">Lets DashBuddy tap the second \"Decline\" button on %1$s\'s confirmation dialog, so a decline you started finishes in one step. It only fires when you have turned on quick declines, and only inside the %1$s app.</string>
+    <string name="consent_cap_expand_title">Open the pay breakdown</string>
+    <string name="consent_cap_expand_desc">Lets DashBuddy tap the arrow that expands the pay details on a completed %1$s delivery, so it can read the payout for your records. It only opens the pay details — it doesn\'t change your delivery, your pay, or any setting.</string>
+    <string name="fake_offer_score_format" translatable="false">"%1$s  ·  %2$dpts"</string>
+    <string name="fake_offer_pay_line_format" translatable="false">"%1$s gross  →  %2$s net"</string>
+    <string name="fake_offer_pay_line_estimate_format" translatable="false">"%1$s gross  →  %2$s net (est.)"</string>
+    <string name="fake_offer_fuel_cost_format" translatable="false">−%1$s fuel</string>
+    <string name="fake_offer_nonfuel_cost_format">−%1$s wear &amp; fixed costs</string>
+    <string name="fake_offer_metric_dollar_per_mile_label" translatable="false">$/mi</string>
+    <string name="fake_offer_metric_dollar_per_hour_label" translatable="false">$/hr</string>
+    <string name="fake_offer_metric_items_label">items</string>
+    <string name="fake_offer_metric_miles_label">miles</string>
+    <string name="fake_offer_metric_est_time_label">est. time</string>
+    <string name="fake_offer_metric_est_time_value_format" translatable="false">~%1$d min</string>
+    <string name="fake_offer_warning_format" translatable="false">⚠️ %1$s</string>
+    <string name="strategy_settings_the_lab_title">The Lab</string>
+    <string name="strategy_settings_sim_pay_format">Pay: %1$s</string>
+    <string name="strategy_settings_sim_dist_format">Dist: %1$s mi</string>
+    <string name="strategy_settings_global_overrides_title">Global Overrides</string>
+    <string name="strategy_settings_protect_stats_label">🛡️ Protect Stats Mode</string>
+    <string name="strategy_settings_protect_stats_subtitle">Auto-accept everything</string>
+    <string name="strategy_settings_allow_shopping_label">🛒 Allow Shopping Orders</string>
+    <string name="strategy_settings_allow_shopping_subtitle">If off, Red Card orders are auto-declined</string>
+    <string name="strategy_settings_quick_declines_label">⚡ Single-click declines</string>
+    <string name="strategy_settings_quick_declines_subtitle">Auto-confirm DoorDash\'s \'are you sure?\' so a decline is one tap</string>
+    <string name="strategy_settings_priorities_title">Priorities (Rack &amp; Stack)</string>
+    <string name="strategy_settings_priorities_hint">Drag to reorder. Top rules matter most.</string>
+    <string name="evidence_settings_title">Evidence Locker</string>
+    <string name="evidence_settings_master_label">Master Record</string>
+    <string name="evidence_settings_master_subtitle">Global kill-switch for all data recording</string>
+    <string name="evidence_settings_section_granular">Granular Controls</string>
+    <string name="evidence_settings_offers_label">Save Offers</string>
+    <string name="evidence_settings_offers_subtitle">Keep full JSON/Screenshots of incoming offers</string>
+    <string name="evidence_settings_deliveries_label">Save Deliveries</string>
+    <string name="evidence_settings_deliveries_subtitle">Track completion stats</string>
+    <string name="evidence_settings_session_label">Save Session Summary</string>
+    <string name="evidence_settings_session_subtitle">End of session earnings report</string>
+</resources>

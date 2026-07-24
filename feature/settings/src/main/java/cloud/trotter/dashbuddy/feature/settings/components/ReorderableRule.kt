@@ -1,4 +1,4 @@
-package cloud.trotter.dashbuddy.ui.main.settings.components
+package cloud.trotter.dashbuddy.feature.settings.components
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -26,7 +26,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import cloud.trotter.dashbuddy.core.designsystem.theme.AppTheme
 import androidx.compose.ui.unit.dp
-import cloud.trotter.dashbuddy.R
+import cloud.trotter.dashbuddy.feature.settings.R
 import cloud.trotter.dashbuddy.domain.evaluation.MetricType
 import cloud.trotter.dashbuddy.domain.evaluation.ScoringRule
 import java.util.Locale

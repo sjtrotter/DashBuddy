@@ -35,8 +35,9 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import cloud.trotter.dashbuddy.R
+import cloud.trotter.dashbuddy.feature.settings.R as SettingsR
 import cloud.trotter.dashbuddy.domain.state.Platform
-import cloud.trotter.dashbuddy.ui.main.settings.capabilityCopy
+import cloud.trotter.dashbuddy.feature.settings.capabilityCopy
 
 /**
  * Prompted per-capability automation consent (#843). A modal sheet at the app's
@@ -125,7 +126,7 @@ private fun ConsentPromptRowView(
     val platformName = row.platform
         .takeIf { it != Platform.Unknown }
         ?.displayName
-        ?: stringResource(R.string.consent_platform_unknown)
+        ?: stringResource(SettingsR.string.consent_platform_unknown)
 
     val copy = capabilityCopy(row.action, platformName)
     val sourceLabel = if (row.isBundled) {

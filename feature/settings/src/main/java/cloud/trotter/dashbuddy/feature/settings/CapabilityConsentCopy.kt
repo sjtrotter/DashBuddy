@@ -1,8 +1,8 @@
-package cloud.trotter.dashbuddy.ui.main.settings
+package cloud.trotter.dashbuddy.feature.settings
 
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.res.stringResource
-import cloud.trotter.dashbuddy.R
+import cloud.trotter.dashbuddy.feature.settings.R
 import cloud.trotter.dashbuddy.domain.action.RuleAction
 
 /**
