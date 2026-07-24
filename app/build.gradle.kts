@@ -165,6 +165,7 @@ dependencies {
     implementation(project(":feature:settings"))
     implementation(project(":feature:setup"))
     implementation(project(":feature:dashboard"))
+    implementation(project(":feature:bubble"))
 
     ksp(libs.androidx.hilt.compiler)
     ksp(libs.hilt.compiler)

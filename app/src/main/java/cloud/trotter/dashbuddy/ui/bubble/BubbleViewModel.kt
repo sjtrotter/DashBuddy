@@ -18,8 +18,8 @@ import cloud.trotter.dashbuddy.domain.state.OfferIntent
 import cloud.trotter.dashbuddy.domain.state.Platform
 import cloud.trotter.dashbuddy.core.state.StateManagerV2
 import cloud.trotter.dashbuddy.domain.pipeline.Observation
-import cloud.trotter.dashbuddy.ui.bubble.cards.FlowCardMapper
-import cloud.trotter.dashbuddy.ui.bubble.cards.LiveCardBuilder
+import cloud.trotter.dashbuddy.feature.bubble.cards.FlowCardMapper
+import cloud.trotter.dashbuddy.feature.bubble.cards.LiveCardBuilder
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableSharedFlow

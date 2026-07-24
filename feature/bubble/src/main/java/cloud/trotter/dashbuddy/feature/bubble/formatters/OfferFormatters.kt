@@ -1,4 +1,4 @@
-package cloud.trotter.dashbuddy.ui.formatters
+package cloud.trotter.dashbuddy.feature.bubble.formatters
 
 import android.graphics.Typeface
 import android.text.Spannable
@@ -7,7 +7,7 @@ import android.text.style.ForegroundColorSpan
 import android.text.style.RelativeSizeSpan
 import android.text.style.StyleSpan
 import androidx.compose.ui.graphics.toArgb
-import cloud.trotter.dashbuddy.R
+import cloud.trotter.dashbuddy.feature.bubble.R
 import cloud.trotter.dashbuddy.core.designsystem.theme.darkAppColors
 import cloud.trotter.dashbuddy.domain.evaluation.OfferAction
 import cloud.trotter.dashbuddy.domain.evaluation.OfferEvaluation

@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!--
+      Duplicated by choice (#96, the #854 doctrine): `white` is referenced by moved bubble chat
+      drawables (ic_chat_merchant / ic_chat_receipt_long_* / ic_chat_shopping_cart) AND stays in
+      :app (still used by :app-remaining drawables). A feature module can't reach :app's `@color/`,
+      so a byte-identical copy lives here. The :app copy (app/src/main/res/values/colors.xml) is
+      AUTHORITATIVE — it wins APK resource merge; editing this copy is a silent no-op in the app.
+    -->
+    <color name="white">#FFFFFFFF</color>
+</resources>

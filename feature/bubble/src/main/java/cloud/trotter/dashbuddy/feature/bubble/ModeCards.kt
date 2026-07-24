@@ -1,4 +1,4 @@
-package cloud.trotter.dashbuddy.ui.bubble
+package cloud.trotter.dashbuddy.feature.bubble
 
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -31,7 +31,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import cloud.trotter.dashbuddy.R
+import cloud.trotter.dashbuddy.feature.bubble.R
 import cloud.trotter.dashbuddy.core.designsystem.component.AppCard
 import cloud.trotter.dashbuddy.core.designsystem.time.rememberNow
 import cloud.trotter.dashbuddy.domain.analytics.SessionRecord

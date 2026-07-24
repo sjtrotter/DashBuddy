@@ -1,4 +1,4 @@
-package cloud.trotter.dashbuddy.ui.bubble
+package cloud.trotter.dashbuddy.feature.bubble
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -15,7 +15,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import cloud.trotter.dashbuddy.R
+import cloud.trotter.dashbuddy.feature.bubble.R
 import cloud.trotter.dashbuddy.core.designsystem.theme.AppTheme
 import cloud.trotter.dashbuddy.domain.analytics.SessionRecord
 import cloud.trotter.dashbuddy.domain.format.Formats
@@ -25,14 +25,14 @@ import cloud.trotter.dashbuddy.domain.state.Mode
 import cloud.trotter.dashbuddy.domain.state.Platform
 import cloud.trotter.dashbuddy.domain.state.PlatformRegion
 import cloud.trotter.dashbuddy.domain.state.presentation
-import cloud.trotter.dashbuddy.ui.formatters.color
+import cloud.trotter.dashbuddy.feature.bubble.formatters.color
 
 // ---------------------------------------------------------------------------
 // TopAppBar title — status badge (left side)
 // ---------------------------------------------------------------------------
 
 @Composable
-internal fun StatusBadgeTitle(region: PlatformRegion?, flow: FlowRegion, platform: Platform?) {
+fun StatusBadgeTitle(region: PlatformRegion?, flow: FlowRegion, platform: Platform?) {
     Row(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(6.dp)
@@ -68,7 +68,7 @@ internal fun StatusBadgeTitle(region: PlatformRegion?, flow: FlowRegion, platfor
 // ---------------------------------------------------------------------------
 
 @Composable
-internal fun SessionMetricsActions(
+fun SessionMetricsActions(
     region: PlatformRegion?,
     earnings: Double,
     miles: Double,

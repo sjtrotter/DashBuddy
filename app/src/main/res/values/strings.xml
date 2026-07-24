@@ -117,35 +117,7 @@
     <!-- bubble/BubbleScreen.kt -->
     <string name="bubble_screen_chat_history_title">Chat History</string>
     <string name="bubble_screen_content_desc_close_chat">Close chat</string>
-    <string name="bubble_screen_waiting_for_activity">Waiting for activity…</string>
-
-    <!-- bubble/ChatViews.kt -->
-    <string name="bubble_chat_no_messages_yet">No messages yet</string>
-    <string name="bubble_chat_content_desc_open_chat">Open chat</string>
-
-    <!-- bubble/ModeCards.kt -->
-    <string name="bubble_mode_idle_last_session_label">Last session</string>
-    <string name="bubble_mode_idle_miles_label">Miles</string>
-    <string name="bubble_mode_idle_duration_label">Duration</string>
-    <string name="bubble_mode_idle_acceptance_label">Acceptance</string>
-    <string name="bubble_mode_idle_deliveries_label">Deliveries</string>
-    <string name="bubble_mode_idle_no_session">No sessions yet</string>
-    <!-- %1$s is a duration, e.g. "12m" -->
-    <string name="bubble_mode_idle_ended_ago">ended %1$s ago</string>
-    <string name="bubble_mode_idle_gas_content_desc">Gas price</string>
-    <string name="bubble_mode_idle_gas_decrease">Lower gas price</string>
-    <string name="bubble_mode_idle_gas_increase">Raise gas price</string>
-    <string name="bubble_mode_idle_gas_auto">AUTO</string>
-    <string name="bubble_mode_idle_gas_manual">MANUAL</string>
-    <string name="bubble_mode_idle_gas_refresh">Refresh gas price</string>
-    <string name="bubble_mode_idle_gas_take_control">Set gas price manually</string>
-    <string name="bubble_mode_idle_gas_resume_auto">Resume auto</string>
-    <string name="bubble_mode_idle_gas_refresh_error">Couldn\'t refresh</string>
-    <string name="bubble_mode_idle_vehicle_action">Vehicle</string>
-
-    <!-- bubble/StatusBar.kt -->
-    <string name="bubble_status_this_session">THIS SESSION</string>
-    <string name="bubble_status_last_session">LAST SESSION</string>
+    <!-- bubble HUD content strings (ChatViews / ModeCards / StatusBar / FlowCardItem) moved to :feature:bubble (#96) -->
 
     <!-- setup/wizard/components/WizardBottomBar.kt -->
 
@@ -490,64 +462,7 @@
     <string name="orphan_offers_unknown_store">Unknown store</string>
     <string name="orphan_offers_close">Close</string>
 
-    <!-- bubble/cards/FlowCardItem.kt -->
-    <string name="flow_card_content_desc_collapse">Collapse</string>
-    <string name="flow_card_content_desc_expand">Expand</string>
-    <string name="flow_card_awaiting_active_format">Waiting · %1$s</string>
-    <string name="flow_card_awaiting_frozen_format">Waited %1$s</string>
-    <string name="flow_card_offer_fallback_store">Offer</string>
-    <string name="flow_card_pickup_arrived_format">%1$s · arrived %2$s</string>
-    <string name="flow_card_delivery_delivered_format">%1$s · delivered %2$s</string>
-    <string name="flow_card_since_last_offer">since last offer</string>
-    <string name="flow_card_before_next_offer">before next offer</string>
-    <string name="flow_card_score_gauge_label">Score</string>
-    <string name="flow_card_hourly_hero_format" translatable="false">%1$s/hr</string>
-    <string name="flow_card_net_secondary_format">Net %1$s</string>
-    <string name="flow_card_distance_secondary_format" translatable="false">%1$s mi</string>
-    <string name="flow_card_per_mile_secondary_format" translatable="false">%1$s/mi</string>
-    <string name="flow_card_badge_shop_and_deliver">Shop &amp; Deliver</string>
-    <string name="flow_card_badge_high_pay">High pay</string>
-    <string name="flow_card_badge_priority">Priority</string>
-    <string name="flow_card_badge_red_card">Red Card</string>
-    <string name="flow_card_badge_alcohol">Alcohol</string>
-    <string name="flow_card_badge_large_order">Large order</string>
-    <string name="flow_card_badge_pizza_bag">Pizza bag</string>
-    <string name="flow_card_badge_same_store">Same store</string>
-    <string name="flow_card_badge_same_customer">Same customer</string>
-    <string name="flow_card_badge_add_ons_ok">Add-ons OK</string>
-    <string name="flow_card_timer_dwell_label">Dwell</string>
-    <string name="flow_card_timer_at_door_sub">at door</string>
-    <string name="flow_card_timer_at_store_sub">at store</string>
-    <string name="flow_card_timer_overdue_label">Overdue</string>
-    <string name="flow_card_timer_to_go_label">To go</string>
-    <string name="flow_card_timer_elapsed_label">Elapsed</string>
-    <string name="flow_card_timer_en_route_sub">en route</string>
-    <string name="flow_card_running_at_label">Running at</string>
-    <string name="flow_card_running_at_overdue_format" translatable="false">%1$s/hr ↓</string>
-    <string name="flow_card_running_at_dropping_sub">dropping</string>
-    <string name="flow_card_running_at_on_track_sub">on track</string>
-    <string name="flow_card_arrived_margin_format">"arrived %1$s %2$s · "</string>
-    <string name="flow_card_margin_early">early</string>
-    <string name="flow_card_margin_late">late</string>
-    <string name="flow_card_at_stop">at stop</string>
-    <string name="flow_card_en_route">en route</string>
-    <string name="flow_card_past_deadline_format">%1$s past %2$s-by</string>
-    <string name="flow_card_by_deadline_format">%1$s by %2$s</string>
-    <string name="flow_card_verb_deliver">deliver</string>
-    <string name="flow_card_verb_pickup">pickup</string>
-    <string name="flow_card_below_floor_warning">Below your floor — no longer worth the wait.</string>
-    <string name="flow_card_shop_progress_format" translatable="false">shop %1$d/%2$d</string>
-    <string name="flow_card_shop_pace_format" translatable="false">%1$s/min</string>
-    <string name="flow_card_detail_arrived_format">" · arrived %1$s"</string>
-    <string name="flow_card_detail_picked_up_format">" · picked up %1$s"</string>
-    <string name="flow_card_post_task_delivery_total">delivery total</string>
-    <string name="flow_card_post_task_tip_format">tip · %1$s</string>
-    <string name="flow_card_post_task_session_format">session %1$s</string>
-    <string name="flow_card_action_decline">Decline</string>
-    <string name="flow_card_action_accept">Accept</string>
-    <string name="flow_card_outcome_accepted">Accepted</string>
-    <string name="flow_card_outcome_declined">Declined</string>
-    <string name="flow_card_outcome_timed_out">Timed out</string>
+    <!-- bubble/cards/FlowCardItem.kt flow_card_* strings moved to :feature:bubble (#96) -->
 
     <!-- settings/EvidenceSettingsScreen.kt -->
     <!-- #428 Half A extracted the spoken copy to strings.xml; Half B makes it translatable —

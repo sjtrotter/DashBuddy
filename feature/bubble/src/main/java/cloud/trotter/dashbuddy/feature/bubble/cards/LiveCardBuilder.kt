@@ -1,4 +1,4 @@
-package cloud.trotter.dashbuddy.ui.bubble.cards
+package cloud.trotter.dashbuddy.feature.bubble.cards
 
 import cloud.trotter.dashbuddy.domain.model.cards.FlowCardSnapshot
 import cloud.trotter.dashbuddy.domain.state.AppState

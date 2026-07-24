@@ -1,4 +1,4 @@
-package cloud.trotter.dashbuddy.ui.formatters
+package cloud.trotter.dashbuddy.feature.bubble.formatters
 
 import androidx.compose.ui.graphics.Color
 import cloud.trotter.dashbuddy.core.designsystem.theme.AppColors
