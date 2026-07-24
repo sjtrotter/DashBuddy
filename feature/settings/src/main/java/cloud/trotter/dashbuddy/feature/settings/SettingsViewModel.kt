@@ -1,4 +1,4 @@
-package cloud.trotter.dashbuddy.ui.main.settings
+package cloud.trotter.dashbuddy.feature.settings
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope

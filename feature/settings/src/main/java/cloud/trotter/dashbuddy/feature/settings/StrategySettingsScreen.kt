@@ -1,4 +1,4 @@
-package cloud.trotter.dashbuddy.ui.main.settings
+package cloud.trotter.dashbuddy.feature.settings
 
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
@@ -40,10 +40,10 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
-import cloud.trotter.dashbuddy.R
+import cloud.trotter.dashbuddy.feature.settings.R
 import cloud.trotter.dashbuddy.domain.format.Formats
-import cloud.trotter.dashbuddy.ui.main.settings.components.DraggableRuleRow
-import cloud.trotter.dashbuddy.ui.main.settings.components.FakeOfferCard
+import cloud.trotter.dashbuddy.feature.settings.components.DraggableRuleRow
+import cloud.trotter.dashbuddy.feature.settings.components.FakeOfferCard
 import sh.calvin.reorderable.ReorderableItem
 import sh.calvin.reorderable.rememberReorderableLazyListState
 

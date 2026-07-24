@@ -1,4 +1,4 @@
-package cloud.trotter.dashbuddy.ui.main.settings
+package cloud.trotter.dashbuddy.feature.settings
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -29,7 +29,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
-import cloud.trotter.dashbuddy.R
+import cloud.trotter.dashbuddy.feature.settings.R
 
 @Composable
 fun PlatformSettingsScreen(

@@ -1,4 +1,4 @@
-package cloud.trotter.dashbuddy.ui.main.settings
+package cloud.trotter.dashbuddy.feature.settings
 
 import android.content.Context
 import android.content.pm.PackageManager

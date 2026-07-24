@@ -162,6 +162,7 @@ dependencies {
     implementation(project(":core:pipeline"))
     implementation(project(":core:state"))
     implementation(project(":domain"))
+    implementation(project(":feature:settings"))
 
     ksp(libs.androidx.hilt.compiler)
     ksp(libs.hilt.compiler)

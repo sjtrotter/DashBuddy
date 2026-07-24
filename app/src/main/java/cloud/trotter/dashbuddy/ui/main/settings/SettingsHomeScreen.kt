@@ -41,6 +41,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import cloud.trotter.dashbuddy.R
+import cloud.trotter.dashbuddy.feature.settings.SettingsMenuViewModel
 import cloud.trotter.dashbuddy.ui.main.navigation.Screen
 import cloud.trotter.dashbuddy.domain.format.Formats
 import androidx.lifecycle.compose.collectAsStateWithLifecycle

@@ -1,4 +1,4 @@
-package cloud.trotter.dashbuddy.ui.main.settings
+package cloud.trotter.dashbuddy.feature.settings
 
 import cloud.trotter.dashbuddy.domain.action.RuleAction
 import cloud.trotter.dashbuddy.domain.capability.RuleCapability
