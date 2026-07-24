@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Dashboard strings (#97) — moved verbatim from :app. Owned by :feature:dashboard. -->
+
+    <!-- PeriodReview stat-tile labels — dashboard-only, moved clean (no other consumer). -->
+    <string name="dashboard_screen_stat_true_net">True Net</string>
+    <string name="dashboard_screen_stat_net_per_hour">Net/hr</string>
+    <string name="dashboard_screen_stat_miles">Miles</string>
+
+    <!--
+      Period-selector labels used by BOTH the moved PeriodReview (here) AND the stayed
+      :app AnalyticsScreen. Multi-consumer "common" strings → DUPLICATED BY CHOICE (the
+      #851 pattern): the authoritative copy stays in :app (it wins APK resource merge —
+      editing this feature copy is a silent runtime no-op), and this byte-identical copy
+      lets the moved PeriodReview resolve them without a feature→:app dep (illegal) or a
+      cross-module R alias. Keep both copies in sync; the long-term fix is a shared res
+      module (the same follow-up #851/#852 flagged). MERGE NOTE: :app copy is authoritative.
+    -->
+    <string name="common_period_today">Today</string>
+    <string name="common_period_week">Week</string>
+    <string name="common_period_month">Month</string>
+    <string name="common_period_lifetime">Lifetime</string>
+</resources>

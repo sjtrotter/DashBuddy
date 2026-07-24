@@ -52,19 +52,33 @@ import java.io.File
  */
 class TimberTagGuardTest {
 
-    /** Modules that can carry `Timber` calls. */
-    private val modules = listOf(
-        "app",
-        "core/database",
-        "core/data",
-        "core/datastore",
-        "core/designsystem",
-        "core/location",
-        "core/network",
-        "core/pipeline",
-        "core/state",
-        "domain",
-    )
+    /**
+     * Modules that can carry `Timber` calls. The fixed layer modules are listed explicitly;
+     * every `:feature:*` module (MAD Phase 6) is discovered **dynamically** off disk (#853) so a
+     * newly-extracted feature module is covered by this guard automatically — a future extraction
+     * (e.g. #96) can't recreate the coverage gap that #853 fixed by forgetting to append its name
+     * here.
+     */
+    private val modules: List<String> by lazy {
+        val layerModules = listOf(
+            "app",
+            "core/database",
+            "core/data",
+            "core/datastore",
+            "core/designsystem",
+            "core/location",
+            "core/network",
+            "core/pipeline",
+            "core/state",
+            "domain",
+        )
+        val featureModules = File(repoRoot, "feature")
+            .listFiles { f -> f.isDirectory }
+            ?.map { "feature/${it.name}" }
+            ?.sorted()
+            ?: emptyList()
+        layerModules + featureModules
+    }
 
     /** Source-set directory-name prefixes to skip — test code is out of scope for this guard. */
     private val excludedSourceSetPrefixes = listOf("test", "androidTest")

@@ -104,6 +104,11 @@
     <!-- home (:core:designsystem res) would let both point at one definition. See #99 boundary notes. -->
     <string name="common_content_desc_back">Back</string>
 
+    <!-- Multi-consumer period labels: :app AnalyticsScreen AND :feature:dashboard PeriodReview
+         (#97). This :app copy is AUTHORITATIVE (wins APK resource merge); a byte-identical copy
+         lives in :feature:dashboard's strings.xml so the moved PeriodReview can resolve them
+         without an (illegal) feature→:app dep. Keep both in sync; a shared res module is the
+         long-term fix (same follow-up as #99's common_content_desc_back). -->
     <string name="common_period_today">Today</string>
     <string name="common_period_week">Week</string>
     <string name="common_period_month">Month</string>
@@ -355,9 +360,7 @@
     <string name="dashboard_screen_dashing_subtitle">You\'re on the clock.</string>
     <string name="dashboard_screen_ready_subtitle">All systems go.</string>
     <string name="dashboard_screen_show_bubble_button">Show Bubble</string>
-    <string name="dashboard_screen_stat_true_net">True Net</string>
-    <string name="dashboard_screen_stat_net_per_hour">Net/hr</string>
-    <string name="dashboard_screen_stat_miles">Miles</string>
+    <!-- dashboard_screen_stat_* moved to :feature:dashboard (#97) — only PeriodReview used them. -->
     <string name="dashboard_screen_entry_analytics">Analytics</string>
     <string name="dashboard_screen_entry_ratings">Ratings</string>
     <string name="dashboard_screen_entry_strategy">Strategy</string>
