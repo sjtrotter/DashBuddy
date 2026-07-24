@@ -1,4 +1,4 @@
-package cloud.trotter.dashbuddy.ui.bubble
+package cloud.trotter.dashbuddy.feature.bubble
 
 import android.text.Html
 import android.text.format.DateFormat
@@ -41,10 +41,10 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
-import cloud.trotter.dashbuddy.R
+import cloud.trotter.dashbuddy.feature.bubble.R
 import cloud.trotter.dashbuddy.domain.model.chat.ChatMessage
 import cloud.trotter.dashbuddy.domain.model.chat.ChatPersona
-import cloud.trotter.dashbuddy.ui.formatters.getIconResId
+import cloud.trotter.dashbuddy.feature.bubble.formatters.getIconResId
 import java.util.Date
 
 // ---------------------------------------------------------------------------

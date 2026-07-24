@@ -87,7 +87,7 @@ Kotlin 2.3.20, JVM 21.
 The project uses modular Clean Architecture with a strict dependency graph:
 
 ```
-:app → :domain, :core:data, :core:database, :core:datastore, :core:designsystem, :core:location, :core:network, :core:pipeline, :core:state, :feature:settings, :feature:setup, :feature:dashboard
+:app → :domain, :core:data, :core:database, :core:datastore, :core:designsystem, :core:location, :core:network, :core:pipeline, :core:state, :feature:settings, :feature:setup, :feature:dashboard, :feature:bubble
 :core:state → :domain, :core:database, :core:pipeline
 :core:pipeline → :domain
 :core:data → :domain, :core:database, :core:datastore, :core:location, :core:network
@@ -99,6 +99,7 @@ The project uses modular Clean Architecture with a strict dependency graph:
 :feature:settings  → :domain, :core:data, :core:designsystem
 :feature:setup     → :domain, :core:data
 :feature:dashboard → :domain, :core:designsystem
+:feature:bubble    → :domain, :core:designsystem
 
 matchers (included build, not a :core module) ⇒ canonicalizes rules → :core:pipeline consumes as generated assets
 ```
@@ -125,7 +126,20 @@ so moving it would need an inversion the honest-smaller-module doctrine declines
 period labels are duplicated by choice into the module — multi-consumer with the stayed
 `AnalyticsScreen`, `:app` copy authoritative — same #99 pattern as `common_content_desc_back`).
 The analytics hub (`ui/main/analytics/*`) is a separate sibling surface, left for a future
-extraction. Remaining Phase-6 extractions: #96.
+extraction. Finally `:feature:bubble` (#96 — the floating-overlay HUD's presentational content:
+the `formatters/*` (offer/chat/phase), the `cards/*` (`FlowCardItem` renderer + `FlowCardMapper`/
+`LiveCardBuilder` card model), `ChatViews`/`ModeCards`/`StatusBar`/`OfferGaugeBitmap`/`BubbleHelpers`,
+and `DashboardView` carved out of `BubbleScreen.kt` into `BubbleDashboardView.kt`. These are
+data-in/lambdas-out renderers of `:domain` types + the bubble-only `ui/formatters/*` — no Hilt,
+no `:core:data`/`:core:state`. The `BubbleActivity` (manifest host), `BubbleScreen` (nav host —
+`MainActivity`/`Screen` route table), `BubbleManager` (`OfferActionReceiver` + notification
+plumbing), and `BubbleViewModel` (injects `BubbleManager` → moving it needs an inversion, declined
+per the honest-smaller-module doctrine, same as `DashboardViewModel`) all stay in `:app`, which
+consumes the moved formatters/gauge/renderers as a legal `:app → :feature` dependency. The bubble
+`flow_card_*`/`bubble_mode_idle_*`/`bubble_status_*`/`bubble_chat_*` strings + the `ic_badge_*`/
+`ic_chat_*` badge/chat drawables moved clean (disjoint from every stayed consumer); `@color/white`
+is duplicated by choice into the module — multi-consumer with :app-remaining drawables, `:app` copy
+authoritative — the #854 pattern.) **Remaining Phase-6 extractions: none — Phase 6 complete.**
 
 - **`:domain`** — Pure Kotlin library. Domain models, state regions, evaluation logic,
   pipeline/provider contracts, the capture contracts (`CaptureBus`, `EnvelopeBuilder`,

@@ -1,4 +1,4 @@
-package cloud.trotter.dashbuddy.ui.bubble
+package cloud.trotter.dashbuddy.feature.bubble
 
 import android.graphics.Bitmap
 import android.graphics.Canvas
@@ -15,7 +15,7 @@ import cloud.trotter.dashbuddy.core.designsystem.theme.darkAppColors
  * from the notification-post path (it has no window/lifecycle owner there). So this is a faithful
  * Canvas re-draw of the same ring: a track circle + a `-90°` score sweep arc in the score-band color
  * + the centered score. Colors come from the fixed dark palette ([darkAppColors]); the band color
- * is the SSOT [cloud.trotter.dashbuddy.ui.formatters.offerScoreArgb]. Drawn on a filled card-colored
+ * is the SSOT [cloud.trotter.dashbuddy.feature.bubble.formatters.offerScoreArgb]. Drawn on a filled card-colored
  * disc so it reads the same regardless of the (system-controlled) notification background.
  */
 fun scoreGaugeBitmap(score: Int, ringArgb: Int, sizePx: Int): Bitmap {

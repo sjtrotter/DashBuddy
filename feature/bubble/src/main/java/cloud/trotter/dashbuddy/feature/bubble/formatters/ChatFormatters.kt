@@ -1,6 +1,6 @@
-package cloud.trotter.dashbuddy.ui.formatters
+package cloud.trotter.dashbuddy.feature.bubble.formatters
 
-import cloud.trotter.dashbuddy.R
+import cloud.trotter.dashbuddy.feature.bubble.R
 import cloud.trotter.dashbuddy.domain.model.chat.ChatPersona
 
 fun ChatPersona.getIconResId(): Int {

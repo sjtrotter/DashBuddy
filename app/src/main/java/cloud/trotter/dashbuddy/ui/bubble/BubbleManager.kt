@@ -22,14 +22,15 @@ import cloud.trotter.dashbuddy.domain.model.chat.ChatPersona
 import cloud.trotter.dashbuddy.domain.state.OfferIntent
 import cloud.trotter.dashbuddy.domain.state.Platform
 import cloud.trotter.dashbuddy.domain.state.activeSessionId
-import cloud.trotter.dashbuddy.ui.formatters.getIconResId // <-- Your new UI Formatter!
-import cloud.trotter.dashbuddy.ui.formatters.notificationPersona
-import cloud.trotter.dashbuddy.ui.formatters.toNotificationSummary
-import cloud.trotter.dashbuddy.ui.formatters.displayLabel
-import cloud.trotter.dashbuddy.ui.formatters.offerBadgeIcon
-import cloud.trotter.dashbuddy.ui.formatters.offerScoreArgb
-import cloud.trotter.dashbuddy.ui.formatters.offerVerdictArgb
-import cloud.trotter.dashbuddy.ui.formatters.offerVerdictLabel
+import cloud.trotter.dashbuddy.feature.bubble.scoreGaugeBitmap
+import cloud.trotter.dashbuddy.feature.bubble.formatters.getIconResId // <-- Your new UI Formatter!
+import cloud.trotter.dashbuddy.feature.bubble.formatters.notificationPersona
+import cloud.trotter.dashbuddy.feature.bubble.formatters.toNotificationSummary
+import cloud.trotter.dashbuddy.feature.bubble.formatters.displayLabel
+import cloud.trotter.dashbuddy.feature.bubble.formatters.offerBadgeIcon
+import cloud.trotter.dashbuddy.feature.bubble.formatters.offerScoreArgb
+import cloud.trotter.dashbuddy.feature.bubble.formatters.offerVerdictArgb
+import cloud.trotter.dashbuddy.feature.bubble.formatters.offerVerdictLabel
 import cloud.trotter.dashbuddy.domain.evaluation.OfferAction
 import cloud.trotter.dashbuddy.domain.format.Formats
 import cloud.trotter.dashbuddy.domain.model.cards.FlowCardSnapshot

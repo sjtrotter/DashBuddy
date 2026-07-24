@@ -1,4 +1,4 @@
-package cloud.trotter.dashbuddy.ui.bubble
+package cloud.trotter.dashbuddy.feature.bubble
 
 import android.graphics.Color
 import org.junit.Assert.assertEquals

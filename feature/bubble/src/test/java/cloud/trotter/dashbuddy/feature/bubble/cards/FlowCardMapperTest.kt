@@ -1,4 +1,4 @@
-package cloud.trotter.dashbuddy.ui.bubble.cards
+package cloud.trotter.dashbuddy.feature.bubble.cards
 
 import cloud.trotter.dashbuddy.domain.model.event.AppEvent
 import cloud.trotter.dashbuddy.domain.evaluation.OfferAction

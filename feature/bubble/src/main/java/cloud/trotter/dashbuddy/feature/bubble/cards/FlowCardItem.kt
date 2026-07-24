@@ -1,4 +1,4 @@
-package cloud.trotter.dashbuddy.ui.bubble.cards
+package cloud.trotter.dashbuddy.feature.bubble.cards
 
 import androidx.annotation.DrawableRes
 import androidx.compose.foundation.clickable
@@ -31,7 +31,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
-import cloud.trotter.dashbuddy.R
+import cloud.trotter.dashbuddy.feature.bubble.R
 import cloud.trotter.dashbuddy.domain.format.Formats
 import cloud.trotter.dashbuddy.core.designsystem.theme.AppTheme
 import cloud.trotter.dashbuddy.domain.format.formatCountdown
@@ -60,10 +60,10 @@ import cloud.trotter.dashbuddy.domain.state.flowPhase
 import cloud.trotter.dashbuddy.domain.state.presentation
 import cloud.trotter.dashbuddy.domain.model.event.AppEventType
 import cloud.trotter.dashbuddy.domain.model.pay.displayLabel
-import cloud.trotter.dashbuddy.ui.formatters.color
-import cloud.trotter.dashbuddy.ui.formatters.displayLabel
-import cloud.trotter.dashbuddy.ui.formatters.offerBadgeIcon
-import cloud.trotter.dashbuddy.ui.formatters.phaseBg
+import cloud.trotter.dashbuddy.feature.bubble.formatters.color
+import cloud.trotter.dashbuddy.feature.bubble.formatters.displayLabel
+import cloud.trotter.dashbuddy.feature.bubble.formatters.offerBadgeIcon
+import cloud.trotter.dashbuddy.feature.bubble.formatters.phaseBg
 import cloud.trotter.dashbuddy.domain.evaluation.OfferEvaluator
 import cloud.trotter.dashbuddy.domain.state.customerLabel
 
