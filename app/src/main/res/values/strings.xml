@@ -116,9 +116,10 @@
     <!-- WizardPhase/WizardStep). -->
     <!-- ========================================================================= -->
 
-    <!-- Shared common string. Also duplicated in :feature:settings (non-transitive R -->
-    <!-- classes; a library's resources are not visible via the app's R). SSOT follow-up: -->
-    <!-- a shared common-strings home (:core:designsystem res) — see #99 boundary notes. -->
+    <!-- Shared common string. This is the AUTHORITATIVE copy — it wins APK resource merge over -->
+    <!-- the byte-identical copy in :feature:settings (which exists only because non-transitive R -->
+    <!-- classes hide this R from that library). Edit HERE. SSOT follow-up: a shared common-strings -->
+    <!-- home (:core:designsystem res) would let both point at one definition. See #99 boundary notes. -->
     <string name="common_content_desc_back">Back</string>
 
     <string name="common_period_today">Today</string>
@@ -216,9 +217,6 @@
     <!-- settings/DataExportScreen.kt -->
     <!-- settings/CapabilityConsentScreen.kt (#422/#843) — Google-Play-consistent automation record -->
     <!-- setup/consent/ConsentPromptSheet.kt (#843) — prompted per-capability consent -->
-    <!-- consent_platform_unknown is owned by :feature:settings (CapabilityConsent copy) and -->
-    <!-- duplicated here for ConsentPromptSheet (non-transitive R). See #99 boundary notes. -->
-    <string name="consent_platform_unknown">Delivery app</string>
     <string name="consent_prompt_heading">Allow DashBuddy to tap for you?</string>
     <string name="consent_prompt_body">Your delivery-app rules can automate these taps. Nothing is turned on until you allow it — choose each one individually, or tap \"Not now\" to decide later.</string>
     <string name="consent_prompt_source_bundled_format">Built-in %1$s rules</string>

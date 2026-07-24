@@ -46,6 +46,8 @@ dependencies {
     implementation(libs.androidx.material3)
     implementation(libs.androidx.compose.foundation)
     implementation(libs.androidx.material.icons.extended)
+    // Compose @Preview tooling — feature (UI) modules are where previews live; kept as
+    // conscious boilerplate for this and the #96-#98 feature modules (no @Preview yet).
     implementation(libs.androidx.ui.tooling.preview)
     implementation(libs.androidx.activity.compose)
     implementation(libs.androidx.hilt.navigation.compose)
@@ -57,7 +59,6 @@ dependencies {
     implementation(libs.hilt.android)
     ksp(libs.hilt.compiler)
 
-    implementation(libs.kotlinx.coroutines.play.services)
     implementation(libs.timber)
 
     testImplementation(libs.junit)
