@@ -1,12 +1,10 @@
 plugins {
     alias(libs.plugins.android.library)
     alias(libs.plugins.compose.compiler)
-    alias(libs.plugins.hilt)
-    alias(libs.plugins.ksp)
 }
 
 android {
-    namespace = "cloud.trotter.dashbuddy.feature.setup"
+    namespace = "cloud.trotter.dashbuddy.feature.dashboard"
     compileSdk {
         version = release(36)
     }
@@ -36,31 +34,23 @@ android {
 }
 
 dependencies {
+    // Honest deps (the #851/#852 "declare only what's used" doctrine — cf. the #852-F1
+    // dead-designsystem drop). The extracted surface is a handful of purely presentational
+    // dashboard composables (data-in / lambdas-out): they read `:domain` value types
+    // (AnalyticsPeriod / PeriodEconomics / Formats) and the `:core:designsystem` component
+    // library (AppCard / AppSegmented / AppStatTile / AppTheme). No `@HiltViewModel`, no
+    // `@Inject`, no repositories — so NO Hilt/KSP, NO `:core:data`, NO Timber here (the
+    // Dashboard's ViewModel/state + Hilt wiring stay in `:app`; see the PR body).
     implementation(project(":domain"))
-    implementation(project(":core:data"))
+    implementation(project(":core:designsystem"))
 
     implementation(platform(libs.androidx.compose.bom))
     implementation(libs.androidx.ui)
     implementation(libs.androidx.ui.graphics)
     implementation(libs.androidx.material3)
     implementation(libs.androidx.compose.foundation)
-    implementation(libs.androidx.material.icons.extended)
     // Compose @Preview tooling — feature (UI) modules are where previews live; kept as
-    // conscious boilerplate for this and the #96-#98 feature modules (no @Preview yet).
+    // conscious boilerplate (the redesign work of Epic #320 will use it; no @Preview yet).
     implementation(libs.androidx.ui.tooling.preview)
-    implementation(libs.androidx.activity.compose)
-    implementation(libs.androidx.hilt.navigation.compose)
-    implementation(libs.androidx.lifecycle.runtime.compose)
-    implementation(libs.androidx.lifecycle.viewmodel.ktx)
     debugImplementation(libs.androidx.ui.tooling)
-
-    implementation(libs.hilt.android)
-    ksp(libs.hilt.compiler)
-
-    implementation(libs.timber)
-
-    testImplementation(libs.junit)
-    testImplementation(libs.mockito.core)
-    testImplementation(libs.mockito.kotlin)
-    testImplementation(libs.kotlinx.coroutines.test)
 }

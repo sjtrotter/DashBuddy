@@ -42,3 +42,8 @@ core/state/src/main/java/cloud/trotter/dashbuddy/core/state/ObservationJournal.k
 core/state/src/main/java/cloud/trotter/dashbuddy/core/state/OfferEffects.kt 4
 core/state/src/main/java/cloud/trotter/dashbuddy/core/state/SnapshotStore.kt 2
 core/state/src/main/java/cloud/trotter/dashbuddy/core/state/StateManagerV2.kt 8
+# feature/* modules entered the guard's scope in #97/#853 (dynamic feature/* discovery). This
+# untagged INFO site rode along verbatim when WizardViewModel moved out of :app in #98 (its old
+# :app allowlist line was deleted then because feature modules weren't yet scanned) — re-listed
+# now that they are. Burn down by tagging the site, same as any other entry.
+feature/setup/src/main/java/cloud/trotter/dashbuddy/feature/setup/wizard/WizardViewModel.kt 1

@@ -87,7 +87,7 @@ Kotlin 2.3.20, JVM 21.
 The project uses modular Clean Architecture with a strict dependency graph:
 
 ```
-:app → :domain, :core:data, :core:database, :core:datastore, :core:designsystem, :core:location, :core:network, :core:pipeline, :core:state, :feature:settings, :feature:setup
+:app → :domain, :core:data, :core:database, :core:datastore, :core:designsystem, :core:location, :core:network, :core:pipeline, :core:state, :feature:settings, :feature:setup, :feature:dashboard
 :core:state → :domain, :core:database, :core:pipeline
 :core:pipeline → :domain
 :core:data → :domain, :core:database, :core:datastore, :core:location, :core:network
@@ -96,8 +96,9 @@ The project uses modular Clean Architecture with a strict dependency graph:
 :core:location → :domain
 :core:datastore → :domain
 
-:feature:settings → :domain, :core:data, :core:designsystem
-:feature:setup    → :domain, :core:data, :core:designsystem
+:feature:settings  → :domain, :core:data, :core:designsystem
+:feature:setup     → :domain, :core:data
+:feature:dashboard → :domain, :core:designsystem
 
 matchers (included build, not a :core module) ⇒ canonicalizes rules → :core:pipeline consumes as generated assets
 ```
@@ -106,13 +107,25 @@ matchers (included build, not a :core module) ⇒ canonicalizes rules → :core:
 (`cloud.trotter.dashbuddy.feature.<name>` namespace), depending only DOWN the graph
 (`:app → :feature:* → :domain / :core:*`); a feature module **never** depends on `:app`
 or on another feature. `:app` legitimately depends on each feature for its moved
-`@HiltViewModel`s and any screens/copy the app shell still hosts. Shipped: `:feature:settings`
+`@HiltViewModel`s and any screens/copy the app shell still hosts. Each module declares only the
+deps it uses (the honest-deps doctrine — `:feature:setup` carries no `:core:designsystem`,
+`:feature:dashboard` no Hilt/`:core:data`). Shipped: `:feature:settings`
 (#99), `:feature:setup` (#98 — the setup wizard: `WizardViewModel`, wizard model/components,
 and the non-economy step cards; the `WizardScreen` shell + `EconomyCostsCard` stay in `:app`
 because they render the shared `ui/components/economy/*` editor family that also serves the
 stayed `EconomySettingsScreen` — moving that shared family is a separate follow-up. The
 Dashboard-hosted `setup/consent/` (#843) and `setup/permissions/` sheets stay in `:app` — the
-host, not the source path, decides ownership). Remaining Phase-6 extractions: #96, #97.
+host, not the source path, decides ownership), and `:feature:dashboard` (#97 — the home
+Dashboard's presentational composables: `StatusCard`, `EntryTile`, `DashingStatusRow`,
+`PeriodReview` under `feature.dashboard.components`. The `DashboardScreen` host stays in `:app`
+(nav start destination, references the `Screen` route table, hosts the `:app`-owned
+permission/consent sheets), as do `DashboardViewModel` — it injects the `:app` `BubbleManager`,
+so moving it would need an inversion the honest-smaller-module doctrine declines — and its
+`DashboardUiState` (produced+consumed entirely by the stayed VM+Screen). The `common_period_*`
+period labels are duplicated by choice into the module — multi-consumer with the stayed
+`AnalyticsScreen`, `:app` copy authoritative — same #99 pattern as `common_content_desc_back`).
+The analytics hub (`ui/main/analytics/*`) is a separate sibling surface, left for a future
+extraction. Remaining Phase-6 extractions: #96.
 
 - **`:domain`** — Pure Kotlin library. Domain models, state regions, evaluation logic,
   pipeline/provider contracts, the capture contracts (`CaptureBus`, `EnvelopeBuilder`,
