@@ -221,6 +221,36 @@ class RuleCompilerTest {
     }
 
     @Test
+    fun `hasPrecedingSiblingText matches the value node of a label-value pair`() {
+        val pred = RuleCompiler.compileNodePred(json("hasPrecedingSiblingText" to "Building Name"))
+        val label = node(text = "Building Name")
+        val value = node(text = "Maple Court Apartments")
+        val other = node(text = "Leave it at the door")
+        val root = tree(node(text = "Apt/Suite"), node(text = "704"), label, value, other)
+        val kids = root.children
+
+        assertTrue("value node follows the label", pred(kids[3]))
+        assertFalse("the label itself never matches", pred(kids[2]))
+        assertFalse("an unrelated later sibling never matches", pred(kids[4]))
+        assertFalse("a node before the label never matches", pred(kids[1]))
+        // Case-insensitive on the label, like every other text predicate.
+        assertTrue(
+            pred(
+                tree(node(text = "BUILDING NAME"), node(text = "X")).children[1],
+            ),
+        )
+    }
+
+    @Test
+    fun `hasPrecedingSiblingText does not match the first child or a parentless node`() {
+        val pred = RuleCompiler.compileNodePred(json("hasPrecedingSiblingText" to "Building Name"))
+        // First child: no preceding sibling.
+        assertFalse(pred(tree(node(text = "Maple Court Apartments")).children[0]))
+        // Parentless (no restoreParents) — fail-closed, no crash.
+        assertFalse(pred(node(text = "Maple Court Apartments")))
+    }
+
+    @Test
     fun `hasClassNameEndsWith matches class suffix`() {
         val pred = RuleCompiler.compileNodePred(json("hasClassNameEndsWith" to "TextView"))
         assertTrue(pred(node(className = "android.widget.TextView")))

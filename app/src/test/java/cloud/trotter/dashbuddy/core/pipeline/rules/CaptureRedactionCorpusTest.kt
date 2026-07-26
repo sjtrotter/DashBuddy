@@ -185,6 +185,79 @@ class CaptureRedactionCorpusTest {
         )
     }
 
+    /**
+     * #860 — the dropoff address block's `Building Name` VALUE (an apartment-complex
+     * name) shipped RAW in the recognized envelope. Every sibling field in that block
+     * was already covered (street/city/zip by the id-less numeric shapes, `Entry code`
+     * / `Apt/Suite` values by the `^#?\s?\d{1,4}[A-Za-z]?$` entry, the instruction body
+     * by the `dasher_instruction_*` ids) but a building name has no id, no digits and
+     * no stable text shape, so no predicate named it — and `CustomerTextMarkers` has no
+     * marker prefix here, so the backstop is structurally blind to it too. The fix
+     * anchors on the LABEL sibling (`hasPrecedingSiblingText`).
+     *
+     * Node shape is ground truth from a real 2026-07-23 device capture: a parent
+     * `android.view.View` whose children are six id-less TextViews in
+     * label/value/label/value/label/value order, `Building Name` last. NOTHING from
+     * that capture is reproduced here — the label is app chrome, and every value below
+     * is invented.
+     *
+     * Teeth: deleting the rule's Building-Name redact entry turns this RED.
+     */
+    @Test
+    fun `dropoff_pre_arrival redact masks the Building Name value, keeps the label (#860)`() {
+        val rule = TestRulesetFactory.screenRuleset.ruleById("doordash.screen.dropoff_pre_arrival")!!
+
+        fun addressBlock(buildingName: String) = UiNode(
+            className = "android.view.View",
+            children = listOf(
+                UiNode(className = "android.widget.TextView", text = "Entry code"),
+                UiNode(className = "android.widget.TextView", text = "#1234"),
+                UiNode(className = "android.widget.TextView", text = "Apt/Suite"),
+                UiNode(className = "android.widget.TextView", text = "704"),
+                UiNode(className = "android.widget.TextView", text = "Building Name"),
+                UiNode(className = "android.widget.TextView", text = buildingName),
+                // Over-match guard: an id-less free-text node that is NOT preceded by
+                // the label must survive untouched.
+                UiNode(className = "android.widget.TextView", text = "Leave it at the door"),
+            ),
+        ).restoreParents()
+
+        val masked = serialize(rule.redact.apply(addressBlock("Maple Court Apartments ")))
+
+        assertFalse("building name must not persist", masked.contains("Maple Court Apartments"))
+        assertTrue(
+            "the label is app chrome and stays raw",
+            masked.contains("Building Name"),
+        )
+        assertTrue(
+            "the building-name value masks to the hash family [redacted:<4hex>]",
+            Regex("""\[redacted:[0-9a-f]{4}]""").containsMatchIn(masked),
+        )
+        assertTrue(
+            "over-match guard: an unlabeled sibling stays raw",
+            masked.contains("Leave it at the door"),
+        )
+
+        // Distinctness (#623): two different complexes must not collide on one mask.
+        // Isolated label/value pair so the only masked node in the tree IS the value.
+        fun hexOf(name: String): String {
+            val pair = UiNode(
+                className = "android.view.View",
+                children = listOf(
+                    UiNode(className = "android.widget.TextView", text = "Building Name"),
+                    UiNode(className = "android.widget.TextView", text = name),
+                ),
+            ).restoreParents()
+            val value = rule.redact.apply(pair).children[1].text!!
+            return Regex("""^\[redacted:([0-9a-f]{4})]$""").find(value)?.groupValues?.get(1)
+                ?: error("Building Name value was not masked; got '$value'")
+        }
+        assertFalse(
+            "different building names must redact to different suffixes",
+            hexOf("Maple Court Apartments") == hexOf("Cedar Ridge Villas"),
+        )
+    }
+
     @Test
     fun `every For-family redact masks the fused customer header, keeps the For marker (#809)`() {
         // #809: the four pickup "For <customer> • <store>" surfaces each ship a

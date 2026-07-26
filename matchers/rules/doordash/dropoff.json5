@@ -666,6 +666,12 @@
           ]
         },
         {
+          "comment": "#860: the address block's 'Building Name' VALUE — an apartment-complex or building label (free-form proper-noun text, sometimes a bare building number) is customer-locating PII, and it was the ONE labeled field in this block shipping raw: street/city/zip fall to the id-less numeric shapes below, 'Entry code'/'Apt/Suite' values to the `^#?\\s?\\d{1,4}[A-Za-z]?$` entry, the instruction body to the dasher_instruction_* ids — but a building name has no id, no digits, and no stable text shape, so nothing named it. Anchored on the LABEL sibling (app chrome, not customer data), which is the only tight handle; the label node itself is NOT redacted (a label is vocabulary, not PII). Hash-mask family (no plainMask): a building name is a large, unbounded space, so the <4hex> distinctness suffix is not brute-recoverable and it buys per-complex replay fidelity. No `normalize` — that canonicalizer is the customer-NAME key and would degrade an address-class token's mask distinctness.",
+          "find": {
+            "hasPrecedingSiblingText": "Building Name"
+          }
+        },
+        {
           "find": {
             "hasIdSuffix": "dasher_instruction_content_collapsed"
           }

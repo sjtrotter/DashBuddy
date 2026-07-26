@@ -1390,6 +1390,10 @@
           "properties": { "hasAnyText": { "type": "string", "description": "Some text anywhere in this subtree (this node or any descendant's text/contentDescription) equals this value, case-insensitive — for buttons whose visible label lives in a nested child node." } }
         },
         {
+          "required": ["hasPrecedingSiblingText"],
+          "properties": { "hasPrecedingSiblingText": { "type": "string", "description": "The IMMEDIATELY PRECEDING sibling's text equals this value, case-insensitive (#860). The label→value predicate for id-less `<label><value>` pairs (an address block's 'Building Name' row): anchors on the stable app-chrome LABEL to name a value node that has no id and no stable text shape. Requires parent back-references (always wired in production)." } }
+        },
+        {
           "required": ["hasTextCaseSensitive"],
           "properties": { "hasTextCaseSensitive": { "type": "string", "description": "Exact text match (case-sensitive)." } }
         },
