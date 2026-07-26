@@ -15,6 +15,7 @@ import cloud.trotter.dashbuddy.core.pipeline.rules.ScreenRulesetTest
 import cloud.trotter.dashbuddy.core.pipeline.rules.TriageRulesTest
 import cloud.trotter.dashbuddy.core.pipeline.rules.UberDeclineClickRuleTest
 import cloud.trotter.dashbuddy.core.pipeline.rules.UberIdleMapOfflineEvidenceTest
+import cloud.trotter.dashbuddy.core.pipeline.rules.UberOfferExpiryOverlayTest
 import org.junit.runner.RunWith
 import org.junit.runners.Suite
 
@@ -62,6 +63,11 @@ import org.junit.runners.Suite
  * - [UberIdleMapOfflineEvidenceTest] — #857 negative guard: real partially-rendered Uber
  *   home captures (`fixtures/uber_idle_map_partial/`) must classify UNKNOWN, so
  *   `uber.screen.idle_map` can never claim `modeHint: offline` from absence again.
+ * - [UberOfferExpiryOverlayTest] — #858: real captures of Uber's expiry overlay
+ *   ("This request is no longer available", rendered OVER the dimmed card inside
+ *   `primary_touch_area`) must classify UNKNOWN, so a dead request can never mint an
+ *   offer or poison `storeName`/`presentationKey`; plus the paired over-rejection
+ *   guard that a clean uber offer still classifies `offer` with a real store.
  * - [OfferPipelineTest] — Layer 2 (#105): a real `offer_popup/` snapshot through the SAME
  *   production ruleset, feeding the recognized `ParsedOffer` into `OfferEvaluator` and pinning the
  *   resulting `OfferEvaluation` — proves the recognition→parse→evaluate wiring, not just the
@@ -79,6 +85,7 @@ import org.junit.runners.Suite
     NotificationRulesetTest::class,
     TriageRulesTest::class,
     UberIdleMapOfflineEvidenceTest::class,
+    UberOfferExpiryOverlayTest::class,
     DefaultRulesIntegrationTest::class,
     NotificationClassifierTest::class,
     ClickClassifierTest::class,
