@@ -101,6 +101,19 @@ was found **broken-in-part** (raw PII in capture envelopes) and moved to that en
     check — still needs dev eyes. Likely 4th capability left ungranted is accept (no automation
     accept line post-install; hashes-only logs can't prove identity).)
 
+- **🆕 NEW — #859 (H4 + placeholder filenames) — one offer screenshot per presentation, and no
+  `{storeName}` filenames.** The Uber offer screenshot now dedupes on the presentation (#830's
+  `presentationKey`) instead of the churning quote hash, and a rule filename template whose field
+  parsed null saves as `Offer` instead of the literal token.
+  **What to watch (Uber dash, evidence capture ON):** Pictures/DashBuddy holds roughly **one
+  `Offer - <store>.png` per offer you actually saw** — no runs of 3–6 near-identical shots of the
+  same card seconds apart; a *later* offer from the SAME store still gets its own shot (this is the
+  regression to watch for — a missing capture for a repeat store means the dedupe went too far).
+  **Desk (next pull):** `ls` the pulled `screenshots/` — (a) zero filenames containing `{`, (b)
+  offer-screenshot count ≈ offer count for that platform (was 140/112 on 07-25), (c) cross-check a
+  repeat-store hour in `offer_records` against the file list to confirm repeats were captured.
+  - Issue: #859. Confirmed: 0/2
+
 - **🆕 NEW — #428-B / PR #845 — multi-language TTS (system locale + settings override).**
   **What to watch:** Settings → Voice → Spoken offer language set to Español → the next offer reads
   in Spanish (voice AND words together); System default on an English phone stays English; if the

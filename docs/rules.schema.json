@@ -1128,7 +1128,7 @@
         },
         "dedupeKey": {
           "type": "string",
-          "description": "Stable key for deduplication. Supports {fieldName} template interpolation against the branch's RAW parse fields, plus the reserved {parsedHash} token, resolved after typed parsing to the parse's content identity (ParsedFields.dedupeHash) — use it for per-offer/per-parse dedupe of fields the rule itself doesn't parse (#427)."
+          "description": "Stable key for deduplication. Supports {fieldName} template interpolation against the branch's RAW parse fields, plus two reserved tokens resolved after typed parsing: {parsedHash} = the parse's CONTENT identity (ParsedFields.dedupeHash) — per-offer/per-parse dedupe of fields the rule itself doesn't parse (#427); {presentationHash} = the parse's PRESENTATION identity (ParsedFields.presentationHash) — one key for as long as the same physical showing is on screen, so a surface that live-updates its own content (a re-quoting offer card) fires the effect once per showing instead of once per update (#859)."
         },
         "throttleMs": {
           "type": "integer",

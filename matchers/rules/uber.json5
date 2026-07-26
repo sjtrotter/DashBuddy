@@ -425,11 +425,22 @@
           },
           "effects": [
             {
+              // #859: dedupe the evidence capture on the PRESENTATION, not the quote. Uber
+              // re-renders this card's pay/miles/minutes every few seconds, so
+              // `{parsedHash}` (offerHash — economics folded in) minted a fresh key per
+              // re-quote and re-fired the screenshot up to 6× for ONE offer (140 captures
+              // for 112 offers in the 2026-07-25 pull), each re-fire anchored on its own
+              // least-settled frame. `{presentationHash}` resolves to #830's
+              // presentationKey — the stable store/order subset the state machine already
+              // uses to tell "same offer, re-quoted" from "different offer" — so the
+              // capture fires once per showing. The declared 60s cadence is what keeps a
+              // LATER offer from the same store capturable (see the SideEffectEngine
+              // throttle-window rule): dedupe identity is per-presentation, not forever.
               "screenshot": {
                 "prefix": "Offer - {storeName}",
                 "category": "offer"
               },
-              "dedupeKey": "offer-ss-{parsedHash}",
+              "dedupeKey": "offer-ss-{presentationHash}",
               "throttleMs": 60000
             },
             {

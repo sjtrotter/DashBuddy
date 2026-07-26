@@ -319,7 +319,13 @@ wins over it. Rules also carry `require` predicates, `bind` blocks, `parse`
 blocks that produce typed fields via `ParsedFieldsFactory`, and an optional `redact` block
 (#598) — node predicates whose matched text is masked in the capture envelope (a screen rule
 that hashes PII via the `sha256` transform MUST declare a non-empty `redact`, enforced at compile;
-the mask keeps a `keepPrefix` marker so recognition on replay is unchanged). There are no Kotlin matcher classes —
+the mask keeps a `keepPrefix` marker so recognition on replay is unchanged). An effect's `dedupeKey`
+interpolates `{field}` against the branch's RAW parse plus two DERIVED reserved tokens resolved
+post-factory by the classifier (`DedupeTokens`, the lint's SSOT): `{parsedHash}` = the parse's
+CONTENT identity (#427) and `{presentationHash}` = its PRESENTATION identity (#859,
+`ParsedFields.presentationHash` — for an offer, #830's `presentationKey`, fail-closed to
+`offerHash`), so a surface that live-re-quotes itself fires its effects once per showing rather
+than once per quote. There are no Kotlin matcher classes —
 changing recognition means editing rule JSON plus corpus tests. **Rules cannot declare actuation**
 (#425): the compiler rejects `click`/gesture effect verbs; rules instead expose well-known *target
 bindings* (`acceptButton`, `declineButton`, `expandButton`) that the app-owned `RuleAction`
@@ -347,6 +353,19 @@ enumeration, every capability lands *undecided* until the user opts in via the c
 Handlers: `OdometerEffectHandler`, `ScreenShotHandler`, `TipEffectHandler`, `TtsEffectHandler`,
 `UiInteractionHandler` (package-scoped, label-verified `RuleAction` taps — the only path that ever
 clicks a third-party app, #425), `OfferActionReceiver` (notification Accept/Decline actions).
+**Dedupe granularity is the rule's to declare (#859).** The durable `effects_fired` row is
+"at most once per 48h"; a rule effect that declares its own `throttleMs` opts OUT of it and
+into that declared window (the engine's wall-clock throttle, keyed by the same `effectKey`) —
+one declared value, one gate. Without that, the strictly-stronger row silently subsumed the
+declaration, making a *stable* dedupe key destructive (`offer-ss-{presentationHash}` would
+capture one offer per store per 48h — 161 Uber offers across 92 merchants in the 07-25 pull).
+Residual: the throttle map is in-memory, so a process restart re-arms it (at most one extra
+capture). App-emitted keyed effects (bubbles, sessions, `EffectMap` captures) declare nothing
+and keep the 48h idempotency unchanged. Evidence **filenames** are sanitized at the one
+evidence gate (`EvidenceFilename.sanitizePrefix`): a rule's `"Offer - {storeName}"` whose
+field parsed null saves as `Offer`, never the literal token (331 `Offer - {storeName}.png`
+files on the device were the receipt) — a fail-safe under, not a replacement for, the
+`ParseOutputGoldenTest` arg-template lint that still flags the un-interpolating rule.
 
 ### 5. Analytics Read-Model (`core/data/.../analytics/`, `core/database/.../analytics/`, #314)
 

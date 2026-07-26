@@ -480,6 +480,51 @@ class DefaultRulesIntegrationTest {
         assertEquals("re-observation must dedupe against the same key", first, resolveOnce())
     }
 
+    @Test
+    fun `the uber offer card resolves a PRESENTATION-scoped screenshot key (#859)`() {
+        // #859 moved uber's offer screenshot from `offer-ss-{parsedHash}` (content identity —
+        // it churns on every live re-quote, so ONE offer fired up to 6 captures) to
+        // `offer-ss-{presentationHash}`. That only helps if the fielded card actually yields
+        // a presentation identity: a null #830 presentationKey fails closed BACK to the
+        // churning offerHash, which would restore the bug silently. Pin both halves.
+        val snapshots = TestResourceLoader.loadSnapshots("snapshots/offer")
+        assertTrue("uber offer corpus must not be empty", snapshots.isNotEmpty())
+
+        val keysByFile = snapshots.mapNotNull { (fn, tree, _) ->
+            val result = screenRuleset.matchFirst(tree, platformWire = "uber")
+                ?: return@mapNotNull null
+            val parsed = ParsedFieldsFactory.create(result.shape, result.fields)
+            val offer = (parsed as? cloud.trotter.dashbuddy.domain.state.ParsedFields.OfferFields)
+                ?: return@mapNotNull null
+            assertNotNull(
+                "$fn: the offer card must yield a #830 presentationKey — without one the " +
+                    "dedupe key degrades to the re-quote-churning offerHash",
+                offer.parsedOffer.presentationKey,
+            )
+            val key = DedupeTokens.resolve(result.effects, parsed)
+                .firstNotNullOfOrNull { e -> e.dedupeKey?.takeIf { it.startsWith("offer-ss-") } }
+                ?: return@mapNotNull null
+            assertEquals(
+                "$fn: the screenshot key must BE the presentation identity",
+                "offer-ss-${offer.presentationHash()}",
+                key,
+            )
+            fn to key
+        }
+
+        assertTrue("expected uber offer screenshots with dedupe keys", keysByFile.size >= 2)
+        assertTrue(
+            "no unresolved template tokens may survive resolution: $keysByFile",
+            keysByFile.none { (_, k) -> k.contains('{') },
+        )
+        assertEquals(
+            "the corpus holds distinct presentations (different stores), so they must NOT " +
+                "collapse onto one key: $keysByFile",
+            keysByFile.size,
+            keysByFile.map { it.second }.toSet().size,
+        )
+    }
+
     // =========================================================================
     // Helpers
     // =========================================================================
