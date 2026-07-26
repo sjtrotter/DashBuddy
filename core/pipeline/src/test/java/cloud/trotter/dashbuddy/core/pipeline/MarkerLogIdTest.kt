@@ -17,14 +17,22 @@ import org.junit.Test
  */
 class MarkerLogIdTest {
 
-    /** The `shape:` marker names [SensitiveTextMarkers] synthesizes for its regex shapes. */
-    private val shapeMarkers = listOf(
-        "shape:\\b\\d{3}-\\d{2}-\\d{4}\\b",
-        "shape:\\b\\d{4}[ -]\\d{4}[ -]\\d{4}[ -]\\d{4}\\b",
-    )
+    /**
+     * The `shape:` marker names [SensitiveTextMarkers] synthesizes for its regex shapes — derived
+     * from the LIVE patterns via the production name formatter, never hand-copied, so a shape
+     * added to the SSOT is covered here automatically.
+     */
+    private val shapeMarkers = SensitiveTextMarkers.SHAPE_PATTERNS.map { SensitiveTextMarkers.shapeMarkerName(it) }
 
-    /** The fail-closed sentinels the two scanners can return instead of a real marker. */
-    private val sentinels = listOf("normalize-error", "scrubber-error")
+    /**
+     * The fail-closed sentinel the scanner returns instead of a real marker.
+     *
+     * The sink's OWN `scrubber-error` sentinel (`LogRepository`, `:core:data`) is deliberately NOT
+     * covered here: it is never passed through [MarkerLogId] — the sink writes it straight into the
+     * `[scrubbed:…]` placeholder that REPLACES the line, and it is never re-scanned. Pinning a
+     * cross-module copy of it would be exactly the hand-maintained duplicate this test avoids.
+     */
+    private val sentinels = listOf(SensitiveTextMarkers.NORMALIZE_FAILED)
 
     @Test
     fun `id is the first two alphanumerics plus the marker length`() {
@@ -70,8 +78,11 @@ class MarkerLogIdTest {
     }
 
     @Test
-    fun `ids are collision-free within each marker SSOT`() {
-        for (ssot in listOf(SensitiveTextMarkers.KEYWORDS, CustomerTextMarkers.MARKERS)) {
+    fun `ids are collision-free within each marker SSOT, and across both`() {
+        val ssots = listOf(SensitiveTextMarkers.KEYWORDS, CustomerTextMarkers.MARKERS)
+        // Per-SSOT is the load-bearing property (a diagnostic names which SSOT it read); the
+        // union check is the stronger one — an id decodes to one marker, full stop.
+        for (ssot in ssots + listOf(ssots.flatten())) {
             val byId = ssot.groupBy { MarkerLogId.of(it) }.filterValues { it.size > 1 }
             assertTrue("ambiguous marker ids: $byId", byId.isEmpty())
         }

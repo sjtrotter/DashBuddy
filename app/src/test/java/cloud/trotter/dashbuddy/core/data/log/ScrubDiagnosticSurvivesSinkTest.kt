@@ -4,7 +4,6 @@ import android.util.Log
 import cloud.trotter.dashbuddy.core.pipeline.CaptureWriter
 import cloud.trotter.dashbuddy.core.pipeline.PipelineEvent
 import cloud.trotter.dashbuddy.core.pipeline.PipelineStats
-import cloud.trotter.dashbuddy.core.pipeline.SensitiveTextMarkers
 import cloud.trotter.dashbuddy.core.pipeline.rules.CompiledRedact
 import cloud.trotter.dashbuddy.core.pipeline.rules.ScreenRedactionSource
 import cloud.trotter.dashbuddy.domain.capture.CaptureBus
@@ -13,6 +12,7 @@ import cloud.trotter.dashbuddy.domain.model.accessibility.UiNode
 import cloud.trotter.dashbuddy.domain.pipeline.Observation
 import cloud.trotter.dashbuddy.domain.pipeline.UNKNOWN_TARGET
 import cloud.trotter.dashbuddy.domain.state.ParsedFields
+import cloud.trotter.dashbuddy.di.AppModule
 import cloud.trotter.dashbuddy.test.util.RecordingTree
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.StandardTestDispatcher
@@ -45,8 +45,11 @@ import timber.log.Timber
 @RunWith(RobolectricTestRunner::class)
 class ScrubDiagnosticSurvivesSinkTest {
 
-    /** The production binding: one marker SSOT, no allowlist. */
-    private val realScrubber = LogScrubber { SensitiveTextMarkers.findMarker(it) }
+    /**
+     * The production binding ITSELF (#862 review LOW-4) — not a reconstruction of it — so this
+     * seam test tracks `AppModule` if the scrub ever widens (e.g. to `CustomerTextMarkers`).
+     */
+    private val realScrubber = AppModule.provideLogScrubber()
 
     private object SinkBus : CaptureBus {
         override fun offer(

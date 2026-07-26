@@ -210,7 +210,7 @@ was found **broken-in-part** (raw PII in capture envelopes) and moved to that en
   shareable-log sink redacted the whole line out of the exported bug report; they now name it by a
   log-safe **id** (first two alphanumerics + length — `Tr12` = `Transfer out`).
   **What to watch:** nothing on-dash. **Desk:** in the next pull's `shareable.log`,
-  `grep -E 'Capture (scrubbed|backstop):'` returns the intact diagnostic lines (with `marker id
+  `grep -e 'Capture scrubbed:' -e 'Capture backstop:'` returns the intact diagnostic lines (with `marker id
   '<id>'`), and no `[scrubbed:<marker>]` placeholder remains that corresponds to one of our own
   capture WARNs — any `[scrubbed:…]` left is a REAL upstream leak worth chasing. The `app.log`
   firehose copies must match line-for-line.
