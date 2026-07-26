@@ -372,6 +372,7 @@ with `all`/`any`/`not` at the node level. Every predicate object carries exactly
 | `{ hasTextContaining: "s" }`             | `text` contains `s` (case-insensitive)                                   | `.contains("s", ignoreCase=true)`   |
 | `{ hasTextStartsWith: "s" }`             | `text` starts with `s` (case-insensitive)                                | `.startsWith("s", ignoreCase=true)` |
 | `{ hasTextMatchesRegex: "p" }`           | `text` matches regex pattern `p` (bounded — max 200 chars, #418)         | `Regex(p).containsMatchIn(text)`    |
+| `{ hasPrecedingSiblingText: "s" }`       | The node's IMMEDIATELY PRECEDING sibling's `text` equals `s` (case-insensitive) — the label→value predicate for id-less `<label><value>` pairs (#860); resolved by referential identity, so a structural twin can't shift the index | `node.parent.children[idx-1].text.equals(s, ignoreCase=true)` |
 | `{ hasAnyText: "s" }`                    | Some text anywhere in this subtree (node or any descendant's text/contentDescription) equals `s` (case-insensitive) — for buttons whose visible label lives in a nested child | `node.allText.any { it.equals(s, ignoreCase=true) }` |
 | `{ hasDesc: "s" }`                       | `contentDescription` equals `s` (case-insensitive)                       | `.equals("s", ignoreCase=true)`     |
 | `{ hasDescContaining: "s" }`             | `contentDescription` contains `s` (case-insensitive)                     | `.contains("s", ignoreCase=true)`   |

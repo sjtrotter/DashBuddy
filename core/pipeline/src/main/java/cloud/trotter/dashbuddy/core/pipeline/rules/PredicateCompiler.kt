@@ -140,6 +140,20 @@ internal object PredicateCompiler {
                 ;{ node -> node.text?.let { str -> regex.containsMatchIn(str) } == true }
             }
 
+            // Matches a node whose IMMEDIATELY PRECEDING sibling's text equals
+            // the value, case-insensitive (#860). The label→value predicate: a
+            // Compose/RN address block renders `<label TextView><value TextView>`
+            // pairs with NO viewId on either node, so a value carrying free-form
+            // PII (an apartment-complex "Building Name") is unreachable by every
+            // other predicate — its own text has no stable shape, and its id is
+            // absent. Anchoring on the LABEL (app chrome, stable vocabulary) is
+            // the only tight way to name it; the label string stays rule DATA, so
+            // this predicate is platform-agnostic (principle 8).
+            "hasPrecedingSiblingText" -> {
+                val s = primOf(value, key).content
+                ;{ node -> precedingSibling(node)?.text?.equals(s, ignoreCase = true) == true }
+            }
+
             // Matches when *any* text node anywhere in this subtree (including
             // the node itself and any descendant's text or contentDescription)
             // equals the value, case-insensitive. Necessary for buttons whose
@@ -329,6 +343,25 @@ internal object PredicateCompiler {
             }
             else -> throw RuleCompileException("Unknown notification predicate key: '$key'")
         }
+    }
+
+    /**
+     * The sibling immediately BEFORE [node], resolved by REFERENTIAL identity
+     * (#860). Deliberately does NOT reuse `UiNode.sibling(-1)`: that helper
+     * resolves the node's index with `List.indexOf`, i.e. structural equality —
+     * so a structurally identical earlier sibling would silently resolve the
+     * WRONG index and the predicate would fail to match, UNDER-masking a PII
+     * node. A privacy control must not depend on structural uniqueness, so this
+     * walks the parent's children by identity. Returns null when the tree has no
+     * parent back-references wired (`restoreParents`, always called by
+     * `AccessibilityNodeMapper` and `UiNodeDto.toDomain`) or the node is first —
+     * fail-closed for recognition, and for redaction a null simply means "no
+     * match here", with the `CustomerTextMarkers` backstop still downstream.
+     */
+    private fun precedingSibling(node: UiNode): UiNode? {
+        val siblings = node.parent?.children ?: return null
+        val idx = siblings.indexOfFirst { it === node }
+        return if (idx > 0) siblings[idx - 1] else null
     }
 
     // -- #293 robustness helpers, predicate-scoped ------------------------------

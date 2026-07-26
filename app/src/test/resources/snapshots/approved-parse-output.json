@@ -2516,6 +2516,18 @@
             "zoneName": null
         }
     },
+    "idle_map/2026-07-23_20-27-05-326__uber__accessibility.window__idle_map__4918e3.json": {
+        "ruleId": "uber.screen.idle_map",
+        "intent": "idle_map",
+        "shape": null,
+        "fields": {}
+    },
+    "idle_map/2026-07-24_18-46-44-317__uber__accessibility.window__idle_map__a75080.json": {
+        "ruleId": "uber.screen.idle_map",
+        "intent": "idle_map",
+        "shape": null,
+        "fields": {}
+    },
     "idle_map/20260128_155954_491_MAIN_MAP_IDLE.json": {
         "ruleId": "doordash.screen.idle_map",
         "intent": "idle_map",

@@ -185,6 +185,92 @@ class CaptureRedactionCorpusTest {
         )
     }
 
+    /**
+     * #860 — the dropoff address block's `Building Name` VALUE (an apartment-complex
+     * name) shipped RAW in the recognized envelope. Every sibling field in that block
+     * was already covered (street/city/zip by the id-less numeric shapes, `Entry code`
+     * / `Apt/Suite` values by the `^#?\s?\d{1,4}[A-Za-z]?$` entry, the instruction body
+     * by the `dasher_instruction_*` ids) but a building name has no id, no digits and
+     * no stable text shape, so no predicate named it — and `CustomerTextMarkers` has no
+     * marker prefix here, so the backstop is structurally blind to it too. The fix
+     * anchors on the LABEL sibling (`hasPrecedingSiblingText`).
+     *
+     * Node shape is ground truth from a real 2026-07-23 device capture: a parent
+     * `android.view.View` whose children are six id-less TextViews in
+     * label/value/label/value/label/value order, `Building Name` last. NOTHING from
+     * that capture is reproduced here — the label is app chrome, and every value below
+     * is invented.
+     *
+     * Covers BOTH rules that render this workflow sheet: `dropoff_pre_arrival` (the
+     * fielded ground truth) and `dropoff_pre_arrival_completion`, which is the SAME
+     * sheet one CTA-state later and carries the same id-less label/value rows. No
+     * committed corpus fixture carries a `Building Name` row for either, so the shape
+     * is asserted directly rather than through a fixture; the completion rule's entry
+     * is shape-inherited from the pre-arrival capture.
+     *
+     * Teeth: deleting either rule's Building-Name redact entry turns this RED.
+     */
+    @Test
+    fun `dropoff workflow-sheet redacts mask the Building Name value, keep the label (#860)`() {
+        val ruleIds = listOf(
+            "doordash.screen.dropoff_pre_arrival",
+            "doordash.screen.dropoff_pre_arrival_completion",
+        )
+
+        fun addressBlock(buildingName: String) = UiNode(
+            className = "android.view.View",
+            children = listOf(
+                UiNode(className = "android.widget.TextView", text = "Entry code"),
+                UiNode(className = "android.widget.TextView", text = "#1234"),
+                UiNode(className = "android.widget.TextView", text = "Apt/Suite"),
+                UiNode(className = "android.widget.TextView", text = "704"),
+                UiNode(className = "android.widget.TextView", text = "Building Name"),
+                UiNode(className = "android.widget.TextView", text = buildingName),
+                // Over-match guard: an id-less free-text node that is NOT preceded by
+                // the label must survive untouched.
+                UiNode(className = "android.widget.TextView", text = "Leave it at the door"),
+            ),
+        ).restoreParents()
+
+        for (id in ruleIds) {
+            val rule = TestRulesetFactory.screenRuleset.ruleById(id)!!
+            val masked = serialize(rule.redact.apply(addressBlock("Maple Court Apartments ")))
+
+            assertFalse("$id: building name must not persist", masked.contains("Maple Court Apartments"))
+            assertTrue(
+                "$id: the label is app chrome and stays raw",
+                masked.contains("Building Name"),
+            )
+            assertTrue(
+                "$id: the building-name value masks to the hash family [redacted:<4hex>]",
+                Regex("""\[redacted:[0-9a-f]{4}]""").containsMatchIn(masked),
+            )
+            assertTrue(
+                "$id: over-match guard — an unlabeled sibling stays raw",
+                masked.contains("Leave it at the door"),
+            )
+
+            // Distinctness (#623): two different complexes must not collide on one mask.
+            // Isolated label/value pair so the only masked node in the tree IS the value.
+            fun hexOf(name: String): String {
+                val pair = UiNode(
+                    className = "android.view.View",
+                    children = listOf(
+                        UiNode(className = "android.widget.TextView", text = "Building Name"),
+                        UiNode(className = "android.widget.TextView", text = name),
+                    ),
+                ).restoreParents()
+                val value = rule.redact.apply(pair).children[1].text!!
+                return Regex("""^\[redacted:([0-9a-f]{4})]$""").find(value)?.groupValues?.get(1)
+                    ?: error("$id: Building Name value was not masked; got '$value'")
+            }
+            assertFalse(
+                "$id: different building names must redact to different suffixes",
+                hexOf("Maple Court Apartments") == hexOf("Cedar Ridge Villas"),
+            )
+        }
+    }
+
     @Test
     fun `every For-family redact masks the fused customer header, keeps the For marker (#809)`() {
         // #809: the four pickup "For <customer> • <store>" surfaces each ship a
