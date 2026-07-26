@@ -93,14 +93,23 @@ was found **broken-in-part** (raw PII in capture envelopes) and moved to that en
   3. Grant **exactly one** automation (e.g. Decline) and leave the others "Not now": on the next
      offer, only that one fires; the un-granted ones still require a manual tap. A "Don't allow"
      choice must never re-prompt.
-  - Issue: #843. Confirmed: 0/2
+  - Issue: #843. Confirmed: 1/2 (2026-07-24 install, desk 07-26: the MECHANISM half is proven from
+    `app.log` — the one-shot migration cleared prior grants at 17:58:32, the reconcile that followed
+    granted NOTHING ("none granted — awaiting consent"), and three grants arrived only as separate
+    explicit user acts ~16 s later; the 19:30:17 decline chain fired only after those grants. The UI
+    half — sheet layout, "Not now" re-prompt, "Don't allow" durability, item 3's exactly-one-grant
+    check — still needs dev eyes. Likely 4th capability left ungranted is accept (no automation
+    accept line post-install; hashes-only logs can't prove identity).)
 
 - **🆕 NEW — #428-B / PR #845 — multi-language TTS (system locale + settings override).**
   **What to watch:** Settings → Voice → Spoken offer language set to Español → the next offer reads
   in Spanish (voice AND words together); System default on an English phone stays English; if the
   es voice pack is missing the read falls back to English (one WARN in the log, never silence).
   **Desk:** grep for the `Tts` tag language-apply lines; no per-utterance WARN spam.
-  - Confirmed: 0/2
+  - Confirmed: 0/2 (desk 07-26: INCONCLUSIVE — 64 post-install utterances all English, zero WARN
+    spam, but the Spanish path and the missing-voice-pack fallback were never exercised. CAVEAT:
+    the desk grep above has NO corresponding log site in the current code — a no-hit is not
+    evidence; needs the Settings→Español toggle actually flipped on a dash.)
 - **🆕 NEW — #810-B2 / PR #847 — orphan offer resolution (inference + attestation).**
   **What to watch:** after any dash where the `JOB_ACCEPT_MISMATCH` WARN fires (chat-path unassign
   class), the Money tab shows the review callout; the drill-down lists the job's accepted offers
@@ -110,14 +119,20 @@ was found **broken-in-part** (raw PII in capture envelopes) and moved to that en
   same-store orphan must sit UNRESOLVED awaiting attestation, never auto-stamped); Decisions-tab
   accepted counts exclude resolved rows. NOTE: the v14→v15 migration's instrumented test needs the
   standard device run at the next reinstall.
-  - Confirmed: 0/2
+  - Confirmed: 0/2 (desk 07-26: INCONCLUSIVE with one sub-check PASS — the v7→8 refold ran clean
+    (979 events, 0 skipped) and `outcomeResolved` is correctly ZERO rows: no `JOB_ACCEPT_MISMATCH`
+    has ever been written (the #818 tripwire postdates session-114), so Tier 1 had zero input and
+    the session-114 orphan sits correctly UNRESOLVED, never auto-stamped. Needs a dash with a real
+    invisible unassign to exercise either tier.)
 - **🆕 NEW — #823 Phase 1 / PR #848 — units-denominated shop-offer time estimate.**
   **What to watch:** a shop offer showing "(N units)" should produce a saner est time / $-per-hour
   than before (the 64-unit H-E-B class would have modeled ~30 items at the 0.469 fielded ratio,
   not 64) — the CARD still shows the platform's raw units count (deliberate).
   **Desk:** `ShopRate`-tag INFO lines gain items-per-unit learn entries (`n=N`) after units-offer
   completions; single-shop-pickup only (stacks deliberately skip).
-  - Confirmed: 0/2
+  - Confirmed: 0/2 (desk 07-26: INCONCLUSIVE — zero units-denominated offers occurred in the whole
+    07-22→24 window (grep of every offer_popup capture: no "(N units)"). The sibling #588 items/min
+    learner is healthy and advancing (n=25→26, mean stable 0.77/min).)
 - **🆕 NEW — #830 / PR #839 — presentation-scoped offer identity (+ the #826 accept chain).** The
   ticking Uber card no longer mints replacement offers: a re-render with the same store/order shape
   ENRICHES the pending offer in place (keeps its presentation epoch and click latches; heads-up
@@ -130,7 +145,13 @@ was found **broken-in-part** (raw PII in capture envelopes) and moved to that en
   new offer" ≈ 0; an accepted trip has `OFFER_ACCEPTED` + non-null economics instead of the
   "Unknown Store uncosted corpse". Churn *rate* post-#827 is also worth noting in the log
   (pay/miles still tick — enrichment should absorb it silently).
-  - Confirmed: 0/2
+  - Confirmed: 1/2 (desk 07-26, post-install window: PASS on the core invariant — ZERO
+    same-presentationKey replaces across 130 Uber offers (every "Replaced by new offer" was a
+    genuine store change), replace rate 12%→8.5%, and the 07-21 triple-read signature is gone
+    (repeated utterances were distinct presentations with identical numbers, i.e. Trip Radar
+    re-offering the same trip — sounds like a repeat but isn't churn). The ACCEPT-CHAIN half is
+    untested: zero Uber accepts occurred (see #251/#786/#826 — the decline/board problem). Second
+    confirmation needs an Uber dash with a real accept.)
 - **🆕 NEW — #825 / PR #833 — Uber recognized-surface customer redact wave.** `active_trip`,
   `customer_chat`, `splash`, and `pickup_verification_items` now carry full redact blocks (content
   shapes + uber id anchors incl. the chat `headline_text` "<Name> says:" header and the
@@ -140,7 +161,9 @@ was found **broken-in-part** (raw PII in capture envelopes) and moved to that en
   name/street/gate nodes and zero raw customer tokens (grep the recognized uber captures with the
   CLAUDE.local.md name/address recipe; the 07-21 pull's 4 leaking active_trip frames are the
   before-picture). Chat header masks must be per-customer-stable (same hex as the bare name).
-  - Confirmed: 0/2
+  - Confirmed: 0/2 (desk 07-26: INCONCLUSIVE — zero Uber `active_trip`/`customer_chat`/
+    `pickup_verification_items` frames exist in the pull (no trip was ever accepted). The Uber
+    surfaces that DID capture show correctly-masked dropoff lines.)
 - **🆕 NEW — #795 / PR #834 — PIN-required delivery confirmation flow + plainMask.** The Enter-PIN
   keypad modal and intro sheet now recognize (`dropoff_pin_keypad`/`dropoff_pin_intro`,
   recognize-only), and the entered PIN masks to a **plain** `[redacted]` (no 4-hex suffix — a
@@ -149,7 +172,8 @@ was found **broken-in-part** (raw PII in capture envelopes) and moved to that en
   before. **Desk:** those frames land in their intent folders instead of UNKNOWN; in the keypad
   frames' envelopes the PIN digits appear ONLY as plain `[redacted]` — no `[redacted:hhhh]` token
   on any pure-digit node, no raw PIN anywhere.
-  - Confirmed: 0/2
+  - Confirmed: 0/2 (desk 07-26: no PIN-required delivery occurred; global `pin[\s:#]*\d` grep over
+    the pull → zero raw hits.)
 - **🆕 NEW — #796 / PR #837 — DoorDash recognition-gap batch (11 rules).** Dropoff issue
   menu/resolution, task feedback, receipt photo, barcode confirm/failed, navigate-to-zone loading,
   and the Quality Rate / Dasher Rewards family now recognize (all recognize-only; zero state
@@ -159,7 +183,10 @@ was found **broken-in-part** (raw PII in capture envelopes) and moved to that en
   `For [redacted:<4hex>]` (marker kept, name+store masked). The known residual: the
   pickup-card-over-zone COMPOUND frame stays UNKNOWN deliberately (PII-bearing; follow-up gap
   noted on #796) — its customer name is covered by the #806/#815 UNKNOWN scrub, verify it masks.
-  - Confirmed: 0/2
+  - Confirmed: 1/2 (desk 07-26: 8 of the 11 families recognize with ZERO UNKNOWN siblings
+    (task_feedback, receipt photo, barcode confirm/failed, zone loading, rate detail, orders list,
+    ratings, qr_confirm). Three residual gaps confirmed still UNKNOWN — acceptance-rate detail,
+    scrolled last-100 list, customer-rating detail — filed as #865.)
 - **🆕 NEW — #827 (Part 1) + #813 — Uber offer time/miles parse + storeName + dropoff redact.** The
   Uber offer's fused `NN min (NN.N mi) total` node now parses distance from the parenthetical miles
   (was reading the *minutes* value as miles, ≈2.7× on every offer), minutes from the `min` token
@@ -172,19 +199,12 @@ was found **broken-in-part** (raw PII in capture envelopes) and moved to that en
   Uber `distanceMiles` should match the `(NN.N mi)` on the card, not the minutes; grep the recognized
   Uber offer capture tree for `& .*, San Antonio` / `, [A-Z][a-z]+$` intersection lines → every hit
   must be `[redacted:<4hex>]`, while store names (which contain no `, `) stay raw.
-  - Confirmed: 0/2
-- **🆕 NEW — #806 / PR #815 — UNKNOWN-path customer scrub (screen + notification + click).** The
-  `CustomerTextMarkers` backstop now scrubs UNKNOWN envelopes too (plus a new "Pickup for " marker), so
-  an unrecognized customer-bearing surface can no longer persist a marker-prefixed name raw.
-  **What to watch / desk-side:** grep the pull's UNKNOWN capture tree for `Deliver to ` / `Pickup for ` /
-  `Message from ` followed by a real name — every hit must be `[redacted]`; the `PipelineStats` summary's
-  UNKNOWN-customer-scrub counter should increment on such frames, with a `Pipeline` WARN naming the marker
-  prefix only. Known residual (by design, pinned in tests): prefix-less address/gate-code lines on UNKNOWN
-  frames persist until the #806 direction-1 recognition rules land.
-  - Confirmed: 1/2 (2026-07-21 dash, desk 07-22: `unknownCustomerScrubs=3` — "Pickup for "/"Deliver to "
-    UNKNOWN scrubs fired with prefix-only WARNs; the documented bare-node/prefix-less residual leaked as
-    expected on two DoorDash UNKNOWN sheets — recorded on #806 — and a NEW recognized-frame Uber variant
-    was found and filed as #825.)
+  - Confirmed: 1/2 (desk 07-26, post-install window: PASS — mi/min swap fixed against two card
+    receipts (`22 min (5.6 mi)` → distanceMiles 5.6; `17 min (7.5 mi)` → 7.5); recognized offer
+    captures show 0/102 raw intersection lines (all `[redacted:*]`, store names raw); screenshots
+    interpolate the real store post-install. Residuals: the `{storeName}` placeholder fallback when
+    the parse yields nothing (331 files on device, all pre-install) → #859; the expiry-overlay
+    storeName poisoning → #858.)
 - **🆕 NEW — #810 B1 / PR #818 — JOB_ACCEPT_MISMATCH close tripwire.** A job closing with more accepted
   offers than accounted physical orders now emits one `JOB_ACCEPT_MISMATCH` event + a `StateMachine` WARN
   (the 07-19 session-114 invisible-unassign class is no longer silent).
@@ -193,21 +213,26 @@ was found **broken-in-part** (raw PII in capture envelopes) and moved to that en
   should be non-empty iff an invisible unassign (or the documented #700 suppressed-arrival residual)
   occurred; a normal dash must produce ZERO rows (false-positive watch).
   - Confirmed: 1/2 (2026-07-21 dash, desk 07-22: FALSE-POSITIVE half — zero rows on a normal 6-delivery
-    DoorDash day, correct silence. The true-positive half still needs an invisible-unassign dash.)
+    DoorDash day, correct silence. The true-positive half still needs an invisible-unassign dash.
+    Desk 07-26: false-positive half re-confirmed — zero rows across three more normal DoorDash
+    dashes, 7 deliveries. The item stays open solely for the true-positive half.)
 - **🆕 NEW — #809 / PR #820 + #803 / PR #821 — pickup/dropoff PII redacts (desk-resolvable).** New
   redacts: `pickup_select_issue` (+ its issue-list variant, now recognized) masks the fused
   `For <name> • <store>` header to `For [redacted:<4hex>]`; `dropoff_pin_entry`/`dropoff_handoff` mask
   gate-code/PIN-bearing instruction bodies (incl. `PIN: NNNN` / fused `PinNNNN` variants).
   **Desk-side:** in the next pull, every capture of these four surfaces must show the masked forms — grep
   for `For [A-Z][a-z]+ [A-Z]\.` and `pin[\s:#]*\d` over the recognized capture tree → zero raw hits.
-  - Confirmed: 0/2
+  - Confirmed: 0/2 (desk 07-26: both greps → zero raw hits across the whole pull, but none of the
+    four specific surfaces occurred, so this is a clean null, not a confirmation.)
 - **🆕 NEW — #801 / PR #817 — bubble session-earnings freshness on 0.230.0.** The collapsed receipt
   no longer refreshes session `runningEarnings` (the 0.230.0 digit-wheel is unparseable); the figure now
   rides the dash-control "This dash" label parse alone. After a delivery on 0.230.0, verify the bubble's
   session-earnings figure still updates post-receipt; watch for a stale figure. Desk-side:
   `sessionEarnings=null` on collapsed parses is EXPECTED on 0.230.0; the dash-control parse lines are the
   live source.
-  - Confirmed: 0/2
+  - Confirmed: 0/2 (desk 07-26: the `sessionEarnings=` grep has NO corresponding log site in current
+    code — desk hint is dead, a no-hit proves nothing. Indirect evidence only: `[Earnings]: Saved:
+    $12.90` + an exact session reconciliation post-install. Needs dev eyes on the bubble figure.)
 - **🆕 NEW — Capability consent surface: honest copy + revoke aborts automation to manual (#422 PR 3).**
   Settings → Data & Privacy → **Automation & Consent** now lists, per bundled ruleset source, every
   automation tap the rules enable (Accept, Decline, Confirm a decline, Open the pay breakdown) with a
@@ -223,20 +248,20 @@ was found **broken-in-part** (raw PII in capture envelopes) and moved to that en
   `consent revoked/granted for capability key <sha256>` on each toggle (PII-safe — hash only), and the
   `Effects` WARN `Denied <action> — no granted capability for rule '…' (fail closed)` when a revoked
   action would have fired.
-  - Confirmed: 0/2
+  - Confirmed: 0/2 (desk 07-26: the desk half-signals showed — `Consent` grant lines are PII-safe
+    hashes-only, and the fail-closed abort WARN fired 4× (though from target-resolution failure
+    (#863), not revocation). The revoke-toggle round-trip still needs dev eyes.)
 
-- **🆕 NEW — DasherDirect "Transfer out" balance screen now blocked as sensitive (#794, Pledge surface).**
-  The DasherDirect "Transfer out" amount-entry screen (heading "Transfer out" over "$X.XX available")
-  evaded BOTH defense layers on the 2026-07-17 dash and leaked the plaintext balance to two UNKNOWN
-  debug captures. Now covered on two layers: a `sensitive.transfer_out` rule branch (priority-0 block)
-  AND a "Transfer out" `SensitiveTextMarkers` backstop keyword.
-  **What to watch:** navigating the DasherDirect Transfer-out flow no longer produces UNKNOWN captures
-  carrying any balance/"Transfer out"/"available" text. **Desk-side:** grep the pull's UNKNOWN capture
-  tree for "Transfer out" — must be ZERO hits after this build (it was 53 window + 24 click hits on the
-  07-17 pull); and `sensitiveDropped` in `PipelineStats` should increment on those DasherDirect windows
-  rather than `unknownCaptured`.
-  - Confirmed: 1/2 (2026-07-21 dash, desk 07-22 — post-#802 build: a "Transfer out" UNKNOWN click was
-    scrubbed at the marker layer; zero banking/balance text anywhere in the pull.)
+- **🆕 NEW (2026-07-26 desk) — Uber decline recording + Trip Radar family (#251/#786/#826/#856–#859).**
+  Once the decline-click rule / board recognition work lands, watch for: Uber declines recording as
+  `OFFER_DECLINED` (today 162/162 lifetime resolve `OFFER_TIMEOUT` in 0.4–18 s — the ignorance
+  default); the bubble no longer reporting "Timed Out!" on offers you declined; no more
+  "Started/Done Ubering!" churn while multi-apping (#857 — 7 real toggles recorded as 13 sessions);
+  no offer named "This request is no longer available" (#858). **Desk:** `offer_records` outcome
+  census per platform; the 7-real-vs-N-recorded session count against go_online/go_offline click
+  observations; merchantName quality census. Nothing to field-watch until the builds land — this
+  item is the parking spot so the family reaches the next post-build dash.
+  - Confirmed: 0/2 (blocked on builds)
 
 - **🆕 NEW — Patterns tab store cards: glanceable face + detail bottom sheet (#765 / PR #799).**
   The store report cards were redesigned: the card **face** now shows only store name + location chip
@@ -1915,6 +1940,116 @@ Accept and Decline registered on DoorDash — and moved to that session's entry 
   - Confirmed: 0/2.
 
 ---
+
+## 2026-07-22→24 — DoorDash + Uber multi-app week (pull 2026-07-25, desk-analyzed 2026-07-26)
+
+**Platform(s) tested:** DoorDash + Uber, heavily multi-apped (both online simultaneously, frequent
+app-switching, some idle/gaming stretches).
+**Branch under test:** TWO builds — Build A (through 07-24 17:58:30; carried #830/#827/#825/#795/#796,
+proven by `presentationKey` present on 07-23 events) and Build B = `master` @ `ddd9e7ff` (installed
+07-24 17:58:30 exactly; adds the #843/#845/#847/#848 wave + #416/#590 + the Phase-6 feature modules).
+`versionName` stayed 0.230.0 across both — partition by the install wall-clock, not version or date.
+**Field conditions:** San Antonio, evening dashes 07-23 and 07-24; 1273 captures, 4 log rotations +
+`app.log`, DB at v15/projector v8. Device purged post-pull (standing step 3b).
+**Money:** exact to the cent on all three money-bearing sessions ($47.08 / $26.78 / $12.90 — Σ
+attributed == reported, zero orphans, zero unattributed). Zero ERROR lines in ~87k; zero pipeline
+restarts; `notifListener` flap still gone.
+
+### Bugs / root causes (all desk-confirmed from this pull; issues filed 2026-07-26)
+
+#### 1. Uber declines recorded as timeouts — recording defect, not display (#786/#826/#251)
+Dasher observation was "we record the decline, the bubble displays timeout" — desk shows the
+**inverse**: the ledger has 162/162 Uber offers `OFFER_TIMEOUT` (lifetime, zero `OFFER_DECLINED`),
+resolving in 0.4–18 s vs genuine DoorDash expiries at 45–120 s. `OFFER_TIMEOUT` is the
+`resolveOfferOutcome` fall-through default ("no click evidence"), not an expiry finding. What read
+as "declined" inside the bubble is the **evaluation verdict banner** ("DECLINE", red/X — advice),
+which visually dominates the small "Timed out" `OutcomeChip` on the same resolved card — display
+ambiguity filed as #864. Dev identified the decline control: the anonymous **106×106 textless
+Button** at the card's right edge (5 on disk; board variant 80×80). Click-side mechanics: UNKNOWN
+clicks dedup on a text-less/bounds-less structural hash, so repeat decline taps collapse to one
+LRU entry (62 pre-gate anonymous clicks in Uber-only windows vs 24 on disk) — but a decline click
+RULE classifies before the gate and bypasses all of it, so #786 alone recovers every witnessed
+decline (~36–40% of resolutions show one; the rest have no witness of any kind — swipe-dismiss is
+API-invisible, the board rotates focus, requests get taken). Proven-negative: the card exposes NO
+countdown (deadline inference unavailable); the platform's own "not a decline" witness exists
+(`This request is no longer available` overlay → #858).
+
+#### 2. Trip Radar: the board is the surface, and it reframes "Uber offers" (#251)
+**72 of 114** Uber UNKNOWN window captures (and 14/24 UNKNOWN clicks) are the Trip Radar board —
+a scrollable multi-request list over the map, each card carrying full offer anatomy + `Match` +
+a textless dismiss-X. `uber.screen.offer` anchors on the single focused card
+(`primary_touch_area`); board scroll/rotation re-anchors it → replace-or-leave churn. 144
+"offers" in ~2 h of Uber-online is a browse feed, not 144 decisions. Full design analysis posted
+to #251, deliberately framed as the generalizable **offer-board pattern** (dev direction
+2026-07-26: Walmart Spark / Instacart / Shipt are board-shaped too — the focused-card model is
+the special case). Key open design questions on #251: card identity/lifecycle (visibility ≠
+liveness), browse-vs-presented semantics, resolution honesty for unwitnessed disappearance,
+per-card actions, and privacy riding recognition.
+
+#### 3. Uber online detection: idle_map claims offline from absence (#857)
+7 real go_online/go_offline toggle pairs recorded as **13 sessions** (6 spurious splits — one
+post-Build-B — plus 14 grace-absorbed false claims). 20 of 27 Online→Offline edges fired on
+frames with NO offline evidence (partial renders satisfy the rule's two `notExists` vacuously;
+worst specimen 115 nodes, zero text). Multi-apping is the amplifier, not the cause: the bad frame
+fires while Uber is foreground; switching to DoorDash starves the 10 s grace of contradicting
+frames (4 of 6 fatal splits: 8–22 DD frames, 0 Uber frames in-window). DoorDash contrast: 0/6
+spurious (its idle_map requires positive markers + rejects). Correcting evidence was discarded —
+Trip Radar frames (online-only proof) landed UNKNOWN inside a fatal grace window.
+
+#### 4. Uber screenshots "fading": exit transition, not entrance (#858/#859)
+Entrance grabs are clean (settle timing identical to DoorDash, ~0.9 s median). The faded ones are
+the **dying card** — Uber renders the expiry message OVER the dimmed card, the rule keeps
+matching (no `validate`), and the storeName parse latched the overlay: `offer_records` got
+`merchantName = "This request is no longer available"`, TTS spoke it, a screenshot is named it,
+and the poisoned `presentationKey` fired a spurious #830 replace (#858). Evidence-quality facets
+(43% stale-layer captures, 140 screenshots for 112 offers via parsedHash re-fire, 331
+`Offer - {storeName}.png` placeholder files) → #859.
+
+#### 5. Privacy sweep (Pledge surface)
+`shareable.log` CLEAN (0 merchant/customer strings in 1588 lines; #772 holding). Recognized Uber
+offer surface CLEAN (0/102 raw dropoff lines — #813 redact working). New findings, all filed:
+Trip Radar UNKNOWN captures carry raw customer cross-streets (34/114 window + 8/24 click) → #856
+(blocked-by #251, the primary control); two bare-customer-NAME UNKNOWN variants (uncatalogued
+"Switch to pick up at <store>" sheet; a `pickup_pre_arrival` partial-render race with label+name
+as separate sibling nodes — a per-node prefix scan cannot join them) → posted to #806; recognized
+`dropoff_pre_arrival` redact misses the `Building Name` value → #860; Uber selfie ID-verification
+camera lands UNKNOWN instead of sensitive-blocked (document-image class; nil actual exposure —
+camera preview contributes no a11y pixels) → #861; the sink scrub self-scrubs its own
+sensitive-marker WARN in `shareable.log`, losing the diagnostic → #862. Known #806 direction-1
+residual (address + gate code ×2 + apt unit on UNKNOWN DoorDash sheets) leaked as documented.
+**Standing dev decisions:** the 2302 on-device evidence PNGs are unredacted images (customer
+cross-streets visible in pulled samples) — retention policy is the dev's call; ditto purging the
+07-25 pull's PII-bearing fixtures once #856/#858/#251 builds no longer need them.
+
+#### 6. Smaller finds
+Intermittent `confirm_decline` target-resolution failure (4×, one post-Build-B, fail-closed to
+manual, #788-adjacent shape) → #863. Three performance-hub recognition gaps survive #837 → #865.
+`idle_map`'s false frames also sat inside 2 of 162 live offer windows (minor churn contributor).
+07-23 evening UNKNOWN census is a lower bound (burst cap hit at 20:55).
+
+### Validated / retired this entry
+- **#794 DasherDirect Transfer-out block — VALIDATED 2/2, retired.** Second clean pass: zero
+  banking/balance text in all 1273 captures; the one post-install Transfer-out UNKNOWN click was
+  scrubbed at the marker layer; ~262 DasherDirect frames dropped by the sensitive gate.
+- **#806 UNKNOWN customer scrub — fired-half VALIDATED 2/2, retired from checklist.** 10 scrubs,
+  prefix-only WARNs, `unknownCustomerScrubs=10`. The item retires; the *residual* work continues
+  on #806 itself (new variants posted there, Uber-scale variant in #856).
+- **#843 consent 1/2** (mechanism proven from logs: migration cleared → nothing auto-granted →
+  3 explicit grants; UI half needs dev eyes). **#830 1/2** (core invariant PASS; accept chain
+  untested). **#827-P1/#813 1/2** (mi/mi fix + redact PASS). **#796 1/2** (8/11 families clean;
+  gaps → #865). **#810-B1** false-positive half re-confirmed. #845/#823-P1/#825/#795/#810-B2
+  INCONCLUSIVE — their trigger conditions never occurred.
+
+### Meta
+- Two desk-hint greps in checklist items (#845 `Tts` language-apply, #801 `sessionEarnings=`) have
+  NO corresponding log sites in current code — a no-hit is not evidence. The hint or the log site
+  needs reconciling whenever those items are next touched (SSOT lesson: a desk hint is a second
+  copy of a log contract).
+- Crash recovery survived an APK replacement mid-session (session-179 straddled the install:
+  replayed 2 observations over the snapshot, suppressed effects during recovery, kept odometer).
+  Treat that session as an artifact for offer/delivery counts.
+- Uber `high_priority` offer pushes (`Uber Request` / `N new requests just came in!`) are unruled
+  and arrive regardless of foreground app — relevant to #785 as a board-arrival witness.
 
 ## 2026-07-22 — dash in progress; DoorDash + SECOND Uber attempt (logged live from the field via chat; desk-analyzed 2026-07-22, results inline + at entry end)
 
