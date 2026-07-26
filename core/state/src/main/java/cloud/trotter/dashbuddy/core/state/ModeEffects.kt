@@ -128,7 +128,9 @@ internal fun EffectMap.diffMode(
                     )
                     // #438 B5: StopOdometer arbitrated at the cross-platform tier (see above).
                 }
-                add(AppEffect.EndSession(prev.platform.name))
+                // #867: the ENDED session (prevSession), not the diff-wide `sessionId` — on a
+                // dash-replaced-by-a-fresh-dash edge that local resolves to the NEW session.
+                add(AppEffect.EndSession(prev.platform.name, sessionId = prevSession.sessionId))
             }
         }
 

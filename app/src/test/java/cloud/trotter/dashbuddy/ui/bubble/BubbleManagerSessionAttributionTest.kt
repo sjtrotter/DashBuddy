@@ -126,4 +126,17 @@ class BubbleManagerSessionAttributionTest {
             saveMessage(eq(uberSession), any(), any())
         }
     }
+
+    @Test
+    fun `endSession files its chat copy to the ENDED session`() {
+        val (manager, chatRepository) = buildFixture().let { it.manager to it.chatRepository }
+
+        // The grace-lapsed shape: the Uber dash's end commits while DoorDash owns the screen, and
+        // the Uber region's own session is already gone — only the effect knows which dash ended.
+        manager.endSession(Platform.Uber.name, sessionId = uberSession)
+
+        verifyBlocking(chatRepository, timeout(5_000)) {
+            saveMessage(eq(uberSession), any(), any())
+        }
+    }
 }

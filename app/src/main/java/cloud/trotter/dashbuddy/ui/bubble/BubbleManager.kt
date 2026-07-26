@@ -169,13 +169,19 @@ class BubbleManager @Inject constructor(
     }
 
     /**
-     * Session chat copy only — the dash id derives from state (#437). #867: no explicit session —
-     * [cloud.trotter.dashbuddy.core.state.AppEffect.EndSession] carries only the platform name, and
-     * the ending session is still the active one at this instant, so the fallback is correct here.
+     * Session chat copy only — the dash id derives from state (#437). #867: [sessionId] is the
+     * session that just ENDED, carried by the effect. The active session is NOT a safe stand-in
+     * here: a grace-lapsed end commits on a `GRACE_COMMIT` timer or a foreign platform's frame (so
+     * `activeSessionId` is the OTHER dash), and the ending region's own session is already null by
+     * execute time even single-app (so the line would file session-less).
      */
-    fun endSession(platformName: String? = null) {
+    fun endSession(platformName: String? = null, sessionId: String? = null) {
         val verb = sessionVerb(platformName)
-        postMessage(context.getString(R.string.bubble_chat_session_done, verb), ChatPersona.Dispatcher)
+        postMessage(
+            context.getString(R.string.bubble_chat_session_done, verb),
+            ChatPersona.Dispatcher,
+            sessionId = sessionId,
+        )
     }
 
     /**

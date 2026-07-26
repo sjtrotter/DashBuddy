@@ -267,5 +267,16 @@ sealed class AppEffect {
     data class StartSession(val sessionId: String, val platformName: String) : AppEffect() {
         override val effectKey: String get() = "start_session:$sessionId"
     }
-    data class EndSession(val platformName: String? = null) : AppEffect()
+    data class EndSession(
+        val platformName: String? = null,
+        /**
+         * The session that just ENDED (#867) — the chat copy this effect posts belongs to it, not
+         * to whatever session is active when the effect executes. Load-bearing on a grace-lapsed
+         * end: the commit can ride a `GRACE_COMMIT` timer or a FOREIGN platform's frame, by which
+         * point `BubbleManager.activeSessionId` is the other platform's dash (the #867 class); and
+         * even single-app the ending region's session is already null at execute time, which would
+         * file the line session-less. Null only for a caller with no session in scope.
+         */
+        val sessionId: String? = null,
+    ) : AppEffect()
 }

@@ -579,6 +579,20 @@ class SideEffectEngineTest {
     }
 
     @Test
+    fun `the session lifecycle effects hand their own session to BubbleManager (#867)`() = runTest {
+        // Start/end chat copy is filed to the session the EFFECT names. The end is the load-bearing
+        // one: a grace-lapsed end executes when the active session is another platform's (or none).
+        val engine = buildEngine(StandardTestDispatcher(testScheduler))
+
+        engine.process(AppEffect.StartSession("uber-sess", "Uber"), recovering = false)
+        engine.process(AppEffect.EndSession("Uber", sessionId = "uber-sess"), recovering = false)
+        runCurrent()
+
+        verify(bubbleManager).startSession(eq("uber-sess"), eq("Uber"))
+        verify(bubbleManager).endSession(eq("Uber"), eq("uber-sess"))
+    }
+
+    @Test
     fun `a gate-denied rule effect is not marked fired`() = runTest {
         val engine = buildEngine(StandardTestDispatcher(testScheduler))
         // Distinct dedupeKeys: a denied fire still consumes the wall-clock

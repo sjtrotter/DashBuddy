@@ -447,6 +447,47 @@ class EffectMapTest {
     }
 
     @Test
+    fun `an ending session's chat copy carries the ENDED session, even on a foreign frame (#867)`() {
+        // The grace-lapsed shape: the Uber dash's end commits on a GRACE_COMMIT timer or a
+        // DoorDash frame, so `activeSessionId` is the DoorDash dash by execute time — and the Uber
+        // region's own session is already null. Nothing at the edge can recover the ended session;
+        // the effect has to carry it.
+        val ddRegion = PlatformRegion(
+            platform = Platform.DoorDash,
+            mode = Mode.Online,
+            session = Session("dd-sess", startedAt = 100L),
+        )
+        fun state(uberSession: Session?, uberMode: Mode) = AppState(
+            regions = Regions(
+                flow = FlowRegion(flow = Flow.Idle, activePlatform = Platform.DoorDash),
+                platforms = mapOf(
+                    Platform.Uber to PlatformRegion(
+                        platform = Platform.Uber,
+                        mode = uberMode,
+                        session = uberSession,
+                    ),
+                    Platform.DoorDash to ddRegion,
+                ),
+            ),
+        )
+        val prev = state(Session("uber-sess", startedAt = 100L), Mode.Online)
+        val next = state(null, Mode.Offline)
+
+        val effects = effectMap.diff(prev, next, screenObs(flow = Flow.Idle))
+
+        assertEquals("dd-sess", next.activeSessionId()) // the wrong dash the edge would pick
+        val end = effects.effectsOfType<AppEffect.EndSession>().single()
+        assertEquals(
+            "the 'done dashing' chat copy must be filed to the ENDED Uber dash",
+            "uber-sess",
+            end.sessionId,
+        )
+        // The "Session Ended"/DASH_STOP siblings agree — one provenance for the whole edge.
+        val stop = effects.logEvents().first { it.event.type == AppEventType.DASH_STOP }
+        assertEquals("uber-sess", stop.event.sessionId)
+    }
+
+    @Test
     fun `the offer heads-up notification carries the resolving platform's session too (#867)`() {
         // The eval-land step ALSO writes a chat line (the offer summary) via BubbleManager, so
         // PostOfferNotification carries the same provenance.

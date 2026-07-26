@@ -316,7 +316,7 @@ class SideEffectEngine @Inject constructor(
                 // the crash, so recovery reconciliation re-establishes tracking without re-anchoring.
                 odometerEffectHandler.onSessionStarted(effect.sessionId)
             }
-            is AppEffect.EndSession -> bubbleManager.endSession(effect.platformName)
+            is AppEffect.EndSession -> bubbleManager.endSession(effect.platformName, effect.sessionId)
             is AppEffect.StartOdometer -> odometerEffectHandler.startUp()
             is AppEffect.StopOdometer -> odometerEffectHandler.shutDown()
             is AppEffect.PauseOdometer -> odometerEffectHandler.pause()
