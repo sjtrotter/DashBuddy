@@ -1177,6 +1177,55 @@
       }
     },
     {
+      // #786 — the offer card's dismiss "X". Field-confirmed (2026-07-23/24 pulls, five on-disk
+      // click envelopes) as an ANONYMOUS CHILDLESS Button: text/id/desc all null, no children,
+      // 106x106 at the focused card's top-right. Uber shows NO confirm sheet, so one tap COMMITS
+      // the decline — hence the decline-COMMIT intent, which latches
+      // PendingOffer.declineCommittedAt through the existing #594 machinery (DoorDash's
+      // confirm-sheet rule proves that chain; no state-machine change is needed here).
+      //
+      // Separability from the ACCEPT interaction is STRUCTURAL, not geometric: the accept tap
+      // arrives as the offer CardView itself (2026-07-21 18:39:25 capture) — a non-leaf
+      // androidx.cardview.widget.CardView whose subtree carries the "Match"/"Accept" label. So
+      // class-exact + isLeaf + hasNoId already exclude it three ways over; the text guards are
+      // belt-and-suspenders that keep the exclusion honest if a future variant ships a non-leaf
+      // decline node. Deliberately NO bounds/geometry predicates — those would bake this device's
+      // pixels into rule data.
+      //
+      // Scoped to screenIs "offer" (the focused offer card). The Trip Radar board's 80x80 sibling X
+      // lands on UNKNOWN screens and is therefore out of scope until #251 recognizes the board.
+      "id": "uber.click.decline_offer",
+      "priority": 6,
+      "screenIs": "offer",
+      "intent": "decline_offer",
+      "require": {
+        "all": [
+          {
+            "isClickable": true
+          },
+          {
+            "hasNoId": true
+          },
+          {
+            "hasClassName": "android.widget.Button"
+          },
+          {
+            "isLeaf": true
+          },
+          {
+            "not": {
+              "hasAnyText": "Accept"
+            }
+          },
+          {
+            "not": {
+              "hasAnyText": "Match"
+            }
+          }
+        ]
+      }
+    },
+    {
       "id": "uber.click.go_online",
       "priority": 10,
       "intent": "go_online",
