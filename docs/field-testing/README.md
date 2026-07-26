@@ -205,6 +205,16 @@ was found **broken-in-part** (raw PII in capture envelopes) and moved to that en
     interpolate the real store post-install. Residuals: the `{storeName}` placeholder fallback when
     the parse yields nothing (331 files on device, all pre-install) → #859; the expiry-overlay
     storeName poisoning → #858.)
+- **🆕 NEW — #862 — the scrub diagnostics stop scrubbing themselves (desk-only).** The capture
+  layer's own "the privacy layer fired" WARNs used to name the tripped marker verbatim, so the
+  shareable-log sink redacted the whole line out of the exported bug report; they now name it by a
+  log-safe **id** (first two alphanumerics + length — `Tr12` = `Transfer out`).
+  **What to watch:** nothing on-dash. **Desk:** in the next pull's `shareable.log`,
+  `grep -e 'Capture scrubbed:' -e 'Capture backstop:'` returns the intact diagnostic lines (with `marker id
+  '<id>'`), and no `[scrubbed:<marker>]` placeholder remains that corresponds to one of our own
+  capture WARNs — any `[scrubbed:…]` left is a REAL upstream leak worth chasing. The `app.log`
+  firehose copies must match line-for-line.
+  - Confirmed: 0/2
 - **🆕 NEW — #810 B1 / PR #818 — JOB_ACCEPT_MISMATCH close tripwire.** A job closing with more accepted
   offers than accounted physical orders now emits one `JOB_ACCEPT_MISMATCH` event + a `StateMachine` WARN
   (the 07-19 session-114 invisible-unassign class is no longer silent).

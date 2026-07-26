@@ -55,7 +55,10 @@ class CaptureWriter @Inject constructor(
             val marker = SensitiveTextMarkers.findMarker(event.tree)
             if (marker != null) {
                 stats.onScrubbedUnknownCapture()
-                Timber.tag("Pipeline").w("Capture scrubbed: UNKNOWN screen hit sensitive marker '%s'", marker)
+                // #862: the marker is named by its log-safe id, NOT verbatim — a verbatim
+                // marker makes this WARN self-scrubbing at the shareable-log sink.
+                Timber.tag("Pipeline")
+                    .w("Capture scrubbed: UNKNOWN screen hit sensitive marker id '%s'", MarkerLogId.of(marker))
                 return obs
             }
         }
@@ -101,21 +104,23 @@ class CaptureWriter @Inject constructor(
                 marker == null -> redactedTree
                 obs.target == UNKNOWN_TARGET -> {
                     stats.onUnknownCustomerScrub()
-                    // Principle 7: log the MARKER PREFIX only — NEVER the leaked value.
+                    // Principle 7: log the MARKER ID only (#862) — NEVER the leaked value,
+                    // and never the marker verbatim (that self-scrubs at the sink).
                     Timber.tag("Pipeline").w(
-                        "Capture backstop: UNKNOWN screen carried customer marker '%s' — " +
+                        "Capture backstop: UNKNOWN screen carried customer marker id '%s' — " +
                             "scrubbing node from envelope",
-                        marker,
+                        MarkerLogId.of(marker),
                     )
                     CustomerTextMarkers.scrub(redactedTree)
                 }
                 else -> {
                     stats.onRedactBackstopScrub()
-                    // Principle 7: log the MARKER + rule id only — NEVER the leaked value.
+                    // Principle 7: log the MARKER ID + rule id only (#862) — NEVER the leaked
+                    // value, and never the marker verbatim (that self-scrubs at the sink).
                     Timber.tag("Pipeline").w(
                         "Capture backstop: recognized frame carried un-redacted customer marker " +
-                            "'%s' (ruleId=%s) — scrubbing node from envelope",
-                        marker, obs.ruleId,
+                            "id '%s' (ruleId=%s) — scrubbing node from envelope",
+                        MarkerLogId.of(marker), obs.ruleId,
                     )
                     CustomerTextMarkers.scrub(redactedTree)
                 }
@@ -163,7 +168,9 @@ class CaptureWriter @Inject constructor(
             val marker = SensitiveTextMarkers.findMarker(event.node)
             if (marker != null) {
                 stats.onScrubbedUnknownCapture()
-                Timber.tag("Pipeline").w("Capture scrubbed: UNKNOWN click hit sensitive marker '%s'", marker)
+                // #862: marker named by log-safe id, not verbatim (see captureScreen).
+                Timber.tag("Pipeline")
+                    .w("Capture scrubbed: UNKNOWN click hit sensitive marker id '%s'", MarkerLogId.of(marker))
                 return obs
             }
         }
@@ -178,11 +185,12 @@ class CaptureWriter @Inject constructor(
             val marker = CustomerTextMarkers.firstUnredactedMarker(event.node)
             if (marker != null) {
                 stats.onUnknownCustomerScrub()
-                // Principle 7: log the MARKER PREFIX only — NEVER the leaked value.
+                // Principle 7: log the MARKER ID only (#862) — NEVER the leaked value,
+                // and never the marker verbatim (that self-scrubs at the sink).
                 Timber.tag("Pipeline").w(
-                    "Capture backstop: UNKNOWN click node carried customer marker '%s' — " +
+                    "Capture backstop: UNKNOWN click node carried customer marker id '%s' — " +
                         "scrubbing node from envelope",
-                    marker,
+                    MarkerLogId.of(marker),
                 )
                 CustomerTextMarkers.scrub(event.node)
             } else {
@@ -242,7 +250,11 @@ class CaptureWriter @Inject constructor(
                 ?: raw.actionLabels.firstNotNullOfOrNull { SensitiveTextMarkers.findMarker(it) }
             if (marker != null) {
                 stats.onScrubbedUnknownCapture()
-                Timber.tag("Pipeline").w("Capture scrubbed: UNKNOWN notification hit sensitive marker '%s'", marker)
+                // #862: marker named by log-safe id, not verbatim (see captureScreen).
+                Timber.tag("Pipeline").w(
+                    "Capture scrubbed: UNKNOWN notification hit sensitive marker id '%s'",
+                    MarkerLogId.of(marker),
+                )
                 return obs
             }
         }
@@ -280,21 +292,23 @@ class CaptureWriter @Inject constructor(
                 marker == null -> redactedRaw
                 obs.target == UNKNOWN_TARGET -> {
                     stats.onUnknownCustomerScrub()
-                    // Principle 7: log the MARKER PREFIX only — NEVER the leaked value.
+                    // Principle 7: log the MARKER ID only (#862) — NEVER the leaked value,
+                    // and never the marker verbatim (that self-scrubs at the sink).
                     Timber.tag("Pipeline").w(
-                        "Capture backstop: UNKNOWN notification carried customer marker '%s' — " +
+                        "Capture backstop: UNKNOWN notification carried customer marker id '%s' — " +
                             "scrubbing field from envelope",
-                        marker,
+                        MarkerLogId.of(marker),
                     )
                     CustomerTextMarkers.scrubNotif(redactedRaw)
                 }
                 else -> {
                     stats.onNotifRedactBackstopScrub()
-                    // Principle 7: log the MARKER + rule id only — NEVER the leaked value.
+                    // Principle 7: log the MARKER ID + rule id only (#862) — NEVER the leaked
+                    // value, and never the marker verbatim (that self-scrubs at the sink).
                     Timber.tag("Pipeline").w(
                         "Capture backstop: recognized notification carried un-redacted customer " +
-                            "marker '%s' (ruleId=%s) — scrubbing field from envelope",
-                        marker, obs.ruleId,
+                            "marker id '%s' (ruleId=%s) — scrubbing field from envelope",
+                        MarkerLogId.of(marker), obs.ruleId,
                     )
                     CustomerTextMarkers.scrubNotif(redactedRaw)
                 }

@@ -107,6 +107,7 @@ SELECT taskId, realizedMiles FROM delivery_records;
 | #438 B4 | `grep 'OfferActionReceiver:'` | each tap line carries `(offer=<hash>)` (full hash, same rendering as OfferEffects) — exact-match it to the resolved `OFFER_*` event's hash; a mismatch = acted on the wrong offer |
 | #731 | `grep -i 'notification listener'` | the per-event lines are the PRIMARY record: first disconnect per process at WARN, the rest (and all connects) at INFO, each with a running count. `grep -c` them for the flap rate; per process, `connects − disconnects ≈ process deaths` (itself a diagnostic — a kill never logs its disconnect). The `PipelineStats` summary fields (`notifListenerConnects=`/`Disconnects=`) are corroboration ONLY — the summary emits per 50 forwarded observations, i.e. only while actively sensing, so it is blind exactly when the idle-time flap is worst |
 | #159 | `grep 'downgrade averted'` / `grep 'store-chain resolved'` | monotonic backstop held / shadow resolution milestones |
+| #862 | `grep -e 'Capture scrubbed:' -e 'Capture backstop:'` | the privacy layer firing, now readable IN `shareable.log` (pre-#862 these lines redacted themselves to `[scrubbed:<marker>]`). Each names the marker by **id** — first two alphanumerics + length (`Tr12` = `Transfer out`, `De11` = `Deliver to `); decode against `SensitiveTextMarkers.KEYWORDS` / `CustomerTextMarkers.MARKERS` (ids are pinned collision-free). A `[scrubbed:…]` line remaining in the export is now a REAL upstream leak, not our own diagnostic |
 
 ## Capture-tree checks
 

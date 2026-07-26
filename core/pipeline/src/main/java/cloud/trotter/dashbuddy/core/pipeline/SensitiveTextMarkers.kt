@@ -105,8 +105,11 @@ object SensitiveTextMarkers {
     /**
      * Shaped-value patterns no keyword list can cover: SSNs and card PANs.
      * Conservative shapes to avoid flagging ordinary money/IDs.
+     *
+     * `internal` (#862) so `MarkerLogIdTest` pins the LIVE patterns rather than a hand-copied
+     * list — a shape added here is covered by the log-safety guard automatically.
      */
-    private val SHAPE_PATTERNS: List<Regex> = listOf(
+    internal val SHAPE_PATTERNS: List<Regex> = listOf(
         // SSN: 123-45-6789
         Regex("""\b\d{3}-\d{2}-\d{4}\b"""),
         // Card PAN: 4 groups of 4 separated by space/dash (16 digits)
@@ -119,8 +122,10 @@ object SensitiveTextMarkers {
      * clean. Losing a real banking screen to disk because a homoglyph tripped the
      * normalizer would defeat the whole backstop, so an unexpected throw drops the
      * capture exactly as a real marker would.
+     *
+     * `internal` (#862) so `MarkerLogIdTest` pins the live sentinel, not a copy of it.
      */
-    private const val NORMALIZE_FAILED = "normalize-error"
+    internal const val NORMALIZE_FAILED = "normalize-error"
 
     /**
      * Markers pre-normalized once (evasion resistance, #590). The scan compares
@@ -163,11 +168,17 @@ object SensitiveTextMarkers {
         return sb.toString().lowercase(Locale.ROOT)
     }
 
+    /**
+     * The marker name reported for a shaped-value hit. `internal` + factored out (#862) so the
+     * log-safety guard derives the same names production does instead of re-spelling the format.
+     */
+    internal fun shapeMarkerName(pattern: Regex): String = "shape:${pattern.pattern}"
+
     private fun scan(normalizedText: String): String? {
         val keyword = normalizedKeywords.firstOrNull { (norm, _) -> normalizedText.contains(norm) }
         if (keyword != null) return keyword.second
         return SHAPE_PATTERNS.firstOrNull { it.containsMatchIn(normalizedText) }
-            ?.let { "shape:${it.pattern}" }
+            ?.let { shapeMarkerName(it) }
     }
 
     /**
