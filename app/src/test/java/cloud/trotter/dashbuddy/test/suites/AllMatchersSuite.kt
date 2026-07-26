@@ -13,6 +13,7 @@ import cloud.trotter.dashbuddy.core.pipeline.rules.NotificationRulesetTest
 import cloud.trotter.dashbuddy.core.pipeline.rules.ParseOutputGoldenTest
 import cloud.trotter.dashbuddy.core.pipeline.rules.ScreenRulesetTest
 import cloud.trotter.dashbuddy.core.pipeline.rules.TriageRulesTest
+import cloud.trotter.dashbuddy.core.pipeline.rules.UberIdleMapOfflineEvidenceTest
 import org.junit.runner.RunWith
 import org.junit.runners.Suite
 
@@ -51,6 +52,9 @@ import org.junit.runners.Suite
  *   anchor across ALL platforms' generated assets is independently caught by the rules-INDEPENDENT
  *   [cloud.trotter.dashbuddy.core.pipeline.SensitiveTextMarkers] backstop (a documented,
  *   shrink-only ledger excuses pre-existing DoorDash debt out of D10's Uber scope).
+ * - [UberIdleMapOfflineEvidenceTest] — #857 negative guard: real partially-rendered Uber
+ *   home captures (`fixtures/uber_idle_map_partial/`) must classify UNKNOWN, so
+ *   `uber.screen.idle_map` can never claim `modeHint: offline` from absence again.
  * - [OfferPipelineTest] — Layer 2 (#105): a real `offer_popup/` snapshot through the SAME
  *   production ruleset, feeding the recognized `ParsedOffer` into `OfferEvaluator` and pinning the
  *   resulting `OfferEvaluation` — proves the recognition→parse→evaluate wiring, not just the
@@ -66,6 +70,7 @@ import org.junit.runners.Suite
     ClickRulesetTest::class,
     NotificationRulesetTest::class,
     TriageRulesTest::class,
+    UberIdleMapOfflineEvidenceTest::class,
     DefaultRulesIntegrationTest::class,
     NotificationClassifierTest::class,
     ClickClassifierTest::class,

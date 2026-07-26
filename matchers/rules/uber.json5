@@ -1099,10 +1099,63 @@
     {
       "id": "uber.screen.idle_map",
       "priority": 130,
+      // #857 — this rule claims `modeHint: offline`, so it must never fire on ABSENCE.
+      // The pre-#857 shape was "the home overlay container exists AND no online text is
+      // present", but that container is present online AND offline, so ANY partially
+      // rendered tree (status sheet not inflated, label subtree missing, label mid-refresh
+      // reading "Loading…", or the 115-node zero-text worst case) satisfied it vacuously
+      // and forged an Online→Offline edge. Field measurement over the 2026-07-25 pull:
+      // 20 of 27 Online→Offline edges fired on frames carrying no offline evidence at all;
+      // 6 of them destroyed a real session (7 real toggles recorded as 13 sessions).
+      //
+      // So POSITIVE evidence is required, mirroring `doordash.screen.idle_map`: the
+      // fielded offline-home labels (`status_label_leading` = "You're offline", the
+      // `status_assistant_overlay_text` = "You're ready to go online" variant, or the big
+      // "GO" button) — all three co-occur with a genuinely offline home in the corpus, and
+      // none appears on any online (awaiting_offer / offer / active_trip) frame.
+      //
+      // Bias is deliberately "believe still online": a partial genuinely-offline frame now
+      // classifies UNKNOWN, makes no mode claim, and the platform region keeps its last
+      // mode until a settled frame or the (already recognized) `uber.click.go_offline`
+      // arrives. A false offline destroys a session record permanently; a delayed offline
+      // costs seconds.
       "state": {
         "flow": "idle",
         "modeHint": "offline"
       },
+      "reject": [
+        // Online-implying text — previously the `notExists` arms of `require`, moved here
+        // to match the DoorDash rule's shape. Behaviourally identical, read as guards.
+        {
+          "exists": {
+            "hasText": "You're online"
+          }
+        },
+        {
+          "exists": {
+            "hasTextContaining": "Finding trips"
+          }
+        },
+        // Status label mid-refresh: the sheet is inflated but its text has not settled, so
+        // whatever the label says next is unknown. Defense-in-depth — the positive arms
+        // below already fail such a frame; this makes the intent explicit and keeps the
+        // rule safe if a future positive marker is added that can co-render with a
+        // still-loading label. (NOTE: "Unable to go offline" is deliberately NOT rejected —
+        // it is Uber's overlay-permission warning and co-occurs with 7 of the 9 genuinely
+        // offline corpus frames.)
+        {
+          "exists": {
+            "all": [
+              {
+                "hasIdSuffix": "status_label_leading"
+              },
+              {
+                "hasTextContaining": "Loading"
+              }
+            ]
+          }
+        }
+      ],
       "require": {
         "all": [
           {
@@ -1111,13 +1164,35 @@
             }
           },
           {
-            "notExists": {
-              "hasText": "You're online"
-            }
-          },
-          {
-            "notExists": {
-              "hasTextContaining": "Finding trips"
+            "exists": {
+              "any": [
+                {
+                  "all": [
+                    {
+                      "hasIdSuffix": "status_label_leading"
+                    },
+                    {
+                      "hasText": "You're offline"
+                    }
+                  ]
+                },
+                {
+                  "all": [
+                    {
+                      "hasIdSuffix": "status_assistant_overlay_text"
+                    },
+                    {
+                      "hasText": "You're ready to go online"
+                    }
+                  ]
+                },
+                {
+                  // The big GO button. It carries no view id, so the anchor is the exact
+                  // (case-sensitive) label — tight enough that map chrome, whose text nodes
+                  // are merchant names, cannot collide.
+                  "hasTextCaseSensitive": "GO"
+                }
+              ]
             }
           }
         ]
