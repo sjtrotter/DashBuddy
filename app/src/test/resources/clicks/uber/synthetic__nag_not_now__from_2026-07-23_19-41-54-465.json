@@ -1,0 +1,40 @@
+{
+ "captureId": "synthetic-786-nag-not_now",
+ "pipelineId": "accessibility.click",
+ "schemaId": "click_context.v1",
+ "timestamp": 1784853714451,
+ "platform": "uber",
+ "ruleId": null,
+ "classificationName": "UNKNOWN",
+ "metadata": {
+  "engineVersion": 1,
+  "rulesetFormatVersion": 2,
+  "pipelineVersions": {
+   "accessibility": 1,
+   "accessibility.window": 1,
+   "accessibility.click": 1,
+   "accessibility.long_click": 1,
+   "accessibility.scroll": 1,
+   "accessibility.focus": 1,
+   "notification": 1
+  },
+  "stateMachineApiVersion": "1.0",
+  "appVersion": "0.230.0",
+  "deviceFingerprint": "google/panther/panther:17/CP2A.260705.006/15641320:user/release-keys"
+ },
+ "payload": {
+  "node": {
+   "text": "Not now",
+   "class": "android.widget.Button",
+   "isClickable": true,
+   "isEnabled": true,
+   "bounds": {
+    "left": 36,
+    "top": 2187,
+    "right": 1044,
+    "bottom": 2311
+   }
+  },
+  "screenTarget": "offer"
+ }
+}

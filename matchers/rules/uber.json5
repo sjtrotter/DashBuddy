@@ -1283,6 +1283,79 @@
       }
     },
     {
+      // #786 — the offer card's dismiss "X". Field-confirmed (2026-07-23/24 pulls, on-disk click
+      // envelopes) as an ANONYMOUS CHILDLESS Button: text/id/desc all null, no children, 106x106 at
+      // the focused card's top-right. Uber shows NO confirm sheet, so one tap COMMITS the decline —
+      // hence the decline-COMMIT intent, which latches PendingOffer.declineCommittedAt through the
+      // existing #594 machinery (DoorDash's confirm-sheet rule proves that chain; no state-machine
+      // change is needed here).
+      //
+      // (a) THE PRIMARY GUARD IS "own text is empty" — `not hasTextMatchesRegex "\S"`. The X is
+      // content-free; every LABELLED id-less leaf Button fails it. This is load-bearing, not
+      // decorative: an offer-CLASSIFIED frame can carry unrelated chrome, and the fielded
+      // 2026-07-23_19-41-54 capture is exactly that — a permission-nag sheet over the offer whose
+      // "Settings" and "Not now" Buttons are leaf, id-less and clickable, i.e. they satisfy every
+      // OTHER predicate here. Click source nodes DO carry their text when they have any (the
+      // fielded "Continue to next stop" click proves it), so without this predicate a "Not now" tap
+      // would latch an IRREVERSIBLE false decline. The Accept/Match guards below are kept as
+      // belt-and-suspenders (and to document intent), but they are no longer the defense.
+      //
+      // Separability from the ACCEPT interaction is STRUCTURAL, not geometric: the accept tap
+      // arrives as the offer CardView itself (2026-07-21 18:39:25 capture) — a non-leaf
+      // androidx.cardview.widget.CardView whose subtree carries the "Match"/"Accept" label. So
+      // class-exact + isLeaf + hasNoId exclude it three ways over. Deliberately NO bounds/geometry
+      // predicates — those would bake this device's pixels into rule data.
+      //
+      // (b) DOCUMENTED RESIDUAL — a DESC-bearing icon button. The predicate vocabulary has no
+      // desc-regex ("is the contentDescription non-empty") predicate, only equality/contains
+      // against a known literal, so an id-less leaf Button carrying only a contentDescription
+      // would still match. No such node has been fielded on this surface; closing it means adding
+      // a predicate to :core:pipeline, not editing rule data.
+      //
+      // (c) NOT EXPRESSIBLE — "the screen must also carry an Accept sibling". Click rules match the
+      // clicked node alone; the screen tree is not in scope for a click predicate, and screenIs is
+      // the only screen-level coupling available. That is a pipeline matter and is deliberately
+      // NOT built here.
+      //
+      // Scoped to screenIs "offer" (the focused offer card). The Trip Radar board's 80x80 sibling X
+      // lands on UNKNOWN screens and is therefore out of scope until #251 recognizes the board.
+      "id": "uber.click.decline_offer",
+      "priority": 6,
+      "screenIs": "offer",
+      "intent": "decline_offer",
+      "require": {
+        "all": [
+          {
+            "isClickable": true
+          },
+          {
+            "hasNoId": true
+          },
+          {
+            "hasClassName": "android.widget.Button"
+          },
+          {
+            "isLeaf": true
+          },
+          {
+            "not": {
+              "hasTextMatchesRegex": "\\S"
+            }
+          },
+          {
+            "not": {
+              "hasAnyText": "Accept"
+            }
+          },
+          {
+            "not": {
+              "hasAnyText": "Match"
+            }
+          }
+        ]
+      }
+    },
+    {
       "id": "uber.click.go_online",
       "priority": 10,
       "intent": "go_online",

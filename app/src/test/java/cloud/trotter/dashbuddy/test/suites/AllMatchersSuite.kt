@@ -13,6 +13,7 @@ import cloud.trotter.dashbuddy.core.pipeline.rules.NotificationRulesetTest
 import cloud.trotter.dashbuddy.core.pipeline.rules.ParseOutputGoldenTest
 import cloud.trotter.dashbuddy.core.pipeline.rules.ScreenRulesetTest
 import cloud.trotter.dashbuddy.core.pipeline.rules.TriageRulesTest
+import cloud.trotter.dashbuddy.core.pipeline.rules.UberDeclineClickRuleTest
 import cloud.trotter.dashbuddy.core.pipeline.rules.UberIdleMapOfflineEvidenceTest
 import org.junit.runner.RunWith
 import org.junit.runners.Suite
@@ -42,6 +43,12 @@ import org.junit.runners.Suite
  * - [ScreenRulesetTest] / [ClickRulesetTest] / [NotificationRulesetTest] — the
  *   ruleset compiles and the core predicates behave.
  * - [TriageRulesTest] — synthetic fixtures for rules added from capture triage.
+ * - [UberDeclineClickRuleTest] — #786: real device click envelopes pin `uber.click.decline_offer`
+ *   onto the offer card's anonymous childless dismiss Button, and pin BOTH the accept CardView tap
+ *   (subtree-labelled, non-leaf) and the fielded permission-nag "Settings"/"Not now" buttons
+ *   (labelled, but otherwise predicate-identical to the X) as NOT matching it — the separability
+ *   the rule rests on. Plus per-predicate mutation coverage, so no predicate can be dropped
+ *   silently.
  * - [DefaultRulesIntegrationTest] — end-to-end rule compilation/wiring.
  * - [NotificationClassifierTest] / [ClickClassifierTest] — classifier behavior.
  * - [CaptureRedactionCorpusTest] — the #598/#620 redact predicates mask injected
@@ -68,6 +75,7 @@ import org.junit.runners.Suite
     OfferPipelineTest::class,
     ScreenRulesetTest::class,
     ClickRulesetTest::class,
+    UberDeclineClickRuleTest::class,
     NotificationRulesetTest::class,
     TriageRulesTest::class,
     UberIdleMapOfflineEvidenceTest::class,

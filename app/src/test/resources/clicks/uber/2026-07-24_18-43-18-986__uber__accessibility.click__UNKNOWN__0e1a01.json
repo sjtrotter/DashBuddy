@@ -1,0 +1,39 @@
+{
+    "captureId": "5c099d51-614a-4700-a206-8bdbe47fa5b5",
+    "pipelineId": "accessibility.click",
+    "schemaId": "click_context.v1",
+    "timestamp": 1784936598985,
+    "platform": "uber",
+    "ruleId": null,
+    "classificationName": "UNKNOWN",
+    "metadata": {
+        "engineVersion": 1,
+        "rulesetFormatVersion": 2,
+        "pipelineVersions": {
+            "accessibility": 1,
+            "accessibility.window": 1,
+            "accessibility.click": 1,
+            "accessibility.long_click": 1,
+            "accessibility.scroll": 1,
+            "accessibility.focus": 1,
+            "notification": 1
+        },
+        "stateMachineApiVersion": "1.0",
+        "appVersion": "0.230.0",
+        "deviceFingerprint": "google/panther/panther:17/CP2A.260705.006/15641320:user/release-keys"
+    },
+    "payload": {
+        "node": {
+            "class": "android.widget.Button",
+            "isClickable": true,
+            "isEnabled": true,
+            "bounds": {
+                "left": 902,
+                "top": 1729,
+                "right": 1008,
+                "bottom": 1835
+            }
+        },
+        "screenTarget": "offer"
+    }
+}
