@@ -65,6 +65,19 @@ sealed class AppEffect {
         val persona: ChatPersona = ChatPersona.Dispatcher,
         val expand: Boolean = false,
         val dedupeScope: String? = null,
+        /**
+         * The originating session — the dash this chat line belongs to; null = genuinely
+         * session-less, falls back to the active session at save time.
+         *
+         * #867: the chat save used to read `BubbleManager.activeSessionId` **at save time**, which
+         * is the session of whichever platform produced the LAST recognized frame. While
+         * multi-apping that flips constantly, so an Uber offer's outcome message could be filed
+         * into the DoorDash session's chat — durable corruption of the per-session history, not
+         * just the live view. Every emitter that has a session in scope stamps it here (the same
+         * per-platform `sessionId` its sibling `logEffect(sessionId, …)` uses), so provenance
+         * travels WITH the effect instead of being re-derived at the edge.
+         */
+        val sessionId: String? = null,
     ) : AppEffect() {
         override val effectKey: String? get() =
             dedupeScope?.let { "bubble:$it:${persona.id}:${text.hashCode()}" }
@@ -192,6 +205,13 @@ sealed class AppEffect {
          * carries a real target platform instead of deriving [Platform.Unknown].
          */
         val platform: Platform,
+        /**
+         * The originating session; null = genuinely session-less, falls back to the active
+         * session at save time. Same #867 contract as [UpdateBubble.sessionId] — this effect's
+         * handler ALSO writes a chat message (the offer summary line), so it carries the same
+         * provenance rather than re-deriving it from the last-recognized-frame active session.
+         */
+        val sessionId: String? = null,
     ) : AppEffect()
 
     /**
@@ -247,5 +267,16 @@ sealed class AppEffect {
     data class StartSession(val sessionId: String, val platformName: String) : AppEffect() {
         override val effectKey: String get() = "start_session:$sessionId"
     }
-    data class EndSession(val platformName: String? = null) : AppEffect()
+    data class EndSession(
+        val platformName: String? = null,
+        /**
+         * The session that just ENDED (#867) — the chat copy this effect posts belongs to it, not
+         * to whatever session is active when the effect executes. Load-bearing on a grace-lapsed
+         * end: the commit can ride a `GRACE_COMMIT` timer or a FOREIGN platform's frame, by which
+         * point `BubbleManager.activeSessionId` is the other platform's dash (the #867 class); and
+         * even single-app the ending region's session is already null at execute time, which would
+         * file the line session-less. Null only for a caller with no session in scope.
+         */
+        val sessionId: String? = null,
+    ) : AppEffect()
 }

@@ -84,6 +84,7 @@ internal fun EffectMap.diffTask(
                     "Unassigned: ${abandonedTask.storeName ?: UNKNOWN_STORE}",
                     ChatPersona.Navigator,
                     dedupeScope = abandonedTask.taskId,
+                    sessionId = sessionId,
                 ),
             )
         }
@@ -121,7 +122,12 @@ internal fun EffectMap.diffTask(
                     nextTask.arrivedAt != null,
                     storeName,
                 )
-                add(AppEffect.UpdateBubble("Pickup: $storeName", persona, dedupeScope = nextTask.taskId))
+                add(
+                    AppEffect.UpdateBubble(
+                        "Pickup: $storeName", persona,
+                        dedupeScope = nextTask.taskId, sessionId = sessionId,
+                    )
+                )
             }
         }
 
@@ -244,7 +250,12 @@ internal fun EffectMap.diffTask(
                     nextTask.arrivedAt != null,
                     storeName,
                 )
-                add(AppEffect.UpdateBubble("Pickup: $storeName", persona, dedupeScope = nextTask.taskId))
+                add(
+                    AppEffect.UpdateBubble(
+                        "Pickup: $storeName", persona,
+                        dedupeScope = nextTask.taskId, sessionId = sessionId,
+                    )
+                )
             }
 
             // Store name resolution — re-emit the pickup payload with the
@@ -301,7 +312,12 @@ private fun EffectMap.deliveryNavStartedEffects(
     // #568: store-flavored label ("Heading to H-E-B's customer") — friendlier
     // than the raw 6-char hash, and it disambiguates a multi-store stack's drops.
     val customer = customerLabel(task.storeName)
-    add(AppEffect.UpdateBubble("Heading to $customer", ChatPersona.Customer(customer), dedupeScope = task.taskId))
+    add(
+        AppEffect.UpdateBubble(
+            "Heading to $customer", ChatPersona.Customer(customer),
+            dedupeScope = task.taskId, sessionId = sessionId,
+        )
+    )
 }
 
 /**
@@ -496,7 +512,10 @@ internal fun EffectMap.diffPostTask(
     } else {
         "Saved: ${Formats.money(parsed.totalPay)}"
     }
-    return listOf(AppEffect.UpdateBubble(text, ChatPersona.Earnings))
+    // #867: same per-platform session resolution [diffTask] uses — the receipt belongs to THIS
+    // region's dash, not to whichever platform produced the last recognized frame.
+    val sessionId = next.session?.sessionId ?: prev.session?.sessionId
+    return listOf(AppEffect.UpdateBubble(text, ChatPersona.Earnings, sessionId = sessionId))
 }
 
 private fun EffectMap.determinePickupPersona(

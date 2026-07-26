@@ -29,6 +29,9 @@ class TipEffectHandler @Inject constructor(
                 Timber.tag("Effects").d(
                     "Tip received: %s from %s", Formats.money(effect.amount), effect.storeName,
                 )
+                // #867: no explicit session — ProcessTipNotification comes from a push that carries
+                // no session provenance (a tip can even land after the dash ended), so the chat
+                // line falls back to the active session.
                 bubbleManager.postMessage(
                     text = context.getString(
                         R.string.tip_effect_chat_message,

@@ -154,16 +154,34 @@ class BubbleManager @Inject constructor(
         pushDynamicShortcut()
     }
 
-    /** Session chat copy only — the dash id derives from state (#437). */
+    /**
+     * Session chat copy only — the dash id derives from state (#437). #867: the STARTING session
+     * is known here, so the line is filed to it explicitly (the derived `activeSessionId` may not
+     * have caught up to — or may belong to — another platform's dash).
+     */
     fun startSession(sessionId: String, platformName: String) {
         val verb = sessionVerb(platformName)
-        postMessage(context.getString(R.string.bubble_chat_session_started, verb), ChatPersona.Dispatcher)
+        postMessage(
+            context.getString(R.string.bubble_chat_session_started, verb),
+            ChatPersona.Dispatcher,
+            sessionId = sessionId,
+        )
     }
 
-    /** Session chat copy only — the dash id derives from state (#437). */
-    fun endSession(platformName: String? = null) {
+    /**
+     * Session chat copy only — the dash id derives from state (#437). #867: [sessionId] is the
+     * session that just ENDED, carried by the effect. The active session is NOT a safe stand-in
+     * here: a grace-lapsed end commits on a `GRACE_COMMIT` timer or a foreign platform's frame (so
+     * `activeSessionId` is the OTHER dash), and the ending region's own session is already null by
+     * execute time even single-app (so the line would file session-less).
+     */
+    fun endSession(platformName: String? = null, sessionId: String? = null) {
         val verb = sessionVerb(platformName)
-        postMessage(context.getString(R.string.bubble_chat_session_done, verb), ChatPersona.Dispatcher)
+        postMessage(
+            context.getString(R.string.bubble_chat_session_done, verb),
+            ChatPersona.Dispatcher,
+            sessionId = sessionId,
+        )
     }
 
     /**
@@ -197,10 +215,22 @@ class BubbleManager @Inject constructor(
         }
     }
 
+    /**
+     * Post a chat line: save it to the dash's history + show the chathead notification.
+     *
+     * [sessionId] is the message's OWN originating session (#867). Null falls back to
+     * [activeSessionId] — the session of whichever platform produced the last recognized frame —
+     * which is correct only for a genuinely session-less message (a welcome line, a rule-declared
+     * bubble, a tip push). While multi-apping the active session flips on every app switch, so any
+     * caller that knows the originating session MUST pass it: without it an Uber offer's outcome
+     * line could be filed into the DoorDash session's chat, durably corrupting the per-session
+     * history (not just the live view).
+     */
     fun postMessage(
         text: CharSequence,
         persona: ChatPersona = ChatPersona.Dispatcher,
-        expand: Boolean = false
+        expand: Boolean = false,
+        sessionId: String? = null,
     ) {
         // #551 P7: chat text can carry raw merchant/store text ("Pickup: <store>"), so the
         // shareable INFO stream logs a counts-only milestone; the raw body stays on DEBUG.
@@ -210,7 +240,7 @@ class BubbleManager @Inject constructor(
 
         // 2. UPDATED: Launched in a coroutine because the Repository is pure suspend now!
         scope.launch {
-            chatRepository.saveMessage(activeSessionId.value, text.toString(), persona)
+            chatRepository.saveMessage(sessionId ?: activeSessionId.value, text.toString(), persona)
         }
 
         // Post Notification
@@ -337,14 +367,20 @@ class BubbleManager @Inject constructor(
      * DoorDash from the accessibility live-window set and fails the verified click (#457).
      * Formatting happens HERE at the UI edge (#436) — the engine hands over the domain evaluation.
      */
-    fun postOfferNotification(offer: FlowCardSnapshot.Offer, evaluation: OfferEvaluation, platform: Platform) {
+    fun postOfferNotification(
+        offer: FlowCardSnapshot.Offer,
+        evaluation: OfferEvaluation,
+        platform: Platform,
+        /** The offer's own originating session (#867); null falls back to [activeSessionId]. */
+        sessionId: String? = null,
+    ) {
         val summary = evaluation.toNotificationSummary()
         val persona = evaluation.notificationPersona()
         // #551 P7: the offer summary ends with the merchant name (raw third-party UI text), so
         // INFO carries a PII-safe milestone and the raw summary stays on the DEBUG firehose.
         Timber.tag("Chat").i("offer posted [%s] (%d chars)", persona.logLabel, summary.length)
         Timber.tag("Chat").d("[%s]: %s", persona.displayName, summary)
-        scope.launch { chatRepository.saveMessage(activeSessionId.value, summary.toString(), persona) }
+        scope.launch { chatRepository.saveMessage(sessionId ?: activeSessionId.value, summary.toString(), persona) }
         showOfferHeadsUp(offer, summary, persona, platform)
     }
 

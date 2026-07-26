@@ -18,6 +18,7 @@ import cloud.trotter.dashbuddy.domain.pipeline.TimeoutType
 import cloud.trotter.dashbuddy.domain.pipeline.TransitionTrigger
 import cloud.trotter.dashbuddy.domain.state.AcceptedOfferEconomics
 import cloud.trotter.dashbuddy.domain.state.AppState
+import cloud.trotter.dashbuddy.domain.state.activeSessionId
 import cloud.trotter.dashbuddy.domain.state.CrossPlatformRegion
 import cloud.trotter.dashbuddy.domain.state.DestructiveKind
 import cloud.trotter.dashbuddy.domain.state.Flow
@@ -389,6 +390,114 @@ class EffectMapTest {
         assertTrue("Should show timeout bubble", effects.any {
             it is AppEffect.UpdateBubble && it.text.contains("Timed Out")
         })
+    }
+
+    // =========================================================================
+    // #867 — a chat bubble carries the session it came FROM
+    // =========================================================================
+
+    /**
+     * A multi-app state: an Uber offer is live on the Uber region (session `uber-sess`) while
+     * DoorDash is the flow's active platform (session `dd-sess`). `AppState.activeSessionId()` —
+     * what `BubbleManager` used to file every chat line under — reads `dd-sess` here, so a bubble
+     * that does NOT carry its own session is mis-attributed to the DoorDash dash.
+     */
+    private fun multiAppOfferState(uberOffer: PendingOffer?): AppState = AppState(
+        regions = Regions(
+            flow = FlowRegion(flow = Flow.Idle, activePlatform = Platform.DoorDash),
+            platforms = mapOf(
+                Platform.Uber to PlatformRegion(
+                    platform = Platform.Uber,
+                    mode = Mode.Online,
+                    session = Session("uber-sess", startedAt = 100L),
+                    pendingOffers = listOfNotNull(uberOffer),
+                ),
+                Platform.DoorDash to PlatformRegion(
+                    platform = Platform.DoorDash,
+                    mode = Mode.Online,
+                    session = Session("dd-sess", startedAt = 100L),
+                ),
+            ),
+        ),
+    )
+
+    @Test
+    fun `an offer outcome bubble carries the RESOLVING platform's session, not the active one (#867)`() {
+        val uberOffer = testPendingOffer.copy(
+            sourceRuleId = "uber.screen.offer",
+            lastClickIntent = "decline_offer",
+        )
+        val prev = multiAppOfferState(uberOffer)
+        val next = multiAppOfferState(null)
+
+        val effects = effectMap.diff(prev, next, screenObs(flow = Flow.Idle))
+
+        // Guard the fixture: the "active" session really is the OTHER platform's.
+        assertEquals("dd-sess", prev.activeSessionId())
+        val outcome = effects.effectsOfType<AppEffect.UpdateBubble>()
+            .first { it.text == expectedOutcomeCard(AppEventType.OFFER_DECLINED) }
+        assertEquals(
+            "the Uber offer's outcome card must be filed to the UBER dash, not the active DoorDash one",
+            "uber-sess",
+            outcome.sessionId,
+        )
+        // ...and it matches the session its own ledger event was logged under (one provenance).
+        val declined = effects.logEvents().first { it.event.type == AppEventType.OFFER_DECLINED }
+        assertEquals(declined.event.sessionId, outcome.sessionId)
+    }
+
+    @Test
+    fun `an ending session's chat copy carries the ENDED session, even on a foreign frame (#867)`() {
+        // The grace-lapsed shape: the Uber dash's end commits on a GRACE_COMMIT timer or a
+        // DoorDash frame, so `activeSessionId` is the DoorDash dash by execute time — and the Uber
+        // region's own session is already null. Nothing at the edge can recover the ended session;
+        // the effect has to carry it.
+        val ddRegion = PlatformRegion(
+            platform = Platform.DoorDash,
+            mode = Mode.Online,
+            session = Session("dd-sess", startedAt = 100L),
+        )
+        fun state(uberSession: Session?, uberMode: Mode) = AppState(
+            regions = Regions(
+                flow = FlowRegion(flow = Flow.Idle, activePlatform = Platform.DoorDash),
+                platforms = mapOf(
+                    Platform.Uber to PlatformRegion(
+                        platform = Platform.Uber,
+                        mode = uberMode,
+                        session = uberSession,
+                    ),
+                    Platform.DoorDash to ddRegion,
+                ),
+            ),
+        )
+        val prev = state(Session("uber-sess", startedAt = 100L), Mode.Online)
+        val next = state(null, Mode.Offline)
+
+        val effects = effectMap.diff(prev, next, screenObs(flow = Flow.Idle))
+
+        assertEquals("dd-sess", next.activeSessionId()) // the wrong dash the edge would pick
+        val end = effects.effectsOfType<AppEffect.EndSession>().single()
+        assertEquals(
+            "the 'done dashing' chat copy must be filed to the ENDED Uber dash",
+            "uber-sess",
+            end.sessionId,
+        )
+        // The "Session Ended"/DASH_STOP siblings agree — one provenance for the whole edge.
+        val stop = effects.logEvents().first { it.event.type == AppEventType.DASH_STOP }
+        assertEquals("uber-sess", stop.event.sessionId)
+    }
+
+    @Test
+    fun `the offer heads-up notification carries the resolving platform's session too (#867)`() {
+        // The eval-land step ALSO writes a chat line (the offer summary) via BubbleManager, so
+        // PostOfferNotification carries the same provenance.
+        val uberOffer = testPendingOffer.copy(sourceRuleId = "uber.screen.offer")
+        val prev = multiAppOfferState(uberOffer)
+        val next = multiAppOfferState(uberOffer.copy(evaluation = testEvaluation))
+
+        val effects = effectMap.diff(prev, next, screenObs(flow = Flow.Idle))
+        val post = effects.effectsOfType<AppEffect.PostOfferNotification>().single()
+        assertEquals("uber-sess", post.sessionId)
     }
 
     @Test
