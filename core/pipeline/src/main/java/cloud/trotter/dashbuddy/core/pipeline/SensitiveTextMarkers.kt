@@ -90,6 +90,16 @@ object SensitiveTextMarkers {
         "Transfer to bank",
         "Tax information",
         "Card number",
+        // Uber's selfie identity-verification CAMERA (#861) — the biometric-image capture
+        // surface the `sensitive.id_verification` branch of `uber.screen.sensitive.known`
+        // blocks. Its primary rule anchor is the platform's own face-camera component view
+        // ids (structurally invisible to a text backstop), so these are the flow's two
+        // text-bearing frames — the guide prompt and the success confirmation — which no
+        // keyword above overlapped. Same fail-closed reasoning as the group above: the
+        // marker list must still drop the frame when the ruleset misses a variant or fails
+        // to load. Drift-guarded by SensitiveMarkerAssetCoverageTest.
+        "Fit your face in the guide",
+        "Thanks for verifying",
     )
 
     /**

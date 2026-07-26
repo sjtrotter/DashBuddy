@@ -80,6 +80,37 @@
               ]
             }
           }
+        },
+        // Blocks the selfie identity-verification CAMERA surface (the periodic
+        // "take a photo of yourself to confirm it's your account" check) — a
+        // biometric-image capture surface, blocked at the matcher layer exactly
+        // like the DoorDash license-scan camera and signature pad, per the Pledge
+        // ("document-image capture surfaces, regardless of whose"). Anchored on the
+        // platform's own face-camera component view ids, which are present on EVERY
+        // frame of the flow — including the mid-capture frames that carry no text at
+        // all — with the flow's own chrome strings as text-level backstops in case a
+        // future build strips the ids. Deliberately NOT anchored on a generic shutter
+        // label ("Take picture"), which would also swallow an ordinary proof-of-
+        // delivery photo surface; the id anchor already covers the shutter node here.
+        // The required-actions LIST row that links to this flow ("Take a photo of
+        // yourself") is not blocked: it is a to-do row, carries no image and no PII.
+        {
+          "intent": "sensitive.id_verification",
+          "require": {
+            "exists": {
+              "any": [
+                {
+                  "hasIdContaining": "facecamera"
+                },
+                {
+                  "hasTextContaining": "Fit your face in the guide"
+                },
+                {
+                  "hasTextContaining": "Thanks for verifying"
+                }
+              ]
+            }
+          }
         }
       ]
     },
