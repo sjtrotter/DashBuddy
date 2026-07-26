@@ -187,6 +187,39 @@
                     }
                   ]
                 }
+              },
+              // #858 LAYER 1 (primary): the expiry overlay disqualifies the frame.
+              // When a request dies, Uber renders `message_content_overlay` /
+              // `image_message_text` ("This request is no longer available") INSIDE
+              // primary_touch_area, over the still-present, dimmed card — every other
+              // require arm (touch area, a "$N.NN", the Match/Accept button) still
+              // holds, so the rule kept matching a dead offer. It then read the
+              // message TextView as the store (it is the first card TextView that is
+              // not a price/badge/duration/dropoff line), which shipped
+              // `merchantName = "This request is no longer available"` into
+              // offer_records, spoke it over TTS, named a screenshot with it, and —
+              // because presentationKey = sha256(storeNames|orders.size|orderTypes)
+              // — poisoned the #830 offer identity into a spurious REPLACE +
+              // OFFER_TIMEOUT("Replaced by new offer") + a phantom offer row.
+              //
+              // Fail-direction: an overlay-bearing frame now matches NO rule and
+              // falls UNKNOWN, so the pipeline DROPS it before the state machine.
+              // That is deliberate — the overlay is the platform saying "this
+              // request is gone", and nothing about it should mint OFFER_RECEIVED or
+              // re-identify the presentation. The already-pending offer simply stays
+              // live until the next real frame or its own OFFER_EXPIRY timer
+              // resolves it (the timer exists precisely for an offer that vanishes
+              // without a frame), which is strictly better than acting on a lie.
+              //
+              // NOT recognized as its own flow on purpose: an explicit
+              // "offer:expired" witness — the platform's own "this was not a
+              // decline" testimony, which #786's outcome resolution would like — is
+              // #251's H3a and is deferred to the Trip Radar / multi-offer board
+              // design. This rule only refuses to lie; it does not yet testify.
+              {
+                "notExists": {
+                  "hasIdSuffix": "image_message_text"
+                }
               }
             ]
           },
@@ -281,6 +314,25 @@
                           },
                           {
                             "hasTextContaining": ", "
+                          },
+                          // #858 LAYER 2 (defense in depth): never let the expiry
+                          // overlay win the store read. Layer 1 (the require
+                          // `notExists` above) already stops an overlay-bearing
+                          // frame from matching at all, so on today's shape this
+                          // is unreachable — it is here so a FUTURE overlay
+                          // variant that slips past layer 1 still cannot poison
+                          // the store. The two arms are deliberately independent
+                          // of each other and of layer 1's anchor: the id catches
+                          // a re-worded message, the text catches a re-id'd node.
+                          // Written as an ordinary negation entry (no store-
+                          // specific matching, platform chrome only) so the #251
+                          // Trip Radar board rule — the overlay also renders
+                          // per-card there — can lift the same two arms verbatim.
+                          {
+                            "hasIdSuffix": "image_message_text"
+                          },
+                          {
+                            "hasTextContaining": "no longer available"
                           }
                         ]
                       }
@@ -341,6 +393,21 @@
                               },
                               {
                                 "hasTextContaining": ", "
+                              },
+                              // #858 LAYER 2, orders[] half — same two arms as the
+                              // top-level storeName negation above. This one is the
+                              // load-bearing copy for offer IDENTITY: presentationKey
+                              // = sha256(storeNames|orders.size|orderTypes) is built
+                              // from orders[].storeName, so an overlay winning HERE is
+                              // what turned a live re-quote into a spurious #830
+                              // REPLACE. (The lists are duplicated because the DSL has
+                              // no shared-predicate form; they must be edited in
+                              // lockstep — see the top-level block for the rationale.)
+                              {
+                                "hasIdSuffix": "image_message_text"
+                              },
+                              {
+                                "hasTextContaining": "no longer available"
                               }
                             ]
                           }
