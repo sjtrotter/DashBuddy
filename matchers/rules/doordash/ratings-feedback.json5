@@ -233,26 +233,44 @@
       }
     },
     {
-      "comment": "#796 — a performance-metric DETAIL screen (Completion rate / On-time rate / Quality rate): a metric header + score, a 'Last 100 orders' breakdown, a 'View all orders' button, and an 'About <metric> rate' explainer. RECOGNIZE-ONLY (dev decision 2026-07-17, batch #796): no state.flow, no parse — the app already ships doordash.screen.ratings (the combined ratings hub); these are the single-metric drill-downs, which that rule's four-way 'ratings'+'acceptance rate'+'completion rate'+'overall' conjunct legitimately does NOT match. Anchored on 'Last 100 orders' + 'View all orders' together (both corpus-unique, 0 other snapshots); the sibling list modal shares 'Last 100 orders' but has NO 'View all orders' button, so the two never collide. PRIVACY: no customer PII — merchant/store names + dates only, both driver-owned and kept.",
+      "comment": "#796/#865 — a performance-metric DETAIL screen (Completion rate / On-time rate / Quality rate / Acceptance rate): a metric header + score, a 'Last 100 <unit>' breakdown, a 'View all <unit>' button, and an 'About <metric> rate' explainer. RECOGNIZE-ONLY (dev decision 2026-07-17, batch #796): no state.flow, no parse — the app already ships doordash.screen.ratings (the combined ratings hub); these are the single-metric drill-downs, which that rule's four-way 'ratings'+'acceptance rate'+'completion rate'+'overall' conjunct legitimately does NOT match. #865 BROADENED the anchor to the two UNIT variants of the SAME screen family: the order-denominated metrics render 'Last 100 orders' + 'View all orders', the offer-denominated Acceptance rate renders 'Last 100 offers' + 'View all offers' (the only textual difference — the layout, the 'About …' explainer and the tips section are identical), so it stays ONE intent rather than a near-duplicate sibling rule. All four anchor strings are corpus-unique (0 other snapshots); each variant requires its OWN header+button PAIR, so the sibling list modal (which shares the header but has NO 'View all …' button) still never collides. PRIVACY: no customer PII — the dasher's own aggregate counters + fixed program copy.",
       "id": "doordash.screen.performance_rate_detail",
       "priority": 116,
       "require": {
-        "all": [
+        "any": [
           {
-            "exists": {
-              "hasTextContaining": "Last 100 orders"
-            }
+            "all": [
+              {
+                "exists": {
+                  "hasTextContaining": "Last 100 orders"
+                }
+              },
+              {
+                "exists": {
+                  "hasTextContaining": "View all orders"
+                }
+              }
+            ]
           },
           {
-            "exists": {
-              "hasTextContaining": "View all orders"
-            }
+            "all": [
+              {
+                "exists": {
+                  "hasTextContaining": "Last 100 offers"
+                }
+              },
+              {
+                "exists": {
+                  "hasTextContaining": "View all offers"
+                }
+              }
+            ]
           }
         ]
       }
     },
     {
-      "comment": "#796 — the 'Last 100 orders' LIST modal reached from a metric detail's 'View all orders' (a tab row All / Completed / Unassigned / Excluded over a store+date order list, with a Close affordance). RECOGNIZE-ONLY (dev decision 2026-07-17, batch #796): no state.flow, no parse. Anchored on 'Last 100 orders' + the exact-text tabs 'All' and 'Excluded' (both corpus-unique). The metric-detail screen also renders 'Last 100 orders' but has no exact 'All'/'Excluded' tab nodes (its 'excluded' appears only fused as '0 orders excluded'), so the exact-text tab conjunct keeps the two apart; hasText (exact) not hasTextContaining is load-bearing here. PRIVACY: no customer PII — merchant/store names + dates only, driver-owned and kept.",
+      "comment": "#796/#865 — the 'Last 100 orders' LIST modal reached from a metric detail's 'View all orders' (a tab row All / Completed / Unassigned / Excluded over a store+date order list, with a Close affordance). RECOGNIZE-ONLY (dev decision 2026-07-17, batch #796): no state.flow, no parse. #865 RE-ANCHORED off the tab row: the All/Completed/Unassigned/Excluded chips scroll out of the accessibility tree as soon as the driver scrolls the list, so every scrolled frame fell out of recognition (6 fielded UNKNOWNs). The scroll-stable pair is the pinned modal chrome — the 'Last 100 orders' header + the exact-desc 'Close' affordance — which survives to the extreme scrolled frame that renders NOTHING else (capture …UNKNOWN__4f4914). The metric-detail sibling also renders 'Last 100 orders' but has no 'Close' (it is a pushed screen with a 'Navigate up' toolbar, not a modal), so the two stay apart; and even a hypothetical detail-in-a-modal would be claimed first by performance_rate_detail's lower priority number. PRIVACY: no customer PII — merchant/store names + dates + 'No issues' status only, all driver-owned and kept.",
       "id": "doordash.screen.performance_orders_list",
       "priority": 117,
       "require": {
@@ -264,12 +282,7 @@
           },
           {
             "exists": {
-              "hasText": "All"
-            }
-          },
-          {
-            "exists": {
-              "hasText": "Excluded"
+              "hasDesc": "Close"
             }
           }
         ]
@@ -283,6 +296,25 @@
         "exists": {
           "hasIdSuffix": "reward_info_epoxy_recyclerview"
         }
+      }
+    },
+    {
+      "comment": "#865 — the Customer rating DETAIL drill-down from the ratings hub: the hero star score + the 5→1 star histogram, an 'N ratings excluded' unfair-ratings row, a 'Customer Feedback' category grid (Communication / Order Handling / Followed Delivery Instructions / Friendliness), a 'Customer Compliments' block ('Above and Beyond' count + 'Quotes from customers'), and a 'Learn more' section. RECOGNIZE-ONLY: no state.flow, no parse — same posture as the sibling performance_rate_detail / dasher_rewards drill-downs (the aggregate customerRating is already parsed off doordash.screen.ratings, the combined hub, which this screen is reached FROM and which its four-way 'ratings'+'acceptance rate'+'completion rate'+'overall' conjunct does not match). Anchored on the structural viewId pair `star_rating_container` + `progress_bar_five` — the hero score container and the 5-star histogram row. Both are corpus-unique (0 other snapshots, incl. all 15 ratings/ hub frames) and both are unconditional CHROME of this screen, present even on the still-loading frame whose score/count TextViews are still empty (capture …UNKNOWN__ce3033) — deliberately used INSTEAD of the 'Customer Compliments' / 'Above and Beyond' copy, which is data-conditional. PRIVACY: no customer PII in either fielded frame — the dasher's own aggregate rating counters, fixed category labels and fixed program copy. DOCUMENTED RESIDUAL: `quotes_recycler` is EMPTY in both fielded frames (the second renders the empty-state 'Customer quotes from 5-star reviews will appear here.'), but a dasher WITH compliments would render customer-authored free-text quotes there. DoorDash renders those quotes unattributed (no name, no address), so they are not the customer-identity PII the hash-at-edge chain covers; they are also not scoped-addressable by a `redact` predicate today (the quote TextViews carry no viewId and nodePredicate has no parent/descendant scoping), so no redact is declared. If a non-empty quotes frame is ever fielded, revisit — either a scoping predicate or a marker-backstop entry.",
+      "id": "doordash.screen.customer_rating_detail",
+      "priority": 126,
+      "require": {
+        "all": [
+          {
+            "exists": {
+              "hasIdSuffix": "star_rating_container"
+            }
+          },
+          {
+            "exists": {
+              "hasIdSuffix": "progress_bar_five"
+            }
+          }
+        ]
       }
     }
   ]

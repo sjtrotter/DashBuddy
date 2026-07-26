@@ -269,6 +269,18 @@
         "shape": null,
         "fields": {}
     },
+    "customer_rating_detail/customer_rating_detail.json": {
+        "ruleId": "doordash.screen.customer_rating_detail",
+        "intent": "customer_rating_detail",
+        "shape": null,
+        "fields": {}
+    },
+    "customer_rating_detail/customer_rating_detail_loading.json": {
+        "ruleId": "doordash.screen.customer_rating_detail",
+        "intent": "customer_rating_detail",
+        "shape": null,
+        "fields": {}
+    },
     "dash_along_the_way/2026-04-25_18-52-07__ON_DASH_ALONG_THE_WAY__28f8873e.json": {
         "ruleId": "doordash.screen.dash_along_the_way",
         "intent": "dash_along_the_way",
@@ -3287,6 +3299,30 @@
     "performance_orders_list/performance_orders_list.json": {
         "ruleId": "doordash.screen.performance_orders_list",
         "intent": "performance_orders_list",
+        "shape": null,
+        "fields": {}
+    },
+    "performance_orders_list/performance_orders_list_scrolled.json": {
+        "ruleId": "doordash.screen.performance_orders_list",
+        "intent": "performance_orders_list",
+        "shape": null,
+        "fields": {}
+    },
+    "performance_orders_list/performance_orders_list_scrolled_tail.json": {
+        "ruleId": "doordash.screen.performance_orders_list",
+        "intent": "performance_orders_list",
+        "shape": null,
+        "fields": {}
+    },
+    "performance_rate_detail/performance_rate_acceptance.json": {
+        "ruleId": "doordash.screen.performance_rate_detail",
+        "intent": "performance_rate_detail",
+        "shape": null,
+        "fields": {}
+    },
+    "performance_rate_detail/performance_rate_acceptance_loading.json": {
+        "ruleId": "doordash.screen.performance_rate_detail",
+        "intent": "performance_rate_detail",
         "shape": null,
         "fields": {}
     },
