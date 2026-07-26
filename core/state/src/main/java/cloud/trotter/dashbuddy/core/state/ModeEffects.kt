@@ -97,7 +97,13 @@ internal fun EffectMap.diffMode(
                     // activeSessionCount 1→0 crossing (this session end is that crossing when
                     // it's the last live session), so one platform ending can't kill GPS under
                     // another still-live dash.
-                    add(AppEffect.UpdateBubble("Session Ended. Total: $earnings", ChatPersona.Dispatcher))
+                    add(
+                        AppEffect.UpdateBubble(
+                            "Session Ended. Total: $earnings",
+                            ChatPersona.Dispatcher,
+                            sessionId = sessionId,
+                        )
+                    )
                     // #606: no CaptureScreenshot here — the dash_summary
                     // rule effect (doordash.json) already owns the
                     // DashSummary screenshot (deduped + throttled, fires
@@ -154,7 +160,7 @@ internal fun EffectMap.diffMode(
                 } else if (nextSession != null && prevSession?.sessionId == nextSession.sessionId) {
                     // Grace resume — same session, no start effects needed
                     Timber.d("Session grace resume: ${nextSession.sessionId}")
-                    add(AppEffect.UpdateBubble("Session resumed (grace)"))
+                    add(AppEffect.UpdateBubble("Session resumed (grace)", sessionId = nextSession.sessionId))
                 }
 
                 // Cancel pause safety timer if resuming from paused
@@ -212,7 +218,7 @@ internal fun EffectMap.diffMode(
                             platform = next.platform,
                         )
                     )
-                    add(AppEffect.UpdateBubble("Dash Paused!"))
+                    add(AppEffect.UpdateBubble("Dash Paused!", sessionId = sessionId))
                 }
             }
         }

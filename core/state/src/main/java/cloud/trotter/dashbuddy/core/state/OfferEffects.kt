@@ -86,7 +86,13 @@ internal fun EffectMap.diffOfferLifecycle(
             val outcome = resolveOfferOutcome(obs, prevOffer)
             add(logEffect(sessionId, outcome, obs.timestamp, offerPayload(prevOffer, outcome, obs.timestamp, "Replaced by new offer")))
             // #601: surface the replaced offer's disposition, suffixed so it reads as the OLD offer's.
-            add(AppEffect.UpdateBubble("${outcomeCardText(outcome)} (offer replaced)", persona = ChatPersona.Dispatcher))
+            add(
+                AppEffect.UpdateBubble(
+                    "${outcomeCardText(outcome)} (offer replaced)",
+                    persona = ChatPersona.Dispatcher,
+                    sessionId = sessionId,
+                )
+            )
         }
         // #457/#830: dismiss the OLD hash's heads-up (dead offer on replace, stale-hash banner on a
         // churn) so a tap can't resolve against a hash that is no longer presented.
@@ -119,7 +125,11 @@ internal fun EffectMap.diffOfferLifecycle(
         // fresh numbers — a feature). The spoken read fires ONCE per physical presentation (#830):
         // only when the PREVIOUS state had no eval-landed marker, so a churning offer that
         // re-evaluates on each variant is read aloud exactly once, not on every re-quote.
-        add(AppEffect.PostOfferNotification(landedEval, offerCard, nextOffer.offerHash, nextOffer.platform))
+        add(
+            AppEffect.PostOfferNotification(
+                landedEval, offerCard, nextOffer.offerHash, nextOffer.platform, sessionId = sessionId,
+            )
+        )
         if (prevOffer.firstEvalLandedAt == null) add(AppEffect.SpeakOffer(landedEval))
     }
 
@@ -143,7 +153,7 @@ internal fun EffectMap.diffOfferLifecycle(
         add(AppEffect.CancelOfferNotification(prevOffer.offerHash))
         add(logEffect(sessionId, outcome, obs.timestamp, offerPayload(prevOffer, outcome, obs.timestamp, raceDescription)))
         // #601: the single place the chat states what actually happened, off the SAME logged outcome.
-        add(AppEffect.UpdateBubble(outcomeCardText(outcome), persona = ChatPersona.Dispatcher))
+        add(AppEffect.UpdateBubble(outcomeCardText(outcome), persona = ChatPersona.Dispatcher, sessionId = sessionId))
         addAll(cancelOfferExpiry(platform))
     }
 
@@ -164,13 +174,14 @@ internal fun EffectMap.diffOfferLifecycle(
                         AppEffect.UpdateBubble(
                             "Decline already submitted — Accept won't take",
                             persona = ChatPersona.Dispatcher,
+                            sessionId = sessionId,
                         )
                     )
                 } else {
-                    add(AppEffect.UpdateBubble("Accepting…", persona = ChatPersona.Dispatcher))
+                    add(AppEffect.UpdateBubble("Accepting…", persona = ChatPersona.Dispatcher, sessionId = sessionId))
                 }
             OfferIntent.DECLINE -> add(
-                AppEffect.UpdateBubble("Declining…", persona = ChatPersona.Dispatcher)
+                AppEffect.UpdateBubble("Declining…", persona = ChatPersona.Dispatcher, sessionId = sessionId)
             )
         }
     }

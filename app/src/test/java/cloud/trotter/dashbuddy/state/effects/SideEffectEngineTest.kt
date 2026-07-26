@@ -456,7 +456,7 @@ class SideEffectEngineTest {
         advanceTimeBy(SideEffectEngine.OFFER_NOTIFICATION_DELAY_MS + 100)
         runCurrent()
 
-        verify(bubbleManager, never()).postOfferNotification(any(), any(), any())
+        verify(bubbleManager, never()).postOfferNotification(any(), any(), any(), anyOrNull())
     }
 
     @Test
@@ -468,7 +468,7 @@ class SideEffectEngineTest {
         advanceTimeBy(SideEffectEngine.OFFER_NOTIFICATION_DELAY_MS + 100)
         runCurrent()
 
-        verify(bubbleManager, times(1)).postOfferNotification(any(), any(), any())
+        verify(bubbleManager, times(1)).postOfferNotification(any(), any(), any(), anyOrNull())
     }
 
     @Test
@@ -480,7 +480,7 @@ class SideEffectEngineTest {
         runCurrent()
         advanceTimeBy(SideEffectEngine.OFFER_NOTIFICATION_DELAY_MS + 100)
         runCurrent()
-        verify(bubbleManager, times(1)).postOfferNotification(any(), any(), any())
+        verify(bubbleManager, times(1)).postOfferNotification(any(), any(), any(), anyOrNull())
 
         engine.process(AppEffect.CancelOfferNotification(offerHash = "hash-9"))
         runCurrent()
@@ -543,7 +543,7 @@ class SideEffectEngineTest {
         engine.process(bubble, recovering = false)
         runCurrent()
 
-        verify(bubbleManager, times(1)).postMessage(eq("Pickup: Petsmart"), any(), any())
+        verify(bubbleManager, times(1)).postMessage(eq("Pickup: Petsmart"), any(), any(), anyOrNull())
         verifyBlocking(effectsFiredDao, times(1)) { markFired(any()) }
     }
 
@@ -559,7 +559,23 @@ class SideEffectEngineTest {
         engine.process(bubble, recovering = false)
         runCurrent()
 
-        verify(bubbleManager, times(2)).postMessage(eq("Offer Accepted"), any(), any())
+        verify(bubbleManager, times(2)).postMessage(eq("Offer Accepted"), any(), any(), anyOrNull())
+    }
+
+    @Test
+    fun `the bubble effect's originating session reaches BubbleManager (#867)`() = runTest {
+        // #867: the chat save used to read the ACTIVE session at save time, so a multi-app frame
+        // flip could file one platform's message into the other's chat. The engine is a pass-through
+        // for the provenance the effect carries — nothing here may re-derive it.
+        val engine = buildEngine(StandardTestDispatcher(testScheduler))
+
+        engine.process(AppEffect.UpdateBubble("Offer Declined", sessionId = "uber-sess"), recovering = false)
+        engine.process(AppEffect.UpdateBubble("Welcome"), recovering = false)
+        runCurrent()
+
+        verify(bubbleManager).postMessage(eq("Offer Declined"), any(), any(), eq("uber-sess"))
+        // A genuinely session-less effect still hands null down (BubbleManager falls back).
+        verify(bubbleManager).postMessage(eq("Welcome"), any(), any(), eq(null))
     }
 
     @Test
@@ -605,9 +621,9 @@ class SideEffectEngineTest {
         runCurrent()
 
         inOrder(bubbleManager) {
-            verify(bubbleManager).postMessage(eq("first"), any(), any())
-            verify(bubbleManager).postMessage(eq("second"), any(), any())
-            verify(bubbleManager).postMessage(eq("third"), any(), any())
+            verify(bubbleManager).postMessage(eq("first"), any(), any(), anyOrNull())
+            verify(bubbleManager).postMessage(eq("second"), any(), any(), anyOrNull())
+            verify(bubbleManager).postMessage(eq("third"), any(), any(), anyOrNull())
         }
     }
 
@@ -653,7 +669,7 @@ class SideEffectEngineTest {
         engine.process(AppEffect.UpdateBubble("after-timer"))
         runCurrent() // no time advanced — the timer is still pending
 
-        verify(bubbleManager).postMessage(eq("after-timer"), any(), any())
+        verify(bubbleManager).postMessage(eq("after-timer"), any(), any(), anyOrNull())
     }
 
     // =========================================================================

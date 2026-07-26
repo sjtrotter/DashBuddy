@@ -210,7 +210,8 @@ class SideEffectEngine @Inject constructor(
             }
 
             is AppEffect.UpdateBubble -> {
-                bubbleManager.postMessage(effect.text, effect.persona, effect.expand)
+                // #867: the effect's OWN originating session, not the active-at-save-time one.
+                bubbleManager.postMessage(effect.text, effect.persona, effect.expand, effect.sessionId)
             }
 
             is AppEffect.CaptureScreenshot -> captureEvidence(effect)
@@ -414,7 +415,9 @@ class SideEffectEngine @Inject constructor(
                 pendingOfferNotifications[hashKey]?.cancel()
                 val job = engineScope.launch(start = CoroutineStart.LAZY) {
                     delay(OFFER_NOTIFICATION_DELAY_MS)
-                    bubbleManager.postOfferNotification(effect.offer, effect.evaluation, effect.platform)
+                    bubbleManager.postOfferNotification(
+                        effect.offer, effect.evaluation, effect.platform, effect.sessionId,
+                    )
                 }
                 job.invokeOnCompletion { pendingOfferNotifications.remove(hashKey, job) }
                 pendingOfferNotifications[hashKey] = job
@@ -567,6 +570,8 @@ class SideEffectEngine @Inject constructor(
         // Persona parsing is the SSOT ChatPersona.fromWire (#audit-2); the bubble
         // verb's schema can't carry a Merchant/Customer name, so none is supplied.
         val persona = ChatPersona.fromWire(args["persona"])
+        // #867: no explicit session — a rule-declared bubble's args carry no session provenance
+        // (RequestEffect is rule data, not a region diff), so it falls back to the active session.
         bubbleManager.postMessage(text, persona)
     }
 

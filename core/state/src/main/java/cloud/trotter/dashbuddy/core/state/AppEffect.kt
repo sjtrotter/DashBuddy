@@ -65,6 +65,19 @@ sealed class AppEffect {
         val persona: ChatPersona = ChatPersona.Dispatcher,
         val expand: Boolean = false,
         val dedupeScope: String? = null,
+        /**
+         * The originating session — the dash this chat line belongs to; null = genuinely
+         * session-less, falls back to the active session at save time.
+         *
+         * #867: the chat save used to read `BubbleManager.activeSessionId` **at save time**, which
+         * is the session of whichever platform produced the LAST recognized frame. While
+         * multi-apping that flips constantly, so an Uber offer's outcome message could be filed
+         * into the DoorDash session's chat — durable corruption of the per-session history, not
+         * just the live view. Every emitter that has a session in scope stamps it here (the same
+         * per-platform `sessionId` its sibling `logEffect(sessionId, …)` uses), so provenance
+         * travels WITH the effect instead of being re-derived at the edge.
+         */
+        val sessionId: String? = null,
     ) : AppEffect() {
         override val effectKey: String? get() =
             dedupeScope?.let { "bubble:$it:${persona.id}:${text.hashCode()}" }
@@ -192,6 +205,13 @@ sealed class AppEffect {
          * carries a real target platform instead of deriving [Platform.Unknown].
          */
         val platform: Platform,
+        /**
+         * The originating session; null = genuinely session-less, falls back to the active
+         * session at save time. Same #867 contract as [UpdateBubble.sessionId] — this effect's
+         * handler ALSO writes a chat message (the offer summary line), so it carries the same
+         * provenance rather than re-deriving it from the last-recognized-frame active session.
+         */
+        val sessionId: String? = null,
     ) : AppEffect()
 
     /**
