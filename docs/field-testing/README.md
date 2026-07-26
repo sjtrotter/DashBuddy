@@ -275,16 +275,58 @@ was found **broken-in-part** (raw PII in capture envelopes) and moved to that en
     hashes-only, and the fail-closed abort WARN fired 4× (though from target-resolution failure
     (#863), not revocation). The revoke-toggle round-trip still needs dev eyes.)
 
-- **🆕 NEW (2026-07-26 desk) — Uber decline recording + Trip Radar family (#251/#786/#826/#856–#859).**
-  Once the decline-click rule / board recognition work lands, watch for: Uber declines recording as
-  `OFFER_DECLINED` (today 162/162 lifetime resolve `OFFER_TIMEOUT` in 0.4–18 s — the ignorance
-  default); the bubble no longer reporting "Timed Out!" on offers you declined; no more
-  "Started/Done Ubering!" churn while multi-apping (#857 — 7 real toggles recorded as 13 sessions);
-  no offer named "This request is no longer available" (#858). **Desk:** `offer_records` outcome
-  census per platform; the 7-real-vs-N-recorded session count against go_online/go_offline click
-  observations; merchantName quality census. Nothing to field-watch until the builds land — this
-  item is the parking spot so the family reaches the next post-build dash.
-  - Confirmed: 0/2 (blocked on builds)
+- **🆕 NEW — #857 / PR #872 — Uber offline detection is now positive-evidence (idle_map rewrite).**
+  A partial render can no longer forge Online→Offline; a genuine offline home still recognizes via
+  "You're offline" / "You're ready to go online" / the GO button; deliberate toggles ride the
+  go_offline click. Deliberate bias: believe-online (a false offline destroyed sessions; a delayed
+  offline costs seconds). **What to watch (Uber, especially multi-apping):** no more spurious
+  "Started/Done Ubering!" churn while switching apps or gaming; exactly one session per real
+  online/offline pair. **Desk:** `session_records` Uber session count == go_online/go_offline click
+  pair count; every Online→Offline edge is ≤4 s from a go_offline click or a settled offline frame;
+  known residuals #874 (home_dashboard absence arm) + #875 (the "Ready to go?" variant).
+  - Confirmed: 0/2
+- **🆕 NEW — #786 / PR #869 — Uber decline click rule (the X is recognized).**
+  The offer card's textless dismiss-X now latches `declineCommittedAt` → declines record as
+  `OFFER_DECLINED` instead of the timeout ignorance-default. **What to watch (Uber):** the bubble's
+  Dispatch line says "Offer Declined" on your X taps; **THE CRITICAL GUARD — an Uber dash with a
+  REAL accepted, driven offer must produce `OFFER_ACCEPTED` + a costed job and NEVER a false
+  `OFFER_DECLINED`** (the mislatch hazard the review closed with the own-text-empty predicate; if
+  an accept ever records as declined, pull the build and report — that's the revert condition).
+  **Desk:** `offer_records` Uber outcome census gains OFFER_DECLINED rows ≈ witnessed X taps
+  (~claimed 4/5 in the 07-25 pull); unwitnessed disappearances stay TIMEOUT pending #251.
+  - Confirmed: 0/2
+- **🆕 NEW — #858 / PR #876 — expiring Uber cards no longer mint offers.**
+  The "This request is no longer available" dying card falls UNKNOWN instead of matching the offer
+  rule. **What to watch (Uber):** an offer that expires on screen produces no new offer row, no TTS
+  read of the error text, no "(offer replaced)" churn on the live offer. **Desk:** zero
+  `merchantName` containing "no longer available" / "Unknown Store"-via-overlay in `offer_records`;
+  the dying frames appear as UNKNOWN captures.
+  - Confirmed: 0/2
+- **🆕 NEW — #861 / PR #868 — Uber selfie ID-verification camera is sensitive-blocked.**
+  **Desk only:** next pull has ZERO selfie-flow UNKNOWN envelopes (`facecamera` ids /
+  "Fit your face in the guide"); `sensitiveDropped` increments across that window instead.
+  - Confirmed: 0/2
+- **🆕 NEW — #860 / PR #871 — Building Name value masked on both dropoff workflow sheets.**
+  **Desk only:** any `dropoff_pre_arrival` / `dropoff_pre_arrival_completion` envelope carrying a
+  `Building Name` row shows the value as `[redacted:<4hex>]` (label survives). New engine predicate
+  `hasPrecedingSiblingText` is the anchor — a completion-sheet fixture is still wanted (none
+  fielded yet; the entry is shape-inherited).
+  - Confirmed: 0/2
+- **🆕 NEW — #867 write-side / PR #873 — bubble chat messages carry their own session.**
+  Offer outcomes, session lifecycle, task lines, and the heads-up summary now file into their
+  ORIGINATING session's chat even when the other platform's frames flip the active platform
+  mid-write. **Desk (multi-app pull):** `chat_messages.dashId` for offer-outcome lines matches the
+  offer's own platform session — zero cross-platform mis-files. (Display-side — what the bubble
+  SHOWS with two live sessions — is still open on #867, dev call.)
+  - Confirmed: 0/2
+- **🆕 NEW — #865 / PR #877 — performance-hub residual gaps recognized.**
+  Acceptance-rate detail, scrolled last-100 list, customer-rating detail. **Desk only:** those three
+  UNKNOWN families → zero in the next pull. Watch item folded in per the review: if "View all
+  offers" opens a "Last 100 offers" modal, it will land UNKNOWN (never fielded, deliberately not
+  speculatively covered) — grab it if you visit that screen. Compliments-quote residual: a dasher
+  WITH compliments renders customer-authored quote text that no redact can scope today — if your
+  rating screen shows quotes, flag the pull for a manual check.
+  - Confirmed: 0/2
 
 - **🆕 NEW — Patterns tab store cards: glanceable face + detail bottom sheet (#765 / PR #799).**
   The store report cards were redesigned: the card **face** now shows only store name + location chip
@@ -2073,6 +2115,22 @@ manual, #788-adjacent shape) → #863. Three performance-hub recognition gaps su
   Treat that session as an artifact for offer/delivery counts.
 - Uber `high_priority` offer pushes (`Uber Request` / `N new requests just came in!`) are unruled
   and arrive regardless of foreground app — relevant to #785 as a board-arrival witness.
+
+### Close-out addendum (2026-07-26 evening — the build wave shipped)
+Same-day autonomous build wave off this entry's findings, every PR through the full fable
+adversarial loop (each review caught or verified something real — the #869 HIGH alone would have
+shipped false declines on the fielded permission-nag sheet): **PR #868** (#861 selfie
+sensitive-block), **#869** (#786 decline X rule + own-text-empty guard), **#870** (#862 scrub
+self-scrub via MarkerLogId), **#871** (#860 Building Name redact + the new
+`hasPrecedingSiblingText` engine predicate, extended to the completion sheet in review), **#872**
+(#857 idle_map positive-offline — follow-ups #874/#875 filed from review), **#873** (#867
+write-side chat session threading incl. the review-caught `EndSession` gap), **#876** (#858 expiry
+overlay guard), **#877** (#865 perf-hub rules), **#879** (#859 presentationHash dedupe + throttle
+engine fix + filename sanitizer). Issues closed: #857 #858 #859 #860 #861 #862 #865 #786; new from
+reviews: #874 #875 #878 (unseeded fuzz lost a counterexample). Checklist items for the wave are
+above (all 0/2). **Still open / dev-gated:** #251 board design sign-off (D2 promotion-only vs
+sighting-mints-record), #867 display-side, #856 (blocked-by #251), #826 (accept chain — needs the
+accepted-trip dash), #864, #863, evidence-PNG retention + pull-fixture purge.
 
 ## 2026-07-22 — dash in progress; DoorDash + SECOND Uber attempt (logged live from the field via chat; desk-analyzed 2026-07-22, results inline + at entry end)
 
