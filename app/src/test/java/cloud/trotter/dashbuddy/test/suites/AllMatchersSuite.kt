@@ -43,8 +43,11 @@ import org.junit.runners.Suite
  *   ruleset compiles and the core predicates behave.
  * - [TriageRulesTest] — synthetic fixtures for rules added from capture triage.
  * - [UberDeclineClickRuleTest] — #786: real device click envelopes pin `uber.click.decline_offer`
- *   onto the offer card's anonymous childless dismiss Button, and pin the accept CardView tap
- *   (subtree-labelled, non-leaf) as NOT matching it — the separability the rule rests on.
+ *   onto the offer card's anonymous childless dismiss Button, and pin BOTH the accept CardView tap
+ *   (subtree-labelled, non-leaf) and the fielded permission-nag "Settings"/"Not now" buttons
+ *   (labelled, but otherwise predicate-identical to the X) as NOT matching it — the separability
+ *   the rule rests on. Plus per-predicate mutation coverage, so no predicate can be dropped
+ *   silently.
  * - [DefaultRulesIntegrationTest] — end-to-end rule compilation/wiring.
  * - [NotificationClassifierTest] / [ClickClassifierTest] — classifier behavior.
  * - [CaptureRedactionCorpusTest] — the #598/#620 redact predicates mask injected
