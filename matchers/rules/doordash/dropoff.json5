@@ -1024,6 +1024,12 @@
               }
             ]
           }
+        },
+        {
+          "comment": "#860: same address-block 'Building Name' VALUE as dropoff_pre_arrival — this rule renders the SAME workflow sheet one CTA-state later and carries the same id-less label/value rows, so it inherits the same gap: free-form proper-noun text the digit-shape entries above structurally cannot reach. Predicate and rationale identical to the pre-arrival entry (label-anchored, hash-mask, no plainMask/normalize). Inert when the row is absent — over-redaction is the only failure direction.",
+          "find": {
+            "hasPrecedingSiblingText": "Building Name"
+          }
         }
       ],
       "state": {

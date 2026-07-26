@@ -242,6 +242,26 @@ class RuleCompilerTest {
     }
 
     @Test
+    fun `hasPrecedingSiblingText resolves the sibling by reference, not structural equality`() {
+        // #860 teeth: UiNode.equals compares identity FIELDS, not object identity, so
+        // two equal-but-distinct siblings are `==`. A List.indexOf-based lookup would
+        // resolve BOTH to the first one's index — the node actually following the label
+        // would then read the wrong predecessor and silently fail to mask (an UNDER-mask
+        // on a privacy control). The compiler walks by reference (`it === node`) for
+        // exactly this shape; swapping it back to indexOf turns this test RED.
+        val pred = RuleCompiler.compileNodePred(json("hasPrecedingSiblingText" to "Building Name"))
+        val first = node(text = "Maple Court Apartments")
+        val second = node(text = "Maple Court Apartments")
+        assertTrue("precondition: the two nodes are structurally equal", first == second)
+        assertFalse("precondition: but distinct instances", first === second)
+
+        val kids = tree(first, node(text = "Building Name"), second).children
+
+        assertTrue("the node that actually follows the label matches", pred(kids[2]))
+        assertFalse("its structural twin, which does NOT follow the label, must not", pred(kids[0]))
+    }
+
+    @Test
     fun `hasPrecedingSiblingText does not match the first child or a parentless node`() {
         val pred = RuleCompiler.compileNodePred(json("hasPrecedingSiblingText" to "Building Name"))
         // First child: no preceding sibling.
