@@ -181,7 +181,19 @@ class SideEffectEngine @Inject constructor(
         // effects on re-observation because the check was recovery-only. The
         // table is pruned at 48h, so a key is "already fired" only within that
         // window (matching the snapshot horizon recovery replays over).
-        val key = effect.effectKey
+        //
+        // …EXCEPT for a rule effect that declares its own repeat cadence (#859): a
+        // `throttleMs` in the ruleset says "at most once per N ms", and the durable row is
+        // strictly stronger ("at most once per 48h"), so it silently subsumed the
+        // declaration — making `throttleMs` unreachable as a gate and any *stable* dedupe
+        // key destructive (`offer-ss-{presentationHash}` would capture one offer per store
+        // per 48h; the 2026-07-25 pull had 161 Uber offers across 92 merchants, so ~43% of
+        // the evidence would silently vanish). A declared cadence therefore opts the effect
+        // out of the durable row entirely and into its own window, enforced by the
+        // wall-clock throttle in [AppEffect.RequestEffect]'s branch below — ONE declared
+        // value, one gate. Residual: the throttle map is in-memory, so a process restart
+        // re-arms it and the surface on screen can be re-captured once.
+        val key = effect.effectKey?.takeUnless { effect.declaresOwnCadence() }
         if (key != null && effectsFiredDao.hasBeenFired(key)) {
             Timber.tag("Effects").d("Skipping already-fired effect: %s", key)
             return
@@ -546,7 +558,16 @@ class SideEffectEngine @Inject constructor(
             Timber.tag("Effects").d("Suppressed capture prefix: %s", effect.filenamePrefix)
             return false
         }
-        screenShotHandler.capture(engineScope, effect)
+        // #859: the gate is also where the filename is made honest. A rule-declared prefix is
+        // a template ("Offer - {storeName}") and a field that parsed null does not
+        // interpolate, so the raw token used to reach the gallery verbatim (331 files named
+        // `Offer - {storeName}.png` on the device). Sanitizing HERE — the one choke point
+        // every capture passes, rule-declared or EffectMap-emitted — keeps it to one policy
+        // for one property, with no per-rule knowledge.
+        screenShotHandler.capture(
+            engineScope,
+            effect.copy(filenamePrefix = EvidenceFilename.sanitizePrefix(effect.filenamePrefix)),
+        )
         return true
     }
 
@@ -679,6 +700,18 @@ class SideEffectEngine @Inject constructor(
         // Keyed by (type, platform) to mirror the rule-driven schedule (#438 item 1).
         activeTimers[TimerKey(type, platform)]?.cancel()
     }
+
+    /**
+     * True when the effect carries a ruleset-declared repeat cadence (#859).
+     *
+     * Only a rule-originated [AppEffect.RequestEffect] can: `throttleMs` is ruleset data, and
+     * declaring it is the rule author saying "this may fire again after N ms". App-emitted
+     * effects (bubbles, sessions, captures from [EffectMap]) declare nothing and keep the
+     * durable 48h idempotency unchanged. Generic over every verb and platform — the engine
+     * reads the declaration, it never asks which rule or which platform wrote it.
+     */
+    private fun AppEffect.declaresOwnCadence(): Boolean =
+        this is AppEffect.RequestEffect && effect.throttleMs != null
 
     private fun isExternalEffect(effect: AppEffect): Boolean = when (effect) {
         is AppEffect.UpdateBubble,

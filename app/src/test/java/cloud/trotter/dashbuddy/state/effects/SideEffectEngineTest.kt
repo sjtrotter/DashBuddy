@@ -414,6 +414,83 @@ class SideEffectEngineTest {
     }
 
     // =========================================================================
+    // #859 — a rule-declared cadence governs its own repeats; filenames stay honest
+    // =========================================================================
+
+    private fun throttledShot(key: String, prefix: String = "Offer - Chipotle") =
+        AppEffect.RequestEffect(
+            RequestedEffect(
+                verb = EffectVerb.SCREENSHOT,
+                ruleId = "uber.screen.offer",
+                args = mapOf("prefix" to prefix, "category" to "offer"),
+                dedupeKey = key,
+                throttleMs = 60_000L,
+            ),
+        )
+
+    @Test
+    fun `a rule effect declaring a cadence is not swallowed by the durable 48h row`() = runTest {
+        // The whole point of a PRESENTATION-stable dedupe key (offer-ss-{presentationHash}):
+        // the same key legitimately recurs on the NEXT offer from that store. The durable
+        // effects_fired row would suppress it for 48h — the rule declared 60s.
+        val engine = buildEngine(StandardTestDispatcher(testScheduler))
+        val effect = throttledShot("offer-ss-1234")
+        whenever { effectsFiredDao.hasBeenFired(effect.effectKey) }.thenReturn(true)
+
+        engine.process(effect)
+        runCurrent()
+
+        verify(screenShotHandler, times(1)).capture(any(), any())
+        // …and it writes no durable row either — the declared window is the ONE gate.
+        verifyBlocking(effectsFiredDao, never()) { markFired(any()) }
+    }
+
+    @Test
+    fun `a rule effect with no declared cadence keeps the durable idempotency`() = runTest {
+        val engine = buildEngine(StandardTestDispatcher(testScheduler))
+        val effect = AppEffect.RequestEffect(
+            RequestedEffect(
+                verb = EffectVerb.SCREENSHOT,
+                ruleId = "uber.screen.offer",
+                args = mapOf("prefix" to "Offer - Chipotle", "category" to "offer"),
+                dedupeKey = "offer-ss-nocadence",
+            ),
+        )
+        whenever { effectsFiredDao.hasBeenFired(effect.effectKey) }.thenReturn(true)
+
+        engine.process(effect)
+        runCurrent()
+
+        verify(screenShotHandler, never()).capture(any(), any())
+    }
+
+    @Test
+    fun `a re-quoted presentation resolves to one key and captures once`() = runTest {
+        // Three frames of ONE Uber offer re-quoting itself: {presentationHash} makes them
+        // one key, and the declared window collapses them to a single capture.
+        val engine = buildEngine(StandardTestDispatcher(testScheduler))
+
+        repeat(3) {
+            engine.process(throttledShot("offer-ss-presA"))
+            runCurrent()
+        }
+
+        verify(screenShotHandler, times(1)).capture(any(), any())
+    }
+
+    @Test
+    fun `an unresolvable filename token never reaches the screenshot handler`() = runTest {
+        val engine = buildEngine(StandardTestDispatcher(testScheduler))
+
+        engine.process(throttledShot("offer-ss-presB", prefix = "Offer - {storeName}"))
+        runCurrent()
+
+        val captor = argumentCaptor<AppEffect.CaptureScreenshot>()
+        verify(screenShotHandler).capture(any(), captor.capture())
+        assertEquals("Offer", captor.firstValue.filenamePrefix)
+    }
+
+    // =========================================================================
     // #436 — engine latency + dedupe pack
     // =========================================================================
 

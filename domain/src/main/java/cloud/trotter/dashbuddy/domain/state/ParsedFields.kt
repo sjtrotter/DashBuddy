@@ -34,6 +34,20 @@ sealed class ParsedFields {
     open fun dedupeHash(): Int = 0
 
     /**
+     * Hash of the PRESENTATION identity — the subset that stays stable for as long as ONE
+     * physical presentation of this surface is on screen, even while the surface live-updates
+     * its own content (#859).
+     *
+     * [dedupeHash] answers "is this the same content?"; this answers "is this the same
+     * showing?". They differ only on a re-quoting surface: an offer card that re-renders its
+     * pay/miles/minutes every few seconds churns [dedupeHash] while the driver is looking at
+     * ONE offer, so a per-content dedupe key re-fires the rule's effects several times per
+     * offer. Shapes with no distinct presentation identity fall back to [dedupeHash], so the
+     * default is exactly today's behaviour.
+     */
+    open fun presentationHash(): Int = dedupeHash()
+
+    /**
      * Structural fields for effect-gate evaluation (`onlyIf`, #345/#434) —
      * every constructor property EXCEPT the open [activity] discriminator
      * (rules gate on structural fields, not the classification tag).
@@ -99,6 +113,18 @@ sealed class ParsedFields {
         )
 
         override fun dedupeHash(): Int = parsedOffer.offerHash.hashCode()
+
+        /**
+         * The #830 `presentationKey` (sha256 of the STABLE subset — store names, order count,
+         * order types) IS the offer's presentation identity: it is what the state machine
+         * already uses to tell "the same offer, re-quoted" from "a different offer".
+         *
+         * Fail-CLOSED, exactly as #830 defines it: a null key (digest failure, or a frame with
+         * no content-bearing stable subset) degrades to the per-quote [offerHash] — i.e. back
+         * to today's churn — never to a shared constant that would merge distinct offers.
+         */
+        override fun presentationHash(): Int =
+            (parsedOffer.presentationKey ?: parsedOffer.offerHash).hashCode()
     }
 
     @Serializable
