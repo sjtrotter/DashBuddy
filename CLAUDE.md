@@ -241,7 +241,16 @@ customer-NAME entry flagged `normalize: customerName`, canonical-key-**normalize
 token, so two customers redact distinctly (per-customer replay fidelity) without persisting raw
 PII; fail-closed to plain `[redacted]`. A redact entry may instead opt into a hash-less plain
 `[redacted]` via `plainMask` (#795 — for bounded secrets like a 4-digit delivery PIN, where 4 hex
-over a 10^4 space is brute-recoverable; compile-rejects `plainMask`+`normalize` together). The
+over a 10^4 space is brute-recoverable; compile-rejects `plainMask`+`normalize` together), and a
+rule-INDEPENDENT **short-token floor** degrades the suffix to plain `[redacted]` whenever the
+stripped/trimmed token is under 4 chars (#889 — a sub-4-char space is ≤ the suffix's 65 536 buckets,
+so the 4 hex become an inversion oracle; the fielded `dropoff_pin_entry` masked a single-glyph keypad
+echo as `[redacted:5fec]`, invertible in ~100 guesses). The floor bounds LENGTH where `plainMask`
+bounds ALPHABET — they compose, and a 4-digit PIN still needs the rule to declare `plainMask`.
+`normalize: customerName` entries are EXEMPT from the floor: their hex must stay equal to the first
+4 hex of the `customerNameHash` the parse already persists (#623/#733), and for a name that hash
+exists by design, so degrading it would break the invariant + cross-surface stability while removing
+no attacker capability (a glyph node has no parse, which is exactly why its suffix is a net leak). The
 mask token is otherwise derived by the SAME canonical form the
 parse's `customerNameHash` chain uses (`normalizeCustomerName` before `sha256`, `CustomerNameKey` =
 first token + second-token initial), so a customer's mask/hash is stable across the surface FORMS
