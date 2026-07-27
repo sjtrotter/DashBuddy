@@ -6,24 +6,13 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.res.stringResource
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.flow.MutableStateFlow
 import androidx.navigation.NavType
@@ -41,6 +30,7 @@ import cloud.trotter.dashbuddy.ui.main.settings.AboutScreen
 import cloud.trotter.dashbuddy.ui.main.settings.EconomySettingsScreen
 import cloud.trotter.dashbuddy.feature.settings.CapabilityConsentScreen
 import cloud.trotter.dashbuddy.feature.settings.DataExportScreen
+import cloud.trotter.dashbuddy.feature.settings.DeveloperSettingsScreen
 import cloud.trotter.dashbuddy.feature.settings.EvidenceSettingsScreen
 import cloud.trotter.dashbuddy.feature.settings.GeneralSettingsScreen
 import cloud.trotter.dashbuddy.feature.settings.PlatformSettingsScreen
@@ -48,7 +38,6 @@ import cloud.trotter.dashbuddy.ui.main.settings.SettingsHomeScreen
 import cloud.trotter.dashbuddy.feature.settings.StrategySettingsScreen
 import cloud.trotter.dashbuddy.ui.main.setup.wizard.WizardScreen
 import cloud.trotter.dashbuddy.core.designsystem.theme.DashBuddyTheme
-import cloud.trotter.dashbuddy.R
 import dagger.hilt.android.AndroidEntryPoint
 
 @AndroidEntryPoint
@@ -208,10 +197,9 @@ class MainActivity : ComponentActivity() {
                             )
                         }
 
-                        // 5. Developer Options
+                        // 5. Developer Options — the field-experiment switches (#867).
                         composable(Screen.DeveloperSettings.route) {
-                            PlaceholderScreen(
-                                title = stringResource(R.string.main_activity_developer_options_title),
+                            DeveloperSettingsScreen(
                                 onBack = { navController.popBackStack() }
                             )
                         }
@@ -256,42 +244,5 @@ class MainActivity : ComponentActivity() {
                 )
                 putExtra(EXTRA_ROUTE, route)
             }
-    }
-}
-
-/**
- * A temporary placeholder to prevent compile errors for screens
- * you haven't built yet (General & Developer).
- */
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-fun PlaceholderScreen(title: String, onBack: () -> Unit) {
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = { Text(title) },
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(
-                            Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = stringResource(R.string.common_content_desc_back),
-                        )
-                    }
-                }
-            )
-        }
-    ) { padding ->
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(padding),
-            contentAlignment = Alignment.Center
-        ) {
-            Text(
-                text = stringResource(R.string.main_activity_placeholder_construction),
-                style = MaterialTheme.typography.headlineSmall,
-                color = MaterialTheme.colorScheme.secondary
-            )
-        }
     }
 }

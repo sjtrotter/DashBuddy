@@ -84,6 +84,12 @@ fun FlowCardItem(
     expanded: Boolean,
     onToggleExpand: () -> Unit,
     modifier: Modifier = Modifier,
+    /**
+     * The owning platform's short name (#867), rendered as a leading chip. Null ⇒ no chip: the
+     * caller passes a label only while ≥2 dashes are live, so a single-platform HUD is unchanged
+     * and a two-platform HUD can never show an unattributed card.
+     */
+    platformLabel: String? = null,
     onAccept: () -> Unit = {},
     onDecline: () -> Unit = {},
 ) {
@@ -105,7 +111,12 @@ fun FlowCardItem(
                 .padding(horizontal = 14.dp, vertical = 10.dp),
             verticalArrangement = Arrangement.spacedBy(if (effectiveExpanded) 10.dp else 4.dp),
         ) {
-            CardHeader(snapshot = snapshot, isActive = isActive, expanded = effectiveExpanded)
+            CardHeader(
+                snapshot = snapshot,
+                isActive = isActive,
+                expanded = effectiveExpanded,
+                platformLabel = platformLabel,
+            )
             if (effectiveExpanded) {
                 CardBody(snapshot = snapshot, isActive = isActive)
                 if (snapshot is FlowCardSnapshot.Offer && isActive && snapshot.outcome == null) {
@@ -125,12 +136,16 @@ private fun CardHeader(
     snapshot: FlowCardSnapshot,
     isActive: Boolean,
     expanded: Boolean,
+    platformLabel: String? = null,
 ) {
     Row(
         modifier = Modifier.fillMaxWidth(),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
+        // #867: multi-app attribution leads the row — whose dash is this card? Shown only when the
+        // caller resolved a label (≥2 live sessions).
+        platformLabel?.let { PlatformChip(it) }
         PhaseChip(snapshot, isActive)
         Text(
             text = cardSummary(snapshot, isActive),
@@ -162,6 +177,27 @@ private fun CardHeader(
                 modifier = Modifier.size(18.dp),
             )
         }
+    }
+}
+
+/**
+ * The owning platform's badge (#867). Deliberately quiet — it's an attribution marker, not a
+ * status: the phase chip beside it keeps the loud color.
+ */
+@Composable
+private fun PlatformChip(label: String) {
+    val c = AppTheme.colors
+    Surface(
+        shape = RoundedCornerShape(4.dp),
+        color = c.neutralBg,
+    ) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelSmall,
+            color = c.neutral,
+            fontWeight = FontWeight.Bold,
+            modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp),
+        )
     }
 }
 

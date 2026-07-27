@@ -27,6 +27,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import cloud.trotter.dashbuddy.R
+import cloud.trotter.dashbuddy.feature.bubble.ChatHeaderTitle
 import cloud.trotter.dashbuddy.feature.bubble.DashboardView
 import cloud.trotter.dashbuddy.feature.bubble.FullChatView
 import cloud.trotter.dashbuddy.feature.bubble.SessionMetricsActions
@@ -50,7 +51,10 @@ fun BubbleScreen(
     val gasPrice by viewModel.gasPrice.collectAsStateWithLifecycle()
     val isGasPriceAuto by viewModel.isGasPriceAuto.collectAsStateWithLifecycle()
     val isGasPriceRefreshing by viewModel.isGasPriceRefreshing.collectAsStateWithLifecycle()
-    val cardStack by viewModel.cardStack.collectAsStateWithLifecycle()
+    val cards by viewModel.cards.collectAsStateWithLifecycle()
+    // #867 multi-app: which dash the surface is scoped to, and the switcher that re-scopes it.
+    val switchablePlatforms by viewModel.switchablePlatforms.collectAsStateWithLifecycle()
+    val displayedPlatformLabel by viewModel.displayedPlatformLabel.collectAsStateWithLifecycle()
     var showFullChat by remember { mutableStateOf(false) }
 
     // Collapse the bubble to its head after the user acts on an offer.
@@ -84,7 +88,12 @@ fun BubbleScreen(
             TopAppBar(
                 title = {
                     if (showFullChat) {
-                        Text(stringResource(R.string.bubble_screen_chat_history_title))
+                        // #867: the chat is per-session, so while two dashes are live the header
+                        // names whose chat this is (null label ⇒ nothing to disambiguate).
+                        ChatHeaderTitle(
+                            title = stringResource(R.string.bubble_screen_chat_history_title),
+                            platformLabel = displayedPlatformLabel,
+                        )
                     } else {
                         StatusBadgeTitle(
                             region = focusedRegion,
@@ -123,11 +132,14 @@ fun BubbleScreen(
                 FullChatView(messages)
             } else {
                 DashboardView(
-                    cardStack = cardStack,
+                    cardStack = cards.stack,
                     region = focusedRegion,
                     messages = messages,
                     lastSession = lastSession,
                     focusedPlatform = focusedPlatform,
+                    cardPlatformLabels = cards.platformLabels,
+                    switchablePlatforms = switchablePlatforms,
+                    onSelectPlatform = viewModel::selectPlatform,
                     gasPrice = gasPrice,
                     isGasPriceAuto = isGasPriceAuto,
                     isGasPriceRefreshing = isGasPriceRefreshing,

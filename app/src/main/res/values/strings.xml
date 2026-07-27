@@ -210,7 +210,6 @@
 
     <!-- main/MainActivity.kt -->
     <string name="main_activity_developer_options_title">Developer Options</string>
-    <string name="main_activity_placeholder_construction">Construction Area 🚧\nComing Soon</string>
 
     <!-- setup/wizard/cards/VehicleCard.kt -->
 

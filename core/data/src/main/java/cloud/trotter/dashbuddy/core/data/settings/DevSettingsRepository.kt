@@ -2,6 +2,7 @@ package cloud.trotter.dashbuddy.core.data.settings
 
 import android.util.Log
 import cloud.trotter.dashbuddy.core.datastore.settings.DevSettingsDataSource
+import cloud.trotter.dashbuddy.domain.model.bubble.BubbleSessionMode
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.Flow
@@ -53,12 +54,25 @@ class DevSettingsRepository @Inject constructor(
     val isDevModeUnlocked: Flow<Boolean> =
         dataSource.isDevModeUnlocked.map { it ?: isDebug }
 
+    /**
+     * The bubble's session-presentation experiment switch (#867). Decode is **fail-closed**: an
+     * absent or unrecognized stored value resolves to [BubbleSessionMode.Default] — the shipped
+     * follow-last-active presentation — so a corrupt/stale preference can never leave the HUD in an
+     * undefined presentation.
+     */
+    val bubbleSessionMode: Flow<BubbleSessionMode> =
+        dataSource.bubbleSessionMode.map { BubbleSessionMode.fromWire(it) }
+
     // ============================================================================================
     // WRITE ACTIONS
     // ============================================================================================
     suspend fun setDevModeUnlocked(unlocked: Boolean) = dataSource.setDevModeUnlocked(unlocked)
 
     suspend fun setLogLevel(priority: Int) = dataSource.setLogLevel(priority)
+
+    /** #867 — persist the bubble session-presentation mode as its wire value. */
+    suspend fun setBubbleSessionMode(mode: BubbleSessionMode) =
+        dataSource.setBubbleSessionMode(mode.wire)
 
     suspend fun clearPreferences() {
         Timber.tag(TAG).w("Clearing Developer Preferences")

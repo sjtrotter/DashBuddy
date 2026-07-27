@@ -139,13 +139,21 @@ and `DashboardView` carved out of `BubbleScreen.kt` into `BubbleDashboardView.kt
 data-in/lambdas-out renderers of `:domain` types + the bubble-only `ui/formatters/*` — no Hilt,
 no `:core:data`/`:core:state`. The `BubbleActivity` (manifest host), `BubbleScreen` (nav host —
 `MainActivity`/`Screen` route table), `BubbleManager` (`OfferActionReceiver` + notification
-plumbing), and `BubbleViewModel` (injects `BubbleManager` → moving it needs an inversion, declined
-per the honest-smaller-module doctrine, same as `DashboardViewModel`) all stay in `:app`, which
+plumbing), and `BubbleViewModel` (injects the `:core:data`/`:core:state` repositories +
+`StateManagerV2`, which `:feature:bubble` does not and should not depend on — moving it would need
+an inversion the honest-smaller-module doctrine declines, same as `DashboardViewModel`; #867 dropped
+its former `BubbleManager` injection when session identity moved to a single `AppState`-derived
+resolution, but the `:core:*` deps keep it in `:app` regardless) all stay in `:app`, which
 consumes the moved formatters/gauge/renderers as a legal `:app → :feature` dependency. The bubble
-`flow_card_*`/`bubble_mode_idle_*`/`bubble_status_*`/`bubble_chat_*` strings + the `ic_badge_*`/
+`flow_card_*`/`bubble_mode_idle_*`/`bubble_status_*`/`bubble_chat_*`/`bubble_switcher_*` strings +
+the `ic_badge_*`/
 `ic_chat_*` badge/chat drawables moved clean (disjoint from every stayed consumer); `@color/white`
 is duplicated by choice into the module — multi-consumer with :app-remaining drawables, `:app` copy
-authoritative — the #854 pattern.) **Remaining Phase-6 extractions: none — Phase 6 complete.**
+authoritative — the #854 pattern. #867 added the module's `session/*` — the pure
+`BubbleSessionResolver` (which dash the HUD shows: follow-active + a manual switcher / pinned /
+merged, a Dev-settings experiment switch) and the stateless `PlatformSwitcherRow` — plus
+`cards/CardStackAssembler` (the merged interleave + the per-card platform-chip map); still no
+Hilt/`:core:data`/`:core:state`.) **Remaining Phase-6 extractions: none — Phase 6 complete.**
 
 - **`:domain`** — Pure Kotlin library. Domain models, state regions, evaluation logic,
   pipeline/provider contracts, the capture contracts (`CaptureBus`, `EnvelopeBuilder`,
