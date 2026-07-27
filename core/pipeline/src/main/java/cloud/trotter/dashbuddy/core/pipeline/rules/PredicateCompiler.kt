@@ -154,6 +154,24 @@ internal object PredicateCompiler {
                 ;{ node -> precedingSibling(node)?.text?.equals(s, ignoreCase = true) == true }
             }
 
+            // The mirror of [hasPrecedingSiblingText] for the block whose PII value
+            // comes FIRST (#886). An id-less address block renders
+            // `<line-1 TextView><line-2 TextView>` with no label at all: line 1 is a
+            // street line OR — when the destination is a business/venue — the venue
+            // NAME, free-form proper-noun text with no id, no digits and no stable
+            // shape, and no preceding sibling to anchor on (it is child 0). Its
+            // FOLLOWING sibling is the city/ST/ZIP line, which DOES have a stable
+            // shape — so the anchor is a regex on the next sibling's text. Text
+            // shape is rule DATA (no platform literal, principle 8); the pattern
+            // runs through the same [compileRegex] ReDoS/length guard as
+            // `hasTextMatchesRegex`. Redaction evaluates every entry against the
+            // ORIGINAL tree (the mask is applied to a copy), so a sibling that is
+            // itself masked by another entry still reads raw here.
+            "hasFollowingSiblingTextMatchesRegex" -> {
+                val regex = compileRegex(primOf(value, key).content)
+                ;{ node -> followingSibling(node)?.text?.let { str -> regex.containsMatchIn(str) } == true }
+            }
+
             // Matches when *any* text node anywhere in this subtree (including
             // the node itself and any descendant's text or contentDescription)
             // equals the value, case-insensitive. Necessary for buttons whose
@@ -362,6 +380,19 @@ internal object PredicateCompiler {
         val siblings = node.parent?.children ?: return null
         val idx = siblings.indexOfFirst { it === node }
         return if (idx > 0) siblings[idx - 1] else null
+    }
+
+    /**
+     * The sibling immediately AFTER [node] (#886) — [precedingSibling]'s mirror,
+     * resolved by the SAME referential-identity walk and for the same reason: a
+     * structural-equality lookup would resolve a duplicated sibling to the wrong
+     * index and UNDER-mask a PII node. Returns null with no parent
+     * back-references or when the node is last.
+     */
+    private fun followingSibling(node: UiNode): UiNode? {
+        val siblings = node.parent?.children ?: return null
+        val idx = siblings.indexOfFirst { it === node }
+        return if (idx >= 0 && idx < siblings.lastIndex) siblings[idx + 1] else null
     }
 
     // -- #293 robustness helpers, predicate-scoped ------------------------------

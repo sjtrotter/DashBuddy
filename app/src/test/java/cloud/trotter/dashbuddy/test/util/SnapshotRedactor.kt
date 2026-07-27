@@ -33,6 +33,13 @@ object SnapshotRedactor {
     private val PII_ID_SUFFIXES = setOf(
         "user_name", "customer_name", "address_line_1", "address_line_2",
         "address_subpremise_line", "primaryManeuverText",
+        // #886: the rest of the embedded Google-Nav maneuver cluster, which the runtime redact
+        // on `dropoff_navigation` / `navigation_generic` declares customer PII. Kept in sync with
+        // that block deliberately — a number-LESS destination street ("Canyon Golf Road ") carries
+        // no digits, so STREET / FULL_ADDRESS / CITY_STATE_ZIP / BARE_STREET all structurally miss
+        // it and a future committed nav fixture would ship the customer's street raw on the
+        // commit path. Ids, not shapes, are the only handle here.
+        "subManeuverText", "secondaryManeuverText", "roadNameView",
         "message_self_message", "message_other_message", "message_input",
         "chat_input_text_field", "bottom_sheet_address_line_1", "bottom_sheet_address_line_2",
         "tvTitle", "tvLastMessage",
@@ -86,11 +93,12 @@ object SnapshotRedactor {
      * documented split-node residual).
      *
      * **SSOT (#362 class):** [FIRST_LAST_INITIAL_PATTERN] is byte-identical to the rule-side
-     * `hasTextMatchesRegex` in `doordash.screen.dropoff_multi_order_confirm` (+ the FIX-3
-     * defense-in-depth copies on `dropoff_navigation`/`dropoff_handoff`), and BOTH compile
-     * `IGNORE_CASE` — so the committed corpus is scrubbed the SAME way the runtime redacts the live
-     * envelope. `CaptureRedactionCorpusTest` asserts the two pattern strings are equal so they
-     * can't drift.
+     * `hasTextMatchesRegex` on EVERY rule that carries this shape — today eight sites across the
+     * doordash dropoff surfaces and the uber trip surfaces — and both sides compile `IGNORE_CASE`,
+     * so the committed corpus is scrubbed the SAME way the runtime redacts the live envelope. The
+     * **authoritative enumeration is the parity tests**, not this KDoc: `CaptureRedactionCorpusTest`
+     * asserts every such rule's redact regex is byte-equal to this constant, so a new site is
+     * covered the moment it is added and this comment cannot rot into a wrong site list.
      *
      * Whole-value anchored (`^…$`, whitespace-tolerant via `\s{0,8}` so a trailing space still
      * matches — the runtime `containsMatchIn` on raw text and this `matches` then agree on
@@ -98,8 +106,18 @@ object SnapshotRedactor {
      * a warehouse zone code ("SAT_San-Antonio_187"), or a count ("2 items"). Character classes are
      * `\p{L}` (accented/Unicode letters — José, Muñoz; interior capitals — McKenna) plus `'` and
      * `-` (O'Brien, D'Angelo, Mary-Jo); the last token is a single letter with an optional trailing
-     * period. Every quantifier is bounded ({0,20}/{0,3}/{0,8}) so it passes RegexSafety's ReDoS
-     * guard when the identical string is compiled on the rule side.
+     * period. Every quantifier is bounded ({0,20}/{0,3}/{0,8}/{1,4}) so it passes RegexSafety's
+     * ReDoS guard when the identical string is compiled on the rule side.
+     *
+     * **INTERIOR whitespace is `\s{1,4}`, not a literal space (#885).** The 07-27 pull fielded
+     * `dropoff_multi_order_confirm` rendering the name with a DOUBLE space ("Firstname  L.") — the
+     * layout, not the data — and the single-space separator this pattern used to carry did not
+     * match, so the rule's redact entry existed but never fired and a raw customer name reached
+     * the recognized envelope. Leading/trailing tolerance was never the gap; the SEPARATOR was.
+     * `\s` covers the ASCII whitespace family (space/tab/newline), so a multi-space or tabbed
+     * render now masks identically; a non-ASCII separator (NBSP) is NOT covered by `\s` and stays
+     * the documented residual — the `CustomerTextMarkers` backstop and this scrubber's other
+     * passes remain downstream of it.
      *
      * **Accepted over-mask trade-off (privacy-first):** because it is case-insensitive and
      * shape-only, a two-token UI label that happens to end in a single letter — "Vitamin C",
@@ -110,7 +128,7 @@ object SnapshotRedactor {
      * the whole-value anchoring here keep the surface small.
      */
     const val FIRST_LAST_INITIAL_PATTERN =
-        "^\\s{0,8}[\\p{L}][\\p{L}'-]{0,20}( [\\p{L}][\\p{L}'-]{0,20}){0,3} [A-Z]\\.?\\s{0,8}$"
+        "^\\s{0,8}[\\p{L}][\\p{L}'-]{0,20}(\\s{1,4}[\\p{L}][\\p{L}'-]{0,20}){0,3}\\s{1,4}[A-Z]\\.?\\s{0,8}$"
     private val FIRST_LAST_INITIAL = Regex(FIRST_LAST_INITIAL_PATTERN, RegexOption.IGNORE_CASE)
     private val APT = Regex("""(?i)\b(apt|suite|ste|unit|bldg|building|gate code|gate)\b[:#\s]*[A-Za-z0-9\-]+""")
     /**

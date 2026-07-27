@@ -240,6 +240,23 @@ was found **broken-in-part** (raw PII in capture envelopes) and moved to that en
     decline ×6, expand ×8) while accept NEVER fired automatically over 10 manual accepts —
     second independent support for the ungranted-accept read.)
 
+- **🆕 NEW — #885 / #886 — three dropoff capture-redaction gaps closed (DESK-ONLY check).** Nothing
+  to watch while driving; this is verified entirely from the next pull's envelopes. Dash DoorDash
+  normally (at least one drop-off with a **business/venue** destination and one where the nav screen
+  reaches its final "arriving" maneuver; a multi-order dash also exercises the confirm card).
+  **Desk (next pull), all three must hold:**
+  1. `dropoff_multi_order_confirm/*.json` — the id-less name line reads `[redacted:<4hex>]`, never a
+     raw first-name + last-initial (the #885 leak was a DOUBLE-space render evading the shape).
+     Grep the whole pull with `\s+` between tokens, not a single space.
+  2. `dropoff_navigation/*.json` and `navigation_generic/*.json` — every `primaryManeuverText` /
+     `subManeuverText` / `secondaryManeuverText` / `roadNameView` is masked (the "arriving" step used
+     to restate the customer's full street address). `pickup_navigation` is UNCHANGED by design —
+     its merchant address stays raw; a masked pickup maneuver means the entry landed on the wrong rule.
+  3. `dropoff_pre_arrival` / `dropoff_handoff` / `dropoff_pin_entry` (+ completion) — for a
+     **venue** destination, the address block's line 1 (the venue NAME) is masked, not just the
+     city/ST/ZIP line beneath it.
+  - Issues: #885, #886. Confirmed: 0/2
+
 - **🆕 NEW — #889 — no brute-forceable `[redacted:<4hex>]` on short tokens.** The capture mask now
   degrades to a plain `[redacted]` whenever the masked token is under 4 characters, rule-independently
   (a 1-glyph source inverts from 4 hex in ~100 guesses; the fielded `dropoff_pin_entry` keypad echo
@@ -382,7 +399,9 @@ was found **broken-in-part** (raw PII in capture envelopes) and moved to that en
   `For <name> • <store>` header to `For [redacted:<4hex>]`; `dropoff_pin_entry`/`dropoff_handoff` mask
   gate-code/PIN-bearing instruction bodies (incl. `PIN: NNNN` / fused `PinNNNN` variants).
   **Desk-side:** in the next pull, every capture of these four surfaces must show the masked forms — grep
-  for `For [A-Z][a-z]+ [A-Z]\.` and `pin[\s:#]*\d` over the recognized capture tree → zero raw hits.
+  for `For [A-Z][a-z]+\s+[A-Z]\.` and `pin[\s:#]*\d` over the recognized capture tree → zero raw hits.
+  (#885: use `\s+` between the name tokens, never a single literal space — the 07-26 render put a
+  DOUBLE space before the last initial and a single-space grep reads clean on a real leak.)
   - Confirmed: 0/2 (desk 07-26: both greps → zero raw hits across the whole pull, but none of the
     four specific surfaces occurred, so this is a clean null, not a confirmation.)
 - **🆕 NEW — #801 / PR #817 — bubble session-earnings freshness on 0.230.0.** The collapsed receipt

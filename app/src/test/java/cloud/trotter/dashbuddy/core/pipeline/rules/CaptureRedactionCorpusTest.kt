@@ -271,6 +271,267 @@ class CaptureRedactionCorpusTest {
         }
     }
 
+    /**
+     * #885 — `dropoff_multi_order_confirm` shipped a RAW customer name on a RECOGNIZED
+     * surface. The rule's name-shape redact entry existed; it just never fired, because
+     * DoorDash renders the line with a **double space** ("Firstname␣␣L.") and the shared
+     * name-shape SSOT used a LITERAL single space between tokens. The separator is now
+     * `\s{1,4}`, so the layout's whitespace can't decide whether PII is masked.
+     *
+     * Node shape is ground truth from the 07-26 device capture (id-less TextViews: the
+     * two copy lines, the name, the store form, the item count, an id-bearing CTA).
+     * Every VALUE is invented — the fielded name/store are not reproduced.
+     *
+     * Teeth: revert the separator to a literal space, or delete the entry, and the
+     * double-space assertion goes RED. The over-match guards pin that the store form,
+     * the count, and the instruction copy still ship raw (merchant data is driver-owned).
+     */
+    @Test
+    fun `dropoff_multi_order_confirm masks a double-spaced customer name, keeps the store (#885)`() {
+        val rule = TestRulesetFactory.screenRuleset
+            .ruleById("doordash.screen.dropoff_multi_order_confirm")!!
+
+        fun card(name: String) = UiNode(
+            className = "android.view.View",
+            children = listOf(
+                UiNode(className = "android.widget.TextView", text = "Confirm you have the correct order before drop-off."),
+                UiNode(
+                    className = "android.widget.TextView",
+                    text = "Mix-ups frequently occur at drop-off when there are multiple orders in a Dash.",
+                ),
+                UiNode(className = "android.widget.TextView", text = name),
+                UiNode(className = "android.widget.TextView", text = "Sample Pizza Co (41709)"),
+                UiNode(className = "android.widget.TextView", text = "2 items"),
+                UiNode(
+                    viewIdResourceName = "com.doordash.driverapp:id/textView_prism_button_title",
+                    className = "android.widget.TextView",
+                    text = "Continue",
+                ),
+            ),
+        ).restoreParents()
+
+        // THE #885 SHAPE: two spaces between the first name and the last initial.
+        val doubleSpaced = serialize(rule.redact.apply(card("Testname  Q.")))
+        assertFalse("double-spaced customer name must not persist", doubleSpaced.contains("Testname"))
+        assertTrue(
+            "the name masks to the hash family [redacted:<4hex>]",
+            Regex("""\[redacted:[0-9a-f]{4}]""").containsMatchIn(doubleSpaced),
+        )
+        // Over-match guards: merchant + structural copy stay raw.
+        assertTrue("store form kept (driver-owned)", doubleSpaced.contains("Sample Pizza Co (41709)"))
+        assertTrue("item count kept", doubleSpaced.contains("2 items"))
+        assertTrue("instruction copy kept", doubleSpaced.contains("Mix-ups frequently occur at drop-off"))
+        assertTrue("CTA kept", doubleSpaced.contains("Continue"))
+
+        // The single-space form (the pre-#885 assumption) still masks — no regression.
+        assertFalse(
+            "single-spaced customer name must not persist",
+            serialize(rule.redact.apply(card("Testname Q."))).contains("Testname"),
+        )
+
+        // #733/#885 cross-surface stability: the mask hex must equal the SAME customer's hex
+        // on the "Deliver to <name>" nav title — that is what `normalize: customerName` on this
+        // entry buys, and it holds across BOTH the double-space render and the fuller name form.
+        val hex = Regex("""\[redacted:([0-9a-f]{4})]""")
+        fun cardHex(name: String): String {
+            val masked = rule.redact.apply(
+                UiNode(className = "android.view.View", children = listOf(UiNode(text = name))).restoreParents(),
+            ).children[0].text!!
+            return hex.find(masked)?.groupValues?.get(1)
+                ?: error("name node was not masked; got '$masked'")
+        }
+        val navRule = TestRulesetFactory.screenRuleset.ruleById("doordash.screen.dropoff_navigation")!!
+        val navHex = hex.find(
+            navRule.redact.apply(
+                UiNode(
+                    viewIdResourceName = "com.dd:id/bottom_sheet_task_title",
+                    text = "Deliver to Testname Quill",
+                ),
+            ).text!!,
+        )!!.groupValues[1]
+        assertEquals("double-spaced name masks to the customer's canonical hex", navHex, cardHex("Testname  Q."))
+        assertEquals("single-spaced name masks to the same hex", navHex, cardHex("Testname Q."))
+    }
+
+    /**
+     * #886 — the drop-off navigation screen embeds Google Nav, and its final "arriving"
+     * maneuver restates the customer's FULL street address in nav copy
+     * ("<house#> <Street>, <City>, <ST> <zip>, USA will be on the right"). The bottom
+     * sheet's own address lines were masked by id; the maneuver node was not, so a
+     * recognized dropoff envelope still carried the destination raw.
+     *
+     * Covers both rules that can render a customer-destination maneuver:
+     * `dropoff_navigation` (the fielded one) and the store-AMBIGUOUS full-screen
+     * `navigation_generic` catch-all, which has no task sheet to tell a merchant leg from
+     * a customer leg (the #745 nav_arriving posture: fail toward privacy). `pickup_navigation`
+     * restates the MERCHANT address — driver-owned — and is asserted to stay RAW.
+     *
+     * Teeth: delete either maneuver entry and the address assertion goes RED.
+     */
+    @Test
+    fun `dropoff-phase nav maneuver text is masked, pickup nav is left raw (#886)`() {
+        val arrivalManeuver = "742 Sample Hollow Way, San Antonio, TX 78260, USA will be on the right "
+
+        fun navScreen() = UiNode(
+            className = "android.view.View",
+            children = listOf(
+                UiNode(
+                    viewIdResourceName = "com.doordash.driverapp:id/stepDistance",
+                    className = "android.widget.TextView",
+                    text = "400 ft",
+                ),
+                UiNode(
+                    viewIdResourceName = "com.doordash.driverapp:id/primaryManeuverText",
+                    className = "android.widget.TextView",
+                    text = arrivalManeuver,
+                ),
+                UiNode(
+                    viewIdResourceName = "com.doordash.driverapp:id/subManeuverText",
+                    className = "android.widget.TextView",
+                    text = "Sample Hollow Way ",
+                ),
+                UiNode(
+                    viewIdResourceName = "com.doordash.driverapp:id/roadNameView",
+                    className = "android.widget.TextView",
+                    text = "Sample Golf Road ",
+                ),
+                UiNode(
+                    viewIdResourceName = "com.doordash.driverapp:id/textView_prism_button_title",
+                    className = "android.widget.TextView",
+                    text = "Exit",
+                ),
+            ),
+        ).restoreParents()
+
+        for (id in listOf("doordash.screen.dropoff_navigation", "doordash.screen.navigation_generic")) {
+            val rule = TestRulesetFactory.screenRuleset.ruleById(id)!!
+            assertFalse("$id must declare a redact block", rule.redact.isEmpty())
+            val masked = serialize(rule.redact.apply(navScreen()))
+
+            assertFalse("$id: the arrival maneuver address must not persist", masked.contains("Sample Hollow Way"))
+            assertFalse("$id: the current-road node must not persist", masked.contains("Sample Golf Road"))
+            assertTrue(
+                "$id: the maneuver masks to the hash family [redacted:<4hex>]",
+                Regex("""\[redacted:[0-9a-f]{4}]""").containsMatchIn(masked),
+            )
+            // Over-match guard: nav chrome the recognition anchors read stays raw.
+            assertTrue("$id: step distance kept", masked.contains("400 ft"))
+            assertTrue("$id: Exit CTA kept", masked.contains("Exit"))
+        }
+
+        // The MERCHANT-side sibling is deliberately untouched (driver-owned data).
+        val pickup = TestRulesetFactory.screenRuleset.ruleById("doordash.screen.pickup_navigation")!!
+        assertTrue(
+            "pickup_navigation restates the merchant address — kept by design",
+            serialize(pickup.redact.apply(navScreen())).contains("Sample Hollow Way"),
+        )
+    }
+
+    /**
+     * #886 commit-path parity — the runtime redact above masks the whole nav maneuver cluster, so
+     * `SnapshotRedactor` (which scrubs a fixture on its way INTO the committed corpus) must know the
+     * same ids. It already knew `primaryManeuverText`; the siblings were the gap, and no text shape
+     * covers them: a destination street with no house number ("Canyon Golf Road ") carries no digits,
+     * so STREET / FULL_ADDRESS / CITY_STATE_ZIP / BARE_STREET all structurally miss it and a future
+     * committed nav fixture would ship the customer's street raw.
+     *
+     * Teeth: drop any of the four ids from `PII_ID_SUFFIXES` and this goes RED.
+     */
+    @Test
+    fun `the commit-path scrubber masks the whole nav maneuver cluster by id (#886)`() {
+        // A number-less street name — the shape passes cannot see it; only the id can.
+        val street = "Sample Golf Road "
+        for (id in listOf("primaryManeuverText", "subManeuverText", "secondaryManeuverText", "roadNameView")) {
+            val scrubbed = SnapshotRedactor.redact(
+                """{"id":"com.doordash.driverapp:id/$id","text":"$street"}""",
+            )
+            assertFalse("$id: a digit-less destination street must not survive -> $scrubbed", scrubbed.contains("Sample Golf Road"))
+            assertTrue("$id: masked", scrubbed.contains(SnapshotRedactor.MASK))
+        }
+        // Control: the SAME text under a non-PII id survives, proving the id set (not a shape) did it.
+        assertTrue(
+            "a digit-less street under a non-PII id is invisible to every shape pass",
+            SnapshotRedactor.redact("""{"id":"com.doordash.driverapp:id/stepDistance","text":"$street"}""")
+                .contains("Sample Golf Road"),
+        )
+    }
+
+    /**
+     * #886 (venue variant) — when the drop-off destination is a business/venue, its NAME
+     * renders in the card's address line-1 slot. That block is id-less and label-less, so
+     * line 1 was only ever named by the numeric street shape (`^\d{1,5}\s+\S`): the city/
+     * ST/ZIP line beneath it masked correctly via the `\d{5}` entry while the venue name —
+     * no id, no digits, no shape, and no preceding sibling (it is child 0) — shipped RAW.
+     * The fix anchors FORWARD, on the address line beneath it
+     * (`hasFollowingSiblingTextMatchesRegex`), which covers BOTH forms of line 1.
+     *
+     * Node shape is ground truth from the 07-26 capture (a container whose children are
+     * line 1, line 2, and a full-block Button); all values are invented.
+     *
+     * Teeth: delete the entry from any of the four workflow-sheet rules and that rule's
+     * venue assertion goes RED.
+     */
+    @Test
+    fun `dropoff workflow-sheet redacts mask a venue name in the address line-1 slot (#886)`() {
+        val ruleIds = listOf(
+            "doordash.screen.dropoff_pre_arrival",
+            "doordash.screen.dropoff_pre_arrival_completion",
+            "doordash.screen.dropoff_handoff",
+            "doordash.screen.dropoff_pin_entry",
+        )
+
+        fun addressBlock(lineOne: String) = UiNode(
+            className = "android.view.View",
+            children = listOf(
+                UiNode(className = "android.widget.TextView", text = lineOne),
+                UiNode(className = "android.widget.TextView", text = "San Antonio, TX 78260, USA"),
+                UiNode(className = "android.widget.Button"),
+                // Over-match guard: an instruction line whose next sibling is NOT an
+                // address must survive untouched.
+                UiNode(className = "android.widget.TextView", text = "Leave it at the door"),
+                UiNode(className = "android.widget.TextView", text = "Directions"),
+            ),
+        ).restoreParents()
+
+        for (id in ruleIds) {
+            val rule = TestRulesetFactory.screenRuleset.ruleById(id)!!
+            val venue = serialize(rule.redact.apply(addressBlock("Sample Family Medical and Urgent Care")))
+
+            assertFalse("$id: venue name must not persist", venue.contains("Sample Family Medical"))
+            assertTrue(
+                "$id: the venue masks to the hash family [redacted:<4hex>]",
+                Regex("""\[redacted:[0-9a-f]{4}]""").containsMatchIn(venue),
+            )
+            assertTrue("$id: over-match guard — instruction line stays raw", venue.contains("Leave it at the door"))
+            assertTrue("$id: over-match guard — CTA stays raw", venue.contains("Directions"))
+
+            // The numeric street form is covered too (defense in depth with the `^\d{1,5}\s+\S` entry).
+            assertFalse(
+                "$id: street line must not persist",
+                serialize(rule.redact.apply(addressBlock("742 Sample Hollow Way"))).contains("Sample Hollow Way"),
+            )
+
+            // Distinctness (#623): two venues must not collide on one mask.
+            fun hexOf(line: String): String {
+                val value = rule.redact.apply(
+                    UiNode(
+                        className = "android.view.View",
+                        children = listOf(
+                            UiNode(className = "android.widget.TextView", text = line),
+                            UiNode(className = "android.widget.TextView", text = "San Antonio, TX 78260, USA"),
+                        ),
+                    ).restoreParents(),
+                ).children[0].text!!
+                return Regex("""^\[redacted:([0-9a-f]{4})]$""").find(value)?.groupValues?.get(1)
+                    ?: error("$id: address line 1 was not masked; got '$value'")
+            }
+            assertFalse(
+                "$id: different venues must redact to different suffixes",
+                hexOf("Sample Family Medical and Urgent Care") == hexOf("Sample Ridge Dental Group"),
+            )
+        }
+    }
+
     @Test
     fun `every For-family redact masks the fused customer header, keeps the For marker (#809)`() {
         // #809: the four pickup "For <customer> • <store>" surfaces each ship a

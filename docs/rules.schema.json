@@ -1394,6 +1394,10 @@
           "properties": { "hasPrecedingSiblingText": { "type": "string", "description": "The IMMEDIATELY PRECEDING sibling's text equals this value, case-insensitive (#860). The label→value predicate for id-less `<label><value>` pairs (an address block's 'Building Name' row): anchors on the stable app-chrome LABEL to name a value node that has no id and no stable text shape. Requires parent back-references (always wired in production)." } }
         },
         {
+          "required": ["hasFollowingSiblingTextMatchesRegex"],
+          "properties": { "hasFollowingSiblingTextMatchesRegex": { "type": "string", "description": "The IMMEDIATELY FOLLOWING sibling's text matches this regex, case-insensitive (#886) — the mirror of hasPrecedingSiblingText for a block whose PII value comes FIRST (an id-less address block's line 1, which may be a street line OR a venue name, followed by a stable city/ST/ZIP line). Pattern goes through the same ReDoS/length guard as hasTextMatchesRegex. Requires parent back-references (always wired in production)." } }
+        },
+        {
           "required": ["hasTextCaseSensitive"],
           "properties": { "hasTextCaseSensitive": { "type": "string", "description": "Exact text match (case-sensitive)." } }
         },
