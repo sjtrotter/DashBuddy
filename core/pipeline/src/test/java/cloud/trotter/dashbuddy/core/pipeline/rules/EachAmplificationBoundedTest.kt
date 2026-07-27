@@ -1,5 +1,6 @@
 package cloud.trotter.dashbuddy.core.pipeline.rules
 
+import cloud.trotter.dashbuddy.core.pipeline.PropSeeds
 import cloud.trotter.dashbuddy.domain.model.accessibility.UiNode
 import io.kotest.property.Arb
 import io.kotest.property.arbitrary.int
@@ -25,9 +26,18 @@ import org.junit.Test
  * bounded tree, by the tree itself) — never `tree_width ^ depth` — and completes
  * well within a wall-clock budget.
  *
- * A failing property prints its seed; pin it with `PropTestConfig(seed = ...)`.
+ * **Determinism (#878).** The seed below pins the generated `width`/`depth` samples on
+ * PR CI; bump it **deliberately** to explore new samples, and use
+ * `-Ddashbuddy.propExplore=true` ([PropSeeds]) for unseeded breadth. NOTE the wall-clock
+ * assertion in this property is machine-dependent by nature — the seed pins the INPUTS,
+ * not the timing.
  */
 class EachAmplificationBoundedTest {
+
+    private companion object {
+        /** #878 pinned seed — pins PR CI. Bump deliberately to explore new samples. */
+        const val SEED = 0x0590_0005L
+    }
 
     /** Mirror of the private RuleCompiler.MAX_EACH_SIZE, referenced in the bound. */
     private val maxEach = 50
@@ -89,7 +99,7 @@ class EachAmplificationBoundedTest {
     fun `property - nested each on a wide tree stays within the MAX_EACH_SIZE-derived bound and time budget`() = runTest {
         // width up to 40 → up to ~1600 id-less nodes; depth 1..3. Naive tree_width^depth
         // would be up to 40^3 = 64 000 *per outer node*; the cap must hold it far below.
-        checkAll(120, Arb.int(2, 40), Arb.int(1, 3)) { width, depth ->
+        checkAll(PropSeeds.samples(120), PropSeeds.config(SEED), Arb.int(2, 40), Arb.int(1, 3)) { width, depth ->
             val ruleset = Ruleset(RuleCompiler.compileRules<UiNode>(nestedEachRule(depth), RuleContext.SCREEN))
             val tree = bushyTree(width)
 

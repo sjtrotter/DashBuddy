@@ -14,6 +14,7 @@ import cloud.trotter.dashbuddy.domain.capture.ReplayMetadata
 import cloud.trotter.dashbuddy.domain.capture.ReplayMetadataProvider
 import cloud.trotter.dashbuddy.domain.model.accessibility.UiNode
 import cloud.trotter.dashbuddy.domain.pipeline.UNKNOWN_TARGET
+import cloud.trotter.dashbuddy.test.util.PropSeeds
 import cloud.trotter.dashbuddy.test.util.TestRulesetFactory
 import io.kotest.property.Arb
 import io.kotest.property.RandomSource
@@ -44,9 +45,18 @@ import org.mockito.kotlin.mock
  * out of scope; this exercises the classify + capture-scrub path directly, mirroring
  * `CaptureScrubTest`'s wiring.
  *
- * A failing property prints its seed; pin it with `PropTestConfig(seed = ...)`.
+ * **Determinism (#878).** The seed below pins PR CI, so a failure is a reproducible
+ * finding rather than a dice roll; bump it **deliberately** to explore new samples.
+ * Unseeded breadth lives on the `-Ddashbuddy.propExplore=true` path ([PropSeeds]).
+ * NOTE the wall-clock budget in this property is machine-dependent by nature — the
+ * seed pins the INPUT trees, not the timing.
  */
 class ClassifyGateCaptureFuzzTest {
+
+    private companion object {
+        /** #878 pinned seed — pins PR CI. Bump deliberately to explore new samples. */
+        const val SEED = 0x0590_0009L
+    }
 
     private val pkg = "com.doordash.driverapp"
 
@@ -129,7 +139,7 @@ class ClassifyGateCaptureFuzzTest {
 
     @Test
     fun `property - adversarial trees never crash classify or capture, stay time-bounded, and never leak an UNKNOWN sensitive frame`() = runTest {
-        checkAll(200, treeArb) { tree ->
+        checkAll(PropSeeds.samples(200), PropSeeds.config(SEED), treeArb) { tree ->
             val bus = RecordingBus()
             val writer = CaptureWriter(bus, PipelineStats(), noRedaction)
 

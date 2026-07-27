@@ -3,6 +3,7 @@ package cloud.trotter.dashbuddy.core.pipeline.notification
 import android.app.Notification
 import android.os.Bundle
 import android.service.notification.StatusBarNotification
+import cloud.trotter.dashbuddy.core.pipeline.PropSeeds
 import cloud.trotter.dashbuddy.core.pipeline.notification.mapper.toDomain
 import io.kotest.property.Arb
 import io.kotest.property.arbitrary.element
@@ -36,8 +37,17 @@ import org.mockito.kotlin.mock
  * the catch was added). Fix: the mapping is wrapped to return null on any
  * exception (the pipeline's `mapNotNull` drops it) + one PII-free WARN — so one
  * bad notification is dropped and the flow keeps emitting.
+ *
+ * **Determinism (#878).** The seed below pins PR CI, so a failure is a reproducible
+ * finding rather than a dice roll; bump it **deliberately** to explore new samples.
+ * Unseeded breadth lives on the `-Ddashbuddy.propExplore=true` path ([PropSeeds]).
  */
 class NotificationMapperTotalityTest {
+
+    private companion object {
+        /** #878 pinned seed — pins PR CI. Bump deliberately to explore new samples. */
+        const val SEED = 0x0590_0007L
+    }
 
     /** A [StatusBarNotification] whose `notification` and `packageName` are stubbed. */
     private fun sbn(notification: Notification, pkg: String = "com.doordash.driverapp"): StatusBarNotification =
@@ -87,7 +97,11 @@ class NotificationMapperTotalityTest {
 
     @Test
     fun `property - a throw on any single extras key never escapes`() = runTest {
-        checkAll(50, Arb.element("android.title", "android.text", "android.bigText", "android.subText")) { key ->
+        checkAll(
+            PropSeeds.samples(50),
+            PropSeeds.config(SEED),
+            Arb.element("android.title", "android.text", "android.bigText", "android.subText"),
+        ) { key ->
             val bundle: Bundle = mock {
                 on { getCharSequence(key) } doThrow RuntimeException("boom on $key")
             }
