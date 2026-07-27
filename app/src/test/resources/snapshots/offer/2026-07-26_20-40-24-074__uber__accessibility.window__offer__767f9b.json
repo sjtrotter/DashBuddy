@@ -1,0 +1,1001 @@
+{
+    "captureId": "5b70cded-97e4-47d4-af63-5605097c6d9c",
+    "pipelineId": "accessibility.window",
+    "schemaId": "uinode.v1",
+    "timestamp": 1785116424049,
+    "platform": "uber",
+    "ruleId": "uber.screen.offer",
+    "classificationName": "offer",
+    "metadata": {
+        "engineVersion": 1,
+        "rulesetFormatVersion": 2,
+        "pipelineVersions": {
+            "accessibility": 1,
+            "accessibility.window": 1,
+            "accessibility.click": 1,
+            "accessibility.long_click": 1,
+            "accessibility.scroll": 1,
+            "accessibility.focus": 1,
+            "notification": 1
+        },
+        "stateMachineApiVersion": "1.0",
+        "appVersion": "0.230.0",
+        "deviceFingerprint": "google/panther/panther:17/CP2A.260705.006/15641320:user/release-keys"
+    },
+    "payload": {
+        "class": "android.widget.FrameLayout",
+        "isEnabled": true,
+        "bounds": {
+            "left": 0,
+            "top": 0,
+            "right": 1080,
+            "bottom": 2400
+        },
+        "children": [
+            {
+                "class": "android.widget.LinearLayout",
+                "isEnabled": true,
+                "bounds": {
+                    "left": 5,
+                    "top": 20,
+                    "right": 1075,
+                    "bottom": 2398
+                },
+                "children": [
+                    {
+                        "class": "android.widget.FrameLayout",
+                        "isEnabled": true,
+                        "bounds": {
+                            "left": 5,
+                            "top": 20,
+                            "right": 1075,
+                            "bottom": 2398
+                        },
+                        "children": [
+                            {
+                                "id": "com.ubercab.driver:id/action_bar_root",
+                                "class": "android.widget.LinearLayout",
+                                "isEnabled": true,
+                                "bounds": {
+                                    "left": 5,
+                                    "top": 20,
+                                    "right": 1075,
+                                    "bottom": 2398
+                                },
+                                "children": [
+                                    {
+                                        "id": "android:id/content",
+                                        "class": "android.widget.FrameLayout",
+                                        "isEnabled": true,
+                                        "bounds": {
+                                            "left": 5,
+                                            "top": 20,
+                                            "right": 1075,
+                                            "bottom": 2398
+                                        },
+                                        "children": [
+                                            {
+                                                "id": "com.ubercab.driver:id/rootView",
+                                                "class": "android.widget.FrameLayout",
+                                                "isEnabled": true,
+                                                "bounds": {
+                                                    "left": 5,
+                                                    "top": 20,
+                                                    "right": 1075,
+                                                    "bottom": 2398
+                                                },
+                                                "children": [
+                                                    {
+                                                        "class": "android.view.ViewGroup",
+                                                        "isEnabled": true,
+                                                        "bounds": {
+                                                            "left": 5,
+                                                            "top": 20,
+                                                            "right": 1075,
+                                                            "bottom": 2398
+                                                        },
+                                                        "children": [
+                                                            {
+                                                                "class": "android.widget.FrameLayout",
+                                                                "isEnabled": true,
+                                                                "bounds": {
+                                                                    "left": 5,
+                                                                    "top": 20,
+                                                                    "right": 1075,
+                                                                    "bottom": 2398
+                                                                },
+                                                                "children": [
+                                                                    {
+                                                                        "class": "android.widget.FrameLayout",
+                                                                        "isEnabled": true,
+                                                                        "bounds": {
+                                                                            "left": 5,
+                                                                            "top": 20,
+                                                                            "right": 1075,
+                                                                            "bottom": 2398
+                                                                        },
+                                                                        "children": [
+                                                                            {
+                                                                                "id": "com.ubercab.driver:id/online_view_container",
+                                                                                "class": "android.view.ViewGroup",
+                                                                                "isEnabled": true,
+                                                                                "bounds": {
+                                                                                    "left": 5,
+                                                                                    "top": 20,
+                                                                                    "right": 1075,
+                                                                                    "bottom": 2398
+                                                                                }
+                                                                            },
+                                                                            {
+                                                                                "class": "android.widget.LinearLayout",
+                                                                                "isEnabled": true,
+                                                                                "bounds": {
+                                                                                    "left": 5,
+                                                                                    "top": 20,
+                                                                                    "right": 1075,
+                                                                                    "bottom": 2398
+                                                                                },
+                                                                                "children": [
+                                                                                    {
+                                                                                        "id": "com.ubercab.driver:id/system_banner_container",
+                                                                                        "class": "android.widget.FrameLayout",
+                                                                                        "isEnabled": true,
+                                                                                        "bounds": {
+                                                                                            "left": 5,
+                                                                                            "top": 20,
+                                                                                            "right": 1075,
+                                                                                            "bottom": 20
+                                                                                        }
+                                                                                    },
+                                                                                    {
+                                                                                        "id": "com.ubercab.driver:id/glide_container",
+                                                                                        "class": "android.widget.FrameLayout",
+                                                                                        "isEnabled": true,
+                                                                                        "bounds": {
+                                                                                            "left": 5,
+                                                                                            "top": 20,
+                                                                                            "right": 1075,
+                                                                                            "bottom": 2398
+                                                                                        },
+                                                                                        "children": [
+                                                                                            {
+                                                                                                "id": "com.ubercab.driver:id/glide_background_container",
+                                                                                                "class": "android.widget.FrameLayout",
+                                                                                                "isEnabled": true,
+                                                                                                "bounds": {
+                                                                                                    "left": 5,
+                                                                                                    "top": 20,
+                                                                                                    "right": 1075,
+                                                                                                    "bottom": 2398
+                                                                                                },
+                                                                                                "children": [
+                                                                                                    {
+                                                                                                        "id": "com.ubercab.driver:id/rxmap",
+                                                                                                        "class": "android.view.ViewGroup",
+                                                                                                        "isEnabled": true,
+                                                                                                        "bounds": {
+                                                                                                            "left": 5,
+                                                                                                            "top": 20,
+                                                                                                            "right": 1075,
+                                                                                                            "bottom": 2398
+                                                                                                        },
+                                                                                                        "children": [
+                                                                                                            {
+                                                                                                                "id": "com.ubercab.driver:id/annotations",
+                                                                                                                "class": "android.view.ViewGroup",
+                                                                                                                "isEnabled": true,
+                                                                                                                "bounds": {
+                                                                                                                    "left": 5,
+                                                                                                                    "top": 20,
+                                                                                                                    "right": 1075,
+                                                                                                                    "bottom": 2398
+                                                                                                                }
+                                                                                                            },
+                                                                                                            {
+                                                                                                                "id": "com.ubercab.driver:id/map",
+                                                                                                                "class": "android.widget.FrameLayout",
+                                                                                                                "isEnabled": true,
+                                                                                                                "bounds": {
+                                                                                                                    "left": 5,
+                                                                                                                    "top": 20,
+                                                                                                                    "right": 1075,
+                                                                                                                    "bottom": 2398
+                                                                                                                },
+                                                                                                                "children": [
+                                                                                                                    {
+                                                                                                                        "class": "android.widget.FrameLayout",
+                                                                                                                        "isClickable": true,
+                                                                                                                        "isEnabled": true,
+                                                                                                                        "bounds": {
+                                                                                                                            "left": 5,
+                                                                                                                            "top": 20,
+                                                                                                                            "right": 1075,
+                                                                                                                            "bottom": 2398
+                                                                                                                        },
+                                                                                                                        "children": [
+                                                                                                                            {
+                                                                                                                                "class": "android.view.TextureView",
+                                                                                                                                "isEnabled": true,
+                                                                                                                                "bounds": {
+                                                                                                                                    "left": 5,
+                                                                                                                                    "top": 20,
+                                                                                                                                    "right": 1075,
+                                                                                                                                    "bottom": 2398
+                                                                                                                                }
+                                                                                                                            },
+                                                                                                                            {
+                                                                                                                                "class": "android.widget.FrameLayout",
+                                                                                                                                "isEnabled": true,
+                                                                                                                                "bounds": {
+                                                                                                                                    "left": 5,
+                                                                                                                                    "top": 20,
+                                                                                                                                    "right": 1075,
+                                                                                                                                    "bottom": 2398
+                                                                                                                                },
+                                                                                                                                "children": [
+                                                                                                                                    {
+                                                                                                                                        "id": "com.ubercab.driver:id/map_marker",
+                                                                                                                                        "class": "android.view.ViewGroup",
+                                                                                                                                        "isClickable": true,
+                                                                                                                                        "isEnabled": true,
+                                                                                                                                        "bounds": {
+                                                                                                                                            "left": 1066,
+                                                                                                                                            "top": 1974,
+                                                                                                                                            "right": 1075,
+                                                                                                                                            "bottom": 2026
+                                                                                                                                        },
+                                                                                                                                        "children": [
+                                                                                                                                            {
+                                                                                                                                                "id": "com.ubercab.driver:id/map_marker_pin_head",
+                                                                                                                                                "class": "android.view.ViewGroup",
+                                                                                                                                                "isEnabled": true,
+                                                                                                                                                "bounds": {
+                                                                                                                                                    "left": 1055,
+                                                                                                                                                    "top": 1987,
+                                                                                                                                                    "right": 1075,
+                                                                                                                                                    "bottom": 2039
+                                                                                                                                                },
+                                                                                                                                                "children": [
+                                                                                                                                                    {
+                                                                                                                                                        "id": "com.ubercab.driver:id/leading_icon",
+                                                                                                                                                        "class": "android.widget.ImageView",
+                                                                                                                                                        "isEnabled": true,
+                                                                                                                                                        "bounds": {
+                                                                                                                                                            "left": 1068,
+                                                                                                                                                            "top": 1999,
+                                                                                                                                                            "right": 1075,
+                                                                                                                                                            "bottom": 2026
+                                                                                                                                                        }
+                                                                                                                                                    }
+                                                                                                                                                ]
+                                                                                                                                            },
+                                                                                                                                            {
+                                                                                                                                                "id": "com.ubercab.driver:id/map_marker_needle_view",
+                                                                                                                                                "class": "android.view.View",
+                                                                                                                                                "isEnabled": true,
+                                                                                                                                                "bounds": {
+                                                                                                                                                    "left": 1049,
+                                                                                                                                                    "top": 2066,
+                                                                                                                                                    "right": 1058,
+                                                                                                                                                    "bottom": 2066
+                                                                                                                                                }
+                                                                                                                                            }
+                                                                                                                                        ]
+                                                                                                                                    },
+                                                                                                                                    {
+                                                                                                                                        "id": "com.ubercab.driver:id/map_marker",
+                                                                                                                                        "class": "android.view.ViewGroup",
+                                                                                                                                        "isClickable": true,
+                                                                                                                                        "isEnabled": true,
+                                                                                                                                        "bounds": {
+                                                                                                                                            "left": 5,
+                                                                                                                                            "top": 1881,
+                                                                                                                                            "right": 31,
+                                                                                                                                            "bottom": 1933
+                                                                                                                                        },
+                                                                                                                                        "children": [
+                                                                                                                                            {
+                                                                                                                                                "id": "com.ubercab.driver:id/map_marker_pin_head",
+                                                                                                                                                "class": "android.view.ViewGroup",
+                                                                                                                                                "isEnabled": true,
+                                                                                                                                                "bounds": {
+                                                                                                                                                    "left": 5,
+                                                                                                                                                    "top": 1891,
+                                                                                                                                                    "right": 26,
+                                                                                                                                                    "bottom": 1943
+                                                                                                                                                },
+                                                                                                                                                "children": [
+                                                                                                                                                    {
+                                                                                                                                                        "id": "com.ubercab.driver:id/leading_icon",
+                                                                                                                                                        "class": "android.widget.ImageView",
+                                                                                                                                                        "isEnabled": true,
+                                                                                                                                                        "bounds": {
+                                                                                                                                                            "left": 5,
+                                                                                                                                                            "top": 1912,
+                                                                                                                                                            "right": 9,
+                                                                                                                                                            "bottom": 1939
+                                                                                                                                                        }
+                                                                                                                                                    }
+                                                                                                                                                ]
+                                                                                                                                            },
+                                                                                                                                            {
+                                                                                                                                                "id": "com.ubercab.driver:id/map_marker_needle_view",
+                                                                                                                                                "class": "android.view.View",
+                                                                                                                                                "isEnabled": true,
+                                                                                                                                                "bounds": {
+                                                                                                                                                    "left": 0,
+                                                                                                                                                    "top": 1958,
+                                                                                                                                                    "right": -10,
+                                                                                                                                                    "bottom": 1958
+                                                                                                                                                }
+                                                                                                                                            }
+                                                                                                                                        ]
+                                                                                                                                    },
+                                                                                                                                    {
+                                                                                                                                        "id": "com.ubercab.driver:id/map_marker",
+                                                                                                                                        "class": "android.view.ViewGroup",
+                                                                                                                                        "isClickable": true,
+                                                                                                                                        "isEnabled": true,
+                                                                                                                                        "bounds": {
+                                                                                                                                            "left": 342,
+                                                                                                                                            "top": 2366,
+                                                                                                                                            "right": 395,
+                                                                                                                                            "bottom": 2400
+                                                                                                                                        },
+                                                                                                                                        "children": [
+                                                                                                                                            {
+                                                                                                                                                "id": "com.ubercab.driver:id/map_marker_pin_head",
+                                                                                                                                                "class": "android.view.ViewGroup",
+                                                                                                                                                "isEnabled": true,
+                                                                                                                                                "bounds": {
+                                                                                                                                                    "left": 342,
+                                                                                                                                                    "top": 2366,
+                                                                                                                                                    "right": 395,
+                                                                                                                                                    "bottom": 2400
+                                                                                                                                                },
+                                                                                                                                                "children": [
+                                                                                                                                                    {
+                                                                                                                                                        "id": "com.ubercab.driver:id/leading_icon",
+                                                                                                                                                        "class": "android.widget.ImageView",
+                                                                                                                                                        "isEnabled": true,
+                                                                                                                                                        "bounds": {
+                                                                                                                                                            "left": 345,
+                                                                                                                                                            "top": 2393,
+                                                                                                                                                            "right": 372,
+                                                                                                                                                            "bottom": 2400
+                                                                                                                                                        }
+                                                                                                                                                    }
+                                                                                                                                                ]
+                                                                                                                                            },
+                                                                                                                                            {
+                                                                                                                                                "id": "com.ubercab.driver:id/map_marker_needle_view",
+                                                                                                                                                "class": "android.view.View",
+                                                                                                                                                "isEnabled": true,
+                                                                                                                                                "bounds": {
+                                                                                                                                                    "left": 349,
+                                                                                                                                                    "top": 2400,
+                                                                                                                                                    "right": 358,
+                                                                                                                                                    "bottom": 2435
+                                                                                                                                                }
+                                                                                                                                            }
+                                                                                                                                        ]
+                                                                                                                                    },
+                                                                                                                                    {
+                                                                                                                                        "id": "com.ubercab.driver:id/map_marker",
+                                                                                                                                        "class": "android.view.ViewGroup",
+                                                                                                                                        "isClickable": true,
+                                                                                                                                        "isEnabled": true,
+                                                                                                                                        "bounds": {
+                                                                                                                                            "left": 473,
+                                                                                                                                            "top": 2400,
+                                                                                                                                            "right": 526,
+                                                                                                                                            "bottom": 2542
+                                                                                                                                        },
+                                                                                                                                        "children": [
+                                                                                                                                            {
+                                                                                                                                                "id": "com.ubercab.driver:id/map_marker_pin_head",
+                                                                                                                                                "class": "android.view.ViewGroup",
+                                                                                                                                                "isEnabled": true,
+                                                                                                                                                "bounds": {
+                                                                                                                                                    "left": 473,
+                                                                                                                                                    "top": 2400,
+                                                                                                                                                    "right": 526,
+                                                                                                                                                    "bottom": 2542
+                                                                                                                                                },
+                                                                                                                                                "children": [
+                                                                                                                                                    {
+                                                                                                                                                        "id": "com.ubercab.driver:id/leading_icon",
+                                                                                                                                                        "class": "android.widget.ImageView",
+                                                                                                                                                        "isEnabled": true,
+                                                                                                                                                        "bounds": {
+                                                                                                                                                            "left": 486,
+                                                                                                                                                            "top": 2400,
+                                                                                                                                                            "right": 513,
+                                                                                                                                                            "bottom": 2544
+                                                                                                                                                        }
+                                                                                                                                                    }
+                                                                                                                                                ]
+                                                                                                                                            },
+                                                                                                                                            {
+                                                                                                                                                "id": "com.ubercab.driver:id/map_marker_needle_view",
+                                                                                                                                                "class": "android.view.View",
+                                                                                                                                                "isEnabled": true,
+                                                                                                                                                "bounds": {
+                                                                                                                                                    "left": 496,
+                                                                                                                                                    "top": 2400,
+                                                                                                                                                    "right": 505,
+                                                                                                                                                    "bottom": 2570
+                                                                                                                                                }
+                                                                                                                                            }
+                                                                                                                                        ]
+                                                                                                                                    },
+                                                                                                                                    {
+                                                                                                                                        "id": "com.ubercab.driver:id/map_marker",
+                                                                                                                                        "class": "android.view.ViewGroup",
+                                                                                                                                        "isClickable": true,
+                                                                                                                                        "isEnabled": true,
+                                                                                                                                        "bounds": {
+                                                                                                                                            "left": 234,
+                                                                                                                                            "top": 1453,
+                                                                                                                                            "right": 286,
+                                                                                                                                            "bottom": 1506
+                                                                                                                                        },
+                                                                                                                                        "children": [
+                                                                                                                                            {
+                                                                                                                                                "id": "com.ubercab.driver:id/map_marker_pin_head",
+                                                                                                                                                "class": "android.view.ViewGroup",
+                                                                                                                                                "isEnabled": true,
+                                                                                                                                                "bounds": {
+                                                                                                                                                    "left": 236,
+                                                                                                                                                    "top": 1453,
+                                                                                                                                                    "right": 288,
+                                                                                                                                                    "bottom": 1506
+                                                                                                                                                },
+                                                                                                                                                "children": [
+                                                                                                                                                    {
+                                                                                                                                                        "id": "com.ubercab.driver:id/leading_icon",
+                                                                                                                                                        "class": "android.widget.ImageView",
+                                                                                                                                                        "isEnabled": true,
+                                                                                                                                                        "bounds": {
+                                                                                                                                                            "left": 247,
+                                                                                                                                                            "top": 1466,
+                                                                                                                                                            "right": 273,
+                                                                                                                                                            "bottom": 1493
+                                                                                                                                                        }
+                                                                                                                                                    }
+                                                                                                                                                ]
+                                                                                                                                            }
+                                                                                                                                        ]
+                                                                                                                                    }
+                                                                                                                                ]
+                                                                                                                            }
+                                                                                                                        ]
+                                                                                                                    }
+                                                                                                                ]
+                                                                                                            }
+                                                                                                        ]
+                                                                                                    }
+                                                                                                ]
+                                                                                            }
+                                                                                        ]
+                                                                                    }
+                                                                                ]
+                                                                            },
+                                                                            {
+                                                                                "id": "com.ubercab.driver:id/online_view",
+                                                                                "class": "android.widget.FrameLayout",
+                                                                                "isEnabled": true,
+                                                                                "bounds": {
+                                                                                    "left": 0,
+                                                                                    "top": 0,
+                                                                                    "right": 1080,
+                                                                                    "bottom": 2400
+                                                                                },
+                                                                                "children": [
+                                                                                    {
+                                                                                        "class": "android.view.ViewGroup",
+                                                                                        "isEnabled": true,
+                                                                                        "bounds": {
+                                                                                            "left": 0,
+                                                                                            "top": 0,
+                                                                                            "right": 1080,
+                                                                                            "bottom": 2400
+                                                                                        },
+                                                                                        "children": [
+                                                                                            {
+                                                                                                "id": "com.ubercab.driver:id/ub_driver_offers_browse_pill_container",
+                                                                                                "class": "android.widget.FrameLayout",
+                                                                                                "isEnabled": true,
+                                                                                                "bounds": {
+                                                                                                    "left": 504,
+                                                                                                    "top": 1495,
+                                                                                                    "right": 576,
+                                                                                                    "bottom": 1495
+                                                                                                }
+                                                                                            },
+                                                                                            {
+                                                                                                "class": "androidx.recyclerview.widget.RecyclerView",
+                                                                                                "isEnabled": true,
+                                                                                                "bounds": {
+                                                                                                    "left": 0,
+                                                                                                    "top": 1513,
+                                                                                                    "right": 1080,
+                                                                                                    "bottom": 2347
+                                                                                                },
+                                                                                                "children": [
+                                                                                                    {
+                                                                                                        "class": "android.widget.FrameLayout",
+                                                                                                        "isEnabled": true,
+                                                                                                        "bounds": {
+                                                                                                            "left": 36,
+                                                                                                            "top": 1513,
+                                                                                                            "right": 1044,
+                                                                                                            "bottom": 2311
+                                                                                                        },
+                                                                                                        "children": [
+                                                                                                            {
+                                                                                                                "class": "android.view.ViewGroup",
+                                                                                                                "isEnabled": true,
+                                                                                                                "bounds": {
+                                                                                                                    "left": 36,
+                                                                                                                    "top": 1513,
+                                                                                                                    "right": 1044,
+                                                                                                                    "bottom": 2311
+                                                                                                                },
+                                                                                                                "children": [
+                                                                                                                    {
+                                                                                                                        "id": "com.ubercab.driver:id/primary_touch_area",
+                                                                                                                        "class": "android.widget.FrameLayout",
+                                                                                                                        "isEnabled": true,
+                                                                                                                        "bounds": {
+                                                                                                                            "left": 36,
+                                                                                                                            "top": 1513,
+                                                                                                                            "right": 1044,
+                                                                                                                            "bottom": 2311
+                                                                                                                        },
+                                                                                                                        "children": [
+                                                                                                                            {
+                                                                                                                                "class": "androidx.cardview.widget.CardView",
+                                                                                                                                "isClickable": true,
+                                                                                                                                "isEnabled": true,
+                                                                                                                                "bounds": {
+                                                                                                                                    "left": 36,
+                                                                                                                                    "top": 1513,
+                                                                                                                                    "right": 1044,
+                                                                                                                                    "bottom": 2311
+                                                                                                                                },
+                                                                                                                                "children": [
+                                                                                                                                    {
+                                                                                                                                        "class": "android.widget.LinearLayout",
+                                                                                                                                        "isEnabled": true,
+                                                                                                                                        "bounds": {
+                                                                                                                                            "left": 36,
+                                                                                                                                            "top": 1513,
+                                                                                                                                            "right": 1044,
+                                                                                                                                            "bottom": 2311
+                                                                                                                                        },
+                                                                                                                                        "children": [
+                                                                                                                                            {
+                                                                                                                                                "class": "android.widget.LinearLayout",
+                                                                                                                                                "isEnabled": true,
+                                                                                                                                                "bounds": {
+                                                                                                                                                    "left": 36,
+                                                                                                                                                    "top": 1513,
+                                                                                                                                                    "right": 1044,
+                                                                                                                                                    "bottom": 1860
+                                                                                                                                                },
+                                                                                                                                                "children": [
+                                                                                                                                                    {
+                                                                                                                                                        "class": "android.widget.FrameLayout",
+                                                                                                                                                        "isEnabled": true,
+                                                                                                                                                        "bounds": {
+                                                                                                                                                            "left": 72,
+                                                                                                                                                            "top": 1549,
+                                                                                                                                                            "right": 1008,
+                                                                                                                                                            "bottom": 1833
+                                                                                                                                                        },
+                                                                                                                                                        "children": [
+                                                                                                                                                            {
+                                                                                                                                                                "class": "android.widget.LinearLayout",
+                                                                                                                                                                "isEnabled": true,
+                                                                                                                                                                "bounds": {
+                                                                                                                                                                    "left": 72,
+                                                                                                                                                                    "top": 1549,
+                                                                                                                                                                    "right": 1008,
+                                                                                                                                                                    "bottom": 1833
+                                                                                                                                                                },
+                                                                                                                                                                "children": [
+                                                                                                                                                                    {
+                                                                                                                                                                        "class": "android.view.ViewGroup",
+                                                                                                                                                                        "isEnabled": true,
+                                                                                                                                                                        "bounds": {
+                                                                                                                                                                            "left": 72,
+                                                                                                                                                                            "top": 1549,
+                                                                                                                                                                            "right": 1008,
+                                                                                                                                                                            "bottom": 1627
+                                                                                                                                                                        },
+                                                                                                                                                                        "children": [
+                                                                                                                                                                            {
+                                                                                                                                                                                "class": "android.widget.LinearLayout",
+                                                                                                                                                                                "isEnabled": true,
+                                                                                                                                                                                "bounds": {
+                                                                                                                                                                                    "left": 72,
+                                                                                                                                                                                    "top": 1549,
+                                                                                                                                                                                    "right": 379,
+                                                                                                                                                                                    "bottom": 1627
+                                                                                                                                                                                },
+                                                                                                                                                                                "children": [
+                                                                                                                                                                                    {
+                                                                                                                                                                                        "class": "android.widget.ImageView",
+                                                                                                                                                                                        "isEnabled": true,
+                                                                                                                                                                                        "bounds": {
+                                                                                                                                                                                            "left": 90,
+                                                                                                                                                                                            "top": 1570,
+                                                                                                                                                                                            "right": 126,
+                                                                                                                                                                                            "bottom": 1606
+                                                                                                                                                                                        }
+                                                                                                                                                                                    },
+                                                                                                                                                                                    {
+                                                                                                                                                                                        "text": "Delivery (2)",
+                                                                                                                                                                                        "class": "android.widget.TextView",
+                                                                                                                                                                                        "isEnabled": true,
+                                                                                                                                                                                        "bounds": {
+                                                                                                                                                                                            "left": 144,
+                                                                                                                                                                                            "top": 1549,
+                                                                                                                                                                                            "right": 379,
+                                                                                                                                                                                            "bottom": 1627
+                                                                                                                                                                                        }
+                                                                                                                                                                                    }
+                                                                                                                                                                                ]
+                                                                                                                                                                            }
+                                                                                                                                                                        ]
+                                                                                                                                                                    },
+                                                                                                                                                                    {
+                                                                                                                                                                        "class": "android.widget.LinearLayout",
+                                                                                                                                                                        "isEnabled": true,
+                                                                                                                                                                        "bounds": {
+                                                                                                                                                                            "left": 72,
+                                                                                                                                                                            "top": 1627,
+                                                                                                                                                                            "right": 371,
+                                                                                                                                                                            "bottom": 1755
+                                                                                                                                                                        },
+                                                                                                                                                                        "children": [
+                                                                                                                                                                            {
+                                                                                                                                                                                "text": "$13.04",
+                                                                                                                                                                                "class": "android.widget.TextView",
+                                                                                                                                                                                "isEnabled": true,
+                                                                                                                                                                                "bounds": {
+                                                                                                                                                                                    "left": 72,
+                                                                                                                                                                                    "top": 1627,
+                                                                                                                                                                                    "right": 371,
+                                                                                                                                                                                    "bottom": 1755
+                                                                                                                                                                                }
+                                                                                                                                                                            }
+                                                                                                                                                                        ]
+                                                                                                                                                                    },
+                                                                                                                                                                    {
+                                                                                                                                                                        "class": "android.view.ViewGroup",
+                                                                                                                                                                        "isEnabled": true,
+                                                                                                                                                                        "bounds": {
+                                                                                                                                                                            "left": 72,
+                                                                                                                                                                            "top": 1755,
+                                                                                                                                                                            "right": 1008,
+                                                                                                                                                                            "bottom": 1833
+                                                                                                                                                                        },
+                                                                                                                                                                        "children": [
+                                                                                                                                                                            {
+                                                                                                                                                                                "class": "android.widget.LinearLayout",
+                                                                                                                                                                                "isEnabled": true,
+                                                                                                                                                                                "bounds": {
+                                                                                                                                                                                    "left": 72,
+                                                                                                                                                                                    "top": 1755,
+                                                                                                                                                                                    "right": 513,
+                                                                                                                                                                                    "bottom": 1833
+                                                                                                                                                                                },
+                                                                                                                                                                                "children": [
+                                                                                                                                                                                    {
+                                                                                                                                                                                        "text": "Includes expected tip",
+                                                                                                                                                                                        "class": "android.widget.TextView",
+                                                                                                                                                                                        "isEnabled": true,
+                                                                                                                                                                                        "bounds": {
+                                                                                                                                                                                            "left": 72,
+                                                                                                                                                                                            "top": 1755,
+                                                                                                                                                                                            "right": 513,
+                                                                                                                                                                                            "bottom": 1833
+                                                                                                                                                                                        }
+                                                                                                                                                                                    }
+                                                                                                                                                                                ]
+                                                                                                                                                                            }
+                                                                                                                                                                        ]
+                                                                                                                                                                    }
+                                                                                                                                                                ]
+                                                                                                                                                            }
+                                                                                                                                                        ]
+                                                                                                                                                    }
+                                                                                                                                                ]
+                                                                                                                                            },
+                                                                                                                                            {
+                                                                                                                                                "class": "android.widget.ImageView",
+                                                                                                                                                "isEnabled": true,
+                                                                                                                                                "bounds": {
+                                                                                                                                                    "left": 36,
+                                                                                                                                                    "top": 1860,
+                                                                                                                                                    "right": 1044,
+                                                                                                                                                    "bottom": 1862
+                                                                                                                                                }
+                                                                                                                                            },
+                                                                                                                                            {
+                                                                                                                                                "class": "android.widget.FrameLayout",
+                                                                                                                                                "isEnabled": true,
+                                                                                                                                                "bounds": {
+                                                                                                                                                    "left": 36,
+                                                                                                                                                    "top": 1862,
+                                                                                                                                                    "right": 1044,
+                                                                                                                                                    "bottom": 1971
+                                                                                                                                                },
+                                                                                                                                                "children": [
+                                                                                                                                                    {
+                                                                                                                                                        "class": "android.widget.LinearLayout",
+                                                                                                                                                        "isEnabled": true,
+                                                                                                                                                        "bounds": {
+                                                                                                                                                            "left": 72,
+                                                                                                                                                            "top": 1889,
+                                                                                                                                                            "right": 1008,
+                                                                                                                                                            "bottom": 1953
+                                                                                                                                                        },
+                                                                                                                                                        "children": [
+                                                                                                                                                            {
+                                                                                                                                                                "class": "android.widget.LinearLayout",
+                                                                                                                                                                "isEnabled": true,
+                                                                                                                                                                "bounds": {
+                                                                                                                                                                    "left": 72,
+                                                                                                                                                                    "top": 1889,
+                                                                                                                                                                    "right": 582,
+                                                                                                                                                                    "bottom": 1953
+                                                                                                                                                                },
+                                                                                                                                                                "children": [
+                                                                                                                                                                    {
+                                                                                                                                                                        "class": "android.widget.ImageView",
+                                                                                                                                                                        "isEnabled": true,
+                                                                                                                                                                        "bounds": {
+                                                                                                                                                                            "left": 72,
+                                                                                                                                                                            "top": 1894,
+                                                                                                                                                                            "right": 125,
+                                                                                                                                                                            "bottom": 1947
+                                                                                                                                                                        }
+                                                                                                                                                                    },
+                                                                                                                                                                    {
+                                                                                                                                                                        "text": "39 min (14.0 mi) total",
+                                                                                                                                                                        "class": "android.widget.TextView",
+                                                                                                                                                                        "isEnabled": true,
+                                                                                                                                                                        "bounds": {
+                                                                                                                                                                            "left": 143,
+                                                                                                                                                                            "top": 1889,
+                                                                                                                                                                            "right": 582,
+                                                                                                                                                                            "bottom": 1953
+                                                                                                                                                                        }
+                                                                                                                                                                    }
+                                                                                                                                                                ]
+                                                                                                                                                            }
+                                                                                                                                                        ]
+                                                                                                                                                    }
+                                                                                                                                                ]
+                                                                                                                                            },
+                                                                                                                                            {
+                                                                                                                                                "class": "android.widget.ImageView",
+                                                                                                                                                "isEnabled": true,
+                                                                                                                                                "bounds": {
+                                                                                                                                                    "left": 36,
+                                                                                                                                                    "top": 1971,
+                                                                                                                                                    "right": 1044,
+                                                                                                                                                    "bottom": 1973
+                                                                                                                                                }
+                                                                                                                                            },
+                                                                                                                                            {
+                                                                                                                                                "class": "android.widget.FrameLayout",
+                                                                                                                                                "isEnabled": true,
+                                                                                                                                                "bounds": {
+                                                                                                                                                    "left": 36,
+                                                                                                                                                    "top": 1973,
+                                                                                                                                                    "right": 1044,
+                                                                                                                                                    "bottom": 2151
+                                                                                                                                                },
+                                                                                                                                                "children": [
+                                                                                                                                                    {
+                                                                                                                                                        "class": "android.widget.LinearLayout",
+                                                                                                                                                        "isEnabled": true,
+                                                                                                                                                        "bounds": {
+                                                                                                                                                            "left": 72,
+                                                                                                                                                            "top": 1991,
+                                                                                                                                                            "right": 1008,
+                                                                                                                                                            "bottom": 2133
+                                                                                                                                                        },
+                                                                                                                                                        "children": [
+                                                                                                                                                            {
+                                                                                                                                                                "class": "android.widget.LinearLayout",
+                                                                                                                                                                "isEnabled": true,
+                                                                                                                                                                "bounds": {
+                                                                                                                                                                    "left": 72,
+                                                                                                                                                                    "top": 1991,
+                                                                                                                                                                    "right": 823,
+                                                                                                                                                                    "bottom": 2133
+                                                                                                                                                                },
+                                                                                                                                                                "children": [
+                                                                                                                                                                    {
+                                                                                                                                                                        "class": "android.widget.LinearLayout",
+                                                                                                                                                                        "isEnabled": true,
+                                                                                                                                                                        "bounds": {
+                                                                                                                                                                            "left": 72,
+                                                                                                                                                                            "top": 1991,
+                                                                                                                                                                            "right": 823,
+                                                                                                                                                                            "bottom": 2062
+                                                                                                                                                                        },
+                                                                                                                                                                        "children": [
+                                                                                                                                                                            {
+                                                                                                                                                                                "class": "android.widget.ImageView",
+                                                                                                                                                                                "isEnabled": true,
+                                                                                                                                                                                "bounds": {
+                                                                                                                                                                                    "left": 72,
+                                                                                                                                                                                    "top": 2000,
+                                                                                                                                                                                    "right": 125,
+                                                                                                                                                                                    "bottom": 2053
+                                                                                                                                                                                }
+                                                                                                                                                                            },
+                                                                                                                                                                            {
+                                                                                                                                                                                "class": "android.widget.LinearLayout",
+                                                                                                                                                                                "isEnabled": true,
+                                                                                                                                                                                "bounds": {
+                                                                                                                                                                                    "left": 143,
+                                                                                                                                                                                    "top": 1998,
+                                                                                                                                                                                    "right": 823,
+                                                                                                                                                                                    "bottom": 2054
+                                                                                                                                                                                },
+                                                                                                                                                                                "children": [
+                                                                                                                                                                                    {
+                                                                                                                                                                                        "class": "android.widget.LinearLayout",
+                                                                                                                                                                                        "isEnabled": true,
+                                                                                                                                                                                        "bounds": {
+                                                                                                                                                                                            "left": 143,
+                                                                                                                                                                                            "top": 1998,
+                                                                                                                                                                                            "right": 570,
+                                                                                                                                                                                            "bottom": 2054
+                                                                                                                                                                                        },
+                                                                                                                                                                                        "children": [
+                                                                                                                                                                                            {
+                                                                                                                                                                                                "text": "Sonic (3035 Tpc Pkwy)",
+                                                                                                                                                                                                "class": "android.widget.TextView",
+                                                                                                                                                                                                "isEnabled": true,
+                                                                                                                                                                                                "bounds": {
+                                                                                                                                                                                                    "left": 143,
+                                                                                                                                                                                                    "top": 1998,
+                                                                                                                                                                                                    "right": 570,
+                                                                                                                                                                                                    "bottom": 2054
+                                                                                                                                                                                                }
+                                                                                                                                                                                            }
+                                                                                                                                                                                        ]
+                                                                                                                                                                                    }
+                                                                                                                                                                                ]
+                                                                                                                                                                            }
+                                                                                                                                                                        ]
+                                                                                                                                                                    },
+                                                                                                                                                                    {
+                                                                                                                                                                        "class": "android.widget.LinearLayout",
+                                                                                                                                                                        "isEnabled": true,
+                                                                                                                                                                        "bounds": {
+                                                                                                                                                                            "left": 72,
+                                                                                                                                                                            "top": 2062,
+                                                                                                                                                                            "right": 823,
+                                                                                                                                                                            "bottom": 2133
+                                                                                                                                                                        },
+                                                                                                                                                                        "children": [
+                                                                                                                                                                            {
+                                                                                                                                                                                "class": "android.widget.ImageView",
+                                                                                                                                                                                "isEnabled": true,
+                                                                                                                                                                                "bounds": {
+                                                                                                                                                                                    "left": 72,
+                                                                                                                                                                                    "top": 2071,
+                                                                                                                                                                                    "right": 125,
+                                                                                                                                                                                    "bottom": 2124
+                                                                                                                                                                                }
+                                                                                                                                                                            },
+                                                                                                                                                                            {
+                                                                                                                                                                                "class": "android.widget.LinearLayout",
+                                                                                                                                                                                "isEnabled": true,
+                                                                                                                                                                                "bounds": {
+                                                                                                                                                                                    "left": 143,
+                                                                                                                                                                                    "top": 2069,
+                                                                                                                                                                                    "right": 823,
+                                                                                                                                                                                    "bottom": 2125
+                                                                                                                                                                                },
+                                                                                                                                                                                "children": [
+                                                                                                                                                                                    {
+                                                                                                                                                                                        "class": "android.widget.LinearLayout",
+                                                                                                                                                                                        "isEnabled": true,
+                                                                                                                                                                                        "bounds": {
+                                                                                                                                                                                            "left": 143,
+                                                                                                                                                                                            "top": 2069,
+                                                                                                                                                                                            "right": 823,
+                                                                                                                                                                                            "bottom": 2125
+                                                                                                                                                                                        },
+                                                                                                                                                                                        "children": [
+                                                                                                                                                                                            {
+                                                                                                                                                                                                "text": "[redacted:5ae5]",
+                                                                                                                                                                                                "class": "android.widget.TextView",
+                                                                                                                                                                                                "isEnabled": true,
+                                                                                                                                                                                                "bounds": {
+                                                                                                                                                                                                    "left": 143,
+                                                                                                                                                                                                    "top": 2069,
+                                                                                                                                                                                                    "right": 823,
+                                                                                                                                                                                                    "bottom": 2125
+                                                                                                                                                                                                }
+                                                                                                                                                                                            }
+                                                                                                                                                                                        ]
+                                                                                                                                                                                    }
+                                                                                                                                                                                ]
+                                                                                                                                                                            }
+                                                                                                                                                                        ]
+                                                                                                                                                                    }
+                                                                                                                                                                ]
+                                                                                                                                                            }
+                                                                                                                                                        ]
+                                                                                                                                                    }
+                                                                                                                                                ]
+                                                                                                                                            },
+                                                                                                                                            {
+                                                                                                                                                "text": "Match",
+                                                                                                                                                "class": "android.widget.Button",
+                                                                                                                                                "isClickable": true,
+                                                                                                                                                "isEnabled": true,
+                                                                                                                                                "bounds": {
+                                                                                                                                                    "left": 72,
+                                                                                                                                                    "top": 2169,
+                                                                                                                                                    "right": 1008,
+                                                                                                                                                    "bottom": 2275
+                                                                                                                                                }
+                                                                                                                                            }
+                                                                                                                                        ]
+                                                                                                                                    },
+                                                                                                                                    {
+                                                                                                                                        "class": "android.widget.Button",
+                                                                                                                                        "isClickable": true,
+                                                                                                                                        "isEnabled": true,
+                                                                                                                                        "bounds": {
+                                                                                                                                            "left": 902,
+                                                                                                                                            "top": 1549,
+                                                                                                                                            "right": 1008,
+                                                                                                                                            "bottom": 1655
+                                                                                                                                        }
+                                                                                                                                    }
+                                                                                                                                ]
+                                                                                                                            }
+                                                                                                                        ]
+                                                                                                                    }
+                                                                                                                ]
+                                                                                                            }
+                                                                                                        ]
+                                                                                                    }
+                                                                                                ]
+                                                                                            }
+                                                                                        ]
+                                                                                    }
+                                                                                ]
+                                                                            }
+                                                                        ]
+                                                                    }
+                                                                ]
+                                                            }
+                                                        ]
+                                                    }
+                                                ]
+                                            }
+                                        ]
+                                    }
+                                ]
+                            }
+                        ]
+                    }
+                ]
+            }
+        ]
+    }
+}

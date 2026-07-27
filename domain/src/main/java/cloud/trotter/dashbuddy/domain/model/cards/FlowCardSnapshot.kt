@@ -104,7 +104,10 @@ sealed class FlowCardSnapshot {
                 payAmount = parsedOffer.payAmount,
                 distanceMiles = parsedOffer.distanceMiles,
                 itemCount = parsedOffer.itemCount,
-                storeNames = parsedOffer.orders.map { it.storeName }.distinct(),
+                // #882: the display-store SSOT, not the raw per-order names — on an Uber
+                // multi-order card the per-order name is the type chip ("Delivery (2)") held
+                // there for #830 identity, and this card is a human surface.
+                storeNames = parsedOffer.displayStores,
                 evaluationScore = evaluation?.score,
                 evaluationAction = evaluation?.action?.name,
                 netPayAmount = evaluation?.netPayAmount,

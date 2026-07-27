@@ -1,6 +1,7 @@
 package cloud.trotter.dashbuddy.core.pipeline.rules
 
 import cloud.trotter.dashbuddy.domain.model.accessibility.ParsedTime
+import cloud.trotter.dashbuddy.domain.model.offer.OfferKind
 import cloud.trotter.dashbuddy.domain.model.offer.ParsedOffer
 import cloud.trotter.dashbuddy.domain.model.order.CountUnit
 import cloud.trotter.dashbuddy.domain.model.order.OrderBadge
@@ -337,6 +338,16 @@ object ParsedFieldsFactory {
                 dueByTimeMillis = f.long("deliveryTime"),
                 timeToCompleteMinutes = timeToCompleteMinutes,
                 orders = orders,
+                // #881: the presentation kind, from the rule's own wire vocabulary. Fail-NULL on an
+                // absent OR unrecognized value (a wrong kind is worse than no kind) — and, unlike
+                // orderType, an unrecognized string is not WARNed: a rule is free to declare no
+                // offerKind at all, so there is no "gap" to report, only a platform without the
+                // concept. Never folded into offerHash/presentationKey (see OfferKind).
+                offerKind = OfferKind.fromWire(f.str("offerKind")),
+                // #882: the card's own headline store text — DISPLAY only (see
+                // ParsedOffer.displayStoreText). Keeps the identity-bearing orders[].storeName
+                // untouched, which is the whole point of the split.
+                displayStoreName = f.str("storeName"),
             ),
         )
     }

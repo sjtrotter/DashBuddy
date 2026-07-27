@@ -4,6 +4,7 @@ import cloud.trotter.dashbuddy.domain.model.cards.FlowCardSnapshot
 import cloud.trotter.dashbuddy.domain.model.chat.ChatPersona
 import cloud.trotter.dashbuddy.domain.model.event.AppEventType
 import cloud.trotter.dashbuddy.domain.model.event.payload.OfferReceivedPayload
+import cloud.trotter.dashbuddy.domain.model.offer.OfferKind
 import cloud.trotter.dashbuddy.domain.pipeline.Observation
 import cloud.trotter.dashbuddy.domain.pipeline.ObservationPayload
 import cloud.trotter.dashbuddy.domain.pipeline.TimeoutType
@@ -84,15 +85,30 @@ internal fun EffectMap.diffOfferLifecycle(
         val replaced = !samePresentation(prevOffer, nextOffer)
         if (replaced) {
             val outcome = resolveOfferOutcome(obs, prevOffer)
-            add(logEffect(sessionId, outcome, obs.timestamp, offerPayload(prevOffer, outcome, obs.timestamp, "Replaced by new offer")))
+            // #881: a DIRECT offer landing over a MATCH display is the platform doing exactly what
+            // it says it does — the match was never assigned to this dasher, and the direct offer
+            // takes the presentation slot. It is an EXPECTED supersession, not the anomalous
+            // clobber the generic replace copy describes, so it gets its own description and NO
+            // "(offer replaced)" chat card (the dasher is mid-read of a card that is being upgraded
+            // — narrating a resolution for it is noise). Same event type, same emission edge, same
+            // heads-up cancel / re-eval / timer re-arm below: only the narration changes.
+            // Kind-driven, not Platform-driven (P8): any ruleset that parses `offerKind` gets this,
+            // and a null kind on either side leaves the pre-#881 behaviour untouched.
+            val directOverMatch = prevOffer.offerKind == OfferKind.MATCH &&
+                nextOffer.offerKind == OfferKind.DIRECT
+            val description =
+                if (directOverMatch) "Superseded by direct offer" else "Replaced by new offer"
+            add(logEffect(sessionId, outcome, obs.timestamp, offerPayload(prevOffer, outcome, obs.timestamp, description)))
             // #601: surface the replaced offer's disposition, suffixed so it reads as the OLD offer's.
-            add(
-                AppEffect.UpdateBubble(
-                    "${outcomeCardText(outcome)} (offer replaced)",
-                    persona = ChatPersona.Dispatcher,
-                    sessionId = sessionId,
+            if (!directOverMatch) {
+                add(
+                    AppEffect.UpdateBubble(
+                        "${outcomeCardText(outcome)} (offer replaced)",
+                        persona = ChatPersona.Dispatcher,
+                        sessionId = sessionId,
+                    )
                 )
-            )
+            }
         }
         // #457/#830: dismiss the OLD hash's heads-up (dead offer on replace, stale-hash banner on a
         // churn) so a tap can't resolve against a hash that is no longer presented.
