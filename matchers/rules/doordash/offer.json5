@@ -282,6 +282,99 @@
           "throttleMs": 60000
         }
       ]
+    },
+    {
+      "comment": "#888 — the post-accept 'accepting' TEARDOWN frame of the offer card: the dasher pressed Accept, DoorDash swaps the footer for an in-card spinner while it submits, and the card then unwinds. The offer chrome (accept_decline_fragment_container, the Decline button, the pay/distance/store rows) is still rendered but the Accept button is GONE. Every accept produced one of these and it fell straight to UNKNOWN (4 frames in the 07-26 pull: 3 spinner-shaped + 1 footer-gone), so each accept was silently dropping its own follow-frame. RECOGNIZE-ONLY (dev decision 2026-07-27, recognition-gap batch #888): no state.flow, no parse, no bind — the same posture as every other transient overlay rule (dropoff_multi_order_confirm, dropoff_issue_menu, pickup_wait_survey). This is DELIBERATELY not mirroring the sibling offer rules' `flow: offer:presented`: #595 is the standing receipt that re-asserting offer state on a post-accept TEARDOWN frame is how ghost accepts/timeouts get manufactured, and the accept was already latched by the click rule on the frame before. Recognizing it only graduates the capture out of UNKNOWN (see FlowRegionStepper: a flow-less observation advances the observed clock and nothing else). Priority 127 sits AFTER offer_popup (20) and offer_popup_confirm_decline (19), so a live, actionable offer can never be pre-empted by this rule; the rejects below make the two shapes structurally disjoint regardless of order.",
+      "id": "doordash.screen.offer_accepting",
+      "priority": 127,
+      // Any surviving accept affordance means the card is still actionable — that is a
+      // LIVE offer (offer_popup's territory), not a teardown. These four rejects are what
+      // make the two shapes structurally disjoint, independent of priority order.
+      "reject": [
+        {
+          "exists": {
+            "hasIdSuffix": "accept_button"
+          }
+        },
+        {
+          "exists": {
+            "hasIdSuffix": "accept_decline_footer_container"
+          }
+        },
+        {
+          "exists": {
+            "hasText": "Accept"
+          }
+        },
+        {
+          "exists": {
+            "hasText": "Add to route"
+          }
+        }
+      ],
+      "branches": [
+        {
+          "comment": "Shape A — the submit spinner: load_progress's progress_message is inflated over the card while the accept POST is in flight. progress_message alone is NOT sufficient (verified: live offer frames in the same pull carry load_progress/progress_message too, with the Accept button still present) — the rule-level rejects are what separate them.",
+          "require": {
+            "all": [
+              {
+                "exists": {
+                  "hasIdSuffix": "accept_decline_fragment_container"
+                }
+              },
+              {
+                "exists": {
+                  "hasIdSuffix": "progress_message"
+                }
+              },
+              {
+                "exists": {
+                  "hasText": "Decline"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "comment": "Shape B — the footer has already been torn down but the offer body is still rendered (no progress node at all; 2026-07-26 13:27:46 in the pull, and the 06-21 add-on frame in snapshots/sessions/addon_phantom_2026_06_21). Requires a REAL store leg, the same #595 predicate offer_popup uses, so the store-less degenerate frame #595 deliberately routes to UNKNOWN stays there.",
+          "require": {
+            "all": [
+              {
+                "exists": {
+                  "hasIdSuffix": "accept_decline_fragment_container"
+                }
+              },
+              {
+                "exists": {
+                  "hasIdSuffix": "secondary_action_button_dash_plus"
+                }
+              },
+              {
+                "exists": {
+                  "all": [
+                    {
+                      "hasIdSuffix": "display_name"
+                    },
+                    {
+                      "hasTextMatchesRegex": "\\S"
+                    },
+                    {
+                      "not": {
+                        "hasText": "Customer dropoff"
+                      }
+                    },
+                    {
+                      "not": {
+                        "hasText": "Business handoff"
+                      }
+                    }
+                  ]
+                }
+              }
+            ]
+          }
+        }
+      ]
     }
   ],
   "clicks": [

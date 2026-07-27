@@ -16,8 +16,11 @@ import org.junit.Test
  * Defense-in-depth fix, two independent guards:
  *  - **recognition** (this test): `delivery_summary_collapsed` now rejects the offer-only markers
  *    `"High paying offer"` / `"Total will be higher"` / `"Additional"`, so an add-on offer frame can
- *    no longer masquerade as a delivery summary (it falls through to UNKNOWN — harmless, never
- *    forwarded to the state machine).
+ *    no longer masquerade as a delivery summary. (#888 update: it no longer falls through to
+ *    UNKNOWN either — this is a post-accept teardown frame, the Accept footer already gone, so
+ *    `doordash.screen.offer_accepting` now claims it. That rule is RECOGNIZE-ONLY: no `state.flow`,
+ *    no parse, so the frame still cannot drive a summary exit or any other lifecycle edge; the
+ *    assertion below is unchanged and still the guard that matters.)
  *  - **state** ([cloud.trotter.dashbuddy.core.state.EffectMapTest], #564): a PostTask exit only
  *    completes a task that actually reached `TaskPhase.DROPOFF`, so a retired PICKUP can never
  *    complete even if some other frame trips the exit.

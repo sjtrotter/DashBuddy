@@ -87,4 +87,16 @@
     <string name="evidence_settings_deliveries_subtitle">Track completion stats</string>
     <string name="evidence_settings_session_label">Save Session Summary</string>
     <string name="evidence_settings_session_subtitle">End of session earnings report</string>
+
+    <!-- #867 Developer Options: bubble session-presentation experiment -->
+    <string name="developer_settings_title">Developer Options</string>
+    <string name="developer_settings_section_bubble">Bubble HUD</string>
+    <string name="developer_settings_bubble_session_label">Session presentation</string>
+    <string name="developer_settings_bubble_session_subtitle">Which dash the bubble shows while two platforms are online. Platform chips appear on cards and the chat header in every mode.</string>
+    <string name="developer_settings_bubble_session_follow_label">Follow</string>
+    <string name="developer_settings_bubble_session_pinned_label">Pin</string>
+    <string name="developer_settings_bubble_session_merged_label">Merge</string>
+    <string name="developer_settings_bubble_session_follow_explainer">Follows whichever platform you last touched. Picking a platform in the bubble\'s switcher holds until that dash ends, then it goes back to following.</string>
+    <string name="developer_settings_bubble_session_pinned_explainer">Your switcher pick sticks until you change it — including across that platform\'s next dash. While the pinned platform is offline the bubble falls back to following.</string>
+    <string name="developer_settings_bubble_session_merged_explainer">Test mode: one card stack folding every live dash, each card chipped with its platform. The switcher is hidden and chat stays on the followed dash.</string>
 </resources>

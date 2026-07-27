@@ -505,7 +505,10 @@ object RecordFolds {
             payAmount = parsed.payAmount,
             distanceMiles = parsed.distanceMiles,
             itemCount = parsed.itemCount,
-            merchantName = eval?.merchantName ?: parsed.orders.firstOrNull()?.storeName,
+            // #882: the eval-less fallback routes through the same display-store SSOT the
+            // evaluator uses, so an un-evaluated offer records the store the dasher saw rather
+            // than the identity-bearing first order (the Uber stack card's type chip).
+            merchantName = eval?.merchantName ?: parsed.displayStoreText.takeIf { it.isNotBlank() },
             score = eval?.score,
             action = eval?.action?.name,
             quality = eval?.qualityLevel?.name,

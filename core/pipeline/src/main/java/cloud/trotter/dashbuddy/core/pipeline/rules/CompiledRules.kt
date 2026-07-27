@@ -240,6 +240,66 @@ data class CompiledRedact(
         val EMPTY = CompiledRedact(emptyList())
 
         /**
+         * #889 — the minimum length a token must have to EARN the `<4hex>`
+         * distinctness suffix. Below it, [mask] degrades to the plain [REDACTED]
+         * constant, rule-independently.
+         *
+         * Why 4: the suffix addresses 16 bits = 65 536 buckets, so it stops being
+         * an oracle only when the token's own plaintext space is much larger than
+         * that. Per character-class:
+         *  - len 1 — ~10^2 values: the prefix is injective, the source inverts in
+         *    ~100 guesses (the FIELDED defect — a `dropoff_pin_entry` single-glyph
+         *    keypad echo shipped as `[redacted:5fec]`).
+         *  - len 2 — 10^2 (digits) … ~9×10^3 (printable): still ≤ the hash space.
+         *  - len 3 — 10^3 (digits), 1.8×10^4 (lowercase alpha), 2.4×10^5 (mixed
+         *    alnum): at or near the space, i.e. a few hundred thousand guesses.
+         *  - len 4 — 1.5×10^7 over alnum, ~226 candidates per bucket: no longer
+         *    an inversion oracle for generic text.
+         * So ≤3 is the defensible floor for generic text; every genuine
+         * name/address/instruction token this masks is ≥4 (and short customer
+         * names are covered by the `normalize` exemption below).
+         *
+         * This floor does NOT subsume #795's declared [CompiledRedactEntry.plainMask]:
+         * it bounds LENGTH, not ALPHABET, so a 4-digit PIN (10^4 < 65 536) sits ABOVE
+         * the floor and still needs the rule to declare `plainMask`. The two controls
+         * compose — the engine backstops short tokens no rule anticipated, the rule
+         * declares bounded-alphabet secrets it knows about.
+         */
+        internal const val MIN_HASH_MASK_TOKEN_LENGTH = 4
+
+        /**
+         * #889 — may [token] carry the `<4hex>` distinctness suffix?
+         *
+         * A `normalize: customerName` entry (#733) is EXEMPT from the length floor,
+         * deliberately:
+         *  1. **The invariant.** The mask hex must equal the first 4 hex of the
+         *     `customerNameHash` the parse persists for the same customer (#623).
+         *     A short-name customer ("Bo", "Al B") would mask plain here while the
+         *     parse still persists the full hash — the mask↔hash invariant breaks
+         *     for exactly those customers.
+         *  2. **It costs the attacker nothing.** For a normalized name the 4 hex is a
+         *     PREFIX of a hash the app persists by design (`customerNameHash` in the
+         *     event log), so degrading the mask removes no capability — it only
+         *     destroys per-customer replay distinctness. For a glyph/keypad node
+         *     there is no parse and no persisted hash: the mask suffix is the ONLY
+         *     copy of that value, which is what makes its reversibility a net new
+         *     leak. That asymmetry is the whole justification for scoping the floor
+         *     to non-normalized entries.
+         *
+         * Note the exemption cannot collide with #795: the compiler rejects
+         * `plainMask` + `normalize` together, so a normalized entry never reaches the
+         * plain arm by declaration either.
+         *
+         * The exemption is DECLARATION-scoped: a rule could tag a glyph-shaped entry
+         * `normalize: customerName` and bypass the floor. Accepted — this guard is an
+         * accident backstop (a predicate matching content its author never foresaw),
+         * not a defense against a hostile ruleset, which could simply omit `redact`
+         * altogether. Ruleset integrity is #416's signature-verification boundary.
+         */
+        private fun hashSuffixIsSafe(token: String, normalize: RedactNormalize?): Boolean =
+            normalize != null || token.length >= MIN_HASH_MASK_TOKEN_LENGTH
+
+        /**
          * Mask [value], preserving a leading [keepPrefix] marker (#598), and
          * append a per-customer distinctness suffix (#623): the masked portion
          * becomes `[redacted:<4hex>]`, where `<4hex>` is the first four hex chars
@@ -248,7 +308,11 @@ data class CompiledRedact(
          * When [plainMask] is set (#795) the suffix is SKIPPED entirely and the
          * masked portion is the plain [REDACTED] constant (keepPrefix still honored)
          * — for a small-space secret (a 4-digit PIN keypad node) whose `<4hex>` form
-         * would be reversible; see [CompiledRedactEntry.plainMask].
+         * would be reversible; see [CompiledRedactEntry.plainMask]. #889 adds the
+         * rule-INDEPENDENT half of that same guard: a token shorter than
+         * [MIN_HASH_MASK_TOKEN_LENGTH] degrades to the plain constant whether or not
+         * the rule declared anything, so a predicate that happens to match a single
+         * glyph can never ship an invertible suffix.
          *
          * Frame-invariance: the token hashed is the customer string itself (after
          * stripping the marker prefix and trimming, and — when [normalize] is set —
@@ -290,7 +354,12 @@ data class CompiledRedact(
                     RedactNormalize.CUSTOMER_NAME -> customerNameKey(stripped)
                     null -> stripped
                 }
-                token?.let { sha256OrNull(it) }?.take(4)
+                // #889: a token too short to have a plaintext space larger than the
+                // suffix's 65 536 buckets is INVERTIBLE from those 4 hex chars, so it
+                // degrades to the plain constant — engine-level and rule-independent,
+                // so no rule can ship a brute-forceable token by forgetting `plainMask`.
+                // See [hashSuffixIsSafe] for the floor + the `normalize` exemption.
+                token?.takeIf { hashSuffixIsSafe(it, normalize) }?.let { sha256OrNull(it) }?.take(4)
             }
             val masked = if (hex != null) "[redacted:$hex]" else REDACTED
             return if (prefix != null) prefix + masked else masked

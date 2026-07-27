@@ -91,4 +91,8 @@
     <string name="flow_card_outcome_declined">Declined</string>
     <string name="flow_card_outcome_timed_out">Timed out</string>
 
+    <!-- #867 manual dash switcher (multi-app) -->
+    <string name="bubble_switcher_label">Showing</string>
+    <string name="bubble_switcher_content_desc">Switch which dash the bubble shows</string>
+
 </resources>

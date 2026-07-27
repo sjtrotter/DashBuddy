@@ -737,6 +737,65 @@ class CaptureRedactionCorpusTest {
     }
 
     @Test
+    fun `dropoff_pin_entry single-glyph keypad echo masks plain, not a brute-forceable hash (#889)`() {
+        // THE FIELDED DEFECT: this surface's id-less unit/entry-code entry
+        // (`^#?\s?\d{1,4}[A-Za-z]?$`) also matches a 22x36px ONE-CHARACTER keypad echo,
+        // which shipped as `[redacted:5fec]` — a 1-glyph space inverts from 4 hex in
+        // ~100 guesses. The #889 engine floor degrades any sub-4-char token to the plain
+        // constant, rule-independently, so no `plainMask` declaration is required here.
+        val tree = UiNode(
+            viewIdResourceName = "com.dd:id/drop_off_workflow_host_fragment",
+            children = listOf(
+                UiNode(text = "5"), // the id-less single-glyph keypad echo
+                UiNode(text = "#7"), // a 2-char unit shape — same class
+                UiNode(viewIdResourceName = "com.dd:id/step_title", text = "Collect PIN from customer"),
+            ),
+        ).restoreParents()
+
+        // #889 F1: the COMPLETED 4-digit PIN clears the engine's length floor, so the
+        // rule's own `plainMask` is what covers it — a 10^4 space against 65 536 4-hex
+        // buckets is ~85% injective. pin_entry (priority 63) wins the frame over
+        // dropoff_pin_keypad (109), so pin_entry's own digit entry must declare it.
+        val completed = UiNode(
+            viewIdResourceName = "com.dd:id/drop_off_workflow_host_fragment",
+            children = listOf(
+                UiNode(text = "9315"), // the whole-PIN echo, id-less
+                UiNode(viewIdResourceName = "com.dd:id/step_title", text = "Collect PIN from customer"),
+            ),
+        ).restoreParents()
+        val completedMatch = TestRulesetFactory.screenRuleset.matchFirst(completed)
+        assertEquals(
+            "the completed-PIN frame is claimed by pin_entry, not pin_keypad",
+            "doordash.screen.dropoff_pin_entry",
+            completedMatch?.ruleId,
+        )
+        val completedMasked = serialize(
+            TestRulesetFactory.screenRuleset.ruleById(completedMatch!!.ruleId)!!.redact.apply(completed),
+        )
+        assertFalse("the completed PIN must not persist", completedMasked.contains("9315"))
+        assertFalse(
+            "a 4-digit PIN must not carry a reversible distinctness hash",
+            Regex("""\[redacted:[0-9a-f]{4}]""").containsMatchIn(completedMasked),
+        )
+
+        // Drive the PRODUCTION rule (mutation teeth: severing the require anchors or the
+        // redact entry breaks this case, not just the floor).
+        val match = TestRulesetFactory.screenRuleset.matchFirst(tree)
+        assertEquals("doordash.screen.dropoff_pin_entry", match?.ruleId)
+        val rule = TestRulesetFactory.screenRuleset.ruleById(match!!.ruleId)!!
+
+        val redacted = rule.redact.apply(tree)
+        assertEquals("single glyph masked plain", "[redacted]", redacted.children[0].text)
+        assertEquals("2-char unit masked plain", "[redacted]", redacted.children[1].text)
+        val masked = serialize(redacted)
+        assertFalse(
+            "a short token must carry NO reversible distinctness hash",
+            Regex("""\[redacted:[0-9a-f]{4}]""").containsMatchIn(masked),
+        )
+        assertTrue("require anchor (step_title) kept", masked.contains("Collect PIN from customer"))
+    }
+
+    @Test
     fun `dropoff_pin_entry redact masks pin colon-fused variants and a bare gate code (#803 F1-F3)`() {
         // Each body is the id-less instructions node; the token variant must mask the
         // WHOLE body (embedded name "Casey Doe" included). Covers the colon / fused /

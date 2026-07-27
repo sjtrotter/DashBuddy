@@ -237,9 +237,8 @@ class SensitiveMarkerAssetCoverageTest {
         private val KNOWN_GAPS = setOf(
             // "Withdraw" + "available" (an AND pair) — neither term overlaps a keyword.
             "doordash.screen.sensitive.known::sensitive.withdraw",
-            // The third OR-alternative, all["Transfer in", "available"], has no covered term
-            // ("Savings jar" and "You transferred" ARE keywords, but this alternative can fire alone).
-            "doordash.screen.sensitive.known::sensitive.savings",
+            // (`sensitive.savings` graduated off this list in #884 — "Transfer in" is now a
+            // keyword, so its third OR-alternative, all["Transfer in", "available"], is covered.)
             // "ready to start verification" is an OR-alternative with no keyword (the other four
             // alternatives of this branch are all keywords).
             "doordash.screen.sensitive.known::sensitive.id_verification",

@@ -2,7 +2,6 @@ package cloud.trotter.dashbuddy.domain.evaluation
 
 import cloud.trotter.dashbuddy.domain.format.Formats
 import cloud.trotter.dashbuddy.domain.model.offer.ParsedOffer
-import cloud.trotter.dashbuddy.domain.model.order.ParsedOrder
 
 class OfferEvaluator() {
 
@@ -52,12 +51,12 @@ class OfferEvaluator() {
         val dpm = NetProfit.perMile(netPay, dist) ?: 0.0
         val activeHourly = NetProfit.perHour(netPay, estTimeHours) ?: 0.0
 
-        val joinedStores: String = offer.orders
-            .map { order: ParsedOrder -> order.storeName }
-            .distinct()
-            .joinToString(separator = " & ")
-
-        val merchants = joinedStores.takeIf { it.isNotBlank() } ?: "Unknown Store"
+        // #882: the ONE display-store SSOT ([ParsedOffer.displayStoreText]) — the joined order
+        // stores exactly as before, except that a card whose rule parsed its own headline store
+        // AND yielded fewer than two distinct order stores shows that headline instead. That is
+        // the Uber multi-order card, whose per-order store name is the type chip held for #830
+        // identity; DoorDash parses no headline store, so its merchants string is unchanged.
+        val merchants = offer.displayStoreText.takeIf { it.isNotBlank() } ?: "Unknown Store"
 
         // Shopping opt-out (#762 D12): if the dasher turned off shopping orders, a shop-for-items
         // offer is a capability constraint (no Red Card / won't shop), so hard-decline it BEFORE any

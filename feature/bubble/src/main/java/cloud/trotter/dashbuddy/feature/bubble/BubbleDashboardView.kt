@@ -29,6 +29,7 @@ import cloud.trotter.dashbuddy.domain.state.Mode
 import cloud.trotter.dashbuddy.domain.state.Platform
 import cloud.trotter.dashbuddy.domain.state.PlatformRegion
 import cloud.trotter.dashbuddy.feature.bubble.cards.FlowCardItem
+import cloud.trotter.dashbuddy.feature.bubble.session.PlatformSwitcherRow
 
 // ---------------------------------------------------------------------------
 // Dashboard layout
@@ -41,6 +42,14 @@ fun DashboardView(
     messages: List<ChatMessage>,
     lastSession: SessionRecord?,
     focusedPlatform: Platform?,
+    /**
+     * Per-card platform badges keyed by card id (#867) — empty unless ≥2 dashes are live.
+     * Resolved upstream so the label gate has exactly one owner.
+     */
+    cardPlatformLabels: Map<String, String> = emptyMap(),
+    /** Live platforms offered by the manual switcher; fewer than two ⇒ the row hides itself. */
+    switchablePlatforms: List<Platform> = emptyList(),
+    onSelectPlatform: (Platform) -> Unit = {},
     gasPrice: Float?,
     isGasPriceAuto: Boolean,
     isGasPriceRefreshing: Boolean = false,
@@ -68,6 +77,13 @@ fun DashboardView(
             .padding(horizontal = 12.dp, vertical = 8.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
+        // #867: the manual dash switcher sits above everything it re-scopes, so the surface says
+        // WHICH dash it is showing before the dasher reads any number off it.
+        PlatformSwitcherRow(
+            platforms = switchablePlatforms,
+            selected = focusedPlatform,
+            onSelect = onSelectPlatform,
+        )
         when {
             // Idle/offline with no ACTIVE dash → the idle dashboard card (gas/vehicle
             // just-in-time actions + last-session summary). Keyed on `active == null`, NOT
@@ -130,6 +146,7 @@ fun DashboardView(
                                 isActive = true,
                                 expanded = true,
                                 onToggleExpand = { /* active always expanded */ },
+                                platformLabel = cardPlatformLabels[live.id],
                                 onAccept = onAccept,
                                 onDecline = onDecline,
                             )
@@ -150,6 +167,7 @@ fun DashboardView(
                             isActive = false,
                             expanded = expanded,
                             onToggleExpand = { expandedIds[snap.id] = !expanded },
+                            platformLabel = cardPlatformLabels[snap.id],
                         )
                     }
                 }

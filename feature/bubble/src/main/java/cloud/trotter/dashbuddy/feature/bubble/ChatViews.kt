@@ -48,6 +48,36 @@ import cloud.trotter.dashbuddy.feature.bubble.formatters.getIconResId
 import java.util.Date
 
 // ---------------------------------------------------------------------------
+// Chat header title
+// ---------------------------------------------------------------------------
+
+/**
+ * The full-chat TopAppBar title, with the displayed dash's platform badge (#867).
+ *
+ * The chat is per-session, and while two dashes are live it silently swapped platforms with the
+ * card stack — this makes the attribution explicit. [platformLabel] is null when fewer than two
+ * sessions are live (nothing to disambiguate), so the single-platform title is unchanged. [title]
+ * is passed in rather than read here because the copy belongs to the hosting app shell.
+ */
+@Composable
+fun ChatHeaderTitle(title: String, platformLabel: String?) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        platformLabel?.let {
+            Text(
+                text = it,
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                fontWeight = FontWeight.Medium,
+            )
+        }
+        Text(text = title)
+    }
+}
+
+// ---------------------------------------------------------------------------
 // Latest message ticker
 // ---------------------------------------------------------------------------
 

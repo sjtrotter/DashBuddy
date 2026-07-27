@@ -485,6 +485,28 @@
               }
             ]
           }
+        },
+        {
+          "comment": "#888 — the DoorDash wait survey's SHEET variant: same 'What's causing your wait?' banner + Submit, but rendered as the wait_survey_container scroll sheet whose reason list has not inflated yet, so branch 1's 'Order still being prepared when I arrived' option anchor is absent and the frame fell to UNKNOWN (2026-07-26 21:08:27 in the pull, ~300ms before the fully-inflated frame branch 1 already recognizes). Anchored on the two survey-specific container/button ids plus the same banner copy branch 1 uses; the ids keep this off any other sheet. Same rule, same intent, same recognize-only posture.",
+          "require": {
+            "all": [
+              {
+                "exists": {
+                  "hasIdSuffix": "wait_survey_container"
+                }
+              },
+              {
+                "exists": {
+                  "hasIdSuffix": "btn_submit_survey"
+                }
+              },
+              {
+                "exists": {
+                  "hasTextContaining": "What's causing your wait"
+                }
+              }
+            ]
+          }
         }
       ]
     },
@@ -1017,6 +1039,140 @@
         "exists": {
           "hasTextContaining": "Confirm barcode scanned"
         }
+      }
+    },
+    {
+      "comment": "#888 — the mid-shop PAY-ADJUSTMENT sheet: while shopping, the customer adds items and DoorDash raises the offer pay, announcing it as a prism sheet ('<N> items have been added' / 'We have adjusted your pay for this order. You can see your pay when the order is delivered.' / Got it). RECOGNIZE-ONLY (dev decision 2026-07-27, recognition-gap batch #888): no state.flow, no parse — same posture as every other transient shopping sheet here. It IS economics-bearing (a mid-job pay change the read-model cannot see today, since the offer's frozen pay was set at accept), but the sheet states no NUMBER — only that pay changed — so there is nothing to parse; capturing the realized delta is a separate follow-up on the delivery receipt, noted on #888. Anchors are generic DoorDash chrome: the item count is variable, so 'items have been added' is matched as a SUBSTRING on the prism_sheet_title node, paired with the 'adjusted your pay' body. Corpus-unique (0 other snapshots or pull frames carry either). PRIVACY: no customer PII — the sheet names no customer, address, or store.",
+      "id": "doordash.screen.shopping_pay_adjustment",
+      "priority": 128,
+      "require": {
+        "all": [
+          {
+            "exists": {
+              "all": [
+                {
+                  "hasIdSuffix": "prism_sheet_title"
+                },
+                {
+                  "hasTextContaining": "items have been added"
+                }
+              ]
+            }
+          },
+          {
+            "exists": {
+              "hasTextContaining": "adjusted your pay"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "comment": "#888 — the PIZZA-BAG verification sub-flow at pickup (a DoorDash pizza-order requirement): three consecutive screens, one intent. RECOGNIZE-ONLY (dev decision 2026-07-27, batch #888): no state.flow, no parse — the task:pickup flow is already established and these are instruction/progress/result screens, not lifecycle anchors. Anchors are generic DoorDash chrome + the literal 'pizza bag' product vocabulary (NOT a merchant name — no store literal appears in any anchor here, per the standing no-store-anchor constraint). PRIVACY: no customer PII on any of the three frames (equipment-photo instructions and a generic thank-you). NOTE — this is an EQUIPMENT photo (the dasher's own insulated bag), not a document-image capture surface: it is neither an identity document nor a signature, so the sensitive block does not apply.",
+      "id": "doordash.screen.pickup_pizza_bag",
+      "priority": 129,
+      "branches": [
+        {
+          "comment": "Shape A — the education/instruction screen ('Take a photo of your pizza bag' + good/bad examples + Take photo / I don't have one).",
+          "require": {
+            "all": [
+              {
+                "exists": {
+                  "all": [
+                    {
+                      "hasIdSuffix": "component_title"
+                    },
+                    {
+                      "hasTextContaining": "photo of your pizza bag"
+                    }
+                  ]
+                }
+              },
+              {
+                "exists": {
+                  "hasIdSuffix": "btn_primary_action"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "comment": "Shape B — the upload/evaluation progress screen. Its title id is pizza-bag-specific, so the id alone is a unique anchor.",
+          "require": {
+            "exists": {
+              "hasIdSuffix": "pizza_bag_uploading_title"
+            }
+          }
+        },
+        {
+          "comment": "Shape C — the verification RESULT screen. verification_result_title is a GENERIC id (a future ID/document verification could reuse it), so the 'pizza bag' text pairing is load-bearing, not decorative: it keeps this branch off any other verification result. Both the positive ('Thanks for using a pizza bag') and any negative wording name the bag, so the substring holds across outcomes.",
+          "require": {
+            "all": [
+              {
+                "exists": {
+                  "hasIdSuffix": "verification_result_title"
+                }
+              },
+              {
+                "exists": {
+                  "hasTextContaining": "pizza bag"
+                }
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "comment": "#888 — the SHELF-PHOTO substitution sheet of the shopping sub-flow ('Take a photo of the shelf to provide more substitution options to the customer' over Take shelf photo / No options available), shown when a shopped item is out of stock. RECOGNIZE-ONLY (dev decision 2026-07-27, batch #888): no state.flow, no parse. Anchors are generic DoorDash copy on the prism_sheet_title node plus the 'substitution options' body phrase; corpus-unique (0 other snapshots or pull frames). PRIVACY: no customer PII — the copy says 'the customer', names nobody, and the shelf photo itself is a store artifact, not a document image.",
+      "id": "doordash.screen.shopping_shelf_photo",
+      "priority": 131,
+      "require": {
+        "all": [
+          {
+            "exists": {
+              "all": [
+                {
+                  "hasIdSuffix": "prism_sheet_title"
+                },
+                {
+                  "hasTextContaining": "photo of the shelf"
+                }
+              ]
+            }
+          },
+          {
+            "exists": {
+              "hasTextContaining": "substitution options"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "comment": "#888 — the 'Confirm order was picked up' bottom-sheet dialog (Confirm / Go back), the last gate before a pickup is committed. RECOGNIZE-ONLY (dev decision 2026-07-27, batch #888) — DELIBERATELY not mirroring the `task:pickup:arrived` flow its neighbours pickup_picked_up (98) / pickup_verify (101) declare: this is a transient CONFIRMATION modal over an already-established pickup flow, and the repo's standing posture for exactly that shape is recognize-only (dropoff_multi_order_confirm, dropoff_completed_confirm's sibling overlays, pickup_wait_survey, the whole #796 batch). Claiming a phase from a modal is how a mis-anchored dialog perturbs task lineage; recognizing it costs nothing and graduates the frame. Anchored on the confirm_title_text id + its exact copy, paired with the dialog's go_back_button id; corpus-unique (0 other snapshots). Distinct from dropoff_completed_confirm's 'Confirm order was completed'. PRIVACY: no customer PII (title + two button labels).",
+      "id": "doordash.screen.pickup_confirm_picked_up",
+      "priority": 132,
+      "require": {
+        "all": [
+          {
+            "exists": {
+              "all": [
+                {
+                  "hasIdSuffix": "confirm_title_text"
+                },
+                {
+                  "hasTextContaining": "Confirm order was picked up"
+                }
+              ]
+            }
+          },
+          {
+            "exists": {
+              "hasIdSuffix": "go_back_button"
+            }
+          }
+        ]
       }
     }
   ],

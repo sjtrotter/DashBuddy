@@ -249,23 +249,76 @@
               // #827: parseMinutes reads the number bound to its own "min" token —
               // robust to the "+ 19 min" add-on lead-in (parseLeadingInt returned
               // null there because the leading token is "+") and structurally
-              // unable to pick up the miles value. The finder is min\\b anchored so
-              // it targets the singular "N min" total node and skips a plural
-              // "N mins away" ETA line (both can co-occur; the ETA line would
-              // otherwise be found first and parse null).
+              // unable to pick up the miles value.
+              //
+              // #882 (found by the 2026-07-26 Match-card fixture): the min\\b anchor
+              // alone was NOT enough to skip the card's ETA banner. #827 assumed that
+              // line always reads plural ("N mins away"), but Uber renders it singular
+              // at one minute — "Arrive around 8:39 PM • 1 min away", INSIDE
+              // primary_touch_area and ABOVE the trip line, so it won first-match and
+              // the offer recorded a 1-minute trip instead of 14. What that corrupts is
+              // NOT the verdict — `OfferEvaluator` derives its own time estimate from
+              // distance + handling and never reads this field — but the three places
+              // that DO consume it: the recorded `ParsedOffer.timeToCompleteMinutes`
+              // (ledger/replay), the `offerHash` input (identity), and the eval-less
+              // `JobAcceptFlow.estMinutes` fallback. The finder now also requires the
+              // trip line's own "total" token, which every fielded Uber offer card
+              // carries (incl. the "+ 19 min (+ 3.9 mi) total" add-on form) and no ETA
+              // banner does. Fail-NULL if a future card drops "total" — an unrecorded
+              // time beats a confidently wrong one (#745).
               "timeToCompleteMinutes": {
                 "find": {
-                  "hasTextMatchesRegex": "\\d+\\s*min\\b"
+                  "all": [
+                    {
+                      "hasTextMatchesRegex": "\\d+\\s*min\\b"
+                    },
+                    {
+                      "hasTextContaining": "total"
+                    }
+                  ]
                 },
                 "read": "text",
                 "transform": "parseMinutes"
               },
+              // #881: which CTA the card offers — "Match" (a Trip Radar match display)
+              // vs "Accept" (a direct offer). Platform chrome, already the `require`'s
+              // discriminator; recorded so the ledger can tell "a trip I was directly
+              // offered" from "a radar trip I was shown", and so the #830 replace path
+              // can read a direct offer landing over a match as the EXPECTED
+              // direct-preempts-match supersession rather than churn. `hasText` is EXACT
+              // on purpose: the same card can render "Matching may take longer", which a
+              // `contains` arm would read as the CTA. No `else` — a card with neither CTA
+              // (impossible under this rule's `require`, but a rule is not a proof)
+              // parses null, and a null kind is inert everywhere downstream (fail-null).
+              "offerKind": {
+                "conditionalEnum": [
+                  {
+                    "if": {
+                      "exists": {
+                        "hasText": "Match"
+                      }
+                    },
+                    "then": "match"
+                  },
+                  {
+                    "if": {
+                      "exists": {
+                        "hasText": "Accept"
+                      }
+                    },
+                    "then": "direct"
+                  }
+                ]
+              },
               // #813: top-level storeName so the "Offer - {storeName}" screenshot
               // prefix interpolates (it resolves against the raw parse map, which
               // never held the nested orders[].storeName). Scoped to the offer
-              // card (bind above); same negation predicate as orders[] — the store
-              // TextView is the first card text that is not a price/badge/label,
-              // the duration ("min"), or the dropoff line (", <city>").
+              // card (bind above); near-identical negation predicate to orders[] —
+              // the store TextView is the first card text that is not a
+              // price/badge/label, the duration ("min"), or the dropoff line
+              // (", <city>"). #882 made this the DISPLAY store (merchantName / TTS /
+              // screenshot prefix), which is why the two lists now differ by exactly
+              // one entry — see the asymmetry note on the orders[] copy below.
               "storeName": {
                 "from": "offerCard",
                 "find": {
@@ -293,6 +346,32 @@
                           },
                           {
                             "hasText": "Delivery"
+                          },
+                          // #882: the MULTI-ORDER type chip ("Delivery (2)"). The
+                          // `hasText: "Delivery"` arm above is an EXACT match, so the
+                          // parenthesised stack form sailed past it and won the
+                          // first-match store read — the card then spoke and recorded
+                          // "Delivery (2)" as the merchant (offer_records seq 1231,
+                          // fielded 2026-07-26). Anchored ^…$ because the finder is a
+                          // containsMatchIn, so the arm pins the WHOLE text and cannot
+                          // swallow a store whose name merely contains the word. The
+                          // "Shop & Deliver (N)" chip needs no entry — the
+                          // `hasTextContaining: "Shop &"` arm below already covers every
+                          // form of it. Platform chrome only; no store-specific matching.
+                          {
+                            "hasTextMatchesRegex": "^Delivery \\(\\d+\\)$"
+                          },
+                          // #881 review F2: the Match card's wait-time note ("Matching
+                          // may take longer") is chrome that sits BELOW the store line
+                          // today, so it loses the first-match by document order alone —
+                          // a positional accident, not a defense. Negated explicitly so
+                          // a re-layout that floats the note above the store can't make
+                          // it the merchant. Top-level only: an identity-bearing
+                          // orders[] read is chip-anchored on a stack and store-anchored
+                          // otherwise, and the #882 asymmetry stays exactly one entry
+                          // wide plus this display-only arm.
+                          {
+                            "hasTextContaining": "may take longer"
                           },
                           {
                             "hasTextContaining": "Exclusive"
@@ -401,8 +480,26 @@
                               // from orders[].storeName, so an overlay winning HERE is
                               // what turned a live re-quote into a spurious #830
                               // REPLACE. (The lists are duplicated because the DSL has
-                              // no shared-predicate form; they must be edited in
-                              // lockstep — see the top-level block for the rationale.)
+                              // no shared-predicate form.)
+                              //
+                              // #882 — THE ONE DELIBERATE ASYMMETRY, and it is load
+                              // bearing. The top-level list negates the multi-order chip
+                              // ("Delivery (2)") so the DISPLAY store falls through to
+                              // the visible store line; this list does NOT, so
+                              // orders[].storeName — and therefore presentationKey —
+                              // stays anchored on the chip for a stack card. Uber renders
+                              // only ONE store line on a multi-order card, and whether it
+                              // CYCLES which one across re-renders is unconfirmed (one
+                              // frame exists). Chip-anchoring makes the identity
+                              // structurally immune to that cycling: a stack's key is the
+                              // same whichever store the card is showing, so a re-render
+                              // can never fire a #830 replace-storm. The cost is that two
+                              // different 2-order stacks share a presentationKey (only
+                              // offerHash separates them) — a known, accepted trade until
+                              // the #251 board work parses ordered per-card inventory.
+                              // Mirroring the chip arm here would trade a display bug for
+                              // an identity bug; do not "fix" the asymmetry without the
+                              // multi-frame stack capture that settles the cycling question.
                               {
                                 "hasIdSuffix": "image_message_text"
                               },
@@ -1277,14 +1374,59 @@
       }
     },
     {
+      // #874 — the sibling of #857, one priority down. Branch 3 used to claim
+      // `modeHint: offline` from ABSENCE (`glide_bottom_nav_home` exists +
+      // `notExists "You're online"`), and the bottom nav renders in every mode, so a
+      // partially rendered ONLINE dashboard — or a Trip Details screen stacked over the
+      // dashboard, or the 68-node nav-bar-only frame Uber emits mid-inflate — satisfied it
+      // vacuously and forged the same destructive Online→Offline edge #857 measured.
+      //
+      // Rewritten (not dropped) because the fielded evidence says the dashboard DOES carry
+      // a reliable positive offline marker: the offline card's own copy,
+      // `header_text_view` = "You're offline" (with `paragraph_text_view` = "Ready to go?").
+      // Over 553 Uber window captures (2026-07-19/20/22/25/27 pulls) it appears on 27
+      // frames, every one of them a genuinely offline home, and on ZERO frame carrying
+      // "You're online" or "Finding trips". `header_text_view` is a shared status-card id
+      // whose other fielded values are "Unable to go online" (7) and "You're online" (1),
+      // so the id alone is not the claim — the id AND the exact text are.
+      //
+      // #875 — the same rewrite absorbs the fielded home variant no rule recognized: the
+      // offline card WITHOUT the bottom nav (3 UNKNOWN captures in the 07-25 pull, e.g.
+      // …411f01), emitted while the nav/CTA subtrees re-inflate. It is the same screen and
+      // the same claim, so the branch anchors on the CARD (plus the `online_view_container`
+      // screen anchor) instead of the nav bar — which is the stronger identity anchor
+      // anyway, since `glide_bottom_nav_home` also renders under `earnings_activity`.
+      // Recognizing it narrows the deliberate believe-online window #857 chose.
+      //
+      // Bias, unchanged from #857: a false offline destroys a session record permanently,
+      // a delayed offline costs seconds and the already-recognized `uber.click.go_offline`
+      // covers every deliberate toggle — so an evidence-free partial now classifies
+      // UNKNOWN, makes no mode claim, and the platform region keeps its last known mode.
       "id": "uber.screen.home_dashboard",
       "priority": 140,
       "branches": [
         {
+          // The offline CTA. `go_online_button` is a positive marker, not an absence: it is
+          // the button Uber renders only when the dasher is offline (22 fielded frames, all
+          // offline, none co-rendered with "You're online" or "Finding trips"). The rejects
+          // are defense-in-depth — this branch is evaluated BEFORE the online branch below,
+          // so without them a frame carrying both would claim offline.
           "state": {
             "flow": "idle",
             "modeHint": "offline"
           },
+          "reject": [
+            {
+              "exists": {
+                "hasText": "You're online"
+              }
+            },
+            {
+              "exists": {
+                "hasTextContaining": "Finding trips"
+              }
+            }
+          ],
           "require": {
             "all": [
               {
@@ -1321,20 +1463,43 @@
           }
         },
         {
+          // The offline card (#874 rewrite + #875). Positive evidence only: the status
+          // card's own headline, id-anchored so the text match cannot land on unrelated
+          // chrome. The nav bar is deliberately NOT required — the card is the surface, the
+          // nav is decoration that may or may not have inflated yet.
           "state": {
             "flow": "idle",
             "modeHint": "offline"
           },
+          "reject": [
+            {
+              "exists": {
+                "hasText": "You're online"
+              }
+            },
+            {
+              "exists": {
+                "hasTextContaining": "Finding trips"
+              }
+            }
+          ],
           "require": {
             "all": [
               {
                 "exists": {
-                  "hasIdSuffix": "glide_bottom_nav_home"
+                  "hasIdSuffix": "online_view_container"
                 }
               },
               {
-                "notExists": {
-                  "hasText": "You're online"
+                "exists": {
+                  "all": [
+                    {
+                      "hasIdSuffix": "header_text_view"
+                    },
+                    {
+                      "hasText": "You're offline"
+                    }
+                  ]
                 }
               }
             ]

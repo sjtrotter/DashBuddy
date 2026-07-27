@@ -312,6 +312,7 @@
           }
         },
         {
+          "comment": "#889 F1: plainMask. The realistic population of this whole-node match is the city/state/ZIP line and bare 5-digit codes — a street line is claimed by the earlier '^\\d{1,5}\\s+\\S' entry and a gate/PIN body by the keyword entries above, both of which keep their hash. 10^5 values over 65 536 buckets is ~1.5 candidates per bucket, i.e. effectively recoverable, and the distinctness it would buy here is redundant: the street-address and name entries on this same surface already carry per-customer distinct masks. Fail toward privacy on a bounded token whose distinctness is redundant. Trade accepted: a long free-text body that happens to contain a 5-digit run also plains (it is masked WHOLE either way; its identity is not a join key).",
           "find": {
             "all": [
               {
@@ -321,7 +322,8 @@
                 "hasNoId": true
               }
             ]
-          }
+          },
+          "plainMask": true
         },
         {
           "find": {
@@ -337,6 +339,7 @@
           }
         },
         {
+          "comment": "#889 F1: plainMask. This id-less digit shape matches an Apt/Suite/entry-code VALUE AND the PIN keypad's digit echoes — the FIELDED #889 envelope was a dropoff_pin_entry frame carrying a single-glyph keypad echo, and pin_entry (priority 63) WINS over dropoff_pin_keypad (priority 109), whose own digit entry already declares plainMask. The #889 engine length floor plains 1-3 char tokens, but a COMPLETED 4-digit PIN clears it while spanning only 10^4 values against the 65 536 4-hex buckets (~85% injective), so the distinctness suffix would be brute-recoverable. plainMask drops it — the same #795 posture as the sibling keypad rule. The floor bounds LENGTH, this declaration bounds ALPHABET; they compose. Capture-only: these nodes are never parsed, goldens unchanged.",
           "find": {
             "all": [
               {
@@ -346,7 +349,8 @@
                 "hasNoId": true
               }
             ]
-          }
+          },
+          "plainMask": true
         },
         {
           "comment": "id-less whole-value first-name + last-initial — same canonical SSOT as SnapshotRedactor.FIRST_LAST_INITIAL_PATTERN / dropoff_multi_order_confirm.",
@@ -511,6 +515,7 @@
           }
         },
         {
+          "comment": "#889 F1: plainMask. The realistic population of this whole-node match is the city/state/ZIP line and bare 5-digit codes — a street line is claimed by the earlier '^\\d{1,5}\\s+\\S' entry and a gate/PIN body by the keyword entries above, both of which keep their hash. 10^5 values over 65 536 buckets is ~1.5 candidates per bucket, i.e. effectively recoverable, and the distinctness it would buy here is redundant: the street-address and name entries on this same surface already carry per-customer distinct masks. Fail toward privacy on a bounded token whose distinctness is redundant. Trade accepted: a long free-text body that happens to contain a 5-digit run also plains (it is masked WHOLE either way; its identity is not a join key).",
           "find": {
             "all": [
               {
@@ -520,7 +525,8 @@
                 "hasNoId": true
               }
             ]
-          }
+          },
+          "plainMask": true
         },
         {
           "find": {
@@ -536,6 +542,7 @@
           }
         },
         {
+          "comment": "#889 F1: plainMask. This id-less digit shape matches an Apt/Suite/entry-code VALUE AND the PIN keypad's digit echoes — the FIELDED #889 envelope was a dropoff_pin_entry frame carrying a single-glyph keypad echo, and pin_entry (priority 63) WINS over dropoff_pin_keypad (priority 109), whose own digit entry already declares plainMask. The #889 engine length floor plains 1-3 char tokens, but a COMPLETED 4-digit PIN clears it while spanning only 10^4 values against the 65 536 4-hex buckets (~85% injective), so the distinctness suffix would be brute-recoverable. plainMask drops it — the same #795 posture as the sibling keypad rule. The floor bounds LENGTH, this declaration bounds ALPHABET; they compose. Capture-only: these nodes are never parsed, goldens unchanged.",
           "find": {
             "all": [
               {
@@ -545,7 +552,8 @@
                 "hasNoId": true
               }
             ]
-          }
+          },
+          "plainMask": true
         },
         {
           "comment": "Defense-in-depth (FIX 3): a modal-over-handoff combined frame carrying the multi-order-confirm's id-less first-name+last-initial line could be claimed by THIS earlier-priority rule instead of dropoff_multi_order_confirm. Same canonical name-shape SSOT as SnapshotRedactor.FIRST_LAST_INITIAL_PATTERN so the leak closes regardless of which rule wins the frame; hasNoId keeps it off id-bearing handoff anchors.",
@@ -735,6 +743,7 @@
           }
         },
         {
+          "comment": "#889 F1: plainMask. The realistic population of this whole-node match is the city/state/ZIP line and bare 5-digit codes — a street line is claimed by the earlier '^\\d{1,5}\\s+\\S' entry and a gate/PIN body by the keyword entries above, both of which keep their hash. 10^5 values over 65 536 buckets is ~1.5 candidates per bucket, i.e. effectively recoverable, and the distinctness it would buy here is redundant: the street-address and name entries on this same surface already carry per-customer distinct masks. Fail toward privacy on a bounded token whose distinctness is redundant. Trade accepted: a long free-text body that happens to contain a 5-digit run also plains (it is masked WHOLE either way; its identity is not a join key).",
           "find": {
             "all": [
               {
@@ -744,7 +753,8 @@
                 "hasNoId": true
               }
             ]
-          }
+          },
+          "plainMask": true
         },
         {
           "find": {
@@ -760,6 +770,7 @@
           }
         },
         {
+          "comment": "#889 F1: plainMask. This id-less digit shape matches an Apt/Suite/entry-code VALUE AND the PIN keypad's digit echoes — the FIELDED #889 envelope was a dropoff_pin_entry frame carrying a single-glyph keypad echo, and pin_entry (priority 63) WINS over dropoff_pin_keypad (priority 109), whose own digit entry already declares plainMask. The #889 engine length floor plains 1-3 char tokens, but a COMPLETED 4-digit PIN clears it while spanning only 10^4 values against the 65 536 4-hex buckets (~85% injective), so the distinctness suffix would be brute-recoverable. plainMask drops it — the same #795 posture as the sibling keypad rule. The floor bounds LENGTH, this declaration bounds ALPHABET; they compose. Capture-only: these nodes are never parsed, goldens unchanged.",
           "find": {
             "all": [
               {
@@ -769,7 +780,8 @@
                 "hasNoId": true
               }
             ]
-          }
+          },
+          "plainMask": true
         }
       ],
       "state": {
@@ -1036,6 +1048,7 @@
           }
         },
         {
+          "comment": "#889 F1: plainMask. The realistic population of this whole-node match is the city/state/ZIP line and bare 5-digit codes — a street line is claimed by the earlier '^\\d{1,5}\\s+\\S' entry and a gate/PIN body by the keyword entries above, both of which keep their hash. 10^5 values over 65 536 buckets is ~1.5 candidates per bucket, i.e. effectively recoverable, and the distinctness it would buy here is redundant: the street-address and name entries on this same surface already carry per-customer distinct masks. Fail toward privacy on a bounded token whose distinctness is redundant. Trade accepted: a long free-text body that happens to contain a 5-digit run also plains (it is masked WHOLE either way; its identity is not a join key).",
           "find": {
             "all": [
               {
@@ -1045,7 +1058,8 @@
                 "hasNoId": true
               }
             ]
-          }
+          },
+          "plainMask": true
         },
         {
           "find": {
@@ -1061,6 +1075,7 @@
           }
         },
         {
+          "comment": "#889 F1: plainMask. This id-less digit shape matches an Apt/Suite/entry-code VALUE AND the PIN keypad's digit echoes — the FIELDED #889 envelope was a dropoff_pin_entry frame carrying a single-glyph keypad echo, and pin_entry (priority 63) WINS over dropoff_pin_keypad (priority 109), whose own digit entry already declares plainMask. The #889 engine length floor plains 1-3 char tokens, but a COMPLETED 4-digit PIN clears it while spanning only 10^4 values against the 65 536 4-hex buckets (~85% injective), so the distinctness suffix would be brute-recoverable. plainMask drops it — the same #795 posture as the sibling keypad rule. The floor bounds LENGTH, this declaration bounds ALPHABET; they compose. Capture-only: these nodes are never parsed, goldens unchanged.",
           "find": {
             "all": [
               {
@@ -1070,7 +1085,8 @@
                 "hasNoId": true
               }
             ]
-          }
+          },
+          "plainMask": true
         },
         {
           "comment": "#860: same address-block 'Building Name' VALUE as dropoff_pre_arrival — this rule renders the SAME workflow sheet one CTA-state later and carries the same id-less label/value rows, so it inherits the same gap: free-form proper-noun text the digit-shape entries above structurally cannot reach. Predicate and rationale identical to the pre-arrival entry (label-anchored, hash-mask, no plainMask/normalize). Inert when the row is absent — over-redaction is the only failure direction.",
@@ -1221,11 +1237,24 @@
           }
         }
       ],
-      "require": {
-        "exists": {
-          "hasTextContaining": "far away from the customer"
+      "branches": [
+        {
+          "comment": "The fully-rendered card, anchored on its 'You're far away from the customer' copy.",
+          "require": {
+            "exists": {
+              "hasTextContaining": "far away from the customer"
+            }
+          }
+        },
+        {
+          "comment": "#888 — the SAME card caught mid-inflation: the sheet is only partially laid out (its title and address TextViews exist but carry no text yet — bounds are still below the viewport), so the copy anchor above misses and the frame fell to UNKNOWN (2026-07-26 14:57:25 in the pull, ~280ms before the fully-rendered frame branch 1 already recognizes). geofence_warning_map is this card's own view id and appears on no other DoorDash surface (verified across the 07-26 pull's 632 captures and the committed corpus: the only two hits are this frame and the already-recognized one), so the id alone is a sound anchor. Same rule, same intent, so the whole-rule address redact above covers this branch too — which is exactly why it must live HERE and not as a separate rule: the card's address_line_* nodes carry the CUSTOMER's address whenever they are populated.",
+          "require": {
+            "exists": {
+              "hasIdSuffix": "geofence_warning_map"
+            }
+          }
         }
-      }
+      ]
     },
     {
       "id": "doordash.screen.delivery_summary_expanded",
@@ -1625,6 +1654,77 @@
         "exists": {
           "hasTextContaining": "complete it at the drop-off location"
         }
+      }
+    },
+    {
+      "comment": "#888 — the generic drop-off HELP sheet reached from the geofence-warning card's 'I need help' ('Help' title over 'Tell us what happened and we'll help you find the right resolution.' and a help_menu_item list: 'I delivered the order' / 'Provided address or map pin is wrong' / 'Bad GPS signal or app issue at drop-off' / …). RECOGNIZE-ONLY (dev decision 2026-07-27, recognition-gap batch #888): no state.flow, no parse — a transient help overlay over an established task:dropoff flow, exactly the posture dropoff_issue_menu (#796) already sets for the sibling 'Drop-off issues' menu. This is a DIFFERENT sheet from that one (different title, different id family, different option set), hence a separate rule rather than a branch. Anchors: the generic intro copy — matched WITHOUT its typographic apostrophe ('help you find the right resolution', so the U+2019 in \"we'll\" can never break the match) — paired with a help_menu_item node naming drop-off, which keeps the rule off any pickup-side help sheet reusing the same ids. Corpus-unique (0 other snapshots or pull frames). PRIVACY: no customer PII — every node is a fixed option label; the sheet names no customer, address, or store.",
+      "id": "doordash.screen.dropoff_help_menu",
+      "priority": 133,
+      "require": {
+        "all": [
+          {
+            "exists": {
+              "hasTextContaining": "help you find the right resolution"
+            }
+          },
+          {
+            "exists": {
+              "all": [
+                {
+                  "hasIdSuffix": "help_menu_item"
+                },
+                {
+                  "hasTextContaining": "drop-off"
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "comment": "#888 — the acknowledgement sheet that closes the drop-off help flow ('Continue to complete delivery' title over 'Thanks for letting us know. Continue to complete the delivery as per the customer's instructions.' + a 'Continue to delivery steps' button). RECOGNIZE-ONLY (dev decision 2026-07-27, batch #888): no state.flow, no parse — it acknowledges and returns the dasher to the drop-off steps that already own the flow. Anchored on the exact prism_sheet_title copy plus the button label; both are generic DoorDash chrome and corpus-unique (0 other snapshots or pull frames). PRIVACY: no customer PII — the body says \"the customer's instructions\" generically and quotes none of them.",
+      "id": "doordash.screen.dropoff_continue_to_complete",
+      "priority": 134,
+      "require": {
+        "all": [
+          {
+            "exists": {
+              "all": [
+                {
+                  "hasIdSuffix": "prism_sheet_title"
+                },
+                {
+                  "hasText": "Continue to complete delivery"
+                }
+              ]
+            }
+          },
+          {
+            "exists": {
+              "hasTextContaining": "Continue to delivery steps"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "comment": "#888 — the hand-it-to-customer attestation sheet ('Confirm you handed order directly to customer' / 'We will verify with the customer if the order was delivered. If you haven't directly handed them the order, go back and follow the steps.' over Confirm to complete delivery / Go back), the last gate on a hand-to-customer drop. RECOGNIZE-ONLY (dev decision 2026-07-27, batch #888) — task-lifecycle-ADJACENT but deliberately claiming no phase: it is a confirmation modal over an already-established task:dropoff:arrived flow, and the completion edge is owned by the frames that follow it (dropoff_completed_confirm / the delivery receipt). Claiming a phase from a modal is how a mis-anchored dialog perturbs task lineage; the repo's standing posture for this exact shape is recognize-only (dropoff_multi_order_confirm, the whole #796 batch). Anchors are the two id-LESS body/button strings — both fixed DoorDash copy, no merchant or customer literal — and are corpus-unique (0 other snapshots or pull frames). PRIVACY: no customer PII — the copy says 'customer'/'them' and names nobody; no address, gate code, or order detail is on the sheet.",
+      "id": "doordash.screen.dropoff_handed_directly_confirm",
+      "priority": 136,
+      "require": {
+        "all": [
+          {
+            "exists": {
+              "hasTextContaining": "handed order directly to customer"
+            }
+          },
+          {
+            "exists": {
+              "hasTextContaining": "Confirm to complete delivery"
+            }
+          }
+        ]
       }
     }
   ],

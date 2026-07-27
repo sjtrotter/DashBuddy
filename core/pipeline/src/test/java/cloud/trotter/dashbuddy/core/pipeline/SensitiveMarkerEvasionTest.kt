@@ -37,8 +37,17 @@ import org.junit.Test
  * Documented out-of-scope residuals (see the bottom of this file) are asserted as
  * residuals, not detections, so a future hardening that closes them is a visible
  * behaviour change.
+ *
+ * **Determinism (#878).** The seed below pins PR CI, so a failure is a reproducible
+ * finding rather than a dice roll; bump it **deliberately** to explore new samples.
+ * Unseeded breadth lives on the `-Ddashbuddy.propExplore=true` path ([PropSeeds]).
  */
 class SensitiveMarkerEvasionTest {
+
+    private companion object {
+        /** #878 pinned seed — pins PR CI. Bump deliberately to explore new samples. */
+        const val SEED = 0x0590_0008L
+    }
 
     // ---- Seed toxic markers to mutate (a representative spread) -----------------
     // Multi-word (space-bearing) keywords, a single-word keyword, and the two shapes.
@@ -176,11 +185,12 @@ class SensitiveMarkerEvasionTest {
 
     @Test
     fun `property - any composition of homoglyph-whitespace mutations still detects a keyword`() = runTest {
-        val seed = Arb.element(keywordSeeds)
+        // Named `keywordArb`, not `seed` — the pinned PRNG seed is [SEED] (#878).
+        val keywordArb = Arb.element(keywordSeeds)
         val mut = Arb.element<(String) -> String>(
             ::nbsp, ::narrowNbsp, ::zeroWidth, ::fullwidth, ::altCase,
         )
-        checkAll(200, seed, mut, mut) { s, m1, m2 ->
+        checkAll(PropSeeds.samples(200), PropSeeds.config(SEED), keywordArb, mut, mut) { s, m1, m2 ->
             val mutated = m2(m1(s))
             assertDetected("composed", s, tree(mutated))
         }

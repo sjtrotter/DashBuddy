@@ -1,5 +1,6 @@
 package cloud.trotter.dashbuddy.core.pipeline.rules
 
+import cloud.trotter.dashbuddy.core.pipeline.PropSeeds
 import io.kotest.property.Arb
 import io.kotest.property.arbitrary.element
 import io.kotest.property.arbitrary.list
@@ -29,9 +30,16 @@ import java.util.concurrent.TimeoutException
  * StackOverflowError catch, fail-closed no-match); the same patterns then return
  * in single-digit ms.
  *
- * A failing property prints its seed; pin it with `PropTestConfig(seed = ...)`.
+ * **Determinism (#878).** The seed below pins PR CI, so a failure is a reproducible
+ * finding rather than a dice roll; bump it **deliberately** to explore new samples.
+ * Unseeded breadth lives on the `-Ddashbuddy.propExplore=true` path ([PropSeeds]).
  */
 class RegexBudgetPropertyTest {
+
+    private companion object {
+        /** #878 pinned seed — pins PR CI. Bump deliberately to explore new samples. */
+        const val SEED = 0x0590_0002L
+    }
 
     private val catalog = listOf("(a|aa)+$", "(\\w+)\\1+", "(a?)*b", "(.*a){20}")
 
@@ -90,7 +98,8 @@ class RegexBudgetPropertyTest {
     fun `property - every accepted generated pattern bounds its match`() = runTest {
         val piece = Arb.element(0, 1) // 0 = unit, 1 = group
         checkAll(
-            200,
+            PropSeeds.samples(200),
+            PropSeeds.config(SEED),
             Arb.list(piece, 1..3),
             unit, group, Arb.element("", "$"),
         ) { shape, u, g, anchor ->

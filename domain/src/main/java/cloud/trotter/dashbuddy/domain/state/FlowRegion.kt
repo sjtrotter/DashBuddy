@@ -94,4 +94,14 @@ data class PendingOffer(
      * when the offer carries no attributed rule provenance.
      */
     val platform: Platform get() = Platform.fromRuleId(sourceRuleId)
+
+    /**
+     * How the platform presented this offer (#881) — a read-through to the parsed offer's own
+     * [cloud.trotter.dashbuddy.domain.model.offer.ParsedOffer.offerKind], NOT a second copy (the
+     * parse is the single source; a stored duplicate would drift on enrich-as-variant). Null on
+     * every platform whose ruleset has no such concept. Read by the #830 replace diff to tell a
+     * direct-preempts-match supersession from an anomalous clobber.
+     */
+    val offerKind: cloud.trotter.dashbuddy.domain.model.offer.OfferKind?
+        get() = offerFields.parsedOffer.offerKind
 }

@@ -85,6 +85,58 @@ data class ParsedOffer(
     /** List of the orders within this offer. */
     val orders: List<ParsedOrder> = emptyList(),
 
+    /**
+     * How the platform is presenting this offer (#881) — see [OfferKind]. Null on every platform
+     * whose ruleset declares no `offerKind` field (the concept doesn't exist there) and on any card
+     * whose CTA didn't resolve; a null kind leaves every consumer on its pre-#881 behaviour.
+     * Deliberately excluded from [offerHash] and [presentationKey] — see [OfferKind].
+     */
+    val offerKind: OfferKind? = null,
+
+    /**
+     * The store text the CARD ITSELF displays, when the rule declares a top-level `storeName`
+     * (#882). This is a **display** field, read by [displayStoreText]; it is NOT part of
+     * [presentationKey], which stays anchored on [orders].
+     *
+     * Why it exists: on an Uber multi-order card the platform renders the type chip
+     * ("Delivery (2)") ABOVE a single visible store line, and the per-order extract — the
+     * identity anchor — deliberately keeps reading the chip (a stack's identity must not churn if
+     * the card cycles which store it shows). Without this field the chip was ALSO what the dasher
+     * heard over TTS and what `offer_records.merchantName` recorded. Null on DoorDash, whose offer
+     * rule declares no top-level `storeName` at all, so nothing there changes.
+     */
+    val displayStoreName: String? = null,
+
     /** Store the full extracted text array (joined or as JSON) for this offer screen for later review or parsing. */
     val rawExtractedTexts: String? = null,
-)
+) {
+    /**
+     * The SSOT for "which stores a human should be shown/told for this offer" (#882) — read by
+     * `OfferEvaluator.merchantName` (→ TTS, `offer_records.merchantName`, store-entity resolution),
+     * by the bubble/analytics offer card (`FlowCardSnapshot.Offer.storeNames`), and by the
+     * analytics fold's eval-less fallback. Empty when the offer carries no store text at all;
+     * callers own their own placeholder copy.
+     *
+     * Resolution order, and why:
+     *  1. **Two or more distinct real order stores** → the order list. A genuine multi-store parse
+     *     (a DoorDash stack: Tarka Indian Kitchen + Torchy's Tacos) is strictly richer than any
+     *     single headline line, so the card-level text may never shadow it.
+     *  2. Else the card's own [displayStoreName], when the rule parsed one — the Uber case, where
+     *     the single order's store name is the type chip held for identity.
+     *  3. Else the order list, exactly as before this existed (DoorDash and every other rule that
+     *     declares no top-level `storeName` land here, byte-identical to pre-#882).
+     */
+    val displayStores: List<String>
+        get() {
+            val orderStores = orders.map { it.storeName }.distinct()
+            val realStores = orderStores.filter { it.isNotBlank() }
+            return if (realStores.size < 2 && !displayStoreName.isNullOrBlank()) {
+                listOf(displayStoreName)
+            } else {
+                orderStores
+            }
+        }
+
+    /** [displayStores] as one human string — the form TTS speaks and the ledger records. */
+    val displayStoreText: String get() = displayStores.joinToString(separator = " & ")
+}

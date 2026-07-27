@@ -14,6 +14,7 @@ import cloud.trotter.dashbuddy.core.pipeline.rules.ParseOutputGoldenTest
 import cloud.trotter.dashbuddy.core.pipeline.rules.ScreenRulesetTest
 import cloud.trotter.dashbuddy.core.pipeline.rules.TriageRulesTest
 import cloud.trotter.dashbuddy.core.pipeline.rules.UberDeclineClickRuleTest
+import cloud.trotter.dashbuddy.core.pipeline.rules.UberHomeDashboardOfflineEvidenceTest
 import cloud.trotter.dashbuddy.core.pipeline.rules.UberIdleMapOfflineEvidenceTest
 import cloud.trotter.dashbuddy.core.pipeline.rules.UberOfferExpiryOverlayTest
 import org.junit.runner.RunWith
@@ -63,6 +64,10 @@ import org.junit.runners.Suite
  * - [UberIdleMapOfflineEvidenceTest] — #857 negative guard: real partially-rendered Uber
  *   home captures (`fixtures/uber_idle_map_partial/`) must classify UNKNOWN, so
  *   `uber.screen.idle_map` can never claim `modeHint: offline` from absence again.
+ * - [UberHomeDashboardOfflineEvidenceTest] — #874, the same guard one rule down: real
+ *   Uber home captures carrying only the bottom nav (or a Trip Details screen stacked over
+ *   the dashboard) — `fixtures/uber_home_dashboard_partial/` — must classify UNKNOWN, so
+ *   `uber.screen.home_dashboard` branch 3 can no longer claim offline from absence either.
  * - [UberOfferExpiryOverlayTest] — #858: real captures of Uber's expiry overlay
  *   ("This request is no longer available", rendered OVER the dimmed card inside
  *   `primary_touch_area`) must classify UNKNOWN, so a dead request can never mint an
@@ -85,6 +90,7 @@ import org.junit.runners.Suite
     NotificationRulesetTest::class,
     TriageRulesTest::class,
     UberIdleMapOfflineEvidenceTest::class,
+    UberHomeDashboardOfflineEvidenceTest::class,
     UberOfferExpiryOverlayTest::class,
     DefaultRulesIntegrationTest::class,
     NotificationClassifierTest::class,

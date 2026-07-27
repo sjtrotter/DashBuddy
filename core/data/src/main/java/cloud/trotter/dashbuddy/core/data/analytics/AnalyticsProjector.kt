@@ -916,7 +916,18 @@ class AnalyticsProjector @Inject constructor(
          * of the new nullable column: `app_events`, every frozen economy column, and pay/net/miles are
          * untouched. Precedented side effect (as v2/v3/v4/v6/v7): the refold also re-stamps
          * `CURRENT_FALLBACK` rows against today's economy.
+         * v9 (#887): store resolution now DELETES the `stores` identity row a monotonic key upgrade
+         * superseded (address-tier `doordash|cvs|@23530` → receipt-tier `doordash|cvs|3551`) once nothing
+         * references it — the fielded 07-27 pull carried 2 such zero-visit phantoms out of 28 rows. The
+         * bump exists to HEAL the on-device rows: the orphans are already committed, and the fold is the
+         * one mechanism that owns what a `stores` row means, so the established wipe+refold
+         * (rebuild ≡ backfill) heals them without adding a second, marker-gated cleanup path. The F8 wipe
+         * clears `stores`/`pickup_records`; the refold repopulates them from the immutable log, minus the
+         * superseded rows. **Scope: the `stores` table ONLY** — the code change adds nothing but a guarded
+         * `DELETE FROM stores`, so every delivery/session/offer/pickup column folds byte-identically.
+         * Precedented side effect (as v2/v3/v4/v6/v7/v8): the refold re-stamps `CURRENT_FALLBACK` rows
+         * against today's economy.
          */
-        private const val PROJECTOR_VERSION = 8
+        private const val PROJECTOR_VERSION = 9
     }
 }

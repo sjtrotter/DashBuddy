@@ -78,6 +78,142 @@ card's **mechanical** half, #577 (re-confirmed, 24/24, ~0.55 s — with a new po
 that entry's Bug #1), the #457 path, and #554 ShadowProjector (2/2). The #462/#460 dropoff item
 was found **broken-in-part** (raw PII in capture envelopes) and moved to that entry's Bug #7.)_
 
+- **🆕 NEW — #888 — eight DoorDash screens that used to fall to UNKNOWN are now recognized.**
+  All eight are **recognize-only** (no state claim, no parse), so the only intended change is that
+  the frames stop landing in the UNKNOWN capture pile. The list: the post-accept **"accepting"
+  spinner** (every accept was losing its own follow-frame), the mid-shop **pay-adjustment sheet**
+  ("N items have been added / We have adjusted your pay"), the dropoff **geofence-warning help flow**
+  (warning card mid-inflation → Help menu → "Continue to complete delivery"), **"Confirm you handed
+  order directly to customer"**, the **pizza-bag verification** flow (instruction → uploading →
+  result), the **shelf-photo substitution** sheet, the **"Confirm order was picked up"** dialog, and
+  the **wait-survey sheet variant**.
+  **What to watch (DoorDash dash) — this is a NEGATIVE test; nothing new should appear:**
+  1. **Nothing changes visibly.** No new bubble cards, no new TTS, no "Declined/Expired" chatter
+     around an accept. If any of these screens now makes the HUD say or do something, that is the
+     bug — note which screen.
+  2. **Accepting an offer still behaves exactly as before** — the accept lands, the pickup card
+     comes up, no ghost offer, no "(offer replaced)". The accept spinner is the highest-frequency
+     of the eight, so it is the one to watch. The rule deliberately does NOT re-assert
+     `offer:presented` (that is the #595 ghost-accept class), but the field is the proof.
+  3. **A pizza order and a shop-with-substitutions order** exercise two of the eight; if you get
+     either, note whether the pickup/dropoff lineage stayed correct through them.
+  **Desk (next pull):** the UNKNOWN pile should no longer contain these eight families — check the
+  UNKNOWN census for `progress_message` offer frames, `pizza_bag_*`, `wait_survey_container`,
+  `geofence_warning_map`, "items have been added", "photo of the shelf", "handed order directly",
+  "Confirm order was picked up". Recognized captures for these intents should be PII-clean (they
+  carry no customer nodes at all; the geofence card's `address_line_*` are covered by that rule's
+  existing redact).
+  - Confirmed: 0/2
+
+- **🆕 NEW — #887 — no more phantom zero-visit stores in the Patterns tab's data.**
+  When one physical store was first keyed off its pickup ADDRESS (`doordash|cvs|@23530`, because that
+  drop carried no receipt) and a later receipt upgraded it to the real store code
+  (`doordash|cvs|3551`), the visits moved to the new key but the old identity row was left behind —
+  2 of 28 `stores` rows in the 07-27 pull were these zero-visit ghosts. Resolution now deletes the
+  superseded row in the same transaction, but only when nothing still points at it.
+  **Nothing to watch while driving** — this is a projection-hygiene fix; no bubble, TTS, money, or
+  Patterns-tab number changes. The `PROJECTOR_VERSION` 8→9 bump means the **first app launch after
+  installing rebuilds the whole analytics read-model** (a one-time refold; the Money/Patterns tabs
+  should look identical afterwards — if any dollar figure MOVED, that's a finding, **except**
+  `CURRENT_FALLBACK`-basis rows if economy settings changed since the last refold (the precedented
+  re-stamp side effect — see the `PROJECTOR_VERSION` KDoc)).
+  **Desk (next pull):** the issue's SQL should return **zero** rows —
+  `SELECT storeKey FROM stores WHERE storeKey NOT IN (SELECT storeKey FROM pickup_records WHERE storeKey IS NOT NULL) AND storeKey NOT IN (SELECT storeKey FROM delivery_records WHERE storeKey IS NOT NULL) AND storeKey NOT IN (SELECT storeKey FROM offer_records WHERE storeKey IS NOT NULL);`
+  A non-zero row is expected **ONLY** if a store-name correction was made since the last refold —
+  that's the [#906](https://github.com/sjtrotter/DashBuddy/issues/906) residual (a
+  `DELIVERY_ADJUSTMENT` `newStoreName` edit nulls that row's key and can drop the last reference to
+  a store entity), **not** a #887 regression.
+  Also grep the log for `superseded store entity kept:` — a WARN there means the guard fired (a row
+  the re-key didn't reach), which is correct behaviour but worth a look at which store it was.
+  - Confirmed: 0/2
+- **🆕 NEW — #882 / #881 — Uber stacked offers speak the STORE, and a "Match" is recorded as a match.**
+  Two fixes on the same card. **#882:** a multi-order Uber card ("Delivery (2)") rendered its type
+  chip above the one store line it shows, and the chip won the store read — so the bubble/TTS said
+  *"Offer. Delivery 2."* and `offer_records.merchantName` recorded "Delivery (2)". The **display**
+  now falls through to the visible store ("Sonic (3035 Tpc Pkwy)"); the offer's internal identity
+  deliberately still uses the chip, so a stack card can't flicker into looking like a new offer.
+  **#881:** the card's CTA ("Match" = a Trip-Radar match, "Accept" = a direct offer) is now recorded
+  as `offerKind`, and a real offer arriving over a match is narrated as an expected hand-off instead
+  of the loud "(offer replaced)" card.
+  **What to watch (Uber dash):**
+  1. **A stacked offer speaks a real store name** — never "Delivery 2" / "Shop and Deliver 3". A
+     single-store Uber offer must still speak exactly what it did before.
+  2. **No store name goes missing.** If an Uber offer suddenly speaks "Unknown Store", that's this
+     change over-rejecting — note the store and the card shape.
+  3. **A direct offer landing on top of a "Match" card** should NOT pop a "Declined/Expired (offer
+     replaced)" chat card any more; the new offer just takes the surface.
+  4. **Trip time (desk-only — nothing to see while driving).** An Uber card that also shows
+     "Arrive around 8:39 PM • 1 min away" was recording the 1-minute ETA as the trip time instead
+     of the *"14 min (3.1 mi) total"* line. This never touched the verdict or the spoken $/hr —
+     the evaluator derives its own estimate from distance + handling — so there is **no on-dash
+     tell**; it corrupted the recorded time, the offer's identity hash, and the accept-time
+     estimate fallback. Check it in the pull, not in the car (below).
+  **Desk (next pull):** `offer_records` for Uber should carry real merchant names (zero rows where
+  `merchantName LIKE 'Delivery (%'`); `OFFER_TIMEOUT` payload descriptions should show
+  `Superseded by direct offer` wherever a direct offer preempted a match; and in the
+  `OFFER_RECEIVED`/closing payloads, `parsedOffer.timeToCompleteMinutes` should equal the card's
+  own *"N min (M.M mi) total"* number — never a 1–2 minute value that matches an "N min away"
+  ETA banner on the same frame.
+  **Still wanted:** multi-frame captures of ONE lingering stack card — if Uber CYCLES which store a
+  stack shows across re-renders, the desk can finally settle whether identity may follow the store
+  (today it deliberately does not).
+  - Confirmed: 0/2
+- **🆕 NEW — #867 (display side) — the bubble says WHICH dash it is showing, and you can switch it.**
+  With two platforms online the HUD used to follow whichever app produced the last frame, unlabeled
+  — a DoorDash "Declined" chip read as the Uber offer you had just acted on. Now: platform chips on
+  every card + the chat header whenever ≥2 dashes are live, a manual **Showing DD | UBER** chip row
+  above the stack, and a Dev-settings switch (Settings → Developer Options → **Session
+  presentation**) picking between **Follow** (default), **Pin**, and **Merge**.
+  **What to watch (needs a genuine multi-app dash — both apps online at once):**
+  1. **Chips appear** the moment the second dash starts (cards + chat header), and DISAPPEAR when
+     you drop back to one platform. A chip must never name the wrong app.
+  2. **Follow (default):** the stack tracks whichever app you last touched. Tap the other chip in
+     the switcher — the stack + chat swap to that dash and STAY there while you use the other app.
+     The live (bottom, expanded) card disappears while you're looking at the non-active platform —
+     that's intentional (there is no live screen for it), and the Accept/Decline buttons go with it.
+     End the dash you pinned → the HUD goes back to following on its own.
+  3. **Pin:** same, except the pick survives that dash ending and re-takes the surface when that
+     platform dashes again. Nothing is persisted across an app restart — a pin is per-session.
+  4. **Merge:** one stack with both dashes' cards interleaved chronologically, each chipped; the
+     switcher row is hidden and chat stays on the followed dash. This is the mode to judge — it's
+     the one the dev was unsure about.
+  **Which mode felt right while driving** is the actual deliverable — the winner becomes the
+  shipped default and the other two get deleted.
+  **Desk:** the two dashes' chat histories should now be cleanly separated per session (the #873
+  write-side fix); confirm no line from one platform sits in the other's `chat_messages` rows.
+  - Confirmed: 0/2
+- **🆕 NEW — #874 / #875 — the Uber HOME screen stopped guessing "offline", and the nav-less
+  offline card is now recognized.** Sibling of #857/PR #872, one rule down: `home_dashboard`
+  branch 3 claimed offline whenever the bottom nav existed and the words "You're online" did not
+  — so a half-drawn online dashboard, or a *Trip Details* screen stacked over it, forged the same
+  destructive Online→Offline edge. It now requires the offline card's own headline
+  (`header_text_view` = "You're offline"), which also recognizes the fielded card-without-nav
+  variant (#875) that previously landed UNKNOWN.
+  **What to watch (Uber dash, multi-apping):** no phantom "Done Ubering!"/"Started Ubering!" churn
+  while you're bouncing between apps; the dash-count at the end of the session still equals the
+  number of times you actually pressed GO / went offline; and going offline from the home screen
+  is still *noticed* (the HUD should flip within a frame or two of the card appearing, not stay
+  stuck Online for the rest of the dash).
+  **Desk (next pull):** in `captures/uber/accessibility.window/`, frames now folder-ing as
+  `home_dashboard` should each carry either `go_online_button` or `header_text_view` =
+  "You're offline"; the 68–69-node nav-bar-only frames and any "Trip Details" frame should land in
+  `UNKNOWN` (that is the fix, not a regression). Online→Offline edges in `app_events` should be
+  1:1 with `uber.click.go_offline` clicks or with an evidence-bearing home/idle_map frame.
+  - Confirmed: 0/2
+- **🆕 NEW — #884 — the amount-bearing transfer button no longer evades the marker backstop.**
+  `SensitiveTextMarkers` gained `Transfer in` plus a `transfer $<digit>` amount-adjacency shape.
+  The leak channel was the CLICK envelope (the tapped button is serialized in isolation, so the
+  window-level AND-pair sensitive rule can't fire); `Transfer $45.66`/`$83.65`/`$68.52` and
+  `Transfer in` reached disk on build `ddd9e7ff`.
+  **What to watch:** nothing on-dash — but if you happen to open DasherDirect and tap a transfer
+  button, that's the exercise. **Desk:** run the new *Dasher-banking sweep* block in
+  `desk-validation-playbook.md` over the pull — `grep -rliE 'transfer +\$[0-9]' captures/` and the
+  `-e 'transfer in'` sweep must both return ZERO. Corroborate in `shareable.log`:
+  `grep 'Capture scrubbed:'` should show the drop with marker id `Tr11` (`Transfer in`) or
+  `sh30` (the amount shape) when the surface was touched. Over-match watch: no benign
+  delivery/offer frame should go missing from `captures/` (the shape needs the literal word
+  `transfer` adjacent to a `$`, so an ordinary money label must still capture).
+  - Confirmed: 0/2
 - **🆕 NEW — #843 — prompted per-capability automation consent (no auto-grant).** Automations are
   no longer pre-granted; each must be consented to individually via a prompt at the app's front
   door (Google Play policy). On upgrade, a one-shot migration clears the old auto-grants, so every
@@ -120,6 +256,18 @@ was found **broken-in-part** (raw PII in capture envelopes) and moved to that en
      **venue** destination, the address block's line 1 (the venue NAME) is masked, not just the
      city/ST/ZIP line beneath it.
   - Issues: #885, #886. Confirmed: 0/2
+
+- **🆕 NEW — #889 — no brute-forceable `[redacted:<4hex>]` on short tokens.** The capture mask now
+  degrades to a plain `[redacted]` whenever the masked token is under 4 characters, rule-independently
+  (a 1-glyph source inverts from 4 hex in ~100 guesses; the fielded `dropoff_pin_entry` keypad echo
+  shipped as `[redacted:5fec]`).
+  **Desk (next pull, no dev-eyes needed):** grep the new capture envelopes for `\[redacted:[0-9a-f]{4}\]`
+  and confirm every hit sits on a name/address-length token — a hash suffix on a 1–3 char node text is a
+  regression. Complementary check: `[redacted]` (plain) now appears on the PIN/keypad and short
+  unit-number nodes of `dropoff_pin_entry`. Customer-name masks must STILL carry their suffix (the
+  `normalize: customerName` exemption) — a `Deliver to [redacted]` with no hex would mean the exemption
+  broke and per-customer replay distinctness is gone.
+  - Issue: #889. Confirmed: 0/2
 
 - **🆕 NEW — #859 (H4 + placeholder filenames) — one offer screenshot per presentation, and no
   `{storeName}` filenames.** The Uber offer screenshot now dedupes on the presentation (#830's
