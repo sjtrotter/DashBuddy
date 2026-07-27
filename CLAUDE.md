@@ -450,7 +450,21 @@ pure-ASCII street-number token (1–6 digits, fail-null on ranges/suffixes/non-n
 (`@12125`) so provenance is self-describing; the resolution ladder is receipt key > address(`@`) key >
 chain-only with tier-aware monotonic upgrades (an address key never downgrades a receipt key), and
 `normalizeRunningKey` strips a leading `@` from receipt-path keys so a payout parenthetical can't
-masquerade as address-tier. `NetProfit`
+masquerade as address-tier. **#887 (supersession sweep, `PROJECTOR_VERSION` 8→9):** a monotonic key
+UPGRADE (address-tier `doordash|cvs|@23530` → receipt-tier `doordash|cvs|3551`, or chain-only → keyed)
+re-keys the visit rows but used to LEAVE the superseded `stores` identity row behind as a zero-visit
+phantom (2 of 28 rows in the 07-27 pull). `StoreResolutionRunner` now collects each row's PRIOR key
+wherever a re-stamp actually lands (a downgrade-blocked or H1-pinned row keeps its key, so it
+contributes nothing) and, STRICTLY LAST in the job — after every pickup/delivery/offer stamp is
+committed — deletes each superseded row that `AnalyticsDao.storeKeyReferenceCount` proves is
+referenced by ZERO pickup/delivery/offer rows. The guard **fails toward KEEPING** (a row the re-key
+didn't reach — another job's pre-receipt visits, an H1-pinned row — keeps the entity alive; deleting
+it would orphan a *referencing* row, strictly worse than a phantom) and counts a merchant-free WARN
+(P7; keys stay at DEBUG). The sweep also **converges incremental ≡ refold on the raw `stores` table**:
+a from-zero refold that sees the receipt evidence in the same batch never mints the intermediate row,
+while an incremental fold split across a page boundary mints then deletes it — the F1 test's former
+"accepted read-invisible residual" is no longer accepted. The read-side M4 `EXISTS` filter on
+`storeReportRows` still masks any survivor. `NetProfit`
 (`:domain`) is the one shared cost-math SSOT for both the offer estimate and the frozen realized net.
 `AnalyticsRepository` (`:core:data`, **DAO-only — no economy dependency**, so historical net is structurally
 immutable) serves period economics (`SUM(netProfit)` frozen + `unattributedPay`; all-pay gross =

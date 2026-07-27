@@ -21,9 +21,10 @@ import timber.log.Timber
  * adapter). Runs INSIDE the projector's batch transaction (resolve-from-rows, F1): for each triggered
  * job it reads the job's committed `pickup_records` (anchors + address) and `delivery_records`
  * (dropoff names + the row-persisted `payoutStoreForms` receipt evidence), resolves every anchor,
- * upserts the `stores` identity rows, and stamps the deterministic `storeKey` back onto the visit rows
- * (+ the offer↔job link). Because it reads committed rows only and the key is row-sourced + monotonic,
- * incremental fold ≡ from-zero refold (B1) and a re-run is a byte-identical no-op (L1).
+ * upserts the `stores` identity rows, stamps the deterministic `storeKey` back onto the visit rows
+ * (+ the offer↔job link), and — since #887 — deletes the identity row a monotonic key UPGRADE superseded
+ * once nothing references it any more. Because it reads committed rows only and the key is row-sourced +
+ * monotonic, incremental fold ≡ from-zero refold (B1) and a re-run is a byte-identical no-op (L1).
  *
  * **Privacy:** store names/addresses are MERCHANT data — fine at rest, never logged at INFO+ (P7). No
  * network, no new capture. Customer hashes are never read here.
@@ -100,11 +101,17 @@ internal class StoreResolutionRunner(private val dao: AnalyticsDao) {
             upsertStore(key, platform, normChain, runKey, r, anchorAddresses[r.canonical])
         }
 
+        // #887: every row whose PRIOR key this re-key replaces contributes that prior key as a
+        // SUPERSESSION candidate. Collected only where the stamp actually lands (a downgrade-blocked or
+        // pinned row keeps its key, so its key is not superseded), and swept at the end of the job.
+        val superseded = LinkedHashSet<String>()
+
         // Stamp pickup rows by their own anchor (storeName == the anchor). FIX 6 monotonic backstop:
         // never re-stamp a keyed row down to a chain-only key of the same platform+chain.
         for (pu in pickups) {
             val key = anchorKey[pu.storeName] ?: continue
             if (isMonotonicDowngrade(pu.storeKey, key)) continue
+            pu.storeKey?.takeIf { it != key }?.let { superseded += it }
             dao.stampPickupStoreKey(pu.eventSequenceId, key)
         }
         // Stamp delivery rows by best-matching their dropoff form to an anchor (the dropoff form differs
@@ -114,6 +121,8 @@ internal class StoreResolutionRunner(private val dao: AnalyticsDao) {
             val anchor = StoreNameMatch.bestMatch(anchors, store) ?: continue
             val key = anchorKey[anchor] ?: continue
             if (isMonotonicDowngrade(d.storeKey, key)) continue
+            // A PINNED row (H1 driver correction) is not re-keyed by the SQL, so its key is not superseded.
+            if (d.storeKeyPinned == 0) d.storeKey?.takeIf { it != key }?.let { superseded += it }
             dao.stampDeliveryStoreKey(d.eventSequenceId, key)
         }
 
@@ -124,7 +133,49 @@ internal class StoreResolutionRunner(private val dao: AnalyticsDao) {
         for (offer in offerRows) {
             val anchor = offer.merchantName?.let { StoreNameMatch.bestMatch(anchors, it) }
             if (!exact && anchor == null) continue
-            dao.stampOfferLink(offer.eventSequenceId, anchor?.let { anchorKey[it] }, jobId)
+            val key = anchor?.let { anchorKey[it] }
+            offer.storeKey?.takeIf { it != key }?.let { superseded += it }
+            dao.stampOfferLink(offer.eventSequenceId, key, jobId)
+        }
+
+        // #887: drop each superseded identity row — STRICTLY LAST, so every re-stamp above (incl. the
+        // offer links) is already committed and the reference count sees the post-re-key world.
+        sweepSuperseded(superseded - anchorKey.values.toSet())
+    }
+
+    /**
+     * #887 — delete the `stores` rows a monotonic key upgrade left behind. When one physical store mints
+     * an address-tier key at pickup-close (`doordash|cvs|@23530`) and a later payout upgrades it to the
+     * receipt-tier key (`doordash|cvs|3551`), the visit rows are re-keyed but the superseded identity row
+     * used to survive as a zero-visit phantom (2 of 28 `stores` rows in the 07-27 pull). Same mechanism,
+     * same fix, for the chain-only → keyed upgrade.
+     *
+     * **The guard fails toward KEEPING.** A superseded key is deleted ONLY when
+     * [AnalyticsDao.storeKeyReferenceCount] proves that zero pickup / delivery / offer rows still point at
+     * it. A row this re-key did not reach — ANOTHER job's visits to the same physical store that resolved
+     * before the receipt existed, or an H1-pinned delivery row — keeps the entity alive; deleting it would
+     * orphan a *referencing* row and blank its report card, which is strictly worse than a phantom.
+     *
+     * **Refold determinism.** The delete is a pure function of the committed rows at this point in the
+     * seq-ordered resolution stream, so it replays identically. It also *converges* the two paths: an
+     * incremental fold that split the job across a page boundary minted the intermediate row and now
+     * deletes it; a from-zero refold that saw the receipt evidence in the same batch never minted it at
+     * all. Terminal `stores` set: identical. (Before this, the raw table genuinely differed — the F1 test
+     * documented it as an accepted read-invisible residual; it is no longer accepted.)
+     *
+     * **P7:** storeKeys are merchant-derived, so the kept-row observability is a DEBUG line (keys) plus a
+     * merchant-free WARN — the same split as [isMonotonicDowngrade].
+     */
+    private suspend fun sweepSuperseded(candidates: Set<String>) {
+        for (old in candidates) {
+            val refs = dao.storeKeyReferenceCount(old)
+            if (refs > 0) {
+                Timber.tag(TAG).d("store-key supersession: keeping %s — %d row(s) still reference it", old, refs)
+                Timber.tag(TAG).w("superseded store entity kept: %d row(s) the re-key did not reach still reference it", refs)
+                continue
+            }
+            Timber.tag(TAG).d("store-key supersession: deleting unreferenced %s", old)
+            dao.deleteStore(old)
         }
     }
 
