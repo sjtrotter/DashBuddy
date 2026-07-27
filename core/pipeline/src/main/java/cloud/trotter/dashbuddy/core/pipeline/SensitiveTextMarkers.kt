@@ -63,6 +63,15 @@ object SensitiveTextMarkers {
         // on no recognized customer-facing surface in the corpus (verified per the #738
         // uniqueness discipline), so it cannot over-block a delivery screen.
         "Transfer out",
+        // The DasherDirect transfer surface's OTHER direction (#884): the "Transfer in"
+        // heading of the deposit-to-DasherDirect flow. The rule side already blocks it
+        // (the `sensitive.savings` branch's all["Transfer in", "available"] alternative),
+        // but the keyword was missing, so a "Transfer in" CLICK — whose envelope serializes
+        // the tapped node in ISOLATION, with no co-present "available" balance line for the
+        // AND-pair rule to fire on — had no backstop and reached disk on the 2026-07-24 build.
+        // Like "Transfer out", the phrase appears on no recognized customer-facing surface in
+        // the corpus (#738 uniqueness discipline), so it cannot over-block a delivery screen.
+        "Transfer in",
         // Alcohol-delivery DOCUMENT-capture surfaces only (#463): the license-scan
         // camera (an image of a government ID) and the signature pad/handoff.
         // The ID-CHECK instruction screen and the alcohol arrival card are NOT
@@ -103,8 +112,16 @@ object SensitiveTextMarkers {
     )
 
     /**
-     * Shaped-value patterns no keyword list can cover: SSNs and card PANs.
-     * Conservative shapes to avoid flagging ordinary money/IDs.
+     * Shaped-value patterns no keyword list can cover: SSNs, card PANs, and the
+     * amount-bearing DasherDirect transfer button.
+     *
+     * Matched against the NORMALIZED text (see [normalize]), so every pattern is written in
+     * lowercase with ASCII spaces — normalization already folded case, homoglyph whitespace,
+     * fullwidth digits/`＄`, and zero-width injections before the scan runs.
+     *
+     * Conservative shapes to avoid flagging ordinary money/IDs, and deliberately BOUNDED
+     * (no nested/unbounded quantifiers) so a hostile third-party string cannot make the scan
+     * backtrack: each is a linear scan with fixed-count repetitions only.
      *
      * `internal` (#862) so `MarkerLogIdTest` pins the LIVE patterns rather than a hand-copied
      * list — a shape added here is covered by the log-safety guard automatically.
@@ -114,6 +131,23 @@ object SensitiveTextMarkers {
         Regex("""\b\d{3}-\d{2}-\d{4}\b"""),
         // Card PAN: 4 groups of 4 separated by space/dash (16 digits)
         Regex("""\b\d{4}[ -]\d{4}[ -]\d{4}[ -]\d{4}\b"""),
+        // DasherDirect transfer CONFIRM button (#884): the label interpolates the dasher's own
+        // balance — "Transfer $45.66" / "Transfer $83.65" / "Transfer $68.52" all reached disk
+        // as UNKNOWN CLICK envelopes on the 2026-07-24 build. No keyword can own this: the
+        // amount is the variable part, and a bare "Transfer" keyword would be far too broad.
+        // The shape is the amount ADJACENCY — "transfer", optional spaces, "$", a digit — which
+        // is banking vocabulary wherever it appears, so a false hit costs at most one debug
+        // capture (fail toward privacy). The bounded ` {0,4}` gaps absorb the per-character
+        // space normalization (a tab/NBSP run normalizes to several ASCII spaces) and let the
+        // sibling-split form ("Transfer" | "$45.66") rejoin across the allText join.
+        //
+        // Sibling shapes deliberately NOT added: "Cash out $<amt>" needs nothing — the bare
+        // "Cash out" keyword above already substring-matches it. "Deposit $<amt>" is not
+        // fielded (0 hits across all twelve 2026-07 pulls; the only "deposit" text on the
+        // surface is the benign "deposited to your DoorDash …" earnings copy, which carries
+        // no adjacent "$"), so it stays out per the #738 uniqueness discipline — a marker is
+        // evidence-driven, not speculative. Revisit if a pull ever shows it.
+        Regex("""transfer {0,4}\$ {0,4}\d"""),
     )
 
     /**

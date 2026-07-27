@@ -78,6 +78,20 @@ card's **mechanical** half, #577 (re-confirmed, 24/24, ~0.55 s — with a new po
 that entry's Bug #1), the #457 path, and #554 ShadowProjector (2/2). The #462/#460 dropoff item
 was found **broken-in-part** (raw PII in capture envelopes) and moved to that entry's Bug #7.)_
 
+- **🆕 NEW — #884 — the amount-bearing transfer button no longer evades the marker backstop.**
+  `SensitiveTextMarkers` gained `Transfer in` plus a `transfer $<digit>` amount-adjacency shape.
+  The leak channel was the CLICK envelope (the tapped button is serialized in isolation, so the
+  window-level AND-pair sensitive rule can't fire); `Transfer $45.66`/`$83.65`/`$68.52` and
+  `Transfer in` reached disk on build `ddd9e7ff`.
+  **What to watch:** nothing on-dash — but if you happen to open DasherDirect and tap a transfer
+  button, that's the exercise. **Desk:** run the new *Dasher-banking sweep* block in
+  `desk-validation-playbook.md` over the pull — `grep -rliE 'transfer +\$[0-9]' captures/` and the
+  `-e 'transfer in'` sweep must both return ZERO. Corroborate in `shareable.log`:
+  `grep 'Capture scrubbed:'` should show the drop with marker id `Tr11` (`Transfer in`) or
+  `sh30` (the amount shape) when the surface was touched. Over-match watch: no benign
+  delivery/offer frame should go missing from `captures/` (the shape needs the literal word
+  `transfer` adjacent to a `$`, so an ordinary money label must still capture).
+  - Confirmed: 0/2
 - **🆕 NEW — #843 — prompted per-capability automation consent (no auto-grant).** Automations are
   no longer pre-granted; each must be consented to individually via a prompt at the app's front
   door (Google Play policy). On upgrade, a one-shot migration clears the old auto-grants, so every

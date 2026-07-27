@@ -22,6 +22,9 @@ class SensitiveTextMarkersTest {
         // DasherDirect Savings flow (#463) — the markers that leaked on 2026-06-12.
         assertEquals("Savings jar", SensitiveTextMarkers.findMarker(tree("Your transfer should now appear in your Savings jar")))
         assertEquals("You transferred", SensitiveTextMarkers.findMarker(tree("You transferred \$9.06")))
+        // #884 — the deposit direction of the DasherDirect transfer surface.
+        assertEquals("Transfer in", SensitiveTextMarkers.findMarker(tree("Transfer in")))
+        assertEquals("Transfer in", SensitiveTextMarkers.findMarker(tree("transfer in", "\$45.66 available")))
         // Alcohol DOCUMENT-capture surfaces only — license scanner + signature pad
         // (#463). The ID-check instruction + the arrival card are NOT markers: we
         // recognize those (customers are hashed, not blocked).
@@ -60,6 +63,30 @@ class SensitiveTextMarkersTest {
         assertNotNull(SensitiveTextMarkers.findMarker(tree("ID 123-45-6789 on file")))
         assertNotNull(SensitiveTextMarkers.findMarker(tree("4111 1111 1111 1111")))
         assertNotNull(SensitiveTextMarkers.findMarker(tree("4111-1111-1111-1111")))
+    }
+
+    @Test
+    fun `shaped values hit - amount-bearing transfer button (#884)`() {
+        // The fielded leak class: the confirm button interpolates the dasher's own balance,
+        // so no keyword can own it — the shape is "transfer" adjacent to a "$<digit>".
+        assertNotNull(SensitiveTextMarkers.findMarker(tree("Transfer \$45.66")))
+        assertNotNull(SensitiveTextMarkers.findMarker(tree("Transfer \$8.00")))
+        assertNotNull(SensitiveTextMarkers.findMarker(tree("TRANSFER \$1,234.56")))
+        // No space between label and amount, and an extra-spaced variant.
+        assertNotNull(SensitiveTextMarkers.findMarker(tree("Transfer\$45.66")))
+        assertNotNull(SensitiveTextMarkers.findMarker(tree("Transfer  \$ 45.66")))
+        // Split across sibling nodes — the allText join re-assembles it.
+        assertNotNull(SensitiveTextMarkers.findMarker(tree("Transfer", "\$45.66")))
+        // Flat (notification/log-sink) overload.
+        assertNotNull(SensitiveTextMarkers.findMarker("Transfer \$45.66"))
+    }
+
+    @Test
+    fun `the transfer amount shape does not fire on ordinary transfer-free money copy`() {
+        // The shape is amount-ADJACENCY, not the word "transfer" — a delivery screen that
+        // merely mentions a transfer with no adjacent amount must stay clean.
+        assertNull(SensitiveTextMarkers.findMarker(tree("Transfer of ownership", "\$45.66")))
+        assertNull(SensitiveTextMarkers.findMarker(tree("Order total \$45.66")))
     }
 
     @Test
