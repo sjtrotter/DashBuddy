@@ -491,6 +491,32 @@ class CaptureRedactionCorpusTest {
             ),
         ).restoreParents()
 
+        // #889 F1: the COMPLETED 4-digit PIN clears the engine's length floor, so the
+        // rule's own `plainMask` is what covers it — a 10^4 space against 65 536 4-hex
+        // buckets is ~85% injective. pin_entry (priority 63) wins the frame over
+        // dropoff_pin_keypad (109), so pin_entry's own digit entry must declare it.
+        val completed = UiNode(
+            viewIdResourceName = "com.dd:id/drop_off_workflow_host_fragment",
+            children = listOf(
+                UiNode(text = "9315"), // the whole-PIN echo, id-less
+                UiNode(viewIdResourceName = "com.dd:id/step_title", text = "Collect PIN from customer"),
+            ),
+        ).restoreParents()
+        val completedMatch = TestRulesetFactory.screenRuleset.matchFirst(completed)
+        assertEquals(
+            "the completed-PIN frame is claimed by pin_entry, not pin_keypad",
+            "doordash.screen.dropoff_pin_entry",
+            completedMatch?.ruleId,
+        )
+        val completedMasked = serialize(
+            TestRulesetFactory.screenRuleset.ruleById(completedMatch!!.ruleId)!!.redact.apply(completed),
+        )
+        assertFalse("the completed PIN must not persist", completedMasked.contains("9315"))
+        assertFalse(
+            "a 4-digit PIN must not carry a reversible distinctness hash",
+            Regex("""\[redacted:[0-9a-f]{4}]""").containsMatchIn(completedMasked),
+        )
+
         // Drive the PRODUCTION rule (mutation teeth: severing the require anchors or the
         // redact entry breaks this case, not just the floor).
         val match = TestRulesetFactory.screenRuleset.matchFirst(tree)

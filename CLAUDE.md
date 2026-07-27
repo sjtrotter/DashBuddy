@@ -249,8 +249,12 @@ echo as `[redacted:5fec]`, invertible in ~100 guesses). The floor bounds LENGTH 
 bounds ALPHABET — they compose, and a 4-digit PIN still needs the rule to declare `plainMask`.
 `normalize: customerName` entries are EXEMPT from the floor: their hex must stay equal to the first
 4 hex of the `customerNameHash` the parse already persists (#623/#733), and for a name that hash
-exists by design, so degrading it would break the invariant + cross-surface stability while removing
-no attacker capability (a glyph node has no parse, which is exactly why its suffix is a net leak). The
+exists by design, so degrading it would break the invariant while removing no attacker capability
+(a glyph node has no parse, which is exactly why its suffix is a net leak). Rule-side, the four
+dropoff surfaces whose id-less digit-shape entries can catch a PIN keypad echo or a bare code
+(`dropoff_pin_entry`/`_handoff`/`_pre_arrival`/`_pre_arrival_completion`) declare `plainMask` on
+those entries (#889 F1) — the floor covers 1–3 chars, the declaration covers the bounded 4–5 digit
+alphabets above it. The
 mask token is otherwise derived by the SAME canonical form the
 parse's `customerNameHash` chain uses (`normalizeCustomerName` before `sha256`, `CustomerNameKey` =
 first token + second-token initial), so a customer's mask/hash is stable across the surface FORMS

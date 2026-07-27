@@ -277,14 +277,7 @@ data class CompiledRedact(
          *     A short-name customer ("Bo", "Al B") would mask plain here while the
          *     parse still persists the full hash — the mask↔hash invariant breaks
          *     for exactly those customers.
-         *  2. **Cross-surface stability, which is why `normalize` exists.** The whole
-         *     point of the canonical key is that every surface form of one customer
-         *     produces one token. Applying a floor to a name-shaped token re-opens a
-         *     divergence seam on exactly the shape #733 documents as the live
-         *     tripwire: a first-name-only surface ("Bo" → key `bo`, 2 chars → plain)
-         *     alongside the fielded first+initial form ("Bo S"/"Bo Smith" → key
-         *     `bo s`, 4 chars → hashed) would mask ONE customer two ways.
-         *  3. **It costs the attacker nothing.** For a normalized name the 4 hex is a
+         *  2. **It costs the attacker nothing.** For a normalized name the 4 hex is a
          *     PREFIX of a hash the app persists by design (`customerNameHash` in the
          *     event log), so degrading the mask removes no capability — it only
          *     destroys per-customer replay distinctness. For a glyph/keypad node
@@ -296,6 +289,12 @@ data class CompiledRedact(
          * Note the exemption cannot collide with #795: the compiler rejects
          * `plainMask` + `normalize` together, so a normalized entry never reaches the
          * plain arm by declaration either.
+         *
+         * The exemption is DECLARATION-scoped: a rule could tag a glyph-shaped entry
+         * `normalize: customerName` and bypass the floor. Accepted — this guard is an
+         * accident backstop (a predicate matching content its author never foresaw),
+         * not a defense against a hostile ruleset, which could simply omit `redact`
+         * altogether. Ruleset integrity is #416's signature-verification boundary.
          */
         private fun hashSuffixIsSafe(token: String, normalize: RedactNormalize?): Boolean =
             normalize != null || token.length >= MIN_HASH_MASK_TOKEN_LENGTH

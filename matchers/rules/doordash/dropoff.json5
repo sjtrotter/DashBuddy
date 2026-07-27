@@ -286,6 +286,7 @@
           }
         },
         {
+          "comment": "#889 F1: plainMask. The realistic population of this whole-node match is the city/state/ZIP line and bare 5-digit codes — a street line is claimed by the earlier '^\\d{1,5}\\s+\\S' entry and a gate/PIN body by the keyword entries above, both of which keep their hash. 10^5 values over 65 536 buckets is ~1.5 candidates per bucket, i.e. effectively recoverable, and the distinctness it would buy here is redundant: the street-address and name entries on this same surface already carry per-customer distinct masks. Fail toward privacy on a bounded token whose distinctness is redundant. Trade accepted: a long free-text body that happens to contain a 5-digit run also plains (it is masked WHOLE either way; its identity is not a join key).",
           "find": {
             "all": [
               {
@@ -295,7 +296,8 @@
                 "hasNoId": true
               }
             ]
-          }
+          },
+          "plainMask": true
         },
         {
           "find": {
@@ -311,6 +313,7 @@
           }
         },
         {
+          "comment": "#889 F1: plainMask. This id-less digit shape matches an Apt/Suite/entry-code VALUE AND the PIN keypad's digit echoes — the FIELDED #889 envelope was a dropoff_pin_entry frame carrying a single-glyph keypad echo, and pin_entry (priority 63) WINS over dropoff_pin_keypad (priority 109), whose own digit entry already declares plainMask. The #889 engine length floor plains 1-3 char tokens, but a COMPLETED 4-digit PIN clears it while spanning only 10^4 values against the 65 536 4-hex buckets (~85% injective), so the distinctness suffix would be brute-recoverable. plainMask drops it — the same #795 posture as the sibling keypad rule. The floor bounds LENGTH, this declaration bounds ALPHABET; they compose. Capture-only: these nodes are never parsed, goldens unchanged.",
           "find": {
             "all": [
               {
@@ -320,7 +323,8 @@
                 "hasNoId": true
               }
             ]
-          }
+          },
+          "plainMask": true
         },
         {
           "comment": "id-less whole-value first-name + last-initial — same canonical SSOT as SnapshotRedactor.FIRST_LAST_INITIAL_PATTERN / dropoff_multi_order_confirm.",
@@ -478,6 +482,7 @@
           }
         },
         {
+          "comment": "#889 F1: plainMask. The realistic population of this whole-node match is the city/state/ZIP line and bare 5-digit codes — a street line is claimed by the earlier '^\\d{1,5}\\s+\\S' entry and a gate/PIN body by the keyword entries above, both of which keep their hash. 10^5 values over 65 536 buckets is ~1.5 candidates per bucket, i.e. effectively recoverable, and the distinctness it would buy here is redundant: the street-address and name entries on this same surface already carry per-customer distinct masks. Fail toward privacy on a bounded token whose distinctness is redundant. Trade accepted: a long free-text body that happens to contain a 5-digit run also plains (it is masked WHOLE either way; its identity is not a join key).",
           "find": {
             "all": [
               {
@@ -487,7 +492,8 @@
                 "hasNoId": true
               }
             ]
-          }
+          },
+          "plainMask": true
         },
         {
           "find": {
@@ -503,6 +509,7 @@
           }
         },
         {
+          "comment": "#889 F1: plainMask. This id-less digit shape matches an Apt/Suite/entry-code VALUE AND the PIN keypad's digit echoes — the FIELDED #889 envelope was a dropoff_pin_entry frame carrying a single-glyph keypad echo, and pin_entry (priority 63) WINS over dropoff_pin_keypad (priority 109), whose own digit entry already declares plainMask. The #889 engine length floor plains 1-3 char tokens, but a COMPLETED 4-digit PIN clears it while spanning only 10^4 values against the 65 536 4-hex buckets (~85% injective), so the distinctness suffix would be brute-recoverable. plainMask drops it — the same #795 posture as the sibling keypad rule. The floor bounds LENGTH, this declaration bounds ALPHABET; they compose. Capture-only: these nodes are never parsed, goldens unchanged.",
           "find": {
             "all": [
               {
@@ -512,7 +519,8 @@
                 "hasNoId": true
               }
             ]
-          }
+          },
+          "plainMask": true
         },
         {
           "comment": "Defense-in-depth (FIX 3): a modal-over-handoff combined frame carrying the multi-order-confirm's id-less first-name+last-initial line could be claimed by THIS earlier-priority rule instead of dropoff_multi_order_confirm. Same canonical name-shape SSOT as SnapshotRedactor.FIRST_LAST_INITIAL_PATTERN so the leak closes regardless of which rule wins the frame; hasNoId keeps it off id-bearing handoff anchors.",
@@ -694,6 +702,7 @@
           }
         },
         {
+          "comment": "#889 F1: plainMask. The realistic population of this whole-node match is the city/state/ZIP line and bare 5-digit codes — a street line is claimed by the earlier '^\\d{1,5}\\s+\\S' entry and a gate/PIN body by the keyword entries above, both of which keep their hash. 10^5 values over 65 536 buckets is ~1.5 candidates per bucket, i.e. effectively recoverable, and the distinctness it would buy here is redundant: the street-address and name entries on this same surface already carry per-customer distinct masks. Fail toward privacy on a bounded token whose distinctness is redundant. Trade accepted: a long free-text body that happens to contain a 5-digit run also plains (it is masked WHOLE either way; its identity is not a join key).",
           "find": {
             "all": [
               {
@@ -703,7 +712,8 @@
                 "hasNoId": true
               }
             ]
-          }
+          },
+          "plainMask": true
         },
         {
           "find": {
@@ -719,6 +729,7 @@
           }
         },
         {
+          "comment": "#889 F1: plainMask. This id-less digit shape matches an Apt/Suite/entry-code VALUE AND the PIN keypad's digit echoes — the FIELDED #889 envelope was a dropoff_pin_entry frame carrying a single-glyph keypad echo, and pin_entry (priority 63) WINS over dropoff_pin_keypad (priority 109), whose own digit entry already declares plainMask. The #889 engine length floor plains 1-3 char tokens, but a COMPLETED 4-digit PIN clears it while spanning only 10^4 values against the 65 536 4-hex buckets (~85% injective), so the distinctness suffix would be brute-recoverable. plainMask drops it — the same #795 posture as the sibling keypad rule. The floor bounds LENGTH, this declaration bounds ALPHABET; they compose. Capture-only: these nodes are never parsed, goldens unchanged.",
           "find": {
             "all": [
               {
@@ -728,7 +739,8 @@
                 "hasNoId": true
               }
             ]
-          }
+          },
+          "plainMask": true
         }
       ],
       "state": {
@@ -989,6 +1001,7 @@
           }
         },
         {
+          "comment": "#889 F1: plainMask. The realistic population of this whole-node match is the city/state/ZIP line and bare 5-digit codes — a street line is claimed by the earlier '^\\d{1,5}\\s+\\S' entry and a gate/PIN body by the keyword entries above, both of which keep their hash. 10^5 values over 65 536 buckets is ~1.5 candidates per bucket, i.e. effectively recoverable, and the distinctness it would buy here is redundant: the street-address and name entries on this same surface already carry per-customer distinct masks. Fail toward privacy on a bounded token whose distinctness is redundant. Trade accepted: a long free-text body that happens to contain a 5-digit run also plains (it is masked WHOLE either way; its identity is not a join key).",
           "find": {
             "all": [
               {
@@ -998,7 +1011,8 @@
                 "hasNoId": true
               }
             ]
-          }
+          },
+          "plainMask": true
         },
         {
           "find": {
@@ -1014,6 +1028,7 @@
           }
         },
         {
+          "comment": "#889 F1: plainMask. This id-less digit shape matches an Apt/Suite/entry-code VALUE AND the PIN keypad's digit echoes — the FIELDED #889 envelope was a dropoff_pin_entry frame carrying a single-glyph keypad echo, and pin_entry (priority 63) WINS over dropoff_pin_keypad (priority 109), whose own digit entry already declares plainMask. The #889 engine length floor plains 1-3 char tokens, but a COMPLETED 4-digit PIN clears it while spanning only 10^4 values against the 65 536 4-hex buckets (~85% injective), so the distinctness suffix would be brute-recoverable. plainMask drops it — the same #795 posture as the sibling keypad rule. The floor bounds LENGTH, this declaration bounds ALPHABET; they compose. Capture-only: these nodes are never parsed, goldens unchanged.",
           "find": {
             "all": [
               {
@@ -1023,7 +1038,8 @@
                 "hasNoId": true
               }
             ]
-          }
+          },
+          "plainMask": true
         },
         {
           "comment": "#860: same address-block 'Building Name' VALUE as dropoff_pre_arrival — this rule renders the SAME workflow sheet one CTA-state later and carries the same id-less label/value rows, so it inherits the same gap: free-form proper-noun text the digit-shape entries above structurally cannot reach. Predicate and rationale identical to the pre-arrival entry (label-anchored, hash-mask, no plainMask/normalize). Inert when the row is absent — over-redaction is the only failure direction.",
