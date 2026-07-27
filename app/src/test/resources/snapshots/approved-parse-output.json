@@ -1420,9 +1420,27 @@
         "shape": null,
         "fields": {}
     },
+    "dropoff_continue_to_complete/2026-07-26_14-57-28-118__doordash__accessibility.window__UNKNOWN__02dac9.json": {
+        "ruleId": "doordash.screen.dropoff_continue_to_complete",
+        "intent": "dropoff_continue_to_complete",
+        "shape": null,
+        "fields": {}
+    },
     "dropoff_geofence_warning/2026-07-17_20-46-59-561__doordash__accessibility.window__dropoff_geofence_warning__f100d7.json": {
         "ruleId": "doordash.screen.dropoff_geofence_warning",
         "intent": "dropoff_geofence_warning",
+        "shape": null,
+        "fields": {}
+    },
+    "dropoff_geofence_warning/2026-07-26_14-57-25-649__doordash__accessibility.window__UNKNOWN__c336f4.json": {
+        "ruleId": "doordash.screen.dropoff_geofence_warning",
+        "intent": "dropoff_geofence_warning",
+        "shape": null,
+        "fields": {}
+    },
+    "dropoff_handed_directly_confirm/2026-07-26_21-21-27-813__doordash__accessibility.window__UNKNOWN__d7bf38.json": {
+        "ruleId": "doordash.screen.dropoff_handed_directly_confirm",
+        "intent": "dropoff_handed_directly_confirm",
         "shape": null,
         "fields": {}
     },
@@ -1471,6 +1489,12 @@
     "dropoff_handoff/20260128_180855_435_DROPOFF_DETAILS_PRE_ARRIVAL.json": {
         "ruleId": "doordash.screen.dropoff_handoff",
         "intent": "dropoff_handoff",
+        "shape": null,
+        "fields": {}
+    },
+    "dropoff_help_menu/2026-07-26_14-57-27-333__doordash__accessibility.window__UNKNOWN__7ed79f.json": {
+        "ruleId": "doordash.screen.dropoff_help_menu",
+        "intent": "dropoff_help_menu",
         "shape": null,
         "fields": {}
     },
@@ -3108,6 +3132,18 @@
             "parsedOffer": "ParsedOffer(offerHash=2142626f9b179829832f665436b00fafae2bf21ce11b052c6707f55ca3dd318f, presentationKey=b99b2492a1b22c758035feae76f98b1eaf18771fd1daa091ac745294de70d6f6, itemCount=0, itemCountIsUnits=false, payAmount=13.04, payTextRaw=null, distanceMiles=14.0, distanceTextRaw=null, dueByTimeText=null, dueByTimeMillis=null, timeToCompleteMinutes=39, badges=[], initialCountdownSeconds=null, orders=[ParsedOrder(orderIndex=0, orderType=PICKUP, storeName=Delivery (2), itemCount=1, isItemCountEstimated=true, badges=[], countUnit=ITEMS)], offerKind=MATCH, displayStoreName=Sonic (3035 Tpc Pkwy), rawExtractedTexts=null)"
         }
     },
+    "offer_accepting/2026-07-26_11-26-00-810__doordash__accessibility.window__UNKNOWN__c43214.json": {
+        "ruleId": "doordash.screen.offer_accepting",
+        "intent": "offer_accepting",
+        "shape": null,
+        "fields": {}
+    },
+    "offer_accepting/2026-07-26_13-27-46-799__doordash__accessibility.window__UNKNOWN__57b5b8.json": {
+        "ruleId": "doordash.screen.offer_accepting",
+        "intent": "offer_accepting",
+        "shape": null,
+        "fields": {}
+    },
     "offer_popup/20260128_163448_533_OFFER_POPUP.json": {
         "ruleId": "doordash.screen.offer_popup",
         "intent": "offer_popup",
@@ -3705,6 +3741,12 @@
         "shape": null,
         "fields": {}
     },
+    "pickup_confirm_picked_up/2026-07-26_21-10-54-490__doordash__accessibility.window__UNKNOWN__0bdb1d.json": {
+        "ruleId": "doordash.screen.pickup_confirm_picked_up",
+        "intent": "pickup_confirm_picked_up",
+        "shape": null,
+        "fields": {}
+    },
     "pickup_issue_menu/2026-07-18_17-36-04-600__doordash__accessibility.window__pickup_issue_menu__e0e12f.json": {
         "ruleId": "doordash.screen.pickup_issue_menu",
         "intent": "pickup_issue_menu",
@@ -4025,6 +4067,24 @@
             "storeName": "[redacted]",
             "subFlow": "NAVIGATION"
         }
+    },
+    "pickup_pizza_bag/2026-07-26_21-10-26-597__doordash__accessibility.window__UNKNOWN__0a4147.json": {
+        "ruleId": "doordash.screen.pickup_pizza_bag",
+        "intent": "pickup_pizza_bag",
+        "shape": null,
+        "fields": {}
+    },
+    "pickup_pizza_bag/2026-07-26_21-10-49-903__doordash__accessibility.window__UNKNOWN__71b1a1.json": {
+        "ruleId": "doordash.screen.pickup_pizza_bag",
+        "intent": "pickup_pizza_bag",
+        "shape": null,
+        "fields": {}
+    },
+    "pickup_pizza_bag/2026-07-26_21-10-51-086__doordash__accessibility.window__UNKNOWN__063e5d.json": {
+        "ruleId": "doordash.screen.pickup_pizza_bag",
+        "intent": "pickup_pizza_bag",
+        "shape": null,
+        "fields": {}
     },
     "pickup_post_arrival_multi/2026-07-17_20-31-32-611__doordash__accessibility.window__pickup_post_arrival_multi__d2fa09.json": {
         "ruleId": "doordash.screen.pickup_post_arrival_multi",
@@ -4804,6 +4864,12 @@
         }
     },
     "pickup_wait_survey/2026-06-12__doordash__pickup_wait_survey__d90d0f.json": {
+        "ruleId": "doordash.screen.pickup_wait_survey",
+        "intent": "pickup_wait_survey",
+        "shape": null,
+        "fields": {}
+    },
+    "pickup_wait_survey/2026-07-26_21-08-27-628__doordash__accessibility.window__UNKNOWN__24d30f.json": {
         "ruleId": "doordash.screen.pickup_wait_survey",
         "intent": "pickup_wait_survey",
         "shape": null,
@@ -5589,6 +5655,18 @@
     "shopping_item_status/2026-07-19_17-24-25-195__doordash__accessibility.window__shopping_item_status__21722c.json": {
         "ruleId": "doordash.screen.shopping_item_status",
         "intent": "shopping_item_status",
+        "shape": null,
+        "fields": {}
+    },
+    "shopping_pay_adjustment/2026-07-26_14-00-04-853__doordash__accessibility.window__UNKNOWN__e0f9f2.json": {
+        "ruleId": "doordash.screen.shopping_pay_adjustment",
+        "intent": "shopping_pay_adjustment",
+        "shape": null,
+        "fields": {}
+    },
+    "shopping_shelf_photo/2026-07-26_16-44-36-459__doordash__accessibility.window__UNKNOWN__aa7d10.json": {
+        "ruleId": "doordash.screen.shopping_shelf_photo",
+        "intent": "shopping_shelf_photo",
         "shape": null,
         "fields": {}
     },
