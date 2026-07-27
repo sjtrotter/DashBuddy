@@ -6,11 +6,18 @@ import cloud.trotter.dashbuddy.core.data.event.AppEventRepo
 import cloud.trotter.dashbuddy.core.data.fuel.FuelPriceRepository
 import cloud.trotter.dashbuddy.core.data.location.OdometerRepository
 import cloud.trotter.dashbuddy.core.data.settings.AppPreferencesRepository
+import cloud.trotter.dashbuddy.core.data.settings.DevSettingsRepository
 import cloud.trotter.dashbuddy.core.state.StateManagerV2
 import cloud.trotter.dashbuddy.domain.analytics.SessionRecord
+import cloud.trotter.dashbuddy.domain.model.bubble.BubbleSessionMode
 import cloud.trotter.dashbuddy.domain.model.vehicle.FuelType
 import cloud.trotter.dashbuddy.domain.state.AppState
+import cloud.trotter.dashbuddy.domain.state.FlowRegion
+import cloud.trotter.dashbuddy.domain.state.Mode
 import cloud.trotter.dashbuddy.domain.state.Platform
+import cloud.trotter.dashbuddy.domain.state.PlatformRegion
+import cloud.trotter.dashbuddy.domain.state.Regions
+import cloud.trotter.dashbuddy.domain.state.Session
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -18,6 +25,7 @@ import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
+import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
@@ -45,7 +53,6 @@ import org.mockito.kotlin.whenever
 @OptIn(ExperimentalCoroutinesApi::class)
 class BubbleViewModelTest {
 
-    private val bubbleManager: BubbleManager = mock()
     private val chatRepository: ChatRepository = mock()
     private val odometerRepository: OdometerRepository = mock()
     private val stateManager: StateManagerV2 = mock()
@@ -53,16 +60,24 @@ class BubbleViewModelTest {
     private val appPreferencesRepository: AppPreferencesRepository = mock()
     private val fuelPriceRepository: FuelPriceRepository = mock()
     private val analyticsRepository: AnalyticsRepository = mock()
+    private val devSettingsRepository: DevSettingsRepository = mock()
 
     private val dispatcher = StandardTestDispatcher()
+
+    /** The state the VM reads; tests mutate it to drive multi-app scenarios (#867). */
+    private val state = MutableStateFlow(AppState())
+
+    /** The dev-settings session-presentation switch (#867). */
+    private val modeFlow = MutableStateFlow(BubbleSessionMode.FOLLOW_ACTIVE)
 
     @Before
     fun setUp() {
         Dispatchers.setMain(dispatcher)
         // Init-time flow accessors — the VM builds several stateIn() flows in its property initializers.
-        whenever(stateManager.state).thenReturn(MutableStateFlow(AppState()))
-        whenever(bubbleManager.activeSessionId).thenReturn(MutableStateFlow(null))
+        whenever(stateManager.state).thenReturn(state)
+        whenever(devSettingsRepository.bubbleSessionMode).thenReturn(modeFlow)
         whenever(appEventRepo.getMostRecentSessionId()).thenReturn(flowOf(null))
+        whenever(appEventRepo.getEventsForSession(any())).thenReturn(flowOf(emptyList()))
         whenever(odometerRepository.sessionMilesFlow).thenReturn(flowOf(0.0))
         whenever(appPreferencesRepository.glanceMode).thenReturn(flowOf(false))
         whenever(appPreferencesRepository.gasPrice).thenReturn(flowOf(3.50f))
@@ -74,7 +89,6 @@ class BubbleViewModelTest {
     fun tearDown() = Dispatchers.resetMain()
 
     private fun viewModel() = BubbleViewModel(
-        bubbleManager = bubbleManager,
         chatRepository = chatRepository,
         odometerRepository = odometerRepository,
         stateManager = stateManager,
@@ -82,6 +96,7 @@ class BubbleViewModelTest {
         appPreferencesRepository = appPreferencesRepository,
         fuelPriceRepository = fuelPriceRepository,
         analyticsRepository = analyticsRepository,
+        devSettingsRepository = devSettingsRepository,
     )
 
     private fun session(
@@ -199,5 +214,214 @@ class BubbleViewModelTest {
         verify(fuelPriceRepository).fetchAndResumeAutoGasPrice(eq(FuelType.REGULAR))
         // Resume-auto never routes through the manual (stepper) write path.
         verify(appPreferencesRepository, never()).updateGasPriceManual(any())
+    }
+
+    // ===========================================================================================
+    // #867 — multi-app session presentation (follow / pin / merge + the labeling pledge)
+    // ===========================================================================================
+
+    private fun appState(active: Platform?, vararg live: Pair<Platform, String>) = AppState(
+        regions = Regions(
+            flow = FlowRegion(activePlatform = active),
+            platforms = live.mapIndexed { index, (platform, sessionId) ->
+                platform to PlatformRegion(
+                    platform = platform,
+                    mode = Mode.Online,
+                    session = Session(sessionId = sessionId, startedAt = 1_000L * (index + 1)),
+                )
+            }.toMap(),
+        ),
+    )
+
+    private val dualOnline = arrayOf(
+        Platform.DoorDash to "session-dd",
+        Platform.Uber to "session-uber",
+    )
+
+    /** Keeps every WhileSubscribed flow hot for the duration of a test. */
+    private fun TestScope.subscribe(vm: BubbleViewModel) = launch {
+        launch { vm.focusedPlatform.collect {} }
+        launch { vm.switchablePlatforms.collect {} }
+        launch { vm.displayedPlatformLabel.collect {} }
+        launch { vm.messages.collect {} }
+        launch { vm.cards.collect {} }
+    }
+
+    private fun stubNoDashes() {
+        whenever(analyticsRepository.recentSessions(any())).thenReturn(flowOf(emptyList()))
+        whenever(chatRepository.getMessages(any())).thenReturn(flowOf(emptyList()))
+    }
+
+    @Test
+    fun `follow-active tracks the platform that produced the last frame`() = runTest {
+        stubNoDashes()
+        state.value = appState(Platform.DoorDash, *dualOnline)
+        val vm = viewModel()
+        val job = subscribe(vm)
+        advanceUntilIdle()
+        assertEquals(Platform.DoorDash, vm.focusedPlatform.value)
+
+        // The multi-app flip the issue documented: a DoorDash frame, then an Uber frame.
+        state.value = appState(Platform.Uber, *dualOnline)
+        advanceUntilIdle()
+
+        assertEquals(Platform.Uber, vm.focusedPlatform.value)
+        verify(chatRepository).getMessages(eq("session-uber"))
+        job.cancel()
+    }
+
+    @Test
+    fun `a switcher pick holds the surface against an active-platform flip`() = runTest {
+        stubNoDashes()
+        state.value = appState(Platform.DoorDash, *dualOnline)
+        val vm = viewModel()
+        val job = subscribe(vm)
+        advanceUntilIdle()
+
+        vm.selectPlatform(Platform.Uber)
+        advanceUntilIdle()
+        assertEquals(Platform.Uber, vm.focusedPlatform.value)
+
+        // A DoorDash frame arrives — the pin must NOT be dragged away by it.
+        state.value = appState(Platform.DoorDash, *dualOnline)
+        advanceUntilIdle()
+
+        assertEquals(Platform.Uber, vm.focusedPlatform.value)
+        job.cancel()
+    }
+
+    @Test
+    fun `the live card is dropped while pinned away from the active platform`() = runTest {
+        stubNoDashes()
+        state.value = appState(Platform.DoorDash, *dualOnline)
+        val vm = viewModel()
+        val job = subscribe(vm)
+        advanceUntilIdle()
+
+        vm.selectPlatform(Platform.Uber)
+        advanceUntilIdle()
+
+        // The live card is built from the GLOBAL FlowRegion, which describes DoorDash's screen —
+        // rendering it under an Uber pin is exactly the mislabeling #867 is about (and it is what
+        // carries the offer Accept/Decline row).
+        assertNull(vm.cards.value.stack.active)
+        job.cancel()
+    }
+
+    @Test
+    fun `re-picking the displayed platform releases the pin`() = runTest {
+        stubNoDashes()
+        state.value = appState(Platform.DoorDash, *dualOnline)
+        val vm = viewModel()
+        val job = subscribe(vm)
+        advanceUntilIdle()
+
+        vm.selectPlatform(Platform.Uber)
+        advanceUntilIdle()
+        vm.selectPlatform(Platform.Uber)
+        advanceUntilIdle()
+
+        assertEquals(Platform.DoorDash, vm.focusedPlatform.value)
+        job.cancel()
+    }
+
+    @Test
+    fun `follow-active releases the pin when the picked dash ends`() = runTest {
+        stubNoDashes()
+        state.value = appState(Platform.DoorDash, *dualOnline)
+        val vm = viewModel()
+        val job = subscribe(vm)
+        advanceUntilIdle()
+
+        vm.selectPlatform(Platform.Uber)
+        advanceUntilIdle()
+        assertEquals(Platform.Uber, vm.focusedPlatform.value)
+
+        // Uber goes offline (its region's session clears) → the temporary pin lapses.
+        state.value = appState(Platform.DoorDash, Platform.DoorDash to "session-dd")
+        advanceUntilIdle()
+        assertEquals(Platform.DoorDash, vm.focusedPlatform.value)
+
+        // …and it stays released when Uber dashes again — the difference from PINNED.
+        state.value = appState(Platform.DoorDash, *dualOnline)
+        advanceUntilIdle()
+        assertEquals(Platform.DoorDash, vm.focusedPlatform.value)
+        job.cancel()
+    }
+
+    @Test
+    fun `pinned survives the picked dash ending and re-takes effect on the next one`() = runTest {
+        stubNoDashes()
+        modeFlow.value = BubbleSessionMode.PINNED
+        state.value = appState(Platform.DoorDash, *dualOnline)
+        val vm = viewModel()
+        val job = subscribe(vm)
+        advanceUntilIdle()
+
+        vm.selectPlatform(Platform.Uber)
+        advanceUntilIdle()
+        assertEquals(Platform.Uber, vm.focusedPlatform.value)
+
+        // Uber stops dashing: nothing live to show for the pin, so the display follows…
+        state.value = appState(Platform.DoorDash, Platform.DoorDash to "session-dd")
+        advanceUntilIdle()
+        assertEquals(Platform.DoorDash, vm.focusedPlatform.value)
+
+        // …but the pin was never dropped, so Uber's next dash re-takes the surface.
+        state.value = appState(Platform.DoorDash, *dualOnline)
+        advanceUntilIdle()
+        assertEquals(Platform.Uber, vm.focusedPlatform.value)
+        job.cancel()
+    }
+
+    @Test
+    fun `merged folds every live dash into one stack`() = runTest {
+        stubNoDashes()
+        modeFlow.value = BubbleSessionMode.MERGED
+        state.value = appState(Platform.DoorDash, *dualOnline)
+        val vm = viewModel()
+        val job = subscribe(vm)
+        advanceUntilIdle()
+
+        verify(appEventRepo).getEventsForSession(eq("session-dd"))
+        verify(appEventRepo).getEventsForSession(eq("session-uber"))
+        // The switcher would be inert in this mode, so it is hidden…
+        assertEquals(emptyList<Platform>(), vm.switchablePlatforms.value)
+        // …and the chat stays on ONE session (the followed one), badged in the header.
+        verify(chatRepository).getMessages(eq("session-dd"))
+        job.cancel()
+    }
+
+    @Test
+    fun `labels and the switcher appear only once two dashes are live`() = runTest {
+        stubNoDashes()
+        state.value = appState(Platform.DoorDash, Platform.DoorDash to "session-dd")
+        val vm = viewModel()
+        val job = subscribe(vm)
+        advanceUntilIdle()
+
+        assertNull(vm.displayedPlatformLabel.value)
+        assertEquals(emptyList<Platform>(), vm.switchablePlatforms.value)
+
+        state.value = appState(Platform.DoorDash, *dualOnline)
+        advanceUntilIdle()
+
+        assertEquals(Platform.DoorDash.shortName, vm.displayedPlatformLabel.value)
+        assertEquals(listOf(Platform.DoorDash, Platform.Uber), vm.switchablePlatforms.value)
+        job.cancel()
+    }
+
+    @Test
+    fun `an unknown stored mode is decoded by the repository, so the VM just follows`() = runTest {
+        // Fail-closed decode lives in DevSettingsRepository (BubbleSessionModeTest covers it); the
+        // VM's contract is that it renders whatever mode it is handed, starting at the default.
+        stubNoDashes()
+        state.value = appState(Platform.DoorDash, *dualOnline)
+        val vm = viewModel()
+        val job = subscribe(vm)
+        advanceUntilIdle()
+
+        assertEquals(Platform.DoorDash, vm.focusedPlatform.value)
+        job.cancel()
     }
 }

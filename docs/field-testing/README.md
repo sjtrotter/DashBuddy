@@ -78,6 +78,30 @@ card's **mechanical** half, #577 (re-confirmed, 24/24, ~0.55 s — with a new po
 that entry's Bug #1), the #457 path, and #554 ShadowProjector (2/2). The #462/#460 dropoff item
 was found **broken-in-part** (raw PII in capture envelopes) and moved to that entry's Bug #7.)_
 
+- **🆕 NEW — #867 (display side) — the bubble says WHICH dash it is showing, and you can switch it.**
+  With two platforms online the HUD used to follow whichever app produced the last frame, unlabeled
+  — a DoorDash "Declined" chip read as the Uber offer you had just acted on. Now: platform chips on
+  every card + the chat header whenever ≥2 dashes are live, a manual **Showing DD | UBER** chip row
+  above the stack, and a Dev-settings switch (Settings → Developer Options → **Session
+  presentation**) picking between **Follow** (default), **Pin**, and **Merge**.
+  **What to watch (needs a genuine multi-app dash — both apps online at once):**
+  1. **Chips appear** the moment the second dash starts (cards + chat header), and DISAPPEAR when
+     you drop back to one platform. A chip must never name the wrong app.
+  2. **Follow (default):** the stack tracks whichever app you last touched. Tap the other chip in
+     the switcher — the stack + chat swap to that dash and STAY there while you use the other app.
+     The live (bottom, expanded) card disappears while you're looking at the non-active platform —
+     that's intentional (there is no live screen for it), and the Accept/Decline buttons go with it.
+     End the dash you pinned → the HUD goes back to following on its own.
+  3. **Pin:** same, except the pick survives that dash ending and re-takes the surface when that
+     platform dashes again. Nothing is persisted across an app restart — a pin is per-session.
+  4. **Merge:** one stack with both dashes' cards interleaved chronologically, each chipped; the
+     switcher row is hidden and chat stays on the followed dash. This is the mode to judge — it's
+     the one the dev was unsure about.
+  **Which mode felt right while driving** is the actual deliverable — the winner becomes the
+  shipped default and the other two get deleted.
+  **Desk:** the two dashes' chat histories should now be cleanly separated per session (the #873
+  write-side fix); confirm no line from one platform sits in the other's `chat_messages` rows.
+  - Confirmed: 0/2
 - **🆕 NEW — #884 — the amount-bearing transfer button no longer evades the marker backstop.**
   `SensitiveTextMarkers` gained `Transfer in` plus a `transfer $<digit>` amount-adjacency shape.
   The leak channel was the CLICK envelope (the tapped button is serialized in isolation, so the

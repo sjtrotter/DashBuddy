@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import cloud.trotter.dashbuddy.core.data.settings.AppPreferencesRepository
 import cloud.trotter.dashbuddy.core.data.settings.DevSettingsRepository
 import cloud.trotter.dashbuddy.core.data.strategy.StrategyRepository
+import cloud.trotter.dashbuddy.domain.model.bubble.BubbleSessionMode
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -32,6 +33,9 @@ class SettingsMenuViewModel @Inject constructor(
     // Re-using the debug flag from repo as the "Unlock" state
     val isDevModeUnlocked = devSettingsRepository.isDevModeUnlocked
 
+    /** #867 — the bubble's session-presentation experiment switch (Developer Options). */
+    val bubbleSessionMode = devSettingsRepository.bubbleSessionMode
+
     private val _versionClickCount = MutableStateFlow(0)
     val versionClickCount = _versionClickCount.asStateFlow()
 
@@ -44,6 +48,11 @@ class SettingsMenuViewModel @Inject constructor(
 
     fun unlockDeveloperMode() = viewModelScope.launch {
         devSettingsRepository.setDevModeUnlocked(true)
+    }
+
+    /** #867 — persist the bubble session-presentation mode; the HUD reads it reactively. */
+    fun setBubbleSessionMode(mode: BubbleSessionMode) = viewModelScope.launch {
+        devSettingsRepository.setBubbleSessionMode(mode)
     }
 
     // --- Actions ---
