@@ -271,6 +271,74 @@ class RuleCompilerTest {
     }
 
     @Test
+    fun `hasFollowingSiblingTextMatchesRegex matches the line-1 node of an id-less address block`() {
+        // #886: the drop-off card's address block is `<line 1><line 2>` with NO label and
+        // no ids. Line 1 is a street line OR (business/venue destination) the venue NAME —
+        // free-form text with no shape of its own. The city/ST/ZIP line BELOW it is the
+        // only stable handle, so the anchor points forward.
+        val pred = RuleCompiler.compileNodePred(
+            json("hasFollowingSiblingTextMatchesRegex" to """[,\s][A-Za-z]{2},?\s{1,4}\d{5}"""),
+        )
+        val venue = node(text = "Sample Family Medical and Urgent Care")
+        val street = node(text = "742 Sample Hollow Way")
+        val cityStateZip = node(text = "San Antonio, TX 78260, USA")
+        val instruction = node(text = "Leave it at the door")
+        val kids = tree(venue, cityStateZip, instruction, street).children
+
+        assertTrue("the venue line above the city/ST/ZIP line matches", pred(kids[0]))
+        assertFalse("the city/ST/ZIP line itself never matches", pred(kids[1]))
+        assertFalse("an unrelated node whose next sibling is a street line does not", pred(kids[2]))
+        assertFalse("the LAST child has no following sibling", pred(kids[3]))
+        // The same predicate covers the numeric street form (defense in depth).
+        assertTrue(pred(tree(street, cityStateZip).children[0]))
+        // Zip-less sibling → no match (the anchor is the state+ZIP shape, not "a sibling").
+        assertFalse(pred(tree(venue, node(text = "Hand it to customer")).children[0]))
+    }
+
+    @Test
+    fun `hasFollowingSiblingTextMatchesRegex resolves the sibling by reference, not structural equality`() {
+        // #886, mirroring the #860 teeth: UiNode.equals compares identity FIELDS, so two
+        // equal-but-distinct siblings are `==`. A List.indexOf lookup would resolve BOTH to
+        // the first one's index, and the node actually sitting above the address line would
+        // read the wrong successor and silently fail to mask (an UNDER-mask on a privacy
+        // control). Swapping the compiler back to indexOf turns this RED.
+        val pred = RuleCompiler.compileNodePred(
+            json("hasFollowingSiblingTextMatchesRegex" to """[,\s][A-Za-z]{2},?\s{1,4}\d{5}"""),
+        )
+        val first = node(text = "Sample Family Medical and Urgent Care")
+        val second = node(text = "Sample Family Medical and Urgent Care")
+        assertTrue("precondition: the two nodes are structurally equal", first == second)
+        assertFalse("precondition: but distinct instances", first === second)
+
+        val kids = tree(first, node(text = "Hand it to customer"), second, node(text = "San Antonio, TX 78260, USA")).children
+
+        assertTrue("the node that actually precedes the address line matches", pred(kids[2]))
+        assertFalse("its structural twin, which does NOT, must not", pred(kids[0]))
+    }
+
+    @Test
+    fun `hasFollowingSiblingTextMatchesRegex does not match the last child or a parentless node`() {
+        val pred = RuleCompiler.compileNodePred(
+            json("hasFollowingSiblingTextMatchesRegex" to """[,\s][A-Za-z]{2},?\s{1,4}\d{5}"""),
+        )
+        // Only child: no following sibling.
+        assertFalse(pred(tree(node(text = "Sample Family Medical")).children[0]))
+        // Parentless (no restoreParents) — fail-closed, no crash.
+        assertFalse(pred(node(text = "Sample Family Medical")))
+    }
+
+    @Test
+    fun `hasFollowingSiblingTextMatchesRegex rejects a ReDoS-prone pattern at compile time`() {
+        // The new predicate routes through the SAME RegexSafety guard as hasTextMatchesRegex.
+        try {
+            RuleCompiler.compileNodePred(json("hasFollowingSiblingTextMatchesRegex" to "(a+)+b"))
+            throw AssertionError("expected a RuleCompileException for a nested-unbounded pattern")
+        } catch (e: RuleCompileException) {
+            assertTrue(e.message!!.isNotBlank())
+        }
+    }
+
+    @Test
     fun `hasClassNameEndsWith matches class suffix`() {
         val pred = RuleCompiler.compileNodePred(json("hasClassNameEndsWith" to "TextView"))
         assertTrue(pred(node(className = "android.widget.TextView")))

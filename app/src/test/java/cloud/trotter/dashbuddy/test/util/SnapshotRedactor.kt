@@ -98,8 +98,18 @@ object SnapshotRedactor {
      * a warehouse zone code ("SAT_San-Antonio_187"), or a count ("2 items"). Character classes are
      * `\p{L}` (accented/Unicode letters — José, Muñoz; interior capitals — McKenna) plus `'` and
      * `-` (O'Brien, D'Angelo, Mary-Jo); the last token is a single letter with an optional trailing
-     * period. Every quantifier is bounded ({0,20}/{0,3}/{0,8}) so it passes RegexSafety's ReDoS
-     * guard when the identical string is compiled on the rule side.
+     * period. Every quantifier is bounded ({0,20}/{0,3}/{0,8}/{1,4}) so it passes RegexSafety's
+     * ReDoS guard when the identical string is compiled on the rule side.
+     *
+     * **INTERIOR whitespace is `\s{1,4}`, not a literal space (#885).** The 07-27 pull fielded
+     * `dropoff_multi_order_confirm` rendering the name with a DOUBLE space ("Firstname  L.") — the
+     * layout, not the data — and the single-space separator this pattern used to carry did not
+     * match, so the rule's redact entry existed but never fired and a raw customer name reached
+     * the recognized envelope. Leading/trailing tolerance was never the gap; the SEPARATOR was.
+     * `\s` covers the ASCII whitespace family (space/tab/newline), so a multi-space or tabbed
+     * render now masks identically; a non-ASCII separator (NBSP) is NOT covered by `\s` and stays
+     * the documented residual — the `CustomerTextMarkers` backstop and this scrubber's other
+     * passes remain downstream of it.
      *
      * **Accepted over-mask trade-off (privacy-first):** because it is case-insensitive and
      * shape-only, a two-token UI label that happens to end in a single letter — "Vitamin C",
@@ -110,7 +120,7 @@ object SnapshotRedactor {
      * the whole-value anchoring here keep the surface small.
      */
     const val FIRST_LAST_INITIAL_PATTERN =
-        "^\\s{0,8}[\\p{L}][\\p{L}'-]{0,20}( [\\p{L}][\\p{L}'-]{0,20}){0,3} [A-Z]\\.?\\s{0,8}$"
+        "^\\s{0,8}[\\p{L}][\\p{L}'-]{0,20}(\\s{1,4}[\\p{L}][\\p{L}'-]{0,20}){0,3}\\s{1,4}[A-Z]\\.?\\s{0,8}$"
     private val FIRST_LAST_INITIAL = Regex(FIRST_LAST_INITIAL_PATTERN, RegexOption.IGNORE_CASE)
     private val APT = Regex("""(?i)\b(apt|suite|ste|unit|bldg|building|gate code|gate)\b[:#\s]*[A-Za-z0-9\-]+""")
     /**
