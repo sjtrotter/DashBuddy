@@ -118,6 +118,18 @@ was found **broken-in-part** (raw PII in capture envelopes) and moved to that en
     decline ×6, expand ×8) while accept NEVER fired automatically over 10 manual accepts —
     second independent support for the ungranted-accept read.)
 
+- **🆕 NEW — #889 — no brute-forceable `[redacted:<4hex>]` on short tokens.** The capture mask now
+  degrades to a plain `[redacted]` whenever the masked token is under 4 characters, rule-independently
+  (a 1-glyph source inverts from 4 hex in ~100 guesses; the fielded `dropoff_pin_entry` keypad echo
+  shipped as `[redacted:5fec]`).
+  **Desk (next pull, no dev-eyes needed):** grep the new capture envelopes for `\[redacted:[0-9a-f]{4}\]`
+  and confirm every hit sits on a name/address-length token — a hash suffix on a 1–3 char node text is a
+  regression. Complementary check: `[redacted]` (plain) now appears on the PIN/keypad and short
+  unit-number nodes of `dropoff_pin_entry`. Customer-name masks must STILL carry their suffix (the
+  `normalize: customerName` exemption) — a `Deliver to [redacted]` with no hex would mean the exemption
+  broke and per-customer replay distinctness is gone.
+  - Issue: #889. Confirmed: 0/2
+
 - **🆕 NEW — #859 (H4 + placeholder filenames) — one offer screenshot per presentation, and no
   `{storeName}` filenames.** The Uber offer screenshot now dedupes on the presentation (#830's
   `presentationKey`) instead of the churning quote hash, and a rule filename template whose field
