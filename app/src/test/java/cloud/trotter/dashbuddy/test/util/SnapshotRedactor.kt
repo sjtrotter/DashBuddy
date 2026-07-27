@@ -33,6 +33,13 @@ object SnapshotRedactor {
     private val PII_ID_SUFFIXES = setOf(
         "user_name", "customer_name", "address_line_1", "address_line_2",
         "address_subpremise_line", "primaryManeuverText",
+        // #886: the rest of the embedded Google-Nav maneuver cluster, which the runtime redact
+        // on `dropoff_navigation` / `navigation_generic` declares customer PII. Kept in sync with
+        // that block deliberately — a number-LESS destination street ("Canyon Golf Road ") carries
+        // no digits, so STREET / FULL_ADDRESS / CITY_STATE_ZIP / BARE_STREET all structurally miss
+        // it and a future committed nav fixture would ship the customer's street raw on the
+        // commit path. Ids, not shapes, are the only handle here.
+        "subManeuverText", "secondaryManeuverText", "roadNameView",
         "message_self_message", "message_other_message", "message_input",
         "chat_input_text_field", "bottom_sheet_address_line_1", "bottom_sheet_address_line_2",
         "tvTitle", "tvLastMessage",
@@ -86,11 +93,12 @@ object SnapshotRedactor {
      * documented split-node residual).
      *
      * **SSOT (#362 class):** [FIRST_LAST_INITIAL_PATTERN] is byte-identical to the rule-side
-     * `hasTextMatchesRegex` in `doordash.screen.dropoff_multi_order_confirm` (+ the FIX-3
-     * defense-in-depth copies on `dropoff_navigation`/`dropoff_handoff`), and BOTH compile
-     * `IGNORE_CASE` — so the committed corpus is scrubbed the SAME way the runtime redacts the live
-     * envelope. `CaptureRedactionCorpusTest` asserts the two pattern strings are equal so they
-     * can't drift.
+     * `hasTextMatchesRegex` on EVERY rule that carries this shape — today eight sites across the
+     * doordash dropoff surfaces and the uber trip surfaces — and both sides compile `IGNORE_CASE`,
+     * so the committed corpus is scrubbed the SAME way the runtime redacts the live envelope. The
+     * **authoritative enumeration is the parity tests**, not this KDoc: `CaptureRedactionCorpusTest`
+     * asserts every such rule's redact regex is byte-equal to this constant, so a new site is
+     * covered the moment it is added and this comment cannot rot into a wrong site list.
      *
      * Whole-value anchored (`^…$`, whitespace-tolerant via `\s{0,8}` so a trailing space still
      * matches — the runtime `containsMatchIn` on raw text and this `matches` then agree on
