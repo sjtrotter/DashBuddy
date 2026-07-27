@@ -428,6 +428,35 @@ class CaptureRedactionCorpusTest {
     }
 
     /**
+     * #886 commit-path parity — the runtime redact above masks the whole nav maneuver cluster, so
+     * `SnapshotRedactor` (which scrubs a fixture on its way INTO the committed corpus) must know the
+     * same ids. It already knew `primaryManeuverText`; the siblings were the gap, and no text shape
+     * covers them: a destination street with no house number ("Canyon Golf Road ") carries no digits,
+     * so STREET / FULL_ADDRESS / CITY_STATE_ZIP / BARE_STREET all structurally miss it and a future
+     * committed nav fixture would ship the customer's street raw.
+     *
+     * Teeth: drop any of the four ids from `PII_ID_SUFFIXES` and this goes RED.
+     */
+    @Test
+    fun `the commit-path scrubber masks the whole nav maneuver cluster by id (#886)`() {
+        // A number-less street name — the shape passes cannot see it; only the id can.
+        val street = "Sample Golf Road "
+        for (id in listOf("primaryManeuverText", "subManeuverText", "secondaryManeuverText", "roadNameView")) {
+            val scrubbed = SnapshotRedactor.redact(
+                """{"id":"com.doordash.driverapp:id/$id","text":"$street"}""",
+            )
+            assertFalse("$id: a digit-less destination street must not survive -> $scrubbed", scrubbed.contains("Sample Golf Road"))
+            assertTrue("$id: masked", scrubbed.contains(SnapshotRedactor.MASK))
+        }
+        // Control: the SAME text under a non-PII id survives, proving the id set (not a shape) did it.
+        assertTrue(
+            "a digit-less street under a non-PII id is invisible to every shape pass",
+            SnapshotRedactor.redact("""{"id":"com.doordash.driverapp:id/stepDistance","text":"$street"}""")
+                .contains("Sample Golf Road"),
+        )
+    }
+
+    /**
      * #886 (venue variant) — when the drop-off destination is a business/venue, its NAME
      * renders in the card's address line-1 slot. That block is id-less and label-less, so
      * line 1 was only ever named by the numeric street shape (`^\d{1,5}\s+\S`): the city/
