@@ -1,5 +1,6 @@
 package cloud.trotter.dashbuddy.core.pipeline.rules
 
+import cloud.trotter.dashbuddy.core.pipeline.PropSeeds
 import io.kotest.property.Arb
 import io.kotest.property.arbitrary.arbitrary
 import io.kotest.property.arbitrary.element
@@ -35,9 +36,20 @@ import org.junit.Test
  *     replacement between every char — bounded by the rule-authored, compile-bounded
  *     replacement length).
  *
- * A failing property prints its seed; pin it with `PropTestConfig(seed = ...)`.
+ * **Determinism (#878).** This is THE property that failed once on CI (PR #869's first
+ * run) and could not be reproduced in 10 000 local samples — unseeded, so the
+ * counterexample was lost. The seed below pins PR CI to one fixed sample set: a failure
+ * here is now a reproducible finding, not a dice roll. Bump the seed **deliberately** to
+ * explore new samples (a reviewable one-line diff) — never to turn a red run green. The
+ * unseeded breadth lives on the `-Ddashbuddy.propExplore=true` path ([PropSeeds]); that
+ * is where the lost #869 counterexample would resurface. It is NOT recovered by seeding.
  */
 class TransformFuzzFailClosedTest {
+
+    private companion object {
+        /** #878 pinned seed — pins PR CI. Bump deliberately to explore new samples. */
+        const val SEED = 0x0590_0001L
+    }
 
     private val input = "Deliver to 123-45-6789 at 4111 1111 1111 1111 by 8:52 PM"
 
@@ -104,7 +116,7 @@ class TransformFuzzFailClosedTest {
 
     @Test
     fun `property - validate is typed-reject-or-ok and a validated spec never raw-throws at apply`() = runTest {
-        checkAll(400, specArb) { spec ->
+        checkAll(PropSeeds.samples(400), PropSeeds.config(SEED), specArb) { spec ->
             val validated = try {
                 TransformRegistry.validateTransformSpec(spec)
                 true

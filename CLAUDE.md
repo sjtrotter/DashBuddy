@@ -71,6 +71,12 @@ epics.)
 # Run a single recognition test (e.g. just the golden-corpus positive guard)
 ./gradlew :app:testDebugUnitTest --tests "*GoldenSnapshotRegressionTest"
 
+# Re-run the #590 security property/fuzz suite UNSEEDED at 10x samples (#878).
+# Every property pins a seed by default so PR CI is deterministic; this flag is the
+# exploration path — run it off the PR path (nightly/manual), and when it finds
+# something, paste the reported seed into that property's pinned SEED const.
+./gradlew :core:pipeline:testDebugUnitTest :app:testDebugUnitTest -Ddashbuddy.propExplore=true
+
 # Run instrumented tests (requires connected device/emulator)
 ./gradlew :app:connectedAndroidTest
 
@@ -867,7 +873,12 @@ touching untrusted input or the Pledges, `/security-review`. The adversary works
 3. **Security** — `/security-review` the branch; for diffs touching the untrusted-input boundaries
    (rule compile/ingest, accessibility-tree mapping, regex, PII/sensitive handling, capture/effects)
    confirm the fail-closed + bounded-ingestion + no-plaintext-leak properties still hold, backed by
-   the security property/fuzz suite (#590).
+   the security property/fuzz suite (#590). **That suite is seeded (#878)** — every kotest property
+   pins an explicit `PropSeeds.config(SEED)`, so PR CI draws the same samples on every run and a red
+   property is a reproducible finding, never a re-run-and-move-on flake (an unseeded
+   `TransformFuzzFailClosedTest` failed once on an unrelated PR and its counterexample was lost).
+   Bump a site's `SEED` **deliberately** to explore new samples, NEVER to turn a red run green; the
+   unseeded breadth lives behind `-Ddashbuddy.propExplore=true` (10× samples, off the PR path).
 
 **Same-tier rule:** the adversarial reviewer runs at the **session model tier** (Mythos/Fable
 class) — never downgraded to a lower tier. An adversary weaker than the author is theater; this is

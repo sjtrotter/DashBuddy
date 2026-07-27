@@ -1,5 +1,6 @@
 package cloud.trotter.dashbuddy.core.pipeline.rules
 
+import cloud.trotter.dashbuddy.core.pipeline.PropSeeds
 import io.kotest.property.Arb
 import io.kotest.property.arbitrary.element
 import io.kotest.property.arbitrary.int
@@ -31,10 +32,19 @@ import org.junit.Test
  * [RuleCompiler.parseBoundedJson]/[RuleCompiler.MAX_JSON_DEPTH] (raw-JSON depth
  * pre-scan before the recursive parser).
  *
- * A failing property prints its seed; pin it with `PropTestConfig(seed = ...)`
- * to reproduce.
+ * **Determinism (#878).** The seeds below pin PR CI, so a failure is a reproducible
+ * finding rather than a dice roll; bump one **deliberately** to explore new samples.
+ * Unseeded breadth lives on the `-Ddashbuddy.propExplore=true` path ([PropSeeds]).
  */
 class RuleCompileRecursionPropertyTest {
+
+    private companion object {
+        /** #878 pinned seed (parse-expression depth). Bump deliberately to explore. */
+        const val SEED_PARSE_DEPTH = 0x0590_0003L
+
+        /** #878 pinned seed (raw-JSON depth). Bump deliberately to explore. */
+        const val SEED_JSON_DEPTH = 0x0590_0004L
+    }
 
     /** parse.fields.x = <verb> -> <verb> -> ... -> "lit", [depth] levels deep. */
     private fun nestedParseRule(depth: Int, verb: String): JsonArray {
@@ -106,14 +116,14 @@ class RuleCompileRecursionPropertyTest {
         val verbs = Arb.element("coalesce", "join", "each")
         // Straddle MAX_PARSE_DEPTH (64) and go far past it into stack-overflow
         // territory pre-fix.
-        checkAll(200, Arb.int(1, 5_000), verbs) { depth, verb ->
+        checkAll(PropSeeds.samples(200), PropSeeds.config(SEED_PARSE_DEPTH), Arb.int(1, 5_000), verbs) { depth, verb ->
             assertTrue(compileIsFailClosed(nestedParseRule(depth, verb)))
         }
     }
 
     @Test
     fun `property - arbitrary raw-JSON depth is always fail-closed`() = runTest {
-        checkAll(200, Arb.int(1, 5_000)) { depth ->
+        checkAll(PropSeeds.samples(200), PropSeeds.config(SEED_JSON_DEPTH), Arb.int(1, 5_000)) { depth ->
             val json = "[".repeat(depth) + "]".repeat(depth)
             assertTrue(parseIsFailClosed(json))
         }

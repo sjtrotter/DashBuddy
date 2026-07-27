@@ -40,5 +40,15 @@ subprojects {
         // "Sharing is only supported for boot loader classes" notice — turn CDS off
         // for test workers rather than ship a permanent noise line.
         jvmArgs("-Xshare:off")
+
+        // #878 — the #590 property/fuzz suite pins a seed per property so PR CI is
+        // deterministic (a failure is a reproducible finding, not a dice roll).
+        // `-Ddashbuddy.propExplore=true` flips every property back to unseeded
+        // generation at 10x the sample count — the exploration path that keeps breadth
+        // OFF the PR path. Gradle passes -D to the daemon, not to the forked test
+        // worker, so forward it explicitly. Opt-in only: absent the flag, nothing
+        // changes. See `PropSeeds` in :core:pipeline's test source set.
+        providers.systemProperty("dashbuddy.propExplore").orNull
+            ?.let { systemProperty("dashbuddy.propExplore", it) }
     }
 }

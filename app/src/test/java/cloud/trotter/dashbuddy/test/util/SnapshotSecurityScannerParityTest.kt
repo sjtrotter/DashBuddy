@@ -42,8 +42,17 @@ import org.junit.Test
  * `SensitiveTextMarkers.findMarker` (not by duplicating its list), keeping the
  * scanner-specific EXTRA pin/gate corpus-gate shapes on top. Delegation is what makes
  * a future marker addition impossible to diverge.
+ *
+ * **Determinism (#878).** The seed below pins PR CI, so a failure is a reproducible
+ * finding rather than a dice roll; bump it **deliberately** to explore new samples.
+ * Unseeded breadth lives on the `-Ddashbuddy.propExplore=true` path ([PropSeeds]).
  */
 class SnapshotSecurityScannerParityTest {
+
+    private companion object {
+        /** #878 pinned seed — pins PR CI. Bump deliberately to explore new samples. */
+        const val SEED = 0x0590_000AL
+    }
 
     // Representative spread of production markers + the two shapes findMarker owns.
     private val toxicTokens: List<String> = listOf(
@@ -108,7 +117,7 @@ class SnapshotSecurityScannerParityTest {
 
     @Test
     fun `property - scanner catches everything the production backstop catches`() = runTest {
-        checkAll(600, treeArb) { tree ->
+        checkAll(PropSeeds.samples(600), PropSeeds.config(SEED), treeArb) { tree ->
             val markerHit = SensitiveTextMarkers.findMarker(tree)
             if (markerHit != null) {
                 assertTrue(

@@ -1,6 +1,7 @@
 package cloud.trotter.dashbuddy.core.pipeline.accessibility.mapper
 
 import android.view.accessibility.AccessibilityNodeInfo
+import cloud.trotter.dashbuddy.core.pipeline.PropSeeds
 import cloud.trotter.dashbuddy.domain.model.accessibility.UiNode
 import io.kotest.property.Arb
 import io.kotest.property.RandomSource
@@ -44,10 +45,23 @@ import java.util.concurrent.atomic.AtomicInteger
  *
  * Pinned to SDK 36: the mapper reads the tri-state `getChecked():int` (API 36) and
  * `getStateDescription()` (API 30), so the Robolectric shadow must supply both.
+ *
+ * **Determinism (#878).** The seed below pins PR CI, so a failure is a reproducible
+ * finding rather than a dice roll; bump it **deliberately** to explore new samples.
+ * Unseeded breadth lives on the `-Ddashbuddy.propExplore=true` path ([PropSeeds]).
+ * The generated case is a graph of Mockito mocks, whose `toString` is opaque
+ * (`Mock for AccessibilityNodeInfo, hashCode: …`), so [TreeCase] carries a structural
+ * label (materialized node count / deepest level / oversized-text count) — that label
+ * plus the reported seed is what makes a CI failure actionable.
  */
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [36])
 class AccessibilityNodeMapperPropertyTest {
+
+    private companion object {
+        /** #878 pinned seed — pins PR CI. Bump deliberately to explore new samples. */
+        const val SEED = 0x0590_0006L
+    }
 
     // ---- Mock AccessibilityNodeInfo factory (counts getChild IPC) ---------------
 
@@ -175,32 +189,69 @@ class AccessibilityNodeMapperPropertyTest {
         else -> "node-${rs.random.nextInt(1000)}"
     }
 
+    /**
+     * Structural label for a generated case, accumulated at BUILD time (#878).
+     *
+     * A Mockito mock renders as `Mock for AccessibilityNodeInfo, hashCode: 1234`, so a
+     * failing sample would otherwise print nothing a human can act on — and re-walking
+     * the tree to describe it would issue `getChild` IPC and corrupt the very counter
+     * the property asserts on. So the shape is recorded as it is generated.
+     */
+    private class Shape {
+        var nodes = 0
+        var deepestLevel = 0
+        var oversizedTexts = 0
+        override fun toString(): String =
+            "nodes=$nodes, deepestLevel=$deepestLevel, oversizedTexts=$oversizedTexts"
+    }
+
     /** Eager bounded mock tree: depth ≤ [maxDepth], total nodes ≤ [budget]. */
-    private fun buildTree(rs: RandomSource, maxDepth: Int, budget: IntArray, ipc: AtomicInteger): AccessibilityNodeInfo {
+    private fun buildTree(
+        rs: RandomSource,
+        maxDepth: Int,
+        budget: IntArray,
+        ipc: AtomicInteger,
+        shape: Shape,
+        level: Int = 0,
+    ): AccessibilityNodeInfo {
         budget[0]--
+        shape.nodes++
+        if (level > shape.deepestLevel) shape.deepestLevel = level
         val childCount = if (maxDepth <= 0 || budget[0] <= 0) 0 else rs.random.nextInt(4)
         val children = (0 until childCount).mapNotNull {
-            if (budget[0] <= 0) null else buildTree(rs, maxDepth - 1, budget, ipc)
+            if (budget[0] <= 0) null else buildTree(rs, maxDepth - 1, budget, ipc, shape, level + 1)
         }
-        return node(ipc, children = children, text = textArb(rs), desc = textArb(rs))
+        val text = textArb(rs)
+        val desc = textArb(rs)
+        if ((text?.length ?: 0) > TreeBudget.MAX_TEXT_LENGTH) shape.oversizedTexts++
+        if ((desc?.length ?: 0) > TreeBudget.MAX_TEXT_LENGTH) shape.oversizedTexts++
+        return node(ipc, children = children, text = text, desc = desc)
     }
 
     /** One generated case: the mock root + the IPC counter it increments. */
-    private class TreeCase(val root: AccessibilityNodeInfo, val ipc: AtomicInteger)
+    private class TreeCase(
+        val root: AccessibilityNodeInfo,
+        val ipc: AtomicInteger,
+        private val shape: Shape,
+    ) {
+        /** #878 — what a CI failure prints instead of a mock's opaque identity hash. */
+        override fun toString(): String = "TreeCase($shape)"
+    }
 
     private val treeArb: Arb<TreeCase> = arbitrary { rs ->
         // depth up to 75 (exceeds MAX_TREE_DEPTH=60), materialization budget 120 —
         // kept lean so the Mockito-inline mock graph doesn't pressure the shared worker.
         val ipc = AtomicInteger(0)
-        val root = buildTree(rs, maxDepth = 75, budget = intArrayOf(120), ipc = ipc)
-        TreeCase(root, ipc)
+        val shape = Shape()
+        val root = buildTree(rs, maxDepth = 75, budget = intArrayOf(120), ipc = ipc, shape = shape)
+        TreeCase(root, ipc, shape)
     }
 
     // ---- Property: any generated tree stays within every cap, never throws ------
 
     @Test
     fun `property - generated trees stay within depth-node-text caps, bound IPC, never throw`() = runTest {
-        checkAll(200, treeArb) { case ->
+        checkAll(PropSeeds.samples(200), PropSeeds.config(SEED), treeArb) { case ->
             val mapped = case.root.toUiNode()   // must not throw
             assertWithinCaps(mapped)
             assertTrue(
