@@ -99,7 +99,10 @@ was found **broken-in-part** (raw PII in capture envelopes) and moved to that en
     explicit user acts ~16 s later; the 19:30:17 decline chain fired only after those grants. The UI
     half — sheet layout, "Not now" re-prompt, "Don't allow" durability, item 3's exactly-one-grant
     check — still needs dev eyes. Likely 4th capability left ungranted is accept (no automation
-    accept line post-install; hashes-only logs can't prove identity).)
+    accept line post-install; hashes-only logs can't prove identity). Desk 07-27 corroboration:
+    across a full day the three granted automations fired constantly (confirm_decline ×14,
+    decline ×6, expand ×8) while accept NEVER fired automatically over 10 manual accepts —
+    second independent support for the ungranted-accept read.)
 
 - **🆕 NEW — #859 (H4 + placeholder filenames) — one offer screenshot per presentation, and no
   `{storeName}` filenames.** The Uber offer screenshot now dedupes on the presentation (#830's
@@ -143,9 +146,12 @@ was found **broken-in-part** (raw PII in capture envelopes) and moved to that en
   not 64) — the CARD still shows the platform's raw units count (deliberate).
   **Desk:** `ShopRate`-tag INFO lines gain items-per-unit learn entries (`n=N`) after units-offer
   completions; single-shop-pickup only (stacks deliberately skip).
-  - Confirmed: 0/2 (desk 07-26: INCONCLUSIVE — zero units-denominated offers occurred in the whole
-    07-22→24 window (grep of every offer_popup capture: no "(N units)"). The sibling #588 items/min
-    learner is healthy and advancing (n=25→26, mean stable 0.77/min).)
+  - Confirmed: 1/2 (desk 07-27, the 07-26 shopping day: the trigger finally occurred ABUNDANTLY —
+    7 units offers (25/34/15/33/34/27 units, `isUnits=True`), the learner recorded FIVE items:units
+    samples → learned 0.83 (n=5) from n=0, and estimate sanity held on all completed shops (est vs
+    actual within ~20%, no 2×-class inflation; e.g. 33 units → est 63.5 min vs 58 actual). #588
+    sibling learner also advanced n=26→33, mean 0.77→0.79. Second confirmation: another units-offer
+    day, watching the now-seeded ratio's estimates.)
 - **🆕 NEW — #830 / PR #839 — presentation-scoped offer identity (+ the #826 accept chain).** The
   ticking Uber card no longer mints replacement offers: a re-render with the same store/order shape
   ENRICHES the pending offer in place (keeps its presentation epoch and click latches; heads-up
@@ -200,24 +206,6 @@ was found **broken-in-part** (raw PII in capture envelopes) and moved to that en
     (task_feedback, receipt photo, barcode confirm/failed, zone loading, rate detail, orders list,
     ratings, qr_confirm). Three residual gaps confirmed still UNKNOWN — acceptance-rate detail,
     scrolled last-100 list, customer-rating detail — filed as #865.)
-- **🆕 NEW — #827 (Part 1) + #813 — Uber offer time/miles parse + storeName + dropoff redact.** The
-  Uber offer's fused `NN min (NN.N mi) total` node now parses distance from the parenthetical miles
-  (was reading the *minutes* value as miles, ≈2.7× on every offer), minutes from the `min` token
-  (robust to the `+ NN min` add-on lead-in), a top-level `storeName` (so the `Offer - <store>`
-  screenshot filename interpolates instead of literal `{storeName}`), and redacts the dropoff
-  intersection line (`<St> & <St>, <City>`) in the capture envelope.
-  **What to watch / desk-side:** after an Uber offer, the offer screenshot should be named
-  `Offer - <real store>.png` (not `Offer - {storeName}.png`); the offer's estimated $/hr and $/mi
-  should be sane (a 17.5 mi offer no longer reads as 40 mi). **Desk:** in the pull's `offer_records`,
-  Uber `distanceMiles` should match the `(NN.N mi)` on the card, not the minutes; grep the recognized
-  Uber offer capture tree for `& .*, San Antonio` / `, [A-Z][a-z]+$` intersection lines → every hit
-  must be `[redacted:<4hex>]`, while store names (which contain no `, `) stay raw.
-  - Confirmed: 1/2 (desk 07-26, post-install window: PASS — mi/min swap fixed against two card
-    receipts (`22 min (5.6 mi)` → distanceMiles 5.6; `17 min (7.5 mi)` → 7.5); recognized offer
-    captures show 0/102 raw intersection lines (all `[redacted:*]`, store names raw); screenshots
-    interpolate the real store post-install. Residuals: the `{storeName}` placeholder fallback when
-    the parse yields nothing (331 files on device, all pre-install) → #859; the expiry-overlay
-    storeName poisoning → #858.)
 - **🆕 NEW — #862 — the scrub diagnostics stop scrubbing themselves (desk-only).** The capture
   layer's own "the privacy layer fired" WARNs used to name the tripped marker verbatim, so the
   shareable-log sink redacted the whole line out of the exported bug report; they now name it by a
@@ -238,7 +226,9 @@ was found **broken-in-part** (raw PII in capture envelopes) and moved to that en
   - Confirmed: 1/2 (2026-07-21 dash, desk 07-22: FALSE-POSITIVE half — zero rows on a normal 6-delivery
     DoorDash day, correct silence. The true-positive half still needs an invisible-unassign dash.
     Desk 07-26: false-positive half re-confirmed — zero rows across three more normal DoorDash
-    dashes, 7 deliveries. The item stays open solely for the true-positive half.)
+    dashes, 7 deliveries. Desk 07-27: THIRD clean pass — zero rows on 11 deliveries / 12 pickups
+    incl. a two-store one-customer job and a receipt stack. The item stays open solely for the
+    true-positive half.)
 - **🆕 NEW — #809 / PR #820 + #803 / PR #821 — pickup/dropoff PII redacts (desk-resolvable).** New
   redacts: `pickup_select_issue` (+ its issue-list variant, now recognized) masks the fused
   `For <name> • <store>` header to `For [redacted:<4hex>]`; `dropoff_pin_entry`/`dropoff_handoff` mask
@@ -411,7 +401,12 @@ was found **broken-in-part** (raw PII in capture envelopes) and moved to that en
   appended to the finished one); in the Money-tab drill-down the two orders appear under **their own dashes/
   rows** and there's **no unattributed-pay spike** for that stretch. Watch especially the hand-off between a
   same-customer double and the very next accept.
-  - Confirmed: 0/2
+  - Confirmed: 1/2 (desk 07-27: the exact shape fielded on 07-26 — Dunkin' + Taco Palenque, two
+    orders one customer, TWO pickups ONE drop. Job closed at its $9.80 receipt, the next offer
+    minted its OWN job (13:55:52), session reconciled $80.55 == $80.55 with zero unattributed —
+    the job-61 class did not recur. Caveat: it closed via the STRICT completeness arm (no
+    "#749 coverage arm closed" line), so #749's own per-customer arm is outcome-validated but not
+    path-exercised; the second confirmation should ideally catch the coverage-arm path.)
 
 - **🆕 NEW — categorize a "(No session)" orphan delivery into its real dash (#660 piece 2).**
   The Money-tab "(No session): $X across N deliveries" callout is now **tappable** — it opens an
@@ -431,22 +426,6 @@ was found **broken-in-part** (raw PII in capture envelopes) and moved to that en
   this (the row's net/pay/est-offer-pay disclosure are the same before and after). PR for #660 piece 2.
   - Confirmed: 0/2
 
-- **🆕 NEW — stacked receipts still split exactly; ±1¢ drift and collapsed-receipt nulls gone (#630).**
-  The per-drop receipt split is hardened for mid-stack/multi-receipt shapes: a collapsed PostTask
-  re-render can no longer wipe an already-captured itemized receipt (the field-reachable break), the
-  split denominator now equals exactly the rows that mint, and the rounding cent is order-invariant.
-  **How to tell it's working (desk-side, after a dash with ≥1 stacked job):** in the per-dash
-  drill-down, each stacked job's delivery rows sum EXACTLY to its receipt total (no missing-pay row
-  where a receipt existed, no ±1¢ mismatch); the Money tab's unattributed callout doesn't grow from
-  stacked jobs. A `#630 mid-stack non-final receipt exit` WARN in the exported log (now also tripped
-  by a pay-bearing *collapsed* receipt, not only an itemized one) would be a genuine field sighting of
-  the mid-stack receipt shape — grab the capture session if you see it. NOTE (PR #754 review): the
-  final-shape gate no longer wedges shut on a never-activated placeholder (#749) or an unassigned
-  sibling (#736), so a normal single-delivered-drop stacked job must attach its full receipt (not fold
-  a $0/NONE row) — watch that a receipted delivery never shows $0 when a placeholder/unassigned
-  sibling exists.
-  - Confirmed: 1/2 (2026-07-17: Pei Wei 2-order stack split 6.72+6.73=13.45 exactly; no tripwire WARN)
-
 - **🆕 NEW — unassign an order AFTER pickup (dropoff phase) also produces NO paid artifact (#752 / PR #757).**
   Companion to #736: when the unassign happens while a **dropoff** is active (or was just grace-retired
   en route to the customer — e.g. a help/idle screen interrupted the drive, the retire grace fired,
@@ -464,23 +443,6 @@ was found **broken-in-part** (raw PII in capture envelopes) and moved to that en
   normal `PICKUP_CONFIRMED`.
   - Confirmed: 0/2
 
-- **🆕 NEW — multi-pickup job lands under a REAL store, no WARN storm (#733 / PR #745).**
-  A multi-pickup job (a stacked stack, or a single customer whose order spans two stores like the
-  07-08 Willie's + Sonic delivery) previously folded its delivery as "Unknown store" and spammed the
-  log with `D6 join miss` WARNs (129–240/dash). The dropoff-store lineage now (a) canonicalizes the
-  customer-name hash (`normalizeCustomerName` before `sha256`) so multi-drop joins stay stable
-  across the surface FORMS a name renders in, (b) resolves a single-customer multi-store job via the
-  constrained multi-match join (earliest-confirmed store, only when unambiguous — two drops sharing
-  a hash fall back rather than guess), and (c) fires the join-miss WARN at most **once per task**.
-  **How to tell it's working (desk-side, after a dash):** on a multi-pickup delivery, the
-  `delivery_records` row (and the per-store view) shows a real store, not "Unknown store"; and the
-  exported `shareable.log` has **at most one** `D6 join miss` line per drop (ideally zero), not the
-  old ×23 burst. Watch a two-store single-customer job especially. A nickname-vs-legal-name render
-  that no normalization can bridge may still fold null (documented residual — fix via Adjust dialog).
-  - Confirmed: 1/2 (2026-07-13 desk pass: ZERO D6 join-miss WARNs on 07-12 — all 23 in the log are
-    dated 07-08, pre-fix — and every drop landed under a real store. Caveat: no multi-pickup job was
-    fielded, so the constrained multi-match join's hard case still needs a live stack for the
-    second confirmation.)
 - **🆕 NEW — GoPuff / multi-order drop-off confirm card recognized (#501 items 1-2 / PR #743).**
   The "Confirm you have the correct order before drop-off / Mix-ups frequently occur…" card that
   appears before a drop on a **multi-order Dash** (GoPuff Drive batches AND ordinary multi-merchant
@@ -2005,6 +1967,75 @@ Accept and Decline registered on DoorDash — and moved to that session's entry 
   - Confirmed: 0/2.
 
 ---
+
+## 2026-07-26 — five-session day, heavy shopping (pull 2026-07-27, desk-analyzed 2026-07-27)
+
+**Platform(s) tested:** DoorDash (4 sessions, $151.25 total) + one 3-minute Uber window.
+**Branch under test:** `ddd9e7ff` (installed 07-24 17:58) — the 07-26 build wave (#868–#879) is NOT
+on this device; wave items scored as BASELINE only. Device purged + cleared for reinstall post-pull.
+**Field conditions:** San Antonio; units-heavy shop day (7 units-denominated offers); the Uber
+window was crippled by Uber's own overlay permission being OFF ("Unable to go online / Turn on
+overlay permissions" — 3 offers in 3 min, weight conclusions accordingly).
+**Headline: cleanest pull on record.** 0 ERROR, 19 WARN (15 = normal grace timers, 4 = the privacy
+layer working) across 11.2 MB; money EXACT on all four sessions (80.55 / 48.40 / 22.30 + a $0);
+zero orphans, zero mismatch tripwires, zero D6, zero #863 recurrences (14/14 confirm_declines
+clean), zero pipeline restarts; projector fully drained at v8.
+
+### Validated / advanced this entry
+- **#827-P1 + #813 — VALIDATED 2/2, retired.** Second pass: both Uber card receipts exact
+  (`14 min (3.1 mi)` → 3.1; `39 min (14.0 mi)` → 14.0); 0/2 raw intersection lines (both
+  `[redacted:*]`); zero `{` filenames in 46 screenshot saves.
+- **#733 — VALIDATED 2/2, retired (real positive).** The two-store single-customer job finally
+  fielded (Dunkin' + Taco Palenque, 2 pickups → 1 drop): landed under a REAL store
+  (`doordash|dunkin'|357430`) via the earliest-confirmed lineage arm, zero D6 WARNs pull-wide.
+- **#630 — VALIDATED 2/2, retired.** Pizza Hut + CVS stack: 6.55 + 6.55 = 13.10 exactly, both
+  DROP_SHARE, no $0/NONE row, zero mid-stack tripwires.
+- **#823-P1 → 1/2** (first real trigger: 7 units offers, learner 0→n=5 @ 0.83, estimates sane).
+  **#749 → 1/2** (the job-61 shape did not recur; closed via the strict arm — coverage-arm path
+  itself still unexercised). **#810-B1** third clean false-positive. **#843** ungranted-accept
+  corroboration (3 automations fired all day; accept never auto-fired over 10 manual accepts).
+  **#588** learner n=26→33 @ 0.79. **#688B** invariant hairline-tight on all sessions (43.47 ≤
+  43.48). **#691** OFFER_PAY fallback minted real dollars on 2 receipt-less shop drops.
+
+### Bugs / new findings (issues filed 2026-07-27)
+1. **Raw customer name on a RECOGNIZED surface** — `dropoff_multi_order_confirm` redact
+   enumeration gap (+ the double-space `Firstname␣␣I.` shape evades the single-space desk recipe)
+   → **#885** (HIGH, Pledge). Only raw name in the pull.
+2. **Raw customer address in nav maneuver text** — `dropoff_navigation` masks the sheet but not
+   the embedded `primaryManeuverText` full-address restatement → **#886** (HIGH, Pledge).
+3. **Dasher-banking click leaks** — `Transfer $<amt>` ×2 + `Transfer in` evade the "Transfer out"
+   marker (window side held; click envelope is the channel) → on **#884**; fielded files purged
+   per the standing procedure.
+4. **`stores` orphan rows** — address-tier key left behind when the receipt-tier key supersedes
+   (2 phantom zero-visit stores from one stack) → **#887**.
+5. **Recognition batch** — accept-spinner (every accept drops its follow-frame), the
+   economics-bearing mid-shop pay-adjustment sheet, geofence help flow, handed-directly confirm,
+   pizza-bag, substitution sheet, picked-up confirm, wait-survey variant → **#888**.
+6. **Single-glyph hash-mask brute-forceable** (`[redacted:5fec]` on a 1-char node) → **#889**.
+7. **Uber Match anatomy nailed (feeds #251/#881/#882):** both captured cards CTA=`Match`
+   (byte-identical bounds; no Accept counterexample in-window); `Matching may take longer` is
+   per-card match chrome; the `Delivery (2)` stack's `orders[]` holds ONE order (chip-anchored
+   `presentationKey` — #882's defect currently SHIELDS #830 from store-cycling churn; fix must
+   pair display + identity). A live X-tap decline during offer B recorded as TIMEOUT with its
+   click envelope on disk — the cleanest #786 before-picture fixture yet.
+8. **#867 before-picture:** "Done Ubering!" filed into the DoorDash session's chat during the
+   dual-online overlap — exactly the `EndSession` shape #873's review caught; offer lines all
+   filed correctly. **#857 baseline:** 1 forged offline in 176 s Uber-online (healed by grace,
+   375 ms); even the deliberate stop rode the offline frame, not the go_offline click.
+9. **Awaiting dev ruling (unclassified, reported):** the recognized `earnings_deposit`
+   notification stores the dasher's own deposit amounts; `shopping_item` stores `Customer Notes:`
+   free text raw (no PII in these instances; historically the gate-code carrier class).
+
+### Meta
+- One `DELIVERY_COMPLETED` without `DELIVERY_ARRIVED` (the #700 suppressed-arrival residual class)
+  → that drop's per-leg trail blank, legacy-delta fallback correct per spec.
+- Pull sanitized in place same-day (standing decision): 07-25 dir (98 files, 155 occurrences,
+  stable fakes, zero residuals; 1 banking file purged) + 07-27 dir (run in progress at entry
+  time). shareable.log: 0 PII across all recipes; hash stability held cross-surface.
+- Dev decisions recorded on-issue this session: #251 (offerKind match|direct → #881; batch-eval
+  helper; best-match announcement, ordinal-disambiguated, NO new permissions), #867 (follow-active
+  + manual switcher; debug presentation toggle incl. merged-stack test mode; platform labels in
+  every mode), evidence PNGs stay as-is (pixel-redact answer shaped as #883).
 
 ## 2026-07-22→24 — DoorDash + Uber multi-app week (pull 2026-07-25, desk-analyzed 2026-07-26)
 
