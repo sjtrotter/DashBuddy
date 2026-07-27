@@ -1,0 +1,145 @@
+{
+    "captureId": "58932615-2568-4a8d-82c1-cc65a68c32c2",
+    "pipelineId": "accessibility.window",
+    "schemaId": "uinode.v1",
+    "timestamp": 1785118249895,
+    "platform": "doordash",
+    "ruleId": null,
+    "classificationName": "UNKNOWN",
+    "metadata": {
+        "engineVersion": 1,
+        "rulesetFormatVersion": 2,
+        "pipelineVersions": {
+            "accessibility": 1,
+            "accessibility.window": 1,
+            "accessibility.click": 1,
+            "accessibility.long_click": 1,
+            "accessibility.scroll": 1,
+            "accessibility.focus": 1,
+            "notification": 1
+        },
+        "stateMachineApiVersion": "1.0",
+        "appVersion": "0.230.0",
+        "deviceFingerprint": "google/panther/panther:17/CP2A.260705.006/15641320:user/release-keys"
+    },
+    "payload": {
+        "class": "android.widget.FrameLayout",
+        "isEnabled": true,
+        "bounds": {
+            "left": -202,
+            "top": 0,
+            "right": 877,
+            "bottom": 2400
+        },
+        "children": [
+            {
+                "class": "android.widget.LinearLayout",
+                "isEnabled": true,
+                "bounds": {
+                    "left": -202,
+                    "top": 0,
+                    "right": 877,
+                    "bottom": 2347
+                },
+                "children": [
+                    {
+                        "id": "android:id/content",
+                        "class": "android.widget.FrameLayout",
+                        "isEnabled": true,
+                        "bounds": {
+                            "left": -202,
+                            "top": 136,
+                            "right": 877,
+                            "bottom": 2347
+                        },
+                        "children": [
+                            {
+                                "class": "android.view.ViewGroup",
+                                "isEnabled": true,
+                                "bounds": {
+                                    "left": -202,
+                                    "top": 136,
+                                    "right": 877,
+                                    "bottom": 2347
+                                },
+                                "children": [
+                                    {
+                                        "id": "com.doordash.driverapp:id/loading_screen",
+                                        "class": "android.view.ViewGroup",
+                                        "isEnabled": true,
+                                        "bounds": {
+                                            "left": -202,
+                                            "top": 136,
+                                            "right": 877,
+                                            "bottom": 2347
+                                        },
+                                        "children": [
+                                            {
+                                                "text": "Uploading & evaluating your photo",
+                                                "id": "com.doordash.driverapp:id/pizza_bag_uploading_title",
+                                                "class": "android.widget.TextView",
+                                                "isEnabled": true,
+                                                "bounds": {
+                                                    "left": -166,
+                                                    "top": 189,
+                                                    "right": 841,
+                                                    "bottom": 255
+                                                }
+                                            },
+                                            {
+                                                "text": "This will usually only take a few seconds.",
+                                                "id": "com.doordash.driverapp:id/pizza_bag_uploading_description",
+                                                "class": "android.widget.TextView",
+                                                "isEnabled": true,
+                                                "bounds": {
+                                                    "left": -166,
+                                                    "top": 291,
+                                                    "right": 841,
+                                                    "bottom": 338
+                                                }
+                                            },
+                                            {
+                                                "desc": "Loading",
+                                                "id": "com.doordash.driverapp:id/uploading_progress_bar",
+                                                "class": "android.widget.ImageView",
+                                                "isEnabled": true,
+                                                "bounds": {
+                                                    "left": -202,
+                                                    "top": 1197,
+                                                    "right": 877,
+                                                    "bottom": 1286
+                                                }
+                                            }
+                                        ]
+                                    }
+                                ]
+                            }
+                        ]
+                    }
+                ]
+            },
+            {
+                "id": "android:id/statusBarBackground",
+                "class": "android.view.View",
+                "isEnabled": true,
+                "bounds": {
+                    "left": -202,
+                    "top": 0,
+                    "right": 877,
+                    "bottom": 136
+                }
+            },
+            {
+                "id": "android:id/navigationBarBackground",
+                "class": "android.view.View",
+                "isEnabled": true,
+                "bounds": {
+                    "left": -202,
+                    "top": 2347,
+                    "right": 877,
+                    "bottom": 2400
+                }
+            }
+        ]
+    }
+}
