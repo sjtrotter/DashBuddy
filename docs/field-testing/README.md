@@ -87,9 +87,15 @@ was found **broken-in-part** (raw PII in capture envelopes) and moved to that en
   **Nothing to watch while driving** — this is a projection-hygiene fix; no bubble, TTS, money, or
   Patterns-tab number changes. The `PROJECTOR_VERSION` 8→9 bump means the **first app launch after
   installing rebuilds the whole analytics read-model** (a one-time refold; the Money/Patterns tabs
-  should look identical afterwards — if any dollar figure MOVED, that's a finding).
+  should look identical afterwards — if any dollar figure MOVED, that's a finding, **except**
+  `CURRENT_FALLBACK`-basis rows if economy settings changed since the last refold (the precedented
+  re-stamp side effect — see the `PROJECTOR_VERSION` KDoc)).
   **Desk (next pull):** the issue's SQL should return **zero** rows —
   `SELECT storeKey FROM stores WHERE storeKey NOT IN (SELECT storeKey FROM pickup_records WHERE storeKey IS NOT NULL) AND storeKey NOT IN (SELECT storeKey FROM delivery_records WHERE storeKey IS NOT NULL) AND storeKey NOT IN (SELECT storeKey FROM offer_records WHERE storeKey IS NOT NULL);`
+  A non-zero row is expected **ONLY** if a store-name correction was made since the last refold —
+  that's the [#906](https://github.com/sjtrotter/DashBuddy/issues/906) residual (a
+  `DELIVERY_ADJUSTMENT` `newStoreName` edit nulls that row's key and can drop the last reference to
+  a store entity), **not** a #887 regression.
   Also grep the log for `superseded store entity kept:` — a WARN there means the guard fired (a row
   the re-key didn't reach), which is correct behaviour but worth a look at which store it was.
   - Confirmed: 0/2
