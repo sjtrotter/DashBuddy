@@ -119,6 +119,25 @@ interface AnalyticsDao {
     )
     suspend fun stampOfferOutcomeResolved(eventSequenceId: Long, resolved: String?)
 
+    /**
+     * How many read-model rows still point at [storeKey] — the #887 supersession guard's evidence.
+     * Counts ALL three tables that carry a resolved key (`pickup_records`, `delivery_records`,
+     * `offer_records`), which is a strict SUPERSET of the two the M4 report-card filter checks: the
+     * guard must fail toward KEEPING a store entity, so an offer-only reference still counts as a
+     * reference even though it renders no card.
+     */
+    @Query(
+        """SELECT (SELECT COUNT(*) FROM pickup_records WHERE storeKey = :storeKey)
+                + (SELECT COUNT(*) FROM delivery_records WHERE storeKey = :storeKey)
+                + (SELECT COUNT(*) FROM offer_records WHERE storeKey = :storeKey)"""
+    )
+    suspend fun storeKeyReferenceCount(storeKey: String): Int
+
+    /** Delete ONE store identity row (#887) — the superseded-key drop, run in the resolution
+     *  transaction only after [storeKeyReferenceCount] proves nothing references it. */
+    @Query("DELETE FROM stores WHERE storeKey = :storeKey")
+    suspend fun deleteStore(storeKey: String)
+
     /** All store entities (resolution debug / rebuild-equivalence assertions). */
     @Query("SELECT * FROM stores ORDER BY storeKey ASC")
     suspend fun allStores(): List<StoreEntity>

@@ -232,6 +232,7 @@ class StoreResolutionProjectorTest {
         val p = projector()
         while (p.processBatch(limit = 2) != null) { /* drain */ }
         val incrementalVisible = dao.storeReportRows().first().map { it.storeKey }.toSet()
+        val incrementalStores = dao.allStores()
         val incrementalDeliveryKeys = listOf("dT", "dM").associateWith { dao.deliveryRecordByTask(it)?.storeKey }
         val incrementalPickupKeys = dao.pickupRecordsForJob("J1").associate { it.taskId to it.storeKey }
 
@@ -239,13 +240,19 @@ class StoreResolutionProjectorTest {
         wipeAndResetWatermark()
         projector().catchUp()
         val refoldVisible = dao.storeReportRows().first().map { it.storeKey }.toSet()
+        val refoldStores = dao.allStores()
         val refoldDeliveryKeys = listOf("dT", "dM").associateWith { dao.deliveryRecordByTask(it)?.storeKey }
         val refoldPickupKeys = dao.pickupRecordsForJob("J1").associate { it.taskId to it.storeKey }
 
         // The READ-VISIBLE store set (M4 EXISTS-filtered) + ALL delivery + ALL pickup stamps converge.
-        // NOTE: the raw `stores` table can differ — the incremental path leaves an unreferenced chain-only
-        // orphan row (dT's early resolution before dM's receipt landed); that orphan is an ACCEPTED,
-        // read-invisible residual (M4 filters it out of every read), not a divergence that surfaces.
+        // #887: the RAW `stores` table now converges too. It used to differ — the incremental path left an
+        // unreferenced chain-only orphan (dT's early resolution, before dM's receipt landed), documented
+        // here as an accepted read-invisible residual. It is no longer accepted: dM's upgrade sweeps the
+        // key it superseded, so incremental lands on the refold's terminal set exactly.
+        assertEquals(
+            "RAW stores table identical incremental vs refold (#887 supersession sweep)",
+            refoldStores, incrementalStores,
+        )
         assertEquals("read-visible store set identical incremental vs refold", refoldVisible, incrementalVisible)
         assertEquals("delivery storeKeys identical", refoldDeliveryKeys, incrementalDeliveryKeys)
         assertEquals("pickup storeKeys identical", refoldPickupKeys, incrementalPickupKeys)
@@ -420,6 +427,148 @@ class StoreResolutionProjectorTest {
         assertEquals(setOf("@100", "@200", "@300", "@400", null), hebRunningKeys)
         assertEquals("doordash|h-e-b|@100", dao.deliveryRecordByTask("dH0")?.storeKey)
         assertEquals("doordash|h-e-b|", dao.deliveryRecordByTask("dH4")?.storeKey)
+    }
+
+    // ── #887: a monotonic key UPGRADE sweeps the identity row it superseded ──
+
+    private val cvsAddress = "23530 Bandera Rd, San Antonio, TX 78255, USA"
+    private val cvsAddressKey = "doordash|cvs|@23530"
+    private val cvsReceiptKey = "doordash|cvs|3551"
+
+    /**
+     * The fielded shape (07-27 pull, job-217): a receipt-less first drop keys the store off its pickup
+     * ADDRESS, a later drop's receipt upgrades it to the receipt tier — and the superseded address-tier
+     * `stores` row used to survive as a zero-visit phantom. The batch boundary BETWEEN the drops is what
+     * makes the intermediate row exist at all (in one batch the receipt evidence is already committed).
+     */
+    @Test
+    fun `#887 — a receipt upgrade over an address-tier key deletes the superseded stores row`() = runBlocking {
+        insert(AppEventType.DASH_START, "S1", 1000, start("S1", 1000))
+        insert(AppEventType.PICKUP_CONFIRMED, "S1", 1100, pickup("J1", "pC", "CVS", 1100, cvsAddress))
+        insert(AppEventType.DELIVERY_COMPLETED, "S1", 1200, delivery("J1", "dC1", "CVS", 1200, dropRealizedPay = 4.5))
+        insert(
+            AppEventType.DELIVERY_COMPLETED, "S1", 1250,
+            delivery("J1", "dC2", "CVS", 1250, receipt("CVS (3551)" to 3.0), dropRealizedPay = 4.25),
+        )
+        insert(AppEventType.DASH_STOP, "S1", 1300, stop("S1", 1300))
+
+        val p = projector()
+        // Batch 1 = DASH_START + pickup + drop1 → the receipt-less resolution mints the ADDRESS-tier row.
+        assertNotNull(p.processBatch(limit = 3))
+        assertNotNull("the address-tier row exists before the upgrade", dao.store(cvsAddressKey))
+        assertEquals(cvsAddressKey, dao.deliveryRecordByTask("dC1")?.storeKey)
+
+        // Batch 2 = drop2 (the receipt) + DASH_STOP → upgrade to the receipt tier.
+        while (p.processBatch(limit = 3) != null) { /* drain */ }
+
+        assertNull("the superseded address-tier stores row is GONE (#887)", dao.store(cvsAddressKey))
+        assertNotNull("the receipt-tier winner exists", dao.store(cvsReceiptKey))
+        assertEquals("winner keyed off the receipt", "3551", dao.store(cvsReceiptKey)!!.runningKey)
+        // Every visit row followed the upgrade — nothing is left pointing at the deleted entity.
+        assertEquals(cvsReceiptKey, dao.deliveryRecordByTask("dC1")?.storeKey)
+        assertEquals(cvsReceiptKey, dao.deliveryRecordByTask("dC2")?.storeKey)
+        assertEquals(cvsReceiptKey, dao.pickupRecordsForJob("J1").single().storeKey)
+        assertEquals("exactly one CVS identity row survives", 1, dao.allStores().count { it.normalizedChain == "cvs" })
+        // The sweep is store-identity only: the money columns are untouched.
+        assertEquals(4.5, dao.deliveryRecordByTask("dC1")!!.realizedPay!!, 0.001)
+    }
+
+    /**
+     * The guard: a row the re-key did NOT reach still references the superseded key ⇒ the entity is
+     * KEPT (fail toward keeping — deleting it would orphan a referencing row and blank its report card).
+     * Simulated with a pickup row from a DIFFERENT session's job (so the session-level DASH_STOP
+     * re-resolution never enumerates it), the same way the F8 test seeds an unreachable row.
+     */
+    @Test
+    fun `#887 guard — a superseded key still referenced by a row the re-key missed is KEPT`() = runBlocking {
+        insert(AppEventType.DASH_START, "S1", 1000, start("S1", 1000))
+        insert(AppEventType.PICKUP_CONFIRMED, "S1", 1100, pickup("J1", "pC", "CVS", 1100, cvsAddress))
+        insert(AppEventType.DELIVERY_COMPLETED, "S1", 1200, delivery("J1", "dC1", "CVS", 1200, dropRealizedPay = 4.5))
+        insert(
+            AppEventType.DELIVERY_COMPLETED, "S1", 1250,
+            delivery("J1", "dC2", "CVS", 1250, receipt("CVS (3551)" to 3.0), dropRealizedPay = 4.25),
+        )
+        insert(AppEventType.DASH_STOP, "S1", 1300, stop("S1", 1300))
+
+        val p = projector()
+        assertNotNull(p.processBatch(limit = 3)) // mints the address-tier row
+        assertNotNull(dao.store(cvsAddressKey))
+        // A visit row from another session's job, already keyed to the address-tier entity, that THIS
+        // job's re-key can never reach.
+        dao.upsertPickup(
+            PickupRecordEntity(
+                eventSequenceId = 88_888, sessionId = "S9", platform = "doordash", jobId = "JOTHER",
+                taskId = "pOTHER", storeName = "CVS", storeKey = cvsAddressKey,
+                phaseStartedAt = 500, arrivedAt = 520, confirmedAt = 560, deadlineMillis = null,
+                activity = "PICKUP", storeAddress = cvsAddress,
+            ),
+        )
+
+        while (p.processBatch(limit = 3) != null) { /* drain */ }
+
+        assertNotNull("the superseded entity is KEPT — a row still references it", dao.store(cvsAddressKey))
+        assertNotNull("the winner still exists alongside it", dao.store(cvsReceiptKey))
+        assertEquals("the unreached row keeps its key", cvsAddressKey, dao.pickupRecordsForJob("JOTHER").single().storeKey)
+        // This job's own rows still completed the upgrade.
+        assertEquals(cvsReceiptKey, dao.deliveryRecordByTask("dC1")?.storeKey)
+    }
+
+    /** Incremental (page boundary between the drops) ≡ from-zero refold on the RAW `stores` table —
+     *  the property the sweep buys: the refold never mints the intermediate row, incremental deletes it. */
+    @Test
+    fun `#887 — incremental across a page boundary equals a from-zero refold on the raw stores table`() = runBlocking {
+        insert(AppEventType.DASH_START, "S1", 1000, start("S1", 1000))
+        insert(AppEventType.PICKUP_CONFIRMED, "S1", 1100, pickup("J1", "pC", "CVS", 1100, cvsAddress))
+        insert(AppEventType.DELIVERY_COMPLETED, "S1", 1200, delivery("J1", "dC1", "CVS", 1200, dropRealizedPay = 4.5))
+        insert(
+            AppEventType.DELIVERY_COMPLETED, "S1", 1250,
+            delivery("J1", "dC2", "CVS", 1250, receipt("CVS (3551)" to 3.0), dropRealizedPay = 4.25),
+        )
+        insert(AppEventType.DASH_STOP, "S1", 1300, stop("S1", 1300))
+
+        val p = projector()
+        while (p.processBatch(limit = 3) != null) { /* drain */ }
+        val incStores = dao.allStores()
+        val incVisible = dao.storeReportRows().first().map { it.storeKey }.toSet()
+        val incKeys = listOf("dC1", "dC2").associateWith { dao.deliveryRecordByTask(it)?.storeKey }
+
+        wipeAndResetWatermark()
+        projector().catchUp() // ONE batch — the receipt evidence is committed before any resolution runs
+        val refStores = dao.allStores()
+
+        assertEquals("raw stores table identical incremental vs from-zero refold", refStores, incStores)
+        assertEquals("the refold never minted the address-tier row either", listOf(cvsReceiptKey), refStores.map { it.storeKey })
+        assertEquals(setOf(cvsReceiptKey), incVisible)
+        assertEquals(mapOf("dC1" to cvsReceiptKey, "dC2" to cvsReceiptKey), incKeys)
+    }
+
+    /** A later correction fold must not RESURRECT a swept identity row: no correction path writes the
+     *  `stores` table or stamps a storeKey — only resolution does, and it re-derives the winner. */
+    @Test
+    fun `#887 — a later correction fold does not resurrect the swept stores row`() = runBlocking {
+        insert(AppEventType.DASH_START, "S1", 1000, start("S1", 1000))
+        insert(AppEventType.PICKUP_CONFIRMED, "S1", 1100, pickup("J1", "pC", "CVS", 1100, cvsAddress))
+        val d1 = insert(AppEventType.DELIVERY_COMPLETED, "S1", 1200, delivery("J1", "dC1", "CVS", 1200, dropRealizedPay = 4.5))
+        insert(
+            AppEventType.DELIVERY_COMPLETED, "S1", 1250,
+            delivery("J1", "dC2", "CVS", 1250, receipt("CVS (3551)" to 3.0), dropRealizedPay = 4.25),
+        )
+        insert(AppEventType.DASH_STOP, "S1", 1300, stop("S1", 1300))
+        val p = projector()
+        while (p.processBatch(limit = 3) != null) { /* drain */ }
+        assertNull(dao.store(cvsAddressKey))
+
+        // A driver re-price + a cash-tip edit, folded in a LATER batch.
+        insert(
+            AppEventType.DELIVERY_ADJUSTMENT, "S1", 1400,
+            DeliveryAdjustmentPayload(targetEventSequenceId = d1, sessionId = "S1", newPay = 9.0, newCashTip = 2.0),
+        )
+        while (p.processBatch(limit = 3) != null) { /* drain */ }
+
+        assertNull("the swept address-tier row stays gone across a correction fold", dao.store(cvsAddressKey))
+        assertEquals(listOf(cvsReceiptKey), dao.allStores().map { it.storeKey })
+        assertEquals("the correction still applied", 9.0, dao.deliveryRecord(d1)!!.realizedPay!!, 0.001)
+        assertEquals(cvsReceiptKey, dao.deliveryRecord(d1)!!.storeKey)
     }
 
     // ── FIX 12d: F4 offer-link guards ──
