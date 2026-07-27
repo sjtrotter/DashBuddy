@@ -96,6 +96,22 @@ class UberOfferKindAndStackStoreTest {
     }
 
     @Test
+    fun `the wait-time note loses the store read by NEGATION, not by document order (review F2)`() {
+        // On the fielded card the note sits below the store, so it would lose first-match anyway —
+        // a positional accident. Prove the negation arm is what's holding by hoisting the note's
+        // text ONTO the node that renders above the store (the ETA banner): without the arm the
+        // card's merchant would become "Matching may take longer" (the #858 class of lie).
+        val hoisted = corpus("__uber__")
+            .single { (name, _, _) -> name.contains("2026-07-26_20-39-29") }
+            .second
+            .withText("Arrive around 8:39 PM • 1 min away", "Matching may take longer")
+            .restoreParents()
+        val parsed = parse(hoisted)!!
+        assertEquals("the note above the store still loses", "Angkor Bistro", parsed.offer.displayStoreText)
+        assertEquals("and still isn't read as the CTA", OfferKind.MATCH, parsed.offer.offerKind)
+    }
+
+    @Test
     fun `a platform whose ruleset has no offerKind concept parses null (P8 - no Platform branch)`() {
         val doordash = TestResourceLoader.loadSnapshots("snapshots/offer_popup")
             .ifEmpty { corpus("OFFER_POPUP") }

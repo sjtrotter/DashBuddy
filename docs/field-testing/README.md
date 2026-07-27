@@ -94,13 +94,18 @@ was found **broken-in-part** (raw PII in capture envelopes) and moved to that en
      change over-rejecting — note the store and the card shape.
   3. **A direct offer landing on top of a "Match" card** should NOT pop a "Declined/Expired (offer
      replaced)" chat card any more; the new offer just takes the surface.
-  4. **Trip time sanity:** an offer card that also shows "Arrive around 8:39 PM • 1 min away"
-     must price off the *"14 min (3.1 mi) total"* line, not the 1-minute ETA (that ETA line was
-     stealing the time on the fielded Match card — an offer quoting an absurdly high $/hr on a
-     long trip is the tell).
+  4. **Trip time (desk-only — nothing to see while driving).** An Uber card that also shows
+     "Arrive around 8:39 PM • 1 min away" was recording the 1-minute ETA as the trip time instead
+     of the *"14 min (3.1 mi) total"* line. This never touched the verdict or the spoken $/hr —
+     the evaluator derives its own estimate from distance + handling — so there is **no on-dash
+     tell**; it corrupted the recorded time, the offer's identity hash, and the accept-time
+     estimate fallback. Check it in the pull, not in the car (below).
   **Desk (next pull):** `offer_records` for Uber should carry real merchant names (zero rows where
   `merchantName LIKE 'Delivery (%'`); `OFFER_TIMEOUT` payload descriptions should show
-  `Superseded by direct offer` wherever a direct offer preempted a match.
+  `Superseded by direct offer` wherever a direct offer preempted a match; and in the
+  `OFFER_RECEIVED`/closing payloads, `parsedOffer.timeToCompleteMinutes` should equal the card's
+  own *"N min (M.M mi) total"* number — never a 1–2 minute value that matches an "N min away"
+  ETA banner on the same frame.
   **Still wanted:** multi-frame captures of ONE lingering stack card — if Uber CYCLES which store a
   stack shows across re-renders, the desk can finally settle whether identity may follow the store
   (today it deliberately does not).

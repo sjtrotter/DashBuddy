@@ -256,11 +256,16 @@
               // line always reads plural ("N mins away"), but Uber renders it singular
               // at one minute — "Arrive around 8:39 PM • 1 min away", INSIDE
               // primary_touch_area and ABOVE the trip line, so it won first-match and
-              // the offer priced as a 1-minute trip instead of 14. The finder now also
-              // requires the trip line's own "total" token, which every fielded Uber
-              // offer card carries (incl. the "+ 19 min (+ 3.9 mi) total" add-on form)
-              // and no ETA banner does. Fail-NULL if a future card drops "total" —
-              // an unpriced time beats a confidently wrong one (#745).
+              // the offer recorded a 1-minute trip instead of 14. What that corrupts is
+              // NOT the verdict — `OfferEvaluator` derives its own time estimate from
+              // distance + handling and never reads this field — but the three places
+              // that DO consume it: the recorded `ParsedOffer.timeToCompleteMinutes`
+              // (ledger/replay), the `offerHash` input (identity), and the eval-less
+              // `JobAcceptFlow.estMinutes` fallback. The finder now also requires the
+              // trip line's own "total" token, which every fielded Uber offer card
+              // carries (incl. the "+ 19 min (+ 3.9 mi) total" add-on form) and no ETA
+              // banner does. Fail-NULL if a future card drops "total" — an unrecorded
+              // time beats a confidently wrong one (#745).
               "timeToCompleteMinutes": {
                 "find": {
                   "all": [
@@ -355,6 +360,18 @@
                           // form of it. Platform chrome only; no store-specific matching.
                           {
                             "hasTextMatchesRegex": "^Delivery \\(\\d+\\)$"
+                          },
+                          // #881 review F2: the Match card's wait-time note ("Matching
+                          // may take longer") is chrome that sits BELOW the store line
+                          // today, so it loses the first-match by document order alone —
+                          // a positional accident, not a defense. Negated explicitly so
+                          // a re-layout that floats the note above the store can't make
+                          // it the merchant. Top-level only: an identity-bearing
+                          // orders[] read is chip-anchored on a stack and store-anchored
+                          // otherwise, and the #882 asymmetry stays exactly one entry
+                          // wide plus this display-only arm.
+                          {
+                            "hasTextContaining": "may take longer"
                           },
                           {
                             "hasTextContaining": "Exclusive"
