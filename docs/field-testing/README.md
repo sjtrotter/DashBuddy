@@ -78,6 +78,27 @@ card's **mechanical** half, #577 (re-confirmed, 24/24, ~0.55 s — with a new po
 that entry's Bug #1), the #457 path, and #554 ShadowProjector (2/2). The #462/#460 dropoff item
 was found **broken-in-part** (raw PII in capture envelopes) and moved to that entry's Bug #7.)_
 
+- **🆕 NEW — #887 — no more phantom zero-visit stores in the Patterns tab's data.**
+  When one physical store was first keyed off its pickup ADDRESS (`doordash|cvs|@23530`, because that
+  drop carried no receipt) and a later receipt upgraded it to the real store code
+  (`doordash|cvs|3551`), the visits moved to the new key but the old identity row was left behind —
+  2 of 28 `stores` rows in the 07-27 pull were these zero-visit ghosts. Resolution now deletes the
+  superseded row in the same transaction, but only when nothing still points at it.
+  **Nothing to watch while driving** — this is a projection-hygiene fix; no bubble, TTS, money, or
+  Patterns-tab number changes. The `PROJECTOR_VERSION` 8→9 bump means the **first app launch after
+  installing rebuilds the whole analytics read-model** (a one-time refold; the Money/Patterns tabs
+  should look identical afterwards — if any dollar figure MOVED, that's a finding, **except**
+  `CURRENT_FALLBACK`-basis rows if economy settings changed since the last refold (the precedented
+  re-stamp side effect — see the `PROJECTOR_VERSION` KDoc)).
+  **Desk (next pull):** the issue's SQL should return **zero** rows —
+  `SELECT storeKey FROM stores WHERE storeKey NOT IN (SELECT storeKey FROM pickup_records WHERE storeKey IS NOT NULL) AND storeKey NOT IN (SELECT storeKey FROM delivery_records WHERE storeKey IS NOT NULL) AND storeKey NOT IN (SELECT storeKey FROM offer_records WHERE storeKey IS NOT NULL);`
+  A non-zero row is expected **ONLY** if a store-name correction was made since the last refold —
+  that's the [#906](https://github.com/sjtrotter/DashBuddy/issues/906) residual (a
+  `DELIVERY_ADJUSTMENT` `newStoreName` edit nulls that row's key and can drop the last reference to
+  a store entity), **not** a #887 regression.
+  Also grep the log for `superseded store entity kept:` — a WARN there means the guard fired (a row
+  the re-key didn't reach), which is correct behaviour but worth a look at which store it was.
+  - Confirmed: 0/2
 - **🆕 NEW — #882 / #881 — Uber stacked offers speak the STORE, and a "Match" is recorded as a match.**
   Two fixes on the same card. **#882:** a multi-order Uber card ("Delivery (2)") rendered its type
   chip above the one store line it shows, and the chip won the store read — so the bubble/TTS said
