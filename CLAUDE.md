@@ -247,7 +247,19 @@ parse's `customerNameHash` chain uses (`normalizeCustomerName` before `sha256`, 
 first token + second-token initial), so a customer's mask/hash is stable across the surface FORMS
 DoorDash renders their name in ("Brandy S" vs "Brandy Smith"). Coverage spans the recognized offer/pickup/dropoff/chat/
 nav/camera **screen** surfaces AND **notification** envelopes (#620 — chat title/body,
-order-ready customer name via a per-field notif `redact`; store names kept). A rules-independent
+order-ready customer name via a per-field notif `redact`; store names kept). Three dropoff-surface
+enumeration gaps closed 2026-07-27: the shared id-less **name shape** now separates its tokens with
+`\s{1,4}` instead of a literal space (#885 — a DOUBLE-space render made an existing entry silently
+miss, and the shape string is byte-SSOT with `SnapshotRedactor.FIRST_LAST_INITIAL_PATTERN`, so every
+doordash/uber copy moves together) and carries `normalize: customerName` on the doordash copies; the
+embedded Google-Nav **maneuver cluster** (`primary`/`sub`/`secondaryManeuverText` + `roadNameView`)
+is masked on the dropoff-phase nav rules AND the store-ambiguous `navigation_generic` catch-all,
+whose "arriving" step restates the customer's full street address (#886 — `pickup_navigation` is a
+MERCHANT address and stays raw by design); and the id-less workflow-sheet **address line 1** is
+masked whether it renders a street line or a business/**venue name**, via a new
+`hasFollowingSiblingTextMatchesRegex` predicate (#886) — the mirror of #860's
+`hasPrecedingSiblingText` for a block whose PII value is child 0 and whose only stable handle is the
+city/ST/ZIP line beneath it. A rules-independent
 customer-PII **marker backstop** (`CustomerTextMarkers`, #624/#632/#666/#806 — distinct from
 `SensitiveTextMarkers`, which drops the dasher's banking screens) scrubs a node (screen tree) or whole
 field (notification — #632, incl. `actionLabels` — #666) that ships a customer-PII marker — on the

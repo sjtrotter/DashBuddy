@@ -69,17 +69,37 @@
           }
         },
         {
+          "comment": "#886: the EMBEDDED Google-Nav maneuver cluster restates the destination. The sheet's own address lines are masked by id above, but the final 'arriving' maneuver renders the customer's FULL street address in nav copy ('<house#> <Street>, San Antonio, TX <zip>, USA will be on the right', fielded 07-26) and the preceding steps name the destination street — the one node family on this recognized dropoff surface still shipping the customer's address RAW. Masked whole and un-normalized (that canonicalizer is the customer-NAME key; an address token would lose mask distinctness). Nav copy has no analytics value and anchors nothing: this rule's require/reject/parse all key on bottom_sheet_* ids and the CTA text, so recognition on replay is unchanged. `roadNameView` (the road currently being driven) rides along — at the arrival step that IS the customer's street. The sibling pickup_navigation restates the MERCHANT address (driver-owned) and is deliberately NOT masked.",
+          "find": {
+            "any": [
+              {
+                "hasIdSuffix": "primaryManeuverText"
+              },
+              {
+                "hasIdSuffix": "subManeuverText"
+              },
+              {
+                "hasIdSuffix": "secondaryManeuverText"
+              },
+              {
+                "hasIdSuffix": "roadNameView"
+              }
+            ]
+          }
+        },
+        {
           "comment": "Defense-in-depth (FIX 3): a modal-over-handoff combined frame that carries the multi-order-confirm's id-less first-name+last-initial line could be claimed by THIS earlier-priority rule instead of dropoff_multi_order_confirm, whose id-keyed redacts wouldn't cover the id-less name node. Same canonical name-shape SSOT as SnapshotRedactor.FIRST_LAST_INITIAL_PATTERN so the leak closes regardless of which rule wins the frame; hasNoId keeps it off id-bearing nav anchors.",
           "find": {
             "all": [
               {
-                "hasTextMatchesRegex": "^\\s{0,8}[\\p{L}][\\p{L}'-]{0,20}( [\\p{L}][\\p{L}'-]{0,20}){0,3} [A-Z]\\.?\\s{0,8}$"
+                "hasTextMatchesRegex": "^\\s{0,8}[\\p{L}][\\p{L}'-]{0,20}(\\s{1,4}[\\p{L}][\\p{L}'-]{0,20}){0,3}\\s{1,4}[A-Z]\\.?\\s{0,8}$"
               },
               {
                 "hasNoId": true
               }
             ]
-          }
+          },
+          "normalize": "customerName"
         }
       ],
       "state": {
@@ -286,6 +306,12 @@
           }
         },
         {
+          "comment": "#886 (venue variant): this card's address block is id-LESS and label-less — `<line 1><line 2>` — so line 1 is named only by shape. A street line falls to the `^\\d{1,5}\\s+\\S` entry above, but when the drop-off destination is a BUSINESS/VENUE line 1 is the venue NAME ('Sample Family Medical and Urgent Care', fielded 07-26): no id, no digits, no stable shape, and no preceding sibling to anchor on (it is child 0) — so it shipped RAW while its own city/ST/ZIP sibling masked correctly via the `\\d{5}` entry. That is a customer-LOCATION leak on a recognized surface. Anchor is the FOLLOWING sibling (#886's mirror predicate): the city/ST/ZIP line is app-rendered address chrome with a stable two-letter-state + 5-digit-ZIP shape, the only tight handle for a child-0 node. It covers BOTH forms of line 1 (venue AND street), so it is also defense-in-depth on the numeric entry. Masked whole, un-normalized (that canonicalizer is the customer-NAME key; an address/venue token would lose mask distinctness). Over-match surface is exactly 'the node directly above a city/ST/ZIP line' — in this card, only the address block's line 1.",
+          "find": {
+            "hasFollowingSiblingTextMatchesRegex": "[,\\s][A-Za-z]{2},?\\s{1,4}\\d{5}"
+          }
+        },
+        {
           "find": {
             "all": [
               {
@@ -327,13 +353,14 @@
           "find": {
             "all": [
               {
-                "hasTextMatchesRegex": "^\\s{0,8}[\\p{L}][\\p{L}'-]{0,20}( [\\p{L}][\\p{L}'-]{0,20}){0,3} [A-Z]\\.?\\s{0,8}$"
+                "hasTextMatchesRegex": "^\\s{0,8}[\\p{L}][\\p{L}'-]{0,20}(\\s{1,4}[\\p{L}][\\p{L}'-]{0,20}){0,3}\\s{1,4}[A-Z]\\.?\\s{0,8}$"
               },
               {
                 "hasNoId": true
               }
             ]
-          }
+          },
+          "normalize": "customerName"
         }
       ],
       "state": {
@@ -478,6 +505,12 @@
           }
         },
         {
+          "comment": "#886 (venue variant): this card's address block is id-LESS and label-less — `<line 1><line 2>` — so line 1 is named only by shape. A street line falls to the `^\\d{1,5}\\s+\\S` entry above, but when the drop-off destination is a BUSINESS/VENUE line 1 is the venue NAME ('Sample Family Medical and Urgent Care', fielded 07-26): no id, no digits, no stable shape, and no preceding sibling to anchor on (it is child 0) — so it shipped RAW while its own city/ST/ZIP sibling masked correctly via the `\\d{5}` entry. That is a customer-LOCATION leak on a recognized surface. Anchor is the FOLLOWING sibling (#886's mirror predicate): the city/ST/ZIP line is app-rendered address chrome with a stable two-letter-state + 5-digit-ZIP shape, the only tight handle for a child-0 node. It covers BOTH forms of line 1 (venue AND street), so it is also defense-in-depth on the numeric entry. Masked whole, un-normalized (that canonicalizer is the customer-NAME key; an address/venue token would lose mask distinctness). Over-match surface is exactly 'the node directly above a city/ST/ZIP line' — in this card, only the address block's line 1.",
+          "find": {
+            "hasFollowingSiblingTextMatchesRegex": "[,\\s][A-Za-z]{2},?\\s{1,4}\\d{5}"
+          }
+        },
+        {
           "find": {
             "all": [
               {
@@ -519,13 +552,14 @@
           "find": {
             "all": [
               {
-                "hasTextMatchesRegex": "^\\s{0,8}[\\p{L}][\\p{L}'-]{0,20}( [\\p{L}][\\p{L}'-]{0,20}){0,3} [A-Z]\\.?\\s{0,8}$"
+                "hasTextMatchesRegex": "^\\s{0,8}[\\p{L}][\\p{L}'-]{0,20}(\\s{1,4}[\\p{L}][\\p{L}'-]{0,20}){0,3}\\s{1,4}[A-Z]\\.?\\s{0,8}$"
               },
               {
                 "hasNoId": true
               }
             ]
-          }
+          },
+          "normalize": "customerName"
         }
       ],
       "state": {
@@ -592,17 +626,18 @@
       "priority": 77,
       "redact": [
         {
-          "comment": "The id-less first-name + last-initial customer name. Whole-value anchored (^...$, whitespace-tolerant so a trailing space still masks) so it masks ONLY the bare name node, never the multi-word merchant anchor, the zone code, a count, or the 'Confirm ...'/'Mix-ups ...' copy. Char classes cover accented/Unicode letters (José, Muñoz), interior capitals (McKenna), hyphenated first names (Mary-Jo), and apostrophes (O'Brien, D'Angelo); every quantifier is bounded ({0,20}/{0,3}/{0,8}) so RegexSafety's ReDoS guard accepts it. Compiled IGNORE_CASE (all rule regexes are), so 'JOSE G' masks too. SSOT with SnapshotRedactor.FIRST_LAST_INITIAL_PATTERN.",
+          "comment": "The id-less first-name + last-initial customer name. Whole-value anchored (^...$, whitespace-tolerant so a trailing space still masks) so it masks ONLY the bare name node, never the multi-word merchant anchor, the zone code, a count, or the 'Confirm ...'/'Mix-ups ...' copy. Char classes cover accented/Unicode letters (José, Muñoz), interior capitals (McKenna), hyphenated first names (Mary-Jo), and apostrophes (O'Brien, D'Angelo); every quantifier is bounded ({0,20}/{0,3}/{0,8}/{1,4}) so RegexSafety's ReDoS guard accepts it. Compiled IGNORE_CASE (all rule regexes are), so 'JOSE G' masks too. SSOT with SnapshotRedactor.FIRST_LAST_INITIAL_PATTERN. #885: the token SEPARATOR is `\\s{1,4}`, not a literal space — the 07-26 field render was 'Firstname  L.' with a DOUBLE space, which the old single-space separator did not match, so this entry existed but never fired and a raw customer name reached the recognized envelope. `normalize: customerName` (#733) canonicalizes the token before the <4hex> distinctness hash, so this card's mask hex equals the same customer's mask on 'Deliver to <name>' surfaces AND the persisted customerNameHash — one customer, one mask, across every surface form.",
           "find": {
             "all": [
               {
-                "hasTextMatchesRegex": "^\\s{0,8}[\\p{L}][\\p{L}'-]{0,20}( [\\p{L}][\\p{L}'-]{0,20}){0,3} [A-Z]\\.?\\s{0,8}$"
+                "hasTextMatchesRegex": "^\\s{0,8}[\\p{L}][\\p{L}'-]{0,20}(\\s{1,4}[\\p{L}][\\p{L}'-]{0,20}){0,3}\\s{1,4}[A-Z]\\.?\\s{0,8}$"
               },
               {
                 "hasNoId": true
               }
             ]
-          }
+          },
+          "normalize": "customerName"
         }
       ],
       "require": {
@@ -691,6 +726,12 @@
                 "hasNoId": true
               }
             ]
+          }
+        },
+        {
+          "comment": "#886 (venue variant): this card's address block is id-LESS and label-less — `<line 1><line 2>` — so line 1 is named only by shape. A street line falls to the `^\\d{1,5}\\s+\\S` entry above, but when the drop-off destination is a BUSINESS/VENUE line 1 is the venue NAME ('Sample Family Medical and Urgent Care', fielded 07-26): no id, no digits, no stable shape, and no preceding sibling to anchor on (it is child 0) — so it shipped RAW while its own city/ST/ZIP sibling masked correctly via the `\\d{5}` entry. That is a customer-LOCATION leak on a recognized surface. Anchor is the FOLLOWING sibling (#886's mirror predicate): the city/ST/ZIP line is app-rendered address chrome with a stable two-letter-state + 5-digit-ZIP shape, the only tight handle for a child-0 node. It covers BOTH forms of line 1 (venue AND street), so it is also defense-in-depth on the numeric entry. Masked whole, un-normalized (that canonicalizer is the customer-NAME key; an address/venue token would lose mask distinctness). Over-match surface is exactly 'the node directly above a city/ST/ZIP line' — in this card, only the address block's line 1.",
+          "find": {
+            "hasFollowingSiblingTextMatchesRegex": "[,\\s][A-Za-z]{2},?\\s{1,4}\\d{5}"
           }
         },
         {
@@ -986,6 +1027,12 @@
                 "hasNoId": true
               }
             ]
+          }
+        },
+        {
+          "comment": "#886 (venue variant): this card's address block is id-LESS and label-less — `<line 1><line 2>` — so line 1 is named only by shape. A street line falls to the `^\\d{1,5}\\s+\\S` entry above, but when the drop-off destination is a BUSINESS/VENUE line 1 is the venue NAME ('Sample Family Medical and Urgent Care', fielded 07-26): no id, no digits, no stable shape, and no preceding sibling to anchor on (it is child 0) — so it shipped RAW while its own city/ST/ZIP sibling masked correctly via the `\\d{5}` entry. That is a customer-LOCATION leak on a recognized surface. Anchor is the FOLLOWING sibling (#886's mirror predicate): the city/ST/ZIP line is app-rendered address chrome with a stable two-letter-state + 5-digit-ZIP shape, the only tight handle for a child-0 node. It covers BOTH forms of line 1 (venue AND street), so it is also defense-in-depth on the numeric entry. Masked whole, un-normalized (that canonicalizer is the customer-NAME key; an address/venue token would lose mask distinctness). Over-match surface is exactly 'the node directly above a city/ST/ZIP line' — in this card, only the address block's line 1.",
+          "find": {
+            "hasFollowingSiblingTextMatchesRegex": "[,\\s][A-Za-z]{2},?\\s{1,4}\\d{5}"
           }
         },
         {

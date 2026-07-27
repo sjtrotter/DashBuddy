@@ -43,6 +43,27 @@
     {
       "id": "doordash.screen.navigation_generic",
       "priority": 95,
+      "comment": "#886: this is the full-screen nav catch-all — it matches on the maneuver-view ids ALONE, with no task sheet to say whose address is on screen, so it is store-AMBIGUOUS in exactly the nav_arriving sense (#745): the same frame shape carries a merchant approach on a pickup leg and the CUSTOMER's approach on a dropoff leg, where the final maneuver renders the full destination address ('<house#> <Street>, <City>, <ST> <zip>, USA will be on the right'). Fail toward privacy: mask the whole maneuver cluster + the current-road node, un-normalized (an address token is not the customer-NAME key). Over-mask cost is a merchant route line in a debug envelope; under-mask cost is a customer's street address persisted raw. Recognition on replay is unchanged — every anchor here is an ID (maneuverView / mainManeuverLayout) or comes from nodes this block doesn't touch (the 'min'/'exit'/'mi'/'ft' chrome lives in stepDistance / remaining-time / Exit-button nodes).",
+      "redact": [
+        {
+          "find": {
+            "any": [
+              {
+                "hasIdSuffix": "primaryManeuverText"
+              },
+              {
+                "hasIdSuffix": "subManeuverText"
+              },
+              {
+                "hasIdSuffix": "secondaryManeuverText"
+              },
+              {
+                "hasIdSuffix": "roadNameView"
+              }
+            ]
+          }
+        }
+      ],
       "branches": [
         {
           "state": {
