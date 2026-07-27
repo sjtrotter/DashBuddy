@@ -1277,14 +1277,59 @@
       }
     },
     {
+      // #874 — the sibling of #857, one priority down. Branch 3 used to claim
+      // `modeHint: offline` from ABSENCE (`glide_bottom_nav_home` exists +
+      // `notExists "You're online"`), and the bottom nav renders in every mode, so a
+      // partially rendered ONLINE dashboard — or a Trip Details screen stacked over the
+      // dashboard, or the 68-node nav-bar-only frame Uber emits mid-inflate — satisfied it
+      // vacuously and forged the same destructive Online→Offline edge #857 measured.
+      //
+      // Rewritten (not dropped) because the fielded evidence says the dashboard DOES carry
+      // a reliable positive offline marker: the offline card's own copy,
+      // `header_text_view` = "You're offline" (with `paragraph_text_view` = "Ready to go?").
+      // Over 553 Uber window captures (2026-07-19/20/22/25/27 pulls) it appears on 27
+      // frames, every one of them a genuinely offline home, and on ZERO frame carrying
+      // "You're online" or "Finding trips". `header_text_view` is a shared status-card id
+      // whose other fielded values are "Unable to go online" (7) and "You're online" (1),
+      // so the id alone is not the claim — the id AND the exact text are.
+      //
+      // #875 — the same rewrite absorbs the fielded home variant no rule recognized: the
+      // offline card WITHOUT the bottom nav (3 UNKNOWN captures in the 07-25 pull, e.g.
+      // …411f01), emitted while the nav/CTA subtrees re-inflate. It is the same screen and
+      // the same claim, so the branch anchors on the CARD (plus the `online_view_container`
+      // screen anchor) instead of the nav bar — which is the stronger identity anchor
+      // anyway, since `glide_bottom_nav_home` also renders under `earnings_activity`.
+      // Recognizing it narrows the deliberate believe-online window #857 chose.
+      //
+      // Bias, unchanged from #857: a false offline destroys a session record permanently,
+      // a delayed offline costs seconds and the already-recognized `uber.click.go_offline`
+      // covers every deliberate toggle — so an evidence-free partial now classifies
+      // UNKNOWN, makes no mode claim, and the platform region keeps its last known mode.
       "id": "uber.screen.home_dashboard",
       "priority": 140,
       "branches": [
         {
+          // The offline CTA. `go_online_button` is a positive marker, not an absence: it is
+          // the button Uber renders only when the dasher is offline (22 fielded frames, all
+          // offline, none co-rendered with "You're online" or "Finding trips"). The rejects
+          // are defense-in-depth — this branch is evaluated BEFORE the online branch below,
+          // so without them a frame carrying both would claim offline.
           "state": {
             "flow": "idle",
             "modeHint": "offline"
           },
+          "reject": [
+            {
+              "exists": {
+                "hasText": "You're online"
+              }
+            },
+            {
+              "exists": {
+                "hasTextContaining": "Finding trips"
+              }
+            }
+          ],
           "require": {
             "all": [
               {
@@ -1321,20 +1366,43 @@
           }
         },
         {
+          // The offline card (#874 rewrite + #875). Positive evidence only: the status
+          // card's own headline, id-anchored so the text match cannot land on unrelated
+          // chrome. The nav bar is deliberately NOT required — the card is the surface, the
+          // nav is decoration that may or may not have inflated yet.
           "state": {
             "flow": "idle",
             "modeHint": "offline"
           },
+          "reject": [
+            {
+              "exists": {
+                "hasText": "You're online"
+              }
+            },
+            {
+              "exists": {
+                "hasTextContaining": "Finding trips"
+              }
+            }
+          ],
           "require": {
             "all": [
               {
                 "exists": {
-                  "hasIdSuffix": "glide_bottom_nav_home"
+                  "hasIdSuffix": "online_view_container"
                 }
               },
               {
-                "notExists": {
-                  "hasText": "You're online"
+                "exists": {
+                  "all": [
+                    {
+                      "hasIdSuffix": "header_text_view"
+                    },
+                    {
+                      "hasText": "You're offline"
+                    }
+                  ]
                 }
               }
             ]
