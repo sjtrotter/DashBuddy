@@ -124,6 +124,54 @@ class CaptureScrubTest {
         assertEquals(0L, stats.scrubbedUnknownCaptureCount)
     }
 
+    // #884: the fielded leak class. A DasherDirect transfer BUTTON is serialized in
+    // ISOLATION on the click path — the tapped node alone, with none of the window's
+    // co-present "$X.XX available" balance line — so the AND-pair sensitive RULE that
+    // blocks the window ("Transfer out"/"Transfer in" + "available") cannot fire here.
+    // The marker backstop is the only control on this envelope, and before #884 neither
+    // the amount-bearing label nor the "in" direction matched any marker: `Transfer
+    // $45.66` / `$83.65` / `$68.52` and `Transfer in` all reached disk on build ddd9e7ff.
+
+    private fun clickNode(text: String) = UiNode(text = text, isClickable = true)
+
+    private fun captureUnknownClick(node: UiNode) = writer.captureClick(
+        unknownClickObs(),
+        PipelineEvent.Click(timestamp = 1_000L, node = node, packageName = "com.doordash.driverapp"),
+        screenTarget = "side_nav_drawer",
+    )
+
+    @Test
+    fun `UNKNOWN click on an amount-bearing transfer button is never offered to the capture bus`() {
+        captureUnknownClick(clickNode("Transfer \$12.34"))
+
+        verify(captureBus, never()).offer(any(), any(), anyOrNull(), any(), any(), anyOrNull())
+        assertEquals(1L, stats.scrubbedUnknownCaptureCount)
+    }
+
+    @Test
+    fun `UNKNOWN click on the Transfer in button is never offered to the capture bus`() {
+        captureUnknownClick(clickNode("Transfer in"))
+
+        verify(captureBus, never()).offer(any(), any(), anyOrNull(), any(), any(), anyOrNull())
+        assertEquals(1L, stats.scrubbedUnknownCaptureCount)
+    }
+
+    @Test
+    fun `UNKNOWN click on the sibling Transfer out button is still dropped (#794 regression)`() {
+        captureUnknownClick(clickNode("Transfer out"))
+
+        verify(captureBus, never()).offer(any(), any(), anyOrNull(), any(), any(), anyOrNull())
+        assertEquals(1L, stats.scrubbedUnknownCaptureCount)
+    }
+
+    @Test
+    fun `an ordinary money-bearing click label still captures - the shape needs the transfer word`() {
+        captureUnknownClick(clickNode("Add \$12.34 tip"))
+
+        verify(captureBus, times(1)).offer(any(), any(), anyOrNull(), any(), any(), anyOrNull())
+        assertEquals(0L, stats.scrubbedUnknownCaptureCount)
+    }
+
     // #666 item 2c: the UNKNOWN-notification backstop must scan actionLabels too —
     // previously only the flat text fields (title/text/bigText/tickerText/subText)
     // were scanned, so a sensitive marker living ONLY in a push action button label

@@ -107,7 +107,7 @@ SELECT taskId, realizedMiles FROM delivery_records;
 | #438 B4 | `grep 'OfferActionReceiver:'` | each tap line carries `(offer=<hash>)` (full hash, same rendering as OfferEffects) — exact-match it to the resolved `OFFER_*` event's hash; a mismatch = acted on the wrong offer |
 | #731 | `grep -i 'notification listener'` | the per-event lines are the PRIMARY record: first disconnect per process at WARN, the rest (and all connects) at INFO, each with a running count. `grep -c` them for the flap rate; per process, `connects − disconnects ≈ process deaths` (itself a diagnostic — a kill never logs its disconnect). The `PipelineStats` summary fields (`notifListenerConnects=`/`Disconnects=`) are corroboration ONLY — the summary emits per 50 forwarded observations, i.e. only while actively sensing, so it is blind exactly when the idle-time flap is worst |
 | #159 | `grep 'downgrade averted'` / `grep 'store-chain resolved'` | monotonic backstop held / shadow resolution milestones |
-| #862 | `grep -e 'Capture scrubbed:' -e 'Capture backstop:'` | the privacy layer firing, now readable IN `shareable.log` (pre-#862 these lines redacted themselves to `[scrubbed:<marker>]`). Each names the marker by **id** — first two alphanumerics + length (`Tr12` = `Transfer out`, `De11` = `Deliver to `); decode against `SensitiveTextMarkers.KEYWORDS` / `CustomerTextMarkers.MARKERS` (ids are pinned collision-free). A `[scrubbed:…]` line remaining in the export is now a REAL upstream leak, not our own diagnostic |
+| #862 | `grep -e 'Capture scrubbed:' -e 'Capture backstop:'` | the privacy layer firing, now readable IN `shareable.log` (pre-#862 these lines redacted themselves to `[scrubbed:<marker>]`). Each names the marker by **id** — first two alphanumerics + length (`Tr12` = `Transfer out`, `Tr11` = `Transfer in`, `De11` = `Deliver to `); decode against `SensitiveTextMarkers.KEYWORDS` / `CustomerTextMarkers.MARKERS` (ids are pinned collision-free). A `[scrubbed:…]` line remaining in the export is now a REAL upstream leak, not our own diagnostic |
 
 ## Capture-tree checks
 
@@ -118,6 +118,26 @@ SELECT taskId, realizedMiles FROM delivery_records;
   spot-check labeled frames are REAL zone screens (over-match check); exactly ONE
   `PICKUP_ARRIVED` per warehouse visit in `app_events` (the rule is recognize-only and must
   not steal the bin-scan anchor).
+
+### Dasher-banking sweep over the pull (#794 / #884)
+
+Run this on EVERY pull — the Pledge check that no dasher banking text reached disk. Deliberately
+outside the table above: these are raw copy-paste greps, and a `|` alternation inside a Markdown
+table cell has to be escaped, which silently corrupts the copied command (the #870 lesson). Use
+repeated `-e` instead of alternations, and run from the pull dir:
+
+```bash
+grep -rli -e 'available balance' -e 'dasherdirect' -e 'crimson' -e 'routing number' captures/
+grep -rli -e 'transfer out' -e 'transfer in' -e 'cash out' -e 'instant pay' captures/
+grep -rliE 'transfer +\$[0-9]' captures/      # the #884 amount-bearing button class
+```
+
+Expect **zero** hits in `captures/`. Hits in `shareable.log`/`app.log` are a different read: a
+`[scrubbed:Transfer out]` placeholder there is the sink DOING its job (the marker name is our own
+constant, not leaked text) — see the `#862` row above for how to tell that apart from a real leak.
+`Transfer $<amt>` and `Transfer in` are the shapes that evaded the sweep before #884 — the class
+leaks on the **click** path (the button node is serialized in isolation, so the window-level
+sensitive rule never fires), so check `captures/**/click/**` specifically, not just screen frames.
 
 ## Known non-desk residuals
 
