@@ -2135,6 +2135,97 @@ Accept and Decline registered on DoorDash — and moved to that session's entry 
 
 ---
 
+## 2026-07-29 — bug report: mid-dash app update/reinstall breaks dash tracking (logged remotely via chat; no pull yet)
+
+**Platform(s) tested:** Not stated (DoorDash assumed — developer to correct).
+**Branch under test:** The post-reinstall build — not stated; presumably `master` at/near
+`49380e9` (post-#901 merge) or the 07-26 build wave the 07-27 reinstall was staged for.
+Developer to correct.
+**Field conditions:** The app was updated (reinstalled) **while a dash was in progress**. The
+developer reports two distinct symptoms: (a) the mid-update dash's tracking "completely broke",
+and (b) **every dash started since the reinstall** has been tracked incompletely / incorrectly —
+i.e. the breakage is *persistent across dashes*, not confined to the interrupted one. No data
+pull or log export yet; this entry is the raw report plus desk-side code exploration done
+remotely (record-not-fix protocol — no code changes made).
+
+### Bugs
+
+1. **Dash tracking broken since a mid-dash app update/reinstall; all subsequent dashes
+   incompletely/incorrectly tracked.** Exact failure shape (missing sessions? missing
+   deliveries? missing miles? wrong attribution?) not yet characterized — needs the
+   verification pull below before triage.
+   - **Status:** Open.
+
+### Open questions / investigations (hypotheses — none concluded)
+
+Context that matters for all of these: the 07-26 entry above records **"Device purged + cleared
+for reinstall post-pull"** (2026-07-27). So the likely shape is a *full data purge + reinstall*,
+not an in-place `install -r` update — which hypothesis family applies depends on which it
+actually was, and that's Verification TODO #1.
+
+2. **H1 — listener rebind loss after package update/reinstall.** Android's
+   `NotificationListenerService` is notorious for silently not rebinding after its package is
+   updated/reinstalled until notification access is toggled off/on (or the device reboots);
+   accessibility services can behave similarly after a reinstall. If either listener is dead,
+   one whole sensor pipeline is missing — which would look exactly like "every dash since is
+   partially tracked" and would persist until manually re-toggled. Would need to confirm by
+   checking both toggles on-device and looking for a total absence of notification-sourced
+   events in the pull.
+3. **H2 — incomplete re-setup after the purge.** A purge+reinstall revokes *everything* the app
+   was granted: accessibility, notification access, overlay, location (odometer dead → no
+   miles), the battery-optimization exemption (process free to be killed mid-dash → per-dash
+   gaps), and — by design — all #843 capability consents (all capabilities return to
+   *undecided*; the consent prompt must be re-answered; automation staying off is expected
+   behavior, not a tracking break, but it changes what "correct" looks like). If any one item
+   of the re-setup chain was missed mid-dash, its absence would produce a *persistent* partial
+   tracking failure with a per-item signature (no miles vs. no notifications vs. mid-dash
+   process deaths).
+4. **H3 — resurrected mid-dash snapshot (in-place-update shape only).**
+   `SnapshotStore.restoreLatest()` has **no age guard** — it restores the latest decodable
+   snapshot regardless of how old it is (`core/state/.../SnapshotStore.kt:70`; pruning runs
+   only on the *write* path, `SnapshotStore.kt:56`). If the process died mid-dash with a live
+   Online session and data survived, the next launch resurrects that session as live. The
+   stale-grace-end + fresh-mint arm (`core/state/.../JobCloseEffects.kt:39`) covers the
+   killed-while-offline-grace-pending shape, but if the session restores as plain Online with
+   no pending grace, one possibility is that the *next* dash's Online frames read as a
+   continuation of the resurrected session (no new `DASH_START`), mis-attributing the new
+   dash. On a purged device this hypothesis is moot (no snapshot survives) — hence
+   Verification TODO #1 first.
+5. **H4 — fail-closed ruleset gate eating all frames.** If the new build's ruleset load fails
+   for a platform (compile reject, duplicate-id skip), the #432 gate drops every frame
+   (`core/pipeline/.../AccessibilityPipeline.kt:105` — "Dropping … rulesets not loaded") —
+   which would look like *total* non-tracking on that platform, every dash, until fixed. The
+   shareable.log check below would show this immediately.
+6. **Open question — is there a known post-#660 signature for this?** The "(No session)"
+   bucket + orphan-delivery machinery (#655/#660) exists precisely because mid-dash restarts
+   produce null-session deliveries; if the pull shows the since-reinstall deliveries landing
+   in that bucket, the breakage may be *attribution*, with the underlying events intact and
+   recoverable via the existing `DELIVERY_SESSION_ASSIGN` correction path.
+
+### Verification TODOs
+
+1. **Establish the reinstall shape first** — was it the planned purge+reinstall from the 07-27
+   note (data wiped) or an in-place update (data preserved)? This decides whether H2 or H3/H4
+   is even in play.
+2. **On-device settings sweep** (5 toggles): Accessibility service ON; Notification access ON
+   (toggle off/on regardless, per H1); overlay permission; Location "Allow all the time";
+   battery optimization = Unrestricted. Note which, if any, were found off.
+3. **Export shareable.log** (Settings → Data & Privacy → Export Data) and grep for:
+   "Dropping … rulesets not loaded" (H4), "Restored from snapshot at cv=" / "Replaying N
+   observations after snapshot" / "State recovery failed — starting fresh" (H3), the periodic
+   `PipelineStats` lines (which gate is eating frames), and any ERROR lines.
+4. **Data pull:** `session_records` since the reinstall (open sessions with no end, session
+   count vs. real dash count), `delivery_records` with `sessionId IS NULL` (the "(No session)"
+   bucket — H6), and the `app_events` sequence around one broken dash (is the event log itself
+   complete and only the fold wrong, or are events missing at the source?).
+5. **Consent state:** did the #843 consent prompt re-fire post-reinstall, and what was
+   answered? (Explains any "automation stopped working" component of "not tracked correctly".)
+
+### Meta
+
+- Logged remotely by the mobile agent under the record-not-fix protocol — desk-side code
+  exploration only, no fixes applied, no issue filed (developer triages).
+
 ## 2026-07-26 — five-session day, heavy shopping (pull 2026-07-27, desk-analyzed 2026-07-27)
 
 **Platform(s) tested:** DoorDash (4 sessions, $151.25 total) + one 3-minute Uber window.
