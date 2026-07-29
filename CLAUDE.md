@@ -405,6 +405,25 @@ evidence gate (`EvidenceFilename.sanitizePrefix`): a rule's `"Offer - {storeName
 field parsed null saves as `Offer`, never the literal token (331 `Offer - {storeName}.png`
 files on the device were the receipt) — a fail-safe under, not a replacement for, the
 `ParseOutputGoldenTest` arg-template lint that still flags the un-interpolating rule.
+**The engine is a data-integrity boundary and must never die silently (#909).** `AppEffect.LogEvent`
+is the ONLY writer of `app_events`, so a dead drain worker inside a live process is total silent
+loss: `process()` keeps `trySend`-ing into `Channel(UNLIMITED)` while the app looks healthy. That
+fired on 2026-07-28 — `EvidenceFilename`'s `Regex("""\{\w*}""")` (valid on the host JVM, **rejected
+by Android's ICU-backed engine**) threw from a `val` initializer as an `ExceptionInInitializerError`,
+an **`Error`** that slipped past the worker's per-item `catch (e: Exception)` — and destroyed 91.7%
+of that evening's data. Three standing rules follow: (1) the per-item catch is **`Throwable`**, with
+only `CancellationException` rethrown — the scope is a `SupervisorJob`, so rethrowing a
+`VirtualMachineError` would not surface anything, it would only trade a loud bounded per-effect
+failure for unbounded silence; (2) the drain loop is **supervised** with a capped linear backoff
+(`superviseDrainWorker`, the #430 pipeline precedent) and every failure logs at ERROR with an honest
+message (`"Effect failed — isolated, the engine is still draining"`) — the old
+`"crashed (isolated)"` scope-handler line was a lie once the worker was gone, and that handler is
+now documented as covering only the **detached** coroutines (timers, delayed posts); (3) the
+ICU/JVM regex divergence is **not executable from any unit or Robolectric test**, so it is caught by
+source scan — `IcuRegexGuardTest` (`:app`, the #764 `TimberTagGuardTest` doctrine) fails the build on
+a bare, unescaped `}` in any main-source `Regex(…)`/`.toRegex()` literal. Write `\}`, never `}`
+(reference shape: `Ruleset.TEMPLATE_PATTERN` = `\{(\w+)\}`). Rule-authored patterns are a separate,
+already-fail-closed path (`RegexSafety.compileRegex` → loud `RuleCompileException` at load).
 
 ### 5. Analytics Read-Model (`core/data/.../analytics/`, `core/database/.../analytics/`, #314)
 

@@ -23,8 +23,26 @@ object EvidenceFilename {
     /** Used when nothing survives sanitization — matches the engine's untemplated default. */
     const val FALLBACK_PREFIX = "Rule"
 
-    /** `{field}` — the exact shape [cloud.trotter.dashbuddy.core.pipeline.rules.Ruleset] leaves behind. */
-    private val UNRESOLVED_TOKEN = Regex("""\{\w*}""")
+    /**
+     * `{field}` — the exact shape [cloud.trotter.dashbuddy.core.pipeline.rules.Ruleset] leaves
+     * behind.
+     *
+     * **Both braces MUST stay escaped (#909).** The original form `"""\{\w*}"""` compiles fine on
+     * the host JVM (`java.util.regex` tolerates a bare closing brace) but Android's regex engine is
+     * ICU-backed and **rejects** it — `PatternSyntaxException: Syntax error near index 6`. Thrown
+     * from a `val` initializer that becomes an `ExceptionInInitializerError`, it killed the
+     * [SideEffectEngine]'s single queue-drain worker on the first evidence-enabled capture of the
+     * process and silently destroyed 91.7% of one evening's `app_events` (#909). The
+     * correctly-escaped sibling is
+     * [cloud.trotter.dashbuddy.core.pipeline.rules.Ruleset]'s `TEMPLATE_PATTERN` (`\{(\w+)\}`).
+     *
+     * `\}` is byte-identical in intent to a bare `}` on both engines — a literal closing brace —
+     * so the strip behaviour is unchanged: `{storeName}`, `{payAmount}`, and the degenerate `{}`
+     * all match exactly as before.
+     *
+     * `IcuRegexGuardTest` (`:app` unit tests) is the permanent, build-red backstop for this class.
+     */
+    private val UNRESOLVED_TOKEN = Regex("""\{\w*\}""")
 
     /** Separator punctuation left dangling once a token is dropped (`"Offer - "` → `"Offer"`). */
     private const val DANGLING = " \t-–—:,;|/_"

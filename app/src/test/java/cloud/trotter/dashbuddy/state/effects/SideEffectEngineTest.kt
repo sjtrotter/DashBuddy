@@ -161,6 +161,73 @@ class SideEffectEngineTest {
     }
 
     // =========================================================================
+    // #909 — an Error (not just an Exception) must isolate to its own queue item
+    // =========================================================================
+
+    @Test
+    fun `an effect that throws an Error is isolated and the queue keeps draining (#909)`() =
+        runTest {
+            // THE regression test for the worst bug this project has had. An ICU-invalid Regex in
+            // EvidenceFilename's `val` initializer surfaced as an ExceptionInInitializerError — an
+            // Error, not an Exception — which slipped past the worker's `catch (e: Exception)` and
+            // killed the SINGLE queue-drain worker. process() kept trySend-ing into an UNLIMITED
+            // channel with no consumer, so every later effect (including AppEffect.LogEvent, the
+            // ONLY writer of app_events) was silently swallowed for the rest of the process: 91.7%
+            // of the 2026-07-28 evening's earnings never recorded, with the app looking healthy.
+            //
+            // Mutation check: narrow the worker's catch back to `Exception` and this goes RED at
+            // the LogEvent assertion below (the engine is dead, so nothing after the poison runs).
+            val engine = buildEngine(StandardTestDispatcher(testScheduler))
+            val eval: OfferEvaluation = mock()
+            doThrow(ExceptionInInitializerError()).whenever(ttsEffectHandler).speakOffer(any())
+
+            engine.process(AppEffect.SpeakOffer(eval))
+            runCurrent()
+
+            // The very next effect — and the durable event write in particular — still lands.
+            engine.process(AppEffect.UpdateBubble("after the poison"))
+            engine.process(logEvent(AppEventType.DELIVERY_COMPLETED, occurredAt = 1_000L))
+            runCurrent()
+
+            verify(bubbleManager).postMessage(eq("after the poison"), any(), any(), anyOrNull())
+            verifyBlocking(appEventRepo) { insertAndMark(any(), any(), anyOrNull(), any()) }
+        }
+
+    @Test
+    fun `a LinkageError from a future effect handler cannot silence the engine (#909)`() = runTest {
+        // Generalizes the above past the specific #859 regression: ANY class-init/linkage failure
+        // introduced by a future effect handler must cost that one effect, never the engine.
+        val engine = buildEngine(StandardTestDispatcher(testScheduler))
+        doThrow(LinkageError("boom")).whenever(odometerEffectHandler).startUp()
+
+        engine.process(AppEffect.StartOdometer)
+        runCurrent()
+        engine.process(AppEffect.StopOdometer)
+        runCurrent()
+
+        verify(odometerEffectHandler, times(1)).startUp()
+        verify(odometerEffectHandler, times(1)).shutDown()
+    }
+
+    @Test
+    fun `the real EvidenceFilename regex runs on the engine's capture path (#909)`() = runTest {
+        // EvidenceFilename.sanitizePrefix is called from captureEvidence, so its `val` initializer
+        // runs on the drain worker. This exercises that exact seam end-to-end with the production
+        // object (no mock), which is what class-initialized the bad Regex in the field. The ICU/JVM
+        // divergence itself is not executable here — IcuRegexGuardTest is the guard for that.
+        val engine = buildEngine(StandardTestDispatcher(testScheduler))
+
+        engine.process(
+            AppEffect.CaptureScreenshot("Offer - {storeName}", category = EvidenceCategory.OFFER),
+        )
+        runCurrent()
+
+        val captor = argumentCaptor<AppEffect.CaptureScreenshot>()
+        verify(screenShotHandler).capture(any(), captor.capture())
+        assertEquals("Offer", captor.firstValue.filenamePrefix)
+    }
+
+    // =========================================================================
     // #341/#425 — recovery suppression: PerformRuleAction must never replay a tap
     // =========================================================================
 
