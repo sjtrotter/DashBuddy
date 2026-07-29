@@ -2147,13 +2147,19 @@ and (b) **every dash started since the reinstall** has been tracked incompletely
 i.e. the breakage is *persistent across dashes*, not confined to the interrupted one. No data
 pull or log export yet; this entry is the raw report plus desk-side code exploration done
 remotely (record-not-fix protocol — no code changes made).
+**Correction (later same session):** symptom (b) retracted — the tracking break was **only the
+first (mid-update) dash**. Subsequent dashes tracked fine; what they showed instead was a HUD
+display behavior: **the bubble displayed only one card, whichever was active** (Bug #4 below,
+developer-rated low severity — "not a huge deal"). Items drafted before the correction are
+annotated inline rather than deleted, so the reasoning trail stays honest.
 
 ### Bugs
 
-1. **Dash tracking broken since a mid-dash app update/reinstall; all subsequent dashes
-   incompletely/incorrectly tracked.** Exact failure shape (missing sessions? missing
-   deliveries? missing miles? wrong attribution?) not yet characterized — needs the
-   verification pull below before triage.
+1. **Dash tracking broken on the dash that was in progress during the app update/reinstall.**
+   ~~All subsequent dashes incompletely/incorrectly tracked~~ — **rescoped by the same-session
+   correction: the first (mid-update) dash only**; subsequent dashes tracked fine. Exact
+   failure shape for that dash (missing session? missing deliveries? missing miles? wrong
+   attribution?) not yet characterized — needs the verification pull below before triage.
    - **Status:** Open.
 2. **Suspected app crash mid-dash, around delivering or accepting an offer** (developer:
    "the app like crashed I think as I delivered or accepted an offer" — not certain it was a
@@ -2163,7 +2169,20 @@ remotely (record-not-fix protocol — no code changes made).
    dash's gaps, or (b) a *recurring* crash on the accept/delivery path in the new build —
    which, if it fires every dash, would by itself explain Bug #1's "every dash since is
    incompletely tracked" (each crash loses the in-flight frames and any un-persisted effects
-   between the last snapshot and the kill). See H5.
+   between the last snapshot and the kill). See H5. *(Post-correction: the "recurring every
+   dash" reading (b) is moot — subsequent dashes tracked fine — leaving reading (a), a one-off
+   death during the first dash.)*
+   - **Status:** Open.
+4. **HUD showed only ONE card — whichever was active — on the dashes after the reinstall**
+   (from the same-session correction; developer-rated **low severity**, "not a huge deal").
+   Not yet clear whether this is (a) the *intended* presentation of the new #867
+   follow-active session resolver (the HUD deliberately follows the active dash — and with
+   one platform running, one session's card set is correct), (b) a card-stack regression
+   (`CardStackAssembler` / `FlowCardMapper` rendering a single card where a stack of
+   status+offer+chat cards should interleave), or (c) a #867 Dev-settings presentation
+   experiment toggle left in a non-default position after the reinstall wiped/reset prefs.
+   Needs a dev glance at the Dev settings toggle state plus one field look at whether
+   multiple cards return during an offer-over-active-task moment.
    - **Status:** Open.
 
 ### Open questions / investigations (hypotheses — none concluded)
@@ -2172,6 +2191,13 @@ Context that matters for all of these: the 07-26 entry above records **"Device p
 for reinstall post-pull"** (2026-07-27). So the likely shape is a *full data purge + reinstall*,
 not an in-place `install -r` update — which hypothesis family applies depends on which it
 actually was, and that's Verification TODO #1.
+
+*Post-correction triage note:* H1/H2/H4 were drafted against the retracted "every dash since"
+symptom — a persistently-dead listener, missed permission, or failed ruleset load would have
+kept breaking *all* subsequent dashes, which didn't happen. They're **largely deflated** (kept
+below for the trail; the cheap TODO #2 settings sweep still costs nothing to confirm). The live
+hypotheses for the first-dash break are **H3** (mid-dash state loss/resurrection across the
+update) and **H5's one-off reading** (the Bug #2 crash killing that dash's tail).
 
 3. **H1 — listener rebind loss after package update/reinstall.** Android's
    `NotificationListenerService` is notorious for silently not rebinding after its package is
@@ -2206,14 +2232,14 @@ actually was, and that's Verification TODO #1.
    (`core/pipeline/.../AccessibilityPipeline.kt:105` — "Dropping … rulesets not loaded") —
    which would look like *total* non-tracking on that platform, every dash, until fixed. The
    shareable.log check below would show this immediately.
-7. **H5 — recurring crash on the accept/delivery path (Bug #2's reading (b)).** If the new
-   build crashes at a specific lifecycle moment (accept landing, delivery confirm), every dash
-   hits it and every dash loses its tail — one hypothesis that would unify Bug #1 and Bug #2
-   without needing any of H1–H4. A crash there also exercises exactly the recovery seams the
-   architecture defends (snapshot every 5 obs + journal tail-replay, recovery-suppressed
-   externals, `effects_fired` dedup), so post-crash state may *look* subtly wrong (e.g. dead
-   GPS until the #438 B5 reconcile fires) even when recovery "worked". Needs the crash
-   evidence first; if confirmed recurring, the logcat stack decides where it goes.
+7. **H5 — crash on the accept/delivery path (Bug #2).** *(Post-correction: the recurring
+   reading is moot; only the one-off reading below stands.)* A single crash during the first
+   dash — around an accept landing or a delivery confirm — would explain that dash's lost
+   tail, and it exercises exactly the recovery seams the architecture defends (snapshot every
+   5 obs + journal tail-replay, recovery-suppressed externals, `effects_fired` dedup), so
+   post-crash state may *look* subtly wrong (e.g. dead GPS until the #438 B5 reconcile fires)
+   even when recovery "worked". Needs the crash evidence (TODO #6); the logcat stack decides
+   where it goes.
 8. **Open question — is there a known post-#660 signature for this?** The "(No session)"
    bucket + orphan-delivery machinery (#655/#660) exists precisely because mid-dash restarts
    produce null-session deliveries; if the pull shows the since-reinstall deliveries landing
@@ -2234,8 +2260,9 @@ actually was, and that's Verification TODO #1.
    `PipelineStats` lines (which gate is eating frames), and any ERROR lines.
 4. **Data pull:** `session_records` since the reinstall (open sessions with no end, session
    count vs. real dash count), `delivery_records` with `sessionId IS NULL` (the "(No session)"
-   bucket — open question #8), and the `app_events` sequence around one broken dash (is the
-   event log itself complete and only the fold wrong, or are events missing at the source?).
+   bucket — open question #8), and the `app_events` sequence around the **first (mid-update)
+   dash** specifically (is the event log itself complete and only the fold wrong, or are
+   events missing at the source?).
 5. **Consent state:** did the #843 consent prompt re-fire post-reinstall, and what was
    answered? (Explains any "automation stopped working" component of "not tracked correctly".)
 6. **Crash evidence for Bug #2:** `adb logcat -b crash -d` (or `adb bugreport`) for a DashBuddy
@@ -2245,6 +2272,10 @@ actually was, and that's Verification TODO #1.
    observations"), which timestamp the death precisely. Note whether it was a real crash
    (stack trace) vs. a system/OOM kill (no trace) — the triage differs. If it reproduces,
    note the exact screen it fires on.
+7. **Bug #4 (one-card HUD):** check the #867 Dev-settings presentation toggle's state
+   post-reinstall; then, on the next dash, note whether the card stack comes back when an
+   offer lands over an active task (multiple cards expected) — that one moment distinguishes
+   intended follow-active display from a stack-assembly regression.
 
 ### Meta
 
