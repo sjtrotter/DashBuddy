@@ -78,6 +78,29 @@ card's **mechanical** half, #577 (re-confirmed, 24/24, ~0.55 s — with a new po
 that entry's Bug #1), the #457 path, and #554 ShadowProjector (2/2). The #462/#460 dropoff item
 was found **broken-in-part** (raw PII in capture envelopes) and moved to that entry's Bug #7.)_
 
+- **🚨 NEW — #909 — the side-effect engine is alive again (and stays alive).** This is the P0 that
+  destroyed 91.7% of the 07-28 evening ($82.10 of $89.54): a one-character ICU-invalid regex in
+  `EvidenceFilename` blew up as an `Error`, killed the engine's single drain worker, and every
+  effect after it — bubbles, TTS, notifications, the odometer, and `app_events` itself — was
+  silently swallowed for the rest of the process. **The device build MUST be reinstalled before
+  this is testable.**
+  **What to watch (either platform):**
+  1. **Turn Evidence capture ON** (Settings → Data & Privacy → Evidence; master + at least the
+     Offer category). The old crash armed on the FIRST evidence-enabled screenshot of a process,
+     which is why boot always looked healthy — with evidence OFF this item proves nothing.
+  2. **After the first offer screenshot fires, the HUD must keep working for the whole dash** —
+     bubble cards keep updating, offers still speak, the heads-up notification still posts, the
+     odometer still starts/stops with the dash. Anything going quiet mid-dash right after an
+     evidence capture is the same class of failure recurring — note the wall-clock time.
+  3. **Saved evidence filenames are clean** — `Offer.png` / `Offer - Chipotle.png`, never
+     `Offer - {storeName}.png`.
+  **Desk (next pull):** `app_events` must be continuous across the whole evening (no cliff after
+  the first capture); `shareable.log` must contain zero `PatternSyntaxException`; grep the log for
+  `Effect failed — isolated` (the new honest message — if it appears, an effect blew up but the
+  engine survived, which is the fix working) and for `Effect drain worker died unexpectedly`
+  (should never appear; if it does, the supervisor caught something new — file it).
+  - Confirmed: 0/2
+
 - **🆕 NEW — #888 — eight DoorDash screens that used to fall to UNKNOWN are now recognized.**
   All eight are **recognize-only** (no state claim, no parse), so the only intended change is that
   the frames stop landing in the UNKNOWN capture pile. The list: the post-accept **"accepting"

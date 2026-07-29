@@ -30,7 +30,9 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
@@ -114,6 +116,12 @@ class SideEffectEngine @Inject constructor(
 
         /** Entries older than this can never gate again (≥ any declared throttle window). */
         private const val THROTTLE_ENTRY_TTL_MS = 10 * 60 * 1000L
+
+        /** Linear backoff step before the drain worker is restarted (#909). */
+        private const val WORKER_RESTART_BACKOFF_MS = 250L
+
+        /** Ceiling on that backoff — a wedged worker must never stop retrying (#909). */
+        private const val WORKER_RESTART_BACKOFF_MAX_MS = 5_000L
     }
 
     /**
@@ -126,11 +134,25 @@ class SideEffectEngine @Inject constructor(
      *   - Loopback effects (timers, evaluations) replay deterministically.
      */
     /**
-     * Backstop for the effect coroutines this engine spawns (timers, delayed posts): an
-     * uncaught failure must never reach the default handler and kill the process (#341).
+     * Backstop for the **detached** coroutines this engine spawns (timers, delayed notification
+     * posts, the startup prune): an uncaught failure must never reach the default handler and kill
+     * the process (#341). Each of those is its own child of a [SupervisorJob], so a crash there
+     * genuinely IS isolated — it costs that one timer/post, nothing else.
+     *
+     * It is **no longer the queue-drain worker's safety net** (#909). Before, the worker's per-item
+     * `catch (e: Exception)` let an `Error` (an `ExceptionInInitializerError` from a bad `Regex`
+     * initializer) through; the worker died, this handler logged "crashed (isolated)" — which was a
+     * lie, since there was no consumer left — and every subsequent effect, including the only
+     * writer of `app_events`, was silently swallowed by an UNLIMITED channel for the rest of the
+     * process lifetime. The worker now catches `Throwable` per item AND supervises its own loop, so
+     * reaching this handler from the drain path means something escaped both — a real last resort.
      */
     private val effectExceptionHandler = CoroutineExceptionHandler { _, t ->
-        Timber.tag("Effects").e(t, "SideEffectEngine: effect coroutine crashed (isolated)")
+        Timber.tag("Effects").e(
+            t,
+            "SideEffectEngine: a detached effect coroutine crashed (isolated — timers/delayed " +
+                "posts; the drain worker supervises itself, see #909)",
+        )
     }
 
     /**
@@ -158,15 +180,75 @@ class SideEffectEngine @Inject constructor(
         engineScope.launch {
             effectsFiredDao.pruneOlderThan(System.currentTimeMillis() - EFFECTS_RETENTION_MS)
         }
-        engineScope.launch {
-            for (item in queue) {
-                try {
-                    execute(item.effect, item.recovering, item.correlationVersion)
-                } catch (e: CancellationException) {
-                    throw e
-                } catch (e: Exception) {
-                    Timber.tag("Effects").e(e, "Effect failed (isolated): %s", item.effect::class.simpleName)
-                }
+        engineScope.launch { superviseDrainWorker() }
+    }
+
+    /**
+     * Supervisor around [drainQueue] (#909, the #430 pipeline-supervision precedent).
+     *
+     * The engine is a **data-integrity boundary**: `AppEffect.LogEvent` is the only writer of
+     * `app_events`, which is the source of truth the whole analytics read-model is projected from.
+     * A dead worker inside a live process is therefore the worst failure this codebase has — every
+     * effect keeps `trySend`-ing into an UNLIMITED channel that nobody reads, so the app looks
+     * healthy while an evening's earnings evaporate ($82.10 of $89.54 on 2026-07-28).
+     *
+     * [drainQueue] already isolates per item, so the only way out of it is the loop machinery
+     * itself failing — by construction unreachable through the public API today. That is exactly
+     * why it is supervised rather than trusted: the #909 class was also "unreachable" right up
+     * until a one-character regex made it reachable. A restart is logged at ERROR (lost/damaged
+     * subsystem, Principle 7) and backed off; queued effects survive the gap in the UNLIMITED
+     * channel, so a restart costs latency, never data.
+     */
+    private suspend fun superviseDrainWorker() {
+        var restarts = 0
+        while (currentCoroutineContext().isActive) {
+            try {
+                drainQueue()
+                return // channel closed — the only normal way out
+            } catch (e: CancellationException) {
+                throw e
+            } catch (t: Throwable) {
+                restarts++
+                Timber.tag("Effects").e(
+                    t,
+                    "Effect drain worker died unexpectedly — restarting (#%d). Effects queued " +
+                        "meanwhile are buffered, not lost (#909)",
+                    restarts,
+                )
+                delay(minOf(WORKER_RESTART_BACKOFF_MS * restarts, WORKER_RESTART_BACKOFF_MAX_MS))
+            }
+        }
+    }
+
+    /**
+     * The serialized drain. **Catches [Throwable], not [Exception] (#909)** — an `Error` is exactly
+     * what killed this worker in the field: a `PatternSyntaxException` from an ICU-invalid `Regex`
+     * in a `val` initializer surfaces as `ExceptionInInitializerError`, and a class-init /
+     * linkage / verify error from *any* future effect handler would do the same.
+     *
+     * **Which fatals are rethrown: only [CancellationException].** The usual Kotlin guidance —
+     * rethrow the fatal subset ([VirtualMachineError] & friends) — assumes rethrowing preserves
+     * some useful failure signal. Here it does the opposite: the scope is a [SupervisorJob] with
+     * [effectExceptionHandler], so a rethrow does NOT crash the process and does NOT surface
+     * anything to the user; it only kills the one consumer of the effect queue and converts a
+     * bounded, loud, per-effect failure into unbounded silent data loss. An `OutOfMemoryError`
+     * raised while executing one effect is also not proof the VM is doomed — and if it is, the
+     * process dies on its own, having at least logged. Isolating everything is strictly the safer
+     * trade for THIS component; nothing here is swallowed silently (every catch logs at ERROR,
+     * which is the always-exported tier).
+     */
+    private suspend fun drainQueue() {
+        for (item in queue) {
+            try {
+                execute(item.effect, item.recovering, item.correlationVersion)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (t: Throwable) {
+                Timber.tag("Effects").e(
+                    t,
+                    "Effect failed — isolated, the engine is still draining: %s",
+                    item.effect::class.simpleName,
+                )
             }
         }
     }
