@@ -2155,6 +2155,16 @@ remotely (record-not-fix protocol — no code changes made).
    deliveries? missing miles? wrong attribution?) not yet characterized — needs the
    verification pull below before triage.
    - **Status:** Open.
+2. **Suspected app crash mid-dash, around delivering or accepting an offer** (developer:
+   "the app like crashed I think as I delivered or accepted an offer" — not certain it was a
+   crash vs. a system kill vs. the bubble/HUD just vanishing). Unconfirmed and
+   uncharacterized; needs crash evidence from the device (Verification TODO #6). Two readings
+   to keep apart at triage: (a) a one-off crash whose recovery machinery then explains that
+   dash's gaps, or (b) a *recurring* crash on the accept/delivery path in the new build —
+   which, if it fires every dash, would by itself explain Bug #1's "every dash since is
+   incompletely tracked" (each crash loses the in-flight frames and any un-persisted effects
+   between the last snapshot and the kill). See H5.
+   - **Status:** Open.
 
 ### Open questions / investigations (hypotheses — none concluded)
 
@@ -2163,7 +2173,7 @@ for reinstall post-pull"** (2026-07-27). So the likely shape is a *full data pur
 not an in-place `install -r` update — which hypothesis family applies depends on which it
 actually was, and that's Verification TODO #1.
 
-2. **H1 — listener rebind loss after package update/reinstall.** Android's
+3. **H1 — listener rebind loss after package update/reinstall.** Android's
    `NotificationListenerService` is notorious for silently not rebinding after its package is
    updated/reinstalled until notification access is toggled off/on (or the device reboots);
    accessibility services can behave similarly after a reinstall. If either listener is dead,
@@ -2171,7 +2181,7 @@ actually was, and that's Verification TODO #1.
    partially tracked" and would persist until manually re-toggled. Would need to confirm by
    checking both toggles on-device and looking for a total absence of notification-sourced
    events in the pull.
-3. **H2 — incomplete re-setup after the purge.** A purge+reinstall revokes *everything* the app
+4. **H2 — incomplete re-setup after the purge.** A purge+reinstall revokes *everything* the app
    was granted: accessibility, notification access, overlay, location (odometer dead → no
    miles), the battery-optimization exemption (process free to be killed mid-dash → per-dash
    gaps), and — by design — all #843 capability consents (all capabilities return to
@@ -2180,7 +2190,7 @@ actually was, and that's Verification TODO #1.
    of the re-setup chain was missed mid-dash, its absence would produce a *persistent* partial
    tracking failure with a per-item signature (no miles vs. no notifications vs. mid-dash
    process deaths).
-4. **H3 — resurrected mid-dash snapshot (in-place-update shape only).**
+5. **H3 — resurrected mid-dash snapshot (in-place-update shape only).**
    `SnapshotStore.restoreLatest()` has **no age guard** — it restores the latest decodable
    snapshot regardless of how old it is (`core/state/.../SnapshotStore.kt:70`; pruning runs
    only on the *write* path, `SnapshotStore.kt:56`). If the process died mid-dash with a live
@@ -2191,12 +2201,20 @@ actually was, and that's Verification TODO #1.
    continuation of the resurrected session (no new `DASH_START`), mis-attributing the new
    dash. On a purged device this hypothesis is moot (no snapshot survives) — hence
    Verification TODO #1 first.
-5. **H4 — fail-closed ruleset gate eating all frames.** If the new build's ruleset load fails
+6. **H4 — fail-closed ruleset gate eating all frames.** If the new build's ruleset load fails
    for a platform (compile reject, duplicate-id skip), the #432 gate drops every frame
    (`core/pipeline/.../AccessibilityPipeline.kt:105` — "Dropping … rulesets not loaded") —
    which would look like *total* non-tracking on that platform, every dash, until fixed. The
    shareable.log check below would show this immediately.
-6. **Open question — is there a known post-#660 signature for this?** The "(No session)"
+7. **H5 — recurring crash on the accept/delivery path (Bug #2's reading (b)).** If the new
+   build crashes at a specific lifecycle moment (accept landing, delivery confirm), every dash
+   hits it and every dash loses its tail — one hypothesis that would unify Bug #1 and Bug #2
+   without needing any of H1–H4. A crash there also exercises exactly the recovery seams the
+   architecture defends (snapshot every 5 obs + journal tail-replay, recovery-suppressed
+   externals, `effects_fired` dedup), so post-crash state may *look* subtly wrong (e.g. dead
+   GPS until the #438 B5 reconcile fires) even when recovery "worked". Needs the crash
+   evidence first; if confirmed recurring, the logcat stack decides where it goes.
+8. **Open question — is there a known post-#660 signature for this?** The "(No session)"
    bucket + orphan-delivery machinery (#655/#660) exists precisely because mid-dash restarts
    produce null-session deliveries; if the pull shows the since-reinstall deliveries landing
    in that bucket, the breakage may be *attribution*, with the underlying events intact and
@@ -2216,10 +2234,17 @@ actually was, and that's Verification TODO #1.
    `PipelineStats` lines (which gate is eating frames), and any ERROR lines.
 4. **Data pull:** `session_records` since the reinstall (open sessions with no end, session
    count vs. real dash count), `delivery_records` with `sessionId IS NULL` (the "(No session)"
-   bucket — H6), and the `app_events` sequence around one broken dash (is the event log itself
-   complete and only the fold wrong, or are events missing at the source?).
+   bucket — open question #8), and the `app_events` sequence around one broken dash (is the
+   event log itself complete and only the fold wrong, or are events missing at the source?).
 5. **Consent state:** did the #843 consent prompt re-fire post-reinstall, and what was
    answered? (Explains any "automation stopped working" component of "not tracked correctly".)
+6. **Crash evidence for Bug #2:** `adb logcat -b crash -d` (or `adb bugreport`) for a DashBuddy
+   stack trace near the accept/delivery moment; on-device Settings → Apps → DashBuddy can also
+   show a recent-crash marker. Cross-check the DEBUG firehose `app.log` for an abrupt cut and
+   the next launch's recovery lines ("Restored from snapshot at cv=" / "Replaying N
+   observations"), which timestamp the death precisely. Note whether it was a real crash
+   (stack trace) vs. a system/OOM kill (no trace) — the triage differs. If it reproduces,
+   note the exact screen it fires on.
 
 ### Meta
 
