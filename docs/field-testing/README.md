@@ -2152,14 +2152,24 @@ first (mid-update) dash**. Subsequent dashes tracked fine; what they showed inst
 display behavior: **the bubble displayed only one card, whichever was active** (Bug #4 below,
 developer-rated low severity — "not a huge deal"). Items drafted before the correction are
 annotated inline rather than deleted, so the reasoning trail stays honest.
+**Second clarification (same session):** the developer walked the correction back partway —
+"I don't know exactly what was going on tbh so I can't claim that they were tracking
+everything." Subsequent dashes are **unverified, not confirmed clean**. And a recalled prior
+symptom may fit: **"we've seen the symptom before where the events were just not getting a
+dash id assigned"** — i.e. the null-`sessionId` attribution class (#655/#660, the
+"(No session)" bucket). That recall makes open question #8 the **leading candidate** for
+whatever wrongness the subsequent dashes have: events captured intact but not attributed to a
+dash. The pull decides.
 
 ### Bugs
 
 1. **Dash tracking broken on the dash that was in progress during the app update/reinstall.**
    ~~All subsequent dashes incompletely/incorrectly tracked~~ — **rescoped by the same-session
-   correction: the first (mid-update) dash only**; subsequent dashes tracked fine. Exact
-   failure shape for that dash (missing session? missing deliveries? missing miles? wrong
-   attribution?) not yet characterized — needs the verification pull below before triage.
+   correction: the first (mid-update) dash is the confirmed break**; per the second
+   clarification, subsequent dashes are **unverified** (not confirmed clean — the developer
+   recalls the events-without-dash-id symptom, see open question #8). Exact failure shape for
+   the first dash (missing session? missing deliveries? missing miles? wrong attribution?)
+   not yet characterized — needs the verification pull below before triage.
    - **Status:** Open.
 2. **Suspected app crash mid-dash, around delivering or accepting an offer** (developer:
    "the app like crashed I think as I delivered or accepted an offer" — not certain it was a
@@ -2192,12 +2202,15 @@ for reinstall post-pull"** (2026-07-27). So the likely shape is a *full data pur
 not an in-place `install -r` update — which hypothesis family applies depends on which it
 actually was, and that's Verification TODO #1.
 
-*Post-correction triage note:* H1/H2/H4 were drafted against the retracted "every dash since"
-symptom — a persistently-dead listener, missed permission, or failed ruleset load would have
-kept breaking *all* subsequent dashes, which didn't happen. They're **largely deflated** (kept
-below for the trail; the cheap TODO #2 settings sweep still costs nothing to confirm). The live
-hypotheses for the first-dash break are **H3** (mid-dash state loss/resurrection across the
-update) and **H5's one-off reading** (the Bug #2 crash killing that dash's tail).
+*Post-correction triage note (amended by the second clarification):* H1/H2/H4 were drafted
+against the "every dash since" symptom; the correction deflated them, but with subsequent
+dashes now **unverified** they're demoted rather than dismissed (kept below for the trail; the
+cheap TODO #2 settings sweep still costs nothing to confirm — note the recalled symptom is
+*attribution*, events present but dash-id-less, which points **away** from dead-sensor
+hypotheses like H1/H4 and toward #8). Leading candidates: **open question #8** (null-session
+attribution — the developer has seen this exact symptom before) for the subsequent dashes, and
+**H3** (mid-dash state loss/resurrection across the update) + **H5's one-off reading** (the
+Bug #2 crash killing that dash's tail) for the first-dash break.
 
 3. **H1 — listener rebind loss after package update/reinstall.** Android's
    `NotificationListenerService` is notorious for silently not rebinding after its package is
@@ -2240,11 +2253,16 @@ update) and **H5's one-off reading** (the Bug #2 crash killing that dash's tail)
    post-crash state may *look* subtly wrong (e.g. dead GPS until the #438 B5 reconcile fires)
    even when recovery "worked". Needs the crash evidence (TODO #6); the logcat stack decides
    where it goes.
-8. **Open question — is there a known post-#660 signature for this?** The "(No session)"
-   bucket + orphan-delivery machinery (#655/#660) exists precisely because mid-dash restarts
-   produce null-session deliveries; if the pull shows the since-reinstall deliveries landing
-   in that bucket, the breakage may be *attribution*, with the underlying events intact and
-   recoverable via the existing `DELIVERY_SESSION_ASSIGN` correction path.
+8. **Open question — is there a known post-#660 signature for this? (LEADING CANDIDATE per
+   the second clarification** — the developer recalls this exact symptom from before: "events
+   were just not getting a dash id assigned".) The "(No session)" bucket + orphan-delivery
+   machinery (#655/#660) exists precisely because mid-dash restarts produce null-session
+   deliveries; if the pull shows the since-reinstall deliveries landing in that bucket, the
+   breakage is *attribution*, with the underlying events intact and recoverable via the
+   existing `DELIVERY_SESSION_ASSIGN` correction path (Money-tab callout → orphan list →
+   session picker). Worth also checking whether a *session* record exists at all for each
+   affected dash (no `DASH_START` observed → nothing to attribute to) vs. exists but the
+   deliveries missed it — the two shapes have different causes.
 
 ### Verification TODOs
 
