@@ -18,71 +18,11 @@ import cloud.trotter.dashbuddy.domain.analytics.AnalyticsWindow
 import cloud.trotter.dashbuddy.domain.analytics.AnalyticsWindows
 import cloud.trotter.dashbuddy.domain.analytics.DailyEarnings
 import cloud.trotter.dashbuddy.domain.analytics.DecisionEconomics
+import cloud.trotter.dashbuddy.domain.analytics.NetDelta
 import cloud.trotter.dashbuddy.domain.analytics.PeriodEconomics
 import cloud.trotter.dashbuddy.domain.format.Formats
 import cloud.trotter.dashbuddy.domain.format.formatDuration
 import java.time.LocalDate
-
-/**
- * Pure copy logic for the recap hero (#970 / brief §3.3) — Compose-free so the comparison rules are
- * unit-testable away from rendering (the [MoneyWentModel] precedent).
- *
- * The rules exist to keep §9's honesty bar: a delta is only stated when there is something real to
- * compare against. No previous window (Lifetime) says so; a previous window that earned nothing gets
- * a worded statement rather than a divide-by-zero percentage; a sub-half-percent move reads as
- * "the same" rather than as a spurious `▲ 0%`.
- */
-object RecapModel {
-
-    /** Below this a money figure is effectively zero — the same threshold the hub's callouts use. */
-    private const val MONEY_EPSILON = UNATTRIBUTED_EPSILON
-
-    /** Below this magnitude a relative move is noise, not a trend. */
-    private const val FLAT_FRACTION = 0.005
-
-    enum class Direction {
-        /** There is no previous equivalent window (Lifetime) — state that, compare nothing. */
-        NONE,
-
-        /** The previous window earned (effectively) nothing, so a percentage would divide by zero. */
-        FROM_ZERO,
-
-        /** Materially unchanged. */
-        FLAT,
-        UP,
-        DOWN,
-    }
-
-    /** [fraction] is the signed relative change, present only for [Direction.UP]/[Direction.DOWN]. */
-    data class Delta(val direction: Direction, val fraction: Double?)
-
-    /**
-     * The delta of [currentNet] against [previousNet] (the previous equivalent window's frozen net).
-     * A null [previousNet] means "no such window".
-     */
-    fun delta(currentNet: Double, previousNet: Double?): Delta {
-        if (previousNet == null) return Delta(Direction.NONE, null)
-        if (kotlin.math.abs(previousNet) < MONEY_EPSILON) {
-            return if (kotlin.math.abs(currentNet) < MONEY_EPSILON) {
-                Delta(Direction.FLAT, null)
-            } else {
-                Delta(Direction.FROM_ZERO, null)
-            }
-        }
-        val fraction = (currentNet - previousNet) / kotlin.math.abs(previousNet)
-        return when {
-            fraction > FLAT_FRACTION -> Delta(Direction.UP, fraction)
-            fraction < -FLAT_FRACTION -> Delta(Direction.DOWN, fraction)
-            else -> Delta(Direction.FLAT, null)
-        }
-    }
-
-    /** True when the window recorded nothing at all — the hero says so instead of printing zeros. */
-    fun isEmpty(economics: PeriodEconomics): Boolean =
-        economics.totals.deliveries == 0 &&
-            economics.totals.onlineDuration == 0L &&
-            kotlin.math.abs(economics.grossEarnings) < MONEY_EPSILON
-}
 
 /**
  * The recap hero (#970 / brief §3.3) — the window's **kept** money, its delta against the previous
@@ -148,10 +88,10 @@ fun RecapHero(
 
 @Composable
 private fun deltaColor(economics: PeriodEconomics, previous: PeriodEconomics?) =
-    when (RecapModel.delta(economics.netProfit, previous?.netProfit).direction) {
-        RecapModel.Direction.UP, RecapModel.Direction.FROM_ZERO -> AppTheme.colors.good
-        RecapModel.Direction.DOWN -> AppTheme.colors.bad
-        RecapModel.Direction.FLAT, RecapModel.Direction.NONE -> AppTheme.colors.text3
+    when (NetDelta.delta(economics.netProfit, previous?.netProfit).direction) {
+        NetDelta.Direction.UP, NetDelta.Direction.FROM_ZERO -> AppTheme.colors.good
+        NetDelta.Direction.DOWN -> AppTheme.colors.bad
+        NetDelta.Direction.FLAT, NetDelta.Direction.NONE -> AppTheme.colors.text3
     }
 
 /** "▲ 12% vs Jul 6 – 12" and friends — the previous window is named by its RANGE, never by a guess. */
@@ -162,22 +102,22 @@ private fun deltaText(
     economics: PeriodEconomics,
     previous: PeriodEconomics?,
 ): String {
-    val delta = RecapModel.delta(economics.netProfit, previous?.netProfit)
+    val delta = NetDelta.delta(economics.netProfit, previous?.netProfit)
     val previousLabel = AnalyticsWindows.previous(window)
         ?.let { WindowLabel.range(it, today) }
         ?: return stringResource(R.string.analytics_hero_delta_none)
     return when (delta.direction) {
-        RecapModel.Direction.NONE -> stringResource(R.string.analytics_hero_delta_none)
-        RecapModel.Direction.FROM_ZERO ->
+        NetDelta.Direction.NONE -> stringResource(R.string.analytics_hero_delta_none)
+        NetDelta.Direction.FROM_ZERO ->
             stringResource(R.string.analytics_hero_delta_from_nothing_format, previousLabel)
-        RecapModel.Direction.FLAT ->
+        NetDelta.Direction.FLAT ->
             stringResource(R.string.analytics_hero_delta_flat_format, previousLabel)
-        RecapModel.Direction.UP -> stringResource(
+        NetDelta.Direction.UP -> stringResource(
             R.string.analytics_hero_delta_up_format,
             Formats.percent(delta.fraction ?: 0.0),
             previousLabel,
         )
-        RecapModel.Direction.DOWN -> stringResource(
+        NetDelta.Direction.DOWN -> stringResource(
             R.string.analytics_hero_delta_down_format,
             Formats.percent(kotlin.math.abs(delta.fraction ?: 0.0)),
             previousLabel,
@@ -188,7 +128,7 @@ private fun deltaText(
 /** "$412.83 gross · 47 deliveries · 15h 49m online · 37% acceptance" — measured facts only. */
 @Composable
 private fun summaryLine(economics: PeriodEconomics, decisions: DecisionEconomics): String {
-    if (RecapModel.isEmpty(economics)) return stringResource(R.string.analytics_hero_no_data)
+    if (NetDelta.isEmpty(economics)) return stringResource(R.string.analytics_hero_no_data)
     val deliveryWord = if (economics.totals.deliveries == 1) {
         stringResource(R.string.time_tab_delivery_singular)
     } else {

@@ -29,7 +29,7 @@ import cloud.trotter.dashbuddy.domain.format.Formats
 
 /**
  * Pure decision logic for "Where your money went" (#973 / brief §4.1) — Compose-free so the coverage
- * reasoning is provable without rendering (the [RecapModel]/`WindowLabel` precedent).
+ * reasoning is provable without rendering (the `NetDelta`/`WindowLabel` precedent).
  *
  * **This carries over the retired true-net waterfall's coverage guard verbatim (#659).** The frozen
  * fuel/non-fuel split is only trustworthy for a window when both sums are present AND they reconcile

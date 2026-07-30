@@ -37,7 +37,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.style.TextAlign
@@ -45,11 +44,10 @@ import androidx.compose.ui.unit.dp
 import cloud.trotter.dashbuddy.R
 import cloud.trotter.dashbuddy.core.designsystem.component.AppCard
 import cloud.trotter.dashbuddy.core.designsystem.component.AppChip
+import cloud.trotter.dashbuddy.core.designsystem.component.AppHeatScale
 import cloud.trotter.dashbuddy.core.designsystem.text.EMPTY_VALUE
-import cloud.trotter.dashbuddy.core.designsystem.theme.AppColors
 import cloud.trotter.dashbuddy.core.designsystem.theme.AppTheme
 import cloud.trotter.dashbuddy.domain.analytics.EarningsHeatmap
-import cloud.trotter.dashbuddy.domain.analytics.EarningsHeatmapCell
 import cloud.trotter.dashbuddy.domain.analytics.StoreReportCard
 import cloud.trotter.dashbuddy.domain.format.Formats
 import cloud.trotter.dashbuddy.domain.format.formatDuration
@@ -146,7 +144,7 @@ private fun HeatmapCard(heatmap: EarningsHeatmap) {
                                     .weight(1f)
                                     .aspectRatio(1f)
                                     .clip(RoundedCornerShape(2.dp))
-                                    .background(cellColor(cell, maxRate, c))
+                                    .background(AppHeatScale.cellColor(cell.dollarsPerHour, maxRate, c))
                                     .then(
                                         if (zeroRate) Modifier.border(1.dp, c.bad, RoundedCornerShape(2.dp))
                                         else Modifier,
@@ -217,7 +215,7 @@ private fun HeatmapLegend(maxRate: Double) {
         Text(text = stringResource(R.string.patterns_tab_heatmap_legend_zero), style = MaterialTheme.typography.labelSmall, color = c.text3)
         Spacer(Modifier.width(8.dp))
         Text(text = stringResource(R.string.patterns_tab_heatmap_legend_low), style = MaterialTheme.typography.labelSmall, color = c.text3)
-        listOf(0.0, 0.5, 1.0).forEach { f -> LegendSwatch(positiveRamp(f.toFloat(), c)) }
+        listOf(0.0, 0.5, 1.0).forEach { f -> LegendSwatch(AppHeatScale.ramp(f.toFloat(), c)) }
         Text(text = stringResource(R.string.patterns_tab_heatmap_legend_high), style = MaterialTheme.typography.labelSmall, color = c.text3)
     }
 }
@@ -232,29 +230,6 @@ private fun LegendSwatch(color: Color, border: Color? = null) {
             .then(if (border != null) Modifier.border(1.dp, border, RoundedCornerShape(2.dp)) else Modifier),
     )
 }
-
-/**
- * The tint for one cell (pure — takes the palette in). Insufficient coverage ([EarningsHeatmapCell.dollarsPerHour]
- * null) → a dim `surface3` (reads as "no data"); a rate ≤ 0 with enough coverage → the cold `badBg`
- * ("worked, earned ~nothing", paired with a `bad` border at the call site); a positive rate → the
- * [positiveRamp] scaled to [maxRate]. The insufficient and genuinely-zero cells are deliberately
- * different so a masked cell never reads as a real zero.
- */
-private fun cellColor(cell: EarningsHeatmapCell, maxRate: Double, c: AppColors): Color {
-    val rate = cell.dollarsPerHour ?: return c.surface3
-    if (rate <= 0.0) return c.badBg
-    val fraction = if (maxRate > 0.0) (rate / maxRate).coerceIn(0.0, 1.0) else 1.0
-    return positiveRamp(fraction.toFloat(), c)
-}
-
-/**
- * The positive-rate ramp `goodBg → good`, but starting at **0.3** of the way up rather than at the raw
- * ~12–14%-alpha `goodBg` — otherwise a low-positive cell is an indistinguishable faint tint next to the
- * `surface3`/`badBg` cells in light mode. The lowest positive rate is thus a clearly-green swatch, and
- * the best hour is solid `good`.
- */
-private fun positiveRamp(fraction: Float, c: AppColors): Color =
-    lerp(c.goodBg, c.good, 0.3f + 0.7f * fraction.coerceIn(0f, 1f))
 
 // ── Store report cards ──────────────────────────────────────────────────
 
