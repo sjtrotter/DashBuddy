@@ -22,7 +22,6 @@ import io.kotest.property.arbitrary.arbitrary
 import io.kotest.property.checkAll
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertNull
-import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.mockito.kotlin.doReturn
 import org.mockito.kotlin.mock
@@ -36,10 +35,16 @@ import org.mockito.kotlin.mock
  * [ObservationClassifier] wired to the PRODUCTION rules ([TestRulesetFactory]) and then
  * the real [CaptureWriter] fail-closed backstop. Asserts:
  *  - classify + capture never throw (no crash on hostile input);
- *  - each frame classifies + captures within a wall-clock budget (bounded time);
  *  - the fail-closed invariant: an UNKNOWN frame that reaches the capture bus NEVER
  *    carried a [SensitiveTextMarkers] hit — a toxic UNKNOWN is always dropped
  *    (post the #590 evasion hardening, homoglyph markers are caught too).
+ *
+ * **No wall-clock assertion (#947).** An earlier version asserted `elapsedMs < 2_000`
+ * inside this 200-sample property — exactly the CI-runner-jitter flake shape the #878
+ * seeding doctrine exists to kill (a slow CI host, not a real regression, would redden a
+ * *reproducible-looking* seeded property, defeating the point of seeding). The functional
+ * assertions above carry the test; a genuine hang is caught by the test-runner's own
+ * timeout, not a per-sample stopwatch.
  *
  * Pipeline-service stages (the accessibility gate/dedup) need Android services and are
  * out of scope; this exercises the classify + capture-scrub path directly, mirroring
@@ -48,8 +53,6 @@ import org.mockito.kotlin.mock
  * **Determinism (#878).** The seed below pins PR CI, so a failure is a reproducible
  * finding rather than a dice roll; bump it **deliberately** to explore new samples.
  * Unseeded breadth lives on the `-Ddashbuddy.propExplore=true` path ([PropSeeds]).
- * NOTE the wall-clock budget in this property is machine-dependent by nature — the
- * seed pins the INPUT trees, not the timing.
  */
 class ClassifyGateCaptureFuzzTest {
 
@@ -138,17 +141,13 @@ class ClassifyGateCaptureFuzzTest {
     )
 
     @Test
-    fun `property - adversarial trees never crash classify or capture, stay time-bounded, and never leak an UNKNOWN sensitive frame`() = runTest {
+    fun `property - adversarial trees never crash classify or capture, and never leak an UNKNOWN sensitive frame`() = runTest {
         checkAll(PropSeeds.samples(200), PropSeeds.config(SEED), treeArb) { tree ->
             val bus = RecordingBus()
             val writer = CaptureWriter(bus, PipelineStats(), noRedaction)
 
-            val start = System.nanoTime()
             val obs = classifier.classify(event(tree)) // must not throw
             writer.captureScreen(obs, event(tree))      // must not throw
-            val elapsedMs = (System.nanoTime() - start) / 1_000_000
-
-            assertTrue("classify+capture took ${elapsedMs}ms — not time-bounded", elapsedMs < 2_000)
 
             // Fail-closed invariant: a toxic UNKNOWN frame is always dropped before the bus.
             if (obs.target == UNKNOWN_TARGET && bus.offered) {
