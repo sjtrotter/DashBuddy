@@ -41,6 +41,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import cloud.trotter.dashbuddy.feature.settings.R
+import cloud.trotter.dashbuddy.domain.evaluation.OfferSimulation
 import cloud.trotter.dashbuddy.domain.format.Formats
 import cloud.trotter.dashbuddy.feature.settings.components.DraggableRuleRow
 import cloud.trotter.dashbuddy.feature.settings.components.FakeOfferCard
@@ -59,9 +60,10 @@ fun StrategySettingsScreen(
     var simPay by remember { mutableFloatStateOf(6.50f) }
     var simDist by remember { mutableFloatStateOf(3.2f) }
 
-    // Memoized (#367): this ran an un-remembered evaluation every recomposition.
+    // Derived display state, memoized on its own inputs (#367 memoization, #944 UDF): a pure
+    // :domain call, not a ViewModel function invoked from composition.
     val simulationResult = remember(simPay, simDist, config) {
-        viewModel.simulateOffer(simPay.toDouble(), simDist.toDouble())
+        OfferSimulation.simulate(simPay.toDouble(), simDist.toDouble(), config)
     }
 
     // --- REORDERABLE STATE ---

@@ -30,12 +30,12 @@
     <string name="data_export_csv_desc">Pick a folder and DashBuddy writes three spreadsheet files into it:\n• deliveries.csv — one row per delivery\n• sessions.csv — one row per session\n• summary.csv — totals + estimated IRS mileage deduction\n\nThis is your own data, on-device — nothing is uploaded. Exports all history (a date-range picker is coming later).</string>
     <string name="data_export_csv_button">"  Choose folder &amp; export"</string>
     <string name="data_export_csv_success_format">Exported %1$d files to the chosen folder.</string>
-    <string name="data_export_csv_error_format">Export failed: %1$s</string>
+    <string name="data_export_csv_error_format">Export failed (%1$s). Check the folder and try again.</string>
     <string name="data_export_log_heading">Export a bug report</string>
     <string name="data_export_log_desc">Pick a folder and DashBuddy writes dashbuddy-log.txt into it — the log the developer needs to diagnose an issue.\n\nINFO+ milestones only — no raw store, customer, or address text. Every line is auto-scrubbed at the sink before it\'s written, so a leaked name can\'t reach the file. On-device, nothing is uploaded.</string>
     <string name="data_export_log_button">"  Choose folder &amp; export log"</string>
     <string name="data_export_log_success_format">Exported dashbuddy-log.txt — %1$d line(s) were auto-scrubbed.</string>
-    <string name="data_export_log_error_format">Log export failed: %1$s</string>
+    <string name="data_export_log_error_format">Log export failed (%1$s). Check the folder and try again.</string>
     <string name="consent_title">Automation &amp; Consent</string>
     <string name="consent_disclosure_heading">Review or change what DashBuddy is allowed to tap</string>
     <string name="consent_disclosure_body">DashBuddy uses Android\'s Accessibility service to read the screens of the delivery apps you turn on, so it can recognize offers, pickups, and deliveries. This recognition runs entirely on your phone.\n\nDashBuddy can also tap buttons in a delivery app for you — but only the specific actions you allow, only inside that delivery app, and only on a button whose label matches the action (except the icon-only pay-details arrow, which is verified by app boundary only). Nothing is turned on for you: each action below stays off until you allow it, and DashBuddy asks you the first time it can offer one. Turn any action off and DashBuddy will not tap it — you do it manually.</string>

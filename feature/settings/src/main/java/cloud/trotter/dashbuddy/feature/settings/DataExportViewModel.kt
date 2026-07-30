@@ -41,7 +41,15 @@ class DataExportViewModel @Inject constructor(
         data object Idle : ExportState
         data object InProgress : ExportState
         data class Success(val filesWritten: Int) : ExportState
-        data class Error(val message: String) : ExportState
+
+        /**
+         * [errorClass] is the exception's simple class name — never its message (#944). A platform
+         * exception message can embed the SAF folder URI, i.e. a user path, which is exactly why
+         * the log below records only the class; the on-screen copy is the same disclosure surface
+         * (a screenshotted/shared error is as public as an exported log line), so it gets the same
+         * treatment. The class name is diagnostic and path-free.
+         */
+        data class Error(val errorClass: String) : ExportState
     }
 
     /** Bug-report (shareable log) export state (#551), separate from the CSV export state. */
@@ -50,7 +58,9 @@ class DataExportViewModel @Inject constructor(
         data object InProgress : LogExportState
         /** [scrubbedLines] = INFO+ lines the sink-gate redacted (surfaced for honesty). */
         data class Success(val scrubbedLines: Int) : LogExportState
-        data class Error(val message: String) : LogExportState
+
+        /** [errorClass] — same path-free disclosure rule as [ExportState.Error] (#944). */
+        data class Error(val errorClass: String) : LogExportState
     }
 
     private val _state = MutableStateFlow<ExportState>(ExportState.Idle)
@@ -82,11 +92,13 @@ class DataExportViewModel @Inject constructor(
                 onFailure = { e ->
                     // P7: ERROR ships in exported bug reports. Platform exception messages can
                     // embed the SAF folder URI (a user-path), so log only the exception CLASS —
-                    // never the raw message/stack-message.
+                    // never the raw message/stack-message. The UI state carries the same class
+                    // (#944): the raw message used to be rendered on screen two lines under this
+                    // very comment.
                     Timber.tag("Export").e(
                         "CSV export failed: %s", e.javaClass.simpleName
                     )
-                    ExportState.Error(e.message ?: "Export failed")
+                    ExportState.Error(e.javaClass.simpleName)
                 },
             )
         }
@@ -120,9 +132,10 @@ class DataExportViewModel @Inject constructor(
                     LogExportState.Success(scrubbed)
                 },
                 onFailure = { e ->
-                    // P7: log the exception CLASS only — messages can embed the SAF folder URI.
+                    // P7 + #944: log AND display the exception CLASS only — a message can embed
+                    // the SAF folder URI.
                     Timber.tag("Export").e("Log export failed: %s", e.javaClass.simpleName)
-                    LogExportState.Error(e.message ?: "Export failed")
+                    LogExportState.Error(e.javaClass.simpleName)
                 },
             )
         }

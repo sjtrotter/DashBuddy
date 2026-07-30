@@ -22,7 +22,7 @@ data class EvaluationConfig(
      * THIS [userEconomy] are whatever the last [forPlatform] call (if any) stamped, which for a
      * freshly-constructed/raw config is the domain default seed, not any platform's real pace. A
      * consumer that scores a SHOP offer against the raw config (skipping [forPlatform]) silently gets
-     * seed-only pricing — see `SettingsViewModel.simulateOffer`, which is safe today only because its
+     * seed-only pricing — see [OfferSimulation.simulate], which is safe today only because its
      * simulated offer is never a shop offer.
      */
     val userEconomy: UserEconomy = UserEconomy(),
