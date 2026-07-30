@@ -108,7 +108,8 @@ class InboxProcessorTest(
                 targetFolder = screenName
             )
             println("     MOVED: snapshots/$screenName/$filename")
-            SnapshotLibrarian.pruneFolder(targetFolder)
+            // Name the newcomer so the prune's at-cap safe can protect the incumbents (#929).
+            SnapshotLibrarian.pruneFolder(targetFolder, addedFilename = filename)
 
         } catch (e: Exception) {
             println("     ERROR: ${e.message}")

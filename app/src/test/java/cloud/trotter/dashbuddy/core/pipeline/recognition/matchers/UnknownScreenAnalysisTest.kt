@@ -61,7 +61,8 @@ class UnknownScreenAnalysisTest(filename: String, node: UiNode) {
             println("   GRADUATED: now recognized as '$identifiedScreen' (was UNKNOWN).")
             try {
                 val target = SnapshotLibrarian.archiveSnapshot(myFilename, FOLDER, identifiedScreen)
-                SnapshotLibrarian.pruneFolder(target)
+                // Name the newcomer so the prune's at-cap safe can protect the incumbents (#929).
+                SnapshotLibrarian.pruneFolder(target, addedFilename = myFilename)
                 println("   MOVED → snapshots/$identifiedScreen/$myFilename")
             } catch (e: Exception) {
                 println("   ERROR graduating $myFilename: ${e.message}")
