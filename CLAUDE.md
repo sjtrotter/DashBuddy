@@ -954,11 +954,19 @@ pass is clean or its findings are triaged.
 
 **Docs-only / non-code PRs can skip CI.** The `pr-check.yml` workflow skips the
 `build-and-test` job when the **PR description (body)** contains the literal
-string **`[skip ci]`** (`if: ${{ !contains(github.event.pull_request.body, '[skip ci]') }}`).
-So for a PR that touches no compiled code (only Markdown/docs), put `[skip ci]`
-in the PR body to avoid a pointless ~6-minute build. Note the exact token is
-`[skip ci]` in the **body** — not `[no-ci]`, not a comment, not a label. Only use
-it when the diff genuinely has no code; when in doubt, let CI run.
+string **`[skip ci]`**. So for a PR that touches no compiled code (only
+Markdown/docs), put `[skip ci]` in the PR body to avoid a pointless ~6-minute
+build. Note the exact token is `[skip ci]` in the **body** — not `[no-ci]`, not a
+comment, not a label. Only use it when the diff genuinely has no code; when in
+doubt, let CI run. **Footgun (#902/#928):** the check is a bare `contains()`, so
+a code PR whose body merely *describes* the token skips its own CI — either
+paraphrase ("the skip-ci token") or add the override token **`[force ci]`** to
+the body, which forces the run back on. And if Actions ever **refuses to
+dispatch** runs for a PR's tree (the 2026-07-27 class — no run object across
+shas/branches), use the `workflow_dispatch` escape hatch: Actions → PR Check →
+Run workflow → enter the PR number; it builds that PR's merge ref and reports a
+real `build-and-test` commit status onto the PR head, satisfying branch
+protection without an admin override.
 
 **PR CI gates `:app:lintVitalRelease` (#907).** Until #907, `pr-check.yml` only ever
 built/tested the **debug** variant, so a release-only break (16 `ExtraTranslation`

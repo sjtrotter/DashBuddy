@@ -3,17 +3,37 @@ name: PR Check
 on:
   pull_request:
     branches: [ master ]
+  # #902 — escape hatch for a dispatch-refused PR (Actions refused to create runs for one
+  # PR's tree across 4 shas/3 PRs on 2026-07-27; branch protection made it unmergeable).
+  # Dispatch with the PR number: the job checks out that PR's MERGE ref (the same tree a
+  # pull_request run would test) and reports a `build-and-test` commit status back onto the
+  # PR's head SHA, so the required check turns green through the normal path instead of an
+  # admin override.
+  workflow_dispatch:
+    inputs:
+      pr:
+        description: 'PR number to run against (checks out refs/pull/<pr>/merge, reports status to its head SHA)'
+        required: true
+        type: string
 
 jobs:
   build-and-test:
     runs-on: ubuntu-latest
-    if: ${{ !contains(github.event.pull_request.body, '[skip ci]') }}
+    # Docs-only PRs skip via the literal token `[skip ci]` in the PR BODY (see CLAUDE.md).
+    # #902 footgun guard: a PR whose body merely DESCRIBES the token (PR #928 documented the
+    # mechanism and silently skipped its own CI) can force the run back on with `[force ci]`.
+    # A workflow_dispatch run has no PR body — contains(null, …) is false — so it always runs.
+    if: ${{ !contains(github.event.pull_request.body, '[skip ci]') || contains(github.event.pull_request.body, '[force ci]') }}
     env:
       FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          # Empty ref (pull_request events) keeps the default merge-commit checkout; a
+          # workflow_dispatch run substitutes the named PR's merge ref (#902).
+          ref: ${{ github.event_name == 'workflow_dispatch' && format('refs/pull/{0}/merge', inputs.pr) || '' }}
 
       - name: Set up JDK 21
         uses: actions/setup-java@v4
@@ -61,6 +81,22 @@ jobs:
       - name: Upload debug APK
         uses: actions/upload-artifact@v4
         with:
-          name: debug-apk-${{ github.event.pull_request.number }}
+          name: debug-apk-${{ github.event.pull_request.number || inputs.pr }}
           path: app/build/outputs/apk/debug/app-debug.apk
           retention-days: 7
+
+      - name: Report status to PR head (dispatch runs only)
+        # #902 — a workflow_dispatch run is not attached to the PR, so its result would never
+        # satisfy the required `build-and-test` check. Post a commit status with that exact
+        # context onto the PR's HEAD sha (branch protection accepts a commit status of the
+        # same name). `always()` so a red dispatch run reports failure, not silence.
+        if: ${{ always() && github.event_name == 'workflow_dispatch' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          HEAD_SHA=$(gh pr view "${{ inputs.pr }}" --repo "${{ github.repository }}" --json headRefOid -q .headRefOid)
+          gh api "repos/${{ github.repository }}/statuses/$HEAD_SHA" \
+            -f state="${{ job.status == 'success' && 'success' || 'failure' }}" \
+            -f context="build-and-test" \
+            -f target_url="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" \
+            -f description="manual dispatch run (#902 escape hatch)"
