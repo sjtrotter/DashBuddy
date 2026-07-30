@@ -15,7 +15,10 @@ package cloud.trotter.dashbuddy.core.pipeline
  * (post-dedup), not raw frames. Both classes are deduped there — recognized screens by
  * identity, UNKNOWN frames by content hash — so a dasher parked on one unruled screen
  * contributes a couple of samples rather than a thousand, and the measured baseline is the
- * one the field logs report.
+ * one the field logs report. The same dedup is also this alarm's known limit: it needs a
+ * window's worth of DISTINCT frames, so it detects a broken-but-LIVE app (the platform-update
+ * case it exists for — offers, timers and maps keep the content changing) rather than a wedged
+ * one, which is the bubble/odometer liveness signals' territory (#916/#917).
  *
  * **Tuning (all three consts are deliberate and field-derived).** The 2026-07-28/29 pulls put
  * a HEALTHY dash at roughly 16 % UNKNOWN on the admitted stream (`forwarded=450
