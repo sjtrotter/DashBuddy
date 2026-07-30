@@ -2,6 +2,7 @@ package cloud.trotter.dashbuddy.domain.format
 
 import java.time.Instant
 import java.time.LocalDate
+import java.time.LocalTime
 import java.time.YearMonth
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
@@ -86,6 +87,51 @@ fun formatMonthDay(date: LocalDate, locale: Locale = Locale.getDefault()): Strin
  */
 fun formatWeekdayMonthDay(date: LocalDate, locale: Locale = Locale.getDefault()): String =
     DateTimeFormatter.ofPattern("EEE, MMM d", locale).format(date)
+
+/**
+ * "Monday, Jul 20" — the Home header's date line (#977 / brief §2).
+ *
+ * The FULL weekday is the point on Home: the whole screen is "today", and the plan strip below it is
+ * explicitly *this weekday's* history, so the header has to name the weekday in full rather than the
+ * three-letter form [formatWeekdayMonthDay] uses inside a chart. Same fixed-order compromise and same
+ * one-owner rule as [formatMonthDay].
+ */
+fun formatLongWeekdayMonthDay(date: LocalDate, locale: Locale = Locale.getDefault()): String =
+    DateTimeFormatter.ofPattern("EEEE, MMM d", locale).format(date)
+
+/**
+ * "5–8 PM" / "11 AM–1 PM" — an hour-of-day RANGE label (#977 / brief §2's plan-strip headline).
+ *
+ * Both bounds are hours-of-day; [endHourExclusive] is the first hour NOT in the range, so a window
+ * covering the 5pm/6pm/7pm cells reads "5–8 PM" (and `24` renders as midnight). The meridiem is
+ * printed once when both ends share it — a range is read as one span, not two timestamps.
+ *
+ * Unlike the compact [hourOfDayLabel] axis token this is display copy, so the hour digit and the
+ * AM/PM marker both come from [locale] via `java.time` patterns. It is deliberately **12-hour
+ * regardless of the device's 24-hour setting**: that setting is only reachable from Android/Compose
+ * (`DateFormat.is24HourFormat`), which `:domain` cannot see — the same documented compromise
+ * [hourOfDayLabel] already makes. One owner for the label (Principle 5).
+ */
+fun hourRangeLabel(
+    startHour: Int,
+    endHourExclusive: Int,
+    locale: Locale = Locale.getDefault(),
+): String {
+    val start = LocalTime.of(((startHour % 24) + 24) % 24, 0)
+    val end = LocalTime.of(((endHourExclusive % 24) + 24) % 24, 0)
+    val hour = DateTimeFormatter.ofPattern("h", locale)
+    val meridiem = DateTimeFormatter.ofPattern("a", locale)
+    val startMeridiem = meridiem.format(start)
+    val endMeridiem = meridiem.format(end)
+    return if (startMeridiem == endMeridiem) {
+        "${hour.format(start)}$HOUR_RANGE_SEPARATOR${hour.format(end)} $endMeridiem"
+    } else {
+        "${hour.format(start)} $startMeridiem$HOUR_RANGE_SEPARATOR${hour.format(end)} $endMeridiem"
+    }
+}
+
+/** En dash — a range separator, not a hyphen (matches the analytics pager's range copy). */
+private const val HOUR_RANGE_SEPARATOR = "–"
 
 /** "Jul 13, 2026" — [formatMonthDay] plus the year, for a window that leaves the current year. */
 fun formatMonthDayYear(date: LocalDate, locale: Locale = Locale.getDefault()): String =

@@ -28,6 +28,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -39,13 +40,34 @@ import androidx.lifecycle.compose.LifecycleEventEffect
 import cloud.trotter.dashbuddy.R
 import cloud.trotter.dashbuddy.feature.dashboard.components.DashingStatusRow
 import cloud.trotter.dashbuddy.feature.dashboard.components.EntryTile
-import cloud.trotter.dashbuddy.feature.dashboard.components.PeriodReview
+import cloud.trotter.dashbuddy.feature.dashboard.components.SoFarToday
 import cloud.trotter.dashbuddy.feature.dashboard.components.StatusCard
+import cloud.trotter.dashbuddy.feature.dashboard.components.TodayHeader
+import cloud.trotter.dashbuddy.feature.dashboard.components.TodayPlanCard
+import cloud.trotter.dashbuddy.feature.dashboard.components.WeekRecapCard
+import cloud.trotter.dashbuddy.ui.main.analytics.NeedsALookCard
+import cloud.trotter.dashbuddy.ui.main.analytics.ReviewAction
+import cloud.trotter.dashbuddy.ui.main.analytics.reviewItems
 import cloud.trotter.dashbuddy.ui.main.navigation.Screen
 import cloud.trotter.dashbuddy.ui.main.setup.consent.ConsentPromptSheet
 import cloud.trotter.dashbuddy.ui.main.setup.permissions.PermissionsBottomSheet
 import cloud.trotter.dashbuddy.util.PermissionUtils
+import kotlinx.coroutines.launch
 
+/**
+ * Home — **"Today"** since #977 (redesign stage 4 of #969, brief §2).
+ *
+ * Top to bottom: header (date · live clock · status pill) · **Today's plan** (the driver's own
+ * weekday history) · **So far today** · **This week** (net, delta, sparkline, `Recap →`) · review
+ * items · entry tiles + Show bubble. Read-side only — nothing here writes to the state machine.
+ *
+ * The host stays in `:app` (nav start destination, the `Screen` route table, the `:app`-owned
+ * permission/consent sheets); the presentational blocks live in `:feature:dashboard`. The one
+ * deliberate exception is the review-items card, which is the analytics hub's own
+ * [NeedsALookCard]/[reviewItems] pair reused verbatim — the flag rules and their copy have one owner
+ * in `:app`, and duplicating them into a feature module to satisfy placement would be exactly the
+ * divergence Principle 5 exists to prevent.
+ */
 @Composable
 fun DashboardScreen(
     viewModel: DashboardViewModel = hiltViewModel(),
@@ -55,6 +77,17 @@ fun DashboardScreen(
 ) {
     val context = LocalContext.current
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val scope = rememberCoroutineScope()
+
+    // `Recap →` and every review-item action land on the same place: the Analytics hub, anchored on
+    // the week Home was just describing. The selection write is ordered BEFORE the navigation so the
+    // hub opens already on that window rather than flickering through its last one.
+    val openWeekRecap: () -> Unit = {
+        scope.launch {
+            viewModel.selectWeekRecapWindow()
+            onNavigate(Screen.Analytics.route)
+        }
+    }
 
     // Permissions are an OS-level fact re-checked on every resume — kept as
     // composable-local state, not in the UiState, since ON_RESUME owns the read.
@@ -136,15 +169,12 @@ fun DashboardScreen(
                     ) { Text(stringResource(R.string.dashboard_screen_skip_for_now_button)) }
                 }
 
-                // CASE 3: Ready — status card, a slim "tap for the bubble" pointer while
-                // dashing, then the read-model period review (the primary economics), the
-                // entry tiles, and a manual bubble trigger.
+                // CASE 3: Ready — the "Today" screen (brief §2).
                 else -> {
-                    StatusCard(
-                        title = stringResource(uiState.statusText),
-                        subtitle = if (uiState.isDashing) stringResource(R.string.dashboard_screen_dashing_subtitle)
-                        else stringResource(R.string.dashboard_screen_ready_subtitle),
-                        containerColor = MaterialTheme.colorScheme.primaryContainer
+                    TodayHeader(
+                        today = uiState.today,
+                        statusText = stringResource(uiState.statusText),
+                        dashing = uiState.isDashing,
                     )
                     Spacer(modifier = Modifier.height(16.dp))
 
@@ -153,12 +183,29 @@ fun DashboardScreen(
                         Spacer(modifier = Modifier.height(12.dp))
                     }
 
-                    PeriodReview(
-                        selectedPeriod = uiState.selectedPeriod,
-                        economics = uiState.economics,
-                        onSelectPeriod = viewModel::setPeriod,
+                    TodayPlanCard(today = uiState.today, heatmap = uiState.heatmap)
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    // SEAM — weekly-plan pointer (brief §2 row 3, stage 6 / #969). It renders ONLY
+                    // when a saved plan exists for the current week, and saved plans do not exist
+                    // yet: stage 6 owns both the storage and this row. Deliberately nothing here —
+                    // a placeholder row would be dead UI promising a screen that isn't built.
+
+                    SoFarToday(economics = uiState.todayEconomics)
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    WeekRecapCard(
+                        economics = uiState.weekEconomics,
+                        previousEconomics = uiState.previousWeekEconomics,
+                        dailyEarnings = uiState.weekDailyEarnings,
+                        onOpenRecap = openWeekRecap,
                     )
                     Spacer(modifier = Modifier.height(16.dp))
+
+                    ReviewItemsRow(
+                        uiState = uiState,
+                        onOpenInAnalytics = openWeekRecap,
+                    )
 
                     EntryTileGrid(onNavigate = onNavigate)
                     Spacer(modifier = Modifier.height(16.dp))
@@ -171,6 +218,34 @@ fun DashboardScreen(
             }
         }
     }
+}
+
+/**
+ * The week's data-quality chores (brief §2 row 6), reusing the analytics hub's own flag rules and
+ * copy ([reviewItems]) and its consolidated card ([NeedsALookCard]) — no second threshold, no second
+ * wording.
+ *
+ * Only the ACTION differs: the hub's rows open the assign/attest dialogs in place, which live on the
+ * Money tab together with the orphan lists they mutate. Home has no standing to host those flows, so
+ * every row here carries the same honest affordance — open the place that owns the fix. The label is
+ * therefore normalised rather than inherited: a row promising "Assign to a dash" that actually
+ * navigates would be a small lie.
+ *
+ * Renders nothing at all when the week is clean (the card self-gates on an empty list).
+ */
+@Composable
+private fun ReviewItemsRow(uiState: DashboardUiState, onOpenInAnalytics: () -> Unit) {
+    val label = stringResource(R.string.dashboard_review_action)
+    val items = reviewItems(
+        economics = uiState.weekEconomics,
+        orphanOfferGroups = uiState.orphanOfferGroups,
+        onOpenNoSession = onOpenInAnalytics,
+        onOpenOrphanOffers = onOpenInAnalytics,
+    ).map { it.copy(action = ReviewAction(label = label, onClick = onOpenInAnalytics)) }
+
+    if (items.isEmpty()) return
+    NeedsALookCard(items = items)
+    Spacer(modifier = Modifier.height(16.dp))
 }
 
 /** 2×2 entry tiles: Analytics · Ratings · Strategy · Economy. */

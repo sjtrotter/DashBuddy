@@ -367,6 +367,10 @@
     <string name="dashboard_screen_ready_subtitle">All systems go.</string>
     <string name="dashboard_screen_show_bubble_button">Show Bubble</string>
     <!-- dashboard_screen_stat_* moved to :feature:dashboard (#97) — only PeriodReview used them. -->
+    <!-- #977: Home's review-items rows all navigate into the Analytics hub (which owns the
+         assign/attest flows), so they carry a navigation label rather than the hub's in-place
+         action wording. -->
+    <string name="dashboard_review_action">Review →</string>
     <string name="dashboard_screen_entry_analytics">Analytics</string>
     <string name="dashboard_screen_entry_ratings">Ratings</string>
     <string name="dashboard_screen_entry_strategy">Strategy</string>
