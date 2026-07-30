@@ -78,6 +78,35 @@ card's **mechanical** half, #577 (re-confirmed, 24/24, ~0.55 s — with a new po
 that entry's Bug #1), the #457 path, and #554 ShadowProjector (2/2). The #462/#460 dropoff item
 was found **broken-in-part** (raw PII in capture envelopes) and moved to that entry's Bug #7.)_
 
+- **🆕 NEW — #936 / PR #952 — an offer with an unreadable distance says so instead of guessing.**
+  If a card's mileage ever fails to parse, the HUD/notification should show `no verdict` +
+  `distance didn't parse` (no `$0/hr`, no score gauge) and the voice should say *"No verdict — the
+  distance didn't parse"*. Rare in the field; the desk check is `offer_records` rows with
+  `quality = 'UNKNOWN'` and a null `distanceMiles` — their `score`/`estDollarsPerHour` columns
+  must be **null**, never `0`.
+  - Confirmed: 0/2
+
+- **🆕 NEW — #942 / PR #953 — UI-edge SSOT batch (four quick eyeball checks, one dash).**
+  1. **Store-join parity:** on a stacked offer, the heads-up notification and the bubble card name
+     the stores identically (`Store A & Store B`) — the notification used to say `+`.
+  2. **Verdict word:** a manual-review verdict reads `REVIEW` on the bubble offer card (was
+     `MANUAL REVIEW`), matching the notification.
+  3. **Badge pills:** text badges read their full names (`All Orders Same Store`, `Items Can Be
+     Added`) — check they don't overflow/truncate badly in the HUD pill row; if they do, shorten
+     the enum `displayName` (one owner now).
+  4. **Chat clock:** flip the phone's 24-hour setting with the bubble chat open; existing
+     timestamps re-render in the new format without reopening.
+  - Confirmed: 0/2
+
+- **🆕 NEW — #938 / PR #954 — English-locale boundary notice.** Briefly switch the phone's
+  language to Spanish (Settings → System → Languages), then toggle DashBuddy's accessibility
+  service off and back on. Expect: exactly **one** system notification titled "DashBuddy solo lee
+  pantallas en inglés" under a new "Avisos de la aplicación" channel, and a `WARN/LocaleBoundary`
+  line naming `'es'` (and **not** a region) in the log. Toggle the service again — the WARN
+  repeats, the notification does **not**. Switch back to English and toggle once more — neither
+  appears.
+  - Confirmed: 0/2
+
 - **🆕 NEW — #910 / PR #931 — the five customer-PII leak sites are closed (three mechanisms; desk-only).**
   Rule redacts on `delivery_summary_collapsed` (name + street + city/zip + instruction/item free
   text) and the two multi-pickup surfaces (`customer_name` nodes); click envelopes now inherit the
