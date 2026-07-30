@@ -95,7 +95,7 @@ class CaptureWriter @Inject constructor(
         //    name/address/gate-code verbatim. SensitiveTextMarkers above (dasher-
         //    banking) correctly ignores customer content, so this scan is the ONLY
         //    customer control on the UNKNOWN screen path. Fail toward privacy:
-        //    scrubbing a benign marker-shaped string is the accepted cost.  #910 adds
+        //    scrubbing a benign marker-shaped string is the accepted cost. #910 adds
         //    the node-ID scan beside it (see scrubUnknownTree) for the split-node
         //    shape a prefix scan structurally cannot own.
         // The VET V1 already-redacted skip keeps a rule's OWN redact output from
