@@ -432,7 +432,7 @@
                                                                                                                                                 }
                                                                                                                                             },
                                                                                                                                             {
-                                                                                                                                                "text": "Apt [redacted:e7fa]",
+                                                                                                                                                "text": "Apt [redacted]",
                                                                                                                                                 "class": "android.widget.TextView",
                                                                                                                                                 "isEnabled": true,
                                                                                                                                                 "bounds": {
