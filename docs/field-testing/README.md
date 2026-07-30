@@ -78,6 +78,26 @@ card's **mechanical** half, #577 (re-confirmed, 24/24, ~0.55 s — with a new po
 that entry's Bug #1), the #457 path, and #554 ShadowProjector (2/2). The #462/#460 dropoff item
 was found **broken-in-part** (raw PII in capture envelopes) and moved to that entry's Bug #7.)_
 
+- **🆕 NEW — #937 / PR #960 — recognition-health liveness (version stamp + UNKNOWN-rate alarm).**
+  What to watch: (a) after the dash, the desk pull's `PipelineStats` INFO lines should carry a
+  `platformApps=com.doordash.driverapp@<version>` suffix, and new capture envelopes should carry
+  `"platformAppVersion"` in their `metadata` block — that is the stamp working; (b) you should see
+  NO "recognition health" notification and no `RecognitionHealth` WARN on a normal dash where the
+  bubble is narrating offers/pickups/deliveries as usual. A notification reading "DashBuddy can't
+  read DoorDash right now" while the app is visibly tracking fine is a FALSE POSITIVE — note what
+  was on screen for the previous minute or two (a long stretch on an unruled surface is the
+  suspected shape) and the threshold needs raising. If recognition really does go quiet mid-dash
+  (no offer cards, no phase changes), the notification SHOULD appear within ~50 admitted frames —
+  that one is the feature working.
+  - Confirmed: 0/2
+
+- **🆕 NEW — #944 / PR #957 — permission gate re-hoisted (UDF).** The permission bottom sheet's
+  behavior should be unchanged: it opens when permissions are missing, advances card-by-card as
+  each is granted, closes cleanly when all are granted — and, the edge the refactor specifically
+  defends, RE-OPENS with a fresh (not stale) card queue after revoking a permission from system
+  Settings and returning to the app.
+  - Confirmed: 0/2
+
 - **🆕 NEW — #936 / PR #952 — an offer with an unreadable distance says so instead of guessing.**
   If a card's mileage ever fails to parse, the HUD/notification should show `no verdict` +
   `distance didn't parse` (no `$0/hr`, no score gauge) and the voice should say *"No verdict — the
