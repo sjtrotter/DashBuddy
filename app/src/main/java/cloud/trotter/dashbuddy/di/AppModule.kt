@@ -9,7 +9,9 @@ import cloud.trotter.dashbuddy.core.pipeline.SensitiveTextMarkers
 import cloud.trotter.dashbuddy.core.state.EffectExecutor
 import cloud.trotter.dashbuddy.core.state.MetadataProvider
 import cloud.trotter.dashbuddy.domain.pipeline.LocaleBoundaryReporter
+import cloud.trotter.dashbuddy.domain.pipeline.RecognitionHealthReporter
 import cloud.trotter.dashbuddy.locale.LocaleBoundaryNotifier
+import cloud.trotter.dashbuddy.notice.RecognitionHealthNotifier
 import cloud.trotter.dashbuddy.state.effects.SideEffectEngine
 import dagger.Binds
 import dagger.Module
@@ -34,6 +36,15 @@ abstract class AppBindingsModule {
      */
     @Binds
     abstract fun bindLocaleBoundaryReporter(impl: LocaleBoundaryNotifier): LocaleBoundaryReporter
+
+    /**
+     * #937: the same inversion for the recognition-health alarm — `:core:pipeline` measures the
+     * UNKNOWN rate and decides, `:app` owns the notification it can't reach.
+     */
+    @Binds
+    abstract fun bindRecognitionHealthReporter(
+        impl: RecognitionHealthNotifier,
+    ): RecognitionHealthReporter
 }
 
 @Module

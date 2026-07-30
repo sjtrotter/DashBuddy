@@ -369,6 +369,33 @@ supported one. (Distinct from #428, which bounds the app's OWN copy/TTS to en/es
 assumption; the #938 notice copy itself IS translated into `values-es` since a Spanish dasher is
 exactly its audience.)
 
+**Recognition has a liveness signal (#937)** — the last unfilled quadrant of the #909 silent-death
+family (effect engine #914, bubble #916, odometer #917). Two pieces, both fail-OPEN and both inert
+to frame processing. (1) **Version stamping:** `PlatformAppVersions` resolves the OBSERVED app's
+`versionName` (`CachingPlatformAppVersions` — one `PackageManager` lookup per package per process,
+negative results cached too, `catch (Throwable)`; the `PackageManager` call is a lambda injected at
+the `PipelineModule` DI edge so the caching logic is a plain unit test). `ObservationClassifier`
+stamps it onto every observation's `ReplayMetadata.platformAppVersion` — classification is the one
+point that always runs AND knows the package, since the capture stage is skipped wholesale on a
+disabled bus (release `NoOpCaptureBus`) — from where it rides into the capture envelope for free.
+Additive + nullable, and `Json.encodeDefaults` is false, so an unstamped envelope is byte-identical
+to a pre-#937 one: the committed corpus and the parse golden carry no such key and no test may
+require it. The cache is deliberately NOT invalidated on a package update (a process restart follows
+one in practice; a stale diagnostic stamp is a nuisance, never a correctness problem). The resolved
+`package@version` pairs also ride the periodic `PipelineStats` INFO summary (`platformApps=…`) —
+platform-app facts, PII-free. (2) **UNKNOWN-rate alarm:** `RecognitionHealth` (pure, per-platform
+rolling window of the last `WINDOW_SIZE`=50 **admitted** screen frames — post-`FrameGate`, so a
+dasher parked on one unruled screen contributes a couple of samples, not a thousand) trips when the
+window is FULL and ≥`UNKNOWN_RATIO_THRESHOLD`=0.80 of it classified UNKNOWN. Field-derived: the
+07-28/29 pulls put a healthy dash near 16 % UNKNOWN on that same stream, so the threshold sits 5×
+clear of the noise while a real anchor break drives the ratio toward 1.0. `RecognitionHealthMonitor`
+owns the edges — package→platform via the registry (an `Unknown` package is ignored; no platform
+literal anywhere), one WARN + one `RecognitionHealthReporter` call per platform per **process**
+(per-*dash* would need `:core:state`, which depends on `:core:pipeline` and not the reverse;
+recovery deliberately does not re-arm). The `:domain` reporter contract is #938's inversion reused:
+the `:app` `RecognitionHealthNotifier` posts on the shared `app_notice_channel`, whose id + copy now
+live in one owner (`AppNoticeChannel`, ids 102 locale / 103 recognition).
+
 ### 2. JSON Rule Engine (`core/pipeline/.../rules/` + generated `assets/rules/`)
 
 Recognition is **data, not code**. The rule SOURCE is per-platform **JSON5** under `matchers/rules/`

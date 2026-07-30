@@ -13,6 +13,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.mockito.kotlin.doReturn
 import org.mockito.kotlin.mock
+import cloud.trotter.dashbuddy.core.pipeline.PlatformAppVersions
 
 /**
  * Regression tests for [ObservationClassifier] producing `unknown` notification intent.
@@ -26,6 +27,7 @@ class UnknownNotificationClassifierTest {
     private val classifier = ObservationClassifier(
         mock<JsonRuleInterpreter>(),
         mock<ReplayMetadataProvider> { on { current() } doReturn ReplayMetadata.EMPTY },
+        PlatformAppVersions.NONE,
     )
 
     private fun raw(title: String? = null, text: String? = null, bigText: String? = null) =

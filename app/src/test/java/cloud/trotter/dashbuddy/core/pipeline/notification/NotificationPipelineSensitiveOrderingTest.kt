@@ -36,6 +36,7 @@ import org.mockito.kotlin.whenever
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.RuntimeEnvironment
 import org.robolectric.annotation.Config
+import cloud.trotter.dashbuddy.core.pipeline.PlatformAppVersions
 
 /**
  * #599 adversarial F2 — pins the PIPELINE ORDERING the sensitive block rests
@@ -61,6 +62,7 @@ class NotificationPipelineSensitiveOrderingTest {
             on { isLoaded } doReturn true
         },
         mock<ReplayMetadataProvider> { on { current() } doReturn ReplayMetadata.EMPTY },
+        PlatformAppVersions.NONE,
     )
     private val source = NotificationSource()
     private val pipeline = NotificationPipeline(

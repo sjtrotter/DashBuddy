@@ -1,5 +1,6 @@
 package cloud.trotter.dashbuddy.core.pipeline
 
+import cloud.trotter.dashbuddy.domain.capture.ReplayMetadata
 import cloud.trotter.dashbuddy.domain.capture.ReplayMetadataProvider
 import cloud.trotter.dashbuddy.domain.model.accessibility.UiNode
 import cloud.trotter.dashbuddy.domain.pipeline.Observation
@@ -35,7 +36,34 @@ import cloud.trotter.dashbuddy.domain.pipeline.NO_ID_FALLBACK
 class ObservationClassifier @Inject constructor(
     private val interpreter: JsonRuleInterpreter,
     private val metadataProvider: ReplayMetadataProvider,
+    private val appVersions: PlatformAppVersions,
 ) {
+
+    /**
+     * Live replay metadata stamped with the OBSERVED app's `versionName` (#937).
+     *
+     * Classification is the one point that always runs and always knows the frame's package —
+     * the capture stage is skipped wholesale on a disabled bus (release `NoOpCaptureBus`), so
+     * stamping there would leave release builds' log line unstamped. Stamping the observation
+     * carries the value into the envelope for free, since `CaptureWriter` serializes
+     * `obs.metadata`.
+     *
+     * Fail-open: an unresolvable package leaves the base metadata untouched, and a resolver that
+     * breaks its own never-throws contract costs the stamp, not the frame. Classification runs
+     * inside the sensing flow, where an escaping throwable takes the whole upstream down until
+     * supervision resubscribes (#430) — a diagnostic must never be able to buy that (#909).
+     */
+    private fun metadataFor(packageName: String?): ReplayMetadata {
+        val base = metadataProvider.current()
+        val version = try {
+            packageName?.takeIf { it.isNotEmpty() }?.let { appVersions.versionName(it) }
+        } catch (t: Throwable) {
+            Timber.tag("Classifier").w(t, "Platform app version stamp failed — unstamped (#937)")
+            null
+        }
+        return if (version == null) base else base.copy(platformAppVersion = version)
+    }
+
     /**
      * Last classified screen target, keyed by platform wire (#438 item 2). A single
      * global `lastScreenTarget` let an Uber screen gate a DoorDash click rule's
@@ -114,14 +142,18 @@ class ObservationClassifier @Inject constructor(
         if (ruleset == null) {
             // Fail-closed invariant fired (rulesets not loaded) — a real WARN (#551 P7).
             Timber.tag("Classifier").w("no screen ruleset loaded")
-            return makeScreenObservation(now, UNKNOWN_TARGET, null, null, ParsedFields.None, null)
+            return makeScreenObservation(
+                now, metadataFor(event.packageName), UNKNOWN_TARGET, null, null, ParsedFields.None, null,
+            )
         }
 
         val result = ruleset.matchFirst(event.tree, platformWire)
         if (result == null) {
             // #551 P7: per-frame trace → VERBOSE (firehose only), never the shareable INFO stream.
             Timber.tag("Classifier").v("SCREEN: UNKNOWN")
-            return makeScreenObservation(now, UNKNOWN_TARGET, null, null, ParsedFields.None, null)
+            return makeScreenObservation(
+                now, metadataFor(event.packageName), UNKNOWN_TARGET, null, null, ParsedFields.None, null,
+            )
         }
 
         Timber.tag("Classifier").v("SCREEN: ${result.intent}")
@@ -132,6 +164,7 @@ class ObservationClassifier @Inject constructor(
         val parsed = ParsedFieldsFactory.create(result.shape, result.fields)
         val obs = makeScreenObservation(
             now = now,
+            metadata = metadataFor(event.packageName),
             screenName = result.intent,
             flow = result.flow,
             modeHint = result.modeHint,
@@ -156,6 +189,7 @@ class ObservationClassifier @Inject constructor(
 
     private fun makeScreenObservation(
         now: Long,
+        metadata: ReplayMetadata,
         screenName: String,
         flow: Flow?,
         modeHint: Mode?,
@@ -168,7 +202,7 @@ class ObservationClassifier @Inject constructor(
         timestamp = now,
         captureId = null,
         ruleId = ruleId,
-        metadata = metadataProvider.current(),
+        metadata = metadata,
         flow = flow,
         modeHint = modeHint,
         parsed = parsed,
@@ -197,7 +231,7 @@ class ObservationClassifier @Inject constructor(
                     timestamp = now,
                     captureId = null,
                     ruleId = result.ruleId,
-                    metadata = metadataProvider.current(),
+                    metadata = metadataFor(event.packageName),
                     flow = result.flow,
                     modeHint = result.modeHint,
                     parsed = parsed,
@@ -219,7 +253,7 @@ class ObservationClassifier @Inject constructor(
             timestamp = now,
             captureId = null,
             ruleId = null,
-            metadata = metadataProvider.current(),
+            metadata = metadataFor(event.packageName),
             flow = null,
             modeHint = null,
             parsed = ParsedFields.ClickFields(
@@ -247,7 +281,7 @@ class ObservationClassifier @Inject constructor(
                     timestamp = event.raw.postTime,
                     captureId = null,
                     ruleId = result.ruleId,
-                    metadata = metadataProvider.current(),
+                    metadata = metadataFor(event.raw.packageName),
                     flow = result.flow,
                     modeHint = result.modeHint,
                     parsed = parsed,
@@ -265,7 +299,7 @@ class ObservationClassifier @Inject constructor(
             timestamp = event.raw.postTime,
             captureId = null,
             ruleId = null,
-            metadata = metadataProvider.current(),
+            metadata = metadataFor(event.raw.packageName),
             flow = null,
             modeHint = null,
             parsed = ParsedFields.NotificationFields(

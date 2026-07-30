@@ -493,10 +493,15 @@
          Deliberately does NOT name a specific language: the string is device-independent, and the
          only device-derived value the feature ever handles is an ISO-639 code (kept out of the
          copy so nothing device-specific rides a user-visible surface). -->
-    <string name="locale_notice_channel_name">App notices</string>
-    <string name="locale_notice_channel_description">One-off notices about how DashBuddy is working on this device</string>
+    <string name="app_notice_channel_name">App notices</string>
+    <string name="app_notice_channel_description">One-off notices about how DashBuddy is working on this device</string>
     <string name="locale_notice_title">DashBuddy reads English screens only</string>
     <string name="locale_notice_text">Your phone is set to a language other than English. DashBuddy recognises delivery screens by their English wording, so it will miss most offers and deliveries — and the privacy filters that hide customer details work by the same English wording, so they cover less too. Switching the phone to English restores both.</string>
+
+    <!-- #937 recognition-health alarm (App notices channel) -->
+    <string name="recognition_health_notice_title">DashBuddy can\'t read %1$s right now</string>
+    <string name="recognition_health_notice_text">%2$d%% of the last few %1$s screens were unrecognised, which usually means the %1$s app updated and moved things around. Offers, pickups and deliveries may not be tracked until DashBuddy is updated to match.</string>
+    <string name="recognition_health_notice_platform_fallback">this platform</string>
 
     <!-- ui/bubble/BubbleManager.kt -->
     <string name="bubble_channel_stream_name">DashBuddy Stream</string>
