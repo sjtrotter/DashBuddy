@@ -108,8 +108,8 @@ data class PayMix(
 
     companion object {
 
-        /** Below this a money figure is effectively zero — the analytics hub's shared threshold. */
-        private const val MONEY_EPSILON = 0.005
+        /** The hub's shared "effectively zero" threshold — one owner ([ANALYTICS_MONEY_EPSILON]). */
+        private const val MONEY_EPSILON = ANALYTICS_MONEY_EPSILON
 
         val EMPTY = of(gross = 0.0, parts = PayMixParts.EMPTY)
 

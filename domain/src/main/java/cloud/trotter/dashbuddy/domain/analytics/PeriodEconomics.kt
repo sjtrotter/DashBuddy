@@ -3,6 +3,16 @@ package cloud.trotter.dashbuddy.domain.analytics
 import cloud.trotter.dashbuddy.domain.state.Platform
 
 /**
+ * Below this magnitude an analytics money figure is effectively zero — half a cent (#973).
+ *
+ * ONE owner for the threshold every read-side money comparison uses: the hub's review callouts, the
+ * cash-tip marker, and [PayMix]'s negative-remainder test. It lives in `:domain` because both the
+ * pure models and the `:app` surfaces need it, and a threshold with two copies is one that can only
+ * ever drift apart (the #942 consolidation, widened a module down).
+ */
+const val ANALYTICS_MONEY_EPSILON = 0.005
+
+/**
  * Economics for an [AnalyticsPeriod] (#314) — the home-glance/hub read model.
  *
  * **Net is frozen, not recomputed.** [netProfit] sums the per-delivery `netProfit`
