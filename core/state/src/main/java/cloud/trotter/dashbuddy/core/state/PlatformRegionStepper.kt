@@ -577,6 +577,9 @@ class PlatformRegionStepper @Inject constructor() {
                 itemsWithQualityIssuesRate = parsed.itemsWithQualityIssuesRate,
                 itemsWrongOrMissingRate = parsed.itemsWrongOrMissingRate,
                 lifetimeShoppingOrders = parsed.lifetimeShoppingOrders,
+                overallRatingPoints = parsed.overallRatingPoints,
+                tierLabel = parsed.tierLabel,
+                qualityRate = parsed.qualityRate,
             ),
         )
     }

@@ -94,4 +94,51 @@ class RatingsViewModelTest {
         assertFalse(ui.hasShoppingQuality)
         job.cancel()
     }
+
+    /**
+     * #962 — the points-based rating facts project through, and `hasPointsRating`
+     * is what gates the row. A platform that reports no points score must not
+     * render an empty "Overall rating:" line.
+     */
+    @Test
+    fun `points-based rating facts project onto the ui state`() = runTest {
+        Dispatchers.setMain(StandardTestDispatcher(testScheduler))
+        val snapshot = RatingsSnapshot(
+            capturedAt = 42L,
+            acceptanceRate = 23.0,
+            qualityRate = 100.0,
+            overallRatingPoints = 73,
+            tierLabel = "Silver",
+        )
+        whenever(stateManager.state).thenReturn(MutableStateFlow(stateWith(snapshot)))
+
+        val viewModel = RatingsViewModel(stateManager)
+        val job = launch { viewModel.uiState.collect {} }
+        testScheduler.advanceUntilIdle()
+
+        val ui = viewModel.uiState.value
+        assertTrue(ui.hasData)
+        assertTrue(ui.hasPointsRating)
+        assertEquals(73, ui.overallRatingPoints)
+        assertEquals("Silver", ui.tierLabel)
+        assertEquals(100.0, ui.qualityRate!!, 1e-9)
+        // `qualityRate` is a DELIVERY factor, not a shopping-quality metric — it
+        // must not switch on the shopping section.
+        assertFalse(ui.hasShoppingQuality)
+        job.cancel()
+    }
+
+    @Test
+    fun `a snapshot without points facts does not claim a points rating`() = runTest {
+        Dispatchers.setMain(StandardTestDispatcher(testScheduler))
+        whenever(stateManager.state)
+            .thenReturn(MutableStateFlow(stateWith(RatingsSnapshot(capturedAt = 1L, customerRating = 4.97))))
+
+        val viewModel = RatingsViewModel(stateManager)
+        val job = launch { viewModel.uiState.collect {} }
+        testScheduler.advanceUntilIdle()
+
+        assertFalse(viewModel.uiState.value.hasPointsRating)
+        job.cancel()
+    }
 }

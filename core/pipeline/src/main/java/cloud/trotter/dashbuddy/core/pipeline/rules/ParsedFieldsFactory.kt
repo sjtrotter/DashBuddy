@@ -221,6 +221,9 @@ object ParsedFieldsFactory {
         itemsWithQualityIssuesRate = f.double("itemsWithQualityIssuesRate"),
         itemsWrongOrMissingRate = f.double("itemsWrongOrMissingRate"),
         lifetimeShoppingOrders = f.int("lifetimeShoppingOrders"),
+        overallRatingPoints = f.int("overallRatingPoints"),
+        tierLabel = f.str("tierLabel"),
+        qualityRate = f.double("qualityRate"),
     )
 
     private fun buildClick(f: Map<String, Any?>) = ParsedFields.ClickFields(

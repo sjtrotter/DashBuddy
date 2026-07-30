@@ -36,7 +36,18 @@ data class RatingsUiState(
     val itemsWithQualityIssuesRate: Double? = null,
     val itemsWrongOrMissingRate: Double? = null,
     val lifetimeShoppingOrders: Int? = null,
+
+    // Points-based rating facts (#962) — recorded and displayed plainly. No
+    // thresholds, no progress-to-next-tier, no rewards UI (dev ruling 2026-07-30).
+    val overallRatingPoints: Int? = null,
+    val tierLabel: String? = null,
+    /** 0–100 percentage, same scale as the other rates. */
+    val qualityRate: Double? = null,
 ) {
+    /** True when the platform reported either points-based rating fact (#962). */
+    val hasPointsRating: Boolean
+        get() = overallRatingPoints != null || tierLabel != null
+
     /** True when the snapshot carried at least one shopping-quality metric. */
     val hasShoppingQuality: Boolean
         get() = originalItemsFoundRate != null || totalItemsFoundRate != null ||
@@ -65,6 +76,9 @@ data class RatingsUiState(
                 itemsWithQualityIssuesRate = snapshot.itemsWithQualityIssuesRate,
                 itemsWrongOrMissingRate = snapshot.itemsWrongOrMissingRate,
                 lifetimeShoppingOrders = snapshot.lifetimeShoppingOrders,
+                overallRatingPoints = snapshot.overallRatingPoints,
+                tierLabel = snapshot.tierLabel,
+                qualityRate = snapshot.qualityRate,
             )
         }
     }

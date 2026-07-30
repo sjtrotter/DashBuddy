@@ -287,6 +287,22 @@ sealed class ParsedFields {
         val itemsWithQualityIssuesRate: Double? = null,
         val itemsWrongOrMissingRate: Double? = null,
         val lifetimeShoppingOrders: Int? = null,
+        /**
+         * The dasher's headline points score on DoorDash's 0.230.0 points-based
+         * rating redesign (#962) — a plain FACT, recorded so a later analytics
+         * correlation ("did $/hr move after the tier changed?") has an anchor. Null
+         * on any platform / layout that does not render one.
+         */
+        val overallRatingPoints: Int? = null,
+        /**
+         * The raw reward-tier label as the platform renders it (#962) — e.g.
+         * "Silver". Deliberately a verbatim string, not an enum: the tier ladder is
+         * one platform's own gamification vocabulary and modelling it as a
+         * cross-platform concept would be forced (dev ruling 2026-07-30).
+         */
+        val tierLabel: String? = null,
+        /** Rating factor introduced by the same redesign (#962); 0–100 percentage. */
+        val qualityRate: Double? = null,
     ) : ParsedFields() {
         override fun toFieldMap(): Map<String, Any?> = mapOf(
             "acceptanceRate" to acceptanceRate,
@@ -301,11 +317,18 @@ sealed class ParsedFields {
             "itemsWithQualityIssuesRate" to itemsWithQualityIssuesRate,
             "itemsWrongOrMissingRate" to itemsWrongOrMissingRate,
             "lifetimeShoppingOrders" to lifetimeShoppingOrders,
+            "overallRatingPoints" to overallRatingPoints,
+            "tierLabel" to tierLabel,
+            "qualityRate" to qualityRate,
         )
 
         override fun dedupeHash(): Int {
             var h = customerRating.hashCode()
             h = 31 * h + lifetimeDeliveries.hashCode()
+            // #962 — the redesigned hub renders no `lifetimeDeliveries` at all, so
+            // without the points score two genuinely different snapshots of it
+            // (73 pts vs 78 pts at an unchanged 5.00 star rating) would collide.
+            h = 31 * h + overallRatingPoints.hashCode()
             return h
         }
     }

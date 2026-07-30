@@ -91,6 +91,14 @@ object CustomerTextMarkers {
         "Order for ",
         "Verify items for ",
         "Delivery for ",
+        // #962, fielded 2026-07-30: the on-time rating's PER-ORDER timeline
+        // drill-down (Ratings -> On-time rate -> an order) renders the delivery leg
+        // as "Delivery to <customer first name>" beside "Pickup at <store>". The
+        // list above already carried "Deliver to " and "Delivery for " but NOT this
+        // third conjugation, so capture …UNKNOWN__2134b3 persisted a customer's
+        // given name verbatim. Data-only addition to the SSOT; zero hits across the
+        // whole committed corpus, so no recognized frame's kept text moves.
+        "Delivery to ",
         "Message from ", // DoorDash in-app chat push title -> customer name.
         // Uber notification vocabulary (#632) — the keepPrefix lead-ins the
         // uber.json5 trip_at_dropoff redact declares.

@@ -275,6 +275,24 @@
         "shape": null,
         "fields": {}
     },
+    "customer_rating_detail/2026-07-30_11-24-27-235__doordash__accessibility.window__UNKNOWN__b5d37a.json": {
+        "ruleId": "doordash.screen.customer_rating_detail",
+        "intent": "customer_rating_detail",
+        "shape": null,
+        "fields": {}
+    },
+    "customer_rating_detail/2026-07-30_11-24-34-605__doordash__accessibility.window__UNKNOWN__7d520b.json": {
+        "ruleId": "doordash.screen.customer_rating_detail",
+        "intent": "customer_rating_detail",
+        "shape": null,
+        "fields": {}
+    },
+    "customer_rating_detail/2026-07-30_11-24-41-758__doordash__accessibility.window__UNKNOWN__634e7a.json": {
+        "ruleId": "doordash.screen.customer_rating_detail",
+        "intent": "customer_rating_detail",
+        "shape": null,
+        "fields": {}
+    },
     "customer_rating_detail/customer_rating_detail.json": {
         "ruleId": "doordash.screen.customer_rating_detail",
         "intent": "customer_rating_detail",
@@ -889,6 +907,12 @@
     "dash_time_picker/2026-07-16_13-36-15-282__doordash__accessibility.window__dash_time_picker__dc6142.json": {
         "ruleId": "doordash.screen.dash_time_picker",
         "intent": "dash_time_picker",
+        "shape": null,
+        "fields": {}
+    },
+    "dasher_rewards/2026-07-30_11-21-59-526__doordash__accessibility.window__UNKNOWN__ee13be.json": {
+        "ruleId": "doordash.screen.dasher_rewards",
+        "intent": "dasher_rewards",
         "shape": null,
         "fields": {}
     },
@@ -3393,6 +3417,36 @@
         "shape": null,
         "fields": {}
     },
+    "order_feedback_detail/2026-07-30_11-23-55-082__doordash__accessibility.window__UNKNOWN__da93d3.json": {
+        "ruleId": "doordash.screen.order_feedback_detail",
+        "intent": "order_feedback_detail",
+        "shape": null,
+        "fields": {}
+    },
+    "order_feedback_detail/2026-07-30_11-24-05-089__doordash__accessibility.window__UNKNOWN__774152.json": {
+        "ruleId": "doordash.screen.order_feedback_detail",
+        "intent": "order_feedback_detail",
+        "shape": null,
+        "fields": {}
+    },
+    "overall_rating_explainer/2026-07-30_11-26-12-892__doordash__accessibility.window__UNKNOWN__288ce1.json": {
+        "ruleId": "doordash.screen.overall_rating_explainer",
+        "intent": "overall_rating_explainer",
+        "shape": null,
+        "fields": {}
+    },
+    "overall_rating_explainer/2026-07-30_11-26-24-629__doordash__accessibility.window__UNKNOWN__b1b6de.json": {
+        "ruleId": "doordash.screen.overall_rating_explainer",
+        "intent": "overall_rating_explainer",
+        "shape": null,
+        "fields": {}
+    },
+    "pause_offers_info/2026-07-30_11-22-00-493__doordash__accessibility.window__UNKNOWN__b23989.json": {
+        "ruleId": "doordash.screen.pause_offers_info",
+        "intent": "pause_offers_info",
+        "shape": null,
+        "fields": {}
+    },
     "performance_orders_list/performance_orders_list.json": {
         "ruleId": "doordash.screen.performance_orders_list",
         "intent": "performance_orders_list",
@@ -3412,6 +3466,12 @@
         "fields": {}
     },
     "performance_rate_detail/2026-07-29_15-18-24-090__doordash__accessibility.window__UNKNOWN__b062f1.json": {
+        "ruleId": "doordash.screen.performance_rate_detail",
+        "intent": "performance_rate_detail",
+        "shape": null,
+        "fields": {}
+    },
+    "performance_rate_detail/2026-07-30_11-25-24-092__doordash__accessibility.window__UNKNOWN__144d5b.json": {
         "ruleId": "doordash.screen.performance_rate_detail",
         "intent": "performance_rate_detail",
         "shape": null,
@@ -4977,7 +5037,10 @@
             "lifetimeShoppingOrders": null,
             "onTimeRate": 100.0,
             "originalItemsFoundRate": 97.0,
+            "overallRatingPoints": null,
+            "qualityRate": null,
             "substitutionIssuesRate": 0.0,
+            "tierLabel": null,
             "totalItemsFoundRate": 100.0
         }
     },
@@ -4996,7 +5059,10 @@
             "lifetimeShoppingOrders": 1144,
             "onTimeRate": 100.0,
             "originalItemsFoundRate": 97.0,
+            "overallRatingPoints": null,
+            "qualityRate": null,
             "substitutionIssuesRate": 0.0,
+            "tierLabel": null,
             "totalItemsFoundRate": 100.0
         }
     },
@@ -5015,7 +5081,10 @@
             "lifetimeShoppingOrders": 1144,
             "onTimeRate": 100.0,
             "originalItemsFoundRate": 97.0,
+            "overallRatingPoints": null,
+            "qualityRate": null,
             "substitutionIssuesRate": 0.0,
+            "tierLabel": null,
             "totalItemsFoundRate": 100.0
         }
     },
@@ -5034,7 +5103,10 @@
             "lifetimeShoppingOrders": null,
             "onTimeRate": 100.0,
             "originalItemsFoundRate": null,
+            "overallRatingPoints": null,
+            "qualityRate": null,
             "substitutionIssuesRate": null,
+            "tierLabel": null,
             "totalItemsFoundRate": null
         }
     },
@@ -5053,7 +5125,10 @@
             "lifetimeShoppingOrders": null,
             "onTimeRate": 100.0,
             "originalItemsFoundRate": null,
+            "overallRatingPoints": null,
+            "qualityRate": null,
             "substitutionIssuesRate": null,
+            "tierLabel": null,
             "totalItemsFoundRate": null
         }
     },
@@ -5072,7 +5147,10 @@
             "lifetimeShoppingOrders": null,
             "onTimeRate": 100.0,
             "originalItemsFoundRate": null,
+            "overallRatingPoints": null,
+            "qualityRate": null,
             "substitutionIssuesRate": null,
+            "tierLabel": null,
             "totalItemsFoundRate": null
         }
     },
@@ -5091,7 +5169,10 @@
             "lifetimeShoppingOrders": null,
             "onTimeRate": 100.0,
             "originalItemsFoundRate": null,
+            "overallRatingPoints": null,
+            "qualityRate": null,
             "substitutionIssuesRate": null,
+            "tierLabel": null,
             "totalItemsFoundRate": null
         }
     },
@@ -5110,7 +5191,10 @@
             "lifetimeShoppingOrders": null,
             "onTimeRate": 100.0,
             "originalItemsFoundRate": 98.0,
+            "overallRatingPoints": null,
+            "qualityRate": null,
             "substitutionIssuesRate": null,
+            "tierLabel": null,
             "totalItemsFoundRate": null
         }
     },
@@ -5129,7 +5213,10 @@
             "lifetimeShoppingOrders": null,
             "onTimeRate": 100.0,
             "originalItemsFoundRate": 98.0,
+            "overallRatingPoints": null,
+            "qualityRate": null,
             "substitutionIssuesRate": null,
+            "tierLabel": null,
             "totalItemsFoundRate": null
         }
     },
@@ -5148,7 +5235,10 @@
             "lifetimeShoppingOrders": null,
             "onTimeRate": 100.0,
             "originalItemsFoundRate": 98.0,
+            "overallRatingPoints": null,
+            "qualityRate": null,
             "substitutionIssuesRate": null,
+            "tierLabel": null,
             "totalItemsFoundRate": null
         }
     },
@@ -5167,7 +5257,10 @@
             "lifetimeShoppingOrders": 1242,
             "onTimeRate": 100.0,
             "originalItemsFoundRate": 98.0,
+            "overallRatingPoints": null,
+            "qualityRate": null,
             "substitutionIssuesRate": 0.0,
+            "tierLabel": null,
             "totalItemsFoundRate": 100.0
         }
     },
@@ -5186,7 +5279,10 @@
             "lifetimeShoppingOrders": null,
             "onTimeRate": 100.0,
             "originalItemsFoundRate": 98.0,
+            "overallRatingPoints": null,
+            "qualityRate": null,
             "substitutionIssuesRate": null,
+            "tierLabel": null,
             "totalItemsFoundRate": 100.0
         }
     },
@@ -5205,7 +5301,10 @@
             "lifetimeShoppingOrders": 1242,
             "onTimeRate": 100.0,
             "originalItemsFoundRate": 98.0,
+            "overallRatingPoints": null,
+            "qualityRate": null,
             "substitutionIssuesRate": 0.0,
+            "tierLabel": null,
             "totalItemsFoundRate": 100.0
         }
     },
@@ -5224,7 +5323,10 @@
             "lifetimeShoppingOrders": 1242,
             "onTimeRate": 100.0,
             "originalItemsFoundRate": 98.0,
+            "overallRatingPoints": null,
+            "qualityRate": null,
             "substitutionIssuesRate": 0.0,
+            "tierLabel": null,
             "totalItemsFoundRate": 100.0
         }
     },
@@ -5243,7 +5345,10 @@
             "lifetimeShoppingOrders": null,
             "onTimeRate": 100.0,
             "originalItemsFoundRate": 100.0,
+            "overallRatingPoints": null,
+            "qualityRate": null,
             "substitutionIssuesRate": null,
+            "tierLabel": null,
             "totalItemsFoundRate": null
         }
     },
@@ -5252,17 +5357,20 @@
         "intent": "ratings",
         "shape": "ratings",
         "fields": {
-            "acceptanceRate": null,
-            "completionRate": null,
-            "customerRating": null,
-            "deliveriesLast30Days": null,
+            "acceptanceRate": 23.0,
+            "completionRate": 99.0,
+            "customerRating": 5.0,
+            "deliveriesLast30Days": 80,
             "itemsWithQualityIssuesRate": null,
             "itemsWrongOrMissingRate": null,
             "lifetimeDeliveries": null,
             "lifetimeShoppingOrders": null,
-            "onTimeRate": null,
+            "onTimeRate": 100.0,
             "originalItemsFoundRate": null,
+            "overallRatingPoints": 73,
+            "qualityRate": 100.0,
             "substitutionIssuesRate": null,
+            "tierLabel": "Silver",
             "totalItemsFoundRate": null
         }
     },
