@@ -57,9 +57,27 @@ data class RatingsUiState(
     companion object {
         val EMPTY = RatingsUiState()
 
-        /** Project a snapshot (may be null → empty) onto the UI state. */
+        /**
+         * Project a snapshot (may be null → empty) onto the UI state.
+         *
+         * #967: an ALL-NULL snapshot object counts as no data. A pre-#963 build stamped a
+         * value-less snapshot whenever a ratings frame classified but parsed nothing, and
+         * `snapshot != null` alone then rendered the populated layout with every gauge/tile
+         * blank — a bare platform header instead of the empty-state explainer that tells the
+         * dasher how to populate the screen. `hasData` now means "at least one VALUE".
+         */
         fun from(platform: Platform?, snapshot: RatingsSnapshot?): RatingsUiState {
             if (snapshot == null) return EMPTY.copy(platformName = platform?.displayName)
+            val hasAnyValue = with(snapshot) {
+                listOf(
+                    customerRating, onTimeRate, completionRate, acceptanceRate,
+                    deliveriesLast30Days, lifetimeDeliveries, originalItemsFoundRate,
+                    totalItemsFoundRate, substitutionIssuesRate, itemsWithQualityIssuesRate,
+                    itemsWrongOrMissingRate, lifetimeShoppingOrders, overallRatingPoints,
+                    tierLabel, qualityRate,
+                ).any { it != null }
+            }
+            if (!hasAnyValue) return EMPTY.copy(platformName = platform?.displayName)
             return RatingsUiState(
                 hasData = true,
                 platformName = platform?.displayName,
