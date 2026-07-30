@@ -8,6 +8,8 @@ import cloud.trotter.dashbuddy.core.data.log.LogScrubber
 import cloud.trotter.dashbuddy.core.pipeline.SensitiveTextMarkers
 import cloud.trotter.dashbuddy.core.state.EffectExecutor
 import cloud.trotter.dashbuddy.core.state.MetadataProvider
+import cloud.trotter.dashbuddy.domain.pipeline.LocaleBoundaryReporter
+import cloud.trotter.dashbuddy.locale.LocaleBoundaryNotifier
 import cloud.trotter.dashbuddy.state.effects.SideEffectEngine
 import dagger.Binds
 import dagger.Module
@@ -24,6 +26,14 @@ abstract class AppBindingsModule {
 
     @Binds
     abstract fun bindEffectExecutor(impl: SideEffectEngine): EffectExecutor
+
+    /**
+     * #938: the sensor layer (`:core:pipeline`) reports its English-locale boundary through a
+     * `:domain` contract; `:app` supplies the implementation because the notice needs the
+     * DataStore flag and a notification, neither of which `:core:pipeline` may reach.
+     */
+    @Binds
+    abstract fun bindLocaleBoundaryReporter(impl: LocaleBoundaryNotifier): LocaleBoundaryReporter
 }
 
 @Module

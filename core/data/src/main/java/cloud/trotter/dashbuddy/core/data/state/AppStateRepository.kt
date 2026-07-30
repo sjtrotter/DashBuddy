@@ -12,8 +12,15 @@ class AppStateRepository @Inject constructor(
 ) {
     val isFirstRun: Flow<Boolean> = dataSource.isFirstRun
 
+    /** False until the #938 English-locale boundary notice has been posted once. */
+    val localeBoundaryNoticeShown: Flow<Boolean> = dataSource.localeBoundaryNoticeShown
+
     suspend fun setFirstRunComplete() {
         dataSource.setFirstRunComplete()
+    }
+
+    suspend fun setLocaleBoundaryNoticeShown() {
+        dataSource.setLocaleBoundaryNoticeShown()
     }
 
     suspend fun clearPreferences() {

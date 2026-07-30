@@ -346,6 +346,24 @@ upstream is supervised — a crash logs + counts a restart and resubscribes with
 silencing all sensing (#430) — and `PipelineStats` counts every gate decision, mapping failure,
 and restart (periodic summary log line).
 
+**The whole recognition + text-scrub layer assumes an ENGLISH device (#938).** Rule anchors and
+BOTH text-marker SSOTs (`SensitiveTextMarkers.KEYWORDS`, `CustomerTextMarkers.MARKERS`) are literal
+English strings, so on a non-`en` device recognition drops toward zero (survivable — everything
+falls to UNKNOWN, and release binds `NoOpCaptureBus`) **but the Pledge layers thin**: the
+sensitive-screen backstop, the UNKNOWN-capture PII scrub, and the shareable-log scrub all weaken.
+`CustomerTextMarkers.ID_MARKERS` (#910) is the one **locale-immune** defence — view ids don't
+localize — and is the pattern any future translation work should prefer. #938 makes the boundary
+*loud, not fixed*: `RecognitionLocale` (`:domain`, pure) decides, and the `:app`
+`LocaleBoundaryNotifier` (bound to the `:domain` `LocaleBoundaryReporter` contract that
+`AccessibilityListener.onServiceConnected` calls — recognition's own go-live edge, fail-OPEN)
+emits one WARN per sensor start (ISO-639 code only, principle 7) plus a **once-per-install**
+dasher-visible notice on its own `app_notice_channel`, remembered by the `app_state` DataStore flag
+`locale_boundary_notice_shown`. **Translating anchors/markers is deliberately NOT done** — it needs
+a non-English corpus, and until that exists a non-`en` device is a documented degraded mode, not a
+supported one. (Distinct from #428, which bounds the app's OWN copy/TTS to en/es/fr — a different
+assumption; the #938 notice copy itself IS translated into `values-es` since a Spanish dasher is
+exactly its audience.)
+
 ### 2. JSON Rule Engine (`core/pipeline/.../rules/` + generated `assets/rules/`)
 
 Recognition is **data, not code**. The rule SOURCE is per-platform **JSON5** under `matchers/rules/`
