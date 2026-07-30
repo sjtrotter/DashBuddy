@@ -167,8 +167,10 @@ enum class RedactNormalize {
 }
 
 /**
- * A single compiled `redact` directive (#598). When [find] matches a node, that
- * node's `text` and `contentDescription` are masked in the serialized capture
+ * A single compiled `redact` directive (#598). When [find] matches a node, ALL
+ * of that node's serialized string fields — `text`, `contentDescription` and
+ * (since #835) `stateDescription`, per the [UiNode.scrubbableStrings] SSOT — are
+ * masked in the serialized capture
  * envelope only. [keepPrefix] preserves a leading marker label so a replayed
  * redacted capture still recognizes — e.g. "Deliver to <name>" is masked to
  * "Deliver to [redacted:<4hex>]", keeping the "Deliver to " require anchor while
@@ -220,15 +222,19 @@ data class CompiledRedact(
 
     private fun maskNode(node: UiNode): UiNode {
         val match = entries.firstOrNull { it.find(node) }
-        val maskedText =
-            if (match != null) mask(node.text, match.keepPrefix, match.normalize, match.plainMask) else node.text
-        val maskedDesc =
-            if (match != null) mask(node.contentDescription, match.keepPrefix, match.normalize, match.plainMask) else node.contentDescription
-        return node.copy(
-            text = maskedText,
-            contentDescription = maskedDesc,
-            children = node.children.map { maskNode(it) },
-        )
+        // #835: mask EVERY serialized string field of the matched node via the
+        // UiNode scrubbable-fields SSOT — `stateDescription` used to be skipped
+        // here, so a matched node's `state` shipped verbatim. Each field is
+        // masked from its OWN content, so the #623 distinctness suffix, the #889
+        // short-token floor and the #795 plainMask semantics apply per field
+        // exactly as they did for text/desc.
+        val maskedSelf =
+            if (match != null) {
+                node.mapScrubbableStrings { mask(it, match.keepPrefix, match.normalize, match.plainMask) }
+            } else {
+                node
+            }
+        return maskedSelf.copy(children = node.children.map { maskNode(it) })
     }
 
     companion object {
