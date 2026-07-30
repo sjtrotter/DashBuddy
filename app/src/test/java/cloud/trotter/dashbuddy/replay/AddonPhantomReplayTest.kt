@@ -1,7 +1,7 @@
 package cloud.trotter.dashbuddy.replay
 
 import cloud.trotter.dashbuddy.test.util.SessionReplay
-import org.junit.Assert.assertNotEquals
+import org.junit.Assert.assertEquals
 import org.junit.Test
 
 /**
@@ -37,9 +37,23 @@ class AddonPhantomReplayTest {
     fun `the Burger King add-on offer frame is not misrecognized as a delivery summary (#564, Level A)`() {
         val obs = SessionReplay.replayRecognition(session).single()
         println("add-on frame → target=${obs.target} parsed=${obs.parsed::class.simpleName}")
-        assertNotEquals(
-            "an add-on offer frame must not classify as a delivery summary (would fabricate a \$0 completion)",
-            "delivery_summary_collapsed", obs.target,
+        // #947: pin the EXPECTED intent instead of only excluding the old bug's misfire.
+        // As of #888 this fixture is Shape B of `doordash.screen.offer_accepting` — the
+        // rule's own comment names this exact fixture
+        // (snapshots/sessions/addon_phantom_2026_06_21) as the frame it was written to catch.
+        // Verified correct by reading the rule (matchers/rules/doordash/offer.json5): Shape B's
+        // `require` demands `accept_decline_fragment_container` + `secondary_action_button_dash_plus`
+        // + a non-empty `display_name` that isn't "Customer dropoff"/"Business handoff" — i.e. the
+        // offer chrome is still on screen with the Accept footer torn down and a real store leg
+        // present, exactly the post-accept teardown frame this fixture captures. The rule is
+        // RECOGNIZE-ONLY (no `state.flow`/parse/bind), so classifying here cannot drive any
+        // lifecycle edge — recognition merely graduates the frame out of UNKNOWN, which is the
+        // guard this test exists to pin. NOTE: #935 may re-anchor `delivery_summary_collapsed`'s
+        // `require`, which could shift what this fixture classifies as — revisit this pin then.
+        assertEquals(
+            "the add-on offer teardown frame's classification drifted; it must never be " +
+                "delivery_summary_collapsed (would fabricate a \$0 completion)",
+            "offer_accepting", obs.target,
         )
     }
 }
