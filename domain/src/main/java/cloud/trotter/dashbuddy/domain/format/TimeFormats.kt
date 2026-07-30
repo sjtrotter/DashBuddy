@@ -1,6 +1,8 @@
 package cloud.trotter.dashbuddy.domain.format
 
 import java.time.Instant
+import java.time.LocalDate
+import java.time.YearMonth
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.time.format.FormatStyle
@@ -62,6 +64,30 @@ fun formatShortDate(
     DateTimeFormatter.ofLocalizedDate(FormatStyle.MEDIUM)
         .withLocale(locale)
         .format(Instant.ofEpochMilli(millis).atZone(zone))
+
+/**
+ * "Jul 13" — a month-and-day label for the analytics period pager / range picker (#970).
+ *
+ * Display copy, so it follows the [Formats] policy and localizes its month name through [locale].
+ * The field ORDER is a fixed `MMM d` pattern rather than a locale-derived skeleton: `java.time` has
+ * no skeleton API in pure Kotlin (Android's `getBestDateTimePattern` is not reachable from `:domain`),
+ * and a fixed order is the honest, greppable compromise until #428's i18n pass revisits it. One owner
+ * for the label — the pager, the picker's commit button, and the recap hero all call it (Principle 5).
+ */
+fun formatMonthDay(date: LocalDate, locale: Locale = Locale.getDefault()): String =
+    DateTimeFormatter.ofPattern("MMM d", locale).format(date)
+
+/** "Jul 13, 2026" — [formatMonthDay] plus the year, for a window that leaves the current year. */
+fun formatMonthDayYear(date: LocalDate, locale: Locale = Locale.getDefault()): String =
+    DateTimeFormatter.ofPattern("MMM d, yyyy", locale).format(date)
+
+/** "July 2026" — a month heading for the range picker's calendar pager (#970). */
+fun formatMonthYear(month: YearMonth, locale: Locale = Locale.getDefault()): String =
+    DateTimeFormatter.ofPattern("MMMM yyyy", locale).format(month)
+
+/** "July" — a bare month name, for a month window inside the current year (#970). */
+fun formatMonthName(month: YearMonth, locale: Locale = Locale.getDefault()): String =
+    DateTimeFormatter.ofPattern("MMMM", locale).format(month)
 
 /**
  * Compact 12-hour clock label for an **hour-of-day** (0..23): `0→"12a"`, `6→"6a"`, `12→"12p"`,

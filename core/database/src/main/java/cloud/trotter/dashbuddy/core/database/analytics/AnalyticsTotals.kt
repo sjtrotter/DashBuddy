@@ -151,6 +151,12 @@ data class PlatformGrossTotalsRow(
 data class SessionGrossRow(
     val startedAt: Long,
     val gross: Double,
+    /**
+     * The session's FROZEN kept money (#970 §7.3) — Σ `netProfit` + Σ `cashTip` + this session's
+     * unattributed remainder, the same three terms `PeriodEconomics.netProfit` folds. Bucketed onto
+     * the same start day as [gross], so the per-day net axis decomposes the period net exactly.
+     */
+    val net: Double = 0.0,
 )
 
 /**
@@ -186,6 +192,9 @@ data class PlatformNoSessionTotalsRow(
 data class NoSessionDailyRow(
     val completedAt: Long,
     val gross: Double,
+    /** The row's FROZEN kept money (#970 §7.3) — `netProfit + cashTip`, the terms this bucket
+     *  contributes to `PeriodEconomics.netProfit`. */
+    val net: Double = 0.0,
 )
 
 /** Cross-platform session totals for a period: miles = Σ odo delta, onlineMillis = Σ duration, sessions = COUNT. */

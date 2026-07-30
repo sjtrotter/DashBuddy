@@ -77,6 +77,49 @@ fun AppBarChart(bars: List<AppBar>, modifier: Modifier = Modifier, height: Dp = 
     }
 }
 
+/**
+ * Compact trend line — the recap hero's per-day sparkline (#970).
+ *
+ * Deliberately axis-less and label-less: a sparkline states *shape*, and the real number always sits
+ * beside it (never inferred from the line). Values may be negative (a day whose costs beat its pay),
+ * so the baseline is `min(0, min(values))` and the line is drawn against the full min→max span — a
+ * losing day visibly dips instead of clamping flat. A single point, an all-equal series, or an empty
+ * list draws a flat mid-height line rather than dividing by a zero span.
+ */
+@Composable
+fun AppSparkline(
+    values: List<Double>,
+    modifier: Modifier = Modifier,
+    color: Color = AppTheme.colors.accent,
+    height: Dp = 34.dp,
+    strokeWidth: Dp = 2.dp,
+) {
+    Canvas(modifier.height(height).fillMaxWidth()) {
+        if (values.isEmpty()) return@Canvas
+        val low = minOf(0.0, values.min())
+        val high = maxOf(values.max(), low)
+        val span = (high - low).takeIf { it > 0.0 }
+        val stroke = strokeWidth.toPx()
+        val usableHeight = (size.height - stroke).coerceAtLeast(1f)
+        fun yFor(value: Double): Float {
+            val fraction = span?.let { ((value - low) / it).toFloat() } ?: 0.5f
+            return (stroke / 2f) + usableHeight * (1f - fraction.coerceIn(0f, 1f))
+        }
+        if (values.size == 1) {
+            val y = yFor(values.first())
+            drawLine(color, Offset(0f, y), Offset(size.width, y), stroke, StrokeCap.Round)
+            return@Canvas
+        }
+        val step = size.width / (values.size - 1)
+        var previous = Offset(0f, yFor(values.first()))
+        for (index in 1 until values.size) {
+            val next = Offset(step * index, yFor(values[index]))
+            drawLine(color, previous, next, stroke, StrokeCap.Round)
+            previous = next
+        }
+    }
+}
+
 /** Circular progress gauge with a centred value + caption — ratings, on-time scorecard. */
 @Composable
 fun AppGaugeRing(
