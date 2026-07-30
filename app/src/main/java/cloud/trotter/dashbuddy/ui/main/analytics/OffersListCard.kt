@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
@@ -30,6 +31,10 @@ import cloud.trotter.dashbuddy.domain.analytics.OfferListing
 import cloud.trotter.dashbuddy.domain.analytics.OfferOutcome
 import cloud.trotter.dashbuddy.domain.format.Formats
 import cloud.trotter.dashbuddy.domain.format.formatClockTime
+import cloud.trotter.dashbuddy.domain.format.formatWeekdayMonthDay
+import java.time.Instant
+import java.time.LocalDate
+import java.time.ZoneId
 
 /**
  * "Offers in this window" (#975 / brief §7.4) — the tab's missing feature: the driver's actual
@@ -82,8 +87,26 @@ fun OffersListCard(
             return@AppCard
         }
 
+        // A day header whenever the date changes. Without it the rows carry a clock time only, and
+        // over any multi-day window the driver genuinely cannot tell which day an offer was — the
+        // rows are ordered newest-first, so the change points are exactly the day boundaries.
+        val zone = remember { ZoneId.systemDefault() }
+        var lastDate: LocalDate? = null
         feed.offers.forEachIndexed { index, offer ->
-            if (index > 0) Spacer(Modifier.height(10.dp))
+            val date = Instant.ofEpochMilli(offer.decidedAt).atZone(zone).toLocalDate()
+            if (date != lastDate) {
+                Spacer(Modifier.height(if (index == 0) 0.dp else 12.dp))
+                Text(
+                    text = formatWeekdayMonthDay(date),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = c.text3,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                Spacer(Modifier.height(6.dp))
+                lastDate = date
+            } else {
+                Spacer(Modifier.height(10.dp))
+            }
             OfferRow(offer)
         }
 

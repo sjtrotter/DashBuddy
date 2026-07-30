@@ -438,6 +438,12 @@ class AnalyticsRepository @Inject constructor(
      * here rather than trusted from the caller: an unbounded page is a bounded-ingestion hazard the
      * read side is responsible for, not the UI (Principle 6).
      *
+     * **Window-only, deliberately.** Every other aggregate here ships an [AnalyticsPeriod] overload
+     * beside its window one because the home glance reads the rolling enum; a per-offer LIST has no
+     * glance consumer and never will (it is a review surface), so a second overload would be dead
+     * code with a `…In(bounds)` core to keep alive. The private core stays, so adding the enum path
+     * later is one delegating line.
+     *
      * Privacy: `offer_records` carries no customer fields; merchant names are driver-owned display
      * data (Principle 6).
      */
