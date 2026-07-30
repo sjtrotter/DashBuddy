@@ -102,9 +102,13 @@ object FlowCardMapper {
                     // On accept, capture the offer's economics for the upcoming
                     // task cards' live $/hr co-hero (#460).
                     if (payload.outcome == AppEventType.OFFER_ACCEPTED) {
-                        acceptedNetPay = payload.evaluation?.netPayAmount
+                        // #936: the co-hero is a live rate, so it reads only an evaluation that
+                        // actually had a distance — a distance-less one carries 0.0 placeholders
+                        // and would render a fabricated $0.00/hr on every task card of the job.
+                        val scored = payload.evaluation?.takeIf { it.hasDistanceMetrics }
+                        acceptedNetPay = scored?.netPayAmount
                         acceptedEstMin = payload.evaluation?.estimatedTimeMinutes
-                        acceptedDistanceMiles = payload.evaluation?.distanceMiles ?: payload.parsedOffer.distanceMiles
+                        acceptedDistanceMiles = scored?.distanceMiles ?: payload.parsedOffer.distanceMiles
                     }
                     // Re-open Awaiting if the dasher returned to the
                     // waiting-for-offer state (declined / timeout). Accept

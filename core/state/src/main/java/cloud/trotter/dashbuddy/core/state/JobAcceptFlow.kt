@@ -65,15 +65,21 @@ internal data class AcceptInputs(
 internal fun PlatformRegionStepper.acceptInputsFromPending(pending: PendingOffer?, acceptedAt: Long?): AcceptInputs {
     val parsedOffer = pending?.offerFields?.parsedOffer
     val eval = pending?.evaluation
+    // #936: an evaluation of a distance-less offer carries 0.0 PLACEHOLDERS in its rate-bearing
+    // fields (it scored nothing), so those are read only from an evaluation that actually had a
+    // distance — otherwise the parse wins, and a null distance is preferable to a 0.0 that would
+    // masquerade as a measurement in the accepted job's economics. `payAmount` (real gross) and
+    // `estMinutes` (the handling floor) are not rates and read from the evaluation either way.
+    val scoredEval = eval?.takeIf { it.hasDistanceMetrics }
     val storeHints = parsedOffer?.orders?.map { it.storeName } ?: emptyList()
     return AcceptInputs(
         offerHash = pending?.offerHash,
         economics = AcceptedOfferEconomics(
             offerHash = pending?.offerHash,
             payAmount = eval?.payAmount ?: parsedOffer?.payAmount,
-            netPay = eval?.netPayAmount,
+            netPay = scoredEval?.netPayAmount,
             estMinutes = eval?.estimatedTimeMinutes ?: parsedOffer?.timeToCompleteMinutes?.toDouble(),
-            distanceMiles = eval?.distanceMiles ?: parsedOffer?.distanceMiles,
+            distanceMiles = scoredEval?.distanceMiles ?: parsedOffer?.distanceMiles,
             // #823 Phase 1: capture the offer's quoted UNITS count when it was units-denominated, so
             // the pickup-confirmed shop-rate site can pair it with the ground-truth items shopped and
             // learn the items:units ratio. Null for an items-denominated / non-shop offer.
