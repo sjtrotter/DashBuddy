@@ -78,7 +78,7 @@ card's **mechanical** half, #577 (re-confirmed, 24/24, ~0.55 s — with a new po
 that entry's Bug #1), the #457 path, and #554 ShadowProjector (2/2). The #462/#460 dropoff item
 was found **broken-in-part** (raw PII in capture envelopes) and moved to that entry's Bug #7.)_
 
-- **🆕 NEW — #910 — the five customer-PII leak sites are closed (three mechanisms; desk-only).**
+- **🆕 NEW — #910 / PR #931 — the five customer-PII leak sites are closed (three mechanisms; desk-only).**
   Rule redacts on `delivery_summary_collapsed` (name + street + city/zip + instruction/item free
   text) and the two multi-pickup surfaces (`customer_name` nodes); click envelopes now inherit the
   screen-target rule's redact (a tap on a customer row used to ship the raw subtree); and a
@@ -2333,13 +2333,24 @@ fixtures, 3 recognize-only broadenings, additive-only golden); nav skeletons / d
 ### Session work log (this desk session)
 
 Issues filed: #917–#925 (two dev observations, five desk findings, two recognition
-opportunities). PRs: **#926** (corpus, +5 fixtures/3 broadenings; adversarial review found + fixed
-one committed `Apt [redacted:<hex>]` token — the F4 class — before merge), **#927** (#895
-fused-Apt plainMask ×8, merged), **#928** (#907 release lint: es-rUS→es fold per the locale
-allowlist, `LocaleAllowlistGuardTest`, lintVitalRelease gated in PR CI — which surfaced its own
-footgun: a PR body *describing* the skip token skips its own CI, noted on #902), plus the #910
-three-mechanism privacy build (redacts + click-envelope screen-redact + UNKNOWN node-ID backstop)
-in flight. `CLAUDE.local.md` updated: GitHub network fixed (dev), retry loops retired.
+opportunities), #929 (corpus-pruner eviction sort footgun, from the #926 pass), #934
+(`address_subpremise_line` plainMask — the #895 class's id-anchored sibling, flagged by the #931
+build), #935 (`delivery_summary_collapsed` misclassifies live drop-off sheets — the leak half
+closed by #931, the flow-claim half filed). PRs, all MERGED: **#926** (corpus, +5 fixtures/3
+ratings broadenings; adversarial review found + fixed one committed `Apt [redacted:<hex>]` token —
+the F4 class — before merge), **#927** (#895 fused-Apt plainMask ×8), **#928** (#907 release lint:
+es-rUS→es fold per the locale allowlist, `LocaleAllowlistGuardTest`, lintVitalRelease gated in PR
+CI — which surfaced its own footgun: a PR body *describing* the skip token skips its own CI),
+**#931** (#910: the three-mechanism privacy build — rule redacts, click envelopes inherit the
+screen rule's redact via `ScreenContext`, `CustomerTextMarkers.ID_MARKERS` UNKNOWN backstop;
+line-by-line adversarial review + a dedicated fable `/security-review` both CLEAN — "monotonically
+privacy-tightening on every traced path"), **#932** (#900 matchFirst wire-scoping). **#930** (#902
+workflow_dispatch escape hatch + `[force ci]` override) hit the very dispatch-refusal class it
+mitigates — the issue's tree-nudge recipe cleared it; in CI at entry-writing time. #835
+(`stateDescription` scrub SSOT) build launched on the post-#931 tree. A separate dev-commissioned
+**ground-up adversarial review** landed as PR #933 (docs-only; 12 recommended issues awaiting dev
+triage — deliberately not filed by any agent). `CLAUDE.local.md` updated: GitHub network fixed
+(dev), retry loops retired.
 
 ---
 
