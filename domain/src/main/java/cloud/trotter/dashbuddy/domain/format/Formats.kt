@@ -44,4 +44,14 @@ object Formats {
 
     /** "12,500" — grouped integer. */
     fun commaInt(value: Int): String = String.format(locale, "%,d", value)
+
+    /**
+     * "67%" — a 0..1 [fraction] rendered as a percentage with [decimals] places
+     * (#942). Callers pass the fraction, NOT the pre-multiplied value: the `* 100`
+     * belongs to the formatter, and hand-rolling it at the call site is how the
+     * bubble's acceptance rate (integer-truncated) and the Decisions tab's
+     * (rounded) came to disagree by a point on the same metric.
+     */
+    fun percent(fraction: Double, decimals: Int = 0): String =
+        String.format(locale, "%.${decimals}f%%", fraction * 100.0)
 }

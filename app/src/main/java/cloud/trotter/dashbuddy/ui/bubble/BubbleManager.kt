@@ -34,6 +34,7 @@ import cloud.trotter.dashbuddy.feature.bubble.formatters.offerVerdictLabel
 import cloud.trotter.dashbuddy.domain.evaluation.OfferAction
 import cloud.trotter.dashbuddy.domain.format.Formats
 import cloud.trotter.dashbuddy.domain.model.cards.FlowCardSnapshot
+import cloud.trotter.dashbuddy.domain.model.offer.joinDisplayStores
 import android.os.SystemClock
 import android.view.View
 import android.widget.RemoteViews
@@ -531,7 +532,7 @@ class BubbleManager @Inject constructor(
                     rv.setViewVisibility(slot, View.GONE)
                 }
             }
-            val stores = offer.storeNames.joinToString(" + ")
+            val stores = offer.storeNames.joinDisplayStores()
             val items = if (offer.itemCount > 1) {
                 context.getString(R.string.bubble_offer_card_items_suffix, offer.itemCount)
             } else ""

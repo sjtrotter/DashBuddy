@@ -139,10 +139,13 @@ private fun LastSessionSummary(session: SessionRecord, focusedPlatform: Platform
         }
 
         if (session.offersReceived > 0) {
-            val pct = session.offersAccepted * 100 / session.offersReceived
             ModeRow(
                 label = stringResource(R.string.bubble_mode_idle_acceptance_label),
-                value = "$pct%",
+                // #942: the Formats.percent SSOT — this used to truncate via integer division while
+                // the Decisions tab rounded, so the same acceptance rate could differ by a point.
+                value = Formats.percent(
+                    session.offersAccepted.toDouble() / session.offersReceived,
+                ),
             )
         }
 

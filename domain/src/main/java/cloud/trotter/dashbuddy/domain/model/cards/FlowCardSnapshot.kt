@@ -78,6 +78,15 @@ sealed class FlowCardSnapshot {
 
         companion object {
             /**
+             * The synthetic Shop & Deliver badge marker (#461) — not an
+             * [cloud.trotter.dashbuddy.domain.model.offer.OfferBadge] /
+             * [cloud.trotter.dashbuddy.domain.model.order.OrderBadge] constant, so it needs its own
+             * owner (#942). Minted by [badgesOf] and recognized by the renderer; the literal
+             * `"SHOP"` used to live at both ends.
+             */
+            const val SHOP_BADGE = "SHOP"
+
+            /**
              * Single owner (SSOT) for assembling an [Offer] card from a
              * [ParsedOffer] + its [OfferEvaluation]. Both the live builder
              * (from `AppState`) and the event-log fold call this so the
@@ -130,7 +139,7 @@ sealed class FlowCardSnapshot {
                 (parsedOffer.badges.map { it.name } +
                     parsedOffer.orders.flatMap { it.badges }.map { it.name } +
                     if (parsedOffer.orders.any { it.orderType == OrderType.SHOP_FOR_ITEMS }) {
-                        listOf("SHOP")
+                        listOf(SHOP_BADGE)
                     } else {
                         emptyList()
                     }).distinct()

@@ -89,6 +89,20 @@ class OfferDisplayStoreTest {
         assertEquals("", offer(null).displayStoreText)
     }
 
+    /**
+     * #942: the two surfaces that hold only the derived list (the HUD offer card and the heads-up
+     * notification) join through this, not through their own separator — they used to disagree
+     * (" & " vs " + ") about the same offer.
+     */
+    @Test
+    fun `joinDisplayStores is the separator SSOT displayStoreText itself uses`() {
+        assertEquals("A & B", listOf("A", "B").joinDisplayStores())
+        assertEquals("A", listOf("A").joinDisplayStores())
+        assertEquals("", emptyList<String>().joinDisplayStores())
+        val stacked = offer(null, "Tarka Indian Kitchen", "Torchy's Tacos")
+        assertEquals(stacked.displayStoreText, stacked.displayStores.joinDisplayStores())
+    }
+
     // ---------------------------------------------------------------------------------------
     // The evaluator (the SSOT's one consumer) — merchantName is what TTS speaks
     // ---------------------------------------------------------------------------------------

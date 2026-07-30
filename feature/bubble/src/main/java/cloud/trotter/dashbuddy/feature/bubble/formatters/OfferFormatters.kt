@@ -6,8 +6,10 @@ import android.text.SpannableStringBuilder
 import android.text.style.ForegroundColorSpan
 import android.text.style.RelativeSizeSpan
 import android.text.style.StyleSpan
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
 import cloud.trotter.dashbuddy.feature.bubble.R
+import cloud.trotter.dashbuddy.core.designsystem.theme.AppColors
 import cloud.trotter.dashbuddy.core.designsystem.theme.darkAppColors
 import cloud.trotter.dashbuddy.domain.evaluation.OfferAction
 import cloud.trotter.dashbuddy.domain.evaluation.OfferEvaluation
@@ -28,28 +30,42 @@ fun offerVerdictLabel(action: OfferAction?): String = when (action) {
     else -> "OFFER"
 }
 
+/**
+ * Verdict foreground color — the companion of [offerVerdictLabel], so the word and its tint can't
+ * drift (#942). The bubble offer card's verdict banner re-implemented this keyed on the raw enum
+ * NAME (`"ACCEPT" -> c.good`), the #283 stringly-typed shape.
+ */
+fun offerVerdictColor(action: OfferAction?, c: AppColors): Color = when (action) {
+    OfferAction.ACCEPT -> c.good
+    OfferAction.DECLINE -> c.bad
+    else -> c.warn
+}
+
+/** The [offerVerdictColor] container tint for a filled verdict surface (#942). */
+fun offerVerdictContainer(action: OfferAction?, c: AppColors): Color = when (action) {
+    OfferAction.ACCEPT -> c.goodBg
+    OfferAction.DECLINE -> c.badBg
+    else -> c.warnBg
+}
+
 /** Verdict color as an ARGB int (RemoteViews can't use Compose Color / theme attrs). */
-fun offerVerdictArgb(action: OfferAction?): Int = darkAppColors().let { c ->
-    when (action) {
-        OfferAction.ACCEPT -> c.good
-        OfferAction.DECLINE -> c.bad
-        OfferAction.MANUAL_REVIEW -> c.warn
-        else -> c.warn
-    }
-}.toArgb()
+fun offerVerdictArgb(action: OfferAction?): Int =
+    offerVerdictColor(action, darkAppColors()).toArgb()
 
 /**
- * Score-band color as an ARGB int for the notification gauge ring (#583) — mirrors the bubble offer
- * card's ring color (`OfferBody`): the evaluator's real decision boundaries (#400). good ≥ ACCEPT,
- * bad ≤ DECLINE, warn in between.
+ * Score-band color: the evaluator's REAL decision boundaries (#400) — good ≥ ACCEPT, bad ≤ DECLINE,
+ * warn in between. One owner (#942) for the bubble offer card's gauge ring and the notification
+ * gauge ring (#583), which held a verbatim copy of this `when`.
  */
-fun offerScoreArgb(score: Double): Int = darkAppColors().let { c ->
-    when {
-        score >= OfferEvaluator.ACCEPT_THRESHOLD -> c.good
-        score <= OfferEvaluator.DECLINE_THRESHOLD -> c.bad
-        else -> c.warn
-    }
-}.toArgb()
+fun offerScoreColor(score: Double, c: AppColors): Color = when {
+    score >= OfferEvaluator.ACCEPT_THRESHOLD -> c.good
+    score <= OfferEvaluator.DECLINE_THRESHOLD -> c.bad
+    else -> c.warn
+}
+
+/** [offerScoreColor] as an ARGB int for the notification gauge ring (#583). */
+fun offerScoreArgb(score: Double): Int =
+    offerScoreColor(score, darkAppColors()).toArgb()
 
 /**
  * SSOT (#461/#578) badge enum name → `ic_badge_*` drawable, shared by the bubble offer card and the

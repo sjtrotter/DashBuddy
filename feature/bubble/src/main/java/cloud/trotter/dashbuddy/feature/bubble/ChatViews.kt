@@ -1,7 +1,6 @@
 package cloud.trotter.dashbuddy.feature.bubble
 
 import android.text.Html
-import android.text.format.DateFormat
 import android.widget.TextView
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -28,24 +27,22 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
+import cloud.trotter.dashbuddy.core.designsystem.time.rememberTimeFormatter
 import cloud.trotter.dashbuddy.feature.bubble.R
 import cloud.trotter.dashbuddy.domain.model.chat.ChatMessage
 import cloud.trotter.dashbuddy.domain.model.chat.ChatPersona
 import cloud.trotter.dashbuddy.feature.bubble.formatters.getIconResId
-import java.util.Date
 
 // ---------------------------------------------------------------------------
 // Chat header title
@@ -165,8 +162,6 @@ fun FullChatView(messages: List<ChatMessage>) {
 
 @Composable
 fun ChatBubble(message: ChatMessage) {
-    val context = LocalContext.current
-
     val isSystem =
         message.persona is ChatPersona.Dispatcher || message.persona is ChatPersona.System
 
@@ -176,9 +171,11 @@ fun ChatBubble(message: ChatMessage) {
         MaterialTheme.colorScheme.primary
     }
 
-    val timeString = remember(message.timestamp) {
-        DateFormat.getTimeFormat(context).format(Date(message.timestamp))
-    }
+    // #942: the designsystem TimeKit formatter, not a second private wall-clock formatter — it is
+    // keyed on the device's 12/24-hour setting, so flipping that setting now re-renders the chat
+    // timestamps instead of freezing them until the next recomposition of this message.
+    val formatTime = rememberTimeFormatter()
+    val timeString = formatTime(message.timestamp)
 
     Row(
         modifier = Modifier.fillMaxWidth(),

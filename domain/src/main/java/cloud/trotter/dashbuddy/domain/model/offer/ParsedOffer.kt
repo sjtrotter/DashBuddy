@@ -138,5 +138,16 @@ data class ParsedOffer(
         }
 
     /** [displayStores] as one human string — the form TTS speaks and the ledger records. */
-    val displayStoreText: String get() = displayStores.joinToString(separator = " & ")
+    val displayStoreText: String get() = displayStores.joinDisplayStores()
 }
+
+/**
+ * The ONE way a list of display store names becomes one human string (#942).
+ *
+ * [ParsedOffer.displayStoreText] is the primary read, but two surfaces hold only the already-derived
+ * `List<String>` (the bubble HUD's `FlowCardSnapshot.Offer.storeNames` and the heads-up
+ * notification's offer payload) and each re-implemented the join — with different separators, so a
+ * stacked offer read "A & B" on the card and "A + B" in the notification for the same offer.
+ * Separator lives here, not at either call site.
+ */
+fun List<String>.joinDisplayStores(): String = joinToString(separator = " & ")

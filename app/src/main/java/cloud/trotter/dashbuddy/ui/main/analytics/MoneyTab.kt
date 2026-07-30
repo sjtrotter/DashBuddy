@@ -32,6 +32,7 @@ import cloud.trotter.dashbuddy.core.designsystem.component.AppCallout
 import cloud.trotter.dashbuddy.core.designsystem.component.AppCard
 import cloud.trotter.dashbuddy.core.designsystem.component.AppChip
 import cloud.trotter.dashbuddy.core.designsystem.component.AppStatTile
+import cloud.trotter.dashbuddy.core.designsystem.text.EMPTY_VALUE
 import cloud.trotter.dashbuddy.core.designsystem.theme.AppTheme
 import cloud.trotter.dashbuddy.domain.analytics.DailyEarnings
 import cloud.trotter.dashbuddy.domain.analytics.OrphanOfferGroup
@@ -43,9 +44,6 @@ import cloud.trotter.dashbuddy.domain.format.formatShortDate
 import java.time.format.TextStyle
 import java.util.Locale
 
-
-/** Below this the unattributed pay is effectively zero — no callout (avoids a "$0.00" flag). */
-private const val UNATTRIBUTED_EPSILON = 0.005
 
 /**
  * Money tab v1 (#315 H1): the frozen-net earnings review for the selected period, top→bottom —

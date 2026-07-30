@@ -53,7 +53,11 @@ import androidx.compose.ui.draw.clip
 import cloud.trotter.dashbuddy.core.designsystem.component.AppChip
 import cloud.trotter.dashbuddy.core.designsystem.component.AppGaugeRing
 import cloud.trotter.dashbuddy.core.designsystem.theme.AppColors
+import cloud.trotter.dashbuddy.domain.evaluation.OfferAction
 import cloud.trotter.dashbuddy.domain.model.cards.FlowCardSnapshot
+import cloud.trotter.dashbuddy.domain.model.offer.OfferBadge
+import cloud.trotter.dashbuddy.domain.model.offer.joinDisplayStores
+import cloud.trotter.dashbuddy.domain.model.order.OrderBadge
 import cloud.trotter.dashbuddy.domain.model.cards.TaskEconomics
 import cloud.trotter.dashbuddy.domain.state.PickupActivity
 import cloud.trotter.dashbuddy.domain.state.flowPhase
@@ -63,8 +67,11 @@ import cloud.trotter.dashbuddy.domain.model.pay.displayLabel
 import cloud.trotter.dashbuddy.feature.bubble.formatters.color
 import cloud.trotter.dashbuddy.feature.bubble.formatters.displayLabel
 import cloud.trotter.dashbuddy.feature.bubble.formatters.offerBadgeIcon
+import cloud.trotter.dashbuddy.feature.bubble.formatters.offerScoreColor
+import cloud.trotter.dashbuddy.feature.bubble.formatters.offerVerdictColor
+import cloud.trotter.dashbuddy.feature.bubble.formatters.offerVerdictContainer
+import cloud.trotter.dashbuddy.feature.bubble.formatters.offerVerdictLabel
 import cloud.trotter.dashbuddy.feature.bubble.formatters.phaseBg
-import cloud.trotter.dashbuddy.domain.evaluation.OfferEvaluator
 import cloud.trotter.dashbuddy.domain.state.customerLabel
 
 /**
@@ -353,12 +360,9 @@ private fun OfferBody(snap: FlowCardSnapshot.Offer, isActive: Boolean) {
             horizontalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             snap.evaluationScore?.let { score ->
-                // Ring colors track the evaluator's REAL decision boundaries (#400).
-                val sc = when {
-                    score >= OfferEvaluator.ACCEPT_THRESHOLD -> c.good
-                    score <= OfferEvaluator.DECLINE_THRESHOLD -> c.bad
-                    else -> c.warn
-                }
+                // Ring colors track the evaluator's REAL decision boundaries (#400) — via the
+                // [offerScoreColor] SSOT the notification gauge shares (#942).
+                val sc = offerScoreColor(score, c)
                 AppGaugeRing(
                     progress = (score / 100.0).toFloat(),
                     value = score.toInt().toString(),
@@ -398,21 +402,17 @@ private fun OfferBody(snap: FlowCardSnapshot.Offer, isActive: Boolean) {
             // (#461: the item count now rides the [cart N] shop badge below, not the hero tier.)
         }
 
-        // Verdict banner — action word + reason + quality chip, tinted by the action.
-        snap.evaluationAction?.let { action ->
-            val vColor = when (action) {
-                "ACCEPT" -> c.good
-                "DECLINE" -> c.bad
-                else -> c.warn
-            }
-            val vBg = when (action) {
-                "ACCEPT" -> c.goodBg
-                "DECLINE" -> c.badBg
-                else -> c.warnBg
-            }
+        // Verdict banner — action word + reason + quality chip, tinted by the action. The word and
+        // its two tints come from the [offerVerdictLabel]/[offerVerdictColor] SSOT the heads-up
+        // notification shares (#942); this used to be three independent `when`s over the raw enum
+        // NAME (the #283 stringly-typed shape), which is how "REVIEW" here became "MANUAL REVIEW".
+        snap.evaluationAction?.let { name ->
+            val action = runCatching { OfferAction.valueOf(name) }.getOrNull()
+            val vColor = offerVerdictColor(action, c)
+            val vBg = offerVerdictContainer(action, c)
             val vIcon = when (action) {
-                "ACCEPT" -> Icons.Default.Check
-                "DECLINE" -> Icons.Default.Close
+                OfferAction.ACCEPT -> Icons.Default.Check
+                OfferAction.DECLINE -> Icons.Default.Close
                 else -> Icons.Default.Info
             }
             Surface(shape = MaterialTheme.shapes.small, color = vBg) {
@@ -424,7 +424,7 @@ private fun OfferBody(snap: FlowCardSnapshot.Offer, isActive: Boolean) {
                     Icon(vIcon, contentDescription = null, tint = vColor, modifier = Modifier.size(18.dp))
                     Column(modifier = Modifier.weight(1f)) {
                         Text(
-                            action.replace('_', ' '),
+                            offerVerdictLabel(action),
                             style = MaterialTheme.typography.labelLarge,
                             fontWeight = FontWeight.ExtraBold,
                             color = vColor,
@@ -446,7 +446,7 @@ private fun OfferBody(snap: FlowCardSnapshot.Offer, isActive: Boolean) {
                 snap.badges.forEach { b ->
                     val (label, col) = badgeMeta(b, c)
                     when {
-                        b == "SHOP" -> BadgeIcon(
+                        b == FlowCardSnapshot.Offer.SHOP_BADGE -> BadgeIcon(
                             iconRes = R.drawable.ic_chat_shopping_cart,
                             label = snap.itemCount.takeIf { it > 0 }?.toString(),
                             color = col,
@@ -459,8 +459,9 @@ private fun OfferBody(snap: FlowCardSnapshot.Offer, isActive: Boolean) {
             }
         }
 
-        // Footer: stores. (Item count moved up to the hero tier, #461.)
-        val storeText = snap.storeNames.joinToString(" & ").ifBlank { null }
+        // Footer: stores, joined by the :domain display SSOT (#942 — the heads-up notification
+        // used to say "A + B" for the same offer this card called "A & B").
+        val storeText = snap.storeNames.joinDisplayStores().ifBlank { null }
         if (storeText != null) Caption(storeText)
     }
 }
@@ -514,20 +515,41 @@ private fun BadgeIcon(
     }
 }
 
-/** Maps a badge enum name to a short label + brand color for the pill row. */
+/**
+ * Maps a badge wire name to its label + brand color for the pill row.
+ *
+ * The **label** is not this function's to own (#942): every badge is an
+ * [OfferBadge]/[OrderBadge] constant carrying a `displayName`, and this map used to keep a second,
+ * drifted set of labels that silently missed ≥8 branches — those fell to a lowercased-enum mangle
+ * ("Age restricted 21 plus"). Only the synthetic
+ * [SHOP_BADGE][FlowCardSnapshot.Offer.SHOP_BADGE] marker, which is no enum constant, keeps a
+ * string-resource label of its own.
+ *
+ * The **color** is the one thing this owns — and it is keyed on the typed enums, not on raw name
+ * strings (the #283 stringly-typed shape).
+ */
 @Composable
-private fun badgeMeta(name: String, c: AppColors): Pair<String, Color> = when (name) {
-    "SHOP" -> stringResource(R.string.flow_card_badge_shop_and_deliver) to c.stPickup
-    "HIGH_PAYING" -> stringResource(R.string.flow_card_badge_high_pay) to c.good
-    "PRIORITY_ACCESS" -> stringResource(R.string.flow_card_badge_priority) to c.stOffer
-    "RED_CARD" -> stringResource(R.string.flow_card_badge_red_card) to c.bad
-    "ALCOHOL" -> stringResource(R.string.flow_card_badge_alcohol) to c.warn
-    "LARGE_ORDER" -> stringResource(R.string.flow_card_badge_large_order) to c.neutral
-    "PIZZA_BAG" -> stringResource(R.string.flow_card_badge_pizza_bag) to c.neutral
-    "ALL_ORDERS_SAME_STORE" -> stringResource(R.string.flow_card_badge_same_store) to c.neutral
-    "BOTH_ORDERS_SAME_CUSTOMER" -> stringResource(R.string.flow_card_badge_same_customer) to c.neutral
-    "ITEMS_CAN_BE_ADDED" -> stringResource(R.string.flow_card_badge_add_ons_ok) to c.neutral
-    else -> name.lowercase().replace('_', ' ').replaceFirstChar { it.uppercase() } to c.neutral
+private fun badgeMeta(name: String, c: AppColors): Pair<String, Color> {
+    if (name == FlowCardSnapshot.Offer.SHOP_BADGE) {
+        return stringResource(R.string.flow_card_badge_shop_and_deliver) to c.stPickup
+    }
+    OfferBadge.entries.firstOrNull { it.name == name }?.let { badge ->
+        return badge.displayName to when (badge) {
+            OfferBadge.HIGH_PAYING -> c.good
+            OfferBadge.PRIORITY_ACCESS -> c.stOffer
+            else -> c.neutral
+        }
+    }
+    OrderBadge.entries.firstOrNull { it.name == name }?.let { badge ->
+        return badge.displayName to when (badge) {
+            OrderBadge.RED_CARD -> c.bad
+            OrderBadge.ALCOHOL -> c.warn
+            OrderBadge.LARGE_ORDER, OrderBadge.PIZZA_BAG -> c.neutral
+        }
+    }
+    // Unreachable today — the snapshot's badge list is minted from the two enums plus SHOP — but a
+    // future marker renders as itself rather than vanishing.
+    return name to c.neutral
 }
 
 /** Pickup body — the #324/#460 task-card vocabulary (co-hero pair). */

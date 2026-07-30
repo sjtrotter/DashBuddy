@@ -21,10 +21,10 @@ import cloud.trotter.dashbuddy.core.designsystem.component.AppCard
 import cloud.trotter.dashbuddy.core.designsystem.component.AppLegend
 import cloud.trotter.dashbuddy.core.designsystem.component.AppSegment
 import cloud.trotter.dashbuddy.core.designsystem.component.AppStackBar
+import cloud.trotter.dashbuddy.core.designsystem.text.EMPTY_VALUE
 import cloud.trotter.dashbuddy.core.designsystem.theme.AppTheme
 import cloud.trotter.dashbuddy.domain.analytics.DecisionEconomics
 import cloud.trotter.dashbuddy.domain.format.Formats
-import kotlin.math.roundToInt
 
 
 /**
@@ -62,7 +62,7 @@ private fun OfferFunnelCard(decisions: DecisionEconomics) {
             return@AppCard
         }
 
-        val rate = decisions.acceptanceRate?.let { "${(it * 100).roundToInt()}%" } ?: EMPTY_VALUE
+        val rate = decisions.acceptanceRate?.let { Formats.percent(it) } ?: EMPTY_VALUE
         Text(text = rate, style = AppTheme.num.heroNum, color = c.text)
         Spacer(Modifier.height(2.dp))
         Text(

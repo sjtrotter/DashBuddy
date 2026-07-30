@@ -7,6 +7,7 @@ import cloud.trotter.dashbuddy.domain.state.Mode
 import cloud.trotter.dashbuddy.domain.state.PlatformRegion
 import cloud.trotter.dashbuddy.domain.state.TaskPhase
 import cloud.trotter.dashbuddy.domain.state.UNKNOWN_STORE
+import cloud.trotter.dashbuddy.domain.state.focusedPlatform
 
 /**
  * Constructs the live (active) flow card from the current [AppState].
@@ -20,9 +21,7 @@ import cloud.trotter.dashbuddy.domain.state.UNKNOWN_STORE
 object LiveCardBuilder {
 
     fun build(state: AppState): FlowCardSnapshot? {
-        val platform = state.regions.flow.activePlatform
-            ?: state.regions.crossPlatform.mostRecentActivityPlatform
-            ?: return null
+        val platform = state.focusedPlatform() ?: return null
         val region = state.regions.platforms[platform] ?: return null
         val flow = state.regions.flow.flow
         val now = state.timestamp
