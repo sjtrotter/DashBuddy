@@ -1,5 +1,6 @@
 package cloud.trotter.dashbuddy.ui.main.analytics
 
+import androidx.lifecycle.viewModelScope
 import cloud.trotter.dashbuddy.core.data.analytics.AnalyticsRepository
 import cloud.trotter.dashbuddy.core.data.settings.AppPreferencesRepository
 import cloud.trotter.dashbuddy.domain.analytics.AnalyticsWindow
@@ -17,12 +18,14 @@ import cloud.trotter.dashbuddy.domain.analytics.TimeEconomics
 import cloud.trotter.dashbuddy.domain.analytics.WindowGranularity
 import cloud.trotter.dashbuddy.domain.state.Platform
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.StandardTestDispatcher
+import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
@@ -50,13 +53,16 @@ import java.time.ZoneId
  * into the same flow its getter exposes, which is exactly the DataStore-is-SSOT contract the
  * ViewModel relies on (it holds no local copy). Same stub-flow pattern as DashboardViewModelTest.
  *
- * **Settle with `runCurrent()`, never `advanceUntilIdle()`.** The ViewModel resolves its window
- * against the local-date flow, which — like `periodBoundariesFlow` — emits and then sleeps until the
- * next local midnight, forever. Under a `StandardTestDispatcher` that delay is *virtual*, so
- * `advanceUntilIdle()` advances the clock past midnight, gets another emission, and never runs out
- * of work (it hangs the suite; a 15-minute CI timeout was the receipt). `runCurrent()` drains
- * everything scheduled at the current instant — which is every real emission — and leaves the
- * midnight re-anchor pending where it belongs.
+ * **Harness note — the midnight re-anchor is an unbounded virtual-time loop.** The ViewModel
+ * resolves its window against the local-date flow, which (like `periodBoundariesFlow`) emits and
+ * then sleeps until the next local midnight, forever. Under a `StandardTestDispatcher` that delay is
+ * *virtual*, so anything that tries to drain the scheduler spins through midnight after midnight and
+ * never runs out of work. Two consequences, both load-bearing — a 12-minute CI hang was the receipt:
+ *  1. settle with **`runCurrent()`**, never `advanceUntilIdle()` — it drains everything scheduled at
+ *     the current instant (which is every real emission) and leaves the re-anchor pending;
+ *  2. **cancel the ViewModel's scope before the test body ends** ([runWithViewModel] does it), because
+ *     `runTest` finishes with its OWN `advanceUntilIdle()` and `viewModelScope` is not a child of the
+ *     test scope — an uncancelled hub would stall that teardown instead.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class AnalyticsViewModelTest {
@@ -179,219 +185,199 @@ class AnalyticsViewModelTest {
     private fun buildViewModel() =
         AnalyticsViewModel(analyticsRepository, correctionRepository, appPreferencesRepository)
 
+
+    /**
+     * Build the ViewModel, subscribe to [AnalyticsViewModel.uiState], settle, run [block], then tear
+     * BOTH down. Cancelling `viewModelScope` is not optional — see the harness note in the class
+     * KDoc: `runTest`'s own teardown drains the scheduler, and the hub's midnight re-anchor flow
+     * never runs dry while its scope is alive.
+     */
+    private fun TestScope.runWithViewModel(block: (AnalyticsViewModel) -> Unit) {
+        Dispatchers.setMain(StandardTestDispatcher(testScheduler))
+        val viewModel = buildViewModel()
+        val collector = launch { viewModel.uiState.collect {} }
+        testScheduler.runCurrent()
+        try {
+            block(viewModel)
+        } finally {
+            collector.cancel()
+            viewModel.viewModelScope.cancel()
+        }
+    }
+
     @After
     fun tearDown() = Dispatchers.resetMain()
 
     @Test
     fun `defaults to the current pay week on the Money tab and maps the read-model into state`() = runTest {
-        Dispatchers.setMain(StandardTestDispatcher(testScheduler))
         economicsByWindow[currentWeek()] = economics(net = 312.0, netPerHour = 24.0)
         storesByWindow[currentWeek()] = listOf(store("H-E-B", 120.0, 5), store("Chili's", 40.0, 2))
         stubSessions(listOf(session("s1", 90.0), session("s2", null)))
 
-        val viewModel = buildViewModel()
-        val job = launch { viewModel.uiState.collect {} }
-        testScheduler.runCurrent()
-
-        val ui = viewModel.uiState.value
-        assertEquals(currentWeek(), ui.window)
-        assertEquals(WindowGranularity.WEEK, ui.window.granularity)
-        assertEquals(AnalyticsTab.Money, ui.selectedTab)
-        assertEquals(312.0, ui.economics.netProfit, 1e-9)
-        assertEquals(2, ui.topStores.size)
-        assertEquals(2, ui.recentSessions.size)
-        job.cancel()
+        runWithViewModel { viewModel ->
+            val ui = viewModel.uiState.value
+            assertEquals(currentWeek(), ui.window)
+            assertEquals(WindowGranularity.WEEK, ui.window.granularity)
+            assertEquals(AnalyticsTab.Money, ui.selectedTab)
+            assertEquals(312.0, ui.economics.netProfit, 1e-9)
+            assertEquals(2, ui.topStores.size)
+            assertEquals(2, ui.recentSessions.size)
+        }
     }
 
     /** The `›` arrow must be dead at the current window and live once the pager has moved back. */
     @Test
     fun `forward paging is disabled at the current window and enabled after stepping back`() = runTest {
-        Dispatchers.setMain(StandardTestDispatcher(testScheduler))
-        val viewModel = buildViewModel()
-        val job = launch { viewModel.uiState.collect {} }
-        testScheduler.runCurrent()
+        runWithViewModel { viewModel ->
+            assertTrue(viewModel.uiState.value.canStepBack)
+            assertFalse(viewModel.uiState.value.canStepForward)
 
-        assertTrue(viewModel.uiState.value.canStepBack)
-        assertFalse(viewModel.uiState.value.canStepForward)
+            viewModel.stepWindow(-1)
+            testScheduler.runCurrent()
 
-        viewModel.stepWindow(-1)
-        testScheduler.runCurrent()
-
-        assertEquals(lastWeek(), viewModel.uiState.value.window)
-        assertTrue(viewModel.uiState.value.canStepForward)
-        job.cancel()
+            assertEquals(lastWeek(), viewModel.uiState.value.window)
+            assertTrue(viewModel.uiState.value.canStepForward)
+        }
     }
 
     /** A forward step at the current window is a fail-closed no-op — never a future range. */
     @Test
     fun `stepping forward at the current window is ignored`() = runTest {
-        Dispatchers.setMain(StandardTestDispatcher(testScheduler))
-        val viewModel = buildViewModel()
-        val job = launch { viewModel.uiState.collect {} }
-        testScheduler.runCurrent()
+        runWithViewModel { viewModel ->
+            viewModel.stepWindow(1)
+            testScheduler.runCurrent()
 
-        viewModel.stepWindow(1)
-        testScheduler.runCurrent()
-
-        assertEquals(currentWeek(), viewModel.uiState.value.window)
-        assertEquals(AnalyticsWindowSelection.Relative(WindowGranularity.WEEK, 0), selectionFlow.value)
-        job.cancel()
+            assertEquals(currentWeek(), viewModel.uiState.value.window)
+            assertEquals(AnalyticsWindowSelection.Relative(WindowGranularity.WEEK, 0), selectionFlow.value)
+        }
     }
 
     @Test
     fun `stepWindow re-anchors economics and top stores to the paged window`() = runTest {
-        Dispatchers.setMain(StandardTestDispatcher(testScheduler))
         economicsByWindow[currentWeek()] = economics(net = 312.0, netPerHour = 24.0)
         storesByWindow[currentWeek()] = listOf(store("H-E-B", 120.0, 5))
         economicsByWindow[lastWeek()] = economics(net = 1280.0, netPerHour = 22.0)
         storesByWindow[lastWeek()] = listOf(store("Target", 400.0, 12))
 
-        val viewModel = buildViewModel()
-        val job = launch { viewModel.uiState.collect {} }
-        testScheduler.runCurrent()
-        assertEquals(312.0, viewModel.uiState.value.economics.netProfit, 1e-9)
+        runWithViewModel { viewModel ->
+            assertEquals(312.0, viewModel.uiState.value.economics.netProfit, 1e-9)
 
-        viewModel.stepWindow(-1)
-        testScheduler.runCurrent()
+            viewModel.stepWindow(-1)
+            testScheduler.runCurrent()
 
-        val ui = viewModel.uiState.value
-        assertEquals(lastWeek(), ui.window)
-        assertEquals(1280.0, ui.economics.netProfit, 1e-9)
-        assertEquals("Target", ui.topStores.single().storeName)
-        job.cancel()
+            val ui = viewModel.uiState.value
+            assertEquals(lastWeek(), ui.window)
+            assertEquals(1280.0, ui.economics.netProfit, 1e-9)
+            assertEquals("Target", ui.topStores.single().storeName)
+        }
     }
 
     @Test
     fun `setGranularity switches to the current window of that granularity`() = runTest {
-        Dispatchers.setMain(StandardTestDispatcher(testScheduler))
         economicsByWindow[currentMonth()] = economics(net = 2100.0, netPerHour = 21.0)
 
-        val viewModel = buildViewModel()
-        val job = launch { viewModel.uiState.collect {} }
-        testScheduler.runCurrent()
+        runWithViewModel { viewModel ->
+            viewModel.setGranularity(WindowGranularity.MONTH)
+            testScheduler.runCurrent()
 
-        viewModel.setGranularity(WindowGranularity.MONTH)
-        testScheduler.runCurrent()
-
-        val ui = viewModel.uiState.value
-        assertEquals(currentMonth(), ui.window)
-        assertEquals(2100.0, ui.economics.netProfit, 1e-9)
-        // Landing on a granularity always lands on ITS current window, so forward stays disabled.
-        assertFalse(ui.canStepForward)
-        job.cancel()
+            val ui = viewModel.uiState.value
+            assertEquals(currentMonth(), ui.window)
+            assertEquals(2100.0, ui.economics.netProfit, 1e-9)
+            // Landing on a granularity always lands on ITS current window, so forward stays disabled.
+            assertFalse(ui.canStepForward)
+        }
     }
 
     /** A committed calendar range persists as an absolute CUSTOM selection. */
     @Test
     fun `setCustomRange commits an absolute window and persists it`() = runTest {
-        Dispatchers.setMain(StandardTestDispatcher(testScheduler))
         val start = today.minusDays(10)
         val end = today.minusDays(4)
         economicsByWindow[AnalyticsWindows.custom(start, end)] = economics(net = 77.0, netPerHour = 11.0)
 
-        val viewModel = buildViewModel()
-        val job = launch { viewModel.uiState.collect {} }
-        testScheduler.runCurrent()
+        runWithViewModel { viewModel ->
+            viewModel.setCustomRange(start, end)
+            testScheduler.runCurrent()
 
-        viewModel.setCustomRange(start, end)
-        testScheduler.runCurrent()
-
-        val ui = viewModel.uiState.value
-        assertEquals(WindowGranularity.CUSTOM, ui.window.granularity)
-        assertEquals(start, ui.window.startDate)
-        assertEquals(end, ui.window.endDateInclusive)
-        assertEquals(77.0, ui.economics.netProfit, 1e-9)
-        assertEquals(AnalyticsWindowSelection.Custom(start, end), selectionFlow.value)
-        job.cancel()
+            val ui = viewModel.uiState.value
+            assertEquals(WindowGranularity.CUSTOM, ui.window.granularity)
+            assertEquals(start, ui.window.startDate)
+            assertEquals(end, ui.window.endDateInclusive)
+            assertEquals(77.0, ui.economics.netProfit, 1e-9)
+            assertEquals(AnalyticsWindowSelection.Custom(start, end), selectionFlow.value)
+        }
     }
 
     /** A persisted selection is restored on construction — the across-restart half of the contract. */
     @Test
     fun `a persisted selection is restored instead of the default`() = runTest {
-        Dispatchers.setMain(StandardTestDispatcher(testScheduler))
         selectionFlow.value = AnalyticsWindowSelection.Relative(WindowGranularity.WEEK, -2)
         val twoWeeksBack = AnalyticsWindows.step(currentWeek(), -2)
         economicsByWindow[twoWeeksBack] = economics(net = 42.0, netPerHour = 9.0)
 
-        val viewModel = buildViewModel()
-        val job = launch { viewModel.uiState.collect {} }
-        testScheduler.runCurrent()
-
-        val ui = viewModel.uiState.value
-        assertEquals(twoWeeksBack, ui.window)
-        assertEquals(42.0, ui.economics.netProfit, 1e-9)
-        job.cancel()
+        runWithViewModel { viewModel ->
+            val ui = viewModel.uiState.value
+            assertEquals(twoWeeksBack, ui.window)
+            assertEquals(42.0, ui.economics.netProfit, 1e-9)
+        }
     }
 
     /** The recap hero's delta source: the previous equivalent window's economics ride the same fan-out. */
     @Test
     fun `previous-window economics are exposed for the delta chip`() = runTest {
-        Dispatchers.setMain(StandardTestDispatcher(testScheduler))
         economicsByWindow[currentWeek()] = economics(net = 300.0, netPerHour = 20.0)
         economicsByWindow[lastWeek()] = economics(net = 200.0, netPerHour = 15.0)
 
-        val viewModel = buildViewModel()
-        val job = launch { viewModel.uiState.collect {} }
-        testScheduler.runCurrent()
-
-        val ui = viewModel.uiState.value
-        assertEquals(300.0, ui.economics.netProfit, 1e-9)
-        assertEquals(200.0, ui.previousEconomics!!.netProfit, 1e-9)
-        job.cancel()
+        runWithViewModel { viewModel ->
+            val ui = viewModel.uiState.value
+            assertEquals(300.0, ui.economics.netProfit, 1e-9)
+            assertEquals(200.0, ui.previousEconomics!!.netProfit, 1e-9)
+        }
     }
 
     /** Lifetime has no predecessor, so the hero must get a null rather than a fabricated comparison. */
     @Test
     fun `lifetime exposes no previous-window economics`() = runTest {
-        Dispatchers.setMain(StandardTestDispatcher(testScheduler))
         economicsByWindow[AnalyticsWindows.LIFETIME] = economics(net = 9000.0, netPerHour = 19.0)
 
-        val viewModel = buildViewModel()
-        val job = launch { viewModel.uiState.collect {} }
-        testScheduler.runCurrent()
+        runWithViewModel { viewModel ->
+            viewModel.setGranularity(WindowGranularity.LIFETIME)
+            testScheduler.runCurrent()
 
-        viewModel.setGranularity(WindowGranularity.LIFETIME)
-        testScheduler.runCurrent()
-
-        val ui = viewModel.uiState.value
-        assertTrue(ui.window.isLifetime)
-        assertEquals(9000.0, ui.economics.netProfit, 1e-9)
-        assertNull(ui.previousEconomics)
-        // Lifetime pages nowhere in either direction.
-        assertFalse(ui.canStepBack)
-        assertFalse(ui.canStepForward)
-        job.cancel()
+            val ui = viewModel.uiState.value
+            assertTrue(ui.window.isLifetime)
+            assertEquals(9000.0, ui.economics.netProfit, 1e-9)
+            assertNull(ui.previousEconomics)
+            // Lifetime pages nowhere in either direction.
+            assertFalse(ui.canStepBack)
+            assertFalse(ui.canStepForward)
+        }
     }
 
     @Test
     fun `setTab switches to Decisions and the decision read-model is present in state`() = runTest {
-        Dispatchers.setMain(StandardTestDispatcher(testScheduler))
         economicsByWindow[currentWeek()] = economics(net = 100.0, netPerHour = 20.0)
         decisions = decisions(accepted = 3, declined = 5, timedOut = 2, acceptanceRate = 0.3)
 
-        val viewModel = buildViewModel()
-        val job = launch { viewModel.uiState.collect {} }
-        testScheduler.runCurrent()
+        runWithViewModel { viewModel ->
+            // Decisions are collected unconditionally, so they're in state even before the tab switch.
+            assertEquals(3, viewModel.uiState.value.decisions.accepted)
 
-        // Decisions are collected unconditionally, so they're in state even before the tab switch.
-        assertEquals(3, viewModel.uiState.value.decisions.accepted)
+            viewModel.setTab(AnalyticsTab.Decisions)
+            testScheduler.runCurrent()
 
-        viewModel.setTab(AnalyticsTab.Decisions)
-        testScheduler.runCurrent()
-
-        val ui = viewModel.uiState.value
-        assertEquals(AnalyticsTab.Decisions, ui.selectedTab)
-        assertEquals(currentWeek(), ui.window)
-        assertEquals(10, ui.decisions.received)
-        assertEquals(5, ui.decisions.declined)
-        assertEquals(0.3, ui.decisions.acceptanceRate!!, 1e-9)
-        assertEquals(12.5, ui.decisions.declinedEstNet, 1e-9)
-        job.cancel()
+            val ui = viewModel.uiState.value
+            assertEquals(AnalyticsTab.Decisions, ui.selectedTab)
+            assertEquals(currentWeek(), ui.window)
+            assertEquals(10, ui.decisions.received)
+            assertEquals(5, ui.decisions.declined)
+            assertEquals(0.3, ui.decisions.acceptanceRate!!, 1e-9)
+            assertEquals(12.5, ui.decisions.declinedEstNet, 1e-9)
+        }
     }
 
     @Test
     fun `patterns-tab sources (store cards + heatmap) are wired into state`() = runTest {
-        Dispatchers.setMain(StandardTestDispatcher(testScheduler))
         // Override the @Before defaults with NON-DEFAULT values so the assertion is falsifiable — an
         // empty stub would equal the UiState defaults and prove nothing about the wiring.
         val heatmap = EarningsHeatmap.EMPTY.copy(minCoverageHours = 0.75)
@@ -399,29 +385,22 @@ class AnalyticsViewModelTest {
             .thenReturn(flowOf(listOf(storeReportCard("Wendys"))))
         whenever(analyticsRepository.earningsHeatmap(anyOrNull())).thenReturn(flowOf(heatmap))
 
-        val viewModel = buildViewModel()
-        val job = launch { viewModel.uiState.collect {} }
-        testScheduler.runCurrent()
-
-        val ui = viewModel.uiState.value
-        assertEquals("Wendys", ui.storeReportCards.single().chainDisplay)
-        assertEquals(0.75, ui.earningsHeatmap.minCoverageHours, 1e-9)
-        job.cancel()
+        runWithViewModel { viewModel ->
+            val ui = viewModel.uiState.value
+            assertEquals("Wendys", ui.storeReportCards.single().chainDisplay)
+            assertEquals(0.75, ui.earningsHeatmap.minCoverageHours, 1e-9)
+        }
     }
 
     @Test
     fun `empty read-model maps to a safe zero-state`() = runTest {
-        Dispatchers.setMain(StandardTestDispatcher(testScheduler))
 
-        val viewModel = buildViewModel()
-        val job = launch { viewModel.uiState.collect {} }
-        testScheduler.runCurrent()
-
-        val ui = viewModel.uiState.value
-        assertEquals(0.0, ui.economics.netProfit, 1e-9)
-        assertEquals(null, ui.economics.netPerHour)
-        assertTrue(ui.topStores.isEmpty())
-        assertTrue(ui.recentSessions.isEmpty())
-        job.cancel()
+        runWithViewModel { viewModel ->
+            val ui = viewModel.uiState.value
+            assertEquals(0.0, ui.economics.netProfit, 1e-9)
+            assertEquals(null, ui.economics.netPerHour)
+            assertTrue(ui.topStores.isEmpty())
+            assertTrue(ui.recentSessions.isEmpty())
+        }
     }
 }
