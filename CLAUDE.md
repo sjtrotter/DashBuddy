@@ -130,7 +130,15 @@ permission/consent sheets), as do `DashboardViewModel` — it injects the `:app`
 so moving it would need an inversion the honest-smaller-module doctrine declines — and its
 `DashboardUiState` (produced+consumed entirely by the stayed VM+Screen). The `common_period_*`
 period labels are duplicated by choice into the module — multi-consumer with the stayed
-`AnalyticsScreen`, `:app` copy authoritative — same #99 pattern as `common_content_desc_back`).
+`AnalyticsScreen`, `:app` copy authoritative — same #99 pattern as `common_content_desc_back`.
+**#977 reshaped the module's contents** when Home became "Today": `PeriodReview` (the four-window
+selector) and its `dashboard_screen_stat_*`/`common_period_*` labels were DELETED — the review
+windows live on the Analytics pager now — and `TodayHeader`/`TodayPlanCard`/`SoFarToday`/
+`WeekRecapCard` joined the module in their place, still pure data-in/lambdas-out over `:domain`
+types + `:core:designsystem`. One deliberate exception to the split: Home's review-items card is
+the analytics hub's own `NeedsALookCard`/`reviewItems` reused verbatim from `:app`, rendered by
+the host — the flag thresholds and their copy keep ONE owner rather than being copied into a
+feature module to satisfy placement).
 The analytics hub (`ui/main/analytics/*`) is a separate sibling surface, left for a future
 extraction. Finally `:feature:bubble` (#96 — the floating-overlay HUD's presentational content:
 the `formatters/*` (offer/chat/phase), the `cards/*` (`FlowCardItem` renderer + `FlowCardMapper`/
@@ -670,6 +678,34 @@ not the UI's); the `See all N offers` footer expands the page **in place** rathe
 screen, and re-collapses on any window or filter change. The list feed is its own
 `OffersFeedState` `StateFlow` beside `uiState` (the `pickerMonth` precedent) so a chip tap doesn't re-emit
 every Money/Time tile. Read-side only — no schema change, no `PROJECTOR_VERSION` bump, no economy dependency.
+**Home = "Today" (#977, stage 4 — brief §2):** the home screen became a forward-looking glance over the
+SAME read-model, adding **zero** queries (the brief marks every §2 source free). Header (date · a
+`rememberNow`-driven clock · the existing `@StringRes` status vocabulary as a pill) · **Today's plan** ·
+**So far today** (the rolling `TODAY` `periodEconomics`, replacing the old four-window `PeriodReview`
+selector — the windows live on the #970 pager now) · **This week** (`periodEconomics(week)` +
+`previous(week)` + `dailyEarnings(week)`, with `Recap →` writing the hub's *persisted*
+`AnalyticsWindowSelection.Relative(WEEK, 0)` **before** navigating so the hub opens already anchored —
+the DataStore stays the selection's one owner, no nav argument, no Home-local copy) · review items ·
+entry tiles. **The plan strip** is the pure `:domain` `DayPlanner` over today's weekday row of the
+LIFETIME `earningsHeatmap` (the Patterns tab's read): hours already spent dim to 35 %, and the best
+still-available contiguous 2–4 h run is outlined, its headline rate **coverage-weighted**
+(`Σ net ÷ Σ coverage`, the heatmap's own division applied to the run) rather than a mean of cell rates.
+A cell qualifies only with a real, positive rate — a masked hour is unknown and a `≤ $0` hour is a
+measured bad hour, so both END the run instead of being averaged through it. **Thin data is the load-
+bearing rule:** the heatmap unions + apportions session spans before it exists, so the dash COUNT is
+structurally unrecoverable read-side; the brief's "~5 samples" is therefore honestly measured as
+`DayPlanner.MIN_SAMPLED_HOURS`=5 **rate-bearing hour buckets** on that weekday, stated to the driver in
+hours, and below it the card states the count INSTEAD of any rate (§9). The provenance line
+`from your own <weekday>s, lifetime — not a guarantee` is verbatim copy rendered on **every** state of
+the card. Time-derived values follow Reactive-UI rule 2 — the state holds the anchors (heatmap + local
+date), the composables derive clock/current-hour from `rememberNow()` through a `derivedStateOf`, so the
+strip re-dims and re-picks on an hour boundary while recomposing hourly, not per second. Two SSOT moves
+rode along: the recap hero's `RecapModel` became `:domain` `NetDelta` (a feature module can't reach an
+`:app` owner) and `PatternsTab`'s private heat ramp became `:core:designsystem` `AppHeatScale`, so the
+strip and the Patterns grid can't drift apart. The review row reuses `ReviewFlags`/`reviewItems`/
+`NeedsALookCard` verbatim, scoped to the same week the block above it describes, with the action
+normalised to *navigate* into the hub (which owns the assign/attest dialogs) rather than inheriting an
+in-place label it can't honour. Read-side only — no schema change, no `PROJECTOR_VERSION` bump.
 **The "(No session)" bucket (#660 piece 1):** `delivery_records` rows whose source event carried
 NO `sessionId` at all were already counted in net (`deliveryTotals`'s own-`completedAt` fallback, #655)
 but invisible to gross (`grossAndUnattributed`/`sessionGrossRows` iterate `session_records` only, so a
