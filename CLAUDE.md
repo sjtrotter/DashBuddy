@@ -960,6 +960,19 @@ in the PR body to avoid a pointless ~6-minute build. Note the exact token is
 `[skip ci]` in the **body** — not `[no-ci]`, not a comment, not a label. Only use
 it when the diff genuinely has no code; when in doubt, let CI run.
 
+**PR CI gates `:app:lintVitalRelease` (#907).** Until #907, `pr-check.yml` only ever
+built/tested the **debug** variant, so a release-only break (16 `ExtraTranslation`
+errors from the #98 `:feature:setup` extraction orphaning `values-es-rUS`
+translations left behind in `:app`) shipped invisibly and broke `./gradlew :app:build`
+on master for an unknown stretch of time. The `build-and-test` job now runs
+`./gradlew :app:lintVitalRelease` after the unit-test step, and a source-scan guard
+(`LocaleAllowlistGuardTest`, the `TimberTagGuardTest`/`IcuRegexGuardTest` doctrine)
+enforces the dev's locale allowlist — translate into `en` (default)/`es`/`fr` only,
+language-level, never a regional variant (`es-rUS`) — so the orphaned-translation class
+can't recreate itself silently. `values-es` is intentionally incomplete (~84/393 keys)
+until the translation-completion work lands; that completeness gate is deferred, not
+forgotten.
+
 ## Session Orientation
 
 At the start of a session or before picking up new work:

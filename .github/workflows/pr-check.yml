@@ -42,6 +42,14 @@ jobs:
         # include; without it every :domain test is CI-invisible (#617 review / #590 gap).
         run: ./gradlew testDebugUnitTest :domain:test
 
+      - name: Release lint (lintVitalRelease)
+        # #907 — PR CI previously only ever built/tested the debug variant, so a release-only
+        # break (16 ExtraTranslation errors from the #98 :feature:setup extraction orphaning
+        # values-es-rUS translations) shipped invisibly and broke `./gradlew :app:build` on
+        # master for an unknown stretch of time. This is the class of break that hid; gate it
+        # here so it can't again.
+        run: ./gradlew :app:lintVitalRelease
+
       - name: Schemas committed (Room export drift)
         # With the destructive fallback retired (#690), an uncommitted Room schema export is a
         # missing upgrade path that only crashes on a device. KSP regenerated the schemas during
