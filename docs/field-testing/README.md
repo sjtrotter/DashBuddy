@@ -78,6 +78,18 @@ card's **mechanical** half, #577 (re-confirmed, 24/24, ~0.55 s — with a new po
 that entry's Bug #1), the #457 path, and #554 ShadowProjector (2/2). The #462/#460 dropoff item
 was found **broken-in-part** (raw PII in capture envelopes) and moved to that entry's Bug #7.)_
 
+- **🆕 NEW — #962 / PR #963 — points-based ratings parse + new rating surfaces.** Open DoorDash →
+  Ratings. In DashBuddy's Ratings screen you should now see a line reading
+  `Overall rating: <N> · Silver` (or Gold/Platinum) plus a `Quality rate` tile — all previously
+  blank on the 0.230.0 redesign. Then tap around the ratings area: the rewards board ("Rewards to
+  unlock"), the overall-rating info sheet ("Your overall rating is N"), a per-order feedback
+  drill-down, and the pause-offers sheet should all stop appearing as UNKNOWN captures.
+  **Watch for the tier being wrong:** open the side-nav drawer *while* on the Ratings screen —
+  the tier shown must still be the hub's, never the drawer's chip. **Desk:** the on-time
+  per-order drill-down (deliberately still UNKNOWN) must arrive with its `Delivery to <name>`
+  line scrubbed — the new third-conjugation marker working.
+  - Confirmed: 0/2
+
 - **🆕 NEW — #937 / PR #960 — recognition-health liveness (version stamp + UNKNOWN-rate alarm).**
   What to watch: (a) after the dash, the desk pull's `PipelineStats` INFO lines should carry a
   `platformApps=com.doordash.driverapp@<version>` suffix, and new capture envelopes should carry
@@ -2273,6 +2285,39 @@ Accept and Decline registered on DoorDash — and moved to that session's entry 
   the redesign, because the parse is still anchored on the old `textView_title` layout. That was
   already true before this change; re-anchoring the parse is separate, data-enrichment work.
   - Confirmed: 0/2.
+
+---
+
+## 2026-07-30 (afternoon) — BROWSE-SESSION pull (pull2): DoorDash's NEW points-based rating system discovered, recognized, and re-parsed same-day
+
+**Date:** 2026-07-30 · **Platform(s):** DoorDash (browse only — NO dashes in this slice) · **Branch
+under test:** master @ `ff99eb8f` device build · **Field conditions:** the dev deliberately browsed
+the redesigned Ratings area to capture the new system. Pull:
+`~/dashbuddy/logs/2026/07/30/pull2/` (75 captures, 54 UNKNOWN windows); device purged post-pull.
+
+**The finding:** DoorDash replaced its ratings layout with a **points-based overall rating** —
+`Overall rating <N>` (e.g. 73/100 pts), Silver/Gold/Platinum tiers at 55/75/85 pts, and six factor
+rows each rendering `label → value → "N of M points" → band` (incl. a NEW **Quality rate** factor),
+all **id-less Compose** — the old `textView_title`-anchored parse read null on every field (the
+residual PR #926 documented became the fielded reality).
+
+**Design rulings (dev, recorded on #962):** (1) tiers are NOT modeled — DoorDash's gamification is
+platform vocabulary and mission-inverted to mirror; two plain FACTS only (`overallRatingPoints`,
+`tierLabel`). (2) **No code may ever DEPEND on ratings data** — capture is opportunistic (only
+updates when the dasher browses Ratings; may be absent/stale forever); protect-stats is a
+*behavior*, not a calculation, and reads no rating. Enforced, not aspirational:
+`RatingsSnapshotIsDisplayOnlyTest` source-scans both consumption routes. (3) Trend history — the
+one version of ratings data the platform doesn't show the dasher — filed dev-gated as **#964**.
+
+**Shipped same-day (PR #963, merged):** parse re-anchored via legacy-first coalesce (legacy goldens
+byte-identical; the drawer-vs-hub tier trap closed with a scoped bind + negative test), 3 additive
+`RatingsSnapshot` facts + a plain display row, 4 recognize-only rules (rewards board,
+overall-rating explainer, per-order feedback drill-down, pause-offers sheet), 10 corpus fixtures.
+**Ride-along Pledge fix:** the sweep caught a fielded leak — the on-time per-order drill-down
+renders `Delivery to <customer first name>`, a THIRD conjugation missing from
+`CustomerTextMarkers` — added to the SSOT (zero corpus hits; the surface stays deliberately
+UNKNOWN and is now scrubbed). Follow-up filed: **#965** (the legacy `deliveriesLast30Days` anchor
+never matched — parenthesized label vs fielded plain).
 
 ---
 
