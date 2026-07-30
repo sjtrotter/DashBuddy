@@ -87,6 +87,14 @@ fun OfferEvaluation.notificationPersona(): ChatPersona = when (action) {
  * Net $22.48 · 12.9 mi · $1.74/mi · Score 74 · H-E-B
  * ```
  *
+ * When the offer's distance never parsed (#936) every rate here would be a `0.0` placeholder, so
+ * the summary states the gross pay and says there is no verdict instead of quoting `$0/hr net`:
+ *
+ * ```
+ * OFFER · no verdict
+ * Pay $12.50 · distance didn't parse · H-E-B
+ * ```
+ *
  * Note: bold + size are reliable across devices; foreground color in a MessagingStyle notification
  * is device/version dependent (the system may re-theme it), so the line still reads cleanly without
  * it. `toString()` yields the plain text used for chat storage.
@@ -94,6 +102,7 @@ fun OfferEvaluation.notificationPersona(): ChatPersona = when (action) {
 fun OfferEvaluation.toNotificationSummary(): CharSequence {
     val verdict = offerVerdictLabel(action)
     val verdictColor = offerVerdictArgb(action)
+    val scored = hasDistanceMetrics
 
     return SpannableStringBuilder().apply {
         val start = length
@@ -102,17 +111,22 @@ fun OfferEvaluation.toNotificationSummary(): CharSequence {
         setSpan(RelativeSizeSpan(1.2f), start, length, Spannable.SPAN_EXCLUSIVE_EXCLUSIVE)
 
         append(" · ")
-        append("${Formats.money0(dollarsPerHour)}/hr net")
+        append(if (scored) "${Formats.money0(dollarsPerHour)}/hr net" else "no verdict")
         // Whole headline (verdict + rate) bold.
         setSpan(StyleSpan(Typeface.BOLD), start, length, Spannable.SPAN_EXCLUSIVE_EXCLUSIVE)
 
         append("\n")
         append(
-            "Net ${Formats.money(netPayAmount)} · " +
-                "${Formats.decimal(distanceMiles)} mi · " +
-                "${Formats.money(dollarsPerMile)}/mi · " +
-                "Score ${score.toInt()} · " +
-                merchantName,
+            if (scored) {
+                "Net ${Formats.money(netPayAmount)} · " +
+                    "${Formats.decimal(distanceMiles)} mi · " +
+                    "${Formats.money(dollarsPerMile)}/mi · " +
+                    "Score ${score.toInt()} · " +
+                    merchantName
+            } else {
+                // Gross pay is real (parsed); every other figure would be invented.
+                "Pay ${Formats.money(payAmount)} · distance didn't parse · $merchantName"
+            },
         )
     }
 }

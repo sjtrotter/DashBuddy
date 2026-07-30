@@ -43,4 +43,17 @@ data class OfferEvaluation(
      * Shown to the user when configuring rules so they understand why offers are being declined.
      */
     val warnings: List<String> = emptyList(),
-)
+) {
+    /**
+     * True when this evaluation was computed against a real, positive parsed distance — i.e.
+     * [distanceMiles], [dollarsPerMile], [dollarsPerHour] and the cost fields are real numbers.
+     *
+     * False when the offer's distance never parsed (#936). Those fields are then `0.0`
+     * PLACEHOLDERS meaning *unknown*, not measurements: [netPayAmount] is gross (no cost was
+     * deducted) and the verdict is [OfferQuality.UNKNOWN]/[OfferAction.NOTHING]. Any surface that
+     * renders or speaks a per-mile / per-hour / distance figure must check this first and show its
+     * "unknown" affordance instead — printing the zeros would quote a rate we never computed.
+     * ([operatingCostPerMile] is exempt: it is the economy profile's own rate, not distance-derived.)
+     */
+    val hasDistanceMetrics: Boolean get() = distanceMiles > 0.0
+}

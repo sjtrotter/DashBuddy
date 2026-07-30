@@ -494,6 +494,14 @@ object RecordFolds {
         val evalDist = eval?.distanceMiles
         val fuelPerMile = if (eval != null && evalDist != null && evalDist > 0.0) eval.fuelCostEstimate / evalDist else null
         val nonFuelPerMile = if (eval != null && evalDist != null && evalDist > 0.0) eval.nonFuelCostEstimate / evalDist else null
+        // #936: an offer whose distance never parsed gets NO verdict — its evaluation carries 0.0
+        // PLACEHOLDERS in every rate field and a placeholder score, because nothing was scored. The
+        // frozen estimate columns are nullable precisely so the Decisions-tab aggregates
+        // (`AVG(score)`, `AVG(estDollarsPerHour)`, `Σ estNetPay`) can yield null instead of a
+        // fabricated 0 (see [OfferScoreOutcomeRow]) — so hand them null. The honest facts still
+        // record: `action`/`quality` (NOTHING/UNKNOWN), the parsed pay + null distance, and the
+        // economy's own `operatingCostPerMile`, which is not distance-derived.
+        val scoredEval = eval?.takeIf { it.hasDistanceMetrics }
         val offer = OfferFold(
             eventSequenceId = event.sequenceId,
             sessionId = sid,
@@ -509,13 +517,13 @@ object RecordFolds {
             // evaluator uses, so an un-evaluated offer records the store the dasher saw rather
             // than the identity-bearing first order (the Uber stack card's type chip).
             merchantName = eval?.merchantName ?: parsed.displayStoreText.takeIf { it.isNotBlank() },
-            score = eval?.score,
+            score = scoredEval?.score,
             action = eval?.action?.name,
             quality = eval?.qualityLevel?.name,
-            estNetPay = eval?.netPayAmount,
-            estDollarsPerHour = eval?.dollarsPerHour,
-            estDollarsPerMile = eval?.dollarsPerMile,
-            estTimeMinutes = eval?.estimatedTimeMinutes,
+            estNetPay = scoredEval?.netPayAmount,
+            estDollarsPerHour = scoredEval?.dollarsPerHour,
+            estDollarsPerMile = scoredEval?.dollarsPerMile,
+            estTimeMinutes = scoredEval?.estimatedTimeMinutes,
             estOperatingCostPerMile = eval?.operatingCostPerMile,
             estFuelPerMile = fuelPerMile,
             estNonFuelPerMile = nonFuelPerMile,

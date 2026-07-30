@@ -108,11 +108,17 @@ sealed class FlowCardSnapshot {
                 // multi-order card the per-order name is the type chip ("Delivery (2)") held
                 // there for #830 identity, and this card is a human surface.
                 storeNames = parsedOffer.displayStores,
-                evaluationScore = evaluation?.score,
+                // #936: an evaluation with no parsed distance carries 0.0 PLACEHOLDERS, not
+                // measurements, in every distance-derived field (and a placeholder score, since
+                // no scoring ran). This card's metric fields are already nullable and every
+                // renderer — the bubble offer card and the heads-up notification's custom views —
+                // already draws the "—" affordance / hides the score gauge for a null, so the
+                // honest value to hand them is null. `payAmount` (real, parsed) still shows.
+                evaluationScore = evaluation?.takeIf { it.hasDistanceMetrics }?.score,
                 evaluationAction = evaluation?.action?.name,
-                netPayAmount = evaluation?.netPayAmount,
-                dollarsPerMile = evaluation?.dollarsPerMile,
-                dollarsPerHour = evaluation?.dollarsPerHour,
+                netPayAmount = evaluation?.takeIf { it.hasDistanceMetrics }?.netPayAmount,
+                dollarsPerMile = evaluation?.takeIf { it.hasDistanceMetrics }?.dollarsPerMile,
+                dollarsPerHour = evaluation?.takeIf { it.hasDistanceMetrics }?.dollarsPerHour,
                 qualityLevel = evaluation?.qualityLevel,
                 badges = badgesOf(parsedOffer),
                 expiresAt = expiresAt,
