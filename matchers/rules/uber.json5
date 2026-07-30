@@ -617,12 +617,14 @@
           }
         },
         {
+          "comment": "#895 (+ the 07-29 F4 field finding): plainMask. The fused 'Apt <n>' unit number is a bounded ~10^4 alphabet over the 4-char length floor, so a 4-hex distinctness suffix is brute-recoverable (the #892/#795 oracle argument); distinctness is redundant here — the same surface's name/street entries keep per-customer hashes. The split label/value form already plains via the id-less digit-shape entry.",
           "find": {
             "hasTextStartsWith": "Apt "
           },
           "keepPrefix": [
             "Apt "
-          ]
+          ],
+          "plainMask": true
         },
         {
           "find": {
@@ -780,12 +782,14 @@
           }
         },
         {
+          "comment": "#895 (+ the 07-29 F4 field finding): plainMask. The fused 'Apt <n>' unit number is a bounded ~10^4 alphabet over the 4-char length floor, so a 4-hex distinctness suffix is brute-recoverable (the #892/#795 oracle argument); distinctness is redundant here — the same surface's name/street entries keep per-customer hashes. The split label/value form already plains via the id-less digit-shape entry.",
           "find": {
             "hasTextStartsWith": "Apt "
           },
           "keepPrefix": [
             "Apt "
-          ]
+          ],
+          "plainMask": true
         },
         {
           "find": {
@@ -906,12 +910,14 @@
           }
         },
         {
+          "comment": "#895 (+ the 07-29 F4 field finding): plainMask. The fused 'Apt <n>' unit number is a bounded ~10^4 alphabet over the 4-char length floor, so a 4-hex distinctness suffix is brute-recoverable (the #892/#795 oracle argument); distinctness is redundant here — the same surface's name/street entries keep per-customer hashes. The split label/value form already plains via the id-less digit-shape entry.",
           "find": {
             "hasTextStartsWith": "Apt "
           },
           "keepPrefix": [
             "Apt "
-          ]
+          ],
+          "plainMask": true
         },
         {
           "find": {
@@ -1169,12 +1175,14 @@
           }
         },
         {
+          "comment": "#895 (+ the 07-29 F4 field finding): plainMask. The fused 'Apt <n>' unit number is a bounded ~10^4 alphabet over the 4-char length floor, so a 4-hex distinctness suffix is brute-recoverable (the #892/#795 oracle argument); distinctness is redundant here — the same surface's name/street entries keep per-customer hashes. The split label/value form already plains via the id-less digit-shape entry.",
           "find": {
             "hasTextStartsWith": "Apt "
           },
           "keepPrefix": [
             "Apt "
-          ]
+          ],
+          "plainMask": true
         },
         {
           "find": {
