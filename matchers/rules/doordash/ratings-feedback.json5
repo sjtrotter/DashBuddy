@@ -28,14 +28,26 @@
       }
     },
     {
+      "comment": "2026-07-30 corpus pass — the 0.230.0 REDESIGNED hub ('Overall rating <N>' + the Silver/Gold/Platinum gem ladder + a 'Your rating factors' points list) never renders the literal word 'ratings' anywhere on the screen. The original conjunct only matched it by ACCIDENT, off the side-nav drawer's 'Ratings' menu row: the two fielded drawer-open frames (07-29 15:15:49 / 15:17:01) classified `ratings`, while the two drawer-closed frames of the SAME screen (…UNKNOWN__3544f5 / …UNKNOWN__dd3695) fell to UNKNOWN. Recognition must not depend on an unrelated overlay being open, so a second arm anchors on the redesign's own copy. 'Your rating factors' is corpus-unique (0 other snapshots) and the arm still demands both rate labels, so it cannot claim the single-metric drill-downs (performance_rate_detail / customer_rating_detail render ONE metric and no 'Your rating factors' header). DOCUMENTED RESIDUAL: the parse below is anchored on `textView_title` siblings, which the redesign does not render — every field reads null on this variant (it already did on the drawer-open frames, so this is a pre-existing parse gap the broadening makes VISIBLE, not one it introduces). The shape has no required fields, no effects and no state.flow, so a null parse is inert; re-anchoring the parse onto the points-list rows is a separate, data-enrichment-labelled change. PRIVACY: no customer PII — the dasher's own aggregate rating counters and fixed program copy.",
       "id": "doordash.screen.ratings",
       "priority": 90,
       "require": {
-        "allTextContainsAll": [
-          "ratings",
-          "acceptance rate",
-          "completion rate",
-          "overall"
+        "any": [
+          {
+            "allTextContainsAll": [
+              "ratings",
+              "acceptance rate",
+              "completion rate",
+              "overall"
+            ]
+          },
+          {
+            "allTextContainsAll": [
+              "your rating factors",
+              "acceptance rate",
+              "completion rate"
+            ]
+          }
         ]
       },
       "parse": {
@@ -233,7 +245,7 @@
       }
     },
     {
-      "comment": "#796/#865 — a performance-metric DETAIL screen (Completion rate / On-time rate / Quality rate / Acceptance rate): a metric header + score, a 'Last 100 <unit>' breakdown, a 'View all <unit>' button, and an 'About <metric> rate' explainer. RECOGNIZE-ONLY (dev decision 2026-07-17, batch #796): no state.flow, no parse — the app already ships doordash.screen.ratings (the combined ratings hub); these are the single-metric drill-downs, which that rule's four-way 'ratings'+'acceptance rate'+'completion rate'+'overall' conjunct legitimately does NOT match. #865 BROADENED the anchor to the two UNIT variants of the SAME screen family: the order-denominated metrics render 'Last 100 orders' + 'View all orders', the offer-denominated Acceptance rate renders 'Last 100 offers' + 'View all offers' (the only textual difference — the layout, the 'About …' explainer and the tips section are identical), so it stays ONE intent rather than a near-duplicate sibling rule. All four anchor strings are corpus-unique (0 other snapshots); each variant requires its OWN header+button PAIR, so the sibling list modal (which shares the header but has NO 'View all …' button) still never collides. PRIVACY: no customer PII — the dasher's own aggregate counters + fixed program copy.",
+      "comment": "#796/#865 — a performance-metric DETAIL screen (Completion rate / On-time rate / Quality rate / Acceptance rate): a metric header + score, a 'Last 100 <unit>' breakdown, a 'View all <unit>' button, and an 'About <metric> rate' explainer. RECOGNIZE-ONLY (dev decision 2026-07-17, batch #796): no state.flow, no parse — the app already ships doordash.screen.ratings (the combined ratings hub); these are the single-metric drill-downs, which that rule's four-way 'ratings'+'acceptance rate'+'completion rate'+'overall' conjunct legitimately does NOT match. #865 BROADENED the anchor to the two UNIT variants of the SAME screen family: the order-denominated metrics render 'Last 100 orders' + 'View all orders', the offer-denominated Acceptance rate renders 'Last 100 offers' + 'View all offers' (the only textual difference — the layout, the 'About …' explainer and the tips section are identical), so it stays ONE intent rather than a near-duplicate sibling rule. All four anchor strings are corpus-unique (0 other snapshots); each variant requires its OWN header+button PAIR, so the sibling list modal (which shares the header but has NO 'View all …' button) still never collides. PRIVACY: no customer PII — the dasher's own aggregate counters + fixed program copy. 2026-07-30 corpus pass added a THIRD arm for the COUNT metric's drill-down ('Last 30-day orders'), the one rating factor in the 0.230.0 redesign that is a running total rather than a rate. Same family and same layout as the two rate arms (metric header + score + band, 'Points toward your overall rating', the collapsible band table, an 'About <metric>' explainer), but it has NO 'Last 100 …' sample window and therefore no 'View all …' button, so neither existing arm could reach it — 5 fielded frames fell to UNKNOWN on 07-29 (…UNKNOWN__b062f1 / __1aa7db / __c5f37f / __8dfab5 / __b1ac01). Anchored on the header + explainer PAIR: 'About last 30-day orders' is corpus-unique (0 other snapshots) and appears ONLY on the drill-down, so the redesigned ratings HUB — which also renders a 'Last 30-day orders' factor row but no explainer — is never claimed (and the hub is claimed first anyway at priority 90).",
       "id": "doordash.screen.performance_rate_detail",
       "priority": 116,
       "require": {
@@ -262,6 +274,20 @@
               {
                 "exists": {
                   "hasTextContaining": "View all offers"
+                }
+              }
+            ]
+          },
+          {
+            "all": [
+              {
+                "exists": {
+                  "hasTextContaining": "Last 30-day orders"
+                }
+              },
+              {
+                "exists": {
+                  "hasTextContaining": "About last 30-day orders"
                 }
               }
             ]
@@ -299,19 +325,26 @@
       }
     },
     {
-      "comment": "#865 — the Customer rating DETAIL drill-down from the ratings hub: the hero star score + the 5→1 star histogram, an 'N ratings excluded' unfair-ratings row, a 'Customer Feedback' category grid (Communication / Order Handling / Followed Delivery Instructions / Friendliness), a 'Customer Compliments' block ('Above and Beyond' count + 'Quotes from customers'), and a 'Learn more' section. RECOGNIZE-ONLY: no state.flow, no parse — same posture as the sibling performance_rate_detail / dasher_rewards drill-downs (the aggregate customerRating is already parsed off doordash.screen.ratings, the combined hub, which this screen is reached FROM and which its four-way 'ratings'+'acceptance rate'+'completion rate'+'overall' conjunct does not match). Anchored on the structural viewId pair `star_rating_container` + `progress_bar_five` — the hero score container and the 5-star histogram row. Both are corpus-unique (0 other snapshots, incl. all 15 ratings/ hub frames) and both are unconditional CHROME of this screen, present even on the still-loading frame whose score/count TextViews are still empty (capture …UNKNOWN__ce3033) — deliberately used INSTEAD of the 'Customer Compliments' / 'Above and Beyond' copy, which is data-conditional. PRIVACY: no customer PII in either fielded frame — the dasher's own aggregate rating counters, fixed category labels and fixed program copy. DOCUMENTED RESIDUAL: `quotes_recycler` is EMPTY in both fielded frames (the second renders the empty-state 'Customer quotes from 5-star reviews will appear here.'), but a dasher WITH compliments would render customer-authored free-text quotes there. DoorDash renders those quotes unattributed (no name, no address), so they are not the customer-identity PII the hash-at-edge chain covers; they are also not scoped-addressable by a `redact` predicate today (the quote TextViews carry no viewId and nodePredicate has no parent/descendant scoping), so no redact is declared. If a non-empty quotes frame is ever fielded, revisit — either a scoping predicate or a marker-backstop entry.",
+      "comment": "#865 — the Customer rating DETAIL drill-down from the ratings hub: the hero star score + the 5→1 star histogram, an 'N ratings excluded' unfair-ratings row, a 'Customer Feedback' category grid (Communication / Order Handling / Followed Delivery Instructions / Friendliness), a 'Customer Compliments' block ('Above and Beyond' count + 'Quotes from customers'), and a 'Learn more' section. RECOGNIZE-ONLY: no state.flow, no parse — same posture as the sibling performance_rate_detail / dasher_rewards drill-downs (the aggregate customerRating is already parsed off doordash.screen.ratings, the combined hub, which this screen is reached FROM and which its four-way 'ratings'+'acceptance rate'+'completion rate'+'overall' conjunct does not match). Anchored on the structural viewId pair `star_rating_container` + `progress_bar_five` — the hero score container and the 5-star histogram row. Both are corpus-unique (0 other snapshots, incl. all 15 ratings/ hub frames) and both are unconditional CHROME of this screen, present even on the still-loading frame whose score/count TextViews are still empty (capture …UNKNOWN__ce3033) — deliberately used INSTEAD of the 'Customer Compliments' / 'Above and Beyond' copy, which is data-conditional. PRIVACY: no customer PII in either fielded frame — the dasher's own aggregate rating counters, fixed category labels and fixed program copy. DOCUMENTED RESIDUAL: `quotes_recycler` is EMPTY in both fielded frames (the second renders the empty-state 'Customer quotes from 5-star reviews will appear here.'), but a dasher WITH compliments would render customer-authored free-text quotes there. DoorDash renders those quotes unattributed (no name, no address), so they are not the customer-identity PII the hash-at-edge chain covers; they are also not scoped-addressable by a `redact` predicate today (the quote TextViews carry no viewId and nodePredicate has no parent/descendant scoping), so no redact is declared. If a non-empty quotes frame is ever fielded, revisit — either a scoping predicate or a marker-backstop entry. 2026-07-30 corpus pass: the pair was SCROLL/EXPAND-fragile, the #865 `performance_orders_list` lesson one rule over. `star_rating_container` is the hero-score container, which the 0.230.0 band-table-EXPANDED render of the same screen replaces with the points header ('Customer rating' + score + 'Points toward your overall rating' + the collapsible band table) — one fielded frame (…UNKNOWN__948ec3, 07-29 15:19:01) therefore dropped out of recognition while still carrying the histogram, the unfair-ratings row, the feedback grid and the compliments block. The rule keeps a PAIR (never a single anchor) but the second conjunct is now satisfied by EITHER the hero container OR `feedback_title`: `progress_bar_five` + `feedback_title` are both present in all four known frames (the two corpus fixtures, the 07-29 loading frame …ce3033, and …948ec3), and both remain corpus-unique.",
       "id": "doordash.screen.customer_rating_detail",
       "priority": 126,
       "require": {
         "all": [
           {
             "exists": {
-              "hasIdSuffix": "star_rating_container"
+              "hasIdSuffix": "progress_bar_five"
             }
           },
           {
             "exists": {
-              "hasIdSuffix": "progress_bar_five"
+              "any": [
+                {
+                  "hasIdSuffix": "star_rating_container"
+                },
+                {
+                  "hasIdSuffix": "feedback_title"
+                }
+              ]
             }
           }
         ]

@@ -269,6 +269,12 @@
         "shape": null,
         "fields": {}
     },
+    "customer_rating_detail/2026-07-29_15-19-01-381__doordash__accessibility.window__UNKNOWN__948ec3.json": {
+        "ruleId": "doordash.screen.customer_rating_detail",
+        "intent": "customer_rating_detail",
+        "shape": null,
+        "fields": {}
+    },
     "customer_rating_detail/customer_rating_detail.json": {
         "ruleId": "doordash.screen.customer_rating_detail",
         "intent": "customer_rating_detail",
@@ -1486,6 +1492,12 @@
         "shape": null,
         "fields": {}
     },
+    "dropoff_handoff/2026-07-29_17-55-50-627__doordash__accessibility.window__dropoff_handoff__b23b66.json": {
+        "ruleId": "doordash.screen.dropoff_handoff",
+        "intent": "dropoff_handoff",
+        "shape": null,
+        "fields": {}
+    },
     "dropoff_handoff/20260128_180855_435_DROPOFF_DETAILS_PRE_ARRIVAL.json": {
         "ruleId": "doordash.screen.dropoff_handoff",
         "intent": "dropoff_handoff",
@@ -2115,6 +2127,27 @@
             "deadline": {
                 "text": "5:02 PM",
                 "time": 1780333320000
+            },
+            "itemsRemaining": null,
+            "itemsShopped": null,
+            "phase": "DROPOFF",
+            "redCardTotal": null,
+            "storeAddress": null,
+            "storeName": null,
+            "subFlow": "NAVIGATION"
+        }
+    },
+    "dropoff_pre_arrival/2026-07-29_19-02-29-477__doordash__accessibility.window__dropoff_pre_arrival__8fe217.json": {
+        "ruleId": "doordash.screen.dropoff_pre_arrival",
+        "intent": "dropoff_pre_arrival",
+        "shape": "task",
+        "fields": {
+            "arrivalConfirmed": false,
+            "customerAddressHash": null,
+            "customerNameHash": "b68919aff001d8366249403a2544fba2d833084f1ad22839b6310aadacb6a138",
+            "deadline": {
+                "text": "7:09 PM",
+                "time": 1780340940000
             },
             "itemsRemaining": null,
             "itemsShopped": null,
@@ -3375,6 +3408,12 @@
     "performance_orders_list/performance_orders_list_scrolled_tail.json": {
         "ruleId": "doordash.screen.performance_orders_list",
         "intent": "performance_orders_list",
+        "shape": null,
+        "fields": {}
+    },
+    "performance_rate_detail/2026-07-29_15-18-24-090__doordash__accessibility.window__UNKNOWN__b062f1.json": {
+        "ruleId": "doordash.screen.performance_rate_detail",
+        "intent": "performance_rate_detail",
         "shape": null,
         "fields": {}
     },
@@ -5204,6 +5243,25 @@
             "lifetimeShoppingOrders": null,
             "onTimeRate": 100.0,
             "originalItemsFoundRate": 100.0,
+            "substitutionIssuesRate": null,
+            "totalItemsFoundRate": null
+        }
+    },
+    "ratings/2026-07-29_15-19-05-861__doordash__accessibility.window__UNKNOWN__dd3695.json": {
+        "ruleId": "doordash.screen.ratings",
+        "intent": "ratings",
+        "shape": "ratings",
+        "fields": {
+            "acceptanceRate": null,
+            "completionRate": null,
+            "customerRating": null,
+            "deliveriesLast30Days": null,
+            "itemsWithQualityIssuesRate": null,
+            "itemsWrongOrMissingRate": null,
+            "lifetimeDeliveries": null,
+            "lifetimeShoppingOrders": null,
+            "onTimeRate": null,
+            "originalItemsFoundRate": null,
             "substitutionIssuesRate": null,
             "totalItemsFoundRate": null
         }
