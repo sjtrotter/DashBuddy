@@ -25,7 +25,7 @@ import java.time.LocalDate
 
 /**
  * Pure copy logic for the recap hero (#970 / brief §3.3) — Compose-free so the comparison rules are
- * unit-testable away from rendering (the [WaterfallModel] precedent).
+ * unit-testable away from rendering (the [MoneyWentModel] precedent).
  *
  * The rules exist to keep §9's honesty bar: a delta is only stated when there is something real to
  * compare against. No previous window (Lifetime) says so; a previous window that earned nothing gets

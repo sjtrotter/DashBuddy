@@ -10,7 +10,7 @@ import org.junit.Test
 
 /**
  * #970 — the recap hero's comparison rules (brief §3.3 + the §9 honesty bar). Compose-free, per the
- * [WaterfallModel] precedent.
+ * [MoneyWentModel] precedent.
  *
  * Each rule exists to stop a specific dishonest reading:
  *  - no previous window (Lifetime) must say so, not print `▲ 0%`;

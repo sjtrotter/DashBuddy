@@ -24,4 +24,12 @@ data class DailyEarnings(
     val date: LocalDate,
     val gross: Double,
     val net: Double = 0.0,
+    /**
+     * Deliveries completed on this day's bar (#973 / brief §4.2) — the third figure the tappable day
+     * bar states, so a big bar can be read as "one good day" vs "a lot of small drops". Counted under
+     * the SAME session-anchored bucketing as [gross]/[net] (a dash's whole delivery count sits on its
+     * start day; a "(No session)" row counts on its own completion day), so the three figures on a bar
+     * always describe one population.
+     */
+    val deliveries: Int = 0,
 )

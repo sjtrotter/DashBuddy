@@ -623,7 +623,22 @@ fail-closed to the current pay week. **Net per day (§7.3):** `DailyEarnings` ga
 unattributed remainder), so Σ per-day net equals the window's `PeriodEconomics.netProfit` by construction and
 the hero's sparkline plots kept money, not gross. `dailyEarnings` returns an EMPTY axis for a single-day,
 unbounded, or over-`MAX_DAY_AXIS` (400-day) window. Read-side only — no schema change, no
-`PROJECTOR_VERSION` bump, no economy dependency. **The "(No session)" bucket (#660 piece 1):** `delivery_records` rows whose source event carried
+`PROJECTOR_VERSION` bump, no economy dependency. **Pay mix + platform split (#973, stage 2 — brief §7.6/§4.2):**
+`AnalyticsDao.payMixTotals` sums `basePay`/`tip`/`cashTip` over the delivery population `deliveryTotals`
+describes (byte-identical `WHERE`), and `AnalyticsRepository.payMixParts(window|period)` serves it as the
+`:domain` `PayMixParts`; the pure `PayMix.of(gross, parts)` composes it with the window's OWN
+`PeriodEconomics.grossEarnings` at the read site (gross keeps one owner — the repository's `assemble` fold —
+so the bar always reconciles with the hero). `bonuses & other` is the RESIDUE `gross − base − tips − cash`,
+**floored at 0** with `partsExceedGross`/`grossOverflow` recording an over-cent negative rather than absorbing
+it. `basePay`/`tip` are stamped only on a job's SOLE drop, so partial coverage is the NORMAL case:
+`deliveriesWithBreakdown`/`deliveries` drive a stated caveat + an "at least N%" tips insight, and ZERO coverage
+renders a "not recorded" state instead of a 100 %-bonuses lie. `platformEconomics(window|period)` runs the four
+by-platform aggregates ONCE and folds each wire through the same `assemble` — platforms come from the DATA via
+`Platform.fromWire` (no fixed list), and the single-platform `periodEconomics(window, platform)` now DELEGATES
+into that grouped fold, so a split row and a filtered read can't be assembled two ways. `DailyEarnings` gained
+`deliveries` (per-session count off the same `GROUP BY sessionId` subquery; an orphan row counts as one) for the
+tappable day bar. Still read-side only — no schema change, no `PROJECTOR_VERSION` bump, no economy dependency.
+**The "(No session)" bucket (#660 piece 1):** `delivery_records` rows whose source event carried
 NO `sessionId` at all were already counted in net (`deliveryTotals`'s own-`completedAt` fallback, #655)
 but invisible to gross (`grossAndUnattributed`/`sessionGrossRows` iterate `session_records` only, so a
 null-session row joined to nothing) — a seam that could let displayed net exceed gross. Fixed by folding

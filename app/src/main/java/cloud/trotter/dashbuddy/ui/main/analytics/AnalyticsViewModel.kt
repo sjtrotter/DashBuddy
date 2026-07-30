@@ -13,7 +13,10 @@ import cloud.trotter.dashbuddy.domain.analytics.DailyEarnings
 import cloud.trotter.dashbuddy.domain.analytics.DecisionEconomics
 import cloud.trotter.dashbuddy.domain.analytics.DeliveryRecord
 import cloud.trotter.dashbuddy.domain.analytics.OrphanOfferGroup
+import cloud.trotter.dashbuddy.domain.analytics.PayMix
+import cloud.trotter.dashbuddy.domain.analytics.PayMixParts
 import cloud.trotter.dashbuddy.domain.analytics.PeriodEconomics
+import cloud.trotter.dashbuddy.domain.analytics.PlatformEconomics
 import cloud.trotter.dashbuddy.domain.analytics.SessionRecord
 import cloud.trotter.dashbuddy.domain.analytics.StoreEconomics
 import cloud.trotter.dashbuddy.domain.analytics.TimeEconomics
@@ -100,17 +103,25 @@ class AnalyticsViewModel @Inject constructor(
                 analyticsRepository.perStoreEconomics(w),
                 analyticsRepository.decisionEconomics(w),
                 analyticsRepository.timeEconomics(w),
-                // The typed `combine` tops out at 5 flows, so the per-day chart + the "(No session)"
-                // orphan list (#660 piece 2) + the orphan-OFFER groups (#810 B2 Tier 2) + the
-                // previous-window economics (#970 §7.2) ride ONE nested sub-combine into the 5th slot.
-                // All window-anchored, so they re-anchor atomically with everything else.
+                // The typed `combine` tops out at 5 flows, so every remaining window-anchored read
+                // rides ONE nested pair of sub-combines into the 5th slot: the per-day chart + the
+                // "(No session)" orphan list (#660 piece 2) + the orphan-OFFER groups (#810 B2 Tier 2)
+                // on one side, and the previous-window economics (#970 §7.2) + the pay-mix parts +
+                // the platform split (#973 §4.2/§7.6) on the other. All window-anchored, so they
+                // re-anchor atomically with everything else.
                 combine(
-                    analyticsRepository.dailyEarnings(w),
-                    analyticsRepository.noSessionDeliveries(w),
-                    analyticsRepository.orphanOfferGroups(w),
-                    previousEconomics(w),
-                ) { daily, orphans, offerGroups, previous ->
-                    WindowExtras(daily, orphans, offerGroups, previous)
+                    combine(
+                        analyticsRepository.dailyEarnings(w),
+                        analyticsRepository.noSessionDeliveries(w),
+                        analyticsRepository.orphanOfferGroups(w),
+                    ) { daily, orphans, offerGroups -> Triple(daily, orphans, offerGroups) },
+                    combine(
+                        previousEconomics(w),
+                        analyticsRepository.payMixParts(w),
+                        analyticsRepository.platformEconomics(w),
+                    ) { previous, payMixParts, platforms -> Triple(previous, payMixParts, platforms) },
+                ) { (daily, orphans, offerGroups), (previous, payMixParts, platforms) ->
+                    WindowExtras(daily, orphans, offerGroups, previous, payMixParts, platforms)
                 },
             ) { economics, stores, decisions, time, extras ->
                 WindowData(w, day, economics, stores, decisions, time, extras)
@@ -130,6 +141,12 @@ class AnalyticsViewModel @Inject constructor(
             canStepForward = AnalyticsWindows.canStepForward(data.window, data.today),
             economics = data.economics,
             previousEconomics = data.extras.previousEconomics,
+            // The mix is composed HERE, against this window's own gross (#973): gross has exactly one
+            // owner (the repository's economics fold) and the "bonuses & other" residue is defined
+            // relative to it, so composing at the read site is what keeps the bar reconciling with the
+            // hero rather than against a second, independently-derived total (Principle 5).
+            payMix = PayMix.of(data.economics.grossEarnings, data.extras.payMixParts),
+            platformSplit = data.extras.platformSplit,
             topStores = data.stores.take(TOP_STORES),
             recentSessions = sessions,
             decisions = data.decisions,
@@ -303,6 +320,8 @@ class AnalyticsViewModel @Inject constructor(
         val orphanDeliveries: List<DeliveryRecord>,
         val orphanOfferGroups: List<OrphanOfferGroup>,
         val previousEconomics: PeriodEconomics?,
+        val payMixParts: PayMixParts,
+        val platformSplit: List<PlatformEconomics>,
     )
 
     /** One window switch's worth of read-model, re-anchored atomically under [flatMapLatest]. */

@@ -15,8 +15,10 @@ import cloud.trotter.dashbuddy.domain.analytics.DeliveryNet
 import cloud.trotter.dashbuddy.domain.analytics.DeliveryRecord
 import cloud.trotter.dashbuddy.domain.analytics.EarningsHeatmap
 import cloud.trotter.dashbuddy.domain.analytics.EarningsHeatmapCalculator
+import cloud.trotter.dashbuddy.domain.analytics.PayMixParts
 import cloud.trotter.dashbuddy.domain.analytics.PeriodEconomics
 import cloud.trotter.dashbuddy.domain.analytics.PeriodTotals
+import cloud.trotter.dashbuddy.domain.analytics.PlatformEconomics
 import cloud.trotter.dashbuddy.domain.analytics.SessionDetail
 import cloud.trotter.dashbuddy.domain.analytics.SessionRecord
 import cloud.trotter.dashbuddy.domain.analytics.SessionSpan
@@ -110,8 +112,16 @@ class AnalyticsRepository @Inject constructor(
         bounds: Flow<PeriodBounds.Bounds>,
         platform: Platform?,
     ): Flow<PeriodEconomics> =
-        bounds.flatMapLatest { (start, end) ->
-            if (platform == null) {
+        if (platform != null) {
+            // ONE owner for the per-platform fold (Principle 5): the single-platform read is a lookup
+            // into the same grouped assembly the split rows are built from, so a platform's row on the
+            // split card and its filtered economics can never be assembled two different ways. A
+            // platform with no rows in the window is genuinely empty, not a fabricated zero-rate.
+            platformEconomicsIn(bounds).map { rows ->
+                rows.find { it.platform == platform }?.economics ?: PeriodEconomics.EMPTY
+            }
+        } else {
+            bounds.flatMapLatest { (start, end) ->
                 combine(
                     analyticsDao.deliveryTotals(start, end),
                     analyticsDao.sessionTotals(start, end),
@@ -126,29 +136,98 @@ class AnalyticsRepository @Inject constructor(
                         noSessionPay = ns.pay + ns.cash, noSessionDeliveries = ns.deliveries,
                     )
                 }
-            } else {
-                val wire = platform.wire
-                combine(
-                    analyticsDao.deliveryTotalsByPlatform(start, end),
-                    analyticsDao.sessionTotalsByPlatform(start, end),
-                    analyticsDao.grossAndUnattributedByPlatform(start, end),
-                    analyticsDao.noSessionTotalsByPlatform(start, end),
-                ) { dl, sl, gl, nsl ->
+            }
+        }
+
+    /**
+     * The window's economics **split per platform** (#973 / brief §4.2 — "DoorDash vs Uber Eats rows")
+     * — one entry per platform that has any record in the window, highest gross first.
+     *
+     * Platform-agnostic by construction (Principle 8): the platforms come from the DATA (each grouped
+     * row's `platform` wire, resolved through the [Platform] registry's [Platform.fromWire]), never
+     * from a hardcoded list or a `when` over platform literals — so a third platform's rows appear on
+     * the card the day its ruleset lands, with no edit here. A wire the registry does not know is
+     * dropped rather than guessed at (fail-null beats fail-wrong).
+     *
+     * Reads the four by-platform DAO aggregates ONCE for the whole split, instead of re-querying per
+     * platform, and folds each through the same [assemble] as every other economics read.
+     */
+    fun platformEconomics(
+        window: AnalyticsWindow,
+        zone: ZoneId = ZoneId.systemDefault(),
+    ): Flow<List<PlatformEconomics>> = platformEconomicsIn(flowOf(PeriodBounds.of(window, zone)))
+
+    /** Rolling-period variant of [platformEconomics] (the home-glance enum path). */
+    fun platformEconomics(period: AnalyticsPeriod): Flow<List<PlatformEconomics>> =
+        platformEconomicsIn(periodBoundariesFlow(period))
+
+    private fun platformEconomicsIn(bounds: Flow<PeriodBounds.Bounds>): Flow<List<PlatformEconomics>> =
+        bounds.flatMapLatest { (start, end) ->
+            combine(
+                analyticsDao.deliveryTotalsByPlatform(start, end),
+                analyticsDao.sessionTotalsByPlatform(start, end),
+                analyticsDao.grossAndUnattributedByPlatform(start, end),
+                analyticsDao.noSessionTotalsByPlatform(start, end),
+            ) { dl, sl, gl, nsl ->
+                // The union of every wire any of the four aggregates saw — a platform can legitimately
+                // appear in one and not another (a dash with no completed delivery has session rows
+                // only; a null-session orphan has no session row at all).
+                val wires = (
+                    dl.map { it.platform } + sl.map { it.platform } +
+                        gl.map { it.platform } + nsl.map { it.platform }
+                    ).distinct()
+                wires.mapNotNull { wire ->
+                    val platform = Platform.fromWire(wire) ?: return@mapNotNull null
                     val d = dl.find { it.platform == wire }
                     val s = sl.find { it.platform == wire }
                     val g = gl.find { it.platform == wire }
                     val ns = nsl.find { it.platform == wire }
-                    assemble(
-                        deliveredPay = d?.pay ?: 0.0, deliveryNet = d?.net ?: 0.0,
-                        deliveries = d?.deliveries ?: 0, jobs = d?.jobs ?: 0,
-                        miles = s?.miles ?: 0.0, onlineMillis = s?.onlineMillis ?: 0L,
-                        gross = g?.gross ?: 0.0, unattributed = g?.unattributed ?: 0.0,
-                        overAttributed = g?.overAttributed ?: 0.0,
-                        fuelCost = d?.fuelCost, nonFuelCost = d?.nonFuelCost, cash = d?.cash ?: 0.0,
-                        noSessionPay = (ns?.pay ?: 0.0) + (ns?.cash ?: 0.0),
-                        noSessionDeliveries = ns?.deliveries ?: 0,
+                    PlatformEconomics(
+                        platform = platform,
+                        economics = assemble(
+                            deliveredPay = d?.pay ?: 0.0, deliveryNet = d?.net ?: 0.0,
+                            deliveries = d?.deliveries ?: 0, jobs = d?.jobs ?: 0,
+                            miles = s?.miles ?: 0.0, onlineMillis = s?.onlineMillis ?: 0L,
+                            gross = g?.gross ?: 0.0, unattributed = g?.unattributed ?: 0.0,
+                            overAttributed = g?.overAttributed ?: 0.0,
+                            fuelCost = d?.fuelCost, nonFuelCost = d?.nonFuelCost, cash = d?.cash ?: 0.0,
+                            noSessionPay = (ns?.pay ?: 0.0) + (ns?.cash ?: 0.0),
+                            noSessionDeliveries = ns?.deliveries ?: 0,
+                        ),
                     )
-                }
+                }.sortedByDescending { it.economics.grossEarnings }
+            }
+        }
+
+    /**
+     * The window's **pay-mix parts** (#973 / brief §7.6) — Σ base pay / Σ platform tip / Σ cash tip
+     * plus the itemization-coverage counters, over the same session-anchored delivery population as
+     * [periodEconomics].
+     *
+     * Deliberately returns the PARTS, not a finished mix: gross has one owner ([assemble]), and the
+     * pure `:domain` [cloud.trotter.dashbuddy.domain.analytics.PayMix.of] composes the two at the read
+     * site. That keeps the "bonuses & other = gross − base − tips − cash" residue rule in one testable
+     * place instead of half here and half in the UI.
+     */
+    fun payMixParts(
+        window: AnalyticsWindow,
+        zone: ZoneId = ZoneId.systemDefault(),
+    ): Flow<PayMixParts> = payMixPartsIn(flowOf(PeriodBounds.of(window, zone)))
+
+    /** Rolling-period variant of [payMixParts] (the home-glance enum path). */
+    fun payMixParts(period: AnalyticsPeriod): Flow<PayMixParts> =
+        payMixPartsIn(periodBoundariesFlow(period))
+
+    private fun payMixPartsIn(bounds: Flow<PeriodBounds.Bounds>): Flow<PayMixParts> =
+        bounds.flatMapLatest { (start, end) ->
+            analyticsDao.payMixTotals(start, end).map { row ->
+                PayMixParts(
+                    basePay = row.basePay,
+                    tips = row.tips,
+                    cashTips = row.cashTips,
+                    deliveries = row.deliveries,
+                    deliveriesWithBreakdown = row.withBreakdown,
+                )
             }
         }
 
@@ -424,6 +503,9 @@ class AnalyticsRepository @Inject constructor(
                                 date = date,
                                 gross = (sessions?.sumOf { it.gross } ?: 0.0) + (orphans?.sumOf { it.gross } ?: 0.0),
                                 net = (sessions?.sumOf { it.net } ?: 0.0) + (orphans?.sumOf { it.net } ?: 0.0),
+                                // #973: each orphan ROW is one delivery, so its count is the row count —
+                                // the same bucketing as the gross/net on this bar.
+                                deliveries = (sessions?.sumOf { it.deliveries } ?: 0) + (orphans?.size ?: 0),
                             ),
                         )
                         date = date.plusDays(1)

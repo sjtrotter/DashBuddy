@@ -404,16 +404,6 @@ private fun travelLine(delivery: DeliveryRecord): String? {
 }
 
 @Composable
-private fun EmptyRow(text: String) {
-    Text(
-        text = text,
-        style = MaterialTheme.typography.bodyMedium,
-        color = AppTheme.colors.text3,
-        modifier = Modifier.padding(vertical = 4.dp),
-    )
-}
-
-@Composable
 private fun CenteredMessage(text: String, modifier: Modifier = Modifier) {
     Box(modifier = modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
         Text(text = text, style = MaterialTheme.typography.bodyMedium, color = AppTheme.colors.text3)

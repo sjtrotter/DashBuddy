@@ -77,6 +77,16 @@ fun formatShortDate(
 fun formatMonthDay(date: LocalDate, locale: Locale = Locale.getDefault()): String =
     DateTimeFormatter.ofPattern("MMM d", locale).format(date)
 
+/**
+ * "Wed, Jul 15" — a weekday-qualified day label for the Money tab's tapped day bar (#973 / brief §4.2).
+ *
+ * The weekday is the point: a driver reads an earnings-by-day chart looking for "my Fridays", so the
+ * selected bar has to name the day of week, not just the date. Same fixed-order compromise and same
+ * one-owner rule as [formatMonthDay].
+ */
+fun formatWeekdayMonthDay(date: LocalDate, locale: Locale = Locale.getDefault()): String =
+    DateTimeFormatter.ofPattern("EEE, MMM d", locale).format(date)
+
 /** "Jul 13, 2026" — [formatMonthDay] plus the year, for a window that leaves the current year. */
 fun formatMonthDayYear(date: LocalDate, locale: Locale = Locale.getDefault()): String =
     DateTimeFormatter.ofPattern("MMM d, yyyy", locale).format(date)

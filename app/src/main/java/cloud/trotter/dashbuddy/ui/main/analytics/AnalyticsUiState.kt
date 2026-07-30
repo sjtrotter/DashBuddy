@@ -2,6 +2,7 @@ package cloud.trotter.dashbuddy.ui.main.analytics
 
 import androidx.annotation.StringRes
 import cloud.trotter.dashbuddy.R
+import cloud.trotter.dashbuddy.domain.analytics.ANALYTICS_MONEY_EPSILON
 import cloud.trotter.dashbuddy.domain.analytics.AnalyticsWindow
 import cloud.trotter.dashbuddy.domain.analytics.AnalyticsWindowSelection
 import cloud.trotter.dashbuddy.domain.analytics.DailyEarnings
@@ -9,7 +10,9 @@ import cloud.trotter.dashbuddy.domain.analytics.DecisionEconomics
 import cloud.trotter.dashbuddy.domain.analytics.DeliveryRecord
 import cloud.trotter.dashbuddy.domain.analytics.EarningsHeatmap
 import cloud.trotter.dashbuddy.domain.analytics.OrphanOfferGroup
+import cloud.trotter.dashbuddy.domain.analytics.PayMix
 import cloud.trotter.dashbuddy.domain.analytics.PeriodEconomics
+import cloud.trotter.dashbuddy.domain.analytics.PlatformEconomics
 import cloud.trotter.dashbuddy.domain.analytics.SessionRecord
 import cloud.trotter.dashbuddy.domain.analytics.StoreEconomics
 import cloud.trotter.dashbuddy.domain.analytics.StoreReportCard
@@ -21,8 +24,13 @@ import java.time.LocalDate
  * a "$0.00"). ONE owner for the analytics hub (#942): the Money tab and the per-dash drill-down
  * each kept their own `private const` copy of the same 0.005, which is a threshold that can only
  * ever drift apart.
+ *
+ * #973 pushed that owner one module DOWN to [ANALYTICS_MONEY_EPSILON] (`:domain`), because the pure
+ * [PayMix][cloud.trotter.dashbuddy.domain.analytics.PayMix] residue test needs the same threshold
+ * and a feature module can never reach an `:app` const. This alias stays so the hub's existing call
+ * sites keep reading in their own vocabulary.
  */
-internal const val UNATTRIBUTED_EPSILON = 0.005
+internal const val UNATTRIBUTED_EPSILON = ANALYTICS_MONEY_EPSILON
 
 /**
  * The Analytics hub tabs (#315). [Money], [Decisions] (H3), [Time] (H4), and [Patterns] (H5) all
@@ -74,6 +82,18 @@ data class AnalyticsUiState(
      * hero states that instead of inventing a comparison (§9).
      */
     val previousEconomics: PeriodEconomics? = null,
+    /**
+     * How the window's gross broke down — base pay / tips / bonuses & other (#973, brief §4.2/§7.6).
+     * Composed at the ViewModel from the window's own gross and the measured pay-mix parts, so the
+     * card can never render a mix against a different window's total than the hero above it.
+     */
+    val payMix: PayMix = PayMix.EMPTY,
+    /**
+     * The window's economics split per platform (#973, brief §4.2) — one entry per platform with any
+     * record in the window, highest gross first. Registry-resolved at the read edge, so this list is
+     * whatever the data contains, never a fixed set (Principle 8).
+     */
+    val platformSplit: List<PlatformEconomics> = emptyList(),
     /** Top-earning stores for [window] (already capped to the display count). */
     val topStores: List<StoreEconomics> = emptyList(),
     /**

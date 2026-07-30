@@ -9,8 +9,10 @@ import cloud.trotter.dashbuddy.domain.analytics.AnalyticsWindows
 import cloud.trotter.dashbuddy.domain.analytics.DailyEarnings
 import cloud.trotter.dashbuddy.domain.analytics.DecisionEconomics
 import cloud.trotter.dashbuddy.domain.analytics.EarningsHeatmap
+import cloud.trotter.dashbuddy.domain.analytics.PayMixParts
 import cloud.trotter.dashbuddy.domain.analytics.PeriodEconomics
 import cloud.trotter.dashbuddy.domain.analytics.PeriodTotals
+import cloud.trotter.dashbuddy.domain.analytics.PlatformEconomics
 import cloud.trotter.dashbuddy.domain.analytics.SessionRecord
 import cloud.trotter.dashbuddy.domain.analytics.StoreEconomics
 import cloud.trotter.dashbuddy.domain.analytics.StoreReportCard
@@ -83,6 +85,10 @@ class AnalyticsViewModelTest {
     private var decisions: DecisionEconomics = DecisionEconomics.EMPTY
     private var dailyEarnings: List<DailyEarnings> = emptyList()
 
+    /** #973 — the Money tab's pay-mix parts and platform split, served for every window. */
+    private var payMixParts: PayMixParts = PayMixParts.EMPTY
+    private var platformSplit: List<PlatformEconomics> = emptyList()
+
     private val today: LocalDate get() = LocalDate.now()
 
     /** Every repository read the VM collects is window-shaped now, so one stub block covers them all. */
@@ -114,6 +120,11 @@ class AnalyticsViewModelTest {
             .thenReturn(flowOf(emptyList()))
         whenever(analyticsRepository.orphanOfferGroups(any<AnalyticsWindow>(), any<ZoneId>()))
             .thenReturn(flowOf(emptyList()))
+        // #973: the Money tab's pay mix + platform split ride the same window fan-out.
+        whenever(analyticsRepository.payMixParts(any<AnalyticsWindow>(), any<ZoneId>()))
+            .thenAnswer { flowOf(payMixParts) }
+        whenever(analyticsRepository.platformEconomics(any<AnalyticsWindow>(), any<ZoneId>()))
+            .thenAnswer { flowOf(platformSplit) }
         whenever(analyticsRepository.recentSessions(any())).thenReturn(flowOf(emptyList()))
         // The Patterns-tab sources (#315 H5) are LIFETIME-scoped and collected unconditionally in
         // the combine, so they must always be stubbed or the combine folds a null Flow.
@@ -222,6 +233,48 @@ class AnalyticsViewModelTest {
             assertEquals(312.0, ui.economics.netProfit, 1e-9)
             assertEquals(2, ui.topStores.size)
             assertEquals(2, ui.recentSessions.size)
+        }
+    }
+
+    /**
+     * #973 — the pay mix is composed at the ViewModel against **this window's own** gross, so the
+     * "what made up the gross" bar always reconciles with the figure the recap hero shows. The parts
+     * are measured; the bonuses residue is derived from them and that gross, nowhere else.
+     */
+    @Test
+    fun `pay mix is composed against the selected window's gross`() = runTest {
+        economicsByWindow[currentWeek()] = economics(net = 200.0, netPerHour = 20.0, unattributed = 40.0)
+        payMixParts = PayMixParts(
+            basePay = 90.0,
+            tips = 100.0,
+            cashTips = 10.0,
+            deliveries = 6,
+            deliveriesWithBreakdown = 4,
+        )
+
+        runWithViewModel { viewModel ->
+            val mix = viewModel.uiState.value.payMix
+            // gross = net + unattributed = 240; 240 − 90 − 100 − 10 = 40 left as bonuses/other.
+            assertEquals(240.0, mix.gross, 1e-9)
+            assertEquals(40.0, mix.bonusesOther, 1e-9)
+            assertEquals(mix.gross, mix.basePay + mix.tipsTotal + mix.bonusesOther, 1e-9)
+            assertFalse("4 of 6 itemized — the card must state the coverage", mix.breakdownComplete)
+        }
+    }
+
+    /** #973 — the platform split rides the same window fan-out and reaches the Money tab's state. */
+    @Test
+    fun `platform split reaches the ui state`() = runTest {
+        platformSplit = listOf(
+            PlatformEconomics(Platform.DoorDash, economics(net = 180.0, netPerHour = 18.0)),
+            PlatformEconomics(Platform.Uber, economics(net = 60.0, netPerHour = 12.0)),
+        )
+
+        runWithViewModel { viewModel ->
+            val rows = viewModel.uiState.value.platformSplit
+            assertEquals(2, rows.size)
+            assertEquals(Platform.DoorDash, rows.first().platform)
+            assertEquals(180.0, rows.first().economics.netProfit, 1e-9)
         }
     }
 

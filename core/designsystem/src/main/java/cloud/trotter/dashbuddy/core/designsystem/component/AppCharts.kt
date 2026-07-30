@@ -2,6 +2,8 @@ package cloud.trotter.dashbuddy.core.designsystem.component
 
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -28,6 +30,7 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.Dp
@@ -39,9 +42,24 @@ import kotlin.math.roundToInt
 /** A single bar. [highlight] paints it in the brand accent (e.g. a "hot" day/zone). */
 data class AppBar(val label: String, val value: Float, val highlight: Boolean = false)
 
-/** Simple labelled bar chart — earnings-by-period, etc. */
+/**
+ * Simple labelled bar chart — earnings-by-period, etc.
+ *
+ * [onBarClick] makes the bars **selectable** (#973 / brief §4.2 — a tappable day bar whose detail the
+ * caller renders beside the chart). It receives the bar's index; the caller owns the selection state
+ * and passes it back as [selectedIndex], which draws the selection outline. Null (the default) leaves
+ * the chart inert, exactly as before — the whole tap affordance, including its accessibility label
+ * ([clickLabel]), is opt-in and caller-supplied, so this stays a data-in / lambdas-out component.
+ */
 @Composable
-fun AppBarChart(bars: List<AppBar>, modifier: Modifier = Modifier, height: Dp = 96.dp) {
+fun AppBarChart(
+    bars: List<AppBar>,
+    modifier: Modifier = Modifier,
+    height: Dp = 96.dp,
+    onBarClick: ((Int) -> Unit)? = null,
+    selectedIndex: Int? = null,
+    clickLabel: String? = null,
+) {
     val c = AppTheme.colors
     val max = bars.maxOfOrNull { it.value }?.takeIf { it > 0f } ?: 1f
     Column(modifier) {
@@ -50,14 +68,36 @@ fun AppBarChart(bars: List<AppBar>, modifier: Modifier = Modifier, height: Dp = 
             horizontalArrangement = Arrangement.spacedBy(6.dp),
             verticalAlignment = Alignment.Bottom,
         ) {
-            bars.forEach { b ->
-                Box(Modifier.weight(1f).fillMaxHeight(), contentAlignment = Alignment.BottomCenter) {
+            bars.forEachIndexed { index, b ->
+                // The whole column is the tap target (a 4dp-wide bar is not), so a thin bar on a big
+                // day stays reachable.
+                val cell = Modifier
+                    .weight(1f)
+                    .fillMaxHeight()
+                    .let { base ->
+                        if (onBarClick == null) {
+                            base
+                        } else {
+                            base.clickable(onClickLabel = clickLabel, role = Role.Button) { onBarClick(index) }
+                        }
+                    }
+                Box(cell, contentAlignment = Alignment.BottomCenter) {
                     Box(
                         Modifier
                             .fillMaxWidth(0.7f)
                             .fillMaxHeight((b.value / max).coerceIn(0.02f, 1f))
                             .clip(MaterialTheme.shapes.extraSmall)
-                            .background(if (b.highlight) c.accent else c.surface3),
+                            .background(if (b.highlight) c.accent else c.surface3)
+                            // Selection is an OUTLINE, never a recolour: the accent fill already means
+                            // "best bar", so tinting a selected bar would overload one signal with two
+                            // meanings.
+                            .then(
+                                if (index == selectedIndex) {
+                                    Modifier.border(2.dp, c.lineStrong, MaterialTheme.shapes.extraSmall)
+                                } else {
+                                    Modifier
+                                },
+                            ),
                     )
                 }
             }
