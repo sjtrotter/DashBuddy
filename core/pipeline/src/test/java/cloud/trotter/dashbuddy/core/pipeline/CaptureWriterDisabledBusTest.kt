@@ -80,7 +80,7 @@ class CaptureWriterDisabledBusTest {
             packageName = "com.doordash.driverapp",
         )
 
-        val result = writer.captureClick(obs, event, screenTarget = "offer_popup")
+        val result = writer.captureClick(obs, event, screenTarget = "offer_popup", screenRuleId = null)
 
         verify(disabledBus, never()).offer(any(), any(), anyOrNull(), any(), any(), anyOrNull())
         assertSame("observation must pass through untouched (captureId stays null)", obs, result)

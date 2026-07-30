@@ -166,6 +166,122 @@ class CustomerTextMarkersTest {
         assertEquals("Deliver to ", CustomerTextMarkers.firstUnredactedMarkerInNotif(raw))
     }
 
+    // --- The node-ID half, UNKNOWN envelopes only (#910) -----------------------
+
+    private fun dd(id: String, text: String? = null, desc: String? = null) = UiNode(
+        viewIdResourceName = "com.doordash.driverapp:id/$id",
+        text = text,
+        contentDescription = desc,
+    )
+
+    @Test
+    fun `a customer-PII node id is detected even though its text carries no marker`() {
+        // The whole point: these values are BARE — no lead-in for the prefix scan.
+        assertEquals("user_name", CustomerTextMarkers.unredactedIdMarker(dd("user_name", "Jane Q")))
+        assertEquals("customer_name", CustomerTextMarkers.unredactedIdMarker(dd("customer_name", "Jane Q")))
+        assertEquals("address_line_1", CustomerTextMarkers.unredactedIdMarker(dd("address_line_1", "123 Main St")))
+        assertEquals(
+            "address_line_2",
+            CustomerTextMarkers.unredactedIdMarker(dd("address_line_2", "Austin, TX 78701")),
+        )
+        // The prefix scan is blind to every one of them — that is the gap this closes.
+        assertNull(CustomerTextMarkers.unredactedMarker("Jane Q"))
+        assertNull(CustomerTextMarkers.unredactedMarker("123 Main St"))
+    }
+
+    @Test
+    fun `the id match is a SUFFIX match, like the rules' hasIdSuffix predicate`() {
+        // The `com.<vendor>:id/` prefix varies by package, so only the tail is pinned.
+        assertEquals(
+            "customer_name",
+            CustomerTextMarkers.unredactedIdMarker(
+                UiNode(viewIdResourceName = "com.example.other:id/customer_name", text = "Jane Q"),
+            ),
+        )
+        // A bare id with no package prefix still matches.
+        assertEquals(
+            "user_name",
+            CustomerTextMarkers.unredactedIdMarker(UiNode(viewIdResourceName = "user_name", text = "Jane Q")),
+        )
+    }
+
+    @Test
+    fun `the LABEL siblings are app vocabulary and are not id markers`() {
+        // "Delivery for" / "Order for" chrome must survive so a scrubbed UNKNOWN frame
+        // keeps its shape for triage.
+        assertNull(CustomerTextMarkers.unredactedIdMarker(dd("user_name_label", "Delivery for")))
+        assertNull(CustomerTextMarkers.unredactedIdMarker(dd("customer_name_label", "Order for")))
+        assertNull(CustomerTextMarkers.unredactedIdMarker(dd("merchant_name", "Pei Wei")))
+    }
+
+    @Test
+    fun `an id-marked node whose values are already redacted is skipped`() {
+        assertNull(CustomerTextMarkers.unredactedIdMarker(dd("user_name", "[redacted:ab12]")))
+        assertNull(CustomerTextMarkers.unredactedIdMarker(dd("address_line_1", "[redacted]")))
+        // An empty/valueless node has nothing to leak either.
+        assertNull(CustomerTextMarkers.unredactedIdMarker(dd("user_name")))
+        assertNull(CustomerTextMarkers.unredactedIdMarker(UiNode(text = "Jane Q")))
+    }
+
+    @Test
+    fun `a customer-PII id carrying its value in the contentDescription is caught too`() {
+        assertEquals("user_name", CustomerTextMarkers.unredactedIdMarker(dd("user_name", desc = "Jane Q")))
+    }
+
+    @Test
+    fun `scrubUnknown masks BOTH the id-marked node and the text-marked node in one pass`() {
+        // THE FIELDED SHAPE (07-28 and again 07-29, once per job): the lead-in reads
+        // exactly "Delivery for" with NO trailing name, so the marker "Delivery for "
+        // never matches — and the name lives in a bare sibling. Neither node is
+        // reachable by the prefix scan alone.
+        val tree = UiNode(
+            children = listOf(
+                dd("user_name_label", "Delivery for"),
+                dd("user_name", "Jane Q"),
+                dd("address_line_1", "123 Main St"),
+                dd("address_line_2", "Austin, TX 78701"),
+                UiNode(text = "Deliver to Jane Q"), // text-marker node, the #806 half
+                UiNode(text = "Directions"), // over-match guard
+            ),
+        )
+        assertNull("the label's exact text does not match the marker", CustomerTextMarkers.unredactedMarker("Delivery for"))
+        assertEquals("user_name", CustomerTextMarkers.firstUnredactedIdMarker(tree))
+
+        val scrubbed = CustomerTextMarkers.scrubUnknown(tree)
+        assertEquals("Delivery for", scrubbed.children[0].text) // chrome kept
+        assertEquals("[redacted]", scrubbed.children[1].text)
+        assertEquals("[redacted]", scrubbed.children[2].text)
+        assertEquals("[redacted]", scrubbed.children[3].text)
+        assertEquals("[redacted]", scrubbed.children[4].text)
+        assertEquals("Directions", scrubbed.children[5].text)
+        // Clean under BOTH scans afterwards.
+        assertNull(CustomerTextMarkers.firstUnredactedIdMarker(scrubbed))
+        assertNull(CustomerTextMarkers.firstUnredactedMarker(scrubbed))
+    }
+
+    @Test
+    fun `the id scan over-scrubs a reused user_name node - the documented UNKNOWN-only cost`() {
+        // `user_name` is not exclusively a customer node: it renders the DASHER's own
+        // name in some chrome, and on a pickup card it holds the MERCHANT ("Pickup from
+        // <store>", which pickup_pre_arrival parses as storeName). On an UNKNOWN frame
+        // the scan cannot tell them apart, so it masks them too — losing triage text,
+        // leaking nothing. This is the accepted fail-toward-privacy cost, pinned here so
+        // it is a DECISION rather than a surprise. The RECOGNIZED path is untouched, so
+        // no rule's merchant-keeps-raw decision is affected.
+        assertEquals(
+            "user_name",
+            CustomerTextMarkers.unredactedIdMarker(dd("user_name", "Pickup from Sample Pizza Co")),
+        )
+    }
+
+    @Test
+    fun `a clean tree yields no id marker`() {
+        val tree = UiNode(
+            children = listOf(dd("merchant_name", "Pei Wei"), UiNode(text = "Continue")),
+        )
+        assertNull(CustomerTextMarkers.firstUnredactedIdMarker(tree))
+    }
+
     @Test
     fun `no-lead-in customer shapes are the documented residual the rule redact owns`() {
         // Uber trip_en_route_dropoff title is a WHOLE address with NO lead-in marker —

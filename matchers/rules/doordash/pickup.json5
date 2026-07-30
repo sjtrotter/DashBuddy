@@ -536,6 +536,15 @@
     {
       "id": "doordash.screen.pickup_post_arrival_multi",
       "priority": 99,
+      "redact": [
+        {
+          "comment": "#910 V2 — the multi-order pickup list renders ONE row per order, each carrying a bare `customer_name` node (the fielded 07-28 frames carry three), and this rule shipped with no redact block, so every one reached the recognized envelope raw. The node has no in-node lead-in ('Order for' is a separate sibling on the single-order card), so `CustomerTextMarkers` is structurally blind to it — the same split-node shape #526 D6a documents for `pickup_arrival`, whose identical `customer_name` + `normalize: customerName` entry this mirrors so a customer's mask hex matches across surfaces and the persisted `customerNameHash`. Recognize-only rule: redact without parse is legal (the `pickup_select_issue` precedent) and the parse goldens are untouched. `merchant_name` stays raw (the merchant is driver-owned data, not PII); so do `num_items`/`header_text`/`description_text`, which are app chrome.",
+          "find": {
+            "hasIdSuffix": "customer_name"
+          },
+          "normalize": "customerName"
+        }
+      ],
       "state": {
         "flow": "task:pickup:arrived",
         "modeHint": "online"
@@ -561,6 +570,15 @@
     {
       "id": "doordash.screen.pickup_pre_arrival_multi",
       "priority": 100,
+      "redact": [
+        {
+          "comment": "#910 V3 — the pre-arrival twin of `pickup_post_arrival_multi` (same list, before 'Confirm at store'); the fielded 07-28 frame carries the same bare `customer_name` node. Same entry, same reasoning, same `normalize: customerName` so the mask hex is one-customer-one-hex across both surfaces.",
+          "find": {
+            "hasIdSuffix": "customer_name"
+          },
+          "normalize": "customerName"
+        }
+      ],
       "state": {
         "flow": "task:pickup:navigation",
         "modeHint": "online"

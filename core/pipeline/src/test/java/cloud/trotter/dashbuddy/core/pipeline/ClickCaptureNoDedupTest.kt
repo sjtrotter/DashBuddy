@@ -55,8 +55,8 @@ class ClickCaptureNoDedupTest {
             .thenReturn("cap-1")
 
         // The same button tapped twice — identical node content, identical screen.
-        writer.captureClick(clickObs(1_000L), clickEvent(1_000L), screenTarget = "offer_popup")
-        writer.captureClick(clickObs(2_000L), clickEvent(2_000L), screenTarget = "offer_popup")
+        writer.captureClick(clickObs(1_000L), clickEvent(1_000L), screenTarget = "offer_popup", screenRuleId = null)
+        writer.captureClick(clickObs(2_000L), clickEvent(2_000L), screenTarget = "offer_popup", screenRuleId = null)
 
         val hashCaptor = argumentCaptor<Int?>()
         verify(captureBus, times(2)).offer(

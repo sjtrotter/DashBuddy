@@ -23,6 +23,17 @@ import java.io.File
  * which is non-recursive) so the session frames are covered too; the shared loader
  * stays non-recursive because GoldenSnapshotRegressionTest iterates the session
  * dir as an intent folder and would break if it recursed.
+ *
+ * SCOPE (#910): this pin covers the TEXT-marker scan on the RECOGNIZED path only —
+ * that is the contract, and it is unchanged. #910's sibling
+ * [CustomerTextMarkers.firstUnredactedIdMarker] is deliberately NOT run here: it is
+ * an UNKNOWN-envelope-only control, and the `user_name` id it scans legitimately
+ * carries MERCHANT text on recognized pickup frames ("Pickup from <store>", which
+ * `pickup_pre_arrival` parses as `storeName`), so running it over this recognized
+ * corpus would report false positives for values the rules keep raw BY DESIGN. Its
+ * own coverage lives in `CustomerTextMarkersTest` + `CaptureScrubTest` (UNKNOWN
+ * screen/click envelopes). Nothing here is weakened — no assertion was removed or
+ * narrowed for #910.
  */
 class CaptureBackstopCorpusTest {
 

@@ -83,6 +83,7 @@ class ScrubDiagnosticSurvivesSinkTest {
                     packageName = "com.doordash.driverapp",
                 ),
                 screenTarget = null,
+                screenRuleId = null,
             )
         } finally {
             Timber.uproot(recording)

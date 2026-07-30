@@ -308,11 +308,27 @@ iterate it instead of hand-listing the fields, so a field added to the model can
 scrub site; the UNKNOWN-notification `SensitiveTextMarkers` scan and the `CustomerTextMarkers`
 backstop both also scan `actionLabels` now (#666) — a push action button label is serialized into
 the envelope the same as the text fields and was previously excluded from every scrub layer.
-UNKNOWN frames and UNKNOWN clicks remain the documented
+**Two #910 additions close the SPLIT-NODE class** — DoorDash renders the customer card as separate
+nodes (a `user_name_label` reading exactly `"Delivery for"` beside a BARE `user_name`), which a
+text-PREFIX scan can never own since the marker and the PII are in different nodes. (1) A **click
+envelope inherits the SCREEN rule's `redact`**: a tapped node is serialized in isolation, so a tap on
+a recognized `pickup_post_arrival_multi` row shipped the same `customer_name` node the screen
+envelope masked correctly — `captureClick` consulted no rule at all. `Observation.Click.screenRuleId`
+(stamped beside `screenTarget` from the classifier's per-platform screen-context cache) drives the
+same `redactFor` lookup; applied to recognized AND UNKNOWN clicks, envelope-only (the dedup
+`contentHash` stays on the original node), fail-OPEN (no screen rule / no `redact` ⇒ untouched).
+(2) `CustomerTextMarkers.ID_MARKERS` — an enumerated, cross-platform-DATA list of view-id suffixes
+whose node VALUE is customer PII (`customer_name`/`user_name`/`address_line_1`/`address_line_2`),
+matched with `hasIdSuffix` semantics and scrubbed on the **UNKNOWN screen + click envelopes only**
+(a recognized frame keeps its rule's deliberate decisions — #886 leaves `pickup_navigation`'s
+MERCHANT address raw — so an id scan there would fight the ruleset). Label siblings are chrome and
+survive; scrubbing the dasher's own `user_name` greeting on an UNKNOWN frame is the accepted
+fail-toward-privacy cost. UNKNOWN frames and UNKNOWN clicks remain the documented
 debug-only exception (behind the release `NoOpCaptureBus` #346 + the `SensitiveTextMarkers`
 drop backstop + the #806 `CustomerTextMarkers` scrub on the UNKNOWN screen/notification/click
-envelopes); the prefix-less residual (a name-at-start body, an address/gate-code line with no
-customer lead-in) persists on UNKNOWN frames until the surface is recognized (#806 direction 1). `PipelineV2.events` is a HOT `shareIn` stream — one upstream pass feeds
+envelopes + the #910 id scan); the residual (a name-at-start body, an id-less address/gate-code line
+with no customer lead-in) persists on UNKNOWN frames until the surface is recognized (#806
+direction 1). `PipelineV2.events` is a HOT `shareIn` stream — one upstream pass feeds
 all collectors, so side effects (captures, dedup state) can never double-run (#361). The merged
 upstream is supervised — a crash logs + counts a restart and resubscribes with backoff instead of
 silencing all sensing (#430) — and `PipelineStats` counts every gate decision, mapping failure,
