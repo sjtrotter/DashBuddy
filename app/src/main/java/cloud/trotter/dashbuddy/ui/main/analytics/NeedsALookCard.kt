@@ -41,7 +41,7 @@ internal data class ReviewAction(val label: String, val onClick: () -> Unit)
 
 /**
  * Which review flags a window raises, and in what order (#973) — pure, Compose-free, so the *gating*
- * can be proved without rendering (the [MoneyWentModel]/[RecapModel] precedent). The copy that
+ * can be proved without rendering (the [MoneyWentModel]/[NetDelta] precedent). The copy that
  * describes each flag is a separate concern and lives in [reviewItems].
  *
  * Every threshold here is carried over unchanged from the four standalone callouts this card
