@@ -56,14 +56,17 @@ object SnapshotSecurityScanner {
         // SSOT PARITY (#590): delegate the marker/shape decision to the production
         // fail-closed backstop rather than re-implementing its keyword list. This is
         // the load-bearing guarantee `findMarker(tree)!=null ⇒ scan.isToxic`:
-        //  - it scans the whole tree's `allText` (text AND contentDescription), so a
-        //    desc-borne marker the old per-node `node.text` walk missed is caught;
+        //  - it scans the whole tree's scrubbable text (text, contentDescription AND —
+        //    since #835 — stateDescription), so a desc/state-borne marker the old
+        //    per-node `node.text` walk missed is caught;
         //  - it NFKC-normalizes both sides, so homoglyph/whitespace-mutated markers hit;
         //  - it scans the space-joined blob, so a marker split across sibling nodes rejoins;
         //  - it owns the SSN/card-PAN shapes the scanner never had.
         // A future marker addition lands here automatically — the two copies can't diverge.
         SensitiveTextMarkers.findMarker(node)?.let { marker ->
-            triggers.add(node.allText.joinToString(" ") to "sensitive-marker:$marker")
+            // Report the SAME blob the production scan read (#835), so the evidence
+            // line can't omit the field that actually tripped it.
+            triggers.add(node.allScrubbableText().joinToString(" ") to "sensitive-marker:$marker")
         }
 
         // Scanner-specific EXTRA corpus-gate shapes NOT in the production backstop
@@ -93,11 +96,12 @@ object SnapshotSecurityScanner {
      * Walk the tree for the scanner-specific EXTRA shapes (#803 pin/gate). Marker/
      * keyword parity is owned by the [SensitiveTextMarkers.findMarker] delegation in
      * [scan]; this only adds the corpus-gate shapes the production backstop doesn't
-     * carry. Scans both text and contentDescription so a shape hiding in a desc node
-     * is caught too (parity discipline extended to the extras).
+     * carry. Scans every field of the [UiNode.scrubbableStrings] SSOT (#835) — text,
+     * contentDescription and stateDescription — so a shape hiding in a desc or state
+     * node is caught too (parity discipline extended to the extras).
      */
     private fun walkAndFind(node: UiNode, results: MutableList<Pair<String, String>>) {
-        for (field in listOfNotNull(node.text, node.contentDescription)) {
+        for (field in node.scrubbableStrings().mapNotNull { it.second }) {
             SENSITIVE_SHAPES.firstOrNull { (re, _) -> re.containsMatchIn(field) }?.let { (_, label) ->
                 results.add(field to label)
             }

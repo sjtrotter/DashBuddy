@@ -693,9 +693,9 @@ class CaptureRedactionCorpusTest {
         )
     }
 
+    /** Visit every serialized string field of every node (the #835 SSOT). */
     private fun walkText(node: UiNode, visit: (String) -> Unit) {
-        node.text?.let(visit)
-        node.contentDescription?.let(visit)
+        node.scrubbableStrings().forEach { (_, value) -> value?.let(visit) }
         node.children.forEach { walkText(it, visit) }
     }
 

@@ -219,15 +219,19 @@ object SensitiveTextMarkers {
      * Scan the tree's text for a sensitive marker. Returns the first
      * matched marker (for logging) or null when clean.
      *
-     * The whole `allText` is joined on a space and scanned as ONE normalized blob
-     * (#590): a keyword within a single node stays intact, AND a keyword split
-     * across adjacent sibling nodes ("Bank" | "Account") rejoins across the space.
-     * Uses the existing `allText` walk — no new tree traversal. FAIL-CLOSED: any
-     * throw in normalization returns the toxic sentinel (drop the capture), never
-     * null.
+     * The whole tree's scrubbable text is joined on a space and scanned as ONE
+     * normalized blob (#590): a keyword within a single node stays intact, AND a
+     * keyword split across adjacent sibling nodes ("Bank" | "Account") rejoins
+     * across the space. FAIL-CLOSED: any throw in normalization returns the toxic
+     * sentinel (drop the capture), never null.
+     *
+     * Reads [UiNode.allScrubbableText] — the PRIVACY-side collection — rather
+     * than the recognition-side `allText` (#835), so a marker riding a node's
+     * `stateDescription` drops the capture too. `allText` deliberately excludes
+     * that field because rules match on it; this scan must not.
      */
     fun findMarker(tree: UiNode): String? = try {
-        scan(normalize(tree.allText.joinToString(" ")))
+        scan(normalize(tree.allScrubbableText().joinToString(" ")))
     } catch (_: Throwable) {
         NORMALIZE_FAILED
     }

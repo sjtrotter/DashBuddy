@@ -17,6 +17,8 @@ import java.util.Locale
  *  In this file
  *    - the equals function
  *    - the hashcode function
+ *    - [UiNodeTextField] + [scrubbableStrings] / [mapScrubbableStrings], if the new
+ *      property is a STRING the capture envelope serializes (#835)
  *  In :core:database
  *  - UiNodeDto
  *  - UiNode.toDto
@@ -239,12 +241,80 @@ data class UiNode(
         get() = !viewIdResourceName.isNullOrBlank()
 
     // ========================================================================
+    //  SCRUBBABLE STRING FIELDS (#835)
+    //  The privacy-side enumeration of this node's serialized string values.
+    //  Deliberately SEPARATE from the recognition-side [allText] — see the
+    //  [UiNodeTextField] KDoc for why the two must not be merged.
+    // ========================================================================
+
+    /**
+     * This node's own scrubbable string values, paired with their field identity
+     * (#835). The SSOT every scrub/redact/scan site iterates instead of
+     * hand-listing `text` + `contentDescription` — a string field added to this
+     * class is covered by every reader the moment it joins [UiNodeTextField],
+     * rather than silently missing a scrub site (which is exactly how
+     * [stateDescription] shipped outside every layer).
+     *
+     * Values are returned RAW (nulls and blanks included) so a caller can decide
+     * its own emptiness policy; [allScrubbableText] is the non-blank tree-wide
+     * collection.
+     */
+    fun scrubbableStrings(): List<Pair<UiNodeTextField, String?>> = listOf(
+        UiNodeTextField.TEXT to text,
+        UiNodeTextField.CONTENT_DESCRIPTION to contentDescription,
+        UiNodeTextField.STATE_DESCRIPTION to stateDescription,
+    )
+
+    /**
+     * A copy of THIS node (children untouched) with every scrubbable string
+     * rewritten through [transform] (#835). The write-side twin of
+     * [scrubbableStrings] and the ONE place the fields are enumerated for
+     * writing — a masker/scrubber that uses it cannot forget a field.
+     *
+     * [transform] receives each value as-is (null included) and returns the
+     * replacement; returning the argument leaves the field untouched. Note the
+     * returned copy has no wired [parent] (as with any `copy`), which the
+     * envelope serializers ignore.
+     */
+    fun mapScrubbableStrings(transform: (String?) -> String?): UiNode = copy(
+        text = transform(text),
+        contentDescription = transform(contentDescription),
+        stateDescription = transform(stateDescription),
+    )
+
+    /**
+     * Every non-blank scrubbable string in this subtree, DFS (#835) — the
+     * privacy-side counterpart of [allText], which recognition owns.
+     *
+     * Deliberately NOT memoized: it is built once per capture envelope at the
+     * tree root, whereas [allText] is read per node per rule, so a `by lazy`
+     * field here would cost memory on every node for a value almost none of
+     * them are asked for.
+     */
+    fun allScrubbableText(): List<String> {
+        val results = mutableListOf<String>()
+        collectScrubbableText(this, results)
+        return results
+    }
+
+    private fun collectScrubbableText(node: UiNode, list: MutableList<String>) {
+        for ((_, value) in node.scrubbableStrings()) {
+            if (!value.isNullOrBlank()) list.add(value)
+        }
+        node.children.forEach { collectScrubbableText(it, list) }
+    }
+
+    // ========================================================================
     //  DATA COLLECTION (Lazy)
     // ========================================================================
 
     /**
      * Collects all text and content descriptions from the entire tree.
      * Used primarily by Screen Recognizers.
+     *
+     * RECOGNITION SSOT — deliberately EXCLUDES [stateDescription] (#835). Rules
+     * match on this list, so folding a new field in would shift classification
+     * corpus-wide; the privacy layers read [allScrubbableText] instead.
      */
     val allText: List<String> by lazy {
         val results = mutableListOf<String>()
@@ -326,6 +396,39 @@ data class UiNode(
         for (child in node.children) {
             appendNode(builder, child, indent + 1)
         }
+    }
+}
+
+/**
+ * The string fields a [UiNode] carries into a capture envelope (#835) — the
+ * screen-node analogue of `NotifTextField` (#666), and the SSOT every scrub /
+ * redact / PII-scan site enumerates via [UiNode.scrubbableStrings] /
+ * [UiNode.mapScrubbableStrings] / [UiNode.allScrubbableText].
+ *
+ * Why it exists: `stateDescription` is captured (SDK ≥ R) and serialized as
+ * `"state"`, but every scrub layer hand-listed `text` + `contentDescription`, so
+ * a third-party view that mirrors its label into `stateDescription` (toggles,
+ * sliders, custom controls do) would have shipped it verbatim on both the
+ * recognized and the UNKNOWN path. Enumerating once makes the NEXT added field a
+ * compile-visible gap instead of a silent leak channel.
+ *
+ * This is a PRIVACY enumeration, not a recognition one: [UiNode.allText] (what
+ * rules match on) is deliberately narrower and stays untouched, so widening
+ * scrub coverage can never move a classification.
+ *
+ * [wire] is the capture-envelope JSON key (`UiNodeDto`'s `@SerialName`), so
+ * JSON-level tooling (the corpus `SnapshotRedactor`) keys off this list too.
+ * Annotation arguments must be compile-time constants, so `UiNodeDto` cannot
+ * reference these directly — `UiNodeScrubbableFieldsTest` pins the two in sync.
+ */
+enum class UiNodeTextField(val wire: String) {
+    TEXT("text"),
+    CONTENT_DESCRIPTION("desc"),
+    STATE_DESCRIPTION("state"),
+    ;
+
+    companion object {
+        fun fromWire(wire: String): UiNodeTextField? = entries.firstOrNull { it.wire == wire }
     }
 }
 

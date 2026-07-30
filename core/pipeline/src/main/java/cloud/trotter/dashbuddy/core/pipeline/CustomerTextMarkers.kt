@@ -138,29 +138,31 @@ object CustomerTextMarkers {
     }
 
     /**
-     * The first un-redacted customer marker anywhere in [tree] (text or
-     * contentDescription of any node), or null when clean. Cheap scan run on
-     * every recognized capture; the [scrub] copy is built only on a hit.
+     * The first un-redacted customer marker anywhere in [tree] — across EVERY
+     * serialized string field of every node ([UiNode.scrubbableStrings], #835:
+     * text, contentDescription AND stateDescription) — or null when clean. Cheap
+     * short-circuiting scan run on every recognized capture; the [scrub] copy is
+     * built only on a hit.
+     *
+     * Walks the tree itself rather than the memoized [UiNode.allText] because
+     * that list is the RECOGNITION SSOT and deliberately excludes
+     * `stateDescription` — reading it here would leave the field this scan is
+     * supposed to cover invisible.
      */
     fun firstUnredactedMarker(tree: UiNode): String? =
-        tree.allText.firstNotNullOfOrNull { unredactedMarker(it) }
+        tree.scrubbableStrings().firstNotNullOfOrNull { (_, value) -> unredactedMarker(value) }
+            ?: tree.children.firstNotNullOfOrNull { firstUnredactedMarker(it) }
 
     /**
-     * Return a copy of [tree] with every node whose `text`/`contentDescription`
-     * carries an un-redacted customer marker scrubbed to [CompiledRedact.REDACTED].
-     * Call only after [firstUnredactedMarker] returned non-null, so the tree copy
-     * never happens on the clean path.
+     * Return a copy of [tree] with every node's marker-carrying string field
+     * scrubbed to [CompiledRedact.REDACTED] — per field, across the
+     * [UiNode.scrubbableStrings] SSOT (#835). Call only after
+     * [firstUnredactedMarker] returned non-null, so the tree copy never happens
+     * on the clean path.
      */
-    fun scrub(tree: UiNode): UiNode = tree.copy(
-        text = if (unredactedMarker(tree.text) != null) CompiledRedact.REDACTED else tree.text,
-        contentDescription =
-            if (unredactedMarker(tree.contentDescription) != null) {
-                CompiledRedact.REDACTED
-            } else {
-                tree.contentDescription
-            },
-        children = tree.children.map { scrub(it) },
-    )
+    fun scrub(tree: UiNode): UiNode = tree
+        .mapScrubbableStrings { if (unredactedMarker(it) != null) CompiledRedact.REDACTED else it }
+        .copy(children = tree.children.map { scrub(it) })
 
     // --- Node-id path, UNKNOWN envelopes only (#910) --------------------------
 
@@ -175,8 +177,11 @@ object CustomerTextMarkers {
         val id = node.viewIdResourceName
         if (id.isNullOrEmpty()) return null
         val marker = ID_MARKERS.firstOrNull { id.endsWith(it, ignoreCase = true) } ?: return null
-        val carriesRaw = sequenceOf(node.text, node.contentDescription)
-            .any { !it.isNullOrEmpty() && !it.contains(REDACTED_MARK) }
+        // #835: every serialized string field counts as "still carrying raw" — a
+        // customer-PII node whose only remaining value is its `stateDescription`
+        // must still be scrubbed.
+        val carriesRaw = node.scrubbableStrings()
+            .any { (_, value) -> !value.isNullOrEmpty() && !value.contains(REDACTED_MARK) }
         return if (carriesRaw) marker else null
     }
 
@@ -197,16 +202,14 @@ object CustomerTextMarkers {
      */
     fun scrubUnknown(tree: UiNode): UiNode {
         val byId = unredactedIdMarker(tree) != null
-        return tree.copy(
-            text = if (byId || unredactedMarker(tree.text) != null) CompiledRedact.REDACTED else tree.text,
-            contentDescription =
-                if (byId || unredactedMarker(tree.contentDescription) != null) {
-                    CompiledRedact.REDACTED
-                } else {
-                    tree.contentDescription
-                },
-            children = tree.children.map { scrubUnknown(it) },
-        )
+        // An id hit scrubs the node WHOLE (every field of the
+        // [UiNode.scrubbableStrings] SSOT, #835); otherwise each field is judged
+        // on its own text marker.
+        return tree
+            .mapScrubbableStrings {
+                if (byId || unredactedMarker(it) != null) CompiledRedact.REDACTED else it
+            }
+            .copy(children = tree.children.map { scrubUnknown(it) })
     }
 
     // --- Notification path (#632) --------------------------------------------
