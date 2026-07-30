@@ -17,6 +17,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.mockito.kotlin.doReturn
 import org.mockito.kotlin.mock
+import cloud.trotter.dashbuddy.core.pipeline.PlatformAppVersions
 
 class ClickClassifierTest {
 
@@ -25,6 +26,7 @@ class ClickClassifierTest {
             on { clickRuleset } doReturn TestRulesetFactory.clickRuleset
         },
         mock<ReplayMetadataProvider> { on { current() } doReturn ReplayMetadata.EMPTY },
+        PlatformAppVersions.NONE,
     )
 
     // =========================================================================

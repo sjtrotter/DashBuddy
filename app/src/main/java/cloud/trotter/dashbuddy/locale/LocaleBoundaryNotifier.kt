@@ -1,12 +1,12 @@
 package cloud.trotter.dashbuddy.locale
 
-import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
 import androidx.core.app.NotificationCompat
 import cloud.trotter.dashbuddy.R
+import cloud.trotter.dashbuddy.notice.AppNoticeChannel
 import cloud.trotter.dashbuddy.ui.main.MainActivity
 import cloud.trotter.dashbuddy.core.data.state.AppStateRepository
 import cloud.trotter.dashbuddy.domain.di.ApplicationScope
@@ -97,19 +97,9 @@ class LocaleBoundaryNotifier @Inject constructor(
     }
 
     private fun postNotice() {
-        // Created lazily: a channel the dasher never needs shouldn't clutter their notification
-        // settings. A dedicated channel rather than a reused one — a channel name IS the user's
-        // mute control, so filing this under "Offer Alerts" or "Odometer Active" would both
-        // mislabel it and let an unrelated mute silence a Pledge-honesty disclosure.
-        notificationManager.createNotificationChannel(
-            NotificationChannel(
-                CHANNEL_ID,
-                context.getString(R.string.locale_notice_channel_name),
-                NotificationManager.IMPORTANCE_DEFAULT,
-            ).apply {
-                description = context.getString(R.string.locale_notice_channel_description)
-            },
-        )
+        // The shared "App notices" channel (#937 moved the id + copy into AppNoticeChannel when
+        // the recognition-health notice joined this family — one owner, principle 5).
+        AppNoticeChannel.ensure(context, notificationManager)
 
         val contentIntent = PendingIntent.getActivity(
             context,
@@ -121,7 +111,7 @@ class LocaleBoundaryNotifier @Inject constructor(
         )
 
         val text = context.getString(R.string.locale_notice_text)
-        val notification = NotificationCompat.Builder(context, CHANNEL_ID)
+        val notification = NotificationCompat.Builder(context, AppNoticeChannel.ID)
             .setSmallIcon(R.drawable.bag_red_idle)
             .setContentTitle(context.getString(R.string.locale_notice_title))
             .setContentText(text)
@@ -136,15 +126,8 @@ class LocaleBoundaryNotifier @Inject constructor(
     companion object {
         private const val TAG = "LocaleBoundary"
 
-        /** Own channel — see [postNotice] for why this is not one of the existing three. */
-        const val CHANNEL_ID = "app_notice_channel"
-
-        /**
-         * Fixed id in the small-constant range the bubble (1), offer fallback (2) and odometer
-         * (101) already occupy; `BubbleManager.offerNotificationId` deliberately folds per-offer
-         * ids into the disjoint `[2^30, 2^31)` namespace, so a fixed small id cannot collide.
-         */
-        const val NOTIFICATION_ID = 102
+        /** This notice's id on the shared channel — see [AppNoticeChannel.Ids]. */
+        const val NOTIFICATION_ID = AppNoticeChannel.Ids.LOCALE_BOUNDARY
 
         private const val REQUEST_CODE = 938
     }

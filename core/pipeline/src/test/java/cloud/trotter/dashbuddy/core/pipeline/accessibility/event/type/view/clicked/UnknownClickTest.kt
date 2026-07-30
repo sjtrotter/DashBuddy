@@ -13,6 +13,7 @@ import org.mockito.kotlin.doReturn
 import org.junit.Assert.assertNull
 import org.junit.Test
 import org.mockito.kotlin.mock
+import cloud.trotter.dashbuddy.core.pipeline.PlatformAppVersions
 
 /**
  * Regression tests for [ObservationClassifier] -> [Observation.Click] with intent "unknown".
@@ -25,6 +26,7 @@ class UnknownClickTest {
     private val classifier = ObservationClassifier(
         mock<JsonRuleInterpreter>(),
         mock<ReplayMetadataProvider> { on { current() } doReturn ReplayMetadata.EMPTY },
+        PlatformAppVersions.NONE,
     )
 
     private fun node(viewId: String? = null, text: String? = null) =

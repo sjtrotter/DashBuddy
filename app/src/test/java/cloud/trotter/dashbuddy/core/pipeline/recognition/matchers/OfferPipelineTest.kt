@@ -27,6 +27,7 @@ import org.junit.runners.Parameterized
 import org.mockito.kotlin.doReturn
 import org.mockito.kotlin.mock
 import java.io.File
+import cloud.trotter.dashbuddy.core.pipeline.PlatformAppVersions
 
 /**
  * Layer 2 (#105): JSON snapshot → recognition → [OfferEvaluator] → [OfferEvaluation].
@@ -62,6 +63,7 @@ class OfferPipelineTest(private val case: PipelineTestCase) {
             ObservationClassifier(
                 mock<JsonRuleInterpreter> { on { screenRuleset } doReturn TestRulesetFactory.screenRuleset },
                 mock<ReplayMetadataProvider> { on { current() } doReturn ReplayMetadata.EMPTY },
+                PlatformAppVersions.NONE,
             )
         }
 

@@ -25,6 +25,7 @@ import org.junit.Assert.assertNull
 import org.junit.Test
 import org.mockito.kotlin.doReturn
 import org.mockito.kotlin.mock
+import cloud.trotter.dashbuddy.core.pipeline.PlatformAppVersions
 
 /**
  * #590 fill-in — end-to-end `classify → gate → capture` on adversarial trees.
@@ -73,6 +74,7 @@ class ClassifyGateCaptureFuzzTest {
             on { screenRuleset } doReturn TestRulesetFactory.screenRuleset
         },
         mock<ReplayMetadataProvider> { on { current() } doReturn ReplayMetadata.EMPTY },
+        PlatformAppVersions.NONE,
     )
 
     /** A capture bus that records whether it was offered a write this frame. */

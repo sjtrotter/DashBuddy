@@ -13,6 +13,7 @@ import cloud.trotter.dashbuddy.core.pipeline.passesContentGates
 import cloud.trotter.dashbuddy.core.pipeline.ObservationClassifier
 import cloud.trotter.dashbuddy.core.pipeline.PipelineEvent
 import cloud.trotter.dashbuddy.core.pipeline.PipelineStats
+import cloud.trotter.dashbuddy.core.pipeline.RecognitionHealthMonitor
 import cloud.trotter.dashbuddy.core.pipeline.accessibility.event.type.window.content_changed.ContentChangedPipeline
 import cloud.trotter.dashbuddy.core.pipeline.accessibility.event.type.window.state_changed.StateChangedPipeline
 import cloud.trotter.dashbuddy.core.pipeline.accessibility.event.type.window.windows_changed.WindowsChangedPipeline
@@ -47,6 +48,7 @@ class AccessibilityPipeline @Inject constructor(
     private val captureWriter: CaptureWriter,
     private val platformPreferences: PlatformPreferences,
     private val stats: PipelineStats,
+    private val recognitionHealth: RecognitionHealthMonitor,
 ) {
     companion object {
         const val SCREEN_PIPELINE_ID = "accessibility.window"
@@ -149,6 +151,15 @@ class AccessibilityPipeline @Inject constructor(
                 stats.onDuplicateSuppressed()
                 Timber.v("Dedup: suppressed %s", obs.target)
                 return@mapNotNull null
+            }
+            // #937 recognition-health sample, taken HERE — post-admission, pre-capture — so the
+            // ratio is measured on the same deduped stream the field logs report (a dasher
+            // parked on one unruled screen contributes a couple of samples, not a thousand).
+            // Screens only: a click/notification carries no recognition-coverage signal about
+            // the screen surface, and mixing them would dilute the denominator. Fail-open: the
+            // monitor swallows everything, so a broken alarm can never cost a frame.
+            if (event is PipelineEvent.Screen) {
+                recognitionHealth.onScreenAdmitted(event.packageName, obs.target == UNKNOWN_TARGET)
             }
             // Capture via the shared writer; smart-casts replace the old
             // unchecked downcasts (#361).

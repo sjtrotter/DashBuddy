@@ -2,6 +2,7 @@ package cloud.trotter.dashbuddy.core.pipeline
 
 import cloud.trotter.dashbuddy.domain.state.ParsedFields
 import timber.log.Timber
+import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicLong
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -39,6 +40,14 @@ class PipelineStats @Inject constructor() {
     private val notifRedactBackstopScrubs = AtomicLong()
     private val notifListenerConnects = AtomicLong()
     private val notifListenerDisconnects = AtomicLong()
+
+    /**
+     * `packageName → versionName` for every observed third-party app whose version resolved
+     * this process (#937). A render-only record for [summary] — the resolution + its cache are
+     * owned by [CachingPlatformAppVersions], which is the SSOT; this map only remembers what
+     * that resolver already answered, so the two cannot disagree.
+     */
+    private val platformAppVersions = ConcurrentHashMap<String, String>()
 
     val droppedSensitiveCount: Long get() = droppedSensitive.get()
     val droppedNoiseCount: Long get() = droppedNoise.get()
@@ -116,6 +125,17 @@ class PipelineStats @Inject constructor() {
         notifRedactBackstopScrubs.incrementAndGet()
     }
 
+    /**
+     * An observed third-party app's `versionName` resolved for the first time this process
+     * (#937). Recorded so the periodic summary — the INFO line a user can export as a bug
+     * report — says WHICH build of the platform app produced the frames it is describing.
+     *
+     * Principle 7: a package name + a version string are platform-app facts, not user data.
+     */
+    fun onPlatformAppVersion(packageName: String, versionName: String) {
+        platformAppVersions[packageName] = versionName
+    }
+
     /** The supervised upstream crashed and is resubscribing. Returns the restart ordinal. */
     fun onPipelineRestart(): Long = restarts.incrementAndGet()
 
@@ -152,7 +172,16 @@ class PipelineStats @Inject constructor() {
             " notifRedactBackstopScrubs=${notifRedactBackstopScrubs.get()}" +
             " notifListenerConnects=${notifListenerConnects.get()}" +
             " notifListenerDisconnects=${notifListenerDisconnects.get()}" +
-            " restarts=${restarts.get()}"
+            " restarts=${restarts.get()}" +
+            platformAppVersionsSuffix()
+
+    /** `" platformApps=com.doordash.driverapp@15.2.3,com.ubercab.driver@4.5"`, or empty. */
+    private fun platformAppVersionsSuffix(): String =
+        platformAppVersions.entries
+            .sortedBy { it.key }
+            .joinToString(separator = ",", prefix = " platformApps=") { "${it.key}@${it.value}" }
+            .takeIf { platformAppVersions.isNotEmpty() }
+            ?: ""
 
     companion object {
         /** Forwarded-observation interval between periodic summary log lines. */

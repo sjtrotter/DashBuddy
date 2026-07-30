@@ -52,6 +52,7 @@ object EnvelopeBuilder {
             stateMachineApiVersion = meta?.stateMachineApiVersion,
             appVersion = meta?.appVersion,
             deviceFingerprint = meta?.deviceFingerprint,
+            platformAppVersion = meta?.platformAppVersion,
         )
 
         val envelope = CaptureEnvelopeDto(
@@ -105,6 +106,13 @@ internal data class ReplayMetadataDto(
     val stateMachineApiVersion: String? = null,
     val appVersion: String? = null,
     val deviceFingerprint: String? = null,
+    /**
+     * #937 — the observed third-party app's `versionName`. Additive and nullable:
+     * `Json` here has `encodeDefaults = false`, so an envelope built without one omits
+     * the key entirely and stays byte-identical to a pre-#937 envelope (the committed
+     * snapshot corpus never carries it, and no test may require it).
+     */
+    val platformAppVersion: String? = null,
 )
 
 @Serializable
