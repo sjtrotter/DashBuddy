@@ -1,9 +1,14 @@
 package cloud.trotter.dashbuddy.core.data.analytics
 
+import cloud.trotter.dashbuddy.core.database.analytics.AcceptedOfferRealizedRow
 import cloud.trotter.dashbuddy.core.database.analytics.DeliveryRecordEntity
+import cloud.trotter.dashbuddy.core.database.analytics.OfferListRow
 import cloud.trotter.dashbuddy.core.database.analytics.SessionRecordEntity
 import cloud.trotter.dashbuddy.core.database.analytics.SessionWithCashRow
+import cloud.trotter.dashbuddy.domain.analytics.AcceptedOfferOutcomeSample
 import cloud.trotter.dashbuddy.domain.analytics.DeliveryRecord
+import cloud.trotter.dashbuddy.domain.analytics.OfferListing
+import cloud.trotter.dashbuddy.domain.analytics.OfferOutcome
 import cloud.trotter.dashbuddy.domain.analytics.SessionRecord
 import cloud.trotter.dashbuddy.domain.state.Platform
 
@@ -60,3 +65,34 @@ internal fun SessionRecordEntity.toDomain(): SessionRecord = SessionRecord(
  * tips carried onto [SessionRecord.cashTips] for the additive "+cash" marker.
  */
 internal fun SessionWithCashRow.toDomain(): SessionRecord = session.toDomain().copy(cashTips = cash)
+
+/**
+ * Offers-list row → domain (#975 / brief §7.4). Platform is registry-resolved and the stored
+ * `AppEventType` name becomes the typed [OfferOutcome] — an outcome this build doesn't recognize maps
+ * to `null` (fail-null, rendered as an unknown pill) rather than crashing the list.
+ */
+internal fun OfferListRow.toDomain(): OfferListing = OfferListing(
+    eventSequenceId = eventSequenceId,
+    platform = Platform.fromWire(platform) ?: Platform.Unknown,
+    storeName = merchantName,
+    decidedAt = decidedAt,
+    payAmount = payAmount,
+    distanceMiles = distanceMiles,
+    estDollarsPerHour = estDollarsPerHour,
+    score = score,
+    outcome = OfferOutcome.fromEventTypeName(outcome),
+)
+
+/**
+ * Estimate-vs-reality join row → domain sample (#975 / brief §7.5). A straight pass-through: every
+ * inclusion rule (null estimate, no link, stacked job, unmeasured job) is applied by the pure
+ * [cloud.trotter.dashbuddy.domain.analytics.EstimateVsReality.Companion.of], not here.
+ */
+internal fun AcceptedOfferRealizedRow.toSample(): AcceptedOfferOutcomeSample = AcceptedOfferOutcomeSample(
+    offerEventSequenceId = offerEventSequenceId,
+    estPerHour = estPerHour,
+    linkedJobId = linkedJobId,
+    realizedNet = realizedNet,
+    realizedCashTip = realizedCashTip,
+    realizedMinutes = realizedMinutes,
+)

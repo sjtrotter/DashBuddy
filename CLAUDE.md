@@ -638,6 +638,38 @@ by-platform aggregates ONCE and folds each wire through the same `assemble` — 
 into that grouped fold, so a split row and a filtered read can't be assembled two ways. `DailyEarnings` gained
 `deliveries` (per-session count off the same `GROUP BY sessionId` subquery; an orphan row counts as one) for the
 tappable day bar. Still read-side only — no schema change, no `PROJECTOR_VERSION` bump, no economy dependency.
+**Offers tab (#975, stage 3 — brief §5/§7.4/§7.5):** the hub's *Decisions* tab became **Offers** and moved
+to slot 2 (Money · Offers · Time · Patterns); `AnalyticsTab`'s declaration order IS the on-screen order, and
+the selection is transient ViewModel state — never persisted, never a nav argument — so the rename can't
+strand a stored preference or a deep link. Three reads. (1) **Declined value states its population:**
+`AnalyticsDao.offerOutcomes` gained a `withEstimate` counter (`SUM(CASE WHEN estNetPay IS NOT NULL …)`) →
+`DecisionEconomics.declinedWithEstimate` + `hasDeclinedEstimates`/`declinedEstimatesComplete`. `SUM` already
+skipped a #936 no-verdict decline, so the Σ was honest but *silently* partial; the counter is what lets the
+card say "across N of M declines with estimates" — and when NO decline was priced it states that instead of
+rendering "$0.00", which would read as "you skipped nothing of value" (§9). (2) **Estimate vs reality**
+(`AnalyticsDao.acceptedOfferRealizedRows` → pure `EstimateVsReality.of`): `offer_records` **LEFT**-joined to
+`delivery_records` on `d.jobId = o.linkedJobId`, same session-anchored WHERE + `outcomeResolved IS NULL`
+(#810 B2) as `offerOutcomes` — so the join's row count IS the funnel's `accepted`, which is what makes
+"N of M accepted offers" one number rather than two. The join is deliberately **unfiltered beyond that**
+(an unpriced/unlinked/unfinished offer still emits a row) because it is the DENOMINATOR the surface must
+state; the whole inclusion policy lives in the pure factory: drop a null frozen `estDollarsPerHour` (#936 —
+counting it as 0 would flatter the realized side), an unlinked offer, an offer sharing its `linkedJobId`
+with another accepted offer (a **stack** settles on receipts that can't be split per offer — BOTH are
+dropped, fail-null beats fail-wrong #745), and a job with null `SUM(netProfit)` or no measured minutes. Both
+bars are a **mean of per-offer rates**, one vote per decision — deliberate: the question is "when I accept at
+est. $X/hr, what do I get?", and it keeps the est side a straight aggregate of the frozen `estDollarsPerHour`
+column rather than re-deriving it from `estNetPay ÷ estTimeMinutes` (a second copy of that math). Realized
+rate = `(Σ netProfit + Σ cashTip) ÷ (Σ realizedMinutes ÷ 60)`. `MIN_CONFIDENT_OFFERS`=5 gates a stated
+thin-data caveat, never a hidden card. (3) **The offers list** (`offersBetween(start, end, outcome, limit,
+offset)` + a byte-identical-WHERE `offerCount`): a paged, `OfferFilter`-filtered read ordered
+`decidedAt DESC, eventSequenceId DESC` (the sequence tie-break is what makes a LIMIT/OFFSET boundary
+deterministic across same-millisecond closes), mapped to the typed `:domain` `OfferListing`/`OfferOutcome`
+(the `AppEventType.name` ↔ chip ↔ pill mapping has ONE owner — no `"OFFER_DECLINED"` literal anywhere).
+`AnalyticsRepository` clamps the page to `MAX_OFFER_PAGE`=250 itself (bounded ingestion is the read's job,
+not the UI's); the `See all N offers` footer expands the page **in place** rather than pushing a second
+screen, and re-collapses on any window or filter change. The list feed is its own
+`OffersFeedState` `StateFlow` beside `uiState` (the `pickerMonth` precedent) so a chip tap doesn't re-emit
+every Money/Time tile. Read-side only — no schema change, no `PROJECTOR_VERSION` bump, no economy dependency.
 **The "(No session)" bucket (#660 piece 1):** `delivery_records` rows whose source event carried
 NO `sessionId` at all were already counted in net (`deliveryTotals`'s own-`completedAt` fallback, #655)
 but invisible to gross (`grossAndUnattributed`/`sessionGrossRows` iterate `session_records` only, so a

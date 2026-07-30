@@ -15,6 +15,10 @@ import cloud.trotter.dashbuddy.domain.analytics.DeliveryNet
 import cloud.trotter.dashbuddy.domain.analytics.DeliveryRecord
 import cloud.trotter.dashbuddy.domain.analytics.EarningsHeatmap
 import cloud.trotter.dashbuddy.domain.analytics.EarningsHeatmapCalculator
+import cloud.trotter.dashbuddy.domain.analytics.EstimateVsReality
+import cloud.trotter.dashbuddy.domain.analytics.OfferFilter
+import cloud.trotter.dashbuddy.domain.analytics.OfferListing
+import cloud.trotter.dashbuddy.domain.analytics.OfferOutcome
 import cloud.trotter.dashbuddy.domain.analytics.PayMixParts
 import cloud.trotter.dashbuddy.domain.analytics.PeriodEconomics
 import cloud.trotter.dashbuddy.domain.analytics.PeriodTotals
@@ -389,6 +393,101 @@ class AnalyticsRepository @Inject constructor(
                 analyticsDao.offerOutcomes(start, end),
                 analyticsDao.offerScoreOutcomes(start, end),
             ) { outcomes, scores -> assembleDecisions(outcomes, scores) }
+        }
+
+    /**
+     * **Estimate vs reality** for [period] (#975 / brief §7.5, the Offers tab): what the evaluator
+     * projected per hour for the offers the driver ACCEPTED, next to what those jobs actually paid
+     * per realized hour, plus the plain ratio between them.
+     *
+     * The DAO read supplies every accepted, non-orphan-resolved offer of the window joined to its
+     * linked job's deliveries; the pure [EstimateVsReality.of] owns the entire population policy —
+     * the #936 null-estimate exclusion, the unlinked/unmeasured exclusions, and the stacked-job rule
+     * (a job claimed by two accepted offers is dropped from BOTH rather than counted twice: fail-null
+     * beats fail-wrong, #745). Its KDoc is the authoritative statement of that population.
+     *
+     * The estimate side is FROZEN decision-time economics and the realized side is the FROZEN
+     * per-delivery net — nothing is recomputed here, and there is no economy dependency (Principle 5).
+     * No new PII surface: rates and counts only.
+     */
+    fun estimateVsReality(period: AnalyticsPeriod): Flow<EstimateVsReality> =
+        estimateVsRealityIn(periodBoundariesFlow(period))
+
+    /** Arbitrary-window variant of [estimateVsReality] (#970 §7.1) — the pager's est-vs-realized read. */
+    fun estimateVsReality(
+        window: AnalyticsWindow,
+        zone: ZoneId = ZoneId.systemDefault(),
+    ): Flow<EstimateVsReality> = estimateVsRealityIn(flowOf(PeriodBounds.of(window, zone)))
+
+    private fun estimateVsRealityIn(bounds: Flow<PeriodBounds.Bounds>): Flow<EstimateVsReality> =
+        bounds.flatMapLatest { (start, end) ->
+            analyticsDao
+                .acceptedOfferRealizedRows(start, end, OfferOutcome.ACCEPTED.eventTypeName)
+                .map { rows -> EstimateVsReality.of(rows.map { it.toSample() }) }
+        }
+
+    /**
+     * One page of the window's offers, newest decision first (#975 / brief §7.4) — the Offers tab's
+     * list. [filter] `ALL` drops the outcome predicate entirely; the other three pin it to that
+     * outcome's stored `AppEventType` name (the [OfferOutcome] mapping is the one owner, Principle 8).
+     *
+     * **Paging is a bounded `LIMIT`/`OFFSET` window, not a Paging3 source.** The hub's list is a
+     * review surface over one selected period — tens to low hundreds of rows — so a growing page size
+     * over one Room-invalidation Flow keeps the whole list reactive (a projector commit re-emits the
+     * visible page) with none of the paging-library machinery. [limit] is CLAMPED to [MAX_OFFER_PAGE]
+     * here rather than trusted from the caller: an unbounded page is a bounded-ingestion hazard the
+     * read side is responsible for, not the UI (Principle 6).
+     *
+     * **Window-only, deliberately.** Every other aggregate here ships an [AnalyticsPeriod] overload
+     * beside its window one because the home glance reads the rolling enum; a per-offer LIST has no
+     * glance consumer and never will (it is a review surface), so a second overload would be dead
+     * code with a `…In(bounds)` core to keep alive. The private core stays, so adding the enum path
+     * later is one delegating line.
+     *
+     * Privacy: `offer_records` carries no customer fields; merchant names are driver-owned display
+     * data (Principle 6).
+     */
+    fun offers(
+        window: AnalyticsWindow,
+        filter: OfferFilter = OfferFilter.ALL,
+        limit: Int = DEFAULT_OFFER_PAGE,
+        offset: Int = 0,
+        zone: ZoneId = ZoneId.systemDefault(),
+    ): Flow<List<OfferListing>> =
+        offersIn(flowOf(PeriodBounds.of(window, zone)), filter, limit, offset)
+
+    private fun offersIn(
+        bounds: Flow<PeriodBounds.Bounds>,
+        filter: OfferFilter,
+        limit: Int,
+        offset: Int,
+    ): Flow<List<OfferListing>> =
+        bounds.flatMapLatest { (start, end) ->
+            analyticsDao
+                .offersBetween(
+                    start = start,
+                    end = end,
+                    outcome = filter.outcome?.eventTypeName,
+                    limit = limit.coerceIn(0, MAX_OFFER_PAGE),
+                    offset = offset.coerceAtLeast(0),
+                )
+                .map { rows -> rows.map { it.toDomain() } }
+        }
+
+    /**
+     * How many offers the window holds under [filter] — the `See all N offers` denominator (#975).
+     * The DAO's `WHERE` is byte-identical to [offers]' minus the paging clause, so the footer count
+     * can never describe a different population than the rows it sits under (Principle 5).
+     */
+    fun offerCount(
+        window: AnalyticsWindow,
+        filter: OfferFilter = OfferFilter.ALL,
+        zone: ZoneId = ZoneId.systemDefault(),
+    ): Flow<Int> = offerCountIn(flowOf(PeriodBounds.of(window, zone)), filter)
+
+    private fun offerCountIn(bounds: Flow<PeriodBounds.Bounds>, filter: OfferFilter): Flow<Int> =
+        bounds.flatMapLatest { (start, end) ->
+            analyticsDao.offerCount(start, end, filter.outcome?.eventTypeName)
         }
 
     /**
@@ -793,6 +892,11 @@ class AnalyticsRepository @Inject constructor(
             timedOut = timedOut,
             acceptanceRate = if (received > 0) accepted.toDouble() / received else null,
             declinedEstNet = outcome(AppEventType.OFFER_DECLINED)?.estNetSum ?: 0.0,
+            // #975: how many of those declines were priced at all. `SUM(estNetPay)` already skips a
+            // #936 no-verdict offer, so the figure above is honest but silently partial — this is what
+            // lets the surface say "across N of M declines with estimates" rather than imply full
+            // coverage (§9).
+            declinedWithEstimate = outcome(AppEventType.OFFER_DECLINED)?.withEstimate ?: 0,
             avgScoreAccepted = acceptedScores?.avgScore,
             avgScoreDeclined = declinedScores?.avgScore,
             avgEstPerHourAccepted = acceptedScores?.avgEstPerHour,
@@ -831,7 +935,13 @@ class AnalyticsRepository @Inject constructor(
         avgDeadlineMarginMillis = delivery.avgDeadlineMarginMillis,
     )
 
-    private companion object {
+    /**
+     * Public only for the two Offers-tab paging constants below (#975) — the hub's list needs the
+     * same page size and the same ceiling the read enforces, and a second copy in the UI is exactly
+     * the kind of hand-maintained duplicate Principle 5 exists to prevent. Everything else here stays
+     * `private`.
+     */
+    companion object {
         /** ±window around an orphan's `completedAt` for the #660 piece-2 categorize picker (48 h). */
         private const val CANDIDATE_WINDOW_MILLIS = 48L * 60L * 60L * 1_000L
 
@@ -841,5 +951,16 @@ class AnalyticsRepository @Inject constructor(
          * variant returns an empty axis and the UI hides the card instead.
          */
         private const val MAX_DAY_AXIS = 400L
+
+        /** Rows the Offers-tab list shows before the driver asks for more (#975 / brief §7.4). */
+        const val DEFAULT_OFFER_PAGE = 10
+
+        /**
+         * Hard ceiling on one offers page (#975). The `See all N offers` footer expands the page in
+         * place, so this is what keeps "N" from becoming an unbounded read on a Lifetime window — a
+         * bounded-ingestion guard owned by the read side, not by the UI (Principle 6). Beyond it the
+         * list shows the most recent [MAX_OFFER_PAGE] and says so.
+         */
+        const val MAX_OFFER_PAGE = 250
     }
 }

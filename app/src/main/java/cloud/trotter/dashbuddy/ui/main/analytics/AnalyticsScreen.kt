@@ -32,8 +32,8 @@ import cloud.trotter.dashbuddy.core.designsystem.component.AppSegmented
 
 /**
  * The Analytics hub (#315), **period-first** since #970. A `‹ ›` window pager + a recap hero own the
- * top of the screen; Money / Decisions / Time / Patterns (H5) render below as detail views of that
- * one window. A **review** surface: UDF state in, `setTab`/`stepWindow`/`setGranularity`/
+ * top of the screen; Money / Offers / Time / Patterns (H5) render below as detail views of that one
+ * window (#975 renamed Decisions → Offers and put it second — brief §1). A **review** surface: UDF state in, `setTab`/`stepWindow`/`setGranularity`/
  * `setCustomRange` intents out (Principle 1); reactive-fresh via the read-model Flows and a
  * once-a-day local-date anchor, with no `rememberNow()` tick (a historical window's figures are
  * fixed).
@@ -139,7 +139,18 @@ fun AnalyticsScreen(
                     onOpenOrphanOffers = { showOrphanOfferSheet = true },
                 )
 
-                AnalyticsTab.Decisions -> DecisionsTab(decisions = uiState.decisions)
+                // #975: the Offers tab's list feed is its OWN StateFlow (a chip tap must not re-emit
+                // the whole hub state), collected only while this tab is on screen.
+                AnalyticsTab.Offers -> {
+                    val offersFeed by viewModel.offersFeed.collectAsStateWithLifecycle()
+                    OffersTab(
+                        decisions = uiState.decisions,
+                        estimateVsReality = uiState.estimateVsReality,
+                        offersFeed = offersFeed,
+                        onSelectFilter = viewModel::setOfferFilter,
+                        onShowAllOffers = viewModel::showAllOffers,
+                    )
+                }
 
                 AnalyticsTab.Time -> TimeTab(time = uiState.time, window = uiState.window)
 
