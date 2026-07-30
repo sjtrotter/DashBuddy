@@ -100,3 +100,5 @@ jobs:
             -f context="build-and-test" \
             -f target_url="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" \
             -f description="manual dispatch run (#902 escape hatch)"
+
+# (tree-nudge: Actions refused to dispatch for the original tree — the exact #902 class this PR mitigates; see issue #902 forensics)
