@@ -46,6 +46,35 @@ Full JSON-Schema validation against `docs/rules.schema.json` is deferred to the 
 (ADR-0009); `verifyMatchersCanonical` does a cheap schema-aware structural check (required top-level
 keys, read from the schema) plus the idempotency fixed-point assertion.
 
+## Locale scope: this ruleset is English-only (#938)
+
+Every anchor in `rules/` is a **literal English string** — `require` text predicates, `matchesRegex`
+shapes, the `keepPrefix` markers a `redact` entry preserves, the tap-label allowlists a `RuleAction`
+verifies against. So is the app-side privacy backstop these rules sit behind: both marker SSOTs
+(`SensitiveTextMarkers.KEYWORDS`, `CustomerTextMarkers.MARKERS`) are English literals too.
+
+**Consequence on a non-English device.** Recognition drops toward zero — every frame falls to
+UNKNOWN, which is survivable (release builds bind `NoOpCaptureBus`, so nothing is written). What is
+*not* survivable silently is that the **Pledge layers thin**: the sensitive-screen text backstop,
+the UNKNOWN-capture customer-PII scrub, and the shareable-log scrub all weaken, because all three
+match on English wording. `CustomerTextMarkers.ID_MARKERS` (#910 — view-id suffixes like
+`customer_name` / `address_line_1`) is the **one locale-immune layer**: Android view ids do not
+localize. That is the pattern to prefer whenever a defence can be anchored on structure instead of
+copy.
+
+**What the app does about it (#938):** detect and disclose, not translate. `RecognitionLocale`
+(`:domain`) compares the device language against `en` at accessibility-service start; a mismatch
+logs one WARN (ISO-639 code only) and posts a once-per-install dasher-visible notice. The
+degradation stays real — the notice just stops it from being invisible.
+
+**Rule authors:** a non-English vocabulary is a **corpus problem, not a rule-syntax problem**. Adding
+`es` anchors without an `es` golden corpus would ship untested matches into the same priority space
+as the English ones, and — because the sensitive block is `priority: 0, overrideable: false` — a bad
+non-English sensitive anchor is a Pledge risk, not just a miss. So: do **not** add non-English
+anchors to `rules/` until a non-English capture corpus and its `AllMatchersSuite` coverage exist.
+This is a deliberate scope boundary, and it becomes load-bearing once rules ship OTA (#640/#192) to
+users who never do a desk pull — the user base must not silently widen past the assumption.
+
 ## Milestone 2 (unbuilt)
 
 The runtime OTA/CDN channel — signed JSON fetched, verified (#416), capability + sensitive-rule

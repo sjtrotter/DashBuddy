@@ -489,6 +489,15 @@
     <!-- %1$s tip amount, %2$s store name -->
     <string name="tip_effect_chat_message">Nice! %1$s tip from %2$s</string>
 
+    <!-- locale/LocaleBoundaryNotifier.kt — the #938 English-locale boundary notice.
+         Deliberately does NOT name a specific language: the string is device-independent, and the
+         only device-derived value the feature ever handles is an ISO-639 code (kept out of the
+         copy so nothing device-specific rides a user-visible surface). -->
+    <string name="locale_notice_channel_name">App notices</string>
+    <string name="locale_notice_channel_description">One-off notices about how DashBuddy is working on this device</string>
+    <string name="locale_notice_title">DashBuddy reads English screens only</string>
+    <string name="locale_notice_text">Your phone is set to a language other than English. DashBuddy recognises delivery screens by their English wording, so it will miss most offers and deliveries — and the privacy filters that hide customer details work by the same English wording, so they cover less too. Switching the phone to English restores both.</string>
+
     <!-- ui/bubble/BubbleManager.kt -->
     <string name="bubble_channel_stream_name">DashBuddy Stream</string>
     <string name="bubble_channel_stream_description">Live updates from your session</string>

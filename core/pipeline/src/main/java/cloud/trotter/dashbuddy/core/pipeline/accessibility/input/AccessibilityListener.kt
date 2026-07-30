@@ -4,6 +4,7 @@ import android.accessibilityservice.AccessibilityService
 import android.accessibilityservice.AccessibilityServiceInfo
 import android.view.accessibility.AccessibilityEvent
 import cloud.trotter.dashbuddy.core.pipeline.BuildConfig
+import cloud.trotter.dashbuddy.domain.pipeline.LocaleBoundaryReporter
 import cloud.trotter.dashbuddy.domain.settings.PlatformPreferences
 import cloud.trotter.dashbuddy.domain.state.Platform
 import dagger.hilt.android.AndroidEntryPoint
@@ -18,6 +19,14 @@ class AccessibilityListener : AccessibilityService() {
 
     @Inject
     lateinit var platformPreferences: PlatformPreferences
+
+    /**
+     * #938 — reports the English-locale boundary of recognition + the marker privacy scrubs.
+     * Injected as a `:domain` contract (the [PlatformPreferences] pattern) because the notice
+     * itself needs `:app`-owned pieces this module must not depend on.
+     */
+    @Inject
+    lateinit var localeBoundaryReporter: LocaleBoundaryReporter
 
 
 
@@ -78,6 +87,14 @@ class AccessibilityListener : AccessibilityService() {
         // Register with the source
         accessibilitySource.registerService(this)
 
+        // #938: this is the moment recognition actually goes live on this device, so it is where
+        // the English-only assumption of the anchors + marker scrubs is worth reporting. Fail-OPEN
+        // — a diagnostic must never be able to stop sensing from starting.
+        try {
+            localeBoundaryReporter.onSensorServiceConnected()
+        } catch (t: Throwable) {
+            Timber.tag("Pipeline").e(t, "Locale boundary report failed (#938) — sensing unaffected")
+        }
     }
 
     companion object {

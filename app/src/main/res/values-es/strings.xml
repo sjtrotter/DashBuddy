@@ -94,4 +94,13 @@
 
     <string name="wizard_title_mpg">Eficiencia del Vehículo</string>
     <string name="wizard_desc_mpg">¿Cuál es el MPG (millas por galón) promedio de tu auto? Usamos esto para calcular tu ganancia real después de los gastos de gasolina.</string>
+
+    <!-- locale/LocaleBoundaryNotifier.kt — el aviso del límite de idioma (#938). Translated here
+         even though values-es is otherwise incomplete: this notice exists FOR a dasher whose phone
+         is not in English, so an untranslated copy would be the one string that fails its own
+         audience. -->
+    <string name="locale_notice_channel_name">Avisos de la aplicación</string>
+    <string name="locale_notice_channel_description">Avisos puntuales sobre cómo funciona DashBuddy en este teléfono</string>
+    <string name="locale_notice_title">DashBuddy solo lee pantallas en inglés</string>
+    <string name="locale_notice_text">Tu teléfono está configurado en un idioma distinto del inglés. DashBuddy reconoce las pantallas de reparto por su texto en inglés, así que se le escaparán casi todas las ofertas y entregas — y los filtros de privacidad que ocultan los datos del cliente funcionan con ese mismo texto en inglés, por lo que también cubren menos. Cambiar el teléfono a inglés restablece ambas cosas.</string>
 </resources>
