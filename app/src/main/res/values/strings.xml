@@ -172,22 +172,52 @@
     <string name="consent_prompt_deny">Don\'t allow</string>
     <string name="consent_prompt_not_now">Not now</string>
     <!-- settings/components/FakeOfferCard.kt -->
-    <!-- main/analytics/DecisionsTab.kt -->
-    <string name="decisions_tab_offer_funnel_title">OFFER FUNNEL</string>
-    <string name="decisions_tab_no_offers_yet">No offers in this period yet.</string>
-    <string name="decisions_tab_acceptance_rate_caption">acceptance rate · %1$s %2$s</string>
-    <string name="decisions_tab_offer_singular">offer</string>
-    <string name="decisions_tab_offer_plural">offers</string>
-    <string name="decisions_tab_segment_accepted">Accepted</string>
-    <string name="decisions_tab_segment_declined">Declined</string>
-    <string name="decisions_tab_segment_timed_out">Timed out</string>
-    <string name="decisions_tab_value_of_no_title">VALUE OF SAYING NO</string>
-    <string name="decisions_tab_no_declines_yet">No declines in this period.</string>
-    <string name="decisions_tab_est_net_skipped_format" translatable="false">~%1$s</string>
-    <string name="decisions_tab_est_net_skipped_caption">est. net skipped across %1$s declined %2$s</string>
-    <string name="decisions_tab_score_vs_outcome_title">SCORE VS OUTCOME</string>
-    <string name="decisions_tab_avg_score_header">Avg score</string>
-    <string name="decisions_tab_est_per_hour_header" translatable="false">Est. $/hr</string>
+    <!-- main/analytics/OffersTab.kt (#975 — was DecisionsTab) -->
+    <string name="offers_tab_offer_funnel_title">OFFER FUNNEL</string>
+    <string name="offers_tab_no_offers_yet">No offers in this window yet.</string>
+    <string name="offers_tab_acceptance_rate_caption">acceptance rate</string>
+    <string name="offers_tab_offers_count_caption">%1$s %2$s</string>
+    <string name="offers_tab_offer_singular">offer</string>
+    <string name="offers_tab_offer_plural">offers</string>
+    <string name="offers_tab_decline_singular">decline</string>
+    <string name="offers_tab_decline_plural">declines</string>
+    <string name="offers_tab_segment_accepted">Accepted</string>
+    <string name="offers_tab_segment_declined">Declined</string>
+    <string name="offers_tab_segment_timed_out">Timed out</string>
+    <string name="offers_tab_said_no_title">SAID NO TO</string>
+    <string name="offers_tab_no_declines_yet">No declines in this window.</string>
+    <string name="offers_tab_est_net_skipped_format" translatable="false">~%1$s</string>
+    <string name="offers_tab_said_no_population_format">est. net across %1$s of %2$s %3$s with estimates</string>
+    <string name="offers_tab_said_no_no_estimates_format">%1$s %2$s, none of them priced by a verdict</string>
+    <string name="offers_tab_score_vs_outcome_title">SCORE VS OUTCOME</string>
+    <string name="offers_tab_avg_score_header">Avg score</string>
+    <string name="offers_tab_est_per_hour_header" translatable="false">Est. $/hr</string>
+    <string name="offers_tab_frozen_disclosure">Offer figures are frozen decision-time estimates — what the verdict projected when the offer arrived, never realized net.</string>
+
+    <!-- main/analytics/EstimateVsRealityCard.kt (#975, brief §7.5) -->
+    <string name="offers_tab_est_vs_reality_title">ESTIMATE VS REALITY</string>
+    <string name="offers_tab_est_vs_reality_bar_est">Est.</string>
+    <string name="offers_tab_est_vs_reality_bar_realized">Realized</string>
+    <string name="offers_tab_est_vs_reality_per_hour_format" translatable="false">%1$s/hr</string>
+    <string name="offers_tab_est_vs_reality_ratio_format">Accepted offers realized about %1$s of their decision-time estimate.</string>
+    <string name="offers_tab_est_vs_reality_no_ratio">The estimate side has no positive rate to compare against.</string>
+    <string name="offers_tab_est_vs_reality_population_format">across %1$s of %2$s accepted %3$s that had an estimate and a completed job</string>
+    <string name="offers_tab_est_vs_reality_thin_format">Thin data — only %1$s matched %2$s so far.</string>
+    <string name="offers_tab_est_vs_reality_none">Nothing to compare yet — this needs accepted offers whose jobs finished with recorded pay and time.</string>
+
+    <!-- main/analytics/OffersListCard.kt (#975, brief §7.4) -->
+    <string name="offers_tab_list_title">OFFERS IN THIS WINDOW</string>
+    <string name="offers_tab_list_empty">No offers matched this filter.</string>
+    <string name="offers_tab_filter_all">All</string>
+    <string name="offers_tab_row_meta_separator" translatable="false">" · "</string>
+    <string name="offers_tab_row_distance_format" translatable="false">%1$s mi</string>
+    <string name="offers_tab_row_est_rate_format">est. %1$s/hr</string>
+    <string name="offers_tab_row_score_format">score %1$s</string>
+    <string name="offers_tab_row_unknown_store">Unnamed store</string>
+    <string name="offers_tab_pill_unknown">Unknown</string>
+    <string name="offers_tab_see_all_format">See all %1$s offers</string>
+    <string name="offers_tab_showing_all_format">Showing all %1$s offers</string>
+    <string name="offers_tab_showing_capped_format">Showing the most recent %1$s of %2$s offers</string>
 
     <!-- main/ratings/RatingsScreen.kt -->
     <string name="ratings_screen_title">Ratings</string>
@@ -583,7 +613,7 @@
     <!-- ui/main/analytics/AnalyticsUiState.kt -->
     <string name="analytics_tab_money">Money</string>
     <string name="analytics_tab_patterns">Patterns</string>
-    <string name="analytics_tab_decisions">Decisions</string>
+    <string name="analytics_tab_offers">Offers</string>
     <string name="analytics_tab_time">Time</string>
 
     <!-- ui/main/analytics/PeriodPager.kt — the #970 period-first pager + range picker -->

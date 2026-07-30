@@ -288,6 +288,60 @@ data class OutcomeCountRow(
     val outcome: String,
     val count: Int,
     val estNetSum: Double,
+    /**
+     * How many of the group's [count] rows carried a non-null `estNetPay` at all (#975 / brief §5).
+     * SQL `SUM` already skips nulls, so [estNetSum] is honest — but silently so: a window of declines
+     * the #936 evaluator refused to score sums to `0.0`, indistinguishable from "the declines really
+     * were worth nothing". This counter is what lets the read side STATE the population ("across N of
+     * M declines with estimates") instead of implying full coverage (§9).
+     */
+    val withEstimate: Int,
+)
+
+/**
+ * One ACCEPTED offer of the window joined to what its linked job realized (#975 / brief §7.5) — the
+ * estimate-vs-reality input. LEFT-joined on `delivery_records.jobId = offer_records.linkedJobId` and
+ * grouped per offer, so an offer with no link and a job with no deliveries both still produce a row:
+ * they are part of the DENOMINATOR the surface has to state, and filtering them out in SQL would
+ * leave the read unable to say how much of the window it describes.
+ *
+ * The nullable SUMs are deliberately un-`COALESCE`d — SQL `SUM` of an all-null set is NULL, the
+ * honest "never measured" signal, where a `0` would drag the realized mean toward zero for a job
+ * that simply wasn't recorded. The whole inclusion policy lives in
+ * [EstimateVsReality.of][cloud.trotter.dashbuddy.domain.analytics.EstimateVsReality.Companion.of].
+ */
+data class AcceptedOfferRealizedRow(
+    val offerEventSequenceId: Long,
+    /** The offer's FROZEN decision-time `estDollarsPerHour`; null on a #936 no-verdict evaluation. */
+    val estPerHour: Double?,
+    /** The job store resolution linked this offer to (#159 F4); null when it was never linked. */
+    val linkedJobId: String?,
+    /** Σ frozen `netProfit` over the job's deliveries; NULL when none carried one. */
+    val realizedNet: Double?,
+    /** Σ driver-entered `cashTip` over the same deliveries (#688 — additive at the read site). */
+    val realizedCashTip: Double,
+    /** Σ measured `realizedMinutes` over the same deliveries; NULL when none was measured. */
+    val realizedMinutes: Double?,
+)
+
+/**
+ * One row of the paged recent-offers list (#975 / brief §7.4) — the projection behind the Offers
+ * tab's list. A frozen decision record: the offer's quoted pay/distance plus the verdict's frozen
+ * est. $/hr and score, and how it closed.
+ *
+ * No customer fields exist on `offer_records`, so this projection cannot carry PII; [merchantName]
+ * is driver-owned merchant display data (Principle 6).
+ */
+data class OfferListRow(
+    val eventSequenceId: Long,
+    val platform: String,
+    val merchantName: String?,
+    val decidedAt: Long,
+    val payAmount: Double?,
+    val distanceMiles: Double?,
+    val estDollarsPerHour: Double?,
+    val score: Double?,
+    val outcome: String,
 )
 
 /**

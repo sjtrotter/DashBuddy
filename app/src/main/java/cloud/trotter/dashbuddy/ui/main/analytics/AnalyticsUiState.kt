@@ -2,6 +2,7 @@ package cloud.trotter.dashbuddy.ui.main.analytics
 
 import androidx.annotation.StringRes
 import cloud.trotter.dashbuddy.R
+import cloud.trotter.dashbuddy.core.data.analytics.AnalyticsRepository
 import cloud.trotter.dashbuddy.domain.analytics.ANALYTICS_MONEY_EPSILON
 import cloud.trotter.dashbuddy.domain.analytics.AnalyticsWindow
 import cloud.trotter.dashbuddy.domain.analytics.AnalyticsWindowSelection
@@ -9,6 +10,9 @@ import cloud.trotter.dashbuddy.domain.analytics.DailyEarnings
 import cloud.trotter.dashbuddy.domain.analytics.DecisionEconomics
 import cloud.trotter.dashbuddy.domain.analytics.DeliveryRecord
 import cloud.trotter.dashbuddy.domain.analytics.EarningsHeatmap
+import cloud.trotter.dashbuddy.domain.analytics.EstimateVsReality
+import cloud.trotter.dashbuddy.domain.analytics.OfferFilter
+import cloud.trotter.dashbuddy.domain.analytics.OfferListing
 import cloud.trotter.dashbuddy.domain.analytics.OrphanOfferGroup
 import cloud.trotter.dashbuddy.domain.analytics.PayMix
 import cloud.trotter.dashbuddy.domain.analytics.PeriodEconomics
@@ -33,8 +37,14 @@ import java.time.LocalDate
 internal const val UNATTRIBUTED_EPSILON = ANALYTICS_MONEY_EPSILON
 
 /**
- * The Analytics hub tabs (#315). [Money], [Decisions] (H3), [Time] (H4), and [Patterns] (H5) all
- * render real content.
+ * The Analytics hub tabs (#315). [Money], [Offers] (#975, was `Decisions`), [Time] (H4), and
+ * [Patterns] (H5) all render real content.
+ *
+ * **Declaration order IS the on-screen order** (`AnalyticsTab.entries` feeds the segmented control),
+ * so #975 / brief §1 lands here: Money · Offers · Time · Patterns. This enum is the *only* place the
+ * order lives — the selection is transient ViewModel state, never persisted and never part of a nav
+ * route, so renaming an entry or reordering the list cannot invalidate a stored preference or a deep
+ * link (the hub is one route, `Screen.Analytics`, with no tab argument).
  *
  * [labelRes] is a `@StringRes` id (#428 Half A), resolved at the Compose layer — see
  * `AnalyticsScreen.tabOptions()`. The [AppSegmented][cloud.trotter.dashbuddy.core.designsystem.component.AppSegmented]
@@ -42,9 +52,9 @@ internal const val UNATTRIBUTED_EPSILON = ANALYTICS_MONEY_EPSILON
  */
 enum class AnalyticsTab(@param:StringRes val labelRes: Int) {
     Money(R.string.analytics_tab_money),
-    Patterns(R.string.analytics_tab_patterns),
-    Decisions(R.string.analytics_tab_decisions),
+    Offers(R.string.analytics_tab_offers),
     Time(R.string.analytics_tab_time),
+    Patterns(R.string.analytics_tab_patterns),
 }
 
 /**
@@ -116,8 +126,14 @@ data class AnalyticsUiState(
      * attests (or Tier-1 resolves) an orphan.
      */
     val orphanOfferGroups: List<OrphanOfferGroup> = emptyList(),
-    /** Offer-decision economics for [window] — the Decisions tab (#315 H3, frozen est.). */
+    /** Offer-decision economics for [window] — the Offers tab's funnel + declined value (#315 H3, frozen est.). */
     val decisions: DecisionEconomics = DecisionEconomics.EMPTY,
+    /**
+     * Frozen est. $/hr vs realized net $/hr over the window's matched accepted offers (#975 / brief
+     * §7.5). Its own KDoc is the authoritative statement of the population — the surface must state
+     * it rather than render two bars as if they covered every accepted offer.
+     */
+    val estimateVsReality: EstimateVsReality = EstimateVsReality.EMPTY,
     /** Time / mileage economics for [window] — the Time tab (#315 H4, measured). */
     val time: TimeEconomics = TimeEconomics.EMPTY,
     /**
@@ -131,3 +147,33 @@ data class AnalyticsUiState(
      */
     val earningsHeatmap: EarningsHeatmap = EarningsHeatmap.EMPTY,
 )
+
+/**
+ * The Offers tab's list feed (#975 / brief §7.4) — kept OUT of [AnalyticsUiState] on purpose.
+ *
+ * Its two inputs (the filter chip and the page size) are list-local UI selection that no other tab
+ * observes, and folding them into the hub's one immutable state would re-emit every Money/Time tile
+ * whenever the driver tapped a chip. Same shape as the range picker's `pickerMonth`/`pickerMonthDays`
+ * pair: a sibling `StateFlow` on the same ViewModel, still strictly UDF (state down, intents up).
+ *
+ * The list stays reactive by construction: both sources are Room-invalidation Flows re-anchored on
+ * the hub's selected window, so a projector commit refreshes the visible page without a refresh
+ * gesture.
+ */
+data class OffersFeedState(
+    /** Which chip is active — `ALL` shows every outcome. */
+    val filter: OfferFilter = OfferFilter.ALL,
+    /** The visible page, newest decision first. Every figure is a frozen decision-time estimate. */
+    val offers: List<OfferListing> = emptyList(),
+    /** How many offers the window holds under [filter] — the `See all N` denominator. */
+    val total: Int = 0,
+) {
+    /** True while the window holds more rows than the page shows AND the ceiling allows more. */
+    val canShowMore: Boolean get() = total > offers.size && offers.size < AnalyticsRepository.MAX_OFFER_PAGE
+
+    /**
+     * True when the window holds more offers than the read will ever return in one page — the footer
+     * says "the most recent N of M" rather than pretending the list is complete (§9).
+     */
+    val cappedByCeiling: Boolean get() = total > AnalyticsRepository.MAX_OFFER_PAGE
+}

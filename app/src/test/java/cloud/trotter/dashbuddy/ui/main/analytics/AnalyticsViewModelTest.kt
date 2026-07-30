@@ -9,6 +9,10 @@ import cloud.trotter.dashbuddy.domain.analytics.AnalyticsWindows
 import cloud.trotter.dashbuddy.domain.analytics.DailyEarnings
 import cloud.trotter.dashbuddy.domain.analytics.DecisionEconomics
 import cloud.trotter.dashbuddy.domain.analytics.EarningsHeatmap
+import cloud.trotter.dashbuddy.domain.analytics.EstimateVsReality
+import cloud.trotter.dashbuddy.domain.analytics.OfferFilter
+import cloud.trotter.dashbuddy.domain.analytics.OfferListing
+import cloud.trotter.dashbuddy.domain.analytics.OfferOutcome
 import cloud.trotter.dashbuddy.domain.analytics.PayMixParts
 import cloud.trotter.dashbuddy.domain.analytics.PeriodEconomics
 import cloud.trotter.dashbuddy.domain.analytics.PeriodTotals
@@ -89,6 +93,10 @@ class AnalyticsViewModelTest {
     private var payMixParts: PayMixParts = PayMixParts.EMPTY
     private var platformSplit: List<PlatformEconomics> = emptyList()
 
+    /** #975 — the Offers tab's est-vs-realized comparison and its list feed, served for every window. */
+    private var estimateVsReality: EstimateVsReality = EstimateVsReality.EMPTY
+    private var offerListings: List<OfferListing> = emptyList()
+
     private val today: LocalDate get() = LocalDate.now()
 
     /** Every repository read the VM collects is window-shaped now, so one stub block covers them all. */
@@ -125,6 +133,17 @@ class AnalyticsViewModelTest {
             .thenAnswer { flowOf(payMixParts) }
         whenever(analyticsRepository.platformEconomics(any<AnalyticsWindow>(), any<ZoneId>()))
             .thenAnswer { flowOf(platformSplit) }
+        // #975: the Offers tab's est-vs-realized read rides the window fan-out (collected
+        // unconditionally); its list feed is a separate StateFlow, collected only on subscription.
+        whenever(analyticsRepository.estimateVsReality(any<AnalyticsWindow>(), any<ZoneId>()))
+            .thenAnswer { flowOf(estimateVsReality) }
+        whenever(analyticsRepository.offers(any<AnalyticsWindow>(), any(), any(), any(), any<ZoneId>()))
+            .thenAnswer { invocation ->
+                // Honour the requested page size so a test can assert the `See all` expansion.
+                flowOf(offerListings.take(invocation.getArgument<Int>(2)))
+            }
+        whenever(analyticsRepository.offerCount(any<AnalyticsWindow>(), any(), any<ZoneId>()))
+            .thenAnswer { flowOf(offerListings.size) }
         whenever(analyticsRepository.recentSessions(any())).thenReturn(flowOf(emptyList()))
         // The Patterns-tab sources (#315 H5) are LIFETIME-scoped and collected unconditionally in
         // the combine, so they must always be stubbed or the combine folds a null Flow.
@@ -144,6 +163,7 @@ class AnalyticsViewModelTest {
             timedOut = timedOut,
             acceptanceRate = acceptanceRate,
             declinedEstNet = 12.5,
+            declinedWithEstimate = declined,
             avgScoreAccepted = 0.8,
             avgScoreDeclined = 0.2,
             avgEstPerHourAccepted = 22.0,
@@ -207,14 +227,31 @@ class AnalyticsViewModelTest {
         Dispatchers.setMain(StandardTestDispatcher(testScheduler))
         val viewModel = buildViewModel()
         val collector = launch { viewModel.uiState.collect {} }
+        // #975: the Offers list feed is a SEPARATE WhileSubscribed StateFlow, so it stays cold until
+        // something collects it — subscribe here so its intents are observable in a test.
+        val offersCollector = launch { viewModel.offersFeed.collect {} }
         testScheduler.runCurrent()
         try {
             block(viewModel)
         } finally {
             collector.cancel()
+            offersCollector.cancel()
             viewModel.viewModelScope.cancel()
         }
     }
+
+    /** One list row — the fields the feed test asserts on; the rest are decision-time detail. */
+    private fun offerListing(seq: Long, outcome: OfferOutcome) = OfferListing(
+        eventSequenceId = seq,
+        platform = Platform.DoorDash,
+        storeName = "Store $seq",
+        decidedAt = seq,
+        payAmount = 8.0,
+        distanceMiles = 3.0,
+        estDollarsPerHour = 18.0,
+        score = 6.0,
+        outcome = outcome,
+    )
 
     @After
     fun tearDown() = Dispatchers.resetMain()
@@ -408,7 +445,7 @@ class AnalyticsViewModelTest {
     }
 
     @Test
-    fun `setTab switches to Decisions and the decision read-model is present in state`() = runTest {
+    fun `setTab switches to Offers and the decision read-model is present in state`() = runTest {
         economicsByWindow[currentWeek()] = economics(net = 100.0, netPerHour = 20.0)
         decisions = decisions(accepted = 3, declined = 5, timedOut = 2, acceptanceRate = 0.3)
 
@@ -416,11 +453,11 @@ class AnalyticsViewModelTest {
             // Decisions are collected unconditionally, so they're in state even before the tab switch.
             assertEquals(3, viewModel.uiState.value.decisions.accepted)
 
-            viewModel.setTab(AnalyticsTab.Decisions)
+            viewModel.setTab(AnalyticsTab.Offers)
             testScheduler.runCurrent()
 
             val ui = viewModel.uiState.value
-            assertEquals(AnalyticsTab.Decisions, ui.selectedTab)
+            assertEquals(AnalyticsTab.Offers, ui.selectedTab)
             assertEquals(currentWeek(), ui.window)
             assertEquals(10, ui.decisions.received)
             assertEquals(5, ui.decisions.declined)
@@ -454,6 +491,80 @@ class AnalyticsViewModelTest {
             assertEquals(null, ui.economics.netPerHour)
             assertTrue(ui.topStores.isEmpty())
             assertTrue(ui.recentSessions.isEmpty())
+        }
+    }
+
+    // ── #975 — the Offers tab ────────────────────────────────────────────
+
+    @Test
+    fun `estimate vs reality rides the window fan-out into ui state`() = runTest {
+        estimateVsReality = EstimateVsReality(
+            acceptedOffers = 9,
+            offers = 6,
+            estPerHour = 20.0,
+            realizedPerHour = 17.0,
+            ratio = 0.85,
+        )
+
+        runWithViewModel { viewModel ->
+            val comparison = viewModel.uiState.value.estimateVsReality
+            assertEquals(6, comparison.offers)
+            assertEquals(9, comparison.acceptedOffers)
+            assertEquals(0.85, comparison.ratio!!, 1e-9)
+            assertFalse(comparison.isThinData)
+        }
+    }
+
+    @Test
+    fun `the offers feed serves a default page and expands to the whole window on See all`() = runTest {
+        offerListings = (1L..40L).map { offerListing(it, OfferOutcome.ACCEPTED) }
+
+        runWithViewModel { viewModel ->
+            // The default page is bounded even though the window holds far more.
+            assertEquals(AnalyticsRepository.DEFAULT_OFFER_PAGE, viewModel.offersFeed.value.offers.size)
+            assertEquals(40, viewModel.offersFeed.value.total)
+            assertTrue(viewModel.offersFeed.value.canShowMore)
+
+            viewModel.showAllOffers()
+            testScheduler.runCurrent()
+
+            assertEquals(40, viewModel.offersFeed.value.offers.size)
+            assertFalse(viewModel.offersFeed.value.canShowMore)
+            assertFalse(viewModel.offersFeed.value.cappedByCeiling)
+        }
+    }
+
+    @Test
+    fun `changing the filter re-collapses the page and is reflected in the feed`() = runTest {
+        offerListings = (1L..40L).map { offerListing(it, OfferOutcome.DECLINED) }
+
+        runWithViewModel { viewModel ->
+            viewModel.showAllOffers()
+            testScheduler.runCurrent()
+            assertEquals(40, viewModel.offersFeed.value.offers.size)
+
+            viewModel.setOfferFilter(OfferFilter.DECLINED)
+            testScheduler.runCurrent()
+
+            assertEquals(OfferFilter.DECLINED, viewModel.offersFeed.value.filter)
+            assertEquals(AnalyticsRepository.DEFAULT_OFFER_PAGE, viewModel.offersFeed.value.offers.size)
+        }
+    }
+
+    @Test
+    fun `paging the window re-collapses the offers page`() = runTest {
+        offerListings = (1L..40L).map { offerListing(it, OfferOutcome.ACCEPTED) }
+
+        runWithViewModel { viewModel ->
+            viewModel.showAllOffers()
+            testScheduler.runCurrent()
+            assertEquals(40, viewModel.offersFeed.value.offers.size)
+
+            viewModel.stepWindow(-1)
+            testScheduler.runCurrent()
+
+            assertEquals(lastWeek(), viewModel.uiState.value.window)
+            assertEquals(AnalyticsRepository.DEFAULT_OFFER_PAGE, viewModel.offersFeed.value.offers.size)
         }
     }
 }

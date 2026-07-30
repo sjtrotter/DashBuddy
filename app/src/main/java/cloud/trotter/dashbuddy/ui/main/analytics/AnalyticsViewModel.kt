@@ -12,6 +12,8 @@ import cloud.trotter.dashbuddy.domain.analytics.AnalyticsWindows
 import cloud.trotter.dashbuddy.domain.analytics.DailyEarnings
 import cloud.trotter.dashbuddy.domain.analytics.DecisionEconomics
 import cloud.trotter.dashbuddy.domain.analytics.DeliveryRecord
+import cloud.trotter.dashbuddy.domain.analytics.EstimateVsReality
+import cloud.trotter.dashbuddy.domain.analytics.OfferFilter
 import cloud.trotter.dashbuddy.domain.analytics.OrphanOfferGroup
 import cloud.trotter.dashbuddy.domain.analytics.PayMix
 import cloud.trotter.dashbuddy.domain.analytics.PayMixParts
@@ -120,8 +122,12 @@ class AnalyticsViewModel @Inject constructor(
                         analyticsRepository.payMixParts(w),
                         analyticsRepository.platformEconomics(w),
                     ) { previous, payMixParts, platforms -> Triple(previous, payMixParts, platforms) },
-                ) { (daily, orphans, offerGroups), (previous, payMixParts, platforms) ->
-                    WindowExtras(daily, orphans, offerGroups, previous, payMixParts, platforms)
+                    // #975 §7.5 — the Offers tab's est-vs-realized comparison. Window-anchored like
+                    // everything else here, so it re-anchors atomically with the funnel it sits under
+                    // (a card claiming "N of M accepted offers" must never quote a different window's M).
+                    analyticsRepository.estimateVsReality(w),
+                ) { (daily, orphans, offerGroups), (previous, payMixParts, platforms), estVsReality ->
+                    WindowExtras(daily, orphans, offerGroups, previous, payMixParts, platforms, estVsReality)
                 },
             ) { economics, stores, decisions, time, extras ->
                 WindowData(w, day, economics, stores, decisions, time, extras)
@@ -150,6 +156,7 @@ class AnalyticsViewModel @Inject constructor(
             topStores = data.stores.take(TOP_STORES),
             recentSessions = sessions,
             decisions = data.decisions,
+            estimateVsReality = data.extras.estimateVsReality,
             time = data.time,
             dailyEarnings = data.extras.dailyEarnings,
             noSessionDeliveries = data.extras.orphanDeliveries,
@@ -168,6 +175,52 @@ class AnalyticsViewModel @Inject constructor(
         AnalyticsWindows.previous(window)
             ?.let { analyticsRepository.periodEconomics(it) }
             ?: flowOf<PeriodEconomics?>(null)
+
+    // ── The Offers tab's list feed (#975 / brief §7.4) ───────────────────
+
+    /** Which outcome the list is filtered to — list-local selection, deliberately not persisted. */
+    private val offerFilter = MutableStateFlow(OfferFilter.ALL)
+
+    /** How many rows the list is asking for; the `See all` footer grows it, the read clamps it. */
+    private val offerPageSize = MutableStateFlow(AnalyticsRepository.DEFAULT_OFFER_PAGE)
+
+    /**
+     * The visible offers page + the window's total under the same filter (#975 / brief §7.4).
+     *
+     * Kept as its OWN `StateFlow` rather than a field of [uiState] (see [OffersFeedState]): the two
+     * inputs are list-local, and re-emitting every Money/Time tile on a chip tap would be exactly the
+     * "state changed ≠ UI updated" conflation the Reactive UI rules warn about. It re-anchors on the
+     * hub's [window] like every other read, so paging back a week can never leave last week's rows
+     * under this week's label.
+     *
+     * Both sources are Room-invalidation Flows, so the page refreshes as the projector folds.
+     */
+    val offersFeed: StateFlow<OffersFeedState> =
+        combine(window, offerFilter, offerPageSize) { w, filter, pageSize -> Triple(w, filter, pageSize) }
+            .flatMapLatest { (w, filter, pageSize) ->
+                combine(
+                    analyticsRepository.offers(w, filter, pageSize),
+                    analyticsRepository.offerCount(w, filter),
+                ) { rows, total -> OffersFeedState(filter = filter, offers = rows, total = total) }
+            }
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), OffersFeedState())
+
+    /** UDF intent — the filter chips. Re-collapses the page: a new filter is a new list. */
+    fun setOfferFilter(filter: OfferFilter) {
+        if (offerFilter.value == filter) return
+        offerFilter.value = filter
+        offerPageSize.value = AnalyticsRepository.DEFAULT_OFFER_PAGE
+    }
+
+    /**
+     * UDF intent — the `See all N offers` footer. Expands the page **in place** rather than pushing a
+     * second screen: the whole list is one review surface over one selected window, and a separate
+     * route would need its own window/filter plumbing to say the same thing. The repository clamps
+     * the request to its own ceiling, so a Lifetime window can't turn this into an unbounded read.
+     */
+    fun showAllOffers() {
+        offerPageSize.value = AnalyticsRepository.MAX_OFFER_PAGE
+    }
 
     // ── The range picker's calendar (brief §3.2) ─────────────────────────
 
@@ -248,6 +301,10 @@ class AnalyticsViewModel @Inject constructor(
     }
 
     private fun persist(selection: AnalyticsWindowSelection) {
+        // The ONE funnel every window change goes through, so it is also the one place the Offers
+        // list re-collapses: a different window is a different list, and carrying a 250-row page
+        // across the pager would make each step an unbounded read (#975).
+        offerPageSize.value = AnalyticsRepository.DEFAULT_OFFER_PAGE
         viewModelScope.launch {
             try {
                 appPreferencesRepository.setAnalyticsWindow(selection)
@@ -322,6 +379,7 @@ class AnalyticsViewModel @Inject constructor(
         val previousEconomics: PeriodEconomics?,
         val payMixParts: PayMixParts,
         val platformSplit: List<PlatformEconomics>,
+        val estimateVsReality: EstimateVsReality,
     )
 
     /** One window switch's worth of read-model, re-anchored atomically under [flatMapLatest]. */

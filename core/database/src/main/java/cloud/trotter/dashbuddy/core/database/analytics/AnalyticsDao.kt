@@ -622,11 +622,17 @@ interface AnalyticsDao {
      * invisibly-unassigned (Tier-1 `UNASSIGNED_INFERRED` or Tier-2 `UNASSIGNED_ATTESTED`) — a resolved
      * orphan never delivered, so counting it would inflate `accepted` (and thus `received`). The
      * original `outcome` column is untouched; only this read excludes it.
+     *
+     * **#975 population counter:** `withEstimate` counts the group's rows that carried a non-null
+     * `estNetPay`. `SUM` already skips nulls, so a #936 no-verdict offer contributes nothing to
+     * `estNetSum` — but silently; this counter is what lets the surface state the population instead
+     * of implying every decline was priced (§9).
      */
     @Query(
         """SELECT outcome,
                   COUNT(*) AS count,
-                  COALESCE(SUM(estNetPay), 0) AS estNetSum
+                  COALESCE(SUM(estNetPay), 0) AS estNetSum,
+                  COALESCE(SUM(CASE WHEN estNetPay IS NOT NULL THEN 1 ELSE 0 END), 0) AS withEstimate
            FROM offer_records
            WHERE outcomeResolved IS NULL
               AND (sessionId IN (SELECT sessionId FROM session_records
@@ -655,6 +661,102 @@ interface AnalyticsDao {
            GROUP BY outcome"""
     )
     fun offerScoreOutcomes(start: Long, end: Long): Flow<List<ScoreOutcomeRow>>
+
+    // ── Offers-tab reads (#975 / brief §7.4 + §7.5) ─────────────────────
+
+    /**
+     * Every ACCEPTED offer of the window beside what its linked job realized (#975 / brief §7.5) —
+     * the estimate-vs-reality input. `offer_records` LEFT-joined to `delivery_records` on
+     * `d.jobId = o.linkedJobId` (the #159 F4 link store resolution stamps) and grouped per offer.
+     *
+     * **Same session-anchored WHERE shape + null-session `decidedAt` fallback as [offerOutcomes], and
+     * the same `outcomeResolved IS NULL` orphan exclusion (#810 B2)** — so the row count here IS the
+     * funnel's `accepted` count by construction (Principle 5), which is exactly what lets the surface
+     * state its population as "N of M accepted offers".
+     *
+     * Deliberately **unfiltered beyond that**: an offer with a null estimate, no link, or a job with
+     * no completed delivery still produces a row, because it belongs in the denominator. The whole
+     * inclusion policy — including the stacked-job rule, which is a cross-ROW fact SQL would have to
+     * express as a second correlated subquery — lives in one pure, unit-testable place
+     * ([EstimateVsReality.of][cloud.trotter.dashbuddy.domain.analytics.EstimateVsReality.Companion.of]).
+     *
+     * The nullable SUMs stay un-`COALESCE`d: `SUM` of an all-null set is NULL, the honest "never
+     * measured" signal (a fabricated `0` would drag the realized mean toward zero, #659 discipline).
+     *
+     * [acceptedOutcome] is passed in rather than inlined so the literal has one owner —
+     * `OfferOutcome.ACCEPTED.eventTypeName`, derived from [AppEventType][cloud.trotter.dashbuddy.domain.model.event.AppEventType]
+     * itself (Principle 8: no magic strings in the read).
+     */
+    @Query(
+        """SELECT o.eventSequenceId AS offerEventSequenceId,
+                  o.estDollarsPerHour AS estPerHour,
+                  o.linkedJobId AS linkedJobId,
+                  SUM(d.netProfit) AS realizedNet,
+                  COALESCE(SUM(d.cashTip), 0) AS realizedCashTip,
+                  SUM(d.realizedMinutes) AS realizedMinutes
+           FROM offer_records o
+           LEFT JOIN delivery_records d ON d.jobId = o.linkedJobId
+           WHERE o.outcome = :acceptedOutcome
+              AND o.outcomeResolved IS NULL
+              AND (o.sessionId IN (SELECT sessionId FROM session_records
+                                   WHERE startedAt >= :start AND startedAt < :end)
+                   OR (o.sessionId IS NULL AND o.decidedAt >= :start AND o.decidedAt < :end))
+           GROUP BY o.eventSequenceId"""
+    )
+    fun acceptedOfferRealizedRows(
+        start: Long,
+        end: Long,
+        acceptedOutcome: String,
+    ): Flow<List<AcceptedOfferRealizedRow>>
+
+    /**
+     * One page of the window's offers, newest decision first (#975 / brief §7.4) — the Offers tab's
+     * list. Same session-anchored WHERE shape + null-session `decidedAt` fallback as [offerOutcomes]
+     * and the same `outcomeResolved IS NULL` orphan exclusion (#810 B2), so the list and the funnel
+     * above it describe the same population (a resolved orphan is absent from both).
+     *
+     * [outcome] is the filter chip's stored `AppEventType` name, or **null for "All"** — `:outcome IS
+     * NULL OR outcome = :outcome` keeps all four chips on ONE query rather than four (Principle 5).
+     *
+     * Ordering is `decidedAt DESC, eventSequenceId DESC`: the sequence tie-break makes the page
+     * boundary deterministic when two offers close in the same millisecond, which is what keeps
+     * `LIMIT`/`OFFSET` paging from dropping or repeating a row.
+     */
+    @Query(
+        """SELECT eventSequenceId, platform, merchantName, decidedAt, payAmount,
+                  distanceMiles, estDollarsPerHour, score, outcome
+           FROM offer_records
+           WHERE outcomeResolved IS NULL
+              AND (:outcome IS NULL OR outcome = :outcome)
+              AND (sessionId IN (SELECT sessionId FROM session_records
+                                 WHERE startedAt >= :start AND startedAt < :end)
+                   OR (sessionId IS NULL AND decidedAt >= :start AND decidedAt < :end))
+           ORDER BY decidedAt DESC, eventSequenceId DESC
+           LIMIT :limit OFFSET :offset"""
+    )
+    fun offersBetween(
+        start: Long,
+        end: Long,
+        outcome: String?,
+        limit: Int,
+        offset: Int,
+    ): Flow<List<OfferListRow>>
+
+    /**
+     * How many offers the window holds under the same filter — the `See all N offers` denominator
+     * (#975 / brief §7.4). **`WHERE` is byte-identical to [offersBetween]** minus the paging clause,
+     * so the footer's N can never describe a different population than the rows above it.
+     */
+    @Query(
+        """SELECT COUNT(*)
+           FROM offer_records
+           WHERE outcomeResolved IS NULL
+              AND (:outcome IS NULL OR outcome = :outcome)
+              AND (sessionId IN (SELECT sessionId FROM session_records
+                                 WHERE startedAt >= :start AND startedAt < :end)
+                   OR (sessionId IS NULL AND decidedAt >= :start AND decidedAt < :end))"""
+    )
+    fun offerCount(start: Long, end: Long, outcome: String?): Flow<Int>
 
     // ── Time-tab aggregates (#315 H4) ───────────────────────────────────
 
