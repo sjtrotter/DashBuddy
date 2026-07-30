@@ -18,8 +18,15 @@
 .cxx
 local.properties
 /app/src/test/resources/snapshots/INBOX/
-# UNKNOWN is staging too (unrecognized captures) — never commit; it is the inbox.
-/app/src/test/resources/snapshots/UNKNOWN/
+# UNKNOWN is staging too (unrecognized captures) — never commit raw triage drops.
+# ONE exception: `UNKNOWN/negative/` is the COMMITTED must-stay-UNKNOWN corpus (#941).
+# The pattern ignores the folder's CONTENTS (`/*`) rather than the folder itself, because
+# git cannot re-include anything under an excluded directory — that is what makes the
+# negation below reachable. The flat staging loaders (InboxProcessorTest /
+# UnknownScreenAnalysisTest) list files, not directories, so they never see `negative/`
+# and can never graduate/prune a committed negative frame.
+/app/src/test/resources/snapshots/UNKNOWN/*
+!/app/src/test/resources/snapshots/UNKNOWN/negative/
 
 # Release keystore — never commit
 *.jks
