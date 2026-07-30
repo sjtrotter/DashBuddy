@@ -237,8 +237,19 @@ class PlatformRegionStepper @Inject constructor() {
             }
         }
 
+        // #967: stamp the opportunistic ratings snapshot BEFORE the lifecycle gates.
+        // updateLifecycle early-returns on `mode == Offline` (idle-anchor/pending clear), and the
+        // ratings stamp used to sit AFTER that return — so a ratings observation while the platform
+        // was Offline (precisely when a dasher browses their ratings) was parsed and then discarded
+        // (fielded 2026-07-30, minutes after #963 shipped: a fully-parsed hub frame left the prior
+        // all-null snapshot in place; it had only ever stamped mid-dash). Ratings stamping is
+        // observation-driven and mode-independent (#962: opportunistic, display-only — the
+        // RatingsSnapshotIsDisplayOnlyTest allowlist covers this site), so it rides ahead of the
+        // lifecycle, not inside it.
+        val afterRatings = updateRatings(afterMode, flowObs)
+
         // Update session/job/task lifecycle based on flow changes
-        return updateLifecycle(afterMode, prevFlow, nextFlow, flowObs, policy)
+        return updateLifecycle(afterRatings, prevFlow, nextFlow, flowObs, policy)
     }
 
     // =========================================================================
@@ -471,8 +482,7 @@ class PlatformRegionStepper @Inject constructor() {
             }
         }
 
-        // Update ratings if we got a ratings observation
-        r = updateRatings(r, obs)
+        // (Ratings stamping moved to stepCore, ahead of this function's early returns — #967.)
 
         // Job lifecycle
         r = updateJobLifecycle(r, prev, next, obs, policy)

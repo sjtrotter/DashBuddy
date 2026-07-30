@@ -98,4 +98,43 @@ class RatingsSnapshotFlowThroughTest {
         assertNull(snap.qualityRate)
         assertNull(snap.acceptanceRate)
     }
+
+    /**
+     * #967 — the FIELDED gap this file originally missed: both tests above step an ONLINE
+     * region, but the natural time a dasher browses their ratings is while OFFLINE, and
+     * `updateLifecycle`'s Offline early-return used to sit above the ratings stamp — a
+     * fully-parsed hub frame was discarded minutes after #963 shipped. Opportunistic
+     * capture is mode-independent by design (#962); this pins it for every mode.
+     */
+    @Test
+    fun `a ratings observation stamps while the platform is OFFLINE`() {
+        val offline = PlatformRegion(platform = Platform.DoorDash, mode = Mode.Offline)
+        val parsed = ParsedFields.RatingsFields(
+            acceptanceRate = 24.0,
+            overallRatingPoints = 74,
+            tierLabel = "Silver",
+        )
+        val next = stepper.step(offline, flow, flow, ratingsObs(parsed), policy)
+        val snap = next.ratings
+        assertNotNull("an OFFLINE ratings observation must still stamp (#967)", snap)
+        requireNotNull(snap)
+        assertEquals(24.0, snap.acceptanceRate!!, 1e-9)
+        assertEquals(74, snap.overallRatingPoints)
+        assertEquals("Silver", snap.tierLabel)
+    }
+
+    /** #967 — a stale snapshot must be OVERWRITTEN by a newer observation, offline or not. */
+    @Test
+    fun `a newer ratings observation replaces a stale all-null snapshot while OFFLINE`() {
+        val staleStamped = PlatformRegion(
+            platform = Platform.DoorDash,
+            mode = Mode.Offline,
+            ratings = cloud.trotter.dashbuddy.domain.model.ratings.RatingsSnapshot(capturedAt = 1L),
+        )
+        val parsed = ParsedFields.RatingsFields(overallRatingPoints = 74, tierLabel = "Silver")
+        val next = stepper.step(staleStamped, flow, flow, ratingsObs(parsed), policy)
+        val snap = requireNotNull(next.ratings)
+        assertEquals("newer observation wins", 1_000L, snap.capturedAt)
+        assertEquals(74, snap.overallRatingPoints)
+    }
 }
