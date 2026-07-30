@@ -601,7 +601,29 @@ while an incremental fold split across a page boundary mints then deletes it —
 immutable) serves period economics (`SUM(netProfit)` frozen + `unattributedPay`; all-pay gross =
 reported-total authoritative + the unattributed review flag; per-store; Monday-week boundaries via
 `PeriodBounds`, midnight-reactive) as Room-invalidation Flows to the home glance + the future Analytics hub
-(#315). **The "(No session)" bucket (#660 piece 1):** `delivery_records` rows whose source event carried
+(#315). **Arbitrary review windows (#970, redesign epic #969 stage 1):** every period aggregate now has a
+second overload taking an `AnalyticsWindow` (`:domain` — a granularity + a half-open span of local
+**dates**: `DAY`/`WEEK`/`MONTH`/`LIFETIME`/`CUSTOM`), so the hub's `‹ ›` pager and range picker can read any
+span while the rolling four-value `AnalyticsPeriod` stays exactly as it was for the home glance. **One rule
+set, two callers:** `PeriodBounds.of(window, zone)` is the primitive and `PeriodBounds.of(period, now, zone)`
+delegates to it via `AnalyticsPeriod.toWindow(today)`, so the enum and window paths can never disagree about
+where Monday starts; inside the repository each pair (`periodEconomics`/`perStoreEconomics`/
+`decisionEconomics`/`timeEconomics`/`dailyEarnings`/`noSessionDeliveries`/`orphanOfferGroups`) shares ONE
+private `…In(boundsFlow)` core — the enum overload feeds it the midnight-re-anchoring `periodBoundariesFlow`,
+the window overload a fixed `flowOf(bounds)` (a paged window is an explicit span and must NOT silently become
+a different one while it is on screen; the hub re-resolves *which* window is current from
+`currentLocalDateFlow` one level up). `AnalyticsWindows` (pure `:domain`) owns the calendar math — Monday
+weeks, calendar-month stepping, the **previous-equivalent window** the recap hero's delta compares against
+(null for Lifetime — no predecessor, so the UI states that rather than inventing a comparison), and the
+`canStepForward` fence that keeps the pager out of the future. The selection persists in **app prefs** as an
+`AnalyticsWindowSelection` — `Relative(granularity, offset)` for the pageable granularities so reopening the
+hub next week still means *this* week, `Custom(start, endInclusive)` only for a driver-drawn range — decoded
+fail-closed to the current pay week. **Net per day (§7.3):** `DailyEarnings` gained `net` alongside `gross`
+(`sessionGrossRows`/`noSessionDailyRows` compute it from the same frozen columns + cash + the session's
+unattributed remainder), so Σ per-day net equals the window's `PeriodEconomics.netProfit` by construction and
+the hero's sparkline plots kept money, not gross. `dailyEarnings` returns an EMPTY axis for a single-day,
+unbounded, or over-`MAX_DAY_AXIS` (400-day) window. Read-side only — no schema change, no
+`PROJECTOR_VERSION` bump, no economy dependency. **The "(No session)" bucket (#660 piece 1):** `delivery_records` rows whose source event carried
 NO `sessionId` at all were already counted in net (`deliveryTotals`'s own-`completedAt` fallback, #655)
 but invisible to gross (`grossAndUnattributed`/`sessionGrossRows` iterate `session_records` only, so a
 null-session row joined to nothing) — a seam that could let displayed net exceed gross. Fixed by folding

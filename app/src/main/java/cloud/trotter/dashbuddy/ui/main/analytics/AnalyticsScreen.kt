@@ -168,10 +168,16 @@ fun AnalyticsScreen(
     }
 
     if (showRangePicker) {
+        val pickerMonth by viewModel.pickerMonth.collectAsStateWithLifecycle()
+        val pickerMonthDays by viewModel.pickerMonthDays.collectAsStateWithLifecycle()
         RangePickerSheet(
             window = uiState.window,
             today = uiState.today,
-            viewModel = viewModel,
+            month = pickerMonth,
+            monthDays = pickerMonthDays,
+            onMonthChange = viewModel::setPickerMonth,
+            onPickPreset = viewModel::setRelativeWindow,
+            onCommitRange = viewModel::setCustomRange,
             onDismiss = { showRangePicker = false },
         )
     }

@@ -1,7 +1,10 @@
 package cloud.trotter.dashbuddy.ui.main.analytics
 
 import cloud.trotter.dashbuddy.core.data.analytics.AnalyticsRepository
-import cloud.trotter.dashbuddy.domain.analytics.AnalyticsPeriod
+import cloud.trotter.dashbuddy.core.data.settings.AppPreferencesRepository
+import cloud.trotter.dashbuddy.domain.analytics.AnalyticsWindow
+import cloud.trotter.dashbuddy.domain.analytics.AnalyticsWindowSelection
+import cloud.trotter.dashbuddy.domain.analytics.AnalyticsWindows
 import cloud.trotter.dashbuddy.domain.analytics.DailyEarnings
 import cloud.trotter.dashbuddy.domain.analytics.DecisionEconomics
 import cloud.trotter.dashbuddy.domain.analytics.EarningsHeatmap
@@ -11,71 +14,110 @@ import cloud.trotter.dashbuddy.domain.analytics.SessionRecord
 import cloud.trotter.dashbuddy.domain.analytics.StoreEconomics
 import cloud.trotter.dashbuddy.domain.analytics.StoreReportCard
 import cloud.trotter.dashbuddy.domain.analytics.TimeEconomics
+import cloud.trotter.dashbuddy.domain.analytics.WindowGranularity
 import cloud.trotter.dashbuddy.domain.state.Platform
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 import org.mockito.kotlin.any
 import org.mockito.kotlin.anyOrNull
-import org.mockito.kotlin.eq
 import org.mockito.kotlin.mock
 import org.mockito.kotlin.whenever
+import java.time.LocalDate
+import java.time.ZoneId
 
 /**
- * #315 H1 — the Analytics hub ViewModel exposes the read-model economics for the selected
- * period (default [AnalyticsPeriod.THIS_WEEK], switchable via [AnalyticsViewModel.setPeriod])
- * on the selected tab (default [AnalyticsTab.Money], switchable via [AnalyticsViewModel.setTab]),
- * strictly over the existing repository surface. Same stub-flow pattern as DashboardViewModelTest.
+ * #315 H1 / #970 — the Analytics hub ViewModel exposes the read-model economics for the selected
+ * **window** (default: the current pay week, paged by `stepWindow` and re-shaped by
+ * `setGranularity`/`setCustomRange`) on the selected tab (default [AnalyticsTab.Money], switchable
+ * via [AnalyticsViewModel.setTab]), strictly over the existing repository surface.
+ *
+ * The window selection round-trips through [AppPreferencesRepository] — the mock's setter writes
+ * into the same flow its getter exposes, which is exactly the DataStore-is-SSOT contract the
+ * ViewModel relies on (it holds no local copy). Same stub-flow pattern as DashboardViewModelTest.
+ *
+ * **Settle with `runCurrent()`, never `advanceUntilIdle()`.** The ViewModel resolves its window
+ * against the local-date flow, which — like `periodBoundariesFlow` — emits and then sleeps until the
+ * next local midnight, forever. Under a `StandardTestDispatcher` that delay is *virtual*, so
+ * `advanceUntilIdle()` advances the clock past midnight, gets another emission, and never runs out
+ * of work (it hangs the suite; a 15-minute CI timeout was the receipt). `runCurrent()` drains
+ * everything scheduled at the current instant — which is every real emission — and leaves the
+ * midnight re-anchor pending where it belongs.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class AnalyticsViewModelTest {
 
     private val analyticsRepository: AnalyticsRepository = mock()
     private val correctionRepository: cloud.trotter.dashbuddy.core.data.analytics.CorrectionRepository = mock()
+    private val appPreferencesRepository: AppPreferencesRepository = mock()
 
-    /**
-     * The Patterns-tab sources (#315 H5) are LIFETIME-scoped and collected unconditionally in the
-     * combine, so every test must supply them or the combine folds a null Flow. They're period-
-     * independent, so a single default stub covers all tests (the Patterns behavior has its own
-     * repository/domain tests).
-     */
+    /** The persisted selection, round-tripped by the mocked prefs repository. */
+    private val selectionFlow = MutableStateFlow(AnalyticsWindowSelection.DEFAULT)
+
+    /** Per-window economics the stubbed repository serves; anything unlisted reads EMPTY. */
+    private val economicsByWindow = mutableMapOf<AnalyticsWindow, PeriodEconomics>()
+
+    /** Per-window top stores; anything unlisted reads empty. */
+    private val storesByWindow = mutableMapOf<AnalyticsWindow, List<StoreEconomics>>()
+
+    private var decisions: DecisionEconomics = DecisionEconomics.EMPTY
+    private var dailyEarnings: List<DailyEarnings> = emptyList()
+
+    private val today: LocalDate get() = LocalDate.now()
+
+    /** Every repository read the VM collects is window-shaped now, so one stub block covers them all. */
     @Before
-    fun stubPatternsSources() {
+    fun stubRepositories() {
+        whenever(appPreferencesRepository.analyticsWindow).thenReturn(selectionFlow)
+        // The setter writes into the SAME flow the getter exposes — the DataStore-is-SSOT contract
+        // the ViewModel depends on (it keeps no local copy of the selection).
+        whenever(runBlocking { appPreferencesRepository.setAnalyticsWindow(any()) }).thenAnswer { invocation ->
+            selectionFlow.value = invocation.getArgument(0)
+            Unit
+        }
+
+        whenever(analyticsRepository.periodEconomics(any<AnalyticsWindow>(), anyOrNull(), any<ZoneId>()))
+            .thenAnswer { invocation ->
+                flowOf(economicsByWindow[invocation.getArgument<AnalyticsWindow>(0)] ?: PeriodEconomics.EMPTY)
+            }
+        whenever(analyticsRepository.perStoreEconomics(any<AnalyticsWindow>(), any<ZoneId>()))
+            .thenAnswer { invocation ->
+                flowOf(storesByWindow[invocation.getArgument<AnalyticsWindow>(0)] ?: emptyList<StoreEconomics>())
+            }
+        whenever(analyticsRepository.decisionEconomics(any<AnalyticsWindow>(), any<ZoneId>()))
+            .thenAnswer { flowOf(decisions) }
+        whenever(analyticsRepository.timeEconomics(any<AnalyticsWindow>(), any<ZoneId>()))
+            .thenReturn(flowOf(TimeEconomics.EMPTY))
+        whenever(analyticsRepository.dailyEarnings(any<AnalyticsWindow>(), any<ZoneId>()))
+            .thenAnswer { flowOf(dailyEarnings) }
+        whenever(analyticsRepository.noSessionDeliveries(any<AnalyticsWindow>(), any<ZoneId>()))
+            .thenReturn(flowOf(emptyList()))
+        whenever(analyticsRepository.orphanOfferGroups(any<AnalyticsWindow>(), any<ZoneId>()))
+            .thenReturn(flowOf(emptyList()))
+        whenever(analyticsRepository.recentSessions(any())).thenReturn(flowOf(emptyList()))
+        // The Patterns-tab sources (#315 H5) are LIFETIME-scoped and collected unconditionally in
+        // the combine, so they must always be stubbed or the combine folds a null Flow.
         whenever(analyticsRepository.storeReportCards()).thenReturn(flowOf(emptyList<StoreReportCard>()))
         whenever(analyticsRepository.earningsHeatmap(anyOrNull())).thenReturn(flowOf(EarningsHeatmap.EMPTY))
     }
 
-    private fun stubPeriod(
-        period: AnalyticsPeriod,
-        economics: PeriodEconomics,
-        stores: List<StoreEconomics> = emptyList(),
-        decisions: DecisionEconomics = DecisionEconomics.EMPTY,
-        time: TimeEconomics = TimeEconomics.EMPTY,
-        dailyEarnings: List<DailyEarnings> = emptyList(),
-    ) {
-        whenever(analyticsRepository.periodEconomics(eq(period), anyOrNull())).thenReturn(flowOf(economics))
-        whenever(analyticsRepository.perStoreEconomics(eq(period))).thenReturn(flowOf(stores))
-        // The VM collects decisions + time + dailyEarnings unconditionally (see AnalyticsViewModel), so
-        // every period stub must supply all three flows or the combine would fold a null.
-        whenever(analyticsRepository.decisionEconomics(eq(period))).thenReturn(flowOf(decisions))
-        whenever(analyticsRepository.timeEconomics(eq(period))).thenReturn(flowOf(time))
-        whenever(analyticsRepository.dailyEarnings(eq(period), anyOrNull())).thenReturn(flowOf(dailyEarnings))
-        // The VM also collects the "(No session)" orphan list per period (#660 piece 2) in the same
-        // combine, so it must be stubbed or the combine folds a null Flow.
-        whenever(analyticsRepository.noSessionDeliveries(eq(period))).thenReturn(flowOf(emptyList()))
-        // The orphan-OFFER groups (#810 B2 Tier 2) ride the same 5th-slot sub-combine — stub too.
-        whenever(analyticsRepository.orphanOfferGroups(eq(period))).thenReturn(flowOf(emptyList()))
-    }
+    private fun currentWeek() = AnalyticsWindows.current(WindowGranularity.WEEK, today)
+    private fun lastWeek() = AnalyticsWindows.step(currentWeek(), -1)
+    private fun currentMonth() = AnalyticsWindows.current(WindowGranularity.MONTH, today)
 
     private fun decisions(accepted: Int, declined: Int, timedOut: Int, acceptanceRate: Double?) =
         DecisionEconomics(
@@ -134,27 +176,26 @@ class AnalyticsViewModelTest {
         offersDeclined = 2, offersTimeout = 0,
     )
 
-    private fun buildViewModel() = AnalyticsViewModel(analyticsRepository, correctionRepository)
+    private fun buildViewModel() =
+        AnalyticsViewModel(analyticsRepository, correctionRepository, appPreferencesRepository)
 
     @After
     fun tearDown() = Dispatchers.resetMain()
 
     @Test
-    fun `defaults to THIS_WEEK on the Money tab and maps the read-model into state`() = runTest {
+    fun `defaults to the current pay week on the Money tab and maps the read-model into state`() = runTest {
         Dispatchers.setMain(StandardTestDispatcher(testScheduler))
-        stubPeriod(
-            AnalyticsPeriod.THIS_WEEK,
-            economics(net = 312.0, netPerHour = 24.0),
-            stores = listOf(store("H-E-B", 120.0, 5), store("Chili's", 40.0, 2)),
-        )
+        economicsByWindow[currentWeek()] = economics(net = 312.0, netPerHour = 24.0)
+        storesByWindow[currentWeek()] = listOf(store("H-E-B", 120.0, 5), store("Chili's", 40.0, 2))
         stubSessions(listOf(session("s1", 90.0), session("s2", null)))
 
         val viewModel = buildViewModel()
         val job = launch { viewModel.uiState.collect {} }
-        testScheduler.advanceUntilIdle()
+        testScheduler.runCurrent()
 
         val ui = viewModel.uiState.value
-        assertEquals(AnalyticsPeriod.THIS_WEEK, ui.selectedPeriod)
+        assertEquals(currentWeek(), ui.window)
+        assertEquals(WindowGranularity.WEEK, ui.window.granularity)
         assertEquals(AnalyticsTab.Money, ui.selectedTab)
         assertEquals(312.0, ui.economics.netProfit, 1e-9)
         assertEquals(2, ui.topStores.size)
@@ -162,51 +203,185 @@ class AnalyticsViewModelTest {
         job.cancel()
     }
 
+    /** The `›` arrow must be dead at the current window and live once the pager has moved back. */
     @Test
-    fun `setPeriod re-anchors economics and top stores to the selected window`() = runTest {
+    fun `forward paging is disabled at the current window and enabled after stepping back`() = runTest {
         Dispatchers.setMain(StandardTestDispatcher(testScheduler))
-        stubPeriod(AnalyticsPeriod.THIS_WEEK, economics(net = 312.0, netPerHour = 24.0), stores = listOf(store("H-E-B", 120.0, 5)))
-        stubPeriod(AnalyticsPeriod.THIS_MONTH, economics(net = 1280.0, netPerHour = 22.0), stores = listOf(store("Target", 400.0, 12)))
-        stubSessions(emptyList())
+        val viewModel = buildViewModel()
+        val job = launch { viewModel.uiState.collect {} }
+        testScheduler.runCurrent()
+
+        assertTrue(viewModel.uiState.value.canStepBack)
+        assertFalse(viewModel.uiState.value.canStepForward)
+
+        viewModel.stepWindow(-1)
+        testScheduler.runCurrent()
+
+        assertEquals(lastWeek(), viewModel.uiState.value.window)
+        assertTrue(viewModel.uiState.value.canStepForward)
+        job.cancel()
+    }
+
+    /** A forward step at the current window is a fail-closed no-op — never a future range. */
+    @Test
+    fun `stepping forward at the current window is ignored`() = runTest {
+        Dispatchers.setMain(StandardTestDispatcher(testScheduler))
+        val viewModel = buildViewModel()
+        val job = launch { viewModel.uiState.collect {} }
+        testScheduler.runCurrent()
+
+        viewModel.stepWindow(1)
+        testScheduler.runCurrent()
+
+        assertEquals(currentWeek(), viewModel.uiState.value.window)
+        assertEquals(AnalyticsWindowSelection.Relative(WindowGranularity.WEEK, 0), selectionFlow.value)
+        job.cancel()
+    }
+
+    @Test
+    fun `stepWindow re-anchors economics and top stores to the paged window`() = runTest {
+        Dispatchers.setMain(StandardTestDispatcher(testScheduler))
+        economicsByWindow[currentWeek()] = economics(net = 312.0, netPerHour = 24.0)
+        storesByWindow[currentWeek()] = listOf(store("H-E-B", 120.0, 5))
+        economicsByWindow[lastWeek()] = economics(net = 1280.0, netPerHour = 22.0)
+        storesByWindow[lastWeek()] = listOf(store("Target", 400.0, 12))
 
         val viewModel = buildViewModel()
         val job = launch { viewModel.uiState.collect {} }
-        testScheduler.advanceUntilIdle()
+        testScheduler.runCurrent()
         assertEquals(312.0, viewModel.uiState.value.economics.netProfit, 1e-9)
 
-        viewModel.setPeriod(AnalyticsPeriod.THIS_MONTH)
-        testScheduler.advanceUntilIdle()
+        viewModel.stepWindow(-1)
+        testScheduler.runCurrent()
 
         val ui = viewModel.uiState.value
-        assertEquals(AnalyticsPeriod.THIS_MONTH, ui.selectedPeriod)
+        assertEquals(lastWeek(), ui.window)
         assertEquals(1280.0, ui.economics.netProfit, 1e-9)
         assertEquals("Target", ui.topStores.single().storeName)
         job.cancel()
     }
 
     @Test
-    fun `setTab switches to Decisions and the decision read-model is present in state`() = runTest {
+    fun `setGranularity switches to the current window of that granularity`() = runTest {
         Dispatchers.setMain(StandardTestDispatcher(testScheduler))
-        stubPeriod(
-            AnalyticsPeriod.THIS_WEEK,
-            economics(net = 100.0, netPerHour = 20.0),
-            decisions = decisions(accepted = 3, declined = 5, timedOut = 2, acceptanceRate = 0.3),
-        )
-        stubSessions(emptyList())
+        economicsByWindow[currentMonth()] = economics(net = 2100.0, netPerHour = 21.0)
 
         val viewModel = buildViewModel()
         val job = launch { viewModel.uiState.collect {} }
-        testScheduler.advanceUntilIdle()
+        testScheduler.runCurrent()
+
+        viewModel.setGranularity(WindowGranularity.MONTH)
+        testScheduler.runCurrent()
+
+        val ui = viewModel.uiState.value
+        assertEquals(currentMonth(), ui.window)
+        assertEquals(2100.0, ui.economics.netProfit, 1e-9)
+        // Landing on a granularity always lands on ITS current window, so forward stays disabled.
+        assertFalse(ui.canStepForward)
+        job.cancel()
+    }
+
+    /** A committed calendar range persists as an absolute CUSTOM selection. */
+    @Test
+    fun `setCustomRange commits an absolute window and persists it`() = runTest {
+        Dispatchers.setMain(StandardTestDispatcher(testScheduler))
+        val start = today.minusDays(10)
+        val end = today.minusDays(4)
+        economicsByWindow[AnalyticsWindows.custom(start, end)] = economics(net = 77.0, netPerHour = 11.0)
+
+        val viewModel = buildViewModel()
+        val job = launch { viewModel.uiState.collect {} }
+        testScheduler.runCurrent()
+
+        viewModel.setCustomRange(start, end)
+        testScheduler.runCurrent()
+
+        val ui = viewModel.uiState.value
+        assertEquals(WindowGranularity.CUSTOM, ui.window.granularity)
+        assertEquals(start, ui.window.startDate)
+        assertEquals(end, ui.window.endDateInclusive)
+        assertEquals(77.0, ui.economics.netProfit, 1e-9)
+        assertEquals(AnalyticsWindowSelection.Custom(start, end), selectionFlow.value)
+        job.cancel()
+    }
+
+    /** A persisted selection is restored on construction — the across-restart half of the contract. */
+    @Test
+    fun `a persisted selection is restored instead of the default`() = runTest {
+        Dispatchers.setMain(StandardTestDispatcher(testScheduler))
+        selectionFlow.value = AnalyticsWindowSelection.Relative(WindowGranularity.WEEK, -2)
+        val twoWeeksBack = AnalyticsWindows.step(currentWeek(), -2)
+        economicsByWindow[twoWeeksBack] = economics(net = 42.0, netPerHour = 9.0)
+
+        val viewModel = buildViewModel()
+        val job = launch { viewModel.uiState.collect {} }
+        testScheduler.runCurrent()
+
+        val ui = viewModel.uiState.value
+        assertEquals(twoWeeksBack, ui.window)
+        assertEquals(42.0, ui.economics.netProfit, 1e-9)
+        job.cancel()
+    }
+
+    /** The recap hero's delta source: the previous equivalent window's economics ride the same fan-out. */
+    @Test
+    fun `previous-window economics are exposed for the delta chip`() = runTest {
+        Dispatchers.setMain(StandardTestDispatcher(testScheduler))
+        economicsByWindow[currentWeek()] = economics(net = 300.0, netPerHour = 20.0)
+        economicsByWindow[lastWeek()] = economics(net = 200.0, netPerHour = 15.0)
+
+        val viewModel = buildViewModel()
+        val job = launch { viewModel.uiState.collect {} }
+        testScheduler.runCurrent()
+
+        val ui = viewModel.uiState.value
+        assertEquals(300.0, ui.economics.netProfit, 1e-9)
+        assertEquals(200.0, ui.previousEconomics!!.netProfit, 1e-9)
+        job.cancel()
+    }
+
+    /** Lifetime has no predecessor, so the hero must get a null rather than a fabricated comparison. */
+    @Test
+    fun `lifetime exposes no previous-window economics`() = runTest {
+        Dispatchers.setMain(StandardTestDispatcher(testScheduler))
+        economicsByWindow[AnalyticsWindows.LIFETIME] = economics(net = 9000.0, netPerHour = 19.0)
+
+        val viewModel = buildViewModel()
+        val job = launch { viewModel.uiState.collect {} }
+        testScheduler.runCurrent()
+
+        viewModel.setGranularity(WindowGranularity.LIFETIME)
+        testScheduler.runCurrent()
+
+        val ui = viewModel.uiState.value
+        assertTrue(ui.window.isLifetime)
+        assertEquals(9000.0, ui.economics.netProfit, 1e-9)
+        assertNull(ui.previousEconomics)
+        // Lifetime pages nowhere in either direction.
+        assertFalse(ui.canStepBack)
+        assertFalse(ui.canStepForward)
+        job.cancel()
+    }
+
+    @Test
+    fun `setTab switches to Decisions and the decision read-model is present in state`() = runTest {
+        Dispatchers.setMain(StandardTestDispatcher(testScheduler))
+        economicsByWindow[currentWeek()] = economics(net = 100.0, netPerHour = 20.0)
+        decisions = decisions(accepted = 3, declined = 5, timedOut = 2, acceptanceRate = 0.3)
+
+        val viewModel = buildViewModel()
+        val job = launch { viewModel.uiState.collect {} }
+        testScheduler.runCurrent()
 
         // Decisions are collected unconditionally, so they're in state even before the tab switch.
         assertEquals(3, viewModel.uiState.value.decisions.accepted)
 
         viewModel.setTab(AnalyticsTab.Decisions)
-        testScheduler.advanceUntilIdle()
+        testScheduler.runCurrent()
 
         val ui = viewModel.uiState.value
         assertEquals(AnalyticsTab.Decisions, ui.selectedTab)
-        assertEquals(AnalyticsPeriod.THIS_WEEK, ui.selectedPeriod)
+        assertEquals(currentWeek(), ui.window)
         assertEquals(10, ui.decisions.received)
         assertEquals(5, ui.decisions.declined)
         assertEquals(0.3, ui.decisions.acceptanceRate!!, 1e-9)
@@ -217,8 +392,6 @@ class AnalyticsViewModelTest {
     @Test
     fun `patterns-tab sources (store cards + heatmap) are wired into state`() = runTest {
         Dispatchers.setMain(StandardTestDispatcher(testScheduler))
-        stubPeriod(AnalyticsPeriod.THIS_WEEK, economics(net = 100.0, netPerHour = 20.0))
-        stubSessions(emptyList())
         // Override the @Before defaults with NON-DEFAULT values so the assertion is falsifiable — an
         // empty stub would equal the UiState defaults and prove nothing about the wiring.
         val heatmap = EarningsHeatmap.EMPTY.copy(minCoverageHours = 0.75)
@@ -228,7 +401,7 @@ class AnalyticsViewModelTest {
 
         val viewModel = buildViewModel()
         val job = launch { viewModel.uiState.collect {} }
-        testScheduler.advanceUntilIdle()
+        testScheduler.runCurrent()
 
         val ui = viewModel.uiState.value
         assertEquals("Wendys", ui.storeReportCards.single().chainDisplay)
@@ -239,12 +412,10 @@ class AnalyticsViewModelTest {
     @Test
     fun `empty read-model maps to a safe zero-state`() = runTest {
         Dispatchers.setMain(StandardTestDispatcher(testScheduler))
-        stubPeriod(AnalyticsPeriod.THIS_WEEK, PeriodEconomics.EMPTY, stores = emptyList())
-        stubSessions(emptyList())
 
         val viewModel = buildViewModel()
         val job = launch { viewModel.uiState.collect {} }
-        testScheduler.advanceUntilIdle()
+        testScheduler.runCurrent()
 
         val ui = viewModel.uiState.value
         assertEquals(0.0, ui.economics.netProfit, 1e-9)

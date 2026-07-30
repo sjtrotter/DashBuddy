@@ -39,7 +39,6 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import cloud.trotter.dashbuddy.R
 import cloud.trotter.dashbuddy.core.designsystem.component.AppChip
 import cloud.trotter.dashbuddy.core.designsystem.theme.AppTheme
@@ -66,18 +65,23 @@ import java.util.Locale
  *
  * The earning dots reuse the same arbitrary-window per-day read the Money chart uses — no bespoke
  * query — so a dot and a bar can never disagree (Principle 5).
+ *
+ * Data-in / lambdas-out: the visible month and its per-day earnings are hoisted (the ViewModel owns
+ * them, since the dots are a repository read), and only the in-progress range selection is
+ * sheet-local — it must not touch the hub's window until the driver commits.
  */
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 fun RangePickerSheet(
     window: AnalyticsWindow,
     today: LocalDate,
-    viewModel: AnalyticsViewModel,
+    month: YearMonth,
+    monthDays: List<DailyEarnings>,
+    onMonthChange: (YearMonth) -> Unit,
+    onPickPreset: (WindowGranularity, Int) -> Unit,
+    onCommitRange: (LocalDate, LocalDate) -> Unit,
     onDismiss: () -> Unit,
 ) {
-    val month by viewModel.pickerMonth.collectAsStateWithLifecycle()
-    val monthDays by viewModel.pickerMonthDays.collectAsStateWithLifecycle()
-
     // Selection is sheet-local until committed — opening the sheet never changes the hub's window.
     var pendingStart by remember { mutableStateOf(window.startDate) }
     var pendingEnd by remember { mutableStateOf(window.endDateInclusive) }
@@ -99,7 +103,7 @@ fun RangePickerSheet(
             Spacer(Modifier.height(8.dp))
             PresetRow(
                 onPick = { granularity, offset ->
-                    viewModel.setRelativeWindow(granularity, offset)
+                    onPickPreset(granularity, offset)
                     onDismiss()
                 },
             )
@@ -107,8 +111,8 @@ fun RangePickerSheet(
             Spacer(Modifier.height(20.dp))
             MonthHeader(
                 month = month,
-                onPrevious = { viewModel.setPickerMonth(month.minusMonths(1)) },
-                onNext = { viewModel.setPickerMonth(month.plusMonths(1)) },
+                onPrevious = { onMonthChange(month.minusMonths(1)) },
+                onNext = { onMonthChange(month.plusMonths(1)) },
                 canGoNext = month < YearMonth.from(today),
             )
             Spacer(Modifier.height(8.dp))
@@ -158,7 +162,7 @@ fun RangePickerSheet(
             Button(
                 onClick = {
                     if (start != null && end != null) {
-                        viewModel.setCustomRange(start, end)
+                        onCommitRange(start, end)
                         onDismiss()
                     }
                 },
