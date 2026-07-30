@@ -78,6 +78,15 @@ sealed interface Observation : cloud.trotter.dashbuddy.domain.model.state.StateE
         override val transitionOverrides: Map<TransitionTrigger, List<RequestedEffect>> = emptyMap(),
         /** The last classified screen target when this click occurred. */
         val screenTarget: String? = null,
+        /**
+         * The RULE that produced [screenTarget] (#910). Recognition context for the
+         * capture stage only: a tapped node is serialized in isolation, so the click
+         * envelope inherits the screen rule's `redact` block to mask customer PII the
+         * screen envelope already masks. Null when the screen was UNKNOWN or
+         * unattributable — the inheritance is fail-open, and nothing in the state
+         * machine reads this.
+         */
+        val screenRuleId: String? = null,
     ) : FlowObservation
 
     /** A notification event classified by the notification pipeline. */

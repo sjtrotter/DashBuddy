@@ -1379,6 +1379,50 @@
     {
       "id": "doordash.screen.delivery_summary_collapsed",
       "priority": 31,
+      "redact": [
+        {
+          "comment": "#910 V1 — this rule shipped with NO redact block and it is the HIGHEST-severity site of the 07-29 pull: 4 of the 8 fielded `delivery_summary_collapsed` envelopes are not the pay-breakdown card at all but the DROP-OFF card (the require is a text-only `allTextContainsAny:['this offer','delivery complete']`, which a live drop-off sheet satisfies), so they carry the full customer block — `user_name`, `address_line_1` (house number + street), `address_line_2` (city/ST/ZIP), the dasher instruction body and the customer's per-item note — all raw on a RECOGNIZED envelope. `CustomerTextMarkers` cannot own any of it: DoorDash renders this block as SPLIT nodes (the 'Delivery for' lead-in is its own `user_name_label` sibling), so the name/address nodes are BARE and a text-prefix scan is structurally blind to them. The entries below are the `dropoff_pre_arrival` (priority 73) id set — the same ids, the same masks — so one customer redacts to one hex everywhere. Capture-only: this rule parses none of these nodes, so the parse goldens are byte-identical. Genuine summary frames (the committed corpus) carry none of these ids, so the block is inert there. Deliberately NOT redacted: `order_contents_header_title` (the merchant — driver-owned, not PII), `order_item_name` (catalog item), and every pay node.",
+          "find": {
+            "hasIdSuffix": "user_name"
+          },
+          "normalize": "customerName"
+        },
+        {
+          "find": {
+            "hasIdSuffix": "address_line_1"
+          }
+        },
+        {
+          "find": {
+            "hasIdSuffix": "address_line_2"
+          }
+        },
+        {
+          "comment": "The Apt/Suite VALUE, keeping its app-vocabulary label prefix exactly as `dropoff_pre_arrival` does.",
+          "find": {
+            "hasIdSuffix": "address_subpremise_line"
+          },
+          "keepPrefix": [
+            "Apt/Suite: "
+          ]
+        },
+        {
+          "find": {
+            "hasIdSuffix": "dasher_instruction_content_collapsed"
+          }
+        },
+        {
+          "find": {
+            "hasIdSuffix": "dasher_instruction_content_expanded"
+          }
+        },
+        {
+          "comment": "The customer's free-text note on an order item — the #803 class (a note routinely carries a gate code, an apartment number, or a callback instruction). Masked whole; the item NAME node (`order_item_name`) is catalog data and stays raw.",
+          "find": {
+            "hasIdSuffix": "order_item_instructions"
+          }
+        }
+      ],
       "state": {
         "flow": "post:task",
         "modeHint": "online"

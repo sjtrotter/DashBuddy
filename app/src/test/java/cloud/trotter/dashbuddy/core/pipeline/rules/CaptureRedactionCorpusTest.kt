@@ -1269,6 +1269,186 @@ class CaptureRedactionCorpusTest {
         assertTrue(Regex("""^Meet at door for \[redacted:[0-9a-f]{4}\]$""").matches(meet.title!!))
     }
 
+    /**
+     * #910 V1 — `delivery_summary_collapsed` shipped with NO redact block, and it is
+     * not only the pay-breakdown card: its require is a text-only
+     * `allTextContainsAny:['this offer','delivery complete']`, which a LIVE DROP-OFF
+     * sheet satisfies, so 4 of the 8 fielded 07-28 envelopes under this classification
+     * carried the customer block whole — name, house-number street line, city/ST/ZIP,
+     * the dasher instruction body, and the customer's per-item note. `CustomerTextMarkers`
+     * cannot own any of it: the "Delivery for" lead-in is a SEPARATE `user_name_label`
+     * sibling, so the value nodes are bare and a prefix scan is structurally blind.
+     *
+     * Node shape is ground truth from that capture (the id set only); every VALUE below
+     * is invented. Teeth: delete any entry from the rule's redact block and its
+     * assertion here goes RED.
+     */
+    @Test
+    fun `delivery_summary_collapsed masks the customer block, keeps merchant and pay (#910)`() {
+        val rule = TestRulesetFactory.screenRuleset
+            .ruleById("doordash.screen.delivery_summary_collapsed")!!
+        assertFalse("delivery_summary_collapsed must declare a redact block", rule.redact.isEmpty())
+
+        fun dd(id: String, text: String) = UiNode(
+            viewIdResourceName = "com.doordash.driverapp:id/$id",
+            className = "android.widget.TextView",
+            text = text,
+        )
+
+        val card = UiNode(
+            className = "android.view.View",
+            children = listOf(
+                // The customer block (split nodes: chrome label, then bare value).
+                dd("user_name_label", "Delivery for"),
+                dd("user_name", "Testname Q"),
+                dd("address_line_1", "1234 Testfixture Dr"),
+                dd("address_line_2", "San Antonio, TX 78299, USA"),
+                dd("address_subpremise_line", "Apt/Suite: 704"),
+                dd("dasher_instruction_content_collapsed", "Leave at my door: gate 4417"),
+                dd("dasher_instruction_content_expanded", "Leave at my door: gate 4417, call on arrival"),
+                dd("order_item_instructions", "test gate code 1234, ring the bell twice"),
+                // Over-match guards: merchant, catalog, chrome and pay are driver-owned.
+                dd("instructions_title", "Dropoff instructions"),
+                dd("order_contents_header_title", "Sample Pizza Co (41709)"),
+                dd("order_item_name", "Large Pepperoni"),
+                dd("order_item_count", "1x"),
+                dd("current_order_pay", "$8.25"),
+                dd("final_value", "$8.25"),
+                dd("textView_prism_button_title", "Complete delivery"),
+            ),
+        ).restoreParents()
+
+        val masked = serialize(rule.redact.apply(card))
+
+        assertFalse("customer name must not persist", masked.contains("Testname Q"))
+        assertFalse("street line must not persist", masked.contains("1234 Testfixture Dr"))
+        assertFalse("city/ST/ZIP must not persist", masked.contains("78299"))
+        assertFalse("apt/suite value must not persist", masked.contains("704"))
+        assertFalse("gate code in the instruction body must not persist", masked.contains("gate 4417"))
+        assertFalse("customer item note must not persist", masked.contains("ring the bell twice"))
+        assertTrue(
+            "the masked nodes carry the hash family [redacted:<4hex>]",
+            Regex("""\[redacted:[0-9a-f]{4}]""").containsMatchIn(masked),
+        )
+        // The label sibling is app vocabulary — kept, so a replayed frame keeps its shape.
+        assertTrue("the 'Delivery for' label is chrome and stays raw", masked.contains("Delivery for"))
+        assertTrue("Apt/Suite lead-in kept", masked.contains("Apt/Suite: "))
+        // Over-match guards.
+        assertTrue("merchant kept (driver-owned)", masked.contains("Sample Pizza Co (41709)"))
+        assertTrue("catalog item kept", masked.contains("Large Pepperoni"))
+        assertTrue("instruction LABEL kept", masked.contains("Dropoff instructions"))
+        assertTrue("pay kept", masked.contains("$8.25"))
+        assertTrue("CTA kept", masked.contains("Complete delivery"))
+
+        // #733 cross-surface stability: the name's hex must equal the SAME customer's hex on
+        // the "Deliver to <name>" nav title — one customer, one mask, every surface.
+        val hex = Regex("""\[redacted:([0-9a-f]{4})]""")
+        val nameHex = hex.find(rule.redact.apply(dd("user_name", "Testname Q")).text!!)!!.groupValues[1]
+        val navRule = TestRulesetFactory.screenRuleset.ruleById("doordash.screen.dropoff_navigation")!!
+        val navHex = hex.find(
+            navRule.redact.apply(
+                UiNode(
+                    viewIdResourceName = "com.dd:id/bottom_sheet_task_title",
+                    text = "Deliver to Testname Quill",
+                ),
+            ).text!!,
+        )!!.groupValues[1]
+        assertEquals("user_name masks to the customer's canonical hex", navHex, nameHex)
+    }
+
+    /**
+     * #910 V2/V3 — the multi-order pickup list renders one row per order, each with a
+     * BARE `customer_name` node (no in-node lead-in: "Order for" is a separate sibling
+     * on the single-order card, the #526 D6a shape). Both `pickup_post_arrival_multi`
+     * and `pickup_pre_arrival_multi` shipped with no redact block, so every row's
+     * customer name reached the recognized envelope raw (three of them on the fielded
+     * 07-28 frame).
+     *
+     * The post-arrival case runs over the COMMITTED corpus fixture with its two
+     * already-masked names replaced by distinct synthetic ones, so it also pins that
+     * two customers on one screen get two DIFFERENT suffixes (per-customer replay
+     * fidelity, #623). The pre-arrival twin has no committed fixture, so it asserts the
+     * same shape directly.
+     *
+     * Teeth: delete either rule's redact entry and that rule's assertion goes RED.
+     */
+    @Test
+    fun `multi-order pickup rules mask every customer_name row, keep the merchant (#910)`() {
+        val hex = Regex("""\[redacted:([0-9a-f]{4})]""")
+
+        // --- post_arrival: the committed fixture, re-seeded with synthetic names ---
+        val postRule = TestRulesetFactory.screenRuleset
+            .ruleById("doordash.screen.pickup_post_arrival_multi")!!
+        assertFalse("pickup_post_arrival_multi must declare a redact block", postRule.redact.isEmpty())
+
+        val fixture = File("src/test/resources/snapshots/pickup_post_arrival_multi")
+            .listFiles { _, n -> n.endsWith(".json") }!!
+            .sorted().first()
+        val names = ArrayDeque(listOf("Testname Q", "Othername R"))
+        fun reseed(node: UiNode): UiNode = node.copy(
+            text = if (node.viewIdResourceName?.endsWith("customer_name") == true && names.isNotEmpty()) {
+                names.removeFirst()
+            } else {
+                node.text
+            },
+            children = node.children.map { reseed(it) },
+        )
+        val seeded = reseed(TestResourceLoader.loadNode(fixture)).restoreParents()
+        assertTrue("fixture must carry the two customer_name rows", names.isEmpty())
+
+        val maskedPost = serialize(postRule.redact.apply(seeded))
+        assertFalse("first customer name must not persist", maskedPost.contains("Testname Q"))
+        assertFalse("second customer name must not persist", maskedPost.contains("Othername R"))
+        assertTrue("merchant kept (driver-owned)", maskedPost.contains("Pei Wei"))
+        assertTrue("row item count kept", maskedPost.contains("1 item"))
+
+        fun rowHex(rule: cloud.trotter.dashbuddy.core.pipeline.rules.CompiledRedact, name: String): String {
+            val masked = rule.apply(
+                UiNode(
+                    viewIdResourceName = "com.doordash.driverapp:id/customer_name",
+                    text = name,
+                ),
+            ).text!!
+            return hex.find(masked)?.groupValues?.get(1)
+                ?: error("customer_name was not masked; got '$masked'")
+        }
+        assertFalse(
+            "two customers on one screen must not collide on one mask",
+            rowHex(postRule.redact, "Testname Q") == rowHex(postRule.redact, "Othername R"),
+        )
+
+        // --- pre_arrival twin: same list, one CTA state earlier; no committed fixture ---
+        val preRule = TestRulesetFactory.screenRuleset
+            .ruleById("doordash.screen.pickup_pre_arrival_multi")!!
+        assertFalse("pickup_pre_arrival_multi must declare a redact block", preRule.redact.isEmpty())
+
+        val row = UiNode(
+            className = "android.view.View",
+            children = listOf(
+                UiNode(viewIdResourceName = "com.doordash.driverapp:id/customer_name", text = "Testname Q"),
+                UiNode(viewIdResourceName = "com.doordash.driverapp:id/merchant_name", text = "Sample Pizza Co"),
+                UiNode(viewIdResourceName = "com.doordash.driverapp:id/num_items", text = "2 items"),
+            ),
+        ).restoreParents()
+        val maskedPre = serialize(preRule.redact.apply(row))
+        assertFalse("customer name must not persist", maskedPre.contains("Testname Q"))
+        assertTrue("merchant kept (driver-owned)", maskedPre.contains("Sample Pizza Co"))
+        assertTrue("item count kept", maskedPre.contains("2 items"))
+
+        // #733: one customer, one hex — across BOTH multi surfaces and the single-order card.
+        val arrivalRule = TestRulesetFactory.screenRuleset.ruleById("doordash.screen.pickup_arrival")!!
+        assertEquals(
+            "the pre/post multi rows mask to the same customer hex",
+            rowHex(postRule.redact, "Testname Q"),
+            rowHex(preRule.redact, "Testname Q"),
+        )
+        assertEquals(
+            "and to the same hex the single-order pickup card produces",
+            rowHex(arrivalRule.redact, "Testname Q"),
+            rowHex(postRule.redact, "Testname Q"),
+        )
+    }
+
     private fun jsonUsesSha256(element: kotlinx.serialization.json.JsonElement): Boolean = when (element) {
         is kotlinx.serialization.json.JsonPrimitive -> element.isString && element.content == "sha256"
         is kotlinx.serialization.json.JsonObject -> element.values.any { jsonUsesSha256(it) }

@@ -156,8 +156,10 @@ class AccessibilityPipeline @Inject constructor(
                 obs is Observation.Screen && event is PipelineEvent.Screen ->
                     captureWriter.captureScreen(obs, event)
                 obs is Observation.Click && event is PipelineEvent.Click ->
-                    // #438 item 2: capture with the click's own per-platform screen context.
-                    captureWriter.captureClick(obs, event, obs.screenTarget)
+                    // #438 item 2: capture with the click's own per-platform screen context —
+                    // its classification (envelope context) AND the rule that produced it
+                    // (#910: the click envelope inherits that rule's `redact`).
+                    captureWriter.captureClick(obs, event, obs.screenTarget, obs.screenRuleId)
                 else -> obs
             }
         }

@@ -41,16 +41,30 @@ class ClickClassifierTest {
         contentDescription = contentDescription,
     )
 
+    /**
+     * Prime (or clear) a platform's cached screen context so rules with a `screenIs`
+     * constraint can match (#438 item 2 — the classifier keys screen targets per
+     * platform wire). #910 turned the cache value into a `ScreenContext(target,
+     * ruleId)` pair — the click envelope now inherits the screen RULE's redact — so
+     * this reflects the nested value type rather than a bare String.
+     */
+    private fun primeScreenContext(wire: String, target: String?) {
+        @Suppress("UNCHECKED_CAST")
+        val contexts = ObservationClassifier::class.java
+            .getDeclaredField("lastScreenContexts").apply { isAccessible = true }
+            .get(classifier) as MutableMap<String, Any>
+        contexts.clear()
+        if (target == null) return
+        val ctor = Class.forName("cloud.trotter.dashbuddy.core.pipeline.ObservationClassifier\u0024ScreenContext")
+            .declaredConstructors.first().apply { isAccessible = true }
+        contexts[wire] = ctor.newInstance(target, null)
+    }
+
     private fun classifyClick(node: UiNode, screenTarget: String? = null): Observation.Click {
         // Prime this platform's screen context so rules with screenIs constraints can
         // match (#438 item 2 — the classifier now keys screen targets per platform wire).
         // The click carries DoorDash's package so it resolves to the "doordash" wire.
-        @Suppress("UNCHECKED_CAST")
-        val targets = ObservationClassifier::class.java
-            .getDeclaredField("lastScreenTargets").apply { isAccessible = true }
-            .get(classifier) as MutableMap<String, String>
-        targets.clear()
-        if (screenTarget != null) targets[Platform.DoorDash.wire] = screenTarget
+        primeScreenContext(Platform.DoorDash.wire, screenTarget)
         return classifier.classify(
             PipelineEvent.Click(
                 System.currentTimeMillis(), node,
@@ -175,12 +189,7 @@ class ClickClassifierTest {
         // DoorDash click whose rule requires screenIs=pickup_arrival. Before item 2
         // the single global would have leaked Uber's screen and matched; now the
         // DoorDash click has no primed target of its own and stays Unknown.
-        @Suppress("UNCHECKED_CAST")
-        val targets = ObservationClassifier::class.java
-            .getDeclaredField("lastScreenTargets").apply { isAccessible = true }
-            .get(classifier) as MutableMap<String, String>
-        targets.clear()
-        targets[Platform.Uber.wire] = "pickup_arrival"
+        primeScreenContext(Platform.Uber.wire, "pickup_arrival")
 
         val result = classifier.classify(
             PipelineEvent.Click(

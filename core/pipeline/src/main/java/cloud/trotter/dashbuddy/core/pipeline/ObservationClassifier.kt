@@ -45,14 +45,22 @@ class ObservationClassifier @Inject constructor(
      * Honest keying: only a frame whose package resolves to a real platform (a
      * non-null wire) WRITES here — a null/Unknown-platform frame can't clobber a
      * real platform's entry. On the read side a click whose platform is Unknown
-     * gets NO screen context (`screenTargetFor` returns null): we won't gate a
+     * gets NO screen context (`screenContextFor` returns null): we won't gate a
      * click rule with cross-frame screen context we can't attribute to a platform.
      */
-    private val lastScreenTargets = ConcurrentHashMap<String, String>()
+    private val lastScreenContexts = ConcurrentHashMap<String, ScreenContext>()
 
-    /** THIS platform's last non-sensitive screen target, or null when unattributable. */
-    private fun screenTargetFor(platformWire: String?): String? =
-        platformWire?.let { lastScreenTargets[it] }
+    /**
+     * A platform's last non-sensitive screen classification AND the rule that produced
+     * it, cached as ONE value (principle 5): the two are written and read together, and
+     * two parallel maps could drift into a click carrying one screen's target with
+     * another screen's redact block.
+     */
+    private data class ScreenContext(val target: String, val ruleId: String?)
+
+    /** THIS platform's last non-sensitive screen context, or null when unattributable. */
+    private fun screenContextFor(platformWire: String?): ScreenContext? =
+        platformWire?.let { lastScreenContexts[it] }
 
     /** True once rulesets are published — pipelines drop frames until then (#432). */
     val isReady: Boolean get() = interpreter.isLoaded
@@ -140,7 +148,7 @@ class ObservationClassifier @Inject constructor(
         // frame's platform (#438 item 2). An Unknown/null-platform frame (null wire)
         // is skipped so it can't clobber a real platform's screen context.
         if (obs.parsed !is ParsedFields.SensitiveFields && platformWire != null) {
-            obs.target?.let { lastScreenTargets[platformWire] = it }
+            obs.target?.let { lastScreenContexts[platformWire] = ScreenContext(it, obs.ruleId) }
         }
 
         return obs
@@ -178,7 +186,8 @@ class ObservationClassifier @Inject constructor(
         now: Long,
     ): Observation.Click {
         // Gate this click against ITS OWN platform's last screen (#438 item 2).
-        val screenTarget = screenTargetFor(platformWire)
+        val screenContext = screenContextFor(platformWire)
+        val screenTarget = screenContext?.target
         val ruleset = interpreter.clickRuleset
         if (ruleset != null) {
             val result = ruleset.matchFirst(event.node, platformWire, screenTarget)
@@ -196,6 +205,7 @@ class ObservationClassifier @Inject constructor(
                     effects = DedupeTokens.resolve(result.effects, parsed),
                     transitionOverrides = result.transitionOverrides,
                     screenTarget = screenTarget,
+                    screenRuleId = screenContext?.ruleId,
                 )
             }
         }
@@ -219,6 +229,7 @@ class ObservationClassifier @Inject constructor(
             ),
             target = UNKNOWN_TARGET,
             screenTarget = screenTarget,
+            screenRuleId = screenContext?.ruleId,
         )
     }
 

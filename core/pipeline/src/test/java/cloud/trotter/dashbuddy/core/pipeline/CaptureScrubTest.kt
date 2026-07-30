@@ -105,6 +105,7 @@ class CaptureScrubTest {
             unknownClickObs(),
             PipelineEvent.Click(timestamp = 1_000L, node = toxic, packageName = "com.doordash.driverapp"),
             screenTarget = null,
+            screenRuleId = null,
         )
 
         verify(captureBus, never()).offer(any(), any(), anyOrNull(), any(), any(), anyOrNull())
@@ -118,6 +119,7 @@ class CaptureScrubTest {
             unknownClickObs(),
             PipelineEvent.Click(timestamp = 1_000L, node = benign, packageName = "com.doordash.driverapp"),
             screenTarget = null,
+            screenRuleId = null,
         )
 
         verify(captureBus, times(1)).offer(any(), any(), anyOrNull(), any(), any(), anyOrNull())
@@ -138,6 +140,7 @@ class CaptureScrubTest {
         unknownClickObs(),
         PipelineEvent.Click(timestamp = 1_000L, node = node, packageName = "com.doordash.driverapp"),
         screenTarget = "side_nav_drawer",
+        screenRuleId = null,
     )
 
     @Test
@@ -264,12 +267,96 @@ class CaptureScrubTest {
             unknownClickObs(),
             PipelineEvent.Click(timestamp = 1_000L, node = node, packageName = "com.doordash.driverapp"),
             screenTarget = null,
+            screenRuleId = null,
         )
         val json = offeredEnvelope()
         assertFalse("leaked customer name scrubbed", json.contains("Jane D."))
         assertTrue("node became [redacted]", json.contains("[redacted]"))
         assertEquals(1L, stats.unknownCustomerScrubCount)
         assertEquals(0L, stats.scrubbedUnknownCaptureCount)
+    }
+
+    // #910: the UNKNOWN envelopes carry a SECOND, structural scan keyed on the node's
+    // own view id — the split-node shape the text scan is blind to by construction.
+
+    /**
+     * The fielded UNKNOWN window: a "Delivery for" label + a BARE name sibling.
+     *
+     * Ground truth from two independent pulls — `…/2026/07/29/captures/doordash/
+     * accessibility.window/UNKNOWN/2026-07-28_16-40-44-160__…__6fa230.json` and, on the
+     * next dash, `…/2026/07/30/captures/…/UNKNOWN/2026-07-29_18-14-06-648__…__6fa230.json`
+     * (same window signature, once per job). Node IDS are ground truth; every VALUE below
+     * is invented.
+     */
+    private fun deliveryForCard() = UiNode(
+        children = listOf(
+            UiNode(
+                viewIdResourceName = "com.doordash.driverapp:id/user_name_label",
+                // Exactly "Delivery for" — no trailing space, no name. The
+                // "Delivery for " marker cannot match it.
+                text = "Delivery for",
+            ),
+            UiNode(viewIdResourceName = "com.doordash.driverapp:id/user_name", text = "Testname Q"),
+            UiNode(viewIdResourceName = "com.doordash.driverapp:id/address_line_1", text = "1234 Testfixture Dr"),
+            UiNode(viewIdResourceName = "com.doordash.driverapp:id/address_line_2", text = "Austin, TX 78701"),
+            UiNode(text = "Directions"),
+        ),
+    )
+
+    @Test
+    fun `UNKNOWN screen with a bare customer_name-user_name node is scrubbed by id (#910)`() {
+        writer.captureScreen(unknownObs(), screenEvent(deliveryForCard()))
+
+        val json = offeredEnvelope()
+        assertFalse("bare customer name scrubbed", json.contains("Testname Q"))
+        assertFalse("street line scrubbed", json.contains("1234 Testfixture Dr"))
+        assertFalse("city/ST/ZIP scrubbed", json.contains("78701"))
+        assertTrue("nodes became [redacted]", json.contains("[redacted]"))
+        // The label is app chrome — kept, so the frame stays triage-useful.
+        assertTrue("the 'Delivery for' label survives", json.contains("Delivery for"))
+        assertTrue("unrelated chrome survives", json.contains("Directions"))
+        assertEquals(1L, stats.unknownCustomerScrubCount)
+        assertEquals(0L, stats.scrubbedUnknownCaptureCount)
+    }
+
+    @Test
+    fun `UNKNOWN click node carrying a bare customer_name is scrubbed by id (#910)`() {
+        val node = UiNode(
+            viewIdResourceName = "com.doordash.driverapp:id/pickup_row",
+            isClickable = true,
+            children = listOf(
+                UiNode(viewIdResourceName = "com.doordash.driverapp:id/customer_name", text = "Testname Q"),
+                UiNode(viewIdResourceName = "com.doordash.driverapp:id/merchant_name", text = "Pei Wei"),
+            ),
+        )
+        writer.captureClick(
+            unknownClickObs(),
+            PipelineEvent.Click(timestamp = 1_000L, node = node, packageName = "com.doordash.driverapp"),
+            screenTarget = "pickup_post_arrival_multi",
+            // No screen redact available here (the #910 B path is tested separately) —
+            // this is the id backstop standing alone.
+            screenRuleId = null,
+        )
+
+        val json = offeredEnvelope()
+        assertFalse("bare customer name scrubbed", json.contains("Testname Q"))
+        assertTrue("merchant kept — merchants are not PII", json.contains("Pei Wei"))
+        assertEquals(1L, stats.unknownCustomerScrubCount)
+    }
+
+    @Test
+    fun `the id backstop is UNKNOWN-only - a recognized frame keeps its rule's decisions (#910)`() {
+        // On a recognized frame the rule's declared `redact` is the primary control and
+        // its decisions are deliberate (#886 keeps pickup_navigation's MERCHANT address
+        // raw). An id scan there could fight the ruleset, so scope stays UNKNOWN-only.
+        val recognized = unknownObs().copy(
+            ruleId = "doordash.screen.test",
+            target = "pickup_navigation",
+        )
+        writer.captureScreen(recognized, screenEvent(deliveryForCard()))
+
+        assertTrue("recognized frame is not id-scrubbed", offeredEnvelope().contains("Testname Q"))
+        assertEquals(0L, stats.unknownCustomerScrubCount)
     }
 
     @Test
@@ -279,6 +366,7 @@ class CaptureScrubTest {
             unknownClickObs(),
             PipelineEvent.Click(timestamp = 1_000L, node = node, packageName = "com.doordash.driverapp"),
             screenTarget = null,
+            screenRuleId = null,
         )
         assertTrue(offeredEnvelope().contains("Some new button"))
         assertEquals(0L, stats.unknownCustomerScrubCount)

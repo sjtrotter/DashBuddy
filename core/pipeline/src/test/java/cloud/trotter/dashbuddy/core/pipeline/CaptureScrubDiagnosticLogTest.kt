@@ -107,6 +107,7 @@ class CaptureScrubDiagnosticLogTest {
                 packageName = "com.doordash.driverapp",
             ),
             screenTarget = null,
+            screenRuleId = null,
         )
         writer.captureNotification(notifObs(), rawNotif(title = "Promo", actionLabels = listOf("Cash out")))
 
@@ -124,6 +125,7 @@ class CaptureScrubDiagnosticLogTest {
                 packageName = "com.doordash.driverapp",
             ),
             screenTarget = null,
+            screenRuleId = null,
         )
         writer.captureNotification(notifObs(), rawNotif(title = "Message from Jane"))
         writer.captureNotification(

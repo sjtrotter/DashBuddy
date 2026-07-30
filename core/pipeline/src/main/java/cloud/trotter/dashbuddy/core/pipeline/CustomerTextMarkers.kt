@@ -52,6 +52,30 @@ import cloud.trotter.dashbuddy.domain.model.notification.RawNotificationData
  * is the ONLY capture control there (and the #548 guard pins the parse to it). The
  * `CaptureBackstopCorpusTest` pins the set to ZERO false positives on the committed
  * (already-redacted) corpus.
+ *
+ * ## The node-ID half ([ID_MARKERS], #910)
+ *
+ * That split-node shape is not an exception, it is the DOMINANT rendering: the 07-28
+ * pull shipped a customer name AND a full street address on an UNKNOWN window whose
+ * lead-in node read exactly `"Delivery for"` — no trailing space, no name — while the
+ * name lived in a bare sibling. A prefix scan can never own that: the marker is in one
+ * node and the PII is in another. So the UNKNOWN paths carry a SECOND, structural scan
+ * keyed on the node's own view id ([unredactedIdMarker] / [firstUnredactedIdMarker] /
+ * [scrubUnknown]) — an enumerated list of ids whose VALUE is customer PII by
+ * construction, matched with the same `endsWith` suffix semantics the rules'
+ * `hasIdSuffix` predicate uses (the `com.<vendor>:id/` prefix varies by package).
+ * Like [MARKERS], the ids are cross-platform recognition DATA in one SSOT, not
+ * per-platform Kotlin (principle 8).
+ *
+ * Scope is deliberately UNKNOWN-only (screen + click envelopes). On a RECOGNIZED frame
+ * the rule's declared `redact` is the primary control and its decisions are deliberate
+ * — #886 keeps `pickup_navigation`'s address raw because it is a MERCHANT address — so
+ * an id scan there could fight the ruleset instead of backing it up. The text-marker
+ * backstop above still covers the recognized path.
+ *
+ * Accepted cost: `user_name` also renders the DASHER's own name in some DoorDash
+ * chrome. Scrubbing that on an UNKNOWN frame loses a little triage text and leaks
+ * nothing — fail toward privacy, exactly as the text scan does.
  */
 object CustomerTextMarkers {
 
@@ -68,6 +92,30 @@ object CustomerTextMarkers {
         // uber.json5 trip_at_dropoff redact declares.
         "Leave the order at ", // Uber trip_at_dropoff title -> dropoff ADDRESS.
         "Meet at door for ", // Uber trip_at_dropoff title -> customer name.
+    )
+
+    /**
+     * View-id SUFFIXES whose node value IS customer PII, independent of any text
+     * prefix (#910). Matched case-insensitively with `endsWith`, the same semantics
+     * as the rules' `hasIdSuffix` predicate, because the `com.<vendor>:id/` prefix
+     * varies by package.
+     *
+     * Scanned on the UNKNOWN screen/click envelope paths ONLY — see the class KDoc
+     * for why the recognized path keeps the rule's `redact` as its primary control.
+     * Every entry is a node whose ONLY content is a customer name or a customer
+     * address line, so scrubbing it can never take app vocabulary with it: the
+     * label siblings (`user_name_label`, `customer_name_label`) are deliberately
+     * absent, so a replayed UNKNOWN frame keeps its shape for triage.
+     */
+    val ID_MARKERS: List<String> = listOf(
+        // DoorDash multi-order pickup rows / pickup arrival card -> customer name.
+        "customer_name",
+        // DoorDash drop-off + pickup contact blocks -> customer name (the node the
+        // "Delivery for" label sibling names; #910 V5).
+        "user_name",
+        // DoorDash address block -> street line and city/ST/ZIP line (#910 V1/V5).
+        "address_line_1",
+        "address_line_2",
     )
 
     /** Substring that classifies a node's text as already-redacted (VET V1). */
@@ -109,6 +157,53 @@ object CustomerTextMarkers {
             },
         children = tree.children.map { scrub(it) },
     )
+
+    // --- Node-id path, UNKNOWN envelopes only (#910) --------------------------
+
+    /**
+     * The [ID_MARKERS] suffix [node]'s own view id carries while the node still
+     * holds UN-redacted text/description, or null. A node whose every value is
+     * already masked (a rule's own `[redacted:…]` output, or an empty node) returns
+     * null — same already-redacted skip as [unredactedMarker], so this never
+     * re-scrubs a mask.
+     */
+    fun unredactedIdMarker(node: UiNode): String? {
+        val id = node.viewIdResourceName
+        if (id.isNullOrEmpty()) return null
+        val marker = ID_MARKERS.firstOrNull { id.endsWith(it, ignoreCase = true) } ?: return null
+        val carriesRaw = sequenceOf(node.text, node.contentDescription)
+            .any { !it.isNullOrEmpty() && !it.contains(REDACTED_MARK) }
+        return if (carriesRaw) marker else null
+    }
+
+    /**
+     * The first [ID_MARKERS] hit anywhere in [tree], or null when clean. Cheap
+     * structural scan (no text comparison); the [scrubUnknown] copy is built only
+     * on a hit.
+     */
+    fun firstUnredactedIdMarker(tree: UiNode): String? =
+        unredactedIdMarker(tree) ?: tree.children.firstNotNullOfOrNull { firstUnredactedIdMarker(it) }
+
+    /**
+     * The UNKNOWN-envelope scrub: a copy of [tree] with every node scrubbed to
+     * [CompiledRedact.REDACTED] that carries EITHER an un-redacted text marker
+     * ([unredactedMarker]) OR a customer-PII view id ([unredactedIdMarker]). One
+     * traversal for both scans, so an UNKNOWN frame is never rebuilt twice. Call
+     * only after one of the two scans returned non-null.
+     */
+    fun scrubUnknown(tree: UiNode): UiNode {
+        val byId = unredactedIdMarker(tree) != null
+        return tree.copy(
+            text = if (byId || unredactedMarker(tree.text) != null) CompiledRedact.REDACTED else tree.text,
+            contentDescription =
+                if (byId || unredactedMarker(tree.contentDescription) != null) {
+                    CompiledRedact.REDACTED
+                } else {
+                    tree.contentDescription
+                },
+            children = tree.children.map { scrubUnknown(it) },
+        )
+    }
 
     // --- Notification path (#632) --------------------------------------------
     // Notification captures are FLAT fields, not a UiNode tree — so a hit scrubs
