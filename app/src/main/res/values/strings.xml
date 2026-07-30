@@ -195,6 +195,11 @@
     <string name="ratings_screen_gauge_on_time">On-time</string>
     <string name="ratings_screen_gauge_completion">Completion</string>
     <string name="ratings_screen_tile_acceptance">Acceptance</string>
+    <string name="ratings_screen_tile_quality">Quality rate</string>
+    <!-- #962: the points-based rating facts, shown verbatim. %1$s = points score, %2$s = the platform's own tier label. -->
+    <string name="ratings_screen_points_and_tier_format">Overall rating: %1$s · %2$s</string>
+    <string name="ratings_screen_points_format">Overall rating: %1$s</string>
+    <string name="ratings_screen_tier_format">Reward tier: %1$s</string>
     <string name="ratings_screen_tile_deliveries_30d">Deliveries (30d)</string>
     <string name="ratings_screen_tile_lifetime_deliveries">Lifetime deliveries</string>
     <string name="ratings_screen_shopping_quality_header">Shopping quality</string>

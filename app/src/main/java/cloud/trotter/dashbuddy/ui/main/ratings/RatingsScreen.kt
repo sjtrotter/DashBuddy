@@ -89,6 +89,8 @@ fun RatingsScreen(
                 Text(it, style = AppTheme.num.lgNum, color = AppTheme.colors.text)
             }
 
+            PointsRatingFacts(state)
+
             HeadlineGauges(state)
 
             StandingTiles(state)
@@ -103,6 +105,32 @@ fun RatingsScreen(
             }
         }
     }
+}
+
+/**
+ * The points-based rating facts (#962) as one plain line — "Overall rating: 74 ·
+ * Silver". Deliberately just the two numbers the platform reported: no
+ * thresholds, no progress-to-next-tier, no rewards board. The tier ladder is
+ * DoorDash's own gamification; DashBuddy records it so a later "did my $/hr move
+ * after the tier changed?" question has an anchor, and renders nothing that would
+ * nudge the dasher toward playing it (dev ruling 2026-07-30).
+ */
+@Composable
+private fun PointsRatingFacts(state: RatingsUiState) {
+    if (!state.hasPointsRating) return
+    val points = state.overallRatingPoints
+    val tier = state.tierLabel
+    val text = when {
+        points != null && tier != null ->
+            stringResource(R.string.ratings_screen_points_and_tier_format, Formats.commaInt(points), tier)
+        points != null -> stringResource(R.string.ratings_screen_points_format, Formats.commaInt(points))
+        else -> stringResource(R.string.ratings_screen_tier_format, tier.orEmpty())
+    }
+    Text(
+        text = text,
+        style = androidx.compose.material3.MaterialTheme.typography.titleMedium,
+        color = AppTheme.colors.text2,
+    )
 }
 
 /** Customer rating (0–5), on-time and completion (0–100%) as gauge rings. */
@@ -141,11 +169,12 @@ private fun HeadlineGauges(state: RatingsUiState) {
     }
 }
 
-/** Acceptance rate + 30-day / lifetime delivery counts. */
+/** Acceptance + quality rate, then the 30-day / lifetime delivery counts. */
 @Composable
 private fun StandingTiles(state: RatingsUiState) {
     val tiles = buildList {
         state.acceptanceRate?.let { add(stringResource(R.string.ratings_screen_tile_acceptance) to percentText(it)) }
+        state.qualityRate?.let { add(stringResource(R.string.ratings_screen_tile_quality) to percentText(it)) }
         state.deliveriesLast30Days?.let { add(stringResource(R.string.ratings_screen_tile_deliveries_30d) to Formats.commaInt(it)) }
         state.lifetimeDeliveries?.let { add(stringResource(R.string.ratings_screen_tile_lifetime_deliveries) to Formats.commaInt(it)) }
     }

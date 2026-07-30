@@ -23,4 +23,16 @@ data class RatingsSnapshot(
     val itemsWithQualityIssuesRate: Double? = null,
     val itemsWrongOrMissingRate: Double? = null,
     val lifetimeShoppingOrders: Int? = null,
+    /**
+     * Headline points score on DoorDash's points-based rating redesign (#962).
+     * A recorded FACT, nothing more: no thresholds, no tier progression and no
+     * rewards modelling live in the app (dev ruling 2026-07-30) — the tier ladder
+     * is one platform's own gamification, and the sovereignty-relevant question
+     * ("did my $/hr move after the tier changed?") only needs the number.
+     */
+    val overallRatingPoints: Int? = null,
+    /** The reward tier exactly as the platform labels it, e.g. "Silver" (#962). */
+    val tierLabel: String? = null,
+    /** Rating factor introduced by the same redesign (#962); 0–100 percentage. */
+    val qualityRate: Double? = null,
 )
