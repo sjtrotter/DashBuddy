@@ -19,12 +19,32 @@ object TestResourceLoader {
     }
 
     /**
+     * Directory names that hold **staging** captures rather than committed corpus: raw,
+     * unsorted device pulls a human is triaging. A malformed file there is expected traffic
+     * (a truncated pull, a click envelope pasted in by hand), so it is skipped with a warning
+     * — the triage tool's whole job is to survive the batch and report.
+     *
+     * Everything else is COMMITTED corpus, where the same skip is a silently lost regression
+     * guard (#941, review §4.4 item 5): the file stays in git looking like coverage while no
+     * test ever reads it. There, a parse failure is a test failure.
+     *
+     * Note `snapshots/UNKNOWN/negative/` is committed and therefore strict — the leaf
+     * directory name is what decides, and it is `negative`, not `UNKNOWN`.
+     */
+    private val TOLERANT_STAGING_DIRS = setOf("INBOX", "UNKNOWN")
+
+    /**
      * Loads snapshots and returns Triple: (Filename, Node, Breadcrumbs)
+     *
+     * Fails LOUD on an unparseable file under committed corpus; tolerates one under a
+     * staging directory (see [TOLERANT_STAGING_DIRS]).
      */
     fun loadSnapshots(pathFromResources: String): List<Triple<String, UiNode, List<String>>> {
         val resourceDir = File("src/test/resources/$pathFromResources")
 
         if (!resourceDir.exists() || !resourceDir.isDirectory) return emptyList()
+
+        val staging = resourceDir.name in TOLERANT_STAGING_DIRS
 
         return resourceDir.listFiles { _, name -> name.endsWith(".json") }
             ?.sorted()
@@ -32,8 +52,16 @@ object TestResourceLoader {
                 try {
                     val (node, breadcrumbs) = parseFlexibleJson(file.readText())
                     Triple(file.name, node, breadcrumbs)
-                } catch (_: Exception) {
-                    println("⚠️  Skipping unparseable file: ${file.name}")
+                } catch (e: Exception) {
+                    if (!staging) {
+                        throw IllegalStateException(
+                            "Unparseable committed corpus file $pathFromResources/${file.name} " +
+                                "— it is silently contributing NO coverage while sitting in git " +
+                                "looking like it does (#941). Fix or delete it.",
+                            e,
+                        )
+                    }
+                    println("⚠️  Skipping unparseable staging file: ${file.name}")
                     null
                 }
             }

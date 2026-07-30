@@ -867,6 +867,42 @@ Tests are data-driven using captured UI hierarchy JSON files under
 6. New corpus changes the parse-output golden — regenerate it deliberately (next section, step 4)
    and commit `snapshots/approved-parse-output.json` together with the new snapshots.
 
+**The intake tools MUTATE the corpus, and are excluded from a plain sweep (#941).**
+`InboxProcessorTest` and `UnknownScreenAnalysisTest` redact/move/prune/delete files under
+`snapshots/` as their normal operation. Since #941 `app/build.gradle.kts` excludes them from an
+UNFILTERED `testDebugUnitTest` run (alongside the pre-existing `*Suite` exclusion) — "a sweep
+never rewrites the corpus" is now structural, not a side effect of `INBOX/` happening to be empty
+on CI. Run them deliberately by name:
+`./gradlew :app:testDebugUnitTest --tests "*InboxProcessorTest"`. Naming a test sets Gradle's
+`commandLineIncludePatterns`, which turns the whole exclusion block off.
+
+**Corpus reads fail LOUD (#941).** `TestResourceLoader.loadSnapshots` used to `println` and skip
+an unparseable file — a corrupt committed fixture then sat in git looking like coverage while no
+test read it. It now throws for every directory except the two *staging* areas (`INBOX/`,
+`UNKNOWN/`), where a malformed raw pull is expected traffic and the triage tool's job is to
+survive the batch. Note `snapshots/UNKNOWN/negative/` is committed corpus and therefore strict —
+the leaf directory name decides.
+
+**The pruner keeps the NEWEST, and never evicts an incumbent to admit a newcomer (#929/#941).**
+`SnapshotLibrarian.pruneFolder` caps a folder at 15 distinct content variants. It sorts by the
+capture timestamp *parsed out of the filename* (both conventions: legacy `20260128_155954_491_…`
+and current `2026-07-17_18-08-53-720__…`, whose lexical orders are inverted against their real
+chronology — the PR #926 pass deleted 9 fixtures because of exactly that). And when the folder was
+already at cap **before** the run, the file the run just added is the one dropped: incumbents are
+never evicted to make room (PR #800's capped-additions-only discipline). Below cap, a fresher
+capture of identical content still replaces the stale one — that is the retention policy working.
+
+**The negative corpus (`snapshots/UNKNOWN/negative/`, #941).** Over-match is the dangerous
+recognition failure: under-match only drops a frame to UNKNOWN, but over-match *forges state*
+(#857/#874/#875 claimed `modeHint: offline` from absence and split live dashes; #858 minted an
+offer named "This request is no longer available"). `NegativeCorpusStaysUnknownTest` (an
+`AllMatchersSuite` member) asserts every committed frame there still classifies UNKNOWN under its
+own platform partition, with a minimum-count floor so an emptied folder fails instead of
+green-passing. To add one: sweep it for PII, keep the `__<platformWire>__` capture-naming token,
+and drop it in. The parent `snapshots/UNKNOWN/` stays gitignored staging; `negative/` is
+un-ignored by an explicit negation, and the subfolder placement is load-bearing — the flat
+staging loaders list files, so they can never graduate or prune a committed negative frame.
+
 **Adding or changing a recognition rule** (there are no matcher classes to register — rules are data):
 
 1. Edit the platform's JSON5 rule source — the flat `matchers/rules/<platform>.json5` (uber) or the
@@ -882,7 +918,10 @@ Tests are data-driven using captured UI hierarchy JSON files under
    -DupdateParseGolden=true`, then **review the diff of `approved-parse-output.json`** — that
    review is the regression gate — and commit it with the rule change. The same test also
    ratchets corpus coverage (new intents should ship with corpus) and lints dedupeKey
-   `{field}` templates against fields the rule actually parses.
+   `{field}` templates against fields the rule actually parses. The coverage ratchet is keyed
+   by **platform + intent** (#941) and measured by classifying the corpus inside each
+   platform's rule partition — not by "a folder with that intent's name exists" — so a
+   DoorDash-populated folder can no longer mark the same-named Uber intent covered.
 
 ### Session replay (capture sequence → recognition → state machine)
 

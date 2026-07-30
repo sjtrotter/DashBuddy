@@ -6,6 +6,7 @@ import cloud.trotter.dashbuddy.core.pipeline.SensitiveMarkerAssetCoverageTest
 import cloud.trotter.dashbuddy.core.pipeline.accessibility.event.type.view.clicked.ClickClassifierTest
 import cloud.trotter.dashbuddy.core.pipeline.notification.NotificationClassifierTest
 import cloud.trotter.dashbuddy.core.pipeline.recognition.matchers.GoldenSnapshotRegressionTest
+import cloud.trotter.dashbuddy.core.pipeline.recognition.matchers.NegativeCorpusStaysUnknownTest
 import cloud.trotter.dashbuddy.core.pipeline.recognition.matchers.OfferPipelineTest
 import cloud.trotter.dashbuddy.core.pipeline.recognition.matchers.PickupNoCustomerIdentityTest
 import cloud.trotter.dashbuddy.core.pipeline.rules.CaptureRedactionCorpusTest
@@ -42,6 +43,12 @@ import org.junit.runners.Suite
  *
  * - [GoldenSnapshotRegressionTest] — positive guard: every snapshot in an intent
  *   folder still classifies as that folder (SENSITIVE: sensitive rule or scanner).
+ * - [NegativeCorpusStaysUnknownTest] — #941, the general NEGATIVE guard: every frame in the
+ *   committed `snapshots/UNKNOWN/negative/` corpus must still classify UNKNOWN under its own
+ *   platform partition, with a minimum-count floor so an emptied folder fails instead of
+ *   green-passing. Over-match is the dangerous direction (it forges state — #857/#874/#875/#858);
+ *   the three Uber evidence tests below are the rule-SPECIFIC instances of the same guard and
+ *   their fixtures are copied, not moved, into this corpus.
  * - [ParseOutputGoldenTest] — parse-OUTPUT guard (#433): every snapshot's typed
  *   fields match `snapshots/approved-parse-output.json` (regen deliberately with
  *   `-DupdateParseGolden=true` and review the diff); plus the corpus-coverage
@@ -101,7 +108,10 @@ import org.junit.runners.Suite
  * These also compile the production ruleset via `TestRulesetFactory` but are NOT suite members:
  *  - [cloud.trotter.dashbuddy.core.pipeline.recognition.matchers.InboxProcessorTest] /
  *    [cloud.trotter.dashbuddy.core.pipeline.recognition.matchers.UnknownScreenAnalysisTest] —
- *    corpus-*mutating* intake tools (see above); this suite is pure verification.
+ *    corpus-*mutating* intake tools (see above); this suite is pure verification. Since #941
+ *    they are also excluded from an unfiltered `testDebugUnitTest` sweep at the BUILD level
+ *    (`app/build.gradle.kts`, alongside the `*Suite` exclusion), so suite membership is no
+ *    longer the only thing keeping a broad run from rewriting the corpus. Run them by name.
  *  - [cloud.trotter.dashbuddy.core.pipeline.notification.NotificationPipelineSensitiveOrderingTest]
  *    — a `RobolectricTestRunner` pipeline-ORDERING integration test (the sensitive gate must run
  *    before `CaptureWriter`), not a ruleset/corpus regression; every other suite member is a plain
@@ -121,6 +131,7 @@ import org.junit.runners.Suite
 @RunWith(Suite::class)
 @Suite.SuiteClasses(
     GoldenSnapshotRegressionTest::class,
+    NegativeCorpusStaysUnknownTest::class,
     ParseOutputGoldenTest::class,
     OfferPipelineTest::class,
     ScreenRulesetTest::class,

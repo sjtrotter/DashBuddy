@@ -90,18 +90,33 @@ android {
                 test.systemProperty("updateParseGolden", it)
             }
 
-            // JUnit @Suite aggregators (e.g. AllMatchersSuite) re-run their member
-            // classes, so during a broad sweep the members would run twice — once
-            // directly, once via the suite. Exclude suites from an unfiltered sweep;
-            // a suite stays runnable explicitly via --tests "*AllMatchersSuite*"
-            // (which sets commandLineIncludePatterns, so the exclude is skipped).
-            // Done in doFirst because --tests is only applied to the filter at
-            // execution time.
+            // Two families are excluded from an UNFILTERED sweep. Both stay runnable by
+            // name (`--tests "*Foo*"` sets commandLineIncludePatterns, so the whole block
+            // is skipped). Done in doFirst because --tests is only applied to the filter
+            // at execution time.
+            //
+            // 1. JUnit @Suite aggregators (e.g. AllMatchersSuite) re-run their member
+            //    classes, so during a broad sweep the members would run twice — once
+            //    directly, once via the suite.
+            // 2. Corpus-MUTATING intake tools (#941, review §4.4 item 5). InboxProcessorTest
+            //    and UnknownScreenAnalysisTest redact/move/prune/delete files under
+            //    `src/test/resources/snapshots/` as their normal operation — they are the
+            //    documented triage workflow, not verification. On CI they are no-ops only
+            //    because INBOX/ is gitignored and therefore empty there; that is luck, not a
+            //    guarantee, and a developer's local sweep DOES hit a populated INBOX and
+            //    silently rewrites the corpus mid-sweep. The exclusion makes "a sweep never
+            //    mutates the corpus" structural. Run them deliberately:
+            //      ./gradlew :app:testDebugUnitTest --tests "*InboxProcessorTest"
+            val corpusMutatingIntakeTests = listOf(
+                "*InboxProcessorTest",
+                "*UnknownScreenAnalysisTest",
+            )
             test.doFirst {
                 val filter = test.filter as
                     org.gradle.api.internal.tasks.testing.filter.DefaultTestFilter
                 if (filter.commandLineIncludePatterns.isEmpty()) {
                     filter.excludeTestsMatching("*Suite")
+                    corpusMutatingIntakeTests.forEach(filter::excludeTestsMatching)
                 }
             }
         }

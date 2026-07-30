@@ -164,21 +164,33 @@ class ParseOutputGoldenTest {
     // =========================================================================
 
     /**
-     * Screen-rule intents with no golden corpus folder yet (#433 noted 13 DD
-     * intents + all of Uber). This set may only SHRINK: when you add corpus
-     * for one of these, delete it here; a NEW intent must ship with corpus
-     * (or be added here deliberately, in review).
+     * Screen-rule `platform:intent` pairs with no golden corpus behind them (#433 noted 13 DD
+     * intents + all of Uber). This set may only SHRINK: when you add corpus for one of these,
+     * delete it here; a NEW intent must ship with corpus (or be added here deliberately, in
+     * review).
+     *
+     * ### Keyed by PLATFORM, not intent alone (#941, review §4.4 item 4)
+     *
+     * The gap used to be "intent has no folder named after it". Intent names are shared across
+     * platforms (`idle_map`, `offer`, `home_dashboard`, `earnings_activity`…), and the folders
+     * are intent-named, not platform-named — so a folder populated entirely by DoorDash
+     * captures marked the same-named UBER intent covered. With Uber at a fraction of DoorDash's
+     * corpus depth, a meaningful share of its thinness was invisible to this gate, which is
+     * precisely the gate that decides whether the dedupeKey / effect-arg lints below have
+     * anything to look at.
+     *
+     * Coverage is now measured the way production classifies: a pair is covered iff SOME corpus
+     * snapshot classifies to that intent *within that platform's rule partition*
+     * (`matchFirst(node, platformWire = …)` — `ObservationClassifier` partitions by wire at all
+     * three call sites). Folder names no longer participate.
      */
     private val knownUncoveredIntents = setOf(
-        // DoorDash — rules added from triage/synthetic fixtures, no capture yet
-        "dropoff_pre_arrival_completion",
-        "earnings",
-        "photo_capture",
-        "pickup_picked_up",
-        "pickup_pre_arrival_multi",
-        "pickup_verification_info",
-        "pickup_verification_pin",
-        "pickup_verify",
+        // ---- DoorDash — rules added from triage/synthetic fixtures, no capture yet ----
+        "doordash:dropoff_pre_arrival_completion",
+        "doordash:earnings",
+        "doordash:pickup_picked_up",
+        "doordash:pickup_pre_arrival_multi",
+        "doordash:pickup_verify",
         // #501 item 3 — GoPuff (Drive) zone-arrival, recognize-only (dev decision 2026-07-07).
         // Anchor strings are grounded (verbatim from issue #501's 2026-06-15 deep-dive over the
         // real 06-14 captures), but the raw capture JSON itself was never committed to
@@ -186,37 +198,74 @@ class ParseOutputGoldenTest {
         // covers it today. NOTE the anchors are NOT GoPuff-unique (every regular
         // pickup_pre_arrival tree carries them); the rule leans on priority order + its rejects,
         // so a real capture matters doubly here. Shrink this when one lands in the corpus.
-        "pickup_zone_arrival",
-        "safety",
-        "shop_and_pay_checkout",
-        "shop_and_pay_list",
-        "shopping_checkout",
-        // Uber — first captures landed 2026-07-18/19 (home_dashboard, splash); active_trip +
+        "doordash:pickup_zone_arrival",
+        "doordash:safety",
+        "doordash:shopping_checkout",
+        // ---- Uber ----
+        // First captures landed 2026-07-18/19 (home_dashboard, splash); active_trip +
         // awaiting_offer landed 2026-07-19. The 2026-07-21 dash (second Uber attempt) closed the
         // rest: offer, earnings_activity, session_summary, customer_chat, delivery_confirmation,
         // and pickup_verification_items all landed corpus. The uber.screen.offer "Offer -
         // {storeName}" effect template was a dead effect-arg on the fielded frames; #813 gave the
         // rule a top-level storeName parse so it now interpolates (pin removed from
-        // knownDeadArgTemplates). Only post_trip still has zero snapshots in the corpus (#433).
-        "post_trip",
+        // knownDeadArgTemplates).
+        //
+        // #941 note: platform-keying corrected the ATTRIBUTION of six of these. The pre-#941
+        // intent-only pin listed `photo_capture`, `pickup_verification_info`,
+        // `pickup_verification_pin`, `shop_and_pay_checkout` and `shop_and_pay_list` under a
+        // "DoorDash" comment header; they are declared by the UBER ruleset, and DoorDash's own
+        // same-named surfaces are covered. The gap's SIZE is unchanged (14 → 14): no
+        // cross-platform folder was masking a real gap today, so nothing was added to this pin.
+        // What changed is that it can no longer happen silently — the next Uber rule that
+        // borrows a DoorDash-covered intent name will show up here.
+        "uber:photo_capture",
+        "uber:pickup_verification_info",
+        "uber:pickup_verification_pin",
+        "uber:post_trip",
+        "uber:shop_and_pay_checkout",
+        "uber:shop_and_pay_list",
     )
 
     @Test
     fun `screen-rule intent corpus coverage only ratchets up`() {
-        val intents = compileProductionScreenRules()
-            .flatMap { r -> r.branches.mapNotNull { it.intent } }
-            .filterNot { it.startsWith("sensitive") } // blocked, never parsed — no goldens by design
+        val rules = compileProductionScreenRules()
+
+        // Declared: every (platform, intent) the shipped screen rules can produce.
+        val declared = rules
+            .flatMap { rule ->
+                val wire = rule.id.substringBefore('.')
+                rule.branches.mapNotNull { it.intent }
+                    // blocked, never parsed — no goldens by design
+                    .filterNot { it.startsWith("sensitive") }
+                    .map { "$wire:$it" }
+            }
             .toSet()
-        val folders = File("src/test/resources/snapshots")
-            .listFiles { f -> f.isDirectory && f.name !in SKIP }
-            ?.map { it.name }?.toSet() ?: emptySet()
+
+        // Covered: what the corpus actually demonstrates, per platform partition.
+        val wires = rules.map { it.id.substringBefore('.') }.toSet()
+        val covered = mutableSetOf<String>()
+        val base = File("src/test/resources/snapshots")
+        val dirs = base.listFiles { f -> f.isDirectory && f.name !in SKIP }
+            ?.sortedBy { it.name } ?: emptyList()
+        for (dir in dirs) {
+            for ((_, node, _) in TestResourceLoader.loadSnapshots("snapshots/${dir.name}")) {
+                TransformRegistry.withClock(FIXED_NOW_MS, FIXED_ZONE) {
+                    for (wire in wires) {
+                        val intent = screenRuleset.matchFirst(node, platformWire = wire)?.intent
+                        if (intent != null) covered += "$wire:$intent"
+                    }
+                }
+            }
+        }
 
         assertEquals(
-            "Corpus coverage gap changed. Intents without a golden folder must only shrink — " +
-                "add corpus for closed gaps (and delete them from knownUncoveredIntents), and " +
-                "ship corpus with new intents instead of growing the pin.",
+            "Corpus coverage gap changed. platform:intent pairs with no corpus behind them must " +
+                "only shrink — add corpus for closed gaps (and delete them from " +
+                "knownUncoveredIntents), and ship corpus with new intents instead of growing " +
+                "the pin. NOTE the key is platform-scoped (#941): a DoorDash-populated folder " +
+                "no longer marks the same-named Uber intent covered.",
             knownUncoveredIntents,
-            intents - folders,
+            declared - covered,
         )
     }
 
