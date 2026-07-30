@@ -6,9 +6,6 @@ import cloud.trotter.dashbuddy.core.data.strategy.StrategyRepository
 import cloud.trotter.dashbuddy.domain.config.OfferAutomationConfig
 import cloud.trotter.dashbuddy.domain.evaluation.EvaluationConfig
 import cloud.trotter.dashbuddy.domain.evaluation.ScoringRule
-import cloud.trotter.dashbuddy.domain.evaluation.OfferEvaluation
-import cloud.trotter.dashbuddy.domain.evaluation.OfferEvaluator
-import cloud.trotter.dashbuddy.domain.model.offer.ParsedOffer
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -20,7 +17,6 @@ import javax.inject.Inject
 @HiltViewModel
 class SettingsViewModel @Inject constructor(
     private val strategyRepository: StrategyRepository,
-    private val offerEvaluator: OfferEvaluator,
 ) : ViewModel() {
 
     // --- STATE ---
@@ -69,24 +65,8 @@ class SettingsViewModel @Inject constructor(
         }
     }
 
-    // --- SIMULATOR ---
-
-    fun simulateOffer(pay: Double, miles: Double): OfferEvaluation {
-        val fakeOffer = ParsedOffer(
-            // Stable hash (#367): the screen memoizes on (pay, dist, config) —
-            // a wall-clock hash would defeat structural equality.
-            offerHash = "simulated-offer",
-            payAmount = pay,
-            distanceMiles = miles,
-            itemCount = 5, // Default average workload
-            orders = emptyList() // non-shop by construction (no SHOP order) — never exercises shop pace
-        )
-
-        // #588: intentionally NOT calling evaluationConfig.value.forPlatform(...) — this simulator has
-        // no platform to resolve against. Safe only because fakeOffer is never a shop offer (see
-        // EvaluationConfig.userEconomy KDoc); a shop-capable simulator would need to pick a platform
-        // and call forPlatform() first, or it would silently price off seed-only shop pace.
-        val currentConfig = evaluationConfig.value
-        return offerEvaluator.evaluate(fakeOffer, currentConfig)
-    }
+    // The Strategy Lab's offer simulator is a PURE function of (pay, miles, config) and no longer
+    // lives here (#944): `OfferSimulation.simulate` in :domain. It was never an action — having
+    // the Lab screen call a ViewModel function from composition to derive display state inverted
+    // UDF, and the evaluator it wrapped is stateless.
 }

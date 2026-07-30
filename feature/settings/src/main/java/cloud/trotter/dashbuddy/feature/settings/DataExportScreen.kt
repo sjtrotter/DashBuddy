@@ -115,7 +115,7 @@ fun DataExportScreen(
                 }
                 is DataExportViewModel.ExportState.Error -> {
                     Text(
-                        stringResource(R.string.data_export_csv_error_format, s.message),
+                        stringResource(R.string.data_export_csv_error_format, s.errorClass),
                         color = MaterialTheme.colorScheme.error,
                         style = MaterialTheme.typography.bodyMedium,
                     )
@@ -162,7 +162,7 @@ fun DataExportScreen(
                 }
                 is DataExportViewModel.LogExportState.Error -> {
                     Text(
-                        stringResource(R.string.data_export_log_error_format, s.message),
+                        stringResource(R.string.data_export_log_error_format, s.errorClass),
                         color = MaterialTheme.colorScheme.error,
                         style = MaterialTheme.typography.bodyMedium,
                     )

@@ -27,7 +27,7 @@ class OdometerEffectHandler @Inject constructor(
     }
 
     fun startUp() {
-        Timber.i("Effect: Starting Odometer & Notification")
+        Timber.tag(TAG).i("Effect: Starting Odometer & Notification")
         try {
             // 1. Start the Logic (Coroutines Job). #438 B5: NO resetSession() here — the odometer
             // is arbitrated at the cross-platform tier (StartOdometer fires only on the 0→1
@@ -40,7 +40,7 @@ class OdometerEffectHandler @Inject constructor(
             notificationManager.notify(notificationId, notification)
 
         } catch (e: Exception) {
-            Timber.e(e, "Failed to start Odometer")
+            Timber.tag(TAG).e(e, "Failed to start Odometer")
         }
     }
 
@@ -54,7 +54,7 @@ class OdometerEffectHandler @Inject constructor(
     }
 
     fun shutDown() {
-        Timber.i("Effect: Stopping Odometer")
+        Timber.tag(TAG).i("Effect: Stopping Odometer")
         try {
             // 1. Stop the Logic (Kills GPS)
             odometerRepository.stopTracking()
@@ -63,27 +63,27 @@ class OdometerEffectHandler @Inject constructor(
             notificationManager.cancel(notificationId)
 
         } catch (e: Exception) {
-            Timber.e(e, "Failed to stop Odometer")
+            Timber.tag(TAG).e(e, "Failed to stop Odometer")
         }
     }
 
     // Idempotent: safe to call even if already paused. stopTracking() no-ops when not active.
     fun pause() {
-        Timber.i("Effect: Pausing Odometer (stationary)")
+        Timber.tag(TAG).i("Effect: Pausing Odometer (stationary)")
         try {
             odometerRepository.stopTracking()
         } catch (e: Exception) {
-            Timber.e(e, "Failed to pause Odometer")
+            Timber.tag(TAG).e(e, "Failed to pause Odometer")
         }
     }
 
     // Idempotent: safe to call even if already running. startTracking() no-ops when active.
     fun resume() {
-        Timber.i("Effect: Resuming Odometer")
+        Timber.tag(TAG).i("Effect: Resuming Odometer")
         try {
             odometerRepository.startTracking()
         } catch (e: Exception) {
-            Timber.e(e, "Failed to resume Odometer")
+            Timber.tag(TAG).e(e, "Failed to resume Odometer")
         }
     }
 
@@ -104,5 +104,10 @@ class OdometerEffectHandler @Inject constructor(
             NotificationManager.IMPORTANCE_LOW
         )
         notificationManager.createNotificationChannel(channel)
+    }
+
+    private companion object {
+        /** Principle 7: this handler's stable Timber tag — never the catch-all `App` (#764). */
+        const val TAG = "Odometer"
     }
 }
