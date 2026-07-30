@@ -273,6 +273,35 @@ interface AnalyticsDao {
     )
     fun deliveryTotals(start: Long, end: Long): Flow<DeliveryTotalsRow>
 
+    /**
+     * The window's **pay mix** parts (#973 / brief §7.6): Σ base pay, Σ platform-reported tip, Σ
+     * driver-entered cash tip, plus the coverage counters. **WHERE shape is byte-identical to
+     * [deliveryTotals]** — the same session-anchored join and the same null-session `completedAt`
+     * fallback — so the mix describes exactly the delivery population whose pay reaches
+     * `PeriodEconomics.grossEarnings`, and the "bonuses & other" remainder computed against that gross
+     * is a real residue rather than a bucketing artefact.
+     *
+     * `withBreakdown` counts the rows that itemized at all. `basePay`/`tip` are stamped ONLY on a job's
+     * **sole drop** (a stacked job settles on one receipt that cannot be split per drop — see
+     * `DeliveryRecordEntity.tip`), so on a window containing stacks these sums under-describe the
+     * window BY DESIGN; the counter is what lets the read side state the coverage instead of implying
+     * the residue is all bonus money. `cashTip` has no such rule (it is recorded per row by the driver)
+     * and is therefore NOT part of the coverage test.
+     */
+    @Query(
+        """SELECT COALESCE(SUM(basePay), 0) AS basePay,
+                  COALESCE(SUM(tip), 0) AS tips,
+                  COALESCE(SUM(cashTip), 0) AS cashTips,
+                  COUNT(*) AS deliveries,
+                  COALESCE(SUM(CASE WHEN basePay IS NOT NULL OR tip IS NOT NULL THEN 1 ELSE 0 END), 0)
+                    AS withBreakdown
+           FROM delivery_records
+           WHERE sessionId IN (SELECT sessionId FROM session_records
+                               WHERE startedAt >= :start AND startedAt < :end)
+              OR (sessionId IS NULL AND completedAt >= :start AND completedAt < :end)"""
+    )
+    fun payMixTotals(start: Long, end: Long): Flow<PayMixTotalsRow>
+
     /** Per-platform variant of [deliveryTotals] — same session-anchored join + null-session edge. */
     @Query(
         """SELECT platform,
@@ -524,6 +553,9 @@ interface AnalyticsDao {
      * **`net` (#970 / brief §7.3):** the same row's FROZEN kept money — `netProfit + cashTip`, the
      * exact terms [noSessionTotals] contributes to `PeriodEconomics.netProfit` — so the per-day net
      * axis decomposes the period net instead of re-deriving it. Never recomputed (Principle 5).
+     *
+     * **Delivery count (#973):** each row IS one delivery, so the day's orphan delivery count is the
+     * row count — no extra column, and no risk of it disagreeing with the gross/net on the same bar.
      */
     @Query(
         """SELECT completedAt,
@@ -547,6 +579,12 @@ interface AnalyticsDao {
      * `reportedEarnings > deliveredPay` CASE [grossAndUnattributed] uses, cash-free comparison and
      * all). So Σ per-day net over a window equals that window's period net by construction, with no
      * second copy of the accounting and no re-costing (Principle 5, frozen economics).
+     *
+     * **`deliveries` (#973 / brief §4.2):** the session's own delivery count, from the SAME `GROUP BY
+     * sessionId` subquery that supplies its gross/net — so the three figures a tapped day bar states
+     * always describe one population, and a session with no folded deliveries reads 0 rather than
+     * borrowing a neighbouring day's count. Deliberately NOT `session_records.deliveries` (the live
+     * counter the state machine bumps): the chart must decompose the read-model, not a second tally.
      */
     @Query(
         """SELECT s.startedAt AS startedAt,
@@ -555,11 +593,12 @@ interface AnalyticsDao {
                     + CASE WHEN s.reportedEarnings IS NOT NULL
                                 AND s.reportedEarnings > COALESCE(d.deliveredPay, 0)
                            THEN s.reportedEarnings - COALESCE(d.deliveredPay, 0)
-                           ELSE 0 END AS net
+                           ELSE 0 END AS net,
+                  COALESCE(d.deliveries, 0) AS deliveries
            FROM session_records s
            LEFT JOIN (
              SELECT sessionId, SUM(realizedPay) AS deliveredPay, SUM(cashTip) AS cashTip,
-                    SUM(netProfit) AS net
+                    SUM(netProfit) AS net, COUNT(*) AS deliveries
              FROM delivery_records GROUP BY sessionId
            ) d ON d.sessionId = s.sessionId
            WHERE s.startedAt >= :start AND s.startedAt < :end

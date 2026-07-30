@@ -1,5 +1,7 @@
 package cloud.trotter.dashbuddy.domain.analytics
 
+import cloud.trotter.dashbuddy.domain.state.Platform
+
 /**
  * Economics for an [AnalyticsPeriod] (#314) — the home-glance/hub read model.
  *
@@ -78,6 +80,21 @@ data class PeriodEconomics(
         )
     }
 }
+
+/**
+ * One platform's slice of a window's economics (#973 / brief §4.2) — the Money tab's platform-split
+ * rows ("DoorDash · $214.60 · 18 deliveries").
+ *
+ * The [platform] is resolved from the stored wire through the [Platform] registry at the read edge, so
+ * every label downstream derives from the registry's own display metadata — no platform literal, no
+ * hand-written name (Principle 8). [economics] is the identical [PeriodEconomics] shape as the
+ * cross-platform read, assembled by the same fold, so a per-platform figure and its all-platform total
+ * can never disagree about what they mean.
+ */
+data class PlatformEconomics(
+    val platform: Platform,
+    val economics: PeriodEconomics,
+)
 
 /**
  * Per-**chain** economics for a period (#314/#159 F9) — the top-stores list, rolled up to the chain

@@ -157,6 +157,12 @@ data class SessionGrossRow(
      * the same start day as [gross], so the per-day net axis decomposes the period net exactly.
      */
     val net: Double = 0.0,
+    /**
+     * The session's own folded delivery count (#973 / brief §4.2) — the third figure a tapped day bar
+     * states. Comes from the same `GROUP BY sessionId` subquery as [gross]/[net], so all three
+     * describe one population; a session with nothing folded yet reads 0.
+     */
+    val deliveries: Int = 0,
 )
 
 /**
@@ -172,6 +178,24 @@ data class NoSessionTotalsRow(
     val pay: Double,
     val cash: Double,
     val deliveries: Int,
+)
+
+/**
+ * The window's **pay-mix parts** (#973 / brief §7.6) — Σ base pay, Σ platform-reported tip, Σ
+ * driver-entered cash tip, and the coverage counters, over the exact delivery population
+ * [DeliveryTotalsRow] describes (byte-identical `WHERE`).
+ *
+ * [withBreakdown] < [deliveries] is the NORMAL case, not an error: `basePay`/`tip` are stamped only on
+ * a job's sole drop, so a window containing stacked jobs itemizes only part of its pay. The read side
+ * turns that gap into a stated caveat rather than letting the un-itemized remainder masquerade as
+ * bonus money.
+ */
+data class PayMixTotalsRow(
+    val basePay: Double,
+    val tips: Double,
+    val cashTips: Double,
+    val deliveries: Int,
+    val withBreakdown: Int,
 )
 
 /** Per-platform variant of [NoSessionTotalsRow] (GROUP BY platform) — grouped on the delivery's own
