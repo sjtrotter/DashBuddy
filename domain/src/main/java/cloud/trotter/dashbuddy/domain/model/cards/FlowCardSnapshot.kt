@@ -97,28 +97,38 @@ sealed class FlowCardSnapshot {
                 expiresAt: Long? = null,
                 countdownSeconds: Int? = null,
                 outcome: AppEventType? = null,
-            ): Offer = Offer(
-                phaseStartedAt = phaseStartedAt,
-                phaseEndedAt = phaseEndedAt,
-                offerHash = offerHash,
-                payAmount = parsedOffer.payAmount,
-                distanceMiles = parsedOffer.distanceMiles,
-                itemCount = parsedOffer.itemCount,
-                // #882: the display-store SSOT, not the raw per-order names — on an Uber
-                // multi-order card the per-order name is the type chip ("Delivery (2)") held
-                // there for #830 identity, and this card is a human surface.
-                storeNames = parsedOffer.displayStores,
-                evaluationScore = evaluation?.score,
-                evaluationAction = evaluation?.action?.name,
-                netPayAmount = evaluation?.netPayAmount,
-                dollarsPerMile = evaluation?.dollarsPerMile,
-                dollarsPerHour = evaluation?.dollarsPerHour,
-                qualityLevel = evaluation?.qualityLevel,
-                badges = badgesOf(parsedOffer),
-                expiresAt = expiresAt,
-                countdownSeconds = countdownSeconds,
-                outcome = outcome,
-            )
+            ): Offer {
+                // #936: an evaluation with no parsed distance carries 0.0 PLACEHOLDERS, not
+                // measurements, in every distance-derived field (and a placeholder score, since
+                // no scoring ran). This card's metric fields are already nullable and every
+                // renderer — the bubble offer card and the heads-up notification's custom views —
+                // already draws the "—" affordance / hides the score gauge for a null, so the
+                // honest value to hand them is null. `payAmount` (real, parsed) still shows, as do
+                // the action and the UNKNOWN quality chip ("No verdict").
+                val scored = evaluation?.takeIf { it.hasDistanceMetrics }
+                return Offer(
+                    phaseStartedAt = phaseStartedAt,
+                    phaseEndedAt = phaseEndedAt,
+                    offerHash = offerHash,
+                    payAmount = parsedOffer.payAmount,
+                    distanceMiles = parsedOffer.distanceMiles,
+                    itemCount = parsedOffer.itemCount,
+                    // #882: the display-store SSOT, not the raw per-order names — on an Uber
+                    // multi-order card the per-order name is the type chip ("Delivery (2)") held
+                    // there for #830 identity, and this card is a human surface.
+                    storeNames = parsedOffer.displayStores,
+                    evaluationScore = scored?.score,
+                    evaluationAction = evaluation?.action?.name,
+                    netPayAmount = scored?.netPayAmount,
+                    dollarsPerMile = scored?.dollarsPerMile,
+                    dollarsPerHour = scored?.dollarsPerHour,
+                    qualityLevel = evaluation?.qualityLevel,
+                    badges = badgesOf(parsedOffer),
+                    expiresAt = expiresAt,
+                    countdownSeconds = countdownSeconds,
+                    outcome = outcome,
+                )
+            }
 
             /**
              * The offer + order badge enum names for the pill row, plus a

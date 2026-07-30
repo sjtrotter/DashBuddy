@@ -480,6 +480,10 @@
          Translations MUST keep the same six positional args (a translated %-mismatch is the #719
          HIGH-1 crash class). The merchant name and the numbers are runtime args — never translated. -->
     <string name="tts_offer_evaluation_template">%1$s. %2$s. %3$s dollars an hour net. Net %4$s, %5$s miles, score %6$s.</string>
+    <!-- #936 — spoken when the offer's distance never parsed, so every rate would be fabricated.
+         %1$s verdict word, %2$s merchant name, %3$s gross pay. Translations MUST keep the same
+         three positional args (the #719 HIGH-1 crash class). -->
+    <string name="tts_offer_no_verdict_template">%1$s. %2$s. Pay %3$s. No verdict — the distance didn\'t parse.</string>
 
     <!-- state/effects/TipEffectHandler.kt -->
     <!-- %1$s tip amount, %2$s store name -->

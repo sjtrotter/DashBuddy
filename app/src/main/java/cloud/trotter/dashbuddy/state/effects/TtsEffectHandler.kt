@@ -173,6 +173,18 @@ class TtsEffectHandler @Inject constructor(
                 else -> R.string.tts_verdict_offer
             }
         )
+        // #936: an offer whose distance never parsed carries 0.0 placeholders in every rate field,
+        // so the scored template would speak "zero dollars an hour net … zero miles, score zero"
+        // — a fabricated verdict read aloud to a driving dasher. Speak the parsed pay and say
+        // there's no verdict instead.
+        if (!eval.hasDistanceMetrics) {
+            return localized.getString(
+                R.string.tts_offer_no_verdict_template,
+                verdict,
+                eval.merchantName.trim(),
+                Formats.decimal(eval.payAmount, 2),
+            )
+        }
         return localized.getString(
             R.string.tts_offer_evaluation_template,
             verdict,

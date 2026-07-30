@@ -9,7 +9,17 @@ class OfferEvaluator() {
 
         val economy = config.userEconomy
         val grossPay = offer.payAmount ?: 0.0
-        val dist = offer.distanceMiles ?: 1.0
+        // #936: distance is the denominator of every cost and rate metric below, so the old
+        // `?: 1.0` fallback fabricated a favorable one-mile trip for an offer whose distance
+        // never parsed — near-zero operating cost, near-zero drive time, an inflated $/hr — i.e.
+        // it biased the verdict toward ACCEPT precisely when its input was least trustworthy.
+        // That was the one fail-toward-ACCEPT default in a codebase whose pay fallback (`?: 0.0`,
+        // above) correctly fails toward DECLINE. The sentinel is now 0.0 ("no distance"), so
+        // nothing is invented: [hasDistance] gates the rate metrics, and an offer that would
+        // otherwise be SCORED without a distance returns the no-verdict evaluation below instead.
+        // A parsed 0.0 is treated identically — per-mile and per-hour are undefined either way.
+        val dist = offer.distanceMiles?.takeIf { it > 0.0 } ?: 0.0
+        val hasDistance = dist > 0.0
         val items = offer.itemCount.toDouble()
 
         // Operating cost — full breakdown (fuel + tires + oil + brakes + fluids +
@@ -48,8 +58,12 @@ class OfferEvaluator() {
 
         // Metrics operate on net pay (same NetProfit SSOT; 0.0 when the
         // denominator is undefined, preserving the prior scoring behavior).
+        // #936: with no distance, [dist] is 0.0 so `perMile` is already undefined → 0.0, but
+        // `estTimeHours` still carries the handling term — dividing by it would quote an hourly
+        // rate off a route whose drive leg is unknown. Gate it, so both rates read as the 0.0
+        // "unknown" placeholder that [OfferEvaluation.hasDistanceMetrics] tells consumers about.
         val dpm = NetProfit.perMile(netPay, dist) ?: 0.0
-        val activeHourly = NetProfit.perHour(netPay, estTimeHours) ?: 0.0
+        val activeHourly = if (hasDistance) NetProfit.perHour(netPay, estTimeHours) ?: 0.0 else 0.0
 
         // #882: the ONE display-store SSOT ([ParsedOffer.displayStoreText]) — the joined order
         // stores exactly as before, except that a card whose rule parsed its own headline store
@@ -162,6 +176,44 @@ class OfferEvaluator() {
             )
         }
 
+        // --- 3b. No distance ⇒ NO VERDICT (#936) ---
+        // Every metric from here on is a rate over distance, so scoring an unparsed-distance offer
+        // would score a fabricated trip. The three verdicts ABOVE this point are deliberately left
+        // in front of it because they are distance-INDEPENDENT decisions that must stay true in
+        // every mode: the shopping opt-out is a capability constraint (#762 D12), protect-stats
+        // accepts everything, and a BLOCK-listed merchant is a hard decline. This mirrors the
+        // no-scoring-rules return above — action NOTHING, score 0, quality UNKNOWN — and carries
+        // only the HONEST economics: real gross pay, and the real per-mile operating rate (a
+        // profile constant, not distance-derived, and load-bearing downstream — the analytics
+        // projector freezes it as the session cpm, so zeroing it would make a delivery in this
+        // session look cost-free). Every distance-derived figure is the explicit 0.0 "unknown"
+        // placeholder — no cost is deducted, so `netPayAmount` is gross, NOT a 1-mile net — and
+        // consumers branch on [OfferEvaluation.hasDistanceMetrics] instead of rendering the zeros.
+        // `estimatedTimeMinutes` is the one field kept as computed: it is the HANDLING term only
+        // (the drive leg is 0 with no distance), which is a real, if incomplete, floor and is the
+        // fallback `JobAcceptFlow` reads for an accepted job's ETA. It is not a rate, so it cannot
+        // flatter a verdict; the analytics fold records it as null alongside the other estimates.
+        if (!hasDistance) {
+            return OfferEvaluation(
+                action = OfferAction.NOTHING,
+                score = 0.0,
+                qualityLevel = OfferQuality.UNKNOWN,
+                payAmount = grossPay,
+                fuelCostEstimate = 0.0,
+                nonFuelCostEstimate = 0.0,
+                totalOperatingCost = 0.0,
+                operatingCostPerMile = economy.operatingCostPerMile,
+                netPayAmount = grossPay,
+                distanceMiles = 0.0,
+                dollarsPerMile = 0.0,
+                dollarsPerHour = 0.0,
+                estimatedTimeMinutes = estTimeMinutes,
+                itemCount = items,
+                merchantName = merchants,
+                isUsingDefaults = economy.isUsingDefaults,
+            )
+        }
+
         // MANUAL_REVIEW: flag for later action override
         val requiresManualReview = activeMerchantRules.any { rule ->
             rule.action == MerchantAction.MANUAL_REVIEW &&
@@ -257,23 +309,30 @@ class OfferEvaluator() {
         }.coerceIn(0.0, 1.0)
     }
 
+    /**
+     * Caveats for rule targets so high that they would auto-decline nearly everything.
+     *
+     * P8 (#936): the copy names no platform and quotes no per-platform pay norms — this is the
+     * platform-agnostic core, and "most DoorDash offers pay $0.80–$1.50/mi" was both a platform
+     * literal in `:domain` and a market-specific claim we don't measure. The thresholds stay; the
+     * wording says only that the target is above what offers typically pay.
+     */
     private fun buildCaveatWarnings(rules: List<ScoringRule.MetricRule>): List<String> =
         rules.mapNotNull { rule ->
             val target = rule.targetValue.toDouble()
+            val consequence =
+                "Setting this high will result in most offers being auto-declined."
             when (rule.metricType) {
                 MetricType.DOLLAR_PER_MILE -> if (target > REALISTIC_MAX_DPM)
-                    "Your \$/mile target of ${Formats.money(target)} is above what most DoorDash offers pay. " +
-                    "Most offers are \$0.80–\$1.50/mi. Setting this high will result in most offers being auto-declined."
+                    "Your per-mile target of ${Formats.money(target)} is above what most offers pay. $consequence"
                 else null
 
                 MetricType.ACTIVE_HOURLY -> if (target > REALISTIC_MAX_HOURLY)
-                    "Your hourly target of ${Formats.money(target)}/hr is above typical DoorDash earnings. " +
-                    "Most dashers earn \$15–\$25/hr active. Setting this high will result in most offers being auto-declined."
+                    "Your hourly target of ${Formats.money(target)} is above typical active earnings. $consequence"
                 else null
 
                 MetricType.PAYOUT -> if (target > REALISTIC_MAX_PAYOUT)
-                    "Your minimum payout of ${Formats.money(target)} is above what most single orders pay. " +
-                    "Most DoorDash orders are under \$10. Setting this high will result in most offers being auto-declined."
+                    "Your minimum payout of ${Formats.money(target)} is above what most single orders pay. $consequence"
                 else null
 
                 else -> null

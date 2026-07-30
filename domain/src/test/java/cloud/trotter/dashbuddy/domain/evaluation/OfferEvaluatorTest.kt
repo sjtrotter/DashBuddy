@@ -5,6 +5,7 @@ import cloud.trotter.dashbuddy.domain.model.order.OrderType
 import cloud.trotter.dashbuddy.domain.model.order.ParsedOrder
 import cloud.trotter.dashbuddy.domain.model.vehicle.VehicleClass
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -480,12 +481,134 @@ class OfferEvaluatorTest {
         assertEquals(100.0, result.score, 0.0001)
     }
 
+    // -------------------------------------------------------------------------
+    // Unparsed distance ⇒ NO VERDICT (#936)
+    //
+    // The predecessor of this section pinned the bug: `distance null defaults to 1 - prevents
+    // divide-by-zero in dpm` asserted score 100 (a full ACCEPT) for a $2.00 offer of unknown
+    // length, because `?: 1.0` fabricated a one-mile trip. Distance is the denominator of every
+    // cost and rate metric, so the fail-SAFE direction is no verdict at all.
+    // -------------------------------------------------------------------------
+
     @Test
-    fun `distance null defaults to 1 - prevents divide-by-zero in dpm`() {
+    fun `null distance - is NOT scored as a 1-mile trip (the #936 regression)`() {
         val cfg = config(metricRule(MetricType.DOLLAR_PER_MILE, 2.0f))
         val result = evaluator.evaluate(offer(pay = 2.0, dist = null), cfg)
-        // dist defaults to 1.0 → dpm = 2.0/1.0 = 2.0 → score 100
+        // Was: dist ?: 1.0 → dpm = 2.0/1.0 = 2.0 → score 100 → ACCEPT.
+        assertEquals(OfferQuality.UNKNOWN, result.qualityLevel)
+        assertEquals(OfferAction.NOTHING, result.action)
+        assertEquals(0.0, result.score, 0.0001)
+    }
+
+    @Test
+    fun `null distance - fabricates no per-mile, per-hour or cost figure`() {
+        // A real (costly) economy: if any distance-derived field were computed off a fabricated
+        // mile, these would be non-zero.
+        val cfg = EvaluationConfig(
+            rules = listOf(metricRule(MetricType.PAYOUT, 7.0f)),
+            userEconomy = fuelOnlyEconomy(vehicleMpg = 20.0, gasPricePerGallon = 4.0),
+        )
+        val result = evaluator.evaluate(offer(pay = 12.5, dist = null), cfg)
+
+        assertEquals(OfferQuality.UNKNOWN, result.qualityLevel)
+        assertEquals(0.0, result.distanceMiles, 0.0)
+        assertEquals(0.0, result.dollarsPerMile, 0.0)
+        assertEquals(0.0, result.dollarsPerHour, 0.0)
+        assertEquals(0.0, result.fuelCostEstimate, 0.0)
+        assertEquals(0.0, result.nonFuelCostEstimate, 0.0)
+        assertEquals(0.0, result.totalOperatingCost, 0.0)
+        // Gross pay is real (it parsed); net is gross because NO cost was deducted — an unknown
+        // cost, not a fabricated one-mile cost.
+        assertEquals(12.5, result.payAmount, 0.0001)
+        assertEquals(12.5, result.netPayAmount, 0.0001)
+        // The economy's own per-mile rate is NOT distance-derived and stays real — the analytics
+        // projector freezes it as the session cost-per-mile.
+        assertEquals(cfg.userEconomy.operatingCostPerMile, result.operatingCostPerMile, 1e-9)
+        // The consumer-facing contract: renderers must treat those zeros as "unknown".
+        assertFalse(result.hasDistanceMetrics)
+    }
+
+    @Test
+    fun `zero distance - is unscoreable for the same reason as a null one`() {
+        val cfg = config(metricRule(MetricType.DOLLAR_PER_MILE, 2.0f))
+        val result = evaluator.evaluate(offer(pay = 2.0, dist = 0.0), cfg)
+        assertEquals(OfferQuality.UNKNOWN, result.qualityLevel)
+        assertFalse(result.hasDistanceMetrics)
+    }
+
+    @Test
+    fun `null distance - a MAX_DISTANCE rule cannot score it as within the limit`() {
+        // The sharpest fail-open shape: `1.0 - (dist / target)` gave a fabricated mile nearly full
+        // marks on a distance limit it was never measured against.
+        val cfg = config(metricRule(MetricType.MAX_DISTANCE, 10.0f))
+        val result = evaluator.evaluate(offer(pay = 20.0, dist = null), cfg)
+        assertEquals(OfferAction.NOTHING, result.action)
+        assertEquals(0.0, result.score, 0.0001)
+    }
+
+    @Test
+    fun `null distance - the shopping opt-out still hard-declines first`() {
+        // #762 D12's promise ("if off, Red Card orders are auto-declined") is a capability
+        // constraint, not an economic verdict — it must stay true even with no distance.
+        val cfg = EvaluationConfig(
+            rules = listOf(metricRule(MetricType.PAYOUT, 7.0f)),
+            userEconomy = noCostEconomy,
+            allowShopping = false,
+        )
+        val result = evaluator.evaluate(
+            offer(pay = 20.0, dist = null, orderType = OrderType.SHOP_FOR_ITEMS), cfg,
+        )
+        assertEquals(OfferAction.DECLINE, result.action)
+        assertEquals(OfferQuality.SHOP_DECLINED, result.qualityLevel)
+        // …but it still invents no mileage economics.
+        assertEquals(0.0, result.distanceMiles, 0.0)
+        assertEquals(0.0, result.dollarsPerHour, 0.0)
+    }
+
+    @Test
+    fun `null distance - a BLOCK-listed merchant still hard-declines first`() {
+        val cfg = config(metricRule(MetricType.PAYOUT, 7.0f), blockRule("Taco Bell"))
+        val result = evaluator.evaluate(offer(pay = 20.0, dist = null, storeName = "Taco Bell"), cfg)
+        assertEquals(OfferAction.DECLINE, result.action)
+        assertEquals(OfferQuality.BLOCKED, result.qualityLevel)
+    }
+
+    @Test
+    fun `null PAY (distance present) still fails toward DECLINE - unchanged asymmetry`() {
+        // Pinned so the asymmetry is deliberate and visible: an unparsed PAY is scoreable (it
+        // scores as $0 and declines), an unparsed DISTANCE is not scoreable at all.
+        val cfg = config(metricRule(MetricType.PAYOUT, 7.0f))
+        val result = evaluator.evaluate(offer(pay = null, dist = 3.0), cfg)
+        assertEquals(OfferAction.DECLINE, result.action)
+        assertEquals(0.0, result.score, 0.0001)
+        assertEquals(0.0, result.payAmount, 0.0)
+        assertTrue(result.hasDistanceMetrics)
+    }
+
+    @Test
+    fun `fully-populated offer - evaluation is unchanged by the #936 guard`() {
+        // Regression pin: the normal path must be byte-identical to pre-#936 behavior.
+        val cfg = EvaluationConfig(
+            rules = listOf(metricRule(MetricType.PAYOUT, 7.0f)),
+            userEconomy = fuelOnlyEconomy(vehicleMpg = 25.0, gasPricePerGallon = 3.0),
+        )
+        val result = evaluator.evaluate(offer(pay = 10.0, dist = 5.0), cfg)
+        val fuel = 5.0 * (3.0 / 25.0)
+
+        assertTrue(result.hasDistanceMetrics)
+        assertEquals(5.0, result.distanceMiles, 0.0)
+        assertEquals(10.0, result.payAmount, 0.0001)
+        assertEquals(fuel, result.fuelCostEstimate, 1e-9)
+        assertEquals(10.0 - fuel, result.netPayAmount, 1e-9)
+        assertEquals((10.0 - fuel) / 5.0, result.dollarsPerMile, 1e-9)
         assertEquals(100.0, result.score, 0.0001)
+        assertEquals(OfferAction.ACCEPT, result.action)
+        // $/hr is the real route rate (drive + handling), not a gated zero.
+        assertEquals(
+            (10.0 - fuel) / (result.estimatedTimeMinutes / 60.0),
+            result.dollarsPerHour,
+            1e-9,
+        )
     }
 
     // -------------------------------------------------------------------------

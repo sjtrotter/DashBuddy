@@ -420,6 +420,28 @@ enumeration, every capability lands *undecided* until the user opts in via the c
 Handlers: `OdometerEffectHandler`, `ScreenShotHandler`, `TipEffectHandler`, `TtsEffectHandler`,
 `UiInteractionHandler` (package-scoped, label-verified `RuleAction` taps — the only path that ever
 clicks a third-party app, #425), `OfferActionReceiver` (notification Accept/Decline actions).
+**The evaluator fails CLOSED on a missing input (#936).** Its two parse fallbacks were asymmetric:
+pay `?: 0.0` scores 0 → DECLINE, but distance `?: 1.0` invented a favourable **one-mile trip** —
+near-zero operating cost, near-zero drive time, an inflated `$/hr` — biasing the verdict toward
+ACCEPT precisely where the input was least trustworthy (the #827 class of seam). Distance is now
+the `0.0` "no distance" sentinel, and an offer that would otherwise be *scored* without one
+returns the existing no-verdict shape instead — `OfferAction.NOTHING` / score 0 /
+`OfferQuality.UNKNOWN`, mirroring the no-scoring-rules return. The three **distance-independent**
+verdicts stay in front of it (shopping opt-out #762 D12, protect-stats, merchant BLOCK). The
+returned economics are the honest subset: real gross pay and the economy's own
+`operatingCostPerMile` (a profile constant the projector freezes as the session cpm — zeroing it
+would make the session's deliveries look cost-free), with every distance-derived figure an
+explicit `0.0` placeholder and `netPayAmount` == gross (no cost deducted ≠ a one-mile cost).
+**`OfferEvaluation.hasDistanceMetrics` is the one predicate consumers branch on** so those
+placeholders are never rendered as measurements — `FlowCardSnapshot.Offer.from` (bubble card +
+heads-up custom views get null → their existing `—` / hidden gauge), `toNotificationSummary`,
+`TtsEffectHandler` (a no-verdict utterance, not "zero dollars an hour"),
+`JobAcceptFlow.acceptInputsFromPending` + `FlowCardMapper`'s #460 co-hero, and
+`RecordFolds.foldOffer` (null frozen estimates, so `AVG(score)`/`AVG(estDollarsPerHour)` aren't
+dragged toward a fabricated 0). The #659 fuel/non-fuel split was already guarded at the fold
+(`distanceMiles > 0.0` → null split → 3-step waterfall), so no NaN can reach a frozen economics
+column, and no `PROJECTOR_VERSION` bump was needed (historical evaluations were frozen carrying
+the fabricated 1.0 mile, so a refold reproduces them byte-identically).
 **Dedupe granularity is the rule's to declare (#859).** The durable `effects_fired` row is
 "at most once per 48h"; a rule effect that declares its own `throttleMs` opts OUT of it and
 into that declared window (the engine's wall-clock throttle, keyed by the same `effectKey`) —

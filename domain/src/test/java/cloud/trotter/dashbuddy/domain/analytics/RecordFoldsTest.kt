@@ -364,11 +364,26 @@ class RecordFoldsTest {
         assertNull(offer.estNonFuelPerMile)
         assertEquals(0.30, offer.estOperatingCostPerMile!!, 1e-9)
 
+        // #936: the same row's other frozen ESTIMATES are placeholders too (a distance-less
+        // evaluation scores nothing), so they record as null rather than dragging the Decisions-tab
+        // `AVG(score)` / `AVG(estDollarsPerHour)` / `Σ estNetPay` aggregates toward a fabricated 0.
+        assertNull(offer.score)
+        assertNull(offer.estNetPay)
+        assertNull(offer.estDollarsPerHour)
+        assertNull(offer.estDollarsPerMile)
+        assertNull(offer.estTimeMinutes)
+        // The honest facts still record.
+        assertEquals(OfferAction.ACCEPT.name, offer.action)
+        assertEquals(OfferQuality.GOOD.name, offer.quality)
+
         val d = outcomes[2].delivery!!
         assertEquals(CostBasis.OFFER_FROZEN, d.costBasis)
         assertEquals(0.30, d.frozenCostPerMile!!, 1e-9)
         assertNull("no split on a distance-0 offer", d.frozenFuelPerMile)
         assertNull(d.frozenNonFuelPerMile)
+        // The money-critical half: no NaN/Infinity can reach a frozen economics column.
+        assertTrue(d.netProfit!!.isFinite())
+        assertTrue(d.frozenCostPerMile.isFinite())
     }
 
     @Test
