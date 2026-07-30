@@ -12,7 +12,7 @@ import java.util.Locale
 
 /**
  * #970 — the period pager's label logic (brief §3.1): which relation word fronts the window, and how
- * its date range renders. Compose-free, per the [WaterfallModel] / [MileageTaxModel] precedent.
+ * its date range renders. Compose-free, per the [MoneyWentModel] / [MileageTaxModel] precedent.
  *
  * The interesting part is calendar reasoning, not rendering: is this the current week, is it the one
  * before, does the range leave the current year, does it straddle a month. Each of those decides a

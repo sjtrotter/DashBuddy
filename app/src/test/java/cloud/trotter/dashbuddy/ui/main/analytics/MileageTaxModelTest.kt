@@ -19,7 +19,7 @@ import java.util.Locale
  * spans-years note. Since #970 the note (and the labelled year) derive from the selected
  * **[AnalyticsWindows] window's own endpoints**, so the Jan-straddling Monday week and a driver-drawn
  * custom range are both covered, and a paged-back window is priced at ITS year rather than at the
- * device clock's. Compose-free, per the [WaterfallModel] / `WaterfallModelTest` precedent (test the
+ * device clock's. Compose-free, per the [MoneyWentModel] / `MoneyWentModelTest` precedent (test the
  * logic, not the rendering).
  */
 class MileageTaxModelTest {

@@ -128,6 +128,8 @@ fun AnalyticsScreen(
             when (uiState.selectedTab) {
                 AnalyticsTab.Money -> MoneyTab(
                     economics = uiState.economics,
+                    payMix = uiState.payMix,
+                    platformSplit = uiState.platformSplit,
                     topStores = uiState.topStores,
                     recentSessions = uiState.recentSessions,
                     dailyEarnings = uiState.dailyEarnings,

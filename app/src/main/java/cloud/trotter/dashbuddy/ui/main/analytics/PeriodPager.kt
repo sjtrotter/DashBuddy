@@ -53,7 +53,7 @@ enum class WindowRelation {
 /**
  * Pure label logic for the period pager (#970 / brief §3.1) — the relation word and the range text.
  *
- * Compose-free on purpose (the [WaterfallModel]/[MileageTaxModel] precedent): the interesting part is
+ * Compose-free on purpose (the [MoneyWentModel]/[MileageTaxModel] precedent): the interesting part is
  * the *calendar* reasoning ("is this the current week?", "does this span two years?"), and it should
  * be provable without rendering. Every rendered string routes through the `:domain` date-format SSOT.
  */

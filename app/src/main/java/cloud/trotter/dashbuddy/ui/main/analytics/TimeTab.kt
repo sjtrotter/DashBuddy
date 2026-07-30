@@ -6,7 +6,6 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -240,7 +239,7 @@ private fun MileageTaxCard(time: TimeEconomics, window: AnalyticsWindow) {
 
 /**
  * Pure copy logic for the MILEAGE & TAX card (#689) — Compose-free so it's unit-testable in
- * isolation from rendering (the [WaterfallModel] precedent). A single day or a calendar month is
+ * isolation from rendering (the [MoneyWentModel] precedent). A single day or a calendar month is
  * single-year by construction, but the Monday-anchored week straddles Jan 1 whenever New Year's Day
  * falls Tue–Sun, a driver-drawn custom range can straddle anything, and Lifetime can span any
  * boundary — so the spans-years check derives from the selected [AnalyticsWindow]'s own endpoints
@@ -288,12 +287,3 @@ object MileageTaxModel {
     }
 }
 
-@Composable
-private fun EmptyRow(text: String) {
-    Text(
-        text = text,
-        style = MaterialTheme.typography.bodyMedium,
-        color = AppTheme.colors.text3,
-        modifier = Modifier.padding(vertical = 4.dp),
-    )
-}

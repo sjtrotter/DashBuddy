@@ -385,17 +385,53 @@
     <string name="economy_editor_irs_rate_note" translatable="false">IRS standard mileage rate: $0.67/mi</string>
 
     <!-- main/analytics/MoneyTab.kt -->
-    <string name="money_tab_gross_earnings_title">GROSS EARNINGS</string>
-    <string name="money_tab_true_net_chip_format">True net %1$s</string>
-    <string name="money_tab_net_per_hour_chip_format">Net/hr %1$s</string>
     <string name="money_tab_earnings_by_day_title">EARNINGS BY DAY</string>
     <string name="money_tab_no_earnings_yet">No earnings in this period yet.</string>
     <string name="money_tab_earnings_by_day_caption">gross per day · sessions count on their start day · (No session) deliveries count on their own completion day</string>
-    <string name="money_tab_true_net_title">TRUE NET</string>
+    <string name="money_tab_earnings_by_day_bar_click_label">Show this day</string>
+    <string name="money_tab_earnings_by_day_detail_format">%1$s · %2$s · %3$s %4$s</string>
     <string name="money_tab_stat_net_per_hour">Net/hr</string>
     <string name="money_tab_stat_net_per_mile">Net/mi</string>
+    <string name="money_tab_stat_net_per_drop">Net/drop</string>
     <string name="money_tab_stat_miles">Miles</string>
     <string name="money_tab_stat_deliveries">Deliveries</string>
+
+    <!-- main/analytics/MoneyWentCard.kt (brief §4.1) -->
+    <string name="money_tab_where_went_title">WHERE YOUR MONEY WENT</string>
+    <string name="money_tab_where_went_came_in">%1$s came in.</string>
+    <string name="money_tab_where_went_car">%1$s went to the car.</string>
+    <string name="money_tab_where_went_kept">%1$s stayed with you.</string>
+    <string name="money_tab_where_went_segment_kept">Stayed with you</string>
+    <string name="money_tab_where_went_segment_gas">Gas</string>
+    <string name="money_tab_where_went_segment_wear">Wear on the car</string>
+    <string name="money_tab_where_went_segment_car">Car costs</string>
+    <string name="money_tab_where_went_disclosure_format">Car costs = %1$s mi driven × %2$s/mi, frozen when you accepted each offer</string>
+    <string name="money_tab_where_went_disclosure_no_miles">Car costs are frozen at what each offer was accepted under — no miles logged for this window</string>
+    <string name="money_tab_where_went_no_split">Gas and wear weren\'t recorded separately for every delivery in this window, so only the combined car cost is shown.</string>
+    <string name="money_tab_where_went_frozen_note">Costs are frozen at the rate each offer was accepted under — changing your cost settings never rewrites past windows.</string>
+    <string name="money_tab_per_mile_format">%1$s/mi</string>
+    <string name="money_tab_disclosure_expand">Show the details</string>
+    <string name="money_tab_disclosure_collapse">Hide the details</string>
+
+    <!-- main/analytics/PayMixCard.kt (brief §4.2) -->
+    <string name="money_tab_pay_mix_title">WHAT MADE UP THE GROSS</string>
+    <string name="money_tab_pay_mix_segment_base">Base pay</string>
+    <string name="money_tab_pay_mix_segment_tips">Tips</string>
+    <string name="money_tab_pay_mix_segment_bonuses">Bonuses &amp; other</string>
+    <string name="money_tab_pay_mix_tips_with_cash_format">%1$s (incl. %2$s cash)</string>
+    <string name="money_tab_pay_mix_insight_format">Tips were %1$s of your pay this window.</string>
+    <string name="money_tab_pay_mix_insight_floor_format">Tips were at least %1$s of your pay this window.</string>
+    <string name="money_tab_pay_mix_no_insight">No pay recorded for this window yet.</string>
+    <string name="money_tab_pay_mix_not_recorded">No pay breakdown was recorded for this window — base pay and tips are only itemized on single-order deliveries.</string>
+    <string name="money_tab_pay_mix_partial_coverage_format">Itemized on %1$s of %2$s deliveries — a stacked order settles on one receipt that can\'t be split, so its pay sits in bonuses &amp; other.</string>
+    <string name="money_tab_pay_mix_exceeds_gross_format">The itemized pay adds up to %1$s more than the reported total — worth a look.</string>
+
+    <!-- main/analytics/NeedsALookCard.kt (brief §4.2) -->
+    <string name="money_tab_needs_a_look_title_format">NEEDS A LOOK (%1$s)</string>
+
+    <!-- main/analytics/MoneyBreakdownCards.kt -->
+    <string name="money_tab_platform_split_title">BY PLATFORM</string>
+    <string name="money_tab_platform_split_kept_format">%1$s kept</string>
     <string name="money_tab_top_stores_title">TOP STORES</string>
     <string name="money_tab_no_store_earnings_yet">No store earnings in this period yet.</string>
     <string name="money_tab_unknown_store">Unknown store</string>
