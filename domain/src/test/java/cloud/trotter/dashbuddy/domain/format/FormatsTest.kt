@@ -40,4 +40,35 @@ class FormatsTest {
         assertEquals("$7,50", Formats.money(7.5))
         assertEquals("12.500", Formats.commaInt(12_500))
     }
+
+    /**
+     * #942: [Formats.percent] replaced four hand-rolled `(x * 100).roundToInt()` sites, so its
+     * whole-number output must be byte-identical to what those rendered.
+     */
+    @Test
+    fun `percent matches the hand-rolled roundToInt shape it replaced`() {
+        Locale.setDefault(Locale.US)
+        assertEquals("0%", Formats.percent(0.0))
+        assertEquals("100%", Formats.percent(1.0))
+        assertEquals("67%", Formats.percent(2.0 / 3.0))
+        assertEquals("33%", Formats.percent(1.0 / 3.0))
+        // .5 rounds up, exactly as roundToInt() does for a non-negative value.
+        assertEquals("13%", Formats.percent(0.125))
+        assertEquals("74%", Formats.percent(0.7351))
+    }
+
+    @Test
+    fun `percent takes the fraction, never the pre-multiplied value`() {
+        Locale.setDefault(Locale.US)
+        assertEquals("8%", Formats.percent(0.08))
+        assertEquals("800%", Formats.percent(8.0))
+    }
+
+    @Test
+    fun `percent honors a decimals request and the device locale`() {
+        Locale.setDefault(Locale.US)
+        assertEquals("66.7%", Formats.percent(2.0 / 3.0, decimals = 1))
+        Locale.setDefault(Locale.GERMANY)
+        assertEquals("66,7%", Formats.percent(2.0 / 3.0, decimals = 1))
+    }
 }

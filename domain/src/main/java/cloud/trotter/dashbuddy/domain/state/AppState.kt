@@ -50,3 +50,21 @@ fun AppState.activeSessionId(): String? {
         ?.let { regions.platforms[it]?.session?.sessionId }
     return active ?: regions.platforms.values.firstNotNullOfOrNull { it.session?.sessionId }
 }
+
+/**
+ * THE platform the UI focuses on (#942) — the flow region's screen-authoritative
+ * active platform, else the cross-platform region's most recent activity so a
+ * neutral/home screen keeps showing the dash the dasher was just on.
+ *
+ * Derived, never a second copy (principle 5): four surfaces — the home dashboard,
+ * the ratings screen, the bubble's follow-platform base, and the live card builder —
+ * hand-rolled this same `activePlatform ?: mostRecentActivityPlatform` expression in
+ * three different modules, which is exactly how the #356 family started. Lives beside
+ * [activeSessionId] because it is the same "which dash is the UI talking about"
+ * question, one step earlier.
+ *
+ * Platform-agnostic by construction: both inputs are registry-resolved [Platform]
+ * values, so no surface can grow a literal.
+ */
+fun AppState.focusedPlatform(): Platform? =
+    regions.flow.activePlatform ?: regions.crossPlatform.mostRecentActivityPlatform

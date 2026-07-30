@@ -12,6 +12,7 @@ import cloud.trotter.dashbuddy.domain.state.Flow
 import cloud.trotter.dashbuddy.domain.state.Mode
 import cloud.trotter.dashbuddy.domain.state.Platform
 import cloud.trotter.dashbuddy.domain.state.PlatformRegion
+import cloud.trotter.dashbuddy.domain.state.focusedPlatform
 import cloud.trotter.dashbuddy.core.state.StateManagerV2
 import cloud.trotter.dashbuddy.ui.bubble.BubbleManager
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -89,11 +90,8 @@ class DashboardViewModel @Inject constructor(
     }
 
     /** The platform the home status attributes to — registry-resolved, not a literal. */
-    private fun focusedRegion(state: AppState): PlatformRegion? {
-        val platform: Platform? = state.regions.flow.activePlatform
-            ?: state.regions.crossPlatform.mostRecentActivityPlatform
-        return platform?.let { state.regions.platforms[it] }
-    }
+    private fun focusedRegion(state: AppState): PlatformRegion? =
+        state.focusedPlatform()?.let { state.regions.platforms[it] }
 
     @StringRes
     private fun statusText(flow: Flow, mode: Mode?): Int {

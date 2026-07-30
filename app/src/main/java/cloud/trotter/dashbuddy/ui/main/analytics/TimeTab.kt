@@ -20,6 +20,7 @@ import cloud.trotter.dashbuddy.core.designsystem.component.AppLegend
 import cloud.trotter.dashbuddy.core.designsystem.component.AppSegment
 import cloud.trotter.dashbuddy.core.designsystem.component.AppStackBar
 import cloud.trotter.dashbuddy.core.designsystem.component.AppStatTile
+import cloud.trotter.dashbuddy.core.designsystem.text.EMPTY_VALUE
 import cloud.trotter.dashbuddy.core.designsystem.theme.AppTheme
 import cloud.trotter.dashbuddy.core.data.analytics.PeriodBounds
 import cloud.trotter.dashbuddy.domain.analytics.AnalyticsPeriod
@@ -29,7 +30,6 @@ import cloud.trotter.dashbuddy.domain.format.Formats
 import cloud.trotter.dashbuddy.domain.format.formatDuration
 import java.time.Instant
 import java.time.ZoneId
-import kotlin.math.roundToInt
 import kotlin.math.roundToLong
 
 
@@ -129,8 +129,8 @@ private fun DeadheadCard(time: TimeEconomics) {
             return@AppCard
         }
 
-        val deadheadPct = (time.unattributedMiles / time.miles * 100.0).roundToInt()
-        Text(text = "$deadheadPct%", style = AppTheme.num.heroNum, color = c.text)
+        val deadheadPct = Formats.percent(time.unattributedMiles / time.miles)
+        Text(text = deadheadPct, style = AppTheme.num.heroNum, color = c.text)
         Spacer(Modifier.height(2.dp))
         Text(
             text = stringResource(R.string.time_tab_deadhead_caption),
@@ -167,7 +167,7 @@ private fun OnTimeCard(time: TimeEconomics) {
 
         AppGaugeRing(
             progress = rate.toFloat(),
-            value = "${(rate * 100.0).roundToInt()}%",
+            value = Formats.percent(rate),
             label = stringResource(R.string.time_tab_gauge_on_time_label),
             color = c.good,
         )

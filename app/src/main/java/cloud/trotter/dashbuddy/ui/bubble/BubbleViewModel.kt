@@ -16,6 +16,7 @@ import cloud.trotter.dashbuddy.domain.model.vehicle.FuelType
 import cloud.trotter.dashbuddy.domain.state.AppState
 import cloud.trotter.dashbuddy.domain.state.OfferIntent
 import cloud.trotter.dashbuddy.domain.state.Platform
+import cloud.trotter.dashbuddy.domain.state.focusedPlatform
 import cloud.trotter.dashbuddy.core.state.StateManagerV2
 import cloud.trotter.dashbuddy.domain.pipeline.Observation
 import cloud.trotter.dashbuddy.feature.bubble.cards.BubbleCards
@@ -27,6 +28,7 @@ import cloud.trotter.dashbuddy.feature.bubble.session.BubbleSessionResolver
 import cloud.trotter.dashbuddy.feature.bubble.session.LiveSession
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -89,11 +91,8 @@ class BubbleViewModel @Inject constructor(
     private val _selectedPlatform = MutableStateFlow<Platform?>(null)
 
     /** The platform whose frame we last recognized — the base the presentation follows. */
-    private val followPlatform = stateManager.state
-        .map { state ->
-            state.regions.flow.activePlatform
-                ?: state.regions.crossPlatform.mostRecentActivityPlatform
-        }
+    private val followPlatform: Flow<Platform?> = stateManager.state
+        .map { it.focusedPlatform() }
         .distinctUntilChanged()
 
     /** Every platform currently dashing (`PlatformRegion.session != null`), oldest dash first. */

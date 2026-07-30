@@ -158,7 +158,8 @@ Hilt/`:core:data`/`:core:state`.) **Remaining Phase-6 extractions: none — Phas
 - **`:domain`** — Pure Kotlin library. Domain models, state regions, evaluation logic,
   pipeline/provider contracts, the capture contracts (`CaptureBus`, `EnvelopeBuilder`,
   capture schemas/DTOs), the `PlatformPreferences` read interface (#355), and the
-  number/money/duration formatting SSOT (`format.Formats` money/decimal + `format.TimeFormats`
+  number/money/duration formatting SSOT (`format.Formats` money/decimal/**percent** — #942 pulled
+  the `(x * 100).roundToInt()` shape down off four UI call sites — + `format.TimeFormats`
   `formatDuration`/`formatCountdown` — the locale policy, #358/#456/#467; lives here so both the
   UI and the state layer route through one definition; the Compose time helpers
   `rememberNow`/`rememberTimeFormatter` stay in `:core:designsystem`). No Android
@@ -209,7 +210,11 @@ Hilt/`:core:data`/`:core:state`.) **Remaining Phase-6 extractions: none — Phas
   `AppGaugeRing`, `AppSegmented`, `AppSlider`, `AppBarChart`, `AppAccordion`). The design-system
   brand vocabulary is `App*`, not `Dash*` (#468) — no platform-flavoured names. No M3 dynamic
   color. Feature-specific composables stay with their feature (Package by Feature); only generic,
-  data-in/lambdas-out components live here.
+  data-in/lambdas-out components live here. It also owns the shared **display vocabulary** two
+  modules would otherwise copy: the Compose time helpers (`time.TimeKit` — `rememberNow`,
+  `rememberTimeFormatter`) and the em-dash no-value placeholder (`text.EMPTY_VALUE`, #942 — the
+  `:app` analytics hub and `:feature:dashboard` each held a copy, and a feature module can never
+  reach an `:app` owner).
 - **`:app`** — UI (Compose + overlays), side effect handlers (SideEffectEngine, odometer, screenshots,
   TTS, tips), Hilt DI wiring, and the `DashBuddyApplication` entry point.
 - **`matchers/`** — the recognition **ruleset** source, as a self-contained **included Gradle build**

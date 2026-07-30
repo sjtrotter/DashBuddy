@@ -3,8 +3,7 @@ package cloud.trotter.dashbuddy.ui.main.ratings
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import cloud.trotter.dashbuddy.core.state.StateManagerV2
-import cloud.trotter.dashbuddy.domain.state.AppState
-import cloud.trotter.dashbuddy.domain.state.Platform
+import cloud.trotter.dashbuddy.domain.state.focusedPlatform
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -27,13 +26,9 @@ class RatingsViewModel @Inject constructor(
 
     val uiState: StateFlow<RatingsUiState> = stateManager.state
         .map { state ->
-            val platform = focusedPlatform(state)
+            val platform = state.focusedPlatform()
             val snapshot = platform?.let { state.regions.platforms[it]?.ratings }
             RatingsUiState.from(platform, snapshot)
         }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), RatingsUiState.EMPTY)
-
-    private fun focusedPlatform(state: AppState): Platform? =
-        state.regions.flow.activePlatform
-            ?: state.regions.crossPlatform.mostRecentActivityPlatform
 }

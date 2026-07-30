@@ -80,8 +80,8 @@ object BubbleSessionResolver {
     /**
      * @param mode the dev-settings experiment switch.
      * @param selection the switcher's current pick (null ⇒ never picked / released by the caller).
-     * @param followPlatform `flow.activePlatform ?: crossPlatform.mostRecentActivityPlatform` —
-     *   the platform of the last recognized frame.
+     * @param followPlatform [cloud.trotter.dashbuddy.domain.state.focusedPlatform] — the platform of
+     *   the last recognized frame.
      * @param liveSessions every platform with a live session, caller-ordered (oldest dash first).
      * @param fallbackSessionId the durable most-recent session from the event log (#459) — what to
      *   show when nothing is live.

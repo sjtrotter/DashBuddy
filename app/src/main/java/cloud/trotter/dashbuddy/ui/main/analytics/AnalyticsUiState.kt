@@ -15,11 +15,12 @@ import cloud.trotter.dashbuddy.domain.analytics.StoreReportCard
 import cloud.trotter.dashbuddy.domain.analytics.TimeEconomics
 
 /**
- * The placeholder shown for a stat with no measurable value yet — the em-dash. ONE owner across every
- * analytics-hub tab (Money / Decisions / Time / Patterns / SessionDetail), Principle 5: a per-file copy
- * is a divergence bug waiting to fire.
+ * Below this a money figure is effectively zero — no callout, no cash-tip line (it avoids flagging
+ * a "$0.00"). ONE owner for the analytics hub (#942): the Money tab and the per-dash drill-down
+ * each kept their own `private const` copy of the same 0.005, which is a threshold that can only
+ * ever drift apart.
  */
-internal const val EMPTY_VALUE = "—"
+internal const val UNATTRIBUTED_EPSILON = 0.005
 
 /**
  * The Analytics hub tabs (#315). [Money], [Decisions] (H3), [Time] (H4), and [Patterns] (H5) all

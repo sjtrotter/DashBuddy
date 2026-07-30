@@ -44,6 +44,7 @@ import cloud.trotter.dashbuddy.core.designsystem.component.AppCallout
 import cloud.trotter.dashbuddy.core.designsystem.component.AppCard
 import cloud.trotter.dashbuddy.core.designsystem.component.AppChip
 import cloud.trotter.dashbuddy.core.designsystem.component.AppStatTile
+import cloud.trotter.dashbuddy.core.designsystem.text.EMPTY_VALUE
 import cloud.trotter.dashbuddy.core.designsystem.theme.AppTheme
 import cloud.trotter.dashbuddy.domain.analytics.DeliveryRecord
 import cloud.trotter.dashbuddy.domain.analytics.PayBasis
@@ -53,10 +54,6 @@ import cloud.trotter.dashbuddy.domain.format.formatClockTime
 import cloud.trotter.dashbuddy.domain.format.formatDuration
 import cloud.trotter.dashbuddy.domain.format.formatShortDate
 import kotlin.math.roundToInt
-
-/** Below this the unattributed pay is effectively zero — no callout (avoids a "$0.00" flag). */
-private const val UNATTRIBUTED_EPSILON = 0.005
-
 
 /**
  * The read-only per-dash drill-down (#650 PR A): one dash expanded top→bottom — a header card

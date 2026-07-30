@@ -12,14 +12,12 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import cloud.trotter.dashbuddy.core.designsystem.component.AppSegmented
 import cloud.trotter.dashbuddy.core.designsystem.component.AppStatTile
+import cloud.trotter.dashbuddy.core.designsystem.text.EMPTY_VALUE
 import cloud.trotter.dashbuddy.core.designsystem.theme.AppTheme
 import cloud.trotter.dashbuddy.domain.analytics.AnalyticsPeriod
 import cloud.trotter.dashbuddy.domain.analytics.PeriodEconomics
 import cloud.trotter.dashbuddy.domain.format.Formats
 import cloud.trotter.dashbuddy.feature.dashboard.R
-
-/** Placeholder shown for a rate figure that has no measurable denominator yet. */
-private const val EMPTY_VALUE = "—"
 
 /** The review windows offered by the period selector, in display order. */
 private data class PeriodOption(val period: AnalyticsPeriod, val label: String)

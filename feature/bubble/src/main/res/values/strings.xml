@@ -48,15 +48,6 @@
     <string name="flow_card_distance_secondary_format" translatable="false">%1$s mi</string>
     <string name="flow_card_per_mile_secondary_format" translatable="false">%1$s/mi</string>
     <string name="flow_card_badge_shop_and_deliver">Shop &amp; Deliver</string>
-    <string name="flow_card_badge_high_pay">High pay</string>
-    <string name="flow_card_badge_priority">Priority</string>
-    <string name="flow_card_badge_red_card">Red Card</string>
-    <string name="flow_card_badge_alcohol">Alcohol</string>
-    <string name="flow_card_badge_large_order">Large order</string>
-    <string name="flow_card_badge_pizza_bag">Pizza bag</string>
-    <string name="flow_card_badge_same_store">Same store</string>
-    <string name="flow_card_badge_same_customer">Same customer</string>
-    <string name="flow_card_badge_add_ons_ok">Add-ons OK</string>
     <string name="flow_card_timer_dwell_label">Dwell</string>
     <string name="flow_card_timer_at_door_sub">at door</string>
     <string name="flow_card_timer_at_store_sub">at store</string>
