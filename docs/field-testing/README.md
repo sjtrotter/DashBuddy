@@ -2344,13 +2344,18 @@ CI — which surfaced its own footgun: a PR body *describing* the skip token ski
 **#931** (#910: the three-mechanism privacy build — rule redacts, click envelopes inherit the
 screen rule's redact via `ScreenContext`, `CustomerTextMarkers.ID_MARKERS` UNKNOWN backstop;
 line-by-line adversarial review + a dedicated fable `/security-review` both CLEAN — "monotonically
-privacy-tightening on every traced path"), **#932** (#900 matchFirst wire-scoping). **#930** (#902
-workflow_dispatch escape hatch + `[force ci]` override) hit the very dispatch-refusal class it
-mitigates — the issue's tree-nudge recipe cleared it; in CI at entry-writing time. #835
-(`stateDescription` scrub SSOT) build launched on the post-#931 tree. A separate dev-commissioned
-**ground-up adversarial review** landed as PR #933 (docs-only; 12 recommended issues awaiting dev
-triage — deliberately not filed by any agent). `CLAUDE.local.md` updated: GitHub network fixed
-(dev), retry loops retired.
+privacy-tightening on every traced path"), **#932** (#900 matchFirst wire-scoping), **#930** (#902
+workflow_dispatch escape hatch + `[force ci]` override — which hit the very dispatch-refusal class
+it mitigates; the issue's tree-nudge recipe cleared it), and **#933** — the dev-commissioned
+**ground-up adversarial review** (docs-only; `docs/adversarial-review/2026-07-30-ground-up-review.md`,
+verdict "viable with binding constraints"). On the dev's go its 12 recommended issues were
+validated against source and filed as **#936–#947** (evaluator null-distance fail-open →
+no-verdict; recognition-health liveness; en-locale boundary of the marker layers; instrumented-CI
+nightly; propExplore nightly; negative corpus + intake hardening ⊃ #929; UI-edge SSOT batch;
+FlowCardItem split; UDF cleanups; checklist triage policy [dev-gated]; ROADMAP retire-or-refresh
+[dev-gated]; test hardening batch) — builds launched same-session for #936/#947 (+ PR #948 for
+#940). #835 (`stateDescription` scrub SSOT) build launched on the post-#931 tree.
+`CLAUDE.local.md` updated: GitHub network fixed (dev), retry loops retired.
 
 ---
 
