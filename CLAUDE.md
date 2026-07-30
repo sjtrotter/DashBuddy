@@ -313,6 +313,18 @@ iterate it instead of hand-listing the fields, so a field added to the model can
 scrub site; the UNKNOWN-notification `SensitiveTextMarkers` scan and the `CustomerTextMarkers`
 backstop both also scan `actionLabels` now (#666) — a push action button label is serialized into
 the envelope the same as the text fields and was previously excluded from every scrub layer.
+**The screen-node edition of that SSOT is `UiNodeTextField` + `UiNode.scrubbableStrings()` /
+`mapScrubbableStrings()` / `allScrubbableText()` (#835):** `stateDescription` is captured (SDK ≥ R)
+and serialized as `"state"`, but every layer hand-listed `text` + `contentDescription`, so a view
+that mirrors content into it (toggles/sliders/custom controls do) would have shipped it verbatim on
+BOTH paths — latent, no fielded leak. `CompiledRedact.maskNode`, `CustomerTextMarkers`
+(text scan + `scrub`/`scrubUnknown` + the #910 id scan's already-redacted test),
+`SensitiveTextMarkers.findMarker(tree)`, and the corpus `SnapshotSecurityScanner`/`SnapshotRedactor`
+now all iterate that enumeration, so the NEXT string field added to `UiNode` cannot silently miss a
+scrub site. Recognition is deliberately untouched: `UiNode.allText` (what rules match on) still
+excludes `stateDescription` — widening a scrub layer must never be able to move a classification —
+and rule-side FIND predicates (`hasTextMatchesRegex` & co.) are likewise unchanged; #835 fixes the
+MASK side only.
 **Two #910 additions close the SPLIT-NODE class** — DoorDash renders the customer card as separate
 nodes (a `user_name_label` reading exactly `"Delivery for"` beside a BARE `user_name`), which a
 text-PREFIX scan can never own since the marker and the PII are in different nodes. (1) A **click

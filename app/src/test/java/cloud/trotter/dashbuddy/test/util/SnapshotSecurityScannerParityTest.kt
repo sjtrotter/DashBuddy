@@ -117,9 +117,16 @@ class SnapshotSecurityScannerParityTest {
 
     @Test
     fun `property - scanner catches everything the production backstop catches`() = runTest {
+        // #947: the property only asserted INSIDE `if (markerHit != null)`, so it would go
+        // silently vacuous (pass without checking anything) if the generators ever drifted
+        // to stop producing marker-bearing trees — e.g. a `toxicTokens`/`mutations` edit that
+        // accidentally neuters every sample. Count hits across the run and floor them so a
+        // drift like that fails loud instead of passing green.
+        var markerHits = 0
         checkAll(PropSeeds.samples(600), PropSeeds.config(SEED), treeArb) { tree ->
             val markerHit = SensitiveTextMarkers.findMarker(tree)
             if (markerHit != null) {
+                markerHits++
                 assertTrue(
                     "SSOT PARITY VIOLATION: findMarker hit <$markerHit> on\n$tree\n" +
                         "but SnapshotSecurityScanner.scan reported CLEAN — a toxic screen the " +
@@ -128,6 +135,17 @@ class SnapshotSecurityScannerParityTest {
                 )
             }
         }
+        // Observed 600/600 samples hit a marker under the pinned SEED (every generated tree
+        // embeds a `toxicTokens` entry, so this should ~always be the full 600) — floor at
+        // ~half so the assertion stays meaningful without being brittle to a legitimate,
+        // deliberate generator change. Per the #878 doctrine, don't bump SEED to dodge this;
+        // if a real generator change lowers the count, re-run and reset the floor deliberately.
+        assertTrue(
+            "SSOT PARITY VIOLATION: only $markerHits/600 samples hit a marker (observed 600/600 " +
+                "at authorship) — the generators may have drifted away from marker-bearing " +
+                "samples, which would make the assertion above conditionally vacuous.",
+            markerHits >= 300,
+        )
     }
 
     // ---- Crisp named cases (each isolates one pre-fix gap for the red-first log) ----

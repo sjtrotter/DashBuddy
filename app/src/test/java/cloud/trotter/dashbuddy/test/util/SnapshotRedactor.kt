@@ -1,5 +1,6 @@
 package cloud.trotter.dashbuddy.test.util
 
+import cloud.trotter.dashbuddy.domain.model.accessibility.UiNodeTextField
 import cloud.trotter.dashbuddy.domain.model.notification.NotifTextField
 import kotlinx.serialization.builtins.serializer
 import kotlinx.serialization.json.Json
@@ -177,8 +178,11 @@ object SnapshotRedactor {
     private fun collectNode(o: JsonObject, repl: MutableMap<String, String>) {
         val piiById = (o["id"]?.takeIf { it is JsonPrimitive }?.jsonPrimitive?.content ?: "")
             .substringAfterLast('/') in PII_ID_SUFFIXES
-        for (k in listOf("text", "desc", "state")) {
-            val v = o[k] as? JsonPrimitive ?: continue
+        // #835: iterate the production UiNodeTextField wire-name SSOT instead of
+        // hand-listing text/desc/state, so a string field added to UiNodeDto is
+        // scrubbed on the commit path automatically.
+        for (field in UiNodeTextField.entries) {
+            val v = o[field.wire] as? JsonPrimitive ?: continue
             if (!v.isString) continue
             record(v.content, scrub(v.content, piiById), repl)
         }
