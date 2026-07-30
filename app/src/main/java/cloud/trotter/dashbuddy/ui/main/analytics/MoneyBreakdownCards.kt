@@ -179,6 +179,15 @@ fun PlatformSplitCard(rows: List<PlatformEconomics>, modifier: Modifier = Modifi
                 }
             }
         }
+        // §9: net is frozen at decision-time costs, and that must be said wherever net appears. The
+        // sentence is the SAME resource the "where your money went" disclosure uses — one owner for
+        // the claim, so the two cards can never phrase the same promise differently.
+        Spacer(Modifier.height(10.dp))
+        Text(
+            text = stringResource(R.string.money_tab_where_went_frozen_note),
+            style = MaterialTheme.typography.bodySmall,
+            color = c.text3,
+        )
     }
 }
 
