@@ -74,7 +74,11 @@ class UberIdleMapOfflineEvidenceTest(
 
     @Test
     fun `partially rendered uber home makes no offline claim`() {
-        val intent = screenRuleset.matchFirst(node)?.intent ?: "UNKNOWN"
+        // #900 (#898 review F5): scope to the uber partition like production does
+        // (ObservationClassifier partitions by wire at all three call sites) — unscoped,
+        // a future fixture carrying an "Inbox, N new notifications" desc would be claimed
+        // cross-platform by doordash.screen.notifications_view via allText folding.
+        val intent = screenRuleset.matchFirst(node, platformWire = "uber")?.intent ?: "UNKNOWN"
         assertEquals(
             "$filename classified '$intent' — a partially rendered Uber home carries no offline " +
                 "evidence, so claiming one forges an Online→Offline edge (#857)",
