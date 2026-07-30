@@ -8,6 +8,7 @@ import androidx.datastore.preferences.core.doublePreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.floatPreferencesKey
 import androidx.datastore.preferences.core.intPreferencesKey
+import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.core.stringSetPreferencesKey
 import cloud.trotter.dashbuddy.core.datastore.di.AppPreferences
@@ -76,7 +77,26 @@ class AppPreferencesDataSource @Inject constructor(
 
         // Tracks which EconomyField enum values the user has explicitly set
         val USER_SET_ECONOMY_FIELDS = stringSetPreferencesKey("user_set_economy_fields")
+
+        // ----- Analytics review window (#970) -----
+        // The hub's period pager selection, persisted so it survives tab switches AND app restarts.
+        // Lives in APP PREFS (not app_state) because it is a UI preference the driver chose — the
+        // same class of key as theme / glance mode — not machine state the state machine owns.
+        // Granularity is the `WindowGranularity` enum NAME; the offset applies to the relative
+        // granularities (0 = the current window) and the two epoch-day keys carry a CUSTOM range.
+        val ANALYTICS_WINDOW_GRANULARITY = stringPreferencesKey("analytics_window_granularity")
+        val ANALYTICS_WINDOW_OFFSET = intPreferencesKey("analytics_window_offset")
+        val ANALYTICS_WINDOW_START_DAY = longPreferencesKey("analytics_window_start_epoch_day")
+        val ANALYTICS_WINDOW_END_DAY = longPreferencesKey("analytics_window_end_epoch_day")
     }
+
+    /** The raw persisted analytics-window selection (#970); the repository decodes it to a domain type. */
+    data class AnalyticsWindowPrefs(
+        val granularity: String?,
+        val offset: Int?,
+        val startEpochDay: Long?,
+        val endEpochDay: Long?,
+    )
 
     // ============================================================================================
     // STREAMS
@@ -136,6 +156,16 @@ class AppPreferencesDataSource @Inject constructor(
 
     val userSetEconomyFields: Flow<Set<String>> =
         ds.data.map { it[Keys.USER_SET_ECONOMY_FIELDS] ?: emptySet() }
+
+    /** #970 — the persisted analytics review-window selection, raw. Absent keys ⇒ all-null (default). */
+    val analyticsWindow: Flow<AnalyticsWindowPrefs> = ds.data.map {
+        AnalyticsWindowPrefs(
+            granularity = it[Keys.ANALYTICS_WINDOW_GRANULARITY],
+            offset = it[Keys.ANALYTICS_WINDOW_OFFSET],
+            startEpochDay = it[Keys.ANALYTICS_WINDOW_START_DAY],
+            endEpochDay = it[Keys.ANALYTICS_WINDOW_END_DAY],
+        )
+    }
 
     // ============================================================================================
     // ENCAPSULATED WRITE ACTIONS
@@ -209,6 +239,34 @@ class AppPreferencesDataSource @Inject constructor(
     suspend fun setTtsLanguageTag(tag: String?) {
         ds.edit {
             if (tag == null) it.remove(Keys.TTS_LANGUAGE_TAG) else it[Keys.TTS_LANGUAGE_TAG] = tag
+        }
+    }
+
+    /**
+     * #970 — persist the analytics review-window selection as ONE atomic edit, so a granularity
+     * switch can never land next to a stale custom range. A relative selection clears the two
+     * epoch-day keys; a custom range clears the offset. Fail-closed by construction: a partially
+     * written state is unreachable.
+     */
+    suspend fun setAnalyticsWindow(
+        granularity: String,
+        offset: Int?,
+        startEpochDay: Long?,
+        endEpochDay: Long?,
+    ) {
+        ds.edit {
+            it[Keys.ANALYTICS_WINDOW_GRANULARITY] = granularity
+            if (offset == null) it.remove(Keys.ANALYTICS_WINDOW_OFFSET) else it[Keys.ANALYTICS_WINDOW_OFFSET] = offset
+            if (startEpochDay == null) {
+                it.remove(Keys.ANALYTICS_WINDOW_START_DAY)
+            } else {
+                it[Keys.ANALYTICS_WINDOW_START_DAY] = startEpochDay
+            }
+            if (endEpochDay == null) {
+                it.remove(Keys.ANALYTICS_WINDOW_END_DAY)
+            } else {
+                it[Keys.ANALYTICS_WINDOW_END_DAY] = endEpochDay
+            }
         }
     }
 

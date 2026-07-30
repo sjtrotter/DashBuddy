@@ -549,4 +549,47 @@
     <string name="analytics_tab_patterns">Patterns</string>
     <string name="analytics_tab_decisions">Decisions</string>
     <string name="analytics_tab_time">Time</string>
+
+    <!-- ui/main/analytics/PeriodPager.kt — the #970 period-first pager + range picker -->
+    <string name="analytics_window_today">Today</string>
+    <string name="analytics_window_yesterday">Yesterday</string>
+    <string name="analytics_window_this_week">This week</string>
+    <string name="analytics_window_last_week">Last week</string>
+    <string name="analytics_window_this_month">This month</string>
+    <string name="analytics_window_last_month">Last month</string>
+    <string name="analytics_window_lifetime">Lifetime</string>
+    <string name="analytics_window_custom">Custom range</string>
+    <string name="analytics_granularity_day">Day</string>
+    <string name="analytics_granularity_week">Week</string>
+    <string name="analytics_granularity_month">Month</string>
+    <string name="analytics_granularity_lifetime">Lifetime</string>
+    <string name="analytics_granularity_custom">Custom…</string>
+    <string name="analytics_window_previous">Previous window</string>
+    <string name="analytics_window_next">Next window</string>
+    <string name="analytics_window_open_picker">Choose a date range</string>
+    <string name="analytics_picker_title">Pick a range</string>
+    <string name="analytics_picker_presets">Quick picks</string>
+    <string name="analytics_picker_show_format">Show %1$s</string>
+    <string name="analytics_picker_show_lifetime">Show everything</string>
+    <string name="analytics_picker_pick_start">Tap a day to start the range</string>
+    <string name="analytics_picker_pick_end">Tap another day to end the range</string>
+    <string name="analytics_picker_previous_month">Previous month</string>
+    <string name="analytics_picker_next_month">Next month</string>
+    <string name="analytics_picker_dot_legend">A dot marks a day you earned</string>
+
+    <!-- ui/main/analytics/RecapHero.kt — the #970 recap hero above the tabs -->
+    <string name="analytics_hero_kept_label">You kept</string>
+    <string name="analytics_hero_frozen_note">Net is frozen at the costs in effect when you accepted each offer</string>
+    <string name="analytics_hero_delta_up_format">▲ %1$s vs %2$s</string>
+    <string name="analytics_hero_delta_down_format">▼ %1$s vs %2$s</string>
+    <string name="analytics_hero_delta_flat_format">Same as %1$s</string>
+    <string name="analytics_hero_delta_none">No earlier window to compare</string>
+    <string name="analytics_hero_delta_from_nothing_format">Up from nothing in %1$s</string>
+    <string name="analytics_hero_previous_window">the window before</string>
+    <string name="analytics_hero_summary_gross_format">%1$s gross</string>
+    <string name="analytics_hero_summary_deliveries_format">%1$s %2$s</string>
+    <string name="analytics_hero_summary_online_format">%1$s online</string>
+    <string name="analytics_hero_summary_acceptance_format">%1$s acceptance</string>
+    <string name="analytics_hero_summary_separator"> · </string>
+    <string name="analytics_hero_no_data">Nothing recorded in this window</string>
 </resources>

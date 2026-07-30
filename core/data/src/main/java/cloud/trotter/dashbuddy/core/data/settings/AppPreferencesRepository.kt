@@ -1,6 +1,8 @@
 package cloud.trotter.dashbuddy.core.data.settings
 
 import cloud.trotter.dashbuddy.core.datastore.settings.AppPreferencesDataSource
+import cloud.trotter.dashbuddy.domain.analytics.AnalyticsWindowSelection
+import cloud.trotter.dashbuddy.domain.analytics.WindowGranularity
 import cloud.trotter.dashbuddy.domain.evaluation.EconomyField
 import cloud.trotter.dashbuddy.domain.evaluation.UserEconomy
 import cloud.trotter.dashbuddy.domain.model.vehicle.FuelType
@@ -9,6 +11,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
 import timber.log.Timber
+import java.time.LocalDate
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -38,6 +41,38 @@ class AppPreferencesRepository @Inject constructor(
             FuelType.valueOf(savedType ?: FuelType.REGULAR.name)
         } catch (_: Exception) {
             FuelType.REGULAR
+        }
+    }
+
+    /**
+     * The analytics hub's persisted review window (#970) — the `‹ ›` pager's selection, restored
+     * across tab switches AND app restarts.
+     *
+     * **Fail-closed decode:** any unrecognized granularity, a relative selection with no offset, a
+     * custom selection missing an endpoint, or a backwards custom range all fall back to
+     * [AnalyticsWindowSelection.DEFAULT] (the current pay week) rather than throwing — a corrupt
+     * preference must never be able to crash the hub open. A **positive** stored offset is clamped to
+     * `0`: the pager can never select a future window, so a future offset can only be corruption.
+     */
+    val analyticsWindow: Flow<AnalyticsWindowSelection> =
+        dataSource.analyticsWindow.map { prefs -> decodeAnalyticsWindow(prefs) }
+
+    private fun decodeAnalyticsWindow(
+        prefs: AppPreferencesDataSource.AnalyticsWindowPrefs,
+    ): AnalyticsWindowSelection {
+        val granularity = prefs.granularity
+            ?.let { name -> WindowGranularity.entries.firstOrNull { it.name == name } }
+            ?: return AnalyticsWindowSelection.DEFAULT
+        return if (granularity == WindowGranularity.CUSTOM) {
+            val start = prefs.startEpochDay ?: return AnalyticsWindowSelection.DEFAULT
+            val end = prefs.endEpochDay ?: return AnalyticsWindowSelection.DEFAULT
+            if (end < start) {
+                AnalyticsWindowSelection.DEFAULT
+            } else {
+                AnalyticsWindowSelection.Custom(LocalDate.ofEpochDay(start), LocalDate.ofEpochDay(end))
+            }
+        } else {
+            AnalyticsWindowSelection.Relative(granularity, (prefs.offset ?: 0).coerceAtMost(0))
         }
     }
 
@@ -205,6 +240,26 @@ class AppPreferencesRepository @Inject constructor(
     suspend fun setProMode(enabled: Boolean) = dataSource.setProMode(enabled)
     suspend fun setTheme(theme: String) = dataSource.setTheme(theme)
     suspend fun setGlanceMode(enabled: Boolean) = dataSource.setGlanceMode(enabled)
+
+    /**
+     * #970 — persist the analytics review window. The DataStore is the single source of truth for the
+     * selection: the hub writes here and reads [analyticsWindow] back reactively (no optimistic local
+     * copy that could drift, Principle 5).
+     */
+    suspend fun setAnalyticsWindow(selection: AnalyticsWindowSelection) = when (selection) {
+        is AnalyticsWindowSelection.Relative -> dataSource.setAnalyticsWindow(
+            granularity = selection.granularity.name,
+            offset = selection.offset,
+            startEpochDay = null,
+            endEpochDay = null,
+        )
+        is AnalyticsWindowSelection.Custom -> dataSource.setAnalyticsWindow(
+            granularity = WindowGranularity.CUSTOM.name,
+            offset = null,
+            startEpochDay = selection.startDate.toEpochDay(),
+            endEpochDay = selection.endDateInclusive.toEpochDay(),
+        )
+    }
 
     /**
      * #428 Half B — set (or clear, null) the spoken-offer language override (BCP-47 tag). Null

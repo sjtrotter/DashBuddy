@@ -520,10 +520,15 @@ interface AnalyticsDao {
      * "(No session)" bucket's per-day chart input (#660), mirroring [sessionGrossRows] for rows that
      * join to no session at all. The repository buckets each onto the LOCAL DAY of its own
      * `completedAt` (there is no session start to anchor on).
+     *
+     * **`net` (#970 / brief §7.3):** the same row's FROZEN kept money — `netProfit + cashTip`, the
+     * exact terms [noSessionTotals] contributes to `PeriodEconomics.netProfit` — so the per-day net
+     * axis decomposes the period net instead of re-deriving it. Never recomputed (Principle 5).
      */
     @Query(
         """SELECT completedAt,
-                  (COALESCE(realizedPay, 0) + COALESCE(cashTip, 0)) AS gross
+                  (COALESCE(realizedPay, 0) + COALESCE(cashTip, 0)) AS gross,
+                  (COALESCE(netProfit, 0) + COALESCE(cashTip, 0)) AS net
            FROM delivery_records
            WHERE sessionId IS NULL AND completedAt >= :start AND completedAt < :end"""
     )
@@ -535,13 +540,26 @@ interface AnalyticsDao {
      * that session's Σ delivered pay (same definition as [grossAndUnattributed]; the LEFT JOIN is onto a
      * GROUP BY sessionId subquery, one row per session, no fan-out). Session-anchored by construction
      * (#655): a session's whole gross lands on its start instant's day.
+     *
+     * **`net` (#970 / brief §7.3):** the same session's FROZEN kept money, built from exactly the
+     * three terms `AnalyticsRepository.assemble` folds into `PeriodEconomics.netProfit` — Σ frozen
+     * `netProfit` + Σ `cashTip` + this session's `unattributed` remainder (the identical
+     * `reportedEarnings > deliveredPay` CASE [grossAndUnattributed] uses, cash-free comparison and
+     * all). So Σ per-day net over a window equals that window's period net by construction, with no
+     * second copy of the accounting and no re-costing (Principle 5, frozen economics).
      */
     @Query(
         """SELECT s.startedAt AS startedAt,
-                  COALESCE(s.reportedEarnings, d.deliveredPay, 0) + COALESCE(d.cashTip, 0) AS gross
+                  COALESCE(s.reportedEarnings, d.deliveredPay, 0) + COALESCE(d.cashTip, 0) AS gross,
+                  COALESCE(d.net, 0) + COALESCE(d.cashTip, 0)
+                    + CASE WHEN s.reportedEarnings IS NOT NULL
+                                AND s.reportedEarnings > COALESCE(d.deliveredPay, 0)
+                           THEN s.reportedEarnings - COALESCE(d.deliveredPay, 0)
+                           ELSE 0 END AS net
            FROM session_records s
            LEFT JOIN (
-             SELECT sessionId, SUM(realizedPay) AS deliveredPay, SUM(cashTip) AS cashTip
+             SELECT sessionId, SUM(realizedPay) AS deliveredPay, SUM(cashTip) AS cashTip,
+                    SUM(netProfit) AS net
              FROM delivery_records GROUP BY sessionId
            ) d ON d.sessionId = s.sessionId
            WHERE s.startedAt >= :start AND s.startedAt < :end

@@ -12,8 +12,16 @@ import java.time.LocalDate
  * definition as the read-model's gross), attributed **wholly to the session's start day**
  * (session-anchored periods, #655): a dash begun 11:50pm counts entirely on that evening, never split
  * across midnight.
+ *
+ * [net] is the same day's **kept** money (#970 / brief §7.3) — the frozen per-delivery `netProfit`
+ * plus cash tips plus that session's unattributed remainder, i.e. the per-day decomposition of
+ * [PeriodEconomics.netProfit] under the identical session-anchored bucketing. It exists because the
+ * recap hero's sparkline must plot kept money, not gross: a gross sparkline flatters a day whose
+ * miles ate it. Σ [net] over a window's days therefore equals that window's `PeriodEconomics.netProfit`
+ * by construction (both fold the same frozen columns) — never recomputed, never re-costed.
  */
 data class DailyEarnings(
     val date: LocalDate,
     val gross: Double,
+    val net: Double = 0.0,
 )

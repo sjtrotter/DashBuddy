@@ -22,8 +22,7 @@ import cloud.trotter.dashbuddy.core.designsystem.component.AppStackBar
 import cloud.trotter.dashbuddy.core.designsystem.component.AppStatTile
 import cloud.trotter.dashbuddy.core.designsystem.text.EMPTY_VALUE
 import cloud.trotter.dashbuddy.core.designsystem.theme.AppTheme
-import cloud.trotter.dashbuddy.core.data.analytics.PeriodBounds
-import cloud.trotter.dashbuddy.domain.analytics.AnalyticsPeriod
+import cloud.trotter.dashbuddy.domain.analytics.AnalyticsWindow
 import cloud.trotter.dashbuddy.domain.analytics.TimeEconomics
 import cloud.trotter.dashbuddy.domain.export.IrsMileage
 import cloud.trotter.dashbuddy.domain.format.Formats
@@ -49,14 +48,14 @@ import kotlin.math.roundToLong
 @Composable
 fun TimeTab(
     time: TimeEconomics,
-    period: AnalyticsPeriod,
+    window: AnalyticsWindow,
     modifier: Modifier = Modifier,
 ) {
     Column(modifier = modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(16.dp)) {
         TimeSplitCard(time)
         DeadheadCard(time)
         OnTimeCard(time)
-        MileageTaxCard(time, period)
+        MileageTaxCard(time, window)
     }
 }
 
@@ -201,7 +200,7 @@ private fun OnTimeCard(time: TimeEconomics) {
 
 /** Mileage & tax: the period's session odometer miles + the estimated IRS standard-mileage deduction. */
 @Composable
-private fun MileageTaxCard(time: TimeEconomics, period: AnalyticsPeriod) {
+private fun MileageTaxCard(time: TimeEconomics, window: AnalyticsWindow) {
     val c = AppTheme.colors
     AppCard(modifier = Modifier.fillMaxWidth()) {
         Text(text = stringResource(R.string.time_tab_mileage_tax_title), style = MaterialTheme.typography.labelMedium, color = c.text3)
@@ -216,7 +215,7 @@ private fun MileageTaxCard(time: TimeEconomics, period: AnalyticsPeriod) {
             miles = time.miles,
             nowMillis = System.currentTimeMillis(),
             zone = ZoneId.systemDefault(),
-            period = period,
+            window = window,
         )
 
         Text(text = "${Formats.decimal(time.miles, 1)} mi", style = AppTheme.num.heroNum, color = c.text)
@@ -241,36 +240,48 @@ private fun MileageTaxCard(time: TimeEconomics, period: AnalyticsPeriod) {
 
 /**
  * Pure copy logic for the MILEAGE & TAX card (#689) — Compose-free so it's unit-testable in
- * isolation from rendering (the [WaterfallModel] precedent). Today and This-Month are single-year
- * by construction, but the Monday-anchored week straddles Jan 1 whenever New Year's Day falls
- * Tue–Sun, and Lifetime can span any boundary — so the spans-years check derives from the period's
- * actual [PeriodBounds] window (the bounds SSOT), not from the enum.
+ * isolation from rendering (the [WaterfallModel] precedent). A single day or a calendar month is
+ * single-year by construction, but the Monday-anchored week straddles Jan 1 whenever New Year's Day
+ * falls Tue–Sun, a driver-drawn custom range can straddle anything, and Lifetime can span any
+ * boundary — so the spans-years check derives from the selected [AnalyticsWindow]'s own endpoints
+ * (the window SSOT), never from a granularity guess.
  *
- * Locked policy: label the deduction with the **current** year's rate via the [IrsMileage] lookup
- * (never a literal year/rate); the fallback policy and disclaimer copy are [IrsMileage.effectiveRate]
- * / [IrsMileage.fallbackNote] (one owner — the CSV renders the identical note). A period that spans
- * tax years gets a note pointing at the CSV export (which owns the per-year precision) — cheap
- * honesty over re-costing every row here.
+ * **Rate year (#970):** the deduction is labelled with the year the *window* falls in, not the
+ * device's current year. Before the pager existed every window was the current one, so reading the
+ * clock was the same answer; once a driver can page back to last December, quoting this year's rate
+ * over last year's miles would be a wrong number with a confident label. An unbounded (Lifetime) or
+ * year-straddling window falls back to the current year AND carries the spans-years note, which
+ * points at the CSV export (which owns the per-year precision) — cheap honesty over re-costing every
+ * row here.
+ *
+ * Locked policy: the rate itself always comes from the [IrsMileage] lookup (never a literal
+ * year/rate); the fallback policy and disclaimer copy are [IrsMileage.effectiveRate] /
+ * [IrsMileage.fallbackNote] (one owner — the CSV renders the identical note).
  */
 object MileageTaxModel {
 
     data class Labels(
         /** "$X.XX est. IRS <year> standard-mileage deduction ($0.725/mi)". */
         val deductionLine: String,
-        /** Non-null only when the current year has no rate in the table — [IrsMileage.fallbackNote]. */
+        /** Non-null only when the labelled year has no rate in the table — [IrsMileage.fallbackNote]. */
         val disclaimer: String?,
-        /** Non-null when the period's window spans (Lifetime: may span) a tax-year boundary. */
+        /** Non-null when the window spans (Lifetime: may span) a tax-year boundary. */
         val spansYearsNote: String?,
     )
 
-    fun from(miles: Double, nowMillis: Long, zone: ZoneId, period: AnalyticsPeriod): Labels {
-        val year = Instant.ofEpochMilli(nowMillis).atZone(zone).year
+    fun from(miles: Double, nowMillis: Long, zone: ZoneId, window: AnalyticsWindow): Labels {
+        val currentYear = Instant.ofEpochMilli(nowMillis).atZone(zone).year
+        val startYear = window.startDate?.year
+        val endYear = window.endDateInclusive?.year
+        val spansYears = startYear == null || endYear == null || startYear != endYear
+        // A window wholly inside one year is labelled with THAT year's rate; anything ambiguous falls
+        // back to the current year and says so.
+        val year = if (spansYears) currentYear else startYear
         val deductionLine = "${Formats.money(IrsMileage.deduction(miles, year))} " +
             "est. IRS $year standard-mileage deduction (${Formats.money3(IrsMileage.effectiveRate(year))}/mi)"
         val spansYearsNote = when {
-            period == AnalyticsPeriod.LIFETIME -> "may span tax years — see the CSV export for per-year figures"
-            Instant.ofEpochMilli(PeriodBounds.of(period, nowMillis, zone).start).atZone(zone).year != year ->
-                "spans tax years — see the CSV export for per-year figures"
+            window.isLifetime -> "may span tax years — see the CSV export for per-year figures"
+            spansYears -> "spans tax years — see the CSV export for per-year figures"
             else -> null
         }
         return Labels(deductionLine, IrsMileage.fallbackNote(year), spansYearsNote)

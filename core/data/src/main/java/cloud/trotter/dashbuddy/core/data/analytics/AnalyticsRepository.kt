@@ -8,6 +8,7 @@ import cloud.trotter.dashbuddy.core.database.analytics.ScoreOutcomeRow
 import cloud.trotter.dashbuddy.core.database.analytics.SessionTotalsRow
 import cloud.trotter.dashbuddy.core.database.event.AppEventDao
 import cloud.trotter.dashbuddy.domain.analytics.AnalyticsPeriod
+import cloud.trotter.dashbuddy.domain.analytics.AnalyticsWindow
 import cloud.trotter.dashbuddy.domain.analytics.DailyEarnings
 import cloud.trotter.dashbuddy.domain.analytics.DecisionEconomics
 import cloud.trotter.dashbuddy.domain.analytics.DeliveryNet
@@ -86,7 +87,30 @@ class AnalyticsRepository @Inject constructor(
      * across two days. The single bucketing owner is the DAO join (Principle 5).
      */
     fun periodEconomics(period: AnalyticsPeriod, platform: Platform? = null): Flow<PeriodEconomics> =
-        periodBoundariesFlow(period).flatMapLatest { (start, end) ->
+        economicsIn(periodBoundariesFlow(period), platform)
+
+    /**
+     * Frozen-net economics for an **arbitrary** [window] (#970 / brief §7.1) — the period pager's
+     * read. Byte-identical accounting to the [AnalyticsPeriod] overload above: both resolve to a
+     * `[start, end)` bounds pair and run the SAME [economicsIn] fold, so the plumbing has one owner
+     * and the enum path is a special case of this one (Principle 5).
+     *
+     * Unlike the rolling-enum path there is **no midnight re-anchor flow**: a paged window is an
+     * explicit span ("Jul 13–19"), and it must not silently become a different span while the driver
+     * is reading it. The hub re-resolves *which* window is current from `currentLocalDateFlow`
+     * instead, one level up — the anchor lives with the selection, not with the query.
+     */
+    fun periodEconomics(
+        window: AnalyticsWindow,
+        platform: Platform? = null,
+        zone: ZoneId = ZoneId.systemDefault(),
+    ): Flow<PeriodEconomics> = economicsIn(flowOf(PeriodBounds.of(window, zone)), platform)
+
+    private fun economicsIn(
+        bounds: Flow<PeriodBounds.Bounds>,
+        platform: Platform?,
+    ): Flow<PeriodEconomics> =
+        bounds.flatMapLatest { (start, end) ->
             if (platform == null) {
                 combine(
                     analyticsDao.deliveryTotals(start, end),
@@ -149,7 +173,16 @@ class AnalyticsRepository @Inject constructor(
      * but a recorded `cashTip` surfaces as `net = 0 + cash`. Accepted: cash has no cost term to net out.
      */
     fun perStoreEconomics(period: AnalyticsPeriod): Flow<List<StoreEconomics>> =
-        periodBoundariesFlow(period).flatMapLatest { (start, end) ->
+        perStoreEconomicsIn(periodBoundariesFlow(period))
+
+    /** Arbitrary-window variant of [perStoreEconomics] (#970 §7.1) — same F9 chain rollup, fixed bounds. */
+    fun perStoreEconomics(
+        window: AnalyticsWindow,
+        zone: ZoneId = ZoneId.systemDefault(),
+    ): Flow<List<StoreEconomics>> = perStoreEconomicsIn(flowOf(PeriodBounds.of(window, zone)))
+
+    private fun perStoreEconomicsIn(bounds: Flow<PeriodBounds.Bounds>): Flow<List<StoreEconomics>> =
+        bounds.flatMapLatest { (start, end) ->
             combine(
                 analyticsDao.deliveryTotalsByStore(start, end),
                 analyticsDao.storeChainDisplays(),
@@ -263,7 +296,16 @@ class AnalyticsRepository @Inject constructor(
      * PII surface: counts + frozen economics only.
      */
     fun decisionEconomics(period: AnalyticsPeriod): Flow<DecisionEconomics> =
-        periodBoundariesFlow(period).flatMapLatest { (start, end) ->
+        decisionEconomicsIn(periodBoundariesFlow(period))
+
+    /** Arbitrary-window variant of [decisionEconomics] (#970 §7.1) — the pager's offer aggregates. */
+    fun decisionEconomics(
+        window: AnalyticsWindow,
+        zone: ZoneId = ZoneId.systemDefault(),
+    ): Flow<DecisionEconomics> = decisionEconomicsIn(flowOf(PeriodBounds.of(window, zone)))
+
+    private fun decisionEconomicsIn(bounds: Flow<PeriodBounds.Bounds>): Flow<DecisionEconomics> =
+        bounds.flatMapLatest { (start, end) ->
             combine(
                 analyticsDao.offerOutcomes(start, end),
                 analyticsDao.offerScoreOutcomes(start, end),
@@ -291,7 +333,16 @@ class AnalyticsRepository @Inject constructor(
      * time/miles only).
      */
     fun timeEconomics(period: AnalyticsPeriod): Flow<TimeEconomics> =
-        periodBoundariesFlow(period).flatMapLatest { (start, end) ->
+        timeEconomicsIn(periodBoundariesFlow(period))
+
+    /** Arbitrary-window variant of [timeEconomics] (#970 §7.1) — the pager's time/deadhead stats. */
+    fun timeEconomics(
+        window: AnalyticsWindow,
+        zone: ZoneId = ZoneId.systemDefault(),
+    ): Flow<TimeEconomics> = timeEconomicsIn(flowOf(PeriodBounds.of(window, zone)))
+
+    private fun timeEconomicsIn(bounds: Flow<PeriodBounds.Bounds>): Flow<TimeEconomics> =
+        bounds.flatMapLatest { (start, end) ->
             combine(
                 analyticsDao.sessionTotals(start, end),
                 analyticsDao.deliveryTimeTotals(start, end),
@@ -321,13 +372,44 @@ class AnalyticsRepository @Inject constructor(
      */
     fun dailyEarnings(period: AnalyticsPeriod, zone: ZoneId = ZoneId.systemDefault()): Flow<List<DailyEarnings>> {
         if (period == AnalyticsPeriod.TODAY || period == AnalyticsPeriod.LIFETIME) return flowOf(emptyList())
-        return periodBoundariesFlow(period, zone).flatMapLatest { (start, end) ->
+        return dailyEarningsIn(periodBoundariesFlow(period, zone), zone)
+    }
+
+    /**
+     * Arbitrary-window variant of [dailyEarnings] (#970 §7.1) — the per-day axis behind the Money
+     * chart AND the recap hero's sparkline, for any paged or custom span.
+     *
+     * Same complete gap-filled axis and same session-anchored bucketing; each entry now also carries
+     * the day's **frozen net** ([DailyEarnings.net], §7.3) so the sparkline can plot kept money rather
+     * than gross.
+     *
+     * Returns an EMPTY list — the UI hides the chart/sparkline — when the axis would carry no
+     * information: an unbounded (LIFETIME) window whose days can't be enumerated, a single-day window
+     * (one bar says nothing the hero doesn't), or a span longer than [MAX_DAY_AXIS] days (a bounded
+     * ingestion guard: a multi-year custom range would build thousands of unreadable bars).
+     */
+    fun dailyEarnings(
+        window: AnalyticsWindow,
+        zone: ZoneId = ZoneId.systemDefault(),
+    ): Flow<List<DailyEarnings>> {
+        val length = window.lengthDays ?: return flowOf(emptyList())
+        if (length <= 1L || length > MAX_DAY_AXIS) return flowOf(emptyList())
+        return dailyEarningsIn(flowOf(PeriodBounds.of(window, zone)), zone)
+    }
+
+    /** The shared gap-filled per-day fold behind both [dailyEarnings] overloads (#970 §7.1/§7.3). */
+    private fun dailyEarningsIn(
+        bounds: Flow<PeriodBounds.Bounds>,
+        zone: ZoneId,
+    ): Flow<List<DailyEarnings>> =
+        bounds.flatMapLatest { (start, end) ->
             combine(
                 analyticsDao.sessionGrossRows(start, end),
                 analyticsDao.noSessionDailyRows(start, end),
             ) { rows, noSessionRows ->
-                // The end bound is exactly the next period's local midnight (PeriodBounds), so iterate
-                // day-by-day up to (but excluding) the end instant's date — a complete, gap-filled axis.
+                // The end bound is exactly the window's exclusive local midnight (PeriodBounds), so
+                // iterate day-by-day up to (but excluding) the end instant's date — a complete,
+                // gap-filled axis.
                 val startDate = Instant.ofEpochMilli(start).atZone(zone).toLocalDate()
                 val endDate = Instant.ofEpochMilli(end).atZone(zone).toLocalDate()
                 val byDay = rows.groupBy { Instant.ofEpochMilli(it.startedAt).atZone(zone).toLocalDate() }
@@ -335,15 +417,20 @@ class AnalyticsRepository @Inject constructor(
                 buildList {
                     var date = startDate
                     while (date < endDate) {
-                        val sessionGross = byDay[date]?.sumOf { it.gross } ?: 0.0
-                        val noSessionGross = noSessionByDay[date]?.sumOf { it.gross } ?: 0.0
-                        add(DailyEarnings(date, sessionGross + noSessionGross))
+                        val sessions = byDay[date]
+                        val orphans = noSessionByDay[date]
+                        add(
+                            DailyEarnings(
+                                date = date,
+                                gross = (sessions?.sumOf { it.gross } ?: 0.0) + (orphans?.sumOf { it.gross } ?: 0.0),
+                                net = (sessions?.sumOf { it.net } ?: 0.0) + (orphans?.sumOf { it.net } ?: 0.0),
+                            ),
+                        )
                         date = date.plusDays(1)
                     }
                 }
             }
         }
-    }
 
     /** Recent dashes, newest first (future hub / #650). */
     fun recentSessions(limit: Int = 20): Flow<List<SessionRecord>> =
@@ -360,7 +447,16 @@ class AnalyticsRepository @Inject constructor(
      * PII surface (store names are driver-owned; no customer hashes on [DeliveryRecord]).
      */
     fun noSessionDeliveries(period: AnalyticsPeriod): Flow<List<DeliveryRecord>> =
-        periodBoundariesFlow(period).flatMapLatest { (start, end) ->
+        noSessionDeliveriesIn(periodBoundariesFlow(period))
+
+    /** Arbitrary-window variant of [noSessionDeliveries] (#970 §7.1). */
+    fun noSessionDeliveries(
+        window: AnalyticsWindow,
+        zone: ZoneId = ZoneId.systemDefault(),
+    ): Flow<List<DeliveryRecord>> = noSessionDeliveriesIn(flowOf(PeriodBounds.of(window, zone)))
+
+    private fun noSessionDeliveriesIn(bounds: Flow<PeriodBounds.Bounds>): Flow<List<DeliveryRecord>> =
+        bounds.flatMapLatest { (start, end) ->
             analyticsDao.noSessionDeliveryRows(start, end).map { rows -> rows.map { it.toDomain() } }
         }
 
@@ -385,7 +481,16 @@ class AnalyticsRepository @Inject constructor(
      * data; no customer hashes.
      */
     fun orphanOfferGroups(period: AnalyticsPeriod): Flow<List<OrphanOfferGroup>> =
-        periodBoundariesFlow(period).flatMapLatest { (start, end) ->
+        orphanOfferGroupsIn(periodBoundariesFlow(period))
+
+    /** Arbitrary-window variant of [orphanOfferGroups] (#970 §7.1). */
+    fun orphanOfferGroups(
+        window: AnalyticsWindow,
+        zone: ZoneId = ZoneId.systemDefault(),
+    ): Flow<List<OrphanOfferGroup>> = orphanOfferGroupsIn(flowOf(PeriodBounds.of(window, zone)))
+
+    private fun orphanOfferGroupsIn(bounds: Flow<PeriodBounds.Bounds>): Flow<List<OrphanOfferGroup>> =
+        bounds.flatMapLatest { (start, end) ->
             combine(
                 appEventDao.getEventsByType(AppEventType.JOB_ACCEPT_MISMATCH),
                 analyticsDao.acceptedOfferRecords(AppEventType.OFFER_ACCEPTED.name),
@@ -647,5 +752,12 @@ class AnalyticsRepository @Inject constructor(
     private companion object {
         /** ±window around an orphan's `completedAt` for the #660 piece-2 categorize picker (48 h). */
         private const val CANDIDATE_WINDOW_MILLIS = 48L * 60L * 60L * 1_000L
+
+        /**
+         * Longest day axis [dailyEarnings] will enumerate (#970) — a little over a year. Beyond it the
+         * per-day list stops being a chart and starts being a bounded-ingestion hazard, so the window
+         * variant returns an empty axis and the UI hides the card instead.
+         */
+        private const val MAX_DAY_AXIS = 400L
     }
 }

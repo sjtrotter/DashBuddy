@@ -1,6 +1,5 @@
 package cloud.trotter.dashbuddy.ui.main.analytics
 
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -30,13 +29,14 @@ import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import cloud.trotter.dashbuddy.R
 import cloud.trotter.dashbuddy.core.designsystem.component.AppSegmented
-import cloud.trotter.dashbuddy.domain.analytics.AnalyticsPeriod
 
 /**
- * The Analytics hub (#315). Money / Decisions / Time / Patterns (H5) all render real content. A
- * **review** surface: UDF state in, `setTab`/`setPeriod` intents out
- * (Principle 1); reactive-fresh via the read-model Flows, no `rememberNow()` tick (a historical
- * period's figures are fixed).
+ * The Analytics hub (#315), **period-first** since #970. A `‹ ›` window pager + a recap hero own the
+ * top of the screen; Money / Decisions / Time / Patterns (H5) render below as detail views of that
+ * one window. A **review** surface: UDF state in, `setTab`/`stepWindow`/`setGranularity`/
+ * `setCustomRange` intents out (Principle 1); reactive-fresh via the read-model Flows and a
+ * once-a-day local-date anchor, with no `rememberNow()` tick (a historical window's figures are
+ * fixed).
  *
  * The header's CSV action routes to the existing Data & Privacy export (#319) — the hub-header entry
  * point deferred from #671 (#315 H6); no new export logic, navigation only.
@@ -53,6 +53,8 @@ fun AnalyticsScreen(
     // "(No session)" categorize flow (#660 piece 2) — opened from the Money-tab callout.
     var showAssignSheet by remember { mutableStateOf(false) }
     var showOrphanOfferSheet by remember { mutableStateOf(false) }
+    // The #970 range picker (brief §3.2) — opened from the pager label or the `Custom…` chip.
+    var showRangePicker by remember { mutableStateOf(false) }
 
     Scaffold(
         topBar = {
@@ -84,6 +86,28 @@ fun AnalyticsScreen(
                 .padding(16.dp)
                 .fillMaxSize(),
         ) {
+            // Period-first (#970): the window control and the recap hero own the top of the screen;
+            // the tabs below are detail views OF that window, not the primary navigation.
+            PeriodPager(
+                window = uiState.window,
+                today = uiState.today,
+                canStepBack = uiState.canStepBack,
+                canStepForward = uiState.canStepForward,
+                onStep = viewModel::stepWindow,
+                onOpenPicker = { showRangePicker = true },
+                onSelectGranularity = viewModel::setGranularity,
+            )
+            Spacer(Modifier.height(16.dp))
+            RecapHero(
+                window = uiState.window,
+                today = uiState.today,
+                economics = uiState.economics,
+                previousEconomics = uiState.previousEconomics,
+                decisions = uiState.decisions,
+                dailyEarnings = uiState.dailyEarnings,
+            )
+            Spacer(Modifier.height(16.dp))
+
             val tabOptions = tabOptions()
             val selectedTabLabel = tabOptions.first { it.tab == uiState.selectedTab }.label
             AppSegmented(
@@ -99,42 +123,23 @@ fun AnalyticsScreen(
             )
             Spacer(Modifier.height(16.dp))
 
+            // Each tab is a detail view of the window selected above — the per-tab period selector is
+            // gone (#970); the pager at the top owns the window for all of them.
             when (uiState.selectedTab) {
-                AnalyticsTab.Money -> {
-                    PeriodSelector(
-                        selectedPeriod = uiState.selectedPeriod,
-                        onSelectPeriod = viewModel::setPeriod,
-                    )
-                    Spacer(Modifier.height(16.dp))
-                    MoneyTab(
-                        economics = uiState.economics,
-                        topStores = uiState.topStores,
-                        recentSessions = uiState.recentSessions,
-                        dailyEarnings = uiState.dailyEarnings,
-                        orphanOfferGroups = uiState.orphanOfferGroups,
-                        onOpenSession = onOpenSession,
-                        onOpenNoSession = { showAssignSheet = true },
-                        onOpenOrphanOffers = { showOrphanOfferSheet = true },
-                    )
-                }
+                AnalyticsTab.Money -> MoneyTab(
+                    economics = uiState.economics,
+                    topStores = uiState.topStores,
+                    recentSessions = uiState.recentSessions,
+                    dailyEarnings = uiState.dailyEarnings,
+                    orphanOfferGroups = uiState.orphanOfferGroups,
+                    onOpenSession = onOpenSession,
+                    onOpenNoSession = { showAssignSheet = true },
+                    onOpenOrphanOffers = { showOrphanOfferSheet = true },
+                )
 
-                AnalyticsTab.Decisions -> {
-                    PeriodSelector(
-                        selectedPeriod = uiState.selectedPeriod,
-                        onSelectPeriod = viewModel::setPeriod,
-                    )
-                    Spacer(Modifier.height(16.dp))
-                    DecisionsTab(decisions = uiState.decisions)
-                }
+                AnalyticsTab.Decisions -> DecisionsTab(decisions = uiState.decisions)
 
-                AnalyticsTab.Time -> {
-                    PeriodSelector(
-                        selectedPeriod = uiState.selectedPeriod,
-                        onSelectPeriod = viewModel::setPeriod,
-                    )
-                    Spacer(Modifier.height(16.dp))
-                    TimeTab(time = uiState.time, period = uiState.selectedPeriod)
-                }
+                AnalyticsTab.Time -> TimeTab(time = uiState.time, window = uiState.window)
 
                 // Patterns (H5) is LIFETIME-scoped (rate/pattern-based) — deliberately NO period selector.
                 AnalyticsTab.Patterns -> PatternsTab(
@@ -161,6 +166,15 @@ fun AnalyticsScreen(
             onDismiss = { showOrphanOfferSheet = false },
         )
     }
+
+    if (showRangePicker) {
+        RangePickerSheet(
+            window = uiState.window,
+            today = uiState.today,
+            viewModel = viewModel,
+            onDismiss = { showRangePicker = false },
+        )
+    }
 }
 
 /** The hub tabs paired with their resolved label (#428 Half A) — identity stays the enum. */
@@ -169,31 +183,3 @@ private data class TabOption(val tab: AnalyticsTab, val label: String)
 @Composable
 private fun tabOptions(): List<TabOption> =
     AnalyticsTab.entries.map { TabOption(it, stringResource(it.labelRes)) }
-
-/** The review windows offered by the Money period selector, in display order. */
-private data class PeriodOption(val period: AnalyticsPeriod, val label: String)
-
-@Composable
-private fun periodOptions(): List<PeriodOption> = listOf(
-    PeriodOption(AnalyticsPeriod.TODAY, stringResource(R.string.common_period_today)),
-    PeriodOption(AnalyticsPeriod.THIS_WEEK, stringResource(R.string.common_period_week)),
-    PeriodOption(AnalyticsPeriod.THIS_MONTH, stringResource(R.string.common_period_month)),
-    PeriodOption(AnalyticsPeriod.LIFETIME, stringResource(R.string.common_period_lifetime)),
-)
-
-@Composable
-private fun PeriodSelector(
-    selectedPeriod: AnalyticsPeriod,
-    onSelectPeriod: (AnalyticsPeriod) -> Unit,
-) {
-    val periodOptions = periodOptions()
-    val selectedLabel = periodOptions.first { it.period == selectedPeriod }.label
-    AppSegmented(
-        options = periodOptions.map { it.label },
-        selected = selectedLabel,
-        onSelect = { label ->
-            periodOptions.firstOrNull { it.label == label }?.let { onSelectPeriod(it.period) }
-        },
-        modifier = Modifier.fillMaxWidth(),
-    )
-}

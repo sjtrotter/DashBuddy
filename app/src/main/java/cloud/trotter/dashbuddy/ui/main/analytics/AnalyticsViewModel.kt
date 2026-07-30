@@ -4,7 +4,11 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import cloud.trotter.dashbuddy.core.data.analytics.AnalyticsRepository
 import cloud.trotter.dashbuddy.core.data.analytics.CorrectionRepository
-import cloud.trotter.dashbuddy.domain.analytics.AnalyticsPeriod
+import cloud.trotter.dashbuddy.core.data.analytics.currentLocalDateFlow
+import cloud.trotter.dashbuddy.core.data.settings.AppPreferencesRepository
+import cloud.trotter.dashbuddy.domain.analytics.AnalyticsWindow
+import cloud.trotter.dashbuddy.domain.analytics.AnalyticsWindowSelection
+import cloud.trotter.dashbuddy.domain.analytics.AnalyticsWindows
 import cloud.trotter.dashbuddy.domain.analytics.DailyEarnings
 import cloud.trotter.dashbuddy.domain.analytics.DecisionEconomics
 import cloud.trotter.dashbuddy.domain.analytics.DeliveryRecord
@@ -13,6 +17,7 @@ import cloud.trotter.dashbuddy.domain.analytics.PeriodEconomics
 import cloud.trotter.dashbuddy.domain.analytics.SessionRecord
 import cloud.trotter.dashbuddy.domain.analytics.StoreEconomics
 import cloud.trotter.dashbuddy.domain.analytics.TimeEconomics
+import cloud.trotter.dashbuddy.domain.analytics.WindowGranularity
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -20,26 +25,37 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import timber.log.Timber
+import java.time.LocalDate
+import java.time.YearMonth
 import javax.inject.Inject
 
 /**
- * State holder for the Analytics hub (#315 H1) — a **review** surface assembled reactively
- * from the durable analytics read-model ([AnalyticsRepository]), exposing one immutable
- * [AnalyticsUiState] (Principle 1 — UDF). Over the read-model repository surface:
+ * State holder for the Analytics hub (#315 H1, made **period-first** by #970) — a **review** surface
+ * assembled reactively from the durable analytics read-model ([AnalyticsRepository]), exposing one
+ * immutable [AnalyticsUiState] (Principle 1 — UDF). Over the read-model repository surface:
  * `periodEconomics` (frozen-net totals), `perStoreEconomics` (top stores), `recentSessions`
  * (recent dashes), `decisionEconomics` (H3 funnel/verdicts), and `timeEconomics` (H4 time/mileage) —
- * every *period* source session-anchored (#655) via the DAO join, which owns the bucketing. The
+ * every *window* source session-anchored (#655) via the DAO join, which owns the bucketing. The
  * Patterns tab's `storeReportCards` (#159) + `earningsHeatmap` (H5) are LIFETIME-scoped and sit
- * outside the period `flatMapLatest`, so a period switch never re-queries them.
+ * outside the window `flatMapLatest`, so a window switch never re-queries them.
+ *
+ * **The window (#970).** The selection is persisted in app preferences and is the single source of
+ * truth: intents write to the DataStore and the resolved window comes back through
+ * [AppPreferencesRepository.analyticsWindow] — no optimistic local copy that could drift
+ * (Principle 5). A *relative* selection ("this week", "two weeks back") is resolved against
+ * [currentLocalDateFlow], so the hub re-anchors at local midnight without a restart and without a
+ * per-second ticker (Reactive UI rule 4: the anchor changes once a day, so its flow ticks once a
+ * day). The previous-equivalent window's economics ride the same fan-out for the recap hero's delta.
  *
  * Reactive by construction: every source is a Room-invalidation `Flow`, so the tiles re-emit
- * as the projector folds each delivery and at midnight/week/month rollover (the boundary
- * flow) — fresh-on-open, no `rememberNow()` clock (a historical period's $/hr is a fixed
- * value; same principle as the dashboard reframe #657).
+ * as the projector folds each delivery — fresh-on-open, no `rememberNow()` clock (a historical
+ * window's $/hr is a fixed value; same principle as the dashboard reframe #657).
  *
  * Privacy: economics/counts/store names only — customer PII is already sha256'd upstream and
  * never surfaces here (Principle 6); store names are merchants, fine to render (Principle 7
@@ -51,68 +67,180 @@ import javax.inject.Inject
 class AnalyticsViewModel @Inject constructor(
     private val analyticsRepository: AnalyticsRepository,
     private val correctionRepository: CorrectionRepository,
+    private val appPreferencesRepository: AppPreferencesRepository,
 ) : ViewModel() {
 
-    /** UDF intent targets — the selected review window and tab. */
-    private val selectedPeriod = MutableStateFlow(AnalyticsPeriod.THIS_WEEK)
+    /** UDF intent target — the visible tab (transient; only the window is persisted). */
     private val selectedTab = MutableStateFlow(AnalyticsTab.Money)
+
+    /** The persisted window selection — DataStore is the SSOT; intents write, this reads back. */
+    private val selection: StateFlow<AnalyticsWindowSelection> =
+        appPreferencesRepository.analyticsWindow
+            .stateIn(viewModelScope, SharingStarted.Eagerly, AnalyticsWindowSelection.DEFAULT)
+
+    /** The device's local date, re-emitting at midnight — the anchor a relative selection resolves against. */
+    private val today: StateFlow<LocalDate> = currentLocalDateFlow()
+        .stateIn(viewModelScope, SharingStarted.Eagerly, LocalDate.now())
+
+    /** The resolved window the whole hub reads. */
+    private val window: StateFlow<AnalyticsWindow> =
+        combine(selection, today) { sel, day -> sel.resolve(day) }
+            .distinctUntilChanged()
+            .stateIn(viewModelScope, SharingStarted.Eagerly, AnalyticsWindowSelection.DEFAULT.resolve(LocalDate.now()))
 
     val uiState: StateFlow<AnalyticsUiState> = combine(
         selectedTab,
-        // Re-anchor economics + top stores + decisions together on each period switch so a tile
-        // never renders one window's number under another's label. Decisions is collected
-        // unconditionally (not gated on the selected tab): the source is a cheap Room-invalidation
-        // aggregate and folding it in here keeps one immutable UiState re-anchored atomically with
-        // the period — the simpler correct shape (Principle 1).
-        selectedPeriod.flatMapLatest { period ->
+        // Re-anchor economics + top stores + decisions together on each window switch so a tile never
+        // renders one window's number under another's label. Decisions is collected unconditionally
+        // (not gated on the selected tab): the source is a cheap Room-invalidation aggregate and
+        // folding it in here keeps one immutable UiState re-anchored atomically with the window.
+        combine(window, today) { w, day -> w to day }.flatMapLatest { (w, day) ->
             combine(
-                analyticsRepository.periodEconomics(period),
-                analyticsRepository.perStoreEconomics(period),
-                analyticsRepository.decisionEconomics(period),
-                analyticsRepository.timeEconomics(period),
+                analyticsRepository.periodEconomics(w),
+                analyticsRepository.perStoreEconomics(w),
+                analyticsRepository.decisionEconomics(w),
+                analyticsRepository.timeEconomics(w),
                 // The typed `combine` tops out at 5 flows, so the per-day chart + the "(No session)"
-                // orphan list (#660 piece 2) + the orphan-OFFER groups (#810 B2 Tier 2) ride ONE nested
-                // sub-combine into the 5th slot. All period-anchored, so they re-anchor atomically with
-                // everything else on a period switch.
+                // orphan list (#660 piece 2) + the orphan-OFFER groups (#810 B2 Tier 2) + the
+                // previous-window economics (#970 §7.2) ride ONE nested sub-combine into the 5th slot.
+                // All window-anchored, so they re-anchor atomically with everything else.
                 combine(
-                    analyticsRepository.dailyEarnings(period),
-                    analyticsRepository.noSessionDeliveries(period),
-                    analyticsRepository.orphanOfferGroups(period),
-                ) { daily, orphans, offerGroups -> Triple(daily, orphans, offerGroups) },
-            ) { economics, stores, decisions, time, (daily, orphans, offerGroups) ->
-                PeriodData(period, economics, stores, decisions, time, daily, orphans, offerGroups)
+                    analyticsRepository.dailyEarnings(w),
+                    analyticsRepository.noSessionDeliveries(w),
+                    analyticsRepository.orphanOfferGroups(w),
+                    previousEconomics(w),
+                ) { daily, orphans, offerGroups, previous ->
+                    WindowExtras(daily, orphans, offerGroups, previous)
+                },
+            ) { economics, stores, decisions, time, extras ->
+                WindowData(w, day, economics, stores, decisions, time, extras)
             }
         },
         analyticsRepository.recentSessions(RECENT_SESSIONS_LIMIT),
         // The Patterns tab (H5, #159) is LIFETIME-scoped by design — its sources sit OUTSIDE the
-        // period flatMapLatest so switching the Money/Decisions/Time period never re-queries them.
+        // window flatMapLatest so switching the Money/Decisions/Time window never re-queries them.
         analyticsRepository.storeReportCards(),
         analyticsRepository.earningsHeatmap(),
     ) { tab, data, sessions, storeCards, heatmap ->
         AnalyticsUiState(
             selectedTab = tab,
-            selectedPeriod = data.period,
+            window = data.window,
+            today = data.today,
+            canStepBack = AnalyticsWindows.canStepBack(data.window),
+            canStepForward = AnalyticsWindows.canStepForward(data.window, data.today),
             economics = data.economics,
+            previousEconomics = data.extras.previousEconomics,
             topStores = data.stores.take(TOP_STORES),
             recentSessions = sessions,
             decisions = data.decisions,
             time = data.time,
-            dailyEarnings = data.dailyEarnings,
-            noSessionDeliveries = data.orphanDeliveries,
-            orphanOfferGroups = data.orphanOfferGroups,
+            dailyEarnings = data.extras.dailyEarnings,
+            noSessionDeliveries = data.extras.orphanDeliveries,
+            orphanOfferGroups = data.extras.orphanOfferGroups,
             storeReportCards = storeCards,
             earningsHeatmap = heatmap,
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), AnalyticsUiState())
 
-    /** UDF intent — switch the review window; economics + top stores re-anchor reactively. */
-    fun setPeriod(period: AnalyticsPeriod) {
-        selectedPeriod.value = period
+    /**
+     * The previous-equivalent window's economics, or a `null` emission for a window that has no
+     * predecessor (Lifetime). Kept as a flow (not a nullable read) so the sub-combine always has five
+     * live sources and the hero's delta re-emits with everything else.
+     */
+    private fun previousEconomics(window: AnalyticsWindow) =
+        AnalyticsWindows.previous(window)
+            ?.let { analyticsRepository.periodEconomics(it) }
+            ?: flowOf<PeriodEconomics?>(null)
+
+    // ── The range picker's calendar (brief §3.2) ─────────────────────────
+
+    /** Which month the picker's calendar is showing — picker-local, not part of the hub's UiState. */
+    private val calendarMonth = MutableStateFlow(YearMonth.now())
+
+    /** The visible calendar month, for the picker's header + month pager. */
+    val pickerMonth: StateFlow<YearMonth> = calendarMonth
+
+    /**
+     * Per-day earnings for the picker's visible month — the calendar's **earning dots**. Reuses the
+     * same arbitrary-window per-day read (#970 §7.1) the Money chart uses rather than a bespoke
+     * query (Principle 5); a month is 28–31 days, well inside the read's bounded day axis.
+     */
+    val pickerMonthDays: StateFlow<List<DailyEarnings>> = calendarMonth
+        .flatMapLatest { month ->
+            analyticsRepository.dailyEarnings(
+                AnalyticsWindows.custom(month.atDay(1), month.atEndOfMonth()),
+            )
+        }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    /** UDF intent — page the picker's calendar to [month]. */
+    fun setPickerMonth(month: YearMonth) {
+        calendarMonth.value = month
     }
+
+    // ── Window intents ──────────────────────────────────────────────────
 
     /** UDF intent — switch the visible tab. */
     fun setTab(tab: AnalyticsTab) {
         selectedTab.value = tab
+    }
+
+    /**
+     * UDF intent — the `‹`/`›` pager. [steps] is negative to page back. A forward step past the
+     * current window is **ignored** rather than clamped silently into a future range (the arrow is
+     * already disabled there; this is the fail-closed backstop for the intent itself).
+     */
+    fun stepWindow(steps: Int) {
+        if (steps == 0) return
+        val current = window.value
+        if (steps > 0 && !AnalyticsWindows.canStepForward(current, today.value)) return
+        if (steps < 0 && !AnalyticsWindows.canStepBack(current)) return
+        val next = when (val sel = selection.value) {
+            is AnalyticsWindowSelection.Relative ->
+                sel.copy(offset = (sel.offset + steps).coerceAtMost(0))
+            is AnalyticsWindowSelection.Custom -> {
+                val stepped = AnalyticsWindows.step(current, steps)
+                val start = stepped.startDate
+                val end = stepped.endDateInclusive
+                if (start == null || end == null) sel else AnalyticsWindowSelection.Custom(start, end)
+            }
+        }
+        persist(next)
+    }
+
+    /**
+     * UDF intent — the granularity chips. Always lands on the CURRENT window of that granularity
+     * (offset 0), which is what "Day / Week / Month / Lifetime" reads as. `CUSTOM` is not a
+     * granularity you can select this way — that chip opens the picker, which calls [setCustomRange].
+     */
+    fun setGranularity(granularity: WindowGranularity) {
+        if (granularity == WindowGranularity.CUSTOM) return
+        persist(AnalyticsWindowSelection.Relative(granularity, 0))
+    }
+
+    /** UDF intent — a preset row in the range picker (e.g. "Last week" = week, one step back). */
+    fun setRelativeWindow(granularity: WindowGranularity, offset: Int) {
+        if (granularity == WindowGranularity.CUSTOM) return
+        persist(AnalyticsWindowSelection.Relative(granularity, offset.coerceAtMost(0)))
+    }
+
+    /** UDF intent — the picker's committed calendar range (both ends inclusive). */
+    fun setCustomRange(startDate: LocalDate, endDateInclusive: LocalDate) {
+        if (endDateInclusive.isBefore(startDate)) return
+        persist(AnalyticsWindowSelection.Custom(startDate, endDateInclusive))
+    }
+
+    private fun persist(selection: AnalyticsWindowSelection) {
+        viewModelScope.launch {
+            try {
+                appPreferencesRepository.setAnalyticsWindow(selection)
+            } catch (e: CancellationException) {
+                throw e // cooperative cancellation — never swallow it
+            } catch (e: Exception) {
+                // P7: no PII — a granularity name and an integer offset only.
+                Timber.tag(TAG).w(e, "window selection not persisted")
+            }
+        }
     }
 
     /**
@@ -169,16 +297,23 @@ class AnalyticsViewModel @Inject constructor(
         }
     }
 
-    /** One period switch's worth of read-model, re-anchored atomically under [flatMapLatest]. */
-    private data class PeriodData(
-        val period: AnalyticsPeriod,
+    /** The 5th-slot sub-combine's payload — window-anchored reads that don't fit the typed 5-arity. */
+    private data class WindowExtras(
+        val dailyEarnings: List<DailyEarnings>,
+        val orphanDeliveries: List<DeliveryRecord>,
+        val orphanOfferGroups: List<OrphanOfferGroup>,
+        val previousEconomics: PeriodEconomics?,
+    )
+
+    /** One window switch's worth of read-model, re-anchored atomically under [flatMapLatest]. */
+    private data class WindowData(
+        val window: AnalyticsWindow,
+        val today: LocalDate,
         val economics: PeriodEconomics,
         val stores: List<StoreEconomics>,
         val decisions: DecisionEconomics,
         val time: TimeEconomics,
-        val dailyEarnings: List<DailyEarnings>,
-        val orphanDeliveries: List<DeliveryRecord>,
-        val orphanOfferGroups: List<OrphanOfferGroup>,
+        val extras: WindowExtras,
     )
 
     private companion object {
