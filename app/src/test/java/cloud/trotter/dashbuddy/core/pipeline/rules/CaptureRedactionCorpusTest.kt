@@ -965,6 +965,38 @@ class CaptureRedactionCorpusTest {
         assertFalse("apt mask must not carry a distinctness hex", masked.contains("Apt [redacted:"))
     }
 
+    /**
+     * #895 — every fused-`Apt ` keepPrefix entry across BOTH platforms' surface
+     * families must declare `plainMask`: the post-strip unit token is a bounded
+     * ~10^4 alphabet over the #889 length floor, so a 4-hex suffix would be
+     * brute-recoverable. The 8 entries are byte-identical SSOT siblings today;
+     * this ratchet keeps a future edit from silently splitting one back to the
+     * hash form (only `active_trip`'s entry has direct mask-output teeth above).
+     */
+    @Test
+    fun `every Apt keepPrefix redact entry declares plainMask on both platforms (#895)`() {
+        val ruleIds = listOf(
+            "uber.screen.splash",
+            "uber.screen.pickup_verification_items",
+            "uber.screen.customer_chat",
+            "uber.screen.active_trip",
+            "doordash.screen.dropoff_pin_entry",
+            "doordash.screen.dropoff_handoff",
+            "doordash.screen.dropoff_pre_arrival",
+            "doordash.screen.dropoff_pre_arrival_completion",
+        )
+        for (id in ruleIds) {
+            val rule = TestRulesetFactory.screenRuleset.ruleById(id)
+            org.junit.Assert.assertNotNull("rule $id must exist", rule)
+            val aptEntries = rule!!.redact.entries.filter { it.keepPrefix.contains("Apt ") }
+            assertFalse("$id must carry an 'Apt ' keepPrefix entry", aptEntries.isEmpty())
+            assertTrue(
+                "$id: every fused-Apt entry must declare plainMask (#895 — bounded alphabet over the length floor)",
+                aptEntries.all { it.plainMask },
+            )
+        }
+    }
+
     @Test
     fun `uber active_trip bare-name redact carries the normalize customerName distinctness hex (#825)`() {
         val rule = TestRulesetFactory.screenRuleset.ruleById("uber.screen.active_trip")!!
