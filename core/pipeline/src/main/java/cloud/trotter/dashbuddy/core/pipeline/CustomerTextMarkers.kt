@@ -73,9 +73,13 @@ import cloud.trotter.dashbuddy.domain.model.notification.RawNotificationData
  * an id scan there could fight the ruleset instead of backing it up. The text-marker
  * backstop above still covers the recognized path.
  *
- * Accepted cost: `user_name` also renders the DASHER's own name in some DoorDash
- * chrome. Scrubbing that on an UNKNOWN frame loses a little triage text and leaks
- * nothing — fail toward privacy, exactly as the text scan does.
+ * Accepted cost — the `user_name` id is REUSED for non-customer values: it renders
+ * the DASHER's own name in some DoorDash chrome, and on a pickup card it holds the
+ * MERCHANT ("Pickup from <store>", which `pickup_pre_arrival` parses as `storeName`).
+ * Scrubbing those on an UNKNOWN frame loses a little triage text and leaks nothing —
+ * fail toward privacy, exactly as the text scan does. It costs nothing on the
+ * RECOGNIZED path, which this scan deliberately does not touch, so no rule's
+ * merchant-keeps-raw decision is affected.
  */
 object CustomerTextMarkers {
 

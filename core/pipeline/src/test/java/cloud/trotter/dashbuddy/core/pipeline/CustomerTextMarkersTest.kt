@@ -260,6 +260,21 @@ class CustomerTextMarkersTest {
     }
 
     @Test
+    fun `the id scan over-scrubs a reused user_name node - the documented UNKNOWN-only cost`() {
+        // `user_name` is not exclusively a customer node: it renders the DASHER's own
+        // name in some chrome, and on a pickup card it holds the MERCHANT ("Pickup from
+        // <store>", which pickup_pre_arrival parses as storeName). On an UNKNOWN frame
+        // the scan cannot tell them apart, so it masks them too — losing triage text,
+        // leaking nothing. This is the accepted fail-toward-privacy cost, pinned here so
+        // it is a DECISION rather than a surprise. The RECOGNIZED path is untouched, so
+        // no rule's merchant-keeps-raw decision is affected.
+        assertEquals(
+            "user_name",
+            CustomerTextMarkers.unredactedIdMarker(dd("user_name", "Pickup from Sample Pizza Co")),
+        )
+    }
+
+    @Test
     fun `a clean tree yields no id marker`() {
         val tree = UiNode(
             children = listOf(dd("merchant_name", "Pei Wei"), UiNode(text = "Continue")),
