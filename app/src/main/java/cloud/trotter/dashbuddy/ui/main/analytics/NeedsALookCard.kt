@@ -40,9 +40,43 @@ internal data class ReviewItem(
 internal data class ReviewAction(val label: String, val onClick: () -> Unit)
 
 /**
- * Build the window's review items in a fixed order (#973). Compose-aware only because the copy lives
- * in resources; the *decisions* (which flag fires, at what threshold) are unchanged from the callouts
- * this replaced — same epsilon on the money figures, same count gate on the orphan buckets.
+ * Which review flags a window raises, and in what order (#973) — pure, Compose-free, so the *gating*
+ * can be proved without rendering (the [MoneyWentModel]/[RecapModel] precedent). The copy that
+ * describes each flag is a separate concern and lives in [reviewItems].
+ *
+ * Every threshold here is carried over unchanged from the four standalone callouts this card
+ * consolidated: the same money epsilon, the same COUNT gate on the "(No session)" bucket (a pay-less
+ * orphan is still a categorizable item), and the same still-OWED gate on the orphan offers (#810 B2
+ * F3 — a fully-resolved group stays reachable in the dialog for undo but no longer raises the flag).
+ * Consolidation is a layout change; no flag was added, dropped, or re-thresholded.
+ */
+internal object ReviewFlags {
+
+    /** The review signals, in the order the card lists them. */
+    enum class Flag {
+        /** Reported pay exceeding the captured deliveries — bonuses/adjustments/a missed capture. */
+        UNATTRIBUTED,
+
+        /** The #701 mirror: captured pay exceeding what the platform reported. Display-only. */
+        OVER_ATTRIBUTED,
+
+        /** The "(No session)" bucket (#660) — deliveries not tied to any dash. Actionable. */
+        NO_SESSION,
+
+        /** Accepted offers with no matching delivery (#810 B2 Tier 2). Actionable. */
+        ORPHAN_OFFERS,
+    }
+
+    fun of(economics: PeriodEconomics, orphanOfferGroups: List<OrphanOfferGroup>): List<Flag> = buildList {
+        if (economics.unattributedPay > UNATTRIBUTED_EPSILON) add(Flag.UNATTRIBUTED)
+        if (economics.overAttributedPay > UNATTRIBUTED_EPSILON) add(Flag.OVER_ATTRIBUTED)
+        if (economics.noSessionDeliveries > 0) add(Flag.NO_SESSION)
+        if (orphanOfferGroups.sumOf { it.owedRemaining } > 0) add(Flag.ORPHAN_OFFERS)
+    }
+}
+
+/**
+ * The window's review rows: [ReviewFlags.of] decides WHICH, this resolves each one's copy and action.
  */
 @Composable
 internal fun reviewItems(
@@ -50,69 +84,49 @@ internal fun reviewItems(
     orphanOfferGroups: List<OrphanOfferGroup>,
     onOpenNoSession: () -> Unit,
     onOpenOrphanOffers: () -> Unit,
-): List<ReviewItem> = buildList {
-    if (economics.unattributedPay > UNATTRIBUTED_EPSILON) {
-        add(
-            ReviewItem(
-                text = stringResource(
-                    R.string.money_tab_unattributed_callout_format,
-                    Formats.money(economics.unattributedPay),
-                ),
+): List<ReviewItem> = ReviewFlags.of(economics, orphanOfferGroups).map { flag ->
+    when (flag) {
+        ReviewFlags.Flag.UNATTRIBUTED -> ReviewItem(
+            text = stringResource(
+                R.string.money_tab_unattributed_callout_format,
+                Formats.money(economics.unattributedPay),
             ),
         )
-    }
-    // Mirror signal (#701): attributed pay exceeded the reported total — display-only, never folded
-    // into netProfit/unattributedPay. Marked severe (an over-count is a stronger review flag than an
-    // unattributed bonus/adjustment) — the tone the standalone callout carried via badBg.
-    if (economics.overAttributedPay > UNATTRIBUTED_EPSILON) {
-        add(
-            ReviewItem(
-                text = stringResource(
-                    R.string.money_tab_over_attributed_callout_format,
-                    Formats.money(economics.overAttributedPay),
-                ),
-                severe = true,
+        // An over-count is a stronger signal than an unattributed bonus/adjustment — the tone the
+        // standalone callout carried via badBg.
+        ReviewFlags.Flag.OVER_ATTRIBUTED -> ReviewItem(
+            text = stringResource(
+                R.string.money_tab_over_attributed_callout_format,
+                Formats.money(economics.overAttributedPay),
+            ),
+            severe = true,
+        )
+        // Already inside BOTH gross and net (#660 piece 1), so this row is the visible data-quality
+        // signal, not a missing figure. Tapping opens the categorize flow, which heals the overlap.
+        ReviewFlags.Flag.NO_SESSION -> ReviewItem(
+            text = stringResource(
+                R.string.money_tab_no_session_callout_format,
+                Formats.money(economics.noSessionPay),
+                Formats.commaInt(economics.noSessionDeliveries),
+                if (economics.noSessionDeliveries == 1) {
+                    stringResource(R.string.time_tab_delivery_singular)
+                } else {
+                    stringResource(R.string.time_tab_delivery_plural)
+                },
+            ),
+            action = ReviewAction(
+                label = stringResource(R.string.money_tab_no_session_callout_click_label),
+                onClick = onOpenNoSession,
             ),
         )
-    }
-    // "(No session)" bucket (#660): deliveries whose source event carried no sessionId at all —
-    // already inside gross AND net, so this is the visible data-quality signal, not a missing figure.
-    // Gated on the COUNT, not the pay: a pay-less orphan is still a categorizable item.
-    if (economics.noSessionDeliveries > 0) {
-        val deliveryWord = if (economics.noSessionDeliveries == 1) {
-            stringResource(R.string.time_tab_delivery_singular)
-        } else {
-            stringResource(R.string.time_tab_delivery_plural)
-        }
-        add(
-            ReviewItem(
-                text = stringResource(
-                    R.string.money_tab_no_session_callout_format,
-                    Formats.money(economics.noSessionPay),
-                    Formats.commaInt(economics.noSessionDeliveries),
-                    deliveryWord,
-                ),
-                action = ReviewAction(
-                    label = stringResource(R.string.money_tab_no_session_callout_click_label),
-                    onClick = onOpenNoSession,
-                ),
+        ReviewFlags.Flag.ORPHAN_OFFERS -> ReviewItem(
+            text = stringResource(
+                R.string.money_tab_orphan_offers_callout_format,
+                Formats.commaInt(orphanOfferGroups.sumOf { it.owedRemaining }),
             ),
-        )
-    }
-    // Orphan-offer mismatches (#810 B2 Tier 2), gated on the still-OWED count (F3 — a fully-resolved
-    // group stays reachable in the dialog for undo but no longer drives this row).
-    val orphanCount = orphanOfferGroups.sumOf { it.owedRemaining }
-    if (orphanCount > 0) {
-        add(
-            ReviewItem(
-                text = stringResource(
-                    R.string.money_tab_orphan_offers_callout_format,
-                    Formats.commaInt(orphanCount),
-                ),
-                action = ReviewAction(
-                    label = stringResource(R.string.money_tab_orphan_offers_callout_click_label),
-                    onClick = onOpenOrphanOffers,
-                ),
+            action = ReviewAction(
+                label = stringResource(R.string.money_tab_orphan_offers_callout_click_label),
+                onClick = onOpenOrphanOffers,
             ),
         )
     }
