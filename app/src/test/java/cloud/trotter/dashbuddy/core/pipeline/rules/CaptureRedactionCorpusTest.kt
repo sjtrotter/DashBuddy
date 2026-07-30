@@ -958,7 +958,11 @@ class CaptureRedactionCorpusTest {
         assertTrue("on_job_view anchor kept", masked.contains("on_job_view"))
         assertTrue("benign order line kept", masked.contains("Dropoff • 1 order"))
         assertTrue("benign ETA kept", masked.contains("Expected by 7:17 PM"))
-        assertTrue("apt marker kept", masked.contains("Apt [redacted:"))
+        // #895: the fused unit number is a bounded ~10^4 alphabet over the length floor —
+        // the rule declares plainMask, so the marker keeps NO 4-hex suffix (a revert to the
+        // brute-recoverable hash form goes red here).
+        assertTrue("apt marker kept, plain-masked", masked.contains("Apt [redacted]"))
+        assertFalse("apt mask must not carry a distinctness hex", masked.contains("Apt [redacted:"))
     }
 
     @Test
