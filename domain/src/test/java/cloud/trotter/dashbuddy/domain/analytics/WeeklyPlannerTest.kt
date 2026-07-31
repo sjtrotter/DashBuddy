@@ -395,6 +395,36 @@ class WeeklyPlannerTest {
     }
 
     @Test
+    fun `a move onto a sibling window is refused, so hours are never double-counted`() {
+        // Two separate Friday runs (9-11am and 12-2pm) with a dead hour between them.
+        val samples = record(
+            weekday(
+                4,
+                mapOf(
+                    9 to List(4) { 30.0 }, 10 to List(4) { 30.0 },
+                    12 to List(4) { 28.0 }, 13 to List(4) { 28.0 },
+                ),
+            ),
+        )
+        val base = WeeklyPlanner.plan(samples, PlanTarget.Hours(4))
+        assertEquals(2, base.windows.size)
+        assertEquals(4, base.totalHours)
+
+        // Nudging the 12pm window back by one would put it at 11-1, straddling nothing — but two
+        // more nudges would walk it onto 9-11, which the guard refuses.
+        val edits = listOf(PlanEdit.Shift(4, 12, -1), PlanEdit.Shift(4, 11, -1), PlanEdit.Shift(4, 10, -1))
+        val edited = WeeklyPlanner.plan(samples, PlanTarget.Hours(4), edits)
+
+        assertEquals(2, edited.windows.size)
+        assertEquals(4, edited.totalHours)
+        for (a in edited.windows.indices) {
+            for (b in a + 1 until edited.windows.size) {
+                assertFalse(edited.windows[a].overlaps(edited.windows[b]))
+            }
+        }
+    }
+
+    @Test
     fun `an edit naming a window that is not there is a no-op`() {
         val samples = record(flat(4, 17..18, 30.0, 4))
         val plan = WeeklyPlanner.plan(samples, PlanTarget.Hours(2), listOf(PlanEdit.Drop(0, 3)))

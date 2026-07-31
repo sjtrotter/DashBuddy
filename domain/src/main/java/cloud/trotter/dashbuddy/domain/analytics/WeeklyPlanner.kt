@@ -81,14 +81,19 @@ object WeeklyPlanner {
 
                 is PlanEdit.Shift -> {
                     val victim = selected.firstOrNull { it.dayIndex == edit.dayIndex && it.startHour == edit.startHour }
-                    if (victim == null) {
-                        selected
-                    } else {
-                        val moved = shifted(victim, edit.deltaHours, samples)
-                        // The vacated hours are banned too: re-filling the very slot the driver just
-                        // moved a window OUT of would read as the app arguing with them.
-                        banned += BannedRange(victim.dayIndex, victim.startHour, victim.endHourExclusive)
-                        selected - victim + moved
+                    val moved = victim?.let { shifted(it, edit.deltaHours, samples) }
+                    when {
+                        victim == null || moved == null -> selected
+                        // A nudge onto a sibling window is refused, not merged: overlapping windows
+                        // would double-count their shared hours into `totalHours` and into the
+                        // projection, and a fabricated total is worse than a nudge that doesn't move.
+                        (selected - victim).any { it.overlaps(moved) } -> selected
+                        else -> {
+                            // The vacated hours are banned too: re-filling the very slot the driver
+                            // just moved a window OUT of would read as the app arguing with them.
+                            banned += BannedRange(victim.dayIndex, victim.startHour, victim.endHourExclusive)
+                            selected - victim + moved
+                        }
                     }
                 }
             }
