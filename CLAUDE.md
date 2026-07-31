@@ -706,6 +706,33 @@ strip and the Patterns grid can't drift apart. The review row reuses `ReviewFlag
 `NeedsALookCard` verbatim, scoped to the same week the block above it describes, with the action
 normalised to *navigate* into the hub (which owns the assign/attest dialogs) rather than inheriting an
 in-place label it can't honour. Read-side only — no schema change, no `PROJECTOR_VERSION` bump.
+**Patterns: ALL-TIME badge + heatmap toggle + store leaderboard (#979, stage 5 — brief §6):** UI-only
+over the already-free `storeReportCards()`/`earningsHeatmap()` reads — **zero** new queries, no schema
+change, no `PROJECTOR_VERSION` bump. An `ALL TIME` `AppChip` + declaring caption sit above the grid so
+the tab's lifetime scope reads as deliberate, not as ignoring the #970 pager above it. The heatmap
+gains a Rate/Hours `AppSegmented` toggle over the SAME grid: `EarningsHeatmapCell.coverageHours` was
+already computed alongside `.dollarsPerHour` and simply never rendered. Hours mode reuses
+`AppHeatScale.cellColor` UNCHANGED (Principle 5 — no second color path) by folding a genuinely-zero
+coverage cell to `null` before calling it, landing it on the same "no data" swatch a masked Rate cell
+already uses; Hours therefore has no Rate-equivalent "worked, no net" third state (coverage has no bad
+outcome) and gets its own legend/title/caption, while the Rate-only best-hour $/hr callout stays
+Rate-mode only. The store cards became a leaderboard (rank · name · the existing `StoreLocationChip` as
+the "area chip" — there is no city/neighborhood data anywhere in the schema, so this reuses the
+existing chain/location-key chip rather than minting one) with a proportional net bar scaled to the
+list's #1 (highest-net) store and `N deliveries · usual wait` inline, amber'd on an outlier wait. Sort
+chips By net / By wait / Recent reorder rows via the new pure `PatternsModel.sortedStores`; the bar
+scale (`PatternsModel.maxNet`) and the outlier fleet (`PatternsModel.isWaitOutlier`) are both computed
+over the FULL store list regardless of the active sort, so switching chips reorders rows without
+rescaling/reflagging them underneath the driver. **Outlier definition (no prior convention in the
+codebase to anchor to, so documented at the constant):** a store's own `p50DwellMillis` is flagged once
+it is `>= 1.5×` (`PatternsModel.OUTLIER_MULTIPLIER`) the FLEET's median `p50DwellMillis` — computed
+across every store currently on the leaderboard that carries a real dwell sample — gated on at least 3
+such stores (`PatternsModel.MIN_FLEET_SAMPLE_FOR_OUTLIER`, §9 thin-data honesty) so a 1–2-store board
+can never manufacture an outlier from a near-meaningless median. A store with no wait sample of its own
+is never flagged. "Recent" reuses `StoreReportCard.lastSeenAt` — the DAO's own existing
+`ORDER BY lastSeenAt DESC` — rather than a new query. `Platform` is available on `StoreReportCard.platform`
+per #315 but this pass doesn't render it on the row (out of the brief's row spec); no `Platform` literal
+was added.
 **The "(No session)" bucket (#660 piece 1):** `delivery_records` rows whose source event carried
 NO `sessionId` at all were already counted in net (`deliveryTotals`'s own-`completedAt` fallback, #655)
 but invisible to gross (`grossAndUnattributed`/`sessionGrossRows` iterate `session_records` only, so a
