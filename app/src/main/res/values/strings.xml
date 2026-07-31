@@ -300,6 +300,40 @@
     <string name="time_tab_delivery_plural">deliveries</string>
     <string name="time_tab_margin_early_format">typically %1$s early</string>
     <string name="time_tab_margin_late_format">typically %1$s late</string>
+    <!-- Time tab — #983 (brief §6 + §7.8): the running-hourly-rate pair, the typical online hour,
+         and the between-job gap distribution. Every line states its population; a residual is never
+         described as pure driving, and a long gap is counted, not judged (§9). -->
+    <string name="time_tab_rate_pair_title">NET PER HOUR</string>
+    <string name="time_tab_rate_while_working">While working</string>
+    <string name="time_tab_rate_whole_shift">Whole shift</string>
+    <string name="time_tab_rate_distinction">While working counts only the time you were on a delivery. Whole shift counts every minute you were online, including the dry gaps between offers.</string>
+    <string name="time_tab_rate_gaps_note_format">Working time is your delivery time minus %1$s measured %2$s between jobs.</string>
+    <string name="time_tab_rate_no_gaps_note">No gap was measured in this window, so working time still includes any waiting inside it — the while-working rate is if anything on the low side.</string>
+    <string name="time_tab_rate_working_unmeasured">No per-delivery time was measured here, so there is no while-working rate to show.</string>
+    <string name="time_tab_rate_frozen_note">Net is frozen at the costs that were in force when you accepted each offer.</string>
+    <string name="time_tab_rate_none">No online time in this window yet.</string>
+    <string name="time_tab_gap_singular">gap</string>
+    <string name="time_tab_gap_plural">gaps</string>
+    <string name="time_tab_typical_hour_title">YOUR TYPICAL ONLINE HOUR</string>
+    <string name="time_tab_typical_hour_none">No online time in this window yet.</string>
+    <string name="time_tab_segment_at_stops">At stops</string>
+    <string name="time_tab_segment_waiting">Waiting</string>
+    <string name="time_tab_segment_driving">Driving &amp; other</string>
+    <string name="time_tab_typical_hour_derivation">At stops is measured time parked at a store or at a door. Waiting is measured time between finishing a drop and taking your next offer. The rest is mostly driving — but it also holds the wait before your first offer, the tail after your last drop, and anything we could not time.</string>
+    <string name="time_tab_typical_hour_coverage_format">Timed %1$s of %2$s stops; the untimed ones sit in the rest.</string>
+    <string name="time_tab_typical_hour_all_timed_format">Timed all %1$s stops.</string>
+    <string name="time_tab_typical_hour_no_stops_timed">No stop in this window recorded an arrival, so at-stops time is unmeasured here — all of it sits in the rest.</string>
+    <string name="time_tab_typical_hour_no_stops">No stops in this window.</string>
+    <string name="time_tab_typical_hour_leak_format">Waiting cost you about %1$s in this window — %2$s at your while-working rate.</string>
+    <string name="time_tab_typical_hour_leak_unpriced">Waiting can\'t be priced here — no while-working rate was measured in this window.</string>
+    <string name="time_tab_gaps_title">GAPS BETWEEN JOBS</string>
+    <string name="time_tab_gaps_none">No gap measured in this window yet — a gap needs a completed drop and a later offer you took in the same dash.</string>
+    <string name="time_tab_gaps_median_label">Typical</string>
+    <string name="time_tab_gaps_p90_label">9 in 10 under</string>
+    <string name="time_tab_gaps_longest_label">Longest</string>
+    <string name="time_tab_gaps_definition">Measured from finishing a drop to accepting your next offer, inside the same dash.</string>
+    <string name="time_tab_gaps_coverage_format">%1$s %2$s measured across %3$s drops; the rest ended their dash, which is a tail rather than a gap.</string>
+    <string name="time_tab_gaps_long_format">%1$s %2$s ran 2 hours or longer. That could be a dry market or your own break — we can\'t tell which, so they are counted, not judged.</string>
     <string name="time_tab_mileage_tax_title">MILEAGE &amp; TAX</string>
     <string name="time_tab_mileage_tax_disclosure">standard-mileage method — not the app\'s operating-cost model; confirm with a tax preparer.</string>
 

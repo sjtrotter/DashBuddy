@@ -10,6 +10,7 @@ import cloud.trotter.dashbuddy.domain.analytics.DailyEarnings
 import cloud.trotter.dashbuddy.domain.analytics.DecisionEconomics
 import cloud.trotter.dashbuddy.domain.analytics.EarningsHeatmap
 import cloud.trotter.dashbuddy.domain.analytics.EstimateVsReality
+import cloud.trotter.dashbuddy.domain.analytics.GapStats
 import cloud.trotter.dashbuddy.domain.analytics.OfferFilter
 import cloud.trotter.dashbuddy.domain.analytics.OfferListing
 import cloud.trotter.dashbuddy.domain.analytics.OfferOutcome
@@ -93,6 +94,10 @@ class AnalyticsViewModelTest {
     private var payMixParts: PayMixParts = PayMixParts.EMPTY
     private var platformSplit: List<PlatformEconomics> = emptyList()
 
+    /** #983 — the Time tab's measured time + between-job gaps, served for every window. */
+    private var time: TimeEconomics = TimeEconomics.EMPTY
+    private var gaps: GapStats = GapStats.EMPTY
+
     /** #975 — the Offers tab's est-vs-realized comparison and its list feed, served for every window. */
     private var estimateVsReality: EstimateVsReality = EstimateVsReality.EMPTY
     private var offerListings: List<OfferListing> = emptyList()
@@ -121,7 +126,10 @@ class AnalyticsViewModelTest {
         whenever(analyticsRepository.decisionEconomics(any<AnalyticsWindow>(), any<ZoneId>()))
             .thenAnswer { flowOf(decisions) }
         whenever(analyticsRepository.timeEconomics(any<AnalyticsWindow>(), any<ZoneId>()))
-            .thenReturn(flowOf(TimeEconomics.EMPTY))
+            .thenAnswer { flowOf(time) }
+        // #983: the §7.8 gap read shares the Time tab's slot, so it must always be stubbed.
+        whenever(analyticsRepository.gapStats(any<AnalyticsWindow>(), any<ZoneId>()))
+            .thenAnswer { flowOf(gaps) }
         whenever(analyticsRepository.dailyEarnings(any<AnalyticsWindow>(), any<ZoneId>()))
             .thenAnswer { flowOf(dailyEarnings) }
         whenever(analyticsRepository.noSessionDeliveries(any<AnalyticsWindow>(), any<ZoneId>()))
@@ -463,6 +471,60 @@ class AnalyticsViewModelTest {
             assertEquals(5, ui.decisions.declined)
             assertEquals(0.3, ui.decisions.acceptanceRate!!, 1e-9)
             assertEquals(12.5, ui.decisions.declinedEstNet, 1e-9)
+        }
+    }
+
+    /**
+     * #983 — the Time tab's two composed models. The ViewModel is the composition site (the pay-mix
+     * precedent) because each needs a value that already has an owner: the hour composition needs the
+     * window's measured time, and the rate pair needs its FROZEN net. Asserting them here is what
+     * proves the Time tab reconciles with the hero above it rather than deriving a second total.
+     */
+    @Test
+    fun `time-tab insights compose the window's measured time, gaps and frozen net`() = runTest {
+        val hour = 3_600_000L
+        val minute = 60_000L
+        time = TimeEconomics(
+            sessions = 1,
+            onlineMillis = 4 * hour,
+            deliveryMinutes = 120.0,
+            miles = 40.0,
+            deliveryMiles = 30.0,
+            deliveriesWithDeadline = 0,
+            onTimeDeliveries = 0,
+            avgDeadlineMarginMillis = null,
+            deliveries = 4,
+            dropoffDwellMillis = 8 * minute,
+            dropoffsTimed = 4,
+            pickups = 4,
+            pickupDwellMillis = 22 * minute,
+            pickupsTimed = 3,
+        )
+        gaps = GapStats(
+            count = 3,
+            totalMillis = 24 * minute,
+            medianMillis = 8 * minute,
+            p90Millis = 12 * minute,
+            longestMillis = 12 * minute,
+            longGapCount = 0,
+            completionsWithoutGap = 1,
+        )
+        economicsByWindow[currentWeek()] = economics(net = 96.0, netPerHour = 24.0)
+
+        runWithViewModel { vm ->
+            val state = vm.uiState.value
+
+            assertEquals(gaps, state.gaps)
+            // At stops = 22m store + 8m door; waiting = the measured gaps.
+            assertEquals(30 * minute, state.hourComposition.atStopsMillis)
+            assertEquals(24 * minute, state.hourComposition.waitingMillis)
+            // 3 of 4 pickups + 4 of 4 drops timed, out of 8 stops — the coverage the card states.
+            assertEquals(7, state.hourComposition.stopsTimed)
+            assertEquals(8, state.hourComposition.stops)
+            // Working = 2h of delivery time − 24m of dry gaps = 1h36m; shift = the whole 4h online.
+            assertEquals(2 * hour - 24 * minute, state.netPerHour.workingMillis)
+            assertEquals(96.0 / 1.6, state.netPerHour.whileWorking!!, 1e-9)
+            assertEquals(24.0, state.netPerHour.wholeShift!!, 1e-9)
         }
     }
 

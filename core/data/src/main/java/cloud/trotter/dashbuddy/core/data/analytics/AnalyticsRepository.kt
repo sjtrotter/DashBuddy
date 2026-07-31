@@ -4,7 +4,9 @@ import cloud.trotter.dashbuddy.core.database.analytics.AnalyticsDao
 import cloud.trotter.dashbuddy.core.database.analytics.DeliveryTimeTotalsRow
 import cloud.trotter.dashbuddy.core.database.analytics.OfferRecordEntity
 import cloud.trotter.dashbuddy.core.database.analytics.OutcomeCountRow
+import cloud.trotter.dashbuddy.core.database.analytics.PickupDwellTotalsRow
 import cloud.trotter.dashbuddy.core.database.analytics.ScoreOutcomeRow
+import cloud.trotter.dashbuddy.core.database.analytics.SessionEventRow
 import cloud.trotter.dashbuddy.core.database.analytics.SessionTotalsRow
 import cloud.trotter.dashbuddy.core.database.event.AppEventDao
 import cloud.trotter.dashbuddy.domain.analytics.AnalyticsPeriod
@@ -16,6 +18,7 @@ import cloud.trotter.dashbuddy.domain.analytics.DeliveryRecord
 import cloud.trotter.dashbuddy.domain.analytics.EarningsHeatmap
 import cloud.trotter.dashbuddy.domain.analytics.EarningsHeatmapCalculator
 import cloud.trotter.dashbuddy.domain.analytics.EstimateVsReality
+import cloud.trotter.dashbuddy.domain.analytics.GapStats
 import cloud.trotter.dashbuddy.domain.analytics.HourOfWeekSampler
 import cloud.trotter.dashbuddy.domain.analytics.HourOfWeekSamples
 import cloud.trotter.dashbuddy.domain.analytics.OfferFilter
@@ -23,14 +26,17 @@ import cloud.trotter.dashbuddy.domain.analytics.OfferListing
 import cloud.trotter.dashbuddy.domain.analytics.OfferOutcome
 import cloud.trotter.dashbuddy.domain.analytics.PayMixParts
 import cloud.trotter.dashbuddy.domain.analytics.PeriodEconomics
+import cloud.trotter.dashbuddy.domain.analytics.Percentiles
 import cloud.trotter.dashbuddy.domain.analytics.PeriodTotals
 import cloud.trotter.dashbuddy.domain.analytics.PlatformEconomics
 import cloud.trotter.dashbuddy.domain.analytics.SessionDetail
+import cloud.trotter.dashbuddy.domain.analytics.SessionEvent
 import cloud.trotter.dashbuddy.domain.analytics.SessionRecord
 import cloud.trotter.dashbuddy.domain.analytics.SessionSpan
 import cloud.trotter.dashbuddy.domain.analytics.StoreEconomics
 import cloud.trotter.dashbuddy.domain.analytics.StoreReportCard
 import cloud.trotter.dashbuddy.domain.analytics.TimeEconomics
+import cloud.trotter.dashbuddy.domain.analytics.WorkGaps
 import cloud.trotter.dashbuddy.domain.analytics.OrphanOfferCandidate
 import cloud.trotter.dashbuddy.domain.analytics.OrphanOfferGroup
 import cloud.trotter.dashbuddy.domain.evaluation.NetProfit
@@ -41,7 +47,6 @@ import cloud.trotter.dashbuddy.domain.state.Platform
 import cloud.trotter.dashbuddy.domain.state.StoreKeys
 import java.time.Instant
 import java.time.ZoneId
-import kotlin.math.ceil
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
@@ -328,8 +333,10 @@ class AnalyticsRepository @Inject constructor(
                     gross = r.gross,
                     net = r.net,
                     avgDwellMillis = sorted.takeIf { it.isNotEmpty() }?.average(),
-                    p50DwellMillis = percentile(sorted, 0.50),
-                    p95DwellMillis = percentile(sorted, 0.95),
+                    // Nearest-rank, shared with the #983 gap percentiles (Principle 5 — one
+                    // percentile convention, two readers).
+                    p50DwellMillis = Percentiles.nearestRank(sorted, 0.50),
+                    p95DwellMillis = Percentiles.nearestRank(sorted, 0.95),
                     firstSeenAt = r.firstSeenAt,
                     lastSeenAt = r.lastSeenAt,
                 )
@@ -553,8 +560,56 @@ class AnalyticsRepository @Inject constructor(
             combine(
                 analyticsDao.sessionTotals(start, end),
                 analyticsDao.deliveryTimeTotals(start, end),
-            ) { s, d -> assembleTime(s, d) }
+                analyticsDao.pickupDwellTotals(start, end),
+            ) { s, d, p -> assembleTime(s, d, p) }
         }
+
+    /**
+     * The window's **between-job gaps** (#983 / brief §7.8) — how long the driver sat between finishing
+     * a drop and taking the next offer. Feeds the Time tab's gap card, the "typical online hour"
+     * waiting segment, and the while-working denominator of the net/hr pair.
+     *
+     * **Read-model, not the event log.** The brief points at `app_events`; the two facts the fold needs
+     * are already projected — `delivery_records.completedAt` and `offer_records.decidedAt` ARE those
+     * payloads' own domain timestamps, and each row's PK IS its source event's `sequenceId`. Paging the
+     * log would re-decode JSON for the same two numbers and re-implement the session-anchored windowing
+     * every other aggregate here shares, so the read model is both cheaper and the SSOT (Principle 5).
+     * The #732 ordering contract is honoured either way: the DAO orders by `sequenceId` and the pure
+     * [WorkGaps] fold measures durations from the domain timestamps.
+     *
+     * The pairing/clamping policy lives entirely in the pure `:domain` [WorkGaps] (never across dashes,
+     * the tail is not a gap, bounded by the dash's own effective end) — this repository only supplies
+     * rows. Off-main ([Dispatchers.Default]) like the heatmap folds, since a Lifetime window's row set
+     * is unbounded by construction; [distinctUntilChanged] suppresses re-emitting identical stats on an
+     * unrelated Room invalidation.
+     *
+     * No economy dependency, no new PII surface: timestamps, ids and counts only.
+     */
+    fun gapStats(
+        window: AnalyticsWindow,
+        zone: ZoneId = ZoneId.systemDefault(),
+    ): Flow<GapStats> = gapStatsIn(flowOf(PeriodBounds.of(window, zone)))
+
+    /** Rolling-period variant of [gapStats] (the enum path, for parity with every other aggregate). */
+    fun gapStats(period: AnalyticsPeriod): Flow<GapStats> = gapStatsIn(periodBoundariesFlow(period))
+
+    private fun gapStatsIn(bounds: Flow<PeriodBounds.Bounds>): Flow<GapStats> =
+        bounds.flatMapLatest { (start, end) ->
+            combine(
+                analyticsDao.completionEvents(start, end),
+                analyticsDao.acceptEvents(start, end, OfferOutcome.ACCEPTED.eventTypeName),
+                analyticsDao.sessionEndBounds(start, end),
+            ) { completions, accepts, ends ->
+                WorkGaps.compute(
+                    completions = completions.map { it.toDomain() },
+                    accepts = accepts.map { it.toDomain() },
+                    sessionEndMillis = ends.associate { it.sessionId to it.endMillis },
+                )
+            }
+        }.flowOn(Dispatchers.Default).distinctUntilChanged()
+
+    private fun SessionEventRow.toDomain() =
+        SessionEvent(sessionId = sessionId, sequenceId = sequenceId, timestamp = timestamp)
 
     /**
      * Per-day earnings for [period] (#315 H6, Money-tab chart) — a **complete day axis**: one
@@ -939,20 +994,10 @@ class AnalyticsRepository @Inject constructor(
      * derived split ([TimeEconomics.unattributedMillis]/[TimeEconomics.unattributedMiles] etc.) is the
      * DTO's own coerce-≥0 helper, so this repository stores no second copy of that math (Principle 5).
      */
-    /**
-     * The [p]-th percentile of an ASCENDING-sorted dwell list (#159 store report card) — nearest-rank
-     * (SQLite has no native percentile and store visit counts are small, so an exact in-Kotlin nearest-
-     * rank is honest and cheap). Null on an empty list. `p ∈ [0,1]`.
-     */
-    private fun percentile(sorted: List<Long>, p: Double): Long? {
-        if (sorted.isEmpty()) return null
-        val rank = ceil(p * sorted.size).toInt().coerceIn(1, sorted.size)
-        return sorted[rank - 1]
-    }
-
     private fun assembleTime(
         session: SessionTotalsRow,
         delivery: DeliveryTimeTotalsRow,
+        pickup: PickupDwellTotalsRow,
     ): TimeEconomics = TimeEconomics(
         sessions = session.sessions,
         onlineMillis = session.onlineMillis,
@@ -962,6 +1007,12 @@ class AnalyticsRepository @Inject constructor(
         deliveriesWithDeadline = delivery.withDeadline,
         onTimeDeliveries = delivery.onTime,
         avgDeadlineMarginMillis = delivery.avgDeadlineMarginMillis,
+        deliveries = delivery.deliveries,
+        dropoffDwellMillis = delivery.dropoffDwellMillis,
+        dropoffsTimed = delivery.dropoffsTimed,
+        pickups = pickup.pickups,
+        pickupDwellMillis = pickup.dwellMillis,
+        pickupsTimed = pickup.timed,
     )
 
     /**

@@ -13,6 +13,9 @@ import cloud.trotter.dashbuddy.domain.analytics.DailyEarnings
 import cloud.trotter.dashbuddy.domain.analytics.DecisionEconomics
 import cloud.trotter.dashbuddy.domain.analytics.DeliveryRecord
 import cloud.trotter.dashbuddy.domain.analytics.EstimateVsReality
+import cloud.trotter.dashbuddy.domain.analytics.GapStats
+import cloud.trotter.dashbuddy.domain.analytics.HourComposition
+import cloud.trotter.dashbuddy.domain.analytics.NetPerHourPair
 import cloud.trotter.dashbuddy.domain.analytics.OfferFilter
 import cloud.trotter.dashbuddy.domain.analytics.OrphanOfferGroup
 import cloud.trotter.dashbuddy.domain.analytics.PayMix
@@ -104,7 +107,14 @@ class AnalyticsViewModel @Inject constructor(
                 analyticsRepository.periodEconomics(w),
                 analyticsRepository.perStoreEconomics(w),
                 analyticsRepository.decisionEconomics(w),
-                analyticsRepository.timeEconomics(w),
+                // The Time tab's two window reads travel as ONE slot: the "typical online hour"
+                // composition and the while-working denominator are BOTH (time × gaps), so a slot
+                // that could deliver one without the other would let the card render a composition
+                // against a different window's gaps for a frame (#983).
+                combine(
+                    analyticsRepository.timeEconomics(w),
+                    analyticsRepository.gapStats(w),
+                ) { time, gaps -> time to gaps },
                 // The typed `combine` tops out at 5 flows, so every remaining window-anchored read
                 // rides ONE nested pair of sub-combines into the 5th slot: the per-day chart + the
                 // "(No session)" orphan list (#660 piece 2) + the orphan-OFFER groups (#810 B2 Tier 2)
@@ -129,8 +139,8 @@ class AnalyticsViewModel @Inject constructor(
                 ) { (daily, orphans, offerGroups), (previous, payMixParts, platforms), estVsReality ->
                     WindowExtras(daily, orphans, offerGroups, previous, payMixParts, platforms, estVsReality)
                 },
-            ) { economics, stores, decisions, time, extras ->
-                WindowData(w, day, economics, stores, decisions, time, extras)
+            ) { economics, stores, decisions, timeAndGaps, extras ->
+                WindowData(w, day, economics, stores, decisions, timeAndGaps.first, timeAndGaps.second, extras)
             }
         },
         analyticsRepository.recentSessions(RECENT_SESSIONS_LIMIT),
@@ -158,6 +168,13 @@ class AnalyticsViewModel @Inject constructor(
             decisions = data.decisions,
             estimateVsReality = data.extras.estimateVsReality,
             time = data.time,
+            gaps = data.gaps,
+            // Composed HERE for the same reason the pay mix is (#973): both models need a value that
+            // already has an owner — the composition needs the window's measured time, the rate pair
+            // needs its FROZEN net — so composing at the read site is what keeps the Time tab
+            // reconciling with the hero above it instead of deriving a second total (Principle 5).
+            hourComposition = HourComposition.of(data.time, data.gaps),
+            netPerHour = NetPerHourPair.of(data.economics.netProfit, data.time, data.gaps),
             dailyEarnings = data.extras.dailyEarnings,
             noSessionDeliveries = data.extras.orphanDeliveries,
             orphanOfferGroups = data.extras.orphanOfferGroups,
@@ -390,6 +407,7 @@ class AnalyticsViewModel @Inject constructor(
         val stores: List<StoreEconomics>,
         val decisions: DecisionEconomics,
         val time: TimeEconomics,
+        val gaps: GapStats,
         val extras: WindowExtras,
     )
 

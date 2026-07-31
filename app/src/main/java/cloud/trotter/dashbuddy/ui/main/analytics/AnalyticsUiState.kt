@@ -11,6 +11,9 @@ import cloud.trotter.dashbuddy.domain.analytics.DecisionEconomics
 import cloud.trotter.dashbuddy.domain.analytics.DeliveryRecord
 import cloud.trotter.dashbuddy.domain.analytics.EarningsHeatmap
 import cloud.trotter.dashbuddy.domain.analytics.EstimateVsReality
+import cloud.trotter.dashbuddy.domain.analytics.GapStats
+import cloud.trotter.dashbuddy.domain.analytics.HourComposition
+import cloud.trotter.dashbuddy.domain.analytics.NetPerHourPair
 import cloud.trotter.dashbuddy.domain.analytics.OfferFilter
 import cloud.trotter.dashbuddy.domain.analytics.OfferListing
 import cloud.trotter.dashbuddy.domain.analytics.OrphanOfferGroup
@@ -136,6 +139,22 @@ data class AnalyticsUiState(
     val estimateVsReality: EstimateVsReality = EstimateVsReality.EMPTY,
     /** Time / mileage economics for [window] — the Time tab (#315 H4, measured). */
     val time: TimeEconomics = TimeEconomics.EMPTY,
+    /**
+     * The window's between-job gaps (#983 / brief §7.8) — the Time tab's gap card. Measured from the
+     * read model's own domain timestamps, session-bounded (never across dashes).
+     */
+    val gaps: GapStats = GapStats.EMPTY,
+    /**
+     * "Your typical online hour" (#983 / brief §6) — composed at the ViewModel from [time] + [gaps],
+     * both of which describe this same window. Its KDoc is the authoritative derivation.
+     */
+    val hourComposition: HourComposition = HourComposition.EMPTY,
+    /**
+     * Net per hour **while working** vs **whole shift** (#983 / brief §6 `4c`) — the pair
+     * `docs/design/running-hourly-rate.md` §2a defines (its *active* / *scheduled* denominators).
+     * Composed at the ViewModel because its numerator is [economics]' frozen net, which has one owner.
+     */
+    val netPerHour: NetPerHourPair = NetPerHourPair.EMPTY,
     /**
      * Per-store report cards — the Patterns tab (#315 H5, #159), newest-visited first. **Lifetime-scoped**,
      * NOT period-filtered: the Patterns tab hides the period selector (it is rate/pattern-based).
