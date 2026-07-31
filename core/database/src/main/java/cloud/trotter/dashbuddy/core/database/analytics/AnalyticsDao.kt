@@ -774,19 +774,130 @@ interface AnalyticsDao {
      * never counted as late), and [avgDeadlineMarginMillis] averages `deadline − completedAt` over just
      * those rows (positive = typically early; NULL when none carried a deadline — `AVG` skips the null
      * CASE arms).
+     *
+     * **Door dwell (#983 / brief §6):** [dropoffDwellMillis] sums `completedAt − arrivedAt` over the
+     * rows that stamped an arrival at all, and [dropoffsTimed] counts them, so the "your typical online
+     * hour" segment can state its coverage instead of implying every drop was timed (§9). The
+     * `completedAt >= arrivedAt` guard drops an incoherent pair rather than contributing a negative
+     * dwell. [deliveries] is the population's own COUNT — the coverage denominator, taken here rather
+     * than from another query so it can never describe a different set of rows than the dwell above it.
      */
     @Query(
         """SELECT SUM(realizedMinutes) AS deliveryMinutes,
                   SUM(realizedMiles) AS deliveryMiles,
                   COALESCE(SUM(CASE WHEN deadlineMillis IS NOT NULL THEN 1 ELSE 0 END), 0) AS withDeadline,
                   COALESCE(SUM(CASE WHEN deadlineMillis IS NOT NULL AND completedAt <= deadlineMillis THEN 1 ELSE 0 END), 0) AS onTime,
-                  AVG(CASE WHEN deadlineMillis IS NOT NULL THEN deadlineMillis - completedAt END) AS avgDeadlineMarginMillis
+                  AVG(CASE WHEN deadlineMillis IS NOT NULL THEN deadlineMillis - completedAt END) AS avgDeadlineMarginMillis,
+                  COUNT(*) AS deliveries,
+                  COALESCE(SUM(CASE WHEN arrivedAt IS NOT NULL AND completedAt >= arrivedAt
+                                    THEN completedAt - arrivedAt ELSE 0 END), 0) AS dropoffDwellMillis,
+                  COALESCE(SUM(CASE WHEN arrivedAt IS NOT NULL AND completedAt >= arrivedAt
+                                    THEN 1 ELSE 0 END), 0) AS dropoffsTimed
            FROM delivery_records
            WHERE sessionId IN (SELECT sessionId FROM session_records
                                WHERE startedAt >= :start AND startedAt < :end)
               OR (sessionId IS NULL AND completedAt >= :start AND completedAt < :end)"""
     )
     fun deliveryTimeTotals(start: Long, end: Long): Flow<DeliveryTimeTotalsRow>
+
+    /**
+     * Store dwell for the window's pickups (#983 / brief §6) — the other half of the "at stops"
+     * segment. Σ `confirmedAt − arrivedAt` over the pickups that stamped both, the count of those, and
+     * the population's own COUNT as the coverage denominator.
+     *
+     * Session-anchored like every other window aggregate (#655), with the null-session fallback keyed
+     * on [PickupRecordEntity.phaseStartedAt] — the pickup table's only non-null instant (its
+     * `confirmedAt` is nullable, so keying the fallback on it would silently exclude exactly the rows
+     * the coverage denominator exists to count).
+     *
+     * The same `confirmedAt >= arrivedAt` guard as [storeDwellSamples] — an incoherent pair is dropped,
+     * never summed as a negative dwell.
+     */
+    @Query(
+        """SELECT COALESCE(SUM(CASE WHEN arrivedAt IS NOT NULL AND confirmedAt IS NOT NULL
+                                         AND confirmedAt >= arrivedAt
+                                    THEN confirmedAt - arrivedAt ELSE 0 END), 0) AS dwellMillis,
+                  COALESCE(SUM(CASE WHEN arrivedAt IS NOT NULL AND confirmedAt IS NOT NULL
+                                         AND confirmedAt >= arrivedAt
+                                    THEN 1 ELSE 0 END), 0) AS timed,
+                  COUNT(*) AS pickups
+           FROM pickup_records
+           WHERE sessionId IN (SELECT sessionId FROM session_records
+                               WHERE startedAt >= :start AND startedAt < :end)
+              OR (sessionId IS NULL AND phaseStartedAt >= :start AND phaseStartedAt < :end)"""
+    )
+    fun pickupDwellTotals(start: Long, end: Long): Flow<PickupDwellTotalsRow>
+
+    // ── §7.8 gap sources (#983) ─────────────────────────────────────────
+
+    /**
+     * Every completed delivery of the window's dashes as a `(sessionId, sequenceId, completedAt)`
+     * triple — the "from" side of the §7.8 gap fold (#983).
+     *
+     * **Read-model, not the log.** Brief §7.8 says "the events exist in the log"; they also exist,
+     * already decoded and already bucketed, in `delivery_records` / `offer_records`, whose
+     * `completedAt` / `decidedAt` ARE the payloads' own domain timestamps and whose PK IS the source
+     * event's `sequenceId`. Paging `app_events` would re-decode JSON to recover the same two numbers
+     * while re-implementing the session-anchored windowing — strictly more work for an identical
+     * answer, so the read model wins (Principle 5).
+     *
+     * `ORDER BY sessionId, eventSequenceId` hands the pure fold rows already in **sequence** order,
+     * which is the authoritative order key (#732 — `occurredAt` may lag, `sequenceId` never does).
+     *
+     * **Session-scoped only, deliberately:** a `sessionId IS NULL` orphan has no dash to sit inside, so
+     * it contributes nothing (a gap that spans two dashes or an overnight is not a gap — see
+     * [cloud.trotter.dashbuddy.domain.analytics.WorkGaps]). This is the ONE window aggregate without a
+     * null-session fallback, and that is the definition, not an oversight.
+     */
+    @Query(
+        """SELECT sessionId, eventSequenceId AS sequenceId, completedAt AS timestamp
+           FROM delivery_records
+           WHERE sessionId IN (SELECT sessionId FROM session_records
+                               WHERE startedAt >= :start AND startedAt < :end)
+           ORDER BY sessionId, eventSequenceId"""
+    )
+    fun completionEvents(start: Long, end: Long): Flow<List<SessionEventRow>>
+
+    /**
+     * Every ACCEPTED offer of the window's dashes as a `(sessionId, sequenceId, decidedAt)` triple —
+     * the "to" side of the §7.8 gap fold (#983). Same session scoping and same sequence ordering as
+     * [completionEvents].
+     *
+     * **Includes resolved orphans, unlike every other offer read.** The funnel/list reads exclude
+     * `outcomeResolved IS NOT NULL` (#810 B2) because a resolved orphan never delivered and would
+     * inflate an outcome COUNT. Here the row is not a count — it is the *instant the driver stopped
+     * waiting*, which happened regardless of what became of the job. Excluding it would silently fuse
+     * two real gaps into one long fabricated one, which is a worse lie than counting an accept whose
+     * job later vanished. Documented divergence, deliberate.
+     *
+     * [acceptedOutcome] is passed in so the stored `AppEventType` name keeps one owner
+     * (`OfferOutcome.ACCEPTED.eventTypeName`) rather than being inlined as a literal (Principle 8).
+     */
+    @Query(
+        """SELECT sessionId, eventSequenceId AS sequenceId, decidedAt AS timestamp
+           FROM offer_records
+           WHERE outcome = :acceptedOutcome
+             AND sessionId IN (SELECT sessionId FROM session_records
+                               WHERE startedAt >= :start AND startedAt < :end)
+           ORDER BY sessionId, eventSequenceId"""
+    )
+    fun acceptEvents(start: Long, end: Long, acceptedOutcome: String): Flow<List<SessionEventRow>>
+
+    /**
+     * Each in-window dash's effective end (#983) — the §7.8 fold's bound: a pairing whose accept lands
+     * after its own dash ended is incoherent and is dropped rather than measured.
+     *
+     * `COALESCE(endedAt, lastEventAt)` is the SAME effective-end definition [sessionTotals] uses for
+     * online duration and [sessionSpans] for the heatmap, so a still-open dash is bounded by its last
+     * observed event rather than treated as running forever (Principle 5 — one definition of "when the
+     * dash ended", three readers).
+     */
+    @Query(
+        """SELECT sessionId, COALESCE(endedAt, lastEventAt) AS endMillis
+           FROM session_records
+           WHERE startedAt >= :start AND startedAt < :end"""
+    )
+    fun sessionEndBounds(start: Long, end: Long): Flow<List<SessionEndRow>>
 
     // ── Patterns-tab heatmap reads (#315 H5) ────────────────────────────
 

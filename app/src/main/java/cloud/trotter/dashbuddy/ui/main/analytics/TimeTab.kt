@@ -22,6 +22,9 @@ import cloud.trotter.dashbuddy.core.designsystem.component.AppStatTile
 import cloud.trotter.dashbuddy.core.designsystem.text.EMPTY_VALUE
 import cloud.trotter.dashbuddy.core.designsystem.theme.AppTheme
 import cloud.trotter.dashbuddy.domain.analytics.AnalyticsWindow
+import cloud.trotter.dashbuddy.domain.analytics.GapStats
+import cloud.trotter.dashbuddy.domain.analytics.HourComposition
+import cloud.trotter.dashbuddy.domain.analytics.NetPerHourPair
 import cloud.trotter.dashbuddy.domain.analytics.TimeEconomics
 import cloud.trotter.dashbuddy.domain.export.IrsMileage
 import cloud.trotter.dashbuddy.domain.format.Formats
@@ -32,9 +35,11 @@ import kotlin.math.roundToLong
 
 
 /**
- * Time tab (#315 H4): the measured time / mileage review for the selected period, top→bottom — the
- * online-time split (on-delivery vs unattributed), the deadhead ratio, the on-time gauge, and the
- * mileage-&-tax card. Pure data in ([TimeEconomics]), no side effects (Principle 1 — UDF).
+ * Time tab (#315 H4, extended by #983): the measured time / mileage review for the selected period,
+ * top→bottom — the online-time split (on-delivery vs unattributed), the #983 net/hr pair, "your
+ * typical online hour", the §7.8 gap distribution, the deadhead ratio, the on-time gauge, and the
+ * mileage-&-tax card. Pure data in ([TimeEconomics] / [GapStats] and the two models composed from
+ * them), no side effects (Principle 1 — UDF).
  *
  * **Everything here is MEASURED, not estimated** — session durations, per-delivery partition deltas,
  * odometer deltas — so there's no "est." qualifier and no economy dependency (this surface reports
@@ -47,11 +52,19 @@ import kotlin.math.roundToLong
 @Composable
 fun TimeTab(
     time: TimeEconomics,
+    gaps: GapStats,
+    hourComposition: HourComposition,
+    netPerHour: NetPerHourPair,
     window: AnalyticsWindow,
     modifier: Modifier = Modifier,
 ) {
     Column(modifier = modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(16.dp)) {
         TimeSplitCard(time)
+        // #983 (brief §6 + §7.8) — the running-hourly-rate doc's pair, where the hour goes, and the
+        // gaps that both of them are measured against. Rendered by `TimeInsightCards.kt`.
+        NetPerHourPairCard(netPerHour)
+        TypicalOnlineHourCard(hourComposition, netPerHour)
+        GapsBetweenJobsCard(gaps)
         DeadheadCard(time)
         OnTimeCard(time)
         MileageTaxCard(time, window)

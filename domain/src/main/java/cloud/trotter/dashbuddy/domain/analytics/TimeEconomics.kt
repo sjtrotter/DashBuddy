@@ -25,6 +25,12 @@ import kotlin.math.roundToLong
  * deliveries that carried a captured deadline; [onTimeDeliveries] and [onTimeRate] cover ONLY that
  * subset — a delivery without a captured deadline is excluded, never silently counted as late.
  *
+ * **Stop dwell is measured, and its coverage is a field** (#983): [pickupDwellMillis]/
+ * [dropoffDwellMillis] sum only the stops that stamped the timestamps a dwell needs, and
+ * [pickupsTimed]/[dropoffsTimed] state how many of [pickups]/[deliveries] those were. An untimed stop
+ * is never estimated from its neighbours — it simply contributes no dwell, which makes [atStopsMillis]
+ * a floor rather than a guess (the [HourComposition] consumer states the coverage).
+ *
  * Nullable where a source SUM/AVG had no measurable input (no fabricated zeros): [deliveryMinutes]/
  * [deliveryMiles] are null on an empty set, [onTimeRate] is null with no deadline-carrying delivery,
  * [avgDeadlineMarginMillis] is null when no delivery carried a deadline.
@@ -46,6 +52,20 @@ data class TimeEconomics(
     val onTimeDeliveries: Int,
     /** AVG(deadline − completedAt) over deadline-carrying deliveries; positive = typically early. */
     val avgDeadlineMarginMillis: Double?,
+
+    // ── Stop dwell (#983 / brief §6 — "your typical online hour") ────────────
+    /** Deliveries in the same session-anchored population — the dropoff-stop denominator. */
+    val deliveries: Int = 0,
+    /** Σ `completedAt − arrivedAt` over deliveries that stamped an arrival (measured door time). */
+    val dropoffDwellMillis: Long = 0L,
+    /** Deliveries that carried a usable arrival stamp — the dropoff-dwell coverage numerator. */
+    val dropoffsTimed: Int = 0,
+    /** Confirmed pickups in the window's dashes — the pickup-stop denominator. */
+    val pickups: Int = 0,
+    /** Σ `confirmedAt − arrivedAt` over pickups that stamped both (measured store time). */
+    val pickupDwellMillis: Long = 0L,
+    /** Pickups that carried both stamps — the pickup-dwell coverage numerator. */
+    val pickupsTimed: Int = 0,
 ) {
     /** On-time fraction over deadline-carrying deliveries, or `null` when none carried a deadline. */
     val onTimeRate: Double?
@@ -67,6 +87,22 @@ data class TimeEconomics(
     /** Average online time per dash (ms), or `null` when no dashes in the period. */
     val avgDashMillis: Long?
         get() = if (sessions == 0) null else onlineMillis / sessions
+
+    /**
+     * Measured time PARKED at a stop (#983) — store dwell + door dwell. The
+     * [HourComposition] "at stops" segment; see its KDoc for why the door is included in a segment
+     * the brief calls "at store".
+     */
+    val atStopsMillis: Long
+        get() = pickupDwellMillis + dropoffDwellMillis
+
+    /** Every stop in the window (pickups + deliveries) — the dwell-coverage denominator. */
+    val stops: Int
+        get() = pickups + deliveries
+
+    /** Stops that carried the timestamps a dwell needs — the dwell-coverage numerator (never estimated). */
+    val stopsTimed: Int
+        get() = pickupsTimed + dropoffsTimed
 
     companion object {
         val EMPTY = TimeEconomics(

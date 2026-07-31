@@ -152,7 +152,13 @@ fun AnalyticsScreen(
                     )
                 }
 
-                AnalyticsTab.Time -> TimeTab(time = uiState.time, window = uiState.window)
+                AnalyticsTab.Time -> TimeTab(
+                    time = uiState.time,
+                    gaps = uiState.gaps,
+                    hourComposition = uiState.hourComposition,
+                    netPerHour = uiState.netPerHour,
+                    window = uiState.window,
+                )
 
                 // Patterns (H5) is LIFETIME-scoped (rate/pattern-based) — deliberately NO period selector.
                 AnalyticsTab.Patterns -> PatternsTab(

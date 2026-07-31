@@ -276,6 +276,47 @@ data class DeliveryTimeTotalsRow(
     val withDeadline: Int,
     val onTime: Int,
     val avgDeadlineMarginMillis: Double?,
+    /** COUNT of the population — the door-dwell coverage denominator (#983). */
+    val deliveries: Int = 0,
+    /** Σ `completedAt − arrivedAt` over arrival-stamped rows — measured door time (#983). */
+    val dropoffDwellMillis: Long = 0L,
+    /** How many rows carried a usable arrival stamp — the coverage numerator (#983). */
+    val dropoffsTimed: Int = 0,
+)
+
+/**
+ * Store-dwell aggregate for a window's pickups (#983 / brief §6) — Σ `confirmedAt − arrivedAt` over the
+ * pickups that stamped both, how many those were ([timed]), and the population's own COUNT ([pickups]).
+ *
+ * [timed] < [pickups] is the NORMAL case (a pickup that never stamped an arrival still happened), which
+ * is why the coverage counter travels with the sum: the "typical online hour" surface states it rather
+ * than implying every stop was measured (§9).
+ */
+data class PickupDwellTotalsRow(
+    val dwellMillis: Long,
+    val timed: Int,
+    val pickups: Int,
+)
+
+/**
+ * One session-scoped read-model row reduced to `(sessionId, sequenceId, timestamp)` — the §7.8 gap
+ * fold's input (#983), for both the completion side (`delivery_records.completedAt`) and the accept
+ * side (`offer_records.decidedAt`).
+ *
+ * [sequenceId] is the source event's `sequenceId` (each table's PK) and orders the fold; [timestamp] is
+ * the row's own domain timestamp and measures the duration — the #732 contract's two halves kept
+ * distinct all the way down to the DTO.
+ */
+data class SessionEventRow(
+    val sessionId: String,
+    val sequenceId: Long,
+    val timestamp: Long,
+)
+
+/** One in-window dash's effective end (`COALESCE(endedAt, lastEventAt)`) — the §7.8 fold's bound (#983). */
+data class SessionEndRow(
+    val sessionId: String,
+    val endMillis: Long,
 )
 
 /**
