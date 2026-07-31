@@ -45,6 +45,7 @@ import cloud.trotter.dashbuddy.R
 import cloud.trotter.dashbuddy.core.designsystem.component.AppCard
 import cloud.trotter.dashbuddy.core.designsystem.component.AppChip
 import cloud.trotter.dashbuddy.core.designsystem.component.AppHeatScale
+import cloud.trotter.dashbuddy.core.designsystem.component.AppSegmented
 import cloud.trotter.dashbuddy.core.designsystem.text.EMPTY_VALUE
 import cloud.trotter.dashbuddy.core.designsystem.theme.AppTheme
 import cloud.trotter.dashbuddy.domain.analytics.EarningsHeatmap
@@ -53,6 +54,8 @@ import cloud.trotter.dashbuddy.domain.format.Formats
 import cloud.trotter.dashbuddy.domain.format.formatDuration
 import cloud.trotter.dashbuddy.domain.format.formatShortDate
 import cloud.trotter.dashbuddy.domain.format.hourOfDayLabel
+import cloud.trotter.dashbuddy.ui.main.analytics.PatternsModel.HeatmapMode
+import cloud.trotter.dashbuddy.ui.main.analytics.PatternsModel.LeaderboardSort
 import java.time.DayOfWeek
 import java.time.format.TextStyle
 import java.util.Locale
@@ -79,8 +82,28 @@ fun PatternsTab(
     modifier: Modifier = Modifier,
 ) {
     Column(modifier = modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+        AllTimeBadge()
         HeatmapCard(heatmap)
         StoresCard(storeCards)
+    }
+}
+
+/**
+ * #979: declares this tab as always-lifetime — it ignores the #970 `‹ ›` pager above it by design
+ * (rate/pattern surfaces need the driver's whole history, not one window), which otherwise reads as a
+ * bug the first time a driver pages the header and nothing here moves.
+ */
+@Composable
+private fun AllTimeBadge() {
+    val c = AppTheme.colors
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+        AppChip(text = stringResource(R.string.patterns_tab_all_time_badge))
+        Text(
+            text = stringResource(R.string.patterns_tab_all_time_caption),
+            style = MaterialTheme.typography.bodySmall,
+            color = c.text3,
+            modifier = Modifier.weight(1f),
+        )
     }
 }
 
@@ -93,17 +116,32 @@ private val DAY_ROWS = listOf(
 )
 
 /**
- * The net-$/hr hour×day heatmap: 7 day-rows × 24 hour-columns, each cell tinted by the driver's own
- * realized net $/hr for that hour-of-week. A cell below the coverage floor renders as
- * *insufficient* (near-empty), visually distinct from a genuinely-zero cell (worked, earned ~nothing).
- * The color ramp is scaled to the driver's own best hour, so it reads as "your best/worst times",
- * never an absolute-dollar claim.
+ * The hour×day heatmap: 7 day-rows × 24 hour-columns. #979 adds a Rate/Hours toggle over ONE grid —
+ * both values are already computed per cell ([EarningsHeatmapCell.dollarsPerHour] /
+ * [EarningsHeatmapCell.coverageHours]) and, pre-#979, only Rate was ever rendered (brief §6).
+ *
+ * **Rate** (unchanged): tinted by the driver's own realized net $/hr for that hour-of-week. A cell
+ * below the coverage floor renders as *insufficient* (near-empty), visually distinct from a
+ * genuinely-zero cell (worked, earned ~nothing) — the third state gets a `bad` border on its `badBg`
+ * fill. The ramp is scaled to the driver's own best hour, so it reads as "your best/worst times", never
+ * an absolute-dollar claim.
+ *
+ * **Hours** (new): tinted by how many hours of coverage that cell has, scaled to the driver's own
+ * most-covered hour-of-week. There is no "worked, no net" state here — coverage has no bad outcome,
+ * only more or less of it — so a genuinely-zero-coverage cell folds into the SAME "no data" swatch as
+ * an insufficient Rate cell ([PatternsModel.cellValue] does this on purpose, reusing [AppHeatScale]
+ * unchanged rather than adding a second color path).
  */
 @Composable
 private fun HeatmapCard(heatmap: EarningsHeatmap) {
     val c = AppTheme.colors
+    var mode by rememberSaveable { mutableStateOf(HeatmapMode.RATE) }
     AppCard(modifier = Modifier.fillMaxWidth()) {
-        Text(text = stringResource(R.string.patterns_tab_heatmap_title), style = MaterialTheme.typography.labelMedium, color = c.text3)
+        Text(
+            text = stringResource(if (mode == HeatmapMode.RATE) R.string.patterns_tab_heatmap_title else R.string.patterns_tab_heatmap_title_hours),
+            style = MaterialTheme.typography.labelMedium,
+            color = c.text3,
+        )
         Spacer(Modifier.height(10.dp))
 
         if (!heatmap.hasData) {
@@ -116,7 +154,19 @@ private fun HeatmapCard(heatmap: EarningsHeatmap) {
             return@AppCard
         }
 
+        val modeOptions = heatmapModeOptions()
+        val selectedModeLabel = modeOptions.first { it.mode == mode }.label
+        AppSegmented(
+            options = modeOptions.map { it.label },
+            selected = selectedModeLabel,
+            onSelect = { label -> modeOptions.firstOrNull { it.label == label }?.let { mode = it.mode } },
+            modifier = Modifier.fillMaxWidth(),
+        )
+        Spacer(Modifier.height(10.dp))
+
         val maxRate = heatmap.maxDollarsPerHour ?: 0.0
+        val maxHours = PatternsModel.maxCoverageHours(heatmap)
+        val maxForMode = if (mode == HeatmapMode.RATE) maxRate else maxHours
 
         // Grid: each day is a row of a fixed-width label + 24 weighted cells.
         Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
@@ -134,17 +184,17 @@ private fun HeatmapCard(heatmap: EarningsHeatmap) {
                     ) {
                         for (hour in 0 until EarningsHeatmap.HOURS) {
                             val cell = heatmap.cell(day.value - 1, hour)
-                            val rate = cell.dollarsPerHour
-                            // A covered-but-≤$0 cell ("worked, no net") gets a `bad` border on its badBg
-                            // fill so it reads as a distinct third state, not a dim tint (legible in both
-                            // themes with the fixed palette).
-                            val zeroRate = rate != null && rate <= 0.0
+                            val value = PatternsModel.cellValue(cell, mode)
+                            // "Worked, no net" is a Rate-only third state — Hours has no bad outcome to
+                            // border, only more/less coverage.
+                            val cellRate = cell.dollarsPerHour
+                            val zeroRate = mode == HeatmapMode.RATE && cellRate != null && cellRate <= 0.0
                             Box(
                                 modifier = Modifier
                                     .weight(1f)
                                     .aspectRatio(1f)
                                     .clip(RoundedCornerShape(2.dp))
-                                    .background(AppHeatScale.cellColor(cell.dollarsPerHour, maxRate, c))
+                                    .background(AppHeatScale.cellColor(value, maxForMode, c))
                                     .then(
                                         if (zeroRate) Modifier.border(1.dp, c.bad, RoundedCornerShape(2.dp))
                                         else Modifier,
@@ -158,30 +208,42 @@ private fun HeatmapCard(heatmap: EarningsHeatmap) {
         Spacer(Modifier.height(6.dp))
         HourAxis()
         Spacer(Modifier.height(12.dp))
-        HeatmapLegend(maxRate)
+        if (mode == HeatmapMode.RATE) HeatmapLegend(maxRate) else HeatmapHoursLegend()
 
-        // Best-hour callout — the single most-earning cell (driver's own experience). Reads the domain
-        // SSOT [EarningsHeatmap.bestCell], the same cell the color ramp is scaled to (Principle 5).
-        heatmap.bestCell?.let { best ->
-            Spacer(Modifier.height(10.dp))
-            Text(
-                text = stringResource(
-                    R.string.patterns_tab_heatmap_best_format,
-                    "${DayOfWeek.of(best.dayIndex + 1).getDisplayName(TextStyle.SHORT, Locale.getDefault())} ${hourOfDayLabel(best.hour)}",
-                    Formats.money(best.dollarsPerHour!!),
-                ),
-                style = MaterialTheme.typography.bodyMedium,
-                color = c.text,
-            )
+        // Best-hour callout is a Rate concept (the single most-earning cell) — showing a $/hr figure
+        // while the grid is tinted by coverage would read as mismatched, so it's Rate-mode only.
+        if (mode == HeatmapMode.RATE) {
+            heatmap.bestCell?.let { best ->
+                Spacer(Modifier.height(10.dp))
+                Text(
+                    text = stringResource(
+                        R.string.patterns_tab_heatmap_best_format,
+                        "${DayOfWeek.of(best.dayIndex + 1).getDisplayName(TextStyle.SHORT, Locale.getDefault())} ${hourOfDayLabel(best.hour)}",
+                        Formats.money(best.dollarsPerHour!!),
+                    ),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = c.text,
+                )
+            }
         }
         Spacer(Modifier.height(6.dp))
         Text(
-            text = stringResource(R.string.patterns_tab_heatmap_caption),
+            text = stringResource(if (mode == HeatmapMode.RATE) R.string.patterns_tab_heatmap_caption else R.string.patterns_tab_heatmap_caption_hours),
             style = MaterialTheme.typography.bodySmall,
             color = c.text3,
         )
     }
 }
+
+/** The heatmap Rate/Hours segments paired with their resolved label (#428 Half A) — selection stays
+ *  keyed off the enum, never the resolved string. */
+private data class HeatmapModeOption(val mode: HeatmapMode, val label: String)
+
+@Composable
+private fun heatmapModeOptions(): List<HeatmapModeOption> = listOf(
+    HeatmapModeOption(HeatmapMode.RATE, stringResource(R.string.patterns_tab_heatmap_mode_rate)),
+    HeatmapModeOption(HeatmapMode.HOURS, stringResource(R.string.patterns_tab_heatmap_mode_hours)),
+)
 
 /** Four evenly-spaced clock ticks under the grid (offset past the day-label gutter). */
 @Composable
@@ -220,6 +282,24 @@ private fun HeatmapLegend(maxRate: Double) {
     }
 }
 
+/**
+ * The Hours-mode legend (#979): just the "no data" swatch (never dashed this hour) + the low→high
+ * coverage ramp — no covered-but-bad third state, since coverage has no bad outcome (see [HeatmapCard]
+ * KDoc).
+ */
+@Composable
+private fun HeatmapHoursLegend() {
+    val c = AppTheme.colors
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        LegendSwatch(c.surface3)
+        Text(text = stringResource(R.string.patterns_tab_heatmap_legend_hours_none), style = MaterialTheme.typography.labelSmall, color = c.text3)
+        Spacer(Modifier.width(8.dp))
+        Text(text = stringResource(R.string.patterns_tab_heatmap_legend_low), style = MaterialTheme.typography.labelSmall, color = c.text3)
+        listOf(0.0, 0.5, 1.0).forEach { f -> LegendSwatch(AppHeatScale.ramp(f.toFloat(), c)) }
+        Text(text = stringResource(R.string.patterns_tab_heatmap_legend_high), style = MaterialTheme.typography.labelSmall, color = c.text3)
+    }
+}
+
 @Composable
 private fun LegendSwatch(color: Color, border: Color? = null) {
     Box(
@@ -234,12 +314,13 @@ private fun LegendSwatch(color: Color, border: Color? = null) {
 // ── Store report cards ──────────────────────────────────────────────────
 
 /**
- * The per-store report cards, newest-visited first (the repository already orders by last-seen).
- *
- * #765: the card **face** is deliberately glanceable — store name + location chip and just the three
- * decision-driving numbers (net, usual wait, deliveries) in plain language (no "median"/"p95"
- * statistical vocabulary). Tapping a card opens [StoreDetailSheet] with the full detail (pickups,
- * gross, the dwell distribution with its precise stat terms, first/last seen). Selection is a
+ * The store **leaderboard** (#979, replacing the old stacked cards): one row per store — rank, name,
+ * area chip, a proportional net bar, `N deliveries · usual wait` inline, net figure, chevron. Sort
+ * chips (By net / By wait / Recent) reorder the rows via [PatternsModel.sortedStores]; the net bar's
+ * scale ([PatternsModel.maxNet]) and the outlier fleet ([PatternsModel.isWaitOutlier]) are both computed
+ * over the FULL [cards] list regardless of sort, so switching chips reorders rows without rescaling or
+ * re-flagging them underneath the driver. Tapping a row opens [StoreDetailSheet] with the full detail
+ * (pickups, gross, the dwell distribution with its precise stat terms, first/last seen). Selection is a
  * local [rememberSaveable] `selectedStoreKey` (UDF — state down, the tap event up); the sheet body
  * re-derives from the same [cards] list, so a projector re-emit keeps it fresh with no extra state
  * (a selection whose store leaves the list is explicitly cleared).
@@ -248,6 +329,7 @@ private fun LegendSwatch(color: Color, border: Color? = null) {
 private fun StoresCard(cards: List<StoreReportCard>) {
     val c = AppTheme.colors
     var selectedStoreKey by rememberSaveable { mutableStateOf<String?>(null) }
+    var sort by rememberSaveable { mutableStateOf(LeaderboardSort.NET) }
 
     // If the selected store leaves the list (e.g. a projector refold re-keys it), clear the
     // selection explicitly — otherwise the stale key would linger in rememberSaveable and could
@@ -278,9 +360,27 @@ private fun StoresCard(cards: List<StoreReportCard>) {
                 modifier = Modifier.padding(vertical = 4.dp),
             )
         } else {
-            cards.forEachIndexed { index, card ->
+            val sortOptions = leaderboardSortOptions()
+            val selectedSortLabel = sortOptions.first { it.sort == sort }.label
+            AppSegmented(
+                options = sortOptions.map { it.label },
+                selected = selectedSortLabel,
+                onSelect = { label -> sortOptions.firstOrNull { it.label == label }?.let { sort = it.sort } },
+                modifier = Modifier.fillMaxWidth(),
+            )
+            Spacer(Modifier.height(12.dp))
+
+            val maxNet = PatternsModel.maxNet(cards)
+            val ranked = PatternsModel.sortedStores(cards, sort)
+            ranked.forEachIndexed { index, card ->
                 if (index > 0) Spacer(Modifier.height(14.dp))
-                StoreRow(card, onClick = { selectedStoreKey = card.storeKey })
+                LeaderboardRow(
+                    rank = index + 1,
+                    card = card,
+                    maxNet = maxNet,
+                    outlier = PatternsModel.isWaitOutlier(cards, card),
+                    onClick = { selectedStoreKey = card.storeKey },
+                )
             }
         }
     }
@@ -294,53 +394,106 @@ private fun StoresCard(cards: List<StoreReportCard>) {
     }
 }
 
-/**
- * The glanceable card **face** (#765): store name + location chip, a tap-affordance chevron, and the
- * three decision-driving numbers in plain language — net, "usual wait", deliveries. Everything else
- * (pickups, gross, the dwell distribution, first/last seen) lives in [StoreDetailSheet] behind a tap.
- * "Usual wait" is the median dwell rendered without the statistical label.
- */
-@OptIn(ExperimentalLayoutApi::class)
+/** The leaderboard sort chips paired with their resolved label (#428 Half A) — selection stays keyed
+ *  off the enum, never the resolved string. */
+private data class LeaderboardSortOption(val sort: LeaderboardSort, val label: String)
+
 @Composable
-private fun StoreRow(card: StoreReportCard, onClick: () -> Unit) {
+private fun leaderboardSortOptions(): List<LeaderboardSortOption> = listOf(
+    LeaderboardSortOption(LeaderboardSort.NET, stringResource(R.string.patterns_tab_leaderboard_sort_net)),
+    LeaderboardSortOption(LeaderboardSort.WAIT, stringResource(R.string.patterns_tab_leaderboard_sort_wait)),
+    LeaderboardSortOption(LeaderboardSort.RECENT, stringResource(R.string.patterns_tab_leaderboard_sort_recent)),
+)
+
+/**
+ * One leaderboard row (#979): rank digit, store name + area chip, a proportional net bar scaled to
+ * [maxNet] (the #1 store), `N deliveries · usual wait` inline (the wait figure ambers when [outlier] —
+ * see [PatternsModel.isWaitOutlier]), the net figure, and the existing tap-through chevron. Tapping
+ * opens [StoreDetailSheet] with the full stat-labeled detail — same drill-down as before #979, just a
+ * denser face.
+ */
+@Composable
+private fun LeaderboardRow(rank: Int, card: StoreReportCard, maxNet: Double, outlier: Boolean, onClick: () -> Unit) {
     val c = AppTheme.colors
-    // The row itself is the explicit button (role + onClickLabel); the chevron is decorative.
     val detailsLabel = stringResource(R.string.patterns_tab_store_details_cd, card.chainDisplay)
-    Column(
-        Modifier
+    val netColor = if (card.net >= 0.0) c.good else c.bad
+    val fraction = PatternsModel.netBarFraction(card.net, maxNet)
+
+    Row(
+        modifier = Modifier
             .fillMaxWidth()
             .clickable(onClickLabel = detailsLabel, role = Role.Button, onClick = onClick),
+        verticalAlignment = Alignment.CenterVertically,
     ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(
-                text = card.chainDisplay,
-                style = MaterialTheme.typography.bodyLarge,
-                color = c.text,
-                modifier = Modifier.weight(1f),
-            )
-            StoreLocationChip(card)
-            Spacer(Modifier.width(4.dp))
-            Icon(
-                imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
-                contentDescription = null,
-                tint = c.text3,
-                modifier = Modifier.size(20.dp),
-            )
+        Text(
+            text = stringResource(R.string.patterns_tab_leaderboard_rank_format, rank),
+            style = AppTheme.num.smNum,
+            color = c.text3,
+            modifier = Modifier.width(30.dp),
+        )
+        Column(Modifier.weight(1f)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    text = card.chainDisplay,
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = c.text,
+                    modifier = Modifier.weight(1f, fill = false),
+                )
+                Spacer(Modifier.width(8.dp))
+                StoreLocationChip(card)
+            }
+            Spacer(Modifier.height(6.dp))
+            // Proportional net bar — fraction-of-#1-store, so it stays a stable scale across sort chips.
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(6.dp)
+                    .clip(RoundedCornerShape(3.dp))
+                    .background(c.surface3),
+            ) {
+                if (fraction > 0f) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth(fraction)
+                            .height(6.dp)
+                            .clip(RoundedCornerShape(3.dp))
+                            .background(netColor),
+                    )
+                }
+            }
+            Spacer(Modifier.height(6.dp))
+            val deliveriesWord = if (card.deliveries == 1) {
+                stringResource(R.string.time_tab_delivery_singular)
+            } else {
+                stringResource(R.string.time_tab_delivery_plural)
+            }
+            Row {
+                Text(
+                    text = "${Formats.commaInt(card.deliveries)} $deliveriesWord · ",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = c.text3,
+                )
+                Text(
+                    text = card.p50DwellMillis?.let { "${formatDuration(it)} ${stringResource(R.string.patterns_tab_leaderboard_wait_suffix)}" }
+                        ?: stringResource(R.string.patterns_tab_leaderboard_no_wait),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = if (outlier) c.warn else c.text3,
+                )
+            }
         }
-
-        Spacer(Modifier.height(8.dp))
-        FlowRow(horizontalArrangement = Arrangement.spacedBy(24.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            StoreStat(
-                stringResource(R.string.patterns_tab_store_net_label),
-                Formats.money(card.net),
-                valueColor = if (card.net >= 0.0) c.good else c.bad,
-            )
-            StoreStat(
-                stringResource(R.string.patterns_tab_store_usual_wait_label),
-                card.p50DwellMillis?.let { formatDuration(it) } ?: EMPTY_VALUE,
-            )
-            StoreStat(stringResource(R.string.patterns_tab_store_deliveries_label), Formats.commaInt(card.deliveries))
-        }
+        Spacer(Modifier.width(10.dp))
+        Text(
+            text = Formats.money(card.net),
+            style = AppTheme.num.smNum,
+            color = netColor,
+        )
+        Spacer(Modifier.width(4.dp))
+        Icon(
+            imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
+            contentDescription = null,
+            tint = c.text3,
+            modifier = Modifier.size(20.dp),
+        )
     }
 }
 
