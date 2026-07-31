@@ -304,14 +304,23 @@
     <string name="time_tab_mileage_tax_disclosure">standard-mileage method — not the app\'s operating-cost model; confirm with a tax preparer.</string>
 
     <!-- main/analytics/PatternsTab.kt (#315 H5) -->
+    <!-- #979: declares the tab as always-lifetime, fixing the looks-like-a-bug relationship with the #970 pager. -->
+    <string name="patterns_tab_all_time_badge">All time</string>
+    <string name="patterns_tab_all_time_caption">patterns need history — this tab always reads your whole record</string>
     <string name="patterns_tab_heatmap_title">YOUR NET $/HR BY HOUR</string>
     <string name="patterns_tab_heatmap_caption">your own realized net $/hr, by hour and day — where your time actually pays. Lifetime.</string>
+    <!-- #979: heatmap Rate/Hours toggle — the Hours copy for the same grid, coloring by coverage instead of rate. -->
+    <string name="patterns_tab_heatmap_mode_rate">Rate</string>
+    <string name="patterns_tab_heatmap_mode_hours">Hours</string>
+    <string name="patterns_tab_heatmap_title_hours">YOUR HOURS WORKED BY HOUR</string>
+    <string name="patterns_tab_heatmap_caption_hours">how many hours you\'ve spent online in each hour-of-week slot, lifetime.</string>
     <string name="patterns_tab_heatmap_no_data">Not enough dashing yet to show a pattern. Dash a few more hours and your best times will fill in here.</string>
     <string name="patterns_tab_heatmap_best_format">Your best hour so far: %1$s — %2$s/hr</string>
     <string name="patterns_tab_heatmap_legend_low">lower</string>
     <string name="patterns_tab_heatmap_legend_high">higher</string>
     <string name="patterns_tab_heatmap_legend_insufficient">too little time</string>
     <string name="patterns_tab_heatmap_legend_zero">worked, no net</string>
+    <string name="patterns_tab_heatmap_legend_hours_none">never dashed this hour</string>
     <string name="patterns_tab_stores_title">YOUR STORES</string>
     <string name="patterns_tab_stores_manual_note">Manually-added deliveries and history we couldn\'t match to a store still count in your Money totals — they just don\'t show up as a store card here yet.</string>
     <string name="patterns_tab_no_stores">No stores visited yet.</string>
@@ -321,8 +330,6 @@
     <string name="patterns_tab_store_deliveries_label">Deliveries</string>
     <string name="patterns_tab_store_gross_label">Gross</string>
     <string name="patterns_tab_store_net_label">Net</string>
-    <!-- #765: card face shows "usual wait" (the median dwell, no stat vocabulary). -->
-    <string name="patterns_tab_store_usual_wait_label">Usual wait</string>
     <string name="patterns_tab_store_details_cd">Details for %1$s</string>
     <string name="patterns_tab_store_dwell_none">no pickup dwell recorded yet</string>
     <string name="patterns_tab_store_seen_format">first %1$s · last %2$s</string>
@@ -331,6 +338,13 @@
     <string name="patterns_tab_store_detail_median">Usual wait (median)</string>
     <string name="patterns_tab_store_detail_p95">Longest waits (p95)</string>
     <string name="patterns_tab_store_detail_avg">Average wait</string>
+    <!-- #979: store cards → leaderboard (brief §6) -->
+    <string name="patterns_tab_leaderboard_rank_format">#%1$d</string>
+    <string name="patterns_tab_leaderboard_sort_net">By net</string>
+    <string name="patterns_tab_leaderboard_sort_wait">By wait</string>
+    <string name="patterns_tab_leaderboard_sort_recent">Recent</string>
+    <string name="patterns_tab_leaderboard_wait_suffix">usual wait</string>
+    <string name="patterns_tab_leaderboard_no_wait">no wait recorded yet</string>
 
     <!-- setup/wizard/WizardScreen.kt -->
     <string name="wizard_screen_goal_option1_title">Cherry Picker</string>
