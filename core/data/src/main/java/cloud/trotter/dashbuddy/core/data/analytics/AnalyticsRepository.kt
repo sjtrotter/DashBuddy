@@ -16,6 +16,8 @@ import cloud.trotter.dashbuddy.domain.analytics.DeliveryRecord
 import cloud.trotter.dashbuddy.domain.analytics.EarningsHeatmap
 import cloud.trotter.dashbuddy.domain.analytics.EarningsHeatmapCalculator
 import cloud.trotter.dashbuddy.domain.analytics.EstimateVsReality
+import cloud.trotter.dashbuddy.domain.analytics.HourOfWeekSampler
+import cloud.trotter.dashbuddy.domain.analytics.HourOfWeekSamples
 import cloud.trotter.dashbuddy.domain.analytics.OfferFilter
 import cloud.trotter.dashbuddy.domain.analytics.OfferListing
 import cloud.trotter.dashbuddy.domain.analytics.OfferOutcome
@@ -357,6 +359,33 @@ class AnalyticsRepository @Inject constructor(
             analyticsDao.deliveryNets(),
         ) { spans, nets ->
             EarningsHeatmapCalculator.compute(
+                spans = spans.map { SessionSpan(it.startMillis, it.endMillis) },
+                deliveries = nets.map { DeliveryNet(it.completedAt, it.netDollars) },
+                zone = zoneProvider(),
+            )
+        }.flowOn(Dispatchers.Default).distinctUntilChanged()
+
+    /**
+     * The same lifetime record as [earningsHeatmap], decomposed **per occurrence** — the distribution
+     * the Weekly Plan takes its medians and sample counts over (#981 / brief §7.7).
+     *
+     * This is the whole of §7.7's read-side plumbing, and it deliberately adds **no query**: brief §8
+     * ranks weekday×hour cells by MEDIAN net $/hr, which the heatmap grid structurally cannot answer
+     * (it is a totals grid whose cell rate is `Σnet ÷ Σcoverage`, a coverage-weighted mean, with the
+     * individual days summed away). [HourOfWeekSampler] consumes the identical two DAO reads one
+     * calendar step earlier — into `(date, hour)` buckets — so a cell's samples are its own separate
+     * days and both the median and "over N Fridays" fall out. No schema change, no
+     * `PROJECTOR_VERSION` bump, no economy dependency (net is the frozen stored value).
+     *
+     * Same shape as [earningsHeatmap] in every other respect: lifetime-scoped, [zoneProvider]
+     * evaluated per emission so a timezone move re-buckets on the next commit, apportionment off-main.
+     */
+    fun hourOfWeekSamples(zoneProvider: () -> ZoneId = { ZoneId.systemDefault() }): Flow<HourOfWeekSamples> =
+        combine(
+            analyticsDao.sessionSpans(),
+            analyticsDao.deliveryNets(),
+        ) { spans, nets ->
+            HourOfWeekSampler.compute(
                 spans = spans.map { SessionSpan(it.startMillis, it.endMillis) },
                 deliveries = nets.map { DeliveryNet(it.completedAt, it.netDollars) },
                 zone = zoneProvider(),

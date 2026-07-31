@@ -24,6 +24,7 @@ import cloud.trotter.dashbuddy.ui.main.analytics.AnalyticsScreen
 import cloud.trotter.dashbuddy.ui.main.analytics.SessionDetailScreen
 import cloud.trotter.dashbuddy.ui.main.dashboard.DashboardScreen
 import cloud.trotter.dashbuddy.ui.main.navigation.Screen
+import cloud.trotter.dashbuddy.ui.main.plan.WeeklyPlanScreen
 import timber.log.Timber
 import cloud.trotter.dashbuddy.ui.main.ratings.RatingsScreen
 import cloud.trotter.dashbuddy.ui.main.settings.AboutScreen
@@ -112,6 +113,13 @@ class MainActivity : ComponentActivity() {
                                 onOpenSession = { sessionId ->
                                     navController.navigate(Screen.SessionDetail.route(sessionId))
                                 }
+                            )
+                        }
+
+                        // --- WEEKLY PLAN (#981 — the Sunday notification's deep-link target) ---
+                        composable(Screen.WeeklyPlan.route) {
+                            WeeklyPlanScreen(
+                                onBack = { navController.popBackStack() }
                             )
                         }
 

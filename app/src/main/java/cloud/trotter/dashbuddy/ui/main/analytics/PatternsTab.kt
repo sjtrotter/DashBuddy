@@ -107,13 +107,7 @@ private fun AllTimeBadge() {
     }
 }
 
-// ── Heatmap ─────────────────────────────────────────────────────────────
-
-/** Local day order: Monday-first, matching the app's Monday-anchored week (#655 / PeriodBounds). */
-private val DAY_ROWS = listOf(
-    DayOfWeek.MONDAY, DayOfWeek.TUESDAY, DayOfWeek.WEDNESDAY, DayOfWeek.THURSDAY,
-    DayOfWeek.FRIDAY, DayOfWeek.SATURDAY, DayOfWeek.SUNDAY,
-)
+// ── Heatmap ───────────────────────────────────────────────────────────
 
 /**
  * The hour×day heatmap: 7 day-rows × 24 hour-columns. #979 adds a Rate/Hours toggle over ONE grid —
@@ -168,45 +162,11 @@ private fun HeatmapCard(heatmap: EarningsHeatmap) {
         val maxHours = PatternsModel.maxCoverageHours(heatmap)
         val maxForMode = if (mode == HeatmapMode.RATE) maxRate else maxHours
 
-        // Grid: each day is a row of a fixed-width label + 24 weighted cells.
-        Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-            DAY_ROWS.forEach { day ->
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(
-                        text = day.getDisplayName(TextStyle.SHORT, Locale.getDefault()),
-                        style = MaterialTheme.typography.labelSmall,
-                        color = c.text3,
-                        modifier = Modifier.width(30.dp),
-                    )
-                    Row(
-                        modifier = Modifier.weight(1f),
-                        horizontalArrangement = Arrangement.spacedBy(1.dp),
-                    ) {
-                        for (hour in 0 until EarningsHeatmap.HOURS) {
-                            val cell = heatmap.cell(day.value - 1, hour)
-                            val value = PatternsModel.cellValue(cell, mode)
-                            // "Worked, no net" is a Rate-only third state — Hours has no bad outcome to
-                            // border, only more/less coverage.
-                            val cellRate = cell.dollarsPerHour
-                            val zeroRate = mode == HeatmapMode.RATE && cellRate != null && cellRate <= 0.0
-                            Box(
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .aspectRatio(1f)
-                                    .clip(RoundedCornerShape(2.dp))
-                                    .background(AppHeatScale.cellColor(value, maxForMode, c))
-                                    .then(
-                                        if (zeroRate) Modifier.border(1.dp, c.bad, RoundedCornerShape(2.dp))
-                                        else Modifier,
-                                    ),
-                            )
-                        }
-                    }
-                }
-            }
-        }
+        // Grid + axis: the shared render the Weekly Plan screen also draws (#981), so the two
+        // surfaces can never disagree about a colour, a mask or the day order.
+        HeatmapGrid(heatmap = heatmap, mode = mode, maxForMode = maxForMode)
         Spacer(Modifier.height(6.dp))
-        HourAxis()
+        HeatmapHourAxis()
         Spacer(Modifier.height(12.dp))
         if (mode == HeatmapMode.RATE) HeatmapLegend(maxRate) else HeatmapHoursLegend()
 
@@ -244,22 +204,6 @@ private fun heatmapModeOptions(): List<HeatmapModeOption> = listOf(
     HeatmapModeOption(HeatmapMode.RATE, stringResource(R.string.patterns_tab_heatmap_mode_rate)),
     HeatmapModeOption(HeatmapMode.HOURS, stringResource(R.string.patterns_tab_heatmap_mode_hours)),
 )
-
-/** Four evenly-spaced clock ticks under the grid (offset past the day-label gutter). */
-@Composable
-private fun HourAxis() {
-    val c = AppTheme.colors
-    Row(Modifier.fillMaxWidth()) {
-        Spacer(Modifier.width(30.dp))
-        Row(modifier = Modifier.weight(1f), horizontalArrangement = Arrangement.SpaceBetween) {
-            // labelSmall, no raw fontSize override — matches the sibling AppBarChart axis-label treatment.
-            listOf(0, 6, 12, 18).forEach { h ->
-                Text(text = hourOfDayLabel(h), style = MaterialTheme.typography.labelSmall, color = c.text3)
-            }
-            Text(text = hourOfDayLabel(0), style = MaterialTheme.typography.labelSmall, color = c.text3)
-        }
-    }
-}
 
 /**
  * Color-scale legend, three states so the grid is readable: the *insufficient* swatch ("too little

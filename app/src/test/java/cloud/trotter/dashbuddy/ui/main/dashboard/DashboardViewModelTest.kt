@@ -3,6 +3,7 @@ package cloud.trotter.dashbuddy.ui.main.dashboard
 import androidx.lifecycle.viewModelScope
 import cloud.trotter.dashbuddy.R
 import cloud.trotter.dashbuddy.core.data.analytics.AnalyticsRepository
+import cloud.trotter.dashbuddy.core.data.analytics.WeeklyPlanRepository
 import cloud.trotter.dashbuddy.core.data.settings.AppPreferencesRepository
 import cloud.trotter.dashbuddy.core.data.state.AppStateRepository
 import cloud.trotter.dashbuddy.core.state.StateManagerV2
@@ -16,6 +17,7 @@ import cloud.trotter.dashbuddy.domain.analytics.EarningsHeatmapCalculator
 import cloud.trotter.dashbuddy.domain.analytics.EarningsHeatmapCell
 import cloud.trotter.dashbuddy.domain.analytics.OrphanOfferGroup
 import cloud.trotter.dashbuddy.domain.analytics.PeriodEconomics
+import cloud.trotter.dashbuddy.domain.analytics.SavedWeeklyPlan
 import cloud.trotter.dashbuddy.domain.analytics.PeriodTotals
 import cloud.trotter.dashbuddy.domain.analytics.WindowGranularity
 import cloud.trotter.dashbuddy.domain.state.AppState
@@ -79,6 +81,10 @@ class DashboardViewModelTest {
     private val analyticsRepository: AnalyticsRepository = mock()
     private val appPreferencesRepository: AppPreferencesRepository = mock()
     private val bubbleManager: BubbleManager = mock()
+    private val weeklyPlanRepository: WeeklyPlanRepository = mock()
+
+    /** The plan the stubbed repository serves for the current week; null ⇒ Home renders no pointer. */
+    private var savedPlan: SavedWeeklyPlan? = null
 
     private val today: LocalDate get() = LocalDate.now()
     private val thisWeek: AnalyticsWindow get() = AnalyticsWindows.current(WindowGranularity.WEEK, today)
@@ -108,6 +114,9 @@ class DashboardViewModelTest {
             .thenAnswer { flowOf(dailyEarnings) }
         whenever(analyticsRepository.orphanOfferGroups(any<AnalyticsWindow>(), any<ZoneId>()))
             .thenAnswer { flowOf(orphanOfferGroups) }
+        // #981 — the weekly-plan pointer row's source. No saved plan by default, which is the
+        // state every pre-#981 assertion here was written against.
+        whenever(weeklyPlanRepository.planFor(any())).thenAnswer { flowOf(savedPlan) }
         whenever(appPreferencesRepository.analyticsWindow).thenReturn(selectionFlow)
         whenever(runBlocking { appPreferencesRepository.setAnalyticsWindow(any()) }).thenAnswer { invocation ->
             selectionFlow.value = invocation.getArgument(0)
@@ -153,6 +162,7 @@ class DashboardViewModelTest {
         analyticsRepository = analyticsRepository,
         appPreferencesRepository = appPreferencesRepository,
         bubbleManager = bubbleManager,
+        weeklyPlanRepository = weeklyPlanRepository,
     )
 
     /**

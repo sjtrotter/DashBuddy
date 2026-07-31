@@ -135,7 +135,9 @@ period labels are duplicated by choice into the module — multi-consumer with t
 selector) and its `dashboard_screen_stat_*`/`common_period_*` labels were DELETED — the review
 windows live on the Analytics pager now — and `TodayHeader`/`TodayPlanCard`/`SoFarToday`/
 `WeekRecapCard` joined the module in their place, still pure data-in/lambdas-out over `:domain`
-types + `:core:designsystem`. One deliberate exception to the split: Home's review-items card is
+types + `:core:designsystem`; #981 added `WeeklyPlanPointerRow` (the seam #977 left), which keeps the
+module's honest-deps posture — no material-icons dependency, so its affordance is a `Plan →` text in
+the `Recap →` vocabulary rather than a chevron. One deliberate exception to the split: Home's review-items card is
 the analytics hub's own `NeedsALookCard`/`reviewItems` reused verbatim from `:app`, rendered by
 the host — the flag thresholds and their copy keep ONE owner rather than being copied into a
 feature module to satisfy placement).
@@ -208,9 +210,12 @@ Hilt/`:core:data`/`:core:state`.) **Remaining Phase-6 extractions: none — Phas
   concrete data layers.
 - **`:core:network`** — Retrofit clients, OkHttp interceptors, EIA gas price API integration.
 - **`:core:location`** — Play Services GPS tracking.
-- **`:core:datastore`** — Preferences DataStore (seven single-concern stores behind Hilt
+- **`:core:datastore`** — Preferences DataStore (eight single-concern stores behind Hilt
   qualifiers — app prefs, strategy, dev settings, odometer, app state, platforms,
-  rule-capability grants).
+  rule-capability grants, and the #981 **weekly plan**). The weekly-plan store is deliberately
+  NOT a Room table: a saved plan is a **user artifact** (nothing in `app_events` implies it, and
+  nothing can rebuild it), so it must not live in the read-model DB that a `PROJECTOR_VERSION`
+  bump wipes — see §5.
 - **`:core:designsystem`** — Brand system (no project deps): fixed dark/light palette (`AppColors`),
   Hanken Grotesk + Space Grotesk fonts (tabular numerals), `AppTheme` + `LocalGlance` (the public
   theme wrapper is `DashBuddyTheme`, the only `Dash`-named symbol kept — it's the app name, not a
@@ -733,6 +738,44 @@ is never flagged. "Recent" reuses `StoreReportCard.lastSeenAt` — the DAO's own
 `ORDER BY lastSeenAt DESC` — rather than a new query. `Platform` is available on `StoreReportCard.platform`
 per #315 but this pass doesn't render it on the row (out of the brief's row spec); no `Platform` literal
 was added.
+**Weekly Plan (#981, stage 6 — brief §8/§7.7):** the redesign's NEW surface, and the first thing in
+this section that is **not** a projection of the event log. Three pieces. (1) **The §7.7 read, and why
+it exists:** brief §8 ranks weekday×hour cells by **median** realized net $/hr, which `EarningsHeatmap`
+structurally cannot answer — it is a totals grid whose cell rate is `Σnet ÷ Σcoverage`, a
+coverage-weighted MEAN, with the individual days summed away, so neither a median nor a sample count is
+recoverable from it. `AnalyticsRepository.hourOfWeekSamples()` therefore feeds the **same two lifetime
+DAO reads** (`sessionSpans` + `deliveryNets`) to the pure `:domain` `HourOfWeekSampler`, which
+apportions them one calendar step earlier — into `(date, hour)` buckets instead of straight into
+`(weekday, hour)` totals — so a cell's samples ARE its own separate days. **No new query, no schema
+change, no `PROJECTOR_VERSION` bump.** It inherits the heatmap's union / apportionment / completion-hour
+rules verbatim (Principle 5), and its coverage floor is the heatmap's own
+`DEFAULT_MIN_COVERAGE_HOURS` expressed as a FRACTION (half the range asked about), so a 4h window needs
+2h of real presence before a day counts as a sample of it. (2) **The planner** (`WeeklyPlanner`, pure)
+implements §8's six lines: median ranking, `MIN_SAMPLE_DAYS`=3 separate days per cell, adjacency merge
+(the greedy tie-break is rate → **longest** → earliest day → earliest start; longest-first is what
+actually performs the merge — shortest-first would render one 4h run as two stapled 2h rows), the ≥2h
+floor + a 4h cap shared with `DayPlanner`, greedy fill to an hours or `$`-goal target
+(`MAX_PLAN_HOURS`=40 bounds the dollars arm), `median × hours` projection, and an
+overall-median-of-every-worked-hour random baseline. Every weekday holding no window is returned with a
+MEASURED reason (`NO_HISTORY`/`THIN_HISTORY`/`NO_CONTIGUOUS_RUN`/`NO_POSITIVE_RATE`/
+`TARGET_ALREADY_MET`/`REMOVED_BY_YOU`), never omitted. Driver edits are **replayed**, not applied: the
+ViewModel holds an ordered `List<PlanEdit>` and the base plan is recomputed every emission, so a moved
+window re-derives its rate at its NEW hours (or prices nothing, visibly) and a dropped window's range is
+banned so the re-fill takes the next-best hours instead of the same ones back. (3) **Storage + the
+loop:** `SavedWeeklyPlan` is FROZEN at save time (the driver is graded against the plan they were shown,
+the `delivery_records` doctrine applied to a commitment), encoded by the fail-closed `WeeklyPlanCodec`
+into the `weekly_plan` DataStore via `WeeklyPlanRepository` (keep the last 2 weeks). `WeeklyPlanWorker`
+is a **periodic 7-day** WorkManager job with its initial delay computed to the next Sunday 18:00 local
+by the pure `WeeklyPlanSchedule`, re-anchored on every app start (which is also what corrects the 1h DST
+drift a 7×24h interval accrues); it grades the finished week with the pure `WeeklyPlanGrader` (planned
+vs actual hours and dollars **inside the planned windows only**; money earned outside is reported
+separately, never folded in) and posts on its **own** notification channel — `weekly_plan_channel`, id
+104 — deliberately not `app_notice_channel`, because a recurring engagement nudge must be mutable
+without also muting the Pledge disclosures. Notification copy is counts and dollars only (P7). Home's
+pointer row reads the plan for the week the driver is IN (`weekStartOf`, not `planWeekStart` — on a
+Sunday those differ). `PatternsTab`'s heat grid was extracted to `HeatmapGrid` so "where the plan came
+from" renders the SAME grid with the picked cells outlined — the derivation's proof is the driver
+recognising the picture, which a lookalike would eventually stop being.
 **The "(No session)" bucket (#660 piece 1):** `delivery_records` rows whose source event carried
 NO `sessionId` at all were already counted in net (`deliveryTotals`'s own-`completedAt` fallback, #655)
 but invisible to gross (`grossAndUnattributed`/`sessionGrossRows` iterate `session_records` only, so a

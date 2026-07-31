@@ -45,4 +45,9 @@
     <string name="dashboard_week_delta_from_nothing">Up from nothing last week</string>
     <string name="dashboard_week_delta_none">No earlier week to compare with yet</string>
     <string name="dashboard_week_frozen_note">Net is frozen at the costs in force when you accepted each offer.</string>
+
+    <!-- components/WeeklyPlanPointerRow.kt — Home's pointer at the Weekly Plan (#981, brief §2 row 3) -->
+    <string name="dashboard_weekly_plan_pointer_title">Your week is planned</string>
+    <string name="dashboard_weekly_plan_pointer_detail_format">%1$d target hours across %2$d windows · %3$s projected</string>
+    <string name="dashboard_weekly_plan_pointer_action">Plan →</string>
 </resources>

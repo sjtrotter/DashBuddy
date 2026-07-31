@@ -6,6 +6,7 @@ import cloud.trotter.dashbuddy.domain.analytics.DailyEarnings
 import cloud.trotter.dashbuddy.domain.analytics.EarningsHeatmap
 import cloud.trotter.dashbuddy.domain.analytics.OrphanOfferGroup
 import cloud.trotter.dashbuddy.domain.analytics.PeriodEconomics
+import cloud.trotter.dashbuddy.domain.analytics.SavedWeeklyPlan
 import java.time.LocalDate
 
 /**
@@ -70,4 +71,9 @@ data class DashboardUiState(
      * chore from yesterday must not vanish just because Home's headline is "today".
      */
     val orphanOfferGroups: List<OrphanOfferGroup> = emptyList(),
+    /**
+     * The plan the driver saved for the week they are currently in (#981), or null when there is
+     * none — the pointer row renders only when this is non-null, per brief §2 row 3.
+     */
+    val weeklyPlan: SavedWeeklyPlan? = null,
 )

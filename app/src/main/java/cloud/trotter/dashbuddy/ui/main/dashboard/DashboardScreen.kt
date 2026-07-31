@@ -45,6 +45,7 @@ import cloud.trotter.dashbuddy.feature.dashboard.components.StatusCard
 import cloud.trotter.dashbuddy.feature.dashboard.components.TodayHeader
 import cloud.trotter.dashbuddy.feature.dashboard.components.TodayPlanCard
 import cloud.trotter.dashbuddy.feature.dashboard.components.WeekRecapCard
+import cloud.trotter.dashbuddy.feature.dashboard.components.WeeklyPlanPointerRow
 import cloud.trotter.dashbuddy.ui.main.analytics.NeedsALookCard
 import cloud.trotter.dashbuddy.ui.main.analytics.ReviewAction
 import cloud.trotter.dashbuddy.ui.main.analytics.reviewItems
@@ -186,10 +187,16 @@ fun DashboardScreen(
                     TodayPlanCard(today = uiState.today, heatmap = uiState.heatmap)
                     Spacer(modifier = Modifier.height(16.dp))
 
-                    // SEAM — weekly-plan pointer (brief §2 row 3, stage 6 / #969). It renders ONLY
-                    // when a saved plan exists for the current week, and saved plans do not exist
-                    // yet: stage 6 owns both the storage and this row. Deliberately nothing here —
-                    // a placeholder row would be dead UI promising a screen that isn't built.
+                    // Weekly-plan pointer (brief §2 row 3, #981) — rendered ONLY when the driver
+                    // has saved a plan for the week they are in. No plan, no row: an empty
+                    // placeholder would advertise a screen they have not asked for.
+                    uiState.weeklyPlan?.let { plan ->
+                        WeeklyPlanPointerRow(
+                            plan = plan,
+                            onOpen = { onNavigate(Screen.WeeklyPlan.route) },
+                        )
+                        Spacer(modifier = Modifier.height(16.dp))
+                    }
 
                     SoFarToday(economics = uiState.todayEconomics)
                     Spacer(modifier = Modifier.height(16.dp))

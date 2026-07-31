@@ -676,4 +676,88 @@
     <string name="analytics_hero_summary_acceptance_format">%1$s acceptance</string>
     <string name="analytics_hero_summary_separator"> · </string>
     <string name="analytics_hero_no_data">Nothing recorded in this window</string>
+
+    <!-- ============================================================ -->
+    <!-- Weekly Plan (#981, redesign stage 6 — brief §8)              -->
+    <!-- ============================================================ -->
+    <string name="weekly_plan_screen_title">Weekly plan</string>
+    <string name="weekly_plan_week_of_format">Week of %1$s</string>
+    <string name="weekly_plan_weekday_plural_format">%1$ss</string>
+
+    <!-- Target selector -->
+    <string name="weekly_plan_target_title">How much do you want to work?</string>
+    <string name="weekly_plan_target_hours_format">%1$dh</string>
+    <string name="weekly_plan_target_dollars">$ goal</string>
+    <string name="weekly_plan_target_dollars_selected">Aiming for %1$s kept</string>
+    <string name="weekly_plan_goal_dialog_title">Set a goal</string>
+    <string name="weekly_plan_goal_dialog_body">How much do you want to keep this week? The plan places hours until your own record projects that much.</string>
+    <string name="weekly_plan_goal_dialog_label">Amount</string>
+    <string name="weekly_plan_goal_dialog_confirm">Plan it</string>
+    <string name="weekly_plan_goal_dialog_cancel">Cancel</string>
+
+    <!-- Headline value + the plan-vs-random comparison -->
+    <string name="weekly_plan_hours_format">%1$d hours</string>
+    <string name="weekly_plan_value_headline_format">%1$s on your best windows ≈ %2$s kept</string>
+    <string name="weekly_plan_value_comparison_format">The same %1$s placed at random ≈ %2$s — the plan is worth about %3$s</string>
+    <string name="weekly_plan_value_comparison_no_gain_format">The same %1$s placed at random ≈ %2$s — this plan doesn\'t beat working whenever</string>
+    <string name="weekly_plan_value_no_baseline">Not enough of your record yet to compare this against working whenever.</string>
+    <string name="weekly_plan_value_shortfall_format">Placed %1$d of your %2$d target hours — your record doesn\'t back any more than that yet.</string>
+    <string name="weekly_plan_value_unpriced_format">%1$d of these hours have no record behind them, so they project nothing.</string>
+    <string name="weekly_plan_provenance">From your own record, lifetime — a projection of what you have earned, not a promise of what you will.</string>
+
+    <!-- Suggested windows -->
+    <string name="weekly_plan_windows_title">Suggested windows</string>
+    <string name="weekly_plan_windows_none">Nothing in your record supports a window yet.</string>
+    <string name="weekly_plan_window_best">Best</string>
+    <string name="weekly_plan_window_moved">Moved</string>
+    <string name="weekly_plan_window_evidence_format">your %1$s: %2$s/hr over %3$d %4$s</string>
+    <string name="weekly_plan_window_no_evidence">no record of these hours — this window projects nothing</string>
+    <string name="weekly_plan_window_unpriced_value">—</string>
+    <string name="weekly_plan_window_earlier">Move an hour earlier</string>
+    <string name="weekly_plan_window_later">Move an hour later</string>
+    <string name="weekly_plan_window_drop">Drop this window</string>
+    <string name="weekly_plan_undo">Undo</string>
+    <string name="weekly_plan_not_picked">Not picked</string>
+    <string name="weekly_plan_reason_no_history">no %1$s on record yet</string>
+    <string name="weekly_plan_reason_thin_format">only %1$d %2$s on record</string>
+    <string name="weekly_plan_reason_no_run_format">no stretch of %1$d hours your %2$s back up</string>
+    <string name="weekly_plan_reason_no_positive">your %1$s haven\'t cleared $0 kept</string>
+    <string name="weekly_plan_reason_target_met">your target filled up with better-paying windows</string>
+    <string name="weekly_plan_reason_removed">you dropped this one</string>
+
+    <!-- Where the plan came from -->
+    <string name="weekly_plan_provenance_title">Where the plan came from</string>
+    <string name="weekly_plan_provenance_caption">Your whole record, hour by hour. The outlined cells are the hours the plan picked.</string>
+
+    <!-- Growth rows — locked, and carrying no data -->
+    <string name="weekly_plan_growth_plus_badge">Plus</string>
+    <string name="weekly_plan_growth_area_title">Demand around you</string>
+    <string name="weekly_plan_growth_area_body">When other drivers near you are earning — including hours you have never tried. Not built yet, and it will never be turned on without you asking.</string>
+    <string name="weekly_plan_growth_year_badge">Needs a year</string>
+    <string name="weekly_plan_growth_year_title">This week last year</string>
+    <string name="weekly_plan_growth_year_body">A year-over-year comparison, once you have a year of your own record to compare against.</string>
+
+    <!-- Save -->
+    <string name="weekly_plan_save_button">Save this plan</string>
+    <string name="weekly_plan_save_update">Update saved plan</string>
+    <string name="weekly_plan_save_note">Saved plans show up on your home screen each morning, and next Sunday this one gets measured against what actually happened.</string>
+
+    <!-- Grade -->
+    <string name="weekly_plan_grade_title">Your plan for the week of %1$s</string>
+    <string name="weekly_plan_grade_hours_format">You worked %1$s of the %2$d hours you planned.</string>
+    <string name="weekly_plan_grade_money_format">Those windows kept %1$s of the %2$s they projected.</string>
+    <string name="weekly_plan_grade_outside_format">Plus %1$s kept outside the plan.</string>
+    <string name="weekly_plan_grade_unworked_format">You didn\'t work any of your %1$d planned hours.</string>
+
+    <!-- Empty state -->
+    <string name="weekly_plan_no_record_title">No record to plan from yet</string>
+    <string name="weekly_plan_no_record_body">This screen plans from hours you have actually worked. Dash a few times and it will have something to say.</string>
+
+    <!-- Notification (its own channel, so it can be muted on its own) -->
+    <string name="weekly_plan_channel_name">Weekly plan</string>
+    <string name="weekly_plan_channel_description">A Sunday-evening look at how last week\'s plan went, and a plan for the week ahead.</string>
+    <string name="weekly_plan_notice_title">Your weekly plan</string>
+    <string name="weekly_plan_notice_text_plain">Plan the week ahead from your own best hours.</string>
+    <string name="weekly_plan_notice_grade_format">Last week: %1$s of %2$d planned hours worked, %3$s kept of %4$s projected. Tap to plan the week ahead.</string>
+    <string name="weekly_plan_notice_grade_unworked_format">Last week: none of your %1$d planned hours got worked. Tap to plan the week ahead.</string>
 </resources>

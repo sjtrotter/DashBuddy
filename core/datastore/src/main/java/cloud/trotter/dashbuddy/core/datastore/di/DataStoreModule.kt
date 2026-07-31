@@ -54,6 +54,12 @@ object DataStoreModule {
 
     @Provides
     @Singleton
+    @WeeklyPlanPreferences
+    fun provideWeeklyPlanDataStore(@ApplicationContext context: Context): DataStore<Preferences> =
+        PreferenceDataStoreFactory.create { context.preferencesDataStoreFile("weekly_plan") }
+
+    @Provides
+    @Singleton
     @RuleCapabilityPreferences
     fun provideRuleCapabilityDataStore(@ApplicationContext context: Context): DataStore<Preferences> =
         PreferenceDataStoreFactory.create { context.preferencesDataStoreFile("rule_capability_grants") }
