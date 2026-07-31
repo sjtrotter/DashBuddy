@@ -5,6 +5,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import cloud.trotter.dashbuddy.R
 import cloud.trotter.dashbuddy.core.data.analytics.AnalyticsRepository
+import cloud.trotter.dashbuddy.core.data.analytics.WeeklyPlanRepository
 import cloud.trotter.dashbuddy.core.data.analytics.currentLocalDateFlow
 import cloud.trotter.dashbuddy.core.data.settings.AppPreferencesRepository
 import cloud.trotter.dashbuddy.core.data.state.AppStateRepository
@@ -14,6 +15,8 @@ import cloud.trotter.dashbuddy.domain.analytics.AnalyticsWindowSelection
 import cloud.trotter.dashbuddy.domain.analytics.AnalyticsWindows
 import cloud.trotter.dashbuddy.domain.analytics.DailyEarnings
 import cloud.trotter.dashbuddy.domain.analytics.OrphanOfferGroup
+import cloud.trotter.dashbuddy.domain.analytics.SavedWeeklyPlan
+import cloud.trotter.dashbuddy.domain.analytics.WeeklyPlanSchedule
 import cloud.trotter.dashbuddy.domain.analytics.PeriodEconomics
 import cloud.trotter.dashbuddy.domain.analytics.WindowGranularity
 import cloud.trotter.dashbuddy.domain.state.AppState
@@ -67,6 +70,7 @@ class DashboardViewModel @Inject constructor(
     private val analyticsRepository: AnalyticsRepository,
     private val appPreferencesRepository: AppPreferencesRepository,
     private val bubbleManager: BubbleManager,
+    private val weeklyPlanRepository: WeeklyPlanRepository,
 ) : ViewModel() {
 
     /** The device's local date, re-emitting at midnight — the anchor the week + weekday resolve against. */
@@ -87,8 +91,12 @@ class DashboardViewModel @Inject constructor(
             previousEconomics(week),
             analyticsRepository.dailyEarnings(week),
             analyticsRepository.orphanOfferGroups(week),
-        ) { economics, previous, daily, orphanOffers ->
-            WeekData(day, economics, previous, daily, orphanOffers)
+            // #981 — the weekly-plan pointer row. Deliberately the week the driver is IN
+            // (`weekStartOf`), not the week a plan saved right now would target: on a Sunday those
+            // differ, and Home is describing today.
+            weeklyPlanRepository.planFor(WeeklyPlanSchedule.weekStartOf(day)),
+        ) { economics, previous, daily, orphanOffers, plan ->
+            WeekData(day, economics, previous, daily, orphanOffers, plan)
         }
     }
 
@@ -113,6 +121,7 @@ class DashboardViewModel @Inject constructor(
             previousWeekEconomics = week.previousEconomics,
             weekDailyEarnings = week.dailyEarnings,
             orphanOfferGroups = week.orphanOfferGroups,
+            weeklyPlan = week.weeklyPlan,
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), DashboardUiState())
 
@@ -197,6 +206,7 @@ class DashboardViewModel @Inject constructor(
         val previousEconomics: PeriodEconomics?,
         val dailyEarnings: List<DailyEarnings>,
         val orphanOfferGroups: List<OrphanOfferGroup>,
+        val weeklyPlan: SavedWeeklyPlan?,
     )
 
     private companion object {

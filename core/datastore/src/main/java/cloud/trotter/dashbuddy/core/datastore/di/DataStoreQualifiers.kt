@@ -29,3 +29,7 @@ annotation class PlatformPreferences
 @Qualifier
 @Retention(AnnotationRetention.BINARY)
 annotation class RuleCapabilityPreferences
+/** #981 — the driver's saved weekly plans (a user artifact, not a rebuildable projection). */
+@Qualifier
+@Retention(AnnotationRetention.BINARY)
+annotation class WeeklyPlanPreferences

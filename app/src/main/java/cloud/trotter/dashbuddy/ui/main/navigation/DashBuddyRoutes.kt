@@ -13,6 +13,13 @@ sealed class Screen(val route: String) {
     data object Analytics : Screen("analytics")
 
     /**
+     * Weekly Plan (#981, redesign stage 6) — reached from the Sunday-evening notification's deep link
+     * and from the Home pointer row, never from a tab. Static route: it takes no arguments, which is
+     * what lets it sit in [allRoutes] and be a legal deep-link target.
+     */
+    data object WeeklyPlan : Screen("plan/week")
+
+    /**
      * Per-dash drill-down (#650) — the read-only session detail for one dash. The [route] template
      * carries the sessionId; [route] (the fun) URL-encodes it since a session id can hold arbitrary
      * characters. The screen reads the id back from `SavedStateHandle`.
@@ -46,7 +53,7 @@ sealed class Screen(val route: String) {
         // lazy: a plain initializer runs during Screen's class-init, BEFORE the nested data
         // objects exist (touching any Screen.X triggers it) → ExceptionInInitializerError.
         val allRoutes: Set<String> by lazy { setOf(
-            Dashboard.route, Analytics.route, SettingsHome.route, AboutSettings.route,
+            Dashboard.route, Analytics.route, WeeklyPlan.route, SettingsHome.route, AboutSettings.route,
             StrategySettings.route, EvidenceSettings.route, DataExport.route,
             ConsentSettings.route,
             EconomySettings.route, GeneralSettings.route, DeveloperSettings.route,
