@@ -776,6 +776,52 @@ pointer row reads the plan for the week the driver is IN (`weekStartOf`, not `pl
 Sunday those differ). `PatternsTab`'s heat grid was extracted to `HeatmapGrid` so "where the plan came
 from" renders the SAME grid with the picked cells outlined — the derivation's proof is the driver
 recognising the picture, which a lookalike would eventually stop being.
+**Time tab: the two rates, the typical hour, gap stats (#983, stage 7/7 — the epic's last build):**
+the redesign's closing stage surfaces `docs/design/running-hourly-rate.md`, which is the **semantic
+SSOT** for hourly rates and which the UI had never rendered. Three additions, all read-side (no schema
+change, no `PROJECTOR_VERSION` bump, no economy dependency). (1) **The §7.8 gap fold.** `WorkGaps`
+(pure `:domain`) pairs each completed drop with the **next accepted offer in the same dash** and
+measures the span. Rules, all fail-null: never across dashes or days (a session-less "(No session)" row
+therefore contributes nothing — this is the ONE window aggregate with no null-session fallback, and
+that is the definition, not an oversight); "which accept came next" is a **`sequenceId`** question while
+"how long" is a **timestamp** question (#732 — order by sequence, measure from the rows' own domain
+timestamps); a dash's LAST drop is a **tail, not a gap** (its wait ran into the driver stopping); a
+pairing whose accept escapes the dash's own effective end (`COALESCE(endedAt, lastEventAt)`, the
+[sessionTotals]-shared definition) is incoherent and dropped. A gap ≥ `LONG_GAP_MILLIS` (2 h) is
+**counted and stated, never excluded** — the doc §3 names break-vs-dry-market as unresolvable
+on-device, so deleting the time would be a worse lie than reporting it unjudged. **Source: the
+read model, not `app_events`.** The brief points at the log, but `delivery_records.completedAt` /
+`offer_records.decidedAt` ARE those payloads' own domain timestamps and each row's PK IS its source
+event's `sequenceId`, so paging the log would re-decode JSON for identical numbers while
+re-implementing the session-anchored windowing (Principle 5). The accept side deliberately KEEPS a
+resolved orphan (#810 B2) unlike every other offer read: the row is not a count, it is the instant the
+driver stopped waiting, and dropping it would fuse two real gaps into one fabricated long one.
+(2) **The net/hr pair** (`NetPerHourPair`) is the doc §2a **active** / **scheduled** denominators under
+the brief's driver-facing labels *while working* / *whole shift* — the doc wins on definitions, the
+brief on wording. Whole-shift = Σ session durations (zero estimates, the doc's "Layer 0"); while-working
+= Σ per-delivery partition deltas **minus the measured gaps**, which is precisely why §7.8 feeds §6 (the
+delta already swallows the dry wait the doc excludes). Both residuals are one-sided and documented (a
+dash's pre-first-offer wait has no preceding completion, so it stays in the denominator), so the
+while-working rate is conservative by construction; the numerator is the window's own FROZEN net, shared
+with the recap hero. A missing denominator yields **null, never `$0.00/hr`** (#936 discipline).
+(3) **"Your typical online hour"** (`HourComposition`) splits the online span three ways: *at stops* = Σ
+pickup dwell (`confirmedAt−arrivedAt`) + Σ **door** dwell (`completedAt−arrivedAt`) — named "at stops"
+rather than the brief's "at store" because a doorstep is not a store; *waiting* = the §7.8 gaps (disjoint
+from dwell by construction — a gap runs completion→accept, a dwell sits inside a job); *the rest* = the
+residual, labelled "driving & other" and NEVER as pure driving, since it also holds the pre-first-offer
+wait, the post-last-drop tail, and every untimed stop. **Coverage is a field, not a footnote** (§9):
+`stopsTimed`/`stops` and `gapCount`/`completionsWithoutGap` ride the models, an untimed stop is never
+estimated from its neighbours (so at-stops is a floor), and the card states all three coverage
+states separately. The waiting leak is stated in dollars at the **while-working** rate (pricing it at the
+whole-shift rate would be circular — that rate already contains the idleness). Plumbing: `deliveryTimeTotals`
+gained door dwell + its coverage counters, new `pickupDwellTotals`/`completionEvents`/`acceptEvents`/
+`sessionEndBounds` DAO reads, `TimeEconomics` gained the dwell/stop fields (+ derived `atStopsMillis`/
+`stops`/`stopsTimed`), and `Percentiles.nearestRank` is now ONE owner for the #159 dwell p50/p95 and the
+new gap median/p90. **Stage-6 seam NOT backfilled:** brief §8's `NOT PICKED` "· gaps ran 14m" clause needs
+a **per-weekday, lifetime** gap median, while §7.8's stats are window-scoped — appending the one to the
+other would back a per-weekday claim with an all-week number (a §9 violation), and doing it properly needs
+a new grouped lifetime read plus a new `UnpickedDay` field and a `WeeklyPlanner` signature change. Left
+deliberately; the reason is recorded here rather than contorting stage 6.
 **The "(No session)" bucket (#660 piece 1):** `delivery_records` rows whose source event carried
 NO `sessionId` at all were already counted in net (`deliveryTotals`'s own-`completedAt` fallback, #655)
 but invisible to gross (`grossAndUnattributed`/`sessionGrossRows` iterate `session_records` only, so a

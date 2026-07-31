@@ -78,6 +78,29 @@ card's **mechanical** half, #577 (re-confirmed, 24/24, ~0.55 s — with a new po
 that entry's Bug #1), the #457 path, and #554 ShadowProjector (2/2). The #462/#460 dropoff item
 was found **broken-in-part** (raw PII in capture envelopes) and moved to that entry's Bug #7.)_
 
+- **🆕 NEW — #983 — Time tab: the two hourly rates, your typical online hour, gap stats
+  (redesign stage 7/7 — the epic's last build).** Analytics → **Time**, after a dash or two.
+  Four things to check.
+  (a) **NET PER HOUR** shows two tiles: *While working* and *Whole shift*, each with its own
+  duration underneath. **While working must never be lower than whole shift** — same money over a
+  smaller denominator. If they are identical, read the line under them: it should say no gap was
+  measured in this window (which is itself a finding — see (c)). The sentence between them explains
+  the difference; the last line must still say net is frozen at accept-time costs.
+  (b) **YOUR TYPICAL ONLINE HOUR** is a 3-segment bar (driving & other / at stops / waiting) whose
+  three chunks add up to one hour. Sanity-check it against the dash you just did: if you spent most
+  of an hour parked at a Walmart, *at stops* should be the fat segment. Under it, a dollar line —
+  `Waiting cost you about $X in this window` — and a coverage line saying how many of your stops
+  were timed. **The coverage line is the one to watch**: if it says "no stop recorded an arrival",
+  the arrival stamps aren't landing and the segment is meaningless (report it).
+  (c) **GAPS BETWEEN JOBS** — typical / 9-in-10-under / longest, plus `N gaps measured across M
+  drops`. Compare *typical* against your gut for that dash. Two failure shapes to catch: a gap that
+  looks like it spans **two different dashes** (impossible by design — the fold refuses it, so
+  seeing one means the session ids are wrong), and `0 gaps measured` on a dash where you clearly
+  waited between orders (means accepts or completions aren't being recorded in-session).
+  (d) **Page the window** (‹ ›) and confirm every figure on the tab moves together — no tile left
+  quoting last week's number under this week's label.
+  - Confirmed: 0/2
+
 - **🆕 NEW — #981 — Weekly Plan + the Sunday notification (redesign stage 6).** A whole new screen,
   reached two ways: the Sunday-evening notification, and (once you save a plan) a row on Home.
   Six things to check.
