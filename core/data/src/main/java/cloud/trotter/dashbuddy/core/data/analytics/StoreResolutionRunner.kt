@@ -25,9 +25,9 @@ import timber.log.Timber
  * (+ the offer↔job link), and — since #887 — deletes the identity row a monotonic key UPGRADE superseded
  * once nothing references it any more. Because it reads committed rows only and the key is row-sourced +
  * monotonic, incremental fold ≡ from-zero refold (B1) and a re-run is a byte-identical no-op (L1).
- * **#1000:** a job with NO pickup rows (a blown-through pickup that never confirmed) still stamps its
- * EXACT offer↔job `linkedJobId` from the trigger's own carried offer hashes — link-only, `storeKey`
- * stays fail-null (no anchor to key with) — see [linkPickupLessJob].
+ * **#1000:** a job with NO anchor at all — no pickup rows, or pickup rows whose only storeName(s) are
+ * blank/`UNKNOWN_STORE` (#733) — still stamps its EXACT offer↔job `linkedJobId` from the trigger's own
+ * carried offer hashes — `storeKey` stays fail-null (no anchor to key with) — see [linkAnchorlessJob].
  *
  * **Privacy:** store names/addresses are MERCHANT data — fine at rest, never logged at INFO+ (P7). No
  * network, no new capture. Customer hashes are never read here.
@@ -51,22 +51,22 @@ internal class StoreResolutionRunner(private val dao: AnalyticsDao) {
 
     private suspend fun resolveJob(jobId: String, task: StoreResolution) {
         val pickups = dao.pickupRecordsForJob(jobId)
-        // v1 (matches the field-verified shadow): anchors come from pickup rows; a job with delivery
-        // rows but no pickup rows produces no store link (no anchor ⇒ no storeKey, fail-null beats
-        // fail-wrong — #1000 rejected an offer-form fallback for exactly this reason). But the
-        // DELIVERY_COMPLETED trigger's own offerHashes already carry the EXACT offer↔job link (the
-        // #615-class blown-through-pickup shape: PICKUP_ARRIVED fired, PICKUP_CONFIRMED never did, so
-        // there is no pickup row at all) — stamp that link before giving up on the job (#1000).
-        if (pickups.isEmpty()) {
-            linkPickupLessJob(jobId, task)
-            return
-        }
-        // FIX 2: exclude the UNKNOWN_STORE sentinel — a null-store pickup must not mint a
-        // `platform|unknown|` entity (the fielded #733 NULL-store shape). Same idiom as :domain's
-        // DisplayNames (import the constant, don't re-literal it).
+        // v1 (matches the field-verified shadow): anchors come from pickup rows. FIX 2: exclude the
+        // UNKNOWN_STORE sentinel — a null-store pickup must not mint a `platform|unknown|` entity (the
+        // fielded #733 NULL-store shape). Same idiom as :domain's DisplayNames (import the constant,
+        // don't re-literal it). Empty `pickups` folds into an empty `anchors` here too, so the #1000
+        // anchorless arm below covers BOTH shapes uniformly: no pickup row at all (a blown-through
+        // pickup that never confirmed, the #615-class fail-null), and a pickup row whose only
+        // storeName(s) are blank/UNKNOWN_STORE (#733).
         val anchors = pickups.map { it.storeName }
             .filter { it.isNotBlank() && it != UNKNOWN_STORE }.distinct()
-        if (anchors.isEmpty()) return
+        // No anchor ⇒ no storeKey, fail-null beats fail-wrong — #1000 rejected an offer-form fallback
+        // for exactly this reason. But the DELIVERY_COMPLETED trigger's own offerHashes may still carry
+        // the EXACT offer↔job link — stamp that link-only fact before giving up on the job (#1000).
+        if (anchors.isEmpty()) {
+            linkAnchorlessJob(jobId, task)
+            return
+        }
         val deliveries = dao.deliveryRecordsForJob(jobId)
 
         val dropoffForms = deliveries.mapNotNull { it.storeName }
@@ -80,7 +80,7 @@ internal class StoreResolutionRunner(private val dao: AnalyticsDao) {
         // Candidate offer(s) for the offer form + the offer↔job link (below). Exact via jobOfferHashes,
         // else the temporal nominee (F4). Their merchantName feeds the resolver's offerNameForm.
         val jobFirstAt = pickups.minOf { it.phaseStartedAt }
-        val offerRows = candidateOffers(task, jobId, jobFirstAt)
+        val offerRows = candidateOffers(task, jobId, jobFirstAt, hasDeliveryRows = deliveries.isNotEmpty())
         val offerForms = offerRows.mapNotNull { it.merchantName }
 
         // Per-anchor address (#773): FIRST-NON-NULL storeAddress by eventSequenceId (pickups are
@@ -229,43 +229,106 @@ internal class StoreResolutionRunner(private val dao: AnalyticsDao) {
     }
 
     /**
-     * #1000 — a pickup-less job's ONLY resolvable fact is the exact offer↔job link the
-     * `DELIVERY_COMPLETED` fold's own [StoreResolution.offerHashes] already carries. Stamp it via the
-     * **link-only** [AnalyticsDao.linkOfferToJobIfUnlinked] — `storeKey` is deliberately left untouched
-     * (no anchor exists to key with, and the design REJECTS minting one from the offer's own parsed
-     * store form: a divergent `normalizedChain` would permanently split the store entity, fail-wrong
-     * beats fail-null). **Never the temporal nominee**: with no anchor there is no brand-token
-     * agreement check to run, and stamping an unverified nominee is exactly the queued-next-job-offer
-     * mis-link F4 exists to block — so this only ever consults [AnalyticsDao.offerRecordsByHashes]
-     * (the exact path), same session+accepted scope as the anchored resolution above. Idempotent +
-     * convergent: an already-linked row is skipped, so incremental fold ≡ from-zero refold and a re-run
-     * is a no-op.
+     * #1000 — an anchorless job's ONLY resolvable fact is the exact offer↔job link the
+     * `DELIVERY_COMPLETED` fold's own [StoreResolution.offerHashes] already carries — whether the job
+     * has NO pickup rows at all, or pickup rows whose only storeName(s) are blank/`UNKNOWN_STORE`
+     * (#733). Stamp it by REUSING [AnalyticsDao.stampOfferLink] with a null `storeKey` (F6a) — safe
+     * because its claim guard (`linkedJobId IS NULL OR = :jobId`) blocks the call outright on any row
+     * already claimed by a DIFFERENT job, so it can never null out that row's real `storeKey`; on a
+     * fresh or same-job row the value guard is satisfied and only `linkedJobId` actually changes. `storeKey`
+     * is deliberately never set here (no anchor exists to key with, and the design REJECTS minting one
+     * from the offer's own parsed store form: a divergent `normalizedChain` would permanently split the
+     * store entity, fail-wrong beats fail-null) — but if a REAL anchor later appears for this job, the
+     * anchored resolution's own offer-link loop re-stamps the SAME row with a real key (see
+     * [candidateOffers]'s `offerLinkCountForJob` narrowing, F4).
+     *
+     * **Preconditions, both load-bearing:**
+     * - **Per-job trigger only** (F5): `task.jobId != jobId` bails immediately. A session-level trigger
+     *   (`task.jobId == null`, [resolve]'s L2 enumeration branch) is relied on TODAY to carry no
+     *   offerHashes at all (both session-level [StoreResolution] constructors — `foldDashStop` and
+     *   [AnalyticsProjector]'s inferred-close trigger — pass `emptyList()`), which would already make
+     *   this whole function a no-op below; this guard makes that safety STRUCTURAL rather than
+     *   incidental, so a future hash-bearing session trigger fails closed instead of mass-claiming every
+     *   job in the session against the same hash list.
+     * - **Not yet outcome-resolved** (F3, #810 B2): [AnalyticsDao.unresolvedOfferRecordsByHashes]
+     *   excludes any row whose `outcomeResolved` is already stamped — a resolved orphan must not gain a
+     *   live `linkedJobId`, or the #975 est-vs-reality stack rule (drop BOTH siblings when 2+ accepted
+     *   offers share one `linkedJobId`) would corrupt on a Tier-2 driver undo.
+     *
+     * **Content-hash multi-claim (F7).** `offerHash` is a CONTENT hash, not a row identity — a session
+     * that accepts the same order twice with an identical parse returns MULTIPLE rows for ONE hash.
+     * Claiming every unlinked row here would starve a sibling job's own exact-hash claim, and — because
+     * whether the sibling row is even visible yet depends on which 500-event batch boundary the two
+     * accepts land on — would break `incremental fold ≡ from-zero refold`, the whole premise the #1000
+     * `PROJECTOR_VERSION` bump rests on. So this claims **at most one row per hash**, deterministically:
+     * the earliest still-unlinked `eventSequenceId`. That choice is batch-boundary-invariant (whether
+     * both sibling rows are already committed or the sibling hasn't landed yet, "the earliest currently
+     * unlinked row" is always the same physical row), and the ANCHORED resolution's own offer-link loop
+     * (unchanged by #1000, see [resolveJob]) already claims whichever sibling is left over once ITS job
+     * gets a real pickup anchor — its per-row [AnalyticsDao.stampOfferLink] guard was already correct
+     * for this shape.
+     *
+     * **Never the temporal nominee**: with no anchor there is no brand-token agreement check to run, and
+     * stamping an unverified nominee is exactly the queued-next-job-offer mis-link F4 exists to block —
+     * so this only ever consults [AnalyticsDao.unresolvedOfferRecordsByHashes] (the exact path).
+     *
+     * Idempotent + convergent: a hash whose only unclaimed row is gone (claimed by this job already, or
+     * by another) is skipped, so incremental fold ≡ from-zero refold and a re-run is a no-op.
      */
-    private suspend fun linkPickupLessJob(jobId: String, task: StoreResolution) {
-        val sessionId = task.sessionId ?: return
-        if (task.offerHashes.isEmpty()) return
-        val offerRows = dao.offerRecordsByHashes(task.offerHashes, sessionId, acceptedOutcome)
-        for (offer in offerRows) {
-            if (offer.linkedJobId != null) continue
-            dao.linkOfferToJobIfUnlinked(offer.eventSequenceId, jobId)
-            Timber.tag(TAG).d("pickup-less job link: jobId=%s offerSeq=%d", jobId, offer.eventSequenceId)
-            Timber.tag(TAG).w("offer linked to a pickup-less job (blown-through pickup, no storeKey)")
+    private suspend fun linkAnchorlessJob(jobId: String, task: StoreResolution) {
+        if (task.jobId != jobId) return // F5: per-job triggers only — see the KDoc precondition above.
+        val candidates = exactOfferCandidates(task, dao::unresolvedOfferRecordsByHashes)
+        if (candidates.isEmpty()) return
+        for ((_, rows) in candidates.groupBy { it.offerHash }) {
+            if (rows.any { it.linkedJobId == jobId }) continue // already claimed by this job — no-op.
+            val target = rows.filter { it.linkedJobId == null }.minByOrNull { it.eventSequenceId } ?: continue
+            Timber.tag(TAG).d("anchorless job link: jobId=%s offerSeq=%d", jobId, target.eventSequenceId)
+            dao.stampOfferLink(target.eventSequenceId, null, jobId)
         }
+    }
+
+    /**
+     * #1000 F6b — the exact-hash offer lookup shared by the anchored resolution's exact arm
+     * ([candidateOffers]) and the anchorless link arm ([linkAnchorlessJob]): given a trigger carrying a
+     * session AND at least one carried offer hash, run [lookup] scoped to it. Returns emptyList() when
+     * either is missing — temporal-fallback (for [candidateOffers]) / anchorless-no-op (for
+     * [linkAnchorlessJob]) territory the caller decides.
+     */
+    private suspend fun exactOfferCandidates(
+        task: StoreResolution,
+        lookup: suspend (hashes: List<String>, sessionId: String, outcome: String) -> List<OfferRecordEntity>,
+    ): List<OfferRecordEntity> {
+        val sessionId = task.sessionId ?: return emptyList()
+        if (task.offerHashes.isEmpty()) return emptyList()
+        return lookup(task.offerHashes, sessionId, acceptedOutcome)
     }
 
     private suspend fun candidateOffers(
         task: StoreResolution,
         jobId: String,
         jobFirstAt: Long,
+        hasDeliveryRows: Boolean,
     ): List<OfferRecordEntity> {
-        val sessionId = task.sessionId ?: return emptyList()
         // Exact path: the job's OWN accepted offer rows, scoped to session + accepted outcome (FIX 1a).
         if (task.offerHashes.isNotEmpty()) {
-            return dao.offerRecordsByHashes(task.offerHashes, sessionId, acceptedOutcome)
+            return exactOfferCandidates(task, dao::offerRecordsByHashes)
         }
-        // FIX 1b: if the job already holds a claim (from an earlier trigger), don't nominate a second
-        // offer — the exact path stays convergent because its scoped lookup returns the same rows, but a
-        // DASH_STOP re-run of a temporal-linked job must not claim a different nearby offer.
+        val sessionId = task.sessionId ?: return emptyList()
+        // #1000 F8: a job with NO delivery row is exactly the shape a re-mint (#499/#736) can leave
+        // behind — the physical job's completion, and the offer's own carried hash, moved to a NEWER
+        // jobId, leaving THIS job holding only pickup rows. Such a job's offer link would feed no #975
+        // est-vs-reality join (that join keys on a DELIVERY row's own jobId) and is exactly the #810
+        // orphan class already, so requiring a delivery row here closes off the construction where the
+        // temporal nominee reaches PAST an offer this job's anchorless sibling already exact-claimed to
+        // an OLDER, brand-coincidental one — evaluated against the FIX-1 family: no existing test or
+        // comment relies on a delivery-less job's temporal nomination succeeding, so this closes the
+        // construction outright rather than merely documenting it (see #1000's PR description).
+        if (!hasDeliveryRows) return emptyList()
+        // FIX 1b, narrowed by #1000 F4: only a storeKey-BEARING claim blocks a second nomination — a
+        // link-only stamp from the anchorless arm must not stop THIS job's later anchored resolution
+        // from nominating/backfilling storeKey once a late-arriving pickup gives it a real anchor (the
+        // #526 D5 late-sweep shape); a DASH_STOP re-run of an already fully-keyed job still must not
+        // claim a SECOND offer, which the storeKey-bearing count still catches exactly as before.
         if (dao.offerLinkCountForJob(jobId) > 0) return emptyList()
         return listOfNotNull(dao.nominateOfferForJob(sessionId, jobFirstAt, jobId, acceptedOutcome))
     }

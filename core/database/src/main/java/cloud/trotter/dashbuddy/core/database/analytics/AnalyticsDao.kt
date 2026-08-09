@@ -201,9 +201,37 @@ interface AnalyticsDao {
         acceptedOutcome: String,
     ): List<OfferRecordEntity>
 
-    /** Count of offers already claimed by [jobId] (#159 FIX 1b) — the nomination guard: a job that
-     *  already holds a claim never nominates a second temporal offer (the DASH_STOP re-run defect). */
-    @Query("SELECT COUNT(*) FROM offer_records WHERE linkedJobId = :jobId")
+    /**
+     * The #1000 anchorless-link arm's candidate lookup: same exact-hash/session/accepted scope as
+     * [offerRecordsByHashes], narrowed to rows whose `outcomeResolved` is still NULL (#810 B2). An
+     * offer already Tier-1/Tier-2 resolved as an orphan must not gain a live `linkedJobId` here — the
+     * #975 est-vs-reality LEFT JOIN and the Tier-2 stack rule (drop BOTH siblings when 2+ accepted
+     * offers share one `linkedJobId`) both assume a resolved orphan carries no fresh link. Deliberately
+     * a SEPARATE query from [offerRecordsByHashes] rather than adding the predicate there — the
+     * anchored resolution's own exact/nominate paths are unaffected by this narrowing (a documented,
+     * un-fixed-here follow-up: see #1000's PR description).
+     */
+    @Query(
+        "SELECT * FROM offer_records WHERE offerHash IN (:offerHashes) " +
+            "AND sessionId = :sessionId AND outcome = :acceptedOutcome AND outcomeResolved IS NULL"
+    )
+    suspend fun unresolvedOfferRecordsByHashes(
+        offerHashes: List<String>,
+        sessionId: String,
+        acceptedOutcome: String,
+    ): List<OfferRecordEntity>
+
+    /**
+     * Count of offers already claimed by [jobId] **with a real storeKey** (#159 FIX 1b, narrowed by
+     * #1000 F4) — the nomination guard: a job that already holds a KEYED claim never nominates a second
+     * temporal offer (the DASH_STOP re-run defect). Narrowed from "any claim" to "storeKey-bearing
+     * claim" so a link-only stamp from the #1000 anchorless arm (no anchor existed, so `storeKey` is
+     * null) does NOT block this job's later ANCHORED resolution from nominating/backfilling `storeKey`
+     * once a late-arriving pickup gives it a real anchor (the #526 D5 late-sweep shape) —
+     * [nominateOfferForJob]'s own `linkedJobId IS NULL OR = :jobId` clause accepts the job's own
+     * already-linked-but-unkeyed row as a valid nominee, so the backfill lands on the SAME offer.
+     */
+    @Query("SELECT COUNT(*) FROM offer_records WHERE linkedJobId = :jobId AND storeKey IS NOT NULL")
     suspend fun offerLinkCountForJob(jobId: String): Int
 
     /** Every ACCEPTED offer row (#810 B2) — the Tier-2 orphan-attestation surface joins these to the
@@ -238,20 +266,6 @@ interface AnalyticsDao {
             "AND (storeKey IS NOT :storeKey OR linkedJobId IS NOT :jobId)"
     )
     suspend fun stampOfferLink(eventSequenceId: Long, storeKey: String?, jobId: String)
-
-    /**
-     * **Link-only** offer↔job stamp for a job with NO pickup anchor (#1000 — a blown-through pickup
-     * that never confirmed). Deliberately narrower than [stampOfferLink]: it touches `linkedJobId`
-     * ONLY — never `storeKey`, so it can never null out or downgrade an existing key — and only ever
-     * FILLS an unlinked row (`linkedJobId IS NULL`), never overwrites an existing link. If an anchor
-     * later appears, [stampOfferLink]'s claim guard (`linkedJobId IS NULL OR = :jobId`) still upgrades
-     * the same row with a real `storeKey`. Idempotent: a re-run matches zero rows once linked.
-     */
-    @Query(
-        "UPDATE offer_records SET linkedJobId = :jobId " +
-            "WHERE eventSequenceId = :eventSequenceId AND linkedJobId IS NULL"
-    )
-    suspend fun linkOfferToJobIfUnlinked(eventSequenceId: Long, jobId: String)
 
     // ── Read-side aggregates (Flow ⇒ reactive via Room invalidation) ─────
 

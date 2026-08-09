@@ -10,6 +10,7 @@ import cloud.trotter.dashbuddy.core.database.analytics.PickupRecordEntity
 import cloud.trotter.dashbuddy.core.database.analytics.StoreEntity
 import cloud.trotter.dashbuddy.core.database.event.AppEventDao
 import cloud.trotter.dashbuddy.core.database.event.AppEventEntity
+import cloud.trotter.dashbuddy.domain.analytics.StoreResolution
 import cloud.trotter.dashbuddy.domain.evaluation.OfferAction
 import cloud.trotter.dashbuddy.domain.evaluation.OfferEvaluation
 import cloud.trotter.dashbuddy.domain.evaluation.OfferQuality
@@ -29,6 +30,7 @@ import cloud.trotter.dashbuddy.domain.model.offer.ParsedOffer
 import cloud.trotter.dashbuddy.domain.model.pay.ParsedPay
 import cloud.trotter.dashbuddy.domain.model.pay.ParsedPayItem
 import cloud.trotter.dashbuddy.domain.state.Flow
+import cloud.trotter.dashbuddy.domain.state.UNKNOWN_STORE
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.runBlocking
@@ -107,10 +109,12 @@ class StoreResolutionProjectorTest {
         totalPay: Double? = null,
         dropRealizedPay: Double? = null,
         customerHash: String? = "cust-$taskId",
+        jobOfferHashes: List<String> = emptyList(),
     ) = DeliveryPayload(
         jobId = jobId, taskId = taskId, storeName = store, customerHash = customerHash,
         addressHash = "addr-$taskId", phaseStartedAt = at - 200, arrivedAt = at - 30,
         completedAt = at, totalPay = totalPay, parsedPay = parsedPay, dropRealizedPay = dropRealizedPay,
+        jobOfferHashes = jobOfferHashes,
     )
 
     private fun receipt(vararg tips: Pair<String, Double>) =
@@ -639,17 +643,9 @@ class StoreResolutionProjectorTest {
         completedAt = at, totalPay = totalPay, parsedPay = parsedPay, jobOfferHashes = hashes,
     )
 
-    // ── #1000: a job with NO pickup rows still links its EXACT offer↔job hash (link-only, storeKey
-    // stays fail-null — the #615-class blown-through pickup, PICKUP_ARRIVED with no PICKUP_CONFIRMED) ──
-
-    /** A pickup-less DELIVERY_COMPLETED (no PICKUP_CONFIRMED event at all for this job). */
-    private fun deliveryNoPickup(
-        jobId: String, taskId: String, store: String, at: Long, hashes: List<String>, totalPay: Double? = null,
-    ) = DeliveryPayload(
-        jobId = jobId, taskId = taskId, storeName = store, customerHash = "cust-$taskId",
-        addressHash = "addr-$taskId", phaseStartedAt = at - 200, arrivedAt = at - 30,
-        completedAt = at, totalPay = totalPay, jobOfferHashes = hashes,
-    )
+    // ── #1000: an ANCHORLESS job (no pickup rows at all, OR pickup rows whose only storeName(s) are
+    // blank/UNKNOWN_STORE — #733) still links its EXACT offer↔job hash, storeKey stays fail-null — the
+    // #615-class blown-through pickup, PICKUP_ARRIVED with no PICKUP_CONFIRMED ──
 
     @Test
     fun `#1000 — a pickup-less job with an exact offer hash links via the offer, storeKey stays null`() = runBlocking {
@@ -659,7 +655,7 @@ class StoreResolutionProjectorTest {
         // own offer hashes (the DELIVERY_COMPLETED fold's jobOfferHashes), which is all the runner needs.
         val d = insert(
             AppEventType.DELIVERY_COMPLETED, "S1", 1200,
-            deliveryNoPickup("J1", "dW", "Wendys", 1200, listOf("HASH1"), totalPay = 8.0),
+            delivery("J1", "dW", "Wendys", 1200, totalPay = 8.0, jobOfferHashes = listOf("HASH1")),
         )
         insert(AppEventType.DASH_STOP, "S1", 1300, stop("S1", 1300))
         projector().catchUp()
@@ -674,6 +670,26 @@ class StoreResolutionProjectorTest {
     }
 
     @Test
+    fun `#1000 F1 — a job whose only pickup row is UNKNOWN_STORE is anchorless too, and still links`() = runBlocking {
+        insert(AppEventType.DASH_START, "S1", 1000, start("S1", 1000))
+        val offSeq = insert(AppEventType.OFFER_ACCEPTED, "S1", 1040, offerAccepted("HASH1", "Wendys", 1040))
+        // The pickup row EXISTS but its only storeName is the UNKNOWN_STORE sentinel (#733) — anchors
+        // resolves empty even though `pickups.isEmpty()` is false, exercising the sibling exit F1 asks for.
+        insert(AppEventType.PICKUP_CONFIRMED, "S1", 1100, pickup("J1", "pW", UNKNOWN_STORE, 1100))
+        val d = insert(
+            AppEventType.DELIVERY_COMPLETED, "S1", 1200,
+            delivery("J1", "dW", "Wendys", 1200, totalPay = 8.0, jobOfferHashes = listOf("HASH1")),
+        )
+        insert(AppEventType.DASH_STOP, "S1", 1300, stop("S1", 1300))
+        projector().catchUp()
+
+        val offer = dao.offerRecord(offSeq)!!
+        assertEquals("a blank/UNKNOWN_STORE-only pickup set is anchorless — the link still stamps", "J1", offer.linkedJobId)
+        assertNull(offer.storeKey)
+        assertNull(dao.deliveryRecord(d)!!.storeKey)
+    }
+
+    @Test
     fun `#1000 — a pickup-less job with no offer hashes stays unlinked (never the temporal nominee)`() = runBlocking {
         insert(AppEventType.DASH_START, "S1", 1000, start("S1", 1000))
         // An accepted offer exists in the session (a plausible temporal nominee) but the job carries NO
@@ -684,7 +700,7 @@ class StoreResolutionProjectorTest {
         val offSeq = insert(AppEventType.OFFER_ACCEPTED, "S1", 1040, offerAccepted("HASH1", "Wendys", 1040))
         insert(
             AppEventType.DELIVERY_COMPLETED, "S1", 1200,
-            deliveryNoPickup("J1", "dW", "Wendys", 1200, emptyList(), totalPay = 8.0),
+            delivery("J1", "dW", "Wendys", 1200, totalPay = 8.0),
         )
         insert(AppEventType.DASH_STOP, "S1", 1300, stop("S1", 1300))
         projector().catchUp()
@@ -696,12 +712,36 @@ class StoreResolutionProjectorTest {
     }
 
     @Test
+    fun `#1000 F3 — a resolved orphan offer is never linked by the anchorless arm`() = runBlocking {
+        insert(AppEventType.DASH_START, "S1", 1000, start("S1", 1000))
+        val offSeq = insert(AppEventType.OFFER_ACCEPTED, "S1", 1040, offerAccepted("HASH1", "Wendys", 1040))
+        // Fold the accept FIRST so the offer_records row exists, THEN mark it already Tier-2 resolved
+        // (#810 B2) — simulating an offer that was already attested elsewhere as an orphan — BEFORE the
+        // pickup-less DELIVERY_COMPLETED's own resolution ever runs.
+        projector().catchUp()
+        dao.stampOfferOutcomeResolved(offSeq, "UNASSIGNED_ATTESTED")
+
+        insert(
+            AppEventType.DELIVERY_COMPLETED, "S1", 1200,
+            delivery("J1", "dW", "Wendys", 1200, totalPay = 8.0, jobOfferHashes = listOf("HASH1")),
+        )
+        insert(AppEventType.DASH_STOP, "S1", 1300, stop("S1", 1300))
+        projector().catchUp()
+
+        assertNull(
+            "an already outcome-resolved offer must not gain a live linkedJobId via the anchorless arm",
+            dao.offerRecord(offSeq)!!.linkedJobId,
+        )
+        assertEquals("UNASSIGNED_ATTESTED", dao.offerRecord(offSeq)!!.outcomeResolved)
+    }
+
+    @Test
     fun `#1000 — the pickup-less link converges — incremental fold across a batch boundary equals a from-zero refold`() = runBlocking {
         insert(AppEventType.DASH_START, "S1", 1000, start("S1", 1000))
         val offSeq = insert(AppEventType.OFFER_ACCEPTED, "S1", 1040, offerAccepted("HASH1", "Wendys", 1040))
         insert(
             AppEventType.DELIVERY_COMPLETED, "S1", 1200,
-            deliveryNoPickup("J1", "dW", "Wendys", 1200, listOf("HASH1"), totalPay = 8.0),
+            delivery("J1", "dW", "Wendys", 1200, totalPay = 8.0, jobOfferHashes = listOf("HASH1")),
         )
         insert(AppEventType.DASH_STOP, "S1", 1300, stop("S1", 1300))
 
@@ -732,7 +772,7 @@ class StoreResolutionProjectorTest {
         // must never steal the claim off J1.
         val d2 = insert(
             AppEventType.DELIVERY_COMPLETED, "S1", 1250,
-            deliveryNoPickup("J2", "dT2", "Target", 1250, listOf("HASH1"), totalPay = 8.0),
+            delivery("J2", "dT2", "Target", 1250, totalPay = 8.0, jobOfferHashes = listOf("HASH1")),
         )
         insert(AppEventType.DASH_STOP, "S1", 1300, stop("S1", 1300))
         projector().catchUp()
@@ -741,5 +781,128 @@ class StoreResolutionProjectorTest {
         assertEquals("first claim wins — J1 keeps the link", "J1", offer.linkedJobId)
         assertEquals("J1's anchored storeKey is untouched by J2's pickup-less trigger", targetKey, offer.storeKey)
         assertNull("J2 gets no storeKey — it has no anchor and the offer was already claimed", dao.deliveryRecord(d2)!!.storeKey)
+    }
+
+    @Test
+    fun `#1000 F5 — a session-level trigger never attempts the anchorless link even if it carried hashes`() = runBlocking {
+        insert(AppEventType.DASH_START, "S1", 1000, start("S1", 1000))
+        val offSeq = insert(AppEventType.OFFER_ACCEPTED, "S1", 1040, offerAccepted("HASH1", "Wendys", 1040))
+        insert(
+            AppEventType.DELIVERY_COMPLETED, "S1", 1200,
+            delivery("J1", "dW", "Wendys", 1200, totalPay = 8.0), // no jobOfferHashes on the job itself
+        )
+        insert(AppEventType.DASH_STOP, "S1", 1300, stop("S1", 1300))
+        projector().catchUp()
+        assertNull("sanity: unlinked via the normal fold (no hashes on the job)", dao.offerRecord(offSeq)!!.linkedJobId)
+
+        // Directly simulate a hash-bearing SESSION-level trigger (jobId == null) — a shape that cannot
+        // occur today (both session-level StoreResolution constructors pass emptyList) but the
+        // precondition guard must reject it structurally, not rely on that incidental fact.
+        StoreResolutionRunner(dao).resolve(
+            StoreResolution(sessionId = "S1", platform = "DoorDash", jobId = null, offerHashes = listOf("HASH1")),
+        )
+
+        assertNull(
+            "a session-level trigger must never mass-claim via the anchorless link path",
+            dao.offerRecord(offSeq)!!.linkedJobId,
+        )
+    }
+
+    @Test
+    fun `#1000 F4 — a late pickup after an anchorless link still backfills storeKey via nomination (DASH_STOP re-run)`() = runBlocking {
+        insert(AppEventType.DASH_START, "S1", 1000, start("S1", 1000))
+        val offSeq = insert(AppEventType.OFFER_ACCEPTED, "S1", 1040, offerAccepted("HASH1", "Target", 1040))
+        // Pickup-less at fold time — J1 has no pickup row yet, so the offer gets a LINK-ONLY stamp
+        // (storeKey stays null). The receipt rides this event so the LATER anchored backfill below can
+        // resolve the same real running-key (`02426`) the rest of the file uses for Target.
+        insert(
+            AppEventType.DELIVERY_COMPLETED, "S1", 1200,
+            delivery(
+                "J1", "dT", "Target", 1200,
+                parsedPay = receipt("Target (02426)" to 3.0), totalPay = 8.0, jobOfferHashes = listOf("HASH1"),
+            ),
+        )
+        // The #526 D5 late-sweep shape: a PICKUP_CONFIRMED for the SAME job arrives after its delivery
+        // already completed and its offer already anchorless-linked.
+        insert(AppEventType.PICKUP_CONFIRMED, "S1", 1250, pickup("J1", "pT", "Target", 1250))
+        insert(AppEventType.DASH_STOP, "S1", 1300, stop("S1", 1300)) // session-level re-run sees the anchor
+        projector().catchUp()
+
+        val offer = dao.offerRecord(offSeq)!!
+        assertEquals("J1", offer.linkedJobId)
+        assertEquals(
+            "the late pickup gives the job a real anchor, and FIX-1b's storeKey-bearing narrowing lets " +
+                "the DASH_STOP re-run's nomination backfill storeKey onto the SAME already-linked offer " +
+                "(nominateOfferForJob's own WHERE accepts linkedJobId = :jobId as a valid candidate)",
+            targetKey, offer.storeKey,
+        )
+    }
+
+    @Test
+    fun `#1000 F7 — a duplicate-hash offer pair claims one row per job, identically with or without a batch boundary`() = runBlocking {
+        insert(AppEventType.DASH_START, "S1", 900, start("S1", 900))
+        // A and B are TWO separate accepted-offer events sharing one CONTENT hash (the session accepted
+        // the same order twice with an identical parse) — the fielded multi-claim shape (#1000 F7).
+        val aSeq = insert(AppEventType.OFFER_ACCEPTED, "S1", 950, offerAccepted("HASH_DUP", "Wendys", 950))
+        insert(
+            AppEventType.DELIVERY_COMPLETED, "S1", 1200,
+            delivery("J1", "dW1", "Wendys", 1200, jobOfferHashes = listOf("HASH_DUP")),
+        )
+        val bSeq = insert(AppEventType.OFFER_ACCEPTED, "S1", 1220, offerAccepted("HASH_DUP", "Wendys", 1220))
+        insert(AppEventType.PICKUP_CONFIRMED, "S1", 1300, pickup("J2", "pW2", "Wendys", 1300))
+        insert(
+            AppEventType.DELIVERY_COMPLETED, "S1", 1400,
+            delivery("J2", "dW2", "Wendys", 1400, jobOfferHashes = listOf("HASH_DUP")),
+        )
+        insert(AppEventType.DASH_STOP, "S1", 1500, stop("S1", 1500))
+
+        // Incremental: a batch boundary that splits J1's DELIVERY_COMPLETED from B's OFFER_ACCEPTED — B
+        // is NOT YET COMMITTED when J1's anchorless link resolves.
+        val p = projector()
+        assertNotNull(p.processBatch(limit = 3)) // DASH_START, A, J1's DELIVERY_COMPLETED
+        while (p.processBatch(limit = 10) != null) { /* drain the rest */ }
+        val incA = dao.offerRecord(aSeq)!!.linkedJobId
+        val incB = dao.offerRecord(bSeq)!!.linkedJobId
+
+        // From-zero refold: the whole log fits in ONE batch, so BOTH rows are already committed when
+        // J1's anchorless resolution runs.
+        wipeAndResetWatermark()
+        projector().catchUp()
+        val refA = dao.offerRecord(aSeq)!!.linkedJobId
+        val refB = dao.offerRecord(bSeq)!!.linkedJobId
+
+        assertEquals("A (the earliest unlinked row) claims J1 regardless of the batch boundary", "J1", incA)
+        assertEquals(
+            "B (the sibling) claims J2 via the ANCHORED path's own per-row guard, regardless of the batch boundary",
+            "J2", incB,
+        )
+        assertEquals("incremental ≡ refold for A", refA, incA)
+        assertEquals("incremental ≡ refold for B", refB, incB)
+    }
+
+    @Test
+    fun `#1000 F8 — a re-mint's pickup-only leftover job never nominates a wrong offer (no delivery row ⇒ no temporal nomination)`() = runBlocking {
+        insert(AppEventType.DASH_START, "S1", 900, start("S1", 900))
+        // An UNRELATED earlier accepted offer, same brand — the wrong-nomination bait.
+        val oldSeq = insert(AppEventType.OFFER_ACCEPTED, "S1", 950, offerAccepted("OLD_HASH", "Wendys", 950))
+        // The offer that is ACTUALLY this physical job's — its hash rides the NEW job's DELIVERY_COMPLETED.
+        val newSeq = insert(AppEventType.OFFER_ACCEPTED, "S1", 1040, offerAccepted("NEW_HASH", "Wendys", 1040))
+        // J_old: the #499/#736 re-mint's LEFTOVER — holds only the pickup rows; no delivery ever completed
+        // under this jobId (the completion, and the offer's hash, moved to J_new after the re-mint).
+        insert(AppEventType.PICKUP_CONFIRMED, "S1", 1100, pickup("J_old", "pW", "Wendys", 1100))
+        // J_new: pickup-less at fold time — the completion (and the exact hash) landed here.
+        insert(
+            AppEventType.DELIVERY_COMPLETED, "S1", 1200,
+            delivery("J_new", "dW", "Wendys", 1200, jobOfferHashes = listOf("NEW_HASH")),
+        )
+        insert(AppEventType.DASH_STOP, "S1", 1300, stop("S1", 1300)) // session-level re-run visits BOTH jobs
+        projector().catchUp()
+
+        assertEquals("the exact hash correctly claims J_new", "J_new", dao.offerRecord(newSeq)!!.linkedJobId)
+        assertNull(
+            "J_old (pickup-only, no delivery row) must NOT reach past the already-claimed offer to " +
+                "wrongly nominate the older, brand-coincidental one (#1000 F8)",
+            dao.offerRecord(oldSeq)!!.linkedJobId,
+        )
     }
 }
