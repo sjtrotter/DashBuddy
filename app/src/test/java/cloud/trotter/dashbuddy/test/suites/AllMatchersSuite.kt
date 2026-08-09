@@ -12,6 +12,7 @@ import cloud.trotter.dashbuddy.core.pipeline.recognition.matchers.PickupNoCustom
 import cloud.trotter.dashbuddy.core.pipeline.rules.CaptureRedactionCorpusTest
 import cloud.trotter.dashbuddy.core.pipeline.rules.ClickRulesetTest
 import cloud.trotter.dashbuddy.core.pipeline.rules.DefaultRulesIntegrationTest
+import cloud.trotter.dashbuddy.core.pipeline.rules.DropoffBannerRedactParityTest
 import cloud.trotter.dashbuddy.core.pipeline.rules.GoPuffRecognitionTest
 import cloud.trotter.dashbuddy.core.pipeline.rules.NotificationRulesetTest
 import cloud.trotter.dashbuddy.core.pipeline.rules.ParseOutputGoldenTest
@@ -68,6 +69,11 @@ import org.junit.runners.Suite
  *   PII across the corpus + notification redact blocks mask name/body, keep store.
  * - [CaptureBackstopCorpusTest] — the #624 recognized-frame customer-marker
  *   backstop finds ZERO leaks over the redacted corpus (false-positive pin).
+ * - [DropoffBannerRedactParityTest] — #993 combined-frame belt: EVERY screen rule in the
+ *   dropoff section declares the `arriving_at_title` redact (a rule's redact protects only
+ *   the frames that rule wins, and the arrival CTA hands the banner-bearing frame around),
+ *   each one actually masks a real banner node, and the id is in the runtime
+ *   `CustomerTextMarkers.ID_MARKERS` SSOT so the UNKNOWN path is covered too.
  * - [SensitiveMarkerAssetCoverageTest] — #762 D10: every `parse.as == "sensitive"` rule's text
  *   anchor across ALL platforms' generated assets is independently caught by the rules-INDEPENDENT
  *   [cloud.trotter.dashbuddy.core.pipeline.SensitiveTextMarkers] backstop (a documented,
@@ -147,6 +153,7 @@ import org.junit.runners.Suite
     ClickClassifierTest::class,
     CaptureRedactionCorpusTest::class,
     CaptureBackstopCorpusTest::class,
+    DropoffBannerRedactParityTest::class,
     SensitiveMarkerAssetCoverageTest::class,
     PickupNoCustomerIdentityTest::class,
     RuleIdLogSafetyTest::class,

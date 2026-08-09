@@ -8,6 +8,12 @@
       "priority": 51,
       "redact": [
         {
+          "comment": "#993 belt (the FIX 3 precedent): this dropoff-phase surface can win a frame that STILL carries DoorDash's nav arrival banner — `dropoff_navigation`'s own reject (Continue / Complete Delivery / Mark as delivered / complete_delivery_steps_button) hands the arrival-MOMENT frame to whichever arrived-phase rule matches, and nav_arriving rejects bottom-sheet frames, so neither of the two rules that already masked `arriving_at_title` covers it. The node is id-BEARING, so the id-less name/address entries elsewhere in this block structurally cannot reach it (`hasNoId` conjunct). Whole token, no normalize — it is a customer ADDRESS on every dropoff-phase surface (see dropoff_navigation for the full reasoning). Inert on any frame without the node; `DropoffBannerRedactParityTest` pins that EVERY rule in this file carries it, so a new dropoff surface cannot forget.",
+          "find": {
+            "hasIdSuffix": "arriving_at_title"
+          }
+        },
+        {
           "find": {
             "hasTextStartsWith": "Deliver to door of"
           },
@@ -241,6 +247,12 @@
       "comment": "#598 F1: the customer instruction fields on this screen are all id-less free text — the handoff summary, a free-form delivery note (gate codes, custom directions), and the unit line ('Apt/Suite <n>'). None have a stable id or prefix, so the only complete mask is all id-less text (the require anchors — drop_off_workflow_host_fragment + the 'photo of drop-off' step_title — are id-bearing, so recognition on replay is unchanged). The 'Apt/Suite ' label is preserved for debug context; the standard handoff summary and any structural counters are masked too (accepted, capture-only).",
       "redact": [
         {
+          "comment": "#993 belt (the FIX 3 precedent): this dropoff-phase surface can win a frame that STILL carries DoorDash's nav arrival banner — `dropoff_navigation`'s own reject (Continue / Complete Delivery / Mark as delivered / complete_delivery_steps_button) hands the arrival-MOMENT frame to whichever arrived-phase rule matches, and nav_arriving rejects bottom-sheet frames, so neither of the two rules that already masked `arriving_at_title` covers it. The node is id-BEARING, so the id-less name/address entries elsewhere in this block structurally cannot reach it (`hasNoId` conjunct). Whole token, no normalize — it is a customer ADDRESS on every dropoff-phase surface (see dropoff_navigation for the full reasoning). Inert on any frame without the node; `DropoffBannerRedactParityTest` pins that EVERY rule in this file carries it, so a new dropoff surface cannot forget.",
+          "find": {
+            "hasIdSuffix": "arriving_at_title"
+          }
+        },
+        {
           "find": {
             "hasTextStartsWith": "Apt/Suite"
           },
@@ -277,6 +289,12 @@
       "priority": 63,
       "comment": "#803: the id-less delivery-instructions body on this PIN-collect surface carried a customer full name + residence gate code + PIN past EVERY redaction layer — id-less (no viewId predicate), embedded mid-body (no whole-value name/marker match). The rule predicate vocabulary is per-node only (no sibling/parent relation), so the id-less free-text body cannot be isolated by STRUCTURE alone. These CONTENT-shape predicates instead mask the WHOLE offending node whenever it carries a gate code / PIN / address / whole-value name: a gate-code OR PIN fragment masks the entire body (embedded name included), which closes the FIELDED leak at the runtime capture edge. A bare embedded name with NO other PII anchor is the documented residual (the test-side pin keyword + SnapshotSecurityScanner shape + the #806 UNKNOWN CustomerTextMarkers path are the complementary controls). Mirrors dropoff_handoff's id-less shape set + the shared FIRST_LAST_INITIAL SSOT. Capture-only: never affects recognition/parse (this rule has no parse block; goldens unchanged).",
       "redact": [
+        {
+          "comment": "#993 belt (the FIX 3 precedent): this dropoff-phase surface can win a frame that STILL carries DoorDash's nav arrival banner — `dropoff_navigation`'s own reject (Continue / Complete Delivery / Mark as delivered / complete_delivery_steps_button) hands the arrival-MOMENT frame to whichever arrived-phase rule matches, and nav_arriving rejects bottom-sheet frames, so neither of the two rules that already masked `arriving_at_title` covers it. The node is id-BEARING, so the id-less name/address entries elsewhere in this block structurally cannot reach it (`hasNoId` conjunct). Whole token, no normalize — it is a customer ADDRESS on every dropoff-phase surface (see dropoff_navigation for the full reasoning). Inert on any frame without the node; `DropoffBannerRedactParityTest` pins that EVERY rule in this file carries it, so a new dropoff surface cannot forget.",
+          "find": {
+            "hasIdSuffix": "arriving_at_title"
+          }
+        },
         {
           "find": {
             "hasIdSuffix": "step_description"
@@ -406,6 +424,12 @@
       "comment": "#795: the 'Enter PIN' 4-digit keypad MODAL of the PIN-required delivery confirmation sub-flow — distinct from dropoff_pin_entry, which is the 'Collect PIN from customer' STEP card, and matched by neither its 'collect pin from customer' nor 'ask the customer for the unique' anchor. RECOGNIZE-ONLY (no state.flow, no parse — mirrors dropoff_multi_order_confirm / pickup_wait_survey): the delivery already completes via the generic dropoff path and this transient sheet is a confirmation, not a lifecycle anchor, so recognizing it only graduates the frame out of UNKNOWN without any phase perturbation (and avoids a #603-class false-arrival off a sheet the dasher can open before arriving). Priority is behaviorally inert — the anchors ('Enter PIN' exact + the 'Before dropping off the order' body, both corpus-unique) match no other rule; 109 is simply the first free value across ALL doordash screen rules (51-108 are dense). PRIVACY (#795 Pledge): the entered PIN renders as raw node text — an id-less EditText carries the whole PIN and each pressed digit is echoed in its own id-less TextView. The redact masks every pure-digit id-less node to a PLAIN '[redacted]' (plainMask) — NOT the '[redacted:<4hex>]' distinctness form, because a 4-digit PIN (10 000 values) is reversible from 4 hex (65 536 buckets, mostly injective over so small a space). The PIN is never parsed/stored (no parse block); capture-only, goldens unaffected by the redact.",
       "redact": [
         {
+          "comment": "#993 belt (the FIX 3 precedent): this dropoff-phase surface can win a frame that STILL carries DoorDash's nav arrival banner — `dropoff_navigation`'s own reject (Continue / Complete Delivery / Mark as delivered / complete_delivery_steps_button) hands the arrival-MOMENT frame to whichever arrived-phase rule matches, and nav_arriving rejects bottom-sheet frames, so neither of the two rules that already masked `arriving_at_title` covers it. The node is id-BEARING, so the id-less name/address entries elsewhere in this block structurally cannot reach it (`hasNoId` conjunct). Whole token, no normalize — it is a customer ADDRESS on every dropoff-phase surface (see dropoff_navigation for the full reasoning). Inert on any frame without the node; `DropoffBannerRedactParityTest` pins that EVERY rule in this file carries it, so a new dropoff surface cannot forget.",
+          "find": {
+            "hasIdSuffix": "arriving_at_title"
+          }
+        },
+        {
           "comment": "#795: mask the entered PIN — the whole-PIN EditText and each echoed single-digit TextView are id-less pure-digit nodes. plainMask drops the distinctness hash (a bounded PIN is recoverable from 4 hex). The rule's require anchors are non-digit text nodes, so masking these leaves replay recognition unchanged.",
           "find": {
             "all": [
@@ -443,7 +467,15 @@
     {
       "id": "doordash.screen.dropoff_pin_intro",
       "priority": 112,
-      "comment": "#795: the informational bottom sheet that precedes the PIN keypad — 'You'll need a PIN from the customer to confirm delivery' + 'To protect your Dasher rating...'. RECOGNIZE-ONLY (no state.flow, no parse — mirrors dropoff_multi_order_confirm): a pre-arrival advisory sheet, not a lifecycle anchor; recognizing it only graduates the frame out of UNKNOWN. NO redact — the sheet carries only generic DoorDash copy, no customer name/address/PIN (verified against both captured frames, text and contentDescription). Anchors are corpus-unique; 112 is the next free screen priority after 109 (behaviorally inert).",
+      "redact": [
+        {
+          "comment": "#993 belt (the FIX 3 precedent): this dropoff-phase surface can win a frame that STILL carries DoorDash's nav arrival banner — `dropoff_navigation`'s own reject (Continue / Complete Delivery / Mark as delivered / complete_delivery_steps_button) hands the arrival-MOMENT frame to whichever arrived-phase rule matches, and nav_arriving rejects bottom-sheet frames, so neither of the two rules that already masked `arriving_at_title` covers it. The node is id-BEARING, so the id-less name/address entries elsewhere in this block structurally cannot reach it (`hasNoId` conjunct). Whole token, no normalize — it is a customer ADDRESS on every dropoff-phase surface (see dropoff_navigation for the full reasoning). Inert on any frame without the node; `DropoffBannerRedactParityTest` pins that EVERY rule in this file carries it, so a new dropoff surface cannot forget.",
+          "find": {
+            "hasIdSuffix": "arriving_at_title"
+          }
+        }
+      ],
+      "comment": "#795: the informational bottom sheet that precedes the PIN keypad — 'You'll need a PIN from the customer to confirm delivery' + 'To protect your Dasher rating...'. RECOGNIZE-ONLY (no state.flow, no parse — mirrors dropoff_multi_order_confirm): a pre-arrival advisory sheet, not a lifecycle anchor; recognizing it only graduates the frame out of UNKNOWN. The sheet's OWN copy needs no mask — it carries only generic DoorDash text, no customer name/address/PIN (verified against both captured frames, text and contentDescription); its single redact entry is the #993 nav-banner belt, which is inert on any frame that does not carry the banner. Anchors are corpus-unique; 112 is the next free screen priority after 109 (behaviorally inert).",
       "require": {
         "all": [
           {
@@ -464,6 +496,12 @@
       "comment": "#603: the 'hand it to customer' instruction is present the ENTIRE drive (en-route AND at-door), so keying on it alone fired a FALSE task:dropoff:arrived the moment nav started. The completion CTA ('Continue'/'Complete Delivery'/'Mark as delivered'/complete_delivery_steps_button) only appears once the dasher is actually at the door, so it is the real arrival discriminator. The en-route workflow-sheet frame (which lacks the CTA) then falls through to dropoff_pre_arrival (priority 73). KEEP THIS CTA SET IN SYNC with dropoff_navigation's reject and dropoff_pre_arrival_completion's require — all three describe the same 'delivery can be completed now' signal.",
       "priority": 64,
       "redact": [
+        {
+          "comment": "#993 belt (the FIX 3 precedent): this dropoff-phase surface can win a frame that STILL carries DoorDash's nav arrival banner — `dropoff_navigation`'s own reject (Continue / Complete Delivery / Mark as delivered / complete_delivery_steps_button) hands the arrival-MOMENT frame to whichever arrived-phase rule matches, and nav_arriving rejects bottom-sheet frames, so neither of the two rules that already masked `arriving_at_title` covers it. The node is id-BEARING, so the id-less name/address entries elsewhere in this block structurally cannot reach it (`hasNoId` conjunct). Whole token, no normalize — it is a customer ADDRESS on every dropoff-phase surface (see dropoff_navigation for the full reasoning). Inert on any frame without the node; `DropoffBannerRedactParityTest` pins that EVERY rule in this file carries it, so a new dropoff surface cannot forget.",
+          "find": {
+            "hasIdSuffix": "arriving_at_title"
+          }
+        },
         {
           "comment": "#803: same id-less instructions-body class as dropoff_pin_entry — mask the id-bearing step_description node and any node carrying a gate code / PIN fragment (masks the whole body, embedded name included). The rest of this block already handles the id-less address/name/quoted-note shapes.",
           "find": {
@@ -622,6 +660,14 @@
     {
       "id": "doordash.screen.dropoff_completed_confirm",
       "priority": 65,
+      "redact": [
+        {
+          "comment": "#993 belt (the FIX 3 precedent): this dropoff-phase surface can win a frame that STILL carries DoorDash's nav arrival banner — `dropoff_navigation`'s own reject (Continue / Complete Delivery / Mark as delivered / complete_delivery_steps_button) hands the arrival-MOMENT frame to whichever arrived-phase rule matches, and nav_arriving rejects bottom-sheet frames, so neither of the two rules that already masked `arriving_at_title` covers it. The node is id-BEARING, so the id-less name/address entries elsewhere in this block structurally cannot reach it (`hasNoId` conjunct). Whole token, no normalize — it is a customer ADDRESS on every dropoff-phase surface (see dropoff_navigation for the full reasoning). Inert on any frame without the node; `DropoffBannerRedactParityTest` pins that EVERY rule in this file carries it, so a new dropoff surface cannot forget.",
+          "find": {
+            "hasIdSuffix": "arriving_at_title"
+          }
+        }
+      ],
       "state": {
         "flow": "task:dropoff:arrived"
       },
@@ -643,6 +689,12 @@
       "id": "doordash.screen.dropoff_multi_order_confirm",
       "priority": 77,
       "redact": [
+        {
+          "comment": "#993 belt (the FIX 3 precedent): this dropoff-phase surface can win a frame that STILL carries DoorDash's nav arrival banner — `dropoff_navigation`'s own reject (Continue / Complete Delivery / Mark as delivered / complete_delivery_steps_button) hands the arrival-MOMENT frame to whichever arrived-phase rule matches, and nav_arriving rejects bottom-sheet frames, so neither of the two rules that already masked `arriving_at_title` covers it. The node is id-BEARING, so the id-less name/address entries elsewhere in this block structurally cannot reach it (`hasNoId` conjunct). Whole token, no normalize — it is a customer ADDRESS on every dropoff-phase surface (see dropoff_navigation for the full reasoning). Inert on any frame without the node; `DropoffBannerRedactParityTest` pins that EVERY rule in this file carries it, so a new dropoff surface cannot forget.",
+          "find": {
+            "hasIdSuffix": "arriving_at_title"
+          }
+        },
         {
           "comment": "The id-less first-name + last-initial customer name. Whole-value anchored (^...$, whitespace-tolerant so a trailing space still masks) so it masks ONLY the bare name node, never the multi-word merchant anchor, the zone code, a count, or the 'Confirm ...'/'Mix-ups ...' copy. Char classes cover accented/Unicode letters (José, Muñoz), interior capitals (McKenna), hyphenated first names (Mary-Jo), and apostrophes (O'Brien, D'Angelo); every quantifier is bounded ({0,20}/{0,3}/{0,8}/{1,4}) so RegexSafety's ReDoS guard accepts it. Compiled IGNORE_CASE (all rule regexes are), so 'JOSE G' masks too. SSOT with SnapshotRedactor.FIRST_LAST_INITIAL_PATTERN. #885: the token SEPARATOR is `\\s{1,4}`, not a literal space — the 07-26 field render was 'Firstname  L.' with a DOUBLE space, which the old single-space separator did not match, so this entry existed but never fired and a raw customer name reached the recognized envelope. `normalize: customerName` (#733) canonicalizes the token before the <4hex> distinctness hash, so this card's mask hex equals the same customer's mask on 'Deliver to <name>' surfaces AND the persisted customerNameHash — one customer, one mask, across every surface form.",
           "find": {
@@ -677,6 +729,12 @@
       "id": "doordash.screen.dropoff_pre_arrival",
       "priority": 73,
       "redact": [
+        {
+          "comment": "#993 belt (the FIX 3 precedent): this dropoff-phase surface can win a frame that STILL carries DoorDash's nav arrival banner — `dropoff_navigation`'s own reject (Continue / Complete Delivery / Mark as delivered / complete_delivery_steps_button) hands the arrival-MOMENT frame to whichever arrived-phase rule matches, and nav_arriving rejects bottom-sheet frames, so neither of the two rules that already masked `arriving_at_title` covers it. The node is id-BEARING, so the id-less name/address entries elsewhere in this block structurally cannot reach it (`hasNoId` conjunct). Whole token, no normalize — it is a customer ADDRESS on every dropoff-phase surface (see dropoff_navigation for the full reasoning). Inert on any frame without the node; `DropoffBannerRedactParityTest` pins that EVERY rule in this file carries it, so a new dropoff surface cannot forget.",
+          "find": {
+            "hasIdSuffix": "arriving_at_title"
+          }
+        },
         {
           "find": {
             "any": [
@@ -1025,6 +1083,12 @@
       "priority": 74,
       "redact": [
         {
+          "comment": "#993 belt (the FIX 3 precedent): this dropoff-phase surface can win a frame that STILL carries DoorDash's nav arrival banner — `dropoff_navigation`'s own reject (Continue / Complete Delivery / Mark as delivered / complete_delivery_steps_button) hands the arrival-MOMENT frame to whichever arrived-phase rule matches, and nav_arriving rejects bottom-sheet frames, so neither of the two rules that already masked `arriving_at_title` covers it. The node is id-BEARING, so the id-less name/address entries elsewhere in this block structurally cannot reach it (`hasNoId` conjunct). Whole token, no normalize — it is a customer ADDRESS on every dropoff-phase surface (see dropoff_navigation for the full reasoning). Inert on any frame without the node; `DropoffBannerRedactParityTest` pins that EVERY rule in this file carries it, so a new dropoff surface cannot forget.",
+          "find": {
+            "hasIdSuffix": "arriving_at_title"
+          }
+        },
+        {
           "find": {
             "any": [
               {
@@ -1236,6 +1300,12 @@
       "priority": 84,
       "redact": [
         {
+          "comment": "#993 belt (the FIX 3 precedent): this dropoff-phase surface can win a frame that STILL carries DoorDash's nav arrival banner — `dropoff_navigation`'s own reject (Continue / Complete Delivery / Mark as delivered / complete_delivery_steps_button) hands the arrival-MOMENT frame to whichever arrived-phase rule matches, and nav_arriving rejects bottom-sheet frames, so neither of the two rules that already masked `arriving_at_title` covers it. The node is id-BEARING, so the id-less name/address entries elsewhere in this block structurally cannot reach it (`hasNoId` conjunct). Whole token, no normalize — it is a customer ADDRESS on every dropoff-phase surface (see dropoff_navigation for the full reasoning). Inert on any frame without the node; `DropoffBannerRedactParityTest` pins that EVERY rule in this file carries it, so a new dropoff surface cannot forget.",
+          "find": {
+            "hasIdSuffix": "arriving_at_title"
+          }
+        },
+        {
           "find": {
             "hasIdSuffix": "address_line_1"
           }
@@ -1273,6 +1343,14 @@
     {
       "id": "doordash.screen.delivery_summary_expanded",
       "priority": 30,
+      "redact": [
+        {
+          "comment": "#993 belt (the FIX 3 precedent): this dropoff-phase surface can win a frame that STILL carries DoorDash's nav arrival banner — `dropoff_navigation`'s own reject (Continue / Complete Delivery / Mark as delivered / complete_delivery_steps_button) hands the arrival-MOMENT frame to whichever arrived-phase rule matches, and nav_arriving rejects bottom-sheet frames, so neither of the two rules that already masked `arriving_at_title` covers it. The node is id-BEARING, so the id-less name/address entries elsewhere in this block structurally cannot reach it (`hasNoId` conjunct). Whole token, no normalize — it is a customer ADDRESS on every dropoff-phase surface (see dropoff_navigation for the full reasoning). Inert on any frame without the node; `DropoffBannerRedactParityTest` pins that EVERY rule in this file carries it, so a new dropoff surface cannot forget.",
+          "find": {
+            "hasIdSuffix": "arriving_at_title"
+          }
+        }
+      ],
       "state": {
         "flow": "post:task",
         "modeHint": "online"
@@ -1394,6 +1472,12 @@
       "id": "doordash.screen.delivery_summary_collapsed",
       "priority": 31,
       "redact": [
+        {
+          "comment": "#993 belt (the FIX 3 precedent): this dropoff-phase surface can win a frame that STILL carries DoorDash's nav arrival banner — `dropoff_navigation`'s own reject (Continue / Complete Delivery / Mark as delivered / complete_delivery_steps_button) hands the arrival-MOMENT frame to whichever arrived-phase rule matches, and nav_arriving rejects bottom-sheet frames, so neither of the two rules that already masked `arriving_at_title` covers it. The node is id-BEARING, so the id-less name/address entries elsewhere in this block structurally cannot reach it (`hasNoId` conjunct). Whole token, no normalize — it is a customer ADDRESS on every dropoff-phase surface (see dropoff_navigation for the full reasoning). Inert on any frame without the node; `DropoffBannerRedactParityTest` pins that EVERY rule in this file carries it, so a new dropoff surface cannot forget.",
+          "find": {
+            "hasIdSuffix": "arriving_at_title"
+          }
+        },
         {
           "comment": "#910 V1 — this rule shipped with NO redact block and it is the HIGHEST-severity site of the 07-29 pull: 4 of the 8 fielded `delivery_summary_collapsed` envelopes are not the pay-breakdown card at all but the DROP-OFF card (the require is a text-only `allTextContainsAny:['this offer','delivery complete']`, which a live drop-off sheet satisfies), so they carry the full customer block — `user_name`, `address_line_1` (house number + street), `address_line_2` (city/ST/ZIP), the dasher instruction body and the customer's per-item note — all raw on a RECOGNIZED envelope. `CustomerTextMarkers` cannot own any of it: DoorDash renders this block as SPLIT nodes (the 'Delivery for' lead-in is its own `user_name_label` sibling), so the name/address nodes are BARE and a text-prefix scan is structurally blind to them. The entries below are the `dropoff_pre_arrival` (priority 73) id set — the same ids, the same masks — so one customer redacts to one hex everywhere. Capture-only: this rule parses none of these nodes, so the parse goldens are byte-identical. Genuine summary frames (the committed corpus) carry none of these ids, so the block is inert there. Deliberately NOT redacted: `order_contents_header_title` (the merchant — driver-owned, not PII), `order_item_name` (catalog item), and every pay node.",
           "find": {
@@ -1563,6 +1647,14 @@
     {
       "id": "doordash.screen.dropoff_alcohol_id_intro",
       "priority": 68,
+      "redact": [
+        {
+          "comment": "#993 belt (the FIX 3 precedent): this dropoff-phase surface can win a frame that STILL carries DoorDash's nav arrival banner — `dropoff_navigation`'s own reject (Continue / Complete Delivery / Mark as delivered / complete_delivery_steps_button) hands the arrival-MOMENT frame to whichever arrived-phase rule matches, and nav_arriving rejects bottom-sheet frames, so neither of the two rules that already masked `arriving_at_title` covers it. The node is id-BEARING, so the id-less name/address entries elsewhere in this block structurally cannot reach it (`hasNoId` conjunct). Whole token, no normalize — it is a customer ADDRESS on every dropoff-phase surface (see dropoff_navigation for the full reasoning). Inert on any frame without the node; `DropoffBannerRedactParityTest` pins that EVERY rule in this file carries it, so a new dropoff surface cannot forget.",
+          "find": {
+            "hasIdSuffix": "arriving_at_title"
+          }
+        }
+      ],
       "state": {
         "flow": "task:dropoff:navigation"
       },
@@ -1591,6 +1683,14 @@
     {
       "id": "doordash.screen.dropoff_alcohol_id_scan",
       "priority": 67,
+      "redact": [
+        {
+          "comment": "#993 belt (the FIX 3 precedent): this dropoff-phase surface can win a frame that STILL carries DoorDash's nav arrival banner — `dropoff_navigation`'s own reject (Continue / Complete Delivery / Mark as delivered / complete_delivery_steps_button) hands the arrival-MOMENT frame to whichever arrived-phase rule matches, and nav_arriving rejects bottom-sheet frames, so neither of the two rules that already masked `arriving_at_title` covers it. The node is id-BEARING, so the id-less name/address entries elsewhere in this block structurally cannot reach it (`hasNoId` conjunct). Whole token, no normalize — it is a customer ADDRESS on every dropoff-phase surface (see dropoff_navigation for the full reasoning). Inert on any frame without the node; `DropoffBannerRedactParityTest` pins that EVERY rule in this file carries it, so a new dropoff surface cannot forget.",
+          "find": {
+            "hasIdSuffix": "arriving_at_title"
+          }
+        }
+      ],
       "state": {
         "flow": "task:dropoff:arrived"
       },
@@ -1613,6 +1713,14 @@
       "comment": "Alcohol ID-verify instruction CHECKLIST — no recipient PII, no capture surface, so it is recognized as a flow step (deliberately distinct from the priority-0 sensitive id-verification capture screens, #463).",
       "id": "doordash.screen.alcohol_verify_checklist",
       "priority": 54,
+      "redact": [
+        {
+          "comment": "#993 belt (the FIX 3 precedent): this dropoff-phase surface can win a frame that STILL carries DoorDash's nav arrival banner — `dropoff_navigation`'s own reject (Continue / Complete Delivery / Mark as delivered / complete_delivery_steps_button) hands the arrival-MOMENT frame to whichever arrived-phase rule matches, and nav_arriving rejects bottom-sheet frames, so neither of the two rules that already masked `arriving_at_title` covers it. The node is id-BEARING, so the id-less name/address entries elsewhere in this block structurally cannot reach it (`hasNoId` conjunct). Whole token, no normalize — it is a customer ADDRESS on every dropoff-phase surface (see dropoff_navigation for the full reasoning). Inert on any frame without the node; `DropoffBannerRedactParityTest` pins that EVERY rule in this file carries it, so a new dropoff surface cannot forget.",
+          "find": {
+            "hasIdSuffix": "arriving_at_title"
+          }
+        }
+      ],
       "require": {
         "all": [
           {
@@ -1632,6 +1740,14 @@
       "comment": "Alcohol ID-CHECK instruction screen (step 2 of 4) — the dasher visually verifies the recipient's ID matches and they aren't intoxicated. Instruction text only (NO recipient PII, NO document image), so it is recognized as a flow step, not blocked. Keyed on the recipient-specific text so it can't match a dasher's own identity screen (#463 reversal).",
       "id": "doordash.screen.alcohol_id_check",
       "priority": 55,
+      "redact": [
+        {
+          "comment": "#993 belt (the FIX 3 precedent): this dropoff-phase surface can win a frame that STILL carries DoorDash's nav arrival banner — `dropoff_navigation`'s own reject (Continue / Complete Delivery / Mark as delivered / complete_delivery_steps_button) hands the arrival-MOMENT frame to whichever arrived-phase rule matches, and nav_arriving rejects bottom-sheet frames, so neither of the two rules that already masked `arriving_at_title` covers it. The node is id-BEARING, so the id-less name/address entries elsewhere in this block structurally cannot reach it (`hasNoId` conjunct). Whole token, no normalize — it is a customer ADDRESS on every dropoff-phase surface (see dropoff_navigation for the full reasoning). Inert on any frame without the node; `DropoffBannerRedactParityTest` pins that EVERY rule in this file carries it, so a new dropoff surface cannot forget.",
+          "find": {
+            "hasIdSuffix": "arriving_at_title"
+          }
+        }
+      ],
       "require": {
         "all": [
           {
@@ -1658,6 +1774,14 @@
       "comment": "Alcohol verification complete (step 4 of 4) — non-sensitive completion prompt.",
       "id": "doordash.screen.alcohol_verify_complete",
       "priority": 56,
+      "redact": [
+        {
+          "comment": "#993 belt (the FIX 3 precedent): this dropoff-phase surface can win a frame that STILL carries DoorDash's nav arrival banner — `dropoff_navigation`'s own reject (Continue / Complete Delivery / Mark as delivered / complete_delivery_steps_button) hands the arrival-MOMENT frame to whichever arrived-phase rule matches, and nav_arriving rejects bottom-sheet frames, so neither of the two rules that already masked `arriving_at_title` covers it. The node is id-BEARING, so the id-less name/address entries elsewhere in this block structurally cannot reach it (`hasNoId` conjunct). Whole token, no normalize — it is a customer ADDRESS on every dropoff-phase surface (see dropoff_navigation for the full reasoning). Inert on any frame without the node; `DropoffBannerRedactParityTest` pins that EVERY rule in this file carries it, so a new dropoff surface cannot forget.",
+          "find": {
+            "hasIdSuffix": "arriving_at_title"
+          }
+        }
+      ],
       "require": {
         "all": [
           {
@@ -1677,6 +1801,14 @@
       "comment": "#796 — DoorDash 'Drop-off issues' help/resolution MENU (opened from the in-dropoff Help action: a 'Drop-off issues' title over two options, 'Reached drop-off location' and 'Have not reached drop-off location'). RECOGNIZE-ONLY (dev decision 2026-07-17, recognition-gap batch #796): no state.flow, no parse — a transient help overlay opened over an already-established task:dropoff flow, not a lifecycle anchor, so recognizing it only graduates the recurring UNKNOWN capture with no risk of perturbing task lineage. Anchors are corpus-unique (grep of app/src/test/resources/snapshots shows 0 other frames carry 'Drop-off issues' or 'Have not reached drop-off location'), so priority is behaviorally inert. PRIVACY: the menu frames carry no customer PII (option labels only); the sibling resolution screen that DOES carry a name is doordash.screen.dropoff_issue_resolution, which redacts it.",
       "id": "doordash.screen.dropoff_issue_menu",
       "priority": 113,
+      "redact": [
+        {
+          "comment": "#993 belt (the FIX 3 precedent): this dropoff-phase surface can win a frame that STILL carries DoorDash's nav arrival banner — `dropoff_navigation`'s own reject (Continue / Complete Delivery / Mark as delivered / complete_delivery_steps_button) hands the arrival-MOMENT frame to whichever arrived-phase rule matches, and nav_arriving rejects bottom-sheet frames, so neither of the two rules that already masked `arriving_at_title` covers it. The node is id-BEARING, so the id-less name/address entries elsewhere in this block structurally cannot reach it (`hasNoId` conjunct). Whole token, no normalize — it is a customer ADDRESS on every dropoff-phase surface (see dropoff_navigation for the full reasoning). Inert on any frame without the node; `DropoffBannerRedactParityTest` pins that EVERY rule in this file carries it, so a new dropoff surface cannot forget.",
+          "find": {
+            "hasIdSuffix": "arriving_at_title"
+          }
+        }
+      ],
       "require": {
         "all": [
           {
@@ -1698,6 +1830,12 @@
       "priority": 114,
       "redact": [
         {
+          "comment": "#993 belt (the FIX 3 precedent): this dropoff-phase surface can win a frame that STILL carries DoorDash's nav arrival banner — `dropoff_navigation`'s own reject (Continue / Complete Delivery / Mark as delivered / complete_delivery_steps_button) hands the arrival-MOMENT frame to whichever arrived-phase rule matches, and nav_arriving rejects bottom-sheet frames, so neither of the two rules that already masked `arriving_at_title` covers it. The node is id-BEARING, so the id-less name/address entries elsewhere in this block structurally cannot reach it (`hasNoId` conjunct). Whole token, no normalize — it is a customer ADDRESS on every dropoff-phase surface (see dropoff_navigation for the full reasoning). Inert on any frame without the node; `DropoffBannerRedactParityTest` pins that EVERY rule in this file carries it, so a new dropoff surface cannot forget.",
+          "find": {
+            "hasIdSuffix": "arriving_at_title"
+          }
+        },
+        {
           "comment": "The id-less fused 'For <FirstName L> • <store>' attribution line. hasTextStartsWith 'For ' targets only this node on this screen (no reason label or button starts with 'For '); keepPrefix keeps the literal 'For ' so replay recognition is unchanged, and everything after it (name + store) is masked to a single [redacted:<4hex>] token.",
           "find": {
             "hasTextStartsWith": "For "
@@ -1718,6 +1856,14 @@
       "comment": "#888 — the generic drop-off HELP sheet reached from the geofence-warning card's 'I need help' ('Help' title over 'Tell us what happened and we'll help you find the right resolution.' and a help_menu_item list: 'I delivered the order' / 'Provided address or map pin is wrong' / 'Bad GPS signal or app issue at drop-off' / …). RECOGNIZE-ONLY (dev decision 2026-07-27, recognition-gap batch #888): no state.flow, no parse — a transient help overlay over an established task:dropoff flow, exactly the posture dropoff_issue_menu (#796) already sets for the sibling 'Drop-off issues' menu. This is a DIFFERENT sheet from that one (different title, different id family, different option set), hence a separate rule rather than a branch. Anchors: the generic intro copy — matched WITHOUT its typographic apostrophe ('help you find the right resolution', so the U+2019 in \"we'll\" can never break the match) — paired with a help_menu_item node naming drop-off, which keeps the rule off any pickup-side help sheet reusing the same ids. Corpus-unique (0 other snapshots or pull frames). PRIVACY: no customer PII — every node is a fixed option label; the sheet names no customer, address, or store.",
       "id": "doordash.screen.dropoff_help_menu",
       "priority": 133,
+      "redact": [
+        {
+          "comment": "#993 belt (the FIX 3 precedent): this dropoff-phase surface can win a frame that STILL carries DoorDash's nav arrival banner — `dropoff_navigation`'s own reject (Continue / Complete Delivery / Mark as delivered / complete_delivery_steps_button) hands the arrival-MOMENT frame to whichever arrived-phase rule matches, and nav_arriving rejects bottom-sheet frames, so neither of the two rules that already masked `arriving_at_title` covers it. The node is id-BEARING, so the id-less name/address entries elsewhere in this block structurally cannot reach it (`hasNoId` conjunct). Whole token, no normalize — it is a customer ADDRESS on every dropoff-phase surface (see dropoff_navigation for the full reasoning). Inert on any frame without the node; `DropoffBannerRedactParityTest` pins that EVERY rule in this file carries it, so a new dropoff surface cannot forget.",
+          "find": {
+            "hasIdSuffix": "arriving_at_title"
+          }
+        }
+      ],
       "require": {
         "all": [
           {
@@ -1744,6 +1890,14 @@
       "comment": "#888 — the acknowledgement sheet that closes the drop-off help flow ('Continue to complete delivery' title over 'Thanks for letting us know. Continue to complete the delivery as per the customer's instructions.' + a 'Continue to delivery steps' button). RECOGNIZE-ONLY (dev decision 2026-07-27, batch #888): no state.flow, no parse — it acknowledges and returns the dasher to the drop-off steps that already own the flow. Anchored on the exact prism_sheet_title copy plus the button label; both are generic DoorDash chrome and corpus-unique (0 other snapshots or pull frames). PRIVACY: no customer PII — the body says \"the customer's instructions\" generically and quotes none of them.",
       "id": "doordash.screen.dropoff_continue_to_complete",
       "priority": 134,
+      "redact": [
+        {
+          "comment": "#993 belt (the FIX 3 precedent): this dropoff-phase surface can win a frame that STILL carries DoorDash's nav arrival banner — `dropoff_navigation`'s own reject (Continue / Complete Delivery / Mark as delivered / complete_delivery_steps_button) hands the arrival-MOMENT frame to whichever arrived-phase rule matches, and nav_arriving rejects bottom-sheet frames, so neither of the two rules that already masked `arriving_at_title` covers it. The node is id-BEARING, so the id-less name/address entries elsewhere in this block structurally cannot reach it (`hasNoId` conjunct). Whole token, no normalize — it is a customer ADDRESS on every dropoff-phase surface (see dropoff_navigation for the full reasoning). Inert on any frame without the node; `DropoffBannerRedactParityTest` pins that EVERY rule in this file carries it, so a new dropoff surface cannot forget.",
+          "find": {
+            "hasIdSuffix": "arriving_at_title"
+          }
+        }
+      ],
       "require": {
         "all": [
           {
@@ -1770,6 +1924,14 @@
       "comment": "#888 — the hand-it-to-customer attestation sheet ('Confirm you handed order directly to customer' / 'We will verify with the customer if the order was delivered. If you haven't directly handed them the order, go back and follow the steps.' over Confirm to complete delivery / Go back), the last gate on a hand-to-customer drop. RECOGNIZE-ONLY (dev decision 2026-07-27, batch #888) — task-lifecycle-ADJACENT but deliberately claiming no phase: it is a confirmation modal over an already-established task:dropoff:arrived flow, and the completion edge is owned by the frames that follow it (dropoff_completed_confirm / the delivery receipt). Claiming a phase from a modal is how a mis-anchored dialog perturbs task lineage; the repo's standing posture for this exact shape is recognize-only (dropoff_multi_order_confirm, the whole #796 batch). Anchors are the two id-LESS body/button strings — both fixed DoorDash copy, no merchant or customer literal — and are corpus-unique (0 other snapshots or pull frames). PRIVACY: no customer PII — the copy says 'customer'/'them' and names nobody; no address, gate code, or order detail is on the sheet.",
       "id": "doordash.screen.dropoff_handed_directly_confirm",
       "priority": 136,
+      "redact": [
+        {
+          "comment": "#993 belt (the FIX 3 precedent): this dropoff-phase surface can win a frame that STILL carries DoorDash's nav arrival banner — `dropoff_navigation`'s own reject (Continue / Complete Delivery / Mark as delivered / complete_delivery_steps_button) hands the arrival-MOMENT frame to whichever arrived-phase rule matches, and nav_arriving rejects bottom-sheet frames, so neither of the two rules that already masked `arriving_at_title` covers it. The node is id-BEARING, so the id-less name/address entries elsewhere in this block structurally cannot reach it (`hasNoId` conjunct). Whole token, no normalize — it is a customer ADDRESS on every dropoff-phase surface (see dropoff_navigation for the full reasoning). Inert on any frame without the node; `DropoffBannerRedactParityTest` pins that EVERY rule in this file carries it, so a new dropoff surface cannot forget.",
+          "find": {
+            "hasIdSuffix": "arriving_at_title"
+          }
+        }
+      ],
       "require": {
         "all": [
           {

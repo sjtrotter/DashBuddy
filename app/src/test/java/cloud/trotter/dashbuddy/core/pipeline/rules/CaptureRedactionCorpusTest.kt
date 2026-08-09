@@ -1,8 +1,10 @@
 package cloud.trotter.dashbuddy.core.pipeline.rules
 
+import cloud.trotter.dashbuddy.core.pipeline.CustomerTextMarkers
 import cloud.trotter.dashbuddy.domain.capture.schema.UiNodeSchema
 import cloud.trotter.dashbuddy.domain.model.accessibility.UiNode
 import cloud.trotter.dashbuddy.domain.model.notification.RawNotificationData
+import cloud.trotter.dashbuddy.test.util.CorpusDecoys
 import cloud.trotter.dashbuddy.test.util.SnapshotRedactor
 import cloud.trotter.dashbuddy.test.util.TestResourceLoader
 import cloud.trotter.dashbuddy.test.util.TestRulesetFactory
@@ -30,6 +32,44 @@ class CaptureRedactionCorpusTest {
 
     private fun serialize(tree: UiNode): String = UiNodeSchema.serialize(tree)
 
+    companion object {
+        /**
+         * The `[redacted:<4hex>]` distinctness-mask token — **ONE spelling** for the whole file.
+         *
+         * This used to be hand-copied at ~35 sites in two divergent spellings (`…{4}\]` and
+         * `…{4}]`) with three separate local hex extractors. That is a live hazard, not just
+         * duplication: several assertions here are NEGATIVE (`assertFalse(MASK_HEX…)` — #920 pins
+         * that a customer note must NOT carry the hash suffix), and a negative assertion backed by
+         * a subtly-wrong private regex passes **vacuously**. With one constant shared by the
+         * positive and negative assertions, every negative is guarded by the positives that prove
+         * the same regex matches a real mask.
+         *
+         * Group 1 is the hex, so the same constant serves matching and extraction.
+         */
+        val MASK_HEX = Regex("""\[redacted:([0-9a-f]{4})]""")
+
+        /** [MASK_HEX] anchored to the WHOLE value — the node was masked entirely, no lead-in kept. */
+        val WHOLE_MASK_HEX = Regex("""^\[redacted:([0-9a-f]{4})]$""")
+
+        /** The plain, hash-less `[redacted]` mask (#795 `plainMask` / the #362 fail-closed form). */
+        val PLAIN_MASK = Regex("""\[redacted]""")
+
+        /** [MASK_HEX] preceded by a kept `keepPrefix` lead-in, e.g. `Deliver to [redacted:ab12]`. */
+        fun maskAfter(prefix: String) = Regex(Regex.escape(prefix) + MASK_HEX.pattern)
+
+        /** [maskAfter] anchored to the whole value — lead-in kept and nothing else survives. */
+        fun wholeMaskAfter(prefix: String) = Regex("^" + Regex.escape(prefix) + MASK_HEX.pattern + "$")
+
+        /**
+         * The 4hex [MASK_HEX] carries in [value], or a loud failure naming [what]. The single
+         * extractor the per-test `hexOf` helpers now delegate to, so "was it masked at all" and
+         * "which customer is it" can never be answered by two different patterns.
+         */
+        fun hexIn(value: String, what: String): String =
+            MASK_HEX.find(value)?.groupValues?.get(1)
+                ?: error("$what was not masked; got '$value'")
+    }
+
     @Test
     fun `dropoff redact masks an injected customer name but keeps the Deliver to marker`() {
         // A real, already-redacted en-route dropoff card from the committed corpus.
@@ -51,7 +91,7 @@ class CaptureRedactionCorpusTest {
         // #623: the masked portion carries a `[redacted:<4hex>]` distinctness suffix.
         assertTrue(
             "marker kept, name masked",
-            Regex("""Deliver to \[redacted:[0-9a-f]{4}\]""").containsMatchIn(redactedJson),
+            maskAfter("Deliver to ").containsMatchIn(redactedJson),
         )
     }
 
@@ -93,7 +133,7 @@ class CaptureRedactionCorpusTest {
         )
         assertTrue(
             "the masked dropoff line carries a [redacted:<4hex>] token",
-            Regex("""\[redacted:[0-9a-f]{4}]""").containsMatchIn(redactedJson),
+            MASK_HEX.containsMatchIn(redactedJson),
         )
         // Over-match guard: store name, pay, and the fused time/mi node stay RAW.
         assertTrue(
@@ -115,9 +155,7 @@ class CaptureRedactionCorpusTest {
      */
     @Test
     fun `same customer redacts to the same 4hex across dropoff_navigation, timeline, and pickup_verify_items`() {
-        val suffix = Regex("""\[redacted:([0-9a-f]{4})\]""")
-        fun hexOf(masked: String): String =
-            suffix.find(masked)!!.groupValues[1]
+        fun hexOf(masked: String): String = hexIn(masked, "value")
 
         // dropoff_navigation: id-keyed title node, keepPrefix "Deliver to ".
         val navRule = TestRulesetFactory.screenRuleset.ruleById("doordash.screen.dropoff_navigation")!!
@@ -181,7 +219,7 @@ class CaptureRedactionCorpusTest {
         assertFalse("apt must not persist", masked.contains("4B"))
         assertTrue(
             "marker kept, address masked",
-            Regex("""Deliver to door of \[redacted:[0-9a-f]{4}\]""").containsMatchIn(masked),
+            maskAfter("Deliver to door of ").containsMatchIn(masked),
         )
     }
 
@@ -243,7 +281,7 @@ class CaptureRedactionCorpusTest {
             )
             assertTrue(
                 "$id: the building-name value masks to the hash family [redacted:<4hex>]",
-                Regex("""\[redacted:[0-9a-f]{4}]""").containsMatchIn(masked),
+                MASK_HEX.containsMatchIn(masked),
             )
             assertTrue(
                 "$id: over-match guard — an unlabeled sibling stays raw",
@@ -261,7 +299,7 @@ class CaptureRedactionCorpusTest {
                     ),
                 ).restoreParents()
                 val value = rule.redact.apply(pair).children[1].text!!
-                return Regex("""^\[redacted:([0-9a-f]{4})]$""").find(value)?.groupValues?.get(1)
+                return WHOLE_MASK_HEX.find(value)?.groupValues?.get(1)
                     ?: error("$id: Building Name value was not masked; got '$value'")
             }
             assertFalse(
@@ -315,7 +353,7 @@ class CaptureRedactionCorpusTest {
         assertFalse("double-spaced customer name must not persist", doubleSpaced.contains("Testname"))
         assertTrue(
             "the name masks to the hash family [redacted:<4hex>]",
-            Regex("""\[redacted:[0-9a-f]{4}]""").containsMatchIn(doubleSpaced),
+            MASK_HEX.containsMatchIn(doubleSpaced),
         )
         // Over-match guards: merchant + structural copy stay raw.
         assertTrue("store form kept (driver-owned)", doubleSpaced.contains("Sample Pizza Co (41709)"))
@@ -332,16 +370,15 @@ class CaptureRedactionCorpusTest {
         // #733/#885 cross-surface stability: the mask hex must equal the SAME customer's hex
         // on the "Deliver to <name>" nav title — that is what `normalize: customerName` on this
         // entry buys, and it holds across BOTH the double-space render and the fuller name form.
-        val hex = Regex("""\[redacted:([0-9a-f]{4})]""")
         fun cardHex(name: String): String {
             val masked = rule.redact.apply(
                 UiNode(className = "android.view.View", children = listOf(UiNode(text = name))).restoreParents(),
             ).children[0].text!!
-            return hex.find(masked)?.groupValues?.get(1)
+            return MASK_HEX.find(masked)?.groupValues?.get(1)
                 ?: error("name node was not masked; got '$masked'")
         }
         val navRule = TestRulesetFactory.screenRuleset.ruleById("doordash.screen.dropoff_navigation")!!
-        val navHex = hex.find(
+        val navHex = MASK_HEX.find(
             navRule.redact.apply(
                 UiNode(
                     viewIdResourceName = "com.dd:id/bottom_sheet_task_title",
@@ -412,7 +449,7 @@ class CaptureRedactionCorpusTest {
             assertFalse("$id: the current-road node must not persist", masked.contains("Sample Golf Road"))
             assertTrue(
                 "$id: the maneuver masks to the hash family [redacted:<4hex>]",
-                Regex("""\[redacted:[0-9a-f]{4}]""").containsMatchIn(masked),
+                MASK_HEX.containsMatchIn(masked),
             )
             // Over-match guard: nav chrome the recognition anchors read stays raw.
             assertTrue("$id: step distance kept", masked.contains("400 ft"))
@@ -500,7 +537,7 @@ class CaptureRedactionCorpusTest {
             assertFalse("$id: venue name must not persist", venue.contains("Sample Family Medical"))
             assertTrue(
                 "$id: the venue masks to the hash family [redacted:<4hex>]",
-                Regex("""\[redacted:[0-9a-f]{4}]""").containsMatchIn(venue),
+                MASK_HEX.containsMatchIn(venue),
             )
             assertTrue("$id: over-match guard — instruction line stays raw", venue.contains("Leave it at the door"))
             assertTrue("$id: over-match guard — CTA stays raw", venue.contains("Directions"))
@@ -522,7 +559,7 @@ class CaptureRedactionCorpusTest {
                         ),
                     ).restoreParents(),
                 ).children[0].text!!
-                return Regex("""^\[redacted:([0-9a-f]{4})]$""").find(value)?.groupValues?.get(1)
+                return WHOLE_MASK_HEX.find(value)?.groupValues?.get(1)
                     ?: error("$id: address line 1 was not masked; got '$value'")
             }
             assertFalse(
@@ -551,7 +588,7 @@ class CaptureRedactionCorpusTest {
             "doordash.screen.pickup_unassign_survey",
             "doordash.screen.dropoff_issue_resolution",
         )
-        val maskShape = Regex("""^For \[redacted:[0-9a-f]{4}\]$""")
+        val maskShape = wholeMaskAfter("For ")
         for (id in forFamily) {
             val rule = TestRulesetFactory.screenRuleset.ruleById(id)!!
             assertFalse("$id must carry a non-empty redact block (#809)", rule.redact.isEmpty())
@@ -621,10 +658,24 @@ class CaptureRedactionCorpusTest {
         // FIX 3 defense-in-depth + #803: the earlier-priority rules that could win a
         // modal-over-handoff combined frame, AND the pin_entry surface whose id-less
         // body carries the same name shape, all carry the SAME canonical pattern.
+        // #995 added three more copies, each of which MUST be pinned here — an unpinned
+        // hand-copy is exactly the drift this test exists to stop, and the receipt-scan
+        // copy shipped unpinned in the first cut of PR #1010:
+        //  - pickup_receipt_scan   the new rule's bare-name entry (the primary control);
+        //  - camera_capture        priority 86, so it BEATS the scan rule (141) whenever the
+        //                          frame also exposes camera_preview/image_capture_view — its
+        //                          old private `^[A-Za-z]{2,}( [A-Z]\.?){1,2}$` was a strict
+        //                          SUBSET (literal single space → #885's double-space render
+        //                          evaded it; ASCII-only → accented names evaded it);
+        //  - pickup_wait_survey    priority 88, so it beats the scan rule on the transition
+        //                          frame where survey anchors and scan nodes coexist.
         for (id in listOf(
             "doordash.screen.dropoff_navigation",
             "doordash.screen.dropoff_handoff",
             "doordash.screen.dropoff_pin_entry",
+            "doordash.screen.pickup_receipt_scan",
+            "doordash.screen.camera_capture",
+            "doordash.screen.pickup_wait_survey",
         )) {
             assertTrue(
                 "$id must carry the canonical name-shape regex (FIX 3 defense-in-depth)",
@@ -641,7 +692,7 @@ class CaptureRedactionCorpusTest {
         // and a trailing space (the raw-text alignment) — every shape the pre-fix
         // masker fell open on.
         val names = listOf("Brandon C", "José R", "O'Brien M", "Mary-Jo K", "JOSE G", "Brandon C ", "McKenna B")
-        val maskShape = Regex("""\[redacted:[0-9a-f]{4}\]""")
+        val maskShape = MASK_HEX
         for (name in names) {
             val tree = UiNode(
                 children = listOf(
@@ -664,33 +715,96 @@ class CaptureRedactionCorpusTest {
         }
     }
 
+    /**
+     * FIX 4 — the committed-corpus PII guard. A leak that reaches git is permanent, so this is
+     * the gate that makes a future intake of a REAL field pull fail rather than commit green.
+     *
+     * It runs THREE checks over an enumerated folder set, all reusing the intake scrubber's own
+     * SSOTs so a widening there strengthens this guard automatically (#1010 review):
+     *  1. the whole-value id-less name shape ([SnapshotRedactor.FIRST_LAST_INITIAL_PATTERN]);
+     *  2. a node whose view id is in [CustomerTextMarkers.ID_MARKERS] carrying a raw value —
+     *     this is what catches an `arriving_at_title` street address (#993), which is one fused
+     *     line the shape passes structurally cannot own. It reuses the RUNTIME id SSOT rather
+     *     than [SnapshotRedactor.PII_ID_SUFFIXES] deliberately: `ID_MARKERS` is the enumeration
+     *     of ids whose value is customer PII **by construction**, whereas the intake set is
+     *     wider by design and includes ids that legitimately carry chrome (`subManeuverText`
+     *     holds "Turn right " on seven committed legacy nav fixtures — masked at intake because
+     *     it CAN carry a street, but not a leak when it doesn't). Flagging those here would be
+     *     a false positive of exactly the kind this suite exists to keep out;
+     *  3. a value opening with a [SnapshotRedactor.NAME_PREFIXES] lead-in and a non-masked tail —
+     *     this is what catches `Return <real name> to <store>` (#994).
+     *
+     * **Decoys.** The #992–#995 fixtures deliberately carry hand-written pseudonyms in RAW,
+     * PII-SHAPED form, because a fixture already masked to `[redacted:…]` cannot prove the
+     * production redact fires on the tree DoorDash actually renders. Those exact strings are
+     * enumerated in [CorpusDecoys] and skipped BY VALUE. Nothing is loosened: every other
+     * name-shaped, PII-id-borne or prefix-led value in these folders still fails, so a real
+     * customer name arriving in a future intake fails exactly as it should.
+     */
     @Test
-    fun `committed corpus carries no un-masked bare customer-name node (FIX 4)`() {
+    fun `committed corpus carries no un-masked customer name, address, or lead-in (FIX 4)`() {
         val nameShape = Regex(SnapshotRedactor.FIRST_LAST_INITIAL_PATTERN, RegexOption.IGNORE_CASE)
-        // Folders whose owning rule declares the name-shape redact (FIX 3 included).
+        // Folders whose owning rule declares one of the customer-PII redacts guarded here.
         // #825 added the uber trip surfaces (active_trip/splash/customer_chat/
-        // pickup_verification_items) to the set — each now carries the id-less
-        // name-shape redact, so a future un-masked bare name in their corpus is a
-        // test failure, not a permanent git leak.
+        // pickup_verification_items) — each carries the id-less name-shape redact.
+        // #992–#995 added the four surfaces this PR fixed; without them the guard did not
+        // cover the very folders whose rules were just given a redact, which is where the
+        // next real pull will land.
         val folders = listOf(
             "dropoff_multi_order_confirm", "dropoff_navigation", "dropoff_handoff",
             "active_trip", "splash", "customer_chat", "pickup_verification_items",
+            "pickup_receipt_scan", "pickup_wait_survey", "timeline", "camera_capture",
         )
         val leaks = mutableListOf<String>()
+        val decoysSeen = mutableSetOf<String>()
+
         for (folder in folders) {
             for ((filename, node, _) in TestResourceLoader.loadSnapshots("snapshots/$folder")) {
-                walkText(node) { text ->
-                    if (!text.contains("[redacted") && nameShape.matches(text)) {
-                        leaks += "$folder/$filename: \"$text\""
+                walkNodes(node) { n ->
+                    val idIsPii = CustomerTextMarkers.ID_MARKERS.any {
+                        n.viewIdResourceName?.endsWith(it, ignoreCase = true) == true
+                    }
+                    val idSuffix = n.viewIdResourceName?.substringAfterLast('/')
+                    n.scrubbableStrings().forEach { (_, raw) ->
+                        val text = raw ?: return@forEach
+                        if (text.isBlank() || text.contains("[redacted")) return@forEach
+                        if (CorpusDecoys.isDecoy(text)) {
+                            decoysSeen += text
+                            return@forEach
+                        }
+                        val why = when {
+                            idIsPii -> "PII view id '$idSuffix' carries a raw value"
+                            nameShape.matches(text) -> "whole-value customer-name shape"
+                            SnapshotRedactor.NAME_PREFIXES.any {
+                                text.startsWith(it, ignoreCase = true) && text.length > it.length
+                            } -> "customer lead-in prefix with a raw tail"
+                            else -> null
+                        }
+                        if (why != null) leaks += "$folder/$filename: $why — \"$text\""
                     }
                 }
             }
         }
         assertTrue(
-            "committed corpus leaks an un-masked bare customer name (the masker's blind spot " +
-                "is now a test failure, not a permanent git leak): $leaks",
+            "committed corpus leaks un-masked customer PII (a leak in git is permanent; this is " +
+                "the gate that makes a real field pull fail instead of committing green): $leaks",
             leaks.isEmpty(),
         )
+        // A decoy that no longer appears anywhere is a stale exemption: it would silently widen
+        // the hole for whatever string later happens to equal it. Deleting a fixture must delete
+        // its CorpusDecoys entry.
+        assertEquals(
+            "every CorpusDecoys entry must still be reachable in the corpus; unreachable: " +
+                (CorpusDecoys.ALLOWED.keys - decoysSeen),
+            CorpusDecoys.ALLOWED.keys,
+            decoysSeen,
+        )
+    }
+
+    /** Visit every node in the tree (the guard needs the node, not just its strings). */
+    private fun walkNodes(node: UiNode, visit: (UiNode) -> Unit) {
+        visit(node)
+        node.children.forEach { walkNodes(it, visit) }
     }
 
     /** Visit every serialized string field of every node (the #835 SSOT). */
@@ -775,7 +889,7 @@ class CaptureRedactionCorpusTest {
         assertFalse("the completed PIN must not persist", completedMasked.contains("9315"))
         assertFalse(
             "a 4-digit PIN must not carry a reversible distinctness hash",
-            Regex("""\[redacted:[0-9a-f]{4}]""").containsMatchIn(completedMasked),
+            MASK_HEX.containsMatchIn(completedMasked),
         )
 
         // Drive the PRODUCTION rule (mutation teeth: severing the require anchors or the
@@ -790,7 +904,7 @@ class CaptureRedactionCorpusTest {
         val masked = serialize(redacted)
         assertFalse(
             "a short token must carry NO reversible distinctness hash",
-            Regex("""\[redacted:[0-9a-f]{4}]""").containsMatchIn(masked),
+            MASK_HEX.containsMatchIn(masked),
         )
         assertTrue("require anchor (step_title) kept", masked.contains("Collect PIN from customer"))
     }
@@ -858,14 +972,14 @@ class CaptureRedactionCorpusTest {
         assertFalse("whole-PIN node must not persist", masked.contains("1234"))
         assertTrue(
             "every id-less digit node plain-masked (EditText + 4 digits)",
-            Regex("""\[redacted]""").findAll(masked).count() >= 5,
+            PLAIN_MASK.findAll(masked).count() >= 5,
         )
         // The plain constant is present but the reversible `<4hex>` distinctness form is
         // NOT — this gives the `plainMask: true` flag itself mutation teeth (a 4-digit
         // PIN is recoverable from 4 hex, so the hashed form would leak it).
         assertFalse(
             "PIN must not carry a reversible distinctness hash",
-            Regex("""\[redacted:[0-9a-f]{4}]""").containsMatchIn(masked),
+            MASK_HEX.containsMatchIn(masked),
         )
         // The require/anchor texts survive unmasked.
         assertTrue("Enter PIN anchor kept", masked.contains("Enter PIN"))
@@ -1255,7 +1369,7 @@ class CaptureRedactionCorpusTest {
             ),
         )
         assertFalse("sender name gone", masked.title!!.contains("Jennifer"))
-        assertTrue(Regex("""Message from \[redacted:[0-9a-f]{4}\]""").containsMatchIn(masked.title!!))
+        assertTrue(maskAfter("Message from ").containsMatchIn(masked.title!!))
         assertFalse("body gone (text)", masked.text!!.contains("4412"))
         assertFalse("body gone (tickerText)", masked.tickerText!!.contains("4412"))
     }
@@ -1290,7 +1404,7 @@ class CaptureRedactionCorpusTest {
         val masked = rule.notifRedact.apply(notif(title = "Going to 1600 Amphitheatre Pkwy"))
         assertFalse("street name gone", masked.title!!.contains("Amphitheatre"))
         assertFalse("house number gone", masked.title!!.contains("1600"))
-        assertTrue(Regex("""^\[redacted:[0-9a-f]{4}\]$""").matches(masked.title!!))
+        assertTrue(WHOLE_MASK_HEX.matches(masked.title!!))
     }
 
     @Test
@@ -1299,10 +1413,10 @@ class CaptureRedactionCorpusTest {
         assertTrue("trip_at_dropoff must carry a notif redact block", !rule.notifRedact.isEmpty())
         val leave = rule.notifRedact.apply(notif(title = "Leave the order at 1600 Amphitheatre Pkwy"))
         assertFalse("address gone", leave.title!!.contains("Amphitheatre"))
-        assertTrue(Regex("""^Leave the order at \[redacted:[0-9a-f]{4}\]$""").matches(leave.title!!))
+        assertTrue(wholeMaskAfter("Leave the order at ").matches(leave.title!!))
         val meet = rule.notifRedact.apply(notif(title = "Meet at door for Jane Doe"))
         assertFalse("customer name gone", meet.title!!.contains("Jane"))
-        assertTrue(Regex("""^Meet at door for \[redacted:[0-9a-f]{4}\]$""").matches(meet.title!!))
+        assertTrue(wholeMaskAfter("Meet at door for ").matches(meet.title!!))
     }
 
     /**
@@ -1364,7 +1478,7 @@ class CaptureRedactionCorpusTest {
         assertFalse("customer item note must not persist", masked.contains("ring the bell twice"))
         assertTrue(
             "the masked nodes carry the hash family [redacted:<4hex>]",
-            Regex("""\[redacted:[0-9a-f]{4}]""").containsMatchIn(masked),
+            MASK_HEX.containsMatchIn(masked),
         )
         // The label sibling is app vocabulary — kept, so a replayed frame keeps its shape.
         assertTrue("the 'Delivery for' label is chrome and stays raw", masked.contains("Delivery for"))
@@ -1378,10 +1492,9 @@ class CaptureRedactionCorpusTest {
 
         // #733 cross-surface stability: the name's hex must equal the SAME customer's hex on
         // the "Deliver to <name>" nav title — one customer, one mask, every surface.
-        val hex = Regex("""\[redacted:([0-9a-f]{4})]""")
-        val nameHex = hex.find(rule.redact.apply(dd("user_name", "Testname Q")).text!!)!!.groupValues[1]
+        val nameHex = MASK_HEX.find(rule.redact.apply(dd("user_name", "Testname Q")).text!!)!!.groupValues[1]
         val navRule = TestRulesetFactory.screenRuleset.ruleById("doordash.screen.dropoff_navigation")!!
-        val navHex = hex.find(
+        val navHex = MASK_HEX.find(
             navRule.redact.apply(
                 UiNode(
                     viewIdResourceName = "com.dd:id/bottom_sheet_task_title",
@@ -1410,7 +1523,6 @@ class CaptureRedactionCorpusTest {
      */
     @Test
     fun `multi-order pickup rules mask every customer_name row, keep the merchant (#910)`() {
-        val hex = Regex("""\[redacted:([0-9a-f]{4})]""")
 
         // --- post_arrival: the committed fixture, re-seeded with synthetic names ---
         val postRule = TestRulesetFactory.screenRuleset
@@ -1445,7 +1557,7 @@ class CaptureRedactionCorpusTest {
                     text = name,
                 ),
             ).text!!
-            return hex.find(masked)?.groupValues?.get(1)
+            return MASK_HEX.find(masked)?.groupValues?.get(1)
                 ?: error("customer_name was not masked; got '$masked'")
         }
         assertFalse(
@@ -1517,7 +1629,7 @@ class CaptureRedactionCorpusTest {
         assertFalse("customer name must not persist", masked.contains("Testname Q"))
         assertTrue(
             "the name masks to the hash family [redacted:<4hex>]",
-            Regex("""\[redacted:[0-9a-f]{4}]""").containsMatchIn(masked),
+            MASK_HEX.containsMatchIn(masked),
         )
         // Over-match guards: the label is chrome, the merchant is driver-owned, the
         // survey copy is platform vocabulary — all three stay raw.
@@ -1527,12 +1639,11 @@ class CaptureRedactionCorpusTest {
 
         // #733: one customer, one hex — this surface must agree with the single-order
         // pickup card, which is what `normalize: customerName` on the entry buys.
-        val hex = Regex("""\[redacted:([0-9a-f]{4})]""")
         fun nameHex(r: CompiledRedact): String {
             val out = r.apply(
                 UiNode(viewIdResourceName = "com.doordash.driverapp:id/customer_name", text = "Testname Q"),
             ).text!!
-            return hex.find(out)?.groupValues?.get(1) ?: error("customer_name was not masked; got '$out'")
+            return hexIn(out, "customer_name")
         }
         assertEquals(
             "the wait survey masks to the same hex as pickup_arrival",
@@ -1581,19 +1692,18 @@ class CaptureRedactionCorpusTest {
         assertFalse("banner apt must not persist", masked.contains("Apt 12"))
         assertTrue(
             "the banner title masks to the hash family [redacted:<4hex>]",
-            Regex("""\[redacted:[0-9a-f]{4}]""").containsMatchIn(masked),
+            MASK_HEX.containsMatchIn(masked),
         )
         // Over-match guards: the label and the sheet header are app chrome.
         assertTrue("subtitle kept (app chrome)", masked.contains("Arriving at"))
         assertTrue("sheet header kept (app chrome)", masked.contains("Arriving soon"))
 
         // Distinctness (#623): two destinations must not collide on one mask.
-        val hex = Regex("""\[redacted:([0-9a-f]{4})]""")
         fun titleHex(text: String): String {
             val out = dropoffRule.redact.apply(
                 UiNode(viewIdResourceName = "com.doordash.driverapp:id/arriving_at_title", text = text),
             ).text!!
-            return hex.find(out)?.groupValues?.get(1) ?: error("arriving_at_title was not masked; got '$out'")
+            return hexIn(out, "arriving_at_title")
         }
         assertFalse(
             "different destinations must redact to different suffixes",
@@ -1633,17 +1743,16 @@ class CaptureRedactionCorpusTest {
         assertFalse("customer name must not persist", masked.contains("Testname Q"))
         assertTrue(
             "the 'Return ' lead-in is kept so the line still reads as a return task",
-            Regex("""Return \[redacted:[0-9a-f]{4}]""").containsMatchIn(masked),
+            maskAfter("Return ").containsMatchIn(masked),
         )
         // The whole-remainder mask swallows the store tail — documented, not incidental.
         assertFalse("the masked remainder covers the ' to <store>' tail", masked.contains("Sample Grocery Co"))
 
         // #623/#733 cross-conjugation invariance: one customer, one hex, whichever verb
         // the platform used — this is what the shared `normalize: customerName` buys.
-        val hex = Regex("""\[redacted:([0-9a-f]{4})]""")
         fun lineHex(text: String): String {
             val out = rule.redact.apply(UiNode(text = text).restoreParents()).text!!
-            return hex.find(out)?.groupValues?.get(1) ?: error("line was not masked; got '$out'")
+            return hexIn(out, "timeline line")
         }
         val deliverHex = lineHex("Deliver to Testname Q")
         assertEquals(
@@ -1661,7 +1770,7 @@ class CaptureRedactionCorpusTest {
         // "Pickup from <store>" node must NOT be swept into the customer-name entry.
         assertTrue(
             "the store line keeps its 'Pickup from ' lead-in",
-            Regex("""Pickup from \[redacted:[0-9a-f]{4}]""").containsMatchIn(
+            maskAfter("Pickup from ").containsMatchIn(
                 serialize(rule.redact.apply(UiNode(text = "Pickup from Sample Grocery Co").restoreParents())),
             ),
         )
@@ -1711,12 +1820,12 @@ class CaptureRedactionCorpusTest {
         assertFalse("customer name must not persist anywhere", masked.contains("Testname Q"))
         assertTrue(
             "the instruction line keeps its 'Focus on ' lead-in",
-            Regex("""Focus on \[redacted:[0-9a-f]{4}]""").containsMatchIn(masked),
+            maskAfter("Focus on ").containsMatchIn(masked),
         )
         assertTrue(
             "the bare name node masks WHOLE to the hash family [redacted:<4hex>], " +
                 "got '${applied.children[2].text}'",
-            Regex("""^\[redacted:[0-9a-f]{4}]$""").matches(applied.children[2].text!!),
+            WHOLE_MASK_HEX.matches(applied.children[2].text!!),
         )
         // Over-match guards: every other node on this surface is platform chrome and
         // must survive — these are also the rule's own recognition anchors.
@@ -1736,16 +1845,65 @@ class CaptureRedactionCorpusTest {
 
         // #733: one customer, one hex — across BOTH nodes on this surface AND the pickup
         // card, so a receipt-scan capture correlates with the rest of the same job.
-        val hex = Regex("""\[redacted:([0-9a-f]{4})]""")
-        val focusHex = hex.find(applied.children[0].text!!)!!.groupValues[1]
-        val bareHex = hex.find(applied.children[2].text!!)!!.groupValues[1]
+        val focusHex = hexIn(applied.children[0].text!!, "the Focus-on line")
+        val bareHex = hexIn(applied.children[2].text!!, "the bare name node")
         assertEquals("both name nodes on one frame mask to one hex", focusHex, bareHex)
-        val arrivalHex = hex.find(
+        val arrivalHex = MASK_HEX.find(
             TestRulesetFactory.screenRuleset.ruleById("doordash.screen.pickup_arrival")!!.redact.apply(
                 UiNode(viewIdResourceName = "com.doordash.driverapp:id/customer_name", text = "Testname Q"),
             ).text!!,
         )!!.groupValues[1]
         assertEquals("and to the customer's hex on the pickup card", arrivalHex, focusHex)
+    }
+
+    /**
+     * #995 on the REAL trees (#1010 review F9). The synthetic case above proves the predicates
+     * against a node shape the test author typed; this runs them over the two committed fixtures,
+     * which still carry their (sanitized, but structurally faithful) name nodes RAW — so it proves
+     * the entries match DoorDash's actual id-less render, and it is what would catch a layout
+     * change that, say, gives the name node an id or splits the instruction line.
+     *
+     * The pseudonym is an enumerated [CorpusDecoys] entry, so the corpus PII guard skips it by
+     * value while this test still gets a raw tree to mask.
+     */
+    @Test
+    fun `pickup_receipt_scan redact masks both name nodes on the committed fixtures (#995)`() {
+        val rule = TestRulesetFactory.screenRuleset.ruleById("doordash.screen.pickup_receipt_scan")!!
+        val decoy = "Jordan T"
+        val files = File("src/test/resources/snapshots/pickup_receipt_scan")
+            .listFiles { _, n -> n.endsWith(".json") }!!.sortedBy { it.name }
+        assertTrue("the receipt-scan corpus must not be empty", files.isNotEmpty())
+
+        for (file in files) {
+            val real = TestResourceLoader.loadNode(file)
+            // Pre-condition: raw input, and it recognizes as this rule (no vacuous pass).
+            assertTrue(
+                "${file.name} must carry the raw name (else this test proves nothing)",
+                serialize(real).contains(decoy),
+            )
+            assertEquals(
+                "${file.name} must recognize as pickup_receipt_scan",
+                "doordash.screen.pickup_receipt_scan",
+                TestRulesetFactory.screenRuleset.matchFirst(real)?.ruleId,
+            )
+
+            val masked = serialize(rule.redact.apply(real))
+            assertFalse("${file.name}: the name must not persist anywhere", masked.contains(decoy))
+            assertTrue(
+                "${file.name}: the instruction line keeps its 'Focus on ' lead-in",
+                maskAfter("Focus on ").containsMatchIn(masked),
+            )
+            // Both copies masked to ONE hex — on the real tree, not a hand-built one.
+            val hexes = MASK_HEX.findAll(masked).map { it.groupValues[1] }.toSet()
+            assertEquals("${file.name}: both name nodes mask to one customer hex", 1, hexes.size)
+            // Over-match guards: the rule's own recognition anchors must survive redaction, or a
+            // replayed envelope would stop recognizing.
+            assertTrue(
+                "${file.name}: the scan chrome (and this rule's anchors) stay raw",
+                masked.contains("Scan customer name") ||
+                    masked.contains("Scan the order details by focusing on the customer name"),
+            )
+        }
     }
 
     /**
@@ -1823,7 +1981,7 @@ class CaptureRedactionCorpusTest {
         // #795: PLAIN mask, no <4hex> suffix — a hash family here would be a regression.
         assertFalse(
             "a customer note must NOT carry the <4hex> distinctness suffix (#795)",
-            Regex("""\[redacted:[0-9a-f]{4}]""").containsMatchIn(masked),
+            MASK_HEX.containsMatchIn(masked),
         )
         // Over-match guards: label chrome, item, price and aisle are driver/merchant-owned.
         assertEquals(
@@ -1842,6 +2000,158 @@ class CaptureRedactionCorpusTest {
             "an unlabeled body_text_view sibling stays raw",
             masked.contains("Aisle 4 - Section A13 - Shelf 2"),
         )
+    }
+
+    /**
+     * #920 on the REAL tree (#1010 review F9). The synthetic case above proves the two predicates;
+     * this proves they match what DoorDash actually renders — which is the whole point of the
+     * #860 label-sibling anchor, whose correctness depends on the live child ORDER
+     * (`…, start_icon_image_view, label_text_view, body_text_view`) rather than on anything the
+     * test author chose. A layout change that inserts a node between the label and its value
+     * silently un-masks the note, and only a committed-fixture assertion can see that.
+     *
+     * The fixture predates the redact, so its note ships RAW — exactly the un-redacted input the
+     * production block has to handle.
+     */
+    @Test
+    fun `shopping_item redact masks the Customer Notes on the committed fixture (#920)`() {
+        val rule = TestRulesetFactory.screenRuleset.ruleById("doordash.screen.shopping_item")!!
+        val fixture = File("src/test/resources/snapshots/shopping_item")
+            .listFiles { _, n -> n.endsWith(".json") }!!
+            .first { it.readText().contains("Customer Notes") }
+        val real = TestResourceLoader.loadNode(fixture)
+
+        // Pre-condition: the committed frame really does carry the note raw — otherwise the
+        // assertions below would pass vacuously on an already-masked tree.
+        val note = "Freshest available please."
+        assertTrue(
+            "${fixture.name} must carry the raw note (else this test proves nothing)",
+            serialize(real).contains(note),
+        )
+        // And it must still RECOGNIZE as the rule whose redact we are about to apply.
+        assertEquals(
+            "doordash.screen.shopping_item",
+            TestRulesetFactory.screenRuleset.matchFirst(real)?.ruleId,
+        )
+
+        val masked = serialize(rule.redact.apply(real))
+        assertFalse("the real note value must not persist", masked.contains(note))
+        assertTrue(
+            "the fused contentDescription keeps only its label half",
+            masked.contains("Customer Notes: [redacted]"),
+        )
+        assertFalse(
+            "a customer note must NOT carry the <4hex> distinctness suffix (#795)",
+            MASK_HEX.containsMatchIn(masked),
+        )
+        // Over-match guards on the real tree: merchant/catalog/location text is driver-owned.
+        assertTrue("item name kept", masked.contains("Pepperidge Farm Farmhouse Hearty White Sliced Bread"))
+        assertTrue("aisle kept", masked.contains("Aisle 4 - Section A13 - Shelf 2"))
+        assertTrue("the notes label is chrome and stays raw", masked.contains("\"Customer Notes\""))
+    }
+
+    /**
+     * #994 review F6 — **the redact and parse prefix enumerations must not silently diverge.**
+     *
+     * `doordash.screen.timeline` enumerates the same customer/store lead-ins twice: once in its
+     * `redact` (`keepPrefix`, what gets MASKED) and once in its `parse.tasks` (`hasTextStartsWith`
+     * + `stripPrefixes`, what gets UNDERSTOOD). #994 added the fourth conjugation `"Return "` to
+     * the redact side only, which is the correct privacy fix but leaves the parse side blind: the
+     * committed return-order fixture folds to `tasks: []`.
+     *
+     * Adding return-task parsing here would be smuggling a state change into a privacy PR — a
+     * return leg's task-model semantics (is it a task? whose lineage? what closes it?) is #998's
+     * design question, not this test's. So the divergence is allowed, but **only by explicit
+     * enumeration**: a prefix on one side and not the other fails unless it is listed below with
+     * the issue that owns the gap. A future prefix added to either side without a decision fails
+     * loudly instead of quietly under-parsing (or, worse, quietly under-masking).
+     */
+    @Test
+    fun `timeline redact and parse prefix enumerations agree, or the gap is documented (#994)`() {
+        /**
+         * Prefixes the redact masks that the parse deliberately does NOT understand yet.
+         * Key = the prefix, value = the issue that owns the decision. Empty is the goal state.
+         */
+        val parseExclusions = mapOf(
+            "Return " to
+                "#998 — a RETURN order's task-model semantics are an open design question " +
+                "(is a return leg a task? whose lineage does it join? what closes it?). #994 " +
+                "masked the line for the Pledge and deliberately did NOT teach the parse to " +
+                "read it; the committed return fixture folds to tasks: [] by design.",
+        )
+
+        val rule = ruleJson("doordash.screen.timeline")
+        val redactPrefixes = mutableListOf<String>()
+        rule["redact"]?.let { collectStringsUnder(it, "keepPrefix", redactPrefixes) }
+        // Scoped to `parse.fields.tasks` — the ONE parse enumeration that mirrors the redact's
+        // lead-in set. The rule's other `hasTextStartsWith` anchors ("Dash ends at") read session
+        // chrome, carry no customer/store value, and are correctly absent from the redact.
+        val parsePrefixes = mutableListOf<String>()
+        rule["parse"]?.jsonObject?.get("fields")?.jsonObject?.get("tasks")?.let {
+            collectStringsUnder(it, "hasTextStartsWith", parsePrefixes)
+            collectStringsUnder(it, "stripPrefixes", parsePrefixes)
+        }
+        assertTrue("timeline must declare redact keepPrefixes", redactPrefixes.isNotEmpty())
+        assertTrue("timeline must declare parse task prefixes", parsePrefixes.isNotEmpty())
+
+        // Masked but not parsed — allowed ONLY when documented above.
+        val maskedNotParsed = redactPrefixes.toSet() - parsePrefixes.toSet()
+        assertEquals(
+            "a prefix the timeline redact masks but the parse does not read must be listed in " +
+                "parseExclusions with the issue that owns the gap (or taught to the parse); " +
+                "undocumented: ${maskedNotParsed - parseExclusions.keys}",
+            emptySet<String>(),
+            maskedNotParsed - parseExclusions.keys,
+        )
+        // Parsed but not masked — NEVER allowed: the parse proves the line carries a
+        // customer/store value, so an unmasked one is a live capture leak.
+        assertEquals(
+            "a prefix the timeline parse reads but the redact does not mask is a capture leak",
+            emptySet<String>(),
+            parsePrefixes.toSet() - redactPrefixes.toSet(),
+        )
+        // A stale exclusion (the parse caught up, nobody removed the entry) must also fail, so
+        // this list can only shrink.
+        assertEquals(
+            "parseExclusions lists a prefix that is no longer divergent — delete it",
+            emptySet<String>(),
+            parseExclusions.keys - maskedNotParsed,
+        )
+    }
+
+    /** The generated-asset JSON object for [ruleId] (screens section). */
+    private fun ruleJson(
+        ruleId: String,
+        platformFile: String = "doordash.json",
+    ): kotlinx.serialization.json.JsonObject =
+        Json.parseToJsonElement(File(rulesDir, platformFile).readText()).jsonObject["screens"]!!
+            .jsonArray.first { it.jsonObject["id"]?.jsonPrimitive?.content == ruleId }.jsonObject
+
+    /** Every string value stored under [key] (scalar or array) anywhere inside [element]. */
+    private fun collectStringsUnder(
+        element: kotlinx.serialization.json.JsonElement,
+        key: String,
+        out: MutableList<String>,
+    ) {
+        when (element) {
+            is kotlinx.serialization.json.JsonObject -> element.forEach { (k, v) ->
+                if (k == key) {
+                    when (v) {
+                        is kotlinx.serialization.json.JsonPrimitive -> if (v.isString) out += v.content
+                        is kotlinx.serialization.json.JsonArray ->
+                            v.forEach { e ->
+                                (e as? kotlinx.serialization.json.JsonPrimitive)
+                                    ?.takeIf { it.isString }?.let { out += it.content }
+                            }
+                        else -> {}
+                    }
+                } else {
+                    collectStringsUnder(v, key, out)
+                }
+            }
+            is kotlinx.serialization.json.JsonArray -> element.forEach { collectStringsUnder(it, key, out) }
+            else -> {}
+        }
     }
 
     private fun jsonUsesSha256(element: kotlinx.serialization.json.JsonElement): Boolean = when (element) {
