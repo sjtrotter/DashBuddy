@@ -625,7 +625,19 @@ it would orphan a *referencing* row, strictly worse than a phantom) and counts a
 a from-zero refold that sees the receipt evidence in the same batch never mints the intermediate row,
 while an incremental fold split across a page boundary mints then deletes it — the F1 test's former
 "accepted read-invisible residual" is no longer accepted. The read-side M4 `EXISTS` filter on
-`storeReportRows` still masks any survivor. `NetProfit`
+`storeReportRows` still masks any survivor. **#1000 (pickup-less offer link, `PROJECTOR_VERSION`
+9→10):** `StoreResolutionRunner.resolveJob`'s `pickups.isEmpty()` short-circuit used to discard the
+job's **exact** offer↔job link along with the missing store anchor — a blown-through pickup
+(PICKUP_ARRIVED with no PICKUP_CONFIRMED, the #615-class fail-null) meant the `DELIVERY_COMPLETED`
+fold's own carried `offerHashes` never reached `offer_records.linkedJobId`, even though the link was
+already in the log. The runner now stamps `linkedJobId` for the exact-hash rows via a **link-only**
+DAO update (`linkOfferToJobIfUnlinked` — `SET linkedJobId WHERE linkedJobId IS NULL`, never touches
+`storeKey`, never overwrites an existing link, never the unverified temporal nominee — no anchor means
+no brand-token agreement check to run). `storeKey` stays fail-null by design (an offer-form fallback
+was considered and REJECTED — a divergent `normalizedChain` would permanently split the store entity,
+fail-wrong beats fail-null); the delivery row's own `storeKey`/`milesToStore`/dwell sample are likewise
+correct residuals, not bugs. The bump heals the 08-08 Zaxbys accept (1-of-5 lifetime offers left
+unlinked) on refold. `NetProfit`
 (`:domain`) is the one shared cost-math SSOT for both the offer estimate and the frozen realized net.
 `AnalyticsRepository` (`:core:data`, **DAO-only — no economy dependency**, so historical net is structurally
 immutable) serves period economics (`SUM(netProfit)` frozen + `unattributedPay`; all-pay gross =

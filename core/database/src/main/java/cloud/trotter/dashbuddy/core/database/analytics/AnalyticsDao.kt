@@ -239,6 +239,20 @@ interface AnalyticsDao {
     )
     suspend fun stampOfferLink(eventSequenceId: Long, storeKey: String?, jobId: String)
 
+    /**
+     * **Link-only** offer↔job stamp for a job with NO pickup anchor (#1000 — a blown-through pickup
+     * that never confirmed). Deliberately narrower than [stampOfferLink]: it touches `linkedJobId`
+     * ONLY — never `storeKey`, so it can never null out or downgrade an existing key — and only ever
+     * FILLS an unlinked row (`linkedJobId IS NULL`), never overwrites an existing link. If an anchor
+     * later appears, [stampOfferLink]'s claim guard (`linkedJobId IS NULL OR = :jobId`) still upgrades
+     * the same row with a real `storeKey`. Idempotent: a re-run matches zero rows once linked.
+     */
+    @Query(
+        "UPDATE offer_records SET linkedJobId = :jobId " +
+            "WHERE eventSequenceId = :eventSequenceId AND linkedJobId IS NULL"
+    )
+    suspend fun linkOfferToJobIfUnlinked(eventSequenceId: Long, jobId: String)
+
     // ── Read-side aggregates (Flow ⇒ reactive via Room invalidation) ─────
 
     /**

@@ -25,6 +25,9 @@ import timber.log.Timber
  * (+ the offer↔job link), and — since #887 — deletes the identity row a monotonic key UPGRADE superseded
  * once nothing references it any more. Because it reads committed rows only and the key is row-sourced +
  * monotonic, incremental fold ≡ from-zero refold (B1) and a re-run is a byte-identical no-op (L1).
+ * **#1000:** a job with NO pickup rows (a blown-through pickup that never confirmed) still stamps its
+ * EXACT offer↔job `linkedJobId` from the trigger's own carried offer hashes — link-only, `storeKey`
+ * stays fail-null (no anchor to key with) — see [linkPickupLessJob].
  *
  * **Privacy:** store names/addresses are MERCHANT data — fine at rest, never logged at INFO+ (P7). No
  * network, no new capture. Customer hashes are never read here.
@@ -49,8 +52,15 @@ internal class StoreResolutionRunner(private val dao: AnalyticsDao) {
     private suspend fun resolveJob(jobId: String, task: StoreResolution) {
         val pickups = dao.pickupRecordsForJob(jobId)
         // v1 (matches the field-verified shadow): anchors come from pickup rows; a job with delivery
-        // rows but no pickup rows produces no store link.
-        if (pickups.isEmpty()) return
+        // rows but no pickup rows produces no store link (no anchor ⇒ no storeKey, fail-null beats
+        // fail-wrong — #1000 rejected an offer-form fallback for exactly this reason). But the
+        // DELIVERY_COMPLETED trigger's own offerHashes already carry the EXACT offer↔job link (the
+        // #615-class blown-through-pickup shape: PICKUP_ARRIVED fired, PICKUP_CONFIRMED never did, so
+        // there is no pickup row at all) — stamp that link before giving up on the job (#1000).
+        if (pickups.isEmpty()) {
+            linkPickupLessJob(jobId, task)
+            return
+        }
         // FIX 2: exclude the UNKNOWN_STORE sentinel — a null-store pickup must not mint a
         // `platform|unknown|` entity (the fielded #733 NULL-store shape). Same idiom as :domain's
         // DisplayNames (import the constant, don't re-literal it).
@@ -215,6 +225,31 @@ internal class StoreResolutionRunner(private val dao: AnalyticsDao) {
             seg.isEmpty() -> 0
             seg.startsWith("@") -> 1
             else -> 2
+        }
+    }
+
+    /**
+     * #1000 — a pickup-less job's ONLY resolvable fact is the exact offer↔job link the
+     * `DELIVERY_COMPLETED` fold's own [StoreResolution.offerHashes] already carries. Stamp it via the
+     * **link-only** [AnalyticsDao.linkOfferToJobIfUnlinked] — `storeKey` is deliberately left untouched
+     * (no anchor exists to key with, and the design REJECTS minting one from the offer's own parsed
+     * store form: a divergent `normalizedChain` would permanently split the store entity, fail-wrong
+     * beats fail-null). **Never the temporal nominee**: with no anchor there is no brand-token
+     * agreement check to run, and stamping an unverified nominee is exactly the queued-next-job-offer
+     * mis-link F4 exists to block — so this only ever consults [AnalyticsDao.offerRecordsByHashes]
+     * (the exact path), same session+accepted scope as the anchored resolution above. Idempotent +
+     * convergent: an already-linked row is skipped, so incremental fold ≡ from-zero refold and a re-run
+     * is a no-op.
+     */
+    private suspend fun linkPickupLessJob(jobId: String, task: StoreResolution) {
+        val sessionId = task.sessionId ?: return
+        if (task.offerHashes.isEmpty()) return
+        val offerRows = dao.offerRecordsByHashes(task.offerHashes, sessionId, acceptedOutcome)
+        for (offer in offerRows) {
+            if (offer.linkedJobId != null) continue
+            dao.linkOfferToJobIfUnlinked(offer.eventSequenceId, jobId)
+            Timber.tag(TAG).d("pickup-less job link: jobId=%s offerSeq=%d", jobId, offer.eventSequenceId)
+            Timber.tag(TAG).w("offer linked to a pickup-less job (blown-through pickup, no storeKey)")
         }
     }
 

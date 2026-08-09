@@ -927,7 +927,18 @@ class AnalyticsProjector @Inject constructor(
          * `DELETE FROM stores`, so every delivery/session/offer/pickup column folds byte-identically.
          * Precedented side effect (as v2/v3/v4/v6/v7/v8): the refold re-stamps `CURRENT_FALLBACK` rows
          * against today's economy.
+         * v10 (#1000): `StoreResolutionRunner` no longer discards the exact offer↔job link when a job
+         * has NO `pickup_records` row (a blown-through pickup that never confirmed, PICKUP_ARRIVED with
+         * no PICKUP_CONFIRMED) — the `DELIVERY_COMPLETED` trigger's own carried offer hashes already
+         * prove the link, and the old `pickups.isEmpty()` short-circuit threw it away with the missing
+         * anchor. The bump exists to HEAL the on-device 08-08 Zaxbys accept (1-of-5 lifetime offers left
+         * unlinked): the refold replays the delivery trigger through the new link-only arm. `storeKey`
+         * stays fail-null (no anchor to key with — an offer-form fallback was considered and REJECTED,
+         * see the design comment on #1000, fail-null beats fail-wrong). **Scope: `offer_records.
+         * linkedJobId` ONLY**, and only for rows the old code left unlinked — every other column, and
+         * every already-linked row, folds byte-identically. Precedented side effect (as v2 onward): the
+         * refold re-stamps `CURRENT_FALLBACK` rows against today's economy.
          */
-        private const val PROJECTOR_VERSION = 9
+        private const val PROJECTOR_VERSION = 10
     }
 }
