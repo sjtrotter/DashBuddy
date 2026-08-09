@@ -12,6 +12,7 @@ import cloud.trotter.dashbuddy.core.data.settings.AppPreferencesRepository
 import cloud.trotter.dashbuddy.domain.di.ApplicationScope
 import cloud.trotter.dashbuddy.domain.evaluation.OfferAction
 import cloud.trotter.dashbuddy.domain.evaluation.OfferEvaluation
+import cloud.trotter.dashbuddy.notice.TtsHealthNotifier
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -23,13 +24,38 @@ import javax.inject.Inject
 import javax.inject.Singleton
 import cloud.trotter.dashbuddy.domain.format.Formats
 
+/**
+ * Speaks the offer verdict aloud.
+ *
+ * **Liveness (#991).** The engine is built through [TtsEngineFactory] rather than inline, and a
+ * failed `speak()` escalates through [TtsRecoveryPolicy] — re-init, backed-off re-init, then a
+ * dasher-visible notice. Before that, the engine was constructed exactly once in `init` with
+ * [isReady] latched true forever, so when the engine's service binder dropped (2026-08-09: a
+ * Google TTS package update under an 8-day-old process) every utterance was lost silently for
+ * three dashes. See [TtsRecoveryPolicy] for the ladder and its reasoning.
+ */
 @Singleton
 class TtsEffectHandler @Inject constructor(
     @param:ApplicationContext private val context: Context,
     private val appPreferencesRepository: AppPreferencesRepository,
     @param:ApplicationScope private val appScope: CoroutineScope,
+    private val engineFactory: TtsEngineFactory,
+    private val healthNotifier: TtsHealthNotifier,
 ) {
     private var tts: TextToSpeech? = null
+
+    /** #991 — when to rebuild the engine, and when to stop pretending it's coming back. */
+    private val recoveryPolicy = TtsRecoveryPolicy()
+
+    /**
+     * True between requesting a re-init and the replacement engine reporting ready. It is what
+     * lets the "engine never came back" case still escalate: while it holds, a skipped utterance
+     * counts as a failure, so an engine whose *construction* also fails (no `onInit` ever lands)
+     * still reaches [TtsRecoveryPolicy.Decision.NOTIFY] instead of falling into the pre-#991
+     * silent `!isReady` early return forever.
+     */
+    @Volatile
+    private var recovering = false
 
     /** Monotonic utterance ids (#551 P7): the id is logged by the WARN error callback, so it
      *  must never embed the merchant name — a counter correlates callbacks just as well. */
@@ -69,32 +95,23 @@ class TtsEffectHandler @Inject constructor(
         )
         .build()
 
-    init {
-        tts = TextToSpeech(context) { status ->
-            if (status == TextToSpeech.SUCCESS) {
-                tts?.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
-                    override fun onStart(utteranceId: String?) {}
-                    override fun onDone(utteranceId: String?) {
-                        audioManager.abandonAudioFocusRequest(audioFocusRequest)
-                    }
-                    @Deprecated("Deprecated in Java")
-                    override fun onError(utteranceId: String?) {
-                        // No-op: errorCode overload handles this
-                    }
-                    override fun onError(utteranceId: String?, errorCode: Int) {
-                        Timber.tag("Tts").w("error %d for utterance %s", errorCode, utteranceId)
-                        audioManager.abandonAudioFocusRequest(audioFocusRequest)
-                    }
-                })
-                isReady = true
-                // #428 Half B: install the effective language now the engine is up (replaces the
-                // former unconditional Locale.US).
-                applyLanguage()
-                Timber.tag("Tts").i("engine initialized")
-            } else {
-                Timber.tag("Tts").w("init failed with status %d", status)
-            }
+    private val utteranceProgressListener = object : UtteranceProgressListener() {
+        override fun onStart(utteranceId: String?) {}
+        override fun onDone(utteranceId: String?) {
+            audioManager.abandonAudioFocusRequest(audioFocusRequest)
         }
+        @Deprecated("Deprecated in Java")
+        override fun onError(utteranceId: String?) {
+            // No-op: errorCode overload handles this
+        }
+        override fun onError(utteranceId: String?, errorCode: Int) {
+            Timber.tag("Tts").w("error %d for utterance %s", errorCode, utteranceId)
+            audioManager.abandonAudioFocusRequest(audioFocusRequest)
+        }
+    }
+
+    init {
+        createEngine(replacing = false)
         // Observe the override reactively so a settings change re-languages the live engine AND the
         // spoken copy with no restart (Reactive UI / UDF: the pref is the single source of truth).
         // distinctUntilChanged() is load-bearing: the app-prefs DataStore emits on EVERY write to the
@@ -107,6 +124,77 @@ class TtsEffectHandler @Inject constructor(
                 applyLanguage()
             }
         }
+    }
+
+    /**
+     * Build an engine and wire its init callback (#991). [replacing] only colours the logging —
+     * the wiring is identical, which is the point: a rebuilt engine gets the SAME utterance
+     * listener and the SAME #428-B language installation as the original, so recovery can never
+     * silently drop the settings override or the fallback WARN.
+     *
+     * Synchronized against [applyLanguage] so a settings write can't re-language an engine that is
+     * being swapped out from under it.
+     */
+    @Synchronized
+    private fun createEngine(replacing: Boolean) {
+        isReady = false
+        recovering = replacing
+        // A fresh engine has its own installed voices: the edge-gate for the unavailable-language
+        // WARN must not stay latched from the dead one, or a replacement that ALSO can't speak the
+        // chosen language would fall back to English with no line saying so.
+        lastFallbackTag = null
+        tts = engineFactory.create { status -> onEngineInit(status, replacing) }
+    }
+
+    /**
+     * The engine's readiness callback. Fires on the framework's own thread, asynchronously — so it
+     * is never inside [createEngine]'s frame, and the `tts` field it configures is already the
+     * engine that reported.
+     */
+    private fun onEngineInit(status: Int, replacing: Boolean) {
+        if (status != TextToSpeech.SUCCESS) {
+            // Not a failure the policy counts: no utterance was lost here. The next skipped
+            // utterance does the counting (see [recovering] in speakOffer).
+            Timber.tag("Tts").w("init failed with status %d", status)
+            return
+        }
+        tts?.setOnUtteranceProgressListener(utteranceProgressListener)
+        isReady = true
+        recovering = false
+        // #428 Half B: install the effective language now the engine is up (replaces the
+        // former unconditional Locale.US).
+        applyLanguage()
+        if (replacing) {
+            // INFO: a user-meaningful milestone ("the voice came back"), and PII-free by
+            // construction — no offer, store or screen value is in reach here (principle 7).
+            Timber.tag("Tts").i("engine re-initialized after failure")
+        } else {
+            Timber.tag("Tts").i("engine initialized")
+        }
+    }
+
+    /**
+     * Tear the dead engine down and build a replacement (#991).
+     *
+     * The in-flight utterance is NOT replayed: the offer that failed to speak is gone, and by the
+     * time the new engine reports ready the card may not even be on screen. Losing it honestly and
+     * saying so beats speaking a stale verdict at a driving dasher.
+     */
+    private fun reinitializeEngine() {
+        val dead = synchronized(this) {
+            val previous = tts
+            tts = null
+            isReady = false
+            previous
+        }
+        try {
+            dead?.shutdown()
+        } catch (t: Throwable) {
+            // A dead binder can throw on the way out; that must not stop the rebuild.
+            Timber.tag("Tts").w(t, "shutdown of the failed engine threw — rebuilding anyway")
+        }
+        Timber.tag("Tts").d("the failed utterance is dropped — recovery does not replay it")
+        createEngine(replacing = true)
     }
 
     /**
@@ -139,6 +227,11 @@ class TtsEffectHandler @Inject constructor(
     fun speakOffer(eval: OfferEvaluation) {
         if (!isReady) {
             Timber.tag("Tts").w("not ready, skipping offer speech")
+            // #991: a skip during a recovery IS a lost utterance — count it, so an engine that
+            // never reports ready again still escalates to the dasher. A skip before the very
+            // first init is not counted (nothing has failed yet; the engine is simply still
+            // coming up).
+            if (recovering) onSpeakFailed()
             return
         }
         val text = formatEvaluation(eval)
@@ -155,6 +248,50 @@ class TtsEffectHandler @Inject constructor(
             // other apps stay ducked (#341).
             Timber.tag("Tts").w("speak returned %s — abandoning audio focus", result)
             audioManager.abandonAudioFocusRequest(audioFocusRequest)
+            onSpeakFailed()
+        } else {
+            // #991: the engine accepted the utterance — the streak and the backoff reset.
+            recoveryPolicy.onSpeakSuccess()
+        }
+    }
+
+    /**
+     * Escalate one lost utterance through [TtsRecoveryPolicy] (#991). Never throws: it runs on the
+     * effect drain worker, which the #909 rules keep alive at all costs.
+     */
+    private fun onSpeakFailed() {
+        val decision = try {
+            recoveryPolicy.onSpeakFailure(System.currentTimeMillis())
+        } catch (t: Throwable) {
+            Timber.tag("Tts").e(t, "recovery policy threw — leaving the engine alone")
+            return
+        }
+        when (decision) {
+            TtsRecoveryPolicy.Decision.RETRY_REINIT -> {
+                Timber.tag("Tts").w(
+                    "speech failed %d time(s) — re-initializing the engine",
+                    recoveryPolicy.failureStreak,
+                )
+                try {
+                    reinitializeEngine()
+                } catch (t: Throwable) {
+                    Timber.tag("Tts").e(t, "engine re-initialization failed")
+                }
+            }
+
+            TtsRecoveryPolicy.Decision.WAIT -> Timber.tag("Tts").d(
+                "speech failed %d time(s) — inside the %d ms re-init backoff, not rebuilding",
+                recoveryPolicy.failureStreak,
+                recoveryPolicy.currentBackoffMillis(),
+            )
+
+            TtsRecoveryPolicy.Decision.NOTIFY -> {
+                Timber.tag("Tts").w(
+                    "speech still failing after %d consecutive losses — notifying the dasher",
+                    recoveryPolicy.failureStreak,
+                )
+                healthNotifier.onSpeechEngineUnrecoverable()
+            }
         }
     }
 

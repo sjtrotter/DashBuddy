@@ -6,7 +6,7 @@ import android.content.Context
 import cloud.trotter.dashbuddy.R
 
 /**
- * The one "App notices" notification channel (#938, extended by #937) — one-off, honest
+ * The one "App notices" notification channel (#938, extended by #937 and #991) — one-off, honest
  * disclosures about how DashBuddy itself is working on this device.
  *
  * A dedicated channel rather than a reused one: a channel name IS the user's mute control, so
@@ -51,5 +51,11 @@ object AppNoticeChannel {
 
         /** #937 — recognition has stopped understanding a platform's screens. */
         const val RECOGNITION_HEALTH = 103
+
+        // 104 is the weekly-plan recap (`WeeklyPlanChannel.NOTIFICATION_ID`) — a different
+        // channel, but the same small-id namespace, so this family continues at 105.
+
+        /** #991 — the speech engine died and re-initialization has not brought it back. */
+        const val TTS_ENGINE_HEALTH = 105
     }
 }
