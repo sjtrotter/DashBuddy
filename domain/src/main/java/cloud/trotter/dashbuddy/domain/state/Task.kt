@@ -55,6 +55,27 @@ data class Task(
      */
     val unassignedAt: Long? = null,
     val recovered: Boolean = false,
+    /**
+     * The `offerHash` of the accepted offer that **minted this slot** (#997) — the per-drop↔offer
+     * lineage the log otherwise lacks. Stamped by `JobAcceptFlow.preCreatedDropoffs` at the moment a
+     * job's placeholders are created (fresh mint AND add-on absorption), which is the only point where
+     * the mapping is both free and unambiguous: `Job.acceptedOffers` records `{offerHash, payAmount}`
+     * per accept, but nothing recorded WHICH placeholders each accept produced, so a job that absorbed
+     * N offers had to POOL their pay into one equal split (08-06: three accepts of \$10.45/\$16.55/
+     * \$20.20 each folded \$15.73). Its one consumer is
+     * [OfferPayFallback.shareFor]'s per-offer partition.
+     *
+     * **Slot identity, not accumulation.** Like `taskId`/`jobId`/`phase`/[expectedStoreHint], it
+     * describes the SLOT, so [swapTaskAccumulation] deliberately does NOT move it: the #526 swap
+     * re-attributes screen observations between two order slots; each slot keeps the offer that
+     * created it.
+     *
+     * Dropoffs only today (the split's denominator is dropoffs; pickup lineage has no consumer —
+     * YAGNI). Null on every non-placeholder task, on all pre-#997 snapshots/journals, and whenever the
+     * accepted offer carried no hash — each of which degrades the split to its pooled arm, never to a
+     * guess. `@Serializable` default-null ⇒ old snapshots/journals decode unchanged (no migration).
+     */
+    val mintedByOfferHash: String? = null,
 )
 
 /**

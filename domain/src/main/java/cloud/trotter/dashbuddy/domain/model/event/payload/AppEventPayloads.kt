@@ -144,13 +144,18 @@ data class DeliveryPayload(
      */
     val dropRealizedPay: Double? = null,
     /**
-     * This drop's equal-split share of the job's accepted-offer pay (#691) — an ESTIMATE, stamped
+     * This drop's share of the job's accepted-offer pay (#691) — an ESTIMATE, stamped
      * ONLY when the closing job was WHOLLY receipt-less (no receipt dollars anywhere on it) AND this
      * drop's own receipt inputs are absent, so a receipt-less shop delivery folds a real net row
      * instead of a $0-unattributed one. The platform's true per-drop split is unknowable without a
-     * receipt, so the whole job's offer total is divided equally across its owed dropoffs
+     * receipt, so the accepted quote is divided equally
      * ([cloud.trotter.dashbuddy.domain.state.DropPayApportioner.equalSplit], cents-exact
-     * remainder-to-last). Null on any receipted mint, on a pay-less offer, and on all pre-#691 events
+     * remainder-to-last) — since #997 across the drops of the drop's OWN accepted offer
+     * ([mintedByOfferHash]) rather than the whole job's pooled total, and since #996 excluding a
+     * never-activated placeholder when the job closed proven-complete; an unresolvable lineage
+     * degrades to the pre-#997 job-wide pooled split. See
+     * [cloud.trotter.dashbuddy.domain.state.OfferPayFallback].
+     * Null on any receipted mint, on a pay-less offer, and on all pre-#691 events
      * (nullable-with-default → old rows deserialize identically → the fold reproduces today's
      * `PayBasis.NONE` rows byte-for-byte, no `PROJECTOR_VERSION` bump). Consumed by the fold only as
      * `PayBasis.OFFER_PAY` and only when no sibling drop of this job already folded a real receipt.
@@ -166,6 +171,21 @@ data class DeliveryPayload(
      * deserialize identically.
      */
     val jobOfferHashes: List<String> = emptyList(),
+    /**
+     * The `offerHash` of the accepted offer that MINTED this drop's slot (#997,
+     * [cloud.trotter.dashbuddy.domain.state.Task.mintedByOfferHash]) — the per-drop↔offer join the log
+     * otherwise lacks. [jobOfferHashes] carries the whole add-on CHAIN on every row, so a job that
+     * absorbed N offers is unmappable from the log alone; this names the one offer this drop came from.
+     *
+     * **No fold consumer today** — deliberately, following the [jobOfferHashes] precedent (added for a
+     * downstream consumer before that consumer existed). The write side already applies the mapping at
+     * the mint (it is what makes [offerPayShare] per-offer), so this is provenance for later:
+     * #756's settlement split, and a per-offer #975 estimate-vs-reality for receipt-less stacks (a
+     * *receipt* can't be split per offer, but a per-offer ESTIMATE can). No `delivery_records` column,
+     * no schema change, no `PROJECTOR_VERSION` bump. Nullable-with-default ⇒ old events deserialize
+     * identically and a refold reproduces historical rows byte-for-byte.
+     */
+    val mintedByOfferHash: String? = null,
 ) : AppEventPayload
 
 /**

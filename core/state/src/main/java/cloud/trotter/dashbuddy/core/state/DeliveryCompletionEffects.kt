@@ -151,11 +151,27 @@ internal fun EffectMap.diffDeliveryCompletion(
                 // FIX 1: a PostTask-exit mint's job may still be OPEN — stamp only when this is
                 // the LAST OPEN owed dropoff (requireFinalShape), so a mid-stack pay-less exit
                 // can't over-count (estimate-then-late-receipt / add-on drift / cents drift).
+                // #996: the consolidation proof at THIS mint — the same #749-backed predicate the
+                // T1/T2 close guards use, so "proven complete" has ONE definition (Principle 5). The
+                // finishing drop is committed INLINE (the T2 idiom) because `Job.tasks` is the stale
+                // mirror at this instant (amdt #6): without it a job that IS complete would read open
+                // and the denominator would keep diluting. A blown-through (arrival-less) drop fails
+                // the #615 arrival gate inside the predicate → not proven → conservative.
+                val provenComplete = p.activeJob?.let { j ->
+                    isJobPhysicallyComplete(
+                        job = j,
+                        recentTasks = p.recentTasks,
+                        justRetired = completedTask.copy(
+                            completedAt = completedTask.completedAt ?: retireSince ?: obs.timestamp,
+                        ),
+                    )
+                } == true
                 val offerShare = offerPayShareFor(
                     region = p,
                     job = p.activeJob,
                     taskId = completedTask.taskId,
                     requireFinalShape = true,
+                    jobProvenComplete = provenComplete,
                 )
                 val payload = deliveryCompletedPayload(
                     task = completedTask,
@@ -215,6 +231,13 @@ internal fun EffectMap.diffDeliveryCompletion(
             )
         }
         val retirePending = p.pendingDestructive?.kind == DestructiveKind.TASK_RETIRE
+        // #996: the consolidation proof for the closing job, computed ONCE for every drop this
+        // close-out mints (all of them share one job shape). `next.recentTasks` is the committed
+        // lifecycle record at the close, so every finished drop is already visible — no inline
+        // justRetired is needed here (unlike the PostTask-exit mint above, whose drop is finishing on
+        // this very step). A job that closed for another reason (endSession bail, abandon) simply
+        // fails the predicate → the estimate keeps today's conservative dilution.
+        val closedJobProvenComplete = isJobPhysicallyComplete(closedJob, next.recentTasks, justRetired = null)
         // #528: split the combined receipt across the job's delivered drops once, so each
         // close-out completion carries its own share (the receipt-skip null rows and the
         // one over-full row become per-drop shares that sum to the receipt total).
@@ -262,6 +285,7 @@ internal fun EffectMap.diffDeliveryCompletion(
                 job = closedJob,
                 taskId = task.taskId,
                 requireFinalShape = false,
+                jobProvenComplete = closedJobProvenComplete,
             )
             val payload = deliveryCompletedPayload(
                 task = task,
@@ -311,24 +335,31 @@ private fun EffectMap.deliveryCompletedPayload(
     offerPayShare = offerPayShare,
     sessionEarningsAtCompletion = sessionEarnings,
     jobOfferHashes = jobOfferHashes,
+    // #997: the ONE offer this drop's slot came from (jobOfferHashes carries the whole add-on chain
+    // on every row, so the log had no per-drop→offer join). Provenance only — no fold consumer today.
+    mintedByOfferHash = task?.mintedByOfferHash,
 )
 
 /**
  * #691 offer-pay estimate share for [taskId] of [job] when the job was WHOLLY receipt-less — the
  * write-side stamp that lets a receipt-less shop delivery fold a real net row instead of a
- * $0-unattributed one. Thin edge over the pure [OfferPayFallback] policy: this computes the two
+ * $0-unattributed one. Thin edge over the pure [OfferPayFallback] policy: this computes the three
  * inputs only the region can see — the job-scoped receipt-evidence verdict
- * ([receiptSuppressesEstimate]) and the per-site final-shape flag — then delegates the eligibility
- * + split, and owns the observability WARN (FIX 6) for an eligible-but-unsplit drop.
+ * ([receiptSuppressesEstimate]), the per-site final-shape flag, and the per-site #996 completeness
+ * proof — then delegates the eligibility + split, and owns the observability WARN (FIX 6) for an
+ * eligible-but-unsplit drop.
  *
  * [requireFinalShape] is true at the PostTask-exit mint (job may still be open — stamp only the
  * LAST OPEN owed drop) and false at the #596 close-out (job already closed → final shape).
+ * [jobProvenComplete] is `isJobPhysicallyComplete` at this mint site (#996 — it decides whether a
+ * never-activated placeholder still dilutes the split).
  */
 private fun EffectMap.offerPayShareFor(
     region: PlatformRegion,
     job: Job?,
     taskId: String,
     requireFinalShape: Boolean,
+    jobProvenComplete: Boolean,
 ): Double? {
     if (job == null) return null
     val result = OfferPayFallback.shareFor(
@@ -337,19 +368,22 @@ private fun EffectMap.offerPayShareFor(
         mintingTaskId = taskId,
         suppressedByReceipt = receiptSuppressesEstimate(region, job),
         requireFinalShape = requireFinalShape,
+        jobProvenComplete = jobProvenComplete,
     )
     if (result.eligibleButUnsplit) {
         // The drop is estimate-ELIGIBLE (receipt-less, final shape) yet got NO share — a pay-less
-        // offer or a minting task outside the owed set (the quoted>delivered halving class). WARN
-        // it so the silent-denominator miss is observable. PII-safe: counts + jobId only, no
-        // store/customer text, stable tag (Principle 7; the #699 D6 join-miss precedent). The count
-        // is the SAME union set the split uses ([OfferPayFallback.owedDropoffs] — job.tasks no
-        // longer retains unassigned drops post-#752), so the WARN describes the real denominator.
+        // offer (job-wide, or #997's own offer's) or a minting task outside the eligible owed set
+        // (the quoted>delivered halving class). WARN it so the silent-denominator miss is
+        // observable. PII-safe: counts + jobId only, no store/customer text, stable tag
+        // (Principle 7; the #699 D6 join-miss precedent). The counts come from the SAME Result the
+        // split produced, so the WARN can never describe a different denominator than the one used.
         Timber.tag("StateMachine").w(
-            "#691 offer-pay estimate eligible but unsplit: job %s, %d owed dropoffs, offerTotal=%s " +
-                "— no share stamped; these dollars ride the unattributed bucket",
+            "#691 offer-pay estimate eligible but unsplit: job %s, %d eligible of %d owed dropoffs " +
+                "(perOffer=%s), offerTotal=%s — no share stamped; these dollars ride the unattributed bucket",
             job.jobId,
-            OfferPayFallback.owedDropoffs(job, region.recentTasks).size,
+            result.eligibleOwed,
+            result.quotedOwed,
+            result.perOffer,
             if (job.offerPayTotal == null) "null" else "present",
         )
     }

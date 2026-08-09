@@ -102,8 +102,8 @@ data class Job(
     /**
      * Swap the **accumulated screen state** between two of this job's tasks, identified by id,
      * while preserving each task's **slot identity** (`taskId`, `jobId`, `phase`,
-     * [Task.expectedStoreHint], `startedAt`). The order-slot stays put; the observations that
-     * were attributed to it move.
+     * [Task.expectedStoreHint], [Task.mintedByOfferHash], `startedAt`). The order-slot stays put;
+     * the observations that were attributed to it move.
      *
      * This is the #526 swap guard: a pickup screen can be bound to the wrong pre-created order
      * because the offer's store hints don't reliably match the parsed pickup store, so the data
@@ -133,7 +133,8 @@ data class Job(
 
 /**
  * Exchange the accumulated, screen-derived observations of two tasks while keeping each task's
- * durable slot identity (`taskId`, `jobId`, `phase`, [Task.expectedStoreHint], `startedAt`).
+ * durable slot identity (`taskId`, `jobId`, `phase`, [Task.expectedStoreHint],
+ * [Task.mintedByOfferHash], `startedAt`).
  * Pure; the basis of the #526 swap guard (see [Job.withSwappedAccumulation]). Returns the pair
  * in the same order it was given: `first` keeps a's identity with b's data, `second` keeps b's
  * identity with a's data.

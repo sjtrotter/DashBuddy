@@ -128,6 +128,21 @@ class AppEventCodecTest {
     }
 
     @Test
+    fun `#997 — a pre-#997 DELIVERY_COMPLETED row decodes with a null mintedByOfferHash`() {
+        // The additive per-drop-to-offer join must not disturb history: an event written before the
+        // field existed carries no such key, and nullable-with-default is what makes its decode
+        // identical (so a refold reproduces the row byte-for-byte — no PROJECTOR_VERSION bump).
+        val legacy = """{"jobId":"j1","taskId":"t2","phaseStartedAt":5000,"completedAt":6000,"totalPay":9.25}"""
+        val decoded = AppEventCodec.decodePayload(AppEventType.DELIVERY_COMPLETED, legacy) as DeliveryPayload
+        assertNull(decoded.mintedByOfferHash)
+        assertEquals("t2", decoded.taskId)
+
+        // …and a stamped row round-trips it.
+        val stamped = decoded.copy(mintedByOfferHash = "offer-h1")
+        assertEquals(stamped, roundTrip(AppEventType.DELIVERY_COMPLETED, stamped))
+    }
+
+    @Test
     fun `empty and blank payloads decode to null for every type`() {
         for (type in AppEventType.entries) {
             assertNull(AppEventCodec.decodePayload(type, "{}"))
