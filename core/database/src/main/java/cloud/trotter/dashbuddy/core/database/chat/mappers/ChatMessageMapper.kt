@@ -29,6 +29,7 @@ fun ChatMessage.toEntity(): ChatMessageEntity {
         is ChatPersona.BadOffer -> "BAD_OFFER"
         is ChatPersona.Inspector -> "INSPECTOR"
         is ChatPersona.Navigator -> "NAVIGATOR"
+        is ChatPersona.Dropoff -> "DROPOFF"
         is ChatPersona.Shopper -> "SHOPPER"
         is ChatPersona.Earnings -> "EARNINGS"
     }

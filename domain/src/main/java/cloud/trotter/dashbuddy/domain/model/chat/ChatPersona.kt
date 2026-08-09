@@ -68,6 +68,18 @@ sealed class ChatPersona {
         override val logLabel get() = displayName
     }
 
+    /**
+     * #1005: the dropoff-phase status persona — deliberately NOT [Customer] (name-bearing).
+     * The dropoff copy is store-flavored ("<STORE> Order"), never a customer-shaped label, so
+     * this persona carries no dynamic name at all — the same non-PII shape as [Navigator]/
+     * [Shopper]/[Earnings].
+     */
+    data object Dropoff : ChatPersona() {
+        override val id = "dropoff"
+        override val displayName = "Dropoff"
+        override val logLabel get() = displayName
+    }
+
     data object Shopper : ChatPersona() {
         override val id = "shopper"
         override val displayName = "Shopper"
@@ -104,6 +116,7 @@ sealed class ChatPersona {
                 "BAD_OFFER" -> BadOffer
                 "INSPECTOR" -> Inspector
                 "NAVIGATOR" -> Navigator
+                "DROPOFF" -> Dropoff
                 "SHOPPER" -> Shopper
                 "EARNINGS" -> Earnings
                 else -> Dispatcher

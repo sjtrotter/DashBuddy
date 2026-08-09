@@ -35,3 +35,23 @@ fun customerLabel(storeName: String?): String =
     storeName?.takeIf { it.isNotBlank() && it != UNKNOWN_STORE }
         ?.let { "${it}'s customer" }
         ?: CUSTOMER_FALLBACK
+
+/** Fallback dropoff label for [dropoffOrderLabel] when the store hasn't resolved. */
+const val DROPOFF_FALLBACK = "Dropoff"
+
+/**
+ * Store-flavored dropoff label (#1005) — "<STORE> Order" once the store has resolved, else
+ * the plain [DROPOFF_FALLBACK]. Driver-facing dropoff copy (the "heading to the drop"
+ * bubble/notification, the dropoff task card) used to read [customerLabel]'s "<STORE>'s
+ * customer" construction; on a DoorDash grocery/shop order that store name can itself BE
+ * the platform's own customer-name placeholder text (e.g. "H-E-B Customer"), which then
+ * walked straight into our copy as a fake customer name. The store's own order label never
+ * carries a customer-shaped string at all, so this is a SEPARATE function from
+ * [customerLabel] (not a rename) — [customerLabel] stays for the one remaining
+ * customer-flavored persona (a pickup-phase "confirmed with customer" hint). Never returns
+ * an empty "Order" — an unresolved store falls all the way back to the plain word.
+ */
+fun dropoffOrderLabel(storeName: String?): String =
+    storeName?.trim()?.takeIf { it.isNotBlank() && it != UNKNOWN_STORE }
+        ?.let { "$it Order" }
+        ?: DROPOFF_FALLBACK

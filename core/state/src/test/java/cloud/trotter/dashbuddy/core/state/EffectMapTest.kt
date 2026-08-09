@@ -1152,10 +1152,10 @@ class EffectMapTest {
             "a non-shop pickup feeds no shop-rate sample (#556)",
             effects.none { it is AppEffect.RecordShopRate },
         )
-        // #568: the dropoff bubble is store-flavored (the resolved store's customer), never a hash.
-        val bubble = effects.effectsOfType<AppEffect.UpdateBubble>().first { it.text.startsWith("Heading to") }
-        assertEquals("Heading to Chipotle's customer", bubble.text)
-        assertEquals(ChatPersona.Customer("Chipotle's customer"), bubble.persona)
+        // #1005: the dropoff bubble is the store's own order, never a customer-shaped label.
+        val bubble = effects.effectsOfType<AppEffect.UpdateBubble>().first { it.persona is ChatPersona.Dropoff }
+        assertEquals("Chipotle Order", bubble.text)
+        assertEquals(ChatPersona.Dropoff, bubble.persona)
     }
 
     @Test
@@ -1360,10 +1360,10 @@ class EffectMapTest {
             "leg-1's drop is confirmed as the active task moves on",
             effects.logEventTypes().contains(AppEventType.DELIVERY_CONFIRMED),
         )
-        // #568: the leg-2 bubble is store-flavored (never the raw hash).
-        val bubble = effects.effectsOfType<AppEffect.UpdateBubble>().first { it.text.startsWith("Heading to") }
-        assertEquals("Heading to Panera Bread's customer", bubble.text)
-        assertEquals(ChatPersona.Customer("Panera Bread's customer"), bubble.persona)
+        // #1005: the leg-2 bubble is the store's own order, never a customer-shaped label.
+        val bubble = effects.effectsOfType<AppEffect.UpdateBubble>().first { it.persona is ChatPersona.Dropoff }
+        assertEquals("Panera Bread Order", bubble.text)
+        assertEquals(ChatPersona.Dropoff, bubble.persona)
     }
 
     @Test

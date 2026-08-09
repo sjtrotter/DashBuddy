@@ -19,6 +19,7 @@ import cloud.trotter.dashbuddy.domain.state.Task
 import cloud.trotter.dashbuddy.domain.state.TaskPhase
 import cloud.trotter.dashbuddy.domain.state.UNKNOWN_STORE
 import cloud.trotter.dashbuddy.domain.state.customerLabel
+import cloud.trotter.dashbuddy.domain.state.dropoffOrderLabel
 
 /**
  * #240 — the pickup/dropoff task-lifecycle effect diffs, extracted from [EffectMap] (past the
@@ -284,14 +285,15 @@ internal fun EffectMap.diffTask(
  * The "delivery nav started" effect trio emitted when a NEW dropoff task
  * becomes the active task: the DELIVERY_NAV_STARTED log event (phase clock
  * stamped to this frame), the odometer resume, and the store-flavored
- * "Heading to <customer>" bubble. Shared by the first-leg pickup→dropoff
+ * "<STORE> Order" bubble. Shared by the first-leg pickup→dropoff
  * transition and the stacked leg-2 dropoff→dropoff / null→dropoff transition
  * (#603) so a stacked drop gets the exact same driver-facing treatment as
  * the first — one silent-second-drop bug, not two code paths that can drift.
  *
  * [task]'s storeName may be null on a leg-2 drop the dropoff screen didn't
- * carry a store for; [customerLabel] then falls back to the generic
- * recipient (never the hash). Leg-2 store re-attribution is #526's scope.
+ * carry a store for; [dropoffOrderLabel] then falls back to the plain "Dropoff"
+ * word (never a customer name, never an empty "Order"). Leg-2 store
+ * re-attribution is #526's scope.
  */
 private fun EffectMap.deliveryNavStartedEffects(
     sessionId: String?,
@@ -309,12 +311,15 @@ private fun EffectMap.deliveryNavStartedEffects(
     // #438 B5: ResumeOdometer arbitrated by the cross-platform stationary predicate
     // (diffCrossPlatform) — leaving an arrived pickup/drop for the next leg is the
     // stationary→moving crossing that resumes GPS there.
-    // #568: store-flavored label ("Heading to H-E-B's customer") — friendlier
-    // than the raw 6-char hash, and it disambiguates a multi-store stack's drops.
-    val customer = customerLabel(task.storeName)
+    // #1005: the store's own order, never a customer-shaped label. The old #568
+    // "Heading to <store>'s customer" construction let DoorDash's own customer-name
+    // PLACEHOLDER text (e.g. "H-E-B Customer" on a grocery/shop order, when the store name
+    // itself carries that placeholder) walk straight into our copy as a fake customer name.
+    // The persona is the fixed, non-PII ChatPersona.Dropoff — the message is the only
+    // dynamic part, and it is store text (merchant data), never a customer identity.
     add(
         AppEffect.UpdateBubble(
-            "Heading to $customer", ChatPersona.Customer(customer),
+            dropoffOrderLabel(task.storeName), ChatPersona.Dropoff,
             dedupeScope = task.taskId, sessionId = sessionId,
         )
     )

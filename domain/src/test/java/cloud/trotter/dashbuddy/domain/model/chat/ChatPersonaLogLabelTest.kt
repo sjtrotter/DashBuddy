@@ -24,6 +24,7 @@ class ChatPersonaLogLabelTest {
         ChatPersona.BadOffer,
         ChatPersona.Inspector,
         ChatPersona.Navigator,
+        ChatPersona.Dropoff,
         ChatPersona.Shopper,
         ChatPersona.Earnings,
     )
@@ -44,6 +45,7 @@ class ChatPersonaLogLabelTest {
         is ChatPersona.BadOffer -> ChatPersona.BadOffer
         is ChatPersona.Inspector -> ChatPersona.Inspector
         is ChatPersona.Navigator -> ChatPersona.Navigator
+        is ChatPersona.Dropoff -> ChatPersona.Dropoff
         is ChatPersona.Shopper -> ChatPersona.Shopper
         is ChatPersona.Earnings -> ChatPersona.Earnings
     }
