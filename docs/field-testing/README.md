@@ -78,6 +78,37 @@ card's **mechanical** half, #577 (re-confirmed, 24/24, ~0.55 s — with a new po
 that entry's Bug #1), the #457 path, and #554 ShadowProjector (2/2). The #462/#460 dropoff item
 was found **broken-in-part** (raw PII in capture envelopes) and moved to that entry's Bug #7.)_
 
+- **🆕 NEW — #999 — is DoorDash still SHOWING the per-delivery earnings receipt at all?** The
+  desk pull of 08-06/07/08 found **zero** receipt-shaped frames — recognized *or* unknown — after
+  08-02, and all 9 deliveries across those three dashes were priced by the `OFFER_PAY` estimate
+  fallback instead of a real receipt. The post-drop frame sequence changed too (`dropoff_photo` →
+  *nothing* → the next `offer_popup`, where it used to be `dropoff_photo` →
+  `dropoff_completed_confirm` → `delivery_summary_collapsed/expanded`). This is **not** a
+  recognition regression — the frames don't exist to recognize — so the only way to settle it is a
+  pair of human eyes on the phone.
+  **What to watch (any DoorDash drop):** immediately after you complete a delivery, does DoorDash
+  still put up the earnings summary card (the one with Base pay / Customer tip / Total)? If **yes**,
+  note roughly when it appears and for how long — and whether you had to tap anything to see it.
+  If **no**, note what shows instead (straight back to the map? an offer? a rating prompt?). Either
+  answer is the finding. **Desk:** `SELECT payBasis, COUNT(*) FROM delivery_records …` — an
+  all-`OFFER_PAY` dash with a nonzero unattributed remainder is the fingerprint.
+  - Confirmed: 0/2
+
+- **🆕 NEW — #991 (P0) — the spoken offer verdict went silent and stayed silent.** From 08-06
+  16:28 onward every single `speak()` call returned `-1` (15 of 15 across three dashes; 11 of 11
+  had succeeded on 08-01/08-02), each one logging `WARN/Tts: speak returned -1 — abandoning audio
+  focus`. Offers were still evaluated, carded and notified the whole time — **only the voice
+  died**, with no user-visible signal that it had. The app process had been alive for 8 days at
+  that point and the TTS engine was only ever initialized once, at install.
+  **What to watch (every dash, until this is fixed):** does the offer read actually SPEAK on each
+  offer? If it goes quiet, note (a) roughly how long the app had been running / when you last
+  rebooted or reinstalled, (b) whether anything else audible still works (navigation, music), and
+  (c) whether force-stopping DashBuddy and reopening it brings the voice back — that last one is
+  the single most useful data point, because it distinguishes a dead engine binding from a dead
+  handler. Expect silence after long uptimes until the fix lands. **Desk:** `grep 'Tts' app.log` —
+  `speak returned -1` runs and a lone `engine initialized` line at install time are the signature.
+  - Confirmed: 0/2
+
 - **🆕 NEW — #967 / PR #968 — ratings stamp during an Offline browse (the early-return fix).**
   The pre-fix bug: `updateLifecycle`'s Offline early-return sat ABOVE the opportunistic ratings
   stamp, so browsing the Ratings hub while DoorDash mode = Offline silently produced NO fresh
@@ -89,7 +120,13 @@ was found **broken-in-part** (raw PII in capture envelopes) and moved to that en
   should populate immediately, not stay blank/stale until the next Online dash. **Desk:** in
   `app_state_snapshots`, `ratings.capturedAt` should advance on an Offline-mode browse, not only on
   an Online one.
-  - Confirmed: 0/2
+  - Confirmed: 1/2 (desk 08-09, the 08-01→08-08 window: DESK HALF PASS — first pull whose device
+    build actually carries #968, and `ratings.capturedAt` advanced on five separate Offline
+    browses: 08-07 20:31 plus 08-08 10:40 / 10:41 / 15:09 / 15:10, every one stamped while the
+    mode snapshot read `[DoorDash:Offline]` (the two same-minute pairs are two browses each).
+    Pre-#968 that combination produced no stamp at all, so this is the fix working. The dev-eyes
+    half — the Ratings screen visibly populating during an Offline browse instead of reading
+    blank/stale — still wants a look on the phone.)
 
 - **🆕 NEW — #983 — Time tab: the two hourly rates, your typical online hour, gap stats
   (redesign stage 7/7 — the epic's last build).** Analytics → **Time**, after a dash or two.
@@ -112,7 +149,17 @@ was found **broken-in-part** (raw PII in capture envelopes) and moved to that en
   waited between orders (means accepts or completions aren't being recorded in-session).
   (d) **Page the window** (‹ ›) and confirm every figure on the tab moves together — no tile left
   quoting last week's number under this week's label.
-  - Confirmed: 0/2
+  - Confirmed: 0/2 (desk 08-09, the 08-01→08-08 window: the tab itself is a UI check no pull can
+    answer, but the **gap fold underneath (c) was traced against the log** and behaves as designed:
+    4 of the 5 dashes measure coherently — 7 gaps spanning 0.6–2.7 min, 5 dash-final drops
+    correctly excluded as tails, zero cross-dash and zero cross-day pairings. The fifth (08-01)
+    measures **0 gaps despite a real ~8-minute wait**, and the mechanism is now understood: that
+    dash's close-out sweep appended every `DELIVERY_COMPLETED` at `DASH_STOP`, so every completion
+    sequences AFTER every accept and no completion has a "next accept in the same dash" to pair
+    with. That is exactly the `0 gaps measured` failure shape named in (c) — but on a late-sweep
+    dash it is **expected by mechanism, not a fold bug**, so read that line as "no accept followed
+    a completion in sequence order", not "your accepts weren't recorded". Worth a dev-eyes pass to
+    decide whether the card should say so.)
 
 - **🆕 NEW — #981 — Weekly Plan + the Sunday notification (redesign stage 6).** A whole new screen,
   reached two ways: the Sunday-evening notification, and (once you save a plan) a row on Home.
@@ -225,46 +272,6 @@ was found **broken-in-part** (raw PII in capture envelopes) and moved to that en
     master @ 3bff50dd (07-30 ~14:22), which predates PR #976 (merged after this build). No redesign
     UI evidence obtainable from this pull.)
 
-- **🆕 NEW — #962 / PR #963 — points-based ratings parse + new rating surfaces.** Open DoorDash →
-  Ratings. In DashBuddy's Ratings screen you should now see a line reading
-  `Overall rating: <N> · Silver` (or Gold/Platinum) plus a `Quality rate` tile — all previously
-  blank on the 0.230.0 redesign. Then tap around the ratings area: the rewards board ("Rewards to
-  unlock"), the overall-rating info sheet ("Your overall rating is N"), a per-order feedback
-  drill-down, and the pause-offers sheet should all stop appearing as UNKNOWN captures.
-  **Watch for the tier being wrong:** open the side-nav drawer *while* on the Ratings screen —
-  the tier shown must still be the hub's, never the drawer's chip. **Desk:** the on-time
-  per-order drill-down (deliberately still UNKNOWN) must arrive with its `Delivery to <name>`
-  line scrubbed — the new third-conjugation marker working.
-  - Confirmed: 1/2 (desk 07-31, the 07-30 dash: recognition PASS — `doordash.screen.
-    overall_rating_explainer` RECOGNIZED at 14:52:51 (the very install this build's own first
-    launch produced). Two adjacent surfaces are STILL UNKNOWN and are the item's own known-gap
-    families, not a regression: the rating-FACTOR expanded drill-down and the rewards-spend
-    screen — filed as #988. **Bonus finding, same browse session:** the install predates #968
-    (merged 07-30 15:14 — this device is 3bff50dd, ~14:22), so the #967 Offline-early-return bug
-    fielded AGAIN in the wild before its own fix landed — the dasher browsed the ratings hub
-    14:51–14:52 while mode=Offline and no fresh `ratings.capturedAt` stamp landed (stayed on the
-    07-29 all-null legacy stamp until the first Online browse at 18:24:33). Independent
-    corroboration that #968 was the right fix for the right bug; no new issue needed, #967/#968
-    already tracked it. Second confirmation of #962 wants the per-order drill-down + rewards
-    board checked with dev eyes.)
-
-- **🆕 NEW — #937 / PR #960 — recognition-health liveness (version stamp + UNKNOWN-rate alarm).**
-  What to watch: (a) after the dash, the desk pull's `PipelineStats` INFO lines should carry a
-  `platformApps=com.doordash.driverapp@<version>` suffix, and new capture envelopes should carry
-  `"platformAppVersion"` in their `metadata` block — that is the stamp working; (b) you should see
-  NO "recognition health" notification and no `RecognitionHealth` WARN on a normal dash where the
-  bubble is narrating offers/pickups/deliveries as usual. A notification reading "DashBuddy can't
-  read DoorDash right now" while the app is visibly tracking fine is a FALSE POSITIVE — note what
-  was on screen for the previous minute or two (a long stretch on an unruled surface is the
-  suspected shape) and the threshold needs raising. If recognition really does go quiet mid-dash
-  (no offer cards, no phase changes), the notification SHOULD appear within ~50 admitted frames —
-  that one is the feature working.
-  - Confirmed: 1/2 (desk 07-31, the 07-30 dash: version stamp PASS — `platformAppVersion: 8.91.7`
-    present in envelope metadata AND `PipelineStats` (`platformApps=com.doordash.driverapp@8.91.7`).
-    False-positive half PASS — zero `RecognitionHealth` WARNs and no recognition-health notification
-    across a textbook clean dash (4 complete job chains, 0 ERROR). The true-positive half (recognition
-    actually going quiet mid-dash) remains unexercised — needs a real anchor break to confirm.)
-
 - **🆕 NEW — #944 / PR #957 — permission gate re-hoisted (UDF).** The permission bottom sheet's
   behavior should be unchanged: it opens when permissions are missing, advances card-by-card as
   each is granted, closes cleanly when all are granted — and, the edge the refactor specifically
@@ -308,34 +315,6 @@ was found **broken-in-part** (raw PII in capture envelopes) and moved to that en
   appears.
   - Confirmed: 0/2 (desk 07-31, the 07-30 dash: un-exercised — the device stayed on English
     throughout; the notice/WARN path needs the language-switch-and-toggle exercise on the phone.)
-
-- **🆕 NEW — #910 / PR #931 — the five customer-PII leak sites are closed (three mechanisms; desk-only).**
-  Rule redacts on `delivery_summary_collapsed` (name + street + city/zip + instruction/item free
-  text) and the two multi-pickup surfaces (`customer_name` nodes); click envelopes now inherit the
-  screen-target rule's redact (a tap on a customer row used to ship the raw subtree); and a
-  rules-independent customer-node-ID backstop (`user_name`/`customer_name`/`address_line_*`)
-  scrubs UNKNOWN screen+click envelopes — the split-node `Delivery for` pre-render sheet (fielded
-  07-28 AND 07-29, once per job) is the marquee case.
-  **Desk (next pull):** (1) every `delivery_summary_collapsed` /
-  `pickup_post_arrival_multi` / `pickup_pre_arrival_multi` envelope shows `[redacted…]` on
-  name/address/instruction nodes, store + pay still raw; (2) the `Delivery for` UNKNOWN sheet's
-  `user_name` sibling arrives scrubbed (grep the UNKNOWN tree for the `\s{1,4}` name shape → zero);
-  (3) UNKNOWN click envelopes carrying `customer_name`/`user_name` ids arrive scrubbed; (4)
-  regression watch: `pickup_navigation`'s MERCHANT address must STAY raw (the id backstop is
-  UNKNOWN-only — a masked merchant address on a recognized pickup surface means it leaked scope).
-  - Confirmed: 1/2 (desk 07-31, the 07-30 dash: FIRST LIVE FIRE of mechanism (2), the `ID_MARKERS`
-    backstop — one `WARN/Pipeline: Capture backstop: UNKNOWN screen carried customer PII
-    (textMarker=- nodeId=address_line_1)` at 18:30:50.332 on the split-node `Delivery for`
-    pre-render sheet, the exact marquee case the item describes. Mechanism (1) rule-declared
-    redacts also held: the two `delivery_summary_collapsed`/`delivery_summary_expanded` captures on
-    this dash (jobs 271/274) show name/street/city-zip masked, store+pay raw; all four customers'
-    masks stable across surface forms (`Deliver to`/`Pickup for` agree, same 4-hex prefix as the
-    persisted `customerHash`); `pickup_navigation`'s merchant address stayed raw (no scope leak).
-    Mechanism (3), the click-envelope inherited-redact path, was NOT exercised — no click envelope
-    carried a customer node this dash. Note this pull also incidentally corroborates #835's
-    three-field `scrubbableStrings()` enumeration on the fired backstop (no raw
-    `stateDescription`/`contentDescription` sibling survived next to the masked node). Second
-    confirmation still wants mechanism (3) — a click on a recognized customer row.)
 
 - **🆕 NEW — #895 / PR #927 — fused `Apt <n>` masks are plain on all 8 uber+doordash surfaces
   (desk-only).** The `Apt [redacted:<4hex>]` form (brute-recoverable ~10⁴ alphabet) is gone;
@@ -386,7 +365,14 @@ was found **broken-in-part** (raw PII in capture envelopes) and moved to that en
     (`offer_accepting` ×2 of 4 accepts, `shopping_pay_adjustment` ×1 also this dash — same ~50%
     accept-spinner coverage as 07-29). NEW RESIDUAL inside the now-recognized geofence family: the
     flow's own `Continue / Go back` confirmation sheet (19:29:31) is still UNKNOWN — filed as #989.
-    Still holding at 0/2 pending #922 and #989; 5 of 8 families remain unexercised.)
+    Still holding at 0/2 pending #922 and #989; 5 of 8 families remain unexercised.
+    Desk 08-09, the 08-01→08-08 window: a FOURTH family sighted and the negative test holds across
+    five dashes — recognized this window: `offer_accepting` ×7, `shopping_pay_adjustment` ×1,
+    `shopping_shelf_photo` ×1 (new), `dropoff_multi_order_confirm` ×1 (new), with zero new
+    bubble/TTS chatter around any of 26 offers and no ghost offers. The blocker is unchanged: the
+    offer-card **inflation** frames still land UNKNOWN (~29 of them this window, #922, including
+    two fully-populated offer cards), so accept-spinner coverage is still partial. Holding at 0/2
+    pending #922 and #989.)
 
 - **🆕 NEW — #882 / #881 — Uber stacked offers speak the STORE, and a "Match" is recorded as a match.**
   Two fixes on the same card. **#882:** a multi-order Uber card ("Delivery (2)") rendered its type
@@ -486,7 +472,13 @@ was found **broken-in-part** (raw PII in capture envelopes) and moved to that en
     raw hits across the whole pull. Marker observed was `Tr12`/"Transfer out" rather than the item's
     named `Tr11`/"Transfer in" — same backstop family, different button on this visit; no over-match
     (no benign delivery/offer frame missing from `captures/`). Second confirmation wants the
-    `Transfer in` button specifically, to round out the pair.)
+    `Transfer in` button specifically, to round out the pair.
+    Desk 08-09, the 08-01→08-08 window: SAME SHAPE AGAIN, still not the missing button — five more
+    marker fires (`Tr12`/Transfer out ×3, `sh30`/the amount-adjacency shape ×2), the full
+    dasher-banking raw sweep (`transfer +\$[0-9]`, `transfer in`, `available balance`, `routing
+    number`, `cash out`, `instant pay`) returns ZERO across the whole nine-day pull, and no benign
+    delivery/offer frame went missing. Stays 1/2 — the pair still needs the literal `Transfer in`
+    button, a deposit-side affordance the dasher simply hasn't tapped in two windows now.)
 - **🆕 NEW — #843 — prompted per-capability automation consent (no auto-grant).** Automations are
   no longer pre-granted; each must be consented to individually via a prompt at the app's front
   door (Google Play policy). On upgrade, a one-shot migration clears the old auto-grants, so every
@@ -523,7 +515,15 @@ was found **broken-in-part** (raw PII in capture envelopes) and moved to that en
     automation 5× (`WARN/Effects: Denied confirm_decline — no granted capability for rule
     'doordash.screen.offer_popup_confirm_decline' (fail closed)`), the clearest single-log evidence
     yet that #417's gate and #843's no-auto-grant compose correctly. Still 1/2 — the UI half is
-    unchanged and still needs dev eyes.)
+    unchanged and still needs dev eyes.
+    Desk 08-09, the 08-01→08-08 window: SIXTH mechanism corroboration, and the longest observation
+    window yet — the 07-31 install's two `Consent: reconciled 4 capabilit(ies)… none granted —
+    awaiting consent` lines, then **zero** grant lines across nine days and five dashes, with the
+    fail-closed gate denying `confirm_decline` **21 times** over that stretch (`WARN/Effects:
+    Denied confirm_decline — no granted capability … (fail closed)`). Item 2's
+    before-you-grant-anything check is now proven negatively over a full field week rather than a
+    single evening. Still 1/2 — the UI half (sheet layout, "Not now" re-prompt, "Don't allow"
+    durability, exactly-one-grant) has still never been exercised and needs dev eyes.)
 
 - **🆕 NEW — #859 (H4 + placeholder filenames) — one offer screenshot per presentation, and no
   `{storeName}` filenames.** The Uber offer screenshot now dedupes on the presentation (#830's
@@ -632,27 +632,6 @@ was found **broken-in-part** (raw PII in capture envelopes) and moved to that en
     ='Delivery for' + a RAW `user_name` sibling (18:14:06); the #806 prefix scan structurally
     can't reach a bare-name node. Field-confirmed as #910's V5; the #910 build's node-ID backstop
     is the fix. The #865-side trio was separately closed by PR #926's ratings broadenings.)
-- **🆕 NEW — #862 — the scrub diagnostics stop scrubbing themselves (desk-only).** The capture
-  layer's own "the privacy layer fired" WARNs used to name the tripped marker verbatim, so the
-  shareable-log sink redacted the whole line out of the exported bug report; they now name it by a
-  log-safe **id** (first two alphanumerics + length — `Tr12` = `Transfer out`).
-  **What to watch:** nothing on-dash. **Desk:** in the next pull's `shareable.log`,
-  `grep -e 'Capture scrubbed:' -e 'Capture backstop:'` returns the intact diagnostic lines (with `marker id
-  '<id>'`), and no `[scrubbed:<marker>]` placeholder remains that corresponds to one of our own
-  capture WARNs — any `[scrubbed:…]` left is a REAL upstream leak worth chasing. The `app.log`
-  firehose copies must match line-for-line.
-  - Confirmed: 1/2 (desk 07-30, the 07-29 dash: UN-EXERCISED — zero `Capture scrubbed:`/`Capture
-    backstop:` lines and all three scrub counters read 0; the backstop never needed to fire on a
-    recognized surface, and the one leak that DID occur (#910 V5, the split-node UNKNOWN sheet) is
-    precisely a shape this diagnostic could not see. shareable.log itself was fully PII-safe with
-    zero `[scrubbed:…]` placeholders. Desk 07-31, the 07-30 dash: PASS — this time the diagnostic
-    DID fire, 12 times (5× `GRACE_COMMIT` timer WARNs aside): 4× `De11` backstop, 1× `-`/
-    `address_line_1` backstop (the #910 first-fire), 5× `Capture scrubbed:` sensitive-marker hits
-    (`Tr12` ×3, `sh30` ×2, `Cr7` ×2 — recount: 12 total scrub/backstop WARNs across both logs). Every
-    one appears VERBATIM in `shareable.log` with its marker id intact and zero `[scrubbed:…]`
-    placeholder anywhere in the export — the id-not-verbatim-marker design holds under real load.
-    This is the FIRST actual confirmation (07-29 was un-exercised, not a pass); second
-    confirmation still wants a dash where the diagnostic fires again.)
 - **🆕 NEW — #810 B1 / PR #818 — JOB_ACCEPT_MISMATCH close tripwire.** A job closing with more accepted
   offers than accounted physical orders now emits one `JOB_ACCEPT_MISMATCH` event + a `StateMachine` WARN
   (the 07-19 session-114 invisible-unassign class is no longer silent).
@@ -667,7 +646,13 @@ was found **broken-in-part** (raw PII in capture envelopes) and moved to that en
     incl. a two-store one-customer job and a receipt stack. The item stays open solely for the
     true-positive half. Desk 07-31, the 07-30 dash: FOURTH clean pass — zero `JOB_ACCEPT_MISMATCH`
     rows across a textbook 4-job dash (6 offers, 4 accepts, 2 declines, 0 timeouts). Still stays
-    open solely for the true-positive half.)
+    open solely for the true-positive half.
+    Desk 08-09, the 08-01→08-08 window: FIFTH clean pass, and the widest yet — zero
+    `JOB_ACCEPT_MISMATCH` rows across five dashes / 26 offers / 15 drops, *including* two shapes
+    that would have been prime false-positive bait: a job that absorbed three separately-accepted
+    offers (see the 08-09 entry's item 7) and a two-store stack. The tripwire correctly stayed
+    silent on both — neither is an accept-vs-orders mismatch, they are pay-attribution defects
+    downstream of it. Still stays open solely for the true-positive half.)
 - **🆕 NEW — #809 / PR #820 + #803 / PR #821 — pickup/dropoff PII redacts (desk-resolvable).** New
   redacts: `pickup_select_issue` (+ its issue-list variant, now recognized) masks the fused
   `For <name> • <store>` header to `For [redacted:<4hex>]`; `dropoff_pin_entry`/`dropoff_handoff` mask
@@ -848,6 +833,16 @@ was found **broken-in-part** (raw PII in capture envelopes) and moved to that en
     the job-61 class did not recur. Caveat: it closed via the STRICT completeness arm (no
     "#749 coverage arm closed" line), so #749's own per-customer arm is outcome-validated but not
     path-exercised; the second confirmation should ideally catch the coverage-arm path.)
+  - **BROKEN-IN-PART (desk 08-09, the 08-07 dash) — the shape recurred and CLOSURE worked, but
+    half the job's pay vanished.** Offer seq 1496, $13.10, two orders to one customer: both pickups
+    confirmed, one physical drop, the job closed correctly and the next offer minted its own job —
+    #749's own deliverable held. But the single folded delivery took `offerPayShare = 6.55`, i.e.
+    the offer total split across BOTH owed drops while only one drop ever exists to claim a share,
+    and the session's unattributed remainder is exactly $6.55. #749 fixed *closure* for this shape;
+    it did not touch the `owedDropoffs` denominator that prices it. Filed as **#996** and written up
+    as item 6 of the 2026-08-09 entry below (per this file's own rule, a broken finding goes to the
+    log immediately). The item stays here at 1/2 for the closure half's second confirmation — but
+    read it alongside #996, because on a receipt-less job the two halves disagree.
 
 - **🆕 NEW — categorize a "(No session)" orphan delivery into its real dash (#660 piece 2).**
   The Money-tab "(No session): $X across N deliveries" callout is now **tappable** — it opens an
@@ -917,7 +912,15 @@ was found **broken-in-part** (raw PII in capture envelopes) and moved to that en
   hours/days you actually earn the most, cells you barely dashed should read as "too little time" (dim,
   distinct from a worked-but-earned-nothing cell), and the "best hour so far" line should feel right.
   Framing check: all copy is "YOUR net $/hr" — flag any wording that reads as a platform-pay claim.
-  - Confirmed: 0/2. **2026-07-13 desk pass:** data half sane — pickup dwell all minutes-scale
+  - Confirmed: 1/2 (the **data half**, desk 08-09, the 08-01→08-08 window: 14 `pickup_records`
+    visits, dwell 0.0–71.1 min — all minutes-scale, none negative, none hours-scale — and the
+    resolved store keys read as real places rather than placeholders, including the #773
+    address-tier form `doordash|h-e-b|@5910`. That is the "running keys match reality + sane dwell"
+    correctness half this item was held open for. The **UI half** — cards rendering, the heatmap's
+    warm cells falling on hours that feel right, the best-hour line — still needs dev eyes, and
+    note #979 has since reshaped this tab into a leaderboard, so the second confirmation should be
+    taken against that item's description, not this one's card layout.)
+  - **2026-07-13 desk pass:** data half sane — pickup dwell all minutes-scale
     (1.8–53 min across 15 visits). **2026-07-12 partial dev sighting (post-#763 build):** the heatmap section (B)
     renders well and the dev likes it; the store-cards section (A) was flagged for UX polish — too
     word-dense, and "p95" means nothing to a dasher (issue filed from this feedback). Data-correctness
@@ -971,23 +974,6 @@ was found **broken-in-part** (raw PII in capture envelopes) and moved to that en
     "works fine" — first live exercise of the interactions after two dashes with no bubble-initiated
     fetch in any log. Second confirmation should re-touch the full cycle: AUTO refresh → take-manual
     → Resume auto, plus the Settings → Personal Economy agreement check.)
-- **🆕 NEW — over-attribution review flag on the Money tab + per-dash drill-down (#701).**
-  The Money tab's unattributed-pay callout ("$X not attributed…") now has a mirror: when a
-  session's **captured delivery pay exceeds** the platform's reported summary total (the
-  opposite direction — e.g. a phantom offer-pay estimate or a mixed-receipt over-stamp), a
-  second callout appears ("attributed exceeds reported by $X — review estimates/corrections"),
-  tinted with the stronger `badBg` (not the softer `warnBg` the unattributed one uses). The
-  per-dash drill-down (tap a session in Recent Dashes) shows the same mirror callout when that
-  ONE dash is over-attributed. **What to watch:** on a normal dash where reported ≈ delivered,
-  neither callout (or only the unattributed one) should appear — the new callout is a **display-only**
-  signal and must never move the True-Net waterfall's Net figure or the stat tiles. If you ever see
-  a dash where delivered pay looks higher than the platform's own reported total (rare — usually a
-  DoorDash shop/Drive job with an estimate involved), confirm the new callout fires with the correct
-  dollar amount and that Net/hr, Net/mi, and the waterfall are unaffected.
-  - Confirmed: 1/2 (07-07 + 07-08 desk analysis: the negative path — all 5 moneyed sessions
-    reconciled EXACTLY (Σ delivered = reported), so no false callout was possible on either dash
-    and none was reported. The positive-fire path — a genuinely over-attributed dash — remains
-    unobserved; rare by nature.)
 - **🆕 NEW — offer lifecycle unchanged single-platform after the platform-owned-offers move (#438 B3 / PR).**
   Offers moved off the shared global screen slot onto each platform's own region (the concurrency
   fix), and the whole accept-stash mechanism was replaced by an owned accepted-pending-consumption
@@ -1004,23 +990,16 @@ was found **broken-in-part** (raw PII in capture envelopes) and moved to that en
     OFFER_TIMEOUT, and the Sonic+Willie's two-pickup stack minted both pickup placeholders —
     clean on BOTH dashes. 2026-07-18: 25 offers across the day all resolved coherently — data half
     reinforced. Second confirmation should be dev-eyes on (1)–(3): card visuals, heads-up
-    notification, TTS.)
-- **🆕 NEW — odometer arbitration holds single-platform (#438 B5 / PR).** The GPS odometer moved off
-  each platform's own diff onto one cross-platform decision (starts once when a dash opens, pauses
-  when parked at a stop, resumes on leaving, stops when the dash ends). Single-platform behavior
-  must feel **identical**. On a normal DoorDash dash, watch the odometer + session miles: (1) the
-  "Odometer Active" notification appears **once** at dash start (not re-created per offer/leg); (2)
-  the **session miles** in the bubble HUD climb during drives and hold steady while you're parked at
-  a pickup/dropoff, then resume climbing when you leave; (3) at dash end the miles look right for the
-  distance you actually drove (compare to your car's trip odometer if handy). One improvement to
-  watch for specifically: on a **stacked multi-drop** (two drops back-to-back) and on a **skipped/late
-  receipt**, the odometer should now keep counting the drive to the next stop even when the app's
-  active-task display lags on the previous drop (today's build wrongly paused there). Miles that look
-  far too low (odometer stuck paused through a drive) or a session-miles value that resets to ~0
-  mid-dash is a B5 regression — capture it. (#438 B5 / PR)
-  - Confirmed: 1/2 (07-07 + 07-08 desk analysis: partition deltas sane on every delivery — 5.9 mi
-    single-drop, 24.5 mi session-spanning — no stuck-paused zeros, no mid-dash reset, session
-    odometer deltas consistent. The "feels identical" + trip-odometer comparison needs dev eyes.)
+    notification, TTS.
+    Desk 08-09, the 08-01→08-08 window: the machine half stays clean at scale — 26 offers across
+    five dashes, every one carded and evaluated, **zero** `OFFER_TIMEOUT`, outcomes coherent
+    throughout. Two notes that bear on sub-check (3) and on (4)'s completeness rather than on B3
+    itself: the **spoken read stopped firing entirely from 08-06 16:28 onward** (every `speak()`
+    returned −1 — that is #991, a TTS-handler death, not an offer-lifecycle defect: the offers
+    still carded and notified), and one accepted offer never linked to its job
+    (`offer_records.linkedJobId` null on the 08-08 Zaxbys accept, because the job had no pickup
+    phase at all — #1000). Stays 1/2; sub-checks (1)–(3) still need dev eyes, and (3) can't be
+    judged at all until #991 is fixed.)
 - **🆕 NEW — edit a delivery directly + cash tips (#688 phase A / PR).** In **Analytics → a dash →
   the delivery drill-down**, **tap a delivery row** (or its pencil) → the **Adjust delivery** dialog:
   Store name / Pay / Tip / Cash tip / Miles / Note. This replaces the pay-only editor and is the real
@@ -2406,6 +2385,269 @@ Accept and Decline registered on DoorDash — and moved to that session's entry 
   the redesign, because the parse is still anchored on the old `textView_title` layout. That was
   already true before this change; re-anchoring the parse is separate, data-enrichment work.
   - Confirmed: 0/2.
+
+---
+
+## 2026-08-09 — DESK ANALYSIS of the 08-01→08-08 field week (pull 08-09): the voice died on 08-06 and nothing said so; four new Pledge leaks; two pay-split defects; the delivery receipt stopped appearing
+
+**Date:** 2026-08-09 (dashes 2026-08-01, 08-02, 08-06, 08-07, 08-08) · **Platform(s) tested:**
+DoorDash only — **zero** Uber sessions all window (11 Uber promo notifications and nothing else, so
+every Uber checklist item is NO-SIGNAL, not a null result) · **Branch under test:** `master` @
+`bbc36913` (post-#984 — every redesign stage #970–#983 aboard), app 0.230.0, installed 2026-07-31
+11:42 · **Field conditions:** five moneyed dashes over nine days, **one single app process for the
+entire window** (never restarted, never updated), 127,024 log lines, **0 ERROR**. Pull:
+`~/dashbuddy/logs/2026/08/09/`; the device was purged 07-31, so this is a clean non-overlapping
+slice.
+
+### Session inventory and the money verdict
+
+| Dash | Window | Drops | Reported | Attributed | Δ |
+|---|---|---|---|---|---|
+| 08-01 | 11:17–13:59 | 3 | $58.41 | $38.04 | −$20.37 |
+| 08-02 | 15:49–18:43 | 3 | $68.63 | $68.63 | **exact** |
+| 08-06 | 16:22–18:45 | 3 | $49.45 | $47.20 | −$2.25 |
+| 08-07 | 18:13–20:30 | 3 | $52.85 | $46.30 | −$6.55 |
+| 08-08 | 12:30–13:54 | 3 | $41.76 | $39.60 | −$2.16 |
+
+(Plus one 2-minute $0 session on 08-06.) Aggregate **$271.10 reported / $239.74 attributed**,
+−$31.36 (11.6 %), and **no session over-attributed** in either direction. Every one of those five
+deltas is now explained by name: 08-02 reconciles to the cent; 08-01's whole −$20.37 is the
+unrecognized return-order pay screen (item 9); 08-06 is mostly a $2.00 post-delivery tip push
+(item 14); 08-07's −$6.55 is *exactly half* of a two-order offer (item 6, a defect); 08-08 is
+post-offer tip drift on estimate-priced rows. The window's headline is not the money, though — it is
+that the app spent its last three dashes silent, and the delivery receipt sheet stopped existing.
+
+### Headline: the spoken verdict has been dead since 08-06, and nothing anywhere said so (item 1)
+
+**1. Offer TTS returns −1 on every call from 08-06 16:28 onward → #991 (P0).** This is the dev's
+own fielded complaint, and the log carries it exactly: 15 of 15 `speak()` calls on 08-06/07/08
+returned `-1`, each logging `WARN/Tts: speak returned -1 — abandoning audio focus`; 11 of 11 on
+08-01/08-02 had succeeded. `engine initialized` appears **once** in the whole 127k-line log, at the
+07-31 install — the process never restarted, so the `TextToSpeech` instance in play on 08-08 was
+eight days old. Working hypothesis: the engine's binder died (a Google TTS / Speech Services package
+update between 08-02 18:06 and 08-06 16:28 would be the ordinary way for that to happen), and the
+`@Singleton` `TtsEffectHandler` has no re-init path — `isReady` is set at init and never reset, so
+every subsequent utterance is dispatched into a dead binding forever. Would need confirming by
+checking whether a force-stop restores the voice (hence the checklist item asking exactly that).
+
+What makes this the entry's worst finding is not the silence itself — offers were still evaluated,
+carded and posted as heads-up notifications the whole time, and the dasher's money was never at risk
+— it is that this is the **same silent-death family as #909/#914 (effect engine), #916 (bubble) and
+#917 (odometer)**: a `@Singleton` whose one job stops happening inside a live process, with no
+alarm, no counter, and no self-heal. The quadrant that #937 filled for recognition is exactly the
+quadrant TTS is missing. Nothing in the app noticed for three dashes; the dev did.
+
+### The Pledge section: four new leaks, all filed (items 2–5)
+
+**2. `pickup_wait_survey` is RECOGNIZED and ships a raw `customer_name` → #992 (P1).** The rule has
+no `redact` block at all (`matchers/rules/doordash/pickup.json5:445`); two envelopes on 08-07 carry
+the customer's name verbatim. The structural point: the #910 `ID_MARKERS` node-id scan is
+**UNKNOWN-only by design** (a recognized frame keeps its rule's deliberate decisions — that's what
+keeps `pickup_navigation`'s merchant address raw), so a recognized rule that simply forgets `redact`
+has *no* backstop underneath it. Every one of the last few Pledge findings has been an id-less or
+marker-less shape; this one is the opposite and arguably worse — a surface we recognize, whose PII
+we could have masked with one declaration.
+
+**3. `dropoff_navigation`'s `arriving_at_title` ships the raw customer street address → #993 (P1).**
+One envelope, 08-02 18:00. The mask for this exact node exists on `nav_arriving`
+(`nav-comms.json5`) but not on the dropoff-phase rule that wins when the arrival banner inflates
+over the dropoff sheet — and the giveaway is that the **same frame** masks
+`bottom_sheet_address_line_1` correctly. The raw copy and the masked copy of the same address sit
+side by side in one envelope. Sibling of #886's maneuver-cluster work, which covered the nav
+maneuver nodes on this rule but not the arrival title.
+
+**4. A FOURTH timeline conjugation, `Return <customer> to <store>` → #994 (P1).** Three recognized
+`timeline` envelopes on 08-01. It escapes both layers at once: the rule's own `redact` enumerates
+`Pickup for` / `Deliver to` / `Pickup from`, and `CustomerTextMarkers.MARKERS` doesn't carry it
+either. Same class as #962's third conjugation (`Delivery to`) — DoorDash keeps inventing sentence
+forms for "this order belongs to this person", and each one is a separate enumeration miss. Whether
+the answer is a fourth literal or a shape-based marker is a design question, not a desk one.
+
+**5. The receipt-scan camera persists the customer's name on id-less nodes (`Focus on <name>`)
+→ #995 (P1, DEV RULING WANTED).** Five UNKNOWN envelopes, 08-07 19:46:54–19:47:05. No view id, no
+marker prefix, no rule — nothing in any scrub layer can currently reach it. The open question is
+which Pledge family it belongs to: a camera pointed at a paper receipt bearing a third party's name
+reads as the **document-image capture** family (the license scanner, the signature pad — *blocked*,
+never parsed), but it is also plainly a customer surface, which the model says we *recognize and
+hash*. The two rules give opposite answers, and the answer decides whether the fix is a sensitive
+rule or a recognizing rule with a `redact`. Dev call.
+
+### Money and lineage (items 6–11)
+
+**6. A receipt-less same-customer two-order job loses half its pay → #996 (P1).** 08-07, offer seq
+1496: $13.10, two orders, one customer. Both pickups confirmed; ONE physical drop, which folded
+`offerPayShare = 6.55`. The session's shortfall is $6.55 to the cent. The mechanism is that
+`OfferPayFallback.owedDropoffs` splits the offer total across both owed drops, but only one drop
+ever exists to claim a share, so the other half is simply never attributed to anything. #749 fixed
+**closure** for this exact shape (the job closes, the next offer gets its own job — that half worked
+perfectly here); it did not touch the denominator that prices it. Note this only bites on a
+receipt-less job — which, per item 8, is now every job.
+
+**7. A job that absorbed three separately-accepted offers pools their pay into an equal split
+→ #997 (P1).** 08-06: offers of $10.45, $16.55 and $20.20 folded as $15.73 / $15.73 / $15.74. The
+session Σ is exact, so nothing is *lost* — but every per-drop figure is wrong by up to $5.28 (50 %
+error on the smallest), and per-drop figures are precisely what the store leaderboard, the earnings
+heatmap, `DayPlanner`/`WeeklyPlanner`, and #975's estimate-vs-reality card are all built on. A dash
+like this teaches the planner that a $10.45 order and a $20.20 order are the same order. The
+encouraging part is that the mapping looks **recoverable rather than lost**: the accept →
+`PICKUP_NAV_STARTED` lineage and `jobOfferHashes` both survive in the log, so this may be an
+attribution defect rather than a missing-data one — would need someone to actually walk that join to
+be sure.
+
+**8. The delivery receipt sheet stopped appearing after 08-02; 9 of 9 deliveries on 08-06/07/08 were
+priced by the `OFFER_PAY` estimate → #999.** Zero receipt-shaped frames — recognized *or* unknown —
+exist after 08-02, and the post-drop frame sequence changed shape with them: it used to run
+`dropoff_photo` → `dropoff_completed_confirm` → `delivery_summary_collapsed/expanded`, and now runs
+`dropoff_photo` → *nothing* → the next `offer_popup`. Because the frames are absent from the UNKNOWN
+pile too, **this is not a recognition regression** — you cannot fail to recognize a screen that was
+never rendered. Hypotheses, unresolved: DoorDash changed the post-delivery flow in an app update; or
+the sheet still renders but so briefly that no frame is admitted; or something about these
+particular orders (all three dashes were ordinary food deliveries) skips it. It matters because
+`OFFER_PAY` is an *estimate* basis — items 6 and 7 are both estimate-path defects, and an
+all-estimate world is where they bite. The frustrating part is that #937's version stamp **can't
+test the app-update hypothesis here** (item 12). This needs a field observation, not more desk work;
+a checklist item is added.
+
+**9. The return-order flow is entirely unmodelled → #998.** ~27 UNKNOWN frames on 08-01: return
+timeline variants (19), a pay-breakdown screen reading `Original order (Base) $20.37 / Return pay
+$10.19 / Total $30.56` (1), and a store-signature flow (4 — which contains a literal **signature
+pad**, i.e. Pledge-sensitive surface area). The money consequence is exact: $20.37 of a $58.41 dash
+(34.9 %) is unattributed, and $38.04 attributed + $20.37 unrecognized = $58.41 reported, to the
+cent — the flow is the *whole* delta. #985 (the Timeline order-detail address sheet, filed 07-31) is
+this same flow's already-filed sibling and re-fielded three more times this window; its two fixture
+files in this pull are corpus-EXCLUDED pending that fix.
+
+**10. A pickup-less job loses its storeKey and its offer→job link → #1000.** 08-08, Zaxbys: the
+event chain runs `PICKUP_NAV_STARTED` → (no `PICKUP_ARRIVED`, no `PICKUP_CONFIRMED`) →
+`DELIVERY_NAV_STARTED`. Downstream, that job has no `pickup_records` row, an empty `storeKey`, a
+null `milesToStore`, and `offer_records.linkedJobId` null — it is the only unlinked accept in the
+window — so it drops out of #975's estimate-vs-reality join entirely. The proximate question is why
+the arrival never fired (geofence? a fast in-and-out? a missed frame?), but the interesting bit is
+downstream: one missing lifecycle edge silently removes a real delivery from three separate
+analytics reads at once.
+
+**11. A D6 join miss left one drop storeless — $15.74 attributed to no merchant (08-06 third
+drop).** `WARN/StateMachine: D6 join miss … 0 of 0 … across 2 stores`, fired **once** and correctly
+edge-gated (the ×23 storm shape from earlier windows did not recur — that gate is doing its job).
+Same job as item 7's absorbed H-E-B add-on, which is presumably not a coincidence: a job assembled
+from three offers is exactly where the customer-hash join has the least to work with. That drop's
+`DELIVERY_ARRIVED` also never fired, so `arrivedAt` is null and its `realizedMiles` reads 0.0 — the
+same missing-edge shape as item 10, on a different job.
+
+### Observability, log hygiene, and one fold interaction (items 12–15)
+
+**12. #937's version stamp is blind on a long-lived process → #1003 (documented, low severity).**
+`platformApps=com.doordash.driverapp@8.91.7` is constant across all nine days — which is what a
+**per-process cache** does when the process spans a nine-day window that straddles the exact app
+update item 8 wants to test. The cache-forever decision was deliberate and documented ("a process
+restart follows an update in practice"), and this window is the case where that premise doesn't
+hold: the process never restarted, so a genuine DoorDash update would be invisible in exactly the
+stamp built to make platform-app change visible. Filed as a documented limitation, not a bug.
+
+**13. A text-less ongoing-dash notification is 13.8 % of the entire log → #1001.** 17,605 lines of
+`DEBUG/Classifier: UNKNOWN notification — ` (nothing after the em dash) at roughly 1 Hz. The capture
+layer handles it correctly — the content-hash dedup means it produced exactly **one** file — so this
+is pure firehose volume, not a data problem. It is still worth fixing: it's shortening how far back
+`app.log` retention reaches before rotation, which is the diagnostic surface every one of these
+analyses runs on.
+
+**14. The Tip Update push is unrecognized → #1002.** `"A customer added $2.00 tip on a past Target
+order."` at 08-06 16:34 — which names most of that dash's $2.25 residual. A post-completion tip is
+real money arriving after the record froze; recognizing the push is at least a way to *see* it,
+whatever the eventual answer is on whether a frozen record should learn about it.
+
+**15. #983's gap fold and the late-sweep dash (informational, no defect).** 08-01 measures **0 gaps**
+despite a real ~8-minute wait between orders, and the mechanism is now understood: that dash's
+close-out sweep appended every `DELIVERY_COMPLETED` at `DASH_STOP`, so every completion sequences
+*after* every accept, and no completion has a "next accept in the same dash" to pair with. That is
+precisely the `0 gaps measured` failure shape the #983 checklist item tells the dev to watch for —
+so it's worth recording that on a late-sweep dash it is **expected by mechanism, not a fold bug**.
+The other four dashes are coherent: 7 gaps spanning 0.6–2.7 min, 5 dash-final drops correctly
+excluded as tails, zero cross-dash and zero cross-day pairings.
+
+### Re-confirmed known issues (item 16)
+
+**16.** #985 re-fielded ×3 (the Timeline address sheet; envelopes purged from the pull dir,
+corpus-excluded). **#986 is wider than filed** — the `Apt/Suite: ` **colon** form also hex-masks, 7
+envelopes; comment posted on the issue. #987 ×5 more Crimson deposit notifications (the dev ruling
+is still queued). #922 ~29 frames including two fully-populated offer cards; #912 ~11; #988 ×1;
+#801's digit-wheel ×3 (corroborated again). **#935 did not recur** — all three collapsed-summary
+captures this window are genuine receipts, correctly classified. **#731: zero flap in nine days**
+(1 connect / 0 disconnects across a nine-day single process — the longest clean observation the
+issue has ever had); comment posted, and it now looks like a close candidate.
+
+### PII sweep — the rest of the tree (item 17)
+
+**17.** Beyond items 2–5 the pull is clean, and the sweep is worth stating positively because the
+new findings are narrow. Only **three** customer-name strings exist in the entire capture tree, and
+all three are items 2, 4 and 5. Five raw addresses: four are **merchant** addresses (raw by design,
+#886) and the fifth is item 3. Zero PINs, zero gate codes, zero `Customer Notes:` free text, zero
+banking hits. `shareable.log`: zero `[scrubbed:…]` placeholders with 28 scrub-diagnostic lines fully
+legible — **#862 PASS**, second clean pass. And #910 got its receipts: **mechanism 2 (a click
+envelope inheriting the screen rule's redact) fired live for the first time**, on a dropoff-nav
+click that arrived masked, while a pickup-nav click on the same window correctly stayed raw — the
+scope discriminator holding in the field rather than only in tests. **Mechanism 3 fired 17 times**
+(`user_name` ×9, `address_line_1` ×7, `address_line_2` ×1).
+
+### Checklist sweep
+
+**Retired (2/2, deleted from the checklist, receipts above):**
+
+1. **#962 — points-based ratings parse → 2/2.** Second confirmation: `overallRatingPoints` 82→83,
+   `tierLabel` Gold, `qualityRate` 100.0, `acceptanceRate` 40→43 all populated across snapshots,
+   with `ratings` ×4 and `performance_rate_detail` ×9 recognized. The parse re-anchor holds on real
+   fielded data over a nine-day span, not just the discovery browse.
+2. **#910 — the five customer-PII leak sites → 2/2.** Mechanism 2's first live fire plus mechanism
+   3 ×17, with `pickup_navigation`'s merchant address staying raw (no scope leak). The new leaks
+   found this window (#992, #993) are **rule-side omissions, not #910 regressions** — #910 built the
+   UNKNOWN-side backstop and it works; a recognized rule with no `redact` is a different gap, which
+   is now written down as item 2's structural point.
+3. **#937 — recognition-health liveness, the version-stamp + false-positive halves → 2/2.** Zero
+   `RecognitionHealth` WARNs across five dashes, the stamp present in every envelope. Standing
+   caveat carried forward: the **true-positive** half (recognition actually going quiet mid-dash)
+   has still never been exercised, and the per-process cache caveat is recorded as #1003.
+4. **#862 — scrub diagnostics survive the shareable-log sink → 2/2.** 28 diagnostic lines verbatim
+   with their marker ids intact, zero `[scrubbed:…]` placeholders anywhere in the export.
+5. **#701 — over-attribution flag, negative path → 2/2.** Delivered ≤ reported on all five moneyed
+   sessions, so no false callout was possible and none appeared. The positive-fire path stays
+   unobserved by nature (it needs a genuinely over-attributed dash).
+6. **#438 B5 — odometer arbitration, data half → 2/2.** Σ drop-miles ≤ odometer span on every
+   session (25.9/23.42, 22.0/21.98, 18.68/9.62, 9.97/8.79, 21.58/21.57), no zeros, no mid-dash
+   reset. The 08-06 pair is the loose one and it's loose in the safe direction.
+
+**Bumped to 1/2:** #967/#968 (five Offline ratings stamps — first pull whose build carries the fix),
+#315 H5 (the **data** half: 14 `pickup_records`, dwell 0.0–71.1 min all minutes-scale, real store
+keys including the #773 address-tier `doordash|h-e-b|@5910`).
+
+**Held, note appended:** #884 (5 more marker fires, still Transfer **out**), #843 (sixth mechanism
+corroboration — zero grants in nine days, gate denied `confirm_decline` 21×), #810 B1 (fifth clean
+zero, including a three-offer merged job and a two-store stack), #438 B3 (machine half clean over 26
+offers / 0 timeouts, but flagged with #991 and #1000), #888 (a fourth family sighted; #922 still
+blocks), #983 (item 15's mechanism recorded on the item).
+
+**Broken-in-part:** the **#749** same-customer item — the shape recurred on 08-07 and the closure
+half worked exactly as designed, but half the job's pay vanished (item 6 / #996). Per this file's
+own rule a broken finding goes to the log immediately, so it is written up above; the checklist item
+stays at 1/2 for the closure half with a pointer to #996.
+
+**Added:** **#999** (does DoorDash still show the per-delivery earnings receipt at all — the one
+question this desk pass cannot answer) and **#991** (does the spoken verdict still fire, and does a
+force-stop bring it back).
+
+**No signal:** every Uber item. Zero Uber sessions in nine days — that is an absence of testing, not
+a clean result, and #882/#881, #874/#875, #857, #786, #858, #861, #825, #830 and the #762 D2 family
+have now gone three consecutive windows without input.
+
+### Session work log (this desk session)
+
+Issues filed: **#991** (P0 — TTS dead since 08-06), **#992** / **#993** / **#994** / **#995** (four
+P1 Pledge leaks; #995 carries a dev ruling), **#996** / **#997** (two P1 pay-attribution defects),
+**#998** (return-order flow unmodelled), **#999** (the receipt sheet's disappearance), **#1000**
+(pickup-less job loses storeKey + offer link), **#1001** (text-less notification log volume),
+**#1002** (Tip Update push unrecognized), **#1003** (#937 version-stamp blindness on a long-lived
+process). Comments posted on **#986** (wider than filed — the colon form) and **#731** (nine days
+clean; close candidate). Checklist: 6 items retired, 2 bumped to 1/2, 6 held with a dated note, 1
+marked broken-in-part, 2 new items added.
 
 ---
 
