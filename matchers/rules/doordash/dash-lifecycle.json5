@@ -253,7 +253,7 @@
           "normalize": "customerName"
         },
         {
-          "comment": "Address line 1, digit-leading form — the fielded '6650 Prue Rd, Apt 331' / '8926 Black Forest' shape. Same predicate as the `dropoff_pre_arrival` / `dropoff_handoff` family (Principle 5: this surface's address block is the same id-less two-line block those rules carry, so it gets the same entry set rather than a new dialect). Hash-mask, un-normalized: the token is a street line, not a customer NAME, and the name canonicalizer would collapse it to first-token + second-initial and destroy the mask's distinctness. **This deliberately also masks a MERCHANT address** on the pickup-task render of the same sheet ('16900 Blanco Rd, San Antonio' under the store row): line 1 sits in the identical slot for both task phases and nothing in the tree separates them, so — unlike `pickup_navigation`, which is unambiguously a merchant surface and is left raw by design (#886) — the only sound choice is to fail toward privacy. The store NAME is untouched, which is what triage and analytics actually read.",
+          "comment": "Address line 1, digit-leading form — the fielded shape (e.g. '4120 Sample Hollow Dr, Apt 12' / '8900 Sample Forest' — invented equivalents of the two fielded renders). Same predicate as the `dropoff_pre_arrival` / `dropoff_handoff` family (Principle 5: this surface's address block is the same id-less two-line block those rules carry, so it gets the same entry set rather than a new dialect). Hash-mask, un-normalized: the token is a street line, not a customer NAME, and the name canonicalizer would collapse it to first-token + second-initial and destroy the mask's distinctness. **This deliberately also masks a MERCHANT address** on the pickup-task render of the same sheet (e.g. '10500 Sample Loop, San Antonio' under the store row — invented equivalent): line 1 sits in the identical slot for both task phases and nothing in the tree separates them, so — unlike `pickup_navigation`, which is unambiguously a merchant surface and is left raw by design (#886) — the only sound choice is to fail toward privacy. The store NAME is untouched, which is what triage and analytics actually read.",
           "find": {
             "all": [
               {
@@ -272,7 +272,7 @@
           }
         },
         {
-          "comment": "#889 F1 posture: the city/ST/ZIP line and any bare 5-digit code, plainMask. 10^5 values against 65 536 4-hex buckets is ~1.5 candidates per bucket — effectively recoverable — and the distinctness would be redundant anyway, since this surface's task-line and street entries already carry per-customer distinct masks. Ordered AFTER the two line-1 entries so a 5-digit house number ('21025 U.S. Highway 281 North, San Antonio') is claimed by the street entry and keeps its hash.",
+          "comment": "#889 F1 posture: the city/ST/ZIP line and any bare 5-digit code, plainMask. 10^5 values against 65 536 4-hex buckets is ~1.5 candidates per bucket — effectively recoverable — and the distinctness would be redundant anyway, since this surface's task-line and street entries already carry per-customer distinct masks. Ordered AFTER the two line-1 entries so a 5-digit house number (e.g. '21000 U.S. Highway 90 North, San Antonio' — invented equivalent of the fielded 5-digit-house-number render) is claimed by the street entry and keeps its hash.",
           "find": {
             "all": [
               {
@@ -286,14 +286,14 @@
           "plainMask": true
         },
         {
-          "comment": "The customer's free-text note, which DoorDash renders on this sheet wrapped in literal double quotes ('\"please call or text so I can open the gate for you, building 3 on the third floor\"' — fielded 07-30; the 07-23 render carried a gate code inside it). Customer-AUTHORED text, the #803/#920 class: it can carry a gate code, a unit, a name, a floor. `plainMask` follows #920's reasoning rather than the older un-plained quote entry on `dropoff_pre_arrival`: a note's ALPHABET is unbounded but its LENGTH is not, so a short note that IS the secret ('Gate 4417') clears the #889 floor while its plaintext space stays far below the suffix's 65 536 buckets — and unlike a customer name a note is nobody's join key, so the distinctness buys nothing to trade against that. Strictly stronger than the sibling entry it diverges from; a privacy entry may be tightened without waiting for the family.",
+          "comment": "The customer's free-text note, which DoorDash renders on this sheet wrapped in literal double quotes (shape: '\"please call so I can open the gate, building N on floor N\"' — invented equivalent of the fielded 07-30 note; the 07-23 render carried a gate code inside it). Customer-AUTHORED text, the #803/#920 class: it can carry a gate code, a unit, a name, a floor. `plainMask` follows #920's reasoning rather than the older un-plained quote entry on `dropoff_pre_arrival`: a note's ALPHABET is unbounded but its LENGTH is not, so a short note that IS the secret ('Gate 4417') clears the #889 floor while its plaintext space stays far below the suffix's 65 536 buckets — and unlike a customer name a note is nobody's join key, so the distinctness buys nothing to trade against that. Strictly stronger than the sibling entry it diverges from; a privacy entry may be tightened without waiting for the family.",
           "find": {
             "hasTextStartsWith": "\""
           },
           "plainMask": true
         },
         {
-          "comment": "The bare entry/gate code rendered as its own node ('799' / '618', fielded). Same shape and same `plainMask` argument as the `dropoff_pre_arrival` family: a bounded ~10^4 numeric alphabet, above the #889 length floor at 4 digits, so the 4-hex suffix would be an inversion oracle. The floor bounds LENGTH, this declaration bounds ALPHABET; they compose. Accepted over-mask: a merchant whose name IS a bare number (DoorDash test data fielded a store row reading '195') plains too — capture-only, and the store's own name row survives on every real render.",
+          "comment": "The bare entry/gate code rendered as its own node (3-digit codes, fielded; e.g. '641' — invented). Same shape and same `plainMask` argument as the `dropoff_pre_arrival` family: a bounded ~10^4 numeric alphabet, above the #889 length floor at 4 digits, so the 4-hex suffix would be an inversion oracle. The floor bounds LENGTH, this declaration bounds ALPHABET; they compose. Accepted over-mask: a merchant whose name IS a bare number (DoorDash test data fielded a store row reading '195') plains too — capture-only, and the store's own name row survives on every real render.",
           "find": {
             "all": [
               {
