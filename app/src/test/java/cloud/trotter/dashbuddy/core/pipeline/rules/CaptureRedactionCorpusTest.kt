@@ -1485,6 +1485,365 @@ class CaptureRedactionCorpusTest {
         )
     }
 
+    /**
+     * #992 — `pickup_wait_survey` shipped with NO redact block at all while its
+     * at-store contact card carries a bare `customer_name` node, so a RECOGNIZED
+     * surface persisted the customer's name verbatim (2 fielded 08-07 envelopes).
+     * `CustomerTextMarkers.ID_MARKERS` lists `customer_name`, but that scan is
+     * UNKNOWN-envelope-only by design (#910) and the text-marker scan is blind to a
+     * bare node ("Order for" is a separate `customer_name_label` sibling), so nothing
+     * backstopped it.
+     *
+     * Node shape mirrors the fielded `at_store_contact_view` block; every value is
+     * invented. Teeth: delete the rule's redact entry and the name assertion goes RED.
+     */
+    @Test
+    fun `pickup_wait_survey masks the customer_name node, keeps merchant and chrome (#992)`() {
+        val rule = TestRulesetFactory.screenRuleset.ruleById("doordash.screen.pickup_wait_survey")!!
+        assertFalse("pickup_wait_survey must declare a redact block", rule.redact.isEmpty())
+
+        fun card(name: String) = UiNode(
+            viewIdResourceName = "com.doordash.driverapp:id/at_store_contact_view",
+            className = "android.view.View",
+            children = listOf(
+                UiNode(viewIdResourceName = "com.doordash.driverapp:id/customer_name_label", text = "Order for"),
+                UiNode(viewIdResourceName = "com.doordash.driverapp:id/customer_name", text = name),
+                UiNode(viewIdResourceName = "com.doordash.driverapp:id/instructions_title", text = "Sample Bowls Co"),
+                UiNode(text = "Tell us what's causing your wait"),
+            ),
+        ).restoreParents()
+
+        val masked = serialize(rule.redact.apply(card("Testname Q")))
+        assertFalse("customer name must not persist", masked.contains("Testname Q"))
+        assertTrue(
+            "the name masks to the hash family [redacted:<4hex>]",
+            Regex("""\[redacted:[0-9a-f]{4}]""").containsMatchIn(masked),
+        )
+        // Over-match guards: the label is chrome, the merchant is driver-owned, the
+        // survey copy is platform vocabulary — all three stay raw.
+        assertTrue("label kept (app chrome)", masked.contains("Order for"))
+        assertTrue("merchant kept (driver-owned)", masked.contains("Sample Bowls Co"))
+        assertTrue("survey copy kept", masked.contains("Tell us what's causing your wait"))
+
+        // #733: one customer, one hex — this surface must agree with the single-order
+        // pickup card, which is what `normalize: customerName` on the entry buys.
+        val hex = Regex("""\[redacted:([0-9a-f]{4})]""")
+        fun nameHex(r: CompiledRedact): String {
+            val out = r.apply(
+                UiNode(viewIdResourceName = "com.doordash.driverapp:id/customer_name", text = "Testname Q"),
+            ).text!!
+            return hex.find(out)?.groupValues?.get(1) ?: error("customer_name was not masked; got '$out'")
+        }
+        assertEquals(
+            "the wait survey masks to the same hex as pickup_arrival",
+            nameHex(TestRulesetFactory.screenRuleset.ruleById("doordash.screen.pickup_arrival")!!.redact),
+            nameHex(rule.redact),
+        )
+    }
+
+    /**
+     * #993 — DoorDash's own arrival banner (`arriving_at_title`) can inflate while the
+     * dropoff workflow sheet is still on screen, and `dropoff_navigation` wins that
+     * combined frame. Its redact covered the sheet's address lines and (since #886) the
+     * embedded Google-Nav maneuver cluster, but NOT the banner — so the customer's full
+     * street address shipped raw beside its own correctly-masked copy (fielded 08-02).
+     * The mask already existed on the sibling `nav_arriving`; it just did not exist here.
+     *
+     * Teeth: delete the `arriving_at_title` entry and the banner assertion goes RED.
+     * The pickup-side counterpart stays raw by design (#886, merchant address).
+     */
+    @Test
+    fun `dropoff_navigation masks the arriving_at banner title, keeps its subtitle (#993)`() {
+        val address = "742 Sample Hollow Way, Apt 12, San Antonio, TX 78260, USA"
+
+        fun banner() = UiNode(
+            viewIdResourceName = "com.doordash.driverapp:id/top_header",
+            className = "android.view.View",
+            children = listOf(
+                UiNode(
+                    viewIdResourceName = "com.doordash.driverapp:id/arriving_at_subtitle",
+                    text = "Arriving at",
+                ),
+                UiNode(
+                    viewIdResourceName = "com.doordash.driverapp:id/arriving_at_title",
+                    text = address,
+                ),
+                UiNode(
+                    viewIdResourceName = "com.doordash.driverapp:id/bottom_sheet_arrived_header_v2",
+                    text = "Arriving soon",
+                ),
+            ),
+        ).restoreParents()
+
+        val dropoffRule = TestRulesetFactory.screenRuleset.ruleById("doordash.screen.dropoff_navigation")!!
+        val masked = serialize(dropoffRule.redact.apply(banner()))
+        assertFalse("banner street address must not persist", masked.contains("Sample Hollow Way"))
+        assertFalse("banner apt must not persist", masked.contains("Apt 12"))
+        assertTrue(
+            "the banner title masks to the hash family [redacted:<4hex>]",
+            Regex("""\[redacted:[0-9a-f]{4}]""").containsMatchIn(masked),
+        )
+        // Over-match guards: the label and the sheet header are app chrome.
+        assertTrue("subtitle kept (app chrome)", masked.contains("Arriving at"))
+        assertTrue("sheet header kept (app chrome)", masked.contains("Arriving soon"))
+
+        // Distinctness (#623): two destinations must not collide on one mask.
+        val hex = Regex("""\[redacted:([0-9a-f]{4})]""")
+        fun titleHex(text: String): String {
+            val out = dropoffRule.redact.apply(
+                UiNode(viewIdResourceName = "com.doordash.driverapp:id/arriving_at_title", text = text),
+            ).text!!
+            return hex.find(out)?.groupValues?.get(1) ?: error("arriving_at_title was not masked; got '$out'")
+        }
+        assertFalse(
+            "different destinations must redact to different suffixes",
+            titleHex(address) == titleHex("15 Other Sample Rd, San Antonio, TX 78260, USA"),
+        )
+
+        // The pickup-side twin restates a MERCHANT address and is deliberately left raw (#886).
+        val pickupRule = TestRulesetFactory.screenRuleset.ruleById("doordash.screen.pickup_navigation")!!
+        assertTrue(
+            "pickup_navigation's merchant destination stays raw by design",
+            serialize(pickupRule.redact.apply(banner())).contains("Sample Hollow Way"),
+        )
+    }
+
+    /**
+     * #994 — a RETURN order renders the timeline task line as
+     * "Return <FirstName L> to <store>", a FOURTH conjugation that matched none of the
+     * three enumerated prefixes, so the name shipped raw on a RECOGNIZED surface (3
+     * fielded 08-01 envelopes). Same shape as #962's "Delivery to " miss.
+     *
+     * Two properties are load-bearing and both are pinned here. (1) The keepPrefix mask
+     * is whole-remainder, so the trailing " to <store>" is masked along with the name —
+     * accepted (screen redacts have no regex-capture form) and asserted so the behaviour
+     * is deliberate, not incidental. (2) The #623 mask↔hash invariant SURVIVES that tail
+     * because `normalize: customerName` canonicalizes to first-token + second-token
+     * initial: customerNameKey("Riley P to H-E-B") == customerNameKey("Riley P").
+     *
+     * Teeth: drop "Return " from either the `find` or the `keepPrefix` list and this goes RED.
+     */
+    @Test
+    fun `timeline masks the Return conjugation and keeps one hex per customer (#994)`() {
+        val rule = TestRulesetFactory.screenRuleset.ruleById("doordash.screen.timeline")!!
+
+        val masked = serialize(
+            rule.redact.apply(UiNode(text = "Return Testname Q to Sample Grocery Co").restoreParents()),
+        )
+        assertFalse("customer name must not persist", masked.contains("Testname Q"))
+        assertTrue(
+            "the 'Return ' lead-in is kept so the line still reads as a return task",
+            Regex("""Return \[redacted:[0-9a-f]{4}]""").containsMatchIn(masked),
+        )
+        // The whole-remainder mask swallows the store tail — documented, not incidental.
+        assertFalse("the masked remainder covers the ' to <store>' tail", masked.contains("Sample Grocery Co"))
+
+        // #623/#733 cross-conjugation invariance: one customer, one hex, whichever verb
+        // the platform used — this is what the shared `normalize: customerName` buys.
+        val hex = Regex("""\[redacted:([0-9a-f]{4})]""")
+        fun lineHex(text: String): String {
+            val out = rule.redact.apply(UiNode(text = text).restoreParents()).text!!
+            return hex.find(out)?.groupValues?.get(1) ?: error("line was not masked; got '$out'")
+        }
+        val deliverHex = lineHex("Deliver to Testname Q")
+        assertEquals(
+            "the return conjugation masks to the same hex as 'Deliver to' — the store tail is " +
+                "canonicalized away by customerNameKey (first token + second-token initial)",
+            deliverHex,
+            lineHex("Return Testname Q to Sample Grocery Co"),
+        )
+        assertEquals(
+            "and to the same hex as 'Pickup for'",
+            deliverHex,
+            lineHex("Pickup for Testname Q"),
+        )
+        // Over-match guard: the STORE line keeps its own no-normalize entry, so a
+        // "Pickup from <store>" node must NOT be swept into the customer-name entry.
+        assertTrue(
+            "the store line keeps its 'Pickup from ' lead-in",
+            Regex("""Pickup from \[redacted:[0-9a-f]{4}]""").containsMatchIn(
+                serialize(rule.redact.apply(UiNode(text = "Pickup from Sample Grocery Co").restoreParents())),
+            ),
+        )
+    }
+
+    /**
+     * #995 — the receipt-scan camera surface persisted the customer's name TWICE per
+     * frame on id-less nodes ("Focus on <FirstName L>" plus a bare "<FirstName L>"
+     * sibling), and NOTHING reached it: no view id (`ID_MARKERS` misses), no enumerated
+     * prefix (`MARKERS` misses — and "Focus on " was vetted and rejected as
+     * chrome-ambiguous, see `CustomerTextMarkers`' KDoc), and no rule. The new
+     * `pickup_receipt_scan` rule is the one control, so it carries all the teeth.
+     *
+     * Node shape is ground truth from the 6 fielded 08-07 envelopes (fully id-less below
+     * `camera_fragment_container`); every value is invented.
+     */
+    @Test
+    fun `pickup_receipt_scan masks both id-less name nodes, keeps the scan chrome (#995)`() {
+        val rule = TestRulesetFactory.screenRuleset.ruleById("doordash.screen.pickup_receipt_scan")!!
+        assertFalse("pickup_receipt_scan must declare a redact block", rule.redact.isEmpty())
+
+        fun scanScreen(name: String) = UiNode(
+            viewIdResourceName = "com.doordash.driverapp:id/camera_fragment_container",
+            className = "android.view.View",
+            children = listOf(
+                UiNode(className = "android.widget.TextView", text = "Focus on $name"),
+                UiNode(className = "android.widget.TextView", text = "Scan customer name"),
+                UiNode(className = "android.widget.TextView", text = name),
+                UiNode(className = "android.widget.TextView", text = "#fddcf · DoorDash"),
+                UiNode(className = "android.widget.TextView", text = "No receipt"),
+                UiNode(className = "android.widget.TextView", text = "Scan receipt"),
+                UiNode(
+                    className = "android.widget.TextView",
+                    text = "Scan the order details by focusing on the customer name. " +
+                        "We'll share this scan as a photo with the customer.",
+                ),
+                UiNode(className = "android.widget.TextView", text = "Start scanning"),
+                UiNode(className = "android.widget.TextView", text = "Pickup complete"),
+                UiNode(className = "android.widget.TextView", text = "Continue"),
+                UiNode(className = "android.widget.TextView", text = "0:05"),
+            ),
+        ).restoreParents()
+
+        val applied = rule.redact.apply(scanScreen("Testname Q"))
+        val masked = serialize(applied)
+        // BOTH copies of the name are gone — the instruction line and the bare sibling.
+        assertFalse("customer name must not persist anywhere", masked.contains("Testname Q"))
+        assertTrue(
+            "the instruction line keeps its 'Focus on ' lead-in",
+            Regex("""Focus on \[redacted:[0-9a-f]{4}]""").containsMatchIn(masked),
+        )
+        assertTrue(
+            "the bare name node masks WHOLE to the hash family [redacted:<4hex>], " +
+                "got '${applied.children[2].text}'",
+            Regex("""^\[redacted:[0-9a-f]{4}]$""").matches(applied.children[2].text!!),
+        )
+        // Over-match guards: every other node on this surface is platform chrome and
+        // must survive — these are also the rule's own recognition anchors.
+        for (kept in listOf(
+            "Scan customer name",
+            "Scan the order details by focusing on the customer name",
+            "Scan receipt",
+            "Start scanning",
+            "No receipt",
+            "Pickup complete",
+            "Continue",
+            "0:05",
+            "#fddcf · DoorDash",
+        )) {
+            assertTrue("chrome kept: '$kept'", masked.contains(kept))
+        }
+
+        // #733: one customer, one hex — across BOTH nodes on this surface AND the pickup
+        // card, so a receipt-scan capture correlates with the rest of the same job.
+        val hex = Regex("""\[redacted:([0-9a-f]{4})]""")
+        val focusHex = hex.find(applied.children[0].text!!)!!.groupValues[1]
+        val bareHex = hex.find(applied.children[2].text!!)!!.groupValues[1]
+        assertEquals("both name nodes on one frame mask to one hex", focusHex, bareHex)
+        val arrivalHex = hex.find(
+            TestRulesetFactory.screenRuleset.ruleById("doordash.screen.pickup_arrival")!!.redact.apply(
+                UiNode(viewIdResourceName = "com.doordash.driverapp:id/customer_name", text = "Testname Q"),
+            ).text!!,
+        )!!.groupValues[1]
+        assertEquals("and to the customer's hex on the pickup card", arrivalHex, focusHex)
+    }
+
+    /**
+     * #920 — `shopping_item` renders the customer's own free-text note twice (a fused
+     * `contentDescription` on the container and the value in a `body_text_view` child)
+     * and declared no redact, so customer-authored text shipped raw on a RECOGNIZED
+     * surface. The fielded note was benign, but the field is the #803 class: it can carry
+     * a gate code, an apartment, a name.
+     *
+     * The mask is deliberately `plainMask` (#795), NOT the `<4hex>` distinctness family:
+     * a note has an unbounded alphabet but no lower bound on LENGTH, so a short note that
+     * IS the secret sits above #889's 4-char floor while its plaintext space stays far
+     * below the suffix's 65 536 buckets. This test pins that choice — a hash-family mask
+     * here would be a REGRESSION, so it asserts the plain form explicitly.
+     *
+     * Node shape is ground truth from the committed 07-18 fixture + the 07-29 pull; the
+     * note values are invented.
+     */
+    @Test
+    fun `shopping_item masks the Customer Notes value with a plain mask, keeps the label (#920)`() {
+        val rule = TestRulesetFactory.screenRuleset.ruleById("doordash.screen.shopping_item")!!
+        assertFalse("shopping_item must declare a redact block", rule.redact.isEmpty())
+
+        fun itemCard(note: String) = UiNode(
+            className = "android.view.View",
+            children = listOf(
+                UiNode(className = "android.widget.TextView", text = "Sample Sliced Bread, 24 oz"),
+                UiNode(className = "android.widget.TextView", text = "24 OUNCE｜\$4.03"),
+                UiNode(
+                    className = "android.view.View",
+                    contentDescription = "Customer Notes: $note",
+                    children = listOf(
+                        UiNode(viewIdResourceName = "com.doordash.driverapp:id/start_icon_image_view"),
+                        UiNode(
+                            viewIdResourceName = "com.doordash.driverapp:id/label_text_view",
+                            text = "Customer Notes",
+                        ),
+                        UiNode(
+                            viewIdResourceName = "com.doordash.driverapp:id/body_text_view",
+                            text = note,
+                        ),
+                    ),
+                ),
+                // Over-match guard: a `body_text_view` NOT preceded by the notes label
+                // (the id is a generic LEGO-card id, also used on pickup_arrival).
+                UiNode(
+                    className = "android.view.View",
+                    children = listOf(
+                        UiNode(
+                            viewIdResourceName = "com.doordash.driverapp:id/label_text_view",
+                            text = "Aisle",
+                        ),
+                        UiNode(
+                            viewIdResourceName = "com.doordash.driverapp:id/body_text_view",
+                            text = "Aisle 4 - Section A13 - Shelf 2",
+                        ),
+                    ),
+                ),
+            ),
+        ).restoreParents()
+
+        // A note carrying exactly the #803 payload class this exists for.
+        val note = "Gate code 4821, leave with Testname Q at the side door"
+        val applied = rule.redact.apply(itemCard(note))
+        val masked = serialize(applied)
+        val notesBlock = applied.children[2]
+
+        assertFalse("the note value must not persist", masked.contains("4821"))
+        assertFalse("nor the name inside it", masked.contains("Testname Q"))
+        assertFalse("nor the fused contentDescription copy", masked.contains("side door"))
+        assertTrue(
+            "the fused desc keeps its 'Customer Notes: ' label half",
+            masked.contains("Customer Notes: [redacted]"),
+        )
+        // #795: PLAIN mask, no <4hex> suffix — a hash family here would be a regression.
+        assertFalse(
+            "a customer note must NOT carry the <4hex> distinctness suffix (#795)",
+            Regex("""\[redacted:[0-9a-f]{4}]""").containsMatchIn(masked),
+        )
+        // Over-match guards: label chrome, item, price and aisle are driver/merchant-owned.
+        assertEquals(
+            "the notes LABEL node is app chrome and stays raw",
+            "Customer Notes",
+            notesBlock.children[1].text,
+        )
+        assertEquals(
+            "the notes VALUE node is masked plain",
+            "[redacted]",
+            notesBlock.children[2].text,
+        )
+        assertTrue("item name kept", masked.contains("Sample Sliced Bread, 24 oz"))
+        assertTrue("price kept", masked.contains("24 OUNCE"))
+        assertTrue(
+            "an unlabeled body_text_view sibling stays raw",
+            masked.contains("Aisle 4 - Section A13 - Shelf 2"),
+        )
+    }
+
     private fun jsonUsesSha256(element: kotlinx.serialization.json.JsonElement): Boolean = when (element) {
         is kotlinx.serialization.json.JsonPrimitive -> element.isString && element.content == "sha256"
         is kotlinx.serialization.json.JsonObject -> element.values.any { jsonUsesSha256(it) }

@@ -1564,6 +1564,27 @@
         "shape": null,
         "fields": {}
     },
+    "dropoff_navigation/2026-08-02_18-00-01-999__doordash__accessibility.window__dropoff_navigation__2109db.json": {
+        "ruleId": "doordash.screen.dropoff_navigation",
+        "intent": "dropoff_navigation",
+        "shape": "task",
+        "fields": {
+            "arrivalConfirmed": false,
+            "customerAddressHash": "8052bcfcf5d23ff64cda92d70e7935a9956e0e33fb79a985059bb15d1ceca9f4",
+            "customerNameHash": "c6b5dc311092ab26fda68e99e21bacae6f834a47ff2ec17e4453f47898ba18d8",
+            "deadline": {
+                "text": "6:02 PM",
+                "time": 1780336920000
+            },
+            "itemsRemaining": null,
+            "itemsShopped": null,
+            "phase": "DROPOFF",
+            "redCardTotal": null,
+            "storeAddress": null,
+            "storeName": null,
+            "subFlow": "NAVIGATION"
+        }
+    },
     "dropoff_navigation/20260128_201025_438_NAVIGATION_VIEW_TO_DROP_OFF.json": {
         "ruleId": "doordash.screen.dropoff_navigation",
         "intent": "dropoff_navigation",
@@ -4530,6 +4551,18 @@
         "shape": null,
         "fields": {}
     },
+    "pickup_receipt_scan/2026-08-07_19-46-54-647__doordash__accessibility.window__UNKNOWN__1cb4be.json": {
+        "ruleId": "doordash.screen.pickup_receipt_scan",
+        "intent": "pickup_receipt_scan",
+        "shape": null,
+        "fields": {}
+    },
+    "pickup_receipt_scan/2026-08-07_19-47-05-133__doordash__accessibility.window__UNKNOWN__92d1cb.json": {
+        "ruleId": "doordash.screen.pickup_receipt_scan",
+        "intent": "pickup_receipt_scan",
+        "shape": null,
+        "fields": {}
+    },
     "pickup_resolution_options/2026-06-12__doordash__pickup_resolution_options__56f6eb.json": {
         "ruleId": "doordash.screen.pickup_resolution_options",
         "intent": "pickup_resolution_options",
@@ -4969,6 +5002,12 @@
         "fields": {}
     },
     "pickup_wait_survey/2026-07-26_21-08-27-628__doordash__accessibility.window__UNKNOWN__24d30f.json": {
+        "ruleId": "doordash.screen.pickup_wait_survey",
+        "intent": "pickup_wait_survey",
+        "shape": null,
+        "fields": {}
+    },
+    "pickup_wait_survey/2026-08-07_19-46-17-026__doordash__accessibility.window__pickup_wait_survey__7e4609.json": {
         "ruleId": "doordash.screen.pickup_wait_survey",
         "intent": "pickup_wait_survey",
         "shape": null,
@@ -6164,6 +6203,18 @@
                 "TimelineTaskEntry(taskType=Pickup for, nameHash=017ad73325fcf108a972edac618f9edfc957c5b1de10f8b371b0a8bfa4f59e2d, deadline=ParsedTime(text=by 20:27, time=1780345620000), storeHint=H-E-B, isCurrent=false)",
                 "TimelineTaskEntry(taskType=Deliver to, nameHash=017ad73325fcf108a972edac618f9edfc957c5b1de10f8b371b0a8bfa4f59e2d, deadline=ParsedTime(text=53 min to complete, time=null), storeHint=null, isCurrent=false)"
             ]
+        }
+    },
+    "timeline/2026-08-01_12-53-16-000__doordash__accessibility.window__timeline__697a26.json": {
+        "ruleId": "doordash.screen.timeline",
+        "intent": "timeline",
+        "shape": "timeline",
+        "fields": {
+            "endsAtMillis": null,
+            "endsAtText": null,
+            "offerEarnings": null,
+            "sessionEarnings": null,
+            "tasks": []
         }
     },
     "timeline/20260128_054044_998_TIMELINE_VIEW.json": {

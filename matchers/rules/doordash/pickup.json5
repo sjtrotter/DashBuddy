@@ -444,6 +444,15 @@
     {
       "id": "doordash.screen.pickup_wait_survey",
       "priority": 88,
+      "comment": "#992 — this rule shipped with NO redact block at all, while the fielded frames (2026-08-07 19:46:17 / 19:47:10) carry the at-store contact card's bare `customer_name` node verbatim on a RECOGNIZED surface. `CustomerTextMarkers.ID_MARKERS` already lists `customer_name`, but that scan is UNKNOWN-envelope-only BY DESIGN (#910), so a recognized rule that forgets to redact has no backstop — the exact 'mechanism 1' class the ruleset must own. The node has no in-node lead-in either ('Order for' is a separate `customer_name_label` sibling), so the TEXT-marker backstop is structurally blind to it too: the same split-node shape #526 D6a documents for `pickup_arrival`. Entry mirrors `pickup_arrival`/`pickup_post_arrival_multi`/`pickup_pre_arrival_multi` byte-for-byte (`normalize: customerName`) so one customer masks to ONE hex across every pickup surface and that hex stays equal to the persisted `customerNameHash`. Recognize-only rule: a redact without a parse is legal (the `pickup_select_issue`/`pickup_post_arrival_multi` precedent) and the parse goldens are untouched. `instructions_title` (the MERCHANT) and the survey/item chrome stay raw — merchant + item text is driver-owned, not customer PII.",
+      "redact": [
+        {
+          "find": {
+            "hasIdSuffix": "customer_name"
+          },
+          "normalize": "customerName"
+        }
+      ],
       "branches": [
         {
           "comment": "Normal DoorDash wait survey.",
@@ -509,6 +518,51 @@
           }
         }
       ]
+    },
+    {
+      "comment": "#995 — DoorDash's receipt-scan camera flow ('Scan receipt' → 'Scan the order details by focusing on the customer name' → the live scan overlay → 'Pickup complete'). DEV RULING 2026-08-09: this is NOT in the blocked document-image family (a license scan / signature pad is an image of an ID or a signature; a receipt is neither) — capturing the surface's TEXT is fine, but the customer name on it is a customer name like any other and is redacted like the rest (#463 recognize-and-hash doctrine). It reached the pledge floor because NOTHING covered it: the two name nodes carry no view id (so `CustomerTextMarkers.ID_MARKERS` misses), no enumerated text prefix (so `MARKERS` misses), and no rule (so there was no `redact` to declare) — the frames fell to UNKNOWN with the name verbatim, twice per frame (fielded 2026-08-07 19:46:54–19:47:05, 6 envelopes). RECOGNIZE-ONLY on purpose: no `state.flow` and no `parse`. The surface adds no lifecycle edge the existing pickup rules do not already own (the arrival/confirm anchors sit on `pickup_arrival`/`pickup_picked_up`), so giving it a flow would be a state-machine change riding on a privacy fix; the rule's whole job is to give the frame a `redact` block. ANCHORS ARE PLATFORM CHROME, NEVER THE NAME (and never a merchant): the two require strings are DoorDash's own fixed scan copy, both corpus-unique (zero hits across every committed snapshot) and jointly covering all three fielded renders — the intro sheet alone ('Scan the order details…'), the live overlay alone ('Scan customer name'), and the frame that carries both. Priority is inert here: no other rule matches these trees today (they classified UNKNOWN), and neither anchor appears on any other surface. The rules-independent `CustomerTextMarkers` backstop is deliberately NOT extended with a 'Focus on ' marker — see that SSOT's deliberate-exclusions KDoc (DoorDash's own shopping-accuracy tip copy starts 'Focus on accuracy…'); this redact is the primary control, per the #806 doctrine.",
+      "id": "doordash.screen.pickup_receipt_scan",
+      "priority": 141,
+      "redact": [
+        {
+          "comment": "The id-less instruction line 'Focus on <FirstName L>'. Ordered FIRST because the bare-name shape entry below would also match this string ('Focus on Jeremy S' satisfies the first-last-initial shape), and this entry keeps the 'Focus on ' lead-in so a replayed envelope still reads as the scan instruction. `normalize: customerName` keeps the mask hex equal to the customer's persisted `customerNameHash` (#623/#733) — customerNameKey strips to first-token + second-token-initial, so 'Focus on ' + name masks to the same 4hex this customer gets on every pickup/dropoff surface.",
+          "find": {
+            "hasTextStartsWith": "Focus on "
+          },
+          "keepPrefix": [
+            "Focus on "
+          ],
+          "normalize": "customerName"
+        },
+        {
+          "comment": "The BARE name node rendered beside the scan target. No id, no lead-in, so the only handle is the shared first-last-initial name SHAPE — byte-SSOT with SnapshotRedactor.FIRST_LAST_INITIAL_PATTERN (the `\\s{1,4}` interior separator is #885's fix; CaptureRedactionCorpusTest pins every copy byte-equal). `hasNoId` keeps it off id-bearing chrome, and `hasTextMatchesRegex` reads `text` only, so the desc-only chrome nodes ('Close'/'Flash off'/'Info') are untouched. Over-match audit on this surface: every other text node fails the shape — 'Scan customer name', 'Scan receipt', 'No receipt', 'Pickup complete', 'Start scanning', 'Continue', '0:05' and the two body paragraphs all end in a multi-letter token, and '#fddcf · DoorDash' does not start with a letter — so nothing but the name is masked.",
+          "find": {
+            "all": [
+              {
+                "hasNoId": true
+              },
+              {
+                "hasTextMatchesRegex": "^\\s{0,8}[\\p{L}][\\p{L}'-]{0,20}(\\s{1,4}[\\p{L}][\\p{L}'-]{0,20}){0,3}\\s{1,4}[A-Z]\\.?\\s{0,8}$"
+              }
+            ]
+          },
+          "normalize": "customerName"
+        }
+      ],
+      "require": {
+        "any": [
+          {
+            "exists": {
+              "hasTextContaining": "Scan customer name"
+            }
+          },
+          {
+            "exists": {
+              "hasTextContaining": "Scan the order details by focusing on the customer name"
+            }
+          }
+        ]
+      }
     },
     {
       "id": "doordash.screen.pickup_issue_menu",
@@ -924,6 +978,33 @@
     {
       "id": "doordash.screen.shopping_item",
       "priority": 75,
+      "comment": "#920 — the item-details card renders the customer's own free-text note TWICE: a fused `contentDescription` on the container ('Customer Notes: <note>') and the value in the `body_text_view` child, with a `label_text_view` sibling reading exactly 'Customer Notes'. It is customer-AUTHORED free text (the fielded 07-29 note was benign — 'Yellow bunch:' — but the field is the #803 class: it can carry a gate code, an apartment, a name), and this rule declared no `redact` at all, so it shipped verbatim on a RECOGNIZED surface. Both entries take `plainMask` (#795) rather than the `<4hex>` distinctness suffix: a note has an UNBOUNDED alphabet but no lower bound on LENGTH, so a short note that IS the secret ('4821', 'Gate 12') sits above #889's 4-char floor while its plaintext space stays far below the suffix's 65 536 buckets — exactly the small-space case plainMask exists for. Distinctness buys nothing here either: unlike a customer name, a note is not a join key and feeds no lineage. `label_text_view` ('Customer Notes') is app chrome and stays raw so the masked card still reads as a note on replay; the item name, price, PLU, aisle and store-instruction nodes are merchant/driver-owned and are untouched. Scope check: 'Customer Notes' appears on no other doordash surface across the committed corpus or the 07-30/08-09 pulls — the sibling shopping rules (`shopping_checkout`/`shopping_item_status`/`shopping_wrong_item`, verify-items) never field it — so this is the one owner today; a later sibling that starts rendering it needs its own entry.",
+      "redact": [
+        {
+          "comment": "The container's fused contentDescription ('Customer Notes: <note>'). Matched by desc (the node has no id and no text), keepPrefix keeps the label half.",
+          "find": {
+            "hasDescContaining": "Customer Notes: "
+          },
+          "keepPrefix": [
+            "Customer Notes: "
+          ],
+          "plainMask": true
+        },
+        {
+          "comment": "The note VALUE node. `body_text_view` is a GENERIC LEGO-card id (the corpus carries it on pickup_arrival too), so it is conjoined with #860's label-sibling predicate — 'Customer Notes' is the immediately preceding sibling — which anchors on app chrome vocabulary rather than on the note's own shapeless text.",
+          "find": {
+            "all": [
+              {
+                "hasIdSuffix": "body_text_view"
+              },
+              {
+                "hasPrecedingSiblingText": "Customer Notes"
+              }
+            ]
+          },
+          "plainMask": true
+        }
+      ],
       "state": {
         "flow": "task:pickup:arrived"
       },

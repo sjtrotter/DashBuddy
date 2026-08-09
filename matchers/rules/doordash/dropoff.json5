@@ -69,6 +69,12 @@
           }
         },
         {
+          "comment": "#993: DoorDash's OWN arrival banner (`arriving_at_subtitle` = 'Arriving at' over `arriving_at_title` = the destination) can inflate while the dropoff workflow sheet is still on screen, and THIS rule wins that combined frame — so the customer's full street address shipped RAW in `arriving_at_title` right beside its own correctly-masked copy in `bottom_sheet_address_line_1` (fielded 2026-08-02 18:00:01, '<street>, Apt <n>, San Antonio, TX <zip>, USA'). The mask already existed on `nav_arriving` (nav-comms.json5) — it just did not exist on the dropoff-phase rule that can also claim a banner-bearing tree. Same entry shape as that sibling: whole-token, NO `normalize` (the customer-NAME canonicalizer would collapse an address to first-token + second-initial and destroy the mask's distinctness — addresses never normalize, per CompiledRedactEntry's KDoc). Unlike `nav_arriving` this rule is dropoff-phase by construction (state.flow `task:dropoff:navigation`), so the banner is always the CUSTOMER destination, never the store-ambiguous case #745 documents there. The sibling `pickup_navigation` restates a MERCHANT address and stays raw by design (#886). Envelope-only: this rule's require/reject/parse key on bottom_sheet_* ids and the CTA text, so recognition on replay is unchanged.",
+          "find": {
+            "hasIdSuffix": "arriving_at_title"
+          }
+        },
+        {
           "comment": "#886: the EMBEDDED Google-Nav maneuver cluster restates the destination. The sheet's own address lines are masked by id above, but the final 'arriving' maneuver renders the customer's FULL street address in nav copy ('<house#> <Street>, San Antonio, TX <zip>, USA will be on the right', fielded 07-26) and the preceding steps name the destination street — the one node family on this recognized dropoff surface still shipping the customer's address RAW. Masked whole and un-normalized (that canonicalizer is the customer-NAME key; an address token would lose mask distinctness). Nav copy has no analytics value and anchors nothing: this rule's require/reject/parse all key on bottom_sheet_* ids and the CTA text, so recognition on replay is unchanged. `roadNameView` (the road currently being driven) rides along — at the arrival step that IS the customer's street. The sibling pickup_navigation restates the MERCHANT address (driver-owned) and is deliberately NOT masked.",
           "find": {
             "any": [

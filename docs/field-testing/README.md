@@ -78,6 +78,32 @@ card's **mechanical** half, #577 (re-confirmed, 24/24, ~0.55 s — with a new po
 that entry's Bug #1), the #457 path, and #554 ShadowProjector (2/2). The #462/#460 dropoff item
 was found **broken-in-part** (raw PII in capture envelopes) and moved to that entry's Bug #7.)_
 
+- **🆕 NEW — #992 / #993 / #994 / #995 / #920 — the Pledge redact batch: five recognized surfaces
+  that were still shipping raw customer PII.** All five were found in the 2026-08-09 desk analysis
+  and are rule-layer fixes (envelope masking only — nothing about recognition, parsing, state or
+  economics moves). What now masks: `pickup_wait_survey`'s `customer_name` node (#992 — the rule had
+  no `redact` block at all); `dropoff_navigation`'s `arriving_at_title` banner, which restates the
+  customer's full street address when DoorDash's arrival banner inflates over the dropoff sheet
+  (#993); the timeline's fourth conjugation `Return <name> to <store>`, which a **return order**
+  renders and which matched none of the three enumerated prefixes (#994); the whole receipt-scan
+  camera surface, which had no rule at all and persisted the name twice per frame on id-less nodes
+  (#995 — now recognized as `pickup_receipt_scan`, recognize-only, no flow); and `shopping_item`'s
+  customer-authored **Customer Notes** free text (#920, plain-masked — it can carry a gate code).
+  **What to watch (on-dash):** nothing should look different — these surfaces render exactly as
+  before and the HUD/verdicts are untouched. The one visible change is that the receipt-scan
+  screen now classifies as a known screen instead of falling to UNKNOWN. If a **return order**
+  comes up, note it: that flow is still unmodelled, and #994 only closes its capture leak.
+  **Desk (the real gate) — on the next pull, grep the new captures:**
+  `grep -rl "arriving_at_title" captures/.../dropoff_navigation/` then confirm every hit reads
+  `[redacted:<4hex>]`, never a street; `grep -rho '"text": "Return [^"]*"' captures/` must return
+  only `Return [redacted:…]`; `grep -rho 'Focus on [^"]*' captures/` likewise; the
+  `pickup_wait_survey` folder's `customer_name` nodes must all be `[redacted:…]`; and
+  `grep -rho 'Customer Notes[^"]*' captures/` must show only `Customer Notes: [redacted]` plus the
+  bare `Customer Notes` label. Also confirm a `pickup_receipt_scan/` folder now exists in the pull
+  (frames that used to land in `UNKNOWN/`). **Any raw value surviving any of those greps is the
+  item failing.**
+  - Confirmed: 0/2
+
 - **🆕 NEW — #999 — is DoorDash still SHOWING the per-delivery earnings receipt at all?** The
   desk pull of 08-06/07/08 found **zero** receipt-shaped frames — recognized *or* unknown — after
   08-02, and all 9 deliveries across those three dashes were priced by the `OFFER_PAY` estimate

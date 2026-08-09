@@ -304,7 +304,30 @@ MERCHANT address and stays raw by design); and the id-less workflow-sheet **addr
 masked whether it renders a street line or a business/**venue name**, via a new
 `hasFollowingSiblingTextMatchesRegex` predicate (#886) — the mirror of #860's
 `hasPrecedingSiblingText` for a block whose PII value is child 0 and whose only stable handle is the
-city/ST/ZIP line beneath it. A rules-independent
+city/ST/ZIP line beneath it. **Five more recognized-surface leaks closed 2026-08-09** — the same
+enumeration class, all envelope-only, no parse/state/economics movement (the parse golden diff was
+additions-only): `pickup_wait_survey` had **no `redact` block at all** beside a bare `customer_name`
+node (#992 — `ID_MARKERS` lists that id but is UNKNOWN-only by design, so a recognized rule that
+forgets to redact has no backstop); `dropoff_navigation` gained the `arriving_at_title` entry, since
+DoorDash's own arrival banner can inflate over the dropoff sheet and restate the customer's full
+street address on the frame THIS rule wins (#993 — the mask already existed on `nav_arriving`, it
+just did not exist on the dropoff-phase rule); the `timeline` name entry gained the FOURTH
+conjugation `Return <name> to <store>` a return order renders (#994 — the keepPrefix mask is
+whole-remainder so the store tail masks too, yet the #623 mask↔hash invariant survives because
+`customerNameKey` canonicalizes to first-token + second-token-initial and discards the tail); the
+**receipt-scan camera** became a recognized surface at all (#995, `pickup_receipt_scan`,
+recognize-only — dev ruling: a receipt is not in the blocked document-image family, so it is
+recognize-and-redact like the #463 ID-CHECK screens, masking both id-less name nodes, the
+`Focus on ` line via keepPrefix and the bare sibling via the `\s{1,4}` name-shape SSOT); and
+`shopping_item` masks the customer-authored **Customer Notes** free text (#920, via the fused
+`contentDescription` plus a #860 label-sibling anchor on the value node, **`plainMask`** — a note's
+alphabet is unbounded but its LENGTH is not, so a short note that IS the secret would sit above
+#889's floor with a brute-forceable suffix, and a note is no one's join key). Two candidate MARKERS
+additions (`"Return "`, `"Focus on "`) were **vetted and REJECTED** the same day: both are
+CHROME-ambiguous — DoorDash's own `on_dash_map` "Return to dash" button and the
+`performance_rate_detail` "Focus on accuracy…" tip trip them — so `CaptureBackstopCorpusTest` goes
+red on a clean corpus, exactly the "Heading to " precedent; the rule redact is the primary control
+per #806, and the reasoning is recorded in the `CustomerTextMarkers` KDoc. A rules-independent
 customer-PII **marker backstop** (`CustomerTextMarkers`, #624/#632/#666/#806 — distinct from
 `SensitiveTextMarkers`, which drops the dasher's banking screens) scrubs a node (screen tree) or whole
 field (notification — #632, incl. `actionLabels` — #666) that ships a customer-PII marker — on the
