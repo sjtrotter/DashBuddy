@@ -2,11 +2,15 @@ package cloud.trotter.dashbuddy.notice
 
 import android.app.NotificationChannel
 import android.app.NotificationManager
+import android.app.PendingIntent
 import android.content.Context
+import android.content.Intent
+import androidx.core.app.NotificationCompat
 import cloud.trotter.dashbuddy.R
+import cloud.trotter.dashbuddy.ui.main.MainActivity
 
 /**
- * The one "App notices" notification channel (#938, extended by #937) — one-off, honest
+ * The one "App notices" notification channel (#938, extended by #937 and #991) — one-off, honest
  * disclosures about how DashBuddy itself is working on this device.
  *
  * A dedicated channel rather than a reused one: a channel name IS the user's mute control, so
@@ -40,6 +44,53 @@ object AppNoticeChannel {
     }
 
     /**
+     * Post one app notice: ensure the channel, build the standard notice notification, show it.
+     *
+     * Every member of this family is the same shape — big-text body, tap opens the app, auto-cancel
+     * — and by the third member (#991) that shape existed as three near-verbatim copies, one per
+     * notifier. It lives here now (principle 5) so a change to how a notice looks or where it
+     * navigates cannot land on two of the three.
+     *
+     * Deliberately NOT wrapped in a try/catch: each notifier owns its own fail-open policy (they
+     * are called from a sensing frame, a DataStore coroutine and an effect handler respectively,
+     * and each already logs its failure under its own tag). Swallowing here would hide a post
+     * failure from all three.
+     *
+     * @param requestCode distinguishes this notice's [PendingIntent] from its siblings' —
+     *   conventionally the issue number that introduced it.
+     */
+    fun postNotice(
+        context: Context,
+        notificationManager: NotificationManager,
+        notificationId: Int,
+        requestCode: Int,
+        title: String,
+        text: String,
+    ) {
+        ensure(context, notificationManager)
+
+        val contentIntent = PendingIntent.getActivity(
+            context,
+            requestCode,
+            Intent(context, MainActivity::class.java).apply {
+                flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+            },
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+        )
+
+        val notification = NotificationCompat.Builder(context, ID)
+            .setSmallIcon(R.drawable.bag_red_idle)
+            .setContentTitle(title)
+            .setContentText(text)
+            .setStyle(NotificationCompat.BigTextStyle().bigText(text))
+            .setContentIntent(contentIntent)
+            .setAutoCancel(true)
+            .build()
+
+        notificationManager.notify(notificationId, notification)
+    }
+
+    /**
      * Notification ids for this channel, in the small-constant range the bubble (1), offer
      * fallback (2) and odometer (101) already occupy; `BubbleManager.offerNotificationId`
      * deliberately folds per-offer ids into the disjoint `[2^30, 2^31)` namespace, so fixed
@@ -51,5 +102,11 @@ object AppNoticeChannel {
 
         /** #937 — recognition has stopped understanding a platform's screens. */
         const val RECOGNITION_HEALTH = 103
+
+        // 104 is the weekly-plan recap (`WeeklyPlanChannel.NOTIFICATION_ID`) — a different
+        // channel, but the same small-id namespace, so this family continues at 105.
+
+        /** #991 — the speech engine died and re-initialization has not brought it back. */
+        const val TTS_ENGINE_HEALTH = 105
     }
 }

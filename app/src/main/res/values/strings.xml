@@ -626,6 +626,15 @@
     <string name="recognition_health_notice_text">%2$d%% of the last few %1$s screens were unrecognised, which usually means the %1$s app updated and moved things around. Offers, pickups and deliveries may not be tracked until DashBuddy is updated to match.</string>
     <string name="recognition_health_notice_platform_fallback">this platform</string>
 
+    <!-- #991 speech-engine liveness notice (App notices channel). Device-independent copy: no
+         offer, store or customer value ever reaches it.
+         The remedy is deliberately FORCE-STOP, not "reopen": the speech handler is a
+         process-scoped singleton, so bringing the activity back to the foreground rebuilds
+         nothing. And retries are stated as happening per offer, because that is when they fire —
+         there is no background retry loop. -->
+    <string name="tts_health_notice_title">DashBuddy has stopped reading offers aloud</string>
+    <string name="tts_health_notice_text">Your phone\'s text-to-speech engine stopped responding, so spoken offer alerts have gone quiet. DashBuddy retries as each new offer arrives. If it stays quiet, force stop DashBuddy in Android Settings → Apps and open it again. Offers still appear on screen either way.</string>
+
     <!-- ui/bubble/BubbleManager.kt -->
     <string name="bubble_channel_stream_name">DashBuddy Stream</string>
     <string name="bubble_channel_stream_description">Live updates from your session</string>

@@ -107,4 +107,10 @@
     <string name="recognition_health_notice_title">DashBuddy no puede leer %1$s ahora mismo</string>
     <string name="recognition_health_notice_text">El %2$d%% de las últimas pantallas de %1$s no se reconocieron, lo que suele significar que la aplicación de %1$s se actualizó y cambió de aspecto. Puede que las ofertas, recogidas y entregas no se registren hasta que DashBuddy se actualice.</string>
     <string name="recognition_health_notice_platform_fallback">esta plataforma</string>
+
+    <!-- #991 — aviso del motor de voz. Traducido aquí porque la lectura de ofertas en voz alta ya
+         respeta el idioma elegido (#428 mitad B): un aviso de que esa voz se apagó debe hablar el
+         mismo idioma que hablaba. -->
+    <string name="tts_health_notice_title">DashBuddy dejó de leer las ofertas en voz alta</string>
+    <string name="tts_health_notice_text">El motor de texto a voz de tu teléfono dejó de responder, así que los avisos de oferta hablados se apagaron. DashBuddy lo reintenta cada vez que llega una oferta nueva. Si sigue en silencio, fuerza la detención de DashBuddy en Ajustes de Android → Aplicaciones y vuelve a abrirla. De todos modos, las ofertas siguen apareciendo en pantalla.</string>
 </resources>

@@ -2,6 +2,7 @@ package cloud.trotter.dashbuddy.di
 
 import android.app.NotificationManager
 import android.content.Context
+import android.speech.tts.TextToSpeech
 import cloud.trotter.dashbuddy.BuildConfig
 import cloud.trotter.dashbuddy.DashBuddyApplication
 import cloud.trotter.dashbuddy.core.data.log.LogScrubber
@@ -13,6 +14,7 @@ import cloud.trotter.dashbuddy.domain.pipeline.RecognitionHealthReporter
 import cloud.trotter.dashbuddy.locale.LocaleBoundaryNotifier
 import cloud.trotter.dashbuddy.notice.RecognitionHealthNotifier
 import cloud.trotter.dashbuddy.state.effects.SideEffectEngine
+import cloud.trotter.dashbuddy.state.effects.TtsEngineFactory
 import dagger.Binds
 import dagger.Module
 import dagger.Provides
@@ -65,6 +67,16 @@ object AppModule {
     fun provideNotificationManager(@ApplicationContext context: Context): NotificationManager {
         return context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
     }
+
+    /**
+     * #991: the speech engine's one construction site. A factory rather than an inline
+     * `TextToSpeech(context, listener)` in the handler is what makes the engine *rebuildable*
+     * after its binder dies — and observable from a unit test without a device.
+     */
+    @Provides
+    @Singleton
+    fun provideTtsEngineFactory(@ApplicationContext context: Context): TtsEngineFactory =
+        TtsEngineFactory { onInit -> TextToSpeech(context, onInit) }
 
     /**
      * The fail-closed PII scrub for the shareable log sink (#551, Principle 7). `:app` is the only

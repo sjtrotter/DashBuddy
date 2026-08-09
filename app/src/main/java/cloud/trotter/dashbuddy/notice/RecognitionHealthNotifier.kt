@@ -1,14 +1,10 @@
 package cloud.trotter.dashbuddy.notice
 
 import android.app.NotificationManager
-import android.app.PendingIntent
 import android.content.Context
-import android.content.Intent
-import androidx.core.app.NotificationCompat
 import cloud.trotter.dashbuddy.R
 import cloud.trotter.dashbuddy.domain.pipeline.RecognitionHealthReporter
 import cloud.trotter.dashbuddy.domain.state.Platform
-import cloud.trotter.dashbuddy.ui.main.MainActivity
 import dagger.hilt.android.qualifiers.ApplicationContext
 import timber.log.Timber
 import javax.inject.Inject
@@ -51,8 +47,6 @@ class RecognitionHealthNotifier @Inject constructor(
     }
 
     private fun postNotice(platformWire: String, unknownPercent: Int) {
-        AppNoticeChannel.ensure(context, notificationManager)
-
         // The registry is the only path from a wire to display copy (principle 8). An unknown
         // wire — a ruleset naming a platform this build doesn't carry — still gets a notice,
         // with the generic wording rather than a fabricated brand name.
@@ -61,28 +55,16 @@ class RecognitionHealthNotifier @Inject constructor(
             ?.displayName
             ?: context.getString(R.string.recognition_health_notice_platform_fallback)
 
-        val contentIntent = PendingIntent.getActivity(
-            context,
-            REQUEST_CODE,
-            Intent(context, MainActivity::class.java).apply {
-                flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
-            },
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+        AppNoticeChannel.postNotice(
+            context = context,
+            notificationManager = notificationManager,
+            notificationId = AppNoticeChannel.Ids.RECOGNITION_HEALTH,
+            requestCode = REQUEST_CODE,
+            title = context.getString(R.string.recognition_health_notice_title, platformName),
+            text = context.getString(
+                R.string.recognition_health_notice_text, platformName, unknownPercent,
+            ),
         )
-
-        val text = context.getString(
-            R.string.recognition_health_notice_text, platformName, unknownPercent,
-        )
-        val notification = NotificationCompat.Builder(context, AppNoticeChannel.ID)
-            .setSmallIcon(R.drawable.bag_red_idle)
-            .setContentTitle(context.getString(R.string.recognition_health_notice_title, platformName))
-            .setContentText(text)
-            .setStyle(NotificationCompat.BigTextStyle().bigText(text))
-            .setContentIntent(contentIntent)
-            .setAutoCancel(true)
-            .build()
-
-        notificationManager.notify(AppNoticeChannel.Ids.RECOGNITION_HEALTH, notification)
     }
 
     private companion object {

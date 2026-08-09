@@ -104,13 +104,23 @@ was found **broken-in-part** (raw PII in capture envelopes) and moved to that en
   focus`. Offers were still evaluated, carded and notified the whole time — **only the voice
   died**, with no user-visible signal that it had. The app process had been alive for 8 days at
   that point and the TTS engine was only ever initialized once, at install.
-  **What to watch (every dash, until this is fixed):** does the offer read actually SPEAK on each
-  offer? If it goes quiet, note (a) roughly how long the app had been running / when you last
-  rebooted or reinstalled, (b) whether anything else audible still works (navigation, music), and
-  (c) whether force-stopping DashBuddy and reopening it brings the voice back — that last one is
-  the single most useful data point, because it distinguishes a dead engine binding from a dead
-  handler. Expect silence after long uptimes until the fix lands. **Desk:** `grep 'Tts' app.log` —
-  `speak returned -1` runs and a lone `engine initialized` line at install time are the signature.
+  **FIXED — PR for #991 (needs field validation).** The handler now rebuilds the engine instead of
+  latching dead: a failed `speak()` tears the `TextToSpeech` down and constructs a new one
+  immediately (the same #428-B language wiring is re-applied), further failures are gated by a
+  linear 30 s → 60 s → … → 5 min backoff, and after 3 consecutive lost utterances a notification
+  appears on the shared **App notices** channel saying the voice stopped and that reopening the app
+  restores it. A successful utterance resets the whole ladder; the notice fires at most once per
+  process.
+  **What to watch:** if the offer read goes quiet mid-dash, it should come back **by itself within
+  roughly a minute** — the next offer or two after the silent one should speak again. If the engine
+  is genuinely dead (e.g. the TTS package is mid-update), you should instead get the "DashBuddy has
+  stopped reading offers aloud" notification rather than open-ended silence; force-stopping and
+  reopening should then restore it. Note whether the notice appeared, and whether the voice
+  self-recovered without any intervention. **Desk:** `grep 'Tts' app.log` — the fix working looks
+  like `WARN … speak returned -1` immediately followed by `WARN … re-initializing the engine` and
+  then `INFO Tts: engine re-initialized after failure`; an unrecoverable engine looks like
+  `WARN … speech still failing after 3 consecutive losses — notifying the dasher`. A `speak
+  returned -1` run with NO re-init line after it means the fix did not engage.
   - Confirmed: 0/2
 
 - **🆕 NEW — #967 / PR #968 — ratings stamp during an Offline browse (the early-return fix).**
