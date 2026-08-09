@@ -120,7 +120,7 @@ class RecordFoldsTest {
         // BOTH hashes null (the payload copies the task's null hashes) — pass true to model it.
         identityLess: Boolean = false,
         // #997 per-drop→offer lineage. Provenance only — no fold consumer today (pinned below).
-        mintedByOfferHash: String? = null,
+        offerPayAttributedHash: String? = null,
     ) = ev(
         AppEventType.DELIVERY_COMPLETED, sid, at,
         DeliveryPayload(
@@ -129,7 +129,7 @@ class RecordFoldsTest {
             addressHash = if (identityLess) null else "addr-$taskId",
             phaseStartedAt = phaseStartedAt, arrivedAt = at - 120_000, completedAt = at,
             totalPay = totalPay, parsedPay = parsedPay, dropRealizedPay = dropRealizedPay,
-            offerPayShare = offerPayShare, mintedByOfferHash = mintedByOfferHash,
+            offerPayShare = offerPayShare, offerPayAttributedHash = offerPayAttributedHash,
         ),
         odometer = odo,
     )
@@ -239,7 +239,7 @@ class RecordFoldsTest {
 
     @Test
     fun `#997 — the new per-drop offer lineage is fold-INERT`() {
-        // DeliveryPayload.mintedByOfferHash is provenance for #756 / a per-offer #975, with NO fold
+        // DeliveryPayload.offerPayAttributedHash is provenance for #756 / a per-offer #975, with NO fold
         // consumer today. Pin that: the same session folded with and without the stamp produces
         // identical records — which is exactly what makes "no PROJECTOR_VERSION bump" true (folded
         // history and a from-zero refold of stamped events agree byte-for-byte).
@@ -251,7 +251,7 @@ class RecordFoldsTest {
                     delivery(
                         "S1", 3_000, "J1", "T1",
                         totalPay = 10.0, parsedPay = parsedPay(base = 7.0, tip = 3.0), odo = 105.0,
-                        offerPayShare = null, mintedByOfferHash = stamp,
+                        offerPayShare = null, offerPayAttributedHash = stamp,
                     ),
                     dashStop("S1", 4_000, odo = 110.0, earnings = 10.0),
                 ),

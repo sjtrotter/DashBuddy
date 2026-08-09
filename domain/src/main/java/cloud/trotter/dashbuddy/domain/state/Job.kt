@@ -30,6 +30,21 @@ data class AcceptedOfferEconomics(
      * (no ratio to learn). Additive `@Serializable` default ⇒ old snapshots decode unchanged.
      */
     val offerUnitCount: Int? = null,
+    /**
+     * The raw per-order store names this offer quoted (`parsedOffer.orders.map { storeName }`), kept
+     * per-ACCEPT — [Job.offerStoreHint] flattens every accept's hints into one list, so a job that
+     * absorbed N offers could not say which store belonged to which quote. This is the evidence
+     * [OfferPayFallback]'s store-correspondence ladder needs to attribute a receipt-less drop to the
+     * offer whose order it actually is (#997 amendment A): the mint-time slot stamp
+     * ([Task.mintedByOfferHash]) is only a HINT, because dropoff placeholders activate blind
+     * first-open, so the *store* — reconciled by close time — is the authoritative correspondence.
+     *
+     * Hints, not truth (the [Task.expectedStoreHint] doctrine): they are matched through
+     * [StoreKeys.normalizedChain], never compared raw. Empty on a pay-less/unparsed offer and on all
+     * pre-#997 snapshots (`@Serializable` default ⇒ old snapshots decode unchanged) — which simply
+     * leaves that offer unmatchable by store, degrading it to the stamp / job-pooled arms.
+     */
+    val storeHints: List<String> = emptyList(),
     val acceptedAt: Long,
 )
 

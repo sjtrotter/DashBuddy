@@ -150,10 +150,12 @@ data class DeliveryPayload(
      * instead of a $0-unattributed one. The platform's true per-drop split is unknowable without a
      * receipt, so the accepted quote is divided equally
      * ([cloud.trotter.dashbuddy.domain.state.DropPayApportioner.equalSplit], cents-exact
-     * remainder-to-last) — since #997 across the drops of the drop's OWN accepted offer
-     * ([mintedByOfferHash]) rather than the whole job's pooled total, and since #996 excluding a
-     * never-activated placeholder when the job closed proven-complete; an unresolvable lineage
-     * degrades to the pre-#997 job-wide pooled split. See
+     * remainder-to-last). At the TERMINAL close (#997) that division follows a store-correspondence
+     * ladder — the drop's own offer's quote when its store names exactly one, a sub-pool when it
+     * names several, the minting offer's when the drop has no store, else the job-wide pool — over a
+     * denominator that (#996) drops never-mintable consolidation placeholders once the job is PROVEN
+     * complete. The INLINE (PostTask-exit) mint deliberately keeps the conservative job-wide pooled
+     * split over the quoted orders. [offerPayAttribution] records which arm ran. See
      * [cloud.trotter.dashbuddy.domain.state.OfferPayFallback].
      * Null on any receipted mint, on a pay-less offer, and on all pre-#691 events
      * (nullable-with-default → old rows deserialize identically → the fold reproduces today's
@@ -172,20 +174,27 @@ data class DeliveryPayload(
      */
     val jobOfferHashes: List<String> = emptyList(),
     /**
-     * The `offerHash` of the accepted offer that MINTED this drop's slot (#997,
-     * [cloud.trotter.dashbuddy.domain.state.Task.mintedByOfferHash]) — the per-drop↔offer join the log
-     * otherwise lacks. [jobOfferHashes] carries the whole add-on CHAIN on every row, so a job that
-     * absorbed N offers is unmappable from the log alone; this names the one offer this drop came from.
+     * The accepted offer this drop's [offerPayShare] was actually **paid from** (#997) — the
+     * RESOLVED attribution, not the mint-time slot stamp. Non-null only when exactly one accepted
+     * offer backed the drop's store-correspondence component; null for every pooled or sub-pooled
+     * share (where no single offer is the answer) and whenever no estimate was stamped.
      *
-     * **No fold consumer today** — deliberately, following the [jobOfferHashes] precedent (added for a
-     * downstream consumer before that consumer existed). The write side already applies the mapping at
-     * the mint (it is what makes [offerPayShare] per-offer), so this is provenance for later:
-     * #756's settlement split, and a per-offer #975 estimate-vs-reality for receipt-less stacks (a
-     * *receipt* can't be split per offer, but a per-offer ESTIMATE can). No `delivery_records` column,
-     * no schema change, no `PROJECTOR_VERSION` bump. Nullable-with-default ⇒ old events deserialize
-     * identically and a refold reproduces historical rows byte-for-byte.
+     * [jobOfferHashes] carries the whole add-on CHAIN on every row, so a job that absorbed N offers
+     * was unmappable from the log alone; this names the one offer, when there is one.
+     * **No fold consumer today** — deliberately, following the [jobOfferHashes] precedent (added for
+     * a downstream consumer before that consumer existed): #756's settlement split, and a per-offer
+     * #975 estimate-vs-reality for receipt-less stacks (a *receipt* cannot be split per offer, but a
+     * per-offer ESTIMATE can). No `delivery_records` column, no schema change, no
+     * `PROJECTOR_VERSION` bump. Nullable-with-default ⇒ old events deserialize identically and a
+     * refold reproduces historical rows byte-for-byte.
      */
-    val mintedByOfferHash: String? = null,
+    val offerPayAttributedHash: String? = null,
+    /**
+     * WHICH arm of the attribution ladder produced [offerPayShare] (#997) — what makes a frozen
+     * estimate row auditable ("was this drop priced from its own offer, or from a pool?"). Null when
+     * no estimate was stamped. Same consumer-pending posture as [offerPayAttributedHash].
+     */
+    val offerPayAttribution: cloud.trotter.dashbuddy.domain.state.OfferPayAttribution? = null,
 ) : AppEventPayload
 
 /**

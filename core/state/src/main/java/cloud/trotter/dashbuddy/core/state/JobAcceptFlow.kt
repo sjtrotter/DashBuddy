@@ -92,6 +92,11 @@ internal fun PlatformRegionStepper.acceptInputsFromPending(pending: PendingOffer
             // the pickup-confirmed shop-rate site can pair it with the ground-truth items shopped and
             // learn the items:units ratio. Null for an items-denominated / non-shop offer.
             offerUnitCount = parsedOffer?.takeIf { it.itemCountIsUnits }?.itemCount,
+            // #997: keep this accept's OWN quoted stores. `Job.offerStoreHint` flattens every
+            // accept's hints together, so a multi-accept job could not say which store belonged to
+            // which quote — and the store is the authoritative offer↔drop correspondence at close
+            // (the slot stamp is only a hint; placeholders activate blind first-open).
+            storeHints = storeHints,
             // The honest accept moment (the accept-click time); falls back to the consume frame.
             acceptedAt = acceptedAt ?: pending?.acceptClickAt ?: pending?.presentedAt ?: 0L,
         ),
@@ -125,7 +130,8 @@ internal fun PlatformRegionStepper.consumeAcceptIntoJob(
     run {
         val pend = region.pendingDestructive?.takeIf { it.kind == DestructiveKind.TASK_RETIRE }
         if (pend?.armedFromFlow == Flow.OfferPresented) return@run
-        val justRetired = if (pend != null) region.activeTask?.copy(completedAt = pend.since) else null
+        // ONE spelling of the inline-committed retire copy (#997 amendment) — see [completedInline].
+        val justRetired = if (pend != null) region.activeTask?.completedInline(pend.since) else null
         val recentForCheck =
             if (justRetired != null) region.recentTasks + justRetired else region.recentTasks
         if (isJobPhysicallyComplete(existing, recentForCheck, justRetired)) {
