@@ -5,12 +5,22 @@
     {
       "id": "doordash.screen.camera_capture",
       "priority": 86,
-      "comment": "#598 F1: the id-bearing 'bottom_instruction' node embeds customer PII ('...name: <name>', '...Apt/Suite: <apt>'); mask it whole, un-normalized — a canonical NAME key over a mixed 'name+apt' field would corrupt the apt token (the 'title' label stays). The bare-name regex catches a stale bin-scan-overlay customer name (e.g. 'Kris K') among id-less product rows without touching those products; #745: it IS a bare customer name, so it normalizes — the regex just selects the node, the canonical-key hash acts on the masked token, keeping its mask hex equal to the persisted customerNameHash. Single-token all-caps bare names remain a structural residual (#623/#624).",
+      "comment": "#598 F1: the id-bearing 'bottom_instruction' node embeds customer PII ('...name: <name>', '...Apt/Suite: <apt>'); mask it whole, un-normalized — a canonical NAME key over a mixed 'name+apt' field would corrupt the apt token (the 'title' label stays). The bare-name entry catches a stale bin-scan-overlay customer name (e.g. 'Kris K') among id-less product rows without touching those products; #745: it IS a bare customer name, so it normalizes — the regex just selects the node, the canonical-key hash acts on the masked token, keeping its mask hex equal to the persisted customerNameHash. Single-token all-caps bare names remain a structural residual (#623/#624). **#995 belt.** This rule (priority 86) BEATS the new `pickup_receipt_scan` (141) on any receipt-scan render that also exposes `camera_preview`/`image_capture_view`, so the scan surface's two name nodes must be covered HERE too or the belt has a hole exactly where the specific rule loses. Two changes: (a) a `Focus on ` keepPrefix entry, because the scan instruction line is one fused string no bare-name shape entry can keep a lead-in on; (b) the bare-name regex was replaced by the canonical `SnapshotRedactor.FIRST_LAST_INITIAL_PATTERN` — the old private `^[A-Za-z]{2,}( [A-Z]\\.?){1,2}$` was a strict SUBSET (literal single space, so #885's double-space render evaded it; ASCII-only `[A-Za-z]`, so an accented or apostrophised name evaded it; no leading/trailing whitespace tolerance), and every shape it matched the canonical pattern matches too, so this is a pure widening — more masking, never less. Priority was deliberately NOT reordered to let the specific rule win: that would move a classification, and a privacy fix must not.",
       "redact": [
         {
           "find": {
             "hasIdSuffix": "bottom_instruction"
           }
+        },
+        {
+          "comment": "#995 belt: the receipt-scan instruction line, ordered BEFORE the bare-name shape below because 'Focus on <FirstName L>' also satisfies that shape and this entry is the one that keeps the lead-in. Byte-identical to the `pickup_receipt_scan` entry so one customer masks to one hex whichever rule wins the frame.",
+          "find": {
+            "hasTextStartsWith": "Focus on "
+          },
+          "keepPrefix": [
+            "Focus on "
+          ],
+          "normalize": "customerName"
         },
         {
           "find": {
@@ -19,7 +29,7 @@
                 "hasNoId": true
               },
               {
-                "hasTextMatchesRegex": "^[A-Za-z]{2,}( [A-Z]\\.?){1,2}$"
+                "hasTextMatchesRegex": "^\\s{0,8}[\\p{L}][\\p{L}'-]{0,20}(\\s{1,4}[\\p{L}][\\p{L}'-]{0,20}){0,3}\\s{1,4}[A-Z]\\.?\\s{0,8}$"
               }
             ]
           },

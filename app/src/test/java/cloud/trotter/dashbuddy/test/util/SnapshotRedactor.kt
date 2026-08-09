@@ -31,7 +31,7 @@ object SnapshotRedactor {
     const val MASK = "[redacted]"
 
     /** Resource-id suffixes whose text value is always customer PII → fully masked. */
-    private val PII_ID_SUFFIXES = setOf(
+    internal val PII_ID_SUFFIXES = setOf(
         "user_name", "customer_name", "address_line_1", "address_line_2",
         "address_subpremise_line", "primaryManeuverText",
         // #886: the rest of the embedded Google-Nav maneuver cluster, which the runtime redact
@@ -41,6 +41,13 @@ object SnapshotRedactor {
         // it and a future committed nav fixture would ship the customer's street raw on the
         // commit path. Ids, not shapes, are the only handle here.
         "subManeuverText", "secondaryManeuverText", "roadNameView",
+        // #993: DoorDash's OWN nav arrival banner. `arriving_at_title` restates the destination,
+        // which on every dropoff-phase surface is the customer's full street address (the fielded
+        // 08-02 frame carried "<street>, Apt <n>, <City>, <ST> <zip>, USA"). The runtime redact now
+        // declares it on every dropoff rule + the two nav rules; without the id here the COMMIT
+        // path stayed open, because the value is one fused line whose city/ST/ZIP tail the address
+        // shapes would mask while leaving the house number + street standing.
+        "arriving_at_title",
         "message_self_message", "message_other_message", "message_input",
         "chat_input_text_field", "bottom_sheet_address_line_1", "bottom_sheet_address_line_2",
         "tvTitle", "tvLastMessage",
@@ -54,10 +61,23 @@ object SnapshotRedactor {
         "order_cx_name",
     )
 
-    /** Text starting with one of these keeps the anchor prefix; the rest (a name/store) is masked. */
-    private val NAME_PREFIXES = listOf(
+    /**
+     * Text starting with one of these keeps the anchor prefix; the rest (a name/store) is masked.
+     *
+     * This is the COMMIT-path twin of the rules' `keepPrefix` enumerations, NOT of
+     * `CustomerTextMarkers.MARKERS` — the runtime backstop must stay free of chrome-ambiguous
+     * prefixes (a false positive there scrubs a live envelope), whereas an over-scrub here only
+     * costs a little triage text in a committed fixture. That asymmetry is why `"Return "` belongs
+     * here (#994) even though it was vetted and REJECTED for the runtime marker set: DoorDash's own
+     * `"Return to dash"` button would be masked to `"Return [redacted]"` on intake, which is
+     * harmless, while a real `"Return <FirstName L> to <store>"` from a return order would
+     * otherwise be committed verbatim.
+     */
+    internal val NAME_PREFIXES = listOf(
         "Pickup for ", "Pickup from ", "Deliver to ", "Delivery for ", "Order for ",
         "Message from ", "Heading to ", "Pick up at ",
+        // #994: the fourth timeline conjugation a RETURN order renders.
+        "Return ",
     )
 
     private val PHONE = Regex("""\b\d{3}[-.\s]?\d{3}[-.\s]?\d{4}\b""")
@@ -94,8 +114,10 @@ object SnapshotRedactor {
      * documented split-node residual).
      *
      * **SSOT (#362 class):** [FIRST_LAST_INITIAL_PATTERN] is byte-identical to the rule-side
-     * `hasTextMatchesRegex` on EVERY rule that carries this shape — today eight sites across the
-     * doordash dropoff surfaces and the uber trip surfaces — and both sides compile `IGNORE_CASE`,
+     * `hasTextMatchesRegex` on EVERY rule that carries this shape — across the doordash
+     * pickup/dropoff/camera surfaces and the uber trip surfaces; the parity test below owns the
+     * live count, which is why no number is written here (it went stale twice) — and both sides
+     * compile `IGNORE_CASE`,
      * so the committed corpus is scrubbed the SAME way the runtime redacts the live envelope. The
      * **authoritative enumeration is the parity tests**, not this KDoc: `CaptureRedactionCorpusTest`
      * asserts every such rule's redact regex is byte-equal to this constant, so a new site is

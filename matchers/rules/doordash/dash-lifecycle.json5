@@ -3,7 +3,7 @@
   "$schema": "../../../docs/rules.fragment.schema.json",
   "screens": [
     {
-      "comment": "#733: the customer-NAME lines ('Pickup for <name>' / 'Deliver to <name>') normalize so their capture mask matches the parse surfaces' canonical-key hash; the STORE line ('Pickup from <store>') is a SEPARATE entry with NO normalize (canonicalizing a store name would corrupt its mask). Two entries, no overlap — a 'Pickup from' node never startsWith 'Pickup for'/'Deliver to' and vice-versa.",
+      "comment": "#733: the customer-NAME lines ('Pickup for <name>' / 'Deliver to <name>') normalize so their capture mask matches the parse surfaces' canonical-key hash; the STORE line ('Pickup from <store>') is a SEPARATE entry with NO normalize (canonicalizing a store name would corrupt its mask). Two entries, no overlap — a 'Pickup from' node never startsWith 'Pickup for'/'Deliver to'/'Return ' and vice-versa. #994 adds the FOURTH conjugation: a RETURN order renders the task line as 'Return <FirstName L> to <store>' (fielded 2026-08-01 12:53:16 / 13:06:36), which matched none of the three enumerated prefixes, so a customer's name shipped raw on this RECOGNIZED surface — the same shape as #962's 'Delivery to ' miss. Two notes on the entry. (a) The keepPrefix mask is WHOLE-remainder, so the trailing ' to <store>' is masked along with the name (screen redacts have no regex-capture form — `match`/`maskGroup` is notification-only). Accepted: the store is recoverable from this same frame's separate 'Pickup from <store>' line and from the offer/receipt parses, and a fail-toward-privacy over-mask beats enumerating a store tail. (b) The #623 mask↔hash invariant still HOLDS despite that tail, because `normalize: customerName` canonicalizes the stripped token to first-token + second-token-initial: customerNameKey('Nicole H to H-E-B') == customerNameKey('Nicole H') == 'nicole h', so the return line's 4hex equals the same customer's hex on every other surface. The rules-independent `CustomerTextMarkers` backstop is deliberately NOT extended with a 'Return ' entry — see that SSOT's deliberate-exclusions KDoc (DoorDash's own 'Return to dash' chrome button on on_dash_map makes the bare prefix chrome-ambiguous); this rule redact is the primary control, per the #806 doctrine.",
       "id": "doordash.screen.timeline",
       "priority": 10,
       "redact": [
@@ -15,12 +15,16 @@
               },
               {
                 "hasTextStartsWith": "Deliver to "
+              },
+              {
+                "hasTextStartsWith": "Return "
               }
             ]
           },
           "keepPrefix": [
             "Pickup for ",
-            "Deliver to "
+            "Deliver to ",
+            "Return "
           ],
           "normalize": "customerName"
         },

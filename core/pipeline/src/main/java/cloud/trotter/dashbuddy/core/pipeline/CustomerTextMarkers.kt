@@ -53,6 +53,21 @@ import cloud.trotter.dashbuddy.domain.model.notification.RawNotificationData
  * `CaptureBackstopCorpusTest` pins the set to ZERO false positives on the committed
  * (already-redacted) corpus.
  *
+ * Two further candidates were VETTED AND REJECTED on 2026-08-09 (#994/#995) — CHROME-ambiguous
+ * rather than store-ambiguous, but the same category as "Heading to " and found the same way
+ * (add the marker, watch `CaptureBackstopCorpusTest` go red on a clean, PII-free corpus):
+ * - `"Return "` — the DoorDash timeline renders a RETURN order's task line as
+ *   `"Return <FirstName L> to <store>"` (#994), but the platform's own chrome renders the
+ *   `on_dash_map` button `"Return to dash"` (6 committed fixtures trip it), and a bare
+ *   case-insensitive `startsWith` cannot separate the customer line from the button.
+ * - `"Focus on "` — the receipt-scan camera renders `"Focus on <FirstName L>"` (#995), but the
+ *   shopping-accuracy tip on `performance_rate_detail` opens `"Focus on accuracy by remembering
+ *   drinks and desserts…"`, so the same prefix also precedes app copy.
+ * Both leaks are owned instead by the rule-declared `redact` — the primary control per the #806
+ * doctrine — on `doordash.screen.timeline` and the new `doordash.screen.pickup_receipt_scan`.
+ * The residual is the usual one: an UNKNOWN sibling of either surface (the still-unmodelled
+ * return flow) is not covered by THIS scan until a rule recognizes it.
+ *
  * ## The node-ID half ([ID_MARKERS], #910)
  *
  * That split-node shape is not an exception, it is the DOMINANT rendering: the 07-28
@@ -128,6 +143,15 @@ object CustomerTextMarkers {
         // DoorDash address block -> street line and city/ST/ZIP line (#910 V1/V5).
         "address_line_1",
         "address_line_2",
+        // DoorDash's OWN nav arrival banner title -> the destination, which on a dropoff leg is
+        // the customer's full street address (#993, fielded 08-02: "<street>, Apt <n>, <City>,
+        // <ST> <zip>, USA"). The rule-declared `redact` now covers it on every dropoff-phase rule
+        // and both nav rules, but an UNKNOWN banner-bearing frame had no control at all. Same
+        // accepted over-scrub as `user_name` above: on a PICKUP approach the banner names the
+        // MERCHANT, so an UNKNOWN pickup-nav frame loses a merchant line from its triage text —
+        // fail toward privacy, and the RECOGNIZED path is untouched by this scan, so #886's
+        // deliberate "pickup_navigation keeps its merchant address raw" decision still stands.
+        "arriving_at_title",
     )
 
     /** Substring that classifies a node's text as already-redacted (VET V1). */

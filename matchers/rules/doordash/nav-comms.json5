@@ -62,6 +62,12 @@
               }
             ]
           }
+        },
+        {
+          "comment": "#993 belt: the SAME store-ambiguity argument this rule already makes for the maneuver cluster applies to DoorDash's own `arriving_at_title` arrival banner, which restates the destination — a merchant address on a pickup leg, the CUSTOMER's full street address on a dropoff leg. `nav_arriving` (69) masks it and rejects bottom-sheet frames; this catch-all (95) can win a banner-bearing frame `nav_arriving` rejected and had no entry for it. Fail toward privacy, exactly as the cluster above: whole token, un-normalized (an address is not the customer-NAME key). Over-mask cost is a merchant line in a debug envelope; under-mask cost is a customer's street address persisted raw. Recognition unchanged — every anchor here is an id or lives in nodes this block does not touch.",
+          "find": {
+            "hasIdSuffix": "arriving_at_title"
+          }
         }
       ],
       "branches": [
