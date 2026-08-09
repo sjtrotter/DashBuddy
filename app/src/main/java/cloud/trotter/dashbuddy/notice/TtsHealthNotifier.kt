@@ -1,12 +1,8 @@
 package cloud.trotter.dashbuddy.notice
 
 import android.app.NotificationManager
-import android.app.PendingIntent
 import android.content.Context
-import android.content.Intent
-import androidx.core.app.NotificationCompat
 import cloud.trotter.dashbuddy.R
-import cloud.trotter.dashbuddy.ui.main.MainActivity
 import dagger.hilt.android.qualifiers.ApplicationContext
 import timber.log.Timber
 import javax.inject.Inject
@@ -47,28 +43,14 @@ class TtsHealthNotifier @Inject constructor(
     }
 
     private fun postNotice() {
-        AppNoticeChannel.ensure(context, notificationManager)
-
-        val contentIntent = PendingIntent.getActivity(
-            context,
-            REQUEST_CODE,
-            Intent(context, MainActivity::class.java).apply {
-                flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
-            },
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+        AppNoticeChannel.postNotice(
+            context = context,
+            notificationManager = notificationManager,
+            notificationId = AppNoticeChannel.Ids.TTS_ENGINE_HEALTH,
+            requestCode = REQUEST_CODE,
+            title = context.getString(R.string.tts_health_notice_title),
+            text = context.getString(R.string.tts_health_notice_text),
         )
-
-        val text = context.getString(R.string.tts_health_notice_text)
-        val notification = NotificationCompat.Builder(context, AppNoticeChannel.ID)
-            .setSmallIcon(R.drawable.bag_red_idle)
-            .setContentTitle(context.getString(R.string.tts_health_notice_title))
-            .setContentText(text)
-            .setStyle(NotificationCompat.BigTextStyle().bigText(text))
-            .setContentIntent(contentIntent)
-            .setAutoCancel(true)
-            .build()
-
-        notificationManager.notify(AppNoticeChannel.Ids.TTS_ENGINE_HEALTH, notification)
     }
 
     private companion object {

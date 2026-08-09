@@ -382,8 +382,9 @@ supported one. (Distinct from #428, which bounds the app's OWN copy/TTS to en/es
 assumption; the #938 notice copy itself IS translated into `values-es` since a Spanish dasher is
 exactly its audience.)
 
-**Recognition has a liveness signal (#937)** — the last unfilled quadrant of the #909 silent-death
-family (effect engine #914, bubble #916, odometer #917). Two pieces, both fail-OPEN and both inert
+**Recognition has a liveness signal (#937)** — the fourth member of the #909 silent-death
+family (effect engine #914, bubble #916, odometer #917; the offer voice joined as the fifth in
+#991, see §4). Two pieces, both fail-OPEN and both inert
 to frame processing. (1) **Version stamping:** `PlatformAppVersions` resolves the OBSERVED app's
 `versionName` (`CachingPlatformAppVersions` — one `PackageManager` lookup per package per process,
 negative results cached too, `catch (Throwable)`; the `PackageManager` call is a lambda injected at
@@ -407,7 +408,9 @@ literal anywhere), one WARN + one `RecognitionHealthReporter` call per platform 
 (per-*dash* would need `:core:state`, which depends on `:core:pipeline` and not the reverse;
 recovery deliberately does not re-arm). The `:domain` reporter contract is #938's inversion reused:
 the `:app` `RecognitionHealthNotifier` posts on the shared `app_notice_channel`, whose id + copy now
-live in one owner (`AppNoticeChannel`, ids 102 locale / 103 recognition).
+live in one owner (`AppNoticeChannel`, ids 102 locale / 103 recognition / 105 TTS health — 104 is the
+separate `weekly_plan_channel`; #991 also moved the ensure+PendingIntent+Builder posting shape itself
+into `AppNoticeChannel.postNotice`, which all three notifiers now call).
 
 ### 2. JSON Rule Engine (`core/pipeline/.../rules/` + generated `assets/rules/`)
 
@@ -537,6 +540,20 @@ source scan — `IcuRegexGuardTest` (`:app`, the #764 `TimberTagGuardTest` doctr
 a bare, unescaped `}` in any main-source `Regex(…)`/`.toRegex()` literal. Write `\}`, never `}`
 (reference shape: `Ruleset.TEMPLATE_PATTERN` = `\{(\w+)\}`). Rule-authored patterns are a separate,
 already-fail-closed path (`RegexSafety.compileRegex` → loud `RuleCompileException` at load).
+**The offer voice is the family's fifth member (#991).** `TtsEffectHandler` built its `TextToSpeech`
+once in `init` and latched `isReady` true forever, so a dropped engine binder (08-06: a Google TTS
+package update under an 8-day-old process) lost 15 of 15 utterances across three dashes with nothing
+but a WARN. The engine now comes from a `TtsEngineFactory` seam and EVERY way an utterance can be
+lost — a non-SUCCESS `speak()` return, an async `UtteranceProgressListener.onError`, a FAILED
+`onInit`, and an offer skipped while a rebuild is outstanding — escalates through the pure
+`TtsRecoveryPolicy`: rebuild immediately, then rebuilds gated by a linear 30 s-step / 5 min-cap
+backoff, then (3 consecutive losses **and** ≥2 rebuilds attempted **and** ≥60 s of streak — the
+floor exists because the notice is once-per-process and must not be burnt by a burst during one slow
+recovery) a `TtsHealthNotifier` notice. Notify and rebuild compose — telling the dasher is not a
+reason to skip the rebuild. A `speak()` SUCCESS means only QUEUED, so the reset lives on `onDone`;
+engine identity is generation-checked so a superseded engine's late callback can't ready or
+mis-language its replacement; and the rebuild is detached onto the app scope so a wedged TTS binder
+can never block the drain worker that owns the `app_events` writer.
 
 ### 5. Analytics Read-Model (`core/data/.../analytics/`, `core/database/.../analytics/`, #314)
 

@@ -79,13 +79,14 @@ class RecognitionHealthNotifierTest {
     }
 
     @Test
-    fun `the two app notices do not collide`() {
+    fun `the app notices do not collide`() {
         assertEquals(
-            "the locale notice and the recognition notice must not overwrite each other",
-            2,
+            "every notice on the shared channel needs its own id or they overwrite each other",
+            3,
             setOf(
                 AppNoticeChannel.Ids.LOCALE_BOUNDARY,
                 AppNoticeChannel.Ids.RECOGNITION_HEALTH,
+                AppNoticeChannel.Ids.TTS_ENGINE_HEALTH,
             ).size,
         )
     }

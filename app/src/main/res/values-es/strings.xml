@@ -112,5 +112,5 @@
          respeta el idioma elegido (#428 mitad B): un aviso de que esa voz se apagó debe hablar el
          mismo idioma que hablaba. -->
     <string name="tts_health_notice_title">DashBuddy dejó de leer las ofertas en voz alta</string>
-    <string name="tts_health_notice_text">El motor de texto a voz de tu teléfono dejó de responder, así que los avisos de oferta hablados se apagaron. DashBuddy sigue intentando reiniciarlo en segundo plano. Volver a abrir DashBuddy suele recuperar la voz; de todos modos, las ofertas siguen apareciendo en pantalla.</string>
+    <string name="tts_health_notice_text">El motor de texto a voz de tu teléfono dejó de responder, así que los avisos de oferta hablados se apagaron. DashBuddy lo reintenta cada vez que llega una oferta nueva. Si sigue en silencio, fuerza la detención de DashBuddy en Ajustes de Android → Aplicaciones y vuelve a abrirla. De todos modos, las ofertas siguen apareciendo en pantalla.</string>
 </resources>

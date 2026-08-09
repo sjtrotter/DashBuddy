@@ -1,13 +1,9 @@
 package cloud.trotter.dashbuddy.locale
 
 import android.app.NotificationManager
-import android.app.PendingIntent
 import android.content.Context
-import android.content.Intent
-import androidx.core.app.NotificationCompat
 import cloud.trotter.dashbuddy.R
 import cloud.trotter.dashbuddy.notice.AppNoticeChannel
-import cloud.trotter.dashbuddy.ui.main.MainActivity
 import cloud.trotter.dashbuddy.core.data.state.AppStateRepository
 import cloud.trotter.dashbuddy.domain.di.ApplicationScope
 import cloud.trotter.dashbuddy.domain.pipeline.LocaleBoundaryCheck
@@ -97,30 +93,17 @@ class LocaleBoundaryNotifier @Inject constructor(
     }
 
     private fun postNotice() {
-        // The shared "App notices" channel (#937 moved the id + copy into AppNoticeChannel when
-        // the recognition-health notice joined this family — one owner, principle 5).
-        AppNoticeChannel.ensure(context, notificationManager)
-
-        val contentIntent = PendingIntent.getActivity(
-            context,
-            REQUEST_CODE,
-            Intent(context, MainActivity::class.java).apply {
-                flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
-            },
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+        // The shared "App notices" channel and its notification shape (#937 moved the id + copy
+        // into AppNoticeChannel when the recognition-health notice joined this family; #991 moved
+        // the posting itself there when the third member arrived — one owner, principle 5).
+        AppNoticeChannel.postNotice(
+            context = context,
+            notificationManager = notificationManager,
+            notificationId = NOTIFICATION_ID,
+            requestCode = REQUEST_CODE,
+            title = context.getString(R.string.locale_notice_title),
+            text = context.getString(R.string.locale_notice_text),
         )
-
-        val text = context.getString(R.string.locale_notice_text)
-        val notification = NotificationCompat.Builder(context, AppNoticeChannel.ID)
-            .setSmallIcon(R.drawable.bag_red_idle)
-            .setContentTitle(context.getString(R.string.locale_notice_title))
-            .setContentText(text)
-            .setStyle(NotificationCompat.BigTextStyle().bigText(text))
-            .setContentIntent(contentIntent)
-            .setAutoCancel(true)
-            .build()
-
-        notificationManager.notify(NOTIFICATION_ID, notification)
     }
 
     companion object {

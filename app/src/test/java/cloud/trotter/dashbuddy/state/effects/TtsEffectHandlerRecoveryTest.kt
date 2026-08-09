@@ -16,19 +16,23 @@ import org.junit.Assert.assertEquals
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
+import android.speech.tts.UtteranceProgressListener
 import org.mockito.kotlin.any
 import org.mockito.kotlin.anyOrNull
+import org.mockito.kotlin.argumentCaptor
 import org.mockito.kotlin.eq
 import org.mockito.kotlin.mock
 import org.mockito.kotlin.never
+import org.mockito.kotlin.times
 import org.mockito.kotlin.verify
 import org.mockito.kotlin.whenever
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.RuntimeEnvironment
 
 /**
- * #991 — the engine seam, proven at the handler rather than in the policy: a failed utterance must
- * actually reach [TtsEngineFactory] again, and a run of them must actually reach the dasher.
+ * #991 — the engine seam, proven at the handler rather than in the policy: every way an utterance
+ * can be lost must actually reach [TtsEngineFactory] again, and a sustained outage must actually
+ * reach the dasher.
  *
  * Robolectric supplies the real `Context` (the spoken copy is resolved through app resources) and
  * a working `AudioManager`; the engine itself is a stub handed out by a fake factory, which also
@@ -74,9 +78,18 @@ class TtsEffectHandlerRecoveryTest {
     /** Deliver the asynchronous readiness callback for the most recently built engine. */
     private fun reportReady() = listeners.last().onInit(TextToSpeech.SUCCESS)
 
+    /** Deliver a FAILED init for the most recently built engine. */
+    private fun reportInitFailure() = listeners.last().onInit(TextToSpeech.ERROR)
+
     private fun failSpeech(engine: TextToSpeech) {
         whenever(engine.speak(any(), any(), anyOrNull(), any())).thenReturn(TextToSpeech.ERROR)
     }
+
+    /** The utterance callbacks the handler installed on [engine], for driving async outcomes. */
+    private fun progressListener(engine: TextToSpeech) =
+        argumentCaptor<UtteranceProgressListener>().apply {
+            verify(engine).setOnUtteranceProgressListener(capture())
+        }.lastValue
 
     private fun evaluation() = OfferEvaluation(
         action = OfferAction.ACCEPT,
@@ -93,8 +106,12 @@ class TtsEffectHandlerRecoveryTest {
         merchantName = "Chipotle",
     )
 
+    // ---------------------------------------------------------------------------------------
+    // The three failure sources
+    // ---------------------------------------------------------------------------------------
+
     @Test
-    fun `a failed utterance tears the engine down and builds a new one`() {
+    fun `a rejected utterance tears the engine down and builds a new one`() {
         val tts = handler()
         reportReady()
         failSpeech(engines.first())
@@ -106,16 +123,58 @@ class TtsEffectHandlerRecoveryTest {
     }
 
     @Test
-    fun `a successful utterance leaves the engine alone`() {
+    fun `an accepted-then-errored utterance also rebuilds`() {
         val tts = handler()
         reportReady()
-        // A mock returns 0 == TextToSpeech.SUCCESS for speak() by default.
+        // speak() returns SUCCESS (the mock default) — QUEUED, not spoken — and the failure
+        // arrives asynchronously. Before #991 review finding 2 this reached nothing at all.
+        tts.speakOffer(evaluation())
+
+        progressListener(engines.first()).onError("offer_1", TextToSpeech.ERROR)
+
+        assertEquals("an async error is just as lost as a rejected utterance", 2, engines.size)
+    }
+
+    @Test
+    fun `a failed init escalates instead of latching silent`() {
+        handler()
+
+        reportInitFailure()
+
+        // Finding 1: the fielded trigger class is a process that starts while the TTS package is
+        // mid-update. Leaving isReady false with nothing armed was the pre-fix silence.
+        assertEquals("a failed init must arm the ladder", 2, engines.size)
+    }
+
+    // ---------------------------------------------------------------------------------------
+    // What must NOT count
+    // ---------------------------------------------------------------------------------------
+
+    @Test
+    fun `a completed utterance leaves the engine alone`() {
+        val tts = handler()
+        reportReady()
 
         tts.speakOffer(evaluation())
+        progressListener(engines.first()).onDone("offer_1")
 
         verify(engines.first(), never()).shutdown()
         assertEquals("a working engine is never rebuilt", 1, engines.size)
     }
+
+    @Test
+    fun `a skipped utterance while the first init is still pending is not counted`() {
+        val tts = handler() // no readiness report: the engine is simply still binding
+
+        repeat(5) { tts.speakOffer(evaluation()) }
+
+        verify(notificationManager, never()).notify(any<Int>(), any<Notification>())
+        assertEquals("startup is not a failure — nothing to rebuild", 1, engines.size)
+    }
+
+    // ---------------------------------------------------------------------------------------
+    // Engine identity (finding 3)
+    // ---------------------------------------------------------------------------------------
 
     @Test
     fun `the replacement engine is wired for speech exactly like the original`() {
@@ -133,29 +192,54 @@ class TtsEffectHandlerRecoveryTest {
     }
 
     @Test
-    fun `a recovery that never comes back notifies the dasher once`() {
+    fun `a superseded engine's late init report is ignored`() {
+        handler()
+        // Engine 1's init fails, which rebuilds: engine 2 is now the live one, still binding.
+        reportInitFailure()
+        assertEquals(2, engines.size)
+
+        // Engine 1's SUCCESS callback lands late — it was already torn down. Acting on it would
+        // ready an instance nobody speaks through, install the #428-B language on it, log a false
+        // "re-initialized", and leave the live engine with no progress listener (so audio focus
+        // would never be released and every other app would stay ducked).
+        listeners.first().onInit(TextToSpeech.SUCCESS)
+
+        verify(engines.first(), never()).setOnUtteranceProgressListener(any())
+        verify(engines.last(), never()).setOnUtteranceProgressListener(any())
+        assertEquals("a stale report must not trigger anything else either", 2, engines.size)
+    }
+
+    // ---------------------------------------------------------------------------------------
+    // The dasher-visible end of the ladder (findings 4 + 6)
+    // ---------------------------------------------------------------------------------------
+
+    @Test
+    fun `a burst of failures inside the elapsed floor does not burn the notice`() {
         val tts = handler()
         reportReady()
         failSpeech(engines.first())
 
-        // 1st: the engine fails and is rebuilt. The replacement never reports ready (the engine's
-        // package is mid-update), so the next two offers are skipped — which, during a recovery,
-        // is itself a lost utterance.
-        repeat(4) { tts.speakOffer(evaluation()) }
+        // The replacement engine never reports ready (the TTS package is mid-update), so every
+        // later offer is skipped — which, during a recovery, is itself a lost utterance. All of
+        // them land milliseconds apart, well inside the policy's 60 s floor.
+        repeat(40) { tts.speakOffer(evaluation()) }
 
-        verify(notificationManager).notify(
-            eq(AppNoticeChannel.Ids.TTS_ENGINE_HEALTH),
-            any<Notification>(),
-        )
+        // Finding 4: the notice cannot be un-fired, so a burst must not spend it. A real outage
+        // crossing the floor still gets it — that gate is exercised in TtsRecoveryPolicyTest.
+        verify(notificationManager, never()).notify(any<Int>(), any<Notification>())
     }
 
     @Test
-    fun `a skipped utterance before the first init is not counted as a failure`() {
-        val tts = handler() // no reportReady(): the engine is still coming up
+    fun `the notice lands on its own id on the shared app-notice channel`() {
+        TtsHealthNotifier(
+            context = RuntimeEnvironment.getApplication(),
+            notificationManager = notificationManager,
+        ).onSpeechEngineUnrecoverable()
 
-        repeat(5) { tts.speakOffer(evaluation()) }
-
-        verify(notificationManager, never()).notify(any<Int>(), any<Notification>())
-        assertEquals("startup is not a failure — nothing to rebuild", 1, engines.size)
+        verify(notificationManager).createNotificationChannel(any())
+        verify(notificationManager, times(1)).notify(
+            eq(AppNoticeChannel.Ids.TTS_ENGINE_HEALTH),
+            any<Notification>(),
+        )
     }
 }
