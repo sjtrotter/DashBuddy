@@ -86,13 +86,17 @@ was found **broken-in-part** (raw PII in capture envelopes) and moved to that en
   `dropoff_completed_confirm` → `delivery_summary_collapsed/expanded`). This is **not** a
   recognition regression — the frames don't exist to recognize — so the only way to settle it is a
   pair of human eyes on the phone.
-  **What to watch (any DoorDash drop):** immediately after you complete a delivery, does DoorDash
-  still put up the earnings summary card (the one with Base pay / Customer tip / Total)? If **yes**,
-  note roughly when it appears and for how long — and whether you had to tap anything to see it.
-  If **no**, note what shows instead (straight back to the map? an offer? a rating prompt?). Either
-  answer is the finding. **Desk:** `SELECT payBasis, COUNT(*) FROM delivery_records …` — an
-  all-`OFFER_PAY` dash with a nonzero unattributed remainder is the fingerprint.
-  - Confirmed: 0/2
+  **CAUSE IDENTIFIED (dev field answer, 2026-08-09):** the receipt does not show when the dash was
+  started **out-of-zone** and runs in the **"Dash Along the Way"** status — all three receipt-less
+  dashes (08-06/07/08) were that shape. Dev assessment: a regression in the Dasher app itself. What
+  remains is verification of both halves:
+  **What to watch:** (a) on a normal **in-zone** dash, confirm the post-drop earnings summary card
+  (Base pay / Customer tip / Total) still appears and DashBuddy parses it (`DROP_SHARE` basis
+  returns); (b) on the next **Dash-Along-the-Way** start, confirm the absence reproduces — that
+  pins the trigger. **Desk:** `SELECT payBasis, COUNT(*) FROM delivery_records …` per dash — an
+  all-`OFFER_PAY` dash with a nonzero unattributed remainder is the fingerprint; note the dash's
+  start status alongside. While this stands, #996/#997 are routine-mode defects, not edge cases.
+  - Confirmed: 0/2 (cause identified by dev 08-09; both verification halves still 0/2)
 
 - **🆕 NEW — #991 (P0) — the spoken offer verdict went silent and stayed silent.** From 08-06
   16:28 onward every single `speak()` call returned `-1` (15 of 15 across three dashes; 11 of 11
@@ -2648,6 +2652,29 @@ P1 Pledge leaks; #995 carries a dev ruling), **#996** / **#997** (two P1 pay-att
 process). Comments posted on **#986** (wider than filed — the colon form) and **#731** (nine days
 clean; close candidate). Checklist: 6 items retired, 2 bumped to 1/2, 6 held with a dated note, 1
 marked broken-in-part, 2 new items added.
+
+### Dev follow-up (same day, after reading the report)
+
+1. **Item 8's mystery answered from the field:** the receipt sheet doesn't show when the dash was
+   started **out-of-zone** in the **"Dash Along the Way"** status — all three receipt-less dashes
+   were that shape. Dev reads it as a Dasher-app regression. #999 re-scoped to verification (both
+   halves: in-zone receipt returns; out-of-zone absence reproduces — checklist item updated), and
+   #996/#997 promoted in practical priority: receipt-less settlement is a routine mode now, so the
+   estimate-path split defects are the numbers that stick.
+2. **#995 ruled:** the receipt-scan camera is *not* document-image family — capturing the screen
+   text is fine — but the customer name on it is a customer name like any other: **redact it just
+   like the rest** (recognizing rule + `redact` on the two name nodes; issue retitled to the
+   decided direction).
+3. **New dev request → #1005:** the dropoff bubble notification rendered "Dropping off for HEB
+   Customer" (DoorDash's persona/placeholder name walked straight into our copy). Requested copy:
+   title **"Dropoff"**, body **"\<STORE\> Order"** — which also stops putting customer-name-shaped
+   strings into system notifications at all.
+4. **New dev feedback → #1006:** the redesigned analytics screens carry **too much text copy** —
+   distracting. A copy-density audit + trim is filed, with the §9 honesty semantics explicitly
+   preserved (condense the rendering, never delete the disclosure).
+5. **New dev direction (undecided) → #1007:** pull the lifetime-scoped **Patterns** tab out of the
+   windowed analytics hub — either a Home entry tile to a standalone screen or integration into
+   the dashboard; shape TBD by dev or a design pass.
 
 ---
 
