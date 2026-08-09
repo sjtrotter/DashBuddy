@@ -62,12 +62,15 @@
           }
         },
         {
+          "comment": "#986/#934: plainMask. After the 'Apt/Suite: ' label strip the masked token IS the bare unit number — the same bounded ~10^4 alphabet the fused 'Apt <n>' entries carry (#895/PR #927), sitting ABOVE the #889 short-token floor at 4 digits and therefore earning a 4-hex suffix over 65 536 buckets (~85% injective). Fielded 2026-08-01 on FOUR `dropoff_navigation` envelopes as 'Apt/Suite: [redacted:d414]'. The label is app vocabulary and stays; only the distinctness suffix is dropped, and it buys nothing here — this surface's name/street entries keep per-customer hashes, and a unit number is no one's join key. Capture-only (this node is never parsed), so the goldens are unchanged.",
           "find": {
             "hasIdSuffix": "bottom_sheet_subpremise_line"
           },
           "keepPrefix": [
-            "Apt/Suite: "
-          ]
+            "Apt/Suite: ",
+            "Apt/Suite "
+          ],
+          "plainMask": true
         },
         {
           "find": {
@@ -253,12 +256,15 @@
           }
         },
         {
+          "comment": "#986: plainMask — the 9th surface PR #927 missed, because its prefix is the FUSED 'Apt/Suite ' spelling and #927 enumerated 'Apt '. Fielded 2026-08-07 on two `dropoff_photo` envelopes as 'Apt/Suite [redacted:6a17]'. Same argument as every other member of the family: the token after the label strip is a bounded unit number, brute-recoverable from 4 hex, and its distinctness is redundant beside this rule's own whole-node id-less mask below. Note the entry is ordered BEFORE the `hasNoId` catch-all deliberately (first match wins) so the label survives for replay context; without it the unit line would mask whole, which is stricter but loses the shape. BOTH spellings are enumerated in `keepPrefix` — the `find` already selected the colon render ('Apt/Suite' with no trailing space), it just had no label to keep, so it masked whole; `dropoff_pre_arrival` fielded both forms on different dashes and the family should not depend on which one a given surface happens to render.",
           "find": {
             "hasTextStartsWith": "Apt/Suite"
           },
           "keepPrefix": [
+            "Apt/Suite: ",
             "Apt/Suite "
-          ]
+          ],
+          "plainMask": true
         },
         {
           "find": {
@@ -769,12 +775,15 @@
           }
         },
         {
+          "comment": "#934: plainMask — the id-anchored member of the #895/#892 family, and the original one the issue was filed on. Fielded 2026-08-01 on three `dropoff_pre_arrival` envelopes as 'Apt/Suite: [redacted:d414]'. Note this SAME rule fielded the plain form ('Apt [redacted]', 08-02) from its fused `Apt ` entry below — one surface, two spellings, and only one of them was covered, which is exactly why this is a family fix and not a one-entry fix. The masked token after the label strip is a bare unit number: bounded ~10^4, above the #889 length floor at 4 digits, brute-recoverable from the 4-hex suffix. Distinctness is redundant (`user_name`/`address_line_*` on this same surface keep per-customer hashes) and a unit number joins nothing. Capture-only — the node is never parsed, so the goldens are unchanged.",
           "find": {
             "hasIdSuffix": "address_subpremise_line"
           },
           "keepPrefix": [
-            "Apt/Suite: "
-          ]
+            "Apt/Suite: ",
+            "Apt/Suite "
+          ],
+          "plainMask": true
         },
         {
           "comment": "#860: the address block's 'Building Name' VALUE — an apartment-complex or building label (free-form proper-noun text, sometimes a bare building number) is customer-locating PII, and it was the ONE labeled field in this block shipping raw: street/city/zip fall to the id-less numeric shapes below, 'Entry code'/'Apt/Suite' values to the `^#?\\s?\\d{1,4}[A-Za-z]?$` entry, the instruction body to the dasher_instruction_* ids — but a building name has no id, no digits, and no stable text shape, so nothing named it. Anchored on the LABEL sibling (app chrome, not customer data), which is the only tight handle; the label node itself is NOT redacted (a label is vocabulary, not PII). Hash-mask family (no plainMask): a building name is a large, unbounded space, so the <4hex> distinctness suffix is not brute-recoverable and it buys per-complex replay fidelity. No `normalize` — that canonicalizer is the customer-NAME key and would degrade an address-class token's mask distinctness.",
@@ -1316,9 +1325,11 @@
           }
         },
         {
+          "comment": "#934: plainMask, the whole-node variant. This entry declares no `keepPrefix`, so the masked token is the ENTIRE 'Apt/Suite: <n>' line — but a constant label prefixed onto a bounded unit number is still a bounded space (the label adds no entropy), so the 4-hex suffix is recoverable exactly as it is on the label-stripping siblings. Family-wide fix, not a fielded sighting: `dropoff_geofence_warning` is a rarely-captured surface and this is the direction the audit closes off before it fields.",
           "find": {
             "hasIdSuffix": "address_subpremise_line"
-          }
+          },
+          "plainMask": true
         }
       ],
       "branches": [
@@ -1496,13 +1507,15 @@
           }
         },
         {
-          "comment": "The Apt/Suite VALUE, keeping its app-vocabulary label prefix exactly as `dropoff_pre_arrival` does.",
+          "comment": "The Apt/Suite VALUE, keeping its app-vocabulary label prefix exactly as `dropoff_pre_arrival` does. #934: and, exactly as that sibling, `plainMask` — this is the #910-added mirror the issue names, and a mirror must inherit the family's posture or the fix has a hole precisely where the surface was copied. Bounded unit number after the label strip; distinctness redundant beside this rule's own `user_name`/`address_line_*` hashes.",
           "find": {
             "hasIdSuffix": "address_subpremise_line"
           },
           "keepPrefix": [
-            "Apt/Suite: "
-          ]
+            "Apt/Suite: ",
+            "Apt/Suite "
+          ],
+          "plainMask": true
         },
         {
           "find": {

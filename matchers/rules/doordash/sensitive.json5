@@ -11,6 +11,7 @@
       },
       "branches": [
         {
+          "comment": "#924: the DasherDirect entry frame is STRUCTURE-gated, not content-gated. Every other arm of this branch keys on rendered banking TEXT ('Crimson'), so the nav host's own pre-render skeleton — `dxdr_nav_host_fragment` + `loading_layout` + an empty ComposeView, fielded 2026-07-29 19:16:46 — carried no marker at all and fell to UNKNOWN capture. No leak occurred (the skeleton has no text; the 21 subsequent rendered frames were all correctly blocked), but the gate should close at the DOOR: `dxdr_nav_host_fragment` is DasherDirect's own nav-host container id, so it is present on EVERY frame of that surface, before and after the banking content inflates. Same priority-0 `overrideable: false` posture as its siblings (structurally first — see the #419 partition), and an id anchor is also LOCALE-IMMUNE where a text anchor is not (#938/#910). Over-match surface: the id is DasherDirect-specific and appears on no delivery/offer surface across the committed corpus or any pull, and over-blocking a banking surface is the safe direction by Pledge anyway.",
           "intent": "sensitive.dasher_direct",
           "require": {
             "exists": {
@@ -20,6 +21,9 @@
                 },
                 {
                   "hasIdSuffix": "dasher_direct_payout_config_compose_view"
+                },
+                {
+                  "hasIdSuffix": "dxdr_nav_host_fragment"
                 },
                 {
                   "hasTextContaining": "DoorDash Crimson"

@@ -6253,6 +6253,18 @@
             "tasks": []
         }
     },
+    "timeline_task_detail/2026-07-28_20-13-06-104__doordash__accessibility.window__UNKNOWN__c9b8d9.json": {
+        "ruleId": "doordash.screen.timeline_task_detail",
+        "intent": "timeline_task_detail",
+        "shape": null,
+        "fields": {}
+    },
+    "timeline_task_detail/2026-07-30_19-40-07-170__doordash__accessibility.window__UNKNOWN__f7dd84.json": {
+        "ruleId": "doordash.screen.timeline_task_detail",
+        "intent": "timeline_task_detail",
+        "shape": null,
+        "fields": {}
+    },
     "waiting_for_offer/20260128_193631_608_ON_DASH_MAP_WAITING_FOR_OFFER.json": {
         "ruleId": "doordash.screen.waiting_for_offer",
         "intent": "waiting_for_offer",

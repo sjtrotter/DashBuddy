@@ -32,14 +32,32 @@ class FlowlessRecognitionNeutralityTest {
 
     @Test
     fun `the receipt-scan frames recognize, carry no flow, and leave PlatformRegion untouched (#995)`() {
-        val frames = SessionReplay.loadSession("snapshots/pickup_receipt_scan")
-        assertTrue("the receipt-scan corpus must not be empty", frames.isNotEmpty())
+        assertFlowlessAndNeutral("snapshots/pickup_receipt_scan", "doordash.screen.pickup_receipt_scan")
+    }
+
+    /**
+     * #985 — the same property for the Timeline order-detail sheet, the second recognize-only
+     * surface added purely to give a leaking frame a `redact` block. It is asserted for the same
+     * reason: the rule buys the privacy fix by making previously-UNKNOWN frames reach the state
+     * machine, and "it declares no `state`" is a claim about the JSON, not about behaviour.
+     */
+    @Test
+    fun `the timeline task-detail frames recognize, carry no flow, and leave PlatformRegion untouched (#985)`() {
+        assertFlowlessAndNeutral(
+            "snapshots/timeline_task_detail",
+            "doordash.screen.timeline_task_detail",
+        )
+    }
+
+    private fun assertFlowlessAndNeutral(corpus: String, expectedRuleId: String) {
+        val frames = SessionReplay.loadSession(corpus)
+        assertTrue("the $corpus corpus must not be empty", frames.isNotEmpty())
 
         // (a) They RECOGNIZE — the rule is live, so this is not a vacuous pass over UNKNOWN frames.
         val observations = SessionReplay.replayRecognition(frames)
         assertEquals(
-            "every committed receipt-scan frame must classify as the new rule",
-            List(frames.size) { "doordash.screen.pickup_receipt_scan" },
+            "every committed frame must classify as $expectedRuleId",
+            List(frames.size) { expectedRuleId },
             observations.map { it.ruleId },
         )
 
@@ -93,7 +111,7 @@ class FlowlessRecognitionNeutralityTest {
             it.stateAfter.regions.platforms[Platform.DoorDash]!!.copy(lastObservedAt = 0L)
         }
         assertEquals(
-            "consecutive receipt-scan frames must differ only by the liveness stamp",
+            "consecutive $expectedRuleId frames must differ only by the liveness stamp",
             List(normalised.size) { normalised.first() },
             normalised,
         )
