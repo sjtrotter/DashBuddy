@@ -119,6 +119,8 @@ class RecordFoldsTest {
         // Identity-bearing by default (a real delivered drop). A #498/#653 phantom payload has
         // BOTH hashes null (the payload copies the task's null hashes) — pass true to model it.
         identityLess: Boolean = false,
+        // #997 per-drop→offer lineage. Provenance only — no fold consumer today (pinned below).
+        offerPayAttributedHash: String? = null,
     ) = ev(
         AppEventType.DELIVERY_COMPLETED, sid, at,
         DeliveryPayload(
@@ -127,7 +129,7 @@ class RecordFoldsTest {
             addressHash = if (identityLess) null else "addr-$taskId",
             phaseStartedAt = phaseStartedAt, arrivedAt = at - 120_000, completedAt = at,
             totalPay = totalPay, parsedPay = parsedPay, dropRealizedPay = dropRealizedPay,
-            offerPayShare = offerPayShare,
+            offerPayShare = offerPayShare, offerPayAttributedHash = offerPayAttributedHash,
         ),
         odometer = odo,
     )
@@ -233,6 +235,32 @@ class RecordFoldsTest {
         assertEquals("carries the closing job id", "J1", reconcile!!.jobId)
         assertEquals("carries the session for the offer lookup", s, reconcile.sessionId)
         assertEquals("carries both accepted offer hashes", listOf("hA", "hB"), reconcile.acceptedOfferHashes)
+    }
+
+    @Test
+    fun `#997 — the new per-drop offer lineage is fold-INERT`() {
+        // DeliveryPayload.offerPayAttributedHash is provenance for #756 / a per-offer #975, with NO fold
+        // consumer today. Pin that: the same session folded with and without the stamp produces
+        // identical records — which is exactly what makes "no PROJECTOR_VERSION bump" true (folded
+        // history and a from-zero refold of stamped events agree byte-for-byte).
+        fun run(stamp: String?): List<FoldOutcome> {
+            seq = 0L
+            return foldSession(
+                listOf(
+                    dashStart("S1", 1_000, odo = 100.0),
+                    delivery(
+                        "S1", 3_000, "J1", "T1",
+                        totalPay = 10.0, parsedPay = parsedPay(base = 7.0, tip = 3.0), odo = 105.0,
+                        offerPayShare = null, offerPayAttributedHash = stamp,
+                    ),
+                    dashStop("S1", 4_000, odo = 110.0, earnings = 10.0),
+                ),
+            ).first
+        }
+
+        val plain = run(null)
+        val stamped = run("offer-h1")
+        assertEquals("every fold outcome of the session is unchanged by the stamp", plain, stamped)
     }
 
     @Test

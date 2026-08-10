@@ -689,7 +689,8 @@ class PlatformRegionStepper @Inject constructor() {
     private fun retireActiveTask(region: PlatformRegion, timestamp: Long): PlatformRegion {
         val armedFromFlow = region.pendingDestructive
             ?.takeIf { it.kind == DestructiveKind.TASK_RETIRE }?.armedFromFlow
-        val completed = region.activeTask?.copy(completedAt = timestamp)
+        // ONE spelling of the inline-committed retire copy (#997 amendment) — see [completedInline].
+        val completed = region.activeTask?.completedInline(timestamp)
             ?: return region.copy(pendingDestructive = null)
         val recentTasks = (region.recentTasks + completed).takeLast(MAX_RECENT_TASKS)
         val retired = region.copy(

@@ -52,6 +52,25 @@ import timber.log.Timber
  * Pure: derives exclusively from `Task`/`Job`/`TaskPhase` structure and the machine's own resume
  * invariant — no platform literals, no rule vocabulary (P8). No clock (all times are stamped).
  */
+/**
+ * The **inline-committed retire copy** — the one spelling of "this task's retire is committing on
+ * THIS frame, so the completeness proof must see it finished even though the `Job.tasks` mirror is
+ * still stale" (amdt #6).
+ *
+ * Extracted (#997 amendment) because the same copy existed in three value-divergent spellings — the
+ * T1 grace lapse (`retireActiveTask`, `completedAt = timestamp`), the T2 accept guard
+ * (`consumeAcceptIntoJob`, `completedAt = pend.since`) and the delivery mint site's
+ * `completedAt ?: retireSince ?: obs.timestamp` elvis chain — all feeding the SAME predicate. Today
+ * [isJobPhysicallyComplete] reads only the NULLNESS of `completedAt`, so the three agreed by luck;
+ * a future gate that reads its VALUE (an ordering or duration check) would have silently given the
+ * stepper and the money proof different answers.
+ *
+ * [at] is the HONEST commit instant of the retire (the grace's `since`, never the frame clock), and
+ * an already-stamped `completedAt` wins — a task that genuinely finished earlier is not re-dated.
+ */
+internal fun Task.completedInline(at: Long): Task =
+    if (completedAt != null) this else copy(completedAt = at)
+
 internal fun isJobPhysicallyComplete(
     job: Job,
     recentTasks: List<Task>,

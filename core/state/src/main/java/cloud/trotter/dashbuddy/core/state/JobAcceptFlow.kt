@@ -30,6 +30,12 @@ import java.util.Locale
  * The count comes from the offer's parsed order list (fallback 1 when the offer wasn't parsed);
  * ids are minted at [startOffset]..[startOffset]+count-1 off the region's mint counter, which the
  * caller advances past in the same copy().
+ *
+ * #997: each slot is stamped with [offerHash] — the accept that produced it — so the receipt-less
+ * pay estimate can split each absorbed offer's OWN quote across its OWN drops instead of pooling a
+ * multi-accept job into one job-wide average. This is the only point at which the mapping is free and
+ * unambiguous (both mint paths call here per accept); nothing downstream can recover it. Null hash
+ * (an offer that carried none) simply leaves the lineage absent → the pooled degrade arm.
  */
 internal fun PlatformRegionStepper.preCreatedDropoffs(
     region: PlatformRegion,
@@ -37,6 +43,7 @@ internal fun PlatformRegionStepper.preCreatedDropoffs(
     jobId: String,
     count: Int,
     startOffset: Long,
+    offerHash: String?,
 ): List<Task> = (0 until count).map { i ->
     Task(
         taskId = mintId("task", region, obs, offset = startOffset + i),
@@ -44,6 +51,7 @@ internal fun PlatformRegionStepper.preCreatedDropoffs(
         phase = TaskPhase.DROPOFF,
         customerNameHash = null,
         startedAt = obs.timestamp,
+        mintedByOfferHash = offerHash,
     )
 }
 
@@ -84,6 +92,11 @@ internal fun PlatformRegionStepper.acceptInputsFromPending(pending: PendingOffer
             // the pickup-confirmed shop-rate site can pair it with the ground-truth items shopped and
             // learn the items:units ratio. Null for an items-denominated / non-shop offer.
             offerUnitCount = parsedOffer?.takeIf { it.itemCountIsUnits }?.itemCount,
+            // #997: keep this accept's OWN quoted stores. `Job.offerStoreHint` flattens every
+            // accept's hints together, so a multi-accept job could not say which store belonged to
+            // which quote — and the store is the authoritative offer↔drop correspondence at close
+            // (the slot stamp is only a hint; placeholders activate blind first-open).
+            storeHints = storeHints,
             // The honest accept moment (the accept-click time); falls back to the consume frame.
             acceptedAt = acceptedAt ?: pending?.acceptClickAt ?: pending?.presentedAt ?: 0L,
         ),
@@ -117,7 +130,8 @@ internal fun PlatformRegionStepper.consumeAcceptIntoJob(
     run {
         val pend = region.pendingDestructive?.takeIf { it.kind == DestructiveKind.TASK_RETIRE }
         if (pend?.armedFromFlow == Flow.OfferPresented) return@run
-        val justRetired = if (pend != null) region.activeTask?.copy(completedAt = pend.since) else null
+        // ONE spelling of the inline-committed retire copy (#997 amendment) — see [completedInline].
+        val justRetired = if (pend != null) region.activeTask?.completedInline(pend.since) else null
         val recentForCheck =
             if (justRetired != null) region.recentTasks + justRetired else region.recentTasks
         if (isJobPhysicallyComplete(existing, recentForCheck, justRetired)) {
@@ -146,7 +160,9 @@ internal fun PlatformRegionStepper.mintFreshJobFromAccept(
     inputs: AcceptInputs,
 ): PlatformRegion {
     val jobId = mintId("job", base, obs)
-    val dropoffs = preCreatedDropoffs(base, obs, jobId, inputs.dropoffCount, startOffset = 1)
+    val dropoffs = preCreatedDropoffs(
+        base, obs, jobId, inputs.dropoffCount, startOffset = 1, offerHash = inputs.offerHash,
+    )
     // #526 D2: one PICKUP placeholder per distinct store, minted AFTER the dropoffs so existing
     // dropoff ids (and the slice-3/3b tests) are unchanged — offsets job=0, dropoffs=1..D,
     // pickups=D+1..D+P.
@@ -181,7 +197,9 @@ internal fun PlatformRegionStepper.appendAddOn(
     val alreadyCounted = inputs.offerHash != null &&
         existing.acceptedOffers.any { it.offerHash == inputs.offerHash }
     if (alreadyCounted) return region
-    val addOnDropoffs = preCreatedDropoffs(region, obs, existing.jobId, inputs.dropoffCount, startOffset = 0)
+    val addOnDropoffs = preCreatedDropoffs(
+        region, obs, existing.jobId, inputs.dropoffCount, startOffset = 0, offerHash = inputs.offerHash,
+    )
     // #526 FIX3c: dedup incoming add-on stores against BOTH the existing pickups' offer hints
     // AND their resolved store names — a bare-fallback job (hint null, storeName "H-E-B") would
     // otherwise get a duplicate H-E-B placeholder from a same-store add-on.

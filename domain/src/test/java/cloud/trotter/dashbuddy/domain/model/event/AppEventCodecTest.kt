@@ -18,6 +18,7 @@ import cloud.trotter.dashbuddy.domain.model.event.payload.SessionStartPayload
 import cloud.trotter.dashbuddy.domain.model.event.payload.SessionStopPayload
 import cloud.trotter.dashbuddy.domain.model.offer.ParsedOffer
 import cloud.trotter.dashbuddy.domain.state.Flow
+import cloud.trotter.dashbuddy.domain.state.OfferPayAttribution
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -125,6 +126,25 @@ class AppEventCodecTest {
         // look identical so old and new decode through the same path.
         assertFalse(wire.contains("\"type\""))
         assertEquals(true, wire.startsWith("{\"sessionId\""))
+    }
+
+    @Test
+    fun `#997 — a pre-#997 DELIVERY_COMPLETED row decodes with null offer-pay provenance`() {
+        // The additive per-drop-to-offer attribution must not disturb history: an event written before
+        // the fields existed carries no such keys, and nullable-with-default is what makes its decode
+        // identical (so a refold reproduces the row byte-for-byte — no PROJECTOR_VERSION bump).
+        val legacy = """{"jobId":"j1","taskId":"t2","phaseStartedAt":5000,"completedAt":6000,"totalPay":9.25}"""
+        val decoded = AppEventCodec.decodePayload(AppEventType.DELIVERY_COMPLETED, legacy) as DeliveryPayload
+        assertNull(decoded.offerPayAttributedHash)
+        assertNull(decoded.offerPayAttribution)
+        assertEquals("t2", decoded.taskId)
+
+        // …and a resolved row round-trips both, enum included.
+        val stamped = decoded.copy(
+            offerPayAttributedHash = "offer-h1",
+            offerPayAttribution = OfferPayAttribution.PER_OFFER_STORE,
+        )
+        assertEquals(stamped, roundTrip(AppEventType.DELIVERY_COMPLETED, stamped))
     }
 
     @Test

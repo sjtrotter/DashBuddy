@@ -72,12 +72,13 @@ fun detectAcceptMismatch(job: Job, recentTasks: List<Task>): JobAcceptMismatchPa
     if (nAccepts <= accounted) return null
 
     // Never-activated TBD dropoff placeholders left outstanding at close — the seq-114 corpse (121).
-    val leftoverTbd = jobTasks.count {
-        it.phase == TaskPhase.DROPOFF &&
-            it.customerNameHash == null &&
-            it.completedAt == null &&
-            it.unassignedAt == null
-    }
+    // Counted through the ONE named owner ([Task.isNeverActivatedPlaceholder], #997 amendment): this
+    // site used to spell the test by hand and disagreed with it twice — it omitted
+    // `customerAddressHash` (so an address-only-resolved REAL drop was counted as a corpse) and it
+    // required `completedAt == null` (so a flicker-activated #498 placeholder, which can equally
+    // never mint, was not). Both are corrections in the same direction the mint firewall already
+    // takes.
+    val leftoverTbd = jobTasks.count { it.isNeverActivatedPlaceholder }
 
     return JobAcceptMismatchPayload(
         jobId = job.jobId,
