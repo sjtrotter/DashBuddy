@@ -47,7 +47,16 @@ class AnalyticsWindowReadsTest {
     private lateinit var dao: AnalyticsDao
     private lateinit var repo: AnalyticsRepository
 
-    private val zone: ZoneId = ZoneId.of("America/Chicago")
+    /**
+     * #1015: MUST be the system default, not a fixed zone. The enum-path overloads
+     * (`periodEconomics(period)` & siblings) anchor on `ZoneId.systemDefault()` with no way to
+     * inject a zone, so the window path and every seeded timestamp must derive from the SAME zone
+     * or the two sides compare different Monday-weeks on any host whose local date differs from the
+     * fixed zone's (a UTC CI runner fails deterministically all Monday while America/Chicago is
+     * still Sunday — how this was found). The ≡ property under test is zone-agnostic; pinning a
+     * zone here was never load-bearing.
+     */
+    private val zone: ZoneId = ZoneId.systemDefault()
     private val hour = 3_600_000L
 
     @Before
