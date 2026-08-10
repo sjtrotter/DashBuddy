@@ -179,15 +179,10 @@ fun PlatformSplitCard(rows: List<PlatformEconomics>, modifier: Modifier = Modifi
                 }
             }
         }
-        // §9: net is frozen at decision-time costs, and that must be said wherever net appears. The
-        // sentence is the SAME resource the "where your money went" disclosure uses — one owner for
-        // the claim, so the two cards can never phrase the same promise differently.
-        Spacer(Modifier.height(10.dp))
-        Text(
-            text = stringResource(R.string.money_tab_where_went_frozen_note),
-            style = MaterialTheme.typography.bodySmall,
-            color = c.text3,
-        )
+        // F1: the frozen-net promise is stated once per screen now, by the recap hero above this
+        // tab and, in full, by the "where your money went" card's own expanded disclosure — a third
+        // copy here was noise on the same scroll. `money_tab_where_went_frozen_note` stays the
+        // resource `MoneyWentCard` renders; this call site is the one that goes.
     }
 }
 

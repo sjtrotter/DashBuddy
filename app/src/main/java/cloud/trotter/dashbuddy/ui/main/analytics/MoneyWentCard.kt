@@ -182,11 +182,15 @@ fun MoneyWentCard(economics: PeriodEconomics, modifier: Modifier = Modifier) {
 @Composable
 private fun moneyWentSegments(split: MoneyWentModel.Split): List<AppSegment> {
     val c = AppTheme.colors
+    // F3: the note is intentionally blank, not omitted — omitting it would fall back to
+    // AppLegend's percentage-share default, which this card's own doc forbids ("the legend
+    // carries real dollars, not shares"). The dollar figure already reads above in the three
+    // plain-words lines, so the legend's job here is only the colour key.
     val kept = AppSegment(
         label = stringResource(R.string.money_tab_where_went_segment_kept),
         value = split.stayedWithYou.toFloat().coerceAtLeast(0f),
         color = c.good,
-        note = Formats.money(split.stayedWithYou),
+        note = "",
     )
     val gas = split.gas
     val wear = split.wear
@@ -197,13 +201,13 @@ private fun moneyWentSegments(split: MoneyWentModel.Split): List<AppSegment> {
                 label = stringResource(R.string.money_tab_where_went_segment_gas),
                 value = gas.toFloat().coerceAtLeast(0f),
                 color = c.warn,
-                note = Formats.money(gas),
+                note = "",
             ),
             AppSegment(
                 label = stringResource(R.string.money_tab_where_went_segment_wear),
                 value = wear.toFloat().coerceAtLeast(0f),
                 color = c.neutral,
-                note = Formats.money(wear),
+                note = "",
             ),
         )
     } else {

@@ -19,8 +19,8 @@
     <string name="dashboard_plan_provenance_format">from your own %1$s, lifetime — not a guarantee</string>
     <string name="dashboard_plan_best_tonight_format">Best bet tonight: %1$s · your %2$s run %3$s/hr</string>
     <string name="dashboard_plan_best_today_format">Best bet today: %1$s · your %2$s run %3$s/hr</string>
-    <string name="dashboard_plan_no_window_format">No clear stretch left today — your %1$s pick up earlier than this.</string>
-    <string name="dashboard_plan_thin_data_format">Not enough %1$s on record yet — only %2$s hours have enough data to read.</string>
+    <string name="dashboard_plan_no_window_format">No clear stretch left — your %1$s pick up earlier.</string>
+    <string name="dashboard_plan_thin_data_format">Only %2$s readable hours on your %1$s so far.</string>
     <!--
       Recurring-weekday plural ("Monday" → "Mondays"). Its own string so a translation can replace
       the English +s rule with its own form instead of having it welded into the code.
@@ -44,7 +44,7 @@
     <string name="dashboard_week_delta_flat">About the same as last week</string>
     <string name="dashboard_week_delta_from_nothing">Up from nothing last week</string>
     <string name="dashboard_week_delta_none">No earlier week to compare with yet</string>
-    <string name="dashboard_week_frozen_note">Net is frozen at the costs in force when you accepted each offer.</string>
+    <string name="dashboard_week_frozen_note">Net frozen at accept-time costs</string>
 
     <!-- components/WeeklyPlanPointerRow.kt — Home's pointer at the Weekly Plan (#981, brief §2 row 3) -->
     <string name="dashboard_weekly_plan_pointer_title">Your week is planned</string>

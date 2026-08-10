@@ -292,8 +292,8 @@ object MileageTaxModel {
         val deductionLine = "${Formats.money(IrsMileage.deduction(miles, year))} " +
             "est. IRS $year standard-mileage deduction (${Formats.money3(IrsMileage.effectiveRate(year))}/mi)"
         val spansYearsNote = when {
-            window.isLifetime -> "may span tax years — see the CSV export for per-year figures"
-            spansYears -> "spans tax years — see the CSV export for per-year figures"
+            window.isLifetime -> "may span tax years — see the CSV export"
+            spansYears -> "spans tax years — see the CSV export"
             else -> null
         }
         return Labels(deductionLine, IrsMileage.fallbackNote(year), spansYearsNote)
