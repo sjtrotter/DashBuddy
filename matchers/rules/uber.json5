@@ -328,6 +328,7 @@
                     },
                     {
                       "not": {
+                        // LOCKSTEP (#827 P2): this storeName exclusion list is duplicated (top-level copy + orders[] copy); every entry except the deliberate #882 Delivery-chip negation asymmetry must be edited in BOTH copies.
                         "any": [
                           {
                             "hasTextMatchesRegex": "^\\$"
@@ -336,7 +337,7 @@
                             "hasTextMatchesRegex": "^\\+"
                           },
                           {
-                            "hasTextContaining": "min"
+                            "hasTextMatchesRegex": "\\d+\\s*min\\b"
                           },
                           {
                             "hasText": "Accept"
@@ -392,7 +393,7 @@
                             "hasTextMatchesRegex": "^\\d+ items?"
                           },
                           {
-                            "hasTextContaining": ", "
+                            "hasTextMatchesRegex": ",\\s[A-Z][A-Za-z .]+$"
                           },
                           // #858 LAYER 2 (defense in depth): never let the expiry
                           // overlay win the store read. Layer 1 (the require
@@ -433,6 +434,7 @@
                         },
                         {
                           "not": {
+                            // LOCKSTEP (#827 P2): this storeName exclusion list is duplicated (top-level copy + orders[] copy); every entry except the deliberate #882 Delivery-chip negation asymmetry must be edited in BOTH copies.
                             "any": [
                               {
                                 "hasTextMatchesRegex": "^\\$"
@@ -441,7 +443,7 @@
                                 "hasTextMatchesRegex": "^\\+"
                               },
                               {
-                                "hasTextContaining": "min"
+                                "hasTextMatchesRegex": "\\d+\\s*min\\b"
                               },
                               {
                                 "hasText": "Accept"
@@ -471,7 +473,7 @@
                                 "hasTextMatchesRegex": "^\\d+ items?"
                               },
                               {
-                                "hasTextContaining": ", "
+                                "hasTextMatchesRegex": ",\\s[A-Z][A-Za-z .]+$"
                               },
                               // #858 LAYER 2, orders[] half — same two arms as the
                               // top-level storeName negation above. This one is the
