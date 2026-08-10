@@ -34,7 +34,7 @@ import cloud.trotter.dashbuddy.domain.format.formatDuration
 import cloud.trotter.dashbuddy.domain.model.cards.FlowCardSnapshot
 import cloud.trotter.dashbuddy.domain.model.cards.TaskEconomics
 import cloud.trotter.dashbuddy.domain.state.PickupActivity
-import cloud.trotter.dashbuddy.domain.state.customerLabel
+import cloud.trotter.dashbuddy.domain.state.dropoffOrderLabel
 import cloud.trotter.dashbuddy.feature.bubble.R
 
 // ---------------------------------------------------------------------------
@@ -63,12 +63,13 @@ internal fun pickupSummary(snap: FlowCardSnapshot.Pickup, isActive: Boolean): St
 
 @Composable
 internal fun deliverySummary(snap: FlowCardSnapshot.Delivery, isActive: Boolean): String {
-    val customer = customerLabel(snap.storeName)
+    // #1005: the store's own order, never a customer-shaped label — see [dropoffOrderLabel].
+    val order = dropoffOrderLabel(snap.storeName)
     val arrivedAt = snap.arrivedAt
     return when {
-        isActive -> customer
-        arrivedAt != null -> stringResource(R.string.flow_card_delivery_delivered_format, customer, formatTime(arrivedAt))
-        else -> customer
+        isActive -> order
+        arrivedAt != null -> stringResource(R.string.flow_card_delivery_delivered_format, order, formatTime(arrivedAt))
+        else -> order
     }
 }
 
@@ -110,7 +111,7 @@ internal fun PickupBody(snap: FlowCardSnapshot.Pickup, isActive: Boolean) {
     )
 }
 
-/** Delivery body — same co-hero shape as Pickup, deliver-by deadline + customer. */
+/** Delivery body — same co-hero shape as Pickup, deliver-by deadline + the store's own order (#1005). */
 @Composable
 internal fun DeliveryBody(snap: FlowCardSnapshot.Delivery, isActive: Boolean) {
     TaskBody(
@@ -120,7 +121,8 @@ internal fun DeliveryBody(snap: FlowCardSnapshot.Delivery, isActive: Boolean) {
         phaseEndedAt = snap.phaseEndedAt,
         isActive = isActive,
         isDrop = true,
-        primary = customerLabel(snap.storeName),
+        // #1005: the store's own order, never a customer-shaped label.
+        primary = dropoffOrderLabel(snap.storeName),
         netPay = snap.netPay,
         estMinutes = snap.estMinutes,
         perMile = snap.perMile,

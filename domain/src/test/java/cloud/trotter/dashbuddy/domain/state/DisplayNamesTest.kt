@@ -42,4 +42,20 @@ class DisplayNamesTest {
         assertEquals("the customer", customerLabel("   "))
         assertEquals("the customer", customerLabel(UNKNOWN_STORE))
     }
+
+    // #1005 — the dropoff order label is store-flavored, never a customer-shaped string.
+
+    @Test
+    fun `dropoffOrderLabel reads STORE Order, never a customer-shaped label (#1005)`() {
+        assertEquals("H-E-B Order", dropoffOrderLabel("H-E-B"))
+        assertEquals("Maple Street Order", dropoffOrderLabel("Maple Street"))
+    }
+
+    @Test
+    fun `dropoffOrderLabel falls back to the plain word, never an empty Order (#1005)`() {
+        assertEquals("Dropoff", dropoffOrderLabel(null))
+        assertEquals("Dropoff", dropoffOrderLabel(""))
+        assertEquals("Dropoff", dropoffOrderLabel("   "))
+        assertEquals("Dropoff", dropoffOrderLabel(UNKNOWN_STORE))
+    }
 }
