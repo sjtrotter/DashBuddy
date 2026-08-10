@@ -9,6 +9,10 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
@@ -46,6 +50,7 @@ import cloud.trotter.dashbuddy.domain.format.Formats
 @Composable
 fun PayMixCard(mix: PayMix, modifier: Modifier = Modifier) {
     val c = AppTheme.colors
+    var partialCoverageExpanded by remember { mutableStateOf(false) }
     AppCard(modifier = modifier.fillMaxWidth()) {
         Text(
             text = stringResource(R.string.money_tab_pay_mix_title),
@@ -77,15 +82,26 @@ fun PayMixCard(mix: PayMix, modifier: Modifier = Modifier) {
 
         if (!mix.breakdownComplete) {
             Spacer(Modifier.height(6.dp))
-            Text(
+            // COLLAPSE: the "N of M" coverage marker stays visible; the stacked-order explanation
+            // behind it moves behind the shared DisclosureRow affordance (§9 — the caveat itself is
+            // never dropped, only its explanation).
+            DisclosureRow(
                 text = stringResource(
                     R.string.money_tab_pay_mix_partial_coverage_format,
                     Formats.commaInt(mix.deliveriesWithBreakdown),
                     Formats.commaInt(mix.deliveries),
                 ),
-                style = MaterialTheme.typography.bodySmall,
-                color = c.text3,
+                expanded = partialCoverageExpanded,
+                onToggle = { partialCoverageExpanded = !partialCoverageExpanded },
             )
+            if (partialCoverageExpanded) {
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    text = stringResource(R.string.money_tab_pay_mix_partial_detail),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = c.text3,
+                )
+            }
         }
         if (mix.partsExceedGross) {
             Spacer(Modifier.height(6.dp))

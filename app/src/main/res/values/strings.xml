@@ -192,18 +192,18 @@
     <string name="offers_tab_score_vs_outcome_title">SCORE VS OUTCOME</string>
     <string name="offers_tab_avg_score_header">Avg score</string>
     <string name="offers_tab_est_per_hour_header" translatable="false">Est. $/hr</string>
-    <string name="offers_tab_frozen_disclosure">Offer figures are frozen decision-time estimates — what the verdict projected when the offer arrived, never realized net.</string>
+    <string name="offers_tab_frozen_disclosure">Offer figures are decision-time estimates; counts and realized figures are measured.</string>
 
     <!-- main/analytics/EstimateVsRealityCard.kt (#975, brief §7.5) -->
     <string name="offers_tab_est_vs_reality_title">ESTIMATE VS REALITY</string>
     <string name="offers_tab_est_vs_reality_bar_est">Est.</string>
     <string name="offers_tab_est_vs_reality_bar_realized">Realized</string>
     <string name="offers_tab_est_vs_reality_per_hour_format" translatable="false">%1$s/hr</string>
-    <string name="offers_tab_est_vs_reality_ratio_format">Accepted offers realized about %1$s of their decision-time estimate.</string>
-    <string name="offers_tab_est_vs_reality_no_ratio">The estimate side has no positive rate to compare against.</string>
-    <string name="offers_tab_est_vs_reality_population_format">across %1$s of %2$s accepted %3$s that had an estimate and a completed job</string>
+    <string name="offers_tab_est_vs_reality_ratio_format">Realized about %1$s of estimate.</string>
+    <string name="offers_tab_est_vs_reality_no_ratio">No positive estimate to compare against.</string>
+    <string name="offers_tab_est_vs_reality_population_format">%1$s of %2$s accepted %3$s with an estimate and a finished job</string>
     <string name="offers_tab_est_vs_reality_thin_format">Thin data — only %1$s matched %2$s so far.</string>
-    <string name="offers_tab_est_vs_reality_none">Nothing to compare yet — this needs accepted offers whose jobs finished with recorded pay and time.</string>
+    <string name="offers_tab_est_vs_reality_none">Needs accepted offers whose jobs finished with recorded pay and time.</string>
 
     <!-- main/analytics/OffersListCard.kt (#975, brief §7.4) -->
     <string name="offers_tab_list_title">OFFERS IN THIS WINDOW</string>
@@ -309,8 +309,8 @@
     <string name="time_tab_rate_distinction">While working counts only the time you were on a delivery. Whole shift counts every minute you were online, including the dry gaps between offers.</string>
     <string name="time_tab_rate_gaps_note_format">Working time is your delivery time minus %1$s measured %2$s between jobs.</string>
     <string name="time_tab_rate_no_gaps_note">No gap was measured in this window, so working time still includes any waiting inside it — the while-working rate is if anything on the low side.</string>
-    <string name="time_tab_rate_working_unmeasured">No per-delivery time was measured here, so there is no while-working rate to show.</string>
-    <string name="time_tab_rate_frozen_note">Net is frozen at the costs that were in force when you accepted each offer.</string>
+    <string name="time_tab_rate_working_unmeasured">No per-delivery time measured — no while-working rate.</string>
+    <string name="time_tab_rate_measurement_detail">How these are measured</string>
     <string name="time_tab_rate_none">No online time in this window yet.</string>
     <string name="time_tab_gap_singular">gap</string>
     <string name="time_tab_gap_plural">gaps</string>
@@ -320,35 +320,35 @@
     <string name="time_tab_segment_waiting">Waiting</string>
     <string name="time_tab_segment_driving">Driving &amp; other</string>
     <string name="time_tab_typical_hour_derivation">At stops is measured time parked at a store or at a door. Waiting is measured time between finishing a drop and taking your next offer. The rest is mostly driving — but it also holds the wait before your first offer, the tail after your last drop, and anything we could not time.</string>
+    <string name="time_tab_typical_hour_rest_short">The rest is mostly driving, plus anything we couldn\'t time.</string>
     <string name="time_tab_typical_hour_coverage_format">Timed %1$s of %2$s stops; the untimed ones sit in the rest.</string>
     <string name="time_tab_typical_hour_all_timed_format">Timed all %1$s stops.</string>
-    <string name="time_tab_typical_hour_no_stops_timed">No stop in this window recorded an arrival, so at-stops time is unmeasured here — all of it sits in the rest.</string>
+    <string name="time_tab_typical_hour_no_stops_timed">No arrival recorded — at-stops time is unmeasured; it sits in the rest.</string>
     <string name="time_tab_typical_hour_no_stops">No stops in this window.</string>
     <string name="time_tab_typical_hour_leak_format">Waiting cost you about %1$s in this window — %2$s at your while-working rate.</string>
-    <string name="time_tab_typical_hour_leak_unpriced">Waiting can\'t be priced here — no while-working rate was measured in this window.</string>
+    <string name="time_tab_typical_hour_leak_unpriced">Waiting can\'t be priced — no while-working rate here.</string>
     <string name="time_tab_gaps_title">GAPS BETWEEN JOBS</string>
-    <string name="time_tab_gaps_none">No gap measured in this window yet — a gap needs a completed drop and a later offer you took in the same dash.</string>
+    <string name="time_tab_gaps_none">No gap yet — needs a completed drop and a later accept in the same dash.</string>
     <string name="time_tab_gaps_median_label">Typical</string>
     <string name="time_tab_gaps_p90_label">9 in 10 under</string>
     <string name="time_tab_gaps_longest_label">Longest</string>
-    <string name="time_tab_gaps_definition">Measured from finishing a drop to accepting your next offer, inside the same dash.</string>
-    <string name="time_tab_gaps_coverage_format">%1$s %2$s measured across %3$s drops; the rest ended their dash, which is a tail rather than a gap.</string>
-    <string name="time_tab_gaps_long_format">%1$s %2$s ran 2 hours or longer. That could be a dry market or your own break — we can\'t tell which, so they are counted, not judged.</string>
+    <string name="time_tab_gaps_coverage_format">%1$s %2$s across %3$s drops — drop to next accept, same dash; the rest end their dash (a tail, not a gap)</string>
+    <string name="time_tab_gaps_long_format">%1$s %2$s ran 2h+ — break or dry market, we can\'t tell, so counted not judged</string>
     <string name="time_tab_mileage_tax_title">MILEAGE &amp; TAX</string>
     <string name="time_tab_mileage_tax_disclosure">standard-mileage method — not the app\'s operating-cost model; confirm with a tax preparer.</string>
 
     <!-- main/analytics/PatternsTab.kt (#315 H5) -->
     <!-- #979: declares the tab as always-lifetime, fixing the looks-like-a-bug relationship with the #970 pager. -->
     <string name="patterns_tab_all_time_badge">All time</string>
-    <string name="patterns_tab_all_time_caption">patterns need history — this tab always reads your whole record</string>
+    <string name="patterns_tab_all_time_caption">always your whole record</string>
     <string name="patterns_tab_heatmap_title">YOUR NET $/HR BY HOUR</string>
-    <string name="patterns_tab_heatmap_caption">your own realized net $/hr, by hour and day — where your time actually pays. Lifetime.</string>
+    <string name="patterns_tab_heatmap_caption">your own realized net $/hr — where your time pays</string>
     <!-- #979: heatmap Rate/Hours toggle — the Hours copy for the same grid, coloring by coverage instead of rate. -->
     <string name="patterns_tab_heatmap_mode_rate">Rate</string>
     <string name="patterns_tab_heatmap_mode_hours">Hours</string>
     <string name="patterns_tab_heatmap_title_hours">YOUR HOURS WORKED BY HOUR</string>
-    <string name="patterns_tab_heatmap_caption_hours">how many hours you\'ve spent online in each hour-of-week slot, lifetime.</string>
-    <string name="patterns_tab_heatmap_no_data">Not enough dashing yet to show a pattern. Dash a few more hours and your best times will fill in here.</string>
+    <string name="patterns_tab_heatmap_caption_hours">hours you\'ve spent online in each slot</string>
+    <string name="patterns_tab_heatmap_no_data">Not enough dashing yet — your best times will fill in here.</string>
     <string name="patterns_tab_heatmap_best_format">Your best hour so far: %1$s — %2$s/hr</string>
     <string name="patterns_tab_heatmap_legend_low">lower</string>
     <string name="patterns_tab_heatmap_legend_high">higher</string>
@@ -356,10 +356,10 @@
     <string name="patterns_tab_heatmap_legend_zero">worked, no net</string>
     <string name="patterns_tab_heatmap_legend_hours_none">never dashed this hour</string>
     <string name="patterns_tab_stores_title">YOUR STORES</string>
-    <string name="patterns_tab_stores_manual_note">Manually-added deliveries and history we couldn\'t match to a store still count in your Money totals — they just don\'t show up as a store card here yet.</string>
+    <string name="patterns_tab_stores_manual_note">Manual and unmatched deliveries count in Money but aren\'t listed here yet.</string>
     <string name="patterns_tab_no_stores">No stores visited yet.</string>
     <string name="patterns_tab_location_unknown">location unknown</string>
-    <string name="patterns_tab_stats_partial">per-location stats partial — blends every %1$s you\'ve visited on payout-less jobs</string>
+    <string name="patterns_tab_stats_partial">stats partial — blends every %1$s you\'ve visited on payout-less jobs</string>
     <string name="patterns_tab_store_pickups_label">Pickups</string>
     <string name="patterns_tab_store_deliveries_label">Deliveries</string>
     <string name="patterns_tab_store_gross_label">Gross</string>
@@ -469,7 +469,7 @@
     <!-- main/analytics/MoneyTab.kt -->
     <string name="money_tab_earnings_by_day_title">EARNINGS BY DAY</string>
     <string name="money_tab_no_earnings_yet">No earnings in this period yet.</string>
-    <string name="money_tab_earnings_by_day_caption">gross per day · sessions count on their start day · (No session) deliveries count on their own completion day</string>
+    <string name="money_tab_earnings_by_day_caption">gross per day, by dash start day — (No session) deliveries by completion day</string>
     <string name="money_tab_earnings_by_day_bar_click_label">Show this day</string>
     <string name="money_tab_earnings_by_day_detail_format">%1$s · %2$s · %3$s %4$s</string>
     <string name="money_tab_stat_net_per_hour">Net/hr</string>
@@ -487,9 +487,9 @@
     <string name="money_tab_where_went_segment_gas">Gas</string>
     <string name="money_tab_where_went_segment_wear">Wear on the car</string>
     <string name="money_tab_where_went_segment_car">Car costs</string>
-    <string name="money_tab_where_went_disclosure_format">Car costs = %1$s mi driven × %2$s/mi, frozen when you accepted each offer</string>
-    <string name="money_tab_where_went_disclosure_no_miles">Car costs are frozen at what each offer was accepted under — no miles logged for this window</string>
-    <string name="money_tab_where_went_no_split">Gas and wear weren\'t recorded separately for every delivery in this window, so only the combined car cost is shown.</string>
+    <string name="money_tab_where_went_disclosure_format">%1$s mi × %2$s/mi, frozen at accept time</string>
+    <string name="money_tab_where_went_disclosure_no_miles">No miles logged — car costs frozen at accept time</string>
+    <string name="money_tab_where_went_no_split">Not every delivery recorded gas and wear separately — combined only.</string>
     <string name="money_tab_where_went_frozen_note">Costs are frozen at the rate each offer was accepted under — changing your cost settings never rewrites past windows.</string>
     <string name="money_tab_per_mile_format">%1$s/mi</string>
     <string name="money_tab_disclosure_expand">Show the details</string>
@@ -504,8 +504,9 @@
     <string name="money_tab_pay_mix_insight_format">Tips were %1$s of your pay this window.</string>
     <string name="money_tab_pay_mix_insight_floor_format">Tips were at least %1$s of your pay this window.</string>
     <string name="money_tab_pay_mix_no_insight">No pay recorded for this window yet.</string>
-    <string name="money_tab_pay_mix_not_recorded">No pay breakdown was recorded for this window — base pay and tips are only itemized on single-order deliveries.</string>
-    <string name="money_tab_pay_mix_partial_coverage_format">Itemized on %1$s of %2$s deliveries — a stacked order settles on one receipt that can\'t be split, so its pay sits in bonuses &amp; other.</string>
+    <string name="money_tab_pay_mix_not_recorded">No pay breakdown here — only single-order deliveries itemize base and tips.</string>
+    <string name="money_tab_pay_mix_partial_coverage_format">itemized on %1$s of %2$s deliveries</string>
+    <string name="money_tab_pay_mix_partial_detail">A stacked order settles on one receipt that can\'t be split, so its pay sits in bonuses &amp; other.</string>
     <string name="money_tab_pay_mix_exceeds_gross_format">The itemized pay adds up to %1$s more than the reported total — worth a look.</string>
 
     <!-- main/analytics/NeedsALookCard.kt (brief §4.2) -->
@@ -517,11 +518,11 @@
     <string name="money_tab_top_stores_title">TOP STORES</string>
     <string name="money_tab_no_store_earnings_yet">No store earnings in this period yet.</string>
     <string name="money_tab_unknown_store">Unknown store</string>
-    <string name="money_tab_unattributed_callout_format">%1$s not attributed to any delivery — bonuses/adjustments; review coming (#650)</string>
+    <string name="money_tab_unattributed_callout_format">%1$s not attributed to any delivery — bonuses or adjustments</string>
     <string name="money_tab_over_attributed_callout_format">attributed exceeds reported by %1$s — review estimates/corrections</string>
-    <string name="money_tab_no_session_callout_format">(No session): %1$s across %2$s %3$s not tied to a dash — data-quality flag (#660)</string>
+    <string name="money_tab_no_session_callout_format">(No session): %1$s across %2$s %3$s not tied to a dash</string>
     <string name="money_tab_no_session_callout_click_label">Assign to a dash</string>
-    <string name="money_tab_orphan_offers_callout_format">%1$s accepted offer(s) have no matching delivery — mark which was unassigned (#810)</string>
+    <string name="money_tab_orphan_offers_callout_format">%1$s accepted offer(s) with no matching delivery</string>
     <string name="money_tab_orphan_offers_callout_click_label">Resolve orphan offers</string>
     <string name="money_tab_recent_sessions_title">RECENT SESSIONS</string>
     <string name="money_tab_no_sessions_recorded_yet">No sessions recorded yet.</string>
@@ -706,7 +707,7 @@
 
     <!-- ui/main/analytics/RecapHero.kt — the #970 recap hero above the tabs -->
     <string name="analytics_hero_kept_label">You kept</string>
-    <string name="analytics_hero_frozen_note">Net is frozen at the costs in effect when you accepted each offer</string>
+    <string name="analytics_hero_frozen_note">Net frozen at accept-time costs</string>
     <string name="analytics_hero_delta_up_format">▲ %1$s vs %2$s</string>
     <string name="analytics_hero_delta_down_format">▼ %1$s vs %2$s</string>
     <string name="analytics_hero_delta_flat_format">Same as %1$s</string>
@@ -733,7 +734,7 @@
     <string name="weekly_plan_target_dollars">$ goal</string>
     <string name="weekly_plan_target_dollars_selected">Aiming for %1$s kept</string>
     <string name="weekly_plan_goal_dialog_title">Set a goal</string>
-    <string name="weekly_plan_goal_dialog_body">How much do you want to keep this week? The plan places hours until your own record projects that much.</string>
+    <string name="weekly_plan_goal_dialog_body">How much do you want to keep this week?</string>
     <string name="weekly_plan_goal_dialog_label">Amount</string>
     <string name="weekly_plan_goal_dialog_confirm">Plan it</string>
     <string name="weekly_plan_goal_dialog_cancel">Cancel</string>
@@ -743,10 +744,10 @@
     <string name="weekly_plan_value_headline_format">%1$s on your best windows ≈ %2$s kept</string>
     <string name="weekly_plan_value_comparison_format">The same %1$s placed at random ≈ %2$s — the plan is worth about %3$s</string>
     <string name="weekly_plan_value_comparison_no_gain_format">The same %1$s placed at random ≈ %2$s — this plan doesn\'t beat working whenever</string>
-    <string name="weekly_plan_value_no_baseline">Not enough of your record yet to compare this against working whenever.</string>
-    <string name="weekly_plan_value_shortfall_format">Placed %1$d of your %2$d target hours — your record doesn\'t back any more than that yet.</string>
-    <string name="weekly_plan_value_unpriced_format">%1$d of these hours have no record behind them, so they project nothing.</string>
-    <string name="weekly_plan_provenance">From your own record, lifetime — a projection of what you have earned, not a promise of what you will.</string>
+    <string name="weekly_plan_value_no_baseline">Not enough record yet to compare with working whenever.</string>
+    <string name="weekly_plan_value_shortfall_format">Placed %1$d of %2$d target hours — your record doesn\'t back more yet.</string>
+    <string name="weekly_plan_value_unpriced_format">%1$d of these hours have no record behind them.</string>
+    <string name="weekly_plan_provenance">From your own record, lifetime — a projection, not a promise.</string>
 
     <!-- Suggested windows -->
     <string name="weekly_plan_windows_title">Suggested windows</string>
@@ -754,7 +755,7 @@
     <string name="weekly_plan_window_best">Best</string>
     <string name="weekly_plan_window_moved">Moved</string>
     <string name="weekly_plan_window_evidence_format">your %1$s: %2$s/hr over %3$d %4$s</string>
-    <string name="weekly_plan_window_no_evidence">no record of these hours — this window projects nothing</string>
+    <string name="weekly_plan_window_no_evidence">no record of these hours — projects nothing</string>
     <string name="weekly_plan_window_unpriced_value">—</string>
     <string name="weekly_plan_window_earlier">Move an hour earlier</string>
     <string name="weekly_plan_window_later">Move an hour later</string>
@@ -770,20 +771,20 @@
 
     <!-- Where the plan came from -->
     <string name="weekly_plan_provenance_title">Where the plan came from</string>
-    <string name="weekly_plan_provenance_caption">Your whole record, hour by hour. The outlined cells are the hours the plan picked.</string>
+    <string name="weekly_plan_provenance_caption">Your whole record — outlined cells are the hours picked.</string>
 
     <!-- Growth rows — locked, and carrying no data -->
     <string name="weekly_plan_growth_plus_badge">Plus</string>
     <string name="weekly_plan_growth_area_title">Demand around you</string>
-    <string name="weekly_plan_growth_area_body">When other drivers near you are earning — including hours you have never tried. Not built yet, and it will never be turned on without you asking.</string>
+    <string name="weekly_plan_growth_area_body">When drivers near you earn. Not built — never on without you asking.</string>
     <string name="weekly_plan_growth_year_badge">Needs a year</string>
     <string name="weekly_plan_growth_year_title">This week last year</string>
-    <string name="weekly_plan_growth_year_body">A year-over-year comparison, once you have a year of your own record to compare against.</string>
+    <string name="weekly_plan_growth_year_body">Once you have a year of your own record to compare.</string>
 
     <!-- Save -->
     <string name="weekly_plan_save_button">Save this plan</string>
     <string name="weekly_plan_save_update">Update saved plan</string>
-    <string name="weekly_plan_save_note">Saved plans show up on your home screen each morning, and next Sunday this one gets measured against what actually happened.</string>
+    <string name="weekly_plan_save_note">Shows on Home each morning; graded next Sunday.</string>
 
     <!-- Grade -->
     <string name="weekly_plan_grade_title">Your plan for the week of %1$s</string>
@@ -794,7 +795,7 @@
 
     <!-- Empty state -->
     <string name="weekly_plan_no_record_title">No record to plan from yet</string>
-    <string name="weekly_plan_no_record_body">This screen plans from hours you have actually worked. Dash a few times and it will have something to say.</string>
+    <string name="weekly_plan_no_record_body">Plans come from hours you\'ve actually worked. Dash a few times first.</string>
 
     <!-- Notification (its own channel, so it can be muted on its own) -->
     <string name="weekly_plan_channel_name">Weekly plan</string>

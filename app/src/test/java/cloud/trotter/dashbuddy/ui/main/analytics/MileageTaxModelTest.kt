@@ -86,7 +86,7 @@ class MileageTaxModelTest {
     @Test fun lifetime_addsMaySpanYearsNote() {
         val labels = MileageTaxModel.from(100.0, noonUtc(2026, 7, 15), utc, AnalyticsWindows.LIFETIME)
         assertEquals(
-            "may span tax years — see the CSV export for per-year figures",
+            "may span tax years — see the CSV export",
             labels.spansYearsNote,
         )
     }
@@ -99,7 +99,7 @@ class MileageTaxModelTest {
             window(WindowGranularity.WEEK, LocalDate.of(2026, 1, 1)),
         )
         assertEquals(
-            "spans tax years — see the CSV export for per-year figures",
+            "spans tax years — see the CSV export",
             labels.spansYearsNote,
         )
         // A year-straddling window falls back to the CURRENT year's rate and says so.
@@ -144,7 +144,7 @@ class MileageTaxModelTest {
             AnalyticsWindows.custom(LocalDate.of(2025, 12, 20), LocalDate.of(2026, 1, 10)),
         )
         assertEquals(
-            "spans tax years — see the CSV export for per-year figures",
+            "spans tax years — see the CSV export",
             labels.spansYearsNote,
         )
     }

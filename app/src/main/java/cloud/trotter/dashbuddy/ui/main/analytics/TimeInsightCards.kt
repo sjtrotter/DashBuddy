@@ -8,6 +8,10 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
@@ -49,6 +53,7 @@ import cloud.trotter.dashbuddy.domain.format.formatDuration
 @Composable
 fun NetPerHourPairCard(rates: NetPerHourPair, modifier: Modifier = Modifier) {
     val c = AppTheme.colors
+    var measurementExpanded by remember { mutableStateOf(false) }
     AppCard(modifier = modifier.fillMaxWidth()) {
         Text(
             text = stringResource(R.string.time_tab_rate_pair_title),
@@ -78,30 +83,36 @@ fun NetPerHourPairCard(rates: NetPerHourPair, modifier: Modifier = Modifier) {
         }
         Spacer(Modifier.height(10.dp))
 
-        // The doc's own distinction, in the brief's driver-facing words.
-        Caption(stringResource(R.string.time_tab_rate_distinction))
-
-        // How the working denominator was measured — including when no gap could be removed from it.
-        Spacer(Modifier.height(4.dp))
-        Caption(
-            if (rates.gapsSubtracted > 0) {
-                stringResource(
-                    R.string.time_tab_rate_gaps_note_format,
-                    Formats.commaInt(rates.gapsSubtracted),
-                    pluralGap(rates.gapsSubtracted),
-                )
-            } else {
-                stringResource(R.string.time_tab_rate_no_gaps_note)
-            },
-        )
-
         if (rates.workingTimeUnmeasured) {
             Spacer(Modifier.height(4.dp))
             Caption(stringResource(R.string.time_tab_rate_working_unmeasured))
         }
 
+        // COLLAPSE: the while-working/whole-shift distinction + the gap-denominator note move behind
+        // one DisclosureRow ("How these are measured") instead of stacking as four separate captions.
+        // F1 also drops the redundant frozen-net note here — the recap hero states it for this window.
         Spacer(Modifier.height(4.dp))
-        Caption(stringResource(R.string.time_tab_rate_frozen_note))
+        DisclosureRow(
+            text = stringResource(R.string.time_tab_rate_measurement_detail),
+            expanded = measurementExpanded,
+            onToggle = { measurementExpanded = !measurementExpanded },
+        )
+        if (measurementExpanded) {
+            Spacer(Modifier.height(4.dp))
+            Caption(stringResource(R.string.time_tab_rate_distinction))
+            Spacer(Modifier.height(4.dp))
+            Caption(
+                if (rates.gapsSubtracted > 0) {
+                    stringResource(
+                        R.string.time_tab_rate_gaps_note_format,
+                        Formats.commaInt(rates.gapsSubtracted),
+                        pluralGap(rates.gapsSubtracted),
+                    )
+                } else {
+                    stringResource(R.string.time_tab_rate_no_gaps_note)
+                },
+            )
+        }
     }
 }
 
@@ -118,6 +129,7 @@ fun NetPerHourPairCard(rates: NetPerHourPair, modifier: Modifier = Modifier) {
 @Composable
 fun TypicalOnlineHourCard(composition: HourComposition, rates: NetPerHourPair, modifier: Modifier = Modifier) {
     val c = AppTheme.colors
+    var derivationExpanded by remember { mutableStateOf(false) }
     AppCard(modifier = modifier.fillMaxWidth()) {
         Text(
             text = stringResource(R.string.time_tab_typical_hour_title),
@@ -174,7 +186,17 @@ fun TypicalOnlineHourCard(composition: HourComposition, rates: NetPerHourPair, m
         )
         Spacer(Modifier.height(8.dp))
 
-        Caption(stringResource(R.string.time_tab_typical_hour_derivation))
+        // COLLAPSE: the 279-char derivation moves behind a tap; the short line + the "Driving &
+        // other" segment label keep the residual-is-not-pure-driving honesty visible by default.
+        DisclosureRow(
+            text = stringResource(R.string.time_tab_typical_hour_rest_short),
+            expanded = derivationExpanded,
+            onToggle = { derivationExpanded = !derivationExpanded },
+        )
+        if (derivationExpanded) {
+            Spacer(Modifier.height(4.dp))
+            Caption(stringResource(R.string.time_tab_typical_hour_derivation))
+        }
         Spacer(Modifier.height(4.dp))
         Caption(stopCoverageText(composition))
     }
@@ -216,8 +238,8 @@ fun GapsBetweenJobsCard(gaps: GapStats, modifier: Modifier = Modifier) {
         }
         Spacer(Modifier.height(12.dp))
 
-        Caption(stringResource(R.string.time_tab_gaps_definition))
-        Spacer(Modifier.height(4.dp))
+        // CONDENSE (merge): the standalone "what a gap measures" definition folds into this one
+        // coverage line rather than sitting above it as a second caption (one caveat per card).
         Caption(
             stringResource(
                 R.string.time_tab_gaps_coverage_format,
