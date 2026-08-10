@@ -78,6 +78,59 @@ card's **mechanical** half, #577 (re-confirmed, 24/24, ~0.55 s — with a new po
 that entry's Bug #1), the #457 path, and #554 ShadowProjector (2/2). The #462/#460 dropoff item
 was found **broken-in-part** (raw PII in capture envelopes) and moved to that entry's Bug #7.)_
 
+- **🆕 NEW — #985 (PR #1014) — the Timeline order-detail sheet is recognized and masked.** Open
+  the timeline mid-dash and tap a task row (both a pickup row and a dropoff row). Working = the
+  frame no longer lands in `captures/…/UNKNOWN/`; it lands under `timeline_task_detail/`, and
+  inside it the street line, the city/ST/ZIP line, any customer note and any bare entry code are
+  `[redacted…]` while `Copy address` and the store name are intact. Broken = an UNKNOWN envelope
+  with a raw address, or a recognized envelope with any raw address line. Also confirm nothing
+  about the dash lifecycle changes when the sheet is opened (no phantom pause/resume, no
+  offer/task churn) — the rule is lifecycle-neutral by test. (#985 itself stays OPEN for the
+  capture-gated "Switch to pick up at <store>" sheet re-homed from #806.)
+  - Confirmed: 0/2
+- **🆕 NEW — #986/#934 (PR #1014) — no `Apt/Suite` mask carries a 4-hex suffix.** After a dash to
+  an apartment, grep the recognized envelopes for `Apt`. Working = every hit reads `Apt [redacted]`
+  or `Apt/Suite: [redacted]`. Broken = any `Apt/Suite[:]? [redacted:<4 hex>]` on `dropoff_photo`,
+  `dropoff_navigation`, `dropoff_pre_arrival`, `dropoff_geofence_warning` or
+  `delivery_summary_collapsed`.
+  - Confirmed: 0/2
+- **🆕 NEW — #924 (PR #1014) — DasherDirect is blocked from the first frame.** Open DasherDirect
+  from the DoorDash menu and let it load. Working = zero new UNKNOWN captures around that
+  timestamp and a sensitive-gate drop in the log from the *entry* frame, not only after the
+  balance renders. Broken = an UNKNOWN envelope containing `dxdr_nav_host_fragment`.
+  - Confirmed: 0/2
+- **🆕 NEW — #996/#997 (PR #1012) — per-offer pay attribution on a receipt-less dash.** On any
+  dash with no post-drop receipt (an out-of-zone "Dash Along the Way" start, or a shop order),
+  watch three shapes. (a) **Multi-accept job at DIFFERENT stores:** each drop's drill-down shows
+  its own store's offer pay as the "est. offer pay", not all drops showing one averaged number.
+  (b) **Multi-accept job at the SAME store:** those drops show the same sub-pooled number — that
+  is correct, not the old bug. (c) **Same-customer multi-order job:** the single physical drop
+  carries the FULL quoted offer pay and the Money tab's unattributed remainder for that dash is
+  $0.00 — pre-fix it was exactly half the quote. **Desk:**
+  `SELECT d.jobId, COUNT(*), SUM(d.realizedPay) FROM delivery_records d WHERE d.payBasis='OFFER_PAY' GROUP BY d.jobId;`
+  — each job's Σ ≤ its accepted offers' Σ `payAmount`, equal whenever every offer's store matched
+  a drop. `DELIVERY_COMPLETED` payloads now carry `offerPayAttribution`
+  (`PER_OFFER_STORE`/`SUB_POOLED_STORE`/`STAMP_FALLBACK`/`CONSOLIDATED_CUSTOMER`/`JOB_POOLED`/
+  `INLINE_POOLED`). Log greps: `#997 offer-pay attribution degraded to` (DEBUG, per-degrade with
+  counts — a `JOB_POOLED` on a job whose drops all had stores means a store failed to reconcile);
+  `#997 offer pay unattributed at close` (WARN — accepted money that found no drop);
+  the `#691` WARN now reports `denominator=N of M owed` + `ownOfferPay=present|null`.
+  - Confirmed: 0/2
+- **🆕 NEW — #1000 (PR #1013) — a blown-through pickup still links its offer to the job.** Watch
+  for a dash where a pickup is arrived-but-never-confirmed followed by a normal delivery
+  completion. **Desk:** `SELECT linkedJobId, storeKey FROM offer_records WHERE offerHash =
+  '<the accepted offer's hash>'` — non-null `linkedJobId` with a **null** `storeKey` is correct
+  (the fail-null residual: no store leaderboard entry, dwell sample, or `milesToStore` from that
+  job, by design). The PROJECTOR_VERSION 10 refold should have healed the 08-08 Zaxbys accept on
+  first launch — check it shows linked in the next pull.
+  - Confirmed: 0/2
+- **🆕 NEW — #1005 (PR #1011) — the dropoff bubble/notification reads "<STORE> Order".** On the
+  drop-off leg, the ongoing bubble/notification message reads e.g. "H-E-B Order" (persona
+  "Dropoff") — never "Heading to <store>'s customer" or any DoorDash customer-placeholder text
+  walked in as a fake name. An unresolved store reads the plain word "Dropoff", never an empty
+  "Order". Also check the in-bubble dropoff task card's summary/detail line carries the same
+  copy.
+  - Confirmed: 0/2
 - **🆕 NEW — #992 / #993 / #994 / #995 / #920 — the Pledge redact batch: five recognized surfaces
   that were still shipping raw customer PII.** All five were found in the 2026-08-09 desk analysis
   and are rule-layer fixes (envelope masking only — nothing about recognition, parsing, state or
@@ -2323,23 +2376,17 @@ Accept and Decline registered on DoorDash — and moved to that session's entry 
   window transition. What to watch/capture: that tapping Exit produces a click
   capture (and note whether back-gesture vs button changes what DoorDash shows next).
   - Confirmed: 0/2.
-- **Drop-off odometer vs "at door" timer disagreement (#294, recheck — survivor of #220).**
-  On a drop-off arrival, watch **both surfaces at the same moment**: when the HUD flips to
-  **AT DOOR**, does the **odometer stop accruing** (bubble session-miles flat while parked)?
-  The label is flow-region-driven while `PauseOdometer` fires on the platform-task
-  `arrivedAt` flip, so they *can* disagree — and desk analysis (2026-06-04/05 logs) suggests
-  `arrivedAt` often stays **null on no-contact drop-offs**, i.e. the odometer may keep
-  counting exactly while the label says AT DOOR. Note the delivery type (hand-to-customer vs
-  leave-at-door) for each sighting; capture if seen.
-  - Confirmed: 0/2.
-- **Post-arrival store name is the real merchant (a698bfa scoping; #337).** After arriving at a
-  pickup, glance at the bubble task card (and later the PostTask receipt): the store line should
-  read the actual merchant ("Chili's Grill & Bar"), never "Walk into store" / "Parking
-  instructions" / an order number. Desk-validated 2026-06-10 against the 05-17 Chili's capture
-  (the only `instructions_title` inside `mx_contact_view` is the store name); needs live
-  confirmation. Extra credit: a McDonald's-style merchant (order-number-heavy arrival screen) —
-  that variant was never captured.
-  - Confirmed: 0/2.
+- **Drop-off GPS runs while parked at the door (#294 — CONFIRMED at desk 08-09, dev-eyes half
+  only).** The mechanism is now known and the old item text was inverted: post-#438 B5 the
+  odometer keys on `lastActedFlow ∈ STATIONARY_FLOWS` (transient — the dropoff-completion
+  screens photo/PIN/confirm are NOT in the set, so they read *moving* and resume GPS) while the
+  HUD's AT DOOR keys on the sticky `arrivedAt`. The 08-09 pull showed the resume firing 10–20 s
+  after arrival on ~every dropoff (pickups hold correctly). Desk half is DONE; what remains is
+  dev eyes on the fix once one of the three candidate directions on the issue ships — until
+  then, expect session-miles to creep at the door (it pairs with #918's jitter). No action
+  needed on-dash beyond awareness.
+  - Confirmed: 1/2 (desk 08-09: mechanism confirmed with per-dropoff timings; awaiting the fix
+    + one field confirmation of the fixed behavior).
 - **Shop-for-items offer card shows ONE pickup (repro watch; #338).** On the next HEB/grocery
   shop-for-items offer, screenshot the bubble offer card: it must list the store once. The
   2026-05-17 #5 duplicate's parse-layer cause was ruled out 2026-06-10 (every captured HEB offer
@@ -2690,6 +2737,37 @@ clean; close candidate). Checklist: 6 items retired, 2 bumped to 1/2, 6 held wit
 marked broken-in-part, 2 new items added.
 
 ### Dev follow-up (same day, after reading the report)
+
+### Same-day campaign addendum (desk, evening — the dev's "get all issues closed" directive)
+
+An autonomous close-out campaign ran the rest of 08-09. Recorded here because several checklist
+items changed hands; the PR/issue record carries the detail.
+
+- **Shipped and merged (all through the adversarial loop):** PR #1009 (#991 TTS re-init + liveness
+  — the voice fix), PR #1010 (redact batch A: #992–#995, #920), PR #1012 (#996/#997 per-offer pay
+  attribution — built to a REVISED design after the first review proved mint-time slot lineage
+  untrustworthy; the amendment lives on #997), PR #1013 (#1000 anchorless offer link,
+  PROJECTOR_VERSION 10), PR #1014 (redact batch B: #986/#934/#924 + the #985 sheet), PR #1016
+  (#1015 — a deterministic UTC-Monday CI failure found when it blocked #1014: the window≡enum test
+  pinned a fixed zone against the enum path's systemDefault).
+- **Desk-audit closures (evidence on each issue):** #806 (superseded — 303-envelope sweep clean),
+  #337 (field-validated 10/10 incl. the original decoy string; item retired below), #863 (44/44
+  clean resolutions post-fix), #911 (root-caused to the by-design structural-hash dedup).
+  **#294 CONFIRMED as a live defect** (dropoff-completion flows resume GPS at the door — item
+  rewritten below), **#827 rescoped** (the "Unknown Store" null-parse is a desk-fixable
+  `hasTextContaining: "min"` self-shadow, no longer capture-gated).
+- **Security-review catch worth remembering:** batch B's first cut quoted REAL fielded customer
+  PII (street+apt, a verbatim gate note, entry codes) in the new rules' own `comment` fields —
+  and rule comments ship in the canonicalized APK asset. Sanitized pre-merge to invented
+  same-shape equivalents; the raw 07-31 source envelopes were purged after the merge. Rule
+  comments are now part of the PII-sweep surface, by precedent.
+- **Checklist mutations in this pass:** #337 retired 2/2; #294 rewritten to the confirmed
+  mechanism at 1/2; six new items added for PRs #1011–#1014 (above).
+- **Standing note:** the dasher's quick-decline automation has been consent-gate-denied since the
+  07-31 install (52/52, zero grants) — working as designed, but the #843 consent-prompt UI half
+  has still never been exercised by the dev. Grant the capability (or report the prompt never
+  appearing) on the next app open.
+
 
 1. **Item 8's mystery answered from the field:** the receipt sheet doesn't show when the dash was
    started **out-of-zone** in the **"Dash Along the Way"** status — all three receipt-less dashes
