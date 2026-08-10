@@ -21,7 +21,7 @@ android {
     // Expose the exported Room schema JSONs to the instrumented tests so MigrationTestHelper can
     // open a real v8 DB and run the committed AutoMigration(8→9) against it (#314).
     sourceSets {
-        getByName("androidTest").assets.srcDir("$projectDir/schemas")
+        getByName("androidTest").assets.directories.add("$projectDir/schemas")
     }
 
     buildTypes {
