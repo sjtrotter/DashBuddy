@@ -1215,7 +1215,10 @@ class CaptureRedactionCorpusTest {
             }
         }
         walk(entry)
-        return strings.any { it.contains("Apt", ignoreCase = true) || it.endsWith("subpremise_line") }
+        return strings.any {
+            Regex("""\bApt\b""", RegexOption.IGNORE_CASE).containsMatchIn(it) ||
+                it.endsWith("subpremise_line")
+        }
     }
 
     /** The compiled unit-number entries of [ruleId] (matched via the generated-asset shape). */
@@ -2297,7 +2300,12 @@ class CaptureRedactionCorpusTest {
         val pickupMasked = serialize(
             rule.redact.apply(snapshots.first { it.first.contains("c9b8d9") }.second),
         )
-        assertTrue("the merchant name is driver-owned and stays raw", pickupMasked.contains("Uff, Quee Rico"))
+        // This pins only the committed ZIP-less pickup fixture; a city/ST/ZIP store-address line
+        // can make the venue/following-sibling entry hash-mask the merchant name.
+        assertTrue(
+            "the merchant name stays raw in the committed ZIP-less pickup fixture",
+            pickupMasked.contains("Uff, Quee Rico"),
+        )
         assertFalse(
             "the address under the merchant is masked too — the sheet cannot tell a customer " +
                 "address from a store address, so it fails toward privacy",

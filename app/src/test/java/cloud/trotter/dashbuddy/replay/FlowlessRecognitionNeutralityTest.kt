@@ -52,6 +52,15 @@ class FlowlessRecognitionNeutralityTest {
     private fun assertFlowlessAndNeutral(corpus: String, expectedRuleId: String) {
         val frames = SessionReplay.loadSession(corpus)
         assertTrue("the $corpus corpus must not be empty", frames.isNotEmpty())
+        val platforms = frames.map { frame ->
+            requireNotNull(Platform.fromWire(frame.wire)) {
+                "${frame.file}: unknown platform wire '${frame.wire}'"
+            }
+        }.distinct()
+        require(platforms.size == 1) {
+            "the $corpus corpus must contain exactly one platform, saw $platforms"
+        }
+        val platform = platforms.single()
 
         // (a) They RECOGNIZE — the rule is live, so this is not a vacuous pass over UNKNOWN frames.
         val observations = SessionReplay.replayRecognition(frames)
@@ -85,8 +94,8 @@ class FlowlessRecognitionNeutralityTest {
                 emptyList<Any>(),
                 step.events,
             )
-            val region = step.stateAfter.regions.platforms[Platform.DoorDash]
-            requireNotNull(region) { "${step.frame?.file}: expected a DoorDash region" }
+            val region = step.stateAfter.regions.platforms[platform]
+            requireNotNull(region) { "${step.frame?.file}: expected a ${platform.displayName} region" }
             assertEquals("${step.frame?.file}: no session", null, region.session)
             assertEquals("${step.frame?.file}: no active job", null, region.activeJob)
             assertEquals("${step.frame?.file}: no active task", null, region.activeTask)
@@ -100,7 +109,7 @@ class FlowlessRecognitionNeutralityTest {
             assertEquals(
                 "${step.frame?.file}: mode must stay at the default, never asserted from a " +
                     "modeHint-less frame",
-                cloud.trotter.dashbuddy.domain.state.PlatformRegion(Platform.DoorDash).mode,
+                cloud.trotter.dashbuddy.domain.state.PlatformRegion(platform).mode,
                 region.mode,
             )
         }
@@ -108,7 +117,7 @@ class FlowlessRecognitionNeutralityTest {
         // And nothing but the liveness stamp moves BETWEEN the frames: normalising
         // `lastObservedAt` (a "we saw the app" timestamp, not lifecycle) the regions are equal.
         val normalised = steps.map {
-            it.stateAfter.regions.platforms[Platform.DoorDash]!!.copy(lastObservedAt = 0L)
+            it.stateAfter.regions.platforms[platform]!!.copy(lastObservedAt = 0L)
         }
         assertEquals(
             "consecutive $expectedRuleId frames must differ only by the liveness stamp",

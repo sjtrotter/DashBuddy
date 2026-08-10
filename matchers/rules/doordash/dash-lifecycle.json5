@@ -35,6 +35,60 @@
           "keepPrefix": [
             "Pickup from "
           ]
+        },
+        {
+          "comment": "Combined-frame belt: the order-detail sheet (timeline_task_detail) can inflate over the timeline, which wins on priority — same entry as that rule; inert when the sheet is absent (pure shape predicate).",
+          "find": {
+            "all": [
+              {
+                "hasTextMatchesRegex": "^\\d{1,5}\\s+\\S"
+              },
+              {
+                "hasNoId": true
+              }
+            ]
+          }
+        },
+        {
+          "comment": "Combined-frame belt: the order-detail sheet (timeline_task_detail) can inflate over the timeline, which wins on priority — same entry as that rule; inert when the sheet is absent (pure shape predicate).",
+          "find": {
+            "hasFollowingSiblingTextMatchesRegex": "[,\\s]{1,4}(?:[A-Za-z]{2},?\\s{1,4})?\\d{5}"
+          }
+        },
+        {
+          "comment": "Combined-frame belt: the order-detail sheet (timeline_task_detail) can inflate over the timeline, which wins on priority — same entry as that rule; inert when the sheet is absent (pure shape predicate).",
+          "find": {
+            "all": [
+              {
+                "hasTextMatchesRegex": "\\d{5}"
+              },
+              {
+                "hasNoId": true
+              }
+            ]
+          },
+          "plainMask": true
+        },
+        {
+          "comment": "Combined-frame belt: the order-detail sheet (timeline_task_detail) can inflate over the timeline, which wins on priority — same entry as that rule; inert when the sheet is absent (pure shape predicate).",
+          "find": {
+            "hasTextStartsWith": "\""
+          },
+          "plainMask": true
+        },
+        {
+          "comment": "Combined-frame belt: the order-detail sheet (timeline_task_detail) can inflate over the timeline, which wins on priority — same entry as that rule; inert when the sheet is absent (pure shape predicate).",
+          "find": {
+            "all": [
+              {
+                "hasTextMatchesRegex": "^#?\\s?\\d{1,4}[A-Za-z]?$"
+              },
+              {
+                "hasNoId": true
+              }
+            ]
+          },
+          "plainMask": true
         }
       ],
       "state": {
@@ -266,7 +320,7 @@
           }
         },
         {
-          "comment": "Address line 1, VENUE form (#886's mirror predicate) — when the destination is an apartment complex or business, line 1 is a proper-noun name with no id, no digits and no stable shape ('Sample Ridge Apartments', fielded 07-23), and it is child 0 of its block so there is no preceding sibling to anchor on. The handle is its FOLLOWING sibling, the city/ST/ZIP line. The pattern is a deliberate SUPERSET of the `dropoff_pre_arrival` copy (`[,\\s][A-Za-z]{2},?\\s{1,4}\\d{5}`): this sheet fielded a STATE-LESS city render ('San Antonio,  78200', 07-23) that the two-letter-state requirement structurally misses, so the state group is optional here and the separator class is repeated. It is not written as a shared SSOT string precisely because it is not the same string — widening the other copies is a separate, corpus-gated change, and a privacy entry must never be loosened to match a sibling. Over-match surface is 'the node directly above a line containing <comma-or-space> [+ ST] + 5 digits', which on this sheet is only the address block's line 1 — the store row's following sibling is its street line (whose ZIP-less form matches nothing) and every chrome node's next sibling is a text-less Button.",
+          "comment": "Address line 1, VENUE form (#886's mirror predicate) — when the destination is an apartment complex or business, line 1 is a proper-noun name with no id, no digits and no stable shape ('Sample Ridge Apartments', fielded 07-23), and it is child 0 of its block so there is no preceding sibling to anchor on. The handle is its FOLLOWING sibling, the city/ST/ZIP line. The pattern is a deliberate SUPERSET of the `dropoff_pre_arrival` copy (`[,\\s][A-Za-z]{2},?\\s{1,4}\\d{5}`): this sheet fielded a STATE-LESS city render ('San Antonio,  78200', 07-23) that the two-letter-state requirement structurally misses, so the state group is optional here and the separator class is repeated. It is not written as a shared SSOT string precisely because it is not the same string — widening the other copies is a separate, corpus-gated change, and a privacy entry must never be loosened to match a sibling. Over-match surface is 'the node directly above a line containing <comma-or-space> [+ ST] + 5 digits', which on this sheet is only the address block's line 1 — the store row's following sibling is its street line (whose ZIP-less form matches nothing) and every chrome node's next sibling is a text-less Button. CAVEAT: this ZIP-less claim is fixture-specific — a pickup render whose store address line carries city/ST/ZIP will make the store NAME node match this entry and hash-mask. Over-mask, fail-toward-privacy, accepted; the store name is NOT guaranteed raw on this surface.",
           "find": {
             "hasFollowingSiblingTextMatchesRegex": "[,\\s]{1,4}(?:[A-Za-z]{2},?\\s{1,4})?\\d{5}"
           }
