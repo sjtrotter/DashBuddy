@@ -9,6 +9,7 @@ import cloud.trotter.dashbuddy.test.util.SnapshotRedactor
 import cloud.trotter.dashbuddy.test.util.TestResourceLoader
 import cloud.trotter.dashbuddy.test.util.TestRulesetFactory
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
@@ -754,6 +755,10 @@ class CaptureRedactionCorpusTest {
             "dropoff_multi_order_confirm", "dropoff_navigation", "dropoff_handoff",
             "active_trip", "splash", "customer_chat", "pickup_verification_items",
             "pickup_receipt_scan", "pickup_wait_survey", "timeline", "camera_capture",
+            // #985 added the Timeline order-detail sheet: an entirely id-less surface whose
+            // whole redact block is shape-anchored, so the committed-corpus guard is the only
+            // structural check that its fixtures don't carry a real customer.
+            "timeline_task_detail",
         )
         val leaks = mutableListOf<String>()
         val decoysSeen = mutableSetOf<String>()
@@ -1086,10 +1091,19 @@ class CaptureRedactionCorpusTest {
      * brute-recoverable. The 8 entries are byte-identical SSOT siblings today;
      * this ratchet keeps a future edit from silently splitting one back to the
      * hash form (only `active_trip`'s entry has direct mask-output teeth above).
+     *
+     * #986/#934 extend it to the **`Apt/Suite` half of the family**, which the original
+     * enumeration structurally could not see: `dropoff_photo`'s entry keeps the FUSED
+     * `"Apt/Suite "` spelling (so `keepPrefix.contains("Apt ")` was false) and the
+     * `address_subpremise_line` / `bottom_sheet_subpremise_line` entries are id-anchored
+     * with a `"Apt/Suite: "` label (or, on `dropoff_geofence_warning`, no label at all).
+     * Both spellings are now enumerated per rule here; the exhaustive scan below is what
+     * makes the enumeration un-rottable.
      */
     @Test
-    fun `every Apt keepPrefix redact entry declares plainMask on both platforms (#895)`() {
-        val ruleIds = listOf(
+    fun `every Apt and Apt-Suite redact entry declares plainMask on both platforms (#895, #986, #934)`() {
+        // Family A — the fused `Apt <n>` line (#895 / PR #927).
+        val fusedAptRules = listOf(
             "uber.screen.splash",
             "uber.screen.pickup_verification_items",
             "uber.screen.customer_chat",
@@ -1099,7 +1113,7 @@ class CaptureRedactionCorpusTest {
             "doordash.screen.dropoff_pre_arrival",
             "doordash.screen.dropoff_pre_arrival_completion",
         )
-        for (id in ruleIds) {
+        for (id in fusedAptRules) {
             val rule = TestRulesetFactory.screenRuleset.ruleById(id)
             org.junit.Assert.assertNotNull("rule $id must exist", rule)
             val aptEntries = rule!!.redact.entries.filter { it.keepPrefix.contains("Apt ") }
@@ -1108,6 +1122,169 @@ class CaptureRedactionCorpusTest {
                 "$id: every fused-Apt entry must declare plainMask (#895 — bounded alphabet over the length floor)",
                 aptEntries.all { it.plainMask },
             )
+        }
+
+        // Family B — the `Apt/Suite` subpremise line (#986 fused-text, #934 id-anchored).
+        // `dropoff_pre_arrival` appears in BOTH lists on purpose: it fielded the plain form
+        // (08-02, family A) and the hex form (08-01, family B) on different dashes, which is
+        // the whole reason this had to be fixed as a family rather than an entry.
+        val subpremiseRules = listOf(
+            "doordash.screen.dropoff_navigation",
+            "doordash.screen.dropoff_photo",
+            "doordash.screen.dropoff_pre_arrival",
+            "doordash.screen.dropoff_geofence_warning",
+            "doordash.screen.delivery_summary_collapsed",
+        )
+        for (id in subpremiseRules) {
+            val rule = TestRulesetFactory.screenRuleset.ruleById(id)
+            org.junit.Assert.assertNotNull("rule $id must exist", rule)
+            // Identified from the generated asset, because the compiled `find` is an opaque
+            // lambda: an entry is a unit-number entry when its predicate names a subpremise id
+            // or its keepPrefix carries an "Apt/Suite" label.
+            val entries = unitNumberRedactEntries(id, platformFileFor(id))
+            assertFalse("$id must carry an Apt/Suite subpremise redact entry", entries.isEmpty())
+            assertTrue(
+                "$id: every Apt/Suite subpremise entry must declare plainMask (#986/#934 — a unit " +
+                    "number is the same bounded ~10^4 alphabet the fused `Apt ` entries carry): $entries",
+                entries.all { it.plainMask },
+            )
+        }
+    }
+
+    /**
+     * #986/#934 — the **exhaustive** half of the ratchet above, and the part that cannot rot.
+     *
+     * The enumerated lists say "these known rules are fixed"; #986 existed precisely because an
+     * enumeration missed a 9th surface whose prefix happened to be spelled differently. So this
+     * scans EVERY screen rule's redact block across BOTH generated platform assets and requires
+     * `plainMask` on any entry that can mask a bare unit number — identified structurally, by the
+     * entry's own predicate/keepPrefix strings mentioning `Apt` or a `subpremise_line` id, never
+     * by a rule list. A new surface that copies the address block in gets covered the day it
+     * lands, whichever spelling it uses.
+     *
+     * `comment` values are excluded from the scan: they discuss `Apt` freely (e.g.
+     * `camera_capture`'s `bottom_instruction` entry, which masks a whole fused name+apt line and
+     * is correctly NOT in this family — its token carries a customer name, so the alphabet is
+     * unbounded and the hash form is right there).
+     */
+    @Test
+    fun `no redact entry can mask a bare unit number with a brute-forceable hash (#986, #934)`() {
+        val offenders = mutableListOf<String>()
+        var found = 0
+        for (platformFile in listOf("doordash.json", "uber.json")) {
+            val screens = Json.parseToJsonElement(File(rulesDir, platformFile).readText())
+                .jsonObject["screens"]!!.jsonArray
+            for (screen in screens) {
+                val obj = screen.jsonObject
+                val ruleId = obj["id"]?.jsonPrimitive?.content ?: continue
+                val redact = obj["redact"] as? kotlinx.serialization.json.JsonArray ?: continue
+                redact.forEachIndexed { i, element ->
+                    val entry = element.jsonObject
+                    if (!isUnitNumberEntry(entry)) return@forEachIndexed
+                    found++
+                    val plain = (entry["plainMask"] as? JsonPrimitive)?.content == "true"
+                    if (!plain) offenders += "$platformFile $ruleId redact[$i]"
+                }
+            }
+        }
+        assertTrue(
+            "a unit-number redact entry without plainMask ships a `[redacted:<4hex>]` suffix over " +
+                "a ~10^4 alphabet — brute-recoverable (#895/#892/#795): $offenders",
+            offenders.isEmpty(),
+        )
+        // Vacuity floor: 8 fused `Apt ` entries (4 uber + 4 doordash) + 5 Apt/Suite subpremise
+        // entries. If a refactor stops the scan from SEEING them, this fails instead of passing
+        // green over nothing.
+        assertTrue(
+            "expected at least 13 unit-number redact entries across both platforms, saw $found — " +
+                "the scan is no longer finding the family it is meant to police",
+            found >= 13,
+        )
+    }
+
+    /** True when [entry]'s own predicate/keepPrefix strings mark it as a unit-number mask. */
+    private fun isUnitNumberEntry(entry: kotlinx.serialization.json.JsonObject): Boolean {
+        val strings = mutableListOf<String>()
+        fun walk(e: kotlinx.serialization.json.JsonElement) {
+            when (e) {
+                is kotlinx.serialization.json.JsonObject -> e.forEach { (k, v) ->
+                    if (k != "comment") walk(v)
+                }
+                is kotlinx.serialization.json.JsonArray -> e.forEach { walk(it) }
+                is JsonPrimitive -> if (e.isString) strings += e.content
+            }
+        }
+        walk(entry)
+        return strings.any {
+            Regex("""\bApt\b""", RegexOption.IGNORE_CASE).containsMatchIn(it) ||
+                it.endsWith("subpremise_line")
+        }
+    }
+
+    /** The compiled unit-number entries of [ruleId] (matched via the generated-asset shape). */
+    private fun unitNumberRedactEntries(ruleId: String, platformFile: String): List<CompiledRedactEntry> {
+        val declared = ruleJson(ruleId, platformFile)["redact"] as? kotlinx.serialization.json.JsonArray
+            ?: return emptyList()
+        val compiled = TestRulesetFactory.screenRuleset.ruleById(ruleId)!!.redact.entries
+        assertEquals(
+            "$ruleId: declared and compiled redact entries must correspond 1:1",
+            declared.size,
+            compiled.size,
+        )
+        return declared.mapIndexedNotNull { i, e ->
+            compiled[i].takeIf { isUnitNumberEntry(e.jsonObject) }
+        }
+    }
+
+    private fun platformFileFor(ruleId: String): String =
+        if (ruleId.startsWith("uber.")) "uber.json" else "doordash.json"
+
+    /**
+     * #986/#934 teeth — the ratchets above read declarations; this runs the compiled redacts
+     * over a real subpremise node and asserts the OUTPUT carries no distinctness suffix. Reverting
+     * any one `plainMask` turns this red with the recoverable mask in the failure message.
+     */
+    @Test
+    fun `every Apt-Suite subpremise redact masks plain, with no distinctness hex (#986, #934)`() {
+        // id-anchored (#934) — the label is app vocabulary and stays; the unit number does not.
+        val byId = mapOf(
+            "doordash.screen.dropoff_navigation" to "bottom_sheet_subpremise_line",
+            "doordash.screen.dropoff_pre_arrival" to "address_subpremise_line",
+            "doordash.screen.dropoff_geofence_warning" to "address_subpremise_line",
+            "doordash.screen.delivery_summary_collapsed" to "address_subpremise_line",
+        )
+        for ((ruleId, idSuffix) in byId) {
+            val rule = TestRulesetFactory.screenRuleset.ruleById(ruleId)!!
+            val masked = rule.redact.apply(
+                UiNode(viewIdResourceName = "com.dd:id/$idSuffix", text = "Apt/Suite: 8888"),
+            ).text!!
+            assertFalse("$ruleId: unit number must not persist", masked.contains("8888"))
+            assertFalse(
+                "$ruleId: '$idSuffix' must not carry a brute-forceable distinctness hex — got '$masked'",
+                MASK_HEX.containsMatchIn(masked),
+            )
+            assertTrue("$ruleId: plain mask expected — got '$masked'", PLAIN_MASK.containsMatchIn(masked))
+        }
+        // `dropoff_geofence_warning` declares no keepPrefix, so it masks the WHOLE line; the other
+        // three keep the label. Both shapes are correct, and both are pinned.
+        assertTrue(
+            "dropoff_navigation keeps the Apt/Suite label",
+            TestRulesetFactory.screenRuleset.ruleById("doordash.screen.dropoff_navigation")!!
+                .redact.apply(
+                    UiNode(viewIdResourceName = "com.dd:id/bottom_sheet_subpremise_line", text = "Apt/Suite: 8888"),
+                ).text!!.startsWith("Apt/Suite: "),
+        )
+
+        // #986 as filed — the fused-text entry on `dropoff_photo`, whose prefix is `Apt/Suite `.
+        val photo = TestRulesetFactory.screenRuleset.ruleById("doordash.screen.dropoff_photo")!!
+        for (raw in listOf("Apt/Suite 8888", "Apt/Suite: 8888")) {
+            val masked = photo.redact.apply(UiNode(text = raw)).text!!
+            assertFalse("dropoff_photo: unit number must not persist from '$raw'", masked.contains("8888"))
+            assertFalse(
+                "dropoff_photo: '$raw' must not carry a distinctness hex — got '$masked'",
+                MASK_HEX.containsMatchIn(masked),
+            )
+            assertTrue("dropoff_photo: label kept for '$raw' — got '$masked'", masked.startsWith("Apt/Suite"))
         }
     }
 
@@ -1483,6 +1660,10 @@ class CaptureRedactionCorpusTest {
         // The label sibling is app vocabulary — kept, so a replayed frame keeps its shape.
         assertTrue("the 'Delivery for' label is chrome and stays raw", masked.contains("Delivery for"))
         assertTrue("Apt/Suite lead-in kept", masked.contains("Apt/Suite: "))
+        // #934: and the unit number behind that lead-in plain-masks — a bounded ~10^4 alphabet
+        // must not ship the brute-recoverable `<4hex>` distinctness suffix.
+        assertTrue("Apt/Suite value plain-masked", masked.contains("Apt/Suite: [redacted]"))
+        assertFalse("Apt/Suite value must carry no distinctness hex", masked.contains("Apt/Suite: [redacted:"))
         // Over-match guards.
         assertTrue("merchant kept (driver-owned)", masked.contains("Sample Pizza Co (41709)"))
         assertTrue("catalog item kept", masked.contains("Large Pepperoni"))
@@ -2048,6 +2229,136 @@ class CaptureRedactionCorpusTest {
         assertTrue("item name kept", masked.contains("Pepperidge Farm Farmhouse Hearty White Sliced Bread"))
         assertTrue("aisle kept", masked.contains("Aisle 4 - Section A13 - Shelf 2"))
         assertTrue("the notes label is chrome and stays raw", masked.contains("\"Customer Notes\""))
+    }
+
+    /**
+     * #985 — the Timeline order-detail sheet, over the COMMITTED fixtures.
+     *
+     * Both fielded renders of the sheet are in the corpus with hand-written pseudonyms in the raw
+     * shape DoorDash emits ([CorpusDecoys]): the DROPOFF render (task line · street+Apt · city/ST/ZIP
+     * · dropoff option · quoted note · bare entry code) and the PICKUP render of the same sheet
+     * (task line · store · store address · store). The point of running against the real trees
+     * rather than a synthetic one is the #871/#885 "teeth" property — a synthetic tree proves the
+     * predicate, only the fielded tree proves the predicate matches what DoorDash actually renders.
+     */
+    @Test
+    fun `timeline_task_detail masks the address block, note and entry code (#985)`() {
+        val rule = TestRulesetFactory.screenRuleset.ruleById("doordash.screen.timeline_task_detail")
+        org.junit.Assert.assertNotNull("the #985 rule must exist", rule)
+        assertFalse("timeline_task_detail must declare a redact block", rule!!.redact.isEmpty())
+
+        val snapshots = TestResourceLoader.loadSnapshots("snapshots/timeline_task_detail")
+        assertEquals("both fielded renders must be committed", 2, snapshots.size)
+
+        for ((filename, node, _) in snapshots) {
+            // The rule must actually WIN the frame — otherwise the redact assertions below are
+            // testing a block that never runs in production.
+            assertEquals(
+                "$filename must classify as the new rule",
+                "timeline_task_detail",
+                TestRulesetFactory.screenRuleset.matchFirst(node)?.intent,
+            )
+            val masked = serialize(rule.redact.apply(node))
+
+            assertFalse("$filename: the customer name must not persist", masked.contains("Avery K"))
+            assertTrue(
+                "$filename: the task lead-in survives with a distinctness hex",
+                maskAfter("Deliver to ").containsMatchIn(masked) ||
+                    maskAfter("Pickup for ").containsMatchIn(masked),
+            )
+            // The address block — street/venue line AND the city/ST/ZIP line beneath it.
+            assertFalse("$filename: street line must not persist", masked.contains("Sample Hollow"))
+            assertFalse("$filename: unit number must not persist", masked.contains("Apt 331"))
+            assertFalse("$filename: ZIP must not persist", masked.contains("78299"))
+            // Chrome — the require anchors MUST survive or replay recognition breaks.
+            assertTrue("$filename: 'Copy address' anchor kept", masked.contains("Copy address"))
+            assertTrue("$filename: 'Close sheet' anchor kept", masked.contains("Close sheet"))
+        }
+
+        val dropoff = snapshots.first { it.first.contains("f7dd84") }.second
+        val dropoffMasked = serialize(rule.redact.apply(dropoff))
+        assertFalse(
+            "the customer's gate note must not persist",
+            dropoffMasked.contains("open the gate"),
+        )
+        assertFalse("the entry code must not persist", dropoffMasked.contains("6413"))
+        // #920/#889 posture: neither the note nor the entry code may carry a distinctness suffix
+        // (a short note that IS the secret, and a 4-digit code, are both small enough spaces that
+        // 4 hex over 65 536 buckets is an inversion oracle). The masked customer NAME is the one
+        // hex on this frame, so a blanket "no hex anywhere" assertion would be wrong — assert per
+        // node instead.
+        fun maskOf(text: String) = rule.redact.apply(UiNode(text = text)).text!!
+        assertEquals(
+            "the quoted note plain-masks",
+            "[redacted]",
+            maskOf("\"leave it by the gate, code 4417, thanks!\""),
+        )
+        assertEquals("a 4-digit entry code plain-masks", "[redacted]", maskOf("6413"))
+        assertEquals("the city/ST/ZIP line plain-masks", "[redacted]", maskOf("San Antonio, TX 78299"))
+        // The dropoff option and the merchant name are platform/driver-owned and stay raw.
+        assertTrue("the dropoff option is chrome", dropoffMasked.contains("Leave it at my door"))
+        val pickupMasked = serialize(
+            rule.redact.apply(snapshots.first { it.first.contains("c9b8d9") }.second),
+        )
+        // This pins only the committed ZIP-less pickup fixture; a city/ST/ZIP store-address line
+        // can make the venue/following-sibling entry hash-mask the merchant name.
+        assertTrue(
+            "the merchant name stays raw in the committed ZIP-less pickup fixture",
+            pickupMasked.contains("Uff, Quee Rico"),
+        )
+        assertFalse(
+            "the address under the merchant is masked too — the sheet cannot tell a customer " +
+                "address from a store address, so it fails toward privacy",
+            pickupMasked.contains("Sample Loop"),
+        )
+    }
+
+    /**
+     * #985 — the shapes the committed fixtures do NOT carry, asserted synthetically: the VENUE
+     * form of address line 1 (a proper noun with no digits, anchored only by the city line beneath
+     * it — #886's mirror predicate), the STATE-LESS city render this surface fielded on 07-23
+     * (which is why the pattern here is a deliberate superset of the `dropoff_pre_arrival` copy),
+     * and #994's `Return <name> to <store>` conjugation.
+     *
+     * Plus the cross-surface invariant that matters most: one customer masks to ONE hex on the
+     * timeline row and in the detail sheet it opens, because both entries normalize through
+     * `CustomerNameKey` (#623/#733).
+     */
+    @Test
+    fun `timeline_task_detail masks a venue line, a state-less city, and the Return conjugation (#985)`() {
+        val rule = TestRulesetFactory.screenRuleset.ruleById("doordash.screen.timeline_task_detail")!!
+
+        val block = UiNode(
+            children = listOf(
+                UiNode(text = "Sample Ridge Apartments"), // venue line 1 — no digits, no id
+                UiNode(text = "San Antonio,  78200"), // the fielded state-less, double-spaced render
+                UiNode(text = "Leave it at my door"),
+            ),
+        ).restoreParents()
+        val masked = serialize(rule.redact.apply(block))
+        assertFalse("a venue line 1 must be masked", masked.contains("Sample Ridge Apartments"))
+        assertFalse("the state-less city line must be masked", masked.contains("78200"))
+        assertTrue("the dropoff option survives", masked.contains("Leave it at my door"))
+
+        // #994's fourth conjugation, with the store tail masked along with the name (the keepPrefix
+        // mask is whole-remainder; the store is recoverable from the sheet's own store row).
+        val ret = rule.redact.apply(UiNode(text = "Return Avery K to H-E-B")).text!!
+        assertFalse("the returned-order customer name must not persist", ret.contains("Avery K"))
+        assertTrue("the Return lead-in survives", wholeMaskAfter("Return ").matches(ret))
+
+        // One customer, one hex — the sheet and the timeline row it was opened from.
+        val timeline = TestRulesetFactory.screenRuleset.ruleById("doordash.screen.timeline")!!
+        val sheetHex = hexIn(rule.redact.apply(UiNode(text = "Deliver to Avery K")).text!!, "sheet name")
+        val rowHex = hexIn(
+            timeline.redact.apply(UiNode(text = "Deliver to Avery Kirkland")).text!!,
+            "timeline row name",
+        )
+        assertEquals(
+            "the detail sheet and its timeline row must mask one customer to one hex " +
+                "(CustomerNameKey canonicalizes both to 'avery k')",
+            rowHex,
+            sheetHex,
+        )
     }
 
     /**

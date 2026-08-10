@@ -286,7 +286,20 @@ exists by design, so degrading it would break the invariant while removing no at
 dropoff surfaces whose id-less digit-shape entries can catch a PIN keypad echo or a bare code
 (`dropoff_pin_entry`/`_handoff`/`_pre_arrival`/`_pre_arrival_completion`) declare `plainMask` on
 those entries (#889 F1) — the floor covers 1–3 chars, the declaration covers the bounded 4–5 digit
-alphabets above it. The
+alphabets above it. **The unit-number family is now closed end to end (#986/#934):** a subpremise
+line is the same ~10^4 space whether it renders fused (`Apt <n>`, the #895/PR #927 set) or
+label-split (`Apt/Suite: <n>` behind `address_subpremise_line`/`bottom_sheet_subpremise_line`), and
+#927's enumeration saw only the first spelling — so `dropoff_photo` (fused `Apt/Suite `),
+`dropoff_navigation`, `dropoff_pre_arrival`, `dropoff_geofence_warning` and
+`delivery_summary_collapsed` all still shipped a brute-recoverable 4-hex suffix over a unit number
+(12 fielded envelopes across 08-01/08-07; `dropoff_pre_arrival` fielded BOTH spellings on different
+dashes, which is what makes it a family bug rather than an entry bug). All five now declare
+`plainMask` and enumerate both label spellings, and the ratchet is no longer a rule list: a
+**structural scan** over both platforms' generated assets requires `plainMask` on any redact entry
+whose own predicate/keepPrefix strings name `Apt` or a `subpremise_line` id, so the next surface to
+copy the address block in is covered whichever spelling it uses. (`camera_capture`'s
+`bottom_instruction` is deliberately NOT in the family — it masks a whole fused name+apt line, whose
+alphabet is unbounded, so the hash form is correct there.) The
 mask token is otherwise derived by the SAME canonical form the
 parse's `customerNameHash` chain uses (`normalizeCustomerName` before `sha256`, `CustomerNameKey` =
 first token + second-token initial), so a customer's mask/hash is stable across the surface FORMS
@@ -350,7 +363,33 @@ surface makes its frames reach the state machine at all and moves `FrameGate.las
 "no `state` block" buys is *lifecycle neutrality*, now asserted end-to-end by
 `FlowlessRecognitionNeutralityTest` — and `timeline`'s redact/parse prefix enumerations now diverge
 **by documented exclusion** (a guard test fails on any undocumented divergence in either direction;
-`"Return "` is listed against #998, which owns the return-task design question). A rules-independent
+`"Return "` is listed against #998, which owns the return-task design question).
+**The batch's last id-less surface followed as #985** — the **Timeline order-detail bottom sheet**
+(`doordash.screen.timeline_task_detail`, in `dash-lifecycle.json5` because the sheet is the
+timeline's own drill-down and is task-phase AGNOSTIC: a dropoff row renders the customer's address,
+a pickup row the merchant's, so it has no dropoff-phase owner and `dropoff.json5`'s
+`arriving_at_title` parity invariant would have forced an inert entry on it). It was the standing
+top Pledge item and the textbook #806 residual: the sibling task line WAS scrubbed by the prefix
+backstop while the address block — id-LESS *and* marker-LESS — shipped `<street>, Apt <n>` ·
+city/ST/ZIP · a customer gate note naming the building · a bare entry code verbatim on the UNKNOWN
+path (58 such envelopes across the 07-08→07-30 pulls, every one UNKNOWN). Recognize-only + a
+shape-anchored `redact` reusing the `dropoff_pre_arrival` entry family, anchored on the sheet's own
+chrome (`Copy address` text AND `Close sheet` contentDescription, both required — `Copy address`
+appears on no other surface anywhere, and the pair keeps the rule off DoorDash's other bottom
+sheets). Two deliberate divergences from the family it copies, both fail-toward-privacy: the venue
+line-1 anchor is a **superset** of #886's following-sibling regex because this sheet fielded a
+STATE-LESS city render (`San Antonio,  78200`) the two-letter-state form structurally misses, and
+the quoted customer note takes `plainMask` per #920 rather than the older un-plained quote entry —
+a privacy entry may be tightened without waiting for its family. The merchant address on the
+pickup render is masked too: line 1 sits in the identical slot for both task phases and nothing in
+the tree separates them, so unlike `pickup_navigation` (unambiguously a merchant surface, left raw
+by #886) the only sound choice is to over-mask; the store NAME stays raw. Both fielded renders are
+committed with hand-written pseudonyms + `CorpusDecoys` entries, the folder joined the FIX 4 guard,
+and `FlowlessRecognitionNeutralityTest` now covers this rule as well as the receipt scan. Riding
+along, **#924** gave `sensitive.dasher_direct` an **id-anchored arm** (`dxdr_nav_host_fragment`):
+every other arm keys on rendered banking TEXT, so DasherDirect's pre-render skeleton fell to UNKNOWN
+capture (no leak — the skeleton is text-free — but the gate should close at the door), and a view id
+is the locale-immune anchor #938 says to prefer. A rules-independent
 customer-PII **marker backstop** (`CustomerTextMarkers`, #624/#632/#666/#806 — distinct from
 `SensitiveTextMarkers`, which drops the dasher's banking screens) scrubs a node (screen tree) or whole
 field (notification — #632, incl. `actionLabels` — #666) that ships a customer-PII marker — on the

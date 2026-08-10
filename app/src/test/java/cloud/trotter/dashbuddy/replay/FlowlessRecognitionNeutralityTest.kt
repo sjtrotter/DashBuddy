@@ -32,14 +32,41 @@ class FlowlessRecognitionNeutralityTest {
 
     @Test
     fun `the receipt-scan frames recognize, carry no flow, and leave PlatformRegion untouched (#995)`() {
-        val frames = SessionReplay.loadSession("snapshots/pickup_receipt_scan")
-        assertTrue("the receipt-scan corpus must not be empty", frames.isNotEmpty())
+        assertFlowlessAndNeutral("snapshots/pickup_receipt_scan", "doordash.screen.pickup_receipt_scan")
+    }
+
+    /**
+     * #985 — the same property for the Timeline order-detail sheet, the second recognize-only
+     * surface added purely to give a leaking frame a `redact` block. It is asserted for the same
+     * reason: the rule buys the privacy fix by making previously-UNKNOWN frames reach the state
+     * machine, and "it declares no `state`" is a claim about the JSON, not about behaviour.
+     */
+    @Test
+    fun `the timeline task-detail frames recognize, carry no flow, and leave PlatformRegion untouched (#985)`() {
+        assertFlowlessAndNeutral(
+            "snapshots/timeline_task_detail",
+            "doordash.screen.timeline_task_detail",
+        )
+    }
+
+    private fun assertFlowlessAndNeutral(corpus: String, expectedRuleId: String) {
+        val frames = SessionReplay.loadSession(corpus)
+        assertTrue("the $corpus corpus must not be empty", frames.isNotEmpty())
+        val platforms = frames.map { frame ->
+            requireNotNull(Platform.fromWire(frame.wire)) {
+                "${frame.file}: unknown platform wire '${frame.wire}'"
+            }
+        }.distinct()
+        require(platforms.size == 1) {
+            "the $corpus corpus must contain exactly one platform, saw $platforms"
+        }
+        val platform = platforms.single()
 
         // (a) They RECOGNIZE — the rule is live, so this is not a vacuous pass over UNKNOWN frames.
         val observations = SessionReplay.replayRecognition(frames)
         assertEquals(
-            "every committed receipt-scan frame must classify as the new rule",
-            List(frames.size) { "doordash.screen.pickup_receipt_scan" },
+            "every committed frame must classify as $expectedRuleId",
+            List(frames.size) { expectedRuleId },
             observations.map { it.ruleId },
         )
 
@@ -67,8 +94,8 @@ class FlowlessRecognitionNeutralityTest {
                 emptyList<Any>(),
                 step.events,
             )
-            val region = step.stateAfter.regions.platforms[Platform.DoorDash]
-            requireNotNull(region) { "${step.frame?.file}: expected a DoorDash region" }
+            val region = step.stateAfter.regions.platforms[platform]
+            requireNotNull(region) { "${step.frame?.file}: expected a ${platform.displayName} region" }
             assertEquals("${step.frame?.file}: no session", null, region.session)
             assertEquals("${step.frame?.file}: no active job", null, region.activeJob)
             assertEquals("${step.frame?.file}: no active task", null, region.activeTask)
@@ -82,7 +109,7 @@ class FlowlessRecognitionNeutralityTest {
             assertEquals(
                 "${step.frame?.file}: mode must stay at the default, never asserted from a " +
                     "modeHint-less frame",
-                cloud.trotter.dashbuddy.domain.state.PlatformRegion(Platform.DoorDash).mode,
+                cloud.trotter.dashbuddy.domain.state.PlatformRegion(platform).mode,
                 region.mode,
             )
         }
@@ -90,10 +117,10 @@ class FlowlessRecognitionNeutralityTest {
         // And nothing but the liveness stamp moves BETWEEN the frames: normalising
         // `lastObservedAt` (a "we saw the app" timestamp, not lifecycle) the regions are equal.
         val normalised = steps.map {
-            it.stateAfter.regions.platforms[Platform.DoorDash]!!.copy(lastObservedAt = 0L)
+            it.stateAfter.regions.platforms[platform]!!.copy(lastObservedAt = 0L)
         }
         assertEquals(
-            "consecutive receipt-scan frames must differ only by the liveness stamp",
+            "consecutive $expectedRuleId frames must differ only by the liveness stamp",
             List(normalised.size) { normalised.first() },
             normalised,
         )

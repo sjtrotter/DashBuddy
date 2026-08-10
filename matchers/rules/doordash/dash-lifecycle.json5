@@ -35,6 +35,60 @@
           "keepPrefix": [
             "Pickup from "
           ]
+        },
+        {
+          "comment": "Combined-frame belt: the order-detail sheet (timeline_task_detail) can inflate over the timeline, which wins on priority — same entry as that rule; inert when the sheet is absent (pure shape predicate).",
+          "find": {
+            "all": [
+              {
+                "hasTextMatchesRegex": "^\\d{1,5}\\s+\\S"
+              },
+              {
+                "hasNoId": true
+              }
+            ]
+          }
+        },
+        {
+          "comment": "Combined-frame belt: the order-detail sheet (timeline_task_detail) can inflate over the timeline, which wins on priority — same entry as that rule; inert when the sheet is absent (pure shape predicate).",
+          "find": {
+            "hasFollowingSiblingTextMatchesRegex": "[,\\s]{1,4}(?:[A-Za-z]{2},?\\s{1,4})?\\d{5}"
+          }
+        },
+        {
+          "comment": "Combined-frame belt: the order-detail sheet (timeline_task_detail) can inflate over the timeline, which wins on priority — same entry as that rule; inert when the sheet is absent (pure shape predicate).",
+          "find": {
+            "all": [
+              {
+                "hasTextMatchesRegex": "\\d{5}"
+              },
+              {
+                "hasNoId": true
+              }
+            ]
+          },
+          "plainMask": true
+        },
+        {
+          "comment": "Combined-frame belt: the order-detail sheet (timeline_task_detail) can inflate over the timeline, which wins on priority — same entry as that rule; inert when the sheet is absent (pure shape predicate).",
+          "find": {
+            "hasTextStartsWith": "\""
+          },
+          "plainMask": true
+        },
+        {
+          "comment": "Combined-frame belt: the order-detail sheet (timeline_task_detail) can inflate over the timeline, which wins on priority — same entry as that rule; inert when the sheet is absent (pure shape predicate).",
+          "find": {
+            "all": [
+              {
+                "hasTextMatchesRegex": "^#?\\s?\\d{1,4}[A-Za-z]?$"
+              },
+              {
+                "hasNoId": true
+              }
+            ]
+          },
+          "plainMask": true
         }
       ],
       "state": {
@@ -223,6 +277,103 @@
             }
           }
         }
+      }
+    },
+    {
+      "comment": "#985 (P1 Pledge, the standing top item) — the **Timeline order-detail bottom sheet**, opened by tapping a task row on `doordash.screen.timeline`. It is the documented #806 residual, fielded WITH a gate-access note: `<street>, Apt <n>` · `<City>, <ST> <zip>` · the dropoff option · a customer free-text note naming the building and asking the dasher to call to open the gate · a bare entry code, all reaching disk verbatim on the UNKNOWN path (2026-07-30 19:40:07, and the same shape across the 07-08 / 07-21 / 07-23 / 07-28 pulls — 58 envelopes carrying 'Copy address' in total, every one of them UNKNOWN). **Why every existing layer missed it:** the sibling task line WAS scrubbed (the #806 `CustomerTextMarkers` prefix scan fired on 'Deliver to '), but the address block is id-LESS **and** marker-LESS, so neither the prefix scan nor #910's `ID_MARKERS` can structurally reach it. Per the #806 doctrine the primary control for that class is a recognizing rule + `redact`, which is this. WHY THIS FILE: the sheet is the timeline's own drill-down and is TASK-PHASE AGNOSTIC — a dropoff row renders the customer's address, a pickup row renders the merchant's — so it has no dropoff-phase owner; `dropoff.json5` additionally holds a structural invariant (`DropoffBannerRedactParityTest`: every rule there declares the `arriving_at_title` belt) that this sheet, which never renders a nav banner, would have to satisfy with an inert entry. ANCHORS ARE CHROME, NEVER THE CUSTOMER: 'Copy address' (text) AND 'Close sheet' (contentDescription), required together. 'Copy address' appears on ZERO other surfaces across the committed corpus and all 2026 pulls, and 'Close sheet' is DoorDash's generic sheet dismiss — the pair is what keeps this off the other bottom sheets that share it (the 'Excluded orders' explainer, the on-time adjustment sheet, the dash-readiness sheet, the far-away completion sheet). Under-match is deliberate and safe: a half-inflated render that has not painted 'Copy address' yet stays UNKNOWN (still covered by the UNKNOWN-path scrubs). RECOGNIZE-ONLY: no `state.flow`, no `parse`. The sheet is a retrospective detail view, not a lifecycle edge — the task lifecycle is owned by the pickup/dropoff surfaces — so giving it a flow would be a state-machine change riding on a privacy fix. Per #995's correction, recognize-only is NOT state-INERT: these frames now reach the state machine at all and move `FrameGate.lastIdentity`. What no `state` block buys is NEUTRALITY (no flow, no modeHint, no events, no mode asserted from absence), which `FlowlessRecognitionNeutralityTest` asserts end-to-end over the committed fixtures rather than leaving to this comment. Priority 142 is the first free value across all doordash rules and is behaviorally inert (no other rule matches these trees today — they classified UNKNOWN).",
+      "id": "doordash.screen.timeline_task_detail",
+      "priority": 142,
+      "redact": [
+        {
+          "comment": "The task line. Byte-identical prefix enumeration to `doordash.screen.timeline`'s own name entry (this sheet renders the SAME task vocabulary the row it opened from does, including #994's fourth 'Return <name> to <store>' conjugation), and `normalize: customerName` keeps the mask hex equal to the customer's persisted `customerNameHash` — one customer, one 4hex, on the timeline row and in its detail sheet alike (#623/#733). Ordered FIRST: 'Deliver to Avery K' also satisfies the id-less first-last-initial name shape, and this entry is the one that keeps the lead-in so a replayed envelope still reads as a task line. Note the device already scrubs this node to a plain '[redacted]' on the UNKNOWN path via the `CustomerTextMarkers` prefix backstop; that backstop keeps running on the recognized path too, so this entry is what upgrades the mask to the per-customer distinctness form rather than what first covers it.",
+          "find": {
+            "any": [
+              {
+                "hasTextStartsWith": "Pickup for "
+              },
+              {
+                "hasTextStartsWith": "Deliver to "
+              },
+              {
+                "hasTextStartsWith": "Return "
+              }
+            ]
+          },
+          "keepPrefix": [
+            "Pickup for ",
+            "Deliver to ",
+            "Return "
+          ],
+          "normalize": "customerName"
+        },
+        {
+          "comment": "Address line 1, digit-leading form — the fielded shape (e.g. '4120 Sample Hollow Dr, Apt 12' / '8900 Sample Forest' — invented equivalents of the two fielded renders). Same predicate as the `dropoff_pre_arrival` / `dropoff_handoff` family (Principle 5: this surface's address block is the same id-less two-line block those rules carry, so it gets the same entry set rather than a new dialect). Hash-mask, un-normalized: the token is a street line, not a customer NAME, and the name canonicalizer would collapse it to first-token + second-initial and destroy the mask's distinctness. **This deliberately also masks a MERCHANT address** on the pickup-task render of the same sheet (e.g. '10500 Sample Loop, San Antonio' under the store row — invented equivalent): line 1 sits in the identical slot for both task phases and nothing in the tree separates them, so — unlike `pickup_navigation`, which is unambiguously a merchant surface and is left raw by design (#886) — the only sound choice is to fail toward privacy. The store NAME is untouched, which is what triage and analytics actually read.",
+          "find": {
+            "all": [
+              {
+                "hasTextMatchesRegex": "^\\d{1,5}\\s+\\S"
+              },
+              {
+                "hasNoId": true
+              }
+            ]
+          }
+        },
+        {
+          "comment": "Address line 1, VENUE form (#886's mirror predicate) — when the destination is an apartment complex or business, line 1 is a proper-noun name with no id, no digits and no stable shape ('Sample Ridge Apartments', fielded 07-23), and it is child 0 of its block so there is no preceding sibling to anchor on. The handle is its FOLLOWING sibling, the city/ST/ZIP line. The pattern is a deliberate SUPERSET of the `dropoff_pre_arrival` copy (`[,\\s][A-Za-z]{2},?\\s{1,4}\\d{5}`): this sheet fielded a STATE-LESS city render ('San Antonio,  78200', 07-23) that the two-letter-state requirement structurally misses, so the state group is optional here and the separator class is repeated. It is not written as a shared SSOT string precisely because it is not the same string — widening the other copies is a separate, corpus-gated change, and a privacy entry must never be loosened to match a sibling. Over-match surface is 'the node directly above a line containing <comma-or-space> [+ ST] + 5 digits', which on this sheet is only the address block's line 1 — the store row's following sibling is its street line (whose ZIP-less form matches nothing) and every chrome node's next sibling is a text-less Button. CAVEAT: this ZIP-less claim is fixture-specific — a pickup render whose store address line carries city/ST/ZIP will make the store NAME node match this entry and hash-mask. Over-mask, fail-toward-privacy, accepted; the store name is NOT guaranteed raw on this surface.",
+          "find": {
+            "hasFollowingSiblingTextMatchesRegex": "[,\\s]{1,4}(?:[A-Za-z]{2},?\\s{1,4})?\\d{5}"
+          }
+        },
+        {
+          "comment": "#889 F1 posture: the city/ST/ZIP line and any bare 5-digit code, plainMask. 10^5 values against 65 536 4-hex buckets is ~1.5 candidates per bucket — effectively recoverable — and the distinctness would be redundant anyway, since this surface's task-line and street entries already carry per-customer distinct masks. Ordered AFTER the two line-1 entries so a 5-digit house number (e.g. '21000 U.S. Highway 90 North, San Antonio' — invented equivalent of the fielded 5-digit-house-number render) is claimed by the street entry and keeps its hash.",
+          "find": {
+            "all": [
+              {
+                "hasTextMatchesRegex": "\\d{5}"
+              },
+              {
+                "hasNoId": true
+              }
+            ]
+          },
+          "plainMask": true
+        },
+        {
+          "comment": "The customer's free-text note, which DoorDash renders on this sheet wrapped in literal double quotes (shape: '\"please call so I can open the gate, building N on floor N\"' — invented equivalent of the fielded 07-30 note; the 07-23 render carried a gate code inside it). Customer-AUTHORED text, the #803/#920 class: it can carry a gate code, a unit, a name, a floor. `plainMask` follows #920's reasoning rather than the older un-plained quote entry on `dropoff_pre_arrival`: a note's ALPHABET is unbounded but its LENGTH is not, so a short note that IS the secret ('Gate 4417') clears the #889 floor while its plaintext space stays far below the suffix's 65 536 buckets — and unlike a customer name a note is nobody's join key, so the distinctness buys nothing to trade against that. Strictly stronger than the sibling entry it diverges from; a privacy entry may be tightened without waiting for the family.",
+          "find": {
+            "hasTextStartsWith": "\""
+          },
+          "plainMask": true
+        },
+        {
+          "comment": "The bare entry/gate code rendered as its own node (3-digit codes, fielded; e.g. '641' — invented). Same shape and same `plainMask` argument as the `dropoff_pre_arrival` family: a bounded ~10^4 numeric alphabet, above the #889 length floor at 4 digits, so the 4-hex suffix would be an inversion oracle. The floor bounds LENGTH, this declaration bounds ALPHABET; they compose. Accepted over-mask: a merchant whose name IS a bare number (DoorDash test data fielded a store row reading '195') plains too — capture-only, and the store's own name row survives on every real render.",
+          "find": {
+            "all": [
+              {
+                "hasTextMatchesRegex": "^#?\\s?\\d{1,4}[A-Za-z]?$"
+              },
+              {
+                "hasNoId": true
+              }
+            ]
+          },
+          "plainMask": true
+        }
+      ],
+      "require": {
+        "all": [
+          {
+            "exists": {
+              "hasText": "Copy address"
+            }
+          },
+          {
+            "exists": {
+              "hasDesc": "Close sheet"
+            }
+          }
+        ]
       }
     },
     {

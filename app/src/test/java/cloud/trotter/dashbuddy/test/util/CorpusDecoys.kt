@@ -53,6 +53,19 @@ object CorpusDecoys {
         "Return Riley P to H-E-B" to
             "hand-written pseudonym in the return conjugation; the store is the real merchant " +
             "(merchant names are driver-owned, not PII, and are kept across the corpus)",
+        // #985 timeline_task_detail/2026-07-30_19-40-07-170__…__f7dd84.json — the DROPOFF-task
+        //      render's id-less task line. The device capture shipped this node already scrubbed
+        //      to a plain `[redacted]` (the #806 prefix backstop fires on "Deliver to "), which
+        //      would have proved nothing about the new rule's redact, so the fixture carries a
+        //      hand-written pseudonym in the raw shape DoorDash renders.
+        "Deliver to Avery K" to
+            "hand-written pseudonym on the Timeline order-detail sheet's dropoff task line",
+        // #985 timeline_task_detail/2026-07-28_20-13-06-104__…__c9b8d9.json — the PICKUP-task
+        //      render of the SAME sheet. Same physical pseudonym as the dropoff line on purpose:
+        //      one customer's two task rows, so the cross-surface one-customer-one-hex assertion
+        //      is testing a real relationship rather than an artefact of the sanitizing.
+        "Pickup for Avery K" to
+            "hand-written pseudonym on the Timeline order-detail sheet's pickup task line",
         // #993 dropoff_navigation/2026-08-02_18-00-01-999__…__2109db.json — `arriving_at_title`.
         "1425 Sample Ridge Dr, Apt 12, San Antonio, TX 78200, USA" to
             "hand-written street address; house number, street and ZIP are all invented, the " +
