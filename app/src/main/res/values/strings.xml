@@ -192,7 +192,7 @@
     <string name="offers_tab_score_vs_outcome_title">SCORE VS OUTCOME</string>
     <string name="offers_tab_avg_score_header">Avg score</string>
     <string name="offers_tab_est_per_hour_header" translatable="false">Est. $/hr</string>
-    <string name="offers_tab_frozen_disclosure">Every figure except Realized is a decision-time estimate.</string>
+    <string name="offers_tab_frozen_disclosure">Offer figures are decision-time estimates; counts and realized figures are measured.</string>
 
     <!-- main/analytics/EstimateVsRealityCard.kt (#975, brief §7.5) -->
     <string name="offers_tab_est_vs_reality_title">ESTIMATE VS REALITY</string>
@@ -332,7 +332,7 @@
     <string name="time_tab_gaps_median_label">Typical</string>
     <string name="time_tab_gaps_p90_label">9 in 10 under</string>
     <string name="time_tab_gaps_longest_label">Longest</string>
-    <string name="time_tab_gaps_coverage_format">%1$s %2$s across %3$s drops — drop to next accept, same dash</string>
+    <string name="time_tab_gaps_coverage_format">%1$s %2$s across %3$s drops — drop to next accept, same dash; the rest end their dash (a tail, not a gap)</string>
     <string name="time_tab_gaps_long_format">%1$s %2$s ran 2h+ — break or dry market, we can\'t tell, so counted not judged</string>
     <string name="time_tab_mileage_tax_title">MILEAGE &amp; TAX</string>
     <string name="time_tab_mileage_tax_disclosure">standard-mileage method — not the app\'s operating-cost model; confirm with a tax preparer.</string>
@@ -359,7 +359,7 @@
     <string name="patterns_tab_stores_manual_note">Manual and unmatched deliveries count in Money but aren\'t listed here yet.</string>
     <string name="patterns_tab_no_stores">No stores visited yet.</string>
     <string name="patterns_tab_location_unknown">location unknown</string>
-    <string name="patterns_tab_stats_partial">blends every %1$s you\'ve visited — location unknown</string>
+    <string name="patterns_tab_stats_partial">stats partial — blends every %1$s you\'ve visited on payout-less jobs</string>
     <string name="patterns_tab_store_pickups_label">Pickups</string>
     <string name="patterns_tab_store_deliveries_label">Deliveries</string>
     <string name="patterns_tab_store_gross_label">Gross</string>
@@ -469,7 +469,7 @@
     <!-- main/analytics/MoneyTab.kt -->
     <string name="money_tab_earnings_by_day_title">EARNINGS BY DAY</string>
     <string name="money_tab_no_earnings_yet">No earnings in this period yet.</string>
-    <string name="money_tab_earnings_by_day_caption">gross per day, by dash start day</string>
+    <string name="money_tab_earnings_by_day_caption">gross per day, by dash start day — (No session) deliveries by completion day</string>
     <string name="money_tab_earnings_by_day_bar_click_label">Show this day</string>
     <string name="money_tab_earnings_by_day_detail_format">%1$s · %2$s · %3$s %4$s</string>
     <string name="money_tab_stat_net_per_hour">Net/hr</string>

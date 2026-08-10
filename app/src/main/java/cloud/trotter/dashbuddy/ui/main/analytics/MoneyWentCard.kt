@@ -182,15 +182,17 @@ fun MoneyWentCard(economics: PeriodEconomics, modifier: Modifier = Modifier) {
 @Composable
 private fun moneyWentSegments(split: MoneyWentModel.Split): List<AppSegment> {
     val c = AppTheme.colors
-    // F3: the note is intentionally blank, not omitted — omitting it would fall back to
-    // AppLegend's percentage-share default, which this card's own doc forbids ("the legend
-    // carries real dollars, not shares"). The dollar figure already reads above in the three
-    // plain-words lines, so the legend's job here is only the colour key.
+    // F3 correction (post-#1019-review): the legend keeps its real dollar notes. An earlier pass
+    // blanked them to remove the "duplicated row" F3 named, but AppLegend falls back to rendering
+    // a PERCENTAGE SHARE whenever a segment's note is null/blank — which this card's own doc
+    // forbids ("the legend carries real dollars, not shares") and which the untouched 2-segment
+    // fallback branch below (real Formats.money note on car costs) would then have contradicted.
+    // A duplicated dollar figure is the honest cost of keeping the legend's promise.
     val kept = AppSegment(
         label = stringResource(R.string.money_tab_where_went_segment_kept),
         value = split.stayedWithYou.toFloat().coerceAtLeast(0f),
         color = c.good,
-        note = "",
+        note = Formats.money(split.stayedWithYou),
     )
     val gas = split.gas
     val wear = split.wear
@@ -201,13 +203,13 @@ private fun moneyWentSegments(split: MoneyWentModel.Split): List<AppSegment> {
                 label = stringResource(R.string.money_tab_where_went_segment_gas),
                 value = gas.toFloat().coerceAtLeast(0f),
                 color = c.warn,
-                note = "",
+                note = Formats.money(gas),
             ),
             AppSegment(
                 label = stringResource(R.string.money_tab_where_went_segment_wear),
                 value = wear.toFloat().coerceAtLeast(0f),
                 color = c.neutral,
-                note = "",
+                note = Formats.money(wear),
             ),
         )
     } else {
