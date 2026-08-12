@@ -27,9 +27,9 @@ import cloud.trotter.dashbuddy.domain.analytics.WeeklyPlanGrade
 import cloud.trotter.dashbuddy.domain.analytics.EarningsHeatmap
 import cloud.trotter.dashbuddy.domain.format.Formats
 import cloud.trotter.dashbuddy.domain.format.formatMonthDay
-import cloud.trotter.dashbuddy.ui.main.analytics.HeatmapGrid
-import cloud.trotter.dashbuddy.ui.main.analytics.HeatmapHourAxis
-import cloud.trotter.dashbuddy.ui.main.analytics.PatternsModel
+import cloud.trotter.dashbuddy.ui.components.HeatmapGrid
+import cloud.trotter.dashbuddy.ui.components.HeatmapHourAxis
+import cloud.trotter.dashbuddy.ui.components.PatternsModel
 import java.time.DayOfWeek
 import java.time.LocalDate
 import java.time.format.TextStyle
@@ -85,13 +85,31 @@ fun PlanProvenanceCard(heatmap: EarningsHeatmap, plan: WeeklyPlan) {
  */
 @Composable
 fun GrowthRows() {
+    AreaDemandRow()
+    Spacer(Modifier.height(12.dp))
+    YearOverYearRow()
+}
+
+/**
+ * "Demand around you" — the subscription pull, inert and carrying no data.
+ *
+ * Named separately from [GrowthRows] because the Playbook (#1024 section C) renders this one on its
+ * own: it is a *what should I do next* row, which is that screen's whole question. Same copy, one
+ * owner — a second hand-written locked row would be a fabricated neighbour to every real figure.
+ */
+@Composable
+fun AreaDemandRow() {
     LockedRow(
         badge = stringResource(R.string.weekly_plan_growth_plus_badge),
         title = stringResource(R.string.weekly_plan_growth_area_title),
         body = stringResource(R.string.weekly_plan_growth_area_body),
         alpha = PLUS_ALPHA,
     )
-    Spacer(Modifier.height(12.dp))
+}
+
+/** "This week last year" — waiting on a year of the driver's own record. */
+@Composable
+fun YearOverYearRow() {
     LockedRow(
         badge = stringResource(R.string.weekly_plan_growth_year_badge),
         title = stringResource(R.string.weekly_plan_growth_year_title),

@@ -32,8 +32,11 @@ import cloud.trotter.dashbuddy.core.designsystem.component.AppSegmented
 
 /**
  * The Analytics hub (#315), **period-first** since #970. A `‹ ›` window pager + a recap hero own the
- * top of the screen; Money / Offers / Time / Patterns (H5) render below as detail views of that one
- * window (#975 renamed Decisions → Offers and put it second — brief §1). A **review** surface: UDF state in, `setTab`/`stepWindow`/`setGranularity`/
+ * top of the screen; Money / Offers / Time render below as detail views of that one window (#975
+ * renamed Decisions → Offers and put it second — brief §1; #1024 section A moved the lifetime-scoped
+ * Patterns tab out to `Screen.Playbook`, so **every** tab here is now a view of the selected window —
+ * the pager can no longer move while the content below it stands still). A **review** surface: UDF
+ * state in, `setTab`/`stepWindow`/`setGranularity`/
  * `setCustomRange` intents out (Principle 1); reactive-fresh via the read-model Flows and a
  * once-a-day local-date anchor, with no `rememberNow()` tick (a historical window's figures are
  * fixed).
@@ -158,12 +161,6 @@ fun AnalyticsScreen(
                     hourComposition = uiState.hourComposition,
                     netPerHour = uiState.netPerHour,
                     window = uiState.window,
-                )
-
-                // Patterns (H5) is LIFETIME-scoped (rate/pattern-based) — deliberately NO period selector.
-                AnalyticsTab.Patterns -> PatternsTab(
-                    storeCards = uiState.storeReportCards,
-                    heatmap = uiState.earningsHeatmap,
                 )
             }
         }

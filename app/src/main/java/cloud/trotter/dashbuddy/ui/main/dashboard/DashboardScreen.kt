@@ -13,6 +13,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AttachMoney
 import androidx.compose.material.icons.filled.BarChart
+import androidx.compose.material.icons.filled.Map
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.Tune
@@ -255,7 +256,13 @@ private fun ReviewItemsRow(uiState: DashboardUiState, onOpenInAnalytics: () -> U
     Spacer(modifier = Modifier.height(16.dp))
 }
 
-/** 2×2 entry tiles: Analytics · Ratings · Strategy · Economy. */
+/**
+ * Entry tiles: Analytics · Ratings · Strategy · Economy, plus **Playbook** (#1024 part 1 — the new
+ * destination has to be reachable, and Home's tile row is where the app's destinations live).
+ *
+ * Deliberately a minimal addition — #1024 section D restyles this whole block into a single row of
+ * four, so anything more here would be work done twice.
+ */
 @Composable
 private fun EntryTileGrid(onNavigate: (String) -> Unit) {
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -293,6 +300,20 @@ private fun EntryTileGrid(onNavigate: (String) -> Unit) {
                 modifier = Modifier.weight(1f),
                 onClick = { onNavigate(Screen.EconomySettings.route) },
             )
+        }
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            EntryTile(
+                icon = Icons.Filled.Map,
+                label = stringResource(R.string.dashboard_screen_entry_playbook),
+                modifier = Modifier.weight(1f),
+                onClick = { onNavigate(Screen.Playbook.route) },
+            )
+            // Keeps the tile the same width as the four above it rather than stretching it across the
+            // row; the odd tile out disappears when #1024 section D reflows this into one row of four.
+            Spacer(Modifier.weight(1f))
         }
     }
 }

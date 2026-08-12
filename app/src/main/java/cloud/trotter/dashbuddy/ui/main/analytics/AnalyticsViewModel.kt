@@ -49,9 +49,9 @@ import javax.inject.Inject
  * immutable [AnalyticsUiState] (Principle 1 — UDF). Over the read-model repository surface:
  * `periodEconomics` (frozen-net totals), `perStoreEconomics` (top stores), `recentSessions`
  * (recent dashes), `decisionEconomics` (H3 funnel/verdicts), and `timeEconomics` (H4 time/mileage) —
- * every *window* source session-anchored (#655) via the DAO join, which owns the bucketing. The
- * Patterns tab's `storeReportCards` (#159) + `earningsHeatmap` (H5) are LIFETIME-scoped and sit
- * outside the window `flatMapLatest`, so a window switch never re-queries them.
+ * every *window* source session-anchored (#655) via the DAO join, which owns the bucketing. Since
+ * #1024 moved the lifetime-scoped Patterns surfaces to the Playbook, EVERY read here is
+ * window-anchored — there is no longer a source that ignores the pager.
  *
  * **The window (#970).** The selection is persisted in app preferences and is the single source of
  * truth: intents write to the DataStore and the resolved window comes back through
@@ -144,11 +144,7 @@ class AnalyticsViewModel @Inject constructor(
             }
         },
         analyticsRepository.recentSessions(RECENT_SESSIONS_LIMIT),
-        // The Patterns tab (H5, #159) is LIFETIME-scoped by design — its sources sit OUTSIDE the
-        // window flatMapLatest so switching the Money/Decisions/Time window never re-queries them.
-        analyticsRepository.storeReportCards(),
-        analyticsRepository.earningsHeatmap(),
-    ) { tab, data, sessions, storeCards, heatmap ->
+    ) { tab, data, sessions ->
         AnalyticsUiState(
             selectedTab = tab,
             window = data.window,
@@ -178,8 +174,6 @@ class AnalyticsViewModel @Inject constructor(
             dailyEarnings = data.extras.dailyEarnings,
             noSessionDeliveries = data.extras.orphanDeliveries,
             orphanOfferGroups = data.extras.orphanOfferGroups,
-            storeReportCards = storeCards,
-            earningsHeatmap = heatmap,
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), AnalyticsUiState())
 

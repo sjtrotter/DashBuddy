@@ -1,4 +1,4 @@
-package cloud.trotter.dashbuddy.ui.main.analytics
+package cloud.trotter.dashbuddy.ui.components
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -22,7 +22,7 @@ import cloud.trotter.dashbuddy.core.designsystem.component.AppHeatScale
 import cloud.trotter.dashbuddy.core.designsystem.theme.AppTheme
 import cloud.trotter.dashbuddy.domain.analytics.EarningsHeatmap
 import cloud.trotter.dashbuddy.domain.format.hourOfDayLabel
-import cloud.trotter.dashbuddy.ui.main.analytics.PatternsModel.HeatmapMode
+import cloud.trotter.dashbuddy.ui.components.PatternsModel.HeatmapMode
 import java.time.DayOfWeek
 import java.time.format.TextStyle
 import java.util.Locale
@@ -37,17 +37,24 @@ internal val DAY_ROWS = listOf(
 private val DAY_LABEL_WIDTH = 30.dp
 
 /**
- * The 7 day-rows × 24 hour-columns heat grid — extracted from `PatternsTab` (#979) so the Weekly Plan
- * screen (#981, brief §8 item 4: "the lifetime heatmap with the picked cells outlined") renders the
- * SAME grid the Patterns tab does rather than a lookalike.
+ * The 7 day-rows × 24 hour-columns heat grid — extracted from the (now retired) `PatternsTab` (#979) so
+ * the Weekly Plan screen (#981, brief §8 item 4: "the lifetime heatmap with the picked cells outlined")
+ * renders the SAME grid the lifetime heatmap card does rather than a lookalike. Its three consumers are
+ * now `WhenYouEarnCard` (the Playbook, #1024), `PlanProvenanceCard` (the Weekly Plan screen) and — via
+ * `AppHeatScale` — Home's plan strip.
  *
  * That reuse is the point: the plan claims to be derived from the driver's own record, and the way it
- * proves that is by showing the *same picture* the Patterns tab shows, with the chosen cells ringed.
- * Two independently-written grids would eventually disagree about a colour, a mask or a day order, and
- * the proof would quietly stop being one (Principle 5).
+ * proves that is by showing the *same picture* the driver already recognises, with the chosen cells
+ * ringed. Two independently-written grids would eventually disagree about a colour, a mask or a day
+ * order, and the proof would quietly stop being one (Principle 5).
  *
- * [outlined] rings a cell — the Weekly Plan's picked hours. `null` (the default) draws no outline, which
- * is exactly the Patterns tab's behaviour, so extracting it changed nothing there.
+ * [outlined] rings a cell — the plan's picked hours. `null` (the default) draws no outline, which is
+ * exactly the pre-#981 behaviour, so extracting it changed nothing for the plain grid.
+ *
+ * **Placement (#1024 review F7):** it sat in `ui/main/analytics/` because that is where it was carved
+ * out of; #1024 retired that tab and left the package with no consumer of this file at all. A shared
+ * render whose home is a deleted surface's folder is exactly the drift Principle 5 punishes, so it moved
+ * here beside [PatternsModel] and `DisclosureRow`.
  */
 @Composable
 internal fun HeatmapGrid(

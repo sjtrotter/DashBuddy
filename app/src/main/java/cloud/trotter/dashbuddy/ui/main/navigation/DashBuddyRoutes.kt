@@ -20,6 +20,14 @@ sealed class Screen(val route: String) {
     data object WeeklyPlan : Screen("plan/week")
 
     /**
+     * Playbook (#1024 section C) — *the next move*, beside Home (*today*) and Analytics (*the past*).
+     * Holds this week's plan progress, the lifetime heatmap and the store leaderboard: surfaces that
+     * are lifetime- or week-scoped by definition and therefore never belonged inside a period-first
+     * hub. Static route, so it is a legal deep-link target like the others.
+     */
+    data object Playbook : Screen("playbook")
+
+    /**
      * Per-dash drill-down (#650) — the read-only session detail for one dash. The [route] template
      * carries the sessionId; [route] (the fun) URL-encodes it since a session id can hold arbitrary
      * characters. The screen reads the id back from `SavedStateHandle`.
@@ -53,7 +61,8 @@ sealed class Screen(val route: String) {
         // lazy: a plain initializer runs during Screen's class-init, BEFORE the nested data
         // objects exist (touching any Screen.X triggers it) → ExceptionInInitializerError.
         val allRoutes: Set<String> by lazy { setOf(
-            Dashboard.route, Analytics.route, WeeklyPlan.route, SettingsHome.route, AboutSettings.route,
+            Dashboard.route, Analytics.route, WeeklyPlan.route, Playbook.route,
+            SettingsHome.route, AboutSettings.route,
             StrategySettings.route, EvidenceSettings.route, DataExport.route,
             ConsentSettings.route,
             EconomySettings.route, GeneralSettings.route, DeveloperSettings.route,

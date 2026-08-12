@@ -18,6 +18,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import cloud.trotter.dashbuddy.R
+import cloud.trotter.dashbuddy.ui.components.DisclosureRow
 import cloud.trotter.dashbuddy.core.designsystem.component.AppCard
 import cloud.trotter.dashbuddy.core.designsystem.component.AppLegend
 import cloud.trotter.dashbuddy.core.designsystem.component.AppSegment

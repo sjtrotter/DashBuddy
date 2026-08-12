@@ -1,4 +1,4 @@
-package cloud.trotter.dashbuddy.ui.main.analytics
+package cloud.trotter.dashbuddy.ui.components
 
 import cloud.trotter.dashbuddy.domain.analytics.EarningsHeatmap
 import cloud.trotter.dashbuddy.domain.analytics.EarningsHeatmapCell

@@ -9,7 +9,6 @@ import cloud.trotter.dashbuddy.domain.analytics.AnalyticsWindowSelection
 import cloud.trotter.dashbuddy.domain.analytics.DailyEarnings
 import cloud.trotter.dashbuddy.domain.analytics.DecisionEconomics
 import cloud.trotter.dashbuddy.domain.analytics.DeliveryRecord
-import cloud.trotter.dashbuddy.domain.analytics.EarningsHeatmap
 import cloud.trotter.dashbuddy.domain.analytics.EstimateVsReality
 import cloud.trotter.dashbuddy.domain.analytics.GapStats
 import cloud.trotter.dashbuddy.domain.analytics.HourComposition
@@ -22,7 +21,6 @@ import cloud.trotter.dashbuddy.domain.analytics.PeriodEconomics
 import cloud.trotter.dashbuddy.domain.analytics.PlatformEconomics
 import cloud.trotter.dashbuddy.domain.analytics.SessionRecord
 import cloud.trotter.dashbuddy.domain.analytics.StoreEconomics
-import cloud.trotter.dashbuddy.domain.analytics.StoreReportCard
 import cloud.trotter.dashbuddy.domain.analytics.TimeEconomics
 import java.time.LocalDate
 
@@ -40,14 +38,16 @@ import java.time.LocalDate
 internal const val UNATTRIBUTED_EPSILON = ANALYTICS_MONEY_EPSILON
 
 /**
- * The Analytics hub tabs (#315). [Money], [Offers] (#975, was `Decisions`), [Time] (H4), and
- * [Patterns] (H5) all render real content.
+ * The Analytics hub tabs (#315). [Money], [Offers] (#975, was `Decisions`) and [Time] (H4) all render
+ * real content.
  *
- * **Declaration order IS the on-screen order** (`AnalyticsTab.entries` feeds the segmented control),
- * so #975 / brief §1 lands here: Money · Offers · Time · Patterns. This enum is the *only* place the
- * order lives — the selection is transient ViewModel state, never persisted and never part of a nav
- * route, so renaming an entry or reordering the list cannot invalidate a stored preference or a deep
- * link (the hub is one route, `Screen.Analytics`, with no tab argument).
+ * **Declaration order IS the on-screen order** (`AnalyticsTab.entries` feeds the segmented control):
+ * Money · Offers · Time. This enum is the *only* place the order lives — the selection is transient
+ * ViewModel state, never persisted and never part of a nav route, so renaming an entry, reordering the
+ * list, or **removing one** cannot invalidate a stored preference or a deep link (the hub is one route,
+ * `Screen.Analytics`, with no tab argument). That is what made #1024 section A a pure deletion: the
+ * lifetime-scoped Patterns tab moved to the Playbook destination (`Screen.Playbook`) with nothing to
+ * migrate.
  *
  * [labelRes] is a `@StringRes` id (#428 Half A), resolved at the Compose layer — see
  * `AnalyticsScreen.tabOptions()`. The [AppSegmented][cloud.trotter.dashbuddy.core.designsystem.component.AppSegmented]
@@ -57,7 +57,6 @@ enum class AnalyticsTab(@param:StringRes val labelRes: Int) {
     Money(R.string.analytics_tab_money),
     Offers(R.string.analytics_tab_offers),
     Time(R.string.analytics_tab_time),
-    Patterns(R.string.analytics_tab_patterns),
 }
 
 /**
@@ -155,16 +154,6 @@ data class AnalyticsUiState(
      * Composed at the ViewModel because its numerator is [economics]' frozen net, which has one owner.
      */
     val netPerHour: NetPerHourPair = NetPerHourPair.EMPTY,
-    /**
-     * Per-store report cards — the Patterns tab (#315 H5, #159), newest-visited first. **Lifetime-scoped**,
-     * NOT period-filtered: the Patterns tab hides the period selector (it is rate/pattern-based).
-     */
-    val storeReportCards: List<StoreReportCard> = emptyList(),
-    /**
-     * The driver's own realized net $/hr by hour-of-week — the Patterns tab heatmap (#315 H5).
-     * Lifetime-scoped (no period). Empty grid until data accrues.
-     */
-    val earningsHeatmap: EarningsHeatmap = EarningsHeatmap.EMPTY,
 )
 
 /**

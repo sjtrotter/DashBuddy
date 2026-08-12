@@ -337,7 +337,9 @@
     <string name="time_tab_mileage_tax_title">MILEAGE &amp; TAX</string>
     <string name="time_tab_mileage_tax_disclosure">standard-mileage method — not the app\'s operating-cost model; confirm with a tax preparer.</string>
 
-    <!-- main/analytics/PatternsTab.kt (#315 H5) -->
+    <!-- #315 H5 heatmap + store leaderboard copy. Authored for the Patterns tab; the surfaces
+         moved to ui/main/playbook/ in #1024 and kept these ids — the words are unchanged and the
+         id IS the copy's identity, so renaming would churn every translation for nothing. -->
     <!-- #979: declares the tab as always-lifetime, fixing the looks-like-a-bug relationship with the #970 pager. -->
     <string name="patterns_tab_all_time_badge">All time</string>
     <string name="patterns_tab_all_time_caption">always your whole record</string>
@@ -423,6 +425,7 @@
     <string name="dashboard_screen_entry_ratings">Ratings</string>
     <string name="dashboard_screen_entry_strategy">Strategy</string>
     <string name="dashboard_screen_entry_economy">Economy</string>
+    <string name="dashboard_screen_entry_playbook">Playbook</string>
 
     <!-- components/economy/EconomyEditor.kt -->
     <string name="economy_editor_per_mile_format" translatable="false">%1$s/mi</string>
@@ -674,7 +677,6 @@
 
     <!-- ui/main/analytics/AnalyticsUiState.kt -->
     <string name="analytics_tab_money">Money</string>
-    <string name="analytics_tab_patterns">Patterns</string>
     <string name="analytics_tab_offers">Offers</string>
     <string name="analytics_tab_time">Time</string>
 
@@ -804,4 +806,34 @@
     <string name="weekly_plan_notice_text_plain">Plan the week ahead from your own best hours.</string>
     <string name="weekly_plan_notice_grade_format">Last week: %1$s of %2$d planned hours worked, %3$s kept of %4$s projected. Tap to plan the week ahead.</string>
     <string name="weekly_plan_notice_grade_unworked_format">Last week: none of your %1$d planned hours got worked. Tap to plan the week ahead.</string>
+
+    <!-- ui/components/HowNumbersWorkFooter.kt — #1024 rule 2: ONE disclosure per screen. The
+         frozen-cost and estimate lines reuse the strings their originating cards already ship
+         (money_tab_where_went_frozen_note / offers_tab_frozen_disclosure) so the wording keeps one
+         owner; only the cash-tip line is new. -->
+    <string name="disclosure_how_numbers_work">How these numbers work</string>
+    <string name="disclosure_cash_tips">Cash tips are the ones you entered yourself — added on top of the recorded pay, never estimated.</string>
+
+    <!-- ui/main/playbook/* — #1024 section C: the next move (plan progress, when/where you earn).
+         Two DISTINCT hour vocabularies, deliberately never mixed inside one sentence (§9): hours
+         "worked" are measured presence from the driver's own record; hours "scheduled" are clock
+         positions in the saved plan. Subtracting one from the other is meaningless, so the copy
+         never puts them in a shape that invites it. -->
+    <string name="playbook_screen_title">Playbook</string>
+    <string name="playbook_plan_title">THIS WEEK\'S PLAN</string>
+    <string name="playbook_plan_headline_format">%1$sh worked in your windows · %2$s kept of the %3$s you planned for</string>
+    <string name="playbook_plan_hours_left_format">%1$d of %2$d scheduled hours still ahead</string>
+    <string name="playbook_plan_all_windows_done">All %1$d scheduled hours have passed.</string>
+    <string name="playbook_plan_not_started_format">Not started yet — %1$d hours scheduled, %2$s projected.</string>
+    <string name="playbook_plan_window_done">Done</string>
+    <string name="playbook_plan_window_now">Now</string>
+    <string name="playbook_plan_window_kept_format">%1$s kept over %2$sh worked</string>
+    <string name="playbook_plan_window_projected_format">projected %1$s</string>
+    <string name="playbook_plan_window_missed">no time logged</string>
+    <string name="playbook_plan_open">Open plan →</string>
+    <string name="playbook_plan_open_click_label">Open the weekly plan</string>
+    <string name="playbook_plan_none_title">No plan saved for this week</string>
+    <string name="playbook_plan_none_body">A plan picks your best hours from your own record, then grades itself next Sunday.</string>
+    <string name="playbook_plan_none_action">Build a plan →</string>
+    <string name="playbook_heatmap_plan_outline_caption">Outlined cells are the hours this week\'s plan picked.</string>
 </resources>
