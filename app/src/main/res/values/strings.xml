@@ -337,7 +337,9 @@
     <string name="time_tab_mileage_tax_title">MILEAGE &amp; TAX</string>
     <string name="time_tab_mileage_tax_disclosure">standard-mileage method — not the app\'s operating-cost model; confirm with a tax preparer.</string>
 
-    <!-- main/analytics/PatternsTab.kt (#315 H5) -->
+    <!-- #315 H5 heatmap + store leaderboard copy. Authored for the Patterns tab; the surfaces
+         moved to ui/main/playbook/ in #1024 and kept these ids — the words are unchanged and the
+         id IS the copy's identity, so renaming would churn every translation for nothing. -->
     <!-- #979: declares the tab as always-lifetime, fixing the looks-like-a-bug relationship with the #970 pager. -->
     <string name="patterns_tab_all_time_badge">All time</string>
     <string name="patterns_tab_all_time_caption">always your whole record</string>
