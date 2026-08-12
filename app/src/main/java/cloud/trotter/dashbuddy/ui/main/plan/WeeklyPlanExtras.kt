@@ -85,13 +85,31 @@ fun PlanProvenanceCard(heatmap: EarningsHeatmap, plan: WeeklyPlan) {
  */
 @Composable
 fun GrowthRows() {
+    AreaDemandRow()
+    Spacer(Modifier.height(12.dp))
+    YearOverYearRow()
+}
+
+/**
+ * "Demand around you" — the subscription pull, inert and carrying no data.
+ *
+ * Named separately from [GrowthRows] because the Playbook (#1024 section C) renders this one on its
+ * own: it is a *what should I do next* row, which is that screen's whole question. Same copy, one
+ * owner — a second hand-written locked row would be a fabricated neighbour to every real figure.
+ */
+@Composable
+fun AreaDemandRow() {
     LockedRow(
         badge = stringResource(R.string.weekly_plan_growth_plus_badge),
         title = stringResource(R.string.weekly_plan_growth_area_title),
         body = stringResource(R.string.weekly_plan_growth_area_body),
         alpha = PLUS_ALPHA,
     )
-    Spacer(Modifier.height(12.dp))
+}
+
+/** "This week last year" — waiting on a year of the driver's own record. */
+@Composable
+fun YearOverYearRow() {
     LockedRow(
         badge = stringResource(R.string.weekly_plan_growth_year_badge),
         title = stringResource(R.string.weekly_plan_growth_year_title),

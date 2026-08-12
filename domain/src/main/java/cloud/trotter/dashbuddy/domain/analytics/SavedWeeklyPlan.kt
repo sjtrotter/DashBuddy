@@ -36,6 +36,14 @@ data class SavedWeeklyPlan(
     /** What the plan claimed to be worth over placing the same hours at random. Null with no baseline. */
     val planWorth: Double? get() = randomKept?.let { projectedKept - it }
 
+    /**
+     * True when a planned window holds ([dayIndex], [hour]) — what outlines the picked cells on a
+     * heatmap. Byte-identical in meaning to [WeeklyPlan.covers]; the frozen artifact needs its own
+     * because the Playbook (#1024) draws the *saved* plan over the grid, not the live derivation.
+     */
+    fun covers(dayIndex: Int, hour: Int): Boolean =
+        windows.any { it.dayIndex == dayIndex && hour >= it.startHour && hour < it.endHourExclusive }
+
     companion object {
         /**
          * How many saved plans are kept. Two: the week being worked and the week just graded. A plan

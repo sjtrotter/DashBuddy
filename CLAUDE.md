@@ -820,7 +820,8 @@ into that grouped fold, so a split row and a filtered read can't be assembled tw
 `deliveries` (per-session count off the same `GROUP BY sessionId` subquery; an orphan row counts as one) for the
 tappable day bar. Still read-side only — no schema change, no `PROJECTOR_VERSION` bump, no economy dependency.
 **Offers tab (#975, stage 3 — brief §5/§7.4/§7.5):** the hub's *Decisions* tab became **Offers** and moved
-to slot 2 (Money · Offers · Time · Patterns); `AnalyticsTab`'s declaration order IS the on-screen order, and
+to slot 2 (Money · Offers · Time · Patterns — Patterns left the hub in #1024, see below);
+`AnalyticsTab`'s declaration order IS the on-screen order, and
 the selection is transient ViewModel state — never persisted, never a nav argument — so the rename can't
 strand a stored preference or a deep link. Three reads. (1) **Declined value states its population:**
 `AnalyticsDao.offerOutcomes` gained a `withEstimate` counter (`SUM(CASE WHEN estNetPay IS NOT NULL …)`) →
@@ -990,6 +991,29 @@ a **per-weekday, lifetime** gap median, while §7.8's stats are window-scoped �
 other would back a per-weekday claim with an all-week number (a §9 violation), and doing it properly needs
 a new grouped lifetime read plus a new `UnpickedDay` field and a `WeeklyPlanner` signature change. Left
 deliberately; the reason is recorded here rather than contorting stage 6.
+**Playbook: the third destination (#1024 part 1, section C + the hub's tab change):** the redesign's
+lifetime-scoped surfaces left the period-first hub. `AnalyticsTab` lost `Patterns` (Money · Offers ·
+Time) — a **pure deletion**, since the selection is transient ViewModel state and the hub is one
+argument-less route, so no stored preference or deep link could be stranded — and `AnalyticsViewModel`
+dropped the two lifetime reads with it, leaving every source it collects window-anchored. `ui/main/playbook/`
+(`Screen.Playbook`, reachable from a Home entry tile) now holds four sections over **zero new queries**:
+(a) **this week's plan with live progress**; (b) **when you earn** — the same `HeatmapGrid` with the
+Rate/Hours toggle, plus the saved plan's picked cells outlined (`SavedWeeklyPlan.covers`, the
+`WeeklyPlan.covers` mirror); (c) **where you earn** — the #979 store leaderboard moved verbatim
+(`PatternsModel` and `HeatmapGrid` stay in `ui/main/analytics/` — shared with the Weekly Plan screen and
+Home's strip); (d) the locked **Demand around you** row, split out of `GrowthRows` so both screens render
+ONE owner of that copy. **`PlanProgress` (pure `:domain`) is a VIEW of `WeeklyPlanGrade`, not a second
+grading:** it takes a finished grade plus the clock (today + hour) and adds only the elapsed
+classification, because grading a live week is already elapsed-only by construction (the record cannot
+contain the future). Its `elapsedPlannedHours` counts a window's hours only once they are OVER — hour
+granularity, matching `HourOfWeekSamples`' own buckets — so progress is conservative by construction,
+never flattered. The clock is NOT in the state: the card derives the hour from `rememberNow` through a
+`derivedStateOf` (Reactive-UI rule 2), ticking once a minute because the only visible transition is an
+hour boundary. Riding along, `DisclosureRow` moved from `PayMixCard` to `ui/components/` and gained
+`HowNumbersWorkFooter` — the shared **one-disclosure-per-screen** row (#1024 rule 2) whose frozen-cost
+and estimate lines reuse the exact strings their originating cards already ship. Parts 2–4 of #1024
+(Money 9 cards → 5, Home 7 blocks → 4, and pointing those screens at the shared footer) are NOT in this
+change; the Money tab still renders its own `TopStoresCard` and per-card disclosures until then.
 **The "(No session)" bucket (#660 piece 1):** `delivery_records` rows whose source event carried
 NO `sessionId` at all were already counted in net (`deliveryTotals`'s own-`completedAt` fallback, #655)
 but invisible to gross (`grossAndUnattributed`/`sessionGrossRows` iterate `session_records` only, so a

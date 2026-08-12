@@ -1,8 +1,5 @@
 package cloud.trotter.dashbuddy.ui.main.analytics
 
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -13,12 +10,11 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
 import cloud.trotter.dashbuddy.R
+import cloud.trotter.dashbuddy.ui.components.DisclosureRow
 import cloud.trotter.dashbuddy.core.designsystem.component.AppCard
 import cloud.trotter.dashbuddy.core.designsystem.component.AppLegend
 import cloud.trotter.dashbuddy.core.designsystem.component.AppSegment
@@ -164,37 +160,5 @@ private fun insightLine(mix: PayMix): String {
         stringResource(R.string.money_tab_pay_mix_insight_format, Formats.percent(share))
     } else {
         stringResource(R.string.money_tab_pay_mix_insight_floor_format, Formats.percent(share))
-    }
-}
-
-/**
- * A tappable one-line disclosure with a caret — the shared shape behind §4.1's car-cost line. Not a
- * full [cloud.trotter.dashbuddy.core.designsystem.component.AppAccordion]: that component owns a card
- * surface of its own, and this sits INSIDE a card as a footnote, not as a sibling panel.
- */
-@Composable
-internal fun DisclosureRow(text: String, expanded: Boolean, onToggle: () -> Unit) {
-    val c = AppTheme.colors
-    val clickLabel = stringResource(
-        if (expanded) R.string.money_tab_disclosure_collapse else R.string.money_tab_disclosure_expand,
-    )
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(onClickLabel = clickLabel, role = Role.Button) { onToggle() },
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(6.dp),
-    ) {
-        Text(
-            text = text,
-            style = MaterialTheme.typography.bodySmall,
-            color = c.text3,
-            modifier = Modifier.weight(1f),
-        )
-        Text(
-            text = if (expanded) "⌃" else "⌄",
-            style = MaterialTheme.typography.bodySmall,
-            color = c.text3,
-        )
     }
 }

@@ -25,6 +25,7 @@ import cloud.trotter.dashbuddy.ui.main.analytics.SessionDetailScreen
 import cloud.trotter.dashbuddy.ui.main.dashboard.DashboardScreen
 import cloud.trotter.dashbuddy.ui.main.navigation.Screen
 import cloud.trotter.dashbuddy.ui.main.plan.WeeklyPlanScreen
+import cloud.trotter.dashbuddy.ui.main.playbook.PlaybookScreen
 import timber.log.Timber
 import cloud.trotter.dashbuddy.ui.main.ratings.RatingsScreen
 import cloud.trotter.dashbuddy.ui.main.settings.AboutScreen
@@ -120,6 +121,14 @@ class MainActivity : ComponentActivity() {
                         composable(Screen.WeeklyPlan.route) {
                             WeeklyPlanScreen(
                                 onBack = { navController.popBackStack() }
+                            )
+                        }
+
+                        // --- PLAYBOOK (#1024 — the next move: plan progress, heatmap, stores) ---
+                        composable(Screen.Playbook.route) {
+                            PlaybookScreen(
+                                onBack = { navController.popBackStack() },
+                                onOpenPlan = { navController.navigate(Screen.WeeklyPlan.route) }
                             )
                         }
 
