@@ -126,9 +126,16 @@ private fun deltaText(
  * Money tab's rate tiles beside the deliveries count, and the previous window's kept figure, so the
  * delta above resolves to an actual dollar amount rather than a bare percentage.
  *
- * Each clause is omitted when its measurement doesn't exist — no online time logged, no predecessor
- * window (Lifetime) — rather than rendered as a zero, and a window with nothing in it says exactly
- * that (§9).
+ * Each clause is omitted when its measurement doesn't exist — no online time logged, no miles, no
+ * predecessor worth comparing against — rather than rendered as a zero, and a window with nothing in
+ * it says exactly that (§9).
+ *
+ * **The comparison clause needs a non-EMPTY predecessor, not merely a non-null one** (review F2).
+ * `previousEconomics` is null only for Lifetime; a week the driver did not work still arrives as a
+ * real `PeriodEconomics` full of zeros, and `vs $0.00 the window before` reads as a measurement of a
+ * worked week rather than the absence of one — while the delta line above has already said "Up from
+ * nothing in …" in words. [NetDelta.isEmpty] is the same predicate this function's own empty-window
+ * branch uses, so the two can't disagree about what "nothing recorded" means.
  */
 @Composable
 private fun factsLine(economics: PeriodEconomics, previous: PeriodEconomics?): String {
@@ -162,7 +169,7 @@ private fun factsLine(economics: PeriodEconomics, previous: PeriodEconomics?): S
                 ),
             )
         }
-        previous?.let {
+        previous?.takeIf { !NetDelta.isEmpty(it) }?.let {
             add(
                 stringResource(
                     R.string.analytics_hero_summary_previous_format,

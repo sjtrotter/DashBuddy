@@ -124,23 +124,6 @@ class AnalyticsSchemaRoundTripTest {
     }
 
     @Test
-    fun `deliveryTotalsByStore groups by store, ordered by pay desc`() = runBlocking {
-        analyticsDao.upsertSession(session("S1", startedAt = 1_000))
-        analyticsDao.upsertDelivery(delivery(1, "J1", "Wendys", 10.0, 1_000))
-        analyticsDao.upsertDelivery(delivery(2, "J1", "Wendys", 5.0, 2_000))
-        analyticsDao.upsertDelivery(delivery(3, "J2", "Chipotle", 8.0, 3_000))
-
-        val byStore = analyticsDao.deliveryTotalsByStore(0, Long.MAX_VALUE).first()
-        assertEquals(2, byStore.size)
-        assertEquals("Wendys", byStore[0].storeName)
-        assertEquals(15.0, byStore[0].pay, 0.0001)
-        assertEquals(2, byStore[0].deliveries)
-        assertEquals("Chipotle", byStore[1].storeName)
-        assertEquals(8.0, byStore[1].pay, 0.0001)
-        assertEquals(1, byStore[1].deliveries)
-    }
-
-    @Test
     fun `upsertDelivery replaces on the sequenceId primary key`() = runBlocking {
         analyticsDao.upsertSession(session("S1", startedAt = 1_000))
         analyticsDao.upsertDelivery(delivery(1, "J1", "Wendys", 10.0, 1_000))

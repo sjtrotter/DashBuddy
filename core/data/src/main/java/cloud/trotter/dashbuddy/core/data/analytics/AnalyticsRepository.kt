@@ -33,7 +33,6 @@ import cloud.trotter.dashbuddy.domain.analytics.SessionDetail
 import cloud.trotter.dashbuddy.domain.analytics.SessionEvent
 import cloud.trotter.dashbuddy.domain.analytics.SessionRecord
 import cloud.trotter.dashbuddy.domain.analytics.SessionSpan
-import cloud.trotter.dashbuddy.domain.analytics.StoreEconomics
 import cloud.trotter.dashbuddy.domain.analytics.StoreReportCard
 import cloud.trotter.dashbuddy.domain.analytics.TimeEconomics
 import cloud.trotter.dashbuddy.domain.analytics.WorkGaps
@@ -44,7 +43,6 @@ import cloud.trotter.dashbuddy.domain.model.event.AppEventCodec
 import cloud.trotter.dashbuddy.domain.model.event.AppEventType
 import cloud.trotter.dashbuddy.domain.model.event.payload.JobAcceptMismatchPayload
 import cloud.trotter.dashbuddy.domain.state.Platform
-import cloud.trotter.dashbuddy.domain.state.StoreKeys
 import java.time.Instant
 import java.time.ZoneId
 import kotlinx.coroutines.Dispatchers
@@ -242,65 +240,14 @@ class AnalyticsRepository @Inject constructor(
             }
         }
 
-    /**
-     * Per-store economics for [period], highest-**gross** store first — frozen net + realized gross,
-     * rolled up to CHAIN level (#159 F9). Both a resolved keyed location (`…|target|02426`) and an
-     * unresolved/MANUAL raw row (`Target`) on the same platform fold into ONE bucket keyed
-     * `platform + "|" + normalizedChain` (chain from the storeKey's middle segment when keyed, else the
-     * shared `:domain` normalizer over `storeName`). This is the F9 sentence — "Target" (unresolved) and
-     * "doordash|target|02426" share a bucket — the cross-platform parity (F5), and the fix for multiple
-     * identical-"Target" rows fragmenting the list. Per-LOCATION detail stays the report card's job
-     * ([storeReportCards], grouped by `storeKey`).
-     *
-     * Display name prefers the chain's first-observed `stores.chainDisplay` (a single extra reactive DAO
-     * read), else the first row's raw `storeName`.
-     *
-     * Cash tips (#688 F5) add to BOTH gross and net (explicit adds here, per the locked accounting). The
-     * DAO's `ORDER BY pay DESC` is a cash-free pre-sort; the final rank is re-sorted here by the
-     * cash-inclusive [StoreEconomics.gross].
-     *
-     * **Null-net + cash presentation:** a bucket whose rows all have a null frozen `net` (no cost basis)
-     * but a recorded `cashTip` surfaces as `net = 0 + cash`. Accepted: cash has no cost term to net out.
+    /*
+     * `perStoreEconomics` (both overloads, the shared `…In` core and its `chainBucket` helper) lived
+     * here until #1024 part 2. Its only consumer was the Money tab's `TopStoresCard`, deleted in B5
+     * because the Playbook's store leaderboard — [storeReportCards], per-LOCATION and lifetime — is
+     * the app's single store list now. A read with no reader is not inert: it is a live Room
+     * observer the hub re-subscribed on every page of the window pager, plus a second, differently
+     * shaped store rollup for a future surface to accidentally adopt.
      */
-    fun perStoreEconomics(period: AnalyticsPeriod): Flow<List<StoreEconomics>> =
-        perStoreEconomicsIn(periodBoundariesFlow(period))
-
-    /** Arbitrary-window variant of [perStoreEconomics] (#970 §7.1) — same F9 chain rollup, fixed bounds. */
-    fun perStoreEconomics(
-        window: AnalyticsWindow,
-        zone: ZoneId = ZoneId.systemDefault(),
-    ): Flow<List<StoreEconomics>> = perStoreEconomicsIn(flowOf(PeriodBounds.of(window, zone)))
-
-    private fun perStoreEconomicsIn(bounds: Flow<PeriodBounds.Bounds>): Flow<List<StoreEconomics>> =
-        bounds.flatMapLatest { (start, end) ->
-            combine(
-                analyticsDao.deliveryTotalsByStore(start, end),
-                analyticsDao.storeChainDisplays(),
-            ) { rows, displays ->
-                val displayByBucket = displays.associate {
-                    (it.platform + "|" + it.normalizedChain) to it.chainDisplay
-                }
-                rows.groupBy { chainBucket(it) }
-                    .map { (bucket, group) ->
-                        val first = group.first()
-                        StoreEconomics(
-                            storeKey = bucket, // chain-level bucket identity (not a per-location storeKey)
-                            storeName = displayByBucket[bucket] ?: first.storeName,
-                            net = group.sumOf { it.net + it.cash },
-                            gross = group.sumOf { it.pay + it.cash },
-                            deliveries = group.sumOf { it.deliveries },
-                        )
-                    }.sortedByDescending { it.gross }
-            }
-        }
-
-    /** The F9 chain bucket for a store totals row: `platform + "|" + normalizedChain`, chain taken from
-     *  the storeKey's middle segment when keyed, else the shared `:domain` normalizer over storeName. */
-    private fun chainBucket(row: cloud.trotter.dashbuddy.core.database.analytics.StoreTotalsRow): String {
-        val chain = row.storeKey?.split("|")?.getOrNull(1)?.takeIf { it.isNotEmpty() }
-            ?: StoreKeys.normalizedChain(row.storeName.orEmpty())
-        return row.platform + "|" + chain
-    }
 
     /**
      * The store report cards (#159, the #315 Patterns tab) — one per **referenced** resolved store

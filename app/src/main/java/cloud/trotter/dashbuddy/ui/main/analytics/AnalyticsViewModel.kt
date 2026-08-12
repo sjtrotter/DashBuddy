@@ -157,8 +157,10 @@ class AnalyticsViewModel @Inject constructor(
             previousEconomics = data.extras.previousEconomics,
             // The mix is composed HERE, against this window's own gross (#973): gross has exactly one
             // owner (the repository's economics fold) and the "bonuses & other" residue is defined
-            // relative to it, so composing at the read site is what keeps the bar reconciling with the
-            // hero rather than against a second, independently-derived total (Principle 5).
+            // relative to it, so composing at the read site is what keeps the came-in bar reconciling
+            // with the "$X came in." clause it sits under rather than with a second, independently
+            // derived total (Principle 5). (Pre-#1024 this said "with the hero" — the hero stated
+            // gross then; since part 2 the money card is gross's only surface.)
             payMix = PayMix.of(data.economics.grossEarnings, data.extras.payMixParts),
             platformSplit = data.extras.platformSplit,
             recentSessions = sessions,

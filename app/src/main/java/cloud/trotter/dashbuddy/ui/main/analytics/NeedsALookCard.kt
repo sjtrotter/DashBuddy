@@ -7,7 +7,6 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.width
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -18,6 +17,7 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
 import cloud.trotter.dashbuddy.R
 import cloud.trotter.dashbuddy.core.designsystem.component.AppCard
+import cloud.trotter.dashbuddy.ui.components.HairlineDivider
 import cloud.trotter.dashbuddy.core.designsystem.theme.AppTheme
 import cloud.trotter.dashbuddy.domain.analytics.OrphanOfferGroup
 import cloud.trotter.dashbuddy.domain.analytics.PeriodEconomics
@@ -202,11 +202,7 @@ internal fun ReviewList(items: List<ReviewItem>, modifier: Modifier = Modifier) 
         )
         Spacer(Modifier.height(10.dp))
         items.forEachIndexed { index, item ->
-            if (index > 0) {
-                Spacer(Modifier.height(10.dp))
-                HorizontalDivider(color = c.line)
-                Spacer(Modifier.height(10.dp))
-            }
+            if (index > 0) HairlineDivider()
             val action = item.action
             Row(
                 verticalAlignment = Alignment.CenterVertically,

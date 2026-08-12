@@ -82,6 +82,17 @@ class AnalyticsViewModelTest {
     private val economicsByWindow = mutableMapOf<AnalyticsWindow, PeriodEconomics>()
 
     private var decisions: DecisionEconomics = DecisionEconomics.EMPTY
+
+    /**
+     * Per-window decision economics; anything unlisted falls back to [decisions].
+     *
+     * This is the SECOND window-keyed source in the fan-out, and it exists to prove the combine
+     * re-anchors ALL of them together rather than just the one the assertion happens to read — the
+     * job the retired `storesByWindow` map used to do before #1024 B5 deleted its read (part-2
+     * review F8). A tile rendering one window's number under another window's label is exactly what
+     * the atomic re-anchor prevents.
+     */
+    private val decisionsByWindow = mutableMapOf<AnalyticsWindow, DecisionEconomics>()
     private var dailyEarnings: List<DailyEarnings> = emptyList()
 
     /** #973 — the Money tab's pay-mix parts and platform split, served for every window. */
@@ -114,7 +125,9 @@ class AnalyticsViewModelTest {
                 flowOf(economicsByWindow[invocation.getArgument<AnalyticsWindow>(0)] ?: PeriodEconomics.EMPTY)
             }
         whenever(analyticsRepository.decisionEconomics(any<AnalyticsWindow>(), any<ZoneId>()))
-            .thenAnswer { flowOf(decisions) }
+            .thenAnswer { invocation ->
+                flowOf(decisionsByWindow[invocation.getArgument<AnalyticsWindow>(0)] ?: decisions)
+            }
         whenever(analyticsRepository.timeEconomics(any<AnalyticsWindow>(), any<ZoneId>()))
             .thenAnswer { flowOf(time) }
         // #983: the §7.8 gap read shares the Time tab's slot, so it must always be stubbed.
@@ -315,13 +328,22 @@ class AnalyticsViewModelTest {
         }
     }
 
+    /**
+     * Paging the window re-anchors EVERY window-keyed source together, not just the economics the
+     * hero reads: both sources here are keyed per window and both must flip on the same step, or a
+     * tab could render last week's funnel under this week's label for a frame (part-2 review F8 —
+     * this replaces the coverage the deleted `perStoreEconomics` stub used to provide).
+     */
     @Test
-    fun `stepWindow re-anchors economics to the paged window`() = runTest {
+    fun `stepWindow re-anchors every window-keyed source to the paged window`() = runTest {
         economicsByWindow[currentWeek()] = economics(net = 312.0, netPerHour = 24.0)
         economicsByWindow[lastWeek()] = economics(net = 1280.0, netPerHour = 22.0)
+        decisionsByWindow[currentWeek()] = decisions(accepted = 3, declined = 1, timedOut = 0, acceptanceRate = 0.75)
+        decisionsByWindow[lastWeek()] = decisions(accepted = 9, declined = 11, timedOut = 0, acceptanceRate = 0.45)
 
         runWithViewModel { viewModel ->
             assertEquals(312.0, viewModel.uiState.value.economics.netProfit, 1e-9)
+            assertEquals(3, viewModel.uiState.value.decisions.accepted)
 
             viewModel.stepWindow(-1)
             testScheduler.runCurrent()
@@ -329,6 +351,8 @@ class AnalyticsViewModelTest {
             val ui = viewModel.uiState.value
             assertEquals(lastWeek(), ui.window)
             assertEquals(1280.0, ui.economics.netProfit, 1e-9)
+            assertEquals("the decisions slot re-anchored with the economics", 9, ui.decisions.accepted)
+            assertEquals(0.45, ui.decisions.acceptanceRate!!, 1e-9)
         }
     }
 

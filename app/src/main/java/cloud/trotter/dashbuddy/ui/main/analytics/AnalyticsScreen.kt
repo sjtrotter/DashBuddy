@@ -29,6 +29,7 @@ import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import cloud.trotter.dashbuddy.R
 import cloud.trotter.dashbuddy.core.designsystem.component.AppSegmented
+import cloud.trotter.dashbuddy.ui.components.HowNumbersWorkFooter
 
 /**
  * The Analytics hub (#315), **period-first** since #970. A `‹ ›` window pager + a recap hero own the
@@ -160,6 +161,14 @@ fun AnalyticsScreen(
                     window = uiState.window,
                 )
             }
+
+            // ONE disclosure affordance for the screen (#1024 rule 2), and it lives HERE rather
+            // than inside a tab: the recap hero states frozen net ABOVE the tab switch, so its
+            // qualifier has to be reachable from every tab, not just the one whose card the
+            // wording used to live on (part-2 review F1). The hub is period-scoped — no plan
+            // projection to disclose, unlike Home's copy of the same footer.
+            Spacer(Modifier.height(16.dp))
+            HowNumbersWorkFooter()
         }
     }
 

@@ -485,6 +485,8 @@
     <string name="money_tab_where_went_title">WHERE YOUR MONEY WENT</string>
     <string name="money_tab_where_went_came_in">%1$s came in.</string>
     <string name="money_tab_where_went_car">%1$s went to the car.</string>
+    <!-- Rendered ONLY when kept money is negative (#1024 review F3) — the hero owns the positive case. -->
+    <string name="money_tab_where_went_kept">%1$s stayed with you.</string>
     <string name="money_tab_where_went_segment_kept">Stayed with you</string>
     <string name="money_tab_where_went_segment_gas">Gas</string>
     <string name="money_tab_where_went_segment_wear">Wear on the car</string>

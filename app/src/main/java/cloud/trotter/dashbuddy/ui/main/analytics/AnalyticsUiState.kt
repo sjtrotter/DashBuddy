@@ -96,7 +96,7 @@ data class AnalyticsUiState(
     /**
      * How the window's gross broke down — base pay / tips / bonuses & other (#973, brief §4.2/§7.6).
      * Composed at the ViewModel from the window's own gross and the measured pay-mix parts, so the
-     * card can never render a mix against a different window's total than the hero above it.
+     * card can never render a mix against a different window's total than its own headline states.
      */
     val payMix: PayMix = PayMix.EMPTY,
     /**

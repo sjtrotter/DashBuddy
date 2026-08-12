@@ -17,7 +17,6 @@ import cloud.trotter.dashbuddy.domain.analytics.PeriodEconomics
 import cloud.trotter.dashbuddy.domain.analytics.PlatformEconomics
 import cloud.trotter.dashbuddy.domain.analytics.SessionRecord
 import cloud.trotter.dashbuddy.domain.format.Formats
-import cloud.trotter.dashbuddy.ui.components.HowNumbersWorkFooter
 
 /**
  * Money tab (#315 H1, reworked by #973 — redesign stage 2 of epic #969, brief §4; **decluttered from
@@ -32,9 +31,12 @@ import cloud.trotter.dashbuddy.ui.components.HowNumbersWorkFooter
  *  4. **needs a look** — the consolidated review rows. Hidden when the window is clean.
  *  5. **recent sessions** — tap through to the per-dash drill-down.
  *
- * Then the shared **"How these numbers work"** footer: ONE disclosure affordance for the screen
- * (#1024 rule 2), owning the frozen-cost / estimate / cash-tip wording that used to be reprinted as a
- * footnote per card. It is a footer row, not a sixth container.
+ * The screen's ONE disclosure affordance (#1024 rule 2) — the shared "How these numbers work" footer
+ * owning the frozen-cost / estimate / cash-tip wording that used to be reprinted as a footnote per
+ * card — is rendered by [AnalyticsScreen] **below the tab content**, not here. It must sit under
+ * EVERY tab, because the recap hero states frozen net above the tab switch: a footer that only the
+ * Money branch composed would leave the Offers and Time tabs showing that headline with its
+ * qualifier nowhere on screen (part-2 review F1).
  *
  * What is deliberately NOT here: the window's kept figure and its measured denominators (the recap
  * hero above the tabs owns them), and the store list (the Playbook's leaderboard owns it since #1024
@@ -72,7 +74,6 @@ fun MoneyTab(
             ),
         )
         RecentDashesCard(recentSessions, onOpenSession)
-        HowNumbersWorkFooter()
     }
 }
 

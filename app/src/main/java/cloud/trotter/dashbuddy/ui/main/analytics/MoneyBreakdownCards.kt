@@ -1,17 +1,13 @@
 package cloud.trotter.dashbuddy.ui.main.analytics
 
-import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -21,7 +17,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import cloud.trotter.dashbuddy.R
@@ -39,6 +34,8 @@ import cloud.trotter.dashbuddy.domain.format.Formats
 import cloud.trotter.dashbuddy.domain.format.formatShortDate
 import cloud.trotter.dashbuddy.domain.format.formatWeekdayMonthDay
 import cloud.trotter.dashbuddy.domain.state.Platform
+import cloud.trotter.dashbuddy.ui.components.HairlineDivider
+import cloud.trotter.dashbuddy.ui.components.NetBar
 import cloud.trotter.dashbuddy.ui.components.PatternsModel
 import java.time.format.TextStyle
 import java.util.Locale
@@ -78,9 +75,7 @@ fun EarningsByDayCard(
         RateRows(economics)
         if (days.isEmpty()) return@AppCard
 
-        Spacer(Modifier.height(14.dp))
-        HorizontalDivider(color = c.line)
-        Spacer(Modifier.height(14.dp))
+        HairlineDivider(gap = 14.dp)
         Text(
             text = stringResource(R.string.money_tab_earnings_by_day_title),
             style = MaterialTheme.typography.labelMedium,
@@ -196,7 +191,15 @@ private fun dayLabel(day: DailyEarnings, isWeek: Boolean): String =
  * decomposes it, so a per-platform gross column was a second decomposition of the same total with no
  * bar to make it readable. What is left is the comparison the card exists for — who paid more — and
  * the bar is what actually answers it at a glance, scaled to the window's best platform via the same
- * `PatternsModel.netBarFraction` the store leaderboard uses (Principle 5 — one bar-scale rule).
+ * `PatternsModel.netBarFraction` + shared [NetBar] the store leaderboard uses (Principle 5 — one
+ * bar-scale rule, one bar render).
+ *
+ * **The bar gets its own full-width line** (review F4). Inline after the badge, its track began after
+ * a variable-width chip and ended before a variable-width dollar figure, so two rows with the same
+ * fraction drew visibly different bars — a comparison graphic that lies about the comparison. On its
+ * own line every row's track is the card's width, which makes the fractions comparable by
+ * construction rather than by luck of the label lengths (the leaderboard's shape, for the same
+ * reason).
  *
  * Every label comes from the [Platform] registry's own display metadata, and the rows themselves come
  * from the DATA (whatever wires the window's records carry), so this card needs no edit when a third
@@ -216,11 +219,7 @@ fun PlatformSplitCard(rows: List<PlatformEconomics>, modifier: Modifier = Modifi
         )
         Spacer(Modifier.height(10.dp))
         rows.forEachIndexed { index, row ->
-            if (index > 0) {
-                Spacer(Modifier.height(10.dp))
-                HorizontalDivider(color = c.line)
-                Spacer(Modifier.height(10.dp))
-            }
+            if (index > 0) HairlineDivider()
             PlatformSplitRow(row, maxNet)
         }
     }
@@ -232,45 +231,32 @@ private fun PlatformSplitRow(row: PlatformEconomics, maxNet: Double) {
     val net = row.economics.netProfit
     val netColor = if (net >= 0.0) c.good else c.bad
     val deliveries = row.economics.totals.deliveries
-    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-        // Registry-resolved label — never a literal (Principle 8).
-        AppChip(text = row.platform.shortName.ifEmpty { row.platform.displayName })
-        Spacer(Modifier.width(10.dp))
-        Box(
-            modifier = Modifier
-                .weight(1f)
-                .height(6.dp)
-                .clip(RoundedCornerShape(3.dp))
-                .background(c.surface3),
-        ) {
-            val fraction = PatternsModel.netBarFraction(net, maxNet)
-            if (fraction > 0f) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth(fraction)
-                        .height(6.dp)
-                        .clip(RoundedCornerShape(3.dp))
-                        .background(netColor),
-                )
-            }
+    Column(Modifier.fillMaxWidth()) {
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            // Registry-resolved label — never a literal (Principle 8).
+            AppChip(text = row.platform.shortName.ifEmpty { row.platform.displayName })
+            Spacer(Modifier.width(10.dp))
+            Text(
+                text = "${Formats.commaInt(deliveries)} " +
+                    if (deliveries == 1) {
+                        stringResource(R.string.time_tab_delivery_singular)
+                    } else {
+                        stringResource(R.string.time_tab_delivery_plural)
+                    },
+                style = MaterialTheme.typography.bodySmall,
+                color = c.text3,
+                modifier = Modifier.weight(1f),
+            )
+            Text(
+                text = stringResource(R.string.money_tab_platform_split_kept_format, Formats.money(net)),
+                style = AppTheme.num.smNum,
+                color = netColor,
+            )
         }
-        Spacer(Modifier.width(10.dp))
-        Text(
-            text = stringResource(R.string.money_tab_platform_split_kept_format, Formats.money(net)),
-            style = AppTheme.num.smNum,
-            color = netColor,
-        )
-        Spacer(Modifier.width(10.dp))
-        Text(
-            text = "${Formats.commaInt(deliveries)} " +
-                if (deliveries == 1) {
-                    stringResource(R.string.time_tab_delivery_singular)
-                } else {
-                    stringResource(R.string.time_tab_delivery_plural)
-                },
-            style = MaterialTheme.typography.bodySmall,
-            color = c.text3,
-        )
+        Spacer(Modifier.height(6.dp))
+        // Full-width by construction, so every row's track is the same length and the fractions
+        // are actually comparable (review F4).
+        NetBar(fraction = PatternsModel.netBarFraction(net, maxNet), color = netColor)
     }
 }
 
@@ -311,11 +297,7 @@ fun RecentDashesCard(
             EmptyRow(stringResource(R.string.money_tab_no_sessions_recorded_yet))
         } else {
             sessions.forEachIndexed { index, session ->
-                if (index > 0) {
-                    Spacer(Modifier.height(10.dp))
-                    HorizontalDivider(color = c.line)
-                    Spacer(Modifier.height(10.dp))
-                }
+                if (index > 0) HairlineDivider()
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     modifier = Modifier

@@ -6,7 +6,6 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -20,6 +19,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import cloud.trotter.dashbuddy.R
 import cloud.trotter.dashbuddy.ui.components.DisclosureRow
+import cloud.trotter.dashbuddy.ui.components.HairlineDivider
 import cloud.trotter.dashbuddy.core.designsystem.component.AppCard
 import cloud.trotter.dashbuddy.core.designsystem.component.AppLegend
 import cloud.trotter.dashbuddy.core.designsystem.component.AppSegment
@@ -118,7 +118,9 @@ object MoneyWentModel {
  *
  * Three things left in the merge, each because something else on the screen already owns it
  * (#1024 rule 1 — one number, one place):
- *  - the **"stayed with you" line**, which restated the recap hero's headline figure verbatim;
+ *  - the **"stayed with you" line**, which restated the recap hero's headline figure verbatim —
+ *    except on a LOSING window, where it returns because nothing else in this card can show a
+ *    negative (see the render);
  *  - that same figure's **legend note** (see [moneyWentSegments]);
  *  - the expanded disclosure's **frozen-cost sentence**, now stated once per screen by
  *    `HowNumbersWorkFooter` — with the SAME string, so the wording keeps one owner (Principle 5).
@@ -140,19 +142,33 @@ fun MoneyWentCard(economics: PeriodEconomics, payMix: PayMix, modifier: Modifier
 
     AppCard(modifier = modifier.fillMaxWidth()) {
         // The headline: two clauses, one line. The third clause ("$N stayed with you") is the recap
-        // hero's headline figure and is not repeated here.
+        // hero's headline figure and is not repeated here — EXCEPT when it is negative, below.
         Text(
             text = headline(split),
             style = MaterialTheme.typography.bodyLarge,
             color = c.text,
         )
+        // A LOSING window is the one case the third clause comes back (#1024 review F3). The bar
+        // can't carry it — [AppStackBar] weights on the value and a negative weight is not
+        // renderable, so a negative kept segment is a zero-width sliver — and its legend note is
+        // deliberately silent, so with the clause gone too a window that cost more than it paid
+        // would show a green "Stayed with you" key beside nothing at all: the anomaly papered over,
+        // which is exactly what #662-F1 asked this card never to do. One duplicated figure on an
+        // abnormal window is a cheaper price than a silent one, and the hero states it in the same
+        // bad tone.
+        if (split.stayedWithYou < 0.0) {
+            Spacer(Modifier.height(2.dp))
+            Text(
+                text = stringResource(R.string.money_tab_where_went_kept, Formats.money(split.stayedWithYou)),
+                style = MaterialTheme.typography.bodyLarge,
+                color = c.bad,
+            )
+        }
 
         Spacer(Modifier.height(14.dp))
         PayMixSection(payMix)
 
-        Spacer(Modifier.height(14.dp))
-        HorizontalDivider(color = c.line)
-        Spacer(Modifier.height(14.dp))
+        HairlineDivider(gap = 14.dp)
 
         Text(
             text = stringResource(R.string.money_tab_where_went_title),
@@ -196,14 +212,14 @@ private fun headline(split: MoneyWentModel.Split): String =
  * value, and a negative weight is not renderable. The signed car-cost figure still appears verbatim
  * in the headline above, so the anomaly is visible rather than papered over.
  *
- * **The kept segment carries an EMPTY note (#1024 B2), and that is deliberate, not an oversight.**
- * `AppLegend` renders a computed PERCENTAGE SHARE whenever a note is `null` — which this card's own
- * rule forbids ("the legend carries real dollars, not shares") — so the note is an explicit `""`,
- * which the legend prints as nothing. The reason the dollars go is that the kept figure is the recap
- * hero's headline, three lines up the same scroll; the gas / wear / car-cost notes stay REAL dollars
- * because nothing else on the screen states them. This retires the standing comment on the previous
- * pass ("a duplicated dollar figure is the honest cost of keeping the legend's promise") — the third
- * option, an explicit blank, keeps the promise without the duplicate.
+ * **The kept segment states NOTHING in the legend (#1024 B2), and that is deliberate.** It sets
+ * `noteHidden` — the design system's explicit third state (see [AppSegment]), NOT a null note, which
+ * would make the legend compute a PERCENTAGE SHARE and this card's own rule forbids shares. The
+ * reason the dollars go is that the kept figure is the recap hero's headline, one scroll up; the gas
+ * / wear / car-cost notes stay REAL dollars because nothing else on the screen states them. This
+ * retires the standing comment on the previous pass ("a duplicated dollar figure is the honest cost
+ * of keeping the legend's promise") — a first-class "say nothing here" keeps the promise without the
+ * duplicate, and `AppLegendNoteTest` pins the distinction so a future tidy-up can't collapse it.
  */
 @Composable
 private fun moneyWentSegments(split: MoneyWentModel.Split): List<AppSegment> {
@@ -212,7 +228,7 @@ private fun moneyWentSegments(split: MoneyWentModel.Split): List<AppSegment> {
         label = stringResource(R.string.money_tab_where_went_segment_kept),
         value = split.stayedWithYou.toFloat().coerceAtLeast(0f),
         color = c.good,
-        note = "",
+        noteHidden = true,
     )
     val gas = split.gas
     val wear = split.wear

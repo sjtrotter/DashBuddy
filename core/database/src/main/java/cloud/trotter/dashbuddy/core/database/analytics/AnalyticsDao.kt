@@ -348,45 +348,13 @@ interface AnalyticsDao {
     )
     fun deliveryTotalsByPlatform(start: Long, end: Long): Flow<List<PlatformDeliveryTotalsRow>>
 
-    /**
-     * Per-store variant of [deliveryTotals] — same session-anchored join + null-session edge.
-     * `ORDER BY pay DESC` is the **highest-earning store first** (realized gross), intentional so
-     * the store list leads with where the money came from. The order stays **cash-free** (realized
-     * pay only) on purpose — cash is added to the store's gross/net in the repository mapper (#688
-     * F5), not used as the sort key.
+    /*
+     * `deliveryTotalsByStore` + `storeChainDisplays` were deleted with the repository's
+     * `perStoreEconomics` (#1024 part 2 B5): the Money tab's `TopStoresCard` was their only consumer,
+     * and the surviving store surface — the Playbook leaderboard — reads [storeReportRows] +
+     * [storeDwellSamples] instead. The `stores` chain-display metadata those queries read is still
+     * carried by [storeReportRows]'s own join, so nothing about store IDENTITY changed here.
      */
-    /**
-     * Per-(storeKey, storeName, platform) delivery totals for a period — the raw input the repository
-     * folds to CHAIN level (#159 F9). It does NOT itself produce the final per-store buckets: the
-     * repository groups these rows by `platform + "|" + normalizedChain` (chain from the storeKey's
-     * middle segment when keyed, else the shared `:domain` normalizer over `storeName`), so a resolved
-     * `"…|target|02426"` and an unresolved `"Target"` on the same platform collapse into ONE chain
-     * bucket. Each row carries its [StoreTotalsRow.storeKey] (null when unresolved), `storeName`, and
-     * `platform` so the repository can compute that bucket. `ORDER BY pay DESC` is a cash-free stable
-     * pre-sort; the final cash-inclusive rank is the repository's.
-     */
-    @Query(
-        """SELECT storeKey,
-                  storeName,
-                  platform,
-                  COALESCE(SUM(realizedPay), 0) AS pay,
-                  COALESCE(SUM(netProfit), 0) AS net,
-                  COUNT(*) AS deliveries,
-                  COALESCE(SUM(cashTip), 0) AS cash
-           FROM delivery_records
-           WHERE sessionId IN (SELECT sessionId FROM session_records
-                               WHERE startedAt >= :start AND startedAt < :end)
-              OR (sessionId IS NULL AND completedAt >= :start AND completedAt < :end)
-           GROUP BY storeKey, storeName, platform
-           ORDER BY pay DESC"""
-    )
-    fun deliveryTotalsByStore(start: Long, end: Long): Flow<List<StoreTotalsRow>>
-
-    /** Chain-display metadata for the F9 chain-level rollup (#159): the first-observed capitalization
-     *  per (platform, normalizedChain). Combined reactively into `perStoreEconomics` for the bucket's
-     *  display name (else the first row's raw storeName). */
-    @Query("SELECT platform, normalizedChain, chainDisplay FROM stores")
-    fun storeChainDisplays(): Flow<List<StoreChainDisplayRow>>
 
     // ── Store report card reads (#159, the #315 Patterns tab consumer) ───
 
@@ -405,7 +373,7 @@ interface AnalyticsDao {
      *
      * **cash-inclusive gross/net (FIX 4):** `gross = Σ realizedPay + Σ cashTip` and `net = Σ netProfit +
      * Σ cashTip`, per the #688 rule that cash lives outside `realizedPay`/`netProfit` and is added at
-     * every read site (mirrors `deliveryTotalsByStore` + the repository mapper).
+     * every read site (the same rule the repository's other cash-bearing mappers follow).
      */
     @Query(
         """SELECT s.storeKey AS storeKey, s.platform AS platform, s.normalizedChain AS normalizedChain,
