@@ -59,8 +59,15 @@ data class PlannedWindowProgress(
  * [elapsedPlannedHours] counts a window's hours only once they are *over*: a window in progress
  * contributes its completed hours, never the one being lived through. That is hour granularity on
  * purpose — [HourOfWeekSamples] buckets the record by wall-clock hour, so a finer claim would be a
- * precision the evidence does not have. The consequence is one-sided and stated: progress against the
- * plan is never flattered, only ever conservative.
+ * precision the evidence does not have.
+ *
+ * **It is a WALL-CLOCK count, and on a DST-forward day that is one hour generous.** A window spanning
+ * the skipped hour reports `endHour − startHour` elapsed while only `length − 1` real hours passed, so
+ * "hours still ahead" reads one low that day (`PlanProgressTest` pins this as characterization). It is
+ * not corrected here because correcting it needs a `ZoneId`, and taking a zone would make this type
+ * clock-aware — the one thing keeping it purely testable. The bound is one hour, twice a year, on the
+ * SCHEDULE side only: [hoursDone]/[keptSoFar] come from the sampler, which apportions real elapsed
+ * milliseconds, so the *worked* side can never be overstated by DST.
  *
  * Pure `:domain`: the plan, the record and the clock reading go in; no wall clock is read here
  * (Principle 1), so every arm — before the week, mid-window, after the week — is a plain unit test.
@@ -82,29 +89,17 @@ data class PlanProgress(
     /** Per-window detail, in the saved plan's own order. */
     val windows: List<PlannedWindowProgress>,
 ) {
-    /** Planned hours still ahead of the driver this week. */
+    /** Scheduled hours still ahead of the driver this week. */
     val plannedHoursLeft: Int get() = (plannedHours - elapsedPlannedHours).coerceAtLeast(0)
 
-    /** How many windows are over. */
-    val windowsDone: Int get() = windows.count { it.state == PlanWindowState.DONE }
-
-    /** How many windows are still ahead (the one in progress is not "ahead"). */
-    val windowsLeft: Int get() = windows.count { it.state == PlanWindowState.UPCOMING }
-
-    /** The window the clock is inside right now, if any. */
+    /** The window the clock is inside right now, if any — the reason [notStarted] is not just an hour count. */
     val currentWindow: PlannedWindowProgress? get() = windows.firstOrNull { it.state == PlanWindowState.IN_PROGRESS }
-
-    /** The next window that hasn't started (the plan's own order is chronological). */
-    val nextWindow: PlannedWindowProgress? get() = windows.firstOrNull { it.state == PlanWindowState.UPCOMING }
 
     /** True before any planned hour has passed — the card says "not started yet" rather than "0 of 12h". */
     val notStarted: Boolean get() = elapsedPlannedHours == 0 && currentWindow == null
 
     /** True once every planned window is over — the week's plan is finished, whatever it returned. */
     val finished: Boolean get() = windows.isNotEmpty() && windows.all { it.state == PlanWindowState.DONE }
-
-    /** Everything kept this week, inside and outside the plan — the same total [WeeklyPlanGrade] reports. */
-    val totalKept: Double get() = keptSoFar + keptOutsideWindows
 
     companion object {
 

@@ -1,4 +1,4 @@
-package cloud.trotter.dashbuddy.ui.main.analytics
+package cloud.trotter.dashbuddy.ui.components
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -22,7 +22,7 @@ import cloud.trotter.dashbuddy.core.designsystem.component.AppHeatScale
 import cloud.trotter.dashbuddy.core.designsystem.theme.AppTheme
 import cloud.trotter.dashbuddy.domain.analytics.EarningsHeatmap
 import cloud.trotter.dashbuddy.domain.format.hourOfDayLabel
-import cloud.trotter.dashbuddy.ui.main.analytics.PatternsModel.HeatmapMode
+import cloud.trotter.dashbuddy.ui.components.PatternsModel.HeatmapMode
 import java.time.DayOfWeek
 import java.time.format.TextStyle
 import java.util.Locale
@@ -50,6 +50,11 @@ private val DAY_LABEL_WIDTH = 30.dp
  *
  * [outlined] rings a cell — the plan's picked hours. `null` (the default) draws no outline, which is
  * exactly the pre-#981 behaviour, so extracting it changed nothing for the plain grid.
+ *
+ * **Placement (#1024 review F7):** it sat in `ui/main/analytics/` because that is where it was carved
+ * out of; #1024 retired that tab and left the package with no consumer of this file at all. A shared
+ * render whose home is a deleted surface's folder is exactly the drift Principle 5 punishes, so it moved
+ * here beside [PatternsModel] and `DisclosureRow`.
  */
 @Composable
 internal fun HeatmapGrid(

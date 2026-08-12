@@ -999,17 +999,25 @@ dropped the two lifetime reads with it, leaving every source it collects window-
 (`Screen.Playbook`, reachable from a Home entry tile) now holds four sections over **zero new queries**:
 (a) **this week's plan with live progress**; (b) **when you earn** — the same `HeatmapGrid` with the
 Rate/Hours toggle, plus the saved plan's picked cells outlined (`SavedWeeklyPlan.covers`, the
-`WeeklyPlan.covers` mirror); (c) **where you earn** — the #979 store leaderboard moved verbatim
-(`PatternsModel` and `HeatmapGrid` stay in `ui/main/analytics/` — shared with the Weekly Plan screen and
-Home's strip); (d) the locked **Demand around you** row, split out of `GrowthRows` so both screens render
-ONE owner of that copy. **`PlanProgress` (pure `:domain`) is a VIEW of `WeeklyPlanGrade`, not a second
+`WeeklyPlan.covers` mirror); (c) **where you earn** — the #979 store leaderboard moved verbatim; (d) the locked **Demand around
+you** row, split out of `GrowthRows` so both screens render ONE owner of that copy. `PatternsModel` +
+`HeatmapGrid` moved to `ui/components/` (with `DisclosureRow`): the retired tab's package had zero
+consumers of them left, and a shared render whose home is a deleted surface is the drift Principle 5
+punishes — their consumers are the Playbook cards, `PlanProvenanceCard` and (via `AppHeatScale`)
+Home's strip. **`PlanProgress` (pure `:domain`) is a VIEW of `WeeklyPlanGrade`, not a second
 grading:** it takes a finished grade plus the clock (today + hour) and adds only the elapsed
 classification, because grading a live week is already elapsed-only by construction (the record cannot
 contain the future). Its `elapsedPlannedHours` counts a window's hours only once they are OVER — hour
 granularity, matching `HourOfWeekSamples`' own buckets — so progress is conservative by construction,
-never flattered. The clock is NOT in the state: the card derives the hour from `rememberNow` through a
-`derivedStateOf` (Reactive-UI rule 2), ticking once a minute because the only visible transition is an
-hour boundary. Riding along, `DisclosureRow` moved from `PayMixCard` to `ui/components/` and gained
+never flattered — with ONE documented exception: the count is WALL-CLOCK, so a DST-forward day
+overcounts the schedule side by an hour (characterization-tested; correcting it would need a `ZoneId`,
+i.e. clock-awareness in a pure type, and the worked side is immune because the sampler apportions real
+milliseconds). No clock at all is in the state: the card reads `rememberNow` ONCE per tick and derives
+BOTH the local date and the hour from that single instant through a `derivedStateOf` (Reactive-UI
+rule 2), ticking once a minute because the only visible transition is an hour boundary; a flow-supplied
+date beside a ticker-supplied hour would skew across midnight and time-zone changes. A decoded plan
+with NO windows is treated as no plan at the first consumer (the codec keeps such a row), and the
+screen renders nothing until the first emission rather than flashing every empty state over real data. Riding along, `DisclosureRow` moved from `PayMixCard` to `ui/components/` and gained
 `HowNumbersWorkFooter` — the shared **one-disclosure-per-screen** row (#1024 rule 2) whose frozen-cost
 and estimate lines reuse the exact strings their originating cards already ship. Parts 2–4 of #1024
 (Money 9 cards → 5, Home 7 blocks → 4, and pointing those screens at the shared footer) are NOT in this

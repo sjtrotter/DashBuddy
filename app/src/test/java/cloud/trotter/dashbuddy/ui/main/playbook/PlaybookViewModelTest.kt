@@ -105,9 +105,10 @@ class PlaybookViewModelTest {
         runWithViewModel { viewModel ->
             val state = viewModel.uiState.value
             assertFalse(state.loading)
-            assertEquals(thisWeek, state.weekStart)
             assertNotNull(state.savedPlan)
             val grade = requireNotNull(state.planGrade)
+            // The week the card labels itself with has ONE owner: the plan's own frozen weekStart.
+            assertEquals(thisWeek, grade.weekStart)
             assertEquals(2, grade.plannedHours)
             assertEquals(2.0, grade.actualHours, 1e-9)
             assertEquals(40.0, grade.actualKept, 1e-9)
@@ -120,6 +121,23 @@ class PlaybookViewModelTest {
         // A plan exists — for a DIFFERENT week. The Playbook shows the week being worked, so this one
         // must not be picked up and graded as if it were this week's commitment.
         savedPlans.value = listOf(planFor(thisWeek.minusWeeks(1)))
+
+        runWithViewModel { viewModel ->
+            val state = viewModel.uiState.value
+            assertNull(state.savedPlan)
+            assertNull(state.planGrade)
+        }
+    }
+
+    /**
+     * F3 (#1024 review). `WeeklyPlanCodec.decode` drops structurally-impossible windows with
+     * `mapNotNull` but keeps the plan row, so a corrupt/older blob can decode to a window-less plan
+     * that still carries a `projectedKept`. Rendering it produces "Not started yet — 0 hours
+     * scheduled, $280 projected" forever, and outlines nothing on a heatmap captioned as outlined.
+     */
+    @Test
+    fun `a decoded plan with no windows is treated as no plan at all`() = runTest {
+        savedPlans.value = listOf(planFor(thisWeek).copy(windows = emptyList()))
 
         runWithViewModel { viewModel ->
             val state = viewModel.uiState.value

@@ -27,9 +27,9 @@ import cloud.trotter.dashbuddy.domain.analytics.WeeklyPlanGrade
 import cloud.trotter.dashbuddy.domain.analytics.EarningsHeatmap
 import cloud.trotter.dashbuddy.domain.format.Formats
 import cloud.trotter.dashbuddy.domain.format.formatMonthDay
-import cloud.trotter.dashbuddy.ui.main.analytics.HeatmapGrid
-import cloud.trotter.dashbuddy.ui.main.analytics.HeatmapHourAxis
-import cloud.trotter.dashbuddy.ui.main.analytics.PatternsModel
+import cloud.trotter.dashbuddy.ui.components.HeatmapGrid
+import cloud.trotter.dashbuddy.ui.components.HeatmapHourAxis
+import cloud.trotter.dashbuddy.ui.components.PatternsModel
 import java.time.DayOfWeek
 import java.time.LocalDate
 import java.time.format.TextStyle

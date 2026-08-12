@@ -1,13 +1,23 @@
-package cloud.trotter.dashbuddy.ui.main.analytics
+package cloud.trotter.dashbuddy.ui.components
 
 import cloud.trotter.dashbuddy.domain.analytics.EarningsHeatmap
 import cloud.trotter.dashbuddy.domain.analytics.EarningsHeatmapCell
 import cloud.trotter.dashbuddy.domain.analytics.StoreReportCard
 
 /**
- * Pure, Compose-free logic for the Patterns tab's #979 leaderboard + heatmap toggle (redesign stage
- * 5/7, brief §6). Compose-free on purpose (the [WindowLabel]/`MoneyWentModel` precedent) — the
+ * Pure, Compose-free logic for the #979 store leaderboard + heatmap Rate/Hours toggle (redesign stage
+ * 5/7, brief §6). Compose-free on purpose (the `WindowLabel`/`MoneyWentModel` precedent) — the
  * interesting part is sort/threshold reasoning, and it should be provable without rendering.
+ *
+ * **Placement (#1024 review F7):** it lived in `ui/main/analytics/` for the Patterns tab, which #1024
+ * retired. With zero consumers left in that package, leaving it there would have made a deleted tab's
+ * folder the home of the Playbook's core render — so it moved to the shared components package
+ * alongside [HeatmapGrid] and `DisclosureRow`. Its consumers are now `WhenYouEarnCard` /
+ * `WhereYouEarnCard` (Playbook) and `PlanProvenanceCard` (Weekly Plan).
+ *
+ * The **name** deliberately did not change: it is the #979 model as filed, referenced by that issue and
+ * its review, and it owns two unrelated things (heatmap mode + leaderboard sort) that no single new name
+ * describes honestly. A rename would trade a searchable history for a tidier label.
  */
 object PatternsModel {
 

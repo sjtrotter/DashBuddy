@@ -79,10 +79,14 @@ fun PlaybookScreen(
                 .padding(16.dp)
                 .fillMaxSize(),
         ) {
+            // F1 (#1024 review): nothing renders until the first read-model emission. Every block
+            // below has an honest empty state, and on a cold open they would ALL be true for a frame —
+            // "No plan saved for this week" over a plan the driver saved yesterday is not an honest
+            // empty state, it is a wrong one shown briefly. Waiting is the honest option (§9).
+            if (uiState.loading) return@Column
+
             PlanProgressCard(
                 grade = uiState.planGrade,
-                today = uiState.today,
-                weekStart = uiState.weekStart,
                 onOpenPlan = onOpenPlan,
             )
             Spacer(Modifier.height(16.dp))

@@ -29,6 +29,7 @@ import cloud.trotter.dashbuddy.domain.analytics.PlanProgress
 import cloud.trotter.dashbuddy.domain.analytics.PlanWindowState
 import cloud.trotter.dashbuddy.domain.analytics.PlannedWindowProgress
 import cloud.trotter.dashbuddy.domain.analytics.WeeklyPlanGrade
+import cloud.trotter.dashbuddy.domain.analytics.WeeklyPlanSchedule
 import cloud.trotter.dashbuddy.domain.format.Formats
 import cloud.trotter.dashbuddy.domain.format.formatMonthDay
 import cloud.trotter.dashbuddy.domain.format.hourRangeLabel
@@ -40,33 +41,42 @@ import java.time.format.TextStyle
 import java.util.Locale
 
 /**
- * **This week's plan, with live progress** (#1024 section C) — `5h done · $118 kept of the $280 you
- * planned for`, and one hairline row per window that marks itself done as the week runs.
+ * **This week's plan, with live progress** (#1024 section C) — `5h worked in your windows · $118 kept
+ * of the $280 you planned for`, and one hairline row per window that marks itself done as the week runs.
  *
  * This is the visible half of the grading loop: the Sunday notification only earns its place if the
  * plan is worth following in the days before it, and a plan the driver cannot check against reality
  * mid-week is just a suggestion they saw once.
  *
- * **Reactive by rule 2, not by re-render.** The state holds anchors ([grade] + [today]); the current
- * hour comes from [rememberNow] through a `derivedStateOf`, so the card re-derives exactly when an hour
- * boundary crosses (a window flipping to *done*) rather than on every tick — and never freezes at the
- * moment the last projector commit happened.
+ * **Reactive by rule 2, and on ONE clock.** The state holds the anchor ([grade]); the card reads the
+ * device clock through [rememberNow] and derives the local **date and hour from that single instant**,
+ * so it re-derives exactly when an hour boundary crosses (a window flipping to *done*) rather than on
+ * every tick. Taking the date from a flow while taking the hour from a ticker would let the two
+ * disagree across local midnight — reporting "all scheduled hours have passed" during the first minute
+ * of a day the plan does not describe — and across a time-zone change (#1024 review F2).
  *
  * **Every state states its reason (§9).** No plan saved → say so and offer to build one, never an empty
  * plan that reads as a bad week. Plan saved but not started → say that, rather than reporting `0h of
  * 12h` as if the driver were already behind. A window whose hours passed with nothing logged says "no
- * time logged" — measured, not scored.
+ * time logged" — measured, not scored. And the two hour figures are labelled apart: hours **worked**
+ * are measured presence, hours **scheduled** are clock positions; subtracting one from the other is
+ * meaningless, so the copy never invites it.
  */
 @Composable
 fun PlanProgressCard(
     grade: WeeklyPlanGrade?,
-    today: LocalDate,
-    weekStart: LocalDate,
     onOpenPlan: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val c = AppTheme.colors
+    // ONE clock read per tick; both the date and the hour come out of it (F2).
+    val now by rememberNow(TICK_MS)
+    val localNow by remember { derivedStateOf { Instant.ofEpochMilli(now).atZone(ZoneId.systemDefault()) } }
+
     AppCard(modifier = modifier.fillMaxWidth()) {
+        // The week has one owner per path: the plan's own frozen weekStart when there is a plan (it is
+        // what selected it), else the week the same instant falls in.
+        val weekStart: LocalDate = grade?.weekStart ?: WeeklyPlanSchedule.weekStartOf(localNow.toLocalDate())
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(
                 text = stringResource(R.string.playbook_plan_title),
@@ -87,12 +97,8 @@ fun PlanProgressCard(
             return@AppCard
         }
 
-        // Rule 2: the hour is derived at the composable from the ticker, never stored in the state.
-        val now by rememberNow(TICK_MS)
-        val progress by remember(grade, today) {
-            derivedStateOf {
-                PlanProgress.of(grade, today, Instant.ofEpochMilli(now).atZone(ZoneId.systemDefault()).hour)
-            }
+        val progress by remember(grade) {
+            derivedStateOf { PlanProgress.of(grade, localNow.toLocalDate(), localNow.hour) }
         }
 
         PlanHeadline(progress)
@@ -129,8 +135,13 @@ fun PlanProgressCard(
 }
 
 /**
- * `5h done · $118 kept of the $280 you planned for`, or — before the first window — the plain statement
- * that the week hasn't started, plus what it is holding.
+ * `5h worked in your windows · $118 kept of the $280 you planned for`, plus the schedule line beneath
+ * it — or, before the first window, the plain statement that the week hasn't started and what it holds.
+ *
+ * The two hour figures are named apart on purpose (#1024 review F5): the headline reports hours
+ * **worked** (measured presence inside the windows) and the line under it hours **scheduled** (clock
+ * positions in the plan). Sharing the word "hours" between them would invite a subtraction whose answer
+ * means nothing.
  */
 @Composable
 private fun PlanHeadline(progress: PlanProgress) {

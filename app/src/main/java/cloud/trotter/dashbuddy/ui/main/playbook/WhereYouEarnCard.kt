@@ -49,8 +49,8 @@ import cloud.trotter.dashbuddy.domain.analytics.StoreReportCard
 import cloud.trotter.dashbuddy.domain.format.Formats
 import cloud.trotter.dashbuddy.domain.format.formatDuration
 import cloud.trotter.dashbuddy.domain.format.formatShortDate
-import cloud.trotter.dashbuddy.ui.main.analytics.PatternsModel
-import cloud.trotter.dashbuddy.ui.main.analytics.PatternsModel.LeaderboardSort
+import cloud.trotter.dashbuddy.ui.components.PatternsModel
+import cloud.trotter.dashbuddy.ui.components.PatternsModel.LeaderboardSort
 
 /**
  * **Where you earn** (#1024 section C) — the store leaderboard, moved here from the retired Patterns

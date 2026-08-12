@@ -53,11 +53,16 @@ class PlaybookViewModel @Inject constructor(
         // differ, and the Playbook is showing the plan being worked, not the one being drafted (the
         // #981 Home-pointer rule, applied for the same reason).
         val weekStart = WeeklyPlanSchedule.weekStartOf(day)
-        val plan = savedPlans.firstOrNull { it.weekStart == weekStart }
+        // F3 (#1024 review): a plan with NO windows is not a plan. `WeeklyPlanCodec.decode` drops
+        // structurally-impossible windows with `mapNotNull` while keeping the plan row, so a corrupt or
+        // older-shaped blob can decode to a window-less plan carrying a live `projectedKept` — which
+        // renders as "Not started yet — 0 hours scheduled, $280 projected", forever, and outlines
+        // nothing on a heatmap that claims cells are outlined. Fail closed at the first consumer: it is
+        // the honest no-plan state. (Whether the CODEC should drop such a row instead is a separate
+        // decision — it would silently discard a user artifact — so it is deliberately not changed here.)
+        val plan = savedPlans.firstOrNull { it.weekStart == weekStart && it.windows.isNotEmpty() }
         PlaybookUiState(
             loading = false,
-            today = day,
-            weekStart = weekStart,
             savedPlan = plan,
             planGrade = plan?.let { WeeklyPlanGrader.grade(it, samples) },
             heatmap = heatmap,

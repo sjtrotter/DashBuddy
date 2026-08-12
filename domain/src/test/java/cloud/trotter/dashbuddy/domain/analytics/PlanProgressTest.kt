@@ -62,8 +62,7 @@ class PlanProgressTest {
         assertTrue(p.notStarted)
         assertEquals(0, p.elapsedPlannedHours)
         assertEquals(4, p.plannedHoursLeft)
-        assertEquals(0, p.windowsDone)
-        assertEquals(2, p.windowsLeft)
+        assertTrue(p.windows.all { it.state == PlanWindowState.UPCOMING })
         assertNull(p.currentWindow)
         assertFalse(p.finished)
     }
@@ -80,7 +79,6 @@ class PlanProgressTest {
         assertEquals(2.0, p.hoursDone, 1e-9)
         assertEquals(38.0, p.keptSoFar, 1e-9)
         assertEquals(100.0, p.projectedKept, 1e-9)
-        assertEquals(p.windows[1], p.nextWindow)
         assertFalse(p.notStarted)
     }
 
@@ -131,8 +129,7 @@ class PlanProgressTest {
         val p = progress(twoWindowPlan, samples, weekStart.plusWeeks(1), 10)
 
         assertTrue(p.finished)
-        assertEquals(2, p.windowsDone)
-        assertEquals(0, p.windowsLeft)
+        assertTrue(p.windows.all { it.state == PlanWindowState.DONE })
         assertEquals(4, p.elapsedPlannedHours)
         assertEquals(0, p.plannedHoursLeft)
         // A window whose hours passed with no presence says so — the surface states it, never scores it.
@@ -159,7 +156,6 @@ class PlanProgressTest {
 
         assertEquals(40.0, p.keptSoFar, 1e-9)
         assertEquals(45.0, p.keptOutsideWindows, 1e-9)
-        assertEquals(85.0, p.totalKept, 1e-9)
     }
 
     @Test
@@ -189,5 +185,37 @@ class PlanProgressTest {
 
         assertEquals(50.0, p.windows[0].projectedKept, 1e-9)
         assertEquals(2, p.windows[0].plannedHours)
+    }
+
+    /**
+     * **Characterization, not an aspiration** — the elapsed count is wall-clock, so on the
+     * spring-forward day a window spanning the skipped hour reports one more elapsed hour than really
+     * passed. Correcting it would require a `ZoneId` here, which is exactly the clock-awareness that
+     * keeps this type pure; the KDoc states the bound (one hour, twice a year, schedule side only) and
+     * this test pins it so the behaviour cannot change silently.
+     *
+     * 2026-03-08 in US zones: 02:00 does not exist. A Sunday 1am–5am window read at wall-clock 4am has
+     * seen 2 real hours (1→2, 3→4) but reports 3.
+     */
+    @Test
+    fun `DST forward overcounts elapsed schedule hours by one - characterization`() {
+        val springForwardSunday = LocalDate.of(2026, 3, 8)
+        val planWeek = springForwardSunday.minusDays(6) // Monday of that week
+        val plan = SavedWeeklyPlan(
+            weekStart = planWeek,
+            savedAtMillis = 0L,
+            target = PlanTarget.Hours(4),
+            windows = listOf(SavedPlanWindow(6, 1, 5, 20.0, 5)), // Sunday 1am-5am
+            projectedKept = 80.0,
+            randomKept = null,
+        )
+
+        val p = PlanProgress.of(WeeklyPlanGrader.grade(plan, HourOfWeekSamples.EMPTY), springForwardSunday, 4)
+
+        assertEquals(3, p.elapsedPlannedHours)
+        assertEquals(1, p.plannedHoursLeft)
+        // The WORKED side is immune: it comes from the sampler's real elapsed milliseconds, never from
+        // this wall-clock subtraction.
+        assertEquals(0.0, p.hoursDone, 1e-9)
     }
 }

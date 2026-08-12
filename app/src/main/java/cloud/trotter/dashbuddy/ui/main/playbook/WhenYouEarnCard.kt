@@ -35,10 +35,10 @@ import cloud.trotter.dashbuddy.domain.analytics.EarningsHeatmap
 import cloud.trotter.dashbuddy.domain.analytics.SavedWeeklyPlan
 import cloud.trotter.dashbuddy.domain.format.Formats
 import cloud.trotter.dashbuddy.domain.format.hourOfDayLabel
-import cloud.trotter.dashbuddy.ui.main.analytics.HeatmapGrid
-import cloud.trotter.dashbuddy.ui.main.analytics.HeatmapHourAxis
-import cloud.trotter.dashbuddy.ui.main.analytics.PatternsModel
-import cloud.trotter.dashbuddy.ui.main.analytics.PatternsModel.HeatmapMode
+import cloud.trotter.dashbuddy.ui.components.HeatmapGrid
+import cloud.trotter.dashbuddy.ui.components.HeatmapHourAxis
+import cloud.trotter.dashbuddy.ui.components.PatternsModel
+import cloud.trotter.dashbuddy.ui.components.PatternsModel.HeatmapMode
 import java.time.DayOfWeek
 import java.time.format.TextStyle
 import java.util.Locale
