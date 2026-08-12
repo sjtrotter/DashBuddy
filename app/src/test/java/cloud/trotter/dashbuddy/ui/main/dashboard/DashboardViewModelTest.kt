@@ -289,6 +289,26 @@ class DashboardViewModelTest {
         }
     }
 
+    /**
+     * The live-dash anchor behind Home's online figure (#1024 review item 12). It is present ONLY
+     * while the focused platform is dashing — a finished session's `startedAt` would tick a duration
+     * that stopped being true the moment the driver went offline.
+     */
+    @Test
+    fun `the session start anchor is exposed only while a dash is running`() = runTest {
+        whenever(appStateRepository.isFirstRun).thenReturn(flowOf(false))
+
+        whenever(stateManager.state).thenReturn(MutableStateFlow(onlineState()))
+        runWithViewModel { viewModel ->
+            assertEquals(1_000_000L, viewModel.uiState.value.sessionStartedAt)
+        }
+
+        whenever(stateManager.state).thenReturn(MutableStateFlow(offlineState()))
+        runWithViewModel { viewModel ->
+            assertNull(viewModel.uiState.value.sessionStartedAt)
+        }
+    }
+
     @Test
     fun `isDashing and statusText reflect the registry-resolved mode`() = runTest {
         whenever(appStateRepository.isFirstRun).thenReturn(flowOf(false))

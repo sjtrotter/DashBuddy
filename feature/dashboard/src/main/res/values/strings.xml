@@ -6,9 +6,10 @@
       #977 (redesign stage 4): Home became "Today". The old PeriodReview period selector went with
       it, and so did its dashboard_screen_stat_* / common_period_* labels — the four review windows
       now live on the Analytics pager, reachable from the week block's Recap action. (The :app
-      copies of common_period_* were the authoritative pair of that #851 duplication and are
-      likewise unused since #970 dropped the hub's per-tab selector; they are left in place rather
-      than removed from a module this stage doesn't otherwise touch.)
+      copies of common_period_* were the authoritative pair of that #851 duplication. #1024 part 3
+      re-checked them: they had no consumer left in ANY module once #970 dropped the hub's per-tab
+      selector, so they were deleted from :app rather than left as orphaned copy of a deleted
+      surface. Neither module carries them now.)
 
       #1024 section D folded seven Home blocks into four. Three groups of copy went with the
       containers that carried them:
@@ -25,10 +26,21 @@
     <!-- Today (brief §2 + #1024 D1) — ONE card: the day's record, a hairline, then the day's plan. -->
     <string name="dashboard_today_title">TODAY</string>
     <string name="dashboard_today_stat_kept">Kept</string>
-    <string name="dashboard_today_stat_net_per_hour">Net/hr</string>
+    <!--
+      The denominator rides the LABEL (#1024 review item 3): "Net/hr" alone reads as an all-day rate,
+      and the "while online" caption it used to carry was deleted with the stat tiles (D3). A rate
+      whose denominator is only findable inside a collapsed footer is not stated.
+    -->
+    <string name="dashboard_today_stat_net_per_hour">Net/hr online</string>
     <string name="dashboard_today_stat_drops">Drops</string>
     <string name="dashboard_today_stat_miles">Miles</string>
     <string name="dashboard_today_stat_online">Online</string>
+    <!--
+      What the online figure is called WHILE a dash is running (#1024 review item 12): the value is
+      then the current dash's live elapsed time, not the day's settled total, so it must not claim to
+      be the latter.
+    -->
+    <string name="dashboard_today_stat_on_dash">On dash</string>
 
     <!-- The plan half of the Today card. Each state names the weekday it is quoting — do not drop it. -->
     <string name="dashboard_plan_best_tonight_format">Best bet tonight: %1$s · your %2$s run %3$s/hr</string>

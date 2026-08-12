@@ -76,7 +76,23 @@ internal object ReviewFlags {
 }
 
 /**
- * The window's review rows: [ReviewFlags.of] decides WHICH, this resolves each one's copy and action.
+ * The window's review rows **as copy only** — text and severity, never an affordance (#1024 D4).
+ *
+ * This is the resolver Home uses. Home cannot honour the hub's in-place assign/attest dialogs (they
+ * live on the Money tab with the orphan lists they mutate), so it must not be *able* to receive an
+ * action it would have to strip or, worse, render as a promise it can't keep. Splitting the resolver
+ * makes that structural rather than a discipline the next caller has to remember: the copy has one
+ * owner, and [ReviewAction] is the hub card's own layer on top of it.
+ */
+@Composable
+internal fun reviewTexts(
+    economics: PeriodEconomics,
+    orphanOfferGroups: List<OrphanOfferGroup>,
+): List<ReviewItem> = reviewRows(economics, orphanOfferGroups).map { it.second }
+
+/**
+ * The window's review rows: [ReviewFlags.of] decides WHICH, [reviewRows] resolves each one's copy,
+ * and this attaches the hub's own in-place actions.
  */
 @Composable
 internal fun reviewItems(
@@ -84,8 +100,31 @@ internal fun reviewItems(
     orphanOfferGroups: List<OrphanOfferGroup>,
     onOpenNoSession: () -> Unit,
     onOpenOrphanOffers: () -> Unit,
-): List<ReviewItem> = ReviewFlags.of(economics, orphanOfferGroups).map { flag ->
+): List<ReviewItem> = reviewRows(economics, orphanOfferGroups).map { (flag, item) ->
     when (flag) {
+        ReviewFlags.Flag.UNATTRIBUTED, ReviewFlags.Flag.OVER_ATTRIBUTED -> item
+        ReviewFlags.Flag.NO_SESSION -> item.copy(
+            action = ReviewAction(
+                label = stringResource(R.string.money_tab_no_session_callout_click_label),
+                onClick = onOpenNoSession,
+            ),
+        )
+        ReviewFlags.Flag.ORPHAN_OFFERS -> item.copy(
+            action = ReviewAction(
+                label = stringResource(R.string.money_tab_orphan_offers_callout_click_label),
+                onClick = onOpenOrphanOffers,
+            ),
+        )
+    }
+}
+
+/** Each raised flag paired with its copy — the one place a flag's wording is resolved. */
+@Composable
+private fun reviewRows(
+    economics: PeriodEconomics,
+    orphanOfferGroups: List<OrphanOfferGroup>,
+): List<Pair<ReviewFlags.Flag, ReviewItem>> = ReviewFlags.of(economics, orphanOfferGroups).map { flag ->
+    flag to when (flag) {
         ReviewFlags.Flag.UNATTRIBUTED -> ReviewItem(
             text = stringResource(
                 R.string.money_tab_unattributed_callout_format,
@@ -114,19 +153,11 @@ internal fun reviewItems(
                     stringResource(R.string.time_tab_delivery_plural)
                 },
             ),
-            action = ReviewAction(
-                label = stringResource(R.string.money_tab_no_session_callout_click_label),
-                onClick = onOpenNoSession,
-            ),
         )
         ReviewFlags.Flag.ORPHAN_OFFERS -> ReviewItem(
             text = stringResource(
                 R.string.money_tab_orphan_offers_callout_format,
                 Formats.commaInt(orphanOfferGroups.sumOf { it.owedRemaining }),
-            ),
-            action = ReviewAction(
-                label = stringResource(R.string.money_tab_orphan_offers_callout_click_label),
-                onClick = onOpenOrphanOffers,
             ),
         )
     }
@@ -140,8 +171,25 @@ internal fun reviewItems(
 @Composable
 internal fun NeedsALookCard(items: List<ReviewItem>, modifier: Modifier = Modifier) {
     if (items.isEmpty()) return
-    val c = AppTheme.colors
     AppCard(modifier = modifier.fillMaxWidth()) {
+        ReviewList(items = items)
+    }
+}
+
+/**
+ * The card's contents WITHOUT its container (#1024 D4) — the count title over the flag rows.
+ *
+ * Extracted because Home renders the same list as a hairline row inside its merged week card rather
+ * than as a card of its own. The count-title format, the warn header tone and the severe→bad row tone
+ * therefore have ONE owner across both surfaces; two copies of "what a review row looks like" is
+ * precisely the drift Principle 5 exists to prevent, and this one would have had to be kept in step
+ * across a module boundary.
+ */
+@Composable
+internal fun ReviewList(items: List<ReviewItem>, modifier: Modifier = Modifier) {
+    if (items.isEmpty()) return
+    val c = AppTheme.colors
+    Column(modifier = modifier.fillMaxWidth()) {
         Text(
             text = stringResource(R.string.money_tab_needs_a_look_title_format, Formats.commaInt(items.size)),
             style = MaterialTheme.typography.labelMedium,

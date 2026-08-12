@@ -78,7 +78,18 @@ data class DashboardUiState(
     val orphanOfferGroups: List<OrphanOfferGroup> = emptyList(),
     /**
      * The plan the driver saved for the week they are currently in (#981), or null when there is
-     * none — the pointer row renders only when this is non-null, per brief §2 row 3.
+     * none — the pointer row renders only when this is non-null (and carries real windows), per
+     * brief §2 row 3.
      */
     val weeklyPlan: SavedWeeklyPlan? = null,
+    /**
+     * When the **currently running** dash started, or null when no dash is active — the Today card's
+     * online figure derives its live elapsed time from this (#1024 review item 12).
+     *
+     * An ANCHOR, not a duration (Reactive UI rule 2): the read model's own `onlineDuration` is a
+     * settled sum that only moves when the projector folds, so on a live dash it would sit frozen
+     * while the driver watched it. This is the session's own `startedAt` off the already-collected
+     * `AppState` — no new read, and the composable owns the ticking.
+     */
+    val sessionStartedAt: Long? = null,
 )

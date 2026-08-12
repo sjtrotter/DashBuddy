@@ -1,15 +1,14 @@
 package cloud.trotter.dashbuddy.ui.main.dashboard
 
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -33,14 +32,14 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
 import cloud.trotter.dashbuddy.R
-import cloud.trotter.dashbuddy.core.designsystem.theme.AppTheme
-import cloud.trotter.dashbuddy.domain.format.Formats
+import cloud.trotter.dashbuddy.domain.analytics.OrphanOfferGroup
+import cloud.trotter.dashbuddy.domain.analytics.PeriodEconomics
+import cloud.trotter.dashbuddy.feature.dashboard.components.DashboardRow
 import cloud.trotter.dashbuddy.feature.dashboard.components.DashingStatusRow
 import cloud.trotter.dashbuddy.feature.dashboard.components.EntryTile
 import cloud.trotter.dashbuddy.feature.dashboard.components.StatusCard
@@ -49,7 +48,8 @@ import cloud.trotter.dashbuddy.feature.dashboard.components.TodayHeader
 import cloud.trotter.dashbuddy.feature.dashboard.components.WeekCard
 import cloud.trotter.dashbuddy.ui.components.HowNumbersWorkFooter
 import cloud.trotter.dashbuddy.ui.main.analytics.ReviewItem
-import cloud.trotter.dashbuddy.ui.main.analytics.reviewItems
+import cloud.trotter.dashbuddy.ui.main.analytics.ReviewList
+import cloud.trotter.dashbuddy.ui.main.analytics.reviewTexts
 import cloud.trotter.dashbuddy.ui.main.navigation.Screen
 import cloud.trotter.dashbuddy.ui.main.setup.consent.ConsentPromptSheet
 import cloud.trotter.dashbuddy.ui.main.setup.permissions.PermissionsBottomSheet
@@ -90,10 +90,15 @@ fun DashboardScreen(
     // `Recap →` and every review-item action land on the same place: the Analytics hub, anchored on
     // the week Home was just describing. The selection write is ordered BEFORE the navigation so the
     // hub opens already on that window rather than flickering through its last one.
-    val openWeekRecap: () -> Unit = {
-        scope.launch {
-            viewModel.selectWeekRecapWindow()
-            onNavigate(Screen.Analytics.route)
+    // Remembered so it is a STABLE lambda: the review section keys its slot on it, and a fresh
+    // instance every recomposition would defeat that memo.
+    val openWeekRecap: () -> Unit = remember(scope, viewModel, onNavigate) {
+        {
+            scope.launch {
+                viewModel.selectWeekRecapWindow()
+                onNavigate(Screen.Analytics.route)
+            }
+            Unit
         }
     }
 
@@ -150,6 +155,7 @@ fun DashboardScreen(
                         containerColor = MaterialTheme.colorScheme.errorContainer,
                         textColor = MaterialTheme.colorScheme.onErrorContainer
                     )
+                    SettingsLink(onNavigateToSettings)
                 }
 
                 // CASE 2: Permissions Granted, first run (The Guide)
@@ -169,6 +175,7 @@ fun DashboardScreen(
                         modifier = Modifier.fillMaxWidth(),
                         onClick = { viewModel.completeSetup() }
                     ) { Text(stringResource(R.string.dashboard_screen_skip_for_now_button)) }
+                    SettingsLink(onNavigateToSettings)
                 }
 
                 // CASE 3: Ready — the "Today" screen (brief §2, decluttered by #1024 D).
@@ -190,6 +197,7 @@ fun DashboardScreen(
                         economics = uiState.todayEconomics,
                         today = uiState.today,
                         heatmap = uiState.heatmap,
+                        sessionStartedAt = uiState.sessionStartedAt,
                     )
                     Spacer(modifier = Modifier.height(16.dp))
 
@@ -203,7 +211,11 @@ fun DashboardScreen(
                         plan = uiState.weeklyPlan,
                         onOpenRecap = openWeekRecap,
                         onOpenPlan = { onNavigate(Screen.WeeklyPlan.route) },
-                        reviewContent = reviewSlot(uiState, openWeekRecap),
+                        reviewContent = rememberReviewSlot(
+                            economics = uiState.weekEconomics,
+                            orphanOfferGroups = uiState.orphanOfferGroups,
+                            onOpen = openWeekRecap,
+                        ),
                     )
                     Spacer(modifier = Modifier.height(16.dp))
 
@@ -221,7 +233,9 @@ fun DashboardScreen(
 
                     // BLOCK 4 — the screen's one disclosure (#1024 rule 2).
                     Spacer(modifier = Modifier.height(20.dp))
-                    HowNumbersWorkFooter()
+                    // Home projects (the plan strip's best-stretch rate), so the footer carries the
+                    // projection disclaimer #1024 D2 took off the card as a standalone line.
+                    HowNumbersWorkFooter(includePlanProjection = true)
                     Spacer(modifier = Modifier.height(24.dp))
                 }
             }
@@ -233,57 +247,38 @@ fun DashboardScreen(
  * The week's data-quality chores as the week card's third row (#1024 D4) — or `null` when the week is
  * clean, which is what keeps the hairline from hanging over an empty section.
  *
- * The flags, their thresholds and their wording stay owned by the analytics hub's [reviewItems]
- * (Principle 5 — Home re-implements none of it). What Home changes is only the affordance: the hub's
- * rows open the assign/attest dialogs in place, which live on the Money tab together with the orphan
- * lists they mutate. Home has no standing to host those flows, so the whole section carries ONE
- * honest affordance — open the place that owns the fix — rather than per-row labels promising an
- * action this screen cannot perform.
+ * **Copy in, one affordance out.** The flags, their thresholds and their wording stay owned by the
+ * analytics hub ([reviewTexts] resolves the copy, [ReviewList] renders it — Home re-implements
+ * neither). What Home changes is only the affordance: the hub's rows open the assign/attest dialogs
+ * in place, which live on the Money tab together with the orphan lists they mutate. Home has no
+ * standing to host those flows, so it reads the action-FREE resolver and wraps the list in ONE honest
+ * affordance — open the place that owns the fix. Structurally it cannot receive a per-row action it
+ * would have to strip.
+ *
+ * The slot lambda is remembered on the resolved rows so a recomposition that changed nothing about
+ * the week does not hand [WeekCard] a new composable to run.
  */
 @Composable
-private fun reviewSlot(uiState: DashboardUiState, onOpenInAnalytics: () -> Unit): (@Composable () -> Unit)? {
-    val items = reviewItems(
-        economics = uiState.weekEconomics,
-        orphanOfferGroups = uiState.orphanOfferGroups,
-        onOpenNoSession = onOpenInAnalytics,
-        onOpenOrphanOffers = onOpenInAnalytics,
-    )
-    if (items.isEmpty()) return null
-    return { ReviewRow(items = items, onOpen = onOpenInAnalytics) }
+private fun rememberReviewSlot(
+    economics: PeriodEconomics,
+    orphanOfferGroups: List<OrphanOfferGroup>,
+    onOpen: () -> Unit,
+): (@Composable () -> Unit)? {
+    val items = reviewTexts(economics = economics, orphanOfferGroups = orphanOfferGroups)
+    return remember(items, onOpen) {
+        if (items.isEmpty()) null else ({ ReviewRow(items = items, onOpen = onOpen) })
+    }
 }
 
-/** `NEEDS A LOOK (2)` over the flags' own sentences, with one `Review →` for the row. */
+/** `NEEDS A LOOK (2)` over the hub's own rendered rows, with one `Review →` for the section. */
 @Composable
 private fun ReviewRow(items: List<ReviewItem>, onOpen: () -> Unit) {
-    val c = AppTheme.colors
-    val label = stringResource(R.string.dashboard_review_action)
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(onClickLabel = label, role = Role.Button) { onOpen() },
-        verticalAlignment = Alignment.CenterVertically,
+    DashboardRow(
+        actionLabel = stringResource(R.string.dashboard_review_action),
+        onClick = onOpen,
+        actionAlignment = Alignment.Top,
     ) {
-        Column(Modifier.weight(1f)) {
-            Text(
-                text = stringResource(
-                    R.string.money_tab_needs_a_look_title_format,
-                    Formats.commaInt(items.size),
-                ),
-                style = MaterialTheme.typography.labelMedium,
-                color = c.warn,
-            )
-            items.forEach { item ->
-                Spacer(Modifier.height(4.dp))
-                Text(
-                    text = item.text,
-                    style = MaterialTheme.typography.bodySmall,
-                    // An over-count is the stronger signal — the tone the hub's card gives it too.
-                    color = if (item.severe) c.bad else c.text2,
-                )
-            }
-        }
-        Spacer(Modifier.width(10.dp))
-        Text(text = label, style = MaterialTheme.typography.labelMedium, color = c.accent)
+        ReviewList(items = items)
     }
 }
 
@@ -298,7 +293,12 @@ private fun ReviewRow(items: List<ReviewItem>, onOpen: () -> Unit) {
 @Composable
 private fun EntryTileRow(onNavigate: (String) -> Unit, onNavigateToSettings: () -> Unit) {
     Row(
-        modifier = Modifier.fillMaxWidth(),
+        // Four tiles of one height whatever their labels do: without an intrinsic-min row, a wrapped
+        // "Analytics" would stand taller than "Ratings" and the row would go ragged (worse at a
+        // large font scale). EntryTile caps and ellipsizes the label; this keeps the boxes equal.
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(IntrinsicSize.Min),
         horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         EntryTile(
@@ -326,4 +326,21 @@ private fun EntryTileRow(onNavigate: (String) -> Unit, onNavigateToSettings: () 
             onClick = onNavigateToSettings,
         )
     }
+}
+
+/**
+ * The way into Settings from the two gated states (#1024 review item 1).
+ *
+ * D5 moved Settings from a floating action button — which rendered in EVERY state — into the entry
+ * tile row, which renders only once the screen is ready. That silently stranded the driver exactly
+ * when they most need Settings: a revoked permission or an unfinished first run is also when Data &
+ * Privacy (log export, the bug-report path) matters. So the gated cards carry their own link.
+ */
+@Composable
+private fun SettingsLink(onNavigateToSettings: () -> Unit) {
+    Spacer(Modifier.height(8.dp))
+    TextButton(
+        modifier = Modifier.fillMaxWidth(),
+        onClick = onNavigateToSettings,
+    ) { Text(stringResource(R.string.dashboard_screen_entry_settings)) }
 }

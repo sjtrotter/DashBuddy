@@ -109,10 +109,9 @@
          lives in :feature:dashboard's strings.xml so the moved PeriodReview can resolve them
          without an (illegal) feature→:app dep. Keep both in sync; a shared res module is the
          long-term fix (same follow-up as #99's common_content_desc_back). -->
-    <string name="common_period_today">Today</string>
-    <string name="common_period_week">Week</string>
-    <string name="common_period_month">Month</string>
-    <string name="common_period_lifetime">Lifetime</string>
+    <!-- common_period_* deleted by #1024 part 3: the last consumer went with #970's per-tab
+         selector and #977's PeriodReview, leaving four orphaned strings for a surface that no
+         longer exists. -->
 
     <!-- bubble/BubbleScreen.kt -->
     <string name="bubble_screen_chat_history_title">Chat History</string>
