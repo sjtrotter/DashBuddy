@@ -23,7 +23,6 @@ import cloud.trotter.dashbuddy.domain.analytics.PayMixParts
 import cloud.trotter.dashbuddy.domain.analytics.PeriodEconomics
 import cloud.trotter.dashbuddy.domain.analytics.PlatformEconomics
 import cloud.trotter.dashbuddy.domain.analytics.SessionRecord
-import cloud.trotter.dashbuddy.domain.analytics.StoreEconomics
 import cloud.trotter.dashbuddy.domain.analytics.TimeEconomics
 import cloud.trotter.dashbuddy.domain.analytics.WindowGranularity
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -47,10 +46,10 @@ import javax.inject.Inject
  * State holder for the Analytics hub (#315 H1, made **period-first** by #970) — a **review** surface
  * assembled reactively from the durable analytics read-model ([AnalyticsRepository]), exposing one
  * immutable [AnalyticsUiState] (Principle 1 — UDF). Over the read-model repository surface:
- * `periodEconomics` (frozen-net totals), `perStoreEconomics` (top stores), `recentSessions`
- * (recent dashes), `decisionEconomics` (H3 funnel/verdicts), and `timeEconomics` (H4 time/mileage) —
- * every *window* source session-anchored (#655) via the DAO join, which owns the bucketing. Since
- * #1024 moved the lifetime-scoped Patterns surfaces to the Playbook, EVERY read here is
+ * `periodEconomics` (frozen-net totals), `recentSessions` (recent dashes), `decisionEconomics`
+ * (H3 funnel/verdicts), and `timeEconomics` (H4 time/mileage) — every *window* source
+ * session-anchored (#655) via the DAO join, which owns the bucketing. Since #1024 moved the
+ * lifetime-scoped Patterns surfaces AND the store list to the Playbook, EVERY read here is
  * window-anchored — there is no longer a source that ignores the pager.
  *
  * **The window (#970).** The selection is persisted in app preferences and is the single source of
@@ -98,14 +97,17 @@ class AnalyticsViewModel @Inject constructor(
 
     val uiState: StateFlow<AnalyticsUiState> = combine(
         selectedTab,
-        // Re-anchor economics + top stores + decisions together on each window switch so a tile never
-        // renders one window's number under another's label. Decisions is collected unconditionally
-        // (not gated on the selected tab): the source is a cheap Room-invalidation aggregate and
-        // folding it in here keeps one immutable UiState re-anchored atomically with the window.
+        // Re-anchor economics + decisions together on each window switch so a tile never renders one
+        // window's number under another's label. Decisions is collected unconditionally (not gated on
+        // the selected tab): the source is a cheap Room-invalidation aggregate and folding it in here
+        // keeps one immutable UiState re-anchored atomically with the window.
+        //
+        // #1024 B5 dropped `perStoreEconomics` from this fan-out with the Money tab's `TopStoresCard`:
+        // the store list is the Playbook's now, off its own lifetime `storeReportCards()` read, and a
+        // window read nothing renders is a query the hub runs on every page of the pager for nobody.
         combine(window, today) { w, day -> w to day }.flatMapLatest { (w, day) ->
             combine(
                 analyticsRepository.periodEconomics(w),
-                analyticsRepository.perStoreEconomics(w),
                 analyticsRepository.decisionEconomics(w),
                 // The Time tab's two window reads travel as ONE slot: the "typical online hour"
                 // composition and the while-working denominator are BOTH (time × gaps), so a slot
@@ -139,8 +141,8 @@ class AnalyticsViewModel @Inject constructor(
                 ) { (daily, orphans, offerGroups), (previous, payMixParts, platforms), estVsReality ->
                     WindowExtras(daily, orphans, offerGroups, previous, payMixParts, platforms, estVsReality)
                 },
-            ) { economics, stores, decisions, timeAndGaps, extras ->
-                WindowData(w, day, economics, stores, decisions, timeAndGaps.first, timeAndGaps.second, extras)
+            ) { economics, decisions, timeAndGaps, extras ->
+                WindowData(w, day, economics, decisions, timeAndGaps.first, timeAndGaps.second, extras)
             }
         },
         analyticsRepository.recentSessions(RECENT_SESSIONS_LIMIT),
@@ -159,7 +161,6 @@ class AnalyticsViewModel @Inject constructor(
             // hero rather than against a second, independently-derived total (Principle 5).
             payMix = PayMix.of(data.economics.grossEarnings, data.extras.payMixParts),
             platformSplit = data.extras.platformSplit,
-            topStores = data.stores.take(TOP_STORES),
             recentSessions = sessions,
             decisions = data.decisions,
             estimateVsReality = data.extras.estimateVsReality,
@@ -398,7 +399,6 @@ class AnalyticsViewModel @Inject constructor(
         val window: AnalyticsWindow,
         val today: LocalDate,
         val economics: PeriodEconomics,
-        val stores: List<StoreEconomics>,
         val decisions: DecisionEconomics,
         val time: TimeEconomics,
         val gaps: GapStats,
@@ -406,7 +406,6 @@ class AnalyticsViewModel @Inject constructor(
     )
 
     private companion object {
-        const val TOP_STORES = 5
         const val RECENT_SESSIONS_LIMIT = 10
         const val TAG = "AnalyticsVm"
     }

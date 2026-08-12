@@ -2,18 +2,13 @@ package cloud.trotter.dashbuddy.ui.main.analytics
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
-import cloud.trotter.dashbuddy.R
-import cloud.trotter.dashbuddy.core.designsystem.component.AppStatTile
-import cloud.trotter.dashbuddy.core.designsystem.text.EMPTY_VALUE
 import cloud.trotter.dashbuddy.core.designsystem.theme.AppTheme
 import cloud.trotter.dashbuddy.domain.analytics.DailyEarnings
 import cloud.trotter.dashbuddy.domain.analytics.OrphanOfferGroup
@@ -21,22 +16,29 @@ import cloud.trotter.dashbuddy.domain.analytics.PayMix
 import cloud.trotter.dashbuddy.domain.analytics.PeriodEconomics
 import cloud.trotter.dashbuddy.domain.analytics.PlatformEconomics
 import cloud.trotter.dashbuddy.domain.analytics.SessionRecord
-import cloud.trotter.dashbuddy.domain.analytics.StoreEconomics
-import cloud.trotter.dashbuddy.domain.evaluation.NetProfit
 import cloud.trotter.dashbuddy.domain.format.Formats
+import cloud.trotter.dashbuddy.ui.components.HowNumbersWorkFooter
 
 /**
- * Money tab (#315 H1, reworked by #973 — redesign stage 2 of epic #969, brief §4).
+ * Money tab (#315 H1, reworked by #973 — redesign stage 2 of epic #969, brief §4; **decluttered from
+ * nine containers to five by #1024 section B**).
  *
- * Reading order, top→bottom: **where your money went** (§4.1, the card that replaced the true-net
- * waterfall) → **what made up the gross** (§4.2 pay mix) → the three rate tiles → earnings by day
- * (tappable) → the platform split → **needs a look** (the consolidated review card) → top stores →
- * recent dashes. The window itself is chosen by the pager above the tabs (#970), so nothing here owns
- * a period selector.
+ * Reading order, top→bottom, one container each:
+ *  1. **the money story** — `$X came in. $Y went to the car.` over two bars: what came in (base /
+ *     tips / bonuses) and where it went (kept / gas / wear). Formerly two cards (#1024 B1).
+ *  2. **the rates and the days they came from** — net per hour / mile / drop as inline rows above the
+ *     earnings-by-day chart. Formerly a tile grid plus a chart card (#1024 B3).
+ *  3. **by platform** — one hairline row per platform (#1024 B4). Hidden below two platforms.
+ *  4. **needs a look** — the consolidated review rows. Hidden when the window is clean.
+ *  5. **recent sessions** — tap through to the per-dash drill-down.
  *
- * The gross headline the tab used to lead with is gone: the recap hero above states net + gross for
- * the same window, and §4.1's first line is literally "$X came in" — three copies of one number on
- * one screen is noise, not reassurance.
+ * Then the shared **"How these numbers work"** footer: ONE disclosure affordance for the screen
+ * (#1024 rule 2), owning the frozen-cost / estimate / cash-tip wording that used to be reprinted as a
+ * footnote per card. It is a footer row, not a sixth container.
+ *
+ * What is deliberately NOT here: the window's kept figure and its measured denominators (the recap
+ * hero above the tabs owns them), and the store list (the Playbook's leaderboard owns it since #1024
+ * part 1). Gross appears exactly once, as the money story's first clause.
  *
  * Pure data in / lambdas out — no side effects, no clock (every figure is a settled historical value).
  * Every rendered string routes through the [Formats]/`TimeFormats` SSOT, and all economics are
@@ -47,7 +49,6 @@ fun MoneyTab(
     economics: PeriodEconomics,
     payMix: PayMix,
     platformSplit: List<PlatformEconomics>,
-    topStores: List<StoreEconomics>,
     recentSessions: List<SessionRecord>,
     dailyEarnings: List<DailyEarnings>,
     orphanOfferGroups: List<OrphanOfferGroup>,
@@ -57,11 +58,10 @@ fun MoneyTab(
     modifier: Modifier = Modifier,
 ) {
     Column(modifier = modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-        MoneyWentCard(economics)
-        PayMixCard(payMix)
-        RateTiles(economics)
-        // Hidden for a single-day / unbounded / over-long window — the repository returns an empty axis.
-        if (dailyEarnings.isNotEmpty()) EarningsByDayCard(dailyEarnings)
+        MoneyWentCard(economics, payMix)
+        // The rates render for every window; only the day chart inside is hidden for a single-day /
+        // unbounded / over-long window (the repository returns an empty axis for those).
+        EarningsByDayCard(economics, dailyEarnings)
         PlatformSplitCard(platformSplit)
         NeedsALookCard(
             reviewItems(
@@ -71,54 +71,8 @@ fun MoneyTab(
                 onOpenOrphanOffers = onOpenOrphanOffers,
             ),
         )
-        TopStoresCard(topStores)
         RecentDashesCard(recentSessions, onOpenSession)
-    }
-}
-
-/**
- * Per hour / per mile / per drop as three equal tiles (#973 / brief §4.2), with miles + deliveries
- * beneath them (the two measured denominators — they appear nowhere else on this tab).
- *
- * Every rate is **kept** money over a measured denominator, and each stays `null` — rendered as the
- * em-dash placeholder — until its denominator exists: the [NetProfit] discipline, so a window with no
- * logged miles shows "—" rather than a fabricated `$0.00/mi`. Per-drop uses the same rule, computed
- * here against the delivery count because it is the one rate the read model does not already carry.
- */
-@Composable
-private fun RateTiles(economics: PeriodEconomics) {
-    val deliveries = economics.totals.deliveries
-    val netPerDrop = if (deliveries > 0) economics.netProfit / deliveries else null
-    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            AppStatTile(
-                label = stringResource(R.string.money_tab_stat_net_per_hour),
-                value = economics.netPerHour?.let { Formats.money(it) } ?: EMPTY_VALUE,
-                modifier = Modifier.weight(1f),
-            )
-            AppStatTile(
-                label = stringResource(R.string.money_tab_stat_net_per_mile),
-                value = economics.netPerMile?.let { Formats.money(it) } ?: EMPTY_VALUE,
-                modifier = Modifier.weight(1f),
-            )
-            AppStatTile(
-                label = stringResource(R.string.money_tab_stat_net_per_drop),
-                value = netPerDrop?.let { Formats.money(it) } ?: EMPTY_VALUE,
-                modifier = Modifier.weight(1f),
-            )
-        }
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            AppStatTile(
-                label = stringResource(R.string.money_tab_stat_miles),
-                value = Formats.decimal(economics.totals.miles),
-                modifier = Modifier.weight(1f),
-            )
-            AppStatTile(
-                label = stringResource(R.string.money_tab_stat_deliveries),
-                value = Formats.commaInt(deliveries),
-                modifier = Modifier.weight(1f),
-            )
-        }
+        HowNumbersWorkFooter()
     }
 }
 

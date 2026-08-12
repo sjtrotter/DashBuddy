@@ -106,8 +106,6 @@ fun AnalyticsScreen(
                 today = uiState.today,
                 economics = uiState.economics,
                 previousEconomics = uiState.previousEconomics,
-                decisions = uiState.decisions,
-                dailyEarnings = uiState.dailyEarnings,
             )
             Spacer(Modifier.height(16.dp))
 
@@ -133,7 +131,6 @@ fun AnalyticsScreen(
                     economics = uiState.economics,
                     payMix = uiState.payMix,
                     platformSplit = uiState.platformSplit,
-                    topStores = uiState.topStores,
                     recentSessions = uiState.recentSessions,
                     dailyEarnings = uiState.dailyEarnings,
                     orphanOfferGroups = uiState.orphanOfferGroups,

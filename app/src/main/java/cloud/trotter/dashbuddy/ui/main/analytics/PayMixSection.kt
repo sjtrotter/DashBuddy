@@ -1,5 +1,6 @@
 package cloud.trotter.dashbuddy.ui.main.analytics
 
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -15,7 +16,6 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import cloud.trotter.dashbuddy.R
 import cloud.trotter.dashbuddy.ui.components.DisclosureRow
-import cloud.trotter.dashbuddy.core.designsystem.component.AppCard
 import cloud.trotter.dashbuddy.core.designsystem.component.AppLegend
 import cloud.trotter.dashbuddy.core.designsystem.component.AppSegment
 import cloud.trotter.dashbuddy.core.designsystem.component.AppStackBar
@@ -27,14 +27,21 @@ import cloud.trotter.dashbuddy.domain.format.Formats
  * "What made up the gross" (#973 / brief §4.2) — base pay / tips / bonuses & other as one 3-segment
  * bar with a real-dollar legend, plus the one-line insight.
  *
+ * **#1024 B1 made this a SECTION, not a card.** It was `PayMixCard`, a bordered surface of its own
+ * sitting directly under the card that states the same window's gross in its first clause — two
+ * containers narrating one number. It now renders inside [MoneyWentCard] as the "what came in" half
+ * of that card's two bars. Nothing about the honesty machinery moved: every state below is the state
+ * the card had, and the only deletions are the card container and its own copy of the title, which
+ * is now the section label.
+ *
  * **Percentages are allowed HERE and only here** (brief §4.1 vs §4.2): the cost headline must never
  * restate money as a share, but the tips insight *is* a share statement — that's what makes it an
  * insight rather than a fourth dollar figure.
  *
  * Three honesty behaviours, all from [PayMix] (§9 — thin data is stated, never smoothed over):
- *  - **No itemization at all** → the card says the breakdown wasn't recorded instead of drawing a bar
- *    that claims 100% "bonuses". With zero coverage the residue IS the whole gross, and rendering it
- *    as a bonus figure would be a statement about the data dressed up as a fact about the pay.
+ *  - **No itemization at all** → the section says the breakdown wasn't recorded instead of drawing a
+ *    bar that claims 100% "bonuses". With zero coverage the residue IS the whole gross, and rendering
+ *    it as a bonus figure would be a statement about the data dressed up as a fact about the pay.
  *  - **Partial itemization** (the normal case — `basePay`/`tip` are stamped only on a job's SOLE drop,
  *    so every stacked job goes un-itemized) → the bar renders, with a caption naming the coverage and
  *    the insight downgraded to "at least N%".
@@ -44,10 +51,10 @@ import cloud.trotter.dashbuddy.domain.format.Formats
  * them separately, so driver-attested money is never silently blended into a platform-reported number.
  */
 @Composable
-fun PayMixCard(mix: PayMix, modifier: Modifier = Modifier) {
+internal fun PayMixSection(mix: PayMix, modifier: Modifier = Modifier) {
     val c = AppTheme.colors
     var partialCoverageExpanded by remember { mutableStateOf(false) }
-    AppCard(modifier = modifier.fillMaxWidth()) {
+    Column(modifier = modifier.fillMaxWidth()) {
         Text(
             text = stringResource(R.string.money_tab_pay_mix_title),
             style = MaterialTheme.typography.labelMedium,
@@ -61,7 +68,7 @@ fun PayMixCard(mix: PayMix, modifier: Modifier = Modifier) {
                 style = MaterialTheme.typography.bodyMedium,
                 color = c.text3,
             )
-            return@AppCard
+            return@Column
         }
 
         val segments = payMixSegments(mix)

@@ -806,7 +806,9 @@ hub next week still means *this* week, `Custom(start, endInclusive)` only for a 
 fail-closed to the current pay week. **Net per day (§7.3):** `DailyEarnings` gained `net` alongside `gross`
 (`sessionGrossRows`/`noSessionDailyRows` compute it from the same frozen columns + cash + the session's
 unattributed remainder), so Σ per-day net equals the window's `PeriodEconomics.netProfit` by construction and
-the hero's sparkline plots kept money, not gross. `dailyEarnings` returns an EMPTY axis for a single-day,
+the hero's sparkline plotted kept money, not gross (that sparkline was deleted by #1024 part 2 — the Money
+tab's day chart draws the same series with an axis and a tap, and the list now feeds only it).
+`dailyEarnings` returns an EMPTY axis for a single-day,
 unbounded, or over-`MAX_DAY_AXIS` (400-day) window. Read-side only — no schema change, no
 `PROJECTOR_VERSION` bump, no economy dependency. **Pay mix + platform split (#973, stage 2 — brief §7.6/§4.2):**
 `AnalyticsDao.payMixTotals` sums `basePay`/`tip`/`cashTip` over the delivery population `deliveryTotals`
@@ -1034,8 +1036,31 @@ blocks became four — one `Today` card (kept · net/hr online · drops · miles
 the plan strip), one `This week` card of hairline rows (recap · plan pointer · review), one row of four
 entry tiles (Analytics · Playbook · Ratings · Settings — the settings FAB and the Strategy/Economy
 tiles retired, with the gated permission/first-run states carrying their own Settings link), and the
-shared footer. Part 2 (Money 9 cards → 5) is in flight; the Money tab still renders its own
-`TopStoresCard` and per-card disclosures until it lands.
+shared footer.
+**Money + the recap hero followed as part 2 (#1024 sections A + B) — pure re-composition, zero read
+changes bar one DELETION.** The hero lost its card container, its sparkline and
+`analytics_hero_frozen_note`: it is the kept figure, the delta, and ONE facts line
+(`47 deliveries · 15h 49m online · 208.6 mi · vs $264.10 the window before`). Gross left that line
+(the money card's headline owns it) and so did acceptance (the Offers funnel owns it); miles arrived
+from the Money tab. The Money tab went **9 containers → 5**: `PayMixCard` became `PayMixSection`
+INSIDE `MoneyWentCard` (one card, two bars — what came in over where it went — headlined by the two
+surviving clauses `$X came in. $Y went to the car.`, the kept clause dropped because the hero states
+it); `RateTiles` became three inline rows above the day chart, its miles/deliveries tiles deleted
+outright; `PlatformSplitCard` became hairline rows (badge · a `PatternsModel.netBarFraction` bar ·
+kept · count — the per-platform gross column went with the tab's other gross copies); `TopStoresCard`
+was DELETED (the Playbook's leaderboard is the app's only store list) and its now-unread
+`perStoreEconomics` collection left `AnalyticsViewModel` with it — the one behavioural change in the
+part, and the reason `AnalyticsUiState.topStores` is gone; and `NeedsALookCard`/`RecentDashesCard`
+became divider-separated row lists with their content untouched (Home reuses `reviewItems`
+verbatim, so the flags/copy SSOT could not move). `HowNumbersWorkFooter` now renders at the tab
+bottom and the per-card copies of the wording it owns were deleted — the `MoneyWentCard` expanded
+disclosure's own per-mile content stays, only the shared frozen-cost sentence left. **Every §9 state
+still states its reason**, in a named place: pay-mix zero coverage / partial coverage / parts-exceed-
+gross inside `PayMixSection`, the fuel-split coverage guard inside the merged card's expanded
+disclosure, the null-denominator em-dash on each rate row, and the no-predecessor line
+(`analytics_hero_delta_none`) on the hero. One knock-on for #1024 part 3: `AppLegend` renders a
+computed PERCENTAGE whenever a segment note is `null`, so the de-duplicated kept segment passes an
+explicit `""` — blank the note, never null. Part 3 (Home 7 blocks → 4) is NOT in this change.
 **The "(No session)" bucket (#660 piece 1):** `delivery_records` rows whose source event carried
 NO `sessionId` at all were already counted in net (`deliveryTotals`'s own-`completedAt` fallback, #655)
 but invisible to gross (`grossAndUnattributed`/`sessionGrossRows` iterate `session_records` only, so a

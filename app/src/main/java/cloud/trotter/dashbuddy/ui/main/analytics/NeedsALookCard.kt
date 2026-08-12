@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.width
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -164,9 +165,13 @@ private fun reviewRows(
 }
 
 /**
- * "Needs a look (2)" (#973 / brief §4.2) — the consolidated review card. Four stacked amber strips
- * read as four alarms; one card with a count in its header reads as one list of chores, which is what
- * they are. Renders nothing at all when the window is clean.
+ * "Needs a look (2)" (#973 / brief §4.2) — the consolidated review card, a **hairline row list** since
+ * #1024 B6. Four stacked amber strips read as four alarms; one card with a count in its header reads
+ * as one list of chores, which is what they are, and dividers are what make a list look like one.
+ * Renders nothing at all when the window is clean.
+ *
+ * Presentation only: the flags, their thresholds, their copy and their actions are untouched — Home
+ * reuses [reviewItems]/[ReviewFlags] verbatim (#977), so this file stays the one owner of all three.
  */
 @Composable
 internal fun NeedsALookCard(items: List<ReviewItem>, modifier: Modifier = Modifier) {
@@ -197,7 +202,11 @@ internal fun ReviewList(items: List<ReviewItem>, modifier: Modifier = Modifier) 
         )
         Spacer(Modifier.height(10.dp))
         items.forEachIndexed { index, item ->
-            if (index > 0) Spacer(Modifier.height(10.dp))
+            if (index > 0) {
+                Spacer(Modifier.height(10.dp))
+                HorizontalDivider(color = c.line)
+                Spacer(Modifier.height(10.dp))
+            }
             val action = item.action
             Row(
                 verticalAlignment = Alignment.CenterVertically,
