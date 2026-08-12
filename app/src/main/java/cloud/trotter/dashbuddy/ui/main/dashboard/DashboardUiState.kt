@@ -11,9 +11,14 @@ import java.time.LocalDate
 
 /**
  * Immutable state for the home screen (Principle 1 — UDF), which #977 (redesign stage 4 of #969,
- * brief §2) turned into **"Today"**: a forward-looking glance — today's plan projected from the
- * driver's own history, so-far-today numbers, a week recap pointer, review items, then the entry
- * tiles.
+ * brief §2) turned into **"Today"**: a forward-looking glance — today's numbers and today's plan,
+ * the week's recap with its plan pointer and review items, then the entry tiles.
+ *
+ * **#1024 section D changed only the containers, never this state.** Seven blocks became four (one
+ * `Today` card, one `This week` card of hairline rows, one tile row, one disclosure footer) by
+ * merging and subtracting UI — no field here was added, dropped or re-derived, and no read was added
+ * to the ViewModel. Which is the point: a presentation merge that needed new state would have been a
+ * re-derivation in disguise.
  *
  * The dashboard is still a **review / plan** surface, not a live-while-dashing mirror of the bubble
  * HUD (#657): the bubble owns the strictly-live glance on a task. But it is no longer *static* —
@@ -50,7 +55,7 @@ data class DashboardUiState(
      * strip's weekday row, and the week window all roll over without a restart.
      */
     val today: LocalDate = LocalDate.now(),
-    /** Frozen-net economics for the rolling `TODAY` window — the "So far today" tiles. */
+    /** Frozen-net economics for the rolling `TODAY` window — the Today card's kept figure + figures. */
     val todayEconomics: PeriodEconomics = PeriodEconomics.EMPTY,
     /**
      * The driver's own realized net $/hr by hour-of-week, **lifetime** — the plan strip's only

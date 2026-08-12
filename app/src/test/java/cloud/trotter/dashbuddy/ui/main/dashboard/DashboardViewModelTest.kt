@@ -17,7 +17,10 @@ import cloud.trotter.dashbuddy.domain.analytics.EarningsHeatmapCalculator
 import cloud.trotter.dashbuddy.domain.analytics.EarningsHeatmapCell
 import cloud.trotter.dashbuddy.domain.analytics.OrphanOfferGroup
 import cloud.trotter.dashbuddy.domain.analytics.PeriodEconomics
+import cloud.trotter.dashbuddy.domain.analytics.PlanTarget
+import cloud.trotter.dashbuddy.domain.analytics.SavedPlanWindow
 import cloud.trotter.dashbuddy.domain.analytics.SavedWeeklyPlan
+import cloud.trotter.dashbuddy.domain.analytics.WeeklyPlanSchedule
 import cloud.trotter.dashbuddy.domain.analytics.PeriodTotals
 import cloud.trotter.dashbuddy.domain.analytics.WindowGranularity
 import cloud.trotter.dashbuddy.domain.state.AppState
@@ -44,6 +47,7 @@ import kotlinx.coroutines.test.setMain
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.mockito.kotlin.any
@@ -233,6 +237,35 @@ class DashboardViewModelTest {
             assertEquals(7, ui.weekDailyEarnings.size)
             assertEquals(1, ui.orphanOfferGroups.size)
             assertEquals("job-3", ui.orphanOfferGroups.first().jobId)
+        }
+    }
+
+    /**
+     * The saved plan for the week the driver is IN reaches the state (#981), which is what makes the
+     * merged week card's second row appear at all (#1024 D4 — no plan, no row: the card renders the
+     * recap alone rather than an empty placeholder advertising a screen nobody asked for).
+     */
+    @Test
+    fun `the saved plan for this week reaches the state for the week card's plan row`() = runTest {
+        whenever(stateManager.state).thenReturn(MutableStateFlow(onlineState()))
+        whenever(appStateRepository.isFirstRun).thenReturn(flowOf(false))
+
+        runWithViewModel { viewModel ->
+            assertNull(viewModel.uiState.value.weeklyPlan)
+        }
+
+        savedPlan = SavedWeeklyPlan(
+            weekStart = WeeklyPlanSchedule.weekStartOf(today),
+            savedAtMillis = 0L,
+            target = PlanTarget.Hours(2),
+            windows = listOf(SavedPlanWindow(0, 9, 11, 25.0, 5)),
+            projectedKept = 50.0,
+            randomKept = null,
+        )
+        runWithViewModel { viewModel ->
+            val plan = viewModel.uiState.value.weeklyPlan
+            assertEquals(2, plan!!.totalHours)
+            assertEquals(50.0, plan.projectedKept, 1e-9)
         }
     }
 
