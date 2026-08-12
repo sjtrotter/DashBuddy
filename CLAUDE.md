@@ -806,14 +806,17 @@ hub next week still means *this* week, `Custom(start, endInclusive)` only for a 
 fail-closed to the current pay week. **Net per day (§7.3):** `DailyEarnings` gained `net` alongside `gross`
 (`sessionGrossRows`/`noSessionDailyRows` compute it from the same frozen columns + cash + the session's
 unattributed remainder), so Σ per-day net equals the window's `PeriodEconomics.netProfit` by construction and
-the hero's sparkline plots kept money, not gross. `dailyEarnings` returns an EMPTY axis for a single-day,
+the hero's sparkline plotted kept money, not gross (that sparkline was deleted by #1024 part 2 — the Money
+tab's day chart draws the same series with an axis and a tap, and the list now feeds only it).
+`dailyEarnings` returns an EMPTY axis for a single-day,
 unbounded, or over-`MAX_DAY_AXIS` (400-day) window. Read-side only — no schema change, no
 `PROJECTOR_VERSION` bump, no economy dependency. **Pay mix + platform split (#973, stage 2 — brief §7.6/§4.2):**
 `AnalyticsDao.payMixTotals` sums `basePay`/`tip`/`cashTip` over the delivery population `deliveryTotals`
 describes (byte-identical `WHERE`), and `AnalyticsRepository.payMixParts(window|period)` serves it as the
 `:domain` `PayMixParts`; the pure `PayMix.of(gross, parts)` composes it with the window's OWN
 `PeriodEconomics.grossEarnings` at the read site (gross keeps one owner — the repository's `assemble` fold —
-so the bar always reconciles with the hero). `bonuses & other` is the RESIDUE `gross − base − tips − cash`,
+so the bar always reconciles with the headline stating that gross; that headline was the recap hero until
+#1024 part 2 moved gross off it, and is the money card's own `$X came in.` clause now). `bonuses & other` is the RESIDUE `gross − base − tips − cash`,
 **floored at 0** with `partsExceedGross`/`grossOverflow` recording an over-cent negative rather than absorbing
 it. `basePay`/`tip` are stamped only on a job's SOLE drop, so partial coverage is the NORMAL case:
 `deliveriesWithBreakdown`/`deliveries` drive a stated caveat + an "at least N%" tips insight, and ZERO coverage
@@ -1034,8 +1037,55 @@ blocks became four — one `Today` card (kept · net/hr online · drops · miles
 the plan strip), one `This week` card of hairline rows (recap · plan pointer · review), one row of four
 entry tiles (Analytics · Playbook · Ratings · Settings — the settings FAB and the Strategy/Economy
 tiles retired, with the gated permission/first-run states carrying their own Settings link), and the
-shared footer. Part 2 (Money 9 cards → 5) is in flight; the Money tab still renders its own
-`TopStoresCard` and per-card disclosures until it lands.
+shared footer.
+**Money + the recap hero followed as part 2 (#1024 sections A + B) — pure re-composition, zero read
+changes bar one DELETION.** The hero lost its card container, its sparkline and
+`analytics_hero_frozen_note`: it is the kept figure, the delta, and ONE facts line
+(`47 deliveries · 15h 49m online · 208.6 mi · vs $264.10 the window before`). Gross left that line
+(the money card's headline owns it) and so did acceptance (the Offers funnel owns it); miles arrived
+from the Money tab. The Money tab went **9 containers → 5**: `PayMixCard` became `PayMixSection`
+INSIDE `MoneyWentCard` (one card, two bars — what came in over where it went — headlined by the two
+surviving clauses `$X came in. $Y went to the car.`, the kept clause dropped because the hero states
+it — **except on a LOSING window**, where the clause returns in the bad tone, because `AppStackBar`
+weights on the value so a negative kept segment is a zero-width sliver and the legend note is silent:
+without the clause a window that cost more than it paid would show a green key beside nothing, the
+#662-F1 anomaly papered over); `RateTiles` became three inline rows above the day chart, its
+miles/deliveries tiles deleted outright, and the card now renders for EVERY window with only the
+chart half hidden on an empty day axis (a Lifetime/single-day window must not lose its rates);
+`PlatformSplitCard` became hairline rows (badge · count · kept, then a FULL-WIDTH
+`PatternsModel.netBarFraction` bar on its own line — inline, the track started after a variable-width
+chip and ended before a variable-width figure, so equal fractions drew unequal bars; the per-platform
+gross column went with the tab's other gross copies); `TopStoresCard`
+was DELETED (the Playbook's leaderboard is the app's only store list) and the **whole dead chain**
+went with it — `AnalyticsUiState.topStores`, the ViewModel's collection, `AnalyticsRepository.
+perStoreEconomics` (both overloads + core + `chainBucket`), `AnalyticsDao.deliveryTotalsByStore` /
+`storeChainDisplays` + their row types, and the `:domain` `StoreEconomics` chain model, plus their
+dedicated tests; two overlapping store models is the drift Principle 5 names, so the unused one goes
+rather than waiting for a second surface to pick the wrong one. `NeedsALookCard`/`RecentDashesCard`
+became divider-separated row lists with their content untouched (Home reuses `reviewItems`
+verbatim, so the flags/copy SSOT could not move). `HowNumbersWorkFooter` renders in
+**`AnalyticsScreen`, below the tab content** — NOT inside `MoneyTab`: the recap hero states frozen
+net ABOVE the tab switch, so a footer only the Money branch composed would leave Offers and Time
+showing that headline with its qualifier nowhere on screen. The per-card copies of the wording it
+owns were deleted — the `MoneyWentCard` expanded disclosure's own per-mile content stays, only the
+shared frozen-cost sentence left. **Every §9 state
+still states its reason**, in a named place: pay-mix zero coverage / partial coverage / parts-exceed-
+gross inside `PayMixSection`, the fuel-split coverage guard inside the merged card's expanded
+disclosure, the null-denominator em-dash on each rate row, and the no-predecessor line
+(`analytics_hero_delta_none`) on the hero — whose facts-line comparison clause requires a **non-EMPTY**
+predecessor (`NetDelta.isEmpty`), since an unworked previous week arrives as a real zero-filled
+`PeriodEconomics` and `vs $0.00 the window before` would read as a measurement of a worked week.
+Two shared renders came out of the pass, both in `:app`'s `ui/components/` beside `PatternsModel`:
+`NetBar` (the leaderboard's proportional bar, which the platform rows had copied byte-for-byte) and
+`HairlineDivider` (the row-list separator, five call sites in one tab — `:feature:dashboard` keeps
+its own module-internal copy for Home by the honest-deps doctrine). And the design system gained a
+first-class **three-way legend note** (`AppSegment.noteHidden` + the pure `legendNote`, unit-tested
+in `:core:designsystem`): a stated figure, a `null` that falls back to the computed PERCENTAGE, and
+an explicit "say nothing here" for a figure another surface owns. The Money card's kept segment uses
+the third — the `""` sentinel it shipped with first was one `isNullOrBlank()` tidy-up away from
+silently rendering a share. (Part 3 landed first, so Home's own `Hairline` and the footer's
+`includePlanProjection` flag predate this; the hub passes the flag's default — a period-scoped review
+surface projects nothing.)
 **The "(No session)" bucket (#660 piece 1):** `delivery_records` rows whose source event carried
 NO `sessionId` at all were already counted in net (`deliveryTotals`'s own-`completedAt` fallback, #655)
 but invisible to gross (`grossAndUnattributed`/`sessionGrossRows` iterate `session_records` only, so a

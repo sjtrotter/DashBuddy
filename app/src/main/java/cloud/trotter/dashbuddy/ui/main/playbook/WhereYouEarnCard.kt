@@ -1,9 +1,7 @@
 package cloud.trotter.dashbuddy.ui.main.playbook
 
-import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
@@ -15,7 +13,6 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -33,7 +30,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
@@ -49,6 +45,7 @@ import cloud.trotter.dashbuddy.domain.analytics.StoreReportCard
 import cloud.trotter.dashbuddy.domain.format.Formats
 import cloud.trotter.dashbuddy.domain.format.formatDuration
 import cloud.trotter.dashbuddy.domain.format.formatShortDate
+import cloud.trotter.dashbuddy.ui.components.NetBar
 import cloud.trotter.dashbuddy.ui.components.PatternsModel
 import cloud.trotter.dashbuddy.ui.components.PatternsModel.LeaderboardSort
 
@@ -185,24 +182,11 @@ private fun LeaderboardRow(rank: Int, card: StoreReportCard, maxNet: Double, out
                 StoreLocationChip(card)
             }
             Spacer(Modifier.height(6.dp))
-            // Proportional net bar — fraction-of-#1-store, so it stays a stable scale across sort chips.
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(6.dp)
-                    .clip(RoundedCornerShape(3.dp))
-                    .background(c.surface3),
-            ) {
-                if (fraction > 0f) {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth(fraction)
-                            .height(6.dp)
-                            .clip(RoundedCornerShape(3.dp))
-                            .background(netColor),
-                    )
-                }
-            }
+            // Proportional net bar — fraction-of-#1-store, so it stays a stable scale across sort
+            // chips. The render itself is the shared [NetBar] (#1024 part 2 review F7): the Money
+            // tab's by-platform row draws the identical bar, and two hand-copied Boxes are one
+            // edit away from disagreeing.
+            NetBar(fraction = fraction, color = netColor)
             Spacer(Modifier.height(6.dp))
             val deliveriesWord = if (card.deliveries == 1) {
                 stringResource(R.string.time_tab_delivery_singular)

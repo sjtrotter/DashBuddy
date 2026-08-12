@@ -106,22 +106,14 @@ data class PlatformEconomics(
     val economics: PeriodEconomics,
 )
 
-/**
- * Per-**chain** economics for a period (#314/#159 F9) — the top-stores list, rolled up to the chain
- * level: both a resolved keyed location and its unresolved/MANUAL raw form on the same platform fold
- * into one bucket. [gross] is Σ realized delivery pay (+ cash) for the chain; [net] is Σ frozen delivery
- * net (+ cash). [storeName] is the chain's display name (first-observed `stores.chainDisplay`, else a
- * representative raw form). Per-LOCATION detail lives on [StoreReportCard]; this is the chain rollup.
+/*
+ * `StoreEconomics` — the per-CHAIN period rollup — was deleted by #1024 part 2 (B5) along with the
+ * `perStoreEconomics` read that produced it and the `TopStoresCard` that rendered it. The app has one
+ * store list now, the Playbook's lifetime leaderboard, and its type is [StoreReportCard] below: a
+ * per-LOCATION entity with visit stats, not a period-scoped chain bucket. Two overlapping store models
+ * is precisely the drift Principle 5 names, so the unused one goes rather than waiting for a second
+ * surface to pick the wrong one.
  */
-data class StoreEconomics(
-    val storeName: String?,
-    val net: Double,
-    val gross: Double,
-    val deliveries: Int,
-    /** The chain-level bucket identity `platform + "|" + normalizedChain` (#159 F9) — NOT a
-     *  per-location storeKey (that granularity is [StoreReportCard]). */
-    val storeKey: String? = null,
-)
 
 /**
  * One store's report card (#159, the #315 Patterns tab consumer) — the resolved store entity plus its

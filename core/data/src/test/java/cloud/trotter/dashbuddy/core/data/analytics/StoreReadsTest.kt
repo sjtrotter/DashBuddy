@@ -102,44 +102,6 @@ class StoreReadsTest {
     )
 
     @Test
-    fun `F9 — unresolved rows fold by normalizedChain, not raw text`() = runBlocking {
-        // Two unresolved (storeKey null) rows differing only in casing/whitespace → ONE chain bucket.
-        dao.upsertDelivery(deliveryRow(1, "Target", null, pay = 10.0, net = 8.0))
-        dao.upsertDelivery(deliveryRow(2, "  target ", null, pay = 5.0, net = 4.0))
-
-        val stores = repo.perStoreEconomics(AnalyticsPeriod.LIFETIME).first()
-        assertEquals("casing/whitespace variants fold into one bucket (F9)", 1, stores.size)
-        assertEquals(15.0, stores.single().gross, 0.001)
-        assertEquals(12.0, stores.single().net, 0.001)
-    }
-
-    @Test
-    fun `F9 — a resolved keyed store and its unresolved chain form MERGE into one chain bucket (FIX 8)`() = runBlocking {
-        dao.upsertDelivery(deliveryRow(1, "Target (02426)", "doordash|target|02426", pay = 10.0, net = 8.0))
-        dao.upsertDelivery(deliveryRow(2, "Target", null, pay = 5.0, net = 4.0))
-
-        val stores = repo.perStoreEconomics(AnalyticsPeriod.LIFETIME).first()
-        assertEquals("keyed + unresolved fold to ONE chain bucket (F9/FIX 8)", 1, stores.size)
-        assertEquals("doordash|target", stores.single().storeKey)
-        assertEquals(15.0, stores.single().gross, 0.001)
-        assertEquals(12.0, stores.single().net, 0.001)
-    }
-
-    @Test
-    fun `F9 — two keyed locations of one chain roll up to a single chain bucket (FIX 8)`() = runBlocking {
-        dao.upsertDelivery(deliveryRow(1, "Target (02426)", "doordash|target|02426", pay = 10.0, net = 8.0))
-        dao.upsertDelivery(deliveryRow(2, "Target (99999)", "doordash|target|99999", pay = 6.0, net = 5.0))
-        // A chainDisplay for the chain feeds the bucket's display name.
-        dao.upsertStore(storeRow("doordash|target|02426", "target", "02426"))
-
-        val stores = repo.perStoreEconomics(AnalyticsPeriod.LIFETIME).first()
-        assertEquals(1, stores.size)
-        assertEquals("doordash|target", stores.single().storeKey)
-        assertEquals("Target", stores.single().storeName) // chainDisplay preferred
-        assertEquals(16.0, stores.single().gross, 0.001)
-    }
-
-    @Test
     fun `FIX 4 — the report card gross and net include cash tips`() = runBlocking {
         val key = "doordash|target|02426"
         dao.upsertStore(storeRow(key, "target", "02426"))

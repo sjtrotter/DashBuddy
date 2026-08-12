@@ -194,8 +194,43 @@ fun AppGaugeRing(
     }
 }
 
-/** A proportion in a stacked bar / legend. */
-data class AppSegment(val label: String, val value: Float, val color: Color, val note: String? = null)
+/**
+ * A proportion in a stacked bar / legend.
+ *
+ * The legend's note slot is a **three-way** choice, and the three are deliberately distinct
+ * (#1024 review F5 — it used to be a `""` sentinel understood only by one call site):
+ *  - `note = "…"` — state this figure. Real dollars, wherever the caller has them.
+ *  - `note = null` — the caller has no figure, so the legend computes the **percentage share**.
+ *  - `noteHidden = true` — state NOTHING. Not "we don't know", but "this figure is stated
+ *    elsewhere on the screen and must not be repeated here" (the Money tab's kept segment, whose
+ *    dollars are the recap hero's headline — #1024 rule 1).
+ *
+ * The middle case is the trap: a legend that silently falls back to a percentage would turn a
+ * de-duplicated money figure into a share, which the money card's own copy rules forbid. Hiding is
+ * therefore its own flag rather than an empty string, so no `isNullOrBlank()` "hardening" can
+ * collapse the two. [legendNote] is the pure decision and is unit-tested.
+ */
+data class AppSegment(
+    val label: String,
+    val value: Float,
+    val color: Color,
+    val note: String? = null,
+    val noteHidden: Boolean = false,
+)
+
+/**
+ * What [AppLegend] prints in a segment's note slot, or null to print nothing — the pure half of the
+ * component, so the three-way rule above is provable without composing anything.
+ *
+ * [total] is the sum of the legend's segment values; a non-positive total makes the percentage
+ * meaningless, so it degrades to `0%` exactly as the renderer's own guard did.
+ */
+fun legendNote(segment: AppSegment, total: Float): String? = when {
+    segment.noteHidden -> null
+    segment.note != null -> segment.note
+    total > 0f -> "${(segment.value / total * 100f).roundToInt()}%"
+    else -> "0%"
+}
 
 /** Stacked proportion bar — offer funnel, time split, deadhead ratio. */
 @Composable
@@ -208,12 +243,16 @@ fun AppStackBar(segments: List<AppSegment>, modifier: Modifier = Modifier, heigh
     }
 }
 
-/** Legend for a [AppStackBar]. Shows each key + its `note` (or computed percent). */
+/**
+ * Legend for a [AppStackBar]. Shows each key + its note — see [AppSegment] for the three-way note
+ * rule (stated figure / computed percentage / deliberately silent) and [legendNote] for the pure
+ * decision this renders.
+ */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun AppLegend(segments: List<AppSegment>, modifier: Modifier = Modifier) {
     val c = AppTheme.colors
-    val total = segments.sumOf { it.value.toDouble() }.toFloat().takeIf { it > 0f } ?: 1f
+    val total = segments.sumOf { it.value.toDouble() }.toFloat()
     FlowRow(
         modifier,
         horizontalArrangement = Arrangement.spacedBy(16.dp),
@@ -223,11 +262,9 @@ fun AppLegend(segments: List<AppSegment>, modifier: Modifier = Modifier) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 Box(Modifier.size(9.dp).clip(MaterialTheme.shapes.extraSmall).background(s.color))
                 Text(s.label, style = MaterialTheme.typography.bodySmall, color = c.text2)
-                Text(
-                    s.note ?: "${(s.value / total * 100f).roundToInt()}%",
-                    style = AppTheme.num.smNum,
-                    color = c.text,
-                )
+                legendNote(s, total)?.let { note ->
+                    Text(note, style = AppTheme.num.smNum, color = c.text)
+                }
             }
         }
     }

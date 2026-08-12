@@ -66,32 +66,6 @@ data class PlatformDeliveryTotalsRow(
 )
 
 /**
- * Per-(storeKey, storeName, platform) delivery totals (#159 F9 raw input). [storeKey] is null for an
- * unresolved row; [platform] lets the repository fold every row to `platform + "|" + normalizedChain`
- * (chain from the storeKey's middle segment when keyed, else the normalizer over [storeName]), merging
- * a resolved keyed location and its unresolved chain form into ONE bucket. [storeName] is a
- * representative raw form of the group (the display name prefers `stores.chainDisplay`).
- */
-data class StoreTotalsRow(
-    val storeKey: String?,
-    val storeName: String?,
-    val platform: String,
-    val pay: Double,
-    val net: Double,
-    val deliveries: Int,
-    /** Σ driver-entered cash tips for the store's period rows (#688) — see [DeliveryTotalsRow.cash]. */
-    val cash: Double,
-)
-
-/** First-observed chain-display capitalization per (platform, normalizedChain) — the F9 rollup's
- *  display-name source (#159). */
-data class StoreChainDisplayRow(
-    val platform: String,
-    val normalizedChain: String,
-    val chainDisplay: String,
-)
-
-/**
  * One store's report-card rollup (#159, the #315 Patterns tab) — the `stores` metadata plus
  * derived-at-read pickup/delivery counts and realized gross/net. Dwell percentiles are computed in the
  * repository from [StoreDwellSample]. A [runningKey] of null is a **chain-only ("location unknown")**

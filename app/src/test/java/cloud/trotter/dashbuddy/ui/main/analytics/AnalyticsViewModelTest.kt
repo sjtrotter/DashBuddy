@@ -18,7 +18,6 @@ import cloud.trotter.dashbuddy.domain.analytics.PeriodEconomics
 import cloud.trotter.dashbuddy.domain.analytics.PeriodTotals
 import cloud.trotter.dashbuddy.domain.analytics.PlatformEconomics
 import cloud.trotter.dashbuddy.domain.analytics.SessionRecord
-import cloud.trotter.dashbuddy.domain.analytics.StoreEconomics
 import cloud.trotter.dashbuddy.domain.analytics.TimeEconomics
 import cloud.trotter.dashbuddy.domain.analytics.WindowGranularity
 import cloud.trotter.dashbuddy.domain.state.Platform
@@ -82,10 +81,18 @@ class AnalyticsViewModelTest {
     /** Per-window economics the stubbed repository serves; anything unlisted reads EMPTY. */
     private val economicsByWindow = mutableMapOf<AnalyticsWindow, PeriodEconomics>()
 
-    /** Per-window top stores; anything unlisted reads empty. */
-    private val storesByWindow = mutableMapOf<AnalyticsWindow, List<StoreEconomics>>()
-
     private var decisions: DecisionEconomics = DecisionEconomics.EMPTY
+
+    /**
+     * Per-window decision economics; anything unlisted falls back to [decisions].
+     *
+     * This is the SECOND window-keyed source in the fan-out, and it exists to prove the combine
+     * re-anchors ALL of them together rather than just the one the assertion happens to read — the
+     * job the retired `storesByWindow` map used to do before #1024 B5 deleted its read (part-2
+     * review F8). A tile rendering one window's number under another window's label is exactly what
+     * the atomic re-anchor prevents.
+     */
+    private val decisionsByWindow = mutableMapOf<AnalyticsWindow, DecisionEconomics>()
     private var dailyEarnings: List<DailyEarnings> = emptyList()
 
     /** #973 — the Money tab's pay-mix parts and platform split, served for every window. */
@@ -117,12 +124,10 @@ class AnalyticsViewModelTest {
             .thenAnswer { invocation ->
                 flowOf(economicsByWindow[invocation.getArgument<AnalyticsWindow>(0)] ?: PeriodEconomics.EMPTY)
             }
-        whenever(analyticsRepository.perStoreEconomics(any<AnalyticsWindow>(), any<ZoneId>()))
-            .thenAnswer { invocation ->
-                flowOf(storesByWindow[invocation.getArgument<AnalyticsWindow>(0)] ?: emptyList<StoreEconomics>())
-            }
         whenever(analyticsRepository.decisionEconomics(any<AnalyticsWindow>(), any<ZoneId>()))
-            .thenAnswer { flowOf(decisions) }
+            .thenAnswer { invocation ->
+                flowOf(decisionsByWindow[invocation.getArgument<AnalyticsWindow>(0)] ?: decisions)
+            }
         whenever(analyticsRepository.timeEconomics(any<AnalyticsWindow>(), any<ZoneId>()))
             .thenAnswer { flowOf(time) }
         // #983: the §7.8 gap read shares the Time tab's slot, so it must always be stubbed.
@@ -151,9 +156,9 @@ class AnalyticsViewModelTest {
         whenever(analyticsRepository.offerCount(any<AnalyticsWindow>(), any(), any<ZoneId>()))
             .thenAnswer { flowOf(offerListings.size) }
         whenever(analyticsRepository.recentSessions(any())).thenReturn(flowOf(emptyList()))
-        // #1024: the hub no longer reads the LIFETIME-scoped `storeReportCards`/`earningsHeatmap` —
-        // those moved to the Playbook (`PlaybookViewModel`), so every source stubbed here is
-        // window-anchored.
+        // #1024: the hub no longer reads the LIFETIME-scoped `storeReportCards`/`earningsHeatmap`
+        // (part 1) nor the window-scoped `perStoreEconomics` (part 2, B5) — every store surface is
+        // the Playbook's now, so every source stubbed here is window-anchored AND rendered.
     }
 
     private fun currentWeek() = AnalyticsWindows.current(WindowGranularity.WEEK, today)
@@ -188,9 +193,6 @@ class AnalyticsViewModelTest {
             netPerHour = netPerHour,
             netPerMile = null,
         )
-
-    private fun store(name: String, net: Double, deliveries: Int) =
-        StoreEconomics(storeName = name, net = net, gross = net, deliveries = deliveries)
 
     private fun session(id: String, reported: Double?) = SessionRecord(
         sessionId = id, platform = Platform.DoorDash, startedAt = 1_700_000_000_000L, endedAt = null,
@@ -245,7 +247,6 @@ class AnalyticsViewModelTest {
     @Test
     fun `defaults to the current pay week on the Money tab and maps the read-model into state`() = runTest {
         economicsByWindow[currentWeek()] = economics(net = 312.0, netPerHour = 24.0)
-        storesByWindow[currentWeek()] = listOf(store("H-E-B", 120.0, 5), store("Chili's", 40.0, 2))
         stubSessions(listOf(session("s1", 90.0), session("s2", null)))
 
         runWithViewModel { viewModel ->
@@ -254,7 +255,6 @@ class AnalyticsViewModelTest {
             assertEquals(WindowGranularity.WEEK, ui.window.granularity)
             assertEquals(AnalyticsTab.Money, ui.selectedTab)
             assertEquals(312.0, ui.economics.netProfit, 1e-9)
-            assertEquals(2, ui.topStores.size)
             assertEquals(2, ui.recentSessions.size)
         }
     }
@@ -328,15 +328,22 @@ class AnalyticsViewModelTest {
         }
     }
 
+    /**
+     * Paging the window re-anchors EVERY window-keyed source together, not just the economics the
+     * hero reads: both sources here are keyed per window and both must flip on the same step, or a
+     * tab could render last week's funnel under this week's label for a frame (part-2 review F8 —
+     * this replaces the coverage the deleted `perStoreEconomics` stub used to provide).
+     */
     @Test
-    fun `stepWindow re-anchors economics and top stores to the paged window`() = runTest {
+    fun `stepWindow re-anchors every window-keyed source to the paged window`() = runTest {
         economicsByWindow[currentWeek()] = economics(net = 312.0, netPerHour = 24.0)
-        storesByWindow[currentWeek()] = listOf(store("H-E-B", 120.0, 5))
         economicsByWindow[lastWeek()] = economics(net = 1280.0, netPerHour = 22.0)
-        storesByWindow[lastWeek()] = listOf(store("Target", 400.0, 12))
+        decisionsByWindow[currentWeek()] = decisions(accepted = 3, declined = 1, timedOut = 0, acceptanceRate = 0.75)
+        decisionsByWindow[lastWeek()] = decisions(accepted = 9, declined = 11, timedOut = 0, acceptanceRate = 0.45)
 
         runWithViewModel { viewModel ->
             assertEquals(312.0, viewModel.uiState.value.economics.netProfit, 1e-9)
+            assertEquals(3, viewModel.uiState.value.decisions.accepted)
 
             viewModel.stepWindow(-1)
             testScheduler.runCurrent()
@@ -344,7 +351,8 @@ class AnalyticsViewModelTest {
             val ui = viewModel.uiState.value
             assertEquals(lastWeek(), ui.window)
             assertEquals(1280.0, ui.economics.netProfit, 1e-9)
-            assertEquals("Target", ui.topStores.single().storeName)
+            assertEquals("the decisions slot re-anchored with the economics", 9, ui.decisions.accepted)
+            assertEquals(0.45, ui.decisions.acceptanceRate!!, 1e-9)
         }
     }
 
@@ -513,7 +521,6 @@ class AnalyticsViewModelTest {
             val ui = viewModel.uiState.value
             assertEquals(0.0, ui.economics.netProfit, 1e-9)
             assertEquals(null, ui.economics.netPerHour)
-            assertTrue(ui.topStores.isEmpty())
             assertTrue(ui.recentSessions.isEmpty())
         }
     }

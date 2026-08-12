@@ -480,13 +480,12 @@
     <string name="money_tab_stat_net_per_hour">Net/hr</string>
     <string name="money_tab_stat_net_per_mile">Net/mi</string>
     <string name="money_tab_stat_net_per_drop">Net/drop</string>
-    <string name="money_tab_stat_miles">Miles</string>
-    <string name="money_tab_stat_deliveries">Deliveries</string>
 
     <!-- main/analytics/MoneyWentCard.kt (brief §4.1) -->
     <string name="money_tab_where_went_title">WHERE YOUR MONEY WENT</string>
     <string name="money_tab_where_went_came_in">%1$s came in.</string>
     <string name="money_tab_where_went_car">%1$s went to the car.</string>
+    <!-- Rendered ONLY when kept money is negative (#1024 review F3) — the hero owns the positive case. -->
     <string name="money_tab_where_went_kept">%1$s stayed with you.</string>
     <string name="money_tab_where_went_segment_kept">Stayed with you</string>
     <string name="money_tab_where_went_segment_gas">Gas</string>
@@ -520,9 +519,6 @@
     <!-- main/analytics/MoneyBreakdownCards.kt -->
     <string name="money_tab_platform_split_title">BY PLATFORM</string>
     <string name="money_tab_platform_split_kept_format">%1$s kept</string>
-    <string name="money_tab_top_stores_title">TOP STORES</string>
-    <string name="money_tab_no_store_earnings_yet">No store earnings in this period yet.</string>
-    <string name="money_tab_unknown_store">Unknown store</string>
     <string name="money_tab_unattributed_callout_format">%1$s not attributed to any delivery — bonuses or adjustments</string>
     <string name="money_tab_over_attributed_callout_format">attributed exceeds reported by %1$s — review estimates/corrections</string>
     <string name="money_tab_no_session_callout_format">(No session): %1$s across %2$s %3$s not tied to a dash</string>
@@ -711,17 +707,15 @@
 
     <!-- ui/main/analytics/RecapHero.kt — the #970 recap hero above the tabs -->
     <string name="analytics_hero_kept_label">You kept</string>
-    <string name="analytics_hero_frozen_note">Net frozen at accept-time costs</string>
     <string name="analytics_hero_delta_up_format">▲ %1$s vs %2$s</string>
     <string name="analytics_hero_delta_down_format">▼ %1$s vs %2$s</string>
     <string name="analytics_hero_delta_flat_format">Same as %1$s</string>
     <string name="analytics_hero_delta_none">No earlier window to compare</string>
     <string name="analytics_hero_delta_from_nothing_format">Up from nothing in %1$s</string>
-    <string name="analytics_hero_previous_window">the window before</string>
-    <string name="analytics_hero_summary_gross_format">%1$s gross</string>
     <string name="analytics_hero_summary_deliveries_format">%1$s %2$s</string>
     <string name="analytics_hero_summary_online_format">%1$s online</string>
-    <string name="analytics_hero_summary_acceptance_format">%1$s acceptance</string>
+    <string name="analytics_hero_summary_miles_format">%1$s mi</string>
+    <string name="analytics_hero_summary_previous_format">vs %1$s the window before</string>
     <string name="analytics_hero_summary_separator"> · </string>
     <string name="analytics_hero_no_data">Nothing recorded in this window</string>
 

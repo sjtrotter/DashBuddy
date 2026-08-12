@@ -20,7 +20,6 @@ import cloud.trotter.dashbuddy.domain.analytics.PayMix
 import cloud.trotter.dashbuddy.domain.analytics.PeriodEconomics
 import cloud.trotter.dashbuddy.domain.analytics.PlatformEconomics
 import cloud.trotter.dashbuddy.domain.analytics.SessionRecord
-import cloud.trotter.dashbuddy.domain.analytics.StoreEconomics
 import cloud.trotter.dashbuddy.domain.analytics.TimeEconomics
 import java.time.LocalDate
 
@@ -97,7 +96,7 @@ data class AnalyticsUiState(
     /**
      * How the window's gross broke down — base pay / tips / bonuses & other (#973, brief §4.2/§7.6).
      * Composed at the ViewModel from the window's own gross and the measured pay-mix parts, so the
-     * card can never render a mix against a different window's total than the hero above it.
+     * card can never render a mix against a different window's total than its own headline states.
      */
     val payMix: PayMix = PayMix.EMPTY,
     /**
@@ -106,12 +105,11 @@ data class AnalyticsUiState(
      * whatever the data contains, never a fixed set (Principle 8).
      */
     val platformSplit: List<PlatformEconomics> = emptyList(),
-    /** Top-earning stores for [window] (already capped to the display count). */
-    val topStores: List<StoreEconomics> = emptyList(),
     /**
-     * Per-day earnings for [window] — the Money-tab earnings-by-day chart (#315 H6) and the recap
-     * hero's net sparkline (#970 §7.3). Empty for a single-day, unbounded, or over-long window, so
-     * both surfaces hide their chart on an empty list.
+     * Per-day earnings for [window] — the Money-tab earnings-by-day chart (#315 H6). Empty for a
+     * single-day, unbounded, or over-long window, so the chart hides on an empty list. (#1024 A took
+     * the recap hero's sparkline off this same list: the chart below it is strictly more informative,
+     * and one series drawn twice on one screen is the repetition that issue exists to remove.)
      */
     val dailyEarnings: List<DailyEarnings> = emptyList(),
     /** Most recent dash sessions, newest first — each row taps through to the per-dash drill-down (#650). */

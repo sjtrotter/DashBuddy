@@ -19,12 +19,14 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import cloud.trotter.dashbuddy.R
 import cloud.trotter.dashbuddy.ui.components.DisclosureRow
+import cloud.trotter.dashbuddy.ui.components.HairlineDivider
 import cloud.trotter.dashbuddy.core.designsystem.component.AppCard
 import cloud.trotter.dashbuddy.core.designsystem.component.AppLegend
 import cloud.trotter.dashbuddy.core.designsystem.component.AppSegment
 import cloud.trotter.dashbuddy.core.designsystem.component.AppStackBar
 import cloud.trotter.dashbuddy.core.designsystem.text.EMPTY_VALUE
 import cloud.trotter.dashbuddy.core.designsystem.theme.AppTheme
+import cloud.trotter.dashbuddy.domain.analytics.PayMix
 import cloud.trotter.dashbuddy.domain.analytics.PeriodEconomics
 import cloud.trotter.dashbuddy.domain.format.Formats
 
@@ -104,53 +106,76 @@ object MoneyWentModel {
 }
 
 /**
- * "Where your money went" (#973 / brief §4.1) — the card that replaced the true-net waterfall, whose
- * four bars were uninformative by construction (fuel and non-fuel are always a thin sliver against
- * gross, so three of the four bars carried no shape).
+ * **The money story — one card, two bars** (#973 / brief §4.1 + §4.2, merged by #1024 B1).
  *
- * Copy rules from the brief, held exactly: plain words (`gas`, `wear on the car`, `stayed with you` —
- * never "non-fuel operating cost"); no cents-per-dollar math on the default view; **never** a
- * percentage in the headline. The legend carries real dollars, not shares.
+ * It began as "Where your money went", the card that replaced the true-net waterfall (whose four bars
+ * were uninformative by construction — fuel and non-fuel are always a thin sliver against gross, so
+ * three of the four carried no shape). #1024 folded the former `PayMixCard` in beside it: both cards
+ * decompose the SAME window gross, one into where it came from and one into where it went, and
+ * standing them side by side as equal-weight containers meant the tab opened with two bordered
+ * surfaces narrating one number. Now the headline states that number once and the two bars are its
+ * two decompositions, in reading order: what came in ([PayMixSection]) above where it went.
  *
- * Honesty (§9): the kept figure is labelled as **frozen** at the costs each offer was accepted under,
- * and the disclosure line names the arithmetic behind the car-cost figure (miles × the frozen rate)
- * rather than presenting it as an opaque deduction. Expanding it shows the per-mile split, but only
- * when the frozen split actually covers the window — see [MoneyWentModel].
+ * Three things left in the merge, each because something else on the screen already owns it
+ * (#1024 rule 1 — one number, one place):
+ *  - the **"stayed with you" line**, which restated the recap hero's headline figure verbatim —
+ *    except on a LOSING window, where it returns because nothing else in this card can show a
+ *    negative (see the render);
+ *  - that same figure's **legend note** (see [moneyWentSegments]);
+ *  - the expanded disclosure's **frozen-cost sentence**, now stated once per screen by
+ *    `HowNumbersWorkFooter` — with the SAME string, so the wording keeps one owner (Principle 5).
+ *
+ * Copy rules from the brief, held exactly: plain words (`gas`, `wear on the car` — never "non-fuel
+ * operating cost"); no cents-per-dollar math on the default view; **never** a percentage in the
+ * headline (the tips insight inside the came-in section is the documented exception, brief §4.2).
+ *
+ * Honesty (§9): the disclosure line names the arithmetic behind the car-cost figure (miles × the
+ * frozen rate) rather than presenting it as an opaque deduction, and expanding it shows the per-mile
+ * split — but only when the frozen split actually covers the window (see [MoneyWentModel]). Every
+ * pay-mix coverage state survives verbatim inside [PayMixSection].
  */
 @Composable
-fun MoneyWentCard(economics: PeriodEconomics, modifier: Modifier = Modifier) {
+fun MoneyWentCard(economics: PeriodEconomics, payMix: PayMix, modifier: Modifier = Modifier) {
     val c = AppTheme.colors
     val split = MoneyWentModel.from(economics)
     var expanded by remember { mutableStateOf(false) }
 
     AppCard(modifier = modifier.fillMaxWidth()) {
+        // The headline: two clauses, one line. The third clause ("$N stayed with you") is the recap
+        // hero's headline figure and is not repeated here — EXCEPT when it is negative, below.
+        Text(
+            text = headline(split),
+            style = MaterialTheme.typography.bodyLarge,
+            color = c.text,
+        )
+        // A LOSING window is the one case the third clause comes back (#1024 review F3). The bar
+        // can't carry it — [AppStackBar] weights on the value and a negative weight is not
+        // renderable, so a negative kept segment is a zero-width sliver — and its legend note is
+        // deliberately silent, so with the clause gone too a window that cost more than it paid
+        // would show a green "Stayed with you" key beside nothing at all: the anomaly papered over,
+        // which is exactly what #662-F1 asked this card never to do. One duplicated figure on an
+        // abnormal window is a cheaper price than a silent one, and the hero states it in the same
+        // bad tone.
+        if (split.stayedWithYou < 0.0) {
+            Spacer(Modifier.height(2.dp))
+            Text(
+                text = stringResource(R.string.money_tab_where_went_kept, Formats.money(split.stayedWithYou)),
+                style = MaterialTheme.typography.bodyLarge,
+                color = c.bad,
+            )
+        }
+
+        Spacer(Modifier.height(14.dp))
+        PayMixSection(payMix)
+
+        HairlineDivider(gap = 14.dp)
+
         Text(
             text = stringResource(R.string.money_tab_where_went_title),
             style = MaterialTheme.typography.labelMedium,
             color = c.text3,
         )
         Spacer(Modifier.height(10.dp))
-
-        // The three plain-words lines — the whole point of the card.
-        Text(
-            text = stringResource(R.string.money_tab_where_went_came_in, Formats.money(split.cameIn)),
-            style = MaterialTheme.typography.bodyLarge,
-            color = c.text,
-        )
-        Spacer(Modifier.height(2.dp))
-        Text(
-            text = stringResource(R.string.money_tab_where_went_car, Formats.money(split.carCosts)),
-            style = MaterialTheme.typography.bodyLarge,
-            color = c.text2,
-        )
-        Spacer(Modifier.height(2.dp))
-        Text(
-            text = stringResource(R.string.money_tab_where_went_kept, Formats.money(split.stayedWithYou)),
-            style = MaterialTheme.typography.bodyLarge,
-            color = if (split.stayedWithYou >= 0.0) c.good else c.bad,
-        )
-
-        Spacer(Modifier.height(12.dp))
         val segments = moneyWentSegments(split)
         AppStackBar(segments, height = 14.dp)
         Spacer(Modifier.height(10.dp))
@@ -159,7 +184,8 @@ fun MoneyWentCard(economics: PeriodEconomics, modifier: Modifier = Modifier) {
         Spacer(Modifier.height(12.dp))
         // Collapsed disclosure: the car-cost arithmetic, stated. Tapping expands to the per-mile split
         // (when the frozen split covers the window) — the detail belongs behind a tap, not in the
-        // default view.
+        // default view. This is the card's OWN content (per-mile rates), not the screen-level frozen
+        // disclosure the footer owns, which is why it survives #1024 B7.
         DisclosureRow(
             text = disclosureText(split),
             expanded = expanded,
@@ -172,28 +198,37 @@ fun MoneyWentCard(economics: PeriodEconomics, modifier: Modifier = Modifier) {
     }
 }
 
+/** `$412.83 came in. $116.73 went to the car.` — the two surviving clauses, from their own strings. */
+@Composable
+private fun headline(split: MoneyWentModel.Split): String =
+    stringResource(R.string.money_tab_where_went_came_in, Formats.money(split.cameIn)) + " " +
+        stringResource(R.string.money_tab_where_went_car, Formats.money(split.carCosts))
+
 /**
  * kept / gas / wear when the frozen split covers the window, else kept / car costs — the
  * coverage-degrade the retired waterfall expressed as 4-step → 3-step.
  *
  * A negative derived cost (#662-F1) contributes a zero-width segment: [AppStackBar] weights on the
- * value, and a negative weight is not renderable. The signed dollar figure still appears verbatim in
- * the three lines above, so the anomaly is visible rather than papered over.
+ * value, and a negative weight is not renderable. The signed car-cost figure still appears verbatim
+ * in the headline above, so the anomaly is visible rather than papered over.
+ *
+ * **The kept segment states NOTHING in the legend (#1024 B2), and that is deliberate.** It sets
+ * `noteHidden` — the design system's explicit third state (see [AppSegment]), NOT a null note, which
+ * would make the legend compute a PERCENTAGE SHARE and this card's own rule forbids shares. The
+ * reason the dollars go is that the kept figure is the recap hero's headline, one scroll up; the gas
+ * / wear / car-cost notes stay REAL dollars because nothing else on the screen states them. This
+ * retires the standing comment on the previous pass ("a duplicated dollar figure is the honest cost
+ * of keeping the legend's promise") — a first-class "say nothing here" keeps the promise without the
+ * duplicate, and `AppLegendNoteTest` pins the distinction so a future tidy-up can't collapse it.
  */
 @Composable
 private fun moneyWentSegments(split: MoneyWentModel.Split): List<AppSegment> {
     val c = AppTheme.colors
-    // F3 correction (post-#1019-review): the legend keeps its real dollar notes. An earlier pass
-    // blanked them to remove the "duplicated row" F3 named, but AppLegend falls back to rendering
-    // a PERCENTAGE SHARE whenever a segment's note is null/blank — which this card's own doc
-    // forbids ("the legend carries real dollars, not shares") and which the untouched 2-segment
-    // fallback branch below (real Formats.money note on car costs) would then have contradicted.
-    // A duplicated dollar figure is the honest cost of keeping the legend's promise.
     val kept = AppSegment(
         label = stringResource(R.string.money_tab_where_went_segment_kept),
         value = split.stayedWithYou.toFloat().coerceAtLeast(0f),
         color = c.good,
-        note = Formats.money(split.stayedWithYou),
+        noteHidden = true,
     )
     val gas = split.gas
     val wear = split.wear
@@ -239,6 +274,15 @@ private fun disclosureText(split: MoneyWentModel.Split): String {
     )
 }
 
+/**
+ * The per-mile split behind the car-cost figure — the card's own unique content.
+ *
+ * The frozen-cost sentence that used to close this block is gone (#1024 B7): it is the screen's
+ * disclosure, not this card's, and `HowNumbersWorkFooter` now states it once at the bottom of the tab
+ * — from the SAME `money_tab_where_went_frozen_note` resource, so there is still exactly one owner of
+ * that wording. The coverage line below it stays here, because "this window's rows don't all carry a
+ * split" is a fact about THIS card's numbers.
+ */
 @Composable
 private fun ExpandedDisclosure(split: MoneyWentModel.Split) {
     val c = AppTheme.colors
@@ -256,11 +300,6 @@ private fun ExpandedDisclosure(split: MoneyWentModel.Split) {
                 color = c.text3,
             )
         }
-        Text(
-            text = stringResource(R.string.money_tab_where_went_frozen_note),
-            style = MaterialTheme.typography.bodySmall,
-            color = c.text3,
-        )
     }
 }
 

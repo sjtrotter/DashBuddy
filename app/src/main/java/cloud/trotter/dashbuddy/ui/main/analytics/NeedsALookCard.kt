@@ -17,6 +17,7 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
 import cloud.trotter.dashbuddy.R
 import cloud.trotter.dashbuddy.core.designsystem.component.AppCard
+import cloud.trotter.dashbuddy.ui.components.HairlineDivider
 import cloud.trotter.dashbuddy.core.designsystem.theme.AppTheme
 import cloud.trotter.dashbuddy.domain.analytics.OrphanOfferGroup
 import cloud.trotter.dashbuddy.domain.analytics.PeriodEconomics
@@ -164,9 +165,13 @@ private fun reviewRows(
 }
 
 /**
- * "Needs a look (2)" (#973 / brief §4.2) — the consolidated review card. Four stacked amber strips
- * read as four alarms; one card with a count in its header reads as one list of chores, which is what
- * they are. Renders nothing at all when the window is clean.
+ * "Needs a look (2)" (#973 / brief §4.2) — the consolidated review card, a **hairline row list** since
+ * #1024 B6. Four stacked amber strips read as four alarms; one card with a count in its header reads
+ * as one list of chores, which is what they are, and dividers are what make a list look like one.
+ * Renders nothing at all when the window is clean.
+ *
+ * Presentation only: the flags, their thresholds, their copy and their actions are untouched — Home
+ * reuses [reviewItems]/[ReviewFlags] verbatim (#977), so this file stays the one owner of all three.
  */
 @Composable
 internal fun NeedsALookCard(items: List<ReviewItem>, modifier: Modifier = Modifier) {
@@ -197,7 +202,7 @@ internal fun ReviewList(items: List<ReviewItem>, modifier: Modifier = Modifier) 
         )
         Spacer(Modifier.height(10.dp))
         items.forEachIndexed { index, item ->
-            if (index > 0) Spacer(Modifier.height(10.dp))
+            if (index > 0) HairlineDivider()
             val action = item.action
             Row(
                 verticalAlignment = Alignment.CenterVertically,

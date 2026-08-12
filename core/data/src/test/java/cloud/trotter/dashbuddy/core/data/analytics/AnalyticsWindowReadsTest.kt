@@ -170,10 +170,6 @@ class AnalyticsWindowReadsTest {
             repo.dailyEarnings(AnalyticsPeriod.THIS_WEEK, zone).first(),
             repo.dailyEarnings(window, zone).first(),
         )
-        assertEquals(
-            repo.perStoreEconomics(AnalyticsPeriod.THIS_WEEK).first(),
-            repo.perStoreEconomics(window, zone).first(),
-        )
     }
 
     /** The same equivalence for the month window (a different length + boundary rule). */
