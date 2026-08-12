@@ -105,7 +105,10 @@ fun PlaybookScreen(
             AreaDemandRow()
             Spacer(Modifier.height(20.dp))
 
-            HowNumbersWorkFooter()
+            // #1024 part 3 follow-through: the plan-projection line ("lifetime aggregates of your
+            // own record — not a guarantee") belongs on every screen that renders plan/best-stretch
+            // rates. Home opts in; the Playbook renders the plan itself, so it opts in too.
+            HowNumbersWorkFooter(includePlanProjection = true)
             Spacer(Modifier.height(24.dp))
         }
     }

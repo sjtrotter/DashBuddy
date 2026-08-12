@@ -78,6 +78,34 @@ card's **mechanical** half, #577 (re-confirmed, 24/24, ~0.55 s — with a new po
 that entry's Bug #1), the #457 path, and #554 ShadowProjector (2/2). The #462/#460 dropoff item
 was found **broken-in-part** (raw PII in capture envelopes) and moved to that entry's Bug #7.)_
 
+- **🆕 NEW — #1024 part 1 (PR #1025) — the Playbook destination.** Open Home → **Playbook** tile.
+  Check: (a) *This week's plan* shows `Xh worked in your windows · $Y kept of the $Z you planned
+  for` and each window row flips to **Done** after its end hour (leave the screen open across an
+  hour boundary — it should re-render without leaving); (b) the heatmap outlines exactly the hours
+  the saved plan picked, and the Rate/Hours toggle still works; (c) the store leaderboard matches
+  what the old Patterns tab showed; (d) Analytics now has three tabs. With **no** plan saved the
+  card says so and offers *Build a plan →*, never an empty plan. The screen's footer disclosure
+  includes the plan-projection line (lifetime, not a guarantee).
+  - Confirmed: 0/2
+- **🆕 NEW — #1024 part 2 (PR #1026) — Money tab: one number, one place.** Open Analytics on a
+  dashed week. Working: kept appears exactly once (the big number), gross exactly once (`$X came
+  in.`), deliveries/miles only in the grey facts line; five bordered cards at most (money story,
+  rates+day chart, by platform, needs a look, recent sessions) then ONE `How these numbers work`
+  row at the bottom of every tab. Broken: a `TOP STORES` card, a second disclosure mid-scroll, or
+  `Stayed with you 63%` in the legend (the percentage fallback — the note went null instead of
+  blank). Rates survive a single-day/Lifetime window (`—` where a denominator is missing, chart
+  simply absent). Two-platform week (needs an Uber dash): one row per platform with chip, bar,
+  `$X kept`, count.
+  - Confirmed: 0/2
+- **🆕 NEW — #1024 part 3 (PR #1027) — Home is four blocks.** One **Today** card (kept big → net/hr
+  online · drops · miles · On dash/Online → plan strip), one **This week** card (net + delta +
+  sparkline + `Recap →`, the plan row if one is saved, `NEEDS A LOOK` if the week flagged), one row
+  of four equal-height tiles, one footer. Working if: net appears once per scope; `Recap →` opens
+  the hub already on THIS week; **On dash ticks live while dashing** (starts at `0s`, never `—`,
+  on a fresh dash) and reads the settled `Online` total otherwise; the plan strip re-dims across an
+  hour boundary; a day with no dash shows `—`, never `$0.00`/`0s`; Settings is reachable even from
+  the permissions-missing and first-run states (the small Settings link under those cards).
+  - Confirmed: 0/2
 - **🆕 NEW — #985 (PR #1014) — the Timeline order-detail sheet is recognized and masked.** Open
   the timeline mid-dash and tap a task row (both a pickup row and a dropoff row). Working = the
   frame no longer lands in `captures/…/UNKNOWN/`; it lands under `timeline_task_detail/`, and
