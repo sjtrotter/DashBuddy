@@ -4,6 +4,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
@@ -22,7 +23,6 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
-import cloud.trotter.dashbuddy.core.designsystem.component.AppCard
 import cloud.trotter.dashbuddy.core.designsystem.component.AppHeatScale
 import cloud.trotter.dashbuddy.core.designsystem.theme.AppTheme
 import cloud.trotter.dashbuddy.core.designsystem.time.rememberNow
@@ -43,16 +43,22 @@ import java.util.Locale
 private const val EVENING_HOUR = 17
 
 /**
- * **Today's plan** (#977 / brief §2) — the 24-cell strip of *this weekday's* row of the driver's own
- * lifetime hour×day heatmap, the hours already spent dimmed, and the best still-available window
- * outlined with a one-line headline.
+ * **Today's plan** — the lower half of [TodayCard]: a one-line headline naming the best window still
+ * available, over the 24-cell strip of *this weekday's* row of the driver's own lifetime hour×day
+ * heatmap, hours already spent dimmed and the picked window outlined.
+ *
+ * Carried over from #977's standalone `TodayPlanCard` with its **mechanics intact** — same
+ * [DayPlanner] call, same dimming, same hourly recompute — because #1024 D1 is a presentation merge,
+ * not a re-derivation. Two things changed and both are deliberate:
+ *  - it no longer owns a card or a title (the merged card's `TODAY` label covers both halves);
+ *  - the separate provenance line is gone (#1024 D2). Provenance did not go with it: every headline
+ *    state still names **whose** record the claim comes from — "your Mondays" — so the sentence the
+ *    driver reads is self-describing rather than footnoted.
  *
  * **This is the driver's own record, not a promise.** Every figure is `Σ their frozen net ÷ Σ their
- * online hours` for that hour-of-week, and the card always says so verbatim — `from your own
- * <weekday>s, lifetime — not a guarantee` (brief §2's copy rule, §9's projection rule). When the
- * weekday is under [DayPlanner.MIN_SAMPLED_HOURS] recorded hours the card states the thin data
- * **instead of** a rate; it never smooths, never extrapolates, and never quotes a window it doesn't
- * have the history to stand behind.
+ * online hours` for that hour-of-week. When the weekday holds under [DayPlanner.MIN_SAMPLED_HOURS]
+ * rate-bearing hours the headline states the thin data **instead of** a rate; it never smooths, never
+ * extrapolates, and never quotes a window it lacks the history to stand behind (§9).
  *
  * **Reactive (rules 1–4).** The state holds the anchors — the lifetime heatmap and today's date — and
  * this composable derives the time-dependent part: the current hour comes from the shared
@@ -61,7 +67,7 @@ private const val EVENING_HOUR = 17
  * [derivedStateOf] on the hour, so 24 cells recompose once an hour rather than once a second.
  */
 @Composable
-fun TodayPlanCard(
+internal fun TodayPlanSection(
     today: LocalDate,
     heatmap: EarningsHeatmap,
     modifier: Modifier = Modifier,
@@ -82,33 +88,16 @@ fun TodayPlanCard(
     val maxRate = heatmap.maxDollarsPerHour ?: 0.0
     val weekdayPlural = weekdayPlural(dayIndex)
 
-    AppCard(modifier = modifier.fillMaxWidth()) {
-        Text(
-            text = stringResource(R.string.dashboard_plan_title),
-            style = MaterialTheme.typography.labelMedium,
-            color = c.text3,
-        )
-        Spacer(Modifier.height(10.dp))
-
-        PlanStrip(plan = plan, maxRate = maxRate)
-        Spacer(Modifier.height(6.dp))
-        HourAxis()
-        Spacer(Modifier.height(12.dp))
-
+    Column(modifier = modifier.fillMaxWidth()) {
         Text(
             text = headline(plan, weekdayPlural),
             style = MaterialTheme.typography.bodyMedium,
             color = if (plan.bestWindow != null) c.text else c.text2,
         )
-        Spacer(Modifier.height(4.dp))
-        // The provenance line is non-negotiable copy and is rendered on EVERY state of this card —
-        // including the thin-data one, where it is what tells the driver whose (sparse) record the
-        // "not enough yet" message is about.
-        Text(
-            text = stringResource(R.string.dashboard_plan_provenance_format, weekdayPlural),
-            style = MaterialTheme.typography.bodySmall,
-            color = c.text3,
-        )
+        Spacer(Modifier.height(10.dp))
+        PlanStrip(plan = plan, maxRate = maxRate)
+        Spacer(Modifier.height(6.dp))
+        HourAxis()
     }
 }
 
@@ -158,7 +147,8 @@ private fun HourAxis() {
 }
 
 /**
- * The headline, in the three honest states:
+ * The headline, in the three honest states — each of which names the weekday, so provenance rides the
+ * sentence itself now that #1024 D2 has retired the separate provenance line:
  *  - thin weekday → state the sample count, never a rate;
  *  - enough history but nothing contiguous left today → say so;
  *  - a real window → name it and quote the driver's own rate across it.
@@ -186,7 +176,7 @@ private fun headline(plan: DayPlan, weekdayPlural: String): String {
 
 /**
  * "Mondays" — the weekday name in its recurring-plural form, which is the exact shape brief §2's copy
- * rule requires (`from your own Mondays, lifetime`).
+ * rule requires (`your Mondays run $19.20/hr`).
  *
  * The name is localized by `java.time`; the pluralization is a separate one-argument string so a
  * translator can replace the English `+s` rule with their own rather than having it welded into code.

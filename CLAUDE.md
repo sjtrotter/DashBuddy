@@ -137,10 +137,14 @@ windows live on the Analytics pager now — and `TodayHeader`/`TodayPlanCard`/`S
 `WeekRecapCard` joined the module in their place, still pure data-in/lambdas-out over `:domain`
 types + `:core:designsystem`; #981 added `WeeklyPlanPointerRow` (the seam #977 left), which keeps the
 module's honest-deps posture — no material-icons dependency, so its affordance is a `Plan →` text in
-the `Recap →` vocabulary rather than a chevron. One deliberate exception to the split: Home's review-items card is
-the analytics hub's own `NeedsALookCard`/`reviewItems` reused verbatim from `:app`, rendered by
-the host — the flag thresholds and their copy keep ONE owner rather than being copied into a
-feature module to satisfy placement).
+the `Recap →` vocabulary rather than a chevron. **#1024 part 3 (section D) merged those four into
+two** — `TodayCard` (+ its `TodayPlanSection`) and `WeekCard`, whose rows absorbed the standalone
+`WeeklyPlanPointerRow` and the review card — over a new shared `DashboardRow` vocabulary (hairline,
+tappable row scaffold, title/line tones) that all three surfaces including the host's review row
+render through, so a per-row layout constant can no longer drift. One deliberate exception to the
+split: Home's review rows are the analytics hub's own `reviewTexts`/`ReviewList` reused from `:app`,
+handed to `WeekCard` as a composable slot — the flag thresholds and their copy keep ONE owner rather
+than being copied into a feature module to satisfy placement).
 The analytics hub (`ui/main/analytics/*`) is a separate sibling surface, left for a future
 extraction. Finally `:feature:bubble` (#96 — the floating-overlay HUD's presentational content:
 the `formatters/*` (offer/chat/phase), the `cards/*` (`FlowCardItem` renderer + `FlowCardMapper`/
@@ -870,16 +874,21 @@ bearing rule:** the heatmap unions + apportions session spans before it exists, 
 structurally unrecoverable read-side; the brief's "~5 samples" is therefore honestly measured as
 `DayPlanner.MIN_SAMPLED_HOURS`=5 **rate-bearing hour buckets** on that weekday, stated to the driver in
 hours, and below it the card states the count INSTEAD of any rate (§9). The provenance line
-`from your own <weekday>s, lifetime — not a guarantee` is verbatim copy rendered on **every** state of
-the card. Time-derived values follow Reactive-UI rule 2 — the state holds the anchors (heatmap + local
+`from your own <weekday>s, lifetime — not a guarantee` was verbatim copy rendered on **every** state of
+the card **until #1024 part 3 (D2)**, which retired it as a separate line: every headline state names
+the weekday it quotes ("your Mondays"), and the lifetime-scope + not-a-guarantee qualifier moved into
+the screen's single `How these numbers work` footer (`weekly_plan_provenance`, the Weekly Plan's own
+string) rather than being dropped. Time-derived values follow Reactive-UI rule 2 — the state holds the anchors (heatmap + local
 date), the composables derive clock/current-hour from `rememberNow()` through a `derivedStateOf`, so the
 strip re-dims and re-picks on an hour boundary while recomposing hourly, not per second. Two SSOT moves
 rode along: the recap hero's `RecapModel` became `:domain` `NetDelta` (a feature module can't reach an
 `:app` owner) and `PatternsTab`'s private heat ramp became `:core:designsystem` `AppHeatScale`, so the
-strip and the Patterns grid can't drift apart. The review row reuses `ReviewFlags`/`reviewItems`/
-`NeedsALookCard` verbatim, scoped to the same week the block above it describes, with the action
-normalised to *navigate* into the hub (which owns the assign/attest dialogs) rather than inheriting an
-in-place label it can't honour. Read-side only — no schema change, no `PROJECTOR_VERSION` bump.
+strip and the Patterns grid can't drift apart. The review row reuses the hub's own flags and copy,
+scoped to the same week the block above it describes, with the action normalised to *navigate* into
+the hub (which owns the assign/attest dialogs) rather than inheriting an in-place label it can't
+honour. (#1024 part 3 sharpened the reuse: Home reads the action-FREE `reviewTexts` resolver and
+renders the extracted `ReviewList` — the hub keeps `reviewItems` + `NeedsALookCard`'s container — so
+Home structurally cannot receive a per-row action it would have to strip.) Read-side only — no schema change, no `PROJECTOR_VERSION` bump.
 **Patterns: ALL-TIME badge + heatmap toggle + store leaderboard (#979, stage 5 — brief §6):** UI-only
 over the already-free `storeReportCards()`/`earningsHeatmap()` reads — **zero** new queries, no schema
 change, no `PROJECTOR_VERSION` bump. An `ALL TIME` `AppChip` + declaring caption sit above the grid so
@@ -1019,9 +1028,14 @@ date beside a ticker-supplied hour would skew across midnight and time-zone chan
 with NO windows is treated as no plan at the first consumer (the codec keeps such a row), and the
 screen renders nothing until the first emission rather than flashing every empty state over real data. Riding along, `DisclosureRow` moved from `PayMixCard` to `ui/components/` and gained
 `HowNumbersWorkFooter` — the shared **one-disclosure-per-screen** row (#1024 rule 2) whose frozen-cost
-and estimate lines reuse the exact strings their originating cards already ship. Parts 2–4 of #1024
-(Money 9 cards → 5, Home 7 blocks → 4, and pointing those screens at the shared footer) are NOT in this
-change; the Money tab still renders its own `TopStoresCard` and per-card disclosures until then.
+and estimate lines reuse the exact strings their originating cards already ship, plus an opt-in
+projection line for screens that project. **Part 3 (section D) has since landed Home's half**: seven
+blocks became four — one `Today` card (kept · net/hr online · drops · miles · online, a hairline, then
+the plan strip), one `This week` card of hairline rows (recap · plan pointer · review), one row of four
+entry tiles (Analytics · Playbook · Ratings · Settings — the settings FAB and the Strategy/Economy
+tiles retired, with the gated permission/first-run states carrying their own Settings link), and the
+shared footer. Part 2 (Money 9 cards → 5) is in flight; the Money tab still renders its own
+`TopStoresCard` and per-card disclosures until it lands.
 **The "(No session)" bucket (#660 piece 1):** `delivery_records` rows whose source event carried
 NO `sessionId` at all were already counted in net (`deliveryTotals`'s own-`completedAt` fallback, #655)
 but invisible to gross (`grossAndUnattributed`/`sessionGrossRows` iterate `session_records` only, so a

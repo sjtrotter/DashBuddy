@@ -122,6 +122,10 @@ class DashboardViewModel @Inject constructor(
             weekDailyEarnings = week.dailyEarnings,
             orphanOfferGroups = week.orphanOfferGroups,
             weeklyPlan = week.weeklyPlan,
+            // The live-dash anchor for Home's online figure (#1024 review item 12). Only while the
+            // focused platform is actually dashing: a finished session's startedAt would tick a
+            // duration that stopped being true when the driver went offline.
+            sessionStartedAt = region?.takeIf { it.mode != Mode.Offline }?.session?.startedAt,
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), DashboardUiState())
 

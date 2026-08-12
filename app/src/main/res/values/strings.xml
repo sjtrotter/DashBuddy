@@ -109,10 +109,9 @@
          lives in :feature:dashboard's strings.xml so the moved PeriodReview can resolve them
          without an (illegal) feature→:app dep. Keep both in sync; a shared res module is the
          long-term fix (same follow-up as #99's common_content_desc_back). -->
-    <string name="common_period_today">Today</string>
-    <string name="common_period_week">Week</string>
-    <string name="common_period_month">Month</string>
-    <string name="common_period_lifetime">Lifetime</string>
+    <!-- common_period_* deleted by #1024 part 3: the last consumer went with #970's per-tab
+         selector and #977's PeriodReview, leaving four orphaned strings for a surface that no
+         longer exists. -->
 
     <!-- bubble/BubbleScreen.kt -->
     <string name="bubble_screen_chat_history_title">Chat History</string>
@@ -406,7 +405,8 @@
     <string name="wizard_screen_lets_go">Let\'s Go</string>
 
     <!-- main/dashboard/DashboardScreen.kt -->
-    <string name="dashboard_screen_content_desc_settings">Settings</string>
+    <!-- dashboard_screen_content_desc_settings went with the settings FAB (#1024 D5) — Settings is
+         an entry tile now, labelled like its three peers rather than described as an icon. -->
     <string name="dashboard_screen_permissions_required_title">Permissions Required</string>
     <string name="dashboard_screen_permissions_required_subtitle">DashBuddy needs your attention. Please complete the popup.</string>
     <string name="dashboard_screen_first_run_title">You have the Keys!</string>
@@ -417,15 +417,17 @@
     <string name="dashboard_screen_ready_subtitle">All systems go.</string>
     <string name="dashboard_screen_show_bubble_button">Show Bubble</string>
     <!-- dashboard_screen_stat_* moved to :feature:dashboard (#97) — only PeriodReview used them. -->
-    <!-- #977: Home's review-items rows all navigate into the Analytics hub (which owns the
-         assign/attest flows), so they carry a navigation label rather than the hub's in-place
-         action wording. -->
+    <!-- #977: Home's review section navigates into the Analytics hub (which owns the assign/attest
+         flows), so it carries a navigation label rather than the hub's in-place action wording.
+         #1024 D4: one label for the whole row, since every flag's action was already this one. -->
     <string name="dashboard_review_action">Review →</string>
+    <!-- #1024 D5: one row of four destinations. dashboard_screen_entry_strategy/_economy went with
+         the two tiles they labelled — both pages live one tap inside Settings, and Home is a glance
+         surface rather than a menu of every route. -->
     <string name="dashboard_screen_entry_analytics">Analytics</string>
-    <string name="dashboard_screen_entry_ratings">Ratings</string>
-    <string name="dashboard_screen_entry_strategy">Strategy</string>
-    <string name="dashboard_screen_entry_economy">Economy</string>
     <string name="dashboard_screen_entry_playbook">Playbook</string>
+    <string name="dashboard_screen_entry_ratings">Ratings</string>
+    <string name="dashboard_screen_entry_settings">Settings</string>
 
     <!-- components/economy/EconomyEditor.kt -->
     <string name="economy_editor_per_mile_format" translatable="false">%1$s/mi</string>
