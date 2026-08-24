@@ -49,6 +49,20 @@ class PipelineStats @Inject constructor() {
      */
     private val platformAppVersions = ConcurrentHashMap<String, String>()
 
+    /**
+     * `ruleId → frames on which that rule MATCHED but its declared parse yielded all-null` (#1036).
+     *
+     * The counter that makes anchor rot countable: DoorDash 8.93.7 removed the view ids every money
+     * parse anchored on, the text-anchored `require` blocks kept matching, and every parse died —
+     * silently, for weeks, because "matched and parsed nothing" and "matched, nothing to parse"
+     * looked identical in every counter and log line we had.
+     *
+     * Keyed by rule id ONLY (principle 8) — no platform key, no per-platform threshold. Bounded by
+     * the compiled ruleset's own rule count, and PII-free by construction: a rule id is our own
+     * authored identifier, and no frame text is recorded.
+     */
+    private val parseAllNullByRule = ConcurrentHashMap<String, AtomicLong>()
+
     val droppedSensitiveCount: Long get() = droppedSensitive.get()
     val droppedNoiseCount: Long get() = droppedNoise.get()
     val droppedDisabledPlatformCount: Long get() = droppedDisabledPlatform.get()
@@ -136,6 +150,19 @@ class PipelineStats @Inject constructor() {
         platformAppVersions[packageName] = versionName
     }
 
+    /**
+     * A rule MATCHED a frame while every field its parse block declares resolved null (#1036) —
+     * the anchor-rot signature. Returns this rule's running count for the process.
+     *
+     * Counting only, at every occurrence: the classifier owns the once-per-rule WARN edge, so the
+     * counter stays a full census the periodic summary can render.
+     */
+    fun onParseAllNull(ruleId: String): Long =
+        parseAllNullByRule.computeIfAbsent(ruleId) { AtomicLong() }.incrementAndGet()
+
+    /** This rule's running all-null-parse count for the process (#1036); 0 if it never tripped. */
+    fun parseAllNullCount(ruleId: String): Long = parseAllNullByRule[ruleId]?.get() ?: 0L
+
     /** The supervised upstream crashed and is resubscribing. Returns the restart ordinal. */
     fun onPipelineRestart(): Long = restarts.incrementAndGet()
 
@@ -173,7 +200,8 @@ class PipelineStats @Inject constructor() {
             " notifListenerConnects=${notifListenerConnects.get()}" +
             " notifListenerDisconnects=${notifListenerDisconnects.get()}" +
             " restarts=${restarts.get()}" +
-            platformAppVersionsSuffix()
+            platformAppVersionsSuffix() +
+            parseAllNullSuffix()
 
     /** `" platformApps=com.doordash.driverapp@15.2.3,com.ubercab.driver@4.5"`, or empty. */
     private fun platformAppVersionsSuffix(): String =
@@ -181,6 +209,22 @@ class PipelineStats @Inject constructor() {
             .sortedBy { it.key }
             .joinToString(separator = ",", prefix = " platformApps=") { "${it.key}@${it.value}" }
             .takeIf { platformAppVersions.isNotEmpty() }
+            ?: ""
+
+    /**
+     * `" parseAllNull{doordash.screen.delivery_summary_expanded=12,…}"`, or empty (#1036).
+     *
+     * Rule ids and counts only — the shareable INFO stream's PII rule holds by construction
+     * (principle 7). Absent entirely while nothing has tripped, so a healthy summary line is
+     * byte-identical to a pre-#1036 one.
+     */
+    private fun parseAllNullSuffix(): String =
+        parseAllNullByRule.entries
+            .sortedBy { it.key }
+            .joinToString(separator = ",", prefix = " parseAllNull{", postfix = "}") {
+                "${it.key}=${it.value.get()}"
+            }
+            .takeIf { parseAllNullByRule.isNotEmpty() }
             ?: ""
 
     companion object {

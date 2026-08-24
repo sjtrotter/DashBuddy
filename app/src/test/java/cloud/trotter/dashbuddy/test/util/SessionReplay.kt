@@ -29,6 +29,7 @@ import org.mockito.kotlin.doReturn
 import org.mockito.kotlin.mock
 import java.io.File
 import cloud.trotter.dashbuddy.core.pipeline.PlatformAppVersions
+import cloud.trotter.dashbuddy.core.pipeline.PipelineStats
 
 /**
  * Session-replay harness — drives a *sequence* of real on-device captures through the
@@ -319,6 +320,7 @@ object SessionReplay {
         mock<JsonRuleInterpreter> { on { screenRuleset } doReturn TestRulesetFactory.screenRuleset },
         mock<ReplayMetadataProvider> { on { current() } doReturn ReplayMetadata.EMPTY },
         PlatformAppVersions.NONE,
+        PipelineStats(),
     )
 
     /**
@@ -332,5 +334,6 @@ object SessionReplay {
         },
         mock<ReplayMetadataProvider> { on { current() } doReturn ReplayMetadata.EMPTY },
         PlatformAppVersions.NONE,
+        PipelineStats(),
     )
 }

@@ -730,6 +730,16 @@ object RuleCompiler {
             }
         }
 
+        // #1036 — what this branch's parser will actually try to EXTRACT. Derived from the same
+        // [parseBlock] the parser above compiles from, and only when a parser was built: a CLICK
+        // branch has no parser (a parse block there is inert), so a declared field must never be
+        // reported as an all-null parse that never ran.
+        val parseFieldNames = if (parseBlock != null && context != RuleContext.CLICK) {
+            ParseExpressionCompiler.extractableFieldNames(parseBlock)
+        } else {
+            emptySet()
+        }
+
         // --- Phase 5: Validate ---
         val validators = obj["validate"]?.jsonArray?.map { entry ->
             ParseExpressionCompiler.compileValidateEntry(entry.jsonObject)
@@ -750,6 +760,7 @@ object RuleCompiler {
             predicate = predicate,
             rejectChecks = rejectChecks,
             parser = parser,
+            parseFieldNames = parseFieldNames,
             validators = validators,
             effects = effects,
             bindings = bindings,

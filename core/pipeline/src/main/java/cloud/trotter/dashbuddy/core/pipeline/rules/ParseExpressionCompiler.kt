@@ -55,6 +55,40 @@ internal object ParseExpressionCompiler {
     }
 
     // ==========================================================================
+    //  Declared-field introspection (#1036)
+    // ==========================================================================
+
+    /**
+     * The parse block's declared field names whose value is **extracted from the input** —
+     * every declared field minus the constant (`literal`) ones (#1036).
+     *
+     * This is the denominator of the "matched but parsed nothing" signal: a rule whose text
+     * anchors still match while every id-anchored field resolves null is anchor rot, and it
+     * looked identical to "matched, nothing to parse" until #1036 (DoorDash 8.93.7 removed the
+     * view ids every money parse anchored on, and recognition logged clean for weeks).
+     *
+     * Constants are excluded for two independent reasons: a rule whose fields are ALL constants
+     * can never evidence anything about the input (so it must never trip), and a constant sitting
+     * beside real extractions would otherwise MASK the rot by keeping one field non-null forever.
+     * The two constant shapes mirror the two constant arms of [compileParseExpression] /
+     * [compileNotifParseExpression] — a bare primitive spec and a `{ "literal": … }` object — so
+     * this set and the compiled extractors can't disagree about what a constant is.
+     *
+     * A `fallback` on an extraction is deliberately NOT treated as a constant: the rule declared
+     * a value it is willing to stand behind when extraction misses, so the field HAS resolved.
+     */
+    fun extractableFieldNames(parseObj: JsonObject): Set<String> {
+        val fieldsObj = parseObj["fields"]?.jsonObject ?: return emptySet()
+        return fieldsObj.entries
+            .filterNot { (_, spec) -> isConstantSpec(spec) }
+            .mapTo(LinkedHashSet()) { it.key }
+    }
+
+    /** True when [spec] compiles to a frame-independent constant — see [extractableFieldNames]. */
+    private fun isConstantSpec(spec: JsonElement): Boolean =
+        spec is JsonPrimitive || (spec is JsonObject && "literal" in spec)
+
+    // ==========================================================================
     //  Notification parse block compiler
     // ==========================================================================
 

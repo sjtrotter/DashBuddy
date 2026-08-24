@@ -75,6 +75,7 @@ class ClassifyGateCaptureFuzzTest {
         },
         mock<ReplayMetadataProvider> { on { current() } doReturn ReplayMetadata.EMPTY },
         PlatformAppVersions.NONE,
+        PipelineStats(),
     )
 
     /** A capture bus that records whether it was offered a write this frame. */

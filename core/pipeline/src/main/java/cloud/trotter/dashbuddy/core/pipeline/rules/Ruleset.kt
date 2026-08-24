@@ -135,6 +135,19 @@ class Ruleset<TInput>(rules: List<CompiledRule<TInput>>) {
                     emptyMap()
                 }
 
+                // #1036 — matched, but did the declared parse yield anything? Measured against
+                // the RAW parser output, before validate: a `DropParsed` validator is a DECLARED
+                // decision to discard a parse, not the silent anchor rot this signal names. A
+                // thrown parse (rawFields empty above) DOES count — it yielded nothing either.
+                val allNullParseFields = if (
+                    branch.parseFieldNames.isNotEmpty() &&
+                    branch.parseFieldNames.all { rawFields[it] == null }
+                ) {
+                    branch.parseFieldNames
+                } else {
+                    emptySet()
+                }
+
                 // Phase 5: Validate
                 var branchSkip = false
                 var dropParsed = false
@@ -190,6 +203,7 @@ class Ruleset<TInput>(rules: List<CompiledRule<TInput>>) {
                     effects = resolvedEffects,
                     targets = targets,
                     transitionOverrides = resolvedOverrides,
+                    allNullParseFields = allNullParseFields,
                 )
             }
         }

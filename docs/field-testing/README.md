@@ -78,6 +78,19 @@ card's **mechanical** half, #577 (re-confirmed, 24/24, ~0.55 s — with a new po
 that entry's Bug #1), the #457 path, and #554 ShadowProjector (2/2). The #462/#460 dropoff item
 was found **broken-in-part** (raw PII in capture envelopes) and moved to that entry's Bug #7.)_
 
+- **🆕 NEW — #1036 — "matched, but parsed nothing" is now loud.** Purely a **desk** item — nothing
+  to watch for while driving; just dash normally and check the log afterwards. A rule that matches a
+  frame while every field its parse block declares comes back null now WARNs once per rule per
+  process and rides the periodic `PipelineStats` summary. Check:
+  `grep 'all-null parse' app.log` and `grep -o 'parseAllNull{[^}]*}' app.log | tail -1`.
+  **Expected until #1029 lands:** the anchor-rot rules — `delivery_summary_expanded`,
+  `delivery_summary_collapsed`, `waiting_for_offer` — plus a benign tail of rules whose ONE
+  extractable field is legitimately optional (`dash_along_the_way` when no spot deadline is shown,
+  `idle_map` when neither Time-mode chip is on, `set_dash_end_time`). **Any OTHER rule id named is a
+  new anchor-rot find** — capture the frame and file it. After #1029 lands, the summary rules should
+  disappear from the list entirely; if they don't, #1029's fix didn't take on the live app build.
+  - Confirmed: 0/2
+
 - **🆕 NEW — #1034 — a negative dollar reads `-$12`, never `$-12`.** `Formats.money`/`money0`/
   `money3` put the sign before the `$` now, so this shows up anywhere a figure can go negative.
   Two places to glance at: (a) **the bubble HUD's `$/hr` hero** on a bad offer, or on an overdue

@@ -14,7 +14,9 @@ import cloud.trotter.dashbuddy.domain.state.Platform
 import cloud.trotter.dashbuddy.core.pipeline.rules.DedupeTokens
 import cloud.trotter.dashbuddy.core.pipeline.rules.JsonRuleInterpreter
 import cloud.trotter.dashbuddy.core.pipeline.rules.ParsedFieldsFactory
+import cloud.trotter.dashbuddy.core.pipeline.rules.RuleMatchResult
 import cloud.trotter.dashbuddy.core.pipeline.rules.TransformRegistry
+import kotlinx.coroutines.CancellationException
 import timber.log.Timber
 import java.util.concurrent.ConcurrentHashMap
 import javax.inject.Inject
@@ -37,6 +39,7 @@ class ObservationClassifier @Inject constructor(
     private val interpreter: JsonRuleInterpreter,
     private val metadataProvider: ReplayMetadataProvider,
     private val appVersions: PlatformAppVersions,
+    private val stats: PipelineStats,
 ) {
 
     /**
@@ -92,6 +95,48 @@ class ObservationClassifier @Inject constructor(
 
     /** True once rulesets are published — pipelines drop frames until then (#432). */
     val isReady: Boolean get() = interpreter.isLoaded
+
+    /** Rule ids whose all-null parse has already been WARNed this process (#1036). */
+    private val parseAllNullWarned = ConcurrentHashMap.newKeySet<String>()
+
+    /**
+     * Record a rule that MATCHED while every field its parse block declares resolved null (#1036).
+     *
+     * The pre-#1036 pipeline could not tell that apart from "matched, nothing to parse", which is
+     * how DoorDash 8.93.7's removal of the ids every money parse anchored on ran silently for
+     * weeks: the text-anchored `require` blocks kept matching, recognition logged clean, and the
+     * frozen golden corpus (still the old UI) structurally could not see it.
+     *
+     * Two grains, deliberately different. The [PipelineStats] counter takes EVERY occurrence, so
+     * the periodic summary carries a census; the WARN is edge-gated **once per rule per process**
+     * — the #937/#938 pattern — because a broken anchor fires on every frame of the surface and a
+     * per-frame WARN would drown the level that means "a defended invariant fired" (principle 7).
+     * The line carries a rule id and a count, no frame text, so it is safe for the INFO+ shareable
+     * export. There is deliberately **no** dasher-visible notice: whether anchor rot escalates the
+     * way #937's UNKNOWN-rate alarm does is a separate decision.
+     *
+     * Fail-OPEN and inert: called AFTER the observation is built, from inside the sensing flow
+     * where an escaping throwable takes the whole upstream down until supervision resubscribes
+     * (#430/#909). A diagnostic must never be able to buy that.
+     */
+    private fun noteParseAllNull(result: RuleMatchResult) {
+        try {
+            val declared = result.allNullParseFields
+            if (declared.isEmpty()) return
+            stats.onParseAllNull(result.ruleId)
+            if (parseAllNullWarned.add(result.ruleId)) {
+                Timber.tag("Classifier").w(
+                    "Rule %s matched with an all-null parse (%d declared fields) — anchor rot? (#1036)",
+                    result.ruleId,
+                    declared.size,
+                )
+            }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (t: Throwable) {
+            Timber.tag("Classifier").e(t, "Parse-health check failed — recognition unaffected (#1036)")
+        }
+    }
 
 
     // Typed entry points (#361): each event subtype returns its observation
@@ -162,6 +207,9 @@ class ObservationClassifier @Inject constructor(
         }
 
         val parsed = ParsedFieldsFactory.create(result.shape, result.fields)
+        // #1036 — pure bookkeeping AFTER the parse; the observation below is built exactly as
+        // it was before, from the same fields.
+        noteParseAllNull(result)
         val obs = makeScreenObservation(
             now = now,
             metadata = metadataFor(event.packageName),
@@ -277,6 +325,10 @@ class ObservationClassifier @Inject constructor(
                 val parsed = ParsedFieldsFactory.create(
                     result.shape ?: "notification", result.fields,
                 )
+                // #1036 — the second parse-bearing path. A notification rule's anchors are the
+                // platform's own push WORDING, which rots the same way a view id does; the signal
+                // is rule-id-keyed, so it needs no per-context or per-platform special-casing.
+                noteParseAllNull(result)
                 return Observation.Notification(
                     timestamp = event.raw.postTime,
                     captureId = null,

@@ -16,6 +16,7 @@ import org.junit.Test
 import org.mockito.kotlin.doReturn
 import org.mockito.kotlin.mock
 import cloud.trotter.dashbuddy.core.pipeline.PlatformAppVersions
+import cloud.trotter.dashbuddy.core.pipeline.PipelineStats
 
 /**
  * Unit tests for notification classification via [ObservationClassifier].
@@ -31,6 +32,7 @@ class NotificationClassifierTest {
         },
         mock<ReplayMetadataProvider> { on { current() } doReturn ReplayMetadata.EMPTY },
         PlatformAppVersions.NONE,
+        PipelineStats(),
     )
 
     // =========================================================================

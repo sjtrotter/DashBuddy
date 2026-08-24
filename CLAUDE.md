@@ -514,6 +514,23 @@ live in one owner (`AppNoticeChannel`, ids 102 locale / 103 recognition / 105 TT
 separate `weekly_plan_channel`; #991 also moved the ensure+PendingIntent+Builder posting shape itself
 into `AppNoticeChannel.postNotice`, which all three notifiers now call).
 
+**#1036 adds the alarm's other half: matched-but-parsed-nothing.** #937 measures rules that stopped
+MATCHING; DoorDash 8.93.7 removed the view ids every money parse anchored on while the text `require`
+anchors kept matching, so recognition looked healthy for weeks as every parse died (and the frozen
+corpus structurally cannot see it, #1029). `Ruleset.matchFirst` now reports a match whose
+**extractable** declared parse fields — `CompiledBranch.parseFieldNames`, the parse block's fields
+minus the constant (`literal`) ones, so a constant can neither trip the signal alone nor MASK a dead
+extraction beside it — ALL resolved null on the raw parse (pre-validate: a `DropParsed` validator is
+a declared decision, not rot). `ObservationClassifier` counts every occurrence via
+`PipelineStats.onParseAllNull(ruleId)` (rendered as `parseAllNull{<ruleId>=n,…}` on the periodic
+summary — rule ids and counts only, P7) and WARNs **once per rule per process** under the
+`Classifier` tag. Keyed by rule id ONLY (P8), applied to both parse-bearing paths (screen +
+notification; click rules have no parser), and inert — the observation is built exactly as before,
+the check is fail-open bookkeeping after it. Deliberately **no** dasher-visible notice: escalation is
+a later decision. A rule whose ONE extractable field is legitimately optional trips benignly (the
+committed corpus shows `dash_along_the_way`, `idle_map`, `set_dash_end_time`), which is why the WARN
+is a once-per-process breadcrumb rather than an alarm.
+
 ### 2. JSON Rule Engine (`core/pipeline/.../rules/` + generated `assets/rules/`)
 
 Recognition is **data, not code**. The rule SOURCE is per-platform **JSON5** under `matchers/rules/`

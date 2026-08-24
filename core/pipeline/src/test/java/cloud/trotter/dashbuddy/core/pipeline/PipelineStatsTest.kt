@@ -2,6 +2,7 @@ package cloud.trotter.dashbuddy.core.pipeline
 
 import cloud.trotter.dashbuddy.domain.state.ParsedFields
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -60,5 +61,32 @@ class PipelineStatsTest {
         val summary = stats.summary()
         assertTrue(summary.contains("notifListenerConnects=2"))
         assertTrue(summary.contains("notifListenerDisconnects=1"))
+    }
+
+    /** #1036 — per-rule "matched but parsed nothing", rendered on the same summary line. */
+    @Test
+    fun `parse-all-null counts per rule and rides the summary sorted by rule id`() {
+        val stats = PipelineStats()
+
+        assertEquals(1L, stats.onParseAllNull("doordash.screen.waiting_for_offer"))
+        assertEquals(1L, stats.onParseAllNull("doordash.screen.delivery_summary_expanded"))
+        assertEquals(2L, stats.onParseAllNull("doordash.screen.delivery_summary_expanded"))
+
+        assertEquals(2L, stats.parseAllNullCount("doordash.screen.delivery_summary_expanded"))
+        assertEquals(1L, stats.parseAllNullCount("doordash.screen.waiting_for_offer"))
+        assertEquals("a rule that never tripped reads zero", 0L, stats.parseAllNullCount("doordash.screen.offer_popup"))
+
+        assertTrue(
+            stats.summary().contains(
+                "parseAllNull{doordash.screen.delivery_summary_expanded=2," +
+                    "doordash.screen.waiting_for_offer=1}",
+            ),
+        )
+    }
+
+    /** A healthy process says nothing — the suffix is absent, not an empty pair of braces. */
+    @Test
+    fun `parse-all-null is absent from the summary until something trips`() {
+        assertFalse(PipelineStats().summary().contains("parseAllNull"))
     }
 }

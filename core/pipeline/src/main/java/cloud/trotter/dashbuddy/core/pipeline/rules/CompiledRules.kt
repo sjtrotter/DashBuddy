@@ -57,6 +57,17 @@ data class CompiledBranch<TInput>(
     val predicate: ((TInput) -> Boolean)? = null,
     val rejectChecks: List<(TInput) -> Boolean> = emptyList(),
     val parser: ((TInput, Bindings) -> Map<String, Any?>) = { _, _ -> emptyMap() },
+    /**
+     * The names [parser] actually EXTRACTS from the input — the branch's declared parse fields
+     * minus the constant (`literal`) ones (#1036). Empty when the branch declares no parse block,
+     * declares only constants, or runs in a context with no parser at all (clicks).
+     *
+     * Carried on the compiled branch because the runtime field map cannot answer the question:
+     * a constant and an extraction are both just a non-null value in it. See
+     * [ParseExpressionCompiler.extractableFieldNames] for why constants are excluded, and
+     * [Ruleset.matchFirst] for the all-null check it feeds.
+     */
+    val parseFieldNames: Set<String> = emptySet(),
     val validators: List<(Map<String, Any?>) -> ValidateOutcome> = emptyList(),
     val effects: List<CompiledEffect> = emptyList(),
     val bindings: List<Binding> = emptyList(),
@@ -392,6 +403,17 @@ data class RuleMatchResult(
     val effects: List<RequestedEffect> = emptyList(),
     val targets: Map<String, cloud.trotter.dashbuddy.domain.pipeline.NodeRef> = emptyMap(),
     val transitionOverrides: Map<TransitionTrigger, List<RequestedEffect>> = emptyMap(),
+    /**
+     * #1036 — the branch's extractable declared parse fields ([CompiledBranch.parseFieldNames]),
+     * **every one of which resolved null** on this input. Empty in every other case: the branch
+     * declared no extractable field, or at least one of them resolved.
+     *
+     * Non-empty means "this rule matched and its parse yielded nothing", which is the anchor-rot
+     * signature — distinct from "matched, nothing to parse", which the pre-#1036 pipeline could
+     * not tell apart. Diagnostic only: it is not read by the factory, the observation, or the
+     * state machine, and carrying it changes nothing about how the frame is processed.
+     */
+    val allNullParseFields: Set<String> = emptySet(),
 )
 
 /**

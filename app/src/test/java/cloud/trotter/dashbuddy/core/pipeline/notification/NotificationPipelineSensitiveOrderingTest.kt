@@ -63,6 +63,7 @@ class NotificationPipelineSensitiveOrderingTest {
         },
         mock<ReplayMetadataProvider> { on { current() } doReturn ReplayMetadata.EMPTY },
         PlatformAppVersions.NONE,
+        PipelineStats(),
     )
     private val source = NotificationSource()
     private val pipeline = NotificationPipeline(
