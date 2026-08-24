@@ -20,6 +20,31 @@
           "keepPrefix": [
             "Deliver to door of "
           ]
+        },
+        {
+          "comment": "#1039 belt (the #993 combined-frame precedent): the FUSED subpremise line — `Apt/Suite <n>` or `Apt/Suite: <n>` in ONE id-less node, the render the committed `dropoff_pre_arrival` fixtures carry. Declared on EVERY rule in this file (plus `navigation_generic`) rather than only on the surfaces that fielded it, because a redact protects only the frames its OWN rule wins and the rules most likely to claim an address-block frame OUT-RANK the fielded pair (`delivery_summary_collapsed` 31, `dropoff_navigation` 61, `dropoff_photo` 62, `dropoff_geofence_warning` 84). Entry is `dropoff_photo`'s #986 entry verbatim — see it for the full reasoning: the token after the label strip is a bounded ~10^4 unit number, so a 4-hex distinctness suffix is brute-recoverable (`plainMask`), while the label itself is app vocabulary and is kept for replay context. ACCEPTED COLLATERAL: the split row's BARE `Apt/Suite` LABEL node is itself an exact prefix match here, and no keepPrefix can be kept from it, so it masks whole to plain `[redacted]` — two words of app chrome lost on a debug envelope, the same fail-toward-privacy trade `DropoffBannerRedactParityTest` already documents for the `Arriving at` label. It cannot break the label-sibling entry below: redact predicates are evaluated against the ORIGINAL tree, the mask lands on a copy. Inert on any frame without the line; the #1039 parity test in `CaptureRedactionCorpusTest` pins that every rule declares it, so a new dropoff surface cannot forget.",
+          "find": {
+            "hasTextStartsWith": "Apt/Suite"
+          },
+          "keepPrefix": [
+            "Apt/Suite: ",
+            "Apt/Suite "
+          ],
+          "plainMask": true
+        },
+        {
+          "comment": "#1039 belt: the LABEL-anchored half of the subpremise mask — an `Apt/Suite` label node followed by its value, whatever spelling that value carries (`Unit 4202` shipped raw 2026-08-14). Both label spellings are enumerated because `hasPrecedingSiblingText` is an exact, un-trimmed equality; whole-node `plainMask` because a unit number is a bounded ~10^4 alphabet. Ordered ahead of every generic shape entry in this block: `maskNode` is first-match-wins, and a digit-leading value (`101 B`) would otherwise be claimed and HASHED by the id-less street shape. See `dropoff_handoff` for the full reasoning. Inert without the label; pinned by the #1039 parity test.",
+          "find": {
+            "any": [
+              {
+                "hasPrecedingSiblingText": "Apt/Suite"
+              },
+              {
+                "hasPrecedingSiblingText": "Apt/Suite:"
+              }
+            ]
+          },
+          "plainMask": true
         }
       ],
       "require": {
@@ -101,6 +126,31 @@
               }
             ]
           }
+        },
+        {
+          "comment": "#1039 belt (the #993 combined-frame precedent): the FUSED subpremise line — `Apt/Suite <n>` or `Apt/Suite: <n>` in ONE id-less node, the render the committed `dropoff_pre_arrival` fixtures carry. Declared on EVERY rule in this file (plus `navigation_generic`) rather than only on the surfaces that fielded it, because a redact protects only the frames its OWN rule wins and the rules most likely to claim an address-block frame OUT-RANK the fielded pair (`delivery_summary_collapsed` 31, `dropoff_navigation` 61, `dropoff_photo` 62, `dropoff_geofence_warning` 84). Entry is `dropoff_photo`'s #986 entry verbatim — see it for the full reasoning: the token after the label strip is a bounded ~10^4 unit number, so a 4-hex distinctness suffix is brute-recoverable (`plainMask`), while the label itself is app vocabulary and is kept for replay context. ACCEPTED COLLATERAL: the split row's BARE `Apt/Suite` LABEL node is itself an exact prefix match here, and no keepPrefix can be kept from it, so it masks whole to plain `[redacted]` — two words of app chrome lost on a debug envelope, the same fail-toward-privacy trade `DropoffBannerRedactParityTest` already documents for the `Arriving at` label. It cannot break the label-sibling entry below: redact predicates are evaluated against the ORIGINAL tree, the mask lands on a copy. Inert on any frame without the line; the #1039 parity test in `CaptureRedactionCorpusTest` pins that every rule declares it, so a new dropoff surface cannot forget.",
+          "find": {
+            "hasTextStartsWith": "Apt/Suite"
+          },
+          "keepPrefix": [
+            "Apt/Suite: ",
+            "Apt/Suite "
+          ],
+          "plainMask": true
+        },
+        {
+          "comment": "#1039 belt: the LABEL-anchored half of the subpremise mask — an `Apt/Suite` label node followed by its value, whatever spelling that value carries (`Unit 4202` shipped raw 2026-08-14). Both label spellings are enumerated because `hasPrecedingSiblingText` is an exact, un-trimmed equality; whole-node `plainMask` because a unit number is a bounded ~10^4 alphabet. Ordered ahead of every generic shape entry in this block: `maskNode` is first-match-wins, and a digit-leading value (`101 B`) would otherwise be claimed and HASHED by the id-less street shape. See `dropoff_handoff` for the full reasoning. Inert without the label; pinned by the #1039 parity test.",
+          "find": {
+            "any": [
+              {
+                "hasPrecedingSiblingText": "Apt/Suite"
+              },
+              {
+                "hasPrecedingSiblingText": "Apt/Suite:"
+              }
+            ]
+          },
+          "plainMask": true
         },
         {
           "comment": "Defense-in-depth (FIX 3): a modal-over-handoff combined frame that carries the multi-order-confirm's id-less first-name+last-initial line could be claimed by THIS earlier-priority rule instead of dropoff_multi_order_confirm, whose id-keyed redacts wouldn't cover the id-less name node. Same canonical name-shape SSOT as SnapshotRedactor.FIRST_LAST_INITIAL_PATTERN so the leak closes regardless of which rule wins the frame; hasNoId keeps it off id-bearing nav anchors.",
@@ -267,6 +317,20 @@
           "plainMask": true
         },
         {
+          "comment": "#1039 belt: the LABEL-anchored half of the subpremise mask — an `Apt/Suite` label node followed by its value, whatever spelling that value carries (`Unit 4202` shipped raw 2026-08-14). Both label spellings are enumerated because `hasPrecedingSiblingText` is an exact, un-trimmed equality; whole-node `plainMask` because a unit number is a bounded ~10^4 alphabet. Ordered ahead of every generic shape entry in this block: `maskNode` is first-match-wins, and a digit-leading value (`101 B`) would otherwise be claimed and HASHED by the id-less street shape. See `dropoff_handoff` for the full reasoning. Inert without the label; pinned by the #1039 parity test.",
+          "find": {
+            "any": [
+              {
+                "hasPrecedingSiblingText": "Apt/Suite"
+              },
+              {
+                "hasPrecedingSiblingText": "Apt/Suite:"
+              }
+            ]
+          },
+          "plainMask": true
+        },
+        {
           "find": {
             "hasNoId": true
           }
@@ -310,6 +374,31 @@
           "find": {
             "hasTextContaining": "gate code"
           }
+        },
+        {
+          "comment": "#1039 belt (the #993 combined-frame precedent): the FUSED subpremise line — `Apt/Suite <n>` or `Apt/Suite: <n>` in ONE id-less node, the render the committed `dropoff_pre_arrival` fixtures carry. Declared on EVERY rule in this file (plus `navigation_generic`) rather than only on the surfaces that fielded it, because a redact protects only the frames its OWN rule wins and the rules most likely to claim an address-block frame OUT-RANK the fielded pair (`delivery_summary_collapsed` 31, `dropoff_navigation` 61, `dropoff_photo` 62, `dropoff_geofence_warning` 84). Entry is `dropoff_photo`'s #986 entry verbatim — see it for the full reasoning: the token after the label strip is a bounded ~10^4 unit number, so a 4-hex distinctness suffix is brute-recoverable (`plainMask`), while the label itself is app vocabulary and is kept for replay context. ACCEPTED COLLATERAL: the split row's BARE `Apt/Suite` LABEL node is itself an exact prefix match here, and no keepPrefix can be kept from it, so it masks whole to plain `[redacted]` — two words of app chrome lost on a debug envelope, the same fail-toward-privacy trade `DropoffBannerRedactParityTest` already documents for the `Arriving at` label. It cannot break the label-sibling entry below: redact predicates are evaluated against the ORIGINAL tree, the mask lands on a copy. Inert on any frame without the line; the #1039 parity test in `CaptureRedactionCorpusTest` pins that every rule declares it, so a new dropoff surface cannot forget.",
+          "find": {
+            "hasTextStartsWith": "Apt/Suite"
+          },
+          "keepPrefix": [
+            "Apt/Suite: ",
+            "Apt/Suite "
+          ],
+          "plainMask": true
+        },
+        {
+          "comment": "#1039 belt: the LABEL-anchored half of the subpremise mask — an `Apt/Suite` label node followed by its value, whatever spelling that value carries (`Unit 4202` shipped raw 2026-08-14). Both label spellings are enumerated because `hasPrecedingSiblingText` is an exact, un-trimmed equality; whole-node `plainMask` because a unit number is a bounded ~10^4 alphabet. Ordered ahead of every generic shape entry in this block: `maskNode` is first-match-wins, and a digit-leading value (`101 B`) would otherwise be claimed and HASHED by the id-less street shape. See `dropoff_handoff` for the full reasoning. Inert without the label; pinned by the #1039 parity test.",
+          "find": {
+            "any": [
+              {
+                "hasPrecedingSiblingText": "Apt/Suite"
+              },
+              {
+                "hasPrecedingSiblingText": "Apt/Suite:"
+              }
+            ]
+          },
+          "plainMask": true
         },
         {
           "comment": "#803 F1/F3: bare 'gate 4821' (no 'code' token) — word-bounded, digit-adjacent (3+); the [\\s:#] separator class covers 'gate: 4821' / 'gate#4821' / 'Gate4821'. Masks the whole body incl. any embedded name.",
@@ -356,7 +445,7 @@
           "plainMask": true
         },
         {
-          "comment": "#895 (+ the 07-29 F4 field finding): plainMask. The fused 'Apt <n>' unit number is a bounded ~10^4 alphabet over the 4-char length floor, so a 4-hex distinctness suffix is brute-recoverable (the #892/#795 oracle argument); distinctness is redundant here — the same surface's name/street entries keep per-customer hashes. The split label/value form already plains via the id-less digit-shape entry.",
+          "comment": "#895 (+ the 07-29 F4 field finding): plainMask. The fused 'Apt <n>' unit number is a bounded ~10^4 alphabet over the 4-char length floor, so a 4-hex distinctness suffix is brute-recoverable (the #892/#795 oracle argument); distinctness is redundant here — the same surface's name/street entries keep per-customer hashes. The split label/value form plains via the id-less digit-shape entry when its VALUE is bare digits, and via the `Apt/Suite` label-sibling entry ABOVE when it is not (#1039 — that entry is ordered ahead of every generic shape entry deliberately, since `maskNode` is first-match-wins).",
           "find": {
             "hasTextStartsWith": "Apt "
           },
@@ -436,6 +525,31 @@
           }
         },
         {
+          "comment": "#1039 belt (the #993 combined-frame precedent): the FUSED subpremise line — `Apt/Suite <n>` or `Apt/Suite: <n>` in ONE id-less node, the render the committed `dropoff_pre_arrival` fixtures carry. Declared on EVERY rule in this file (plus `navigation_generic`) rather than only on the surfaces that fielded it, because a redact protects only the frames its OWN rule wins and the rules most likely to claim an address-block frame OUT-RANK the fielded pair (`delivery_summary_collapsed` 31, `dropoff_navigation` 61, `dropoff_photo` 62, `dropoff_geofence_warning` 84). Entry is `dropoff_photo`'s #986 entry verbatim — see it for the full reasoning: the token after the label strip is a bounded ~10^4 unit number, so a 4-hex distinctness suffix is brute-recoverable (`plainMask`), while the label itself is app vocabulary and is kept for replay context. ACCEPTED COLLATERAL: the split row's BARE `Apt/Suite` LABEL node is itself an exact prefix match here, and no keepPrefix can be kept from it, so it masks whole to plain `[redacted]` — two words of app chrome lost on a debug envelope, the same fail-toward-privacy trade `DropoffBannerRedactParityTest` already documents for the `Arriving at` label. It cannot break the label-sibling entry below: redact predicates are evaluated against the ORIGINAL tree, the mask lands on a copy. Inert on any frame without the line; the #1039 parity test in `CaptureRedactionCorpusTest` pins that every rule declares it, so a new dropoff surface cannot forget.",
+          "find": {
+            "hasTextStartsWith": "Apt/Suite"
+          },
+          "keepPrefix": [
+            "Apt/Suite: ",
+            "Apt/Suite "
+          ],
+          "plainMask": true
+        },
+        {
+          "comment": "#1039 belt: the LABEL-anchored half of the subpremise mask — an `Apt/Suite` label node followed by its value, whatever spelling that value carries (`Unit 4202` shipped raw 2026-08-14). Both label spellings are enumerated because `hasPrecedingSiblingText` is an exact, un-trimmed equality; whole-node `plainMask` because a unit number is a bounded ~10^4 alphabet. Ordered ahead of every generic shape entry in this block: `maskNode` is first-match-wins, and a digit-leading value (`101 B`) would otherwise be claimed and HASHED by the id-less street shape. See `dropoff_handoff` for the full reasoning. Inert without the label; pinned by the #1039 parity test.",
+          "find": {
+            "any": [
+              {
+                "hasPrecedingSiblingText": "Apt/Suite"
+              },
+              {
+                "hasPrecedingSiblingText": "Apt/Suite:"
+              }
+            ]
+          },
+          "plainMask": true
+        },
+        {
           "comment": "#795: mask the entered PIN — the whole-PIN EditText and each echoed single-digit TextView are id-less pure-digit nodes. plainMask drops the distinctness hash (a bounded PIN is recoverable from 4 hex). The rule's require anchors are non-digit text nodes, so masking these leaves replay recognition unchanged.",
           "find": {
             "all": [
@@ -479,6 +593,31 @@
           "find": {
             "hasIdSuffix": "arriving_at_title"
           }
+        },
+        {
+          "comment": "#1039 belt (the #993 combined-frame precedent): the FUSED subpremise line — `Apt/Suite <n>` or `Apt/Suite: <n>` in ONE id-less node, the render the committed `dropoff_pre_arrival` fixtures carry. Declared on EVERY rule in this file (plus `navigation_generic`) rather than only on the surfaces that fielded it, because a redact protects only the frames its OWN rule wins and the rules most likely to claim an address-block frame OUT-RANK the fielded pair (`delivery_summary_collapsed` 31, `dropoff_navigation` 61, `dropoff_photo` 62, `dropoff_geofence_warning` 84). Entry is `dropoff_photo`'s #986 entry verbatim — see it for the full reasoning: the token after the label strip is a bounded ~10^4 unit number, so a 4-hex distinctness suffix is brute-recoverable (`plainMask`), while the label itself is app vocabulary and is kept for replay context. ACCEPTED COLLATERAL: the split row's BARE `Apt/Suite` LABEL node is itself an exact prefix match here, and no keepPrefix can be kept from it, so it masks whole to plain `[redacted]` — two words of app chrome lost on a debug envelope, the same fail-toward-privacy trade `DropoffBannerRedactParityTest` already documents for the `Arriving at` label. It cannot break the label-sibling entry below: redact predicates are evaluated against the ORIGINAL tree, the mask lands on a copy. Inert on any frame without the line; the #1039 parity test in `CaptureRedactionCorpusTest` pins that every rule declares it, so a new dropoff surface cannot forget.",
+          "find": {
+            "hasTextStartsWith": "Apt/Suite"
+          },
+          "keepPrefix": [
+            "Apt/Suite: ",
+            "Apt/Suite "
+          ],
+          "plainMask": true
+        },
+        {
+          "comment": "#1039 belt: the LABEL-anchored half of the subpremise mask — an `Apt/Suite` label node followed by its value, whatever spelling that value carries (`Unit 4202` shipped raw 2026-08-14). Both label spellings are enumerated because `hasPrecedingSiblingText` is an exact, un-trimmed equality; whole-node `plainMask` because a unit number is a bounded ~10^4 alphabet. Ordered ahead of every generic shape entry in this block: `maskNode` is first-match-wins, and a digit-leading value (`101 B`) would otherwise be claimed and HASHED by the id-less street shape. See `dropoff_handoff` for the full reasoning. Inert without the label; pinned by the #1039 parity test.",
+          "find": {
+            "any": [
+              {
+                "hasPrecedingSiblingText": "Apt/Suite"
+              },
+              {
+                "hasPrecedingSiblingText": "Apt/Suite:"
+              }
+            ]
+          },
+          "plainMask": true
         }
       ],
       "comment": "#795: the informational bottom sheet that precedes the PIN keypad — 'You'll need a PIN from the customer to confirm delivery' + 'To protect your Dasher rating...'. RECOGNIZE-ONLY (no state.flow, no parse — mirrors dropoff_multi_order_confirm): a pre-arrival advisory sheet, not a lifecycle anchor; recognizing it only graduates the frame out of UNKNOWN. The sheet's OWN copy needs no mask — it carries only generic DoorDash text, no customer name/address/PIN (verified against both captured frames, text and contentDescription); its single redact entry is the #993 nav-banner belt, which is inert on any frame that does not carry the banner. Anchors are corpus-unique; 112 is the next free screen priority after 109 (behaviorally inert).",
@@ -518,6 +657,31 @@
           "find": {
             "hasTextContaining": "gate code"
           }
+        },
+        {
+          "comment": "#1039 belt (the #993 combined-frame precedent): the FUSED subpremise line — `Apt/Suite <n>` or `Apt/Suite: <n>` in ONE id-less node, the render the committed `dropoff_pre_arrival` fixtures carry. Declared on EVERY rule in this file (plus `navigation_generic`) rather than only on the surfaces that fielded it, because a redact protects only the frames its OWN rule wins and the rules most likely to claim an address-block frame OUT-RANK the fielded pair (`delivery_summary_collapsed` 31, `dropoff_navigation` 61, `dropoff_photo` 62, `dropoff_geofence_warning` 84). Entry is `dropoff_photo`'s #986 entry verbatim — see it for the full reasoning: the token after the label strip is a bounded ~10^4 unit number, so a 4-hex distinctness suffix is brute-recoverable (`plainMask`), while the label itself is app vocabulary and is kept for replay context. ACCEPTED COLLATERAL: the split row's BARE `Apt/Suite` LABEL node is itself an exact prefix match here, and no keepPrefix can be kept from it, so it masks whole to plain `[redacted]` — two words of app chrome lost on a debug envelope, the same fail-toward-privacy trade `DropoffBannerRedactParityTest` already documents for the `Arriving at` label. It cannot break the label-sibling entry below: redact predicates are evaluated against the ORIGINAL tree, the mask lands on a copy. Inert on any frame without the line; the #1039 parity test in `CaptureRedactionCorpusTest` pins that every rule declares it, so a new dropoff surface cannot forget.",
+          "find": {
+            "hasTextStartsWith": "Apt/Suite"
+          },
+          "keepPrefix": [
+            "Apt/Suite: ",
+            "Apt/Suite "
+          ],
+          "plainMask": true
+        },
+        {
+          "comment": "#1039: the split label/value subpremise form spelled `Unit <n>` evaded EVERY mask in this family — the fused `Apt ` entry only sees a value LEADING with `Apt `, and the id-less pure-digit shape entry only sees a value that IS bare digits, so `Unit 4202` beside its `Apt/Suite` label shipped RAW on two recognized envelopes (dropoff_handoff + dropoff_pre_arrival, fielded 2026-08-14 18:56, two days AFTER the #986/#934 install). The value spelling is app/customer-authored — Apt / Unit / Bldg / # are all plausible — so prefix enumeration keeps losing that race; this entry anchors on the LABEL sibling instead (#860's `hasPrecedingSiblingText`, the same handle the `Building Name` entries use), which is app chrome and stable vocabulary. BOTH label spellings are enumerated because the predicate compiles to an exact, UN-TRIMMED `equals(ignoreCase)` and this family has already fielded the colon render (`Apt/Suite: <n>`, the spelling the id-anchored `bottom_sheet_subpremise_line`/`address_subpremise_line` entries strip) — a colon label would otherwise silently miss. Masked WHOLE with `plainMask` (a value node has no lead-in worth keeping): a unit number is the same bounded ~10^4 alphabet as the fused form (#895/#986/#934), so a 4-hex distinctness suffix would be brute-recoverable, and its distinctness is redundant beside this surface's per-customer name/street hashes. ORDER IS LOAD-BEARING — `CompiledRedact.maskNode` is first-match-wins per node, so this sits AHEAD of every generic shape entry in the block: a digit-leading value like `101 B` matches the id-less street shape `^\\d{1,5}\\s+\\S`, which hashes, and that hash is exactly the brute-recoverable token this entry exists to remove. Declared on EVERY rule in this file plus `navigation_generic` for the #993 combined-frame reason, not only on the two surfaces that fielded it. The label node itself is vocabulary and stays raw. Capture-only — the node is never parsed, so the goldens are unchanged.",
+          "find": {
+            "any": [
+              {
+                "hasPrecedingSiblingText": "Apt/Suite"
+              },
+              {
+                "hasPrecedingSiblingText": "Apt/Suite:"
+              }
+            ]
+          },
+          "plainMask": true
         },
         {
           "comment": "#803 F1/F3: bare 'gate 4821' (no 'code' token) — word-bounded, digit-adjacent (3+); [\\s:#] covers 'gate: 4821'/'gate#4821'/'Gate4821'.",
@@ -581,7 +745,7 @@
           "plainMask": true
         },
         {
-          "comment": "#895 (+ the 07-29 F4 field finding): plainMask. The fused 'Apt <n>' unit number is a bounded ~10^4 alphabet over the 4-char length floor, so a 4-hex distinctness suffix is brute-recoverable (the #892/#795 oracle argument); distinctness is redundant here — the same surface's name/street entries keep per-customer hashes. The split label/value form already plains via the id-less digit-shape entry.",
+          "comment": "#895 (+ the 07-29 F4 field finding): plainMask. The fused 'Apt <n>' unit number is a bounded ~10^4 alphabet over the 4-char length floor, so a 4-hex distinctness suffix is brute-recoverable (the #892/#795 oracle argument); distinctness is redundant here — the same surface's name/street entries keep per-customer hashes. The split label/value form plains via the id-less digit-shape entry when its VALUE is bare digits, and via the `Apt/Suite` label-sibling entry ABOVE when it is not (#1039 — that entry is ordered ahead of every generic shape entry deliberately, since `maskNode` is first-match-wins).",
           "find": {
             "hasTextStartsWith": "Apt "
           },
@@ -672,6 +836,31 @@
           "find": {
             "hasIdSuffix": "arriving_at_title"
           }
+        },
+        {
+          "comment": "#1039 belt (the #993 combined-frame precedent): the FUSED subpremise line — `Apt/Suite <n>` or `Apt/Suite: <n>` in ONE id-less node, the render the committed `dropoff_pre_arrival` fixtures carry. Declared on EVERY rule in this file (plus `navigation_generic`) rather than only on the surfaces that fielded it, because a redact protects only the frames its OWN rule wins and the rules most likely to claim an address-block frame OUT-RANK the fielded pair (`delivery_summary_collapsed` 31, `dropoff_navigation` 61, `dropoff_photo` 62, `dropoff_geofence_warning` 84). Entry is `dropoff_photo`'s #986 entry verbatim — see it for the full reasoning: the token after the label strip is a bounded ~10^4 unit number, so a 4-hex distinctness suffix is brute-recoverable (`plainMask`), while the label itself is app vocabulary and is kept for replay context. ACCEPTED COLLATERAL: the split row's BARE `Apt/Suite` LABEL node is itself an exact prefix match here, and no keepPrefix can be kept from it, so it masks whole to plain `[redacted]` — two words of app chrome lost on a debug envelope, the same fail-toward-privacy trade `DropoffBannerRedactParityTest` already documents for the `Arriving at` label. It cannot break the label-sibling entry below: redact predicates are evaluated against the ORIGINAL tree, the mask lands on a copy. Inert on any frame without the line; the #1039 parity test in `CaptureRedactionCorpusTest` pins that every rule declares it, so a new dropoff surface cannot forget.",
+          "find": {
+            "hasTextStartsWith": "Apt/Suite"
+          },
+          "keepPrefix": [
+            "Apt/Suite: ",
+            "Apt/Suite "
+          ],
+          "plainMask": true
+        },
+        {
+          "comment": "#1039 belt: the LABEL-anchored half of the subpremise mask — an `Apt/Suite` label node followed by its value, whatever spelling that value carries (`Unit 4202` shipped raw 2026-08-14). Both label spellings are enumerated because `hasPrecedingSiblingText` is an exact, un-trimmed equality; whole-node `plainMask` because a unit number is a bounded ~10^4 alphabet. Ordered ahead of every generic shape entry in this block: `maskNode` is first-match-wins, and a digit-leading value (`101 B`) would otherwise be claimed and HASHED by the id-less street shape. See `dropoff_handoff` for the full reasoning. Inert without the label; pinned by the #1039 parity test.",
+          "find": {
+            "any": [
+              {
+                "hasPrecedingSiblingText": "Apt/Suite"
+              },
+              {
+                "hasPrecedingSiblingText": "Apt/Suite:"
+              }
+            ]
+          },
+          "plainMask": true
         }
       ],
       "state": {
@@ -700,6 +889,31 @@
           "find": {
             "hasIdSuffix": "arriving_at_title"
           }
+        },
+        {
+          "comment": "#1039 belt (the #993 combined-frame precedent): the FUSED subpremise line — `Apt/Suite <n>` or `Apt/Suite: <n>` in ONE id-less node, the render the committed `dropoff_pre_arrival` fixtures carry. Declared on EVERY rule in this file (plus `navigation_generic`) rather than only on the surfaces that fielded it, because a redact protects only the frames its OWN rule wins and the rules most likely to claim an address-block frame OUT-RANK the fielded pair (`delivery_summary_collapsed` 31, `dropoff_navigation` 61, `dropoff_photo` 62, `dropoff_geofence_warning` 84). Entry is `dropoff_photo`'s #986 entry verbatim — see it for the full reasoning: the token after the label strip is a bounded ~10^4 unit number, so a 4-hex distinctness suffix is brute-recoverable (`plainMask`), while the label itself is app vocabulary and is kept for replay context. ACCEPTED COLLATERAL: the split row's BARE `Apt/Suite` LABEL node is itself an exact prefix match here, and no keepPrefix can be kept from it, so it masks whole to plain `[redacted]` — two words of app chrome lost on a debug envelope, the same fail-toward-privacy trade `DropoffBannerRedactParityTest` already documents for the `Arriving at` label. It cannot break the label-sibling entry below: redact predicates are evaluated against the ORIGINAL tree, the mask lands on a copy. Inert on any frame without the line; the #1039 parity test in `CaptureRedactionCorpusTest` pins that every rule declares it, so a new dropoff surface cannot forget.",
+          "find": {
+            "hasTextStartsWith": "Apt/Suite"
+          },
+          "keepPrefix": [
+            "Apt/Suite: ",
+            "Apt/Suite "
+          ],
+          "plainMask": true
+        },
+        {
+          "comment": "#1039 belt: the LABEL-anchored half of the subpremise mask — an `Apt/Suite` label node followed by its value, whatever spelling that value carries (`Unit 4202` shipped raw 2026-08-14). Both label spellings are enumerated because `hasPrecedingSiblingText` is an exact, un-trimmed equality; whole-node `plainMask` because a unit number is a bounded ~10^4 alphabet. Ordered ahead of every generic shape entry in this block: `maskNode` is first-match-wins, and a digit-leading value (`101 B`) would otherwise be claimed and HASHED by the id-less street shape. See `dropoff_handoff` for the full reasoning. Inert without the label; pinned by the #1039 parity test.",
+          "find": {
+            "any": [
+              {
+                "hasPrecedingSiblingText": "Apt/Suite"
+              },
+              {
+                "hasPrecedingSiblingText": "Apt/Suite:"
+              }
+            ]
+          },
+          "plainMask": true
         },
         {
           "comment": "The id-less first-name + last-initial customer name. Whole-value anchored (^...$, whitespace-tolerant so a trailing space still masks) so it masks ONLY the bare name node, never the multi-word merchant anchor, the zone code, a count, or the 'Confirm ...'/'Mix-ups ...' copy. Char classes cover accented/Unicode letters (José, Muñoz), interior capitals (McKenna), hyphenated first names (Mary-Jo), and apostrophes (O'Brien, D'Angelo); every quantifier is bounded ({0,20}/{0,3}/{0,8}/{1,4}) so RegexSafety's ReDoS guard accepts it. Compiled IGNORE_CASE (all rule regexes are), so 'JOSE G' masks too. SSOT with SnapshotRedactor.FIRST_LAST_INITIAL_PATTERN. #885: the token SEPARATOR is `\\s{1,4}`, not a literal space — the 07-26 field render was 'Firstname  L.' with a DOUBLE space, which the old single-space separator did not match, so this entry existed but never fired and a raw customer name reached the recognized envelope. `normalize: customerName` (#733) canonicalizes the token before the <4hex> distinctness hash, so this card's mask hex equals the same customer's mask on 'Deliver to <name>' surfaces AND the persisted customerNameHash — one customer, one mask, across every surface form.",
@@ -802,6 +1016,31 @@
           }
         },
         {
+          "comment": "#1039 belt (the #993 combined-frame precedent): the FUSED subpremise line — `Apt/Suite <n>` or `Apt/Suite: <n>` in ONE id-less node, the render the committed `dropoff_pre_arrival` fixtures carry. Declared on EVERY rule in this file (plus `navigation_generic`) rather than only on the surfaces that fielded it, because a redact protects only the frames its OWN rule wins and the rules most likely to claim an address-block frame OUT-RANK the fielded pair (`delivery_summary_collapsed` 31, `dropoff_navigation` 61, `dropoff_photo` 62, `dropoff_geofence_warning` 84). Entry is `dropoff_photo`'s #986 entry verbatim — see it for the full reasoning: the token after the label strip is a bounded ~10^4 unit number, so a 4-hex distinctness suffix is brute-recoverable (`plainMask`), while the label itself is app vocabulary and is kept for replay context. ACCEPTED COLLATERAL: the split row's BARE `Apt/Suite` LABEL node is itself an exact prefix match here, and no keepPrefix can be kept from it, so it masks whole to plain `[redacted]` — two words of app chrome lost on a debug envelope, the same fail-toward-privacy trade `DropoffBannerRedactParityTest` already documents for the `Arriving at` label. It cannot break the label-sibling entry below: redact predicates are evaluated against the ORIGINAL tree, the mask lands on a copy. Inert on any frame without the line; the #1039 parity test in `CaptureRedactionCorpusTest` pins that every rule declares it, so a new dropoff surface cannot forget.",
+          "find": {
+            "hasTextStartsWith": "Apt/Suite"
+          },
+          "keepPrefix": [
+            "Apt/Suite: ",
+            "Apt/Suite "
+          ],
+          "plainMask": true
+        },
+        {
+          "comment": "#1039 belt: the LABEL-anchored half of the subpremise mask — an `Apt/Suite` label node followed by its value, whatever spelling that value carries (`Unit 4202` shipped raw 2026-08-14). Both label spellings are enumerated because `hasPrecedingSiblingText` is an exact, un-trimmed equality; whole-node `plainMask` because a unit number is a bounded ~10^4 alphabet. Ordered ahead of every generic shape entry in this block: `maskNode` is first-match-wins, and a digit-leading value (`101 B`) would otherwise be claimed and HASHED by the id-less street shape. See `dropoff_handoff` for the full reasoning. Inert without the label; pinned by the #1039 parity test.",
+          "find": {
+            "any": [
+              {
+                "hasPrecedingSiblingText": "Apt/Suite"
+              },
+              {
+                "hasPrecedingSiblingText": "Apt/Suite:"
+              }
+            ]
+          },
+          "plainMask": true
+        },
+        {
           "find": {
             "all": [
               {
@@ -834,7 +1073,7 @@
           "plainMask": true
         },
         {
-          "comment": "#895 (+ the 07-29 F4 field finding): plainMask. The fused 'Apt <n>' unit number is a bounded ~10^4 alphabet over the 4-char length floor, so a 4-hex distinctness suffix is brute-recoverable (the #892/#795 oracle argument); distinctness is redundant here — the same surface's name/street entries keep per-customer hashes. The split label/value form already plains via the id-less digit-shape entry.",
+          "comment": "#895 (+ the 07-29 F4 field finding): plainMask. The fused 'Apt <n>' unit number is a bounded ~10^4 alphabet over the 4-char length floor, so a 4-hex distinctness suffix is brute-recoverable (the #892/#795 oracle argument); distinctness is redundant here — the same surface's name/street entries keep per-customer hashes. The split label/value form plains via the id-less digit-shape entry when its VALUE is bare digits, and via the `Apt/Suite` label-sibling entry ABOVE when it is not (#1039 — that entry is ordered ahead of every generic shape entry deliberately, since `maskNode` is first-match-wins).",
           "find": {
             "hasTextStartsWith": "Apt "
           },
@@ -1115,6 +1354,31 @@
           "normalize": "customerName"
         },
         {
+          "comment": "#1039 belt (the #993 combined-frame precedent): the FUSED subpremise line — `Apt/Suite <n>` or `Apt/Suite: <n>` in ONE id-less node, the render the committed `dropoff_pre_arrival` fixtures carry. Declared on EVERY rule in this file (plus `navigation_generic`) rather than only on the surfaces that fielded it, because a redact protects only the frames its OWN rule wins and the rules most likely to claim an address-block frame OUT-RANK the fielded pair (`delivery_summary_collapsed` 31, `dropoff_navigation` 61, `dropoff_photo` 62, `dropoff_geofence_warning` 84). Entry is `dropoff_photo`'s #986 entry verbatim — see it for the full reasoning: the token after the label strip is a bounded ~10^4 unit number, so a 4-hex distinctness suffix is brute-recoverable (`plainMask`), while the label itself is app vocabulary and is kept for replay context. ACCEPTED COLLATERAL: the split row's BARE `Apt/Suite` LABEL node is itself an exact prefix match here, and no keepPrefix can be kept from it, so it masks whole to plain `[redacted]` — two words of app chrome lost on a debug envelope, the same fail-toward-privacy trade `DropoffBannerRedactParityTest` already documents for the `Arriving at` label. It cannot break the label-sibling entry below: redact predicates are evaluated against the ORIGINAL tree, the mask lands on a copy. Inert on any frame without the line; the #1039 parity test in `CaptureRedactionCorpusTest` pins that every rule declares it, so a new dropoff surface cannot forget.",
+          "find": {
+            "hasTextStartsWith": "Apt/Suite"
+          },
+          "keepPrefix": [
+            "Apt/Suite: ",
+            "Apt/Suite "
+          ],
+          "plainMask": true
+        },
+        {
+          "comment": "#1039 belt: the LABEL-anchored half of the subpremise mask — an `Apt/Suite` label node followed by its value, whatever spelling that value carries (`Unit 4202` shipped raw 2026-08-14). Both label spellings are enumerated because `hasPrecedingSiblingText` is an exact, un-trimmed equality; whole-node `plainMask` because a unit number is a bounded ~10^4 alphabet. Ordered ahead of every generic shape entry in this block: `maskNode` is first-match-wins, and a digit-leading value (`101 B`) would otherwise be claimed and HASHED by the id-less street shape. See `dropoff_handoff` for the full reasoning. Inert without the label; pinned by the #1039 parity test.",
+          "find": {
+            "any": [
+              {
+                "hasPrecedingSiblingText": "Apt/Suite"
+              },
+              {
+                "hasPrecedingSiblingText": "Apt/Suite:"
+              }
+            ]
+          },
+          "plainMask": true
+        },
+        {
           "find": {
             "all": [
               {
@@ -1147,7 +1411,7 @@
           "plainMask": true
         },
         {
-          "comment": "#895 (+ the 07-29 F4 field finding): plainMask. The fused 'Apt <n>' unit number is a bounded ~10^4 alphabet over the 4-char length floor, so a 4-hex distinctness suffix is brute-recoverable (the #892/#795 oracle argument); distinctness is redundant here — the same surface's name/street entries keep per-customer hashes. The split label/value form already plains via the id-less digit-shape entry.",
+          "comment": "#895 (+ the 07-29 F4 field finding): plainMask. The fused 'Apt <n>' unit number is a bounded ~10^4 alphabet over the 4-char length floor, so a 4-hex distinctness suffix is brute-recoverable (the #892/#795 oracle argument); distinctness is redundant here — the same surface's name/street entries keep per-customer hashes. The split label/value form plains via the id-less digit-shape entry when its VALUE is bare digits, and via the `Apt/Suite` label-sibling entry ABOVE when it is not (#1039 — that entry is ordered ahead of every generic shape entry deliberately, since `maskNode` is first-match-wins).",
           "find": {
             "hasTextStartsWith": "Apt "
           },
@@ -1330,6 +1594,31 @@
             "hasIdSuffix": "address_subpremise_line"
           },
           "plainMask": true
+        },
+        {
+          "comment": "#1039 belt (the #993 combined-frame precedent): the FUSED subpremise line — `Apt/Suite <n>` or `Apt/Suite: <n>` in ONE id-less node, the render the committed `dropoff_pre_arrival` fixtures carry. Declared on EVERY rule in this file (plus `navigation_generic`) rather than only on the surfaces that fielded it, because a redact protects only the frames its OWN rule wins and the rules most likely to claim an address-block frame OUT-RANK the fielded pair (`delivery_summary_collapsed` 31, `dropoff_navigation` 61, `dropoff_photo` 62, `dropoff_geofence_warning` 84). Entry is `dropoff_photo`'s #986 entry verbatim — see it for the full reasoning: the token after the label strip is a bounded ~10^4 unit number, so a 4-hex distinctness suffix is brute-recoverable (`plainMask`), while the label itself is app vocabulary and is kept for replay context. ACCEPTED COLLATERAL: the split row's BARE `Apt/Suite` LABEL node is itself an exact prefix match here, and no keepPrefix can be kept from it, so it masks whole to plain `[redacted]` — two words of app chrome lost on a debug envelope, the same fail-toward-privacy trade `DropoffBannerRedactParityTest` already documents for the `Arriving at` label. It cannot break the label-sibling entry below: redact predicates are evaluated against the ORIGINAL tree, the mask lands on a copy. Inert on any frame without the line; the #1039 parity test in `CaptureRedactionCorpusTest` pins that every rule declares it, so a new dropoff surface cannot forget.",
+          "find": {
+            "hasTextStartsWith": "Apt/Suite"
+          },
+          "keepPrefix": [
+            "Apt/Suite: ",
+            "Apt/Suite "
+          ],
+          "plainMask": true
+        },
+        {
+          "comment": "#1039 belt: the LABEL-anchored half of the subpremise mask — an `Apt/Suite` label node followed by its value, whatever spelling that value carries (`Unit 4202` shipped raw 2026-08-14). Both label spellings are enumerated because `hasPrecedingSiblingText` is an exact, un-trimmed equality; whole-node `plainMask` because a unit number is a bounded ~10^4 alphabet. Ordered ahead of every generic shape entry in this block: `maskNode` is first-match-wins, and a digit-leading value (`101 B`) would otherwise be claimed and HASHED by the id-less street shape. See `dropoff_handoff` for the full reasoning. Inert without the label; pinned by the #1039 parity test.",
+          "find": {
+            "any": [
+              {
+                "hasPrecedingSiblingText": "Apt/Suite"
+              },
+              {
+                "hasPrecedingSiblingText": "Apt/Suite:"
+              }
+            ]
+          },
+          "plainMask": true
         }
       ],
       "branches": [
@@ -1360,6 +1649,31 @@
           "find": {
             "hasIdSuffix": "arriving_at_title"
           }
+        },
+        {
+          "comment": "#1039 belt (the #993 combined-frame precedent): the FUSED subpremise line — `Apt/Suite <n>` or `Apt/Suite: <n>` in ONE id-less node, the render the committed `dropoff_pre_arrival` fixtures carry. Declared on EVERY rule in this file (plus `navigation_generic`) rather than only on the surfaces that fielded it, because a redact protects only the frames its OWN rule wins and the rules most likely to claim an address-block frame OUT-RANK the fielded pair (`delivery_summary_collapsed` 31, `dropoff_navigation` 61, `dropoff_photo` 62, `dropoff_geofence_warning` 84). Entry is `dropoff_photo`'s #986 entry verbatim — see it for the full reasoning: the token after the label strip is a bounded ~10^4 unit number, so a 4-hex distinctness suffix is brute-recoverable (`plainMask`), while the label itself is app vocabulary and is kept for replay context. ACCEPTED COLLATERAL: the split row's BARE `Apt/Suite` LABEL node is itself an exact prefix match here, and no keepPrefix can be kept from it, so it masks whole to plain `[redacted]` — two words of app chrome lost on a debug envelope, the same fail-toward-privacy trade `DropoffBannerRedactParityTest` already documents for the `Arriving at` label. It cannot break the label-sibling entry below: redact predicates are evaluated against the ORIGINAL tree, the mask lands on a copy. Inert on any frame without the line; the #1039 parity test in `CaptureRedactionCorpusTest` pins that every rule declares it, so a new dropoff surface cannot forget.",
+          "find": {
+            "hasTextStartsWith": "Apt/Suite"
+          },
+          "keepPrefix": [
+            "Apt/Suite: ",
+            "Apt/Suite "
+          ],
+          "plainMask": true
+        },
+        {
+          "comment": "#1039 belt: the LABEL-anchored half of the subpremise mask — an `Apt/Suite` label node followed by its value, whatever spelling that value carries (`Unit 4202` shipped raw 2026-08-14). Both label spellings are enumerated because `hasPrecedingSiblingText` is an exact, un-trimmed equality; whole-node `plainMask` because a unit number is a bounded ~10^4 alphabet. Ordered ahead of every generic shape entry in this block: `maskNode` is first-match-wins, and a digit-leading value (`101 B`) would otherwise be claimed and HASHED by the id-less street shape. See `dropoff_handoff` for the full reasoning. Inert without the label; pinned by the #1039 parity test.",
+          "find": {
+            "any": [
+              {
+                "hasPrecedingSiblingText": "Apt/Suite"
+              },
+              {
+                "hasPrecedingSiblingText": "Apt/Suite:"
+              }
+            ]
+          },
+          "plainMask": true
         }
       ],
       "state": {
@@ -1532,6 +1846,31 @@
           "find": {
             "hasIdSuffix": "order_item_instructions"
           }
+        },
+        {
+          "comment": "#1039 belt (the #993 combined-frame precedent): the FUSED subpremise line — `Apt/Suite <n>` or `Apt/Suite: <n>` in ONE id-less node, the render the committed `dropoff_pre_arrival` fixtures carry. Declared on EVERY rule in this file (plus `navigation_generic`) rather than only on the surfaces that fielded it, because a redact protects only the frames its OWN rule wins and the rules most likely to claim an address-block frame OUT-RANK the fielded pair (`delivery_summary_collapsed` 31, `dropoff_navigation` 61, `dropoff_photo` 62, `dropoff_geofence_warning` 84). Entry is `dropoff_photo`'s #986 entry verbatim — see it for the full reasoning: the token after the label strip is a bounded ~10^4 unit number, so a 4-hex distinctness suffix is brute-recoverable (`plainMask`), while the label itself is app vocabulary and is kept for replay context. ACCEPTED COLLATERAL: the split row's BARE `Apt/Suite` LABEL node is itself an exact prefix match here, and no keepPrefix can be kept from it, so it masks whole to plain `[redacted]` — two words of app chrome lost on a debug envelope, the same fail-toward-privacy trade `DropoffBannerRedactParityTest` already documents for the `Arriving at` label. It cannot break the label-sibling entry below: redact predicates are evaluated against the ORIGINAL tree, the mask lands on a copy. Inert on any frame without the line; the #1039 parity test in `CaptureRedactionCorpusTest` pins that every rule declares it, so a new dropoff surface cannot forget.",
+          "find": {
+            "hasTextStartsWith": "Apt/Suite"
+          },
+          "keepPrefix": [
+            "Apt/Suite: ",
+            "Apt/Suite "
+          ],
+          "plainMask": true
+        },
+        {
+          "comment": "#1039 belt: the LABEL-anchored half of the subpremise mask — an `Apt/Suite` label node followed by its value, whatever spelling that value carries (`Unit 4202` shipped raw 2026-08-14). Both label spellings are enumerated because `hasPrecedingSiblingText` is an exact, un-trimmed equality; whole-node `plainMask` because a unit number is a bounded ~10^4 alphabet. Ordered ahead of every generic shape entry in this block: `maskNode` is first-match-wins, and a digit-leading value (`101 B`) would otherwise be claimed and HASHED by the id-less street shape. See `dropoff_handoff` for the full reasoning. Inert without the label; pinned by the #1039 parity test.",
+          "find": {
+            "any": [
+              {
+                "hasPrecedingSiblingText": "Apt/Suite"
+              },
+              {
+                "hasPrecedingSiblingText": "Apt/Suite:"
+              }
+            ]
+          },
+          "plainMask": true
         }
       ],
       "state": {
@@ -1666,6 +2005,31 @@
           "find": {
             "hasIdSuffix": "arriving_at_title"
           }
+        },
+        {
+          "comment": "#1039 belt (the #993 combined-frame precedent): the FUSED subpremise line — `Apt/Suite <n>` or `Apt/Suite: <n>` in ONE id-less node, the render the committed `dropoff_pre_arrival` fixtures carry. Declared on EVERY rule in this file (plus `navigation_generic`) rather than only on the surfaces that fielded it, because a redact protects only the frames its OWN rule wins and the rules most likely to claim an address-block frame OUT-RANK the fielded pair (`delivery_summary_collapsed` 31, `dropoff_navigation` 61, `dropoff_photo` 62, `dropoff_geofence_warning` 84). Entry is `dropoff_photo`'s #986 entry verbatim — see it for the full reasoning: the token after the label strip is a bounded ~10^4 unit number, so a 4-hex distinctness suffix is brute-recoverable (`plainMask`), while the label itself is app vocabulary and is kept for replay context. ACCEPTED COLLATERAL: the split row's BARE `Apt/Suite` LABEL node is itself an exact prefix match here, and no keepPrefix can be kept from it, so it masks whole to plain `[redacted]` — two words of app chrome lost on a debug envelope, the same fail-toward-privacy trade `DropoffBannerRedactParityTest` already documents for the `Arriving at` label. It cannot break the label-sibling entry below: redact predicates are evaluated against the ORIGINAL tree, the mask lands on a copy. Inert on any frame without the line; the #1039 parity test in `CaptureRedactionCorpusTest` pins that every rule declares it, so a new dropoff surface cannot forget.",
+          "find": {
+            "hasTextStartsWith": "Apt/Suite"
+          },
+          "keepPrefix": [
+            "Apt/Suite: ",
+            "Apt/Suite "
+          ],
+          "plainMask": true
+        },
+        {
+          "comment": "#1039 belt: the LABEL-anchored half of the subpremise mask — an `Apt/Suite` label node followed by its value, whatever spelling that value carries (`Unit 4202` shipped raw 2026-08-14). Both label spellings are enumerated because `hasPrecedingSiblingText` is an exact, un-trimmed equality; whole-node `plainMask` because a unit number is a bounded ~10^4 alphabet. Ordered ahead of every generic shape entry in this block: `maskNode` is first-match-wins, and a digit-leading value (`101 B`) would otherwise be claimed and HASHED by the id-less street shape. See `dropoff_handoff` for the full reasoning. Inert without the label; pinned by the #1039 parity test.",
+          "find": {
+            "any": [
+              {
+                "hasPrecedingSiblingText": "Apt/Suite"
+              },
+              {
+                "hasPrecedingSiblingText": "Apt/Suite:"
+              }
+            ]
+          },
+          "plainMask": true
         }
       ],
       "state": {
@@ -1702,6 +2066,31 @@
           "find": {
             "hasIdSuffix": "arriving_at_title"
           }
+        },
+        {
+          "comment": "#1039 belt (the #993 combined-frame precedent): the FUSED subpremise line — `Apt/Suite <n>` or `Apt/Suite: <n>` in ONE id-less node, the render the committed `dropoff_pre_arrival` fixtures carry. Declared on EVERY rule in this file (plus `navigation_generic`) rather than only on the surfaces that fielded it, because a redact protects only the frames its OWN rule wins and the rules most likely to claim an address-block frame OUT-RANK the fielded pair (`delivery_summary_collapsed` 31, `dropoff_navigation` 61, `dropoff_photo` 62, `dropoff_geofence_warning` 84). Entry is `dropoff_photo`'s #986 entry verbatim — see it for the full reasoning: the token after the label strip is a bounded ~10^4 unit number, so a 4-hex distinctness suffix is brute-recoverable (`plainMask`), while the label itself is app vocabulary and is kept for replay context. ACCEPTED COLLATERAL: the split row's BARE `Apt/Suite` LABEL node is itself an exact prefix match here, and no keepPrefix can be kept from it, so it masks whole to plain `[redacted]` — two words of app chrome lost on a debug envelope, the same fail-toward-privacy trade `DropoffBannerRedactParityTest` already documents for the `Arriving at` label. It cannot break the label-sibling entry below: redact predicates are evaluated against the ORIGINAL tree, the mask lands on a copy. Inert on any frame without the line; the #1039 parity test in `CaptureRedactionCorpusTest` pins that every rule declares it, so a new dropoff surface cannot forget.",
+          "find": {
+            "hasTextStartsWith": "Apt/Suite"
+          },
+          "keepPrefix": [
+            "Apt/Suite: ",
+            "Apt/Suite "
+          ],
+          "plainMask": true
+        },
+        {
+          "comment": "#1039 belt: the LABEL-anchored half of the subpremise mask — an `Apt/Suite` label node followed by its value, whatever spelling that value carries (`Unit 4202` shipped raw 2026-08-14). Both label spellings are enumerated because `hasPrecedingSiblingText` is an exact, un-trimmed equality; whole-node `plainMask` because a unit number is a bounded ~10^4 alphabet. Ordered ahead of every generic shape entry in this block: `maskNode` is first-match-wins, and a digit-leading value (`101 B`) would otherwise be claimed and HASHED by the id-less street shape. See `dropoff_handoff` for the full reasoning. Inert without the label; pinned by the #1039 parity test.",
+          "find": {
+            "any": [
+              {
+                "hasPrecedingSiblingText": "Apt/Suite"
+              },
+              {
+                "hasPrecedingSiblingText": "Apt/Suite:"
+              }
+            ]
+          },
+          "plainMask": true
         }
       ],
       "state": {
@@ -1732,6 +2121,31 @@
           "find": {
             "hasIdSuffix": "arriving_at_title"
           }
+        },
+        {
+          "comment": "#1039 belt (the #993 combined-frame precedent): the FUSED subpremise line — `Apt/Suite <n>` or `Apt/Suite: <n>` in ONE id-less node, the render the committed `dropoff_pre_arrival` fixtures carry. Declared on EVERY rule in this file (plus `navigation_generic`) rather than only on the surfaces that fielded it, because a redact protects only the frames its OWN rule wins and the rules most likely to claim an address-block frame OUT-RANK the fielded pair (`delivery_summary_collapsed` 31, `dropoff_navigation` 61, `dropoff_photo` 62, `dropoff_geofence_warning` 84). Entry is `dropoff_photo`'s #986 entry verbatim — see it for the full reasoning: the token after the label strip is a bounded ~10^4 unit number, so a 4-hex distinctness suffix is brute-recoverable (`plainMask`), while the label itself is app vocabulary and is kept for replay context. ACCEPTED COLLATERAL: the split row's BARE `Apt/Suite` LABEL node is itself an exact prefix match here, and no keepPrefix can be kept from it, so it masks whole to plain `[redacted]` — two words of app chrome lost on a debug envelope, the same fail-toward-privacy trade `DropoffBannerRedactParityTest` already documents for the `Arriving at` label. It cannot break the label-sibling entry below: redact predicates are evaluated against the ORIGINAL tree, the mask lands on a copy. Inert on any frame without the line; the #1039 parity test in `CaptureRedactionCorpusTest` pins that every rule declares it, so a new dropoff surface cannot forget.",
+          "find": {
+            "hasTextStartsWith": "Apt/Suite"
+          },
+          "keepPrefix": [
+            "Apt/Suite: ",
+            "Apt/Suite "
+          ],
+          "plainMask": true
+        },
+        {
+          "comment": "#1039 belt: the LABEL-anchored half of the subpremise mask — an `Apt/Suite` label node followed by its value, whatever spelling that value carries (`Unit 4202` shipped raw 2026-08-14). Both label spellings are enumerated because `hasPrecedingSiblingText` is an exact, un-trimmed equality; whole-node `plainMask` because a unit number is a bounded ~10^4 alphabet. Ordered ahead of every generic shape entry in this block: `maskNode` is first-match-wins, and a digit-leading value (`101 B`) would otherwise be claimed and HASHED by the id-less street shape. See `dropoff_handoff` for the full reasoning. Inert without the label; pinned by the #1039 parity test.",
+          "find": {
+            "any": [
+              {
+                "hasPrecedingSiblingText": "Apt/Suite"
+              },
+              {
+                "hasPrecedingSiblingText": "Apt/Suite:"
+              }
+            ]
+          },
+          "plainMask": true
         }
       ],
       "require": {
@@ -1759,6 +2173,31 @@
           "find": {
             "hasIdSuffix": "arriving_at_title"
           }
+        },
+        {
+          "comment": "#1039 belt (the #993 combined-frame precedent): the FUSED subpremise line — `Apt/Suite <n>` or `Apt/Suite: <n>` in ONE id-less node, the render the committed `dropoff_pre_arrival` fixtures carry. Declared on EVERY rule in this file (plus `navigation_generic`) rather than only on the surfaces that fielded it, because a redact protects only the frames its OWN rule wins and the rules most likely to claim an address-block frame OUT-RANK the fielded pair (`delivery_summary_collapsed` 31, `dropoff_navigation` 61, `dropoff_photo` 62, `dropoff_geofence_warning` 84). Entry is `dropoff_photo`'s #986 entry verbatim — see it for the full reasoning: the token after the label strip is a bounded ~10^4 unit number, so a 4-hex distinctness suffix is brute-recoverable (`plainMask`), while the label itself is app vocabulary and is kept for replay context. ACCEPTED COLLATERAL: the split row's BARE `Apt/Suite` LABEL node is itself an exact prefix match here, and no keepPrefix can be kept from it, so it masks whole to plain `[redacted]` — two words of app chrome lost on a debug envelope, the same fail-toward-privacy trade `DropoffBannerRedactParityTest` already documents for the `Arriving at` label. It cannot break the label-sibling entry below: redact predicates are evaluated against the ORIGINAL tree, the mask lands on a copy. Inert on any frame without the line; the #1039 parity test in `CaptureRedactionCorpusTest` pins that every rule declares it, so a new dropoff surface cannot forget.",
+          "find": {
+            "hasTextStartsWith": "Apt/Suite"
+          },
+          "keepPrefix": [
+            "Apt/Suite: ",
+            "Apt/Suite "
+          ],
+          "plainMask": true
+        },
+        {
+          "comment": "#1039 belt: the LABEL-anchored half of the subpremise mask — an `Apt/Suite` label node followed by its value, whatever spelling that value carries (`Unit 4202` shipped raw 2026-08-14). Both label spellings are enumerated because `hasPrecedingSiblingText` is an exact, un-trimmed equality; whole-node `plainMask` because a unit number is a bounded ~10^4 alphabet. Ordered ahead of every generic shape entry in this block: `maskNode` is first-match-wins, and a digit-leading value (`101 B`) would otherwise be claimed and HASHED by the id-less street shape. See `dropoff_handoff` for the full reasoning. Inert without the label; pinned by the #1039 parity test.",
+          "find": {
+            "any": [
+              {
+                "hasPrecedingSiblingText": "Apt/Suite"
+              },
+              {
+                "hasPrecedingSiblingText": "Apt/Suite:"
+              }
+            ]
+          },
+          "plainMask": true
         }
       ],
       "require": {
@@ -1793,6 +2232,31 @@
           "find": {
             "hasIdSuffix": "arriving_at_title"
           }
+        },
+        {
+          "comment": "#1039 belt (the #993 combined-frame precedent): the FUSED subpremise line — `Apt/Suite <n>` or `Apt/Suite: <n>` in ONE id-less node, the render the committed `dropoff_pre_arrival` fixtures carry. Declared on EVERY rule in this file (plus `navigation_generic`) rather than only on the surfaces that fielded it, because a redact protects only the frames its OWN rule wins and the rules most likely to claim an address-block frame OUT-RANK the fielded pair (`delivery_summary_collapsed` 31, `dropoff_navigation` 61, `dropoff_photo` 62, `dropoff_geofence_warning` 84). Entry is `dropoff_photo`'s #986 entry verbatim — see it for the full reasoning: the token after the label strip is a bounded ~10^4 unit number, so a 4-hex distinctness suffix is brute-recoverable (`plainMask`), while the label itself is app vocabulary and is kept for replay context. ACCEPTED COLLATERAL: the split row's BARE `Apt/Suite` LABEL node is itself an exact prefix match here, and no keepPrefix can be kept from it, so it masks whole to plain `[redacted]` — two words of app chrome lost on a debug envelope, the same fail-toward-privacy trade `DropoffBannerRedactParityTest` already documents for the `Arriving at` label. It cannot break the label-sibling entry below: redact predicates are evaluated against the ORIGINAL tree, the mask lands on a copy. Inert on any frame without the line; the #1039 parity test in `CaptureRedactionCorpusTest` pins that every rule declares it, so a new dropoff surface cannot forget.",
+          "find": {
+            "hasTextStartsWith": "Apt/Suite"
+          },
+          "keepPrefix": [
+            "Apt/Suite: ",
+            "Apt/Suite "
+          ],
+          "plainMask": true
+        },
+        {
+          "comment": "#1039 belt: the LABEL-anchored half of the subpremise mask — an `Apt/Suite` label node followed by its value, whatever spelling that value carries (`Unit 4202` shipped raw 2026-08-14). Both label spellings are enumerated because `hasPrecedingSiblingText` is an exact, un-trimmed equality; whole-node `plainMask` because a unit number is a bounded ~10^4 alphabet. Ordered ahead of every generic shape entry in this block: `maskNode` is first-match-wins, and a digit-leading value (`101 B`) would otherwise be claimed and HASHED by the id-less street shape. See `dropoff_handoff` for the full reasoning. Inert without the label; pinned by the #1039 parity test.",
+          "find": {
+            "any": [
+              {
+                "hasPrecedingSiblingText": "Apt/Suite"
+              },
+              {
+                "hasPrecedingSiblingText": "Apt/Suite:"
+              }
+            ]
+          },
+          "plainMask": true
         }
       ],
       "require": {
@@ -1811,7 +2275,7 @@
       }
     },
     {
-      "comment": "#796 — DoorDash 'Drop-off issues' help/resolution MENU (opened from the in-dropoff Help action: a 'Drop-off issues' title over two options, 'Reached drop-off location' and 'Have not reached drop-off location'). RECOGNIZE-ONLY (dev decision 2026-07-17, recognition-gap batch #796): no state.flow, no parse — a transient help overlay opened over an already-established task:dropoff flow, not a lifecycle anchor, so recognizing it only graduates the recurring UNKNOWN capture with no risk of perturbing task lineage. Anchors are corpus-unique (grep of app/src/test/resources/snapshots shows 0 other frames carry 'Drop-off issues' or 'Have not reached drop-off location'), so priority is behaviorally inert. PRIVACY: the menu frames carry no customer PII (option labels only); the sibling resolution screen that DOES carry a name is doordash.screen.dropoff_issue_resolution, which redacts it.",
+      "comment": "#796 — DoorDash 'Drop-off issues' help/resolution MENU (opened from the in-dropoff Help action: a 'Drop-off issues' title over two options, 'Reached drop-off location' and 'Have not reached drop-off location'). RECOGNIZE-ONLY (dev decision 2026-07-17, recognition-gap batch #796): no state.flow, no parse — a transient help overlay opened over an already-established task:dropoff flow, not a lifecycle anchor, so recognizing it only graduates the recurring UNKNOWN capture with no risk of perturbing task lineage. Anchors are corpus-unique (grep of app/src/test/resources/snapshots shows 0 other frames carry 'Drop-off issues' or 'Have not reached drop-off location'), so priority is behaviorally inert. PRIVACY (corrected by #1031): the fielded menu frames showed option labels only, and this comment used to stop there — but 'no PII observed' is a reading, not a control, and #1031 disproved exactly that reading on the pickup side, where `pickup_issue_menu` shipped with no redact block at all while its four sub-flow siblings masked the same fused 'For <customer> • <store>' header, and one fielded frame carried the customer verbatim. This rule therefore declares the sibling `doordash.screen.dropoff_issue_resolution`'s `For ` entry VERBATIM (mask-hex parity across the sub-flow, #623/#733) plus the shared `Apt/Suite` subpremise entries — all inert on a frame that renders none of those nodes.",
       "id": "doordash.screen.dropoff_issue_menu",
       "priority": 113,
       "redact": [
@@ -1820,6 +2284,41 @@
           "find": {
             "hasIdSuffix": "arriving_at_title"
           }
+        },
+        {
+          "comment": "#1039 belt (the #993 combined-frame precedent): the FUSED subpremise line — `Apt/Suite <n>` or `Apt/Suite: <n>` in ONE id-less node, the render the committed `dropoff_pre_arrival` fixtures carry. Declared on EVERY rule in this file (plus `navigation_generic`) rather than only on the surfaces that fielded it, because a redact protects only the frames its OWN rule wins and the rules most likely to claim an address-block frame OUT-RANK the fielded pair (`delivery_summary_collapsed` 31, `dropoff_navigation` 61, `dropoff_photo` 62, `dropoff_geofence_warning` 84). Entry is `dropoff_photo`'s #986 entry verbatim — see it for the full reasoning: the token after the label strip is a bounded ~10^4 unit number, so a 4-hex distinctness suffix is brute-recoverable (`plainMask`), while the label itself is app vocabulary and is kept for replay context. ACCEPTED COLLATERAL: the split row's BARE `Apt/Suite` LABEL node is itself an exact prefix match here, and no keepPrefix can be kept from it, so it masks whole to plain `[redacted]` — two words of app chrome lost on a debug envelope, the same fail-toward-privacy trade `DropoffBannerRedactParityTest` already documents for the `Arriving at` label. It cannot break the label-sibling entry below: redact predicates are evaluated against the ORIGINAL tree, the mask lands on a copy. Inert on any frame without the line; the #1039 parity test in `CaptureRedactionCorpusTest` pins that every rule declares it, so a new dropoff surface cannot forget.",
+          "find": {
+            "hasTextStartsWith": "Apt/Suite"
+          },
+          "keepPrefix": [
+            "Apt/Suite: ",
+            "Apt/Suite "
+          ],
+          "plainMask": true
+        },
+        {
+          "comment": "#1039 belt: the LABEL-anchored half of the subpremise mask — an `Apt/Suite` label node followed by its value, whatever spelling that value carries (`Unit 4202` shipped raw 2026-08-14). Both label spellings are enumerated because `hasPrecedingSiblingText` is an exact, un-trimmed equality; whole-node `plainMask` because a unit number is a bounded ~10^4 alphabet. Ordered ahead of every generic shape entry in this block: `maskNode` is first-match-wins, and a digit-leading value (`101 B`) would otherwise be claimed and HASHED by the id-less street shape. See `dropoff_handoff` for the full reasoning. Inert without the label; pinned by the #1039 parity test.",
+          "find": {
+            "any": [
+              {
+                "hasPrecedingSiblingText": "Apt/Suite"
+              },
+              {
+                "hasPrecedingSiblingText": "Apt/Suite:"
+              }
+            ]
+          },
+          "plainMask": true
+        },
+        {
+          "comment": "#1031 (the dropoff twin): the id-less fused `For <FirstName L> • <store>` attribution line. This rule's own comment used to argue that menu frames carry no customer PII — #1031 disproved exactly that reasoning on the pickup side, where `pickup_issue_menu` shipped no redact at all while its four sub-flow siblings masked this same header, and one fielded frame carried the customer verbatim. The sibling `dropoff_issue_resolution` already masks this line on THIS sub-flow, so the entry is copied from it VERBATIM: the mask hex must stay equal across the sub-flow and equal to the first 4 hex of the persisted `customerNameHash` (#623/#733), which a re-derived entry could silently break. The whole post-`For ` remainder — name AND the ` • <store>` tail — masks to ONE token; nothing here reads that node (the requires key on the `Drop-off issues` / `Have not reached drop-off location` option chrome), so replay recognition is unchanged. Inert on a frame that does not render the line.",
+          "find": {
+            "hasTextStartsWith": "For "
+          },
+          "keepPrefix": [
+            "For "
+          ],
+          "normalize": "customerName"
         }
       ],
       "require": {
@@ -1857,6 +2356,31 @@
             "For "
           ],
           "normalize": "customerName"
+        },
+        {
+          "comment": "#1039 belt (the #993 combined-frame precedent): the FUSED subpremise line — `Apt/Suite <n>` or `Apt/Suite: <n>` in ONE id-less node, the render the committed `dropoff_pre_arrival` fixtures carry. Declared on EVERY rule in this file (plus `navigation_generic`) rather than only on the surfaces that fielded it, because a redact protects only the frames its OWN rule wins and the rules most likely to claim an address-block frame OUT-RANK the fielded pair (`delivery_summary_collapsed` 31, `dropoff_navigation` 61, `dropoff_photo` 62, `dropoff_geofence_warning` 84). Entry is `dropoff_photo`'s #986 entry verbatim — see it for the full reasoning: the token after the label strip is a bounded ~10^4 unit number, so a 4-hex distinctness suffix is brute-recoverable (`plainMask`), while the label itself is app vocabulary and is kept for replay context. ACCEPTED COLLATERAL: the split row's BARE `Apt/Suite` LABEL node is itself an exact prefix match here, and no keepPrefix can be kept from it, so it masks whole to plain `[redacted]` — two words of app chrome lost on a debug envelope, the same fail-toward-privacy trade `DropoffBannerRedactParityTest` already documents for the `Arriving at` label. It cannot break the label-sibling entry below: redact predicates are evaluated against the ORIGINAL tree, the mask lands on a copy. Inert on any frame without the line; the #1039 parity test in `CaptureRedactionCorpusTest` pins that every rule declares it, so a new dropoff surface cannot forget.",
+          "find": {
+            "hasTextStartsWith": "Apt/Suite"
+          },
+          "keepPrefix": [
+            "Apt/Suite: ",
+            "Apt/Suite "
+          ],
+          "plainMask": true
+        },
+        {
+          "comment": "#1039 belt: the LABEL-anchored half of the subpremise mask — an `Apt/Suite` label node followed by its value, whatever spelling that value carries (`Unit 4202` shipped raw 2026-08-14). Both label spellings are enumerated because `hasPrecedingSiblingText` is an exact, un-trimmed equality; whole-node `plainMask` because a unit number is a bounded ~10^4 alphabet. Ordered ahead of every generic shape entry in this block: `maskNode` is first-match-wins, and a digit-leading value (`101 B`) would otherwise be claimed and HASHED by the id-less street shape. See `dropoff_handoff` for the full reasoning. Inert without the label; pinned by the #1039 parity test.",
+          "find": {
+            "any": [
+              {
+                "hasPrecedingSiblingText": "Apt/Suite"
+              },
+              {
+                "hasPrecedingSiblingText": "Apt/Suite:"
+              }
+            ]
+          },
+          "plainMask": true
         }
       ],
       "require": {
@@ -1866,7 +2390,7 @@
       }
     },
     {
-      "comment": "#888 — the generic drop-off HELP sheet reached from the geofence-warning card's 'I need help' ('Help' title over 'Tell us what happened and we'll help you find the right resolution.' and a help_menu_item list: 'I delivered the order' / 'Provided address or map pin is wrong' / 'Bad GPS signal or app issue at drop-off' / …). RECOGNIZE-ONLY (dev decision 2026-07-27, recognition-gap batch #888): no state.flow, no parse — a transient help overlay over an established task:dropoff flow, exactly the posture dropoff_issue_menu (#796) already sets for the sibling 'Drop-off issues' menu. This is a DIFFERENT sheet from that one (different title, different id family, different option set), hence a separate rule rather than a branch. Anchors: the generic intro copy — matched WITHOUT its typographic apostrophe ('help you find the right resolution', so the U+2019 in \"we'll\" can never break the match) — paired with a help_menu_item node naming drop-off, which keeps the rule off any pickup-side help sheet reusing the same ids. Corpus-unique (0 other snapshots or pull frames). PRIVACY: no customer PII — every node is a fixed option label; the sheet names no customer, address, or store.",
+      "comment": "#888 — the generic drop-off HELP sheet reached from the geofence-warning card's 'I need help' ('Help' title over 'Tell us what happened and we'll help you find the right resolution.' and a help_menu_item list: 'I delivered the order' / 'Provided address or map pin is wrong' / 'Bad GPS signal or app issue at drop-off' / …). RECOGNIZE-ONLY (dev decision 2026-07-27, recognition-gap batch #888): no state.flow, no parse — a transient help overlay over an established task:dropoff flow, exactly the posture dropoff_issue_menu (#796) already sets for the sibling 'Drop-off issues' menu. This is a DIFFERENT sheet from that one (different title, different id family, different option set), hence a separate rule rather than a branch. Anchors: the generic intro copy — matched WITHOUT its typographic apostrophe ('help you find the right resolution', so the U+2019 in \"we'll\" can never break the match) — paired with a help_menu_item node naming drop-off, which keeps the rule off any pickup-side help sheet reusing the same ids. Corpus-unique (0 other snapshots or pull frames). PRIVACY (corrected by #1031): the fielded frames were fixed option labels only — but per #1031 that is an observation, not a control (`pickup_issue_menu` carried the same absence-of-evidence claim and then shipped a raw customer name on a recognized envelope). This sheet sits in the same drop-off issue sub-flow as `doordash.screen.dropoff_issue_resolution`, so it declares that sibling's `For ` entry VERBATIM (mask-hex parity, #623/#733) plus the shared `Apt/Suite` subpremise entries, all inert on a frame that renders none of those nodes.",
       "id": "doordash.screen.dropoff_help_menu",
       "priority": 133,
       "redact": [
@@ -1875,6 +2399,41 @@
           "find": {
             "hasIdSuffix": "arriving_at_title"
           }
+        },
+        {
+          "comment": "#1039 belt (the #993 combined-frame precedent): the FUSED subpremise line — `Apt/Suite <n>` or `Apt/Suite: <n>` in ONE id-less node, the render the committed `dropoff_pre_arrival` fixtures carry. Declared on EVERY rule in this file (plus `navigation_generic`) rather than only on the surfaces that fielded it, because a redact protects only the frames its OWN rule wins and the rules most likely to claim an address-block frame OUT-RANK the fielded pair (`delivery_summary_collapsed` 31, `dropoff_navigation` 61, `dropoff_photo` 62, `dropoff_geofence_warning` 84). Entry is `dropoff_photo`'s #986 entry verbatim — see it for the full reasoning: the token after the label strip is a bounded ~10^4 unit number, so a 4-hex distinctness suffix is brute-recoverable (`plainMask`), while the label itself is app vocabulary and is kept for replay context. ACCEPTED COLLATERAL: the split row's BARE `Apt/Suite` LABEL node is itself an exact prefix match here, and no keepPrefix can be kept from it, so it masks whole to plain `[redacted]` — two words of app chrome lost on a debug envelope, the same fail-toward-privacy trade `DropoffBannerRedactParityTest` already documents for the `Arriving at` label. It cannot break the label-sibling entry below: redact predicates are evaluated against the ORIGINAL tree, the mask lands on a copy. Inert on any frame without the line; the #1039 parity test in `CaptureRedactionCorpusTest` pins that every rule declares it, so a new dropoff surface cannot forget.",
+          "find": {
+            "hasTextStartsWith": "Apt/Suite"
+          },
+          "keepPrefix": [
+            "Apt/Suite: ",
+            "Apt/Suite "
+          ],
+          "plainMask": true
+        },
+        {
+          "comment": "#1039 belt: the LABEL-anchored half of the subpremise mask — an `Apt/Suite` label node followed by its value, whatever spelling that value carries (`Unit 4202` shipped raw 2026-08-14). Both label spellings are enumerated because `hasPrecedingSiblingText` is an exact, un-trimmed equality; whole-node `plainMask` because a unit number is a bounded ~10^4 alphabet. Ordered ahead of every generic shape entry in this block: `maskNode` is first-match-wins, and a digit-leading value (`101 B`) would otherwise be claimed and HASHED by the id-less street shape. See `dropoff_handoff` for the full reasoning. Inert without the label; pinned by the #1039 parity test.",
+          "find": {
+            "any": [
+              {
+                "hasPrecedingSiblingText": "Apt/Suite"
+              },
+              {
+                "hasPrecedingSiblingText": "Apt/Suite:"
+              }
+            ]
+          },
+          "plainMask": true
+        },
+        {
+          "comment": "#1031 (the dropoff twin): the id-less fused `For <FirstName L> • <store>` attribution line. The fielded frames of this sheet showed option labels only — but per #1031 a \"no PII observed\" reading is not a control: `pickup_issue_menu` carried the same absence-of-evidence claim and then fielded a raw customer name on a recognized envelope. This help sheet sits in the same drop-off issue sub-flow as `doordash.screen.dropoff_issue_resolution`, which masks this exact line, so the entry is copied from it VERBATIM for mask-hex parity across the sub-flow (#623/#733). Nothing here reads that node (the requires key on the generic help copy plus a `help_menu_item` naming drop-off), so replay recognition is unchanged. Inert on a frame that does not render the line.",
+          "find": {
+            "hasTextStartsWith": "For "
+          },
+          "keepPrefix": [
+            "For "
+          ],
+          "normalize": "customerName"
         }
       ],
       "require": {
@@ -1909,6 +2468,31 @@
           "find": {
             "hasIdSuffix": "arriving_at_title"
           }
+        },
+        {
+          "comment": "#1039 belt (the #993 combined-frame precedent): the FUSED subpremise line — `Apt/Suite <n>` or `Apt/Suite: <n>` in ONE id-less node, the render the committed `dropoff_pre_arrival` fixtures carry. Declared on EVERY rule in this file (plus `navigation_generic`) rather than only on the surfaces that fielded it, because a redact protects only the frames its OWN rule wins and the rules most likely to claim an address-block frame OUT-RANK the fielded pair (`delivery_summary_collapsed` 31, `dropoff_navigation` 61, `dropoff_photo` 62, `dropoff_geofence_warning` 84). Entry is `dropoff_photo`'s #986 entry verbatim — see it for the full reasoning: the token after the label strip is a bounded ~10^4 unit number, so a 4-hex distinctness suffix is brute-recoverable (`plainMask`), while the label itself is app vocabulary and is kept for replay context. ACCEPTED COLLATERAL: the split row's BARE `Apt/Suite` LABEL node is itself an exact prefix match here, and no keepPrefix can be kept from it, so it masks whole to plain `[redacted]` — two words of app chrome lost on a debug envelope, the same fail-toward-privacy trade `DropoffBannerRedactParityTest` already documents for the `Arriving at` label. It cannot break the label-sibling entry below: redact predicates are evaluated against the ORIGINAL tree, the mask lands on a copy. Inert on any frame without the line; the #1039 parity test in `CaptureRedactionCorpusTest` pins that every rule declares it, so a new dropoff surface cannot forget.",
+          "find": {
+            "hasTextStartsWith": "Apt/Suite"
+          },
+          "keepPrefix": [
+            "Apt/Suite: ",
+            "Apt/Suite "
+          ],
+          "plainMask": true
+        },
+        {
+          "comment": "#1039 belt: the LABEL-anchored half of the subpremise mask — an `Apt/Suite` label node followed by its value, whatever spelling that value carries (`Unit 4202` shipped raw 2026-08-14). Both label spellings are enumerated because `hasPrecedingSiblingText` is an exact, un-trimmed equality; whole-node `plainMask` because a unit number is a bounded ~10^4 alphabet. Ordered ahead of every generic shape entry in this block: `maskNode` is first-match-wins, and a digit-leading value (`101 B`) would otherwise be claimed and HASHED by the id-less street shape. See `dropoff_handoff` for the full reasoning. Inert without the label; pinned by the #1039 parity test.",
+          "find": {
+            "any": [
+              {
+                "hasPrecedingSiblingText": "Apt/Suite"
+              },
+              {
+                "hasPrecedingSiblingText": "Apt/Suite:"
+              }
+            ]
+          },
+          "plainMask": true
         }
       ],
       "require": {
@@ -1943,6 +2527,31 @@
           "find": {
             "hasIdSuffix": "arriving_at_title"
           }
+        },
+        {
+          "comment": "#1039 belt (the #993 combined-frame precedent): the FUSED subpremise line — `Apt/Suite <n>` or `Apt/Suite: <n>` in ONE id-less node, the render the committed `dropoff_pre_arrival` fixtures carry. Declared on EVERY rule in this file (plus `navigation_generic`) rather than only on the surfaces that fielded it, because a redact protects only the frames its OWN rule wins and the rules most likely to claim an address-block frame OUT-RANK the fielded pair (`delivery_summary_collapsed` 31, `dropoff_navigation` 61, `dropoff_photo` 62, `dropoff_geofence_warning` 84). Entry is `dropoff_photo`'s #986 entry verbatim — see it for the full reasoning: the token after the label strip is a bounded ~10^4 unit number, so a 4-hex distinctness suffix is brute-recoverable (`plainMask`), while the label itself is app vocabulary and is kept for replay context. ACCEPTED COLLATERAL: the split row's BARE `Apt/Suite` LABEL node is itself an exact prefix match here, and no keepPrefix can be kept from it, so it masks whole to plain `[redacted]` — two words of app chrome lost on a debug envelope, the same fail-toward-privacy trade `DropoffBannerRedactParityTest` already documents for the `Arriving at` label. It cannot break the label-sibling entry below: redact predicates are evaluated against the ORIGINAL tree, the mask lands on a copy. Inert on any frame without the line; the #1039 parity test in `CaptureRedactionCorpusTest` pins that every rule declares it, so a new dropoff surface cannot forget.",
+          "find": {
+            "hasTextStartsWith": "Apt/Suite"
+          },
+          "keepPrefix": [
+            "Apt/Suite: ",
+            "Apt/Suite "
+          ],
+          "plainMask": true
+        },
+        {
+          "comment": "#1039 belt: the LABEL-anchored half of the subpremise mask — an `Apt/Suite` label node followed by its value, whatever spelling that value carries (`Unit 4202` shipped raw 2026-08-14). Both label spellings are enumerated because `hasPrecedingSiblingText` is an exact, un-trimmed equality; whole-node `plainMask` because a unit number is a bounded ~10^4 alphabet. Ordered ahead of every generic shape entry in this block: `maskNode` is first-match-wins, and a digit-leading value (`101 B`) would otherwise be claimed and HASHED by the id-less street shape. See `dropoff_handoff` for the full reasoning. Inert without the label; pinned by the #1039 parity test.",
+          "find": {
+            "any": [
+              {
+                "hasPrecedingSiblingText": "Apt/Suite"
+              },
+              {
+                "hasPrecedingSiblingText": "Apt/Suite:"
+              }
+            ]
+          },
+          "plainMask": true
         }
       ],
       "require": {

@@ -572,22 +572,31 @@ class CaptureRedactionCorpusTest {
 
     @Test
     fun `every For-family redact masks the fused customer header, keeps the For marker (#809)`() {
-        // #809: the four pickup "For <customer> • <store>" surfaces each ship a
-        // `redact` with keepPrefix ["For "] + normalize customerName. Nothing else
-        // pinned them — the #598 sha256 compile gate needs a sha256 parse (these are
-        // recognize-only), and CustomerTextMarkers has no bare "For " marker — so a
-        // deleted redact block on any of them went unnoticed (mutation-verified: the
-        // full suite stayed green). This is the teeth: an injected fused header node
-        // must mask to "For [redacted:<4hex>]" with no name residue. This is a PIN for
-        // these four explicit ids, NOT a discovery gate — a FIFTH "For "-surface rule
-        // added without redact won't appear in this list; that gap is caught at
-        // author/review time, not here.
+        // #809: the "For <customer> • <store>" surfaces each ship a `redact` with
+        // keepPrefix ["For "] + normalize customerName. Nothing else pinned them —
+        // the #598 sha256 compile gate needs a sha256 parse (these are recognize-only),
+        // and CustomerTextMarkers has no bare "For " marker — so a deleted redact block
+        // on any of them went unnoticed (mutation-verified: the full suite stayed green).
+        // This is the teeth: an injected fused header node must mask to
+        // "For [redacted:<4hex>]" with no name residue.
+        //
+        // #1031 (round 2) makes this ONE loop the owner of the class's mask shape. The
+        // original comment noted that a FIFTH "For " surface added without redact would
+        // not appear here — which is exactly what happened: `pickup_issue_menu` shipped
+        // with no redact block at all and leaked a fielded customer name. Its two dropoff
+        // twins (`dropoff_issue_menu` / `dropoff_help_menu`) carried the same
+        // "menu frames have no customer PII" reasoning and are now in the family too.
+        // Still a PIN over explicit ids, not a discovery gate — a SIXTH surface is caught
+        // at author/review time, not here.
         val forFamily = listOf(
             "doordash.screen.pickup_select_issue",
             "doordash.screen.pickup_resolution_options",
             "doordash.screen.pickup_unassigned_confirmation",
             "doordash.screen.pickup_unassign_survey",
+            "doordash.screen.pickup_issue_menu",
             "doordash.screen.dropoff_issue_resolution",
+            "doordash.screen.dropoff_issue_menu",
+            "doordash.screen.dropoff_help_menu",
         )
         val maskShape = wholeMaskAfter("For ")
         for (id in forFamily) {
@@ -603,6 +612,64 @@ class CaptureRedactionCorpusTest {
                 maskShape.matches(masked),
             )
         }
+    }
+
+    /**
+     * #1031 — the FIFTH "For "-surface the family loop above could not discover.
+     * `pickup_issue_menu` shipped with no `redact` block at all while its four sub-flow siblings
+     * all masked the same fused header, so a recognized envelope carried the customer's
+     * first-name + last-initial raw (fielded 2026-08-18).
+     *
+     * The MASK SHAPE is owned by the family loop (round 2 added this id and its two dropoff twins
+     * to it, so one loop owns the class). What stays here is what only this rule needs: the
+     * require anchor is chrome and must survive the mask, and the produced token must be
+     * BYTE-EQUAL to its sibling's — a divergent copy would break the #623/#733 cross-surface
+     * mask↔`customerNameHash` invariant, which is the whole reason the entry was copied verbatim
+     * rather than re-derived.
+     */
+    @Test
+    fun `pickup_issue_menu masks the fused For header its siblings already masked (#1031)`() {
+        val rule = TestRulesetFactory.screenRuleset
+            .ruleById("doordash.screen.pickup_issue_menu")!!
+        assertFalse("pickup_issue_menu must carry a non-empty redact block (#1031)", rule.redact.isEmpty())
+
+        // Node shape from the fielded frame: the require anchor beside the fused header.
+        // Both VALUES are invented — the fielded name/store are not reproduced.
+        val tree = UiNode(
+            className = "android.view.View",
+            children = listOf(
+                UiNode(
+                    className = "android.widget.TextView",
+                    text = "What pickup issues can we help with?",
+                ),
+                UiNode(className = "android.widget.TextView", text = "For Jane Q • Sample Thai Kitchen"),
+            ),
+        ).restoreParents()
+        val maskedTree = rule.redact.apply(tree)
+        val serialized = serialize(maskedTree)
+        assertFalse("customer name must not persist", serialized.contains("Jane"))
+        assertTrue(
+            "the require anchor is app chrome and stays raw",
+            serialized.contains("What pickup issues can we help with?"),
+        )
+
+        val header = maskedTree.children[1].text!!
+        assertTrue(
+            "fused header must mask to 'For [redacted:<4hex>]' — the store tail rides the " +
+                "remainder into the hash by design; got '$header'",
+            wholeMaskAfter("For ").matches(header),
+        )
+        assertFalse("store tail must not survive the whole-remainder mask", header.contains("Sample Thai"))
+
+        // Mask parity with the sibling it was copied from (#623/#733): the same customer must
+        // redact to the same 4hex on every surface of the issue sub-flow.
+        val sibling = TestRulesetFactory.screenRuleset
+            .ruleById("doordash.screen.pickup_select_issue")!!
+        assertEquals(
+            "pickup_issue_menu must mask a customer to the same token its sibling does",
+            sibling.redact.apply(UiNode(text = "For Jane Q • Sample Thai Kitchen").restoreParents()).text,
+            header,
+        )
     }
 
     // =========================================================================
@@ -759,6 +826,14 @@ class CaptureRedactionCorpusTest {
             // whole redact block is shape-anchored, so the committed-corpus guard is the only
             // structural check that its fixtures don't carry a real customer.
             "timeline_task_detail",
+            // #1031/#1039 (round 2) add the surfaces THIS PR gave a redact to. Same reasoning as
+            // the #992–#995 batch: the next real pull lands in exactly the folders whose rules
+            // were just changed, so leaving them outside the guard is where a leak would commit
+            // green. `pickup_issue_menu` is the #1031 fused `For <customer>` header; the three
+            // dropoff folders are where the label-split subpremise row renders. (There is no
+            // committed `dropoff_pre_arrival_completion` folder — nothing to guard yet.)
+            "pickup_issue_menu", "dropoff_pre_arrival", "dropoff_pin_entry",
+            "dropoff_issue_menu", "dropoff_help_menu",
         )
         val leaks = mutableListOf<String>()
         val decoysSeen = mutableSetOf<String>()
@@ -1128,12 +1203,24 @@ class CaptureRedactionCorpusTest {
         // `dropoff_pre_arrival` appears in BOTH lists on purpose: it fielded the plain form
         // (08-02, family A) and the hex form (08-01, family B) on different dashes, which is
         // the whole reason this had to be fixed as a family rather than an entry.
+        // #1039 (round 2) extends the list with the rules the blanket declaration newly covers
+        // and that the review named as the ones most likely to WIN an address-block frame: the
+        // two surfaces that FIELDED the label-split row (`dropoff_pin_entry` /
+        // `dropoff_handoff` — `dropoff_pre_arrival` was already here), the fourth member of the
+        // fused-`Apt ` set (`dropoff_pre_arrival_completion`), and the nav catch-all
+        // (`navigation_generic`, which lives in nav-comms.json5, so it is outside the dropoff
+        // parity test's own source scan). Exhaustiveness is NOT this list's job — the structural
+        // scan below and the #1039 parity test own that; this stays the named-rules pin.
         val subpremiseRules = listOf(
             "doordash.screen.dropoff_navigation",
             "doordash.screen.dropoff_photo",
             "doordash.screen.dropoff_pre_arrival",
             "doordash.screen.dropoff_geofence_warning",
             "doordash.screen.delivery_summary_collapsed",
+            "doordash.screen.dropoff_pin_entry",
+            "doordash.screen.dropoff_handoff",
+            "doordash.screen.dropoff_pre_arrival_completion",
+            "doordash.screen.navigation_generic",
         )
         for (id in subpremiseRules) {
             val rule = TestRulesetFactory.screenRuleset.ruleById(id)
@@ -1192,13 +1279,22 @@ class CaptureRedactionCorpusTest {
                 "a ~10^4 alphabet — brute-recoverable (#895/#892/#795): $offenders",
             offenders.isEmpty(),
         )
-        // Vacuity floor: 8 fused `Apt ` entries (4 uber + 4 doordash) + 5 Apt/Suite subpremise
-        // entries. If a refactor stops the scan from SEEING them, this fails instead of passing
-        // green over nothing.
+        // Vacuity floor. If a refactor stops the scan from SEEING the family, this fails instead
+        // of passing green over nothing. Post-#1039-round-2 breakdown (62):
+        //   •  4 — uber fused `Apt ` entries (splash / pickup_verification_items /
+        //          customer_chat / active_trip)
+        //   •  4 — doordash fused `Apt ` entries (dropoff_pin_entry / _handoff / _pre_arrival /
+        //          _pre_arrival_completion)
+        //   •  4 — doordash id-anchored subpremise entries (`bottom_sheet_subpremise_line` on
+        //          dropoff_navigation; `address_subpremise_line` on dropoff_pre_arrival /
+        //          dropoff_geofence_warning / delivery_summary_collapsed)
+        //   • 25 — the fused `Apt/Suite` entry, now blanket-declared on all 24 screen rules in
+        //          dropoff.json5 plus navigation_generic (#993 combined-frame doctrine)
+        //   • 25 — the `Apt/Suite` label-sibling entry, on the same 25 rules
         assertTrue(
-            "expected at least 13 unit-number redact entries across both platforms, saw $found — " +
+            "expected at least 62 unit-number redact entries across both platforms, saw $found — " +
                 "the scan is no longer finding the family it is meant to police",
-            found >= 13,
+            found >= 62,
         )
     }
 
@@ -1285,6 +1381,219 @@ class CaptureRedactionCorpusTest {
                 MASK_HEX.containsMatchIn(masked),
             )
             assertTrue("dropoff_photo: label kept for '$raw' — got '$masked'", masked.startsWith("Apt/Suite"))
+        }
+    }
+
+    /**
+     * The screen rules that must declare the #1039 subpremise pair, DERIVED — never hand-listed.
+     *
+     * Round 1 of PR #1042 pinned four ids, which is the enumeration failure #986 already paid for
+     * once: a redact protects only the frames its OWN rule wins (the #993 combined-frame
+     * doctrine), and the rules most likely to claim an address-block frame — `dropoff_navigation`
+     * (61), `delivery_summary_collapsed` (31), `dropoff_geofence_warning` (84), `dropoff_photo`
+     * (62) — all OUT-RANK the four that were patched. So the invariant is the strong one, exactly
+     * as [DropoffBannerRedactParityTest] states it for the arrival banner: **every screen rule in
+     * the dropoff section declares both entries**, read out of the source file so a new rule is in
+     * scope the day it lands.
+     *
+     * `navigation_generic` is appended because it is in the same class and lives in a different
+     * source file: the store-ambiguous nav catch-all can win a frame carrying the dropoff address
+     * block, which is why #886 and #993 already declare entries on it for the same reason.
+     */
+    private fun subpremiseParityRuleIds(): List<String> {
+        val declared = Regex(""""id":\s*"(doordash\.screen\.[A-Za-z_0-9]+)"""")
+            .findAll(File("../matchers/rules/doordash/dropoff.json5").readText())
+            .map { it.groupValues[1] }
+            .toList()
+        assertTrue("expected the dropoff section to declare screen rules", declared.isNotEmpty())
+        return declared + "doordash.screen.navigation_generic"
+    }
+
+    /**
+     * True when [entry] names its node by TEXT SHAPE rather than by id or label — the entries that
+     * can claim a subpremise VALUE out from under the #1039 label anchor. `maskNode` is
+     * first-match-wins per node, so a digit-leading value like `101 B` matches the id-less street
+     * shape `^\d{1,5}\s+\S` and gets HASHED, which is the brute-recoverable token the #1039 entry
+     * exists to remove. `comment` values are skipped (they discuss these predicates in prose).
+     */
+    private fun isGenericShapeEntry(entry: kotlinx.serialization.json.JsonObject): Boolean {
+        var hit = false
+        fun walk(e: kotlinx.serialization.json.JsonElement) {
+            when (e) {
+                is kotlinx.serialization.json.JsonObject -> e.forEach { (k, v) ->
+                    if (k == "comment") return@forEach
+                    if (k == "hasTextMatchesRegex" || k == "hasNoId" ||
+                        k == "hasFollowingSiblingTextMatchesRegex"
+                    ) {
+                        hit = true
+                    }
+                    if (k == "hasTextStartsWith" && (v as? JsonPrimitive)?.content == "\"") hit = true
+                    walk(v)
+                }
+                is kotlinx.serialization.json.JsonArray -> e.forEach { walk(it) }
+                else -> {}
+            }
+        }
+        walk(entry)
+        return hit
+    }
+
+    /**
+     * #1039 — the family's remaining hole was the value SPELLING, not the entry set. A
+     * label-split subpremise row renders `<"Apt/Suite" TextView><"Unit 4202" TextView>`, and that
+     * value is invisible to both older masks: the fused entry wants a value LEADING with `Apt `,
+     * the id-less shape entry wants a value that IS bare digits. Two recognized envelopes shipped
+     * it raw (dropoff_handoff + dropoff_pre_arrival, 2026-08-14) two days after the #986/#934
+     * install, and the #986 structural scan cannot see the class at all — it ratchets entries that
+     * EXIST, so a missing spelling is invisible to it.
+     *
+     * This is the DECLARATION half of the ratchet (the mask itself is pinned below). Three things
+     * are asserted per rule, all read from the generated asset:
+     *  1. the fused `Apt/Suite` entry exists (the committed `dropoff_pre_arrival` fixtures prove
+     *     that render is real, and it is id-LESS);
+     *  2. the label-sibling entry exists AND enumerates BOTH label spellings — the predicate
+     *     compiles to an exact, UN-TRIMMED `equals(ignoreCase)`, and this family has already
+     *     fielded the colon render, so `Apt/Suite:` alone would silently miss;
+     *  3. both sit AHEAD of every generic shape entry in their block (see [isGenericShapeEntry]) —
+     *     ordering is behaviour here, not style.
+     */
+    @Test
+    fun `every dropoff-section rule declares both Apt-Suite subpremise redacts, ordered first (#1039)`() {
+        val missingFused = mutableListOf<String>()
+        val missingLabel = mutableListOf<String>()
+        val misordered = mutableListOf<String>()
+
+        for (ruleId in subpremiseParityRuleIds()) {
+            val entries = ruleJson(ruleId)["redact"] as? kotlinx.serialization.json.JsonArray
+            if (entries == null) {
+                missingFused += ruleId
+                missingLabel += ruleId
+                continue
+            }
+            var fusedAt = -1
+            var labelAt = -1
+            var firstGeneric = -1
+            entries.forEachIndexed { i, element ->
+                val entry = element.jsonObject
+                val starts = mutableListOf<String>()
+                collectStringsUnder(entry, "hasTextStartsWith", starts)
+                val siblings = mutableListOf<String>()
+                collectStringsUnder(entry, "hasPrecedingSiblingText", siblings)
+                if (fusedAt < 0 && "Apt/Suite" in starts) fusedAt = i
+                if (labelAt < 0 && siblings.containsAll(listOf("Apt/Suite", "Apt/Suite:"))) labelAt = i
+                if (firstGeneric < 0 && isGenericShapeEntry(entry)) firstGeneric = i
+            }
+            if (fusedAt < 0) missingFused += ruleId
+            if (labelAt < 0) missingLabel += ruleId
+            if (firstGeneric >= 0 && fusedAt > firstGeneric) {
+                misordered += "$ruleId: fused entry at $fusedAt, first generic shape at $firstGeneric"
+            }
+            if (firstGeneric >= 0 && labelAt > firstGeneric) {
+                misordered += "$ruleId: label entry at $labelAt, first generic shape at $firstGeneric"
+            }
+        }
+
+        assertEquals(
+            "every screen rule in matchers/rules/doordash/dropoff.json5 (plus navigation_generic) " +
+                "must declare the FUSED `Apt/Suite` subpremise redact — the banner-class argument " +
+                "(#993) applies verbatim: a redact protects only the frames its own rule wins, and " +
+                "the entry is inert when the line is absent. Missing: $missingFused",
+            emptyList<String>(),
+            missingFused,
+        )
+        assertEquals(
+            "every screen rule in matchers/rules/doordash/dropoff.json5 (plus navigation_generic) " +
+                "must declare the `Apt/Suite` LABEL-SIBLING redact with BOTH label spellings " +
+                "(`hasPrecedingSiblingText` is an exact, un-trimmed equality). Missing or " +
+                "single-spelling: $missingLabel",
+            emptyList<String>(),
+            missingLabel,
+        )
+        assertEquals(
+            "the #1039 entries must precede every generic SHAPE entry in their own block — " +
+                "`maskNode` is first-match-wins, so a digit-leading subpremise value ('101 B') " +
+                "placed after the id-less street shape gets a brute-recoverable `[redacted:<4hex>]` " +
+                "instead of a plain mask: $misordered",
+            emptyList<String>(),
+            misordered,
+        )
+    }
+
+    /**
+     * #1039 teeth — the parity test above reads declarations; this runs the compiled redacts over
+     * the fielded split row on the two surfaces that actually shipped it raw (2026-08-14).
+     * Mutation checks: delete the entry and (a)/(d) go red; drop its `plainMask` and the no-hex
+     * assertions go red; move it after the street-shape entry and (c) goes red. (e) is the
+     * over-match guard — the anchor must name the subpremise value and nothing else in the block.
+     */
+    @Test
+    fun `the Apt-Suite label sibling plain-masks any subpremise spelling, Unit included (#1039)`() {
+        val fielded = listOf(
+            "doordash.screen.dropoff_handoff",
+            "doordash.screen.dropoff_pre_arrival",
+        )
+
+        /** The fielded split row: an id-less label TextView followed by its id-less value. */
+        fun labelledRow(label: String, value: String) = UiNode(
+            className = "android.view.View",
+            children = listOf(
+                UiNode(className = "android.widget.TextView", text = label),
+                UiNode(className = "android.widget.TextView", text = value),
+            ),
+        ).restoreParents()
+
+        for (id in fielded) {
+            val rule = TestRulesetFactory.screenRuleset.ruleById(id)!!
+
+            fun maskedValue(label: String, value: String): String =
+                rule.redact.apply(labelledRow(label, value)).children[1].text!!
+
+            fun assertPlainMasked(what: String, masked: String, secret: String) {
+                assertFalse("$id: $what must not persist; got '$masked'", masked.contains(secret))
+                assertFalse(
+                    "$id: $what must not carry a brute-forceable distinctness hex " +
+                        "(#895/#986 bounded alphabet) — got '$masked'",
+                    MASK_HEX.containsMatchIn(masked),
+                )
+                assertTrue("$id: plain mask expected for $what — got '$masked'", PLAIN_MASK.containsMatchIn(masked))
+            }
+
+            // (a) the fielded evasion — the `Unit <n>` spelling.
+            assertPlainMasked("the 'Unit 4202' value", maskedValue("Apt/Suite", "Unit 4202"), "4202")
+
+            // (b) the `Apt <n>` spelling in the same split row still masks. Either entry may win —
+            // the pin is on the OUTCOME, not on which one fired: no digits, no distinctness hex.
+            assertPlainMasked("the 'Apt 4202' value", maskedValue("Apt/Suite", "Apt 4202"), "4202")
+
+            // (c) the ORDERING ratchet, in behaviour: a digit-LEADING value also matches the
+            // id-less street shape `^\d{1,5}\s+\S`, which hashes. First match wins, so this is
+            // plain only while the label entry sits ahead of that one.
+            assertPlainMasked("the digit-leading '101 B' value", maskedValue("Apt/Suite", "101 B"), "101")
+
+            // (d) the COLON label render. `hasPrecedingSiblingText` is an exact, un-trimmed
+            // equality, so the second enumerated spelling is what covers this.
+            assertPlainMasked("the colon-labelled value", maskedValue("Apt/Suite:", "Unit 4202"), "4202")
+
+            // (e) over-match guard — a non-subpremise label/value pair is untouched by the new
+            // entry (the anchor is the label string, not "any second child").
+            assertEquals(
+                "$id: a non-subpremise labelled value must not be masked by the label anchor",
+                "Sunset Ridge",
+                maskedValue("Business name", "Sunset Ridge"),
+            )
+
+            // The bare `Apt/Suite` LABEL node is itself an exact prefix match for the fused entry
+            // and has no keepPrefix to keep, so it masks whole to plain `[redacted]`. That is
+            // ACCEPTED collateral, pinned here so it stays deliberate: two words of app chrome
+            // lost on a debug envelope, the same fail-toward-privacy trade
+            // `DropoffBannerRedactParityTest` documents for the `Arriving at` label — and it
+            // cannot break the anchor above, because redact predicates are evaluated against the
+            // ORIGINAL tree while the mask lands on a copy (which (a)/(c)/(d) prove).
+            assertEquals(
+                "$id: the bare label masks as documented collateral of the fused entry",
+                CompiledRedact.REDACTED,
+                rule.redact.apply(labelledRow("Apt/Suite", "Unit 4202")).children[0].text,
+            )
         }
     }
 

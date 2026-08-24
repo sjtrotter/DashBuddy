@@ -70,6 +70,21 @@ object CorpusDecoys {
         "1425 Sample Ridge Dr, Apt 12, San Antonio, TX 78200, USA" to
             "hand-written street address; house number, street and ZIP are all invented, the " +
             "city/state are kept so the line still has the fielded shape",
+        // #1039 (PR #1042 round 2) brought `dropoff_pre_arrival` into the FIX 4 guard, which
+        // surfaced the pseudonyms its two 2026-06-12 fixtures have carried since they were
+        // committed by PR #462/#460 (`dropoff_pre_arrival_711__335996.json` and
+        // `dropoff_pre_arrival_alcohol__f076f1.json`, both the same card). They were sanitized by
+        // hand at commit time — the fielded customer on that card was "Adam C" per the #462
+        // commit message, and the committed value is "Sample C" — and they are PII-ID-borne
+        // (`user_name` / `address_line_1` / `address_line_2`), which is what the guard flags.
+        // Kept raw, per this file's whole premise: these fixtures are what prove the
+        // `dropoff_pre_arrival` id-anchored redacts fire on the tree DoorDash actually renders.
+        "Sample C" to "hand-written pseudonym for the 06-12 dropoff arrival card's customer",
+        "Sample Complex" to
+            "hand-written venue/complex name in the same card's `address_line_1`",
+        "100 Sample St, San Antonio, TX 78000, USA" to
+            "hand-written street address in the same card's `address_line_2`; house number, " +
+            "street and ZIP are all invented, city/state kept so the line keeps its fielded shape",
     )
 
     /** True when [value] is an enumerated decoy (byte-exact). */
