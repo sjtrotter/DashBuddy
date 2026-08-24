@@ -42,6 +42,36 @@ class FormatsTest {
     }
 
     /**
+     * #1034: a negative renders sign-BEFORE-symbol. `String.format("$%.2f", …)` treats the `$` as a
+     * literal prefix and let the numeric conversion place its own sign, so the Money card headline
+     * shipped `$-65.94 went to the car.` on the 08-17→08-23 window.
+     */
+    @Test
+    fun `money puts the sign before the currency symbol`() {
+        Locale.setDefault(Locale.US)
+        assertEquals("-$65.94", Formats.money(-65.94))
+        assertEquals("$0.00", Formats.money(0.0))
+        assertEquals("$65.94", Formats.money(65.94))
+        Locale.setDefault(Locale.GERMANY)
+        assertEquals("-$65,94", Formats.money(-65.94))
+    }
+
+    /**
+     * The sign MOVES; the digits do not. Only `"%.2f"` decides rounding, exactly as before — so a
+     * negative rounds HALF_UP on its magnitude (`-0.005` → `-$0.01`) and a magnitude that rounds away
+     * still carries its sign (`-0.004` → `-$0.00`, the signed zero the old `$-0.00` also rendered).
+     * Pinned, not chosen: changing either would be a second formatting policy.
+     */
+    @Test
+    fun `money pins the rounding String format already gave`() {
+        Locale.setDefault(Locale.US)
+        assertEquals("-$0.01", Formats.money(-0.005))
+        assertEquals("$0.01", Formats.money(0.005))
+        assertEquals("-$0.00", Formats.money(-0.004))
+        assertEquals("$0.00", Formats.money(0.004))
+    }
+
+    /**
      * #942: [Formats.percent] replaced four hand-rolled `(x * 100).roundToInt()` sites, so its
      * whole-number output must be byte-identical to what those rendered.
      */
