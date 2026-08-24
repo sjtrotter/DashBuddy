@@ -80,16 +80,22 @@ was found **broken-in-part** (raw PII in capture envelopes) and moved to that en
 
 - **🆕 NEW — #1036 — "matched, but parsed nothing" is now loud.** Purely a **desk** item — nothing
   to watch for while driving; just dash normally and check the log afterwards. A rule that matches a
-  frame while every field its parse block declares comes back null now WARNs once per rule per
-  process and rides the periodic `PipelineStats` summary. Check:
-  `grep 'all-null parse' app.log` and `grep -o 'parseAllNull{[^}]*}' app.log | tail -1`.
-  **Expected until #1029 lands:** the remaining anchor-rot rules — `delivery_summary_expanded`,
-  `delivery_summary_collapsed`, `waiting_for_offer` — plus a benign tail of rules whose ONE
-  extractable field is legitimately optional (`dash_along_the_way` when no spot deadline is shown,
-  `idle_map` when neither Time-mode chip is on, `set_dash_end_time`). **Any OTHER rule id named is a
-  new anchor-rot find** — capture the frame and file it. Two cross-checks: `dash_summary` must NOT
-  appear (#1032 re-anchored it — if it does, that fix didn't take on this build), and after #1029
-  lands the `delivery_summary_*` pair should drop off the list entirely.
+  frame while its declared parse yields nothing usable now WARNs once per rule per process and rides
+  the periodic `PipelineStats` summary. Two triggers: **every** evidence field unresolved (an empty
+  `each`/`findAll` list counts as unresolved), or a **shape-required** field null while others
+  parsed. Check: `grep 'parse shortfall' app.log` and
+  `grep -o 'parseShortfall{[^}]*}' app.log | tail -1`.
+  - **Should trip (the #1029 rot, now detectable):** `delivery_summary_expanded` and
+    `delivery_summary_collapsed` (`required [totalPay]`), `waiting_for_offer` (`all 2 null`), and
+    `timeline` (`all 5 null`). Their absence is itself informative — it would mean those surfaces
+    never rendered on the dash, not that they are healthy.
+  - **Benign baseline (not a find):** `dash_along_the_way` (no spot deadline shown), `idle_map`
+    (neither Time-mode chip on), `set_dash_end_time` — each has ONE evidence field that is
+    legitimately optional.
+  - **`dash_summary` must NOT appear** — #1032 re-anchored it. If it does, that fix didn't take on
+    the installed build.
+  - **Any OTHER rule id is a new anchor-rot find** — capture the frame and file it. After #1029
+    lands, the `delivery_summary_*` pair should drop off the list entirely.
   - Confirmed: 0/2
 
 - **🆕 NEW — #1032 — the dash-end summary sheet is recognized again (DoorDash 8.93.7).** End a dash

@@ -161,6 +161,12 @@ class AccessibilityPipeline @Inject constructor(
             if (event is PipelineEvent.Screen) {
                 recognitionHealth.onScreenAdmitted(event.packageName, obs.target == UNKNOWN_TARGET)
             }
+            // #1036 parse-shortfall census, taken HERE for the same reason as the #937 sample
+            // above: post-admission, so a dasher parked on a rotted screen contributes the frames
+            // the dedup actually let through — not one per redraw — and a disabled platform
+            // contributes none at all. The observation only carried the evidence here; this is
+            // where it is counted and (once per rule per process) WARNed.
+            (obs as? Observation.Screen)?.parseShortfalls?.forEach { stats.onParseShortfall(it) }
             // Capture via the shared writer; smart-casts replace the old
             // unchecked downcasts (#361).
             when {

@@ -701,43 +701,40 @@ object RuleCompiler {
             validateEffectIntentFields(intent, declaredFields, ruleId)
         }
 
-        val parser: (TInput, Bindings) -> Map<String, Any?> = when (context) {
+        // The parser AND the #1036 metadata describing it are produced by the same arm: a branch
+        // that gets no parser also gets no evidence/required fields, so nothing can report a
+        // shortfall on a parse that never ran (a CLICK branch has no parser at all). Deriving the
+        // metadata from a separate `if` beside this `when` was review finding R6 — two conditions
+        // for one fact, free to drift.
+        val parse: BranchParse<TInput> = when (context) {
             RuleContext.SCREEN -> {
                 if (parseBlock != null) {
                     val compiled = ParseExpressionCompiler.compileScreenParseBlock(parseBlock)
-                    val fn: (TInput, Bindings) -> Map<String, Any?> = { input, bindings ->
-                        compiled(input as UiNode, bindings)
-                    }
-                    fn
+                    BranchParse(
+                        parser = { input, bindings -> compiled.parse(input as UiNode, bindings) },
+                        evidenceFields = compiled.evidenceFields,
+                        requiredFields = requiredShapeFields(parseAs),
+                    )
                 } else {
-                    { _, _ -> emptyMap() }
+                    BranchParse.none()
                 }
             }
             RuleContext.NOTIFICATION -> {
                 if (parseBlock != null) {
                     val compiled = ParseExpressionCompiler.compileNotificationParseBlock(parseBlock)
-                    val fn: (TInput, Bindings) -> Map<String, Any?> = { input, _ ->
-                        compiled(input as RawNotificationData)
-                    }
-                    fn
+                    BranchParse(
+                        parser = { input, _ -> compiled.parse(input as RawNotificationData) },
+                        evidenceFields = compiled.evidenceFields,
+                        requiredFields = requiredShapeFields(parseAs),
+                    )
                 } else {
-                    { _, _ -> emptyMap() }
+                    BranchParse.none()
                 }
             }
             RuleContext.CLICK -> {
                 // Click rules currently don't have parse blocks
-                { _, _ -> emptyMap() }
+                BranchParse.none()
             }
-        }
-
-        // #1036 — what this branch's parser will actually try to EXTRACT. Derived from the same
-        // [parseBlock] the parser above compiles from, and only when a parser was built: a CLICK
-        // branch has no parser (a parse block there is inert), so a declared field must never be
-        // reported as an all-null parse that never ran.
-        val parseFieldNames = if (parseBlock != null && context != RuleContext.CLICK) {
-            ParseExpressionCompiler.extractableFieldNames(parseBlock)
-        } else {
-            emptySet()
         }
 
         // --- Phase 5: Validate ---
@@ -759,8 +756,9 @@ object RuleCompiler {
         return CompiledBranch(
             predicate = predicate,
             rejectChecks = rejectChecks,
-            parser = parser,
-            parseFieldNames = parseFieldNames,
+            parser = parse.parser,
+            parseEvidenceFields = parse.evidenceFields,
+            requiredParseFields = parse.requiredFields,
             validators = validators,
             effects = effects,
             bindings = bindings,
@@ -772,6 +770,34 @@ object RuleCompiler {
             transitionOverrides = transitionOverrides,
         )
     }
+
+    /**
+     * A branch's compiled parse: the extractor plus the #1036 metadata describing it. Bundled so
+     * the `when (context)` arm that decides whether a parser exists is the ONE place that decides
+     * whether there is anything to measure.
+     */
+    private data class BranchParse<TInput>(
+        val parser: (TInput, Bindings) -> Map<String, Any?>,
+        val evidenceFields: Map<String, ParseFieldKind>,
+        val requiredFields: Set<String>,
+    ) {
+        companion object {
+            /** No parser ⇒ nothing declared, nothing required, nothing measurable. */
+            fun <TInput> none() = BranchParse<TInput>(
+                parser = { _, _ -> emptyMap() },
+                evidenceFields = emptyMap(),
+                requiredFields = emptySet(),
+            )
+        }
+    }
+
+    /**
+     * The fields [shape]'s contract names as load-bearing (#1036 review R2). Reads the SAME
+     * `ParsedFieldsFactory.REQUIRED_FIELDS_BY_SHAPE` map the compile-time declaration check above
+     * uses — the map stays one owner, and this just carries its verdict to match time.
+     */
+    private fun requiredShapeFields(shape: String?): Set<String> =
+        shape?.let { ParsedFieldsFactory.REQUIRED_FIELDS_BY_SHAPE[it] }.orEmpty()
 
     // ==========================================================================
     //  Context-dispatched predicate compilation

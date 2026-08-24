@@ -39,7 +39,7 @@ class PlatformAppVersionStampTest {
     }
 
     private fun classifier(versions: PlatformAppVersions) =
-        ObservationClassifier(mock<JsonRuleInterpreter>(), metadataProvider, versions, PipelineStats())
+        ObservationClassifier(mock<JsonRuleInterpreter>(), metadataProvider, versions)
 
     private fun screenEvent(pkg: String? = doordash) = PipelineEvent.Screen(
         timestamp = 1_000L,

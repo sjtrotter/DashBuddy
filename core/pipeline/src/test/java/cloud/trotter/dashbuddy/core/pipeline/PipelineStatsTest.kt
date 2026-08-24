@@ -1,10 +1,12 @@
 package cloud.trotter.dashbuddy.core.pipeline
 
+import cloud.trotter.dashbuddy.domain.pipeline.ParseShortfall
 import cloud.trotter.dashbuddy.domain.state.ParsedFields
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import timber.log.Timber
 
 /** #430 — gate/restart counters and the summary line. */
 class PipelineStatsTest {
@@ -65,20 +67,24 @@ class PipelineStatsTest {
 
     /** #1036 — per-rule "matched but parsed nothing", rendered on the same summary line. */
     @Test
-    fun `parse-all-null counts per rule and rides the summary sorted by rule id`() {
+    fun `parse shortfalls count per rule and ride the summary loudest-first`() {
         val stats = PipelineStats()
 
-        assertEquals(1L, stats.onParseAllNull("doordash.screen.waiting_for_offer"))
-        assertEquals(1L, stats.onParseAllNull("doordash.screen.delivery_summary_expanded"))
-        assertEquals(2L, stats.onParseAllNull("doordash.screen.delivery_summary_expanded"))
+        assertEquals(1L, stats.onParseShortfall(allNull("doordash.screen.waiting_for_offer")))
+        assertEquals(1L, stats.onParseShortfall(allNull("doordash.screen.delivery_summary_expanded")))
+        assertEquals(2L, stats.onParseShortfall(allNull("doordash.screen.delivery_summary_expanded")))
 
-        assertEquals(2L, stats.parseAllNullCount("doordash.screen.delivery_summary_expanded"))
-        assertEquals(1L, stats.parseAllNullCount("doordash.screen.waiting_for_offer"))
-        assertEquals("a rule that never tripped reads zero", 0L, stats.parseAllNullCount("doordash.screen.offer_popup"))
+        assertEquals(2L, stats.parseShortfallCount("doordash.screen.delivery_summary_expanded"))
+        assertEquals(1L, stats.parseShortfallCount("doordash.screen.waiting_for_offer"))
+        assertEquals(
+            "a rule that never tripped reads zero",
+            0L,
+            stats.parseShortfallCount("doordash.screen.offer_popup"),
+        )
 
         assertTrue(
             stats.summary().contains(
-                "parseAllNull{doordash.screen.delivery_summary_expanded=2," +
+                "parseShortfall{doordash.screen.delivery_summary_expanded=2," +
                     "doordash.screen.waiting_for_offer=1}",
             ),
         )
@@ -86,7 +92,97 @@ class PipelineStatsTest {
 
     /** A healthy process says nothing — the suffix is absent, not an empty pair of braces. */
     @Test
-    fun `parse-all-null is absent from the summary until something trips`() {
-        assertFalse(PipelineStats().summary().contains("parseAllNull"))
+    fun `parse shortfall is absent from the summary until something trips`() {
+        assertFalse(PipelineStats().summary().contains("parseShortfall"))
+    }
+
+    /**
+     * #1036 review R4 — this line is written every [PipelineStats.SUMMARY_EVERY] observations for
+     * the life of the process and lands in the exported bug report, and benign optional-field
+     * rules trip from the first minutes of a dash. An uncapped list would grow on every line.
+     */
+    @Test
+    fun `the summary caps the rendered rules and states how many it omitted`() {
+        val stats = PipelineStats()
+        // 10 rules, ascending counts, so the cap has something to order by.
+        repeat(10) { i ->
+            repeat(i + 1) { stats.onParseShortfall(allNull("doordash.screen.rule_$i")) }
+        }
+
+        val suffix = stats.summary().substringAfter("parseShortfall{").substringBefore("}")
+
+        assertEquals(
+            "the loudest 8 are rendered",
+            PipelineStats.PARSE_SHORTFALL_RENDER_LIMIT,
+            suffix.split(",").count { it.contains("=") },
+        )
+        assertTrue("the loudest rule leads", suffix.startsWith("doordash.screen.rule_9=10,"))
+        assertTrue("the omission is stated, not silent", suffix.endsWith(",+2 more"))
+        assertFalse("the quietest rules are the ones dropped", suffix.contains("rule_0="))
+    }
+
+    @Test
+    fun `a pathological rule id is clamped rather than owning the line`() {
+        val stats = PipelineStats()
+        val longId = "doordash.screen." + "x".repeat(400)
+        stats.onParseShortfall(allNull(longId))
+
+        val rendered = stats.summary().substringAfter("parseShortfall{").substringBefore("=")
+        assertEquals(PipelineStats.MAX_RENDERED_RULE_ID + 1, rendered.length) // + the ellipsis
+        assertTrue(rendered.endsWith("…"))
+    }
+
+    /** The WARN is once per rule per process; the counter keeps taking every occurrence. */
+    @Test
+    fun `the shortfall WARN is edge-gated per rule while the count keeps rising`() {
+        val recorder = Recorder()
+        Timber.plant(recorder)
+        try {
+            val stats = PipelineStats()
+            repeat(3) { stats.onParseShortfall(allNull("doordash.screen.delivery_summary_expanded")) }
+            stats.onParseShortfall(
+                ParseShortfall("doordash.screen.receipt", nullRequiredFields = listOf("totalPay")),
+            )
+
+            val warns = recorder.messages.filter { it.contains("parse shortfall") }
+            assertEquals("one line per rule, not per frame", 2, warns.size)
+            assertTrue(
+                "the total-rot wording says extractable and agrees at n>1",
+                warns[0].contains("all 2 extractable fields unresolved"),
+            )
+            assertTrue(
+                "the partial-rot wording names the required field",
+                warns[1].contains("required field null: totalPay"),
+            )
+            assertEquals(3L, stats.parseShortfallCount("doordash.screen.delivery_summary_expanded"))
+        } finally {
+            Timber.uproot(recorder)
+        }
+    }
+
+    @Test
+    fun `a single unresolved field reads in the singular`() {
+        val recorder = Recorder()
+        Timber.plant(recorder)
+        try {
+            PipelineStats().onParseShortfall(
+                ParseShortfall("doordash.screen.idle_map", allNullFieldCount = 1),
+            )
+            assertTrue(
+                recorder.messages.single { it.contains("parse shortfall") }
+                    .contains("all 1 extractable field unresolved"),
+            )
+        } finally {
+            Timber.uproot(recorder)
+        }
+    }
+
+    private fun allNull(ruleId: String) = ParseShortfall(ruleId, allNullFieldCount = 2)
+
+    private class Recorder : Timber.Tree() {
+        val messages = mutableListOf<String>()
+        override fun log(priority: Int, tag: String?, message: String, t: Throwable?) {
+            messages += message
+        }
     }
 }
