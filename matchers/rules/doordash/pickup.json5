@@ -590,6 +590,18 @@
     {
       "id": "doordash.screen.pickup_issue_menu",
       "priority": 87,
+      "redact": [
+        {
+          "comment": "#1031: this rule shipped with NO redact block while all four of its own sub-flow siblings (pickup_select_issue / pickup_resolution_options / pickup_unassigned_confirmation / pickup_unassign_survey) already masked this exact node — so the fused 'For <customer> • <store>' header reached a RECOGNIZED envelope raw (fielded 2026-08-18 18:52, 1 of 6 pickup_issue_menu frames). Entry is verbatim the sibling's, so a customer's mask hex matches across the whole issue sub-flow and the persisted `customerNameHash` (#623/#733). As on `pickup_select_issue`, the whole post-'For ' remainder — customer name AND the ' • <store>' tail — masks to ONE '[redacted:<4hex>]', so the store tail does NOT survive: that is fine here because no anchor or parse rides this header line (the rule's only require is the 'what pickup issues can we help with' chrome) and no other rule reads this surface's store from it. Recognize-only rule, so redact-without-parse is legal (the pickup_select_issue precedent) and the parse goldens are untouched.",
+          "find": {
+            "hasTextStartsWith": "For "
+          },
+          "keepPrefix": [
+            "For "
+          ],
+          "normalize": "customerName"
+        }
+      ],
       "require": {
         "exists": {
           "hasTextContaining": "what pickup issues can we help with"

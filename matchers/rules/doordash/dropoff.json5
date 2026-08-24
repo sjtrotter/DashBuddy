@@ -356,13 +356,20 @@
           "plainMask": true
         },
         {
-          "comment": "#895 (+ the 07-29 F4 field finding): plainMask. The fused 'Apt <n>' unit number is a bounded ~10^4 alphabet over the 4-char length floor, so a 4-hex distinctness suffix is brute-recoverable (the #892/#795 oracle argument); distinctness is redundant here — the same surface's name/street entries keep per-customer hashes. The split label/value form already plains via the id-less digit-shape entry.",
+          "comment": "#895 (+ the 07-29 F4 field finding): plainMask. The fused 'Apt <n>' unit number is a bounded ~10^4 alphabet over the 4-char length floor, so a 4-hex distinctness suffix is brute-recoverable (the #892/#795 oracle argument); distinctness is redundant here — the same surface's name/street entries keep per-customer hashes. The split label/value form plains via the id-less digit-shape entry when its VALUE is bare digits, and via the label-sibling entry below when it is not (#1039).",
           "find": {
             "hasTextStartsWith": "Apt "
           },
           "keepPrefix": [
             "Apt "
           ],
+          "plainMask": true
+        },
+        {
+          "comment": "#1039: the split label/value subpremise form spelled 'Unit <n>' evaded EVERY mask in this family — the fused entry above only sees a value LEADING with 'Apt ', and the id-less pure-digit shape entry only sees a value that IS bare digits, so 'Unit 4202' beside its 'Apt/Suite' label shipped RAW on two recognized envelopes (dropoff_handoff + dropoff_pre_arrival, fielded 2026-08-14 18:56 on the then-current build, i.e. two days AFTER the #986/#934 install). The value spelling is app/customer-authored — Apt / Unit / Bldg / # are all plausible — so prefix enumeration keeps losing that race; this entry anchors on the LABEL sibling instead (#860's `hasPrecedingSiblingText`, the same handle the 'Building Name' entries use), which is app chrome and stable vocabulary, so the mask no longer depends on how the value is spelled. Masked WHOLE (a value node has no lead-in worth keeping) with `plainMask`: a unit number is the same bounded ~10^4 alphabet as the fused form (#895/#986/#934), so a 4-hex distinctness suffix would be brute-recoverable, and its distinctness is redundant beside this surface's per-customer name/street hashes. The label node itself is vocabulary and stays raw. Capture-only — the node is never parsed, so the goldens are unchanged.",
+          "find": {
+            "hasPrecedingSiblingText": "Apt/Suite"
+          },
           "plainMask": true
         },
         {
@@ -581,13 +588,20 @@
           "plainMask": true
         },
         {
-          "comment": "#895 (+ the 07-29 F4 field finding): plainMask. The fused 'Apt <n>' unit number is a bounded ~10^4 alphabet over the 4-char length floor, so a 4-hex distinctness suffix is brute-recoverable (the #892/#795 oracle argument); distinctness is redundant here — the same surface's name/street entries keep per-customer hashes. The split label/value form already plains via the id-less digit-shape entry.",
+          "comment": "#895 (+ the 07-29 F4 field finding): plainMask. The fused 'Apt <n>' unit number is a bounded ~10^4 alphabet over the 4-char length floor, so a 4-hex distinctness suffix is brute-recoverable (the #892/#795 oracle argument); distinctness is redundant here — the same surface's name/street entries keep per-customer hashes. The split label/value form plains via the id-less digit-shape entry when its VALUE is bare digits, and via the label-sibling entry below when it is not (#1039).",
           "find": {
             "hasTextStartsWith": "Apt "
           },
           "keepPrefix": [
             "Apt "
           ],
+          "plainMask": true
+        },
+        {
+          "comment": "#1039: the split label/value subpremise form spelled 'Unit <n>' evaded EVERY mask in this family — the fused entry above only sees a value LEADING with 'Apt ', and the id-less pure-digit shape entry only sees a value that IS bare digits, so 'Unit 4202' beside its 'Apt/Suite' label shipped RAW on two recognized envelopes (dropoff_handoff + dropoff_pre_arrival, fielded 2026-08-14 18:56 on the then-current build, i.e. two days AFTER the #986/#934 install). The value spelling is app/customer-authored — Apt / Unit / Bldg / # are all plausible — so prefix enumeration keeps losing that race; this entry anchors on the LABEL sibling instead (#860's `hasPrecedingSiblingText`, the same handle the 'Building Name' entries use), which is app chrome and stable vocabulary, so the mask no longer depends on how the value is spelled. Masked WHOLE (a value node has no lead-in worth keeping) with `plainMask`: a unit number is the same bounded ~10^4 alphabet as the fused form (#895/#986/#934), so a 4-hex distinctness suffix would be brute-recoverable, and its distinctness is redundant beside this surface's per-customer name/street hashes. The label node itself is vocabulary and stays raw. Capture-only — the node is never parsed, so the goldens are unchanged.",
+          "find": {
+            "hasPrecedingSiblingText": "Apt/Suite"
+          },
           "plainMask": true
         },
         {
@@ -834,13 +848,20 @@
           "plainMask": true
         },
         {
-          "comment": "#895 (+ the 07-29 F4 field finding): plainMask. The fused 'Apt <n>' unit number is a bounded ~10^4 alphabet over the 4-char length floor, so a 4-hex distinctness suffix is brute-recoverable (the #892/#795 oracle argument); distinctness is redundant here — the same surface's name/street entries keep per-customer hashes. The split label/value form already plains via the id-less digit-shape entry.",
+          "comment": "#895 (+ the 07-29 F4 field finding): plainMask. The fused 'Apt <n>' unit number is a bounded ~10^4 alphabet over the 4-char length floor, so a 4-hex distinctness suffix is brute-recoverable (the #892/#795 oracle argument); distinctness is redundant here — the same surface's name/street entries keep per-customer hashes. The split label/value form plains via the id-less digit-shape entry when its VALUE is bare digits, and via the label-sibling entry below when it is not (#1039).",
           "find": {
             "hasTextStartsWith": "Apt "
           },
           "keepPrefix": [
             "Apt "
           ],
+          "plainMask": true
+        },
+        {
+          "comment": "#1039: the split label/value subpremise form spelled 'Unit <n>' evaded EVERY mask in this family — the fused entry above only sees a value LEADING with 'Apt ', and the id-less pure-digit shape entry only sees a value that IS bare digits, so 'Unit 4202' beside its 'Apt/Suite' label shipped RAW on two recognized envelopes (dropoff_handoff + dropoff_pre_arrival, fielded 2026-08-14 18:56 on the then-current build, i.e. two days AFTER the #986/#934 install). The value spelling is app/customer-authored — Apt / Unit / Bldg / # are all plausible — so prefix enumeration keeps losing that race; this entry anchors on the LABEL sibling instead (#860's `hasPrecedingSiblingText`, the same handle the 'Building Name' entries use), which is app chrome and stable vocabulary, so the mask no longer depends on how the value is spelled. Masked WHOLE (a value node has no lead-in worth keeping) with `plainMask`: a unit number is the same bounded ~10^4 alphabet as the fused form (#895/#986/#934), so a 4-hex distinctness suffix would be brute-recoverable, and its distinctness is redundant beside this surface's per-customer name/street hashes. The label node itself is vocabulary and stays raw. Capture-only — the node is never parsed, so the goldens are unchanged.",
+          "find": {
+            "hasPrecedingSiblingText": "Apt/Suite"
+          },
           "plainMask": true
         },
         {
@@ -1147,13 +1168,20 @@
           "plainMask": true
         },
         {
-          "comment": "#895 (+ the 07-29 F4 field finding): plainMask. The fused 'Apt <n>' unit number is a bounded ~10^4 alphabet over the 4-char length floor, so a 4-hex distinctness suffix is brute-recoverable (the #892/#795 oracle argument); distinctness is redundant here — the same surface's name/street entries keep per-customer hashes. The split label/value form already plains via the id-less digit-shape entry.",
+          "comment": "#895 (+ the 07-29 F4 field finding): plainMask. The fused 'Apt <n>' unit number is a bounded ~10^4 alphabet over the 4-char length floor, so a 4-hex distinctness suffix is brute-recoverable (the #892/#795 oracle argument); distinctness is redundant here — the same surface's name/street entries keep per-customer hashes. The split label/value form plains via the id-less digit-shape entry when its VALUE is bare digits, and via the label-sibling entry below when it is not (#1039).",
           "find": {
             "hasTextStartsWith": "Apt "
           },
           "keepPrefix": [
             "Apt "
           ],
+          "plainMask": true
+        },
+        {
+          "comment": "#1039: the split label/value subpremise form spelled 'Unit <n>' evaded EVERY mask in this family — the fused entry above only sees a value LEADING with 'Apt ', and the id-less pure-digit shape entry only sees a value that IS bare digits, so 'Unit 4202' beside its 'Apt/Suite' label shipped RAW on two recognized envelopes (dropoff_handoff + dropoff_pre_arrival, fielded 2026-08-14 18:56 on the then-current build, i.e. two days AFTER the #986/#934 install). The value spelling is app/customer-authored — Apt / Unit / Bldg / # are all plausible — so prefix enumeration keeps losing that race; this entry anchors on the LABEL sibling instead (#860's `hasPrecedingSiblingText`, the same handle the 'Building Name' entries use), which is app chrome and stable vocabulary, so the mask no longer depends on how the value is spelled. Masked WHOLE (a value node has no lead-in worth keeping) with `plainMask`: a unit number is the same bounded ~10^4 alphabet as the fused form (#895/#986/#934), so a 4-hex distinctness suffix would be brute-recoverable, and its distinctness is redundant beside this surface's per-customer name/street hashes. The label node itself is vocabulary and stays raw. Capture-only — the node is never parsed, so the goldens are unchanged.",
+          "find": {
+            "hasPrecedingSiblingText": "Apt/Suite"
+          },
           "plainMask": true
         },
         {

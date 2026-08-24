@@ -605,6 +605,60 @@ class CaptureRedactionCorpusTest {
         }
     }
 
+    /**
+     * #1031 — the FIFTH "For "-surface the test above explicitly says it cannot discover.
+     * `pickup_issue_menu` shipped with no `redact` block at all while its four sub-flow siblings
+     * all masked the same fused header, so a recognized envelope carried the customer's
+     * first-name + last-initial raw (fielded 2026-08-18). The entry is verbatim the sibling's, so
+     * the assertion is both "it masks" and "it masks IDENTICALLY" — a divergent copy would break
+     * the #623/#733 cross-surface mask↔`customerNameHash` invariant, which is the whole reason
+     * the entry was copied rather than re-derived.
+     */
+    @Test
+    fun `pickup_issue_menu masks the fused For header its siblings already masked (#1031)`() {
+        val rule = TestRulesetFactory.screenRuleset
+            .ruleById("doordash.screen.pickup_issue_menu")!!
+        assertFalse("pickup_issue_menu must carry a non-empty redact block (#1031)", rule.redact.isEmpty())
+
+        // Node shape from the fielded frame: the require anchor beside the fused header.
+        // Both VALUES are invented — the fielded name/store are not reproduced.
+        val tree = UiNode(
+            className = "android.view.View",
+            children = listOf(
+                UiNode(
+                    className = "android.widget.TextView",
+                    text = "What pickup issues can we help with?",
+                ),
+                UiNode(className = "android.widget.TextView", text = "For Jane Q • Sample Thai Kitchen"),
+            ),
+        ).restoreParents()
+        val maskedTree = rule.redact.apply(tree)
+        val serialized = serialize(maskedTree)
+        assertFalse("customer name must not persist", serialized.contains("Jane"))
+        assertTrue(
+            "the require anchor is app chrome and stays raw",
+            serialized.contains("What pickup issues can we help with?"),
+        )
+
+        val header = maskedTree.children[1].text!!
+        assertTrue(
+            "fused header must mask to 'For [redacted:<4hex>]' — the store tail rides the " +
+                "remainder into the hash by design; got '$header'",
+            wholeMaskAfter("For ").matches(header),
+        )
+        assertFalse("store tail must not survive the whole-remainder mask", header.contains("Sample Thai"))
+
+        // Mask parity with the sibling it was copied from (#623/#733): the same customer must
+        // redact to the same 4hex on every surface of the issue sub-flow.
+        val sibling = TestRulesetFactory.screenRuleset
+            .ruleById("doordash.screen.pickup_select_issue")!!
+        assertEquals(
+            "pickup_issue_menu must mask a customer to the same token its sibling does",
+            sibling.redact.apply(UiNode(text = "For Jane Q • Sample Thai Kitchen").restoreParents()).text,
+            header,
+        )
+    }
+
     // =========================================================================
     // #501 — the id-less first-name + last-initial customer-name shape. The
     // adversarial-review pledge finding: the runtime redact fail-OPEN on common
@@ -1285,6 +1339,81 @@ class CaptureRedactionCorpusTest {
                 MASK_HEX.containsMatchIn(masked),
             )
             assertTrue("dropoff_photo: label kept for '$raw' — got '$masked'", masked.startsWith("Apt/Suite"))
+        }
+    }
+
+    /**
+     * #1039 — the family's remaining hole was the value SPELLING, not the entry set. A
+     * label-split subpremise row renders `<"Apt/Suite" TextView><"Unit 4202" TextView>`, and that
+     * value is invisible to both existing masks: the fused entry wants a value LEADING with
+     * `Apt `, the id-less shape entry wants a value that IS bare digits. Two recognized envelopes
+     * shipped it raw (dropoff_handoff + dropoff_pre_arrival, 2026-08-14) two days after the
+     * #986/#934 install, and the #986 structural scan cannot see the class at all — it ratchets
+     * entries that EXIST, so a missing spelling is invisible to it.
+     *
+     * The fix anchors on the LABEL sibling (#860's predicate), which is app chrome, so the mask
+     * stops depending on how the customer/app spelled the value. Teeth: delete the entry and (a)
+     * goes red; drop its `plainMask` and (a)/(b)'s no-hex assertion goes red. (c) is the
+     * over-match guard — the anchor must name the subpremise value and nothing else in the block.
+     */
+    @Test
+    fun `the Apt-Suite label sibling plain-masks any subpremise spelling, Unit included (#1039)`() {
+        // Every dropoff rule carrying the fused `Apt ` entry carries the label-sibling entry too:
+        // a surface that renders one form renders the other on a different dash (#986's lesson).
+        val ruleIds = listOf(
+            "doordash.screen.dropoff_pin_entry",
+            "doordash.screen.dropoff_handoff",
+            "doordash.screen.dropoff_pre_arrival",
+            "doordash.screen.dropoff_pre_arrival_completion",
+        )
+
+        /** The fielded split row: an id-less label TextView followed by its id-less value. */
+        fun labelledRow(label: String, value: String) = UiNode(
+            className = "android.view.View",
+            children = listOf(
+                UiNode(className = "android.widget.TextView", text = label),
+                UiNode(className = "android.widget.TextView", text = value),
+            ),
+        ).restoreParents()
+
+        for (id in ruleIds) {
+            val rule = TestRulesetFactory.screenRuleset.ruleById(id)!!
+
+            // (a) the fielded evasion — the `Unit <n>` spelling.
+            val unitRow = rule.redact.apply(labelledRow("Apt/Suite", "Unit 4202"))
+            val unitValue = unitRow.children[1].text!!
+            assertFalse("$id: unit number must not persist; got '$unitValue'", unitValue.contains("4202"))
+            assertFalse(
+                "$id: a unit number must not carry a brute-forceable distinctness hex " +
+                    "(#895/#986 bounded alphabet) — got '$unitValue'",
+                MASK_HEX.containsMatchIn(unitValue),
+            )
+            assertTrue("$id: plain mask expected — got '$unitValue'", PLAIN_MASK.containsMatchIn(unitValue))
+            assertEquals(
+                "$id: the label is app vocabulary and stays raw",
+                "Apt/Suite",
+                unitRow.children[0].text,
+            )
+
+            // (b) the `Apt <n>` spelling in the same split row still masks. Either entry may win
+            // (the fused one keeps its label prefix, the sibling anchor masks whole) — the pin is
+            // on the OUTCOME, not on which entry fired: no digits, no distinctness hex.
+            val aptValue = rule.redact.apply(labelledRow("Apt/Suite", "Apt 4202")).children[1].text!!
+            assertFalse("$id: unit number must not persist; got '$aptValue'", aptValue.contains("4202"))
+            assertFalse(
+                "$id: 'Apt 4202' must not carry a distinctness hex — got '$aptValue'",
+                MASK_HEX.containsMatchIn(aptValue),
+            )
+            assertTrue("$id: plain mask expected — got '$aptValue'", PLAIN_MASK.containsMatchIn(aptValue))
+
+            // (c) over-match guard — a non-subpremise label/value pair is untouched by the new
+            // entry (the anchor is the label string, not "any second child").
+            val decoy = rule.redact.apply(labelledRow("Business name", "Sunset Ridge"))
+            assertEquals(
+                "$id: a non-subpremise labelled value must not be masked by the label anchor",
+                "Sunset Ridge",
+                decoy.children[1].text,
+            )
         }
     }
 

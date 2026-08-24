@@ -301,7 +301,11 @@ dashes, which is what makes it a family bug rather than an entry bug). All five 
 `plainMask` and enumerate both label spellings, and the ratchet is no longer a rule list: a
 **structural scan** over both platforms' generated assets requires `plainMask` on any redact entry
 whose own predicate/keepPrefix strings name `Apt` or a `subpremise_line` id, so the next surface to
-copy the address block in is covered whichever spelling it uses. (`camera_capture`'s
+copy the address block in is covered whichever spelling it uses — though that scan can only ratchet
+entries that EXIST, so the VALUE spelling stayed open until #1039 anchored the split form's value on
+its `Apt/Suite` **label sibling** (`hasPrecedingSiblingText`, whole-node `plainMask`, on every
+dropoff rule carrying the fused `Apt ` entry), which no longer depends on how the value is spelled.
+(`camera_capture`'s
 `bottom_instruction` is deliberately NOT in the family — it masks a whole fused name+apt line, whose
 alphabet is unbounded, so the hash form is correct there.) The
 mask token is otherwise derived by the SAME canonical form the
@@ -325,7 +329,10 @@ city/ST/ZIP line beneath it. **Five more recognized-surface leaks closed 2026-08
 enumeration class, all envelope-only, no parse/state/economics movement (the parse golden diff was
 additions-only): `pickup_wait_survey` had **no `redact` block at all** beside a bare `customer_name`
 node (#992 — `ID_MARKERS` lists that id but is UNKNOWN-only by design, so a recognized rule that
-forgets to redact has no backstop); `dropoff_navigation` gained the `arriving_at_title` entry, since
+forgets to redact has no backstop; the class recurred as #1031, where `pickup_issue_menu` shipped no
+redact block while its four `For <customer> • <store>` sub-flow siblings all carried one, fixed by
+copying theirs verbatim so the mask hex stays equal across the sub-flow);
+`dropoff_navigation` gained the `arriving_at_title` entry, since
 DoorDash's own arrival banner can inflate over the dropoff sheet and restate the customer's full
 street address on the frame THIS rule wins (#993 — the mask already existed on `nav_arriving`, it
 just did not exist on the dropoff-phase rule); the `timeline` name entry gained the FOURTH
