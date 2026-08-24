@@ -784,6 +784,23 @@ class RecordFoldsTest {
         assertEquals(21.45, ctx!!.reportedEarnings!!, 1e-9)
     }
 
+    /**
+     * #1030 F1: the summary-screen carve-out can only be trusted because a MISSED parse is now null
+     * rather than a coerced `0.0`. A summary stop carrying null falls through to the context, exactly
+     * like an early-offline one — it never re-reads as a `$0` report.
+     */
+    @Test
+    fun `a summary_screen stop with an unparsed total falls through to the context (#1030)`() {
+        val s = "Z5"
+        val (_, ctx) = foldSession(
+            listOf(
+                dashStart(s, 1_000, odo = 0.0),
+                dashStop(s, 2_000, odo = null, earnings = null, source = SessionEndSource.SUMMARY_SCREEN),
+            ),
+        )
+        assertNull("nothing parsed ⇒ no report, even on the summary screen", ctx!!.reportedEarnings)
+    }
+
     /** #1030: an early_offline stop that DID carry a parsed positive total still folds it. */
     @Test
     fun `an early_offline stop with a positive total still folds it (#1030)`() {

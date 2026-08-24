@@ -497,7 +497,7 @@ class StateMachineTest {
         assertTrue(pend.authoritative)
         assertEquals(summaryAt, pend.since)
         assertEquals(summaryAt + TransitionPolicy.AUTHORITATIVE_GRACE_MS, pend.deadline)
-        assertEquals(25.0, pend.endFields!!.totalEarnings, 0.001)
+        assertEquals(25.0, pend.endFields!!.totalEarnings!!, 0.001)
         // And the machine armed a wake-up so the commit doesn't wait for the
         // next observation.
         val timer = transition.effects.filterIsInstance<AppEffect.ScheduleTimeout>()

@@ -85,9 +85,11 @@ was found **broken-in-part** (raw PII in capture envelopes) and moved to that en
   gone for the healed history (the v11 refold runs once on the first launch of this build — give it a
   moment before reading); (c) a dash's drill-down shows **Gross (reported)** as `—`, never `$0.00`,
   for a receipt-less dash. A dash that DID end on the summary screen must still show its real
-  reported total. Desk check on the next pull:
-  `SELECT sessionId, reportedEarnings FROM session_records WHERE endSource='early_offline';` → every
-  row NULL after the v11 refold (41 of 42 were a hard `0.0` before it).
+  reported total. Also glance at the bubble HUD's last-dash figure after a summary-less dash — it
+  should read `—`, not `$0.00`. Desk check on the next pull:
+  `SELECT sessionId, reportedEarnings FROM session_records WHERE endSource='early_offline';` → **no
+  row reads exactly 0.0** after the v11 refold (a positive early_offline total is kept by design;
+  41 of 42 rows were a hard `0.0` before the fix).
   - Confirmed: 0/2
 - **🆕 NEW — #1024 part 1 (PR #1025) — the Playbook destination.** Open Home → **Playbook** tile.
   Check: (a) *This week's plan* shows `Xh worked in your windows · $Y kept of the $Z you planned

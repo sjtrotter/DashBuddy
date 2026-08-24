@@ -16,6 +16,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import cloud.trotter.dashbuddy.feature.bubble.R
+import cloud.trotter.dashbuddy.core.designsystem.text.EMPTY_VALUE
 import cloud.trotter.dashbuddy.core.designsystem.theme.AppTheme
 import cloud.trotter.dashbuddy.domain.analytics.SessionRecord
 import cloud.trotter.dashbuddy.domain.format.Formats
@@ -76,21 +77,25 @@ fun SessionMetricsActions(
 ) {
     val isActive = region?.mode == Mode.Online || region?.mode == Mode.Paused
 
-    val displayEarnings: Double
+    // The earnings figure is carried as its rendered TEXT, not a Double, so a dash that reported
+    // nothing can state that (#1030): a summary-less dash now stores a NULL `reportedEarnings` —
+    // the normal case, not an edge — and the old `?: 0.0` rendered it as a confident "$0.00" on the
+    // app's strictest-reactivity surface. Placeholder, never a fabricated measurement (#936).
+    val displayEarnings: String
     val displayMiles: Double
     val dimmed: Boolean
     val captionRes: Int
 
     when {
         isActive -> {
-            displayEarnings = earnings
+            displayEarnings = Formats.money(earnings)
             displayMiles = miles
             dimmed = false
             captionRes = R.string.bubble_status_this_session
         }
         region?.mode == Mode.Offline && lastSession != null -> {
             // Last-dash review: dimmed to signal it's history, not a live session (#693).
-            displayEarnings = lastSession.reportedEarnings ?: 0.0
+            displayEarnings = lastSession.reportedEarnings?.let { Formats.money(it) } ?: EMPTY_VALUE
             displayMiles = lastSession.miles ?: 0.0
             dimmed = true
             captionRes = R.string.bubble_status_last_session
@@ -114,7 +119,7 @@ fun SessionMetricsActions(
         )
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(
-                text = Formats.money(displayEarnings),
+                text = displayEarnings,
                 style = MaterialTheme.typography.titleSmall,
                 fontWeight = FontWeight.Bold,
                 color = textColor

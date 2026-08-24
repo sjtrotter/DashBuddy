@@ -172,7 +172,9 @@ object ParsedFieldsFactory {
 
     private fun buildSessionEnded(f: Map<String, Any?>) = ParsedFields.SessionEndedFields(
         activity = f.str("activity"),
-        totalEarnings = f.double("totalEarnings") ?: 0.0,
+        // #1030: NO `?: 0.0` — a missed parse must stay absent. Coercing it here fabricated the
+        // exact "$0 reported" the fold/DAO/drill-down then trust as a measurement.
+        totalEarnings = f.double("totalEarnings"),
         sessionDurationMillis = f.long("sessionDurationMillis"),
         offersAccepted = f.int("offersAccepted"),
         offersTotal = f.int("offersTotal"),

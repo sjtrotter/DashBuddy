@@ -33,6 +33,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import cloud.trotter.dashbuddy.feature.bubble.R
 import cloud.trotter.dashbuddy.core.designsystem.component.AppCard
+import cloud.trotter.dashbuddy.core.designsystem.text.EMPTY_VALUE
 import cloud.trotter.dashbuddy.core.designsystem.time.rememberNow
 import cloud.trotter.dashbuddy.domain.analytics.SessionRecord
 import cloud.trotter.dashbuddy.domain.evaluation.UserEconomy
@@ -118,7 +119,10 @@ private fun LastSessionSummary(session: SessionRecord, focusedPlatform: Platform
         }
 
         Text(
-            text = Formats.money(session.reportedEarnings ?: 0.0),
+            // #1030: a summary-less dash reports NOTHING (the normal case now that the fake $0
+            // stamp is gone), so the hero figure states that with the placeholder rather than
+            // rendering a confident "$0.00" — no fabricated measurements (#936).
+            text = session.reportedEarnings?.let { Formats.money(it) } ?: EMPTY_VALUE,
             style = MaterialTheme.typography.headlineMedium,
             fontWeight = FontWeight.Bold,
             color = MaterialTheme.colorScheme.primary,

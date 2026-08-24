@@ -582,7 +582,17 @@ object RecordFolds {
      *
      * #1030's layer-1 stamp fixes this going forward; normalizing HERE is what heals history, since
      * a refold replays those literal `0.0` payloads verbatim (hence the `PROJECTOR_VERSION` bump).
-     * A summary-screen `0.0` is kept: a parsed report of $0 is a real, if unusual, measurement.
+     *
+     * A summary-screen `0.0` is KEPT: a parsed report of $0 is a real, if unusual, measurement. That
+     * carve-out is only sound because `ParsedFields.SessionEndedFields.totalEarnings` is nullable —
+     * it used to be coerced from a missed parse with `?: 0.0`, which would have fed this branch a
+     * fabricated zero to trust. A missed summary parse now stamps null and falls through to the
+     * context, the same as an early-offline stop.
+     *
+     * **This function is the rule's one owner.** Its read-side mirrors —
+     * `AnalyticsDao.grossAndUnattributed` & siblings (SQL, source-keyed the same way) and
+     * `SessionDetail.reportedEarningsOrNull` (the per-dash drill-down) — point back here rather
+     * than restating the reasoning.
      */
     private fun reportedEarningsOf(p: SessionStopPayload): Double? =
         p.totalEarnings?.takeIf { it > 0.0 || p.source == SessionEndSource.SUMMARY_SCREEN }

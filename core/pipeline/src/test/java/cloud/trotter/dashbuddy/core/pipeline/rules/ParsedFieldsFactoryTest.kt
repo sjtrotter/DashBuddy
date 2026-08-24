@@ -91,4 +91,32 @@ class ParsedFieldsFactoryTest {
         )
         assertNotNull("a single real store carries identity", presentationKeyOf(mixed))
     }
+
+    // -----------------------------------------------------------------------------------------
+    // #1030 — a MISSED session-summary total is absent, never a fabricated $0
+    // -----------------------------------------------------------------------------------------
+
+    private fun sessionEndedTotal(fields: Map<String, Any?>): Double? =
+        (ParsedFieldsFactory.create("session_ended", fields) as ParsedFields.SessionEndedFields)
+            .totalEarnings
+
+    @Test
+    fun `an unparsed session-ended total stays null, never coerced to zero (#1030)`() {
+        // The old `?: 0.0` here fabricated the exact value the fold's summary-screen carve-out
+        // trusts as a real measurement — an anchor break would have looked like a $0 dash.
+        assertNull(
+            "a missed money parse is absent",
+            sessionEndedTotal(mapOf("sessionDurationMillis" to 3_600_000L)),
+        )
+    }
+
+    @Test
+    fun `a genuinely parsed zero total is kept as zero (#1030)`() {
+        assertEquals(0.0, sessionEndedTotal(mapOf("totalEarnings" to 0.0))!!, 1e-9)
+    }
+
+    @Test
+    fun `a real parsed total rides through unchanged (#1030)`() {
+        assertEquals(21.45, sessionEndedTotal(mapOf("totalEarnings" to 21.45))!!, 1e-9)
+    }
 }

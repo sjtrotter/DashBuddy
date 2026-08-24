@@ -652,6 +652,45 @@ class EffectMapPayloadTest {
         assertNull("nothing was parsed — the honest stamp is absent, not \$0", payload.totalEarnings)
     }
 
+    /**
+     * #1030 F1: the summary branch's fidelity depends on the parse. A summary screen whose
+     * `totalEarnings` did NOT parse arrives with a null field (the factory no longer coerces it to
+     * `0.0`), and the payload must carry that null through — otherwise the fold's summary-screen
+     * carve-out would trust a fabricated `$0` as a measurement.
+     */
+    @Test
+    fun `DASH_STOP summary_screen with an unparsed total stamps null (#1030)`() {
+        val regionPrev = PlatformRegion(
+            platform = Platform.DoorDash,
+            mode = Mode.Online,
+            session = Session("s1", startedAt = 1000L, runningEarnings = 0.0),
+        )
+        val regionNext = PlatformRegion(platform = Platform.DoorDash, mode = Mode.Offline)
+        val prev = appState(platforms = mapOf(Platform.DoorDash to regionPrev))
+        val next = appState(platforms = mapOf(Platform.DoorDash to regionNext))
+        // A recognized summary frame whose money field missed — duration/offers still parsed.
+        val summaryFields = ParsedFields.SessionEndedFields(
+            totalEarnings = null,
+            sessionDurationMillis = 4 * 60 * 60 * 1000L,
+            offersAccepted = 5,
+            offersTotal = 8,
+        )
+        val obs = screenObs(
+            flow = Flow.SessionEnded,
+            modeHint = Mode.Offline,
+            parsed = summaryFields,
+            timestamp = 6000L,
+        )
+
+        val logs = logEvents(prev, next, obs, AppEventType.DASH_STOP)
+        assertEquals(1, logs.size)
+
+        val payload = (logs[0].event.payload as SessionStopPayload)
+        assertEquals("summary_screen", payload.source)
+        assertNull("a missed money parse is absent, never a fabricated \$0", payload.totalEarnings)
+        assertEquals("the fields that DID parse still ride", 5, payload.offersAccepted)
+    }
+
     @Test
     fun `offline while session is graced does NOT finalize (deferred for the summary)`() {
         // idle_map offline: the stepper preserves the session under a grace

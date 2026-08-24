@@ -46,6 +46,7 @@ internal fun SessionRecordEntity.toDomain(): SessionRecord = SessionRecord(
     startedAt = startedAt,
     endedAt = endedAt,
     reportedEarnings = reportedEarnings,
+    endSource = endSource,
     reportedDurationMillis = reportedDurationMillis,
     miles = if (startOdometer != null && lastOdometer != null) {
         (lastOdometer!! - startOdometer!!).coerceAtLeast(0.0)

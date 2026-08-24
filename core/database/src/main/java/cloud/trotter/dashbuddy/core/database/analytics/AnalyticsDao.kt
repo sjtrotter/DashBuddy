@@ -464,27 +464,24 @@ interface AnalyticsDao {
      * (`d.deliveredPay`, never `+ d.cashTip`) as `unattributed`, so the #688 cash exclusion holds for
      * both directions. `unattributed` is left byte-for-byte untouched.
      *
-     * **A stored `0.0` is treated as no-report (#1030) — defense in depth under the fold
-     * normalization.** `RecordFolds` now stores NULL for a non-summary DASH_STOP that reported
-     * nothing, and the fake-`0.0` history heals on the `PROJECTOR_VERSION` 10→11 refold; the
-     * `NULLIF(s.reportedEarnings, 0)` here is the read-side backstop for any row that reaches this
-     * query with the old value (a pre-refold read, an unforeseen writer). It is applied to **every**
-     * arm, not just `gross`: a `0.0` row that only escaped the gross COALESCE would still satisfy
-     * `IS NOT NULL` and flag `overAttributed = deliveredPay − 0` — exactly the severe review flag
-     * #1030 reported. Documented semantic cost: a GENUINE summary-screen `$0` report on a session
-     * that nevertheless has delivered pay no longer flags over-attribution. That pair is
-     * contradictory in practice (a $0 summary over real receipts), and accepting it is what keeps
-     * the three arms reading one definition of "reported".
+     * **A stored `0.0` on a non-summary end source is no-report (#1030)** — the read-side mirror of
+     * `RecordFolds.reportedEarningsOf`, which owns the rule, kept here for pre-refold rows and
+     * unforeseen writers. The guard is **source-keyed**, not a blanket `NULLIF`: a genuine parsed
+     * `$0` summary must stay authoritative (a blanket NULLIF would silently replace it with
+     * delivered pay), while the old EARLY_OFFLINE default must not. It is applied to **every** arm,
+     * not just `gross`: a `0.0` row that only escaped the gross COALESCE would still satisfy
+     * `IS NOT NULL` and flag `overAttributed = deliveredPay − 0`. The `'summary_screen'` literal is
+     * the wire value of `SessionEndSource.SUMMARY_SCREEN`.
      */
     @Query(
-        """SELECT COALESCE(SUM(COALESCE(NULLIF(s.reportedEarnings, 0), d.deliveredPay, 0) + COALESCE(d.cashTip, 0)), 0) AS gross,
+        """SELECT COALESCE(SUM(COALESCE(CASE WHEN s.endSource = 'summary_screen' THEN s.reportedEarnings ELSE NULLIF(s.reportedEarnings, 0) END, d.deliveredPay, 0) + COALESCE(d.cashTip, 0)), 0) AS gross,
                   COALESCE(SUM(
-                    CASE WHEN NULLIF(s.reportedEarnings, 0) IS NOT NULL
+                    CASE WHEN (CASE WHEN s.endSource = 'summary_screen' THEN s.reportedEarnings ELSE NULLIF(s.reportedEarnings, 0) END) IS NOT NULL
                               AND s.reportedEarnings > COALESCE(d.deliveredPay, 0)
                          THEN s.reportedEarnings - COALESCE(d.deliveredPay, 0)
                          ELSE 0 END), 0) AS unattributed,
                   COALESCE(SUM(
-                    CASE WHEN NULLIF(s.reportedEarnings, 0) IS NOT NULL
+                    CASE WHEN (CASE WHEN s.endSource = 'summary_screen' THEN s.reportedEarnings ELSE NULLIF(s.reportedEarnings, 0) END) IS NOT NULL
                               AND s.reportedEarnings < COALESCE(d.deliveredPay, 0)
                          THEN COALESCE(d.deliveredPay, 0) - s.reportedEarnings
                          ELSE 0 END), 0) AS overAttributed
@@ -498,17 +495,17 @@ interface AnalyticsDao {
     fun grossAndUnattributed(start: Long, end: Long): Flow<GrossTotalsRow>
 
     /** Per-platform variant of [grossAndUnattributed] — same `overAttributed` mirror aggregate (#701),
-     *  and the same `NULLIF(s.reportedEarnings, 0)` no-report treatment on every arm (#1030). */
+     *  and the same source-keyed no-report treatment on every arm (#1030). */
     @Query(
         """SELECT s.platform AS platform,
-                  COALESCE(SUM(COALESCE(NULLIF(s.reportedEarnings, 0), d.deliveredPay, 0) + COALESCE(d.cashTip, 0)), 0) AS gross,
+                  COALESCE(SUM(COALESCE(CASE WHEN s.endSource = 'summary_screen' THEN s.reportedEarnings ELSE NULLIF(s.reportedEarnings, 0) END, d.deliveredPay, 0) + COALESCE(d.cashTip, 0)), 0) AS gross,
                   COALESCE(SUM(
-                    CASE WHEN NULLIF(s.reportedEarnings, 0) IS NOT NULL
+                    CASE WHEN (CASE WHEN s.endSource = 'summary_screen' THEN s.reportedEarnings ELSE NULLIF(s.reportedEarnings, 0) END) IS NOT NULL
                               AND s.reportedEarnings > COALESCE(d.deliveredPay, 0)
                          THEN s.reportedEarnings - COALESCE(d.deliveredPay, 0)
                          ELSE 0 END), 0) AS unattributed,
                   COALESCE(SUM(
-                    CASE WHEN NULLIF(s.reportedEarnings, 0) IS NOT NULL
+                    CASE WHEN (CASE WHEN s.endSource = 'summary_screen' THEN s.reportedEarnings ELSE NULLIF(s.reportedEarnings, 0) END) IS NOT NULL
                               AND s.reportedEarnings < COALESCE(d.deliveredPay, 0)
                          THEN COALESCE(d.deliveredPay, 0) - s.reportedEarnings
                          ELSE 0 END), 0) AS overAttributed
@@ -595,16 +592,15 @@ interface AnalyticsDao {
      * borrowing a neighbouring day's count. Deliberately NOT `session_records.deliveries` (the live
      * counter the state machine bumps): the chart must decompose the read-model, not a second tally.
      *
-     * **A stored `0.0` is treated as no-report (#1030) — defense in depth under the fold
-     * normalization.** Same `NULLIF(s.reportedEarnings, 0)` as [grossAndUnattributed], on both the
-     * gross COALESCE and the unattributed-remainder CASE, so the per-day series keeps decomposing
-     * the period totals term for term (see that query's note for the accepted semantic cost).
+     * **A stored `0.0` on a non-summary end source is no-report (#1030).** Same source-keyed guard
+     * as [grossAndUnattributed], on both the gross COALESCE and the unattributed-remainder CASE, so
+     * the per-day series keeps decomposing the period totals term for term.
      */
     @Query(
         """SELECT s.startedAt AS startedAt,
-                  COALESCE(NULLIF(s.reportedEarnings, 0), d.deliveredPay, 0) + COALESCE(d.cashTip, 0) AS gross,
+                  COALESCE(CASE WHEN s.endSource = 'summary_screen' THEN s.reportedEarnings ELSE NULLIF(s.reportedEarnings, 0) END, d.deliveredPay, 0) + COALESCE(d.cashTip, 0) AS gross,
                   COALESCE(d.net, 0) + COALESCE(d.cashTip, 0)
-                    + CASE WHEN NULLIF(s.reportedEarnings, 0) IS NOT NULL
+                    + CASE WHEN (CASE WHEN s.endSource = 'summary_screen' THEN s.reportedEarnings ELSE NULLIF(s.reportedEarnings, 0) END) IS NOT NULL
                                 AND s.reportedEarnings > COALESCE(d.deliveredPay, 0)
                            THEN s.reportedEarnings - COALESCE(d.deliveredPay, 0)
                            ELSE 0 END AS net,
