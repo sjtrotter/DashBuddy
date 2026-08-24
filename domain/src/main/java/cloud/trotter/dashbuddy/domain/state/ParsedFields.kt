@@ -213,7 +213,13 @@ sealed class ParsedFields {
 
     data class SessionEndedFields(
         override val activity: String? = null,
-        val totalEarnings: Double,
+        /**
+         * The summary screen's own parsed all-pay total — **nullable, and null means the parse
+         * MISSED** (#1030). It used to be non-null with the factory coercing a miss to `0.0`, which
+         * fabricated the exact value every downstream consumer reads as "the platform reported $0";
+         * a genuine parsed `0.00` still arrives as `0.0` and is kept, which is the honest split.
+         */
+        val totalEarnings: Double? = null,
         val sessionDurationMillis: Long? = null,
         val offersAccepted: Int? = null,
         val offersTotal: Int? = null,
@@ -227,7 +233,9 @@ sealed class ParsedFields {
             "weeklyEarnings" to weeklyEarnings,
         )
 
-        override fun dedupeHash(): Int = totalEarnings.hashCode()
+        // Null-safe (#1030): a missed parse hashes as 0 — the same bucket the pre-#1030 coerced
+        // `0.0` produced, so frame dedupe behaviour is unchanged.
+        override fun dedupeHash(): Int = totalEarnings?.hashCode() ?: 0
     }
 
     @Serializable

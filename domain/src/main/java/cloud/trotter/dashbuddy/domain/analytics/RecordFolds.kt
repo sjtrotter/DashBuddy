@@ -4,6 +4,7 @@ import cloud.trotter.dashbuddy.domain.model.event.AppEventType
 import cloud.trotter.dashbuddy.domain.model.event.SequencedAppEvent
 import cloud.trotter.dashbuddy.domain.model.event.payload.JobAcceptMismatchPayload
 import cloud.trotter.dashbuddy.domain.model.event.payload.OfferPayload
+import cloud.trotter.dashbuddy.domain.model.event.payload.SessionEndSource
 import cloud.trotter.dashbuddy.domain.model.event.payload.SessionStartPayload
 import cloud.trotter.dashbuddy.domain.model.event.payload.SessionStopPayload
 import cloud.trotter.dashbuddy.domain.state.Platform
@@ -567,6 +568,35 @@ object RecordFolds {
         )
     }
 
+    /**
+     * The DASH_STOP payload's reported total, with a **stored `0.0` read as "no report" on every
+     * non-summary end source** (#1030).
+     *
+     * `SessionStopPayload.totalEarnings` has exactly two writers (`ModeEffects`' two branches): the
+     * summary-screen branch, where it is a value PARSED off the dash-summary screen, and the
+     * early-offline branch, where it was the non-nullable `Session.runningEarnings` — a `Double = 0.0`
+     * whose only feeders are the (dead, #1029) money parses. So a non-summary `0.0` is structurally
+     * the unfilled default, never a measurement: 41 of 42 historical `early_offline` stops carry a
+     * literal `"totalEarnings": 0.0`, which the DAO's `COALESCE(s.reportedEarnings, d.deliveredPay, 0)`
+     * then honoured as an authoritative "$0 reported", zeroing the window's gross.
+     *
+     * #1030's layer-1 stamp fixes this going forward; normalizing HERE is what heals history, since
+     * a refold replays those literal `0.0` payloads verbatim (hence the `PROJECTOR_VERSION` bump).
+     *
+     * A summary-screen `0.0` is KEPT: a parsed report of $0 is a real, if unusual, measurement. That
+     * carve-out is only sound because `ParsedFields.SessionEndedFields.totalEarnings` is nullable —
+     * it used to be coerced from a missed parse with `?: 0.0`, which would have fed this branch a
+     * fabricated zero to trust. A missed summary parse now stamps null and falls through to the
+     * context, the same as an early-offline stop.
+     *
+     * **This function is the rule's one owner.** Its read-side mirrors —
+     * `AnalyticsDao.grossAndUnattributed` & siblings (SQL, source-keyed the same way) and
+     * `SessionDetail.reportedEarningsOrNull` (the per-dash drill-down) — point back here rather
+     * than restating the reasoning.
+     */
+    private fun reportedEarningsOf(p: SessionStopPayload): Double? =
+        p.totalEarnings?.takeIf { it > 0.0 || p.source == SessionEndSource.SUMMARY_SCREEN }
+
     private fun foldDashStop(event: SequencedAppEvent, context: SessionFoldContext?): FoldOutcome {
         val e = event.event
         val p = e.payload as? SessionStopPayload
@@ -578,7 +608,7 @@ object RecordFolds {
         val newCtx = ctx.copy(
             endedAt = p.endedAt,
             endSource = p.source,
-            reportedEarnings = p.totalEarnings ?: ctx.reportedEarnings,
+            reportedEarnings = reportedEarningsOf(p) ?: ctx.reportedEarnings,
             reportedDurationMillis = p.sessionDurationMillis ?: ctx.reportedDurationMillis,
             lastEventAt = maxOf(ctx.lastEventAt, e.occurredAt),
             lastOdometer = odo ?: ctx.lastOdometer,

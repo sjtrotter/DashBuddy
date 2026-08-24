@@ -557,8 +557,13 @@ class PlatformRegionStepper @Inject constructor() {
                 }
             }
             is ParsedFields.SessionEndedFields -> {
-                r.session?.let { session ->
-                    r = r.copy(session = session.copy(runningEarnings = parsed.totalEarnings))
+                // #1030: only a REAL parse moves `runningEarnings` — a missed total is null now,
+                // and writing it through would zero a figure the summary never contradicted.
+                val total = parsed.totalEarnings
+                if (total != null) {
+                    r.session?.let { session ->
+                        r = r.copy(session = session.copy(runningEarnings = total))
+                    }
                 }
             }
             is ParsedFields.PausedFields -> {

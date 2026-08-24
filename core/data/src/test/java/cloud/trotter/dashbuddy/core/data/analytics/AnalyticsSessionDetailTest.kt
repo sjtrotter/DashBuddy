@@ -51,13 +51,14 @@ class AnalyticsSessionDetailTest {
     private fun session(
         id: String,
         reportedEarnings: Double? = null,
+        endSource: String = "summary_screen",
     ) = SessionRecordEntity(
         sessionId = id,
         platform = "doordash",
         startedAt = base,
         endedAt = base + hour,
         lastEventAt = base + hour,
-        endSource = "summary_screen",
+        endSource = endSource,
         startOdometer = 0.0,
         lastOdometer = 12.0,
         reportedEarnings = reportedEarnings,
@@ -199,5 +200,31 @@ class AnalyticsSessionDetailTest {
 
         val detail = repo.sessionDetail("S").first()!!
         assertEquals("overAttributed compares cash-free deliveredPay: 8 − 5 = 3", 3.0, detail.overAttributedPay, 1e-9)
+    }
+
+    /**
+     * #1030: the per-dash mirror follows `RecordFolds.reportedEarningsOf` — a stored `0.0` on a
+     * NON-summary end source is no-report, so the drill-down stops flagging severe over-attribution
+     * on exactly the rows the period aggregates now defend.
+     */
+    @Test
+    fun `a stored zero on an early_offline dash reads as no report (#1030)`() = runBlocking {
+        dao.upsertSession(session("S", reportedEarnings = 0.0, endSource = "early_offline"))
+        dao.upsertDelivery(delivery(1, "S", completedAt = base + hour, realizedPay = 8.0))
+
+        val detail = repo.sessionDetail("S").first()!!
+        assertEquals("no report to exceed — not an over-attribution", 0.0, detail.overAttributedPay, 1e-9)
+        assertEquals(0.0, detail.unattributedPay, 1e-9)
+    }
+
+    /** #1030: a PARSED summary-screen `$0` keeps the old comparison — it is a real measurement. */
+    @Test
+    fun `a stored zero on a summary_screen dash keeps the comparison (#1030)`() = runBlocking {
+        dao.upsertSession(session("S", reportedEarnings = 0.0, endSource = "summary_screen"))
+        dao.upsertDelivery(delivery(1, "S", completedAt = base + hour, realizedPay = 8.0))
+
+        val detail = repo.sessionDetail("S").first()!!
+        assertEquals("delivered 8 − a real reported 0", 8.0, detail.overAttributedPay, 1e-9)
+        assertEquals(0.0, detail.unattributedPay, 1e-9)
     }
 }

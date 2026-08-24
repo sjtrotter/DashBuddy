@@ -61,13 +61,14 @@ class AnalyticsDailyEarningsTest {
         startedAt: Long,
         reportedEarnings: Double?,
         platform: String = "doordash",
+        endSource: String = "summary_screen",
     ) = SessionRecordEntity(
         sessionId = id,
         platform = platform,
         startedAt = startedAt,
         endedAt = startedAt + hour,
         lastEventAt = startedAt + hour,
-        endSource = "summary_screen",
+        endSource = endSource,
         startOdometer = 0.0,
         lastOdometer = 5.0,
         reportedEarnings = reportedEarnings,
@@ -138,6 +139,38 @@ class AnalyticsDailyEarningsTest {
         val all = dao.sessionGrossRows(base, base + 3 * hour).first()
         assertEquals(3, all.size)
         assertEquals(0.0, all[2].gross, 1e-9)
+    }
+
+    /**
+     * #1030: the day-chart read is the third `reportedEarnings` query family, and it carries the same
+     * source-keyed no-report guard — a stored `early_offline` `0.0` falls back to Σ delivered pay
+     * (and adds no unattributed remainder to the day's net), so the per-day series keeps decomposing
+     * the period totals term for term instead of drawing a $0 bar over a worked day.
+     */
+    @Test
+    fun `a stored early_offline 0 falls back to delivered pay on the day chart (#1030)`() = runBlocking {
+        val base = weekStart()
+        dao.upsertSession(session("S0", base, reportedEarnings = 0.0, endSource = "early_offline"))
+        dao.upsertDelivery(delivery(1, "S0", completedAt = base + hour, pay = 16.70))
+
+        val rows = dao.sessionGrossRows(base, base + 2 * hour).first()
+        assertEquals(1, rows.size)
+        assertEquals("gross falls back to delivered pay, not the fake \$0 report", 16.70, rows[0].gross, 1e-9)
+        // The fixture's deliveries carry a null netProfit, so the day's net is the unattributed
+        // remainder alone — which must be 0, not `0 − 16.70` clamped or `16.70` fabricated.
+        assertEquals("no unattributed remainder from a no-report session", 0.0, rows[0].net, 1e-9)
+    }
+
+    /** #1030: a GENUINE summary-screen `$0` still wins over delivered pay on the day chart too. */
+    @Test
+    fun `a genuine summary_screen 0 report stays authoritative on the day chart (#1030)`() = runBlocking {
+        val base = weekStart()
+        dao.upsertSession(session("SS", base, reportedEarnings = 0.0, endSource = "summary_screen"))
+        dao.upsertDelivery(delivery(1, "SS", completedAt = base + hour, pay = 16.70))
+
+        val rows = dao.sessionGrossRows(base, base + 2 * hour).first()
+        assertEquals(1, rows.size)
+        assertEquals("the platform really did report \$0", 0.0, rows[0].gross, 1e-9)
     }
 
     /** THIS_WEEK ⇒ a complete 7-day, Monday-first axis with gap days at 0.0. */

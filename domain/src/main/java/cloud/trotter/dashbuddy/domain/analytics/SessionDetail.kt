@@ -1,5 +1,7 @@
 package cloud.trotter.dashbuddy.domain.analytics
 
+import cloud.trotter.dashbuddy.domain.model.event.payload.SessionEndSource
+
 /**
  * One dash, fully expanded — the read-only per-dash drill-down (#650 PR A): the [session] header
  * plus every [DeliveryRecord] captured under it, in completion order. Read-model only, assembled at
@@ -29,6 +31,17 @@ data class SessionDetail(
     val cashTips: Double get() = deliveries.sumOf { it.cashTip ?: 0.0 }
 
     /**
+     * This dash's reported total, or `null` when there is **no report** — the read-side mirror of
+     * `RecordFolds.reportedEarningsOf` (#1030), which owns the rule: a stored `0.0` is a real,
+     * parsed `$0` only when the dash ended on the summary screen; on every other end source it is
+     * the unfilled default the old stamp wrote. Without this, the per-dash drill-down would keep
+     * flagging severe over-attribution on exactly the rows the period aggregates now defend.
+     */
+    private val reportedEarningsOrNull: Double?
+        get() = session.reportedEarnings
+            ?.takeIf { it > 0.0 || session.endSource == SessionEndSource.SUMMARY_SCREEN }
+
+    /**
      * `reported − delivered` when the platform-reported total exceeds captured delivery pay, else
      * `0` (never negative) — the per-dash review flag. This deliberately mirrors the SQL `CASE` in
      * [cloud.trotter.dashbuddy.domain.analytics] `AnalyticsDao.grossAndUnattributed` (that query is
@@ -38,7 +51,7 @@ data class SessionDetail(
      */
     val unattributedPay: Double
         get() {
-            val reported = session.reportedEarnings ?: return 0.0
+            val reported = reportedEarningsOrNull ?: return 0.0
             return (reported - deliveredPay).coerceAtLeast(0.0)
         }
 
@@ -51,7 +64,7 @@ data class SessionDetail(
      */
     val overAttributedPay: Double
         get() {
-            val reported = session.reportedEarnings ?: return 0.0
+            val reported = reportedEarningsOrNull ?: return 0.0
             return (deliveredPay - reported).coerceAtLeast(0.0)
         }
 }

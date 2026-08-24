@@ -938,7 +938,16 @@ class AnalyticsProjector @Inject constructor(
          * linkedJobId` ONLY**, and only for rows the old code left unlinked — every other column, and
          * every already-linked row, folds byte-identically. Precedented side effect (as v2 onward): the
          * refold re-stamps `CURRENT_FALLBACK` rows against today's economy.
+         * v11 (#1030): `RecordFolds.reportedEarningsOf` (the rule's owner — see its KDoc) now reads a
+         * DASH_STOP `totalEarnings` of `0.0` as **no report** on every non-summary end source. The
+         * stamp side is fixed at the source, but history cannot heal from that: the committed
+         * `early_offline` stops carry a literal `"totalEarnings": 0.0` and a refold replays them
+         * verbatim, so the bump is what re-stamps the already-committed rows.
+         * **Scope: `session_records.reportedEarnings` ONLY** — no frozen economy column moves
+         * (`reportedEarnings` is attribution metadata, never an input to `netProfit`/`frozenCostPerMile`),
+         * and a summary-screen row folds byte-identically. Precedented side effect (as v2 onward): the
+         * refold re-stamps `CURRENT_FALLBACK` rows against today's economy.
          */
-        private const val PROJECTOR_VERSION = 10
+        private const val PROJECTOR_VERSION = 11
     }
 }

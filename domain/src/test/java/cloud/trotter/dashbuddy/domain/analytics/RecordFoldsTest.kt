@@ -134,10 +134,17 @@ class RecordFoldsTest {
         odometer = odo,
     )
 
-    private fun dashStop(sid: String, at: Long, odo: Double?, earnings: Double?, platform: String? = null) = ev(
+    private fun dashStop(
+        sid: String,
+        at: Long,
+        odo: Double?,
+        earnings: Double?,
+        platform: String? = null,
+        source: String = SessionEndSource.SUMMARY_SCREEN,
+    ) = ev(
         AppEventType.DASH_STOP, sid, at,
         SessionStopPayload(
-            sid, endedAt = at, source = SessionEndSource.SUMMARY_SCREEN, totalEarnings = earnings,
+            sid, endedAt = at, source = source, totalEarnings = earnings,
             platform = platform,
         ),
         odometer = odo,
@@ -729,6 +736,82 @@ class RecordFoldsTest {
         )
         assertEquals("real platform from DASH_START is preserved", Platform.DoorDash, outcomes.last().context!!.platform)
         assertEquals(Platform.DoorDash, ctx!!.platform)
+    }
+
+    // ── #1030: a non-summary `totalEarnings` of 0.0 is the unfilled default, not a report ──
+
+    /**
+     * #1030: history carries a literal `"totalEarnings": 0.0` on 41 of 42 `early_offline` stops (the
+     * old stamp wrote `Session.runningEarnings`, a non-nullable `0.0` whose feeders are dead, #1029).
+     * A refold replays those payloads verbatim, so the fold — not just the stamp — has to read that
+     * `0.0` as "no report", or the healed rows would reproduce the zeroed gross.
+     */
+    @Test
+    fun `an early_offline stop carrying a literal zero folds reportedEarnings null (#1030)`() {
+        val s = "Z1"
+        val (_, ctx) = foldSession(
+            listOf(
+                dashStart(s, 1_000, odo = 0.0),
+                dashStop(s, 2_000, odo = null, earnings = 0.0, source = SessionEndSource.EARLY_OFFLINE),
+            ),
+        )
+        assertNull("a non-summary 0.0 is the unfilled default, never a report", ctx!!.reportedEarnings)
+    }
+
+    /** #1030: a PARSED summary-screen report of $0 is a real measurement and is kept verbatim. */
+    @Test
+    fun `a summary_screen stop reporting zero keeps the zero (#1030)`() {
+        val s = "Z2"
+        val (_, ctx) = foldSession(
+            listOf(
+                dashStart(s, 1_000, odo = 0.0),
+                dashStop(s, 2_000, odo = null, earnings = 0.0, source = SessionEndSource.SUMMARY_SCREEN),
+            ),
+        )
+        assertEquals("a parsed \$0 summary is a measurement", 0.0, ctx!!.reportedEarnings!!, 1e-9)
+    }
+
+    /** #1030: a real summary total is untouched — the normalization only ever removes a 0.0. */
+    @Test
+    fun `a summary_screen stop with a real total is unchanged (#1030)`() {
+        val s = "Z3"
+        val (_, ctx) = foldSession(
+            listOf(
+                dashStart(s, 1_000, odo = 0.0),
+                dashStop(s, 2_000, odo = null, earnings = 21.45, source = SessionEndSource.SUMMARY_SCREEN),
+            ),
+        )
+        assertEquals(21.45, ctx!!.reportedEarnings!!, 1e-9)
+    }
+
+    /**
+     * #1030 F1: the summary-screen carve-out can only be trusted because a MISSED parse is now null
+     * rather than a coerced `0.0`. A summary stop carrying null falls through to the context, exactly
+     * like an early-offline one — it never re-reads as a `$0` report.
+     */
+    @Test
+    fun `a summary_screen stop with an unparsed total falls through to the context (#1030)`() {
+        val s = "Z5"
+        val (_, ctx) = foldSession(
+            listOf(
+                dashStart(s, 1_000, odo = 0.0),
+                dashStop(s, 2_000, odo = null, earnings = null, source = SessionEndSource.SUMMARY_SCREEN),
+            ),
+        )
+        assertNull("nothing parsed ⇒ no report, even on the summary screen", ctx!!.reportedEarnings)
+    }
+
+    /** #1030: an early_offline stop that DID carry a parsed positive total still folds it. */
+    @Test
+    fun `an early_offline stop with a positive total still folds it (#1030)`() {
+        val s = "Z4"
+        val (_, ctx) = foldSession(
+            listOf(
+                dashStart(s, 1_000, odo = 0.0),
+                dashStop(s, 2_000, odo = null, earnings = 30.0, source = SessionEndSource.EARLY_OFFLINE),
+            ),
+        )
+        assertEquals(30.0, ctx!!.reportedEarnings!!, 1e-9)
     }
 
     // ── #691 offer-pay fallback for receipt-less completions ─────────────

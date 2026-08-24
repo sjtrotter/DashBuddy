@@ -780,7 +780,32 @@ no brand-token agreement check to run). `storeKey` stays fail-null by design (an
 was considered and REJECTED — a divergent `normalizedChain` would permanently split the store entity,
 fail-wrong beats fail-null); the delivery row's own `storeKey`/`milesToStore`/dwell sample are likewise
 correct residuals, not bugs. The bump heals the 08-08 Zaxbys accept (1-of-5 lifetime offers left
-unlinked) on refold. `NetProfit`
+unlinked) on refold. **#1030 (early_offline fake $0 report, `PROJECTOR_VERSION` 10→11):** the
+EARLY_OFFLINE `DASH_STOP` branch stamped `totalEarnings = Session.runningEarnings`, a non-nullable
+`Double = 0.0` whose only feeders are the dead money parses (#1029), so every summary-less dash wrote
+a **hard `0.0`** that `COALESCE(s.reportedEarnings, d.deliveredPay, 0)` then honoured as an
+authoritative "$0 reported" — the 08-17→08-23 week (the first all-`early_offline` one) read
+`$0.00 came in.` against $78.50 realized and tripped the over-attribution severe flag.
+**`RecordFolds.reportedEarningsOf` is the rule's ONE owner:** a `totalEarnings` of `0.0` is a report
+only when the end source is the summary screen; on every other source it is the unfilled default.
+Four layers. (1) The stamp is `runningEarnings.takeIf { it > 0.0 }`. (2) The fold normalizes, because
+history carries the literal `"totalEarnings": 0.0` and a refold would otherwise replay the lie —
+hence the bump, which re-stamps all 41 affected rows (the drill-down and CSV read the row raw).
+(3) `ParsedFields.SessionEndedFields.totalEarnings` became **nullable**, dropping the factory's
+`?: 0.0`: a missed *parse* used to fabricate exactly the `$0` the summary-screen carve-out trusts as
+a measurement, so an anchor break would have read as a $0 dash (`ModeEffects` now stamps null and
+states the end without a figure; `PlatformRegionStepper` only moves `runningEarnings` on a real
+parse). (4) Read-side **mirrors** of the same source-keyed rule, pointing back at the fold: the DAO's
+three `reportedEarnings` query families take
+`CASE WHEN s.endSource = 'summary_screen' THEN s.reportedEarnings ELSE NULLIF(s.reportedEarnings, 0) END`
+on **every** arm — gross AND the `unattributed`/`overAttributed` CASEs, since guarding gross alone
+would leave a `0.0` row still flagging `overAttributed = deliveredPay − 0` — and `SessionDetail`
+(the per-dash drill-down) applies it via the new `SessionRecord.endSource`. A blanket `NULLIF` was
+rejected: it would silently override a genuine parsed `$0` summary with delivered pay. The bubble
+HUD's two `reportedEarnings ?: 0.0` render sites became `EMPTY_VALUE` (#936 — a null report is the
+NORMAL value for a summary-less dash, and the HUD must not state a measurement it doesn't have).
+Scope: `session_records.reportedEarnings` only — it is attribution metadata, so no frozen economy
+column moves. `NetProfit`
 (`:domain`) is the one shared cost-math SSOT for both the offer estimate and the frozen realized net.
 `AnalyticsRepository` (`:core:data`, **DAO-only — no economy dependency**, so historical net is structurally
 immutable) serves period economics (`SUM(netProfit)` frozen + `unattributedPay`; all-pay gross =

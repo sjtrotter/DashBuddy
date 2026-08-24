@@ -74,7 +74,9 @@ internal fun EffectMap.diffMode(
                     ?: pend?.endFields
                 val endedAt = pend?.since ?: obs.timestamp
                 if (endParsed != null) {
-                    val earnings = Formats.money(endParsed.totalEarnings)
+                    // #1030: a MISSED total is null now, so the bubble states the end without
+                    // quoting a figure rather than rendering a fabricated "$0.00".
+                    val earnings = endParsed.totalEarnings?.let { Formats.money(it) }
                     add(
                         logEffect(
                             sessionId,
@@ -99,7 +101,7 @@ internal fun EffectMap.diffMode(
                     // another still-live dash.
                     add(
                         AppEffect.UpdateBubble(
-                            "Session Ended. Total: $earnings",
+                            earnings?.let { "Session Ended. Total: $it" } ?: "Session Ended.",
                             ChatPersona.Dispatcher,
                             sessionId = sessionId,
                         )
@@ -121,7 +123,11 @@ internal fun EffectMap.diffMode(
                                 sessionId = sessionId,
                                 endedAt = endedAt,
                                 source = SessionEndSource.EARLY_OFFLINE,
-                                totalEarnings = prevSession.runningEarnings,
+                                // #1030: nothing is parsed on this path — `Session.runningEarnings`
+                                // is a non-nullable `Double = 0.0`, so stamping it raw wrote a hard
+                                // `0.0` that reads downstream as "the platform reported $0". Absent
+                                // is the honest stamp. Rule owner: `RecordFolds.reportedEarningsOf`.
+                                totalEarnings = prevSession.runningEarnings.takeIf { it > 0.0 },
                                 platform = prev.platform.name, // #314 capture-gap: harden the log
                             ),
                         ),

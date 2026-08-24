@@ -66,6 +66,12 @@ data class SessionRecord(
     val endedAt: Long?,
     /** Platform summary-screen all-pay total (incl. bonuses/adjustments); null until a summary is seen. */
     val reportedEarnings: Double?,
+    /**
+     * How the dash ended — one of `SessionEndSource` (#1030). Needed on the READ side because it is
+     * what tells a stored `reportedEarnings` of `0.0` apart from a parsed `$0` summary; see
+     * [SessionDetail.reportedEarningsOrNull], whose rule owner is `RecordFolds.reportedEarningsOf`.
+     */
+    val endSource: String? = null,
     val reportedDurationMillis: Long?,
     /** Odometer delta (lastOdometer − startOdometer), floored at 0; null when odometer never seen. */
     val miles: Double?,
