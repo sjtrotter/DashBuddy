@@ -78,6 +78,20 @@ card's **mechanical** half, #577 (re-confirmed, 24/24, ~0.55 s — with a new po
 that entry's Bug #1), the #457 path, and #554 ShadowProjector (2/2). The #462/#460 dropoff item
 was found **broken-in-part** (raw PII in capture envelopes) and moved to that entry's Bug #7.)_
 
+- **🆕 NEW — #1032 — the dash-end summary sheet is recognized again (DoorDash 8.93.7).** End a dash
+  and stay ON the summary sheet — the one headlined **Dash summary** with the big total, "Total
+  online time" and "Offers accepted" — then tap **Done**. 8.93.7 re-rendered that sheet with no view
+  ids, so it had been falling to UNKNOWN and the dash was ending with **no reported total at all**.
+  How to tell it worked: open **Analytics → Money → the dash's drill-down** afterwards; it should
+  show a real **Gross (reported)** matching the sheet's total (not delivered-pay fallback, not a
+  `$0.00`/em-dash). Also worth a glance mid-dash: the **"This dash so far"** sheet (the one with
+  *Continue dashing*) must NOT end your dash — if the HUD flips to offline / a dash summary the
+  moment you peek at it, that is the bug and it is serious.
+  Desk checks on the next pull: `session_records.endSource = 'summary_screen'` with a non-null
+  `reportedEarnings` for that dash, and **no** `Dash summary`-shaped frame left in
+  `captures/.../UNKNOWN/` (`grep -l 'Dash summary' captures/**/UNKNOWN/*.json` → empty).
+  - Confirmed: 0/2
+
 - **🆕 NEW — #1034 — a negative dollar reads `-$12`, never `$-12`.** `Formats.money`/`money0`/
   `money3` put the sign before the `$` now, so this shows up anywhere a figure can go negative.
   Two places to glance at: (a) **the bubble HUD's `$/hr` hero** on a bad offer, or on an overdue

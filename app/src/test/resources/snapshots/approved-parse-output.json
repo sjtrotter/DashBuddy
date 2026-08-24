@@ -681,8 +681,8 @@
         "intent": "dash_summary",
         "shape": "session_ended",
         "fields": {
-            "offersAccepted": 0,
-            "offersTotal": 0,
+            "offersAccepted": null,
+            "offersTotal": null,
             "sessionDurationMillis": 4080000,
             "totalEarnings": 24.1,
             "weeklyEarnings": null
@@ -693,8 +693,8 @@
         "intent": "dash_summary",
         "shape": "session_ended",
         "fields": {
-            "offersAccepted": 0,
-            "offersTotal": 0,
+            "offersAccepted": null,
+            "offersTotal": null,
             "sessionDurationMillis": 4500000,
             "totalEarnings": 26.3,
             "weeklyEarnings": 50.4
@@ -729,9 +729,9 @@
         "intent": "dash_summary",
         "shape": "session_ended",
         "fields": {
-            "offersAccepted": 0,
-            "offersTotal": 0,
-            "sessionDurationMillis": 0,
+            "offersAccepted": null,
+            "offersTotal": null,
+            "sessionDurationMillis": null,
             "totalEarnings": 15.44,
             "weeklyEarnings": null
         }
@@ -841,6 +841,18 @@
             "offersTotal": 2,
             "sessionDurationMillis": 6660000,
             "totalEarnings": 35.47,
+            "weeklyEarnings": null
+        }
+    },
+    "dash_summary/2026-08-14_19-02-29-006__doordash__accessibility.window__UNKNOWN__646487.json": {
+        "ruleId": "doordash.screen.dash_summary",
+        "intent": "dash_summary",
+        "shape": "session_ended",
+        "fields": {
+            "offersAccepted": 2,
+            "offersTotal": 2,
+            "sessionDurationMillis": 7080000,
+            "totalEarnings": 48.34,
             "weeklyEarnings": null
         }
     },

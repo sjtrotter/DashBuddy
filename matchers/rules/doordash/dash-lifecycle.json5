@@ -959,6 +959,7 @@
       }
     },
     {
+      "comment": "#1032 — the dash-end earnings summary sheet, the SOLE source of session_records.reportedEarnings. DoorDash 8.93.7 re-rendered the sheet with every text node id-LESS under bottomsheet_content_container, so the old id anchors ('textView_prism_button_title' on Done, 'header_pay', the 'name'/'value' stat pairs) all evaporated and the surface fell to UNKNOWN — recognized once in the 15 days to 08-24, and with FrameGate suppressing repeat UNKNOWN frames there was no envelope to diagnose it with. The require is now TEXT-anchored with two arms: the original id arm (kept verbatim so the 15 corpus incumbents match on exactly the anchor they always did) OR a text-only arm requiring 'Done' plus BOTH stat labels — 'Dash summary' alone would also match the NEW 'This dash so far' mid-dash sheet family, and the Done+labels conjunction is what keeps this rule off every other prism bottom sheet. Each parse field likewise keeps its id-anchored arm FIRST inside a coalesce and adds a label->value sibling arm behind it, so the id layout parses byte-identically and the id-less layout resolves off the rendered label. Two deliberate removals: the three `fallback: 0`s are GONE (#936/#1030 — SessionEndedFields is nullable, and a fabricated 0 duration/offer count is exactly the shape the money side reads as a measurement), and totalEarnings' positional `^\\$…$` regex arm is now LAST, behind the 'Dash summary' label sibling, because the first-currency-in-document-order read only happens to be the total today (the weekly-goal figure is the second such node and a reorder would silently swap them).",
       "id": "doordash.screen.dash_summary",
       "priority": 150,
       "state": {
@@ -973,16 +974,39 @@
             }
           },
           {
-            "exists": {
-              "all": [
-                {
-                  "hasIdSuffix": "textView_prism_button_title"
-                },
-                {
-                  "hasText": "Done"
+            "any": [
+              {
+                "exists": {
+                  "all": [
+                    {
+                      "hasIdSuffix": "textView_prism_button_title"
+                    },
+                    {
+                      "hasText": "Done"
+                    }
+                  ]
                 }
-              ]
-            }
+              },
+              {
+                "all": [
+                  {
+                    "exists": {
+                      "hasText": "Done"
+                    }
+                  },
+                  {
+                    "exists": {
+                      "hasTextContaining": "Total online time"
+                    }
+                  },
+                  {
+                    "exists": {
+                      "hasTextContaining": "Offers accepted"
+                    }
+                  }
+                ]
+              }
+            ]
           }
         ]
       },
@@ -1000,6 +1024,14 @@
               },
               {
                 "find": {
+                  "hasText": "Dash summary"
+                },
+                "navigate": "sibling(1)",
+                "read": "text",
+                "transform": "parseCurrency"
+              },
+              {
+                "find": {
                   "hasTextMatchesRegex": "^\\$[\\d,]+\\.\\d{2}$"
                 },
                 "read": "text",
@@ -1008,64 +1040,109 @@
             ]
           },
           "sessionDurationMillis": {
-            "find": {
-              "all": [
-                {
-                  "hasIdSuffix": "name"
+            "coalesce": [
+              {
+                "find": {
+                  "all": [
+                    {
+                      "hasIdSuffix": "name"
+                    },
+                    {
+                      "hasTextContaining": "Total online time"
+                    }
+                  ]
                 },
-                {
+                "navigate": "sibling(1)",
+                "read": "text",
+                "transform": "parseHrMin"
+              },
+              {
+                "find": {
                   "hasTextContaining": "Total online time"
-                }
-              ]
-            },
-            "navigate": "sibling(1)",
-            "read": "text",
-            "transform": "parseHrMin",
-            "fallback": 0
+                },
+                "navigate": "sibling(1)",
+                "read": "text",
+                "transform": "parseHrMin"
+              }
+            ]
           },
           "offersAccepted": {
-            "find": {
-              "all": [
-                {
-                  "hasIdSuffix": "name"
+            "coalesce": [
+              {
+                "find": {
+                  "all": [
+                    {
+                      "hasIdSuffix": "name"
+                    },
+                    {
+                      "hasTextContaining": "Offers accepted"
+                    }
+                  ]
                 },
-                {
-                  "hasTextContaining": "Offers accepted"
+                "navigate": "sibling(1)",
+                "read": "text",
+                "transform": {
+                  "regex": {
+                    "pattern": "(\\d+)\\s*out of",
+                    "group": 1,
+                    "then": "toInt"
+                  }
                 }
-              ]
-            },
-            "navigate": "sibling(1)",
-            "read": "text",
-            "transform": {
-              "regex": {
-                "pattern": "(\\d+)\\s*out of",
-                "group": 1,
-                "then": "toInt"
+              },
+              {
+                "find": {
+                  "hasTextContaining": "Offers accepted"
+                },
+                "navigate": "sibling(1)",
+                "read": "text",
+                "transform": {
+                  "regex": {
+                    "pattern": "(\\d+)\\s*out of",
+                    "group": 1,
+                    "then": "toInt"
+                  }
+                }
               }
-            },
-            "fallback": 0
+            ]
           },
           "offersTotal": {
-            "find": {
-              "all": [
-                {
-                  "hasIdSuffix": "name"
+            "coalesce": [
+              {
+                "find": {
+                  "all": [
+                    {
+                      "hasIdSuffix": "name"
+                    },
+                    {
+                      "hasTextContaining": "Offers accepted"
+                    }
+                  ]
                 },
-                {
-                  "hasTextContaining": "Offers accepted"
+                "navigate": "sibling(1)",
+                "read": "text",
+                "transform": {
+                  "regex": {
+                    "pattern": "out of\\s*(\\d+)",
+                    "group": 1,
+                    "then": "toInt"
+                  }
                 }
-              ]
-            },
-            "navigate": "sibling(1)",
-            "read": "text",
-            "transform": {
-              "regex": {
-                "pattern": "out of\\s*(\\d+)",
-                "group": 1,
-                "then": "toInt"
+              },
+              {
+                "find": {
+                  "hasTextContaining": "Offers accepted"
+                },
+                "navigate": "sibling(1)",
+                "read": "text",
+                "transform": {
+                  "regex": {
+                    "pattern": "out of\\s*(\\d+)",
+                    "group": 1,
+                    "then": "toInt"
+                  }
+                }
               }
-            },
-            "fallback": 0
+            ]
           },
           "weeklyEarnings": {
             "find": {
