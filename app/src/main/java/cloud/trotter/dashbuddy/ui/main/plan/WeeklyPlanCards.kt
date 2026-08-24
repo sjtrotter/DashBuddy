@@ -55,6 +55,7 @@ import cloud.trotter.dashbuddy.domain.analytics.WeeklyPlan
 import cloud.trotter.dashbuddy.domain.analytics.WeeklyPlanner
 import cloud.trotter.dashbuddy.domain.format.Formats
 import cloud.trotter.dashbuddy.domain.format.hourRangeLabel
+import cloud.trotter.dashbuddy.ui.components.economy.editableAmount
 
 // ── 1. Target selector (brief §8 item 1) ───────────────────────────────────
 
@@ -124,7 +125,9 @@ fun TargetSelectorCard(target: PlanTarget, onSelect: (PlanTarget) -> Unit) {
 
 @Composable
 private fun DollarGoalDialog(initial: Double?, onDismiss: () -> Unit, onConfirm: (Double) -> Unit) {
-    var text by rememberSaveable { mutableStateOf(initial?.let { Formats.money0(it).removePrefix("$") } ?: "") }
+    // A bare MACHINE number for a digits-and-dot field the dialog round-trips via toDoubleOrNull
+    // (#1034) — never a display formatter, which pins the device locale.
+    var text by rememberSaveable { mutableStateOf(initial?.let { editableAmount(it) } ?: "") }
     val amount = text.toDoubleOrNull()
     AlertDialog(
         onDismissRequest = onDismiss,

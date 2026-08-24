@@ -1,6 +1,7 @@
 package cloud.trotter.dashbuddy.domain.format
 
 import java.util.Locale
+import kotlin.math.abs
 
 /**
  * Locale policy for every formatted number in DashBuddy (#358, #456):
@@ -29,14 +30,62 @@ object Formats {
 
     private val locale: Locale get() = Locale.getDefault()
 
-    /** "$7.50" — standard money. */
-    fun money(amount: Double): String = String.format(locale, "$%.2f", amount)
+    /**
+     * Half a cent — below this a negative magnitude is not money, so [signedMoney] drops its sign
+     * rather than rendering a minus in front of a zero. It is a MONEY floor, not a per-arity one:
+     * a coarse arity that rounds a real negative away keeps the sign (`money0(-0.4)` → `-$0`).
+     */
+    private const val SUB_CENT = 0.005
 
-    /** "$23" — whole-dollar money (heroes, $/hr). */
-    fun money0(amount: Double): String = String.format(locale, "$%.0f", amount)
+    /** "$7.50" — standard money. A negative renders `-$65.94` (see [signedMoney]). */
+    fun money(amount: Double): String = signedMoney(amount, decimals = 2)
 
-    /** "$0.165" — per-mile cost precision. */
-    fun money3(amount: Double): String = String.format(locale, "$%.3f", amount)
+    /** "$23" — whole-dollar money (heroes, $/hr). A negative renders `-$23` (see [signedMoney]). */
+    fun money0(amount: Double): String = signedMoney(amount, decimals = 0)
+
+    /** "$0.165" — per-mile cost precision. A negative renders `-$0.165` (see [signedMoney]). */
+    fun money3(amount: Double): String = signedMoney(amount, decimals = 3)
+
+    /**
+     * The one money renderer (#1034): `$` first, then the magnitude, with a `-` **before** the
+     * symbol when the value is negative.
+     *
+     * `String.format(locale, "$%.2f", …)` treats the `$` as a literal PREFIX and lets the numeric
+     * conversion place its own sign, so a negative used to render `$-65.94` — which reached the Money
+     * card headline verbatim (`"$0.00 came in. $-65.94 went to the car."` on the 08-17→08-23 window).
+     * Negatives are legitimate across this whole family, not an anomaly: `MoneyWentCard`'s derived
+     * car cost can go negative (#662-F1), #1024 deliberately renders a losing window's kept clause,
+     * and a bad offer's `$/hr` hero ([money0]) is negative whenever costs outrun the pay. So all
+     * three arities share this shape rather than diverging by precision.
+     *
+     * The digits are produced by the **same** `"%.Nf"` conversion as before — `"$%.Nf"` is exactly
+     * that conversion with a literal `$` glued on — applied to the magnitude, which is exact for a
+     * `Double`. Rounding, the locale decimal separator and the absence of grouping are therefore
+     * byte-identical to the old output: `-0.005` → `-$0.01`, HALF_UP on the magnitude.
+     *
+     * **The sign is dropped only for a genuinely sub-cent magnitude that also renders as zero.**
+     * `money(-0.004)` is `$0.00`, `money0(-0.004)` is `$0`, `money3(-0.0004)` is `$0.000` — the old
+     * `$-0.00` was a fabricated sign in the old glyph order, and moving it to the front would only
+     * relocate the fabrication. But a **real** negative that merely rounds away at a coarse arity
+     * KEEPS its sign: `money0(-0.4)` is `-$0` and `money0(-0.6)` is `-$1`, because the bubble renders
+     * that hero in the bad tone under a "drop it" verdict and an unsigned `$0/hr` there would
+     * contradict the banner beside it. [SUB_CENT] is the money floor, so the drop can never widen
+     * with precision — `money3(-0.004)` stays `-$0.004`.
+     *
+     * "Renders as zero" is decided by comparing against `0.0` formatted through the SAME pattern and
+     * the SAME locale snapshot, so the two strings are comparable by construction — no digit scan,
+     * and nothing to get wrong on a non-Latin digit locale. A non-finite value falls out correctly
+     * for free: `Infinity` never equals a formatted zero, so `-Infinity` → `-$Infinity`, and `NaN`
+     * fails `amount < 0.0` → `$NaN`.
+     */
+    private fun signedMoney(amount: Double, decimals: Int): String {
+        val loc = locale
+        val pattern = "%.${decimals}f"
+        val magnitude = String.format(loc, pattern, abs(amount))
+        val rendersZero = magnitude == String.format(loc, pattern, 0.0)
+        val dropSign = rendersZero && abs(amount) < SUB_CENT
+        return if (amount < 0.0 && !dropSign) "-$$magnitude" else "$$magnitude"
+    }
 
     /** "4.2" — bare decimal with [digits] places (callers add units). */
     fun decimal(value: Double, digits: Int = 1): String =
