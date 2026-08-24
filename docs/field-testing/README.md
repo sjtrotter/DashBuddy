@@ -83,16 +83,21 @@ was found **broken-in-part** (raw PII in capture envelopes) and moved to that en
   recognition must be unchanged (pickup issue menus and dropoff cards still recognize normally, no
   new UNKNOWN family on the pickup-issue or dropoff surfaces). Both are **desk-gated on the next
   pull**: (a) #1031 —
-  `grep -rhoE '"text": "For [^"]*"' captures/*/accessibility.window/pickup_issue_menu/` returns
-  only `For [redacted:<4hex>]` (no name, no ` • <store>` tail); (b) #1039 —
-  `grep -rhoE '"text": "[^"]*(Unit|Apt|Bldg|#) ?[0-9]+[^"]*"' captures/` over the dropoff surfaces
-  (`dropoff_handoff` / `dropoff_pre_arrival` / `dropoff_pre_arrival_completion` /
-  `dropoff_pin_entry`) returns **nothing raw** — every subpremise value reads plain `[redacted]`
-  with **no** `:<4hex>` suffix, whichever spelling the app rendered, and the `Apt/Suite` label
-  itself still reads raw beside it. A raw `Unit <n>` (or any other spelling) surviving on a
-  *recognized* dropoff envelope means the label-sibling anchor missed and the issue reopens.
-  Residual to watch, not a fix: **uber** rules were deliberately NOT touched — if an uber trip
-  surface renders the same label/value split, it is a separate finding, file it.
+  `grep -rhoE '"text": "For [^"]*"' captures/*/accessibility.window/{pickup,dropoff}_issue_menu/ …/dropoff_help_menu/`
+  returns only `For [redacted:<4hex>]` (no name, no ` • <store>` tail); (b) #1039 —
+  `grep -rhoE '"text": "[^"]*(Unit|Apt|Bldg|#) ?[0-9]+[^"]*"' captures/` over **every**
+  `dropoff_*` / `delivery_summary_*` / `alcohol_*` surface folder plus `navigation_generic`
+  (round 2 blanket-declared the subpremise pair on all 24 dropoff-section rules + the nav
+  catch-all, so any of them can be the rule that wins an address-block frame — checking only
+  the four originally-patched surfaces would re-create the gap the review found) returns
+  **nothing raw**: every subpremise value reads plain `[redacted]` with **no** `:<4hex>`
+  suffix, whichever spelling the app rendered. Expect the bare `Apt/Suite` LABEL to read
+  `[redacted]` too — that is documented, accepted collateral of the fused entry, not a
+  regression. A raw `Unit <n>` (or any other spelling) surviving on a *recognized* dropoff
+  envelope means the label-sibling anchor missed and the issue reopens.
+  Residual to watch, not a fix: **uber** got `plainMask` on its four id-less digit-shape
+  entries (round 2) but no label-sibling anchor — if an uber trip surface renders the
+  `<label><value>` split, it is a separate finding, file it.
   - Confirmed: 0/2
 - **🆕 NEW — #1030 — the `early_offline` fake $0 report is gone.** Dash and go offline **without**
   the dash-summary screen (the normal `early_offline` shape), then check: (a) Home / the Money tab's

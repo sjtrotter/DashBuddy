@@ -619,7 +619,7 @@
           }
         },
         {
-          "comment": "#895 (+ the 07-29 F4 field finding): plainMask. The fused 'Apt <n>' unit number is a bounded ~10^4 alphabet over the 4-char length floor, so a 4-hex distinctness suffix is brute-recoverable (the #892/#795 oracle argument); distinctness is redundant here — the same surface's name/street entries keep per-customer hashes. The split label/value form already plains via the id-less digit-shape entry.",
+          "comment": "#895 (+ the 07-29 F4 field finding): plainMask. The fused 'Apt <n>' unit number is a bounded ~10^4 alphabet over the 4-char length floor, so a 4-hex distinctness suffix is brute-recoverable (the #892/#795 oracle argument); distinctness is redundant here — the same surface's name/street entries keep per-customer hashes. The split label/value form plains via the id-less digit-shape entry below — which only acquired its own `plainMask` in #1039 (round 2): until then this sentence was FALSE on uber, because uber's four copies of that entry were byte-siblings of the doordash ones MINUS the declaration, so the split form hashed a bounded unit number here while the same shape plained on doordash.",
           "find": {
             "hasTextStartsWith": "Apt "
           },
@@ -634,6 +634,7 @@
           }
         },
         {
+          "comment": "#1039 (round 2): plainMask — the byte-sibling of doordash's #889 F1 entry, which has declared it since #889 while these four uber copies did not. The realistic population of this id-less shape is a bare unit number / entry code: a bounded ~10^4 alphabet sitting ABOVE the #889 short-token floor at 4 digits, so the 4-hex distinctness suffix spans 65 536 buckets over 10^4 values and is brute-recoverable (the #892/#795 oracle argument). Distinctness buys nothing here — this surface's name/street entries keep per-customer hashes and a unit number joins nothing. Strictly-stronger mask, capture-only (the node is never parsed), goldens unchanged.",
           "find": {
             "all": [
               {
@@ -643,7 +644,8 @@
                 "hasNoId": true
               }
             ]
-          }
+          },
+          "plainMask": true
         },
         {
           "find": {
@@ -784,7 +786,7 @@
           }
         },
         {
-          "comment": "#895 (+ the 07-29 F4 field finding): plainMask. The fused 'Apt <n>' unit number is a bounded ~10^4 alphabet over the 4-char length floor, so a 4-hex distinctness suffix is brute-recoverable (the #892/#795 oracle argument); distinctness is redundant here — the same surface's name/street entries keep per-customer hashes. The split label/value form already plains via the id-less digit-shape entry.",
+          "comment": "#895 (+ the 07-29 F4 field finding): plainMask. The fused 'Apt <n>' unit number is a bounded ~10^4 alphabet over the 4-char length floor, so a 4-hex distinctness suffix is brute-recoverable (the #892/#795 oracle argument); distinctness is redundant here — the same surface's name/street entries keep per-customer hashes. The split label/value form plains via the id-less digit-shape entry below — which only acquired its own `plainMask` in #1039 (round 2): until then this sentence was FALSE on uber, because uber's four copies of that entry were byte-siblings of the doordash ones MINUS the declaration, so the split form hashed a bounded unit number here while the same shape plained on doordash.",
           "find": {
             "hasTextStartsWith": "Apt "
           },
@@ -799,6 +801,7 @@
           }
         },
         {
+          "comment": "#1039 (round 2): plainMask — the byte-sibling of doordash's #889 F1 entry, which has declared it since #889 while these four uber copies did not. The realistic population of this id-less shape is a bare unit number / entry code: a bounded ~10^4 alphabet sitting ABOVE the #889 short-token floor at 4 digits, so the 4-hex distinctness suffix spans 65 536 buckets over 10^4 values and is brute-recoverable (the #892/#795 oracle argument). Distinctness buys nothing here — this surface's name/street entries keep per-customer hashes and a unit number joins nothing. Strictly-stronger mask, capture-only (the node is never parsed), goldens unchanged.",
           "find": {
             "all": [
               {
@@ -808,7 +811,8 @@
                 "hasNoId": true
               }
             ]
-          }
+          },
+          "plainMask": true
         },
         {
           "find": {
@@ -912,7 +916,7 @@
           }
         },
         {
-          "comment": "#895 (+ the 07-29 F4 field finding): plainMask. The fused 'Apt <n>' unit number is a bounded ~10^4 alphabet over the 4-char length floor, so a 4-hex distinctness suffix is brute-recoverable (the #892/#795 oracle argument); distinctness is redundant here — the same surface's name/street entries keep per-customer hashes. The split label/value form already plains via the id-less digit-shape entry.",
+          "comment": "#895 (+ the 07-29 F4 field finding): plainMask. The fused 'Apt <n>' unit number is a bounded ~10^4 alphabet over the 4-char length floor, so a 4-hex distinctness suffix is brute-recoverable (the #892/#795 oracle argument); distinctness is redundant here — the same surface's name/street entries keep per-customer hashes. The split label/value form plains via the id-less digit-shape entry below — which only acquired its own `plainMask` in #1039 (round 2): until then this sentence was FALSE on uber, because uber's four copies of that entry were byte-siblings of the doordash ones MINUS the declaration, so the split form hashed a bounded unit number here while the same shape plained on doordash.",
           "find": {
             "hasTextStartsWith": "Apt "
           },
@@ -927,6 +931,7 @@
           }
         },
         {
+          "comment": "#1039 (round 2): plainMask — the byte-sibling of doordash's #889 F1 entry, which has declared it since #889 while these four uber copies did not. The realistic population of this id-less shape is a bare unit number / entry code: a bounded ~10^4 alphabet sitting ABOVE the #889 short-token floor at 4 digits, so the 4-hex distinctness suffix spans 65 536 buckets over 10^4 values and is brute-recoverable (the #892/#795 oracle argument). Distinctness buys nothing here — this surface's name/street entries keep per-customer hashes and a unit number joins nothing. Strictly-stronger mask, capture-only (the node is never parsed), goldens unchanged.",
           "find": {
             "all": [
               {
@@ -936,7 +941,8 @@
                 "hasNoId": true
               }
             ]
-          }
+          },
+          "plainMask": true
         },
         {
           "find": {
@@ -1177,7 +1183,7 @@
           }
         },
         {
-          "comment": "#895 (+ the 07-29 F4 field finding): plainMask. The fused 'Apt <n>' unit number is a bounded ~10^4 alphabet over the 4-char length floor, so a 4-hex distinctness suffix is brute-recoverable (the #892/#795 oracle argument); distinctness is redundant here — the same surface's name/street entries keep per-customer hashes. The split label/value form already plains via the id-less digit-shape entry.",
+          "comment": "#895 (+ the 07-29 F4 field finding): plainMask. The fused 'Apt <n>' unit number is a bounded ~10^4 alphabet over the 4-char length floor, so a 4-hex distinctness suffix is brute-recoverable (the #892/#795 oracle argument); distinctness is redundant here — the same surface's name/street entries keep per-customer hashes. The split label/value form plains via the id-less digit-shape entry below — which only acquired its own `plainMask` in #1039 (round 2): until then this sentence was FALSE on uber, because uber's four copies of that entry were byte-siblings of the doordash ones MINUS the declaration, so the split form hashed a bounded unit number here while the same shape plained on doordash.",
           "find": {
             "hasTextStartsWith": "Apt "
           },
@@ -1192,6 +1198,7 @@
           }
         },
         {
+          "comment": "#1039 (round 2): plainMask — the byte-sibling of doordash's #889 F1 entry, which has declared it since #889 while these four uber copies did not. The realistic population of this id-less shape is a bare unit number / entry code: a bounded ~10^4 alphabet sitting ABOVE the #889 short-token floor at 4 digits, so the 4-hex distinctness suffix spans 65 536 buckets over 10^4 values and is brute-recoverable (the #892/#795 oracle argument). Distinctness buys nothing here — this surface's name/street entries keep per-customer hashes and a unit number joins nothing. Strictly-stronger mask, capture-only (the node is never parsed), goldens unchanged.",
           "find": {
             "all": [
               {
@@ -1201,7 +1208,8 @@
                 "hasNoId": true
               }
             ]
-          }
+          },
+          "plainMask": true
         },
         {
           "comment": "id-less whole-value first-name + last-initial — same canonical SSOT as SnapshotRedactor.FIRST_LAST_INITIAL_PATTERN / dropoff_multi_order_confirm. normalize customerName gives a per-customer-stable mask hex across the surface FORMS the name renders in.",

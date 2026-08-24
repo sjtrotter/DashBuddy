@@ -303,9 +303,15 @@ dashes, which is what makes it a family bug rather than an entry bug). All five 
 whose own predicate/keepPrefix strings name `Apt` or a `subpremise_line` id, so the next surface to
 copy the address block in is covered whichever spelling it uses — though that scan can only ratchet
 entries that EXIST, so the VALUE spelling stayed open until #1039 anchored the split form's value on
-its `Apt/Suite` **label sibling** (`hasPrecedingSiblingText`, whole-node `plainMask`, on every
-dropoff rule carrying the fused `Apt ` entry), which no longer depends on how the value is spelled.
-(`camera_capture`'s
+its `Apt/Suite` **label sibling** (`hasPrecedingSiblingText`, BOTH label spellings enumerated since
+the predicate is an exact un-trimmed equality, whole-node `plainMask`), which no longer depends on
+how the value is spelled. Both that entry and the fused `Apt/Suite` one are declared **blanket** —
+every screen rule in `dropoff.json5` plus `navigation_generic`, the #993 combined-frame doctrine
+applied to the address block, since the rules most likely to WIN such a frame out-rank the surfaces
+that fielded it — and both sit **ahead of every generic shape entry** in their block, because
+`maskNode` is first-match-wins and a digit-leading value (`101 B`) would otherwise be claimed and
+HASHED by the id-less street shape. A derived parity test reads the rule list out of the source
+file, so a new dropoff surface is in scope the day it lands. (`camera_capture`'s
 `bottom_instruction` is deliberately NOT in the family — it masks a whole fused name+apt line, whose
 alphabet is unbounded, so the hash form is correct there.) The
 mask token is otherwise derived by the SAME canonical form the
