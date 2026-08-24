@@ -10,6 +10,7 @@ import cloud.trotter.dashbuddy.core.pipeline.recognition.matchers.NegativeCorpus
 import cloud.trotter.dashbuddy.core.pipeline.recognition.matchers.OfferPipelineTest
 import cloud.trotter.dashbuddy.core.pipeline.recognition.matchers.PickupNoCustomerIdentityTest
 import cloud.trotter.dashbuddy.core.pipeline.rules.CaptureRedactionCorpusTest
+import cloud.trotter.dashbuddy.core.pipeline.rules.DashSummaryReanchorTest
 import cloud.trotter.dashbuddy.core.pipeline.rules.ClickRulesetTest
 import cloud.trotter.dashbuddy.core.pipeline.rules.DefaultRulesIntegrationTest
 import cloud.trotter.dashbuddy.core.pipeline.rules.DropoffBannerRedactParityTest
@@ -108,6 +109,11 @@ import org.junit.runners.Suite
  *   the top-level display store but NOT the `orders[]`/`presentationKey` read (chip-anchored
  *   identity, immune to the card cycling which store it shows), plus `offerKind: match|direct`
  *   parsing from the CTA — against the fielded corpus.
+ * - [DashSummaryReanchorTest] — #1032: the dash-end summary sheet (the sole source of
+ *   `session_records.reportedEarnings`) parses off its rendered LABELS on the id-less DoorDash
+ *   8.93.7 layout as well as off the ids on the old one, a stat row that does not render parses
+ *   null rather than a fabricated 0 (#936/#1030), and the mid-dash "This dash so far" sheet —
+ *   which shares both stat labels — stays UNKNOWN.
  *
  * ### Deliberately excluded (#947 membership reconciliation)
  *
@@ -159,5 +165,6 @@ import org.junit.runners.Suite
     RuleIdLogSafetyTest::class,
     GoPuffRecognitionTest::class,
     UberOfferKindAndStackStoreTest::class,
+    DashSummaryReanchorTest::class,
 )
 class AllMatchersSuite

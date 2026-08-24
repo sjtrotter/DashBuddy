@@ -309,9 +309,27 @@ class ParseOutputGoldenTest {
      * specimen. The pin records the debt rather than hiding it: the parse is genuinely dead on
      * 8.93.7 and stays dead until #1029 re-anchors it, at which point BOTH summary entries should
      * come off this set together.)
+     * (`dash_summary:sessionDurationMillis` joined the set with **#1032**, and is the
+     * `delivery_summary_collapsed:totalPay` shape exactly — a CORPUS artifact, not a dead
+     * parse. 15 of the folder's 16 fixtures resolve the field (the 8.93.7 specimen among
+     * them, at 1 hr 58 min); the sole holdout is the truncated `2026-02-07_17-30-17`
+     * capture, whose tree carries no 'Total online time' row at all. It never registered
+     * before because the rule declared `fallback: 0` — #1032 deleted that, since a
+     * fabricated 0-millisecond dash is exactly the #936/#1030 shape the money side reads
+     * as a measurement, and `SessionEndedFields.sessionDurationMillis` is nullable for
+     * precisely this reason. The #801/#819 alternative — retiring `{sessionDurationMillis}`
+     * out of the dedupeKey — was REJECTED here: those retirements followed the PLATFORM
+     * dropping a field, whereas DoorDash still renders online time on every current sheet,
+     * so weakening a live dedupe key to satisfy one stale fixture would trade a real
+     * runtime property for a test-set entry. Pinning records the truth: on a frame that
+     * renders no duration, the key stays partly literal.)
      * Entries are "ruleId:field".
      */
     private val knownDeadDedupeTemplates = setOf(
+        // #1032 — see the KDoc above: one truncated 2026-02-07 fixture renders no
+        // 'Total online time' row, and the fabricated `fallback: 0` that used to mask
+        // that is gone.
+        "doordash.screen.dash_summary:sessionDurationMillis",
         "doordash.screen.delivery_summary_collapsed:totalPay",
         // #1029 — see the KDoc above: DoorDash 8.93.7 ships the receipt sheet id-less.
         "doordash.screen.delivery_summary_expanded:totalPay",

@@ -83,12 +83,30 @@ was found **broken-in-part** (raw PII in capture envelopes) and moved to that en
   frame while every field its parse block declares comes back null now WARNs once per rule per
   process and rides the periodic `PipelineStats` summary. Check:
   `grep 'all-null parse' app.log` and `grep -o 'parseAllNull{[^}]*}' app.log | tail -1`.
-  **Expected until #1029 lands:** the anchor-rot rules — `delivery_summary_expanded`,
+  **Expected until #1029 lands:** the remaining anchor-rot rules — `delivery_summary_expanded`,
   `delivery_summary_collapsed`, `waiting_for_offer` — plus a benign tail of rules whose ONE
   extractable field is legitimately optional (`dash_along_the_way` when no spot deadline is shown,
   `idle_map` when neither Time-mode chip is on, `set_dash_end_time`). **Any OTHER rule id named is a
-  new anchor-rot find** — capture the frame and file it. After #1029 lands, the summary rules should
-  disappear from the list entirely; if they don't, #1029's fix didn't take on the live app build.
+  new anchor-rot find** — capture the frame and file it. Two cross-checks: `dash_summary` must NOT
+  appear (#1032 re-anchored it — if it does, that fix didn't take on this build), and after #1029
+  lands the `delivery_summary_*` pair should drop off the list entirely.
+  - Confirmed: 0/2
+
+- **🆕 NEW — #1032 — the dash-end summary sheet is recognized again (DoorDash 8.93.7).** End a dash
+  and stay ON the summary sheet — the one headlined **Dash summary** with the big total, "Total
+  online time" and "Offers accepted" — then tap **Done**. 8.93.7 re-rendered that sheet with no view
+  ids, so it had been falling to UNKNOWN and the dash was ending with **no reported total at all**.
+  How to tell it worked: open **Analytics → Money → the dash's drill-down** afterwards; it should
+  show a real **Gross (reported)** matching the sheet's total (not delivered-pay fallback, not a
+  `$0.00`/em-dash). Also worth a glance mid-dash: the **"This dash so far"** sheet (the one with
+  *Continue dashing*) must NOT end your dash — if the HUD flips to offline / a dash summary the
+  moment you peek at it, that is the bug and it is serious. And once, mid-dash, browse **Earnings
+  history → a past dash**: it must NOT end the live dash either — that surface is uncaptured, so it
+  could carry the same labels the new text-only anchor keys on and we have no fixture to prove it
+  doesn't.
+  Desk checks on the next pull: `session_records.endSource = 'summary_screen'` with a non-null
+  `reportedEarnings` for that dash, and **no** `Dash summary`-shaped frame left in
+  `captures/.../UNKNOWN/` (`grep -l 'Dash summary' captures/**/UNKNOWN/*.json` → empty).
   - Confirmed: 0/2
 
 - **🆕 NEW — #1034 — a negative dollar reads `-$12`, never `$-12`.** `Formats.money`/`money0`/
