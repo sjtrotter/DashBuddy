@@ -86,7 +86,10 @@ was found **broken-in-part** (raw PII in capture envelopes) and moved to that en
   show a real **Gross (reported)** matching the sheet's total (not delivered-pay fallback, not a
   `$0.00`/em-dash). Also worth a glance mid-dash: the **"This dash so far"** sheet (the one with
   *Continue dashing*) must NOT end your dash — if the HUD flips to offline / a dash summary the
-  moment you peek at it, that is the bug and it is serious.
+  moment you peek at it, that is the bug and it is serious. And once, mid-dash, browse **Earnings
+  history → a past dash**: it must NOT end the live dash either — that surface is uncaptured, so it
+  could carry the same labels the new text-only anchor keys on and we have no fixture to prove it
+  doesn't.
   Desk checks on the next pull: `session_records.endSource = 'summary_screen'` with a non-null
   `reportedEarnings` for that dash, and **no** `Dash summary`-shaped frame left in
   `captures/.../UNKNOWN/` (`grep -l 'Dash summary' captures/**/UNKNOWN/*.json` → empty).

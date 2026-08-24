@@ -844,7 +844,7 @@
             "weeklyEarnings": null
         }
     },
-    "dash_summary/2026-08-14_19-02-29-006__doordash__accessibility.window__UNKNOWN__646487.json": {
+    "dash_summary/2026-08-14_19-02-29-006__doordash__accessibility.window__dash_summary__646487.json": {
         "ruleId": "doordash.screen.dash_summary",
         "intent": "dash_summary",
         "shape": "session_ended",
