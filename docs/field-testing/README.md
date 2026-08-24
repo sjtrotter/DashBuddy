@@ -78,6 +78,17 @@ card's **mechanical** half, #577 (re-confirmed, 24/24, ~0.55 s — with a new po
 that entry's Bug #1), the #457 path, and #554 ShadowProjector (2/2). The #462/#460 dropoff item
 was found **broken-in-part** (raw PII in capture envelopes) and moved to that entry's Bug #7.)_
 
+- **🆕 NEW — #1034 — a negative dollar reads `-$12`, never `$-12`.** `Formats.money`/`money0`/
+  `money3` put the sign before the `$` now, so this shows up anywhere a figure can go negative.
+  Two places to glance at: (a) **the bubble HUD's `$/hr` hero** on a bad offer, or on an overdue
+  task's running-at line — when the verdict is "drop it" and the hero is red, it should read
+  `-$12/hr`; (b) **the Money card headline** on a losing window (Analytics → Money):
+  `$X came in. -$65.94 went to the car.` A stray `$-` anywhere is the bug back. Also worth a
+  glance: a **sub-cent** negative must read a plain `$0.00` with **no** minus in front — but a
+  real negative that just rounds small still keeps its sign (`-$0/hr` is correct, not a defect).
+  Desk-checkable in part: `grep -c '\$-' shareable.log` over the pull should be 0.
+  - Confirmed: 0/2
+
 - **🆕 NEW — #1031 + #1039 — the redact pair (two Pledge leaks, envelope-only).** **Nothing visible
   changes on-dash** — this is capture-envelope masking, so the only in-app tell is a negative one:
   recognition must be unchanged (pickup issue menus and dropoff cards still recognize normally, no

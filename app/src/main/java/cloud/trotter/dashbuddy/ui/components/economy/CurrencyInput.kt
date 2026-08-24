@@ -96,5 +96,10 @@ fun IntegerInput(
 // via toDoubleOrNull — Locale.US, trailing zeros trimmed ("5.5", "0"), NOT the
 // display money SSOT (Formats.money, which renders "$5.50"). Renamed from
 // formatCurrency to avoid confusion with the removed display formatter.
-private fun editableAmount(value: Double): String =
+//
+// `internal` (#1034): the weekly plan's dollar-goal dialog seeds a digits-and-dot
+// field the same way, and MUST NOT reach for a display formatter to do it — on a
+// non-Latin-digit device the seed would come back un-parseable. One machine-string
+// owner for every money field in the module.
+internal fun editableAmount(value: Double): String =
     if (value == 0.0) "0" else String.format(Locale.US, "%.2f", value).trimEnd('0').trimEnd('.')

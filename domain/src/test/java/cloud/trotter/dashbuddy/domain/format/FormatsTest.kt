@@ -2,6 +2,8 @@ package cloud.trotter.dashbuddy.domain.format
 
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 import java.util.Locale
@@ -83,22 +85,65 @@ class FormatsTest {
     }
 
     /**
-     * A magnitude that rounds to zero renders NO sign. The old `$-0.00` was a fabricated sign in the
-     * old glyph order; moving it to the front would only relocate the fabrication, so a rendered zero
-     * is a plain `$0.00` at every precision — including the negative-zero `Double`, which reaches the
-     * formatter from any subtraction that cancels.
+     * A SUB-CENT magnitude that renders as zero drops its sign. The old `$-0.00` was a fabricated
+     * sign in the old glyph order; moving it to the front would only relocate the fabrication. The
+     * negative-zero `Double` — which reaches the formatter from any subtraction that cancels — is the
+     * same case.
      */
     @Test
-    fun `a magnitude that rounds to zero renders no sign`() {
+    fun `a sub-cent magnitude renders unsigned`() {
         Locale.setDefault(Locale.US)
         assertEquals("$0.00", Formats.money(-0.004))
         assertEquals("$0.00", Formats.money(-0.0))
         assertEquals("$0.00", Formats.money(0.004))
-        assertEquals("$0", Formats.money0(-0.4))
+        assertEquals("$0", Formats.money0(-0.004))
         assertEquals("$0.000", Formats.money3(-0.0004))
-        // The floor is the RENDERED text, not the raw value: one more digit of precision and the
-        // same input is a real, signed figure.
+    }
+
+    /**
+     * A **real** negative that merely rounds away at a coarse arity KEEPS its sign. The bubble paints
+     * that `$/hr` hero in the bad tone beneath a "drop it" verdict, so an unsigned `$0/hr` would
+     * contradict the banner beside it — and the suppression floor is a money floor, not a per-arity
+     * one, so it can never widen with precision.
+     */
+    @Test
+    fun `a real negative keeps its sign even when the arity rounds it away`() {
+        Locale.setDefault(Locale.US)
+        assertEquals("-$0", Formats.money0(-0.4))
+        assertEquals("-$1", Formats.money0(-0.6))
         assertEquals("-$0.004", Formats.money3(-0.004))
+    }
+
+    /**
+     * Non-finite values fall out of the same rule rather than needing a branch: `Infinity` never
+     * equals a formatted zero (so the sign survives), and `NaN` is not `< 0.0` (so none is invented).
+     * Neither should ever reach a money surface — a `0.0` denominator is guarded at the read sites —
+     * but a formatter that inverts a sign under one is worse than one that doesn't.
+     */
+    @Test
+    fun `non-finite values keep an honest sign`() {
+        Locale.setDefault(Locale.US)
+        assertEquals("-\$Infinity", Formats.money(Double.NEGATIVE_INFINITY))
+        assertEquals("\$Infinity", Formats.money(Double.POSITIVE_INFINITY))
+        assertEquals("\$NaN", Formats.money(Double.NaN))
+    }
+
+    /**
+     * The zero test compares against `0.0` formatted through the SAME pattern and locale, so it holds
+     * on a locale whose digits are not Latin — where a digit scan against ASCII `'0'` would see "no
+     * digits", call a real figure zero, and drop its sign.
+     *
+     * `ar-EG` is chosen deliberately: bare `ar` and `ar-DZ` format with Latin digits on the JDK, so
+     * they would pass this test without exercising anything (`TransformHardeningTest` is the in-repo
+     * precedent for the same choice).
+     */
+    @Test
+    fun `the zero test holds on a non-Latin-digit locale`() {
+        Locale.setDefault(Locale.forLanguageTag("ar-EG"))
+        val negative = Formats.money(-65.94)
+        assertTrue("expected a leading '-', got $negative", negative.startsWith("-$"))
+        assertTrue("expected Arabic-Indic digits, got $negative", negative.any { it in '٠'..'٩' })
+        assertFalse("a sub-cent magnitude must not carry a sign", Formats.money(-0.004).startsWith("-"))
     }
 
     /**
