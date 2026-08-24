@@ -626,6 +626,32 @@ class EffectMapPayloadTest {
         assertEquals("DoorDash", payload.platform) // #314 capture-gap stamp
     }
 
+    /**
+     * #1030: an early-offline stop with NOTHING parsed must stamp `totalEarnings = null`, not the
+     * `Session.runningEarnings` default of `0.0` — a hard `0.0` reads downstream as an authoritative
+     * "the platform reported $0" and zeroes the window's gross.
+     */
+    @Test
+    fun `DASH_STOP early_offline with no parsed earnings stamps null, not a fake zero (#1030)`() {
+        val regionPrev = PlatformRegion(
+            platform = Platform.DoorDash,
+            mode = Mode.Online,
+            // The fielded shape: the money parses never fired, so runningEarnings is its 0.0 default.
+            session = Session("s1", startedAt = 1000L, runningEarnings = 0.0),
+        )
+        val regionNext = PlatformRegion(platform = Platform.DoorDash, mode = Mode.Offline)
+        val prev = appState(platforms = mapOf(Platform.DoorDash to regionPrev))
+        val next = appState(platforms = mapOf(Platform.DoorDash to regionNext))
+        val obs = screenObs(modeHint = Mode.Offline, timestamp = 5500L)
+
+        val logs = logEvents(prev, next, obs, AppEventType.DASH_STOP)
+        assertEquals(1, logs.size)
+
+        val payload = (logs[0].event.payload as SessionStopPayload)
+        assertEquals("early_offline", payload.source)
+        assertNull("nothing was parsed — the honest stamp is absent, not \$0", payload.totalEarnings)
+    }
+
     @Test
     fun `offline while session is graced does NOT finalize (deferred for the summary)`() {
         // idle_map offline: the stepper preserves the session under a grace

@@ -140,6 +140,26 @@ class AnalyticsDailyEarningsTest {
         assertEquals(0.0, all[2].gross, 1e-9)
     }
 
+    /**
+     * #1030: the day-chart read is the third `reportedEarnings` query family, and it gets the same
+     * `NULLIF(…, 0)` no-report treatment — a stored `0.0` falls back to Σ delivered pay (and adds no
+     * unattributed remainder to the day's net), so the per-day series keeps decomposing the period
+     * totals term for term instead of drawing a $0 bar over a worked day.
+     */
+    @Test
+    fun `a stored reportedEarnings of 0 falls back to delivered pay on the day chart (#1030)`() = runBlocking {
+        val base = weekStart()
+        dao.upsertSession(session("S0", base, reportedEarnings = 0.0))
+        dao.upsertDelivery(delivery(1, "S0", completedAt = base + hour, pay = 16.70))
+
+        val rows = dao.sessionGrossRows(base, base + 2 * hour).first()
+        assertEquals(1, rows.size)
+        assertEquals("gross falls back to delivered pay, not the fake \$0 report", 16.70, rows[0].gross, 1e-9)
+        // The fixture's deliveries carry a null netProfit, so the day's net is the unattributed
+        // remainder alone — which must be 0, not `0 − 16.70` clamped or `16.70` fabricated.
+        assertEquals("no unattributed remainder from a no-report session", 0.0, rows[0].net, 1e-9)
+    }
+
     /** THIS_WEEK ⇒ a complete 7-day, Monday-first axis with gap days at 0.0. */
     @Test
     fun `dailyEarnings for the week is a complete Monday-first axis with zero-filled gaps`() = runBlocking {

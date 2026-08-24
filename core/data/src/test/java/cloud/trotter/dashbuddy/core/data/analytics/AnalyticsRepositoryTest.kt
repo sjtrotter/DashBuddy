@@ -489,6 +489,65 @@ class AnalyticsRepositoryTest {
     }
 
     /**
+     * #1030 layer 3 (DAO defense in depth): a row that still carries the fake `reportedEarnings = 0.0`
+     * — a pre-refold read, or any future writer that regresses — must read EXACTLY like a NULL-report
+     * row: gross falls back to Σ delivered pay, and neither review flag fires. Applying `NULLIF` to
+     * the gross COALESCE alone was the trap the vetting caught: the `IS NOT NULL` CASE arms would
+     * still see the `0.0` and flag `overAttributed = deliveredPay − 0`, which is the severe
+     * "attributed exceeds reported" flag #1030 reported on the 08-17→08-23 week.
+     */
+    @Test
+    fun `a stored reportedEarnings of 0 reads as no report on every arm (#1030)`() = runBlocking {
+        dao.upsertSession(session("S0", base, reportedEarnings = 0.0, durationMillis = hour, startOdo = 0.0, lastOdo = 10.0, deliveries = 1, jobsCompleted = 1))
+        dao.upsertDelivery(delivery(1, "S0", "J1", "Wendys", pay = 16.70, net = 13.20, completedAt = base + hour))
+
+        val eco = repo.periodEconomics(AnalyticsPeriod.LIFETIME).first()
+        assertEquals("gross falls back to delivered pay, not the fake \$0 report", 16.70, eco.grossEarnings, 1e-9)
+        assertEquals("no over-attribution flag — there was no report to exceed", 0.0, eco.overAttributedPay, 1e-9)
+        assertEquals(0.0, eco.unattributedPay, 1e-9)
+        assertEquals("net stays the frozen delivery net", 13.20, eco.netProfit, 1e-9)
+    }
+
+    /** #1030: the NULL-report row is the reference behaviour the `0.0` row above must match exactly. */
+    @Test
+    fun `a NULL-report session reads identically to the stored-zero one (#1030)`() = runBlocking {
+        dao.upsertSession(session("SN", base, reportedEarnings = null, durationMillis = hour, startOdo = 0.0, lastOdo = 10.0, deliveries = 1, jobsCompleted = 1))
+        dao.upsertDelivery(delivery(1, "SN", "J1", "Wendys", pay = 16.70, net = 13.20, completedAt = base + hour))
+
+        val eco = repo.periodEconomics(AnalyticsPeriod.LIFETIME).first()
+        assertEquals(16.70, eco.grossEarnings, 1e-9)
+        assertEquals(0.0, eco.overAttributedPay, 1e-9)
+        assertEquals(0.0, eco.unattributedPay, 1e-9)
+        assertEquals(13.20, eco.netProfit, 1e-9)
+    }
+
+    /** #1030: a REAL report is still authoritative — `NULLIF` only ever removes an exact `0`. */
+    @Test
+    fun `a real reported total stays authoritative under the NULLIF (#1030)`() = runBlocking {
+        dao.upsertSession(session("SR", base, reportedEarnings = 21.45, durationMillis = hour, startOdo = 0.0, lastOdo = 10.0, deliveries = 1, jobsCompleted = 1))
+        dao.upsertDelivery(delivery(1, "SR", "J1", "Wendys", pay = 16.70, net = 13.20, completedAt = base + hour))
+
+        val eco = repo.periodEconomics(AnalyticsPeriod.LIFETIME).first()
+        assertEquals("reported wins over delivered", 21.45, eco.grossEarnings, 1e-9)
+        assertEquals("reported 21.45 − delivered 16.70", 21.45 - 16.70, eco.unattributedPay, 1e-9)
+        assertEquals(0.0, eco.overAttributedPay, 1e-9)
+    }
+
+    /** #1030: the per-platform variant of [grossAndUnattributed] carries the same treatment. */
+    @Test
+    fun `the per-platform gross read treats a stored zero as no report (#1030)`() = runBlocking {
+        dao.upsertSession(session("S0", base, reportedEarnings = 0.0, durationMillis = hour, startOdo = 0.0, lastOdo = 10.0, deliveries = 1, jobsCompleted = 1))
+        dao.upsertDelivery(delivery(1, "S0", "J1", "Wendys", pay = 16.70, net = 13.20, completedAt = base + hour))
+
+        val rows = repo.platformEconomics(AnalyticsPeriod.LIFETIME).first()
+        assertEquals(1, rows.size)
+        val eco = rows.single().economics
+        assertEquals(16.70, eco.grossEarnings, 1e-9)
+        assertEquals(0.0, eco.overAttributedPay, 1e-9)
+        assertEquals(0.0, eco.unattributedPay, 1e-9)
+    }
+
+    /**
      * #660 review Fix 4: a mid-dash-restart orphan completes hours INTO the dash that contains it, so
      * the candidate picker must rank by distance to the session SPAN — the containing dash first — not
      * by distance to its start instant (which would rank a short LATER dash above the one it belongs to).
