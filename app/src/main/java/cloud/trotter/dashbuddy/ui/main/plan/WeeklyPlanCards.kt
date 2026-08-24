@@ -124,7 +124,12 @@ fun TargetSelectorCard(target: PlanTarget, onSelect: (PlanTarget) -> Unit) {
 
 @Composable
 private fun DollarGoalDialog(initial: Double?, onDismiss: () -> Unit, onConfirm: (Double) -> Unit) {
-    var text by rememberSaveable { mutableStateOf(initial?.let { Formats.money0(it).removePrefix("$") } ?: "") }
+    // The field's own filter admits only digits and `.`, so the seed must be a BARE number — hence
+    // `decimal(digits = 0)`, the formatting SSOT's no-currency arity, rather than money0 with its `$`
+    // stripped off the front (#1034: money0 now renders a negative as `-$50`, which `removePrefix`
+    // would silently leave intact; a goal is non-negative by construction, but the seed should not
+    // depend on that). Byte-identical to the old output for every value the dialog can produce.
+    var text by rememberSaveable { mutableStateOf(initial?.let { Formats.decimal(it, digits = 0) } ?: "") }
     val amount = text.toDoubleOrNull()
     AlertDialog(
         onDismissRequest = onDismiss,

@@ -57,18 +57,48 @@ class FormatsTest {
     }
 
     /**
-     * The sign MOVES; the digits do not. Only `"%.2f"` decides rounding, exactly as before — so a
-     * negative rounds HALF_UP on its magnitude (`-0.005` → `-$0.01`) and a magnitude that rounds away
-     * still carries its sign (`-0.004` → `-$0.00`, the signed zero the old `$-0.00` also rendered).
-     * Pinned, not chosen: changing either would be a second formatting policy.
+     * All three arities share ONE renderer, so the whole-dollar `$/hr` hero and the per-mile figure
+     * carry the sign the same way. `money0` is the one that shipped a negative in practice — a bad
+     * offer's hourly hero — and its old form rendered `$-12`.
+     */
+    @Test
+    fun `money0 and money3 place the sign the same way`() {
+        Locale.setDefault(Locale.US)
+        assertEquals("-$12", Formats.money0(-12.0))
+        assertEquals("$23", Formats.money0(23.4))
+        assertEquals("-$0.165", Formats.money3(-0.1649))
+        assertEquals("$0.165", Formats.money3(0.1649))
+    }
+
+    /**
+     * The sign MOVES; the digits do not. Only `"%.Nf"` decides rounding, exactly as before — a
+     * negative rounds HALF_UP on its magnitude, so `-0.005` → `-$0.01`. Pinned, not chosen: changing
+     * it would be a second formatting policy.
      */
     @Test
     fun `money pins the rounding String format already gave`() {
         Locale.setDefault(Locale.US)
         assertEquals("-$0.01", Formats.money(-0.005))
         assertEquals("$0.01", Formats.money(0.005))
-        assertEquals("-$0.00", Formats.money(-0.004))
+    }
+
+    /**
+     * A magnitude that rounds to zero renders NO sign. The old `$-0.00` was a fabricated sign in the
+     * old glyph order; moving it to the front would only relocate the fabrication, so a rendered zero
+     * is a plain `$0.00` at every precision — including the negative-zero `Double`, which reaches the
+     * formatter from any subtraction that cancels.
+     */
+    @Test
+    fun `a magnitude that rounds to zero renders no sign`() {
+        Locale.setDefault(Locale.US)
+        assertEquals("$0.00", Formats.money(-0.004))
+        assertEquals("$0.00", Formats.money(-0.0))
         assertEquals("$0.00", Formats.money(0.004))
+        assertEquals("$0", Formats.money0(-0.4))
+        assertEquals("$0.000", Formats.money3(-0.0004))
+        // The floor is the RENDERED text, not the raw value: one more digit of precision and the
+        // same input is a real, signed figure.
+        assertEquals("-$0.004", Formats.money3(-0.004))
     }
 
     /**
