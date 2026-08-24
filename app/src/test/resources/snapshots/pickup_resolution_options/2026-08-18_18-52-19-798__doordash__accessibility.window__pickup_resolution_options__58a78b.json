@@ -1,0 +1,1234 @@
+{
+    "captureId": "2e75c718-8a4c-4044-81dc-59a6d24d8f79",
+    "pipelineId": "accessibility.window",
+    "schemaId": "uinode.v1",
+    "timestamp": 1787097139791,
+    "platform": "doordash",
+    "ruleId": "doordash.screen.pickup_resolution_options",
+    "classificationName": "pickup_resolution_options",
+    "metadata": {
+        "engineVersion": 1,
+        "rulesetFormatVersion": 2,
+        "pipelineVersions": {
+            "accessibility": 1,
+            "accessibility.window": 1,
+            "accessibility.click": 1,
+            "accessibility.long_click": 1,
+            "accessibility.scroll": 1,
+            "accessibility.focus": 1,
+            "notification": 1
+        },
+        "stateMachineApiVersion": "1.0",
+        "appVersion": "0.230.0",
+        "deviceFingerprint": "google/panther/panther:17/CP2A.260705.006/15641320:user/release-keys",
+        "platformAppVersion": "8.93.7"
+    },
+    "payload": {
+        "class": "android.widget.FrameLayout",
+        "isEnabled": true,
+        "bounds": {
+            "left": 0,
+            "top": 0,
+            "right": 1080,
+            "bottom": 2400
+        },
+        "children": [
+            {
+                "class": "android.widget.LinearLayout",
+                "isEnabled": true,
+                "bounds": {
+                    "left": 0,
+                    "top": 0,
+                    "right": 1080,
+                    "bottom": 2347
+                },
+                "children": [
+                    {
+                        "class": "android.widget.FrameLayout",
+                        "isEnabled": true,
+                        "bounds": {
+                            "left": 0,
+                            "top": 136,
+                            "right": 1080,
+                            "bottom": 2347
+                        },
+                        "children": [
+                            {
+                                "id": "com.doordash.driverapp:id/action_bar_root",
+                                "class": "android.widget.LinearLayout",
+                                "isEnabled": true,
+                                "bounds": {
+                                    "left": 0,
+                                    "top": 136,
+                                    "right": 1080,
+                                    "bottom": 2347
+                                },
+                                "children": [
+                                    {
+                                        "id": "android:id/content",
+                                        "class": "android.widget.FrameLayout",
+                                        "isEnabled": true,
+                                        "bounds": {
+                                            "left": 0,
+                                            "top": 136,
+                                            "right": 1080,
+                                            "bottom": 2347
+                                        },
+                                        "children": [
+                                            {
+                                                "id": "com.doordash.driverapp:id/container",
+                                                "class": "android.view.ViewGroup",
+                                                "isEnabled": true,
+                                                "bounds": {
+                                                    "left": 0,
+                                                    "top": 136,
+                                                    "right": 1080,
+                                                    "bottom": 2347
+                                                },
+                                                "children": [
+                                                    {
+                                                        "id": "com.doordash.driverapp:id/fragment",
+                                                        "class": "android.widget.FrameLayout",
+                                                        "isEnabled": true,
+                                                        "bounds": {
+                                                            "left": 0,
+                                                            "top": 136,
+                                                            "right": 1080,
+                                                            "bottom": 2311
+                                                        },
+                                                        "children": [
+                                                            {
+                                                                "class": "androidx.compose.ui.platform.ComposeView",
+                                                                "isEnabled": true,
+                                                                "bounds": {
+                                                                    "left": 0,
+                                                                    "top": 136,
+                                                                    "right": 1080,
+                                                                    "bottom": 2311
+                                                                },
+                                                                "children": [
+                                                                    {
+                                                                        "class": "android.view.View",
+                                                                        "isEnabled": true,
+                                                                        "bounds": {
+                                                                            "left": 0,
+                                                                            "top": 136,
+                                                                            "right": 1080,
+                                                                            "bottom": 2311
+                                                                        },
+                                                                        "children": [
+                                                                            {
+                                                                                "class": "android.view.View",
+                                                                                "isEnabled": true,
+                                                                                "bounds": {
+                                                                                    "left": 0,
+                                                                                    "top": 136,
+                                                                                    "right": 1080,
+                                                                                    "bottom": 2311
+                                                                                },
+                                                                                "children": [
+                                                                                    {
+                                                                                        "class": "android.view.View",
+                                                                                        "isEnabled": true,
+                                                                                        "bounds": {
+                                                                                            "left": 0,
+                                                                                            "top": 136,
+                                                                                            "right": 685,
+                                                                                            "bottom": 2311
+                                                                                        },
+                                                                                        "children": [
+                                                                                            {
+                                                                                                "class": "android.view.View",
+                                                                                                "isEnabled": true,
+                                                                                                "bounds": {
+                                                                                                    "left": 0,
+                                                                                                    "top": 136,
+                                                                                                    "right": 685,
+                                                                                                    "bottom": 2311
+                                                                                                },
+                                                                                                "children": [
+                                                                                                    {
+                                                                                                        "class": "android.view.View",
+                                                                                                        "isEnabled": true,
+                                                                                                        "bounds": {
+                                                                                                            "left": 0,
+                                                                                                            "top": 241,
+                                                                                                            "right": 649,
+                                                                                                            "bottom": 1463
+                                                                                                        },
+                                                                                                        "children": [
+                                                                                                            {
+                                                                                                                "text": "Select an issue",
+                                                                                                                "class": "android.widget.TextView",
+                                                                                                                "isEnabled": true,
+                                                                                                                "bounds": {
+                                                                                                                    "left": 0,
+                                                                                                                    "top": 277,
+                                                                                                                    "right": 649,
+                                                                                                                    "bottom": 334
+                                                                                                                }
+                                                                                                            },
+                                                                                                            {
+                                                                                                                "class": "android.view.View",
+                                                                                                                "isEnabled": true,
+                                                                                                                "bounds": {
+                                                                                                                    "left": 0,
+                                                                                                                    "top": 370,
+                                                                                                                    "right": 649,
+                                                                                                                    "bottom": 1463
+                                                                                                                },
+                                                                                                                "children": [
+                                                                                                                    {
+                                                                                                                        "class": "android.view.View",
+                                                                                                                        "isEnabled": true,
+                                                                                                                        "bounds": {
+                                                                                                                            "left": 0,
+                                                                                                                            "top": 370,
+                                                                                                                            "right": 649,
+                                                                                                                            "bottom": 476
+                                                                                                                        },
+                                                                                                                        "children": [
+                                                                                                                            {
+                                                                                                                                "text": "Store related",
+                                                                                                                                "class": "android.widget.TextView",
+                                                                                                                                "isEnabled": true,
+                                                                                                                                "bounds": {
+                                                                                                                                    "left": 0,
+                                                                                                                                    "top": 397,
+                                                                                                                                    "right": 649,
+                                                                                                                                    "bottom": 449
+                                                                                                                                }
+                                                                                                                            }
+                                                                                                                        ]
+                                                                                                                    },
+                                                                                                                    {
+                                                                                                                        "class": "android.view.View",
+                                                                                                                        "isClickable": true,
+                                                                                                                        "isEnabled": true,
+                                                                                                                        "bounds": {
+                                                                                                                            "left": 0,
+                                                                                                                            "top": 476,
+                                                                                                                            "right": 649,
+                                                                                                                            "bottom": 597
+                                                                                                                        },
+                                                                                                                        "children": [
+                                                                                                                            {
+                                                                                                                                "class": "android.view.View",
+                                                                                                                                "isEnabled": true,
+                                                                                                                                "bounds": {
+                                                                                                                                    "left": 0,
+                                                                                                                                    "top": 476,
+                                                                                                                                    "right": 649,
+                                                                                                                                    "bottom": 595
+                                                                                                                                },
+                                                                                                                                "children": [
+                                                                                                                                    {
+                                                                                                                                        "class": "android.view.View",
+                                                                                                                                        "isEnabled": true,
+                                                                                                                                        "bounds": {
+                                                                                                                                            "left": 0,
+                                                                                                                                            "top": 476,
+                                                                                                                                            "right": 613,
+                                                                                                                                            "bottom": 595
+                                                                                                                                        },
+                                                                                                                                        "children": [
+                                                                                                                                            {
+                                                                                                                                                "text": "Cannot find the store",
+                                                                                                                                                "class": "android.widget.TextView",
+                                                                                                                                                "isEnabled": true,
+                                                                                                                                                "bounds": {
+                                                                                                                                                    "left": 0,
+                                                                                                                                                    "top": 512,
+                                                                                                                                                    "right": 613,
+                                                                                                                                                    "bottom": 559
+                                                                                                                                                }
+                                                                                                                                            }
+                                                                                                                                        ]
+                                                                                                                                    },
+                                                                                                                                    {
+                                                                                                                                        "class": "android.view.View",
+                                                                                                                                        "isEnabled": true,
+                                                                                                                                        "bounds": {
+                                                                                                                                            "left": 613,
+                                                                                                                                            "top": 518,
+                                                                                                                                            "right": 649,
+                                                                                                                                            "bottom": 554
+                                                                                                                                        },
+                                                                                                                                        "children": [
+                                                                                                                                            {
+                                                                                                                                                "desc": "",
+                                                                                                                                                "class": "android.view.View",
+                                                                                                                                                "isEnabled": true,
+                                                                                                                                                "bounds": {
+                                                                                                                                                    "left": 613,
+                                                                                                                                                    "top": 518,
+                                                                                                                                                    "right": 649,
+                                                                                                                                                    "bottom": 554
+                                                                                                                                                }
+                                                                                                                                            }
+                                                                                                                                        ]
+                                                                                                                                    }
+                                                                                                                                ]
+                                                                                                                            },
+                                                                                                                            {
+                                                                                                                                "class": "android.view.View",
+                                                                                                                                "isEnabled": true,
+                                                                                                                                "bounds": {
+                                                                                                                                    "left": 0,
+                                                                                                                                    "top": 543,
+                                                                                                                                    "right": 649,
+                                                                                                                                    "bottom": 597
+                                                                                                                                }
+                                                                                                                            }
+                                                                                                                        ]
+                                                                                                                    },
+                                                                                                                    {
+                                                                                                                        "class": "android.view.View",
+                                                                                                                        "isClickable": true,
+                                                                                                                        "isEnabled": true,
+                                                                                                                        "bounds": {
+                                                                                                                            "left": 0,
+                                                                                                                            "top": 597,
+                                                                                                                            "right": 649,
+                                                                                                                            "bottom": 718
+                                                                                                                        },
+                                                                                                                        "children": [
+                                                                                                                            {
+                                                                                                                                "class": "android.view.View",
+                                                                                                                                "isEnabled": true,
+                                                                                                                                "bounds": {
+                                                                                                                                    "left": 0,
+                                                                                                                                    "top": 597,
+                                                                                                                                    "right": 649,
+                                                                                                                                    "bottom": 716
+                                                                                                                                },
+                                                                                                                                "children": [
+                                                                                                                                    {
+                                                                                                                                        "class": "android.view.View",
+                                                                                                                                        "isEnabled": true,
+                                                                                                                                        "bounds": {
+                                                                                                                                            "left": 0,
+                                                                                                                                            "top": 597,
+                                                                                                                                            "right": 613,
+                                                                                                                                            "bottom": 716
+                                                                                                                                        },
+                                                                                                                                        "children": [
+                                                                                                                                            {
+                                                                                                                                                "text": "Store is closed",
+                                                                                                                                                "class": "android.widget.TextView",
+                                                                                                                                                "isEnabled": true,
+                                                                                                                                                "bounds": {
+                                                                                                                                                    "left": 0,
+                                                                                                                                                    "top": 633,
+                                                                                                                                                    "right": 613,
+                                                                                                                                                    "bottom": 680
+                                                                                                                                                }
+                                                                                                                                            }
+                                                                                                                                        ]
+                                                                                                                                    },
+                                                                                                                                    {
+                                                                                                                                        "class": "android.view.View",
+                                                                                                                                        "isEnabled": true,
+                                                                                                                                        "bounds": {
+                                                                                                                                            "left": 613,
+                                                                                                                                            "top": 639,
+                                                                                                                                            "right": 649,
+                                                                                                                                            "bottom": 675
+                                                                                                                                        },
+                                                                                                                                        "children": [
+                                                                                                                                            {
+                                                                                                                                                "desc": "",
+                                                                                                                                                "class": "android.view.View",
+                                                                                                                                                "isEnabled": true,
+                                                                                                                                                "bounds": {
+                                                                                                                                                    "left": 613,
+                                                                                                                                                    "top": 639,
+                                                                                                                                                    "right": 649,
+                                                                                                                                                    "bottom": 675
+                                                                                                                                                }
+                                                                                                                                            }
+                                                                                                                                        ]
+                                                                                                                                    }
+                                                                                                                                ]
+                                                                                                                            },
+                                                                                                                            {
+                                                                                                                                "class": "android.view.View",
+                                                                                                                                "isEnabled": true,
+                                                                                                                                "bounds": {
+                                                                                                                                    "left": 0,
+                                                                                                                                    "top": 664,
+                                                                                                                                    "right": 649,
+                                                                                                                                    "bottom": 718
+                                                                                                                                }
+                                                                                                                            }
+                                                                                                                        ]
+                                                                                                                    },
+                                                                                                                    {
+                                                                                                                        "class": "android.view.View",
+                                                                                                                        "isClickable": true,
+                                                                                                                        "isEnabled": true,
+                                                                                                                        "bounds": {
+                                                                                                                            "left": 0,
+                                                                                                                            "top": 718,
+                                                                                                                            "right": 649,
+                                                                                                                            "bottom": 839
+                                                                                                                        },
+                                                                                                                        "children": [
+                                                                                                                            {
+                                                                                                                                "class": "android.view.View",
+                                                                                                                                "isEnabled": true,
+                                                                                                                                "bounds": {
+                                                                                                                                    "left": 0,
+                                                                                                                                    "top": 718,
+                                                                                                                                    "right": 552,
+                                                                                                                                    "bottom": 837
+                                                                                                                                },
+                                                                                                                                "children": [
+                                                                                                                                    {
+                                                                                                                                        "class": "android.view.View",
+                                                                                                                                        "isEnabled": true,
+                                                                                                                                        "bounds": {
+                                                                                                                                            "left": 0,
+                                                                                                                                            "top": 718,
+                                                                                                                                            "right": 426,
+                                                                                                                                            "bottom": 837
+                                                                                                                                        },
+                                                                                                                                        "children": [
+                                                                                                                                            {
+                                                                                                                                                "text": "Store not accepting any DoorDash orders",
+                                                                                                                                                "class": "android.widget.TextView",
+                                                                                                                                                "isEnabled": true,
+                                                                                                                                                "bounds": {
+                                                                                                                                                    "left": 0,
+                                                                                                                                                    "top": 754,
+                                                                                                                                                    "right": 516,
+                                                                                                                                                    "bottom": 801
+                                                                                                                                                }
+                                                                                                                                            }
+                                                                                                                                        ]
+                                                                                                                                    },
+                                                                                                                                    {
+                                                                                                                                        "class": "android.view.View",
+                                                                                                                                        "isEnabled": true,
+                                                                                                                                        "bounds": {
+                                                                                                                                            "left": 516,
+                                                                                                                                            "top": 760,
+                                                                                                                                            "right": 552,
+                                                                                                                                            "bottom": 796
+                                                                                                                                        },
+                                                                                                                                        "children": [
+                                                                                                                                            {
+                                                                                                                                                "desc": "",
+                                                                                                                                                "class": "android.view.View",
+                                                                                                                                                "isEnabled": true,
+                                                                                                                                                "bounds": {
+                                                                                                                                                    "left": 516,
+                                                                                                                                                    "top": 760,
+                                                                                                                                                    "right": 552,
+                                                                                                                                                    "bottom": 796
+                                                                                                                                                }
+                                                                                                                                            }
+                                                                                                                                        ]
+                                                                                                                                    }
+                                                                                                                                ]
+                                                                                                                            },
+                                                                                                                            {
+                                                                                                                                "class": "android.view.View",
+                                                                                                                                "isEnabled": true,
+                                                                                                                                "bounds": {
+                                                                                                                                    "left": 0,
+                                                                                                                                    "top": 785,
+                                                                                                                                    "right": 382,
+                                                                                                                                    "bottom": 891
+                                                                                                                                }
+                                                                                                                            }
+                                                                                                                        ]
+                                                                                                                    },
+                                                                                                                    {
+                                                                                                                        "class": "android.view.View",
+                                                                                                                        "isEnabled": true,
+                                                                                                                        "bounds": {
+                                                                                                                            "left": 0,
+                                                                                                                            "top": 875,
+                                                                                                                            "right": 649,
+                                                                                                                            "bottom": 981
+                                                                                                                        },
+                                                                                                                        "children": [
+                                                                                                                            {
+                                                                                                                                "text": "Order related",
+                                                                                                                                "class": "android.widget.TextView",
+                                                                                                                                "isEnabled": true,
+                                                                                                                                "bounds": {
+                                                                                                                                    "left": 0,
+                                                                                                                                    "top": 902,
+                                                                                                                                    "right": 315,
+                                                                                                                                    "bottom": 954
+                                                                                                                                }
+                                                                                                                            }
+                                                                                                                        ]
+                                                                                                                    },
+                                                                                                                    {
+                                                                                                                        "class": "android.view.View",
+                                                                                                                        "isClickable": true,
+                                                                                                                        "isEnabled": true,
+                                                                                                                        "bounds": {
+                                                                                                                            "left": 0,
+                                                                                                                            "top": 981,
+                                                                                                                            "right": 649,
+                                                                                                                            "bottom": 1102
+                                                                                                                        },
+                                                                                                                        "children": [
+                                                                                                                            {
+                                                                                                                                "class": "android.view.View",
+                                                                                                                                "isEnabled": true,
+                                                                                                                                "bounds": {
+                                                                                                                                    "left": 0,
+                                                                                                                                    "top": 981,
+                                                                                                                                    "right": 257,
+                                                                                                                                    "bottom": 1100
+                                                                                                                                },
+                                                                                                                                "children": [
+                                                                                                                                    {
+                                                                                                                                        "class": "android.view.View",
+                                                                                                                                        "isEnabled": true,
+                                                                                                                                        "bounds": {
+                                                                                                                                            "left": 0,
+                                                                                                                                            "top": 981,
+                                                                                                                                            "right": 221,
+                                                                                                                                            "bottom": 1100
+                                                                                                                                        },
+                                                                                                                                        "children": [
+                                                                                                                                            {
+                                                                                                                                                "text": "Order has long wait time",
+                                                                                                                                                "class": "android.widget.TextView",
+                                                                                                                                                "isEnabled": true,
+                                                                                                                                                "bounds": {
+                                                                                                                                                    "left": 0,
+                                                                                                                                                    "top": 1017,
+                                                                                                                                                    "right": 171,
+                                                                                                                                                    "bottom": 1064
+                                                                                                                                                }
+                                                                                                                                            }
+                                                                                                                                        ]
+                                                                                                                                    },
+                                                                                                                                    {
+                                                                                                                                        "class": "android.view.View",
+                                                                                                                                        "isEnabled": true,
+                                                                                                                                        "bounds": {
+                                                                                                                                            "left": 129,
+                                                                                                                                            "top": 1023,
+                                                                                                                                            "right": 165,
+                                                                                                                                            "bottom": 1059
+                                                                                                                                        },
+                                                                                                                                        "children": [
+                                                                                                                                            {
+                                                                                                                                                "desc": "",
+                                                                                                                                                "class": "android.view.View",
+                                                                                                                                                "isEnabled": true,
+                                                                                                                                                "bounds": {
+                                                                                                                                                    "left": 129,
+                                                                                                                                                    "top": 1023,
+                                                                                                                                                    "right": 165,
+                                                                                                                                                    "bottom": 1059
+                                                                                                                                                }
+                                                                                                                                            }
+                                                                                                                                        ]
+                                                                                                                                    }
+                                                                                                                                ]
+                                                                                                                            },
+                                                                                                                            {
+                                                                                                                                "class": "android.view.View",
+                                                                                                                                "isEnabled": true,
+                                                                                                                                "bounds": {
+                                                                                                                                    "left": 0,
+                                                                                                                                    "top": 1048,
+                                                                                                                                    "right": 129,
+                                                                                                                                    "bottom": 1102
+                                                                                                                                }
+                                                                                                                            }
+                                                                                                                        ]
+                                                                                                                    },
+                                                                                                                    {
+                                                                                                                        "class": "android.view.View",
+                                                                                                                        "isClickable": true,
+                                                                                                                        "isEnabled": true,
+                                                                                                                        "bounds": {
+                                                                                                                            "left": 0,
+                                                                                                                            "top": 1102,
+                                                                                                                            "right": 99,
+                                                                                                                            "bottom": 1223
+                                                                                                                        },
+                                                                                                                        "children": [
+                                                                                                                            {
+                                                                                                                                "class": "android.view.View",
+                                                                                                                                "isEnabled": true,
+                                                                                                                                "bounds": {
+                                                                                                                                    "left": 0,
+                                                                                                                                    "top": 1102,
+                                                                                                                                    "right": 72,
+                                                                                                                                    "bottom": 1221
+                                                                                                                                },
+                                                                                                                                "children": [
+                                                                                                                                    {
+                                                                                                                                        "class": "android.view.View",
+                                                                                                                                        "isEnabled": true,
+                                                                                                                                        "bounds": {
+                                                                                                                                            "left": 0,
+                                                                                                                                            "top": 1102,
+                                                                                                                                            "right": 63,
+                                                                                                                                            "bottom": 1221
+                                                                                                                                        },
+                                                                                                                                        "children": [
+                                                                                                                                            {
+                                                                                                                                                "text": "Order not found in system",
+                                                                                                                                                "class": "android.widget.TextView",
+                                                                                                                                                "isEnabled": true,
+                                                                                                                                                "bounds": {
+                                                                                                                                                    "left": 0,
+                                                                                                                                                    "top": 1138,
+                                                                                                                                                    "right": 63,
+                                                                                                                                                    "bottom": 1185
+                                                                                                                                                }
+                                                                                                                                            }
+                                                                                                                                        ]
+                                                                                                                                    },
+                                                                                                                                    {
+                                                                                                                                        "class": "android.view.View",
+                                                                                                                                        "isEnabled": true,
+                                                                                                                                        "bounds": {
+                                                                                                                                            "left": 63,
+                                                                                                                                            "top": 1144,
+                                                                                                                                            "right": 99,
+                                                                                                                                            "bottom": 1180
+                                                                                                                                        },
+                                                                                                                                        "children": [
+                                                                                                                                            {
+                                                                                                                                                "desc": "",
+                                                                                                                                                "class": "android.view.View",
+                                                                                                                                                "isEnabled": true,
+                                                                                                                                                "bounds": {
+                                                                                                                                                    "left": 63,
+                                                                                                                                                    "top": 1144,
+                                                                                                                                                    "right": 99,
+                                                                                                                                                    "bottom": 1180
+                                                                                                                                                }
+                                                                                                                                            }
+                                                                                                                                        ]
+                                                                                                                                    }
+                                                                                                                                ]
+                                                                                                                            },
+                                                                                                                            {
+                                                                                                                                "class": "android.view.View",
+                                                                                                                                "isEnabled": true,
+                                                                                                                                "bounds": {
+                                                                                                                                    "left": 0,
+                                                                                                                                    "top": 1169,
+                                                                                                                                    "right": 99,
+                                                                                                                                    "bottom": 1223
+                                                                                                                                }
+                                                                                                                            }
+                                                                                                                        ]
+                                                                                                                    },
+                                                                                                                    {
+                                                                                                                        "class": "android.view.View",
+                                                                                                                        "isClickable": true,
+                                                                                                                        "isEnabled": true,
+                                                                                                                        "bounds": {
+                                                                                                                            "left": 0,
+                                                                                                                            "top": 1223,
+                                                                                                                            "right": 50,
+                                                                                                                            "bottom": 1344
+                                                                                                                        },
+                                                                                                                        "children": [
+                                                                                                                            {
+                                                                                                                                "class": "android.view.View",
+                                                                                                                                "isEnabled": true,
+                                                                                                                                "bounds": {
+                                                                                                                                    "left": 0,
+                                                                                                                                    "top": 1223,
+                                                                                                                                    "right": 31,
+                                                                                                                                    "bottom": 1342
+                                                                                                                                },
+                                                                                                                                "children": [
+                                                                                                                                    {
+                                                                                                                                        "class": "android.view.View",
+                                                                                                                                        "isEnabled": true,
+                                                                                                                                        "bounds": {
+                                                                                                                                            "left": 0,
+                                                                                                                                            "top": 1265,
+                                                                                                                                            "right": 15,
+                                                                                                                                            "bottom": 1301
+                                                                                                                                        },
+                                                                                                                                        "children": [
+                                                                                                                                            {
+                                                                                                                                                "desc": "",
+                                                                                                                                                "class": "android.view.View",
+                                                                                                                                                "isEnabled": true,
+                                                                                                                                                "bounds": {
+                                                                                                                                                    "left": 0,
+                                                                                                                                                    "top": 1265,
+                                                                                                                                                    "right": 2,
+                                                                                                                                                    "bottom": 1301
+                                                                                                                                                }
+                                                                                                                                            }
+                                                                                                                                        ]
+                                                                                                                                    }
+                                                                                                                                ]
+                                                                                                                            }
+                                                                                                                        ]
+                                                                                                                    }
+                                                                                                                ]
+                                                                                                            }
+                                                                                                        ]
+                                                                                                    },
+                                                                                                    {
+                                                                                                        "class": "android.view.View",
+                                                                                                        "isEnabled": true,
+                                                                                                        "bounds": {
+                                                                                                            "left": 0,
+                                                                                                            "top": 136,
+                                                                                                            "right": 11,
+                                                                                                            "bottom": 241
+                                                                                                        },
+                                                                                                        "children": [
+                                                                                                            {
+                                                                                                                "class": "android.view.View",
+                                                                                                                "isEnabled": true,
+                                                                                                                "bounds": {
+                                                                                                                    "left": 0,
+                                                                                                                    "top": 187,
+                                                                                                                    "right": 6,
+                                                                                                                    "bottom": 293
+                                                                                                                }
+                                                                                                            }
+                                                                                                        ]
+                                                                                                    }
+                                                                                                ]
+                                                                                            }
+                                                                                        ]
+                                                                                    },
+                                                                                    {
+                                                                                        "class": "android.view.View",
+                                                                                        "isEnabled": true,
+                                                                                        "bounds": {
+                                                                                            "left": 3,
+                                                                                            "top": 136,
+                                                                                            "right": 1080,
+                                                                                            "bottom": 2311
+                                                                                        },
+                                                                                        "children": [
+                                                                                            {
+                                                                                                "class": "android.view.View",
+                                                                                                "isEnabled": true,
+                                                                                                "bounds": {
+                                                                                                    "left": 1,
+                                                                                                    "top": 136,
+                                                                                                    "right": 1080,
+                                                                                                    "bottom": 2311
+                                                                                                },
+                                                                                                "children": [
+                                                                                                    {
+                                                                                                        "class": "android.view.View",
+                                                                                                        "isEnabled": true,
+                                                                                                        "bounds": {
+                                                                                                            "left": 39,
+                                                                                                            "top": 241,
+                                                                                                            "right": 1047,
+                                                                                                            "bottom": 950
+                                                                                                        },
+                                                                                                        "children": [
+                                                                                                            {
+                                                                                                                "text": "Resolution options",
+                                                                                                                "class": "android.widget.TextView",
+                                                                                                                "isEnabled": true,
+                                                                                                                "bounds": {
+                                                                                                                    "left": 39,
+                                                                                                                    "top": 277,
+                                                                                                                    "right": 1047,
+                                                                                                                    "bottom": 334
+                                                                                                                }
+                                                                                                            },
+                                                                                                            {
+                                                                                                                "text": "Select from the options below to get help with this order or unassign and move on to the next task.",
+                                                                                                                "class": "android.widget.TextView",
+                                                                                                                "isEnabled": true,
+                                                                                                                "bounds": {
+                                                                                                                    "left": 39,
+                                                                                                                    "top": 361,
+                                                                                                                    "right": 1047,
+                                                                                                                    "bottom": 464
+                                                                                                                }
+                                                                                                            },
+                                                                                                            {
+                                                                                                                "class": "android.view.View",
+                                                                                                                "isEnabled": true,
+                                                                                                                "bounds": {
+                                                                                                                    "left": 39,
+                                                                                                                    "top": 517,
+                                                                                                                    "right": 1047,
+                                                                                                                    "bottom": 897
+                                                                                                                },
+                                                                                                                "children": [
+                                                                                                                    {
+                                                                                                                        "class": "android.view.View",
+                                                                                                                        "isEnabled": true,
+                                                                                                                        "bounds": {
+                                                                                                                            "left": 39,
+                                                                                                                            "top": 517,
+                                                                                                                            "right": 1047,
+                                                                                                                            "bottom": 897
+                                                                                                                        },
+                                                                                                                        "children": [
+                                                                                                                            {
+                                                                                                                                "class": "android.view.View",
+                                                                                                                                "isEnabled": true,
+                                                                                                                                "bounds": {
+                                                                                                                                    "left": 39,
+                                                                                                                                    "top": 521,
+                                                                                                                                    "right": 1047,
+                                                                                                                                    "bottom": 691
+                                                                                                                                },
+                                                                                                                                "children": [
+                                                                                                                                    {
+                                                                                                                                        "class": "android.view.View",
+                                                                                                                                        "isClickable": true,
+                                                                                                                                        "isEnabled": true,
+                                                                                                                                        "bounds": {
+                                                                                                                                            "left": 39,
+                                                                                                                                            "top": 521,
+                                                                                                                                            "right": 1047,
+                                                                                                                                            "bottom": 691
+                                                                                                                                        },
+                                                                                                                                        "children": [
+                                                                                                                                            {
+                                                                                                                                                "class": "android.view.View",
+                                                                                                                                                "isClickable": true,
+                                                                                                                                                "isEnabled": true,
+                                                                                                                                                "bounds": {
+                                                                                                                                                    "left": 39,
+                                                                                                                                                    "top": 521,
+                                                                                                                                                    "right": 1047,
+                                                                                                                                                    "bottom": 691
+                                                                                                                                                },
+                                                                                                                                                "children": [
+                                                                                                                                                    {
+                                                                                                                                                        "class": "android.view.View",
+                                                                                                                                                        "isEnabled": true,
+                                                                                                                                                        "bounds": {
+                                                                                                                                                            "left": 39,
+                                                                                                                                                            "top": 521,
+                                                                                                                                                            "right": 1047,
+                                                                                                                                                            "bottom": 691
+                                                                                                                                                        },
+                                                                                                                                                        "children": [
+                                                                                                                                                            {
+                                                                                                                                                                "class": "android.view.View",
+                                                                                                                                                                "isEnabled": true,
+                                                                                                                                                                "bounds": {
+                                                                                                                                                                    "left": 75,
+                                                                                                                                                                    "top": 552,
+                                                                                                                                                                    "right": 1011,
+                                                                                                                                                                    "bottom": 660
+                                                                                                                                                                },
+                                                                                                                                                                "children": [
+                                                                                                                                                                    {
+                                                                                                                                                                        "state": "Selected",
+                                                                                                                                                                        "class": "android.widget.RadioButton",
+                                                                                                                                                                        "isEnabled": true,
+                                                                                                                                                                        "isChecked": 1,
+                                                                                                                                                                        "bounds": {
+                                                                                                                                                                            "left": 79,
+                                                                                                                                                                            "top": 556,
+                                                                                                                                                                            "right": 128,
+                                                                                                                                                                            "bottom": 605
+                                                                                                                                                                        }
+                                                                                                                                                                    },
+                                                                                                                                                                    {
+                                                                                                                                                                        "class": "android.view.View",
+                                                                                                                                                                        "isEnabled": true,
+                                                                                                                                                                        "bounds": {
+                                                                                                                                                                            "left": 168,
+                                                                                                                                                                            "top": 552,
+                                                                                                                                                                            "right": 1011,
+                                                                                                                                                                            "bottom": 660
+                                                                                                                                                                        },
+                                                                                                                                                                        "children": [
+                                                                                                                                                                            {
+                                                                                                                                                                                "text": "Wait for the order",
+                                                                                                                                                                                "class": "android.widget.TextView",
+                                                                                                                                                                                "isEnabled": true,
+                                                                                                                                                                                "bounds": {
+                                                                                                                                                                                    "left": 168,
+                                                                                                                                                                                    "top": 552,
+                                                                                                                                                                                    "right": 1011,
+                                                                                                                                                                                    "bottom": 604
+                                                                                                                                                                                }
+                                                                                                                                                                            },
+                                                                                                                                                                            {
+                                                                                                                                                                                "text": "Follow instructions when stores run into delays",
+                                                                                                                                                                                "class": "android.widget.TextView",
+                                                                                                                                                                                "isEnabled": true,
+                                                                                                                                                                                "bounds": {
+                                                                                                                                                                                    "left": 168,
+                                                                                                                                                                                    "top": 617,
+                                                                                                                                                                                    "right": 1011,
+                                                                                                                                                                                    "bottom": 660
+                                                                                                                                                                                }
+                                                                                                                                                                            }
+                                                                                                                                                                        ]
+                                                                                                                                                                    }
+                                                                                                                                                                ]
+                                                                                                                                                            }
+                                                                                                                                                        ]
+                                                                                                                                                    }
+                                                                                                                                                ]
+                                                                                                                                            }
+                                                                                                                                        ]
+                                                                                                                                    }
+                                                                                                                                ]
+                                                                                                                            },
+                                                                                                                            {
+                                                                                                                                "class": "android.view.View",
+                                                                                                                                "isEnabled": true,
+                                                                                                                                "bounds": {
+                                                                                                                                    "left": 39,
+                                                                                                                                    "top": 727,
+                                                                                                                                    "right": 1047,
+                                                                                                                                    "bottom": 897
+                                                                                                                                },
+                                                                                                                                "children": [
+                                                                                                                                    {
+                                                                                                                                        "class": "android.view.View",
+                                                                                                                                        "isClickable": true,
+                                                                                                                                        "isEnabled": true,
+                                                                                                                                        "bounds": {
+                                                                                                                                            "left": 39,
+                                                                                                                                            "top": 727,
+                                                                                                                                            "right": 1047,
+                                                                                                                                            "bottom": 897
+                                                                                                                                        },
+                                                                                                                                        "children": [
+                                                                                                                                            {
+                                                                                                                                                "class": "android.view.View",
+                                                                                                                                                "isClickable": true,
+                                                                                                                                                "isEnabled": true,
+                                                                                                                                                "bounds": {
+                                                                                                                                                    "left": 39,
+                                                                                                                                                    "top": 727,
+                                                                                                                                                    "right": 1047,
+                                                                                                                                                    "bottom": 897
+                                                                                                                                                },
+                                                                                                                                                "children": [
+                                                                                                                                                    {
+                                                                                                                                                        "class": "android.view.View",
+                                                                                                                                                        "isEnabled": true,
+                                                                                                                                                        "bounds": {
+                                                                                                                                                            "left": 39,
+                                                                                                                                                            "top": 727,
+                                                                                                                                                            "right": 1047,
+                                                                                                                                                            "bottom": 897
+                                                                                                                                                        },
+                                                                                                                                                        "children": [
+                                                                                                                                                            {
+                                                                                                                                                                "class": "android.view.View",
+                                                                                                                                                                "isEnabled": true,
+                                                                                                                                                                "bounds": {
+                                                                                                                                                                    "left": 75,
+                                                                                                                                                                    "top": 758,
+                                                                                                                                                                    "right": 1011,
+                                                                                                                                                                    "bottom": 866
+                                                                                                                                                                },
+                                                                                                                                                                "children": [
+                                                                                                                                                                    {
+                                                                                                                                                                        "state": "Not selected",
+                                                                                                                                                                        "class": "android.widget.RadioButton",
+                                                                                                                                                                        "isEnabled": true,
+                                                                                                                                                                        "bounds": {
+                                                                                                                                                                            "left": 79,
+                                                                                                                                                                            "top": 762,
+                                                                                                                                                                            "right": 128,
+                                                                                                                                                                            "bottom": 811
+                                                                                                                                                                        }
+                                                                                                                                                                    },
+                                                                                                                                                                    {
+                                                                                                                                                                        "class": "android.view.View",
+                                                                                                                                                                        "isEnabled": true,
+                                                                                                                                                                        "bounds": {
+                                                                                                                                                                            "left": 168,
+                                                                                                                                                                            "top": 758,
+                                                                                                                                                                            "right": 1011,
+                                                                                                                                                                            "bottom": 866
+                                                                                                                                                                        },
+                                                                                                                                                                        "children": [
+                                                                                                                                                                            {
+                                                                                                                                                                                "text": "Unassign with no pay",
+                                                                                                                                                                                "class": "android.widget.TextView",
+                                                                                                                                                                                "isEnabled": true,
+                                                                                                                                                                                "bounds": {
+                                                                                                                                                                                    "left": 168,
+                                                                                                                                                                                    "top": 758,
+                                                                                                                                                                                    "right": 1011,
+                                                                                                                                                                                    "bottom": 810
+                                                                                                                                                                                }
+                                                                                                                                                                            },
+                                                                                                                                                                            {
+                                                                                                                                                                                "text": "Your Completion Rate will drop to 98%",
+                                                                                                                                                                                "class": "android.widget.TextView",
+                                                                                                                                                                                "isEnabled": true,
+                                                                                                                                                                                "bounds": {
+                                                                                                                                                                                    "left": 168,
+                                                                                                                                                                                    "top": 823,
+                                                                                                                                                                                    "right": 1011,
+                                                                                                                                                                                    "bottom": 866
+                                                                                                                                                                                }
+                                                                                                                                                                            }
+                                                                                                                                                                        ]
+                                                                                                                                                                    }
+                                                                                                                                                                ]
+                                                                                                                                                            }
+                                                                                                                                                        ]
+                                                                                                                                                    }
+                                                                                                                                                ]
+                                                                                                                                            }
+                                                                                                                                        ]
+                                                                                                                                    }
+                                                                                                                                ]
+                                                                                                                            }
+                                                                                                                        ]
+                                                                                                                    }
+                                                                                                                ]
+                                                                                                            }
+                                                                                                        ]
+                                                                                                    },
+                                                                                                    {
+                                                                                                        "class": "android.view.View",
+                                                                                                        "isEnabled": true,
+                                                                                                        "bounds": {
+                                                                                                            "left": 3,
+                                                                                                            "top": 136,
+                                                                                                            "right": 1080,
+                                                                                                            "bottom": 241
+                                                                                                        },
+                                                                                                        "children": [
+                                                                                                            {
+                                                                                                                "class": "android.view.View",
+                                                                                                                "isEnabled": true,
+                                                                                                                "bounds": {
+                                                                                                                    "left": 21,
+                                                                                                                    "top": 138,
+                                                                                                                    "right": 1065,
+                                                                                                                    "bottom": 228
+                                                                                                                },
+                                                                                                                "children": [
+                                                                                                                    {
+                                                                                                                        "class": "android.view.View",
+                                                                                                                        "isClickable": true,
+                                                                                                                        "isEnabled": true,
+                                                                                                                        "bounds": {
+                                                                                                                            "left": 12,
+                                                                                                                            "top": 136,
+                                                                                                                            "right": 119,
+                                                                                                                            "bottom": 237
+                                                                                                                        },
+                                                                                                                        "children": [
+                                                                                                                            {
+                                                                                                                                "desc": "",
+                                                                                                                                "class": "android.view.View",
+                                                                                                                                "isEnabled": true,
+                                                                                                                                "bounds": {
+                                                                                                                                    "left": 39,
+                                                                                                                                    "top": 157,
+                                                                                                                                    "right": 92,
+                                                                                                                                    "bottom": 210
+                                                                                                                                }
+                                                                                                                            }
+                                                                                                                        ]
+                                                                                                                    },
+                                                                                                                    {
+                                                                                                                        "class": "android.view.View",
+                                                                                                                        "isEnabled": true,
+                                                                                                                        "bounds": {
+                                                                                                                            "left": 110,
+                                                                                                                            "top": 138,
+                                                                                                                            "right": 994,
+                                                                                                                            "bottom": 228
+                                                                                                                        },
+                                                                                                                        "children": [
+                                                                                                                            {
+                                                                                                                                "text": "Order has long wait time",
+                                                                                                                                "class": "android.widget.TextView",
+                                                                                                                                "isEnabled": true,
+                                                                                                                                "bounds": {
+                                                                                                                                    "left": 301,
+                                                                                                                                    "top": 138,
+                                                                                                                                    "right": 803,
+                                                                                                                                    "bottom": 190
+                                                                                                                                }
+                                                                                                                            },
+                                                                                                                            {
+                                                                                                                                "text": "For [redacted:1085]",
+                                                                                                                                "class": "android.widget.TextView",
+                                                                                                                                "isEnabled": true,
+                                                                                                                                "bounds": {
+                                                                                                                                    "left": 312,
+                                                                                                                                    "top": 192,
+                                                                                                                                    "right": 793,
+                                                                                                                                    "bottom": 228
+                                                                                                                                }
+                                                                                                                            }
+                                                                                                                        ]
+                                                                                                                    }
+                                                                                                                ]
+                                                                                                            },
+                                                                                                            {
+                                                                                                                "class": "android.view.View",
+                                                                                                                "isEnabled": true,
+                                                                                                                "bounds": {
+                                                                                                                    "left": 3,
+                                                                                                                    "top": 187,
+                                                                                                                    "right": 1080,
+                                                                                                                    "bottom": 293
+                                                                                                                }
+                                                                                                            }
+                                                                                                        ]
+                                                                                                    },
+                                                                                                    {
+                                                                                                        "class": "android.view.View",
+                                                                                                        "isEnabled": true,
+                                                                                                        "bounds": {
+                                                                                                            "left": 3,
+                                                                                                            "top": 1944,
+                                                                                                            "right": 1080,
+                                                                                                            "bottom": 2311
+                                                                                                        },
+                                                                                                        "children": [
+                                                                                                            {
+                                                                                                                "class": "android.view.View",
+                                                                                                                "isEnabled": true,
+                                                                                                                "bounds": {
+                                                                                                                    "left": 0,
+                                                                                                                    "top": 1918,
+                                                                                                                    "right": 92,
+                                                                                                                    "bottom": 2024
+                                                                                                                }
+                                                                                                            },
+                                                                                                            {
+                                                                                                                "class": "android.view.View",
+                                                                                                                "isEnabled": true,
+                                                                                                                "bounds": {
+                                                                                                                    "left": 39,
+                                                                                                                    "top": 2034,
+                                                                                                                    "right": 1047,
+                                                                                                                    "bottom": 2275
+                                                                                                                },
+                                                                                                                "children": [
+                                                                                                                    {
+                                                                                                                        "class": "android.view.View",
+                                                                                                                        "isClickable": true,
+                                                                                                                        "isEnabled": true,
+                                                                                                                        "bounds": {
+                                                                                                                            "left": 39,
+                                                                                                                            "top": 2034,
+                                                                                                                            "right": 1047,
+                                                                                                                            "bottom": 2141
+                                                                                                                        },
+                                                                                                                        "children": [
+                                                                                                                            {
+                                                                                                                                "class": "android.view.View",
+                                                                                                                                "isClickable": true,
+                                                                                                                                "isEnabled": true,
+                                                                                                                                "bounds": {
+                                                                                                                                    "left": 39,
+                                                                                                                                    "top": 2034,
+                                                                                                                                    "right": 1047,
+                                                                                                                                    "bottom": 2141
+                                                                                                                                },
+                                                                                                                                "children": [
+                                                                                                                                    {
+                                                                                                                                        "text": "Continue",
+                                                                                                                                        "class": "android.widget.TextView",
+                                                                                                                                        "isEnabled": true,
+                                                                                                                                        "bounds": {
+                                                                                                                                            "left": 447,
+                                                                                                                                            "top": 2062,
+                                                                                                                                            "right": 638,
+                                                                                                                                            "bottom": 2114
+                                                                                                                                        }
+                                                                                                                                    },
+                                                                                                                                    {
+                                                                                                                                        "class": "android.widget.Button",
+                                                                                                                                        "isEnabled": true,
+                                                                                                                                        "bounds": {
+                                                                                                                                            "left": 39,
+                                                                                                                                            "top": 2034,
+                                                                                                                                            "right": 1047,
+                                                                                                                                            "bottom": 2141
+                                                                                                                                        }
+                                                                                                                                    }
+                                                                                                                                ]
+                                                                                                                            }
+                                                                                                                        ]
+                                                                                                                    },
+                                                                                                                    {
+                                                                                                                        "class": "android.view.View",
+                                                                                                                        "isClickable": true,
+                                                                                                                        "isEnabled": true,
+                                                                                                                        "bounds": {
+                                                                                                                            "left": 39,
+                                                                                                                            "top": 2168,
+                                                                                                                            "right": 1047,
+                                                                                                                            "bottom": 2275
+                                                                                                                        },
+                                                                                                                        "children": [
+                                                                                                                            {
+                                                                                                                                "text": "Contact support",
+                                                                                                                                "class": "android.widget.TextView",
+                                                                                                                                "isEnabled": true,
+                                                                                                                                "bounds": {
+                                                                                                                                    "left": 375,
+                                                                                                                                    "top": 2196,
+                                                                                                                                    "right": 710,
+                                                                                                                                    "bottom": 2248
+                                                                                                                                }
+                                                                                                                            },
+                                                                                                                            {
+                                                                                                                                "class": "android.widget.Button",
+                                                                                                                                "isEnabled": true,
+                                                                                                                                "bounds": {
+                                                                                                                                    "left": 39,
+                                                                                                                                    "top": 2168,
+                                                                                                                                    "right": 1047,
+                                                                                                                                    "bottom": 2275
+                                                                                                                                }
+                                                                                                                            }
+                                                                                                                        ]
+                                                                                                                    }
+                                                                                                                ]
+                                                                                                            }
+                                                                                                        ]
+                                                                                                    }
+                                                                                                ]
+                                                                                            }
+                                                                                        ]
+                                                                                    }
+                                                                                ]
+                                                                            }
+                                                                        ]
+                                                                    }
+                                                                ]
+                                                            }
+                                                        ]
+                                                    }
+                                                ]
+                                            }
+                                        ]
+                                    }
+                                ]
+                            }
+                        ]
+                    }
+                ]
+            }
+        ]
+    }
+}

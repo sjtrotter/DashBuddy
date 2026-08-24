@@ -5,6 +5,12 @@
         "shape": null,
         "fields": {}
     },
+    "account_checkup/2026-08-13_15-31-40-292__doordash__accessibility.window__account_checkup__4226b9.json": {
+        "ruleId": "doordash.screen.account_checkup",
+        "intent": "account_checkup",
+        "shape": null,
+        "fields": {}
+    },
     "active_trip/2026-07-19_13-30-50-341__uber__accessibility.window__active_trip__483515.json": {
         "ruleId": "uber.screen.active_trip",
         "intent": "active_trip",
@@ -59,13 +65,13 @@
         "shape": null,
         "fields": {}
     },
-    "app_startup/2026-03-25_22-21-25__UNKNOWN__3afaa104.json": {
+    "app_startup/2026-08-09_23-43-43-196__doordash__accessibility.window__app_startup__8456ae.json": {
         "ruleId": "doordash.screen.app_startup",
         "intent": "app_startup",
         "shape": null,
         "fields": {}
     },
-    "app_startup/c85de491.json": {
+    "app_startup/2026-08-13_09-06-12-331__doordash__accessibility.window__app_startup__8456ae.json": {
         "ruleId": "doordash.screen.app_startup",
         "intent": "app_startup",
         "shape": null,
@@ -95,25 +101,7 @@
         "shape": null,
         "fields": {}
     },
-    "camera_capture/2026-04-03_20-18-58__UNKNOWN__4ba65eea.json": {
-        "ruleId": "doordash.screen.camera_capture",
-        "intent": "camera_capture",
-        "shape": null,
-        "fields": {}
-    },
-    "camera_capture/2026-04-03_20-18-58__UNKNOWN__96e56f57.json": {
-        "ruleId": "doordash.screen.camera_capture",
-        "intent": "camera_capture",
-        "shape": null,
-        "fields": {}
-    },
     "camera_capture/2026-04-03_20-19-00__UNKNOWN__6348cf8.json": {
-        "ruleId": "doordash.screen.camera_capture",
-        "intent": "camera_capture",
-        "shape": null,
-        "fields": {}
-    },
-    "camera_capture/2026-04-03_20-19-02__UNKNOWN__ffdd410d.json": {
         "ruleId": "doordash.screen.camera_capture",
         "intent": "camera_capture",
         "shape": null,
@@ -137,18 +125,6 @@
         "shape": null,
         "fields": {}
     },
-    "camera_capture/2026-07-18_09-52-28-805__doordash__accessibility.window__camera_capture__212e3a.json": {
-        "ruleId": "doordash.screen.camera_capture",
-        "intent": "camera_capture",
-        "shape": null,
-        "fields": {}
-    },
-    "camera_capture/2026-07-18_09-52-33-839__doordash__accessibility.window__camera_capture__fdcd1b.json": {
-        "ruleId": "doordash.screen.camera_capture",
-        "intent": "camera_capture",
-        "shape": null,
-        "fields": {}
-    },
     "camera_capture/2026-07-18_10-30-36-183__doordash__accessibility.window__camera_capture__db3913.json": {
         "ruleId": "doordash.screen.camera_capture",
         "intent": "camera_capture",
@@ -167,13 +143,37 @@
         "shape": null,
         "fields": {}
     },
-    "camera_capture/2026-08-06_17-41-16-132__doordash__accessibility.window__camera_capture__e27e86.json": {
+    "camera_capture/2026-08-13_16-10-41-070__doordash__accessibility.window__camera_capture__212e3a.json": {
         "ruleId": "doordash.screen.camera_capture",
         "intent": "camera_capture",
         "shape": null,
         "fields": {}
     },
-    "camera_capture/2026-08-06_17-41-20-296__doordash__accessibility.window__camera_capture__158727.json": {
+    "camera_capture/2026-08-13_16-10-43-480__doordash__accessibility.window__camera_capture__fdcd1b.json": {
+        "ruleId": "doordash.screen.camera_capture",
+        "intent": "camera_capture",
+        "shape": null,
+        "fields": {}
+    },
+    "camera_capture/2026-08-18_18-55-50-018__doordash__accessibility.window__camera_capture__3c6b0d.json": {
+        "ruleId": "doordash.screen.camera_capture",
+        "intent": "camera_capture",
+        "shape": null,
+        "fields": {}
+    },
+    "camera_capture/2026-08-18_19-07-03-734__doordash__accessibility.window__camera_capture__79b9c9.json": {
+        "ruleId": "doordash.screen.camera_capture",
+        "intent": "camera_capture",
+        "shape": null,
+        "fields": {}
+    },
+    "camera_capture/2026-08-18_19-07-08-550__doordash__accessibility.window__camera_capture__77703f.json": {
+        "ruleId": "doordash.screen.camera_capture",
+        "intent": "camera_capture",
+        "shape": null,
+        "fields": {}
+    },
+    "camera_capture/2026-08-23_15-05-52-195__doordash__accessibility.window__camera_capture__e5d591.json": {
         "ruleId": "doordash.screen.camera_capture",
         "intent": "camera_capture",
         "shape": null,
@@ -323,13 +323,13 @@
         "shape": null,
         "fields": {}
     },
-    "customer_rating_detail/customer_rating_detail.json": {
+    "customer_rating_detail/2026-08-10_14-35-53-133__doordash__accessibility.window__customer_rating_detail__ce3033.json": {
         "ruleId": "doordash.screen.customer_rating_detail",
         "intent": "customer_rating_detail",
         "shape": null,
         "fields": {}
     },
-    "customer_rating_detail/customer_rating_detail_loading.json": {
+    "customer_rating_detail/customer_rating_detail.json": {
         "ruleId": "doordash.screen.customer_rating_detail",
         "intent": "customer_rating_detail",
         "shape": null,
@@ -559,7 +559,7 @@
             "zoneName": null
         }
     },
-    "dash_navigate_to_zone_loading/dash_navigate_to_zone_loading.json": {
+    "dash_navigate_to_zone_loading/2026-08-13_15-44-42-278__doordash__accessibility.window__dash_navigate_to_zone_loading__94db3e.json": {
         "ruleId": "doordash.screen.dash_navigate_to_zone_loading",
         "intent": "dash_navigate_to_zone_loading",
         "shape": null,
@@ -610,25 +610,7 @@
             "remainingText": "34:28"
         }
     },
-    "dash_schedule/2026-03-27_07-55-12__UNKNOWN__e57b520c.json": {
-        "ruleId": "doordash.screen.dash_schedule",
-        "intent": "dash_schedule",
-        "shape": null,
-        "fields": {}
-    },
-    "dash_schedule/2026-03-27_07-55-50__UNKNOWN__8c162b01.json": {
-        "ruleId": "doordash.screen.dash_schedule",
-        "intent": "dash_schedule",
-        "shape": null,
-        "fields": {}
-    },
     "dash_schedule/2026-03-27_07-55-50__UNKNOWN__c32512f0.json": {
-        "ruleId": "doordash.screen.dash_schedule",
-        "intent": "dash_schedule",
-        "shape": null,
-        "fields": {}
-    },
-    "dash_schedule/2026-03-27_10-34-13__UNKNOWN__b3a3866e.json": {
         "ruleId": "doordash.screen.dash_schedule",
         "intent": "dash_schedule",
         "shape": null,
@@ -641,6 +623,12 @@
         "fields": {}
     },
     "dash_schedule/2026-07-16_13-35-15-529__doordash__accessibility.window__dash_schedule__f9e07d.json": {
+        "ruleId": "doordash.screen.dash_schedule",
+        "intent": "dash_schedule",
+        "shape": null,
+        "fields": {}
+    },
+    "dash_schedule/2026-08-10_14-12-18-970__doordash__accessibility.window__dash_schedule__e24a4d.json": {
         "ruleId": "doordash.screen.dash_schedule",
         "intent": "dash_schedule",
         "shape": null,
@@ -958,6 +946,18 @@
         "shape": null,
         "fields": {}
     },
+    "dasher_rewards/2026-08-10_14-12-31-044__doordash__accessibility.window__dasher_rewards__1b10df.json": {
+        "ruleId": "doordash.screen.dasher_rewards",
+        "intent": "dasher_rewards",
+        "shape": null,
+        "fields": {}
+    },
+    "dasher_rewards/2026-08-10_14-36-17-037__doordash__accessibility.window__dasher_rewards__4ef4b1.json": {
+        "ruleId": "doordash.screen.dasher_rewards",
+        "intent": "dasher_rewards",
+        "shape": null,
+        "fields": {}
+    },
     "dasher_rewards/dasher_rewards_about.json": {
         "ruleId": "doordash.screen.dasher_rewards",
         "intent": "dasher_rewards",
@@ -1012,6 +1012,22 @@
             "parsedPay": null,
             "sessionEarnings": null,
             "totalPay": 13.45
+        }
+    },
+    "delivery_summary_collapsed/2026-08-23_17-35-17-361__doordash__accessibility.window__delivery_summary_collapsed__c65d43.json": {
+        "ruleId": "doordash.screen.delivery_summary_collapsed",
+        "intent": "delivery_summary_collapsed",
+        "shape": "post_task",
+        "fields": {
+            "appPay": null,
+            "customerTips": null,
+            "expandButtonId": null,
+            "isExpanded": false,
+            "offersAccepted": null,
+            "offersTotal": null,
+            "parsedPay": null,
+            "sessionEarnings": null,
+            "totalPay": 0.0
         }
     },
     "delivery_summary_collapsed/20260128_163015_182_DELIVERY_SUMMARY_COLLAPSED.json": {
@@ -1302,6 +1318,22 @@
             "totalPay": 17.25
         }
     },
+    "delivery_summary_expanded/2026-08-23_17-35-21-221__doordash__accessibility.window__delivery_summary_expanded__6b9dd1.json": {
+        "ruleId": "doordash.screen.delivery_summary_expanded",
+        "intent": "delivery_summary_expanded",
+        "shape": "post_task",
+        "fields": {
+            "appPay": null,
+            "customerTips": 799.0,
+            "expandButtonId": null,
+            "isExpanded": true,
+            "offersAccepted": null,
+            "offersTotal": null,
+            "parsedPay": null,
+            "sessionEarnings": null,
+            "totalPay": 0.0
+        }
+    },
     "delivery_summary_expanded/20260128_163017_537_DELIVERY_SUMMARY_EXPANDED.json": {
         "ruleId": "doordash.screen.delivery_summary_expanded",
         "intent": "delivery_summary_expanded",
@@ -1474,31 +1506,19 @@
         "shape": null,
         "fields": {}
     },
-    "dropoff_completed_confirm/2026-03-27_20-49-07__UNKNOWN__23f70508.json": {
-        "ruleId": "doordash.screen.dropoff_completed_confirm",
-        "intent": "dropoff_completed_confirm",
-        "shape": null,
-        "fields": {}
-    },
-    "dropoff_completed_confirm/2026-03-27_20-49-07__UNKNOWN__3cdff3f4.json": {
-        "ruleId": "doordash.screen.dropoff_completed_confirm",
-        "intent": "dropoff_completed_confirm",
-        "shape": null,
-        "fields": {}
-    },
     "dropoff_completed_confirm/2026-06-12__doordash__dropoff_completed_confirm__f2ead7.json": {
         "ruleId": "doordash.screen.dropoff_completed_confirm",
         "intent": "dropoff_completed_confirm",
         "shape": null,
         "fields": {}
     },
-    "dropoff_completed_confirm/2026-08-02_18-01-15-065__doordash__accessibility.window__dropoff_completed_confirm__92ab78.json": {
+    "dropoff_completed_confirm/2026-08-14_19-02-19-115__doordash__accessibility.window__dropoff_completed_confirm__92ab78.json": {
         "ruleId": "doordash.screen.dropoff_completed_confirm",
         "intent": "dropoff_completed_confirm",
         "shape": null,
         "fields": {}
     },
-    "dropoff_continue_to_complete/2026-07-26_14-57-28-118__doordash__accessibility.window__UNKNOWN__02dac9.json": {
+    "dropoff_continue_to_complete/2026-08-13_16-44-13-089__doordash__accessibility.window__dropoff_continue_to_complete__02dac9.json": {
         "ruleId": "doordash.screen.dropoff_continue_to_complete",
         "intent": "dropoff_continue_to_complete",
         "shape": null,
@@ -1510,7 +1530,13 @@
         "shape": null,
         "fields": {}
     },
-    "dropoff_geofence_warning/2026-07-26_14-57-25-649__doordash__accessibility.window__UNKNOWN__c336f4.json": {
+    "dropoff_geofence_warning/2026-08-13_16-44-10-236__doordash__accessibility.window__dropoff_geofence_warning__c336f4.json": {
+        "ruleId": "doordash.screen.dropoff_geofence_warning",
+        "intent": "dropoff_geofence_warning",
+        "shape": null,
+        "fields": {}
+    },
+    "dropoff_geofence_warning/2026-08-13_16-44-10-335__doordash__accessibility.window__dropoff_geofence_warning__f100d7.json": {
         "ruleId": "doordash.screen.dropoff_geofence_warning",
         "intent": "dropoff_geofence_warning",
         "shape": null,
@@ -1582,13 +1608,19 @@
         "shape": null,
         "fields": {}
     },
+    "dropoff_handoff/2026-08-14_18-56-14-236__doordash__accessibility.window__dropoff_handoff__44485a.json": {
+        "ruleId": "doordash.screen.dropoff_handoff",
+        "intent": "dropoff_handoff",
+        "shape": null,
+        "fields": {}
+    },
     "dropoff_handoff/20260128_180855_435_DROPOFF_DETAILS_PRE_ARRIVAL.json": {
         "ruleId": "doordash.screen.dropoff_handoff",
         "intent": "dropoff_handoff",
         "shape": null,
         "fields": {}
     },
-    "dropoff_help_menu/2026-07-26_14-57-27-333__doordash__accessibility.window__UNKNOWN__7ed79f.json": {
+    "dropoff_help_menu/2026-08-13_16-44-11-949__doordash__accessibility.window__dropoff_help_menu__7ed79f.json": {
         "ruleId": "doordash.screen.dropoff_help_menu",
         "intent": "dropoff_help_menu",
         "shape": null,
@@ -1619,6 +1651,12 @@
         "fields": {}
     },
     "dropoff_multi_order_confirm/2026-08-06_17-34-06-035__doordash__accessibility.window__dropoff_multi_order_confirm__d205bd.json": {
+        "ruleId": "doordash.screen.dropoff_multi_order_confirm",
+        "intent": "dropoff_multi_order_confirm",
+        "shape": null,
+        "fields": {}
+    },
+    "dropoff_multi_order_confirm/2026-08-23_15-33-06-133__doordash__accessibility.window__dropoff_multi_order_confirm__5811d4.json": {
         "ruleId": "doordash.screen.dropoff_multi_order_confirm",
         "intent": "dropoff_multi_order_confirm",
         "shape": null,
@@ -2608,19 +2646,13 @@
         "shape": null,
         "fields": {}
     },
-    "end_dash_confirm/2026-02-24_20-42-56__UNKNOWN__a9057da6.json": {
-        "ruleId": "doordash.screen.end_dash_confirm",
-        "intent": "end_dash_confirm",
-        "shape": null,
-        "fields": {}
-    },
     "end_dash_confirm/2026-02-24_20-42-57__UNKNOWN__94e5c887.json": {
         "ruleId": "doordash.screen.end_dash_confirm",
         "intent": "end_dash_confirm",
         "shape": null,
         "fields": {}
     },
-    "end_dash_confirm/2026-08-01_13-59-01-822__doordash__accessibility.window__end_dash_confirm__bec8c8.json": {
+    "end_dash_confirm/2026-08-13_15-41-01-840__doordash__accessibility.window__end_dash_confirm__bec8c8.json": {
         "ruleId": "doordash.screen.end_dash_confirm",
         "intent": "end_dash_confirm",
         "shape": null,
@@ -3366,6 +3398,30 @@
         "shape": null,
         "fields": {}
     },
+    "offer_accepting/2026-08-13_15-44-41-714__doordash__accessibility.window__offer_accepting__d7ad71.json": {
+        "ruleId": "doordash.screen.offer_accepting",
+        "intent": "offer_accepting",
+        "shape": null,
+        "fields": {}
+    },
+    "offer_accepting/2026-08-13_18-46-21-256__doordash__accessibility.window__offer_accepting__442895.json": {
+        "ruleId": "doordash.screen.offer_accepting",
+        "intent": "offer_accepting",
+        "shape": null,
+        "fields": {}
+    },
+    "offer_accepting/2026-08-14_17-04-21-015__doordash__accessibility.window__offer_accepting__79bea8.json": {
+        "ruleId": "doordash.screen.offer_accepting",
+        "intent": "offer_accepting",
+        "shape": null,
+        "fields": {}
+    },
+    "offer_accepting/2026-08-23_16-57-19-641__doordash__accessibility.window__offer_accepting__f430b5.json": {
+        "ruleId": "doordash.screen.offer_accepting",
+        "intent": "offer_accepting",
+        "shape": null,
+        "fields": {}
+    },
     "offer_popup/20260128_163448_533_OFFER_POPUP.json": {
         "ruleId": "doordash.screen.offer_popup",
         "intent": "offer_popup",
@@ -3540,19 +3596,25 @@
         "shape": null,
         "fields": {}
     },
-    "offer_popup_confirm_decline/2026-08-01_13-58-55-862__doordash__accessibility.window__offer_popup_confirm_decline__b34044.json": {
-        "ruleId": "doordash.screen.offer_popup_confirm_decline",
-        "intent": "offer_popup_confirm_decline",
-        "shape": null,
-        "fields": {}
-    },
-    "offer_popup_confirm_decline/2026-08-06_18-49-45-427__doordash__accessibility.window__offer_popup_confirm_decline__3c755c.json": {
-        "ruleId": "doordash.screen.offer_popup_confirm_decline",
-        "intent": "offer_popup_confirm_decline",
-        "shape": null,
-        "fields": {}
-    },
     "offer_popup_confirm_decline/2026-08-07_20-27-35-926__doordash__accessibility.window__offer_popup_confirm_decline__ddb1d4.json": {
+        "ruleId": "doordash.screen.offer_popup_confirm_decline",
+        "intent": "offer_popup_confirm_decline",
+        "shape": null,
+        "fields": {}
+    },
+    "offer_popup_confirm_decline/2026-08-13_15-22-05-824__doordash__accessibility.window__offer_popup_confirm_decline__b34044.json": {
+        "ruleId": "doordash.screen.offer_popup_confirm_decline",
+        "intent": "offer_popup_confirm_decline",
+        "shape": null,
+        "fields": {}
+    },
+    "offer_popup_confirm_decline/2026-08-13_18-39-45-389__doordash__accessibility.window__offer_popup_confirm_decline__3c755c.json": {
+        "ruleId": "doordash.screen.offer_popup_confirm_decline",
+        "intent": "offer_popup_confirm_decline",
+        "shape": null,
+        "fields": {}
+    },
+    "offer_popup_confirm_decline/2026-08-13_18-39-47-167__doordash__accessibility.window__offer_popup_confirm_decline__183284.json": {
         "ruleId": "doordash.screen.offer_popup_confirm_decline",
         "intent": "offer_popup_confirm_decline",
         "shape": null,
@@ -3649,6 +3711,12 @@
         "fields": {}
     },
     "overall_rating_explainer/2026-07-30_11-26-24-629__doordash__accessibility.window__UNKNOWN__b1b6de.json": {
+        "ruleId": "doordash.screen.overall_rating_explainer",
+        "intent": "overall_rating_explainer",
+        "shape": null,
+        "fields": {}
+    },
+    "overall_rating_explainer/2026-08-10_18-53-53-918__doordash__accessibility.window__overall_rating_explainer__9f63b8.json": {
         "ruleId": "doordash.screen.overall_rating_explainer",
         "intent": "overall_rating_explainer",
         "shape": null,
@@ -4107,7 +4175,7 @@
         "shape": null,
         "fields": {}
     },
-    "pickup_barcode_scan_failed/pickup_barcode_not_recognized.json": {
+    "pickup_barcode_scan_failed/2026-08-14_18-07-46-515__doordash__accessibility.window__pickup_barcode_scan_failed__dab975.json": {
         "ruleId": "doordash.screen.pickup_barcode_scan_failed",
         "intent": "pickup_barcode_scan_failed",
         "shape": null,
@@ -4131,7 +4199,31 @@
         "shape": null,
         "fields": {}
     },
-    "pickup_issue_menu/2026-07-18_17-36-04-600__doordash__accessibility.window__pickup_issue_menu__e0e12f.json": {
+    "pickup_issue_menu/2026-08-18_18-50-23-455__doordash__accessibility.window__pickup_issue_menu__ede7ce.json": {
+        "ruleId": "doordash.screen.pickup_issue_menu",
+        "intent": "pickup_issue_menu",
+        "shape": null,
+        "fields": {}
+    },
+    "pickup_issue_menu/2026-08-18_18-50-35-201__doordash__accessibility.window__pickup_issue_menu__b4d046.json": {
+        "ruleId": "doordash.screen.pickup_issue_menu",
+        "intent": "pickup_issue_menu",
+        "shape": null,
+        "fields": {}
+    },
+    "pickup_issue_menu/2026-08-18_18-52-23-131__doordash__accessibility.window__pickup_issue_menu__2f1a45.json": {
+        "ruleId": "doordash.screen.pickup_issue_menu",
+        "intent": "pickup_issue_menu",
+        "shape": null,
+        "fields": {}
+    },
+    "pickup_issue_menu/2026-08-18_18-54-21-360__doordash__accessibility.window__pickup_issue_menu__b85311.json": {
+        "ruleId": "doordash.screen.pickup_issue_menu",
+        "intent": "pickup_issue_menu",
+        "shape": null,
+        "fields": {}
+    },
+    "pickup_issue_menu/2026-08-18_18-55-46-016__doordash__accessibility.window__pickup_issue_menu__cdf2a5.json": {
         "ruleId": "doordash.screen.pickup_issue_menu",
         "intent": "pickup_issue_menu",
         "shape": null,
@@ -4797,7 +4889,7 @@
             "subFlow": "NAVIGATION"
         }
     },
-    "pickup_qr_confirm/2026-06-12__doordash__pickup_qr_confirm__86cce3.json": {
+    "pickup_qr_confirm/2026-08-13_16-20-16-478__doordash__accessibility.window__pickup_qr_confirm__86cce3.json": {
         "ruleId": "doordash.screen.pickup_qr_confirm",
         "intent": "pickup_qr_confirm",
         "shape": null,
@@ -4863,6 +4955,24 @@
         "shape": null,
         "fields": {}
     },
+    "pickup_resolution_options/2026-08-18_18-50-18-859__doordash__accessibility.window__pickup_resolution_options__8c2558.json": {
+        "ruleId": "doordash.screen.pickup_resolution_options",
+        "intent": "pickup_resolution_options",
+        "shape": null,
+        "fields": {}
+    },
+    "pickup_resolution_options/2026-08-18_18-50-30-629__doordash__accessibility.window__pickup_resolution_options__440ccf.json": {
+        "ruleId": "doordash.screen.pickup_resolution_options",
+        "intent": "pickup_resolution_options",
+        "shape": null,
+        "fields": {}
+    },
+    "pickup_resolution_options/2026-08-18_18-52-19-798__doordash__accessibility.window__pickup_resolution_options__58a78b.json": {
+        "ruleId": "doordash.screen.pickup_resolution_options",
+        "intent": "pickup_resolution_options",
+        "shape": null,
+        "fields": {}
+    },
     "pickup_select_issue/2026-06-12__doordash__pickup_select_issue__0a08a9.json": {
         "ruleId": "doordash.screen.pickup_select_issue",
         "intent": "pickup_select_issue",
@@ -4876,6 +4986,24 @@
         "fields": {}
     },
     "pickup_select_issue/2026-07-19_14-20-59-652__doordash__accessibility.window__pickup_select_issue__496268.json": {
+        "ruleId": "doordash.screen.pickup_select_issue",
+        "intent": "pickup_select_issue",
+        "shape": null,
+        "fields": {}
+    },
+    "pickup_select_issue/2026-08-18_18-50-22-274__doordash__accessibility.window__pickup_select_issue__496268.json": {
+        "ruleId": "doordash.screen.pickup_select_issue",
+        "intent": "pickup_select_issue",
+        "shape": null,
+        "fields": {}
+    },
+    "pickup_select_issue/2026-08-18_18-55-25-190__doordash__accessibility.window__pickup_select_issue__2cccf5.json": {
+        "ruleId": "doordash.screen.pickup_select_issue",
+        "intent": "pickup_select_issue",
+        "shape": null,
+        "fields": {}
+    },
+    "pickup_select_issue/2026-08-18_18-55-45-233__doordash__accessibility.window__pickup_select_issue__912055.json": {
         "ruleId": "doordash.screen.pickup_select_issue",
         "intent": "pickup_select_issue",
         "shape": null,
@@ -5157,19 +5285,19 @@
         "shape": null,
         "fields": {}
     },
-    "pickup_steps/2026-07-17_20-35-04-522__doordash__accessibility.window__pickup_steps__932126.json": {
+    "pickup_steps/2026-08-18_18-55-47-909__doordash__accessibility.window__pickup_steps__45e0c4.json": {
         "ruleId": "doordash.screen.pickup_steps",
         "intent": "pickup_steps",
         "shape": null,
         "fields": {}
     },
-    "pickup_steps/2026-07-17_20-35-07-139__doordash__accessibility.window__pickup_steps__88833e.json": {
+    "pickup_steps/2026-08-18_18-55-55-608__doordash__accessibility.window__pickup_steps__40ae9c.json": {
         "ruleId": "doordash.screen.pickup_steps",
         "intent": "pickup_steps",
         "shape": null,
         "fields": {}
     },
-    "pickup_steps/2026-07-17_20-35-12-533__doordash__accessibility.window__pickup_steps__d0bd1d.json": {
+    "pickup_steps/2026-08-18_18-56-02-700__doordash__accessibility.window__pickup_steps__d0bd1d.json": {
         "ruleId": "doordash.screen.pickup_steps",
         "intent": "pickup_steps",
         "shape": null,
@@ -5313,13 +5441,25 @@
             "subFlow": "ARRIVED"
         }
     },
-    "pickup_wait_survey/2026-06-12__doordash__pickup_wait_survey__d90d0f.json": {
-        "ruleId": "doordash.screen.pickup_wait_survey",
-        "intent": "pickup_wait_survey",
-        "shape": null,
-        "fields": {}
+    "pickup_verify_items/2026-08-18_18-55-57-626__doordash__accessibility.window__pickup_verify_items__a3cc55.json": {
+        "ruleId": "doordash.screen.pickup_verify_items",
+        "intent": "pickup_verify_items",
+        "shape": "task",
+        "fields": {
+            "arrivalConfirmed": false,
+            "customerAddressHash": null,
+            "customerNameHash": null,
+            "deadline": null,
+            "itemsRemaining": null,
+            "itemsShopped": null,
+            "phase": "PICKUP",
+            "redCardTotal": null,
+            "storeAddress": null,
+            "storeName": null,
+            "subFlow": "ARRIVED"
+        }
     },
-    "pickup_wait_survey/2026-07-26_21-08-27-628__doordash__accessibility.window__UNKNOWN__24d30f.json": {
+    "pickup_wait_survey/2026-06-12__doordash__pickup_wait_survey__d90d0f.json": {
         "ruleId": "doordash.screen.pickup_wait_survey",
         "intent": "pickup_wait_survey",
         "shape": null,
@@ -5350,6 +5490,24 @@
         "fields": {}
     },
     "pickup_wait_survey/2026-08-08_12-45-40-504__doordash__accessibility.window__pickup_wait_survey__608677.json": {
+        "ruleId": "doordash.screen.pickup_wait_survey",
+        "intent": "pickup_wait_survey",
+        "shape": null,
+        "fields": {}
+    },
+    "pickup_wait_survey/2026-08-18_18-45-08-947__doordash__accessibility.window__pickup_wait_survey__1c1273.json": {
+        "ruleId": "doordash.screen.pickup_wait_survey",
+        "intent": "pickup_wait_survey",
+        "shape": null,
+        "fields": {}
+    },
+    "pickup_wait_survey/2026-08-18_18-46-41-653__doordash__accessibility.window__pickup_wait_survey__24d30f.json": {
+        "ruleId": "doordash.screen.pickup_wait_survey",
+        "intent": "pickup_wait_survey",
+        "shape": null,
+        "fields": {}
+    },
+    "pickup_wait_survey/2026-08-23_15-04-40-021__doordash__accessibility.window__pickup_wait_survey__0bf7d7.json": {
         "ruleId": "doordash.screen.pickup_wait_survey",
         "intent": "pickup_wait_survey",
         "shape": null,
@@ -6073,7 +6231,7 @@
             "zoneName": "TX: Leon Valley"
         }
     },
-    "shopping_intro_message/2026-06-12__doordash__shopping_intro_message__334e4e.json": {
+    "shopping_intro_message/2026-08-13_15-48-51-340__doordash__accessibility.window__shopping_intro_message__334e4e.json": {
         "ruleId": "doordash.screen.shopping_intro_message",
         "intent": "shopping_intro_message",
         "shape": null,
@@ -6181,12 +6339,6 @@
         "shape": null,
         "fields": {}
     },
-    "shopping_item_status/2026-06-12__doordash__shopping_item_status__25710d.json": {
-        "ruleId": "doordash.screen.shopping_item_status",
-        "intent": "shopping_item_status",
-        "shape": null,
-        "fields": {}
-    },
     "shopping_item_status/2026-07-18_09-51-27-351__doordash__accessibility.window__shopping_item_status__497ead.json": {
         "ruleId": "doordash.screen.shopping_item_status",
         "intent": "shopping_item_status",
@@ -6223,6 +6375,12 @@
         "shape": null,
         "fields": {}
     },
+    "shopping_item_status/2026-08-14_18-24-41-637__doordash__accessibility.window__shopping_item_status__25710d.json": {
+        "ruleId": "doordash.screen.shopping_item_status",
+        "intent": "shopping_item_status",
+        "shape": null,
+        "fields": {}
+    },
     "shopping_pay_adjustment/2026-07-26_14-00-04-853__doordash__accessibility.window__UNKNOWN__e0f9f2.json": {
         "ruleId": "doordash.screen.shopping_pay_adjustment",
         "intent": "shopping_pay_adjustment",
@@ -6241,7 +6399,13 @@
         "shape": null,
         "fields": {}
     },
-    "shopping_shelf_photo/2026-07-26_16-44-36-459__doordash__accessibility.window__UNKNOWN__aa7d10.json": {
+    "shopping_pay_adjustment/2026-08-13_15-49-20-825__doordash__accessibility.window__shopping_pay_adjustment__e0f9f2.json": {
+        "ruleId": "doordash.screen.shopping_pay_adjustment",
+        "intent": "shopping_pay_adjustment",
+        "shape": null,
+        "fields": {}
+    },
+    "shopping_shelf_photo/2026-08-18_19-26-38-130__doordash__accessibility.window__shopping_shelf_photo__aa7d10.json": {
         "ruleId": "doordash.screen.shopping_shelf_photo",
         "intent": "shopping_shelf_photo",
         "shape": null,
@@ -6308,6 +6472,24 @@
         "fields": {}
     },
     "shopping_wrong_item/2026-08-06_17-05-25-944__doordash__accessibility.window__shopping_wrong_item__fb1078.json": {
+        "ruleId": "doordash.screen.shopping_wrong_item",
+        "intent": "shopping_wrong_item",
+        "shape": null,
+        "fields": {}
+    },
+    "shopping_wrong_item/2026-08-13_15-59-50-574__doordash__accessibility.window__shopping_wrong_item__121945.json": {
+        "ruleId": "doordash.screen.shopping_wrong_item",
+        "intent": "shopping_wrong_item",
+        "shape": null,
+        "fields": {}
+    },
+    "shopping_wrong_item/2026-08-18_19-25-05-669__doordash__accessibility.window__shopping_wrong_item__c49b68.json": {
+        "ruleId": "doordash.screen.shopping_wrong_item",
+        "intent": "shopping_wrong_item",
+        "shape": null,
+        "fields": {}
+    },
+    "shopping_wrong_item/2026-08-23_14-55-33-529__doordash__accessibility.window__shopping_wrong_item__ad929b.json": {
         "ruleId": "doordash.screen.shopping_wrong_item",
         "intent": "shopping_wrong_item",
         "shape": null,
@@ -6445,13 +6627,13 @@
         "shape": null,
         "fields": {}
     },
-    "task_feedback/task_feedback_categories.json": {
+    "task_feedback/2026-08-23_17-35-24-891__doordash__accessibility.window__task_feedback__cb7a8f.json": {
         "ruleId": "doordash.screen.task_feedback",
         "intent": "task_feedback",
         "shape": null,
         "fields": {}
     },
-    "task_feedback/task_feedback_thumbs.json": {
+    "task_feedback/task_feedback_categories.json": {
         "ruleId": "doordash.screen.task_feedback",
         "intent": "task_feedback",
         "shape": null,
