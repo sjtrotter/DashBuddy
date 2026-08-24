@@ -121,7 +121,8 @@ was found **broken-in-part** (raw PII in capture envelopes) and moved to that en
   or `Apt/Suite: [redacted]`. Broken = any `Apt/Suite[:]? [redacted:<4 hex>]` on `dropoff_photo`,
   `dropoff_navigation`, `dropoff_pre_arrival`, `dropoff_geofence_warning` or
   `delivery_summary_collapsed`.
-  - Confirmed: 0/2
+  - Confirmed: 1/2 (desk 08-24: 12 `Apt` hits across `dropoff_photo`/`dropoff_pre_arrival`,
+    every one plain `[redacted]`, no 4-hex suffix.)
 - **🆕 NEW — #924 (PR #1014) — DasherDirect is blocked from the first frame.** Open DasherDirect
   from the DoorDash menu and let it load. Working = zero new UNKNOWN captures around that
   timestamp and a sensitive-gate drop in the log from the *entry* frame, not only after the
@@ -143,7 +144,10 @@ was found **broken-in-part** (raw PII in capture envelopes) and moved to that en
   counts — a `JOB_POOLED` on a job whose drops all had stores means a store failed to reconcile);
   `#997 offer pay unattributed at close` (WARN — accepted money that found no drop);
   the `#691` WARN now reports `denominator=N of M owed` + `ownOfferPay=present|null`.
-  - Confirmed: 0/2
+  - Confirmed: 1/2 (desk 08-24: shape (a) confirmed — 5/5 week drops `PER_OFFER_STORE`, the
+    Michaels+Petsmart job split $19.70 → $9.85/$9.85 across its two stores, Σ stamped = Σ quotes
+    to the cent, zero degrades; the slice's one `STAMP_FALLBACK` (08-14, store-less drop) also
+    reconciled exactly. Shapes (b) sub-pooled and (c) consolidated-customer still unseen.)
 - **🆕 NEW — #1000 (PR #1013) — a blown-through pickup still links its offer to the job.** Watch
   for a dash where a pickup is arrived-but-never-confirmed followed by a normal delivery
   completion. **Desk:** `SELECT linkedJobId, storeKey FROM offer_records WHERE offerHash =
@@ -151,14 +155,10 @@ was found **broken-in-part** (raw PII in capture envelopes) and moved to that en
   (the fail-null residual: no store leaderboard entry, dwell sample, or `milesToStore` from that
   job, by design). The PROJECTOR_VERSION 10 refold should have healed the 08-08 Zaxbys accept on
   first launch — check it shows linked in the next pull.
-  - Confirmed: 0/2
-- **🆕 NEW — #1005 (PR #1011) — the dropoff bubble/notification reads "<STORE> Order".** On the
-  drop-off leg, the ongoing bubble/notification message reads e.g. "H-E-B Order" (persona
-  "Dropoff") — never "Heading to <store>'s customer" or any DoorDash customer-placeholder text
-  walked in as a fake name. An unresolved store reads the plain word "Dropoff", never an empty
-  "Order". Also check the in-bubble dropoff task card's summary/detail line carries the same
-  copy.
-  - Confirmed: 0/2
+  - Confirmed: 1/2 (desk 08-24: the v10 refold healed the 08-08 Zaxbys accept on first launch —
+    `anchorless job link: jobId=job-doordash-…-322 offerSeq=1521` in the 08-09 23:40 refold, and
+    the pulled DB shows that offer with `linkedJobId` set and `storeKey` NULL, the correct
+    fail-null shape. A LIVE blown-through pickup on-dash is the remaining half.)
 - **🆕 NEW — #992 / #993 / #994 / #995 / #920 — the Pledge redact batch: five recognized surfaces
   that were still shipping raw customer PII.** All five were found in the 2026-08-09 desk analysis
   and are rule-layer fixes (envelope masking only — nothing about recognition, parsing, state or
@@ -185,26 +185,6 @@ was found **broken-in-part** (raw PII in capture envelopes) and moved to that en
   item failing.**
   - Confirmed: 0/2
 
-- **🆕 NEW — #999 — is DoorDash still SHOWING the per-delivery earnings receipt at all?** The
-  desk pull of 08-06/07/08 found **zero** receipt-shaped frames — recognized *or* unknown — after
-  08-02, and all 9 deliveries across those three dashes were priced by the `OFFER_PAY` estimate
-  fallback instead of a real receipt. The post-drop frame sequence changed too (`dropoff_photo` →
-  *nothing* → the next `offer_popup`, where it used to be `dropoff_photo` →
-  `dropoff_completed_confirm` → `delivery_summary_collapsed/expanded`). This is **not** a
-  recognition regression — the frames don't exist to recognize — so the only way to settle it is a
-  pair of human eyes on the phone.
-  **CAUSE IDENTIFIED (dev field answer, 2026-08-09):** the receipt does not show when the dash was
-  started **out-of-zone** and runs in the **"Dash Along the Way"** status — all three receipt-less
-  dashes (08-06/07/08) were that shape. Dev assessment: a regression in the Dasher app itself. What
-  remains is verification of both halves:
-  **What to watch:** (a) on a normal **in-zone** dash, confirm the post-drop earnings summary card
-  (Base pay / Customer tip / Total) still appears and DashBuddy parses it (`DROP_SHARE` basis
-  returns); (b) on the next **Dash-Along-the-Way** start, confirm the absence reproduces — that
-  pins the trigger. **Desk:** `SELECT payBasis, COUNT(*) FROM delivery_records …` per dash — an
-  all-`OFFER_PAY` dash with a nonzero unattributed remainder is the fingerprint; note the dash's
-  start status alongside. While this stands, #996/#997 are routine-mode defects, not edge cases.
-  - Confirmed: 0/2 (cause identified by dev 08-09; both verification halves still 0/2)
-
 - **🆕 NEW — #991 (P0) — the spoken offer verdict went silent and stayed silent.** From 08-06
   16:28 onward every single `speak()` call returned `-1` (15 of 15 across three dashes; 11 of 11
   had succeeded on 08-01/08-02), each one logging `WARN/Tts: speak returned -1 — abandoning audio
@@ -228,7 +208,9 @@ was found **broken-in-part** (raw PII in capture envelopes) and moved to that en
   then `INFO Tts: engine re-initialized after failure`; an unrecoverable engine looks like
   `WARN … speech still failing after 3 consecutive losses — notifying the dasher`. A `speak
   returned -1` run with NO re-init line after it means the fix did not engage.
-  - Confirmed: 0/2
+  - Confirmed: 0/2 (desk 08-24: voice healthy — 28/28 `speak()` succeeded across four dashes —
+    but the engine never failed, so the rebuild/backoff/notice ladder is still unexercised;
+    counts as no-regression, not a confirmation.)
 
 - **🆕 NEW — #967 / PR #968 — ratings stamp during an Offline browse (the early-return fix).**
   The pre-fix bug: `updateLifecycle`'s Offline early-return sat ABOVE the opportunistic ratings
@@ -2500,6 +2482,140 @@ Accept and Decline registered on DoorDash — and moved to that session's entry 
   the redesign, because the parse is still anchored on the old `textView_title` layout. That was
   already true before this change; re-anchoring the parse is separate, data-enrichment work.
   - Confirmed: 0/2.
+
+---
+
+## 2026-08-24 — DESK ANALYSIS of the 08-23 field report (pull 08-24): nothing was lost — gross was zeroed by a fake $0 report meeting one COALESCE; DoorDash 8.93.7 removed every money id anchor
+
+**Date:** 2026-08-24 (dashes 2026-08-13 ×6, 08-14, 08-18, 08-23 ×2) · **Platform(s) tested:**
+DoorDash · **Branch under test:** `master` @ `e903a6e2` (post-#1028 — CONFIRMED from the device:
+installed 2026-08-12 08:40, after the last master merge; one uninterrupted app process from then
+through 08-24 05:48) · **Field conditions:** desk analysis of pull
+`~/dashbuddy/logs/2026/08/24/` — 689 captures (688 DoorDash / 1 Uber), 5 logs (79,779 lines),
+DB + WAL, DataStore prefs. Clean-slate slice 08-10→08-24 (device purged after the 08-09 pull,
+and purged again after this one). Issues filed this analysis: **#1029–#1036**.
+
+One correction to the 08-23 entry's framing up front: the "Monday 08-17" dash was **Tuesday
+2026-08-18** (18:38–20:15, $42.10) — no session exists on 08-17.
+
+### Bugs
+
+**1. RESOLVES 08-23 item 1 (the $0 week) — both hypotheses refuted; the read model was complete
+and correct the whole time. Gross alone was $0, from two stacked defects → #1030 (+ #1029).**
+- *Hypothesis (a) wipe-without-refold:* **refuted.** The v9→v10 wipe ran once, 08-09 23:40:10, and
+  completed 5.1 s later (`Analytics backfill complete: 1538 events → 83 deliveries, 72 sessions,
+  409 offers`). No wipe at the 08-12 install (version unchanged).
+- *Hypothesis (b) dead projector:* **refuted.** The projector drains continuously in-process; all
+  five of the week's deliveries folded within ~50 ms of their events (seq 1628, 1637, 1656, 1657,
+  1668), watermark `(1, 1669, 10)` = fully drained, **zero ERROR lines in 79,779**, one process for
+  11.5 days, zero restarts.
+- The actual chain, verified end to end: DoorDash 8.93.7 renders money as id-less digit wheels, so
+  every money parse died silently (**#1029** — `final_value`/`earnings_ticker`/`running_total_pay`
+  all 0 hits across 689 fielded files vs 10–15/15 in the corpus, whose newest receipt fixture is
+  2026-04-19); `Session.runningEarnings` therefore never left its non-nullable `0.0` default; every
+  `early_offline` DASH_STOP stamped that as `totalEarnings: 0.0` (seq 1638/1658/1669); the fold
+  stored it as `reportedEarnings = 0.0`, **not NULL**; and `AnalyticsDao`'s
+  `COALESCE(s.reportedEarnings, d.deliveredPay, 0)` (three sites) let the stored 0.0 win, so the
+  `deliveredPay` fallback built for exactly this case never fired (**#1030**, with the two-part
+  fix — null stamp + `NULLIF`; the DAO half alone heals all history read-side). 41 of 42
+  `early_offline` sessions all-time carry the hard 0.0; this was simply the **first
+  all-`early_offline` week**, which took gross to exactly $0 and tripped the severe
+  `over-attributed $78.50` review flag.
+- What the screen actually showed Sunday evening, reproduced from the pulled DB: recap hero
+  **"You kept $65.94"** (correct), money card **"$0.00 came in. $-65.94 went to the car."**,
+  pay-mix "not recorded", gross $0 on every day bar. Not transient — that window still renders
+  this today. The `$-65.94` glyph order is its own cosmetic bug → **#1034**.
+
+**2. RESOLVES 08-23 item 2 — the delivery DID land (seq 1668, H-E-B, OFFER_PAY $16.70, net
+$15.36). What was lost is the receipt's real pay, by two INDEPENDENT misses → #1029 + #1033.**
+The receipt sheet appeared (the slice's only occurrence), was **recognized** — and (i) the
+completion's 2.5 s `GRACE_COMMIT` fired 17:35:19.877, 1.3 s **before** the expand tap
+(17:35:21.191), and (ii) even the expanded frame parsed nothing because the anchors are gone
+(`DELIVERY_COMPLETED` carried `totalPay: 0.0, payBasis: null`; the #859 filename fail-safe saved
+`Delivery.png` — the `{totalPay}` token was null). The 08-23 entry's instinct to replay this is
+right, and the fixture set is named in #1033 — but the replay only reproduces the timing seam;
+the parse seam is #1029.
+
+**3. Pledge leak — `pickup_issue_menu` has no `redact` block; a recognized envelope ships
+`"For Doug P. • Sukhothai Restaurant"` raw → #1031.** 1 of 6 fielded frames. Its four sub-flow
+siblings already mask this exact shape (`hasTextStartsWith: "For "` + `keepPrefix`), so the fix is
+copy-paste. Everything else in the PII sweep came back clean: all 12 `Apt/Suite` masks are plain
+`[redacted]` (no 4-hex — #986/#934 working), all `Deliver to` masks carry hashes, raw names on
+`pickup_navigation` are merchants (the documented #886 exception), zero PIN/gate-code/
+`Customer Notes` hits, zero dasher-banking hits anywhere including clicks. Known residual
+unchanged: `maneuverView` click envelopes on UNKNOWN screens carry raw road names.
+
+**4. The dash-end summary sheet (`EarningsBottomSheetWorkflowActivity`) — the SOLE source of
+`reportedEarnings` — recognized once in 15 days, and its misses leave no envelope → #1032.**
+On 08-18 20:15 and 08-23 15:36 its frames fell to UNKNOWN with `captured=false` (FrameGate
+content-hash suppression); on 08-23 17:35:32 it produced no snapshot at all. A recognition rot on
+this surface is currently undiagnosable by construction.
+
+### Field UX context
+
+**5. REFINES 08-23 item 3 (and retires checklist item #999 as broken).** The receipt absence is
+real — one `delivery_summary_*` pair and one `dropoff_completed_confirm` in 15 days — but the
+one time the receipt DID appear (in-zone, 08-23 17:35) **we recognized it and still parsed
+nothing** (#1029). So "DoorDash stopped showing it out of zone" is true and is still only half
+the story; the in-zone half is our defect, not theirs. #999's two-halves verification is
+superseded: the in-zone half is now #1029's field validation, the out-of-zone absence got its
+second sighting (08-14 / 08-18 / 08-23-early all receipt-less), and the item leaves the
+checklist.
+
+### Research / design
+
+**6. ANSWERS 08-23 item 4 (the running-total oracle) — the data is there, and it reconciles TO
+THE CENT → filed as #1035 (blocked by #1029).** The `earnings_pill` wheel appears in 51 captures;
+at every settled checkpoint DoorDash's figure equals our Σ `realizedPay` exactly (5/5, e.g.
+`$61.80 This week` = $42.10 + $19.70). The oracle would have corrected nothing this slice except
+`reportedEarnings` — precisely the $0 gross. **Mandatory caution, now quantified:** 5 of 24 wheel
+reads are mid-spin garbage and three are well-formed-but-wrong (`$470.00`, `$580.00`, `$70.00`) —
+any consumer needs a settle gate, not just a currency regex. Also free today: `running_total_pay`
+still lives on `pickup_pre_arrival`/`dropoff_pre_arrival` (8 captures, correct values) but is
+parsed-then-discarded, and `TimelineFields` still falls to `updateSessionFields`' `else` — both
+noted in #1035.
+
+### Money reconciliation
+
+Attribution was **perfect** all slice — the failure was purely the gross side (#1030):
+
+| Dash | Drops | Σ realized | reportedEarnings | DoorDash's own figure | Verdict |
+|---|---|---|---|---|---|
+| 08-13 15:43 | 1 | $21.45 | **$21.45** (summary_screen) | $21.45 wk | exact |
+| 08-14 17:03 | 2 | $48.34 | 0.0 (early_offline) | $69.79 wk (= 21.45+48.34) | attribution exact, gross lost |
+| 08-18 18:38 | 2 | $42.10 | 0.0 | $42.10 wk | attribution exact, gross lost |
+| 08-23 14:46 | 2 | $19.70 | 0.0 | $61.80 wk (= 42.10+19.70) | attribution exact, gross lost |
+| 08-23 16:56 | 1 | $16.70 | 0.0 | $16.70 dash | attribution exact, gross lost |
+
+All five week drops stamped `offerPayAttribution: PER_OFFER_STORE` (the #997 ladder's best arm,
+zero degrades this week; the slice's one degrade — 08-14 `STAMP_FALLBACK` on a store-less drop —
+still reconciled exactly). Σ accepted quotes = Σ realizedPay = $78.50. No null-session
+deliveries, no orphan offers, one edge-gated D6 join miss (08-14, as designed).
+
+### Verification TODOs / system health
+
+**7. WARN/ERROR census: 66 WARN, 0 ERROR, 0 restarts.** All five WARN families known-benign or
+the privacy layers working. 38× `Denied confirm_decline … (fail closed)` — the quick-decline
+capability is STILL ungranted on the device, so #577's auto-confirm was inert all week (the
+standing to-do before the next dash). #909 family all clear; TTS 28/28 utterances succeeded
+(#991's recovery ladder never exercised — count as no-regression, not validation); recognition
+health #937 never tripped (UNKNOWN ratio 14.4–16.7%, at baseline); version stamping working
+(`8.93.7` on 651 envelopes — which is how #1029 is datable to the 08-09→08-12 window).
+
+**8. UNKNOWN census: 175 of 689 (25.4%).** Families worth rules batched into #1036 (pause menu —
+which renders the running total, "Drop off steps", photo-zoom viewer, uncollared offer card,
+47-item shop pre-arrival variant, ~14 notification wording variants), alongside #1036's primary
+ask: a rule that MATCHES but parses all-null must be loud — the #1029 class was silent by
+construction and the frozen corpus structurally cannot see it.
+
+**9. Checklist outcomes this pull:** #1005 **VALIDATED 2/2 → retired** (8 clean `<STORE> Order`
+rows across 4 dashes, incl. the bare `Dropoff` fallback on the store-less drop, exactly as
+specified); #999 **BROKEN → retired to this entry** (item 5 above); #1000 → 1/2 (the v10 refold
+healed the 08-08 Zaxbys accept: `linkedJobId` set, `storeKey` NULL — the correct fail-null
+shape); #996/#997 → 1/2 (shape (a) confirmed; (b)/(c) unseen); #986/#934 → 1/2 (12/12 clean);
+#991 noted, stays 0/2; #985/#992-#995/#924 no evidence (no such surfaces fielded — and the
+`doordash.screen.earnings` zero-corpus concern from the 08-23 entry's item 6 remains untested:
+no Earnings-tab capture came home; `dxdr_nav_host_fragment` 0 hits anywhere).
 
 ---
 
