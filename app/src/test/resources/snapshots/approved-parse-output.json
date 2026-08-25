@@ -1006,7 +1006,7 @@
             "offersAccepted": null,
             "offersTotal": null,
             "parsedPay": null,
-            "sessionEarnings": null,
+            "sessionEarnings": 17.75,
             "totalPay": 17.72
         }
     },
@@ -1039,7 +1039,7 @@
             "offersTotal": null,
             "parsedPay": null,
             "sessionEarnings": null,
-            "totalPay": 0.0
+            "totalPay": 16.7
         }
     },
     "delivery_summary_collapsed/20260128_163015_182_DELIVERY_SUMMARY_COLLAPSED.json": {
@@ -1262,7 +1262,7 @@
             "offersAccepted": null,
             "offersTotal": null,
             "parsedPay": "ParsedPay(appPayComponents=[ParsedPayItem(type=Base pay, amount=17.75), ParsedPayItem(type=Peak pay, amount=1.0)], customerTips=[ParsedPayItem(type=799, amount=5.0)])",
-            "sessionEarnings": null,
+            "sessionEarnings": 23.75,
             "totalPay": 23.75
         }
     },
@@ -1278,7 +1278,7 @@
             "offersAccepted": null,
             "offersTotal": null,
             "parsedPay": "ParsedPay(appPayComponents=[ParsedPayItem(type=Base pay, amount=8.75)], customerTips=[ParsedPayItem(type=618, amount=20.12)])",
-            "sessionEarnings": null,
+            "sessionEarnings": 52.62,
             "totalPay": 28.87
         }
     },
@@ -1294,7 +1294,7 @@
             "offersAccepted": null,
             "offersTotal": null,
             "parsedPay": "ParsedPay(appPayComponents=[ParsedPayItem(type=Base pay, amount=6.7)], customerTips=[ParsedPayItem(type=Walgreens (11520), amount=4.25), ParsedPayItem(type=Arépale Latín Food, amount=5.5)])",
-            "sessionEarnings": null,
+            "sessionEarnings": 16.45,
             "totalPay": 16.45
         }
     },
@@ -1310,7 +1310,7 @@
             "offersAccepted": null,
             "offersTotal": null,
             "parsedPay": "ParsedPay(appPayComponents=[ParsedPayItem(type=Base pay, amount=13.0)], customerTips=[ParsedPayItem(type=799, amount=12.63)])",
-            "sessionEarnings": null,
+            "sessionEarnings": 42.08,
             "totalPay": 25.63
         }
     },
@@ -1326,7 +1326,7 @@
             "offersAccepted": null,
             "offersTotal": null,
             "parsedPay": "ParsedPay(appPayComponents=[ParsedPayItem(type=Base pay, amount=10.25)], customerTips=[ParsedPayItem(type=618, amount=7.0)])",
-            "sessionEarnings": null,
+            "sessionEarnings": 71.83,
             "totalPay": 17.25
         }
     },
@@ -1336,14 +1336,14 @@
         "shape": "post_task",
         "fields": {
             "appPay": null,
-            "customerTips": 799.0,
+            "customerTips": 7.0,
             "expandButtonId": null,
             "isExpanded": true,
             "offersAccepted": null,
             "offersTotal": null,
             "parsedPay": null,
-            "sessionEarnings": null,
-            "totalPay": 0.0
+            "sessionEarnings": 16.7,
+            "totalPay": 16.7
         }
     },
     "delivery_summary_expanded/20260128_163017_537_DELIVERY_SUMMARY_EXPANDED.json": {

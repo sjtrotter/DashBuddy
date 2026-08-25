@@ -759,12 +759,48 @@
       "parse": {
         "as": "idle",
         "fields": {
+          // #1029: the dash running total. Two renders, tried in order.
+          //   1. `running_total_pay` — a single settled TextView. Every committed
+          //      corpus frame carries it and resolves here, byte-identically.
+          //   2. The 8.93.7 `earnings_pill` — an id-less ANIMATED digit-wheel ("$",
+          //      "3",".","1","0" as separate nodes) beside its own label, under one
+          //      id-bearing container. `running_total_pay` appears in 0 of the 6
+          //      fielded waiting-for-offer frames of the 08-24 pull; the pill is
+          //      present in 51. `read: allText` fuses the subtree to "$3.10This dash",
+          //      which `parseGlyphCurrency` strips to the glyphs and accepts only when
+          //      the wheel has SETTLED into a well-formed figure (a mid-spin read is
+          //      null, never a number — see the transform's KDoc).
+          // The `hasAnyText: "This dash"` conjunct is load-bearing, not decoration: the
+          // SAME `earnings_pill` id renders the dasher's WEEK total on the earnings-mode
+          // pill ("This week" — see the committed on_dash_map/idle_map frames), and
+          // reading a weekly figure into the session's running earnings would be a
+          // large, plausible, stable lie — exactly the value a settle gate would happily
+          // commit. This rule is the ONLY one that parses `sessionPay`
+          // (`SessionPayOwnershipTest` pins that).
           "sessionPay": {
-            "find": {
-              "hasIdSuffix": "running_total_pay"
-            },
-            "read": "text",
-            "transform": "parseCurrency"
+            "coalesce": [
+              {
+                "find": {
+                  "hasIdSuffix": "running_total_pay"
+                },
+                "read": "text",
+                "transform": "parseCurrency"
+              },
+              {
+                "find": {
+                  "all": [
+                    {
+                      "hasIdSuffix": "earnings_pill"
+                    },
+                    {
+                      "hasAnyText": "This dash"
+                    }
+                  ]
+                },
+                "read": "allText",
+                "transform": "parseGlyphCurrency"
+              }
+            ]
           },
           "waitTimeEstimate": {
             "coalesce": [

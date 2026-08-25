@@ -113,6 +113,27 @@ data class PlatformRegion(
      * Default-null so existing snapshots deserialize unchanged.
      */
     val lastJoinMissWarnTaskId: String? = null,
+    /**
+     * A dash running-total read that has been seen ONCE and is waiting for a second, identical
+     * read before it may move [Session.runningEarnings] (#1029 — the **settle gate**).
+     *
+     * The platform renders that total as an animated digit-wheel, and captures land mid-animation.
+     * `parseGlyphCurrency` throws out the malformed intermediates, but roughly one fielded read in
+     * eight is well-FORMED and wrong ($470.00 during a $16.70 dash) — a string function cannot tell
+     * that apart from a real figure, because nothing about the string is wrong. What distinguishes
+     * them is TIME: a spin value is transient, a settled value repeats. So a parsed total that
+     * differs from the committed one is parked here, and only a second observation agreeing with
+     * the park commits it. A third distinct value simply replaces the park (it is a spin frame),
+     * and a read that already equals the committed total clears it (the wheel is at rest).
+     *
+     * Cost: a genuinely-changed total commits one frame late, which for a figure the dasher is
+     * glancing at is the right trade against showing them a number that never existed.
+     *
+     * Cleared whenever the session it describes begins or ends. Platform-agnostic: the gate is
+     * per-region state, keyed by nothing but this region's own reads. Default-null so existing
+     * snapshots deserialize unchanged.
+     */
+    val pendingSessionPayQuote: Double? = null,
 ) {
     /**
      * This platform's current PRESENTED offer — the accepted-pending-consumption survivors

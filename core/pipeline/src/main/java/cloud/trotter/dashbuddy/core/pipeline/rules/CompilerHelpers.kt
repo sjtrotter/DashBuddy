@@ -25,6 +25,15 @@ internal fun readProperty(node: UiNode, prop: String): String? = when (prop) {
     else -> throw RuleCompileException("Unknown read property: '$prop'")
 }
 
+/**
+ * How many FOLLOWING siblings `nextSiblingMatchingRegex(...)` will look at (#1029, bounded
+ * ingestion). A label→value pair on a flat row is 1–3 siblings apart in every fielded render; 8
+ * leaves headroom for an icon/divider or two without letting a rule walk an arbitrarily wide
+ * container — the scan runs per frame on the classification thread, and each step costs a
+ * (budgeted) regex match.
+ */
+internal const val MAX_SIBLING_SCAN = 8
+
 /** Compile a navigation spec to a node closure — unknown verbs throw HERE,
  *  at rule-load time, never during a live match (#362). */
 internal fun compileNavigation(navSpec: JsonElement): (UiNode) -> UiNode? {
@@ -38,6 +47,26 @@ internal fun compileNavigation(navSpec: JsonElement): (UiNode) -> UiNode? {
         nav.startsWith("sibling(") -> {
             val offset = nav.removePrefix("sibling(").removeSuffix(")").toIntOrNull() ?: 1
             ;{ node -> node.sibling(offset) }
+        }
+        // #1029 — the SHAPE-anchored sibling read. `sibling(N)` addresses a slot by POSITION,
+        // which is only sound while the row's shape is fixed; DoorDash 8.93.7 flattened the
+        // receipt breakdown into id-less siblings
+        // ('Customer tips', '799', '$7.00') and `sibling(1)` off the label then read the stray
+        // '799' — a type-code node that older builds render as a `pay_line_item_title` — through
+        // `parseCurrency` as a fabricated $799.00 tip. This scans the FOLLOWING siblings in order
+        // and returns the first whose own `text` FULL-matches the rule's pattern, so the rule
+        // states the shape it expects (`^\$[\d,]+\.\d{2}$` = "a currency figure") instead of
+        // guessing an offset. Bounded by [MAX_SIBLING_SCAN]; the pattern goes through
+        // [RegexSafety] here, at load time, so an over-long/ReDoS-prone pattern is a loud
+        // [RuleCompileException] and never a hot-path hang. Fail-null when nothing matches.
+        nav.startsWith("nextSiblingMatchingRegex(") -> {
+            val pattern = nav.removePrefix("nextSiblingMatchingRegex(").removeSuffix(")")
+            val regex = compileRegex(pattern)
+            ;{ node ->
+                (1..MAX_SIBLING_SCAN).firstNotNullOfOrNull { offset ->
+                    node.sibling(offset)?.takeIf { s -> s.text?.let(regex::matches) == true }
+                }
+            }
         }
         nav.startsWith("findChild(") -> {
             val idSuffix = nav.removePrefix("findChild(").removeSuffix(")")

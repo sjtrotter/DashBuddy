@@ -517,7 +517,8 @@ into `AppNoticeChannel.postNotice`, which all three notifiers now call).
 **#1036 adds the alarm's other half: matched-but-parsed-nothing.** #937 measures rules that stopped
 MATCHING; DoorDash 8.93.7 removed the view ids every money parse anchored on while the text `require`
 anchors kept matching, so recognition looked healthy for weeks as every parse died (and the frozen
-corpus structurally cannot see it, #1029). `Ruleset.matchFirst` reports a `:domain` `ParseShortfall`
+corpus structurally cannot see it — that rot was #1029, re-anchored below). `Ruleset.matchFirst`
+reports a `:domain` `ParseShortfall`
 for every branch that MATCHED while its parse yielded nothing usable, on **two** triggers: every
 **evidence** field unresolved (total rot), or any **shape-required** field null while others parsed
 (partial rot — `ParsedFieldsFactory.REQUIRED_FIELDS_BY_SHAPE`, the receipt's shape one release before
@@ -593,6 +594,28 @@ changing recognition means editing rule JSON plus corpus tests. **Rules cannot d
 bindings* (`acceptButton`, `declineButton`, `expandButton`) that the app-owned `RuleAction`
 registry (`:domain`) consumes — see `docs/design/rule-capability-consent.md`.
 
+**Two primitives exist for reading an id-less render (#1029), both bounded.** DoorDash 8.93.7
+shipped its money surfaces with NO view ids, so the parse vocabulary needed shape anchors where it
+had only id and position anchors. (1) The **`parseGlyphCurrency` transform** reads an animated
+digit-wheel — a figure rendered as per-glyph id-less `TextView`s beside a label, which `read:
+allText` fuses into one string (`"This dash so far$16.70"`, or `"$3.10This dash"` when the label
+trails). It keeps only the `$`/digit/`.`/`,` characters, then **full-matches** a settled shape
+(`$` + 1–4 digits + optional comma group + exactly 2 decimals) or returns **null** — bounded input
+(256 chars), fail-closed, and that strictness is the point: ~1 in 5 fielded reads is mid-animation
+(`$70103.030`, `$016.603`), and a fabricated figure is strictly worse than none. Note `parseCurrency`
+is not merely useless on that shape but WRONG — it splits on space and takes the first token, so a
+space-separated wheel reads `$1.00`. (2) The **`nextSiblingMatchingRegex(<pattern>)` navigate spec**
+scans up to `MAX_SIBLING_SCAN`=8 FOLLOWING siblings and returns the first whose own text
+full-matches, so a rule states the SHAPE it expects instead of a positional `sibling(N)`. The
+pattern compiles through `RegexSafety` at rule-LOAD time (length cap + ReDoS rejection, a loud
+`RuleCompileException`, never a hot-path hang) and matches through `BoundedRegex.matches` (the new
+whole-input sibling of `containsMatchIn`, same 200 ms budget, fail-closed to no-match). Its receipt:
+8.93.7 flattened the pay breakdown into id-less siblings `'Customer tips', '799', '$7.00'`, where
+`799` is a DoorDash type CODE that older builds render in the `pay_line_item_title` slot — so
+`sibling(1)` + `parseCurrency` reported a **$799.00 tip on a $16.70 delivery**. No offset is right
+on both layouts; "the next money-shaped node" is. Neither primitive can catch a mid-spin read that
+is well-FORMED but wrong — that is the settle gate's job (§3).
+
 ### 3. Multi-Region State Machine (`core/state/`)
 
 Observations reduce into `AppState(regions)` (`:domain`): **`FlowRegion`** (R0 — ground-truth
@@ -603,6 +626,18 @@ screen interpretation; the current flow + its provenance, NOT offers), one **`Pl
 crash recovery can replay observations over the last snapshot. `StateManagerV2` hosts the
 reduction, exposes `StateFlow<AppState>`, and owns crash recovery; `EffectMap` diffs prev/next
 state into `AppEffect`s.
+
+**The dash running total is settle-gated (#1029).** A parsed `IdleFields.sessionPay` moves
+`Session.runningEarnings` only when **two consecutive reads agree** — `PlatformRegion.pendingSessionPayQuote`
+parks the first sighting, a matching second commits it, a read equal to the committed figure clears
+the park. §2's `parseGlyphCurrency` already rejects the malformed digit-wheel intermediates, but a
+spin value that lands well-FORMED ($470.00 during a $16.70 dash) is indistinguishable from a real
+figure by inspection — only by repetition — so the discriminator has to be TIME, which means state.
+Pure and platform-agnostic (keyed by the region's own reads, no `Platform` branch, no wall clock);
+cleared on session start and end; a genuinely changed total commits one frame late by design.
+RESIDUAL: the PostTask receipt's `sessionEarnings` feed is deliberately NOT behind the gate, so a
+well-formed mid-spin receipt read can still write `runningEarnings` — self-correcting on the next
+idle frame pair, but not if the dash ends on that receipt.
 
 ### 4. Side Effect Engine (`app/.../state/effects/`)
 
@@ -822,7 +857,8 @@ fail-wrong beats fail-null); the delivery row's own `storeKey`/`milesToStore`/dw
 correct residuals, not bugs. The bump heals the 08-08 Zaxbys accept (1-of-5 lifetime offers left
 unlinked) on refold. **#1030 (early_offline fake $0 report, `PROJECTOR_VERSION` 10→11):** the
 EARLY_OFFLINE `DASH_STOP` branch stamped `totalEarnings = Session.runningEarnings`, a non-nullable
-`Double = 0.0` whose only feeders are the dead money parses (#1029), so every summary-less dash wrote
+`Double = 0.0` whose only feeders were the then-dead money parses (#1029, since re-anchored — and
+now settle-gated, so the figure moves only on two agreeing reads), so every summary-less dash wrote
 a **hard `0.0`** that `COALESCE(s.reportedEarnings, d.deliveredPay, 0)` then honoured as an
 authoritative "$0 reported" — the 08-17→08-23 week (the first all-`early_offline` one) read
 `$0.00 came in.` against $78.50 realized and tripped the over-attribution severe flag.

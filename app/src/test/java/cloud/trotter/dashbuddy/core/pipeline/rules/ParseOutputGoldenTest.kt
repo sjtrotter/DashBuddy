@@ -300,15 +300,18 @@ class ParseOutputGoldenTest {
      * still id-anchored, still gracefully null on 0.230.0 — it just no longer drives
      * dedupe.)
      * (`delivery_summary_expanded:totalPay` joined the set with the 2026-08-24 corpus intake —
-     * NOT a rule change, a fielded PLATFORM change. Every incumbent expanded fixture resolves
-     * `{totalPay}`; the DoorDash **8.93.7** receipt does not, because that build re-rendered the
-     * summary sheet with NO money-bearing view ids at all — the whole `earnings_ticker` /
-     * `pay_line_item_value` / `pay_breakdown_epoxy_recycler` family the parse anchors on is gone,
-     * and the figure now arrives as per-glyph id-less text nodes. That is **#1029** (money-anchor
-     * rot), and the newly committed 08-23 17:35 collapsed/expanded pair is its only fielded
-     * specimen. The pin records the debt rather than hiding it: the parse is genuinely dead on
-     * 8.93.7 and stays dead until #1029 re-anchors it, at which point BOTH summary entries should
-     * come off this set together.)
+     * NOT a rule change, a fielded PLATFORM change: DoorDash **8.93.7** re-rendered the summary
+     * sheet with NO money-bearing view ids at all. **#1029 re-anchored it and the pin is gone**:
+     * the rule now falls back to the currency-shaped sibling of the 'This offer' row, which every
+     * expanded fixture in the corpus — 8.93.7 included — resolves.
+     * The `delivery_summary_collapsed:totalPay` entry above deliberately did NOT come off with it,
+     * against the expectation recorded here before the work: the two are dead for DIFFERENT
+     * reasons. The expanded one was version rot, which #1029 fixed. The collapsed one is the
+     * CORPUS artifact described in its own bullet — two truncated 2026-01-28 mid-render captures
+     * (`20260128_173245_145`/`_150`) that carry no `final_value` AND nest 'This offer' as the sole
+     * child of its `section_title_container`, so it has no sibling to scan. Nothing about the
+     * fielded layout is broken there; the frames are half-laid-out. Fixing it would mean anchoring
+     * on something those frames actually render, which is a corpus question, not a rot one.)
      * (`dash_summary:sessionDurationMillis` joined the set with **#1032**, and is the
      * `delivery_summary_collapsed:totalPay` shape exactly — a CORPUS artifact, not a dead
      * parse. 15 of the folder's 16 fixtures resolve the field (the 8.93.7 specimen among
@@ -331,8 +334,6 @@ class ParseOutputGoldenTest {
         // that is gone.
         "doordash.screen.dash_summary:sessionDurationMillis",
         "doordash.screen.delivery_summary_collapsed:totalPay",
-        // #1029 — see the KDoc above: DoorDash 8.93.7 ships the receipt sheet id-less.
-        "doordash.screen.delivery_summary_expanded:totalPay",
     )
 
     @Test
@@ -418,14 +419,13 @@ class ParseOutputGoldenTest {
      * Entries are "ruleId:field".
      */
     private val knownDeadArgTemplates = setOf(
+        // Two truncated 2026-01-28 mid-render captures render neither `final_value` nor a
+        // scannable 'This offer' sibling, so `DeliveryBreakdown - {totalPay}.png` still ships
+        // literal on THOSE frames. A corpus artifact, not rot — see [knownDeadDedupeTemplates].
         "doordash.screen.delivery_summary_collapsed:totalPay",
-        // #1029, added with the 2026-08-24 corpus intake — the mirror of the same-key entry in
-        // [knownDeadDedupeTemplates]. DoorDash 8.93.7 renders the receipt sheet with no
-        // money-bearing view ids, so `totalPay` parses null and this rule's evidence screenshot
-        // saves the literal `DeliveryBreakdown - {totalPay}.png` on such a frame. The
-        // EvidenceFilename sanitizer (#859) keeps that from reaching disk as the raw token, but
-        // the template is still dead until #1029 re-anchors the parse.
-        "doordash.screen.delivery_summary_expanded:totalPay",
+        // (`delivery_summary_expanded:totalPay` was here from the 2026-08-24 intake and came OFF
+        // with #1029: the 8.93.7 id-less receipt now resolves `{totalPay}` through the
+        // 'This offer' sibling scan, so no expanded frame leaves the token unresolved.)
         // uber.screen.offer:storeName was FIXED in #813: the rule now parses a
         // top-level storeName (scoped to the offer card) so "Offer - {storeName}"
         // interpolates on every fielded offer frame. Pin removed (the lint asserts

@@ -1,0 +1,120 @@
+package cloud.trotter.dashbuddy.core.pipeline.rules
+
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
+import org.junit.Test
+
+/**
+ * `parseGlyphCurrency` — the animated digit-wheel reader (#1029).
+ *
+ * DoorDash 8.93.7 removed every money view id and now renders each figure as per-glyph, id-less
+ * `TextView`s beside a label. `read: allText` joins a subtree with the EMPTY separator, so the
+ * whole container arrives as one fused string. These cases pin the two properties the money side
+ * depends on: a SETTLED wheel reconstructs exactly, and anything else is null — never a number.
+ *
+ * The three garbage shapes below are not invented: they are the literal joins of committed corpus
+ * frames (`delivery_summary_collapsed` 07-17 and 08-23, plus the field-log `$291.0360` class).
+ */
+class GlyphCurrencyTransformTest {
+
+    private fun parse(text: String?): Any? = TransformRegistry.apply("parseGlyphCurrency", text)
+
+    // =========================================================================
+    // Settled wheels — the values the parse must recover
+    // =========================================================================
+
+    @Test
+    fun `a settled wheel with a leading label parses`() {
+        // The 08-23 delivery_summary_expanded receipt, verbatim.
+        assertEquals(16.70, parse("This dash so far\$16.70"))
+    }
+
+    @Test
+    fun `a settled wheel with a TRAILING label parses`() {
+        // The on-dash `earnings_pill` renders its label AFTER the digits, which is why the glyph
+        // filter has to be two-sided rather than a leading-label strip.
+        assertEquals(3.10, parse("\$3.10This dash"))
+    }
+
+    @Test
+    fun `spacer text between the glyphs is stripped`() {
+        // A space-separated wheel is exactly where `parseCurrency` fails WRONG: it splits on
+        // space and takes the first token, so this same input reads $1.00 there.
+        assertEquals(16.70, parse("\$ 1 6 . 7 0"))
+        assertEquals(1.00, TransformRegistry.apply("parseCurrency", "\$ 1 6 . 7 0"))
+    }
+
+    @Test
+    fun `a comma thousands group parses`() {
+        assertEquals(1234.56, parse("This week\$1,234.56"))
+    }
+
+    @Test
+    fun `the shape's boundaries are respected`() {
+        assertEquals(0.00, parse("\$0.00"))
+        assertEquals(9999.99, parse("\$9999.99"))
+        assertEquals(9999.99, parse("\$9,999.99"))
+    }
+
+    // =========================================================================
+    // Mid-spin garbage — the whole reason the transform exists
+    // =========================================================================
+
+    @Test
+    fun `the fielded mid-spin joins all fail closed`() {
+        // 08-23 delivery_summary_collapsed: the wheel caught mid-flight, 4s before its
+        // expanded sibling settled at $16.70.
+        assertNull(parse("This dash so far\$70103.030"))
+        // 07-17 delivery_summary_collapsed, the frame #801's rule comment cites.
+        assertNull(parse("This dash so far\$016.603"))
+        // The doubled-digit class from the field log.
+        assertNull(parse("\$291.0360"))
+    }
+
+    @Test
+    fun `an unsettled shape is never coerced into a number`() {
+        assertNull(parse("\$1670"))       // no decimal point yet
+        assertNull(parse("\$16.7"))       // one fraction digit
+        assertNull(parse("\$16.700"))     // three fraction digits
+        assertNull(parse("16.70"))        // no currency mark
+        assertNull(parse("\$"))           // the wheel has only rendered the mark
+        assertNull(parse(""))
+    }
+
+    // =========================================================================
+    // Fail-closed on an ambiguous container — a mis-aimed rule reads null
+    // =========================================================================
+
+    @Test
+    fun `a label carrying its own digits poisons the join and yields null`() {
+        // The stats row that sits beside the receipt wheel. Folding it in would splice
+        // "1 out of 1" into the figure, so the full-match rejects the whole read.
+        assertNull(parse("This dash so far\$16.70Total online time 39 minOffers accepted1 out of 1"))
+        assertNull(parse("1 out of 1\$16.70"))
+    }
+
+    @Test
+    fun `two figures in one container yield null, never a fusion`() {
+        assertNull(parse("\$8.70\$1.00"))
+    }
+
+    @Test
+    fun `input past the bound is rejected without inspection`() {
+        val padded = "x".repeat(TransformRegistry.MAX_GLYPH_CURRENCY_INPUT) + "\$16.70"
+        assertNull(parse(padded))
+    }
+
+    @Test
+    fun `null input stays null`() {
+        assertNull(parse(null))
+    }
+
+    // =========================================================================
+    // Engine wiring
+    // =========================================================================
+
+    @Test
+    fun `the transform name is compile-validated like every other`() {
+        TransformRegistry.validateTransformName("parseGlyphCurrency")
+    }
+}

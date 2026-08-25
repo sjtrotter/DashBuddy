@@ -292,6 +292,9 @@ class PlatformRegionStepper @Inject constructor() {
                             startedAt = obs.timestamp,
                         ),
                         mintCounter = region.mintCounter + 1,
+                        // #1029: a running-total read parked before this dash existed
+                        // describes the previous one — never settle it against this session.
+                        pendingSessionPayQuote = null,
                     )
                 }
             }
@@ -512,9 +515,7 @@ class PlatformRegionStepper @Inject constructor() {
                 if (parsed.sessionType != null) r = r.copy(sessionType = parsed.sessionType)
                 r.session?.let { session ->
                     val pay = parsed.sessionPay
-                    if (pay != null) {
-                        r = r.copy(session = session.copy(runningEarnings = pay))
-                    }
+                    if (pay != null) r = settleSessionPay(r, session, pay)
                 }
             }
             is ParsedFields.PostTaskFields -> {
@@ -573,6 +574,35 @@ class PlatformRegionStepper @Inject constructor() {
         }
 
         return r
+    }
+
+    /**
+     * The **settle gate** for a parsed dash running total (#1029): a value commits to
+     * [Session.runningEarnings] only once TWO consecutive reads agree on it.
+     *
+     * The platform now renders that total as an animated digit-wheel, so a capture can catch it
+     * mid-spin. `parseGlyphCurrency` rejects the malformed intermediates at the parse layer, but a
+     * spin value that happens to be well-FORMED ($470.00 on a $16.70 dash) is indistinguishable
+     * from a real figure by inspection — only by repetition. Hence:
+     *
+     *  - read == committed → the wheel is at rest; drop any park and change nothing.
+     *  - read == parked    → two consecutive frames agree; COMMIT it and clear the park.
+     *  - otherwise         → first sighting; park it and leave the committed figure alone.
+     *
+     * Pure, platform-agnostic (state keyed by this region only, no [Platform] branch, no wall
+     * clock). See [PlatformRegion.pendingSessionPayQuote].
+     */
+    private fun settleSessionPay(
+        region: PlatformRegion,
+        session: Session,
+        pay: Double,
+    ): PlatformRegion = when {
+        pay == session.runningEarnings -> region.copy(pendingSessionPayQuote = null)
+        pay == region.pendingSessionPayQuote -> region.copy(
+            session = session.copy(runningEarnings = pay),
+            pendingSessionPayQuote = null,
+        )
+        else -> region.copy(pendingSessionPayQuote = pay)
     }
 
     private fun updateRatings(region: PlatformRegion, obs: Observation.FlowObservation): PlatformRegion {
@@ -730,6 +760,8 @@ class PlatformRegionStepper @Inject constructor() {
             lastPostTaskFields = null,
             // #438 B3: the session's over — pending/accepted offers must not leak into the next dash.
             pendingOffers = emptyList(),
+            // #1029: an un-settled running-total read describes the dash that just ended.
+            pendingSessionPayQuote = null,
         )
     }
 

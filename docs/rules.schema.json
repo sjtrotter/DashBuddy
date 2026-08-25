@@ -885,8 +885,8 @@
 
     "navigateSpec": {
       "type": "string",
-      "description": "Navigation from a found node. Supported: 'parent', 'ancestor(N)', 'sibling(N)', 'findChild(idSuffix)', 'findDescendant(idSuffix)'.",
-      "pattern": "^(parent|ancestor\\(-?\\d+\\)|sibling\\(-?\\d+\\)|findChild\\([^)]+\\)|findDescendant\\([^)]+\\))$"
+      "description": "Navigation from a found node. Supported: 'parent', 'ancestor(N)', 'sibling(N)', 'findChild(idSuffix)', 'findDescendant(idSuffix)', 'nextSiblingMatchingRegex(pattern)'. The last one (#1029) scans up to 8 FOLLOWING siblings in order and returns the first whose own text FULL-matches the pattern — the shape-anchored alternative to a positional 'sibling(N)' on a flat, id-less row. The pattern is compiled through the RegexSafety guard at rule-load time (length cap + ReDoS rejection), so a bad pattern fails the load loudly.",
+      "pattern": "^(parent|ancestor\\(-?\\d+\\)|sibling\\(-?\\d+\\)|findChild\\([^)]+\\)|findDescendant\\([^)]+\\)|nextSiblingMatchingRegex\\(.+\\))$"
     },
 
     "transformSpec": {
@@ -913,6 +913,7 @@
       "description": "Named transform from TransformRegistry.",
       "enum": [
         "parseCurrency",
+        "parseGlyphCurrency",
         "parseDistance",
         "parseItemCount",
         "parseDeadline",
