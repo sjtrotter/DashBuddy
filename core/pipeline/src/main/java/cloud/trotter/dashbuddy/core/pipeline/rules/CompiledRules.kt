@@ -25,6 +25,41 @@ enum class RuleContext {
 typealias Bindings = Map<String, UiNode?>
 
 /**
+ * What a compiled parse expression can YIELD (#1036) — the vocabulary the matched-but-parsed-
+ * nothing signal reasons in. Decided at compile time, in the same dispatch that builds the
+ * extractor ([ParseExpressionCompiler.compileParseExpression]), because the runtime value alone
+ * cannot answer it: a constant `true` and an extracted `true` are the same Boolean.
+ */
+enum class ParseFieldKind {
+    /**
+     * Always resolves, whatever the frame says — a `literal`, a bare primitive spec, a
+     * `presence` check, an `else`-bearing `conditionalEnum`, or any extraction declaring a
+     * `fallback`. Such a field is evidence of nothing: it can neither show rot on its own nor
+     * be allowed to hide it by staying non-null beside a dead extraction.
+     */
+    CONSTANT,
+
+    /** Resolves to a value or to null — the ordinary anchored extraction. */
+    NULLABLE,
+
+    /**
+     * Resolves to a LIST that may be empty (`each`, `findAll`). An empty list is "found
+     * nothing" wearing a non-null value — exactly the rot shape on a line-item or orders parse,
+     * and the reason a plain null check was blind to the money surfaces (#1036 review R1).
+     */
+    COLLECTION,
+
+    ;
+
+    /** Did this field come back with nothing to say about the frame? */
+    fun isUnresolved(value: Any?): Boolean = when (this) {
+        CONSTANT -> false
+        NULLABLE -> value == null
+        COLLECTION -> value == null || (value is Collection<*> && value.isEmpty())
+    }
+}
+
+/**
  * A named binding declaration compiled from a `bind:` block.
  * Bindings are a screen-rule concept; click and notification rules have no bindings.
  *
@@ -57,6 +92,25 @@ data class CompiledBranch<TInput>(
     val predicate: ((TInput) -> Boolean)? = null,
     val rejectChecks: List<(TInput) -> Boolean> = emptyList(),
     val parser: ((TInput, Bindings) -> Map<String, Any?>) = { _, _ -> emptyMap() },
+    /**
+     * The fields whose value is EVIDENCE about the frame [parser] ran on, and what each can
+     * yield (#1036) — the branch's declared parse fields minus the [ParseFieldKind.CONSTANT]
+     * ones. Empty when the branch declares no parse block, declares only constants, or runs in
+     * a context with no parser at all (clicks).
+     *
+     * Carried on the compiled branch because the runtime field map cannot answer the question:
+     * a constant and an extraction are both just a non-null value in it. Declaration order is
+     * preserved so any rendering of the set is stable.
+     */
+    val parseEvidenceFields: Map<String, ParseFieldKind> = emptyMap(),
+    /**
+     * The fields this branch's parse SHAPE names as load-bearing —
+     * `ParsedFieldsFactory.REQUIRED_FIELDS_BY_SHAPE` for [shape], e.g. `post_task.totalPay`
+     * (#1036 review R2). The compiler already proves they are DECLARED; this carries them to
+     * match time so a rule can also be caught leaving one null while its other fields parse —
+     * the partial rot that preceded 8.93.7's total receipt failure by a release.
+     */
+    val requiredParseFields: Set<String> = emptySet(),
     val validators: List<(Map<String, Any?>) -> ValidateOutcome> = emptyList(),
     val effects: List<CompiledEffect> = emptyList(),
     val bindings: List<Binding> = emptyList(),

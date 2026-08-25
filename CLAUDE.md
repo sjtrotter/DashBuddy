@@ -514,6 +514,33 @@ live in one owner (`AppNoticeChannel`, ids 102 locale / 103 recognition / 105 TT
 separate `weekly_plan_channel`; #991 also moved the ensure+PendingIntent+Builder posting shape itself
 into `AppNoticeChannel.postNotice`, which all three notifiers now call).
 
+**#1036 adds the alarm's other half: matched-but-parsed-nothing.** #937 measures rules that stopped
+MATCHING; DoorDash 8.93.7 removed the view ids every money parse anchored on while the text `require`
+anchors kept matching, so recognition looked healthy for weeks as every parse died (and the frozen
+corpus structurally cannot see it, #1029). `Ruleset.matchFirst` reports a `:domain` `ParseShortfall`
+for every branch that MATCHED while its parse yielded nothing usable, on **two** triggers: every
+**evidence** field unresolved (total rot), or any **shape-required** field null while others parsed
+(partial rot — `ParsedFieldsFactory.REQUIRED_FIELDS_BY_SHAPE`, the receipt's shape one release before
+it died completely). "Unresolved" is judged per field by the `ParseFieldKind` the parse compiler
+emits **in the same dispatch that builds the extractor** (`CompiledBranch.parseEvidenceFields`):
+`CONSTANT` (a literal, a `presence` check, an `else`-bearing `conditionalEnum`, any `fallback`-bearing
+extraction) is excluded entirely — it can neither evidence rot nor MASK a dead extraction beside it —
+`NULLABLE` counts when null, and `COLLECTION` (`each`/`findAll`) counts when the list is **empty**,
+which is what a plain null check missed on exactly the money surfaces (`payLineItems`, `orders`,
+`tasks`). Measured pre-validate (a `DropParsed` validator is a declared decision, not rot) and
+reported even when a `Skip` validator then discards the branch — that is the case where a
+lower-priority text rule claims the frame and the rot leaves no other trace. The classifier only
+CARRIES the shortfalls (on `Observation.Screen`/`Notification`); both pipelines count them
+**post-admission**, beside the #937 sample, so debounced duplicates and disabled platforms never
+enter the census. `PipelineStats.onParseShortfall(shortfall)` owns both grains: a full per-rule count
+(rendered as `parseShortfall{<ruleId>=n,…}` on the periodic summary — loudest 8, `+k more`, rule ids
+and counts only, P7) and one WARN per rule per process under the `ParseHealth` tag. Keyed by rule id
+ONLY (P8), and inert — the observation is built exactly as before. Deliberately **no** dasher-visible
+notice: escalation is a later decision. A rule whose one evidence field is legitimately optional trips
+benignly (`dash_along_the_way`, `idle_map`, `set_dash_end_time` in the committed corpus), which is why
+the WARN is a once-per-process breadcrumb rather than an alarm; the same corpus shows the real finds
+(`delivery_summary_expanded`/`_collapsed`, `waiting_for_offer`, `timeline`).
+
 ### 2. JSON Rule Engine (`core/pipeline/.../rules/` + generated `assets/rules/`)
 
 Recognition is **data, not code**. The rule SOURCE is per-platform **JSON5** under `matchers/rules/`

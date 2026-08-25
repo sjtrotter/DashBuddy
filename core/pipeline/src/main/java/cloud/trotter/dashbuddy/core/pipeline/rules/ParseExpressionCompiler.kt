@@ -34,25 +34,54 @@ internal object ParseExpressionCompiler {
     // ==========================================================================
 
     /**
+     * A compiled parse block: the extractor, plus what each declared field can actually YIELD
+     * (#1036). The two are produced by ONE pass over the block, so the parse and the metadata
+     * describing it structurally cannot disagree.
+     *
+     * [evidenceFields] holds only the fields that say something about THIS frame —
+     * [ParseFieldKind.CONSTANT] fields are dropped, because a constant can neither evidence rot
+     * on its own nor be allowed to MASK a dead extraction beside it by staying non-null forever.
+     */
+    data class CompiledScreenParse(
+        val parse: (UiNode, Bindings) -> Map<String, Any?>,
+        val evidenceFields: Map<String, ParseFieldKind>,
+    )
+
+    /** The notification edition of [CompiledScreenParse]. */
+    data class CompiledNotifParse(
+        val parse: (RawNotificationData) -> Map<String, Any?>,
+        val evidenceFields: Map<String, ParseFieldKind>,
+    )
+
+    /**
      * Compile a `parse:` block for screen rules.
      * Operates on UiNode tree with optional bindings.
      */
-    fun compileScreenParseBlock(parseObj: JsonObject): (UiNode, Bindings) -> Map<String, Any?> {
-        val fieldsObj = parseObj["fields"]?.jsonObject ?: return { _, _ -> emptyMap() }
+    fun compileScreenParseBlock(parseObj: JsonObject): CompiledScreenParse {
+        val fieldsObj = parseObj["fields"]?.jsonObject
+            ?: return CompiledScreenParse({ _, _ -> emptyMap() }, emptyMap())
 
-        val compiledFields: List<Pair<String, (UiNode, Bindings) -> Any?>> =
+        val compiledFields: List<Pair<String, ScreenExpr>> =
             fieldsObj.entries.map { (fieldName, fieldSpec) ->
                 fieldName to compileParseExpression(fieldSpec)
             }
 
-        return { tree, bindings ->
-            val result = mutableMapOf<String, Any?>()
-            for ((name, expr) in compiledFields) {
-                result[name] = expr(tree, bindings)
-            }
-            result
-        }
+        return CompiledScreenParse(
+            parse = { tree, bindings ->
+                val result = mutableMapOf<String, Any?>()
+                for ((name, expr) in compiledFields) {
+                    result[name] = expr.eval(tree, bindings)
+                }
+                result
+            },
+            evidenceFields = evidenceFieldsOf(compiledFields.map { it.first to it.second.kind }),
+        )
     }
+
+    /** Drop the constants; keep declaration order so a rendered field list is stable. */
+    private fun evidenceFieldsOf(kinds: List<Pair<String, ParseFieldKind>>): Map<String, ParseFieldKind> =
+        kinds.filterNot { it.second == ParseFieldKind.CONSTANT }
+            .toMap(LinkedHashMap())
 
     // ==========================================================================
     //  Notification parse block compiler
@@ -72,34 +101,34 @@ internal object ParseExpressionCompiler {
      */
     fun compileNotificationParseBlock(
         parseObj: JsonObject,
-    ): (RawNotificationData) -> Map<String, Any?> {
-        val fieldsObj = parseObj["fields"]?.jsonObject ?: return { emptyMap() }
+    ): CompiledNotifParse {
+        val fieldsObj = parseObj["fields"]?.jsonObject
+            ?: return CompiledNotifParse({ emptyMap() }, emptyMap())
 
-        data class NotifFieldExtractor(
-            val name: String,
-            val extract: (RawNotificationData) -> Any?,
+        val extractors: List<Pair<String, NotifExpr>> = fieldsObj.entries.map { (fieldName, fieldSpec) ->
+            fieldName to compileNotifParseExpression(fieldSpec)
+        }
+
+        return CompiledNotifParse(
+            parse = { raw ->
+                val result = mutableMapOf<String, Any?>()
+                for ((name, expr) in extractors) {
+                    result[name] = expr.eval(raw)
+                }
+                result
+            },
+            evidenceFields = evidenceFieldsOf(extractors.map { it.first to it.second.kind }),
         )
-
-        val extractors = fieldsObj.entries.map { (fieldName, fieldSpec) ->
-            NotifFieldExtractor(fieldName, compileNotifParseExpression(fieldSpec))
-        }
-
-        return { raw ->
-            val result = mutableMapOf<String, Any?>()
-            for (extractor in extractors) {
-                result[extractor.name] = extractor.extract(raw)
-            }
-            result
-        }
     }
 
     /**
-     * Compile a single notification parse expression.
+     * Compile a single notification parse expression, with the [ParseFieldKind] it can yield
+     * (#1036) — decided in the SAME dispatch that builds the extractor.
      */
-    private fun compileNotifParseExpression(spec: JsonElement): (RawNotificationData) -> Any? {
+    private fun compileNotifParseExpression(spec: JsonElement): NotifExpr {
         if (spec is JsonPrimitive) {
             val value = spec.content
-            return { _ -> value }
+            return NotifExpr({ _ -> value }, ParseFieldKind.CONSTANT)
         }
 
         val obj = spec as? JsonObject
@@ -108,7 +137,7 @@ internal object ParseExpressionCompiler {
         // Literal
         if ("literal" in obj) {
             val value = resolveLiteral(obj["literal"]!!)
-            return { _ -> value }
+            return NotifExpr({ _ -> value }, ParseFieldKind.CONSTANT)
         }
 
         // From + find pattern
@@ -127,7 +156,7 @@ internal object ParseExpressionCompiler {
         // notification, per field, violating the no-hot-path-parsing contract.
         val findRegex = findPattern?.let { compileRegex(it) }
 
-        return { raw ->
+        val eval: (RawNotificationData) -> Any? = { raw ->
             val sourceText = readNotificationField(raw, fromField)
 
             val rawValue = if (findRegex != null && sourceText != null) {
@@ -142,7 +171,14 @@ internal object ParseExpressionCompiler {
 
             transformed ?: fallbackVal?.let { resolveLiteral(it) }
         }
+        // A declared `fallback` is a value the rule stands behind when extraction misses, so the
+        // field always resolves — it can no more evidence rot than a literal can (#1036).
+        return NotifExpr(eval, kindFor(fallbackVal != null))
     }
+
+    /** `CONSTANT` when the expression can never come back empty, else `NULLABLE` (#1036). */
+    private fun kindFor(alwaysResolves: Boolean): ParseFieldKind =
+        if (alwaysResolves) ParseFieldKind.CONSTANT else ParseFieldKind.NULLABLE
 
     /**
      * Read a named field from a notification.
@@ -170,7 +206,7 @@ internal object ParseExpressionCompiler {
     private fun compileParseExpression(
         spec: JsonElement,
         depth: Int = 0,
-    ): (UiNode, Bindings) -> Any? {
+    ): ScreenExpr {
         if (depth > RuleCompiler.MAX_PARSE_DEPTH)
             throw RuleCompileException(
                 "Parse expression nesting exceeds MAX_PARSE_DEPTH=${RuleCompiler.MAX_PARSE_DEPTH}",
@@ -178,7 +214,7 @@ internal object ParseExpressionCompiler {
 
         if (spec is JsonPrimitive) {
             val value = spec.content
-            return { _, _ -> value }
+            return ScreenExpr({ _, _ -> value }, ParseFieldKind.CONSTANT)
         }
 
         val obj = spec as? JsonObject
@@ -189,21 +225,53 @@ internal object ParseExpressionCompiler {
 
         val fromName = obj["from"]?.jsonPrimitive?.content?.removePrefix("$")
 
+        // #1036 — each arm names the [ParseFieldKind] its own extractor can yield, in the SAME
+        // dispatch that builds it. A hand-mirrored "is this a literal?" scan beside this `when`
+        // was the first shape of this signal and it was blind to five never-null forms
+        // (`each`/`findAll` return an empty List, `presence` a Boolean, an `else`-bearing
+        // `conditionalEnum` and any `fallback`-bearing extraction a declared default) — one such
+        // field on a rule pinned the whole signal silent, and they sit on exactly the money
+        // surfaces this exists to watch. Adding an arm below without a kind is now a compile error.
         return when {
-            "literal" in obj -> compileLiteral(obj)
-            "find" in obj -> compileFind(obj, fromName)
-            "findAll" in obj -> compileFindAll(obj, fromName)
-            "textAfterLabel" in obj -> compileTextAfterLabel(obj, fromName)
-            "presence" in obj -> compilePresence(obj, fromName)
-            "conditionalEnum" in obj -> compileConditionalEnum(obj, fromName)
-            "each" in obj -> compileEach(obj, fromName, depth)
-            "join" in obj -> compileJoin(obj, depth)
+            "literal" in obj -> ScreenExpr(compileLiteral(obj), ParseFieldKind.CONSTANT)
+            // A COLLECTION resolves to a List that may be EMPTY — "found nothing" wearing a
+            // non-null value, which is precisely the rot shape on a line-item/orders parse.
+            "findAll" in obj -> ScreenExpr(compileFindAll(obj, fromName), ParseFieldKind.COLLECTION)
+            "each" in obj -> ScreenExpr(compileEach(obj, fromName, depth), ParseFieldKind.COLLECTION)
+            // `presence` answers a yes/no about the tree: it is never null, and "absent" is a
+            // real answer, not a miss.
+            "presence" in obj -> ScreenExpr(compilePresence(obj, fromName), ParseFieldKind.CONSTANT)
+            "conditionalEnum" in obj ->
+                ScreenExpr(compileConditionalEnum(obj, fromName), kindFor(hasElseCase(obj)))
+            "find" in obj -> ScreenExpr(compileFind(obj, fromName), kindFor("fallback" in obj))
+            "textAfterLabel" in obj ->
+                ScreenExpr(compileTextAfterLabel(obj, fromName), kindFor("fallback" in obj))
+            "siblingOf" in obj -> ScreenExpr(compileSiblingOf(obj, fromName), kindFor("fallback" in obj))
+            "join" in obj -> ScreenExpr(compileJoin(obj, depth), kindFor("fallback" in obj))
+            // A coalesce resolves whenever ANY of its alternatives always resolves — it decides
+            // its own kind off the branches it already compiled.
             "coalesce" in obj -> compileCoalesce(obj, depth)
-            "siblingOf" in obj -> compileSiblingOf(obj, fromName)
-            "read" in obj && fromName != null -> compileReadFromBinding(obj, fromName)
+            "read" in obj && fromName != null ->
+                ScreenExpr(compileReadFromBinding(obj, fromName), kindFor("fallback" in obj))
             else -> throw RuleCompileException("Unknown parse expression keys: ${obj.keys}")
         }
     }
+
+    /** True when a `conditionalEnum` declares an `else` arm — then it always resolves (#1036). */
+    private fun hasElseCase(obj: JsonObject): Boolean =
+        obj["conditionalEnum"]!!.jsonArray.any { "else" in it.jsonObject }
+
+    /** A compiled screen parse expression + the [ParseFieldKind] it can yield (#1036). */
+    private data class ScreenExpr(
+        val eval: (UiNode, Bindings) -> Any?,
+        val kind: ParseFieldKind,
+    )
+
+    /** The notification edition of [ScreenExpr]. */
+    private data class NotifExpr(
+        val eval: (RawNotificationData) -> Any?,
+        val kind: ParseFieldKind,
+    )
 
     private fun compileLiteral(obj: JsonObject): (UiNode, Bindings) -> Any? {
         val value = obj["literal"]!!
@@ -365,7 +433,9 @@ internal object ParseExpressionCompiler {
 
         val compiledExtract: List<Pair<String, (UiNode, Bindings) -> Any?>> =
             extractObj.entries.map { (name, spec) ->
-                name to compileParseExpression(spec, depth + 1)
+                // Item-level kinds are inert: `each` reports COLLECTION for the whole field, and
+                // an item's own shortfall is not separately observable (#1036).
+                name to compileParseExpression(spec, depth + 1).eval
             }
 
         return { tree, bindings ->
@@ -398,7 +468,7 @@ internal object ParseExpressionCompiler {
         val skipNulls = obj["skipNulls"]?.jsonPrimitive?.booleanOrNull ?: true
         val transformSpec = obj["transform"]
 
-        val compiledParts = partsArray.map { compileParseExpression(it, depth + 1) }
+        val compiledParts = partsArray.map { compileParseExpression(it, depth + 1).eval }
 
         return { tree, bindings ->
             val values = compiledParts.map { it(tree, bindings)?.toString() }
@@ -414,7 +484,7 @@ internal object ParseExpressionCompiler {
         }
     }
 
-    private fun compileCoalesce(obj: JsonObject, depth: Int = 0): (UiNode, Bindings) -> Any? {
+    private fun compileCoalesce(obj: JsonObject, depth: Int = 0): ScreenExpr {
         // #549 hardening: coalesce returns the first non-null branch verbatim — it does NOT apply a
         // top-level transform. Silently dropping one would be a privacy footgun: a PII coalesce whose
         // sha256 sat at the top level (instead of inside each branch) would emit the RAW value. Reject
@@ -428,9 +498,13 @@ internal object ParseExpressionCompiler {
         }
         val exprs = obj["coalesce"]!!.jsonArray.map { compileParseExpression(it, depth + 1) }
 
-        return { tree, bindings ->
-            exprs.firstNotNullOfOrNull { it(tree, bindings) }
-        }
+        // #1036 — the alternatives are compiled ONCE and their kinds read off that same pass: a
+        // coalesce always resolves iff one of its branches always does. Re-compiling them to ask
+        // would double-spend the #590 regex budget on the recognition load path.
+        return ScreenExpr(
+            eval = { tree, bindings -> exprs.firstNotNullOfOrNull { it.eval(tree, bindings) } },
+            kind = kindFor(exprs.any { it.kind == ParseFieldKind.CONSTANT }),
+        )
     }
 
     private fun compileReadFromBinding(obj: JsonObject, fromName: String): (UiNode, Bindings) -> Any? {

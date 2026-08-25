@@ -61,6 +61,18 @@ sealed interface Observation : cloud.trotter.dashbuddy.domain.model.state.StateE
         override val effects: List<RequestedEffect> = emptyList(),
         override val targets: Map<String, NodeRef> = emptyMap(),
         override val transitionOverrides: Map<TransitionTrigger, List<RequestedEffect>> = emptyMap(),
+        /**
+         * Rules that matched this frame while their declared parse yielded nothing (#1036) —
+         * the winning rule, plus any branch that matched-then-`Skip`ped on the way to it.
+         *
+         * A DIAGNOSTIC passenger, carried here for one reason: the counting must happen
+         * POST-admission (after the content/platform gates and `FrameGate` dedup), or a dasher
+         * parked on a rotted screen inflates the census with debounced duplicates and a disabled
+         * platform accrues counts at all. Classification is where the evidence exists; admission
+         * is where it may be counted; this is the ride between them. Nothing reads it to decide
+         * anything, and it is never serialized into a capture envelope.
+         */
+        val parseShortfalls: List<ParseShortfall> = emptyList(),
     ) : FlowObservation
 
     /** A click/tap event classified by the click pipeline. */
@@ -102,6 +114,12 @@ sealed interface Observation : cloud.trotter.dashbuddy.domain.model.state.StateE
         override val effects: List<RequestedEffect> = emptyList(),
         override val targets: Map<String, NodeRef> = emptyMap(),
         override val transitionOverrides: Map<TransitionTrigger, List<RequestedEffect>> = emptyMap(),
+        /**
+         * The notification path's [Screen.parseShortfalls] (#1036) — a push rule's anchors are the
+         * platform's own WORDING, which rots exactly the way a view id does. `Click` carries no
+         * such field on purpose: click rules have no parser at all, so a click can never have one.
+         */
+        val parseShortfalls: List<ParseShortfall> = emptyList(),
     ) : FlowObservation
 
     /** A timeout fired by the state machine's internal timer system. */

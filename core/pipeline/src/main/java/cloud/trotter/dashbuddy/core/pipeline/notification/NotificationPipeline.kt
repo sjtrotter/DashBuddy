@@ -90,6 +90,10 @@ class NotificationPipeline @Inject constructor(
                 stats.onDuplicateSuppressed()
                 return@mapNotNull null
             }
+            // #1036 — post-admission parse-shortfall census, the notification twin of the
+            // accessibility pipeline's. A push that reposts on a timer must not be able to
+            // multiply one rotted rule into a hundred counts.
+            obs.parseShortfalls.forEach { stats.onParseShortfall(it) }
             captureWriter.captureNotification(obs, raw)
         }
         // Gate: don't forward UNKNOWN to state machine

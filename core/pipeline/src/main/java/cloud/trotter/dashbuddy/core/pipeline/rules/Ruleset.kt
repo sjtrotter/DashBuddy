@@ -2,6 +2,7 @@ package cloud.trotter.dashbuddy.core.pipeline.rules
 
 import cloud.trotter.dashbuddy.domain.model.accessibility.UiNode
 import cloud.trotter.dashbuddy.domain.pipeline.NodeRef
+import cloud.trotter.dashbuddy.domain.pipeline.ParseShortfall
 import cloud.trotter.dashbuddy.domain.pipeline.RequestedEffect
 import cloud.trotter.dashbuddy.domain.pipeline.TransitionTrigger
 import timber.log.Timber
@@ -97,11 +98,16 @@ class Ruleset<TInput>(rules: List<CompiledRule<TInput>>) {
      * @param platformWire When non-null, only rules whose ID starts with this prefix are evaluated.
      * @param screenTarget When non-null, rules with a `screenIs` constraint only match
      *   if it equals this value. Used for click rules.
+     * @param onParseShortfall Diagnostic sink for #1036: called for every branch that MATCHED
+     *   while its declared parse yielded nothing — the winning branch, and any branch a `Skip`
+     *   validator discarded on the way to it. Never consulted for a classification decision;
+     *   omitting it changes nothing but the telemetry.
      */
     fun matchFirst(
         input: TInput,
         platformWire: String? = null,
         screenTarget: String? = null,
+        onParseShortfall: ((ParseShortfall) -> Unit)? = null,
     ): RuleMatchResult? {
         val rules = if (platformWire != null) {
             // Pre-partitioned at construction (#435 item 1) — no per-frame filter alloc.
@@ -134,6 +140,17 @@ class Ruleset<TInput>(rules: List<CompiledRule<TInput>>) {
                     Timber.w(e, "Parse error in rule '${rule.id}'")
                     emptyMap()
                 }
+
+                // #1036 — matched, but did the declared parse yield anything? Measured against
+                // the RAW parser output, before validate: a `DropParsed` validator is a DECLARED
+                // decision to discard a parse, not the silent anchor rot this signal names. A
+                // thrown parse (rawFields empty above) DOES count — it yielded nothing either.
+                //
+                // Reported BEFORE the `Skip` continue below (review R5): a branch that matched,
+                // parsed nothing, and was then skipped by its own validator is exactly the case
+                // where a lower-priority text rule claims the frame and the rot leaves no trace
+                // at all — so it must be counted even though this branch returns no result.
+                onParseShortfall?.let { sink -> shortfallOf(rule.id, branch, rawFields)?.let(sink) }
 
                 // Phase 5: Validate
                 var branchSkip = false
@@ -194,6 +211,34 @@ class Ruleset<TInput>(rules: List<CompiledRule<TInput>>) {
             }
         }
         return null
+    }
+
+    /**
+     * The #1036 shortfall for one matched branch, or null when its parse is healthy.
+     *
+     * Two independent triggers, either or both (see [ParseShortfall]):
+     *  - **total** — the branch declares at least one evidence field and EVERY one of them came
+     *    back unresolved, judged per field by its compiled [ParseFieldKind] (an `each`/`findAll`
+     *    field is unresolved when its list is EMPTY, which is what a plain null check missed).
+     *  - **partial** — a field the parse's shape contract names as load-bearing is null. Checked
+     *    for null only: every shape-required field today is a scalar, and an emptiness rule for
+     *    one would belong to the shape contract, not here.
+     */
+    private fun shortfallOf(
+        ruleId: String,
+        branch: CompiledBranch<TInput>,
+        rawFields: Map<String, Any?>,
+    ): ParseShortfall? {
+        val evidence = branch.parseEvidenceFields
+        val allNull = evidence.isNotEmpty() &&
+            evidence.all { (name, kind) -> kind.isUnresolved(rawFields[name]) }
+        val nullRequired = branch.requiredParseFields.filter { rawFields[it] == null }
+        if (!allNull && nullRequired.isEmpty()) return null
+        return ParseShortfall(
+            ruleId = ruleId,
+            allNullFieldCount = if (allNull) evidence.size else 0,
+            nullRequiredFields = nullRequired,
+        )
     }
 
     /**

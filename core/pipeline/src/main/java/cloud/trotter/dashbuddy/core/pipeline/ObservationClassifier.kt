@@ -5,6 +5,7 @@ import cloud.trotter.dashbuddy.domain.capture.ReplayMetadataProvider
 import cloud.trotter.dashbuddy.domain.model.accessibility.UiNode
 import cloud.trotter.dashbuddy.domain.pipeline.Observation
 import cloud.trotter.dashbuddy.domain.pipeline.NodeRef
+import cloud.trotter.dashbuddy.domain.pipeline.ParseShortfall
 import cloud.trotter.dashbuddy.domain.pipeline.RequestedEffect
 import cloud.trotter.dashbuddy.domain.pipeline.TransitionTrigger
 import cloud.trotter.dashbuddy.domain.state.Flow
@@ -94,6 +95,7 @@ class ObservationClassifier @Inject constructor(
     val isReady: Boolean get() = interpreter.isLoaded
 
 
+
     // Typed entry points (#361): each event subtype returns its observation
     // subtype, so pipelines never downcast classify results.
     fun classify(event: PipelineEvent.Screen): Observation.Screen =
@@ -147,12 +149,20 @@ class ObservationClassifier @Inject constructor(
             )
         }
 
-        val result = ruleset.matchFirst(event.tree, platformWire)
+        // #1036 — the shortfalls this classification observes ride the observation to the
+        // pipeline's post-admission block, the one place they may be counted (review R3: a frame
+        // the gates or the dedup reject must never enter the census). The classifier CARRIES the
+        // evidence; it does not report it, and nothing here reads it back.
+        val shortfalls = mutableListOf<ParseShortfall>()
+        val result = ruleset.matchFirst(event.tree, platformWire) { shortfalls += it }
         if (result == null) {
             // #551 P7: per-frame trace → VERBOSE (firehose only), never the shareable INFO stream.
             Timber.tag("Classifier").v("SCREEN: UNKNOWN")
+            // An UNKNOWN frame can still carry shortfalls: a branch that matched, parsed nothing
+            // and was then discarded by its own `Skip` validator leaves no other trace at all.
             return makeScreenObservation(
                 now, metadataFor(event.packageName), UNKNOWN_TARGET, null, null, ParsedFields.None, null,
+                parseShortfalls = shortfalls.toList(),
             )
         }
 
@@ -175,6 +185,7 @@ class ObservationClassifier @Inject constructor(
             effects = DedupeTokens.resolve(result.effects, parsed),
             targets = result.targets,
             transitionOverrides = result.transitionOverrides,
+            parseShortfalls = shortfalls.toList(),
         )
 
         // Cache last non-sensitive screen for click enrichment, keyed by THIS
@@ -198,6 +209,7 @@ class ObservationClassifier @Inject constructor(
         effects: List<RequestedEffect> = emptyList(),
         targets: Map<String, NodeRef> = emptyMap(),
         transitionOverrides: Map<TransitionTrigger, List<RequestedEffect>> = emptyMap(),
+        parseShortfalls: List<ParseShortfall> = emptyList(),
     ) = Observation.Screen(
         timestamp = now,
         captureId = null,
@@ -210,6 +222,7 @@ class ObservationClassifier @Inject constructor(
         effects = effects,
         targets = targets,
         transitionOverrides = transitionOverrides,
+        parseShortfalls = parseShortfalls,
     )
 
     // ── Click ───────────────────────────────────────────────────────────
@@ -271,8 +284,11 @@ class ObservationClassifier @Inject constructor(
 
     private fun classifyNotification(event: PipelineEvent.Notification, platformWire: String?): Observation.Notification {
         val ruleset = interpreter.notificationRuleset
+        val shortfalls = mutableListOf<ParseShortfall>()
         if (ruleset != null) {
-            val result = ruleset.matchFirst(event.raw, platformWire)
+            // #1036 — the second parse-bearing path: a push rule's anchors are the platform's own
+            // WORDING, which rots the same way a view id does.
+            val result = ruleset.matchFirst(event.raw, platformWire) { shortfalls += it }
             if (result != null) {
                 val parsed = ParsedFieldsFactory.create(
                     result.shape ?: "notification", result.fields,
@@ -288,6 +304,7 @@ class ObservationClassifier @Inject constructor(
                     target = result.intent,
                     effects = DedupeTokens.resolve(result.effects, parsed),
                     transitionOverrides = result.transitionOverrides,
+                    parseShortfalls = shortfalls.toList(),
                 )
             }
         }
@@ -307,6 +324,8 @@ class ObservationClassifier @Inject constructor(
                 rawText = rawText,
             ),
             target = UNKNOWN_TARGET,
+            // As on the screen path: a `Skip`ped all-null branch is the only trace of its own rot.
+            parseShortfalls = shortfalls.toList(),
         )
     }
 }

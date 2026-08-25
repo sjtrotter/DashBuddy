@@ -1,5 +1,6 @@
 package cloud.trotter.dashbuddy.core.pipeline
 
+import cloud.trotter.dashbuddy.domain.pipeline.ParseShortfall
 import cloud.trotter.dashbuddy.domain.state.ParsedFields
 import timber.log.Timber
 import java.util.concurrent.ConcurrentHashMap
@@ -48,6 +49,24 @@ class PipelineStats @Inject constructor() {
      * that resolver already answered, so the two cannot disagree.
      */
     private val platformAppVersions = ConcurrentHashMap<String, String>()
+
+    /**
+     * `ruleId → admitted frames on which that rule MATCHED but its declared parse yielded
+     * nothing usable` (#1036).
+     *
+     * The counter that makes anchor rot countable: DoorDash 8.93.7 removed the view ids every money
+     * parse anchored on, the text-anchored `require` blocks kept matching, and every parse died —
+     * silently, for weeks, because "matched and parsed nothing" and "matched, nothing to parse"
+     * looked identical in every counter and log line we had.
+     *
+     * Keyed by rule id ONLY (principle 8) — no platform key, no per-platform threshold. Bounded by
+     * the compiled ruleset's own rule count, and PII-free by construction: a rule id is our own
+     * authored identifier, and no frame text is recorded.
+     */
+    private val parseShortfallByRule = ConcurrentHashMap<String, AtomicLong>()
+
+    /** Rule ids already WARNed about this process — the once-per-rule edge gate (#1036). */
+    private val parseShortfallWarned = ConcurrentHashMap.newKeySet<String>()
 
     val droppedSensitiveCount: Long get() = droppedSensitive.get()
     val droppedNoiseCount: Long get() = droppedNoise.get()
@@ -136,6 +155,58 @@ class PipelineStats @Inject constructor() {
         platformAppVersions[packageName] = versionName
     }
 
+    /**
+     * A rule MATCHED an admitted frame while its declared parse yielded nothing usable (#1036) —
+     * the anchor-rot signature. Returns this rule's running count for the process.
+     *
+     * **Two grains, deliberately different.** The counter takes EVERY occurrence, so the periodic
+     * summary carries a census; the WARN fires **once per rule per process** (the #937/#938 edge
+     * gate), because a broken anchor fires on every frame of the surface and a per-frame WARN
+     * would drown the level that means "a defended invariant fired" (principle 7). The per-rule
+     * map and the per-rule gate live together so the two can't disagree about what "this rule"
+     * means.
+     *
+     * **Callers must be post-admission.** Counting at classify time would let a dasher parked on
+     * a rotted screen inflate the census with debounced duplicates, and a disabled platform accrue
+     * counts at all (review R3) — so both pipelines call this after `FrameGate.admit`.
+     *
+     * PII-free: a rule id, a count, and — for the partial case — the names of fields WE declared.
+     * No frame text of any kind, so the shareable INFO+ export is safe by construction.
+     */
+    fun onParseShortfall(shortfall: ParseShortfall): Long {
+        val count = parseShortfallByRule.computeIfAbsent(shortfall.ruleId) { AtomicLong() }
+            .incrementAndGet()
+        if (parseShortfallWarned.add(shortfall.ruleId)) {
+            Timber.tag(PARSE_HEALTH_TAG).w(
+                "Rule %s matched with a parse shortfall — %s — anchor rot? (#1036)",
+                shortfall.ruleId,
+                describe(shortfall),
+            )
+        }
+        return count
+    }
+
+    /** This rule's running parse-shortfall count for the process (#1036); 0 if it never tripped. */
+    fun parseShortfallCount(ruleId: String): Long = parseShortfallByRule[ruleId]?.get() ?: 0L
+
+    /**
+     * The human half of the #1036 WARN: which of the two triggers fired, in the vocabulary the
+     * rule author uses. Says `extractable` rather than `declared` because constants are excluded
+     * from the count (review R7), and agrees with itself at n=1.
+     */
+    private fun describe(shortfall: ParseShortfall): String {
+        val parts = mutableListOf<String>()
+        if (shortfall.allNullFieldCount > 0) {
+            val n = shortfall.allNullFieldCount
+            parts += "all $n extractable field${if (n == 1) "" else "s"} unresolved"
+        }
+        if (shortfall.nullRequiredFields.isNotEmpty()) {
+            val names = shortfall.nullRequiredFields.joinToString(", ")
+            parts += "required field${if (shortfall.nullRequiredFields.size == 1) "" else "s"} null: $names"
+        }
+        return parts.joinToString("; ")
+    }
+
     /** The supervised upstream crashed and is resubscribing. Returns the restart ordinal. */
     fun onPipelineRestart(): Long = restarts.incrementAndGet()
 
@@ -173,18 +244,64 @@ class PipelineStats @Inject constructor() {
             " notifListenerConnects=${notifListenerConnects.get()}" +
             " notifListenerDisconnects=${notifListenerDisconnects.get()}" +
             " restarts=${restarts.get()}" +
-            platformAppVersionsSuffix()
+            platformAppVersionsSuffix() +
+            parseShortfallSuffix()
 
-    /** `" platformApps=com.doordash.driverapp@15.2.3,com.ubercab.driver@4.5"`, or empty. */
-    private fun platformAppVersionsSuffix(): String =
-        platformAppVersions.entries
+    /**
+     * `" platformApps=com.doordash.driverapp@15.2.3,com.ubercab.driver@4.5"`, or empty.
+     *
+     * The emptiness check comes FIRST: building the string and then discarding it left a window
+     * where an entry added between the two emitted a bare `" platformApps="` (review R8, the
+     * shape #1036's suffix was copied from).
+     */
+    private fun platformAppVersionsSuffix(): String {
+        if (platformAppVersions.isEmpty()) return ""
+        return platformAppVersions.entries
             .sortedBy { it.key }
             .joinToString(separator = ",", prefix = " platformApps=") { "${it.key}@${it.value}" }
-            .takeIf { platformAppVersions.isNotEmpty() }
-            ?: ""
+    }
+
+    /**
+     * `" parseShortfall{doordash.screen.delivery_summary_expanded=12,…}"`, or empty (#1036).
+     *
+     * Rule ids and counts only — the shareable INFO stream's PII rule holds by construction
+     * (principle 7).
+     *
+     * **Bounded** (review R4): this line is written every [SUMMARY_EVERY] observations for the
+     * whole process, and rules whose one extractable field is legitimately optional trip from the
+     * first minutes of a dash — so an uncapped render would put a growing list on every summary
+     * line in the exported bug report. The top [PARSE_SHORTFALL_RENDER_LIMIT] by count are shown
+     * (that is the ordering that matters: rot is the loud one), each id clamped to
+     * [MAX_RENDERED_RULE_ID] chars, with a `+k more` tail so the omission is stated rather than
+     * silent. Ties break on the id so the render is deterministic.
+     */
+    private fun parseShortfallSuffix(): String {
+        if (parseShortfallByRule.isEmpty()) return ""
+        val entries = parseShortfallByRule.entries
+            .map { it.key to it.value.get() }
+            .sortedWith(compareByDescending<Pair<String, Long>> { it.second }.thenBy { it.first })
+        val shown = entries.take(PARSE_SHORTFALL_RENDER_LIMIT)
+        val omitted = entries.size - shown.size
+        val body = shown.joinToString(",") { (id, n) -> "${clampRuleId(id)}=$n" }
+        val tail = if (omitted > 0) ",+$omitted more" else ""
+        return " parseShortfall{$body$tail}"
+    }
+
+    /** Keep one pathological rule id from owning the summary line (#1036 review R4). */
+    private fun clampRuleId(id: String): String =
+        if (id.length <= MAX_RENDERED_RULE_ID) id else id.take(MAX_RENDERED_RULE_ID) + "…"
 
     companion object {
         /** Forwarded-observation interval between periodic summary log lines. */
         const val SUMMARY_EVERY = 50L
+
+        /** Timber tag for the #1036 parse-health WARN — its own component, not the classifier's. */
+        const val PARSE_HEALTH_TAG = "ParseHealth"
+
+        /** How many tripped rules the summary line renders before `+k more` (#1036 review R4). */
+        const val PARSE_SHORTFALL_RENDER_LIMIT = 8
+
+        /** Longest rule id rendered on the summary line before it is elided (#1036 review R4). */
+        const val MAX_RENDERED_RULE_ID = 64
     }
 }
