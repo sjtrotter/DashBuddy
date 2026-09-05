@@ -1,11 +1,11 @@
 {
-    "captureId": "6bbecd7f-f0a7-4024-9a3f-566242cb7e84",
+    "captureId": "49a0fa83-54f3-4ca6-81f2-51cb079a7d88",
     "pipelineId": "accessibility.window",
     "schemaId": "uinode.v1",
-    "timestamp": 1781303387482,
+    "timestamp": 1787954354135,
     "platform": "doordash",
-    "ruleId": null,
-    "classificationName": "UNKNOWN",
+    "ruleId": "doordash.screen.alcohol_verify_complete",
+    "classificationName": "alcohol_verify_complete",
     "metadata": {
         "engineVersion": 1,
         "rulesetFormatVersion": 2,
@@ -20,7 +20,8 @@
         },
         "stateMachineApiVersion": "1.0",
         "appVersion": "0.230.0",
-        "deviceFingerprint": "google/panther/panther:16/CP1A.260405.005/15001963:user/release-keys"
+        "deviceFingerprint": "google/panther/panther:17/CP2A.260705.006/15641320:user/release-keys",
+        "platformAppVersion": "8.93.7"
     },
     "payload": {
         "class": "android.widget.FrameLayout",
@@ -205,8 +206,8 @@
                                                                 },
                                                                 "children": [
                                                                     {
-                                                                        "text": "Identity verification",
-                                                                        "id": "com.doordash.driverapp:id/verify_id_confirmation_title",
+                                                                        "text": "Hand order to recipient",
+                                                                        "id": "com.doordash.driverapp:id/verify_id_hand_order_title",
                                                                         "class": "android.widget.TextView",
                                                                         "isEnabled": true,
                                                                         "bounds": {
@@ -217,7 +218,7 @@
                                                                         }
                                                                     },
                                                                     {
-                                                                        "id": "com.doordash.driverapp:id/verify_id_confirmation_flow_progressbar",
+                                                                        "id": "com.doordash.driverapp:id/verify_id_hand_order_flow_progressbar",
                                                                         "class": "android.view.ViewGroup",
                                                                         "isEnabled": true,
                                                                         "bounds": {
@@ -228,7 +229,7 @@
                                                                         },
                                                                         "children": [
                                                                             {
-                                                                                "text": "2 of 4",
+                                                                                "text": "4 of 4",
                                                                                 "id": "com.doordash.driverapp:id/step_title",
                                                                                 "class": "android.widget.TextView",
                                                                                 "isEnabled": true,
@@ -295,58 +296,30 @@
                                                                         ]
                                                                     },
                                                                     {
-                                                                        "text": "Verify that the ID matches the recipient and they aren't intoxicated.     ",
-                                                                        "id": "com.doordash.driverapp:id/verify_id_confirmation_subtitle",
+                                                                        "text": "Now that you've completed verification, you're ready to complete the delivery.",
+                                                                        "id": "com.doordash.driverapp:id/verify_id_hand_order_subtitle",
                                                                         "class": "android.widget.TextView",
                                                                         "isEnabled": true,
                                                                         "bounds": {
                                                                             "left": 36,
                                                                             "top": 506,
                                                                             "right": 1044,
-                                                                            "bottom": 624
+                                                                            "bottom": 612
                                                                         }
                                                                     },
                                                                     {
-                                                                        "id": "com.doordash.driverapp:id/verify_id_confirmation_image",
                                                                         "class": "android.widget.ImageView",
                                                                         "isEnabled": true,
                                                                         "bounds": {
-                                                                            "left": 255,
-                                                                            "top": 1101,
-                                                                            "right": 825,
-                                                                            "bottom": 1508
+                                                                            "left": 211,
+                                                                            "top": 1073,
+                                                                            "right": 870,
+                                                                            "bottom": 1536
                                                                         }
                                                                     },
                                                                     {
-                                                                        "desc": "Verify",
-                                                                        "id": "com.doordash.driverapp:id/verify_id_confirm_btn",
-                                                                        "class": "android.widget.Button",
-                                                                        "isClickable": true,
-                                                                        "isEnabled": true,
-                                                                        "bounds": {
-                                                                            "left": 36,
-                                                                            "top": 2097,
-                                                                            "right": 1044,
-                                                                            "bottom": 2204
-                                                                        },
-                                                                        "children": [
-                                                                            {
-                                                                                "text": "Verify",
-                                                                                "id": "com.doordash.driverapp:id/textView_prism_button_title",
-                                                                                "class": "android.widget.TextView",
-                                                                                "isEnabled": true,
-                                                                                "bounds": {
-                                                                                    "left": 479,
-                                                                                    "top": 2118,
-                                                                                    "right": 601,
-                                                                                    "bottom": 2184
-                                                                                }
-                                                                            }
-                                                                        ]
-                                                                    },
-                                                                    {
-                                                                        "desc": "Can't verify",
-                                                                        "id": "com.doordash.driverapp:id/verify_id_no_confirm_btn",
+                                                                        "desc": "Continue",
+                                                                        "id": "com.doordash.driverapp:id/verify_id_hand_order_continue_btn",
                                                                         "class": "android.widget.Button",
                                                                         "isClickable": true,
                                                                         "isEnabled": true,
@@ -358,14 +331,14 @@
                                                                         },
                                                                         "children": [
                                                                             {
-                                                                                "text": "Can't verify",
+                                                                                "text": "Continue",
                                                                                 "id": "com.doordash.driverapp:id/textView_prism_button_title",
                                                                                 "class": "android.widget.TextView",
                                                                                 "isEnabled": true,
                                                                                 "bounds": {
-                                                                                    "left": 422,
+                                                                                    "left": 445,
                                                                                     "top": 2243,
-                                                                                    "right": 658,
+                                                                                    "right": 635,
                                                                                     "bottom": 2309
                                                                                 }
                                                                             }

@@ -1,11 +1,11 @@
 {
-    "captureId": "6e78bf80-78a2-4327-a3fd-e0eeb7467e85",
+    "captureId": "238865f2-f63b-4244-823c-d724f90673b6",
     "pipelineId": "accessibility.window",
     "schemaId": "uinode.v1",
-    "timestamp": 1780096100236,
+    "timestamp": 1787954321403,
     "platform": "doordash",
-    "ruleId": null,
-    "classificationName": "UNKNOWN",
+    "ruleId": "doordash.screen.dropoff_alcohol_id_intro",
+    "classificationName": "dropoff_alcohol_id_intro",
     "metadata": {
         "engineVersion": 1,
         "rulesetFormatVersion": 2,
@@ -20,7 +20,8 @@
         },
         "stateMachineApiVersion": "1.0",
         "appVersion": "0.230.0",
-        "deviceFingerprint": "google/panther/panther:16/CP1A.260405.005/15001963:user/release-keys"
+        "deviceFingerprint": "google/panther/panther:17/CP2A.260705.006/15641320:user/release-keys",
+        "platformAppVersion": "8.93.7"
     },
     "payload": {
         "class": "android.widget.FrameLayout",
@@ -104,7 +105,7 @@
                                                         "isEnabled": true,
                                                         "bounds": {
                                                             "left": 0,
-                                                            "top": 2164,
+                                                            "top": 1228,
                                                             "right": 1080,
                                                             "bottom": 2347
                                                         },
@@ -115,9 +116,9 @@
                                                                 "isEnabled": true,
                                                                 "bounds": {
                                                                     "left": 0,
-                                                                    "top": 2164,
+                                                                    "top": 1228,
                                                                     "right": 1080,
-                                                                    "bottom": 2164
+                                                                    "bottom": 1228
                                                                 }
                                                             },
                                                             {
@@ -126,9 +127,9 @@
                                                                 "isEnabled": true,
                                                                 "bounds": {
                                                                     "left": 0,
-                                                                    "top": 2236,
+                                                                    "top": 1300,
                                                                     "right": 1080,
-                                                                    "bottom": 2347
+                                                                    "bottom": 2311
                                                                 },
                                                                 "children": [
                                                                     {
@@ -137,9 +138,9 @@
                                                                         "isEnabled": true,
                                                                         "bounds": {
                                                                             "left": 0,
-                                                                            "top": 2236,
+                                                                            "top": 1300,
                                                                             "right": 1080,
-                                                                            "bottom": 2347
+                                                                            "bottom": 2311
                                                                         },
                                                                         "children": [
                                                                             {
@@ -148,9 +149,9 @@
                                                                                 "isEnabled": true,
                                                                                 "bounds": {
                                                                                     "left": 0,
-                                                                                    "top": 2236,
+                                                                                    "top": 1300,
                                                                                     "right": 1080,
-                                                                                    "bottom": 2347
+                                                                                    "bottom": 2168
                                                                                 },
                                                                                 "children": [
                                                                                     {
@@ -159,9 +160,9 @@
                                                                                         "isEnabled": true,
                                                                                         "bounds": {
                                                                                             "left": 0,
-                                                                                            "top": 2236,
+                                                                                            "top": 1300,
                                                                                             "right": 1080,
-                                                                                            "bottom": 2347
+                                                                                            "bottom": 2168
                                                                                         },
                                                                                         "children": [
                                                                                             {
@@ -169,9 +170,9 @@
                                                                                                 "isEnabled": true,
                                                                                                 "bounds": {
                                                                                                     "left": 0,
-                                                                                                    "top": 2236,
+                                                                                                    "top": 1300,
                                                                                                     "right": 1080,
-                                                                                                    "bottom": 2347
+                                                                                                    "bottom": 2168
                                                                                                 },
                                                                                                 "children": [
                                                                                                     {
@@ -181,9 +182,9 @@
                                                                                                         "isEnabled": true,
                                                                                                         "bounds": {
                                                                                                             "left": 36,
-                                                                                                            "top": 2272,
+                                                                                                            "top": 1336,
                                                                                                             "right": 1044,
-                                                                                                            "bottom": 2338
+                                                                                                            "bottom": 1402
                                                                                                         }
                                                                                                     },
                                                                                                     {
@@ -193,9 +194,9 @@
                                                                                                         "isEnabled": true,
                                                                                                         "bounds": {
                                                                                                             "left": 36,
-                                                                                                            "top": 2383,
+                                                                                                            "top": 1447,
                                                                                                             "right": 1044,
-                                                                                                            "bottom": 2347
+                                                                                                            "bottom": 1500
                                                                                                         }
                                                                                                     },
                                                                                                     {
@@ -205,9 +206,9 @@
                                                                                                         "isEnabled": true,
                                                                                                         "bounds": {
                                                                                                             "left": 36,
-                                                                                                            "top": 2454,
+                                                                                                            "top": 1518,
                                                                                                             "right": 1044,
-                                                                                                            "bottom": 2347
+                                                                                                            "bottom": 1895
                                                                                                         }
                                                                                                     },
                                                                                                     {
@@ -216,9 +217,9 @@
                                                                                                         "isEnabled": true,
                                                                                                         "bounds": {
                                                                                                             "left": 0,
-                                                                                                            "top": 2840,
+                                                                                                            "top": 1904,
                                                                                                             "right": 1080,
-                                                                                                            "bottom": 2347
+                                                                                                            "bottom": 2168
                                                                                                         },
                                                                                                         "children": [
                                                                                                             {
@@ -226,9 +227,9 @@
                                                                                                                 "isEnabled": true,
                                                                                                                 "bounds": {
                                                                                                                     "left": 0,
-                                                                                                                    "top": 2876,
+                                                                                                                    "top": 1940,
                                                                                                                     "right": 1080,
-                                                                                                                    "bottom": 2347
+                                                                                                                    "bottom": 1942
                                                                                                                 }
                                                                                                             },
                                                                                                             {
@@ -237,9 +238,9 @@
                                                                                                                 "isEnabled": true,
                                                                                                                 "bounds": {
                                                                                                                     "left": 36,
-                                                                                                                    "top": 2923,
+                                                                                                                    "top": 1987,
                                                                                                                     "right": 1044,
-                                                                                                                    "bottom": 2347
+                                                                                                                    "bottom": 2039
                                                                                                                 }
                                                                                                             },
                                                                                                             {
@@ -248,9 +249,9 @@
                                                                                                                 "isEnabled": true,
                                                                                                                 "bounds": {
                                                                                                                     "left": 36,
-                                                                                                                    "top": 2993,
+                                                                                                                    "top": 2057,
                                                                                                                     "right": 1044,
-                                                                                                                    "bottom": 2347
+                                                                                                                    "bottom": 2159
                                                                                                                 }
                                                                                                             }
                                                                                                         ]
@@ -271,12 +272,23 @@
                                                                 "isEnabled": true,
                                                                 "bounds": {
                                                                     "left": 0,
-                                                                    "top": 2236,
+                                                                    "top": 1300,
                                                                     "right": 1080,
-                                                                    "bottom": 2245
+                                                                    "bottom": 1309
                                                                 }
                                                             }
                                                         ]
+                                                    },
+                                                    {
+                                                        "id": "com.doordash.driverapp:id/prism_sheet_footer_divider",
+                                                        "class": "android.view.View",
+                                                        "isEnabled": true,
+                                                        "bounds": {
+                                                            "left": 0,
+                                                            "top": 2164,
+                                                            "right": 1080,
+                                                            "bottom": 2168
+                                                        }
                                                     },
                                                     {
                                                         "id": "com.doordash.driverapp:id/prism_sheet_footer_container",
@@ -284,7 +296,7 @@
                                                         "isEnabled": true,
                                                         "bounds": {
                                                             "left": 0,
-                                                            "top": 2236,
+                                                            "top": 2168,
                                                             "right": 1080,
                                                             "bottom": 2347
                                                         },
@@ -295,7 +307,7 @@
                                                                 "isEnabled": true,
                                                                 "bounds": {
                                                                     "left": 0,
-                                                                    "top": 2236,
+                                                                    "top": 2168,
                                                                     "right": 1080,
                                                                     "bottom": 2347
                                                                 },
@@ -306,9 +318,9 @@
                                                                         "isEnabled": true,
                                                                         "bounds": {
                                                                             "left": 36,
-                                                                            "top": 2272,
+                                                                            "top": 2204,
                                                                             "right": 1044,
-                                                                            "bottom": 2347
+                                                                            "bottom": 2311
                                                                         },
                                                                         "children": [
                                                                             {
@@ -318,9 +330,9 @@
                                                                                 "isEnabled": true,
                                                                                 "bounds": {
                                                                                     "left": 340,
-                                                                                    "top": 2344,
+                                                                                    "top": 2225,
                                                                                     "right": 741,
-                                                                                    "bottom": 2347
+                                                                                    "bottom": 2291
                                                                                 }
                                                                             }
                                                                         ]
@@ -328,17 +340,6 @@
                                                                 ]
                                                             }
                                                         ]
-                                                    },
-                                                    {
-                                                        "id": "com.doordash.driverapp:id/prism_sheet_footer_divider",
-                                                        "class": "android.view.View",
-                                                        "isEnabled": true,
-                                                        "bounds": {
-                                                            "left": 0,
-                                                            "top": 2232,
-                                                            "right": 1080,
-                                                            "bottom": 2236
-                                                        }
                                                     }
                                                 ]
                                             }

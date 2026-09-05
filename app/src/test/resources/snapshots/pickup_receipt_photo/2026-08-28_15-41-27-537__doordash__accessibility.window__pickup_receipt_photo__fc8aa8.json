@@ -1,11 +1,11 @@
 {
-    "captureId": "47891837-4548-4db9-a2f1-cf2233b8941e",
+    "captureId": "664c29e1-534f-4cda-ba86-ab29ce9fa06d",
     "pipelineId": "accessibility.window",
     "schemaId": "uinode.v1",
-    "timestamp": 1784338483645,
+    "timestamp": 1787949687531,
     "platform": "doordash",
-    "ruleId": null,
-    "classificationName": "UNKNOWN",
+    "ruleId": "doordash.screen.pickup_receipt_photo",
+    "classificationName": "pickup_receipt_photo",
     "metadata": {
         "engineVersion": 1,
         "rulesetFormatVersion": 2,
@@ -20,7 +20,8 @@
         },
         "stateMachineApiVersion": "1.0",
         "appVersion": "0.230.0",
-        "deviceFingerprint": "google/panther/panther:16/CP1A.260405.005/15001963:user/release-keys"
+        "deviceFingerprint": "google/panther/panther:17/CP2A.260705.006/15641320:user/release-keys",
+        "platformAppVersion": "8.93.7"
     },
     "payload": {
         "class": "android.widget.FrameLayout",
@@ -153,7 +154,7 @@
                                             "left": 0,
                                             "top": 261,
                                             "right": 1080,
-                                            "bottom": 2043
+                                            "bottom": 2168
                                         },
                                         "children": [
                                             {
@@ -163,11 +164,11 @@
                                                     "left": 0,
                                                     "top": 261,
                                                     "right": 1080,
-                                                    "bottom": 1519
+                                                    "bottom": 1242
                                                 },
                                                 "children": [
                                                     {
-                                                        "id": "com.doordash.driverapp:id/instructions_group_view",
+                                                        "id": "com.doordash.driverapp:id/image_capture_result_group_view",
                                                         "class": "android.view.View",
                                                         "isEnabled": true,
                                                         "bounds": {
@@ -202,50 +203,42 @@
                                                         }
                                                     },
                                                     {
-                                                        "id": "com.doordash.driverapp:id/example_image1",
+                                                        "id": "com.doordash.driverapp:id/image_capture_result",
                                                         "class": "android.widget.ImageView",
                                                         "isEnabled": true,
                                                         "bounds": {
                                                             "left": 36,
                                                             "top": 554,
-                                                            "right": 522,
-                                                            "bottom": 1326
+                                                            "right": 459,
+                                                            "bottom": 1117
                                                         }
                                                     },
                                                     {
-                                                        "id": "com.doordash.driverapp:id/example_image2",
-                                                        "class": "android.widget.ImageView",
-                                                        "isEnabled": true,
-                                                        "bounds": {
-                                                            "left": 558,
-                                                            "top": 554,
-                                                            "right": 1044,
-                                                            "bottom": 1326
-                                                        }
-                                                    },
-                                                    {
-                                                        "text": "Receipt \nInclude the customer and merchant name",
-                                                        "id": "com.doordash.driverapp:id/example_image1_subtitle",
-                                                        "class": "android.widget.TextView",
+                                                        "desc": "Retake",
+                                                        "id": "com.doordash.driverapp:id/btn_retake_photo",
+                                                        "class": "android.widget.Button",
+                                                        "isClickable": true,
                                                         "isEnabled": true,
                                                         "bounds": {
                                                             "left": 36,
-                                                            "top": 1362,
-                                                            "right": 522,
-                                                            "bottom": 1519
-                                                        }
-                                                    },
-                                                    {
-                                                        "text": "No receipt \nIf there’s no receipt, just include the order",
-                                                        "id": "com.doordash.driverapp:id/example_image2_subtitle",
-                                                        "class": "android.widget.TextView",
-                                                        "isEnabled": true,
-                                                        "bounds": {
-                                                            "left": 558,
-                                                            "top": 1362,
-                                                            "right": 1044,
-                                                            "bottom": 1519
-                                                        }
+                                                            "top": 1153,
+                                                            "right": 222,
+                                                            "bottom": 1242
+                                                        },
+                                                        "children": [
+                                                            {
+                                                                "text": "Retake",
+                                                                "id": "com.doordash.driverapp:id/textView_prism_button_title",
+                                                                "class": "android.widget.TextView",
+                                                                "isEnabled": true,
+                                                                "bounds": {
+                                                                    "left": 63,
+                                                                    "top": 1168,
+                                                                    "right": 195,
+                                                                    "bottom": 1228
+                                                                }
+                                                            }
+                                                        ]
                                                     }
                                                 ]
                                             }
@@ -257,7 +250,7 @@
                                         "isEnabled": true,
                                         "bounds": {
                                             "left": 0,
-                                            "top": 2043,
+                                            "top": 2168,
                                             "right": 1080,
                                             "bottom": 2347
                                         },
@@ -270,47 +263,20 @@
                                                 "isEnabled": true,
                                                 "bounds": {
                                                     "left": 36,
-                                                    "top": 2079,
-                                                    "right": 1044,
-                                                    "bottom": 2186
-                                                },
-                                                "children": [
-                                                    {
-                                                        "text": "Continue",
-                                                        "id": "com.doordash.driverapp:id/textView_prism_button_title",
-                                                        "class": "android.widget.TextView",
-                                                        "isEnabled": true,
-                                                        "bounds": {
-                                                            "left": 445,
-                                                            "top": 2100,
-                                                            "right": 635,
-                                                            "bottom": 2166
-                                                        }
-                                                    }
-                                                ]
-                                            },
-                                            {
-                                                "desc": "No receipt",
-                                                "id": "com.doordash.driverapp:id/btn_secondary_action",
-                                                "class": "android.widget.Button",
-                                                "isClickable": true,
-                                                "isEnabled": true,
-                                                "bounds": {
-                                                    "left": 36,
                                                     "top": 2204,
                                                     "right": 1044,
                                                     "bottom": 2311
                                                 },
                                                 "children": [
                                                     {
-                                                        "text": "No receipt",
+                                                        "text": "Confirm pickup",
                                                         "id": "com.doordash.driverapp:id/textView_prism_button_title",
                                                         "class": "android.widget.TextView",
                                                         "isEnabled": true,
                                                         "bounds": {
-                                                            "left": 432,
+                                                            "left": 382,
                                                             "top": 2225,
-                                                            "right": 648,
+                                                            "right": 699,
                                                             "bottom": 2291
                                                         }
                                                     }

@@ -1,11 +1,11 @@
 {
-    "captureId": "19bcd276-2e90-4714-bd82-53817bc7daeb",
+    "captureId": "04e76776-9ab6-4a29-a006-ae3a1aa1d2c9",
     "pipelineId": "accessibility.window",
     "schemaId": "uinode.v1",
-    "timestamp": 1781303437857,
+    "timestamp": 1787954326566,
     "platform": "doordash",
-    "ruleId": null,
-    "classificationName": "UNKNOWN",
+    "ruleId": "doordash.screen.dropoff_alcohol_id_scan",
+    "classificationName": "dropoff_alcohol_id_scan",
     "metadata": {
         "engineVersion": 1,
         "rulesetFormatVersion": 2,
@@ -20,7 +20,8 @@
         },
         "stateMachineApiVersion": "1.0",
         "appVersion": "0.230.0",
-        "deviceFingerprint": "google/panther/panther:16/CP1A.260405.005/15001963:user/release-keys"
+        "deviceFingerprint": "google/panther/panther:17/CP2A.260705.006/15641320:user/release-keys",
+        "platformAppVersion": "8.93.7"
     },
     "payload": {
         "class": "android.widget.FrameLayout",
@@ -205,8 +206,8 @@
                                                                 },
                                                                 "children": [
                                                                     {
-                                                                        "text": "Hand order to recipient",
-                                                                        "id": "com.doordash.driverapp:id/verify_id_hand_order_title",
+                                                                        "text": "ID barcode scan",
+                                                                        "id": "com.doordash.driverapp:id/verify_id_intro_title",
                                                                         "class": "android.widget.TextView",
                                                                         "isEnabled": true,
                                                                         "bounds": {
@@ -217,7 +218,7 @@
                                                                         }
                                                                     },
                                                                     {
-                                                                        "id": "com.doordash.driverapp:id/verify_id_hand_order_flow_progressbar",
+                                                                        "id": "com.doordash.driverapp:id/verify_id_intro_flow_progressbar",
                                                                         "class": "android.view.ViewGroup",
                                                                         "isEnabled": true,
                                                                         "bounds": {
@@ -228,7 +229,7 @@
                                                                         },
                                                                         "children": [
                                                                             {
-                                                                                "text": "4 of 4",
+                                                                                "text": "1 of 4",
                                                                                 "id": "com.doordash.driverapp:id/step_title",
                                                                                 "class": "android.widget.TextView",
                                                                                 "isEnabled": true,
@@ -295,8 +296,8 @@
                                                                         ]
                                                                     },
                                                                     {
-                                                                        "text": "Now that you've completed verification, you're ready to complete the delivery.",
-                                                                        "id": "com.doordash.driverapp:id/verify_id_hand_order_subtitle",
+                                                                        "text": "Scan the barcode on the back of the recipient's ID",
+                                                                        "id": "com.doordash.driverapp:id/verify_id_intro_subtitle",
                                                                         "class": "android.widget.TextView",
                                                                         "isEnabled": true,
                                                                         "bounds": {
@@ -307,18 +308,19 @@
                                                                         }
                                                                     },
                                                                     {
+                                                                        "id": "com.doordash.driverapp:id/verify_id_intro_image",
                                                                         "class": "android.widget.ImageView",
                                                                         "isEnabled": true,
                                                                         "bounds": {
-                                                                            "left": 211,
-                                                                            "top": 1073,
-                                                                            "right": 870,
-                                                                            "bottom": 1536
+                                                                            "left": 255,
+                                                                            "top": 1101,
+                                                                            "right": 825,
+                                                                            "bottom": 1508
                                                                         }
                                                                     },
                                                                     {
-                                                                        "desc": "Continue",
-                                                                        "id": "com.doordash.driverapp:id/verify_id_hand_order_continue_btn",
+                                                                        "desc": "Start scan",
+                                                                        "id": "com.doordash.driverapp:id/verify_id_start_scan_btn",
                                                                         "class": "android.widget.Button",
                                                                         "isClickable": true,
                                                                         "isEnabled": true,
@@ -330,14 +332,14 @@
                                                                         },
                                                                         "children": [
                                                                             {
-                                                                                "text": "Continue",
+                                                                                "text": "Start scan",
                                                                                 "id": "com.doordash.driverapp:id/textView_prism_button_title",
                                                                                 "class": "android.widget.TextView",
                                                                                 "isEnabled": true,
                                                                                 "bounds": {
-                                                                                    "left": 445,
+                                                                                    "left": 439,
                                                                                     "top": 2243,
-                                                                                    "right": 635,
+                                                                                    "right": 641,
                                                                                     "bottom": 2309
                                                                                 }
                                                                             }

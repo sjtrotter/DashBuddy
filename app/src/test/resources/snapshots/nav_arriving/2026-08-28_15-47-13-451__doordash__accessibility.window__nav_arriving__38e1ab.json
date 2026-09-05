@@ -1,8 +1,8 @@
 {
-    "captureId": "c10abd98-9708-48c9-bdda-f3212cb0499b",
+    "captureId": "121696d9-9687-4b64-8800-70cd0f318562",
     "pipelineId": "accessibility.window",
     "schemaId": "uinode.v1",
-    "timestamp": 1786215164788,
+    "timestamp": 1787950033430,
     "platform": "doordash",
     "ruleId": "doordash.screen.nav_arriving",
     "classificationName": "nav_arriving",
@@ -21,7 +21,7 @@
         "stateMachineApiVersion": "1.0",
         "appVersion": "0.230.0",
         "deviceFingerprint": "google/panther/panther:17/CP2A.260705.006/15641320:user/release-keys",
-        "platformAppVersion": "8.91.7"
+        "platformAppVersion": "8.93.7"
     },
     "payload": {
         "class": "android.widget.FrameLayout",
@@ -358,7 +358,7 @@
                                                                                                                         },
                                                                                                                         "children": [
                                                                                                                             {
-                                                                                                                                "text": "20",
+                                                                                                                                "text": "30",
                                                                                                                                 "id": "com.doordash.driverapp:id/postedSpeedMutcd",
                                                                                                                                 "class": "android.widget.TextView",
                                                                                                                                 "isEnabled": true,
@@ -549,20 +549,7 @@
                                                                                                                             "top": 570,
                                                                                                                             "right": 1062,
                                                                                                                             "bottom": 685
-                                                                                                                        },
-                                                                                                                        "children": [
-                                                                                                                            {
-                                                                                                                                "id": "com.doordash.driverapp:id/container",
-                                                                                                                                "class": "android.view.ViewGroup",
-                                                                                                                                "isEnabled": true,
-                                                                                                                                "bounds": {
-                                                                                                                                    "left": 947,
-                                                                                                                                    "top": 570,
-                                                                                                                                    "right": 1062,
-                                                                                                                                    "bottom": 685
-                                                                                                                                }
-                                                                                                                            }
-                                                                                                                        ]
+                                                                                                                        }
                                                                                                                     }
                                                                                                                 ]
                                                                                                             }
@@ -597,9 +584,9 @@
                                                                                                 "class": "android.widget.FrameLayout",
                                                                                                 "isEnabled": true,
                                                                                                 "bounds": {
-                                                                                                    "left": 400,
+                                                                                                    "left": 405,
                                                                                                     "top": 1976,
-                                                                                                    "right": 681,
+                                                                                                    "right": 675,
                                                                                                     "bottom": 2083
                                                                                                 }
                                                                                             }
