@@ -20,12 +20,19 @@ class OdometerFixPolicyTest {
         metersNorth: Double,
         accuracyMeters: Double? = null,
         timestampMs: Long? = null,
+        monotonicMs: Long? = null,
     ) = Coordinates(
         latitude = degreesNorth(metersNorth),
         longitude = 0.0,
         accuracyMeters = accuracyMeters,
         timestampMs = timestampMs,
+        monotonicMs = monotonicMs,
     )
+
+    private fun reasonOf(verdict: OdometerFixPolicy.Verdict): OdometerFixPolicy.Reason {
+        assertTrue("expected a Reject, got $verdict", verdict is OdometerFixPolicy.Verdict.Reject)
+        return (verdict as OdometerFixPolicy.Verdict.Reject).reason
+    }
 
     @Test
     fun `the first fix of a tracking run becomes the reference and accrues nothing`() {
@@ -155,6 +162,149 @@ class OdometerFixPolicyTest {
         assertEquals(
             OdometerFixPolicy.Reason.NON_MONOTONIC_TIME,
             (goingBackwards as OdometerFixPolicy.Verdict.Reject).reason,
+        )
+    }
+
+    // ---------------------------------------------------------------------------------------------
+    // #1057 round 2 — R1: a malformed fix is not a measurement, and must never reach the total.
+    // Every bound in the policy is a comparison, and every comparison against NaN is false, so
+    // without an explicit well-formedness gate a NaN falls THROUGH to `Accept(NaN)`.
+    // ---------------------------------------------------------------------------------------------
+
+    @Test
+    fun `a non-finite latitude is rejected as an invalid fix, from a reference and from nothing`() {
+        val nan = Coordinates(latitude = Double.NaN, longitude = 0.0, accuracyMeters = 8.0, timestampMs = 5_000L)
+
+        assertEquals(
+            "a NaN fix cannot seed the reference",
+            OdometerFixPolicy.Reason.INVALID_FIX,
+            reasonOf(OdometerFixPolicy.judge(null, nan)),
+        )
+        assertEquals(
+            OdometerFixPolicy.Reason.INVALID_FIX,
+            reasonOf(OdometerFixPolicy.judge(fix(0.0, accuracyMeters = 8.0, timestampMs = 0L), nan)),
+        )
+    }
+
+    @Test
+    fun `infinite and out-of-range latitude and longitude are invalid fixes`() {
+        val reference = fix(0.0, accuracyMeters = 8.0, timestampMs = 0L)
+        val malformed = listOf(
+            Coordinates(latitude = Double.POSITIVE_INFINITY, longitude = 0.0, timestampMs = 5_000L),
+            Coordinates(latitude = 0.0, longitude = Double.NaN, timestampMs = 5_000L),
+            Coordinates(latitude = 91.0, longitude = 0.0, timestampMs = 5_000L),
+            Coordinates(latitude = -90.5, longitude = 0.0, timestampMs = 5_000L),
+            Coordinates(latitude = 0.0, longitude = 180.5, timestampMs = 5_000L),
+            Coordinates(latitude = 0.0, longitude = 0.0, timestampMs = -1L),
+            Coordinates(latitude = 0.0, longitude = 0.0, monotonicMs = -1L),
+        )
+
+        for (fix in malformed) {
+            assertEquals(
+                "malformed fix rejected",
+                OdometerFixPolicy.Reason.INVALID_FIX,
+                reasonOf(OdometerFixPolicy.judge(reference, fix)),
+            )
+        }
+    }
+
+    @Test
+    fun `a NaN or negative accuracy is an invalid fix, not a poor-accuracy one`() {
+        val reference = fix(0.0, accuracyMeters = 8.0, timestampMs = 0L)
+
+        // A NaN accuracy is the nastiest of the family: it makes the jitter FLOOR NaN, so
+        // `delta <= floor` is false and a 1 m stationary bounce is ACCEPTED as motion.
+        assertEquals(
+            OdometerFixPolicy.Reason.INVALID_FIX,
+            reasonOf(OdometerFixPolicy.judge(reference, fix(1.0, accuracyMeters = Double.NaN, timestampMs = 3_000L))),
+        )
+        assertEquals(
+            OdometerFixPolicy.Reason.INVALID_FIX,
+            reasonOf(OdometerFixPolicy.judge(reference, fix(150.0, accuracyMeters = -1.0, timestampMs = 5_000L))),
+        )
+        assertEquals(
+            OdometerFixPolicy.Reason.INVALID_FIX,
+            reasonOf(
+                OdometerFixPolicy.judge(
+                    reference,
+                    fix(150.0, accuracyMeters = Double.POSITIVE_INFINITY, timestampMs = 5_000L),
+                )
+            ),
+        )
+    }
+
+    @Test
+    fun `a well-formed near-antipodal pair produces a finite delta and is rejected as a jump, never accepted`() {
+        // The other half of the NaN family: valid coordinates whose haversine intermediate rounds
+        // past 1.0. The clamp in `Coordinates.distanceTo` keeps the delta finite, and the ordinary
+        // bounds then do their job.
+        val here = Coordinates(latitude = 45.0, longitude = 10.0, accuracyMeters = 8.0)
+        val antipode = Coordinates(latitude = -45.0, longitude = -170.0, accuracyMeters = 8.0)
+
+        val verdict = OdometerFixPolicy.judge(here, antipode)
+
+        assertEquals(OdometerFixPolicy.Reason.IMPLAUSIBLE_JUMP, reasonOf(verdict))
+        assertTrue(
+            "the reported delta is finite",
+            (verdict as OdometerFixPolicy.Verdict.Reject).deltaMeters.isFinite(),
+        )
+    }
+
+    // ---------------------------------------------------------------------------------------------
+    // #1057 round 2 — R2: elapsed time comes from the MONOTONIC clock wherever both fixes carry one.
+    // ---------------------------------------------------------------------------------------------
+
+    @Test
+    fun `a wall-clock step-back is accepted when the monotonic clock advances normally`() {
+        // An NTP correction steps `Location.time` 60 s backwards mid-drive. Judged on wall time this
+        // is NON_MONOTONIC_TIME, and every fix after it fails too until the clock catches up —
+        // ~110 s of silently lost mileage. On the monotonic clock it is an ordinary 5 s / 150 m leg.
+        val last = fix(0.0, accuracyMeters = 6.0, timestampMs = 1_000_000L, monotonicMs = 500_000L)
+        val next = fix(150.0, accuracyMeters = 6.0, timestampMs = 940_000L, monotonicMs = 505_000L)
+
+        val verdict = OdometerFixPolicy.judge(last, next)
+
+        assertTrue("real motion accepted despite the wall-clock step-back", verdict is OdometerFixPolicy.Verdict.Accept)
+        assertEquals(150.0, (verdict as OdometerFixPolicy.Verdict.Accept).deltaMeters, 0.5)
+    }
+
+    @Test
+    fun `a monotonic clock that does not advance is a genuine ordering fault`() {
+        val last = fix(0.0, accuracyMeters = 6.0, timestampMs = 1_000_000L, monotonicMs = 500_000L)
+
+        // Wall time advances, monotonic time does not: the wall clock is the one lying.
+        val sameInstant = fix(150.0, accuracyMeters = 6.0, timestampMs = 1_005_000L, monotonicMs = 500_000L)
+        assertEquals(OdometerFixPolicy.Reason.NON_MONOTONIC_TIME, reasonOf(OdometerFixPolicy.judge(last, sameInstant)))
+
+        val backwards = fix(150.0, accuracyMeters = 6.0, timestampMs = 1_005_000L, monotonicMs = 499_000L)
+        assertEquals(OdometerFixPolicy.Reason.NON_MONOTONIC_TIME, reasonOf(OdometerFixPolicy.judge(last, backwards)))
+    }
+
+    @Test
+    fun `a monotonic value on only one side falls back to wall time`() {
+        // Tests and synthetic sources carry no monotonic clock; their behaviour is unchanged.
+        val lastWallOnly = fix(0.0, accuracyMeters = 6.0, timestampMs = 0L)
+        val nextBoth = fix(150.0, accuracyMeters = 6.0, timestampMs = 5_000L, monotonicMs = 5_000L)
+        assertTrue(
+            "wall-time fallback accepts the 30 m per second leg",
+            OdometerFixPolicy.judge(lastWallOnly, nextBoth) is OdometerFixPolicy.Verdict.Accept,
+        )
+
+        val lastBoth = fix(0.0, accuracyMeters = 6.0, timestampMs = 0L, monotonicMs = 0L)
+        val nextWallOnly = fix(1_000.0, accuracyMeters = 6.0, timestampMs = 1_000L)
+        assertEquals(
+            "wall time still catches the 1,000 m per second jump",
+            OdometerFixPolicy.Reason.IMPLAUSIBLE_SPEED,
+            reasonOf(OdometerFixPolicy.judge(lastBoth, nextWallOnly)),
+        )
+    }
+
+    @Test
+    fun `with no clock on either side the bounded jump check still applies`() {
+        val last = fix(0.0, accuracyMeters = 6.0)
+        assertEquals(
+            OdometerFixPolicy.Reason.IMPLAUSIBLE_JUMP,
+            reasonOf(OdometerFixPolicy.judge(last, fix(2_500.0, accuracyMeters = 6.0))),
         )
     }
 

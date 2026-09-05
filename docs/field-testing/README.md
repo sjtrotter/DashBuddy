@@ -89,10 +89,17 @@ was found **broken-in-part** (raw PII in capture envelopes) and moved to that en
   **Desk, three greps:**
   1. `grep 'Odometer fix rejected' app.log` — a WARN line here is the gate **working**, not a bug.
      Each carries `delta`/`dt`/`impliedSpeed`/`accuracy` and a reason
-     (`POOR_ACCURACY`/`IMPLAUSIBLE_SPEED`/`IMPLAUSIBLE_JUMP`/`NON_MONOTONIC_TIME`) — no
-     coordinates, by design. A `IMPLAUSIBLE_SPEED` reject with a huge delta IS the 09-03 fault
-     being caught. What would be a **failure**: a burst of rejects during ordinary highway
-     driving (the bound is too tight) or during a normal parking-lot crawl.
+     (`INVALID_FIX`/`POOR_ACCURACY`/`IMPLAUSIBLE_SPEED`/`IMPLAUSIBLE_JUMP`/`NON_MONOTONIC_TIME`) —
+     no coordinates, by design. A `IMPLAUSIBLE_SPEED` reject with a huge delta IS the 09-03 fault
+     being caught. **The WARNs are episode-gated: a WARN opens a rejection streak, an INFO
+     (`Odometer reception recovered after N rejected fixes over M s`) closes it — so a FLOOD of
+     WARNs is the bug, not the gate.** Inside a streak only every 100th repeat is re-logged
+     (`Odometer rejection streak: …`), but a rejection with a *different* reason still gets its own
+     line. What would be a **failure**: a burst of rejects during ordinary highway
+     driving (the bound is too tight) or during a normal parking-lot crawl; a `NON_MONOTONIC_TIME`
+     reject at all (elapsed time now comes off the monotonic clock, so it means a real ordering
+     fault rather than a clock correction); or any `INVALID_FIX` line (the fused provider should
+     never hand us a malformed fix — worth capturing if one appears).
   2. `grep 'Odometer fixes:' app.log` — one DEBUG summary per 100 judged fixes
      (`accepted=… ignored=… rejected=… +N m`). On a normal drive `rejected` should be ≈ 0 and
      `accepted` should dominate; a large `ignored` count while parked is expected and correct.

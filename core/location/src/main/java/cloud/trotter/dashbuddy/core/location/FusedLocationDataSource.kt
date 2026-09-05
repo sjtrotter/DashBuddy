@@ -119,11 +119,16 @@ class FusedLocationDataSource @Inject constructor(
      * the floor here, which is why [cloud.trotter.dashbuddy.domain.location.OdometerFixPolicy] had
      * nothing to judge an implausible fix with. `hasAccuracy()` is honoured rather than reading the
      * always-present `accuracy` field, so "no estimate" stays null instead of masquerading as 0 m.
+     *
+     * `elapsedRealtimeNanos` rides along as the ORDERING key (round 2): `time` is the settable
+     * wall clock, and Android's own guidance is not to compare fixes with it — an NTP step-back
+     * mid-drive used to stall the odometer for ~110 s. It is always present on a real `Location`.
      */
     private fun Location.toCoordinates(): Coordinates = Coordinates(
         latitude = latitude,
         longitude = longitude,
         accuracyMeters = if (hasAccuracy()) accuracy.toDouble() else null,
         timestampMs = time,
+        monotonicMs = elapsedRealtimeNanos / 1_000_000L,
     )
 }
