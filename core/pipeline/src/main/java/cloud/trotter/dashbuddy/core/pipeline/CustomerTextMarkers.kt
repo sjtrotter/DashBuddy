@@ -94,7 +94,10 @@ import cloud.trotter.dashbuddy.domain.model.notification.RawNotificationData
  * Scrubbing those on an UNKNOWN frame loses a little triage text and leaks nothing —
  * fail toward privacy, exactly as the text scan does. It costs nothing on the
  * RECOGNIZED path, which this scan deliberately does not touch, so no rule's
- * merchant-keeps-raw decision is affected.
+ * merchant-keeps-raw decision is affected. The #1058 additions carry the same accepted cost in
+ * the other direction: an UNKNOWN frame loses its unit line and its delivery-instruction body from
+ * the triage text, which is the whole point — those two nodes are exactly what the 08-28 alcohol
+ * arrival card shipped verbatim while no rule recognized it.
  */
 object CustomerTextMarkers {
 
@@ -152,6 +155,25 @@ object CustomerTextMarkers {
         // fail toward privacy, and the RECOGNIZED path is untouched by this scan, so #886's
         // deliberate "pickup_navigation keeps its merchant address raw" decision still stands.
         "arriving_at_title",
+        // #1058 (fielded 2026-08-28, four envelopes): the drop-off address block's SUBPREMISE
+        // line — the customer's unit/apartment number, rendered fused with its label
+        // ("Apt/Suite: <n>"). It is customer-locating PII by construction, `SnapshotRedactor`
+        // already treats the id that way on the COMMIT path, and every dropoff rule's `redact`
+        // declares it — but the UNKNOWN path had nothing, so an unrecognized variant of the
+        // arrival card (the alcohol render, which carries no customer lead-in for the prefix
+        // scan) persisted it verbatim.
+        "address_subpremise_line",
+        // #1058, same four envelopes: the customer's own free-text delivery instructions. The
+        // node holds nothing else — the "Hand it to recipient" label is a separate
+        // `instructions_title` sibling — and the fielded value carried a door code. This is the
+        // #803 class: customer-AUTHORED text that can hold a code, a unit, a floor or a name, so
+        // the whole node goes. Both states of the same field are listed: the collapsed one is
+        // what fielded, and the expanded one is the SAME customer text with the same content by
+        // construction — the ruleset's own `redact` blocks have always declared the pair
+        // together, and listing only the state that happened to field is the enumeration debt
+        // #986 already paid for once.
+        "dasher_instruction_content_collapsed",
+        "dasher_instruction_content_expanded",
     )
 
     /** Substring that classifies a node's text as already-redacted (VET V1). */

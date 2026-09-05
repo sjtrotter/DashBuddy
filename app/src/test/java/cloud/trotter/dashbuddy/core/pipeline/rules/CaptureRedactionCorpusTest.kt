@@ -834,6 +834,10 @@ class CaptureRedactionCorpusTest {
             // committed `dropoff_pre_arrival_completion` folder — nothing to guard yet.)
             "pickup_issue_menu", "dropoff_pre_arrival", "dropoff_pin_entry",
             "dropoff_issue_menu", "dropoff_help_menu",
+            // #1058 adds the 8.93.7 drop-off workflow sheet — an entirely id-less surface whose
+            // whole redact block is shape-anchored (the `timeline_task_detail` case again), so
+            // this guard is the only structural check that its fixtures carry no real customer.
+            "dropoff_workflow_sheet",
         )
         val leaks = mutableListOf<String>()
         val decoysSeen = mutableSetOf<String>()
@@ -1280,21 +1284,21 @@ class CaptureRedactionCorpusTest {
             offenders.isEmpty(),
         )
         // Vacuity floor. If a refactor stops the scan from SEEING the family, this fails instead
-        // of passing green over nothing. Post-#1039-round-2 breakdown (62):
+        // of passing green over nothing. Post-#1058 breakdown (65):
         //   •  4 — uber fused `Apt ` entries (splash / pickup_verification_items /
         //          customer_chat / active_trip)
-        //   •  4 — doordash fused `Apt ` entries (dropoff_pin_entry / _handoff / _pre_arrival /
-        //          _pre_arrival_completion)
+        //   •  5 — doordash fused `Apt ` entries (dropoff_pin_entry / _handoff / _pre_arrival /
+        //          _pre_arrival_completion / #1058's _workflow_sheet)
         //   •  4 — doordash id-anchored subpremise entries (`bottom_sheet_subpremise_line` on
         //          dropoff_navigation; `address_subpremise_line` on dropoff_pre_arrival /
         //          dropoff_geofence_warning / delivery_summary_collapsed)
-        //   • 25 — the fused `Apt/Suite` entry, now blanket-declared on all 24 screen rules in
+        //   • 26 — the fused `Apt/Suite` entry, now blanket-declared on all 25 screen rules in
         //          dropoff.json5 plus navigation_generic (#993 combined-frame doctrine)
-        //   • 25 — the `Apt/Suite` label-sibling entry, on the same 25 rules
+        //   • 26 — the `Apt/Suite` label-sibling entry, on the same 26 rules
         assertTrue(
-            "expected at least 62 unit-number redact entries across both platforms, saw $found — " +
+            "expected at least 65 unit-number redact entries across both platforms, saw $found — " +
                 "the scan is no longer finding the family it is meant to police",
-            found >= 62,
+            found >= 65,
         )
     }
 
@@ -2619,6 +2623,177 @@ class CaptureRedactionCorpusTest {
             "the address under the merchant is masked too — the sheet cannot tell a customer " +
                 "address from a store address, so it fails toward privacy",
             pickupMasked.contains("Sample Loop"),
+        )
+    }
+
+    /**
+     * #1058 — the 8.93.7 drop-off workflow sheet, over its COMMITTED fixtures.
+     *
+     * The surface is FULLY id-less below its host fragment, so every entry in the rule's redact is
+     * shape- or sibling-anchored and nothing (no `ID_MARKERS` id, no `MARKERS` lead-in) would reach
+     * it if the rule stopped matching. Both fielded envelopes are committed with hand-written
+     * pseudonyms in the raw shape DoorDash emits ([CorpusDecoys]) — the #871/#885 teeth property:
+     * a synthetic tree proves the predicate, only the fielded tree proves the predicate matches
+     * what the app actually renders.
+     */
+    @Test
+    fun `the dropoff workflow sheet masks its id-less address block, note and code (#1058)`() {
+        val rule = TestRulesetFactory.screenRuleset.ruleById("doordash.screen.dropoff_workflow_sheet")
+        org.junit.Assert.assertNotNull("the #1058 rule must exist", rule)
+        assertFalse("dropoff_workflow_sheet must declare a redact block", rule!!.redact.isEmpty())
+
+        val snapshots = TestResourceLoader.loadSnapshots("snapshots/dropoff_workflow_sheet")
+        assertEquals("both fielded envelopes must be committed", 2, snapshots.size)
+
+        for ((filename, node, _) in snapshots) {
+            // The rule must actually WIN the frame — otherwise everything below tests a block
+            // that never runs in production.
+            assertEquals(
+                "$filename must classify as the new rule",
+                "dropoff_workflow_sheet",
+                TestRulesetFactory.screenRuleset.matchFirst(node)?.intent,
+            )
+            val masked = serialize(rule.redact.apply(node))
+
+            assertFalse("$filename: the street line must not persist", masked.contains("Sample Loop"))
+            assertFalse("$filename: the city/ST/ZIP line must not persist", masked.contains("Sampleton"))
+            assertFalse("$filename: the unit value must not persist", masked.contains("Apt 0000"))
+            assertFalse("$filename: the customer note must not persist", masked.contains("Gate code"))
+            assertFalse("$filename: the note's body must not persist", masked.contains("building B"))
+            // Chrome — the require anchors MUST survive or replay recognition breaks.
+            assertTrue("$filename: 'Continue' anchor kept", masked.contains("Continue"))
+            assertTrue("$filename: 'Directions' anchor kept", masked.contains("Directions"))
+            // DoorDash's own handoff option is platform vocabulary, not customer text.
+            assertTrue("$filename: the handoff option is chrome", masked.contains("Leave it at the door"))
+        }
+
+        // The second envelope renders a bare first-name + last-initial node the first does not.
+        val withName = snapshots.first { it.first.contains("52eccf") }.second
+        val namedMasked = serialize(rule.redact.apply(withName))
+        assertFalse("the bare customer name must not persist", namedMasked.contains("Sample D"))
+
+        // Mask FORM, per node — the point of the #795/#889/#920 split. A bounded token may not
+        // carry a distinctness suffix; an unbounded one keeps it.
+        fun maskOf(text: String) = rule.redact.apply(UiNode(text = text)).text!!
+        assertEquals(
+            "the quoted customer note plain-masks (#920 — unbounded alphabet, BOUNDED length)",
+            CompiledRedact.REDACTED,
+            maskOf("\"leave it by the gate, code 4417, thanks!\""),
+        )
+        assertEquals("a bare 3-digit code plain-masks", CompiledRedact.REDACTED, maskOf("417"))
+        assertEquals(
+            "the city/ST/ZIP line plain-masks",
+            CompiledRedact.REDACTED,
+            maskOf("Sampleton, TX 00000"),
+        )
+        assertTrue(
+            "the fused unit line keeps its label and plain-masks its number",
+            maskOf("Apt 4021") == "Apt [redacted]",
+        )
+        assertTrue(
+            "the street line keeps a per-customer distinctness hex (unbounded alphabet)",
+            WHOLE_MASK_HEX.matches(maskOf("1200 Sample Loop")),
+        )
+        assertTrue(
+            "a bare customer name keeps the CustomerNameKey-normalized hex (#623/#733)",
+            WHOLE_MASK_HEX.matches(maskOf("Sample D")),
+        )
+
+        // The label-SPLIT subpremise row is what this sheet actually fields: the value's only
+        // handle is its `Apt/Suite` label sibling (#1039), and it must plain-mask there too.
+        val row = UiNode(
+            className = "android.view.View",
+            children = listOf(
+                UiNode(className = "android.widget.TextView", text = "Apt/Suite"),
+                UiNode(className = "android.widget.TextView", text = "Apt 4021"),
+            ),
+        ).restoreParents()
+        val value = rule.redact.apply(row).children[1].text!!
+        assertFalse("the split unit number must not persist", value.contains("4021"))
+        assertFalse(
+            "a unit number must not carry a brute-forceable distinctness hex",
+            MASK_HEX.containsMatchIn(value),
+        )
+    }
+
+    /**
+     * #1058 adversarial review (Astra xhigh) — the alcohol arrival card, recognized on its IDS
+     * ALONE, must plain-mask the customer's instruction body.
+     *
+     * Two properties in one control tree, because they only matter together. (1) The #1058 fourth
+     * `require` arm is purely id-anchored, so a card carrying NO customer lead-in anywhere — which
+     * is exactly what made the alcohol render fall UNKNOWN — still classifies as
+     * `dropoff_pre_arrival`; arms 1-3 structurally cannot be what matched. (2) The instruction body
+     * it then redacts must mask to a PLAIN `[redacted]`. It shipped the hash form until this
+     * review: an instruction's alphabet is unbounded but its LENGTH is not, so a short body that IS
+     * the secret ("Hand it to me: 4417") is recoverable by enumerating the 10^4 codes against the
+     * 65 536 4-hex buckets — the #889 F1 argument arriving through length instead of alphabet. The
+     * hash bought nothing to trade against it: unlike a customer NAME, an instruction body is
+     * nobody's join key and is never parsed.
+     *
+     * Mutation checks: drop the fourth arm and (a) goes red (the card falls to UNKNOWN); drop the
+     * `plainMask` and (c) goes red.
+     */
+    @Test
+    fun `the alcohol arrival card recognizes on ids alone and plain-masks its instruction body (#1058)`() {
+        fun dd(id: String, text: String? = null) =
+            UiNode(viewIdResourceName = "com.doordash.driverapp:id/$id", text = text)
+
+        val card = UiNode(
+            viewIdResourceName = "com.doordash.driverapp:id/drop_off_container",
+            children = listOf(
+                UiNode(
+                    viewIdResourceName = "com.doordash.driverapp:id/drop_off_bottom_sheet_container",
+                    children = listOf(
+                        dd("address_subpremise_line", "Apt/Suite: 4021"),
+                        dd("directions_button", "Directions"),
+                        dd("instructions_title", "Hand it to recipient"),
+                        dd("dasher_instruction_content_collapsed", "Hand it to me: 4417"),
+                        dd("alcohol_dropoff_ic_scan"),
+                        dd("alcohol_dropoff_instructions_title", "Verify the recipient's identity"),
+                    ),
+                ),
+            ),
+        ).restoreParents()
+
+        // (a) It recognizes — on the id-anchored arm, since (b) proves no lead-in exists to feed
+        // the other three.
+        assertEquals(
+            "the alcohol card must recognize on the #1058 id-anchored arm alone",
+            "dropoff_pre_arrival",
+            TestRulesetFactory.screenRuleset.matchFirst(card)?.intent,
+        )
+        // (b) No customer lead-in anywhere in the tree — the premise of (a).
+        val allText = serialize(card)
+        for (leadIn in listOf("Deliver to", "Delivery for", "Heading to")) {
+            assertFalse("the control tree must carry no '$leadIn' lead-in", allText.contains(leadIn))
+        }
+
+        val rule = TestRulesetFactory.screenRuleset.ruleById("doordash.screen.dropoff_pre_arrival")!!
+        val masked = rule.redact.apply(card)
+        val body = masked.children[0].children[3].text!!
+
+        // (c) The instruction body plain-masks — no secret, and no brute-forceable hex.
+        assertFalse("the instruction body must not persist", body.contains("4417"))
+        assertFalse(
+            "a bounded-length instruction body must not carry a distinctness hex (#889/#920)",
+            MASK_HEX.containsMatchIn(body),
+        )
+        assertEquals("plain mask expected for the instruction body", CompiledRedact.REDACTED, body)
+
+        // The EXPANDED state of the same field carries the same declaration.
+        fun maskOf(id: String, text: String) =
+            rule.redact.apply(dd(id, text)).text!!
+        assertEquals(
+            "the expanded instruction body plain-masks too",
+            CompiledRedact.REDACTED,
+            maskOf("dasher_instruction_content_expanded", "Hand it to me: 4417"),
+        )
+        // Over-mask guard: the instruction LABEL is app vocabulary and survives for triage.
+        assertEquals(
+            "the instructions title is chrome",
+            "Hand it to recipient",
+            masked.children[0].children[2].text,
         )
     }
 

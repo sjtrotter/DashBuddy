@@ -329,7 +329,8 @@ must never be able to move a classification. **Two #910 additions close the SPLI
 drives the same `redactFor` lookup, applied to recognized AND UNKNOWN clicks, envelope-only (the
 dedup `contentHash` stays on the original node), fail-OPEN; (2) `CustomerTextMarkers.ID_MARKERS` —
 an enumerated, cross-platform-DATA list of view-id suffixes whose node VALUE is customer PII
-(`customer_name`/`user_name`/`address_line_1`/`address_line_2`), `hasIdSuffix` semantics, scrubbed
+(`customer_name`/`user_name`/`address_line_1`/`address_line_2`, + `arriving_at_title` #993 and
+#1058's `address_subpremise_line`/`dasher_instruction_content_{collapsed,expanded}`), `hasIdSuffix` semantics, scrubbed
 on the **UNKNOWN screen + click envelopes only** (a recognized frame keeps its rule's deliberate
 decisions — #886 leaves `pickup_navigation`'s MERCHANT address raw — so an id scan there would
 fight the ruleset; scrubbing the dasher's own `user_name` greeting on an UNKNOWN frame is the

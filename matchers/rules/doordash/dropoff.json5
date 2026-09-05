@@ -1006,14 +1006,18 @@
           }
         },
         {
+          "comment": "#1058 review (Astra xhigh) \u2014 `plainMask`, the #920/#985 posture. The node is the customer's own delivery-instruction body, and its ALPHABET is unbounded but its LENGTH is not: a SHORT instruction that IS the secret (\"Hand it to me: 4417\") masks whole to `[redacted:<4hex>]`, and enumerating `Hand it to me: 0000`\u2026`9999` against those 65 536 buckets recovers the code \u2014 the #889 F1 bounded-secret argument, arriving through length rather than through alphabet. The distinctness the hash buys is worth nothing here to trade against that: unlike a customer NAME (which `normalize: customerName` turns into a cross-surface join key) an instruction body joins nothing and is never parsed. Pre-existing on this rule; #1058's fourth `require` arm is what EXPOSED it, by making the alcohol render \u2014 whose instruction body carried a door code \u2014 a recognized frame this entry actually fires on. Both states of the field carry the same declaration, and `plainMask` is legal here precisely because there is no `normalize` (the compiler rejects the pair).",
           "find": {
             "hasIdSuffix": "dasher_instruction_content_collapsed"
-          }
+          },
+          "plainMask": true
         },
         {
+          "comment": "#1058 review: `plainMask`, for the reason spelled out on the collapsed twin directly above \u2014 same customer text, same bounded-length secret, same #920/#985 posture. Enumerating only the state that happened to field is the debt #986 already paid for once.",
           "find": {
             "hasIdSuffix": "dasher_instruction_content_expanded"
-          }
+          },
+          "plainMask": true
         },
         {
           "comment": "#1039 belt (the #993 combined-frame precedent): the FUSED subpremise line — `Apt/Suite <n>` or `Apt/Suite: <n>` in ONE id-less node, the render the committed `dropoff_pre_arrival` fixtures carry. Declared on EVERY rule in this file (plus `navigation_generic`) rather than only on the surfaces that fielded it, because a redact protects only the frames its OWN rule wins and the rules most likely to claim an address-block frame OUT-RANK the fielded pair (`delivery_summary_collapsed` 31, `dropoff_navigation` 61, `dropoff_photo` 62, `dropoff_geofence_warning` 84). Entry is `dropoff_photo`'s #986 entry verbatim — see it for the full reasoning: the token after the label strip is a bounded ~10^4 unit number, so a 4-hex distinctness suffix is brute-recoverable (`plainMask`), while the label itself is app vocabulary and is kept for replay context. ACCEPTED COLLATERAL: the split row's BARE `Apt/Suite` LABEL node is itself an exact prefix match here, and no keepPrefix can be kept from it, so it masks whole to plain `[redacted]` — two words of app chrome lost on a debug envelope, the same fail-toward-privacy trade `DropoffBannerRedactParityTest` already documents for the `Arriving at` label. It cannot break the label-sibling entry below: redact predicates are evaluated against the ORIGINAL tree, the mask lands on a copy. Inert on any frame without the line; the #1039 parity test in `CaptureRedactionCorpusTest` pins that every rule declares it, so a new dropoff surface cannot forget.",
@@ -1106,7 +1110,7 @@
         "flow": "task:dropoff:navigation",
         "modeHint": "online"
       },
-      "comment": "Dropoff layouts (#462/#460/#549): (1) the en-route nav card ('Deliver to <name>' + Directions/Call/Message); (2) the arrival detail card with 'Delivery for' + 'Hand it to recipient'; (3) #549: the arrival detail card whose instruction is NOT 'Hand it to recipient' (e.g. 'Leave it at the door'), anchored on 'Delivery for' + the complete_delivery_steps_button id (the third require branch) — it was dropping to UNKNOWN. The arrival card's first text is 'Delivery for'/'Deliver by', neither of which startsWith 'Deliver to'. 'Hand it to recipient' / complete_delivery_steps_button are the dropoff-specific discriminators (the pickup card also carries 'Delivery for', so keying on that alone would steal it). The arrival card's address nodes carry ids (address_line_1/_2), so customerAddressHash uses a coalesce (id-less shape first, by-id second). The alcohol variant additionally carries the priority-0 sensitive id/signature banner (#463), blocked before reaching here. Recognize-only (flow stays task:dropoff:navigation); the gate-code/instruction node is never parsed.",
+      "comment": "Dropoff layouts (#462/#460/#549): (1) the en-route nav card ('Deliver to <name>' + Directions/Call/Message); (2) the arrival detail card with 'Delivery for' + 'Hand it to recipient'; (3) #549: the arrival detail card whose instruction is NOT 'Hand it to recipient' (e.g. 'Leave it at the door'), anchored on 'Delivery for' + the complete_delivery_steps_button id (the third require branch) — it was dropping to UNKNOWN. The arrival card's first text is 'Delivery for'/'Deliver by', neither of which startsWith 'Deliver to'. 'Hand it to recipient' / complete_delivery_steps_button are the dropoff-specific discriminators (the pickup card also carries 'Delivery for', so keying on that alone would steal it). The arrival card's address nodes carry ids (address_line_1/_2), so customerAddressHash uses a coalesce (id-less shape first, by-id second). The alcohol variant additionally carries the priority-0 sensitive id/signature banner (#463), blocked before reaching here. Recognize-only (flow stays task:dropoff:navigation); the gate-code/instruction node is never parsed. (4) #1058, fielded 08-28 (4 envelopes): the ALCOHOL arrival card renders `alcohol_dropoff_instructions_title` INSTEAD of any customer lead-in — no `Deliver to` / `Heading to` / `Delivery for` node exists on it — so all three arms above missed and the sheet fell UNKNOWN, shipping its `address_subpremise_line` and its `dasher_instruction_content_collapsed` (a customer note carrying a door code) verbatim on the UNKNOWN capture path. The fourth arm is purely ID-anchored (#938: view ids do not localize): the drop-off bottom sheet container + the alcohol scan icon + the Directions button, three ids that co-occur only on this card (two committed fixtures carry all three, both already `dropoff_pre_arrival`). Recognition alone closes the leak — this rule's `redact` already declares both leaked ids — and the parse's name/address fields are nullable coalesces that simply resolve null on this render, so nothing is fabricated.",
       "require": {
         "any": [
           {
@@ -1164,6 +1168,25 @@
               {
                 "exists": {
                   "hasIdSuffix": "complete_delivery_steps_button"
+                }
+              }
+            ]
+          },
+          {
+            "all": [
+              {
+                "exists": {
+                  "hasIdSuffix": "drop_off_bottom_sheet_container"
+                }
+              },
+              {
+                "exists": {
+                  "hasIdSuffix": "alcohol_dropoff_ic_scan"
+                }
+              },
+              {
+                "exists": {
+                  "hasIdSuffix": "directions_button"
                 }
               }
             ]
@@ -1909,14 +1932,18 @@
           "plainMask": true
         },
         {
+          "comment": "#1058 review (Astra xhigh) \u2014 `plainMask`, the #920/#985 posture. The node is the customer's own delivery-instruction body, and its ALPHABET is unbounded but its LENGTH is not: a SHORT instruction that IS the secret (\"Hand it to me: 4417\") masks whole to `[redacted:<4hex>]`, and enumerating `Hand it to me: 0000`\u2026`9999` against those 65 536 buckets recovers the code \u2014 the #889 F1 bounded-secret argument, arriving through length rather than through alphabet. The distinctness the hash buys is worth nothing here to trade against that: unlike a customer NAME (which `normalize: customerName` turns into a cross-surface join key) an instruction body joins nothing and is never parsed. Pre-existing on this rule; #1058's fourth `require` arm is what EXPOSED it, by making the alcohol render \u2014 whose instruction body carried a door code \u2014 a recognized frame this entry actually fires on. Both states of the field carry the same declaration, and `plainMask` is legal here precisely because there is no `normalize` (the compiler rejects the pair).",
           "find": {
             "hasIdSuffix": "dasher_instruction_content_collapsed"
-          }
+          },
+          "plainMask": true
         },
         {
+          "comment": "#1058 review: `plainMask`, for the reason spelled out on the collapsed twin directly above \u2014 same customer text, same bounded-length secret, same #920/#985 posture. Enumerating only the state that happened to field is the debt #986 already paid for once.",
           "find": {
             "hasIdSuffix": "dasher_instruction_content_expanded"
-          }
+          },
+          "plainMask": true
         },
         {
           "comment": "The customer's free-text note on an order item — the #803 class (a note routinely carries a gate code, an apartment number, or a callback instruction). Masked whole; the item NAME node (`order_item_name`) is catalog data and stays raw.",
@@ -2668,6 +2695,169 @@
           {
             "exists": {
               "hasTextContaining": "Confirm to complete delivery"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "doordash.screen.dropoff_workflow_sheet",
+      "priority": 143,
+      "comment": "#1058 — DoorDash 8.93.7's id-LESS drop-off workflow sheet, fielded 2026-08-30 (two envelopes, 16:30:48). The whole sheet renders with ONE surviving view id (`drop_off_workflow_host_fragment`) plus the two prism CTA titles; everything the dasher reads — the street line, the city/ST/ZIP line, the label-split `Apt/Suite` unit row, the handoff instruction, the customer's quoted note (which carried a door code) and a bare 3-digit code — is an id-LESS TextView. That is the #985 residual class on a NEW surface: no ids for `CustomerTextMarkers.ID_MARKERS` to see, no `Deliver to `/`Delivery for ` lead-in for the prefix backstop, and `timeline_task_detail`'s `Copy address` / `Close sheet` anchors absent — so the frames fell UNKNOWN and persisted the customer's address and note verbatim. Per #806 the primary control for that class is a RECOGNIZING rule with a `redact`, which is all this rule is.\nRECOGNIZE-ONLY, deliberately: no `state` block, so it contributes no flow and no modeHint. That is NOT the same as state-inert (#995) — giving a previously-UNKNOWN surface a rule makes its frames reach the state machine and moves `FrameGate.lastIdentity`; what it buys is lifecycle NEUTRALITY, asserted end-to-end by `FlowlessRecognitionNeutralityTest`. Whether this sheet SHOULD carry a dropoff flow (it looks like 8.93.7's replacement for the id-bearing arrival card) is a separate design question, left open on purpose: a privacy fix must not move a lifecycle classification.\nAnchors: the one surviving id, plus `Continue` and `Directions` matched ON their own `textView_prism_button_title` nodes. Priority 143 sits BEHIND every id-bearing dropoff rule (max 136) and behind `timeline_task_detail` (142), so it can only claim a frame nothing else recognized — ten committed fixtures of the older, lead-in-BEARING renders of this same sheet satisfy this `require` and keep their existing classification purely by priority. The rejects pin the two neighbours that render the same address block: `Copy address` is the Timeline order-detail sheet, `drop_off_recycler_view` the id-bearing pre-arrival / handoff card. Text anchors are English (the #938 boundary applies, as it does to every rule in this file).",
+      "redact": [
+        {
+          "comment": "#993 belt (the FIX 3 precedent): this dropoff-phase surface can win a frame that STILL carries DoorDash's nav arrival banner — `dropoff_navigation`'s own reject (Continue / Complete Delivery / Mark as delivered / complete_delivery_steps_button) hands the arrival-MOMENT frame to whichever arrived-phase rule matches, and nav_arriving rejects bottom-sheet frames, so neither of the two rules that already masked `arriving_at_title` covers it. The node is id-BEARING, so the id-less name/address entries elsewhere in this block structurally cannot reach it (`hasNoId` conjunct). Whole token, no normalize — it is a customer ADDRESS on every dropoff-phase surface (see dropoff_navigation for the full reasoning). Inert on any frame without the node; `DropoffBannerRedactParityTest` pins that EVERY rule in this file carries it, so a new dropoff surface cannot forget.",
+          "find": {
+            "hasIdSuffix": "arriving_at_title"
+          }
+        },
+        {
+          "comment": "#1039 belt (the #993 combined-frame precedent): the FUSED subpremise line — `Apt/Suite <n>` or `Apt/Suite: <n>` in ONE id-less node, the render the committed `dropoff_pre_arrival` fixtures carry. Declared on EVERY rule in this file (plus `navigation_generic`) rather than only on the surfaces that fielded it, because a redact protects only the frames its OWN rule wins and the rules most likely to claim an address-block frame OUT-RANK the fielded pair (`delivery_summary_collapsed` 31, `dropoff_navigation` 61, `dropoff_photo` 62, `dropoff_geofence_warning` 84). Entry is `dropoff_photo`'s #986 entry verbatim — see it for the full reasoning: the token after the label strip is a bounded ~10^4 unit number, so a 4-hex distinctness suffix is brute-recoverable (`plainMask`), while the label itself is app vocabulary and is kept for replay context. ACCEPTED COLLATERAL: the split row's BARE `Apt/Suite` LABEL node is itself an exact prefix match here, and no keepPrefix can be kept from it, so it masks whole to plain `[redacted]` — two words of app chrome lost on a debug envelope, the same fail-toward-privacy trade `DropoffBannerRedactParityTest` already documents for the `Arriving at` label. It cannot break the label-sibling entry below: redact predicates are evaluated against the ORIGINAL tree, the mask lands on a copy. Inert on any frame without the line; the #1039 parity test in `CaptureRedactionCorpusTest` pins that every rule declares it, so a new dropoff surface cannot forget.",
+          "find": {
+            "hasTextStartsWith": "Apt/Suite"
+          },
+          "keepPrefix": [
+            "Apt/Suite: ",
+            "Apt/Suite "
+          ],
+          "plainMask": true
+        },
+        {
+          "comment": "#1039 belt: the LABEL-anchored half of the subpremise mask — an `Apt/Suite` label node followed by its value, whatever spelling that value carries (`Unit 4202` shipped raw 2026-08-14). Both label spellings are enumerated because `hasPrecedingSiblingText` is an exact, un-trimmed equality; whole-node `plainMask` because a unit number is a bounded ~10^4 alphabet. Ordered ahead of every generic shape entry in this block: `maskNode` is first-match-wins, and a digit-leading value (`101 B`) would otherwise be claimed and HASHED by the id-less street shape. See `dropoff_handoff` for the full reasoning. Inert without the label; pinned by the #1039 parity test. **This is the entry that covers the FIELDED 08-30 row on this sheet** — the unit value sits directly under its `Apt/Suite` label, both id-less.",
+          "find": {
+            "any": [
+              {
+                "hasPrecedingSiblingText": "Apt/Suite"
+              },
+              {
+                "hasPrecedingSiblingText": "Apt/Suite:"
+              }
+            ]
+          },
+          "plainMask": true
+        },
+        {
+          "comment": "#895 belt: the FUSED `Apt <n>` spelling of the same unit number, for the render where the label sibling is absent (this sheet fielded the label-SPLIT row, but the fused one is the same family and costs nothing). `plainMask` for the same reason as its siblings — a bare unit number is a bounded ~10^4 alphabet over the #889 length floor, so a 4-hex distinctness suffix would be an inversion oracle, and distinctness buys nothing: a unit number is nobody's join key.",
+          "find": {
+            "hasTextStartsWith": "Apt "
+          },
+          "keepPrefix": [
+            "Apt "
+          ],
+          "plainMask": true
+        },
+        {
+          "comment": "The id-less first-name + last-initial customer name. FIELDED on this sheet (the 08-30 pair's second envelope renders a bare name node in the toolbar row while the first does not), and there is nothing to say whose name it is from the tree alone — so it masks, the #985 phase-ambiguous-slot posture. The pattern is byte-identical to `SnapshotRedactor.FIRST_LAST_INITIAL_PATTERN` (the #885/#362 SSOT — `\\s{1,4}` between tokens, never a literal space, because a double-space render evaded the older copy) and is pinned by `CaptureRedactionCorpusTest`. `normalize: customerName` keeps this mask's 4 hex equal to the `customerNameHash` the parse of a sibling surface persists for the same customer (#623/#733), which is also why it is NOT `plainMask` — the canonical-key hash is the join, and a name's alphabet is unbounded. `hasNoId` keeps it off id-bearing chrome.",
+          "find": {
+            "all": [
+              {
+                "hasTextMatchesRegex": "^\\s{0,8}[\\p{L}][\\p{L}'-]{0,20}(\\s{1,4}[\\p{L}][\\p{L}'-]{0,20}){0,3}\\s{1,4}[A-Z]\\.?\\s{0,8}$"
+              },
+              {
+                "hasNoId": true
+              }
+            ]
+          },
+          "normalize": "customerName"
+        },
+        {
+          "comment": "Address line 1, digit-leading (street) form — the fielded shape on this sheet. Same predicate as the `dropoff_pre_arrival` / `dropoff_handoff` / `timeline_task_detail` family (Principle 5: the same id-less address block gets the same entry set, not a new dialect). Hash-mask, un-normalized: the token is a street line, not a customer NAME, and the name canonicalizer would collapse it to first-token + second-initial and destroy the mask's distinctness.",
+          "find": {
+            "all": [
+              {
+                "hasTextMatchesRegex": "^\\d{1,5}\\s+\\S"
+              },
+              {
+                "hasNoId": true
+              }
+            ]
+          }
+        },
+        {
+          "comment": "Address line 1, VENUE form (#886's mirror predicate): when the destination is a complex or a business, line 1 is a proper-noun name with no id, no digits and no stable shape, and it is child 0 of its block so there is no preceding sibling to anchor on — the handle is its FOLLOWING sibling, the city/ST/ZIP line. The pattern is `timeline_task_detail`'s SUPERSET copy, not `dropoff_pre_arrival`'s, and deliberately: that sheet fielded a STATE-LESS city render ('San Antonio,  78200') the two-letter-state requirement structurally misses, and this surface is the same fully id-less block class, so the wider anchor is the right one here. Over-match surface is 'the node directly above a city/ST/ZIP line', which on this sheet is only line 1.",
+          "find": {
+            "hasFollowingSiblingTextMatchesRegex": "[,\\s]{1,4}(?:[A-Za-z]{2},?\\s{1,4})?\\d{5}"
+          }
+        },
+        {
+          "comment": "#889 F1 posture: the city/ST/ZIP line and any bare 5-digit code, `plainMask`. 10^5 values against 65 536 4-hex buckets is ~1.5 candidates per bucket — effectively recoverable — and the distinctness would be redundant anyway, since this surface's name and street entries already carry per-customer distinct masks. Ordered AFTER the two line-1 entries so a 5-digit house number is claimed by the street entry and keeps its hash.",
+          "find": {
+            "all": [
+              {
+                "hasTextMatchesRegex": "\\d{5}"
+              },
+              {
+                "hasNoId": true
+              }
+            ]
+          },
+          "plainMask": true
+        },
+        {
+          "comment": "The customer's free-text note, which this sheet renders wrapped in literal double quotes — the FIELDED leak (the 08-30 render carried a door code and a unit inside it). Customer-AUTHORED text, the #803/#920 class: it can carry a gate code, a unit, a name, a floor. `plainMask` follows #920/#985 rather than the older un-plained quote entry on `dropoff_pre_arrival`: a note's ALPHABET is unbounded but its LENGTH is not, so a short note that IS the secret ('Gate 4417') clears the #889 floor while its plaintext space stays far below the suffix's 65 536 buckets — and unlike a customer name a note is nobody's join key, so the distinctness buys nothing to trade against that. The handoff instruction beside it ('Leave it at the door') is DoorDash's own option vocabulary, not customer text, and is deliberately kept raw.",
+          "find": {
+            "hasTextStartsWith": "\""
+          },
+          "plainMask": true
+        },
+        {
+          "comment": "The bare entry/gate code rendered as its own node — fielded here as a 3-digit node under the note. Same shape and same `plainMask` argument as the `dropoff_pre_arrival` / `timeline_task_detail` family: a bounded ~10^4 numeric alphabet, above the #889 length floor at 4 digits, so the 4-hex suffix would be an inversion oracle. The floor bounds LENGTH, this declaration bounds ALPHABET; they compose.",
+          "find": {
+            "all": [
+              {
+                "hasTextMatchesRegex": "^#?\\s?\\d{1,4}[A-Za-z]?$"
+              },
+              {
+                "hasNoId": true
+              }
+            ]
+          },
+          "plainMask": true
+        }
+      ],
+      "reject": [
+        {
+          "exists": {
+            "any": [
+              {
+                "hasText": "Copy address"
+              },
+              {
+                "hasIdSuffix": "drop_off_recycler_view"
+              }
+            ]
+          }
+        }
+      ],
+      "require": {
+        "all": [
+          {
+            "exists": {
+              "hasIdSuffix": "drop_off_workflow_host_fragment"
+            }
+          },
+          {
+            "exists": {
+              "all": [
+                {
+                  "hasIdSuffix": "textView_prism_button_title"
+                },
+                {
+                  "hasText": "Continue"
+                }
+              ]
+            }
+          },
+          {
+            "exists": {
+              "all": [
+                {
+                  "hasIdSuffix": "textView_prism_button_title"
+                },
+                {
+                  "hasText": "Directions"
+                }
+              ]
             }
           }
         ]

@@ -190,6 +190,48 @@ class CustomerTextMarkersTest {
     }
 
     @Test
+    fun `the dropoff subpremise and instruction ids are customer PII by construction (#1058)`() {
+        // Fielded 2026-08-28: the ALCOHOL variant of the drop-off arrival card renders no
+        // customer lead-in at all (`alcohol_dropoff_instructions_title` sits where "Delivery for"
+        // does on the ordinary card), so the prefix scan is blind to it — and until this rule
+        // existed the frame fell UNKNOWN with both of these nodes raw.
+        assertEquals(
+            "address_subpremise_line",
+            CustomerTextMarkers.unredactedIdMarker(dd("address_subpremise_line", "Apt/Suite: 4021")),
+        )
+        assertEquals(
+            "dasher_instruction_content_collapsed",
+            CustomerTextMarkers.unredactedIdMarker(
+                dd("dasher_instruction_content_collapsed", "Hand it to me: gate code 4417, building B"),
+            ),
+        )
+        // Both states of the same field, not just the one that fielded.
+        assertEquals(
+            "dasher_instruction_content_expanded",
+            CustomerTextMarkers.unredactedIdMarker(
+                dd("dasher_instruction_content_expanded", "Hand it to me: gate code 4417, building B"),
+            ),
+        )
+        // The prefix scan is blind to every one of them — that is the gap this closes.
+        assertNull(CustomerTextMarkers.unredactedMarker("Apt/Suite: 4021"))
+        assertNull(CustomerTextMarkers.unredactedMarker("Hand it to me: gate code 4417, building B"))
+        // The instruction LABEL sibling is app vocabulary and must survive for triage.
+        assertNull(CustomerTextMarkers.unredactedIdMarker(dd("instructions_title", "Hand it to recipient")))
+        // And the whole-node scrub reaches them through the UNKNOWN-path helper.
+        val tree = UiNode(
+            children = listOf(
+                dd("instructions_title", "Hand it to recipient"),
+                dd("address_subpremise_line", "Apt/Suite: 4021"),
+                dd("dasher_instruction_content_collapsed", "Hand it to me: gate code 4417"),
+            ),
+        )
+        val scrubbed = CustomerTextMarkers.scrubUnknown(tree)
+        assertEquals("Hand it to recipient", scrubbed.children[0].text)
+        assertEquals("[redacted]", scrubbed.children[1].text)
+        assertEquals("[redacted]", scrubbed.children[2].text)
+    }
+
+    @Test
     fun `the id match is a SUFFIX match, like the rules' hasIdSuffix predicate`() {
         // The `com.<vendor>:id/` prefix varies by package, so only the tail is pinned.
         assertEquals(

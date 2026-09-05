@@ -49,6 +49,23 @@ class FlowlessRecognitionNeutralityTest {
         )
     }
 
+    /**
+     * #1058 — the third recognize-only surface, and the same reason again: DoorDash 8.93.7's
+     * id-LESS drop-off workflow sheet shipped a full street line, a unit number and the
+     * customer's quoted note (with a door code in it) to UNKNOWN captures, and the only control
+     * for a fully id-less surface is a rule that recognizes it and declares a `redact`. The rule
+     * declares no `state` deliberately — whether this sheet is 8.93.7's replacement for the
+     * id-bearing arrival card, and should therefore carry `task:dropoff:*`, is an open design
+     * question a privacy fix must not answer by accident. This is what pins that it did not.
+     */
+    @Test
+    fun `the dropoff workflow-sheet frames recognize, carry no flow, and leave PlatformRegion untouched (#1058)`() {
+        assertFlowlessAndNeutral(
+            "snapshots/dropoff_workflow_sheet",
+            "doordash.screen.dropoff_workflow_sheet",
+        )
+    }
+
     private fun assertFlowlessAndNeutral(corpus: String, expectedRuleId: String) {
         val frames = SessionReplay.loadSession(corpus)
         assertTrue("the $corpus corpus must not be empty", frames.isNotEmpty())

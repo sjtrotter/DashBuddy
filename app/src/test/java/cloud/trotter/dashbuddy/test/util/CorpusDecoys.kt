@@ -85,6 +85,47 @@ object CorpusDecoys {
         "100 Sample St, San Antonio, TX 78000, USA" to
             "hand-written street address in the same card's `address_line_2`; house number, " +
             "street and ZIP are all invented, city/state kept so the line keeps its fielded shape",
+        // #1058 — `address_subpremise_line` and `dasher_instruction_content_collapsed` joined
+        // `CustomerTextMarkers.ID_MARKERS`, which is the id SSOT the FIX 4 guard reuses, so the
+        // two 2026-06-12 `dropoff_pre_arrival` fixtures' long-standing hand-sanitized values
+        // became visible to it. Both were sanitized by hand at commit time (PR #462/#460): the
+        // unit number is a row of zeros, and the instruction body was truncated at its label.
+        // They are kept in raw shape for the same reason as everything else in this file — they
+        // are what proves the id-anchored redacts fire on the tree DoorDash actually renders.
+        "Apt/Suite: 0000" to
+            "hand-written unit number on the 06-12 dropoff arrival cards and on the 08-28 " +
+            "alcohol-variant fixture (#1058); a row of zeros, never a fielded value",
+        "Hand it to me: " to
+            "hand-truncated delivery-instruction body on the two 06-12 dropoff arrival cards — " +
+            "the customer's text was removed at commit time, the label kept",
+        // #1058 dropoff_pre_arrival/2026-08-28_16-58-20-471__…__172c76.json — the ALCOHOL
+        // variant's instruction body. The fielded value was a customer-written note carrying a
+        // door code; this is an invented note of similar length in the same shape, so the
+        // fixture still proves the id-anchored redact masks the whole node.
+        "Hand it to me: Gate code 00000, then take the first left and park by building B. " +
+            "Please call when you reach the gate and I will walk down to meet you at the " +
+            "mailboxes by the pool, thank you so much for helping." to
+            "hand-written delivery instruction on the 08-28 alcohol arrival card",
+        // #1058 dropoff_workflow_sheet/2026-08-30_16-30-48-8{51,67}__…json — the id-LESS 8.93.7
+        // sheet. EVERY customer value on it is invented: the whole point of the fixture is that
+        // the address block, the unit row, the note and the bare code carry no view ids at all,
+        // so the rule's shape-anchored redact is the only control and it can only be proven
+        // against values in the fielded shape.
+        "1200 Sample Loop" to "hand-written street line on the 08-30 dropoff workflow sheet",
+        "Sampleton, TX 00000" to
+            "hand-written city/ST/ZIP line on the same sheet; the city and ZIP are invented, the " +
+            "two-letter-state shape is kept so the sibling-anchored entries still match",
+        "Apt 0000" to "hand-written unit value in the same sheet's label-split subpremise row",
+        "\"Gate code 0000 at the front entrance, which is the second gate on the right side of " +
+            "the complex. Once inside take the first left and follow the road around past the " +
+            "pool to building B, unit 0000 is upstairs on the far end. Please do not leave the " +
+            "order by the office. If the gate will not open just call me and I will come down " +
+            "to meet you.\"" to
+            "hand-written quoted customer note on the same sheet — the fielded one carried a " +
+            "door code, so the decoy does too, in the same quoted shape and similar length",
+        "Sample D" to
+            "hand-written pseudonym for the bare first-name + last-initial node the second " +
+            "08-30 envelope renders",
     )
 
     /** True when [value] is an enumerated decoy (byte-exact). */

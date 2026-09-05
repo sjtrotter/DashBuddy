@@ -78,6 +78,31 @@ card's **mechanical** half, #577 (re-confirmed, 24/24, ~0.55 s — with a new po
 that entry's Bug #1), the #457 path, and #554 ShadowProjector (2/2). The #462/#460 dropoff item
 was found **broken-in-part** (raw PII in capture envelopes) and moved to that entry's Bug #7.)_
 
+- **🆕 NEW — #1058 — the two dropoff sheets that were shipping addresses and door codes to
+  UNKNOWN captures are now recognized and redacted.** Leak A is the ALCOHOL variant of the drop-off
+  arrival card (the one that asks you to scan an ID and collect a signature): it renders no
+  "Delivery for" line, so no rule matched it and the unit number + the customer's instruction body
+  went to disk raw. Leak B is DoorDash 8.93.7's id-less "Leave it at the door" workflow sheet
+  (Call · Message · Directions · Continue), which shipped the street line, city/ST/ZIP, the unit,
+  the quoted customer note (with a code in it) and a bare 3-digit code. Both now have a rule with a
+  full redact; the two node ids also joined the UNKNOWN-path id backstop.
+  **On-dash:** nothing to watch — the fix is capture-side only. The one thing to NOTICE is that
+  nothing changed in behaviour: an alcohol drop-off and an ordinary "leave it at the door" drop-off
+  must still narrate, bubble and complete exactly as before (the new sheet rule declares no flow on
+  purpose).
+  **Desk, after the pull:**
+  1. `grep -rl 'drop_off_workflow_host_fragment\|alcohol_dropoff_ic_scan' captures/**/UNKNOWN/`
+     must return **nothing** — a hit means the frame still fell UNKNOWN and the rule missed it.
+  2. In the recognized folders for those two surfaces
+     (`captures/doordash/accessibility.window/dropoff_pre_arrival/` and
+     `.../dropoff_workflow_sheet/`), every address line, unit/`Apt` value, instruction body, quoted
+     note and bare code must read `[redacted]` or `[redacted:<4hex>]` — the codes, unit numbers,
+     ZIPs and notes must be **plain** `[redacted]` (no hex), the street lines and any bare
+     first-name + last-initial keep the hex.
+  3. `grep -c dropoff_workflow_sheet app.log` — a non-zero count on a dash where you took a
+     leave-at-door drop is the positive signal that the new rule is live on the device build.
+  - Confirmed: 0/2
+
 - **🆕 NEW — #1057/#918 — every odometer fix is now gated (the +905-mile fault, and the
   parked-at-the-desk phantom miles).** The gate rejects a fix whose accuracy is worse than 50 m,
   whose implied speed tops ~150 mph, or (with no timestamps) that jumps more than 2 km; a rejected

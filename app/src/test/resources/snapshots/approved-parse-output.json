@@ -2379,6 +2379,27 @@
             "subFlow": "NAVIGATION"
         }
     },
+    "dropoff_pre_arrival/2026-08-28_16-58-20-471__doordash__accessibility.window__UNKNOWN__172c76.json": {
+        "ruleId": "doordash.screen.dropoff_pre_arrival",
+        "intent": "dropoff_pre_arrival",
+        "shape": "task",
+        "fields": {
+            "arrivalConfirmed": false,
+            "customerAddressHash": "7342b159859c4de641357a7c8243c1090043221af131d43681d8443b3e0a7100",
+            "customerNameHash": null,
+            "deadline": {
+                "text": "17:00",
+                "time": 1780333200000
+            },
+            "itemsRemaining": null,
+            "itemsShopped": null,
+            "phase": "DROPOFF",
+            "redCardTotal": null,
+            "storeAddress": null,
+            "storeName": null,
+            "subFlow": "NAVIGATION"
+        }
+    },
     "dropoff_pre_arrival/20260128_180652_578_DROPOFF_DETAILS_PRE_ARRIVAL.json": {
         "ruleId": "doordash.screen.dropoff_pre_arrival",
         "intent": "dropoff_pre_arrival",
@@ -2703,6 +2724,18 @@
     "dropoff_reminder/2026-08-01_12-31-29-336__doordash__accessibility.window__dropoff_reminder__fd6e80.json": {
         "ruleId": "doordash.screen.dropoff_reminder",
         "intent": "dropoff_reminder",
+        "shape": null,
+        "fields": {}
+    },
+    "dropoff_workflow_sheet/2026-08-30_16-30-48-851__doordash__accessibility.window__UNKNOWN__1c7706.json": {
+        "ruleId": "doordash.screen.dropoff_workflow_sheet",
+        "intent": "dropoff_workflow_sheet",
+        "shape": null,
+        "fields": {}
+    },
+    "dropoff_workflow_sheet/2026-08-30_16-30-48-867__doordash__accessibility.window__UNKNOWN__52eccf.json": {
+        "ruleId": "doordash.screen.dropoff_workflow_sheet",
+        "intent": "dropoff_workflow_sheet",
         "shape": null,
         "fields": {}
     },
