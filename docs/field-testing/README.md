@@ -78,6 +78,31 @@ card's **mechanical** half, #577 (re-confirmed, 24/24, ~0.55 s — with a new po
 that entry's Bug #1), the #457 path, and #554 ShadowProjector (2/2). The #462/#460 dropoff item
 was found **broken-in-part** (raw PII in capture envelopes) and moved to that entry's Bug #7.)_
 
+- **🆕 NEW — #1033 — a collapsed delivery receipt now gets 8 s to be expanded, and an expansion
+  that lands too late re-prices the delivery anyway.** DoorDash's post-delivery receipt renders
+  COLLAPSED (a total, no breakdown). A completion committed off that shape has no itemization, so
+  the drop is priced by the #691 `OFFER_PAY` **estimate** rather than the receipt. On 08-23 the
+  expansion landed 3.9 s after the collapsed frame — 1.3 s past the old 2.5 s retire grace, so the
+  delivery was recorded on the estimate with the real receipt on screen a second later. **Layer 1**
+  widens the retire window to 8 s for a COLLAPSED receipt only (an expanded one still commits in
+  2.5 s, and an expanded frame tightens a widened deadline the moment it arrives). **Layer 2**
+  appends a `DELIVERY_RECEIPT_REPRICE` when the expansion still arrives after the completion.
+  **On-dash:** on a couple of deliveries, let the receipt sit collapsed and expand it deliberately
+  LATE (say 5–10 s after it appears); on others, expand it immediately. Two things to watch: the
+  "Saved: $X" bubble should still fire at the same moment it always has (it fires on the receipt
+  frame, not the commit), and the next offer should not feel delayed. **Desk, after the pull:**
+  1. `SELECT payBasis, COUNT(*) FROM delivery_records GROUP BY 1` — `DROP_SHARE` should now
+     dominate where `OFFER_PAY` used to, on ordinary (non-shop) deliveries.
+  2. The per-dash drill-down: a deliberately-late expansion should show
+     **"re-priced from the receipt"** on that row (and `receiptRepricedAt` non-null in
+     `delivery_records`); a normally-expanded one should show neither that nor "est. offer pay".
+  3. `SELECT eventType, COUNT(*) FROM app_events WHERE eventType='DELIVERY_RECEIPT_REPRICE'` —
+     one row per delivered drop of an affected job, never more; and for a stacked job, the Σ of
+     the payload `dropRealizedPay` must equal the payload `totalPay` to the cent.
+  4. No `DELIVERY_RECEIPT_REPRICE: no delivery row` WARN in the log (that would mean the event is
+     firing for a drop whose completion was never folded).
+  - Confirmed: 0/2
+
 - **🆕 NEW — #1063 — an offer is recognized from its FIRST frame, before the Decline
   button inflates.** DoorDash lands the offer card in two beats: the collar animation drops the
   sheet (store leg, pay, distance, deadline, live Accept + countdown) and the decline control

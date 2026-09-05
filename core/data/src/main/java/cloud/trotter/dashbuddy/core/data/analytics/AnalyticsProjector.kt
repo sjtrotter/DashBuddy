@@ -12,6 +12,7 @@ import cloud.trotter.dashbuddy.core.database.analytics.PickupRecordEntity
 import cloud.trotter.dashbuddy.core.database.analytics.SessionRecordEntity
 import cloud.trotter.dashbuddy.core.database.event.AppEventDao
 import cloud.trotter.dashbuddy.domain.analytics.DeliveryAdjustmentFold
+import cloud.trotter.dashbuddy.domain.analytics.ReceiptRepriceFold
 import cloud.trotter.dashbuddy.domain.analytics.DeliveryFold
 import cloud.trotter.dashbuddy.domain.analytics.JobAcceptMismatchResolver
 import cloud.trotter.dashbuddy.domain.analytics.LegStateCodec
@@ -199,6 +200,7 @@ class AnalyticsProjector @Inject constructor(
             outcome.resolution?.let { resolutions += ResolutionTask(ev.sequenceId, it) }
             outcome.payAdjustment?.let { adjustments += Adjustment.Pay(ev.sequenceId, it) }
             outcome.deliveryAdjustment?.let { adjustments += Adjustment.Delivery(ev.sequenceId, it) }
+            outcome.receiptReprice?.let { adjustments += Adjustment.ReceiptReprice(ev.sequenceId, it) }
             outcome.sessionAssign?.let { adjustments += Adjustment.SessionAssign(ev.sequenceId, it) }
             outcome.offerReconcile?.let { adjustments += Adjustment.OfferReconcile(ev.sequenceId, it) }
             outcome.offerOutcomeCorrection?.let { adjustments += Adjustment.OfferOutcomeCorrect(ev.sequenceId, it) }
@@ -235,6 +237,7 @@ class AnalyticsProjector @Inject constructor(
                 val skipped = when (adj) {
                     is Adjustment.Pay -> applyPayAdjustment(adj.fold)
                     is Adjustment.Delivery -> applyDeliveryAdjustment(adj.fold)
+                    is Adjustment.ReceiptReprice -> applyReceiptReprice(adj.fold)
                     is Adjustment.SessionAssign -> applySessionAssign(adj.fold)
                     is Adjustment.OfferReconcile -> applyOfferReconcile(adj.fold, adj.sequenceId)
                     is Adjustment.OfferOutcomeCorrect -> applyOfferOutcomeCorrection(adj.fold)
@@ -269,6 +272,7 @@ class AnalyticsProjector @Inject constructor(
         val sequenceId: Long
         data class Pay(override val sequenceId: Long, val fold: PayAdjustmentFold) : Adjustment
         data class Delivery(override val sequenceId: Long, val fold: DeliveryAdjustmentFold) : Adjustment
+        data class ReceiptReprice(override val sequenceId: Long, val fold: ReceiptRepriceFold) : Adjustment
         data class SessionAssign(override val sequenceId: Long, val fold: SessionAssignFold) : Adjustment
         data class OfferReconcile(override val sequenceId: Long, val fold: OfferReconcileFold) : Adjustment
         data class OfferOutcomeCorrect(override val sequenceId: Long, val fold: OfferOutcomeCorrectionFold) : Adjustment
@@ -397,6 +401,67 @@ class AnalyticsProjector @Inject constructor(
                 netProfit = net,
                 storeKey = if (storeChanged) null else row.storeKey,
                 storeKeyPinned = if (storeChanged) 1 else row.storeKeyPinned,
+            ),
+        )
+        return false
+    }
+
+    /**
+     * Apply one machine `DELIVERY_RECEIPT_REPRICE` (#1033 layer 2) by (jobId, taskId). Returns true
+     * iff the apply was SKIPPED (a counted skip + PII-safe WARN, ids only — never a crash).
+     *
+     * The row was priced off the #691 `OFFER_PAY` estimate because its `DELIVERY_COMPLETED` closed on
+     * a COLLAPSED receipt; the itemization that arrived seconds later is the real receipt, so the row
+     * takes the apportioned share as `realizedPay` with `payBasis` → [PayBasis.DROP_SHARE].
+     *
+     * The invariants it shares with every other apply:
+     *  - **Never re-costs.** Net recomputes against the row's OWN `frozenCostPerMile` and its stored
+     *    `realizedMiles` — the same helper [applyDeliveryAdjustment] uses — never today's economy.
+     *  - **`originalPayBasis` is preserved** (via `row.copy`), so the #691/#703 receipt-evidence
+     *    hydration still reads the FIRST-fold basis.
+     *  - **Cash, store keys, mileage and every other column are untouched.**
+     *
+     * Two fail-closed guards, each a counted skip:
+     *  1. **Target row exists** (a re-price whose completion was never folded — the mid-stack shape
+     *     where the mint is still pending — leaves nothing to do; the pending mint will carry the
+     *     itemization itself).
+     *  2. **Never overrides a DRIVER row.** A `MANUAL` or `USER_CORRECTED` row states the driver's
+     *     own figure; a machine re-price must not silently overwrite it. Log order is what settles
+     *     the general case (a driver `DELIVERY_ADJUSTMENT` sequenced AFTER the re-price simply wins,
+     *     because each apply reads the row fresh), and this guard is the other direction: a driver
+     *     edit that came EARLIER is superseded for nothing at all. The documented asymmetry: an
+     *     earlier machine re-price IS superseded by a later driver adjustment's pay/tip, which is the
+     *     intended precedence — the driver is the higher authority on their own money.
+     */
+    private suspend fun applyReceiptReprice(adj: ReceiptRepriceFold): Boolean {
+        val row = analyticsDao.deliveryRecordByJobTask(adj.jobId, adj.taskId) ?: run {
+            // P7: ids only, no payload text.
+            Timber.tag(TAG).w(
+                "DELIVERY_RECEIPT_REPRICE: no delivery row for job %s task %s", adj.jobId, adj.taskId,
+            )
+            return true
+        }
+        if (row.payBasis == PayBasis.MANUAL || row.payBasis == PayBasis.USER_CORRECTED) {
+            Timber.tag(TAG).w(
+                "DELIVERY_RECEIPT_REPRICE: skipped driver-owned row %d (basis %s)",
+                row.eventSequenceId, row.payBasis,
+            )
+            return true
+        }
+        val net = if (row.frozenCostPerMile != null && row.realizedMiles != null) {
+            NetProfit.net(adj.realizedPay, row.realizedMiles!!, row.frozenCostPerMile!!)
+        } else {
+            null
+        }
+        analyticsDao.upsertDelivery(
+            // originalPayBasis (+ every unmentioned column) is preserved by `row.copy`.
+            row.copy(
+                realizedPay = adj.realizedPay,
+                tip = adj.tip,
+                basePay = adj.basePay,
+                payBasis = PayBasis.DROP_SHARE,
+                netProfit = net,
+                receiptRepricedAt = adj.repricedAt,
             ),
         )
         return false
@@ -817,6 +882,9 @@ class AnalyticsProjector @Inject constructor(
         // rewrites these — see applyDeliveryAdjustment).
         milesToStore = milesToStore,
         milesToDropoff = milesToDropoff,
+        // #1033: null at fold time — only a later DELIVERY_RECEIPT_REPRICE stamps it (applied below,
+        // in this same transaction, in event-sequence order).
+        receiptRepricedAt = null,
     )
 
     private fun PickupFold.toEntity() = PickupRecordEntity(

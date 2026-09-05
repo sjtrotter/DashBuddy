@@ -85,6 +85,13 @@ import cloud.trotter.dashbuddy.core.database.snapshot.AppStateSnapshotEntity
     // seq-114 orphan), stamping `UNASSIGNED_INFERRED` on any cross-store single orphan and leaving the
     // same-store fielded shape NULL for Tier-2 driver attestation. Additive ⇒ never wipes app_events or
     // the existing analytics rows.
+    // v15→v16 (#1033 layer 2) is additive-only: one new nullable INTEGER column on delivery_records
+    // (receiptRepricedAt — set when a DELIVERY_RECEIPT_REPRICE re-prices a drop from a late-expanded
+    // receipt; NULL for every row the machine priced correctly first time, back-filled NULL on
+    // existing rows). There is NO `PROJECTOR_VERSION` bump: DELIVERY_RECEIPT_REPRICE is a new event
+    // type that cannot exist in already-folded history, and NULL is correct for all of it — a fresh
+    // drain folds new re-prices; nothing needs refolding. Additive ⇒ never wipes app_events or the
+    // existing analytics rows.
     autoMigrations = [
         AutoMigration(from = 8, to = 9),
         AutoMigration(from = 9, to = 10),
@@ -93,6 +100,7 @@ import cloud.trotter.dashbuddy.core.database.snapshot.AppStateSnapshotEntity
         AutoMigration(from = 12, to = 13),
         AutoMigration(from = 13, to = 14),
         AutoMigration(from = 14, to = 15),
+        AutoMigration(from = 15, to = 16),
     ],
 )
 @TypeConverters(DataTypeConverters::class)
@@ -120,7 +128,7 @@ abstract class DashBuddyDatabase : RoomDatabase() {
          * this in lockstep with a new `schemas/**/<N>.json`, an `AutoMigration(N-1 → N)`, and its
          * `MigrationTestHelper` case — see the release checklist in CLAUDE.md.
          */
-        const val VERSION = 15
+        const val VERSION = 16
     }
 
 }

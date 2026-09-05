@@ -9,6 +9,7 @@ import cloud.trotter.dashbuddy.domain.model.event.EventMetadata
 import cloud.trotter.dashbuddy.domain.model.event.SequencedAppEvent
 import cloud.trotter.dashbuddy.domain.model.event.payload.AppEventPayload
 import cloud.trotter.dashbuddy.domain.model.event.payload.DeliveryAdjustmentPayload
+import cloud.trotter.dashbuddy.domain.model.event.payload.DeliveryReceiptRepricePayload
 import cloud.trotter.dashbuddy.domain.model.event.payload.DeliverySessionAssignPayload
 import cloud.trotter.dashbuddy.domain.model.event.payload.DeliveryPayload
 import cloud.trotter.dashbuddy.domain.model.event.payload.ManualDeliveryPayload
@@ -1239,6 +1240,67 @@ class RecordFoldsTest {
         // correction's wall-clock time.
         assertEquals(ctx, out.context)
         assertEquals(1_000L, out.context!!.lastEventAt)
+    }
+
+    @Test
+    fun `DELIVERY_RECEIPT_REPRICE emits the re-price decision, no record, and passes the context through untouched (#1033)`() {
+        val s = "M20"
+        val ctx = RecordFolds.foldEvent(dashStart(s, 1_000, odo = 0.0), null, null).context
+        val receipt = ParsedPay(
+            appPayComponents = listOf(ParsedPayItem("Base Pay", 9.70)),
+            customerTips = listOf(ParsedPayItem("Bill Millers", 7.00)),
+        )
+        val ev = ev(
+            AppEventType.DELIVERY_RECEIPT_REPRICE, s, 5_000,
+            DeliveryReceiptRepricePayload(
+                jobId = "J1", taskId = "t1", totalPay = receipt.total,
+                parsedPay = receipt, dropRealizedPay = receipt.total,
+            ),
+        )
+        val out = RecordFolds.foldEvent(ev, ctx, null)
+
+        assertNull("a re-price produces no delivery record in the pure fold", out.delivery)
+        assertNull(out.offer)
+        assertNull(out.deliveryAdjustment)
+        val rp = out.receiptReprice!!
+        assertEquals("J1", rp.jobId)
+        assertEquals("t1", rp.taskId)
+        assertEquals(16.70, rp.realizedPay, 1e-9)
+        // Sole drop → the itemization is attributable to it (the `soleDropOfReceipt` SSOT).
+        assertEquals(7.00, rp.tip!!, 1e-9)
+        assertEquals(9.70, rp.basePay!!, 1e-9)
+        assertEquals(5_000L, rp.repricedAt)
+        // Bookkeeping about a past row, not session activity: liveness must NOT advance.
+        assertEquals(ctx, out.context)
+        assertEquals(1_000L, out.context!!.lastEventAt)
+    }
+
+    @Test
+    fun `a STACKED re-price share carries no itemization (the sole-drop rule the mint uses)`() {
+        val s = "M21"
+        val ctx = RecordFolds.foldEvent(dashStart(s, 1_000, odo = 0.0), null, null).context
+        val receipt = ParsedPay(
+            appPayComponents = listOf(ParsedPayItem("Base Pay", 8.00)),
+            customerTips = listOf(ParsedPayItem("A", 6.00), ParsedPayItem("B", 2.00)),
+        )
+        val ev = ev(
+            AppEventType.DELIVERY_RECEIPT_REPRICE, s, 5_000,
+            DeliveryReceiptRepricePayload(
+                jobId = "J1", taskId = "t2", totalPay = receipt.total,
+                parsedPay = receipt, dropRealizedPay = 6.00,
+            ),
+        )
+        val rp = RecordFolds.foldEvent(ev, ctx, null).receiptReprice!!
+        assertEquals(6.00, rp.realizedPay, 1e-9)
+        assertNull("a stacked drop has no per-drop tip split", rp.tip)
+        assertNull(rp.basePay)
+    }
+
+    @Test
+    fun `a malformed DELIVERY_RECEIPT_REPRICE payload is a counted skip, never a crash`() {
+        val out = RecordFolds.foldEvent(ev(AppEventType.DELIVERY_RECEIPT_REPRICE, "M22", 5_000, null), null, null)
+        assertNull(out.receiptReprice)
+        assertNotNull(out.skip)
     }
 
     @Test

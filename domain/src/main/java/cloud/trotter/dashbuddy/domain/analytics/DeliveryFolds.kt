@@ -103,7 +103,7 @@ internal object DeliveryFolds {
         // full-receipt drop (#653) is never the sole drop — its siblings already carry the receipt.
         val receipt = p.parsedPay
         val soleDrop = !suspectFullReceipt && receipt != null &&
-            (p.dropRealizedPay == null || kotlin.math.abs(p.dropRealizedPay - receipt.total) < 0.005)
+            soleDropOfReceipt(p.dropRealizedPay, receipt.total)
         val tip = if (soleDrop) receipt.totalTip else null
         val basePay = if (soleDrop) receipt.totalBasePay else null
 

@@ -37,6 +37,14 @@ enum class AppEventType {
                          // NO re-attribution — it only makes the silent seam observable. Payload = hashes +
                          // counts only (PII-safe, P7).
 
+    // --- Machine receipt re-price (#1033 layer 2) ---
+    DELIVERY_RECEIPT_REPRICE, // The post-delivery receipt was EXPANDED after its DELIVERY_COMPLETED had
+                              // already been minted off a collapsed (un-itemized) one, so the drop was
+                              // priced by the #691 OFFER_PAY estimate. An append-only TIER-1 (automatic)
+                              // correction: it re-prices the drop from the receipt's own itemization
+                              // (payBasis → DROP_SHARE) and never rewrites the original completion event.
+                              // One event per delivered drop of the job; payload = money + ids only (P7).
+
     // --- User corrections (#650) ---
     MANUAL_DELIVERY, // A driver-entered missed delivery (durable correction event, never destructive)
     PAY_ADJUSTMENT,  // A driver re-price of an already-recorded delivery (the original event stays)

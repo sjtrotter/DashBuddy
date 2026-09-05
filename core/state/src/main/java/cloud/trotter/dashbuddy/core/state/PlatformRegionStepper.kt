@@ -4,6 +4,7 @@ import cloud.trotter.dashbuddy.domain.model.ratings.RatingsSnapshot
 import cloud.trotter.dashbuddy.domain.pipeline.Observation
 import cloud.trotter.dashbuddy.domain.pipeline.TimeoutType
 import cloud.trotter.dashbuddy.domain.state.DestructiveKind
+import cloud.trotter.dashbuddy.domain.state.ClosedJobReceipt
 import cloud.trotter.dashbuddy.domain.state.Flow
 import cloud.trotter.dashbuddy.domain.state.FlowRegion
 import cloud.trotter.dashbuddy.domain.state.AcceptedOfferEconomics
@@ -1037,6 +1038,9 @@ class PlatformRegionStepper @Inject constructor() {
             pendingOffers = emptyList(),
             // #1029: an un-settled running-total read describes the dash that just ended.
             pendingSessionPay = null,
+            // #1033: the receipt marker belongs to the dash that just ended — a stale one must not
+            // let a next-dash receipt frame re-price the previous dash's drops.
+            lastClosedJobReceipt = null,
         )
     }
 
@@ -1046,6 +1050,17 @@ class PlatformRegionStepper @Inject constructor() {
             activeJob = null,
             lastPostTaskPayHash = null,
             lastPostTaskFields = null,
+            // #1033 layer 2: record what the receipt looked like BEFORE this line drops it. Closing
+            // the job is the step on which the `DELIVERY_COMPLETED`s for its delivered drops are
+            // minted (the #596 close-out sweep, or the PostTask-exit block on this same step), and
+            // both read `lastPostTaskFields` from the PRE-step region — so this marker is exactly
+            // what those payloads carried. Without it a receipt EXPANDED after the close cannot be
+            // told apart from a re-render of one the completions already priced off.
+            lastClosedJobReceipt = ClosedJobReceipt(
+                jobId = job.jobId,
+                totalPay = region.lastPostTaskFields?.totalPay,
+                itemized = region.lastPostTaskFields?.parsedPay != null,
+            ),
         )
     }
 }

@@ -56,6 +56,15 @@ data class DeliveryRecord(
      * `false`; an unassigned (bucket) row is `false`. Event-derived, so a from-zero refold re-derives it.
      */
     val sessionAssigned: Boolean = false,
+    /**
+     * True when a machine `DELIVERY_RECEIPT_REPRICE` (#1033 layer 2) re-priced this row from the
+     * post-delivery receipt's own itemization — the receipt was expanded after the completion had
+     * already been minted off the collapsed shape, so the row started life on the #691 `OFFER_PAY`
+     * estimate. Drives the drill-down's "re-priced from the receipt" disclosure (the same
+     * never-silent family as "est. offer pay" / "assigned by you"). Event-derived, so a from-zero
+     * refold re-derives it.
+     */
+    val receiptRepriced: Boolean = false,
 )
 
 /** One dash session. */

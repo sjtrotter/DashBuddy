@@ -337,6 +337,46 @@ data class DeliveryAdjustmentPayload(
 ) : AppEventPayload
 
 /**
+ * Payload for `DELIVERY_RECEIPT_REPRICE` (#1033 layer 2) — the machine's own Tier-1 correction when a
+ * post-delivery receipt is EXPANDED *after* its `DELIVERY_COMPLETED` was already minted off the
+ * COLLAPSED shape. A collapsed receipt carries a total but no itemization, so the completion it
+ * closed was priced by the #691 `OFFER_PAY` estimate; the itemization that arrives seconds later is
+ * the real receipt, and this event carries it to the fold.
+ *
+ * Append-only, exactly like the driver corrections: the original `DELIVERY_COMPLETED` event and its
+ * provenance stay in the log untouched, and the projector re-prices the target `delivery_record` in
+ * place (payBasis → [PayBasis.DROP_SHARE], net recomputed against the row's OWN frozen cost basis —
+ * never re-costed by today's economy, `originalPayBasis` preserved). One event is emitted per
+ * delivered drop of the job — a stacked receipt re-prices every sibling — and the shares come from
+ * the SAME `DropPayApportioner.apportion` the completion mint uses, so `Σ dropRealizedPay ==
+ * parsedPay.total` to the cent.
+ *
+ * Applied by ([jobId], [taskId]) rather than a `targetEventSequenceId`: the state machine never sees
+ * sequence ids. Because the re-price always sequences AFTER its target's completion, a from-zero
+ * refold replays them in order and reproduces identical rows.
+ *
+ * **PII (Principle 7):** money, ids and hashes only. [parsedPay]'s item `type` strings are the
+ * receipt's own store forms — merchant data, driver-owned (the `payoutStoreForms` residual named on
+ * `DeliveryRecordEntity` applies here too: they are merchant-shaped under the fielded DoorDash
+ * receipt, and no consumer exports them).
+ */
+@Serializable
+data class DeliveryReceiptRepricePayload(
+    /** The job whose receipt was expanded — scopes the by-taskId apply. */
+    val jobId: String,
+    /** The delivered dropoff this event re-prices (one event per drop of [jobId]). */
+    val taskId: String,
+    /** The expanded receipt's total (`parsedPay.total`); the Σ invariant's right-hand side. */
+    val totalPay: Double,
+    /** The expanded receipt's itemization — the reason this event exists. */
+    val parsedPay: ParsedPay,
+    /** This drop's apportioned share of [parsedPay] (`DropPayApportioner.apportion`). */
+    val dropRealizedPay: Double,
+    /** The capture the expanded receipt was read from, when the observation carried one (debug). */
+    val sourceCaptureId: String? = null,
+) : AppEventPayload
+
+/**
  * Payload for `PAY_ADJUSTMENT` (#650) — a driver re-price of an already-recorded delivery (a
  * mis-captured tip, a late-arriving adjustment). It is an **event, never a destructive edit**: the
  * original `DELIVERY_COMPLETED` event and its provenance stay in the log untouched; the projector

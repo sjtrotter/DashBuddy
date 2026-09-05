@@ -186,4 +186,20 @@ data class DeliveryRecordEntity(
      * (SQL column default so the additive AutoMigration back-fills existing rows).
      */
     @ColumnInfo(defaultValue = "0") val sessionAssigned: Int = 0,
+
+    // ── Machine receipt re-price marker (#1033 layer 2, v16) ────────────────
+    /**
+     * When a `DELIVERY_RECEIPT_REPRICE` re-priced this row from the post-delivery receipt's own
+     * itemization (#1033 layer 2), null otherwise. The receipt was EXPANDED after this drop's
+     * `DELIVERY_COMPLETED` had already been minted off the COLLAPSED shape, so the row had been
+     * priced by the #691 `OFFER_PAY` estimate; the re-price sets [realizedPay]/[tip]/[basePay] from
+     * the receipt, flips [payBasis] to `DROP_SHARE` and recomputes [netProfit] against this row's OWN
+     * [frozenCostPerMile] — never today's economy, and [originalPayBasis] is preserved.
+     *
+     * Drives the per-dash drill-down's "re-priced from the receipt" disclosure (the never-silent
+     * #689/#691 precedent). Event-derived, so a from-zero refold re-derives it; null on all history
+     * and on every row a driver `DELIVERY_ADJUSTMENT` later overrides (log order decides — a LATER
+     * adjustment wins the pay, and this stamp stays as the trail of what the machine had done).
+     */
+    val receiptRepricedAt: Long? = null,
 )

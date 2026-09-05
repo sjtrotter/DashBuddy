@@ -160,6 +160,26 @@ data class PlatformRegion(
      * reads. Default-null so existing snapshots deserialize unchanged.
      */
     val pendingSessionPay: PendingSessionPay? = null,
+    /**
+     * What the just-CLOSED job's post-delivery receipt looked like at the moment the job closed
+     * (#1033 layer 2) — the minimal marker that says "this job's `DELIVERY_COMPLETED`s have been
+     * minted, and here is the receipt they carried".
+     *
+     * `completeActiveJob` is the ONE place a job leaves the active slot, and it CLEARS
+     * [lastPostTaskFields] as it goes — which is exactly why this marker is needed: after the close
+     * there is nothing left in the region to say whether the completions were priced off an itemized
+     * receipt or off a bare/absent one. A receipt that is EXPANDED after that close (the fielded
+     * 2026-08-23 shape: collapsed → commit → expand 1.3 s late) then re-sets [lastPostTaskFields],
+     * and `EffectMap` compares it against this marker to decide whether a `DELIVERY_RECEIPT_REPRICE`
+     * is owed.
+     *
+     * Derived wholly from the region's own records at the close, so it is replay-stable; cleared by
+     * `endSession` (a dash's receipt must not survive into the next one). Fail-null by construction:
+     * with no marker no re-price is ever emitted, so a close path that never stamps one (an
+     * `endSession` bail) simply keeps today's behaviour. Default-null so existing snapshots
+     * deserialize unchanged.
+     */
+    val lastClosedJobReceipt: ClosedJobReceipt? = null,
 ) {
     /**
      * This platform's current PRESENTED offer — the accepted-pending-consumption survivors
@@ -170,6 +190,24 @@ data class PlatformRegion(
      */
     fun presentedOffer(): PendingOffer? = pendingOffers.lastOrNull { it.acceptedAt == null }
 }
+
+/**
+ * The receipt state of a job at the instant it closed (#1033 layer 2) — see
+ * [PlatformRegion.lastClosedJobReceipt].
+ *
+ * Deliberately NOT the receipt itself: all the re-price decision needs is "which job" and "did the
+ * completions that were just minted already carry THIS itemization". Keeping only the total + the
+ * itemized flag also keeps the marker cheap to serialize into every snapshot.
+ */
+@Serializable
+data class ClosedJobReceipt(
+    /** The job whose completions were minted at this close. */
+    val jobId: String,
+    /** `lastPostTaskFields.totalPay` at the close; null when no receipt had been seen at all. */
+    val totalPay: Double? = null,
+    /** True when that receipt carried an itemized `parsedPay` — i.e. the completions were priced from it. */
+    val itemized: Boolean = false,
+)
 
 /**
  * A dash running-total read waiting out its settle window (#1029).

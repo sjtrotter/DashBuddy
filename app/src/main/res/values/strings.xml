@@ -547,6 +547,9 @@
     <string name="session_detail_tip_included_format">incl. %1$s tip</string>
     <string name="session_detail_cash_format">+%1$s cash</string>
     <string name="session_detail_est_offer_pay">est. offer pay</string>
+    <!-- #1033 layer 2: the receipt was expanded after this delivery was already recorded, so the
+         row was re-priced from the receipt's own itemization instead of the offer-pay estimate. -->
+    <string name="session_detail_receipt_repriced">re-priced from the receipt</string>
     <string name="session_detail_net_format">net %1$s</string>
     <string name="session_detail_content_desc_adjust">Adjust delivery</string>
     <string name="session_detail_field_store_optional">Store (optional)</string>

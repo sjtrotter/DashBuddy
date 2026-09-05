@@ -208,6 +208,26 @@ object SessionReplay {
     }
 
     /**
+     * Load ONE screen `CaptureEnvelope` (from anywhere under `src/test/resources`, including the
+     * per-intent corpus folders) as a [ReplayFrame] stamped at [atMs] — for splicing a specific real
+     * frame into a chain whose own session directory does not contain it (#1033: the 2026-08-23
+     * collapsed/expanded receipt pair). The capture's own timestamp is deliberately REPLACED: the
+     * spliced frame has to sit at a chosen offset inside the host chain's clock, and every stepper is
+     * `obs.timestamp`-driven, so the injected time is the only one that matters.
+     */
+    fun loadScreenFrame(pathFromResources: String, atMs: Long): ReplayFrame {
+        val file = File("src/test/resources/$pathFromResources")
+        val root = json.parseToJsonElement(file.readText()).jsonObject
+        return ReplayFrame(
+            file = file.name,
+            node = TestResourceLoader.loadNode(file),
+            capturedAtMs = atMs,
+            wire = root["platform"]?.jsonPrimitive?.contentOrNull ?: Platform.DoorDash.wire,
+            captureId = root["captureId"]?.jsonPrimitive?.contentOrNull,
+        )
+    }
+
+    /**
      * A fully synthetic offer-accept/decline click as a [RawInput] — when no real click capture
      * exists. Must be injected while flow is OfferPresented and strictly BEFORE the screen frame
      * that pops the offer, so `FlowRegionStepper.handleOfferClick` records the intent and the later

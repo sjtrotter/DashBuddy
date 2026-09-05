@@ -358,6 +358,17 @@ private fun DeliveryRow(delivery: DeliveryRecord, onAdjust: () -> Unit) {
                     color = c.text3,
                 )
             }
+            // #1033 layer 2: this row started on that estimate and was corrected from the receipt
+            // once the breakdown expanded (a machine correction, so it is disclosed exactly as the
+            // driver ones are — never-silent, the #689 precedent). The two are mutually exclusive by
+            // construction: the re-price flips payBasis to DROP_SHARE.
+            if (delivery.receiptRepriced) {
+                Text(
+                    text = stringResource(R.string.session_detail_receipt_repriced),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = c.text3,
+                )
+            }
             // Net includes the cash tip at display level only (the frozen netProfit column stays
             // cash-free); a null-net row (no cost basis) stays an em dash even with cash present.
             val net = delivery.netProfit?.let { it + (delivery.cashTip ?: 0.0) }

@@ -3,6 +3,7 @@ package cloud.trotter.dashbuddy.domain.analytics
 import cloud.trotter.dashbuddy.domain.evaluation.NetProfit
 import cloud.trotter.dashbuddy.domain.model.event.SequencedAppEvent
 import cloud.trotter.dashbuddy.domain.model.event.payload.DeliveryAdjustmentPayload
+import cloud.trotter.dashbuddy.domain.model.event.payload.DeliveryReceiptRepricePayload
 import cloud.trotter.dashbuddy.domain.model.event.payload.DeliverySessionAssignPayload
 import cloud.trotter.dashbuddy.domain.model.event.payload.ManualDeliveryPayload
 import cloud.trotter.dashbuddy.domain.model.event.payload.OfferOutcomeCorrectionPayload
@@ -145,6 +146,43 @@ internal object CorrectionFolds {
                 newTip = p.newTip,
                 newCashTip = p.newCashTip,
                 newMiles = p.newMiles,
+            ),
+        )
+    }
+
+    /**
+     * A machine `DELIVERY_RECEIPT_REPRICE` (#1033 layer 2) — the receipt was EXPANDED after this
+     * drop's `DELIVERY_COMPLETED` had already been minted off the COLLAPSED shape, so the row is
+     * priced by the #691 `OFFER_PAY` estimate while the real itemization exists. Structurally the
+     * widened analog of [foldDeliveryAdjustment]: the pure fold emits the [ReceiptRepriceFold]
+     * decision (which row, which values) and the orchestrator applies it inside the batch
+     * transaction — the one difference being that the row is addressed by (jobId, taskId), because
+     * the state machine that emitted this event never sees sequence ids.
+     *
+     * Machine-sourced, but the SAME liveness discipline as the driver corrections (#650 review F2):
+     * the session context passes through UNTOUCHED. A re-price is bookkeeping about a row that
+     * already exists (the #661 invariant guarantees its session row does too); advancing liveness
+     * here would let a re-price stretch a crash-orphaned session's online span, and synthesizing a
+     * context could mint a session row stamped with correction time.
+     *
+     * The itemization split follows [soleDropOfReceipt] — the same rule
+     * `DeliveryFolds.foldDeliveryCompleted` applies — so a re-priced row is byte-identical to the
+     * row the mint would have produced had the expansion landed inside the retire grace.
+     */
+    fun foldDeliveryReceiptReprice(event: SequencedAppEvent, context: SessionFoldContext?): FoldOutcome {
+        val e = event.event
+        val p = e.payload as? DeliveryReceiptRepricePayload
+            ?: return FoldOutcome(context = context, skip = "DELIVERY_RECEIPT_REPRICE: missing/malformed payload")
+        val sole = soleDropOfReceipt(p.dropRealizedPay, p.parsedPay.total)
+        return FoldOutcome(
+            context = context,
+            receiptReprice = ReceiptRepriceFold(
+                jobId = p.jobId,
+                taskId = p.taskId,
+                realizedPay = p.dropRealizedPay,
+                tip = if (sole) p.parsedPay.totalTip else null,
+                basePay = if (sole) p.parsedPay.totalBasePay else null,
+                repricedAt = e.occurredAt,
             ),
         )
     }
