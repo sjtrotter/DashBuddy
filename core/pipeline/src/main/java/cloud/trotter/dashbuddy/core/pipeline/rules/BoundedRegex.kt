@@ -48,6 +48,14 @@ class BoundedRegex internal constructor(private val regex: Regex) {
     fun find(input: CharSequence): MatchResult? =
         runBounded(default = null, input) { regex.find(it) }
 
+    /**
+     * WHOLE-input match (#1029) — the strict sibling of [containsMatchIn], for a rule that names
+     * the exact shape a node's text must have rather than a substring it must contain
+     * (`nextSiblingMatchingRegex`). Same budget, same fail-closed `false` on an abort.
+     */
+    fun matches(input: CharSequence): Boolean =
+        runBounded(default = false, input) { regex.matches(it) }
+
     /** The underlying [Pattern] — compile-time introspection only (no match). */
     fun toPattern(): Pattern = regex.toPattern()
 

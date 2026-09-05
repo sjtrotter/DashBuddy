@@ -221,6 +221,20 @@ enum class TimeoutType {
     MODE_RESUME_COMMIT,
 
     /**
+     * Wakes the state machine when a `PendingSessionPay` settle deadline lapses
+     * (#1029), committing a parked dash running-total read that stood
+     * unchallenged for its window. Like [GRACE_COMMIT] and [MODE_RESUME_COMMIT]
+     * it carries no handler logic — the stepper's lazy expiry performs the
+     * commit. A SEPARATE type is REQUIRED for the same reason [MODE_RESUME_COMMIT]
+     * is: the park shares the platform region with both other graces, so the
+     * (type, platform) timer key (#438 item 1) would cross-cancel a live
+     * destructive or resume timer if the type were reused. It is also the ONLY
+     * thing that can land a settled figure at all — see `PlatformRegion.pendingSessionPay`
+     * for why (FrameGate identity dedup), stated canonically there.
+     */
+    SESSION_PAY_SETTLE,
+
+    /**
      * Expires a presented offer whose overlay can vanish without emitting a frame (#438 B3 /
      * vet H1). Armed by EffectMap on offer push ([cloud.trotter.dashbuddy.core.state.OfferEffects],
      * the [GRACE_COMMIT] mechanism — NEVER inside a reducer), deadline `presentedAt +

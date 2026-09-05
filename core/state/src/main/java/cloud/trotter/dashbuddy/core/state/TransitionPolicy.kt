@@ -72,6 +72,14 @@ class TransitionPolicy @Inject constructor(
         graceConfig.forPlatform(platform).pauseResumeGraceMs
 
     /**
+     * Settle window for a parsed dash running-total read on [platform] (#1029): how long a parked
+     * read must stand unchallenged before it may move `Session.runningEarnings` — see
+     * [GraceConfig.sessionPaySettleMs].
+     */
+    fun sessionPaySettleMs(platform: Platform): Long =
+        graceConfig.forPlatform(platform).sessionPaySettleMs
+
+    /**
      * Accept-consumption grace for [platform] (#438 B3 / #762 D2): how long an accepted-pending-
      * consumption offer stays consumable by the task-edge mint. Per-platform (DoorDash 120s, Uber
      * 600s) — see [GraceConfig.acceptGraceMs].

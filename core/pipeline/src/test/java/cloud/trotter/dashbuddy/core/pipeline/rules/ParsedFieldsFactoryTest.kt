@@ -5,6 +5,7 @@ import cloud.trotter.dashbuddy.domain.state.ParsedFields
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
@@ -118,5 +119,77 @@ class ParsedFieldsFactoryTest {
     @Test
     fun `a real parsed total rides through unchanged (#1030)`() {
         assertEquals(21.45, sessionEndedTotal(mapOf("totalEarnings" to 21.45))!!, 1e-9)
+    }
+
+    // =========================================================================
+    // The id-less receipt still prices its drops (#1029 E4)
+    // =========================================================================
+
+    private fun postTask(
+        totalPay: Double?,
+        customerTips: Double?,
+        lineItems: List<Map<String, Any?>> = emptyList(),
+    ): ParsedFields.PostTaskFields {
+        val fields = buildMap<String, Any?> {
+            put("totalPay", totalPay)
+            put("customerTips", customerTips)
+            put("payLineItems", lineItems)
+        }
+        return ParsedFieldsFactory.create("post_task", fields) as ParsedFields.PostTaskFields
+    }
+
+    @Test
+    fun `an 8_93_7 receipt with no itemization synthesizes its breakdown from the scalars`() {
+        // DropPayApportioner.apportion(null, ...) returns an EMPTY map — for a SINGLE drop too —
+        // so a null parsedPay means no drop gets dropRealizedPay, everything falls to an OFFER_PAY
+        // estimate and payoutStoreForms never mints. `pay_line_item_title` is gone on 8.93.7, so
+        // that was every fielded receipt; the receipt's own scalars are the honest bridge.
+        val parsed = postTask(totalPay = 16.70, customerTips = 7.00).parsedPay
+        assertNotNull(parsed)
+        assertEquals(9.70, parsed!!.totalBasePay, 0.0001)
+        assertEquals(7.00, parsed.customerTips.single().amount, 0.0001)
+        assertEquals(16.70, parsed.total, 0.0001)
+        assertEquals(
+            "a BLANK tip type makes injectiveTipMatch decline, so a stack even-splits (#1051)",
+            "", parsed.customerTips.single().type,
+        )
+    }
+
+    @Test
+    fun `a zero-tip receipt synthesizes an app-pay-only breakdown`() {
+        val parsed = postTask(totalPay = 8.70, customerTips = 0.0).parsedPay
+        assertNotNull(parsed)
+        assertEquals(8.70, parsed!!.totalBasePay, 0.0001)
+        assertTrue(parsed.customerTips.isEmpty())
+    }
+
+    @Test
+    fun `a COLLAPSED receipt stays unpriced — the tips line is the breakdown-visible signal`() {
+        // `sameTaskCollapsedDowngrade` in PlatformRegionStepper keys on parsedPay == null being
+        // the collapsed signal, so synthesizing one without a tips line would break it.
+        assertNull(postTask(totalPay = 16.70, customerTips = null).parsedPay)
+    }
+
+    @Test
+    fun `a receipt with no total, a zero total, or tips above total stays unpriced`() {
+        assertNull(postTask(totalPay = null, customerTips = 7.00).parsedPay)
+        assertNull(postTask(totalPay = 0.0, customerTips = 0.0).parsedPay)
+        assertNull(postTask(totalPay = 5.00, customerTips = 7.00).parsedPay)
+    }
+
+    @Test
+    fun `an itemized receipt is untouched by the bridge`() {
+        val parsed = postTask(
+            totalPay = 16.70,
+            customerTips = 7.00,
+            lineItems = listOf(
+                mapOf("type" to "Base pay", "amount" to 8.70),
+                mapOf("type" to "Peak pay", "amount" to 1.00),
+                mapOf("type" to "Some Store", "amount" to 7.00),
+            ),
+        ).parsedPay
+        assertNotNull(parsed)
+        assertEquals(9.70, parsed!!.totalBasePay, 0.0001)
+        assertEquals("the real per-store tip type survives", "Some Store", parsed.customerTips.single().type)
     }
 }

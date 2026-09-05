@@ -395,9 +395,11 @@ class PlatformRegionStepperTest {
             afterCollapsed.lastPostTaskFields?.parsedPay,
         )
         assertEquals(
-            "sessionEarnings still folds from the collapsed frame",
+            "sessionEarnings still folds from the collapsed frame — into the #1029 settle gate, " +
+                "which is where the receipt's own digit-wheel read belongs; it commits once it " +
+                "has stood unchallenged on this surface for the settle window",
             51.0,
-            afterCollapsed.session?.runningEarnings,
+            afterCollapsed.pendingSessionPay?.value,
         )
     }
 
@@ -428,7 +430,7 @@ class PlatformRegionStepperTest {
         )
         assertEquals(7.5, next.lastPostTaskFields?.totalPay)
         assertEquals("task-D", next.lastAnnouncedPostTaskTaskId)
-        assertEquals("sessionEarnings still folds", 51.0, next.session?.runningEarnings)
+        assertEquals("sessionEarnings still folds (into the #1029 settle gate)", 51.0, next.pendingSessionPay?.value)
     }
 
 }

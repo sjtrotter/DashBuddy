@@ -78,6 +78,32 @@ card's **mechanical** half, #577 (re-confirmed, 24/24, ~0.55 s — with a new po
 that entry's Bug #1), the #457 path, and #554 ShadowProjector (2/2). The #462/#460 dropoff item
 was found **broken-in-part** (raw PII in capture envelopes) and moved to that entry's Bug #7.)_
 
+- **🆕 NEW — #1029 — the money reads are re-anchored on DoorDash 8.93.7 (and the $799 tip is
+  gone).** Two things to watch, one while driving and one at the desk.
+  - **On-dash, glanceable:** the bubble's **"This dash"** figure. It should track the DoorDash
+    earnings pill and land on the real running total within a couple of frames of the wheel
+    settling. What would be a **failure**: it shows a number that never appeared on the pill (a
+    mid-spin value like `$470.00` on a $16 dash), or it shows your **weekly** total instead of the
+    dash's. Both are worse than it showing nothing, so report either immediately. A figure that
+    lands ~3 s after the wheel stops is EXPECTED — that is the settle gate (a read commits only
+    once it has stood unchallenged **on that screen** for the settle window). Two more EXPECTED
+    behaviours, not bugs: if you leave the waiting-for-offer screen mid-spin (an offer pops, you
+    tap into something), the **old figure stands until you come back** — the half-read is thrown
+    away rather than guessed at; and a `$0.00` on the pill while it loads never wipes a total you
+    already had.
+  - **On-dash, after a delivery:** the receipt sheet ("This offer", with the pay breakdown). The
+    bubble's "Saved: $X" should quote the receipt's real total, and expanding the breakdown should
+    NOT produce anything wild.
+  - **Desk:** `SELECT payBasis, realizedPay, tip, cashTip FROM delivery_records` for the dash —
+    a **single-drop** delivery, and any drop whose receipt you EXPANDED, must come back on the
+    **`DROP_SHARE`** basis with the receipt's real tip, not `OFFER_PAY`. (A **stacked** job still
+    even-splits its receipt across the drops until #1051 lands the per-store tip read, so equal
+    shares on a stack are expected, not a miss.) And **no row anywhere may carry `799`** (that was
+    a DoorDash type code being read as a $799 tip). Then `grep -o 'parseShortfall{[^}]*}' app.log | tail -1` and
+    `grep 'parse shortfall' app.log`: **`delivery_summary_expanded` / `_collapsed` must no longer
+    appear for `required [totalPay]`**, and `waiting_for_offer` should have dropped off too.
+  - Confirmed: 0/2
+
 - **🆕 NEW — #1036 — "matched, but parsed nothing" is now loud.** Purely a **desk** item — nothing
   to watch for while driving; just dash normally and check the log afterwards. A rule that matches a
   frame while its declared parse yields nothing usable now WARNs once per rule per process and rides
@@ -85,17 +111,19 @@ was found **broken-in-part** (raw PII in capture envelopes) and moved to that en
   `each`/`findAll` list counts as unresolved), or a **shape-required** field null while others
   parsed. Check: `grep 'parse shortfall' app.log` and
   `grep -o 'parseShortfall{[^}]*}' app.log | tail -1`.
-  - **Should trip (the #1029 rot, now detectable):** `delivery_summary_expanded` and
-    `delivery_summary_collapsed` (`required [totalPay]`), `waiting_for_offer` (`all 2 null`), and
-    `timeline` (`all 5 null`). Their absence is itself informative — it would mean those surfaces
-    never rendered on the dash, not that they are healthy.
+  - **Should trip:** `timeline` (`all 5 null`) — still un-re-anchored. (The rest of the original
+    #1029 list — `delivery_summary_expanded`/`_collapsed` `required [totalPay]` and
+    `waiting_for_offer` `all 2 null` — was the rot #1029 has since FIXED. They are now in the
+    "must not appear" column; see the #1029 item above.)
   - **Benign baseline (not a find):** `dash_along_the_way` (no spot deadline shown), `idle_map`
     (neither Time-mode chip on), `set_dash_end_time` — each has ONE evidence field that is
     legitimately optional.
   - **`dash_summary` must NOT appear** — #1032 re-anchored it. If it does, that fix didn't take on
-    the installed build.
-  - **Any OTHER rule id is a new anchor-rot find** — capture the frame and file it. After #1029
-    lands, the `delivery_summary_*` pair should drop off the list entirely.
+    the installed build. Same for `delivery_summary_expanded`/`_collapsed` and `waiting_for_offer`
+    after #1029.
+  - **Any OTHER rule id is a new anchor-rot find** — capture the frame and file it. #1029 has since
+    landed, so the `delivery_summary_*` pair and `waiting_for_offer` should now be OFF the list;
+    their reappearance is a regression, not the known rot.
   - Confirmed: 0/2
 
 - **🆕 NEW — #1032 — the dash-end summary sheet is recognized again (DoorDash 8.93.7).** End a dash

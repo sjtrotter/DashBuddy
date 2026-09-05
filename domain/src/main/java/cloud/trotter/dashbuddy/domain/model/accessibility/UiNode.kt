@@ -219,11 +219,42 @@ data class UiNode(
     /**
      * Return the sibling at (this node's index in parent's children + [offset]).
      * Null if there is no parent or the computed index is out of bounds.
+     *
+     * Resolves this node's index by STRUCTURAL equality ([List.indexOf]), so a structurally
+     * identical earlier sibling resolves the wrong index. Kept as-is for the positional
+     * `sibling(N)` rule vocabulary that has always had those semantics; anything that must be
+     * right in the presence of twins uses [followingSiblings] / [precedingSibling] instead.
      */
     fun sibling(offset: Int): UiNode? {
         val siblings = parent?.children ?: return null
         val idx = siblings.indexOf(this) + offset
         return siblings.getOrNull(idx)
+    }
+
+    /**
+     * The siblings AFTER this node, in order, resolved by REFERENTIAL identity (#1029 / #860).
+     *
+     * The one owner of the identity-based sibling walk: `UiNode.equals` compares text, desc, class,
+     * flags and bounds and never identity, so a structural lookup silently resolves a twin — two
+     * blank wrapper `View`s in one row are the norm on a flattened render, and DoorDash 8.93.7
+     * flattened exactly the rows this is used on. Getting the WRONG index here would under-mask a
+     * PII node (`hasPrecedingSiblingText`/`hasFollowingSiblingTextMatchesRegex`, #860/#886) or read
+     * money off the wrong slot (`nextSiblingMatchingRegex`, #1029) — so both callers share this.
+     *
+     * Empty when the tree has no parent back-references wired (`restoreParents`, always called by
+     * `AccessibilityNodeMapper` and `UiNodeDto.toDomain`) or this node is last.
+     */
+    fun followingSiblings(): List<UiNode> {
+        val siblings = parent?.children ?: return emptyList()
+        val idx = siblings.indexOfFirst { it === this }
+        return if (idx >= 0) siblings.subList(idx + 1, siblings.size) else emptyList()
+    }
+
+    /** The sibling immediately BEFORE this node — [followingSiblings]' mirror, same identity walk. */
+    fun precedingSibling(): UiNode? {
+        val siblings = parent?.children ?: return null
+        val idx = siblings.indexOfFirst { it === this }
+        return if (idx > 0) siblings[idx - 1] else null
     }
 
     /**

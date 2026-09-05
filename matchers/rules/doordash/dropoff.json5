@@ -1704,13 +1704,47 @@
       "parse": {
         "as": "post_task",
         "fields": {
+          // #1029: the offer's own total. Arm 1 is the `final_value` id every
+          // committed pre-8.93.7 fixture carries (byte-identical there). Arm 2 is
+          // the 8.93.7 render, which ships the whole sheet WITHOUT money view ids:
+          // the figure is a plain TextView a couple of slots after the 'This offer'
+          // section title, with a Collapse/Expand affordance in between — hence the
+          // shape-anchored scan rather than a positional `sibling(N)`. The pattern
+          // IS the safety: only a well-formed currency node can be picked up, so a
+          // re-ordered row reads null, never the wrong node. The pattern text is
+          // byte-pinned to `CurrencyShape.RULE_PATTERN` (one shape definition shared
+          // with `parseGlyphCurrency`) and the trailing `, 2` caps the scan at this
+          // row's own width — see the tips field below for why an uncapped scan is
+          // fail-WRONG on a row whose value is missing.
           "totalPay": {
-            "find": {
-              "hasIdSuffix": "final_value"
-            },
-            "read": "text",
-            "transform": "parseCurrency"
+            "coalesce": [
+              {
+                "find": {
+                  "hasIdSuffix": "final_value"
+                },
+                "read": "text",
+                "transform": "parseCurrency"
+              },
+              {
+                "find": {
+                  "hasText": "This offer"
+                },
+                "navigate": "nextSiblingMatchingRegex(^\\$(?:0|[1-9]\\d{0,3}|[1-9]\\d{0,2},\\d{3})\\.\\d{2}$, 2)",
+                "read": "text",
+                "transform": "parseCurrency"
+              }
+            ]
           },
+          // #1029: DELIBERATELY left as the exact-offset read, and deliberately NOT
+          // given a currency scan. On 8.93.7 'DoorDash pay' is a HEADER, not a
+          // label — its value is the sum of the 'Base pay'/'Peak pay' items that
+          // follow it — so a `nextSiblingMatchingRegex` here would happily return
+          // Base pay's $8.70 and call it the whole app-pay side. The offset read is
+          // safe by accident of the alphabet: on 8.93.7 sibling(1) is the literal
+          // text 'Base pay', which `parseCurrency` rejects, so the field is null on
+          // that build — honest, and the `sumApproxEquals` validator below PASSES on
+          // a null summand by design (see ValidateRegistry), so a null here cannot
+          // drop the rest of the parse.
           "appPay": {
             "find": {
               "hasTextContaining": "DoorDash pay"
@@ -1719,11 +1753,34 @@
             "read": "text",
             "transform": "parseCurrency"
           },
+          // #1029: this one FAILED WRONG, which is worse than failing null. 8.93.7
+          // renders the breakdown as flat id-less siblings — 'Customer tips', '799',
+          // '$7.00' — where '799' is a DoorDash type CODE (older builds render it in
+          // the `pay_line_item_title` slot, which is why it reads as harmless there).
+          // `sibling(1)` therefore handed `parseCurrency` the string '799' and the
+          // parse reported a $799.00 tip on a $16.70 delivery. Scanning for the first
+          // following sibling whose text IS a currency figure skips the code node and
+          // removes the fabrication structurally: no offset can be right on both
+          // layouts, but "the next money-shaped node" is right on both.
+          // The `, 2` cap is the other half of that: if the tips VALUE is simply
+          // absent (['Customer tips', '799', 'Peak pay', '$1.00']) an uncapped scan
+          // walks out of the row and returns Peak pay's $1.00 as the tip — fail-WRONG,
+          // and the `sumApproxEquals` validator cannot catch it because `appPay` is
+          // null on 8.93.7. Two is the fielded distance (label -> optional type code
+          // -> value).
+          // RESIDUAL (documented, not built): the cap bounds DISTANCE, not row
+          // OWNERSHIP. With the type-code node ABSENT as well — ['Customer tips',
+          // 'Peak pay', '$1.00'] — a cap of 2 still reaches Peak pay's figure and
+          // reports it as the tip. No fielded frame has that shape (8.93.7 renders
+          // the tips row LAST and always with the code present), and tightening the
+          // cap to 1 would break the fielded row it exists for. #1051 closes it
+          // properly with the label-based `each` over the breakdown rows, which reads
+          // each row's own value instead of scanning past its end.
           "customerTips": {
             "find": {
               "hasTextContaining": "Customer tips"
             },
-            "navigate": "sibling(1)",
+            "navigate": "nextSiblingMatchingRegex(^\\$(?:0|[1-9]\\d{0,3}|[1-9]\\d{0,2},\\d{3})\\.\\d{2}$, 2)",
             "read": "text",
             "transform": "parseCurrency"
           },
@@ -1751,22 +1808,42 @@
           "isExpanded": {
             "literal": true
           },
-          // #819: mirror of the #801 collapsed-rule fix. Pre-0.230.0 the "This dash so
-          // far" session total was a single settled TextView with a stable
-          // `earnings_ticker` id; DoorDash 0.230.0 dropped that id here too, so this
-          // id-anchored find now gracefully returns null on 0.230.0 (the field is
-          // already optional) while still parsing older-version replays — NOT
-          // broadened onto the unreliable id-less animated digit-wheel (see the
-          // collapsed rule's comment below for why). The dead `{sessionEarnings}`
-          // dedupeKey half is retired in favour of `{totalPay}` (which 0.230.0 DOES
-          // render — the `final_value` id survives). See ParseOutputGoldenTest
-          // dedupeKey lint (the #427/#606/#801 dead-template class).
+          // #1029, superseding the #801/#819 "leave it null" stance: the "This dash so
+          // far" session total. Arm 1 is the settled `earnings_ticker` TextView that
+          // pre-0.230.0 builds carry (every corpus frame that HAS the id resolves here,
+          // byte-identically). Arm 2 reads the id-less ANIMATED digit-wheel that
+          // replaced it — the parent of the label node, whose `allText` fuses to
+          // "This dash so far$16.70".
+          // #801/#819 declined to read that wheel because "the digits do NOT reliably
+          // reconstruct the value". True — and that is exactly the judgement
+          // `parseGlyphCurrency` now makes FOR the rule: it keeps only the currency
+          // glyphs and then FULL-matches a settled shape, so the mid-spin frames in this
+          // corpus ("$016.603" on 07-17, "$70103.030" on the 8.93.7 collapsed capture)
+          // still yield null, while every settled wheel parses — including the five
+          // 2026-04-19 fixtures this rule has been silently dropping since 0.230.0.
+          // The transform cannot catch a mid-spin read that is well-FORMED but wrong;
+          // that is the settle gate's job, and this feed IS behind it — the state layer
+          // treats `sessionEarnings` exactly like the idle pill's `sessionPay`, because
+          // it is literally the same digit-wheel component.
+          // The dedupeKey stays `{totalPay}` (the #427/#606/#801 dead-template lint).
           "sessionEarnings": {
-            "find": {
-              "hasIdSuffix": "earnings_ticker"
-            },
-            "read": "allText",
-            "transform": "parseCurrency"
+            "coalesce": [
+              {
+                "find": {
+                  "hasIdSuffix": "earnings_ticker"
+                },
+                "read": "allText",
+                "transform": "parseCurrency"
+              },
+              {
+                "find": {
+                  "hasText": "This dash so far"
+                },
+                "navigate": "parent",
+                "read": "allText",
+                "transform": "parseGlyphCurrency"
+              }
+            ]
           }
         }
       },
@@ -1910,12 +1987,30 @@
       "parse": {
         "as": "post_task",
         "fields": {
+          // #1029 — the expanded rule's arm pair, mirrored (see it for the reasoning):
+          // `final_value` first (every corpus frame that has the id resolves there),
+          // then the 8.93.7 id-less render, where the figure is a currency-shaped
+          // TextView a couple of slots after the 'This offer' section title with the
+          // Expand affordance in between. Same byte-pinned `CurrencyShape` pattern and
+          // same `, 2` row cap as the expanded rule.
           "totalPay": {
-            "find": {
-              "hasIdSuffix": "final_value"
-            },
-            "read": "text",
-            "transform": "parseCurrency"
+            "coalesce": [
+              {
+                "find": {
+                  "hasIdSuffix": "final_value"
+                },
+                "read": "text",
+                "transform": "parseCurrency"
+              },
+              {
+                "find": {
+                  "hasText": "This offer"
+                },
+                "navigate": "nextSiblingMatchingRegex(^\\$(?:0|[1-9]\\d{0,3}|[1-9]\\d{0,2},\\d{3})\\.\\d{2}$, 2)",
+                "read": "text",
+                "transform": "parseCurrency"
+              }
+            ]
           },
           "isExpanded": {
             "literal": false
@@ -1936,24 +2031,33 @@
               }
             ]
           },
-          // #801: the "This dash so far" session total. Pre-0.230.0 this was a single
-          // settled TextView with a stable `earnings_ticker` id; DoorDash 0.230.0 dropped
-          // that id and now renders the total as an id-less ANIMATED digit-wheel ("$",
-          // "1","7",".","7","5" as separate nodes under an id=None container). Captures land
-          // mid-animation — the 07-17 corpus frames read "$0.00" and a doubled-digit
-          // "$016.603" for the same wheel — so the digits do NOT reliably reconstruct the
-          // value. NOT broadened onto that ticker (an unreliable read is worse than null);
-          // the id-anchored find below simply returns null on 0.230.0 (graceful — the field
-          // is already optional) while still parsing older-version replays. The dead
-          // `{sessionEarnings}` dedupe half was retired below in favour of `{totalPay}`,
-          // which 0.230.0 DOES render (the `final_value` id survives). See ParseOutputGoldenTest
-          // dedupeKey lint (the #427/#606 dead-template class).
+          // #1029 — the expanded rule's `sessionEarnings` arm pair, mirrored; see it for
+          // the full reasoning. #801 was right that the raw digit-wheel "does NOT reliably
+          // reconstruct the value" — the two mid-spin frames it names ("$0.00", "$016.603")
+          // are in THIS folder — so the reliability judgement now lives in
+          // `parseGlyphCurrency`, which full-matches a settled shape and returns null on
+          // both of them, rather than in a decision to not look at all. The 8.93.7
+          // collapsed capture is a third such frame ("$70103.030" → null); its sibling
+          // expanded capture, taken 4 s later, has settled and parses $16.70.
+          // The dedupeKey stays `{totalPay}` (the #427/#606 dead-template class).
           "sessionEarnings": {
-            "find": {
-              "hasIdSuffix": "earnings_ticker"
-            },
-            "read": "allText",
-            "transform": "parseCurrency"
+            "coalesce": [
+              {
+                "find": {
+                  "hasIdSuffix": "earnings_ticker"
+                },
+                "read": "allText",
+                "transform": "parseCurrency"
+              },
+              {
+                "find": {
+                  "hasText": "This dash so far"
+                },
+                "navigate": "parent",
+                "read": "allText",
+                "transform": "parseGlyphCurrency"
+              }
+            ]
           }
         }
       },

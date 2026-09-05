@@ -494,6 +494,7 @@ nested predicate object:
 | `"sibling(N)"`                    | `node.sibling(N)` — sibling at offset N in parent's children |
 | `"findChild(s)"`                  | First direct child whose id ends with `s`                    |
 | `"findDescendant(s)"`             | First descendant whose id ends with `s`                      |
+| `"nextSiblingMatchingRegex(p[, n])"` | First FOLLOWING sibling whose own text full-matches `p` (#1029). Identity-based walk; optional cap `n` (default/max 8) bounds the scan to the row's own width — an uncapped scan on a row missing its value returns the NEXT row's; pattern compiled through `RegexSafety` at load |
 
 ```json5
 // WaitingForOfferParser: find button, then read its child's text
@@ -839,6 +840,7 @@ This makes the engine self-contained and the vocabulary discoverable.
 | Transform               | Input -> Output                                                   | Notes                                                   |
 |-------------------------|-------------------------------------------------------------------|---------------------------------------------------------|
 | `parseCurrency`         | `"$5.00"`, `"+$4.00"`, `"$7.75+ Total"` -> `Double?`               | Strips `$`, `+`, `,`; takes first space-delimited token |
+| `parseGlyphCurrency`    | `"This dash so far$16.70"`, `"$ 1 6 . 7 0"` -> `Double?`           | Animated digit-wheel reader (#1029): keeps only `$`/digits/`.`/`,` from a ≤256-char input, then full-matches `CurrencyShape`; a mid-spin join yields null, never a guess |
 | `parseDistance`         | `"3.2 mi"`, `"500 ft"`, `"Additional 2.6 mi"` -> `Double?` (miles) | Regex extracts number; converts ft to mi                |
 | `parseItemCount`        | `"(2 items)"`, `"(3 items • 4 units)"` -> `Int?`                   | Regex extracts leading count                            |
 | `parseDeadline`         | `"Pick up by 17:39"`, `"by 6:10 PM"` -> `Long?` (epoch ms)         | Strips known prefixes, parses time, rolls to tomorrow if far enough past (#343) |

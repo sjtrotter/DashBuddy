@@ -113,6 +113,53 @@ data class PlatformRegion(
      * Default-null so existing snapshots deserialize unchanged.
      */
     val lastJoinMissWarnTaskId: String? = null,
+    /**
+     * A dash running-total read that is parked, waiting out a settle window before it may move
+     * [Session.runningEarnings] (#1029 — the **settle gate**).
+     *
+     * The platform renders that total as an animated digit-wheel, and captures land mid-animation.
+     * `parseGlyphCurrency` throws out the malformed intermediates, but roughly one fielded read in
+     * eight is well-FORMED and wrong ($470.00 during a $16.70 dash) — a string function cannot tell
+     * that apart from a real figure, because nothing about the string is wrong. What distinguishes
+     * them is TIME: a spin value is transient. So a parsed total that differs from the committed
+     * one is parked here, and commits once it has stood **unchallenged** for
+     * `GraceConfig.sessionPaySettleMs` — a different read REPLACES the park (with a fresh
+     * deadline), a read equal to the committed total CLEARS it (the wheel is at rest), and the
+     * commit itself happens by lazy expiry on the first observation AT or past
+     * [PendingSessionPay.deadline] (a `SESSION_PAY_SETTLE` wake timer guarantees one arrives).
+     *
+     * REPETITION CANNOT BE THE DISCRIMINATOR, and that is not a style choice: `IdleFields.dedupeHash`
+     * folds `sessionPay` into the screen's `Observation.identity()`, and `FrameGate.admit` drops a
+     * frame whose identity equals the last admitted one. On a settled wheel ($16.70, $16.70, …) only
+     * the FIRST frame ever reaches the state machine, so a "second agreeing read" would never arrive
+     * and the figure would freeze for most of a dash. Elapsed time without contradiction is the only
+     * signal available here. **This is the canonical statement of that rationale** — every other
+     * site (the stepper, `ModeEffects`, `TimeoutType.SESSION_PAY_SETTLE`, CLAUDE.md) points here
+     * rather than restating it.
+     *
+     * The park is **flow-scoped** ([PendingSessionPay.flow]): a read is evidence only while the
+     * surface it was read from is on screen, so leaving that surface DROPS the park instead of
+     * letting the wake timer commit a figure nothing can contradict any more — fail-null (#745).
+     * The committed total simply stands, and a return to the surface re-parks.
+     *
+     * BOTH running-total feeds are gated: the on-dash earnings pill (`IdleFields.sessionPay`) and
+     * the receipt's own "This dash so far" figure (`PostTaskFields.sessionEarnings`) — the receipt
+     * renders the SAME digit-wheel component, so exempting it would leave the identical failure
+     * mode open on the surface that closes a delivery. Conversely every write of
+     * [Session.runningEarnings] that does NOT go through the gate (the PostTask-entry pay
+     * accumulation, the dash-summary total) SUPERSEDES any park older than itself, so a stale park
+     * can never expire over fresher evidence.
+     *
+     * Cost: a genuinely-changed total lands one settle window late, which for a figure the dasher is
+     * glancing at is the right trade against showing them a number that never existed.
+     *
+     * Cleared whenever the session it describes begins or ends, and DROPPED wholesale by crash
+     * recovery (`AppState.droppingSessionPayParks`): a restored park is pre-crash evidence whose
+     * surface is long gone and whose wake timer no restore path re-arms — fail-null (#745).
+     * Platform-agnostic: the gate is per-region state, keyed by nothing but this region's own
+     * reads. Default-null so existing snapshots deserialize unchanged.
+     */
+    val pendingSessionPay: PendingSessionPay? = null,
 ) {
     /**
      * This platform's current PRESENTED offer — the accepted-pending-consumption survivors
@@ -123,6 +170,48 @@ data class PlatformRegion(
      */
     fun presentedOffer(): PendingOffer? = pendingOffers.lastOrNull { it.acceptedAt == null }
 }
+
+/**
+ * A dash running-total read waiting out its settle window (#1029).
+ * See [PlatformRegion.pendingSessionPay] for why the discriminator is elapsed
+ * time rather than repetition (FrameGate identity dedup never re-admits an
+ * identical wheel read).
+ *
+ * Plain data (kotlinx-serializable) so it survives crash-recovery replay;
+ * resolution is driven by `obs.timestamp`, never a wall clock, keeping the
+ * reducer pure.
+ */
+@Serializable
+data class PendingSessionPay(
+    /** The parsed total being held. */
+    val value: Double,
+    /** The obs.timestamp of the read that parked it. */
+    val since: Long,
+    /** Once an observation's timestamp reaches this, the value is committed. */
+    val deadline: Long,
+    /**
+     * The R0 [Flow] the read was parked under — the surface it was read from.
+     *
+     * A read is evidence only while that surface is on screen: an offer overlay landing half a
+     * second after a mid-spin pill read would otherwise leave the park unchallengeable (no other
+     * screen carries a running total), and the wake timer would commit the spin value. Leaving the
+     * surface therefore DROPS the park — the committed figure stands, and the next return to the
+     * surface re-parks; that returning frame IS admitted, because its observation identity differs
+     * from the interloper's.
+     *
+     * **Ownership is (this flow, the PLATFORM that put it on screen)**, not the flow alone. R0 is
+     * SHARED across platforms — `FlowRegion.activePlatform` names whose screen last set it — while
+     * `StateMachine.stepPlatforms` steps only `obs.platform`'s region, so a DoorDash park is never
+     * stepped by an Uber frame and a flow-only test would let this platform's wake timer commit a
+     * figure R0 stopped showing long ago (and two idle screens on two platforms defeat it outright:
+     * R0 stays `Idle` throughout). A NON-flow observation — a timer, a click, a loopback — cannot
+     * itself be the departure frame, so it checks ownership BEFORE the expiry and drops a park it
+     * no longer owns instead of committing it. Another platform's screen therefore still drops this
+     * platform's park; fail-null, and accepted — the alternative is committing a figure this
+     * platform can no longer see.
+     */
+    val flow: Flow,
+)
 
 /**
  * A provisional screen-implied resume out of [Mode.Paused], pending confirmation

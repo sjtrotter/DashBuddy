@@ -517,7 +517,8 @@ into `AppNoticeChannel.postNotice`, which all three notifiers now call).
 **#1036 adds the alarm's other half: matched-but-parsed-nothing.** #937 measures rules that stopped
 MATCHING; DoorDash 8.93.7 removed the view ids every money parse anchored on while the text `require`
 anchors kept matching, so recognition looked healthy for weeks as every parse died (and the frozen
-corpus structurally cannot see it, #1029). `Ruleset.matchFirst` reports a `:domain` `ParseShortfall`
+corpus structurally cannot see it — that rot was #1029, re-anchored below). `Ruleset.matchFirst`
+reports a `:domain` `ParseShortfall`
 for every branch that MATCHED while its parse yielded nothing usable, on **two** triggers: every
 **evidence** field unresolved (total rot), or any **shape-required** field null while others parsed
 (partial rot — `ParsedFieldsFactory.REQUIRED_FIELDS_BY_SHAPE`, the receipt's shape one release before
@@ -593,6 +594,44 @@ changing recognition means editing rule JSON plus corpus tests. **Rules cannot d
 bindings* (`acceptButton`, `declineButton`, `expandButton`) that the app-owned `RuleAction`
 registry (`:domain`) consumes — see `docs/design/rule-capability-consent.md`.
 
+**Two primitives exist for reading an id-less render (#1029), both bounded.** DoorDash 8.93.7
+shipped its money surfaces with NO view ids, so the parse vocabulary needed shape anchors where it
+had only id and position anchors. (1) The **`parseGlyphCurrency` transform** reads an animated
+digit-wheel — a figure rendered as per-glyph id-less `TextView`s beside a label, which `read:
+allText` fuses into one string (`"This dash so far$16.70"`, or `"$3.10This dash"` when the label
+trails). It keeps only the `$`/digit/`.`/`,` characters, then **full-matches** a settled shape
+(`$` + 1–4 digits + optional comma group + exactly 2 decimals) or returns **null** — bounded input
+(256 chars), fail-closed, and that strictness is the point: ~1 in 5 fielded reads is mid-animation
+(`$70103.030`, `$016.603`), and a fabricated figure is strictly worse than none. Note `parseCurrency`
+is not merely useless on that shape but WRONG — it splits on space and takes the first token, so a
+space-separated wheel reads `$1.00`. (2) The **`nextSiblingMatchingRegex(<pattern>)` navigate spec**
+scans up to `MAX_SIBLING_SCAN`=8 FOLLOWING siblings and returns the first whose own text
+full-matches, so a rule states the SHAPE it expects instead of a positional `sibling(N)`. The
+pattern compiles through `RegexSafety` at rule-LOAD time (length cap + ReDoS rejection, a loud
+`RuleCompileException`, never a hot-path hang) and matches through `BoundedRegex.matches` (the new
+whole-input sibling of `containsMatchIn`, same 200 ms budget, fail-closed to no-match). Its receipt:
+8.93.7 flattened the pay breakdown into id-less siblings `'Customer tips', '799', '$7.00'`, where
+`799` is a DoorDash type CODE that older builds render in the `pay_line_item_title` slot — so
+`sibling(1)` + `parseCurrency` reported a **$799.00 tip on a $16.70 delivery**. No offset is right
+on both layouts; "the next money-shaped node" is. The spec takes an **optional scan cap**
+(`nextSiblingMatchingRegex(<pattern>, <n>)`, default and ceiling `MAX_SIBLING_SCAN`=8, a cap outside
+1..8 isolates the rule at load) and the three DoorDash money scans declare `2`: that is a
+CORRECTNESS control, not merely a bound — on a row whose value is simply absent
+(`['Customer tips','799','Peak pay','$1.00']`) an unbounded scan returns the NEXT row's money AS
+this one's, fail-WRONG and invisible to `sumApproxEquals` since `appPay` is null on 8.93.7. The
+sibling walk itself has ONE owner, `UiNode.followingSiblings()`/`precedingSibling()`, resolved by
+REFERENTIAL identity and shared with the #860/#886 mask predicates — `UiNode.equals` ignores
+children, so a flattened row's twin wrappers make a structural `indexOf` start the scan from the
+wrong node; positional `sibling(N)` keeps its old structural semantics. And "a well-formed currency
+figure" is now ONE definition, `CurrencyShape` (`:core:pipeline`), from which both
+`parseGlyphCurrency` and the rules' scan patterns derive — byte-pinned by `CurrencyShapePinTest`
+over the generated assets, the `FIRST_LAST_INITIAL_PATTERN` precedent. It is also TIGHTER than
+either hand-written predecessor: no leading-zero integer (`$016.70`, one settled digit from the
+fielded mid-spin `$016.603`) and no malformed thousands group (`$1234,567.00`, which the old Kotlin
+shape folded to 1234567.0; the old rule-side `^\$[\d,]+\.\d{2}$` also took `$,.00` → 0.0).
+Neither primitive can catch a mid-spin read that is well-FORMED but wrong — that is the settle
+gate's job (§3).
+
 ### 3. Multi-Region State Machine (`core/state/`)
 
 Observations reduce into `AppState(regions)` (`:domain`): **`FlowRegion`** (R0 — ground-truth
@@ -603,6 +642,69 @@ screen interpretation; the current flow + its provenance, NOT offers), one **`Pl
 crash recovery can replay observations over the last snapshot. `StateManagerV2` hosts the
 reduction, exposes `StateFlow<AppState>`, and owns crash recovery; `EffectMap` diffs prev/next
 state into `AppEffect`s.
+
+**The dash running total is settle-gated (#1029).** A parsed running total moves
+`Session.runningEarnings` only once it has stood **unchallenged on its own surface for a settle
+window** — `PlatformRegion.pendingSessionPay` parks the read with a deadline
+(`GraceConfig.sessionPaySettleMs`, 3 s, resolved per-platform through `TransitionPolicy`) and the
+commit is the stepper's **lazy expiry** on the first observation AT or past it. §2's
+`parseGlyphCurrency` already rejects the malformed digit-wheel intermediates, but a spin value that
+lands well-FORMED ($470.00 during a $16.70 dash) is indistinguishable from a real figure by
+inspection — only by TIME, which means state. **Repetition was REJECTED as the discriminator** (the
+round-1 design): the idle dedup hash folds `sessionPay` into `Observation.identity()`, so
+`FrameGate.admit` drops every repeat of a settled wheel and a "second agreeing read" can never
+arrive — the figure would freeze for most of a dash. That is also why the park arms a
+`SESSION_PAY_SETTLE` wake timer (`EffectMap.diffSessionPaySettleTimer`, its own `TimeoutType` so the
+(type, platform) key can't cross-cancel the `GRACE_COMMIT`/`MODE_RESUME_COMMIT` graces sharing the
+region): on an unchanged wheel the timer is the ONLY observation that will ever come. The canonical
+statement of that rationale is the `PlatformRegion.pendingSessionPay` KDoc; every other site points
+at it. The rule, as reviewed (round 3):
+**(a) a park is owned by (FLOW, PLATFORM)** — `PendingSessionPay.flow` records the R0 flow it was
+read under and `FlowRegion.activePlatform` names whose screen put it there; losing either DROPS it,
+because no other screen carries a running total and the wake timer would otherwise commit an
+unchallengeable figure (fielded 08-23 17:35: pill read → offer overlay 0.5 s later → dash end). The
+platform half is load-bearing because `stepPlatforms` steps only `obs.platform`'s region, so a
+DoorDash park is never stepped by an Uber frame — and two idle screens on two platforms defeat a
+flow-only test outright (R0 stays `Idle`). A NON-flow observation (the wake timer, a click, a
+loopback) is never a departure frame, so it checks ownership BEFORE the expiry and drops a park it
+no longer owns; a flow frame runs the expiry FIRST, so a park that stood its whole window still
+commits on the departure frame. Another platform's screen therefore still drops this platform's
+park — fail-null, accepted.
+**(b) BOTH feeds go through the gate** — the on-dash pill (`IdleFields.sessionPay`) and the
+receipt's own "This dash so far" (`PostTaskFields.sessionEarnings`), which `dropoff.json5` reads off
+the SAME animated wheel via `parseGlyphCurrency`; for the settled re-render to be admittable at all,
+`PostTaskFields.dedupeHash` folds in `sessionEarnings` (it is the only field that moves while the
+receipt sits still).
+**(c) every NON-gated writer supersedes older parks** — the PostTask-entry pay accumulation and the
+dash-summary total drop any park whose `since` predates them; `since >= now` keeps the receipt's own
+same-frame park. The dash summary reaches the park by (f), not by this rule: `updateLifecycle`
+returns early on `Flow.SessionEnded` with a live session (to arm the authoritative SESSION_END
+grace), so its `updateSessionFields` arm is unreachable on the fielded path — the summary's
+`totalEarnings` is instead one of the three reads `Observation.sessionPayRead()` recognizes, which
+is what stops a pre-"End Dash" $470 park from committing on the summary frame and riding into the
+#596 close-out sweep's `DELIVERY_COMPLETED.sessionEarnings`.
+**(d) comparisons are cent-tolerant** (an accumulated `accumulatedDeliveryPay + totalPay` is not
+bit-equal to the 2-dp figure the wheel renders).
+**(e) expiry is `>=` and an early/stale wake RE-ARMS for the remainder** — the timer is armed for
+exactly `deadline − obs.timestamp` and fires against a wall clock, so a fire landing on the deadline
+would no-op and, by the very FrameGate argument above, no frame is coming to retry. It re-arms
+rather than commits: a stale fire from a REPLACED park would otherwise commit the new one early,
+which is precisely a mid-spin value. (All three region timers now share one
+`ModeEffects.diffDeadlineTimer` body; only this one passes `rearmOnEarlyWake`.)
+**(f) a contradicting read on the expiring frame supersedes the park** it contradicts, rather than
+committing the stale figure and re-parking the fresh one for another window.
+**(g) a `$0.00` read never overwrites a positive total** — the same pill component renders the
+placeholder for seconds before the figure loads (08-23 15:53:42 `$0.00` → `$61.80` at :48), and a
+dash total never legitimately returns to zero mid-dash. Deliberately NOT a general monotonic guard.
+Pure and platform-agnostic throughout (keyed by the region's own reads, deadlines derived from
+`obs.timestamp`, no `Platform` branch, no wall clock); split immediate/gated fields —
+`zoneName`/`sessionType` still write on sight; cleared on session start and end; a genuinely changed
+total lands one settle window late by design. **Crash recovery DROPS any restored park**
+(`AppState.droppingSessionPayParks`, applied to the snapshot state on both the tail and no-tail
+restore paths): a park is pre-crash evidence whose surface is gone and whose wake timer no restore
+path re-arms, so it would either sit forever or be committed by whatever frame happens past its
+deadline — fail-null (#745), at a cost of one settle window.
+
 
 ### 4. Side Effect Engine (`app/.../state/effects/`)
 
@@ -703,7 +805,16 @@ WHOLE job was receipt-less (a DoorDash shop order shows no per-delivery receipt,
 "Dash Along the Way" start shows none at all — #999) — a `PayBasis.OFFER_PAY`
 ESTIMATE from `DeliveryPayload.offerPayShare`, the accepted offer's quote split equally across the job's
 owed drops at the mint site and consumed by the fold only if no sibling drop already folded a real receipt
-(#691). **That split became store-correspondence-attributed and consolidation-aware in #996/#997 — a pure
+(#691). **A receipt with no itemization still prices its drops (#1029):** `apportion(parsedPay = null, …)`
+returns an EMPTY map even for a SINGLE drop, and DoorDash 8.93.7 shipped the receipt with no
+`pay_line_item_*` ids at all — so `parsedPay` was null on every fielded receipt, every drop fell to an
+`OFFER_PAY` estimate, `payoutStoreForms` never minted and the #653 guard was off, silently, because
+`totalPay` still resolved. `ParsedFieldsFactory.buildPostTask` now SYNTHESIZES `ParsedPay` from the
+receipt's own parsed scalars on that layout (empty line items + `totalPay > 0` + a non-null
+`customerTips` — the tips line is exposed only while the breakdown is visible, which keeps every
+COLLAPSED receipt at `parsedPay == null` as `sameTaskCollapsedDowngrade` requires); the synthetic tip
+carries a BLANK type so `injectiveTipMatch` declines and a stacked job even-splits. Per-store tip
+itemization off the flat 8.93.7 row is #1051. **That split became store-correspondence-attributed and consolidation-aware in #996/#997 — a pure
 mint-site change, no fold touch, no `PROJECTOR_VERSION` bump, historical rows refold byte-identically.**
 **Two mint sites, two policies.** The INLINE (PostTask-exit) mint, whose job may still be OPEN, keeps the
 pre-#996/#997 **conservative pooled split over the QUOTED owed orders** (`OfferPayFallback.shareFor`) —
@@ -822,7 +933,8 @@ fail-wrong beats fail-null); the delivery row's own `storeKey`/`milesToStore`/dw
 correct residuals, not bugs. The bump heals the 08-08 Zaxbys accept (1-of-5 lifetime offers left
 unlinked) on refold. **#1030 (early_offline fake $0 report, `PROJECTOR_VERSION` 10→11):** the
 EARLY_OFFLINE `DASH_STOP` branch stamped `totalEarnings = Session.runningEarnings`, a non-nullable
-`Double = 0.0` whose only feeders are the dead money parses (#1029), so every summary-less dash wrote
+`Double = 0.0` whose only feeders were the then-dead money parses (#1029, since re-anchored — and
+now settle-gated), so every summary-less dash wrote
 a **hard `0.0`** that `COALESCE(s.reportedEarnings, d.deliveredPay, 0)` then honoured as an
 authoritative "$0 reported" — the 08-17→08-23 week (the first all-`early_offline` one) read
 `$0.00 came in.` against $78.50 realized and tripped the over-attribution severe flag.

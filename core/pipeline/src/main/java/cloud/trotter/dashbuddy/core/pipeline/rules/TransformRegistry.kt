@@ -98,6 +98,7 @@ object TransformRegistry {
         if (value == null) return null
         return when (name) {
             "parseCurrency" -> parseCurrency(value)
+            "parseGlyphCurrency" -> parseGlyphCurrency(value)
             "parseDistance" -> parseDistance(value)
             "parseItemCount" -> parseItemCount(value)
             "parseItemCountUnit" -> parseItemCountUnit(value)
@@ -230,7 +231,8 @@ object TransformRegistry {
     // ========================================================================
 
     private val knownPlainTransforms = setOf(
-        "parseCurrency", "parseDistance", "parseItemCount", "parseItemCountUnit", "parseDeadline",
+        "parseCurrency", "parseGlyphCurrency",
+        "parseDistance", "parseItemCount", "parseItemCountUnit", "parseDeadline",
         "parseTime", "parseDuration", "parseHrMin", "parseMinutes", "parseLeadingInt",
         "parsePercent", "sha256", "normalizeCustomerName", "trim", "lower", "upper",
         "toDouble", "toInt", "stripDeadlinePrefix",
@@ -319,6 +321,71 @@ object TransformRegistry {
     private fun parseCurrency(text: String): Double? {
         val clean = text.replace("$", "").replace("+", "").replace(",", "").trim()
         return clean.split(" ").firstOrNull()?.toDoubleOrNull()
+    }
+
+    /**
+     * Longest input [parseGlyphCurrency] will look at (#1029, bounded ingestion). A glyph wheel's
+     * whole subtree text is a label plus a handful of digits — "This dash so far$16.70" is 22
+     * chars. Anything materially longer means the rule is aimed at the wrong container, and a
+     * fail-CLOSED null is the honest answer there; it also keeps the scan trivially bounded on the
+     * classification thread.
+     */
+    internal const val MAX_GLYPH_CURRENCY_INPUT = 256
+
+    /** The only characters a currency figure is built from. Everything else is label or spacer. */
+    private const val GLYPH_CURRENCY_ALPHABET = "$0123456789.,"
+
+    /**
+     * A **settled** currency figure: one leading `$` (written `\x24` so neither the Kotlin string
+     * template nor a regex anchor is in play) followed by [CurrencyShape.FIGURE_CORE] — the ONE
+     * shape definition this and the rules' money scans now share, rather than two hand-written
+     * patterns that were loose in different ways. Applied with [Regex.matches], which anchors the
+     * WHOLE input by construction — deliberately strict; see [parseGlyphCurrency].
+     */
+    private val SETTLED_GLYPH_CURRENCY = Regex("\\x24" + CurrencyShape.FIGURE_CORE)
+
+    /**
+     * Reconstructs a currency figure from an **animated digit-wheel** render (#1029).
+     *
+     * DoorDash 8.93.7 removed every money view id from the receipt sheet and the on-dash earnings
+     * pill and now renders the figure as per-glyph, id-less `TextView`s — `'$'`, `'1'`, `'6'`,
+     * `'.'`, `'7'`, `'0'` — each in its own wrapper `View`, beside a label node ("This dash so
+     * far", "This dash", "This week"). `read: allText` joins a subtree's text with the EMPTY
+     * separator, so the container reads as one fused string: `"This dash so far$16.70"`.
+     * [parseCurrency] is not merely useless on that shape, it is WRONG — it splits on space and
+     * takes the first token, so a space-separated wheel reads `"$ 1 6 . 7 0"` → `$1.00`.
+     *
+     * Two steps, both fail-closed:
+     *  1. **Keep only the currency glyphs**, in order. This is the "keep the `$` / digit-run / `.`
+     *     / `,` tokens, drop the label words and spacers" filter expressed at CHARACTER
+     *     granularity — which it has to be, because the `allText` join has no separator to
+     *     tokenize on, so a label fuses with the first glyph (`"far$16.70"`) and, on the pill,
+     *     the label fuses onto the END (`"$3.10This dash"`). Letters carry no currency glyph, so
+     *     for a purely alphabetic label the two spellings agree exactly.
+     *  2. **Full-match the strict settled shape** ([SETTLED_GLYPH_CURRENCY]) or return null.
+     *
+     * Step 2 is what makes this safe on a wheel captured MID-SPIN. Roughly a fifth of fielded
+     * reads are mid-animation, and they arrive malformed — the committed 8.93.7 collapsed receipt
+     * reads `$70103.030`, the 07-17 corpus `$016.603` — every one of which fails the full match
+     * and yields null rather than a fabricated figure. It cannot defend against a mid-spin read
+     * that happens to be well-FORMED but wrong (`$470.00` for a $16.70 dash): that is the state
+     * layer's settle gate (a read commits once it has stood unchallenged on its surface for the
+     * settle window), not a string function's job.
+     *
+     * Also fails closed on a label that carries its own digits — `"1 out of 1$16.70"` folds to
+     * `"11$16.70"`, which no longer full-matches — and on two figures in one container
+     * (`"$8.70$1.00"`), so a mis-aimed rule reads null, never a fused number. Since #1029 round 3
+     * the shape also rejects a LEADING-ZERO integer (`$016.70` — the fielded mid-spin `$016.603`
+     * is one settled digit away from it) and a malformed thousands group (`$1234,567.00`, which
+     * the old `\d{1,4}(?:,\d{3})?` accepted and folded to 1234567.0).
+     */
+    private fun parseGlyphCurrency(text: String): Double? {
+        if (text.length > MAX_GLYPH_CURRENCY_INPUT) return null
+        val glyphs = buildString(text.length) {
+            for (c in text) if (c in GLYPH_CURRENCY_ALPHABET) append(c)
+        }
+        if (!SETTLED_GLYPH_CURRENCY.matches(glyphs)) return null
+        return glyphs.removePrefix("$").replace(",", "").toDoubleOrNull()
     }
 
     /**

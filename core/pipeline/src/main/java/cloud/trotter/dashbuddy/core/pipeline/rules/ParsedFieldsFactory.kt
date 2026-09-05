@@ -139,10 +139,38 @@ object ParsedFieldsFactory {
         arrivalConfirmed = f.bool("arrivalConfirmed") ?: false,
     )
 
+    /**
+     * The receipt shape (#1029). `parsedPay` is what prices a job's drops: `DropPayApportioner`
+     * returns an EMPTY map for a null one — for a SINGLE drop too — so no drop gets
+     * `dropRealizedPay`, every one falls to an `OFFER_PAY` estimate, `payoutStoreForms` never
+     * mints, and the #653 reconciliation guard is off. On DoorDash 8.93.7 the itemization is
+     * id-less (`pay_line_item_title` is gone), so `payLineItems` is EMPTY on every fielded
+     * receipt and post-delivery pricing died silently — silently because `totalPay` still
+     * resolves, so the #1036 shortfall census sees a healthy parse.
+     *
+     * The bridge: when the itemization is missing but the receipt's own SCALARS are both there,
+     * synthesize the breakdown from them. Deliberately narrow —
+     *  - `payLineItems` empty AND `totalPay > 0` AND `customerTips` non-null AND `total >= tips`.
+     *    The tips line is exposed only while the breakdown is VISIBLE, which is what keeps every
+     *    COLLAPSED receipt (old or new) at `parsedPay == null` — the `sameTaskCollapsedDowngrade`
+     *    logic in `PlatformRegionStepper` depends on that being the collapsed signal.
+     *  - the app-pay side is one synthetic `"DoorDash pay"` component of `total - tips`; the tip
+     *    side carries a BLANK type, so `injectiveTipMatch` declines and a stacked job even-splits
+     *    (which is what it already did whenever the tip types didn't match anyway).
+     * Per-store tip itemization off the flat 8.93.7 row is #1051's ask — it needs a fielded
+     * STACKED 8.93.7 receipt to pin, and this bridge is what keeps single-drop and expanded
+     * receipts on a real `DROP_SHARE` basis until then.
+     *
+     * (`totalPay`'s own `?: 0.0` below is the #1030/#1041 fabrication class — a missed parse
+     * becomes a measured zero. Left alone here deliberately: changing it is a state/fold-visible
+     * change, not part of this bridge.)
+     */
     private fun buildPostTask(f: Map<String, Any?>): ParsedFields.PostTaskFields {
         @Suppress("UNCHECKED_CAST")
         val rawLineItems = f["payLineItems"] as? List<Map<String, Any?>> ?: emptyList()
 
+        val total = f.double("totalPay")
+        val tips = f.double("customerTips")
         val parsedPay = if (rawLineItems.isNotEmpty()) {
             val allItems = rawLineItems.map { item ->
                 ParsedPayItem(
@@ -152,17 +180,22 @@ object ParsedFieldsFactory {
             }
             // Split: DoorDash pay components have labels like "Base pay", "Peak pay";
             // customer tips have store names/IDs that don't contain "pay".
-            val (appPay, tips) = allItems.partition {
+            val (appPay, tipItems) = allItems.partition {
                 it.type.contains("pay", ignoreCase = true)
             }
-            ParsedPay(appPayComponents = appPay, customerTips = tips)
+            ParsedPay(appPayComponents = appPay, customerTips = tipItems)
+        } else if (total != null && total > 0.0 && tips != null && total - tips >= 0.0) {
+            ParsedPay(
+                appPayComponents = listOf(ParsedPayItem("DoorDash pay", total - tips)),
+                customerTips = if (tips > 0.0) listOf(ParsedPayItem("", tips)) else emptyList(),
+            )
         } else null
 
         return ParsedFields.PostTaskFields(
             activity = f.str("activity"),
-            totalPay = f.double("totalPay") ?: 0.0,
+            totalPay = total ?: 0.0,
             appPay = f.double("appPay"),
-            customerTips = f.double("customerTips"),
+            customerTips = tips,
             parsedPay = parsedPay,
             isExpanded = f.bool("isExpanded") ?: false,
             expandButtonId = f.str("expandButtonId"),
