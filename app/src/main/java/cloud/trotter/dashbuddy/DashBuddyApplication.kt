@@ -68,7 +68,7 @@ class DashBuddyApplication : Application(), Configuration.Provider {
 
     // Global Context Accessor (Still useful for Utils, but avoid if possible)
     companion object {
-        /** Stable Timber tag for the build-identity startup line (#1062, principle 7). */
+        /** Stable Timber tag for the build-identity startup line (PR #1066, principle 7). */
         const val BUILD_TAG = "App"
 
         /**
@@ -134,7 +134,7 @@ class DashBuddyApplication : Application(), Configuration.Provider {
             )
         )
 
-        // 1b. Build identity (#1062) — the FIRST line every log file carries, planted here so it
+        // 1b. Build identity (PR #1066) — the FIRST line every log file carries, planted here so it
         // lands in the shareable INFO+ export as well as the DEBUG firehose. A field-data pull must
         // never again have to INFER which build the phone ran (2026-09-05: inferred from the
         // ABSENCE of log lines, because installDebug reported an identical versionName for two

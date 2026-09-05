@@ -12,7 +12,7 @@ import timber.log.Timber
 class PipelineStatsTest {
 
     /**
-     * #1062 — the build id rides the periodic summary, so a field-data pull reads WHICH build
+     * PR #1066 — the build id rides the periodic summary, so a field-data pull reads WHICH build
      * produced the frames off any log line instead of inferring it from absent lines.
      */
     @Test

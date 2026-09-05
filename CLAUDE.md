@@ -341,7 +341,7 @@ recognized (#806 direction 1). `PipelineV2.events` is a HOT `shareIn` stream —
 feeds all collectors, so side effects (captures, dedup state) can never double-run (#361). The
 merged upstream is supervised — a crash logs + counts a restart and resubscribes with backoff
 instead of silencing all sensing (#430) — and `PipelineStats` counts every gate decision, mapping
-failure, and restart (periodic summary log line). **Every build identifies itself (#1062):**
+failure, and restart (periodic summary log line). **Every build identifies itself (PR #1066):**
 `app/build.gradle.kts` computes `versionName = "<base>+<8-hex git sha>[.dirty]"` at configuration
 time (fail-safe to `nogit`; `versionCode` stays a hand-bumped constant because Android refuses a
 lower one on install), and that string rides `BuildConfig.GIT_SHA`/`BUILD_TIME_MS`, one INFO

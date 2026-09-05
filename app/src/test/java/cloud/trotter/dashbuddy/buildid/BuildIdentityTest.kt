@@ -7,7 +7,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * #1062 — every build identifies itself.
+ * PR #1066 — every build identifies itself.
  *
  * The receipt: the 2026-09-05 field-data pull had to INFER which build the phone ran from the
  * ABSENCE of log lines, because `:app:installDebug` reported the same `versionName=0.230.0` for a

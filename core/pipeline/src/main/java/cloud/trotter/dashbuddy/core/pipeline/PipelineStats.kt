@@ -27,7 +27,7 @@ import javax.inject.Singleton
 @Singleton
 class PipelineStats @Inject constructor(
     /**
-     * OUR build's identity — `BuildConfig.VERSION_NAME`, which since #1062 carries the git sha
+     * OUR build's identity — `BuildConfig.VERSION_NAME`, which since PR #1066 carries the git sha
      * (`0.230.0+ab12cd34[.dirty]`). It rides the periodic summary next to the #937
      * `platformApps=` stamp so a field-data pull can read WHICH build produced the frames
      * straight off any log line, instead of inferring it from which lines are absent.
@@ -41,7 +41,7 @@ class PipelineStats @Inject constructor(
 ) {
 
     /**
-     * Identity-less construction for the many unit tests that only exercise counters (#1062).
+     * Identity-less construction for the many unit tests that only exercise counters (PR #1066).
      *
      * A secondary constructor rather than a default argument: Kotlin synthesizes a no-arg
      * constructor when every primary parameter has a default AND copies the annotations onto it,
@@ -273,7 +273,7 @@ class PipelineStats @Inject constructor(
             parseShortfallSuffix()
 
     /**
-     * `"app=0.230.0+ab12cd34 "`, or empty when no version was injected (#1062).
+     * `"app=0.230.0+ab12cd34 "`, or empty when no version was injected (PR #1066).
      *
      * Rendered FIRST — a field-data reader greps one summary line to answer "which build was
      * this?", so it must not be buried behind fourteen counters. The emptiness check comes first

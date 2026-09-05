@@ -16,7 +16,7 @@ plugins {
 }
 
 // ---------------------------------------------------------------------------
-// Build identity (#1062): every build must be able to say which commit it is.
+// Build identity (PR #1066): every build must be able to say which commit it is.
 //
 // The receipt: a field-data pull on 2026-09-05 had to INFER the phone's build
 // from the ABSENCE of log lines, because `:app:installDebug` reported the same

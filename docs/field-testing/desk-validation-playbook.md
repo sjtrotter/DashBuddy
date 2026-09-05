@@ -24,7 +24,7 @@ and 3), #159, #691-mechanism. **desk-partial** (data half here; UI half needs de
 ## Step 0 — identify the build
 
 **Do this first.** Every other reading in this playbook is a reading *of a specific build*, and
-until #1062 the build had to be inferred (the 2026-09-05 pull inferred a pre-#1044 build from the
+until PR #1066 the build had to be inferred (the 2026-09-05 pull inferred a pre-#1044 build from the
 ABSENCE of log lines, because `:app:installDebug` reported the same `versionName=0.230.0` for two
 different commits).
 
