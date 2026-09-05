@@ -51,6 +51,25 @@ data class GraceConfig(
      * never parks a read, so the value costs it nothing — hence no [CODE_DEFAULTS] override today.
      */
     val sessionPaySettleMs: Long = SESSION_PAY_SETTLE_MS,
+    /**
+     * How long a **COLLAPSED** post-delivery receipt gets before its authoritative `TASK_RETIRE`
+     * grace commits the completion (#1033 layer 1) — used in place of [authoritativeGraceMs] when the
+     * receipt frame that armed (or re-armed) the grace carried no itemization (`parsedPay == null`).
+     *
+     * A collapsed receipt states a total and nothing else, so a completion committed off one is
+     * priced by the #691 `OFFER_PAY` estimate rather than the receipt. The itemization only exists
+     * once the breakdown is expanded — by the dasher, or by the app's own `EXPAND_EARNINGS` tap — and
+     * the fielded 2026-08-23 expansion landed 3.9 s after the collapsed frame, 1.3 s past the 2.5 s
+     * authoritative window. Widening the window ONLY for the un-itemized shape buys that expansion
+     * time to land, at the cost of a completion committing up to 5.5 s later on a receipt that stays
+     * collapsed; an EXPANDED frame keeps [authoritativeGraceMs] and TIGHTENS the deadline the moment
+     * it arrives (the arm takes `minOf(existing, new)`), so a normal expanded receipt is unchanged.
+     *
+     * Per-platform by construction (Principle 8): a platform that renders no collapsible receipt
+     * simply never arms with `parsedPay == null` off one, so the value costs it nothing — hence no
+     * [CODE_DEFAULTS] override today.
+     */
+    val receiptExpandGraceMs: Long = RECEIPT_EXPAND_GRACE_MS,
 ) {
     companion object {
         const val DEFAULT_GRACE_MS = 10_000L
@@ -59,6 +78,13 @@ data class GraceConfig(
         const val PAUSE_TIMEOUT_BUFFER_MS = 1_000L
         const val EXPAND_SETTLE_MS = 500L
         const val SESSION_PAY_SETTLE_MS = 3_000L
+
+        /**
+         * The collapsed-receipt retire grace (#1033) — see [GraceConfig.receiptExpandGraceMs].
+         * 8 s: comfortably past the fielded 3.9 s expand latency plus the content-changed debounce,
+         * while still committing the delivery well inside the gap before the next offer.
+         */
+        const val RECEIPT_EXPAND_GRACE_MS = 8_000L
 
         /**
          * Default accept-consumption grace (DoorDash and any platform without an override): a fine-
