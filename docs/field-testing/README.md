@@ -1108,8 +1108,10 @@ was found **broken-in-part** (raw PII in capture envelopes) and moved to that en
   grace retire may already have fired on the prior frame — that's read-model row-inert and expected, so
   don't treat its presence as a failure.) The sibling pickup of a stacked job should still show its
   normal `PICKUP_CONFIRMED`.
-  - Confirmed: 1/2 (desk 09-05: one `TASK_UNASSIGNED` at seq 1806, the $45.45 quote
-    stayed unattributed, and no paid artifact was fabricated for it.)
+  - Confirmed: 0/2
+    - desk 09-05: NOT this item's case — the slice's one `TASK_UNASSIGNED` (seq 1806) was
+      PICKUP-phase (arrived at the store, never confirmed); it behaved correctly (the $45.45 quote
+      stayed unattributed, no paid artifact), but the dropoff-phase retro-mark is still unexercised.
 
 - **🆕 NEW — GoPuff / multi-order drop-off confirm card recognized (#501 items 1-2 / PR #743).**
   The "Confirm you have the correct order before drop-off / Mix-ups frequently occur…" card that
