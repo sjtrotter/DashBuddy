@@ -1341,7 +1341,7 @@
             "isExpanded": true,
             "offersAccepted": null,
             "offersTotal": null,
-            "parsedPay": null,
+            "parsedPay": "ParsedPay(appPayComponents=[ParsedPayItem(type=DoorDash pay, amount=9.7)], customerTips=[ParsedPayItem(type=, amount=7.0)])",
             "sessionEarnings": 16.7,
             "totalPay": 16.7
         }
@@ -6866,6 +6866,34 @@
         "intent": "timeline_task_detail",
         "shape": null,
         "fields": {}
+    },
+    "waiting_for_offer/2026-08-18_18-41-22-167__doordash__accessibility.window__waiting_for_offer__9bc1ac.json": {
+        "ruleId": "doordash.screen.waiting_for_offer",
+        "intent": "waiting_for_offer",
+        "shape": "idle",
+        "fields": {
+            "isHeadingBackToZone": false,
+            "sessionPay": 0.0,
+            "sessionType": null,
+            "spotSaveDeadline": null,
+            "startingSession": false,
+            "waitTimeEstimate": "1-2 min",
+            "zoneName": null
+        }
+    },
+    "waiting_for_offer/2026-08-23_17-35-24-870__doordash__accessibility.window__waiting_for_offer__65095d.json": {
+        "ruleId": "doordash.screen.waiting_for_offer",
+        "intent": "waiting_for_offer",
+        "shape": "idle",
+        "fields": {
+            "isHeadingBackToZone": false,
+            "sessionPay": 16.7,
+            "sessionType": null,
+            "spotSaveDeadline": null,
+            "startingSession": false,
+            "waitTimeEstimate": "1-2 min",
+            "zoneName": null
+        }
     },
     "waiting_for_offer/20260128_193631_608_ON_DASH_MAP_WAITING_FOR_OFFER.json": {
         "ruleId": "doordash.screen.waiting_for_offer",

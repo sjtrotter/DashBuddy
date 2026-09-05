@@ -2,6 +2,7 @@ package cloud.trotter.dashbuddy.core.pipeline.rules
 
 import cloud.trotter.dashbuddy.test.util.TestRulesetFactory
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import org.junit.Assert.assertEquals
@@ -29,6 +30,19 @@ class SessionPayOwnershipTest {
         const val FIELD = "sessionPay"
     }
 
+    /**
+     * Every `parse.fields` block a screen rule can carry — the top-level one AND each BRANCH's
+     * own (`docs/rules.schema.json` `branchObject` allows a per-branch parse; `uber.screen.offer`
+     * uses one). Scanning only the top level would let a branch-level `sessionPay` — reading the
+     * "This week" pill on some other surface — walk straight past this pin.
+     */
+    private fun parseFieldSets(rule: JsonObject): List<JsonObject> = buildList {
+        rule["parse"]?.jsonObject?.get("fields")?.jsonObject?.let(::add)
+        rule["branches"]?.jsonArray.orEmpty().forEach { branch ->
+            branch.jsonObject["parse"]?.jsonObject?.get("fields")?.jsonObject?.let(::add)
+        }
+    }
+
     private fun screenRulesDeclaring(field: String): List<String> =
         File(TestRulesetFactory.rulesDir)
             .listFiles { f -> f.extension == "json" }
@@ -37,9 +51,7 @@ class SessionPayOwnershipTest {
                 Json.parseToJsonElement(file.readText()).jsonObject["screens"]
                     ?.jsonArray.orEmpty()
                     .map { it.jsonObject }
-                    .filter { rule ->
-                        rule["parse"]?.jsonObject?.get("fields")?.jsonObject?.containsKey(field) == true
-                    }
+                    .filter { rule -> parseFieldSets(rule).any { it.containsKey(field) } }
                     .mapNotNull { it["id"]?.toString()?.trim('"') }
             }
             ?: emptyList()

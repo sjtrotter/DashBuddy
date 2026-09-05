@@ -10,7 +10,9 @@ import cloud.trotter.dashbuddy.core.pipeline.recognition.matchers.NegativeCorpus
 import cloud.trotter.dashbuddy.core.pipeline.recognition.matchers.OfferPipelineTest
 import cloud.trotter.dashbuddy.core.pipeline.recognition.matchers.PickupNoCustomerIdentityTest
 import cloud.trotter.dashbuddy.core.pipeline.rules.CaptureRedactionCorpusTest
+import cloud.trotter.dashbuddy.core.pipeline.rules.CurrencyShapePinTest
 import cloud.trotter.dashbuddy.core.pipeline.rules.DashSummaryReanchorTest
+import cloud.trotter.dashbuddy.core.pipeline.rules.DeliverySummaryReanchorTest
 import cloud.trotter.dashbuddy.core.pipeline.rules.ClickRulesetTest
 import cloud.trotter.dashbuddy.core.pipeline.rules.DefaultRulesIntegrationTest
 import cloud.trotter.dashbuddy.core.pipeline.rules.DropoffBannerRedactParityTest
@@ -18,6 +20,7 @@ import cloud.trotter.dashbuddy.core.pipeline.rules.GoPuffRecognitionTest
 import cloud.trotter.dashbuddy.core.pipeline.rules.NotificationRulesetTest
 import cloud.trotter.dashbuddy.core.pipeline.rules.ParseOutputGoldenTest
 import cloud.trotter.dashbuddy.core.pipeline.rules.ScreenRulesetTest
+import cloud.trotter.dashbuddy.core.pipeline.rules.SessionPayOwnershipTest
 import cloud.trotter.dashbuddy.core.pipeline.rules.TriageRulesTest
 import cloud.trotter.dashbuddy.core.pipeline.rules.UberDeclineClickRuleTest
 import cloud.trotter.dashbuddy.core.pipeline.rules.UberHomeDashboardOfflineEvidenceTest
@@ -114,6 +117,16 @@ import org.junit.runners.Suite
  *   8.93.7 layout as well as off the ids on the old one, a stat row that does not render parses
  *   null rather than a fabricated 0 (#936/#1030), and the mid-dash "This dash so far" sheet —
  *   which shares both stat labels — stays UNKNOWN.
+ * - [DeliverySummaryReanchorTest] — #1029: the delivery receipt's money fields on the same id-less
+ *   8.93.7 layout, against the fielded collapsed/expanded pair — the recovered total/tip, the dead
+ *   `$799` type-code fabrication, the honest nulls (`appPay`, a mid-spin dash total), the capped
+ *   scan that must not reach the NEXT row's money, and the #1036 shortfall signal staying silent.
+ * - [SessionPayOwnershipTest] — #1029: exactly ONE rule may parse `sessionPay`. The same
+ *   `earnings_pill` id renders "This dash" and "This week", and a weekly total written into
+ *   `Session.runningEarnings` would be a large, plausible, STABLE lie the settle gate would happily
+ *   commit.
+ * - [CurrencyShapePinTest] — #1029: every rule-declared money scan uses `CurrencyShape` verbatim,
+ *   so the rules and `parseGlyphCurrency` cannot drift into accepting different figures.
  *
  * ### Deliberately excluded (#947 membership reconciliation)
  *
@@ -166,5 +179,8 @@ import org.junit.runners.Suite
     GoPuffRecognitionTest::class,
     UberOfferKindAndStackStoreTest::class,
     DashSummaryReanchorTest::class,
+    DeliverySummaryReanchorTest::class,
+    SessionPayOwnershipTest::class,
+    CurrencyShapePinTest::class,
 )
 class AllMatchersSuite

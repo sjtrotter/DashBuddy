@@ -1813,9 +1813,10 @@
           // corpus ("$016.603" on 07-17, "$70103.030" on the 8.93.7 collapsed capture)
           // still yield null, while every settled wheel parses — including the five
           // 2026-04-19 fixtures this rule has been silently dropping since 0.230.0.
-          // RESIDUAL: the transform cannot catch a mid-spin read that is well-FORMED but
-          // wrong; that is the settle gate's job, and this feed is deliberately not
-          // behind it (the gate sits on the idle `sessionPay` path — see the #1029 PR).
+          // The transform cannot catch a mid-spin read that is well-FORMED but wrong;
+          // that is the settle gate's job, and this feed IS behind it — the state layer
+          // treats `sessionEarnings` exactly like the idle pill's `sessionPay`, because
+          // it is literally the same digit-wheel component.
           // The dedupeKey stays `{totalPay}` (the #427/#606/#801 dead-template lint).
           "sessionEarnings": {
             "coalesce": [

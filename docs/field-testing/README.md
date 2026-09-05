@@ -86,14 +86,20 @@ was found **broken-in-part** (raw PII in capture envelopes) and moved to that en
     mid-spin value like `$470.00` on a $16 dash), or it shows your **weekly** total instead of the
     dash's. Both are worse than it showing nothing, so report either immediately. A figure that
     lands ~3 s after the wheel stops is EXPECTED — that is the settle gate (a read commits only
-    once it has stood unchallenged for the settle window).
+    once it has stood unchallenged **on that screen** for the settle window). Two more EXPECTED
+    behaviours, not bugs: if you leave the waiting-for-offer screen mid-spin (an offer pops, you
+    tap into something), the **old figure stands until you come back** — the half-read is thrown
+    away rather than guessed at; and a `$0.00` on the pill while it loads never wipes a total you
+    already had.
   - **On-dash, after a delivery:** the receipt sheet ("This offer", with the pay breakdown). The
     bubble's "Saved: $X" should quote the receipt's real total, and expanding the breakdown should
     NOT produce anything wild.
   - **Desk:** `SELECT payBasis, realizedPay, tip, cashTip FROM delivery_records` for the dash —
-    receipt-priced drops must come back on the **`DROP_SHARE`** basis with the receipt's real tip,
-    not `OFFER_PAY`, and **no row anywhere may carry `799`** (that was a DoorDash type code being
-    read as a $799 tip). Then `grep -o 'parseShortfall{[^}]*}' app.log | tail -1` and
+    a **single-drop** delivery, and any drop whose receipt you EXPANDED, must come back on the
+    **`DROP_SHARE`** basis with the receipt's real tip, not `OFFER_PAY`. (A **stacked** job still
+    even-splits its receipt across the drops until #1051 lands the per-store tip read, so equal
+    shares on a stack are expected, not a miss.) And **no row anywhere may carry `799`** (that was
+    a DoorDash type code being read as a $799 tip). Then `grep -o 'parseShortfall{[^}]*}' app.log | tail -1` and
     `grep 'parse shortfall' app.log`: **`delivery_summary_expanded` / `_collapsed` must no longer
     appear for `required [totalPay]`**, and `waiting_for_offer` should have dropped off too.
   - Confirmed: 0/2

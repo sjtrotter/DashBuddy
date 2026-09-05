@@ -1,5 +1,6 @@
 package cloud.trotter.dashbuddy.core.pipeline.rules
 
+import cloud.trotter.dashbuddy.domain.model.accessibility.UiNode
 import cloud.trotter.dashbuddy.domain.pipeline.ParseShortfall
 import cloud.trotter.dashbuddy.test.util.TestResourceLoader
 import cloud.trotter.dashbuddy.test.util.TestRulesetFactory
@@ -8,6 +9,7 @@ import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import java.io.File
 
 /**
  * The DoorDash **8.93.7** receipt sheet, read end to end through the production ruleset (#1029).
@@ -29,23 +31,36 @@ class DeliverySummaryReanchorTest {
 
     private val ruleset get() = TestRulesetFactory.screenRuleset
 
+    /**
+     * Load ONE fixture by name (the `DashSummaryReanchorTest` shape) rather than the whole folder:
+     * these tests each need a single specimen, and re-reading + re-parsing 15 sibling JSON trees
+     * per call is pure waste. Behaviour-neutral.
+     */
     private fun matchOf(
         folder: String,
         fileMarker: String,
         onShortfall: ((ParseShortfall) -> Unit)? = null,
     ): RuleMatchResult {
-        val snapshots = TestResourceLoader.loadSnapshots("snapshots/$folder")
-        val match = snapshots.firstOrNull { it.first.contains(fileMarker) }
+        val dir = File("src/test/resources/snapshots/$folder")
+        val file = dir.listFiles()?.sortedBy { it.name }?.firstOrNull { it.name.contains(fileMarker) }
         assertTrue(
             "the specimen '$fileMarker' must still be committed under $folder — the 8.93.7 pair " +
                 "is the only fielded evidence of the id-less render",
-            match != null,
+            file != null,
         )
-        val result = ruleset.matchFirst(match!!.second, "doordash", onParseShortfall = onShortfall)
+        val result = ruleset.matchFirst(
+            TestResourceLoader.loadNode(file!!),
+            "doordash",
+            onParseShortfall = onShortfall,
+        )
         assertTrue("the $folder frame must still be recognized", result != null)
         assertEquals("doordash.screen.$folder", result!!.ruleId)
         return result
     }
+
+    /** A synthetic flat 8.93.7-shaped breakdown row, siblings in order under one container. */
+    private fun row(vararg texts: String): UiNode =
+        UiNode(children = texts.map { UiNode(text = it) }).restoreParents()
 
     private fun fieldsOf(folder: String, fileMarker: String): Map<String, Any?> =
         matchOf(folder, fileMarker).fields
@@ -135,6 +150,33 @@ class DeliverySummaryReanchorTest {
             "the collapsed 8.93.7 receipt must parse cleanly now — its null sessionEarnings is a " +
                 "mid-spin wheel, not a dead anchor, and totalPay (the shape-required field) resolves",
             shortfallOf("delivery_summary_collapsed", "c65d43"),
+        )
+    }
+
+    // =========================================================================
+    // The scan cap — a missing value must read NULL, never the next row's money
+    // =========================================================================
+
+    @Test
+    fun `a tips row whose VALUE is missing reads null, not the next row's figure`() {
+        // The control the fielded pair cannot provide (#1029 E1): if the tips value simply is not
+        // rendered, an uncapped shape scan walks out of the row and hands back Peak pay's $1.00 AS
+        // the customer tip — fail-WRONG, and `sumApproxEquals` cannot catch it because `appPay` is
+        // null on 8.93.7. The rule's `, 2` cap stops the scan at its own row.
+        val tree = UiNode(
+            children = listOf(
+                UiNode(text = "Delivery complete"),
+                UiNode(text = "This offer"),
+                UiNode(text = "\$16.70"),
+                row("Customer tips", "799", "Peak pay", "\$1.00"),
+            ),
+        ).restoreParents()
+
+        val result = ruleset.matchFirst(tree, "doordash")
+        assertTrue("the synthetic must still be recognized as a summary", result != null)
+        assertNull(
+            "an absent tip must read null — reporting the next row's money is worse than nothing",
+            result!!.fields["customerTips"],
         )
     }
 
