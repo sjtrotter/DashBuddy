@@ -4,17 +4,6 @@
   <component name="GradleSettings">
     <option name="linkedExternalProjectsSettings">
       <GradleProjectSettings>
-        <compositeConfiguration>
-          <compositeBuild compositeDefinitionSource="SCRIPT">
-            <builds>
-              <build path="$PROJECT_DIR$/matchers" name="matchers">
-                <projects>
-                  <project path="$PROJECT_DIR$/matchers" />
-                </projects>
-              </build>
-            </builds>
-          </compositeBuild>
-        </compositeConfiguration>
         <option name="testRunner" value="CHOOSE_PER_TEST" />
         <option name="externalProjectPath" value="$PROJECT_DIR$" />
         <option name="gradleJvm" value="#GRADLE_LOCAL_JAVA_HOME" />
@@ -32,12 +21,6 @@
             <option value="$PROJECT_DIR$/core/pipeline" />
             <option value="$PROJECT_DIR$/core/state" />
             <option value="$PROJECT_DIR$/domain" />
-            <option value="$PROJECT_DIR$/feature" />
-            <option value="$PROJECT_DIR$/feature/bubble" />
-            <option value="$PROJECT_DIR$/feature/dashboard" />
-            <option value="$PROJECT_DIR$/feature/settings" />
-            <option value="$PROJECT_DIR$/feature/setup" />
-            <option value="$PROJECT_DIR$/matchers" />
           </set>
         </option>
       </GradleProjectSettings>
