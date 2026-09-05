@@ -2717,6 +2717,87 @@ class CaptureRedactionCorpusTest {
     }
 
     /**
+     * #1058 adversarial review (Astra xhigh) — the alcohol arrival card, recognized on its IDS
+     * ALONE, must plain-mask the customer's instruction body.
+     *
+     * Two properties in one control tree, because they only matter together. (1) The #1058 fourth
+     * `require` arm is purely id-anchored, so a card carrying NO customer lead-in anywhere — which
+     * is exactly what made the alcohol render fall UNKNOWN — still classifies as
+     * `dropoff_pre_arrival`; arms 1-3 structurally cannot be what matched. (2) The instruction body
+     * it then redacts must mask to a PLAIN `[redacted]`. It shipped the hash form until this
+     * review: an instruction's alphabet is unbounded but its LENGTH is not, so a short body that IS
+     * the secret ("Hand it to me: 4417") is recoverable by enumerating the 10^4 codes against the
+     * 65 536 4-hex buckets — the #889 F1 argument arriving through length instead of alphabet. The
+     * hash bought nothing to trade against it: unlike a customer NAME, an instruction body is
+     * nobody's join key and is never parsed.
+     *
+     * Mutation checks: drop the fourth arm and (a) goes red (the card falls to UNKNOWN); drop the
+     * `plainMask` and (c) goes red.
+     */
+    @Test
+    fun `the alcohol arrival card recognizes on ids alone and plain-masks its instruction body (#1058)`() {
+        fun dd(id: String, text: String? = null) =
+            UiNode(viewIdResourceName = "com.doordash.driverapp:id/$id", text = text)
+
+        val card = UiNode(
+            viewIdResourceName = "com.doordash.driverapp:id/drop_off_container",
+            children = listOf(
+                UiNode(
+                    viewIdResourceName = "com.doordash.driverapp:id/drop_off_bottom_sheet_container",
+                    children = listOf(
+                        dd("address_subpremise_line", "Apt/Suite: 4021"),
+                        dd("directions_button", "Directions"),
+                        dd("instructions_title", "Hand it to recipient"),
+                        dd("dasher_instruction_content_collapsed", "Hand it to me: 4417"),
+                        dd("alcohol_dropoff_ic_scan"),
+                        dd("alcohol_dropoff_instructions_title", "Verify the recipient's identity"),
+                    ),
+                ),
+            ),
+        ).restoreParents()
+
+        // (a) It recognizes — on the id-anchored arm, since (b) proves no lead-in exists to feed
+        // the other three.
+        assertEquals(
+            "the alcohol card must recognize on the #1058 id-anchored arm alone",
+            "dropoff_pre_arrival",
+            TestRulesetFactory.screenRuleset.matchFirst(card)?.intent,
+        )
+        // (b) No customer lead-in anywhere in the tree — the premise of (a).
+        val allText = serialize(card)
+        for (leadIn in listOf("Deliver to", "Delivery for", "Heading to")) {
+            assertFalse("the control tree must carry no '$leadIn' lead-in", allText.contains(leadIn))
+        }
+
+        val rule = TestRulesetFactory.screenRuleset.ruleById("doordash.screen.dropoff_pre_arrival")!!
+        val masked = rule.redact.apply(card)
+        val body = masked.children[0].children[3].text!!
+
+        // (c) The instruction body plain-masks — no secret, and no brute-forceable hex.
+        assertFalse("the instruction body must not persist", body.contains("4417"))
+        assertFalse(
+            "a bounded-length instruction body must not carry a distinctness hex (#889/#920)",
+            MASK_HEX.containsMatchIn(body),
+        )
+        assertEquals("plain mask expected for the instruction body", CompiledRedact.REDACTED, body)
+
+        // The EXPANDED state of the same field carries the same declaration.
+        fun maskOf(id: String, text: String) =
+            rule.redact.apply(dd(id, text)).text!!
+        assertEquals(
+            "the expanded instruction body plain-masks too",
+            CompiledRedact.REDACTED,
+            maskOf("dasher_instruction_content_expanded", "Hand it to me: 4417"),
+        )
+        // Over-mask guard: the instruction LABEL is app vocabulary and survives for triage.
+        assertEquals(
+            "the instructions title is chrome",
+            "Hand it to recipient",
+            masked.children[0].children[2].text,
+        )
+    }
+
+    /**
      * #985 — the shapes the committed fixtures do NOT carry, asserted synthetically: the VENUE
      * form of address line 1 (a proper noun with no digits, anchored only by the city line beneath
      * it — #886's mirror predicate), the STATE-LESS city render this surface fielded on 07-23

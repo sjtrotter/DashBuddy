@@ -1006,14 +1006,18 @@
           }
         },
         {
+          "comment": "#1058 review (Astra xhigh) \u2014 `plainMask`, the #920/#985 posture. The node is the customer's own delivery-instruction body, and its ALPHABET is unbounded but its LENGTH is not: a SHORT instruction that IS the secret (\"Hand it to me: 4417\") masks whole to `[redacted:<4hex>]`, and enumerating `Hand it to me: 0000`\u2026`9999` against those 65 536 buckets recovers the code \u2014 the #889 F1 bounded-secret argument, arriving through length rather than through alphabet. The distinctness the hash buys is worth nothing here to trade against that: unlike a customer NAME (which `normalize: customerName` turns into a cross-surface join key) an instruction body joins nothing and is never parsed. Pre-existing on this rule; #1058's fourth `require` arm is what EXPOSED it, by making the alcohol render \u2014 whose instruction body carried a door code \u2014 a recognized frame this entry actually fires on. Both states of the field carry the same declaration, and `plainMask` is legal here precisely because there is no `normalize` (the compiler rejects the pair).",
           "find": {
             "hasIdSuffix": "dasher_instruction_content_collapsed"
-          }
+          },
+          "plainMask": true
         },
         {
+          "comment": "#1058 review: `plainMask`, for the reason spelled out on the collapsed twin directly above \u2014 same customer text, same bounded-length secret, same #920/#985 posture. Enumerating only the state that happened to field is the debt #986 already paid for once.",
           "find": {
             "hasIdSuffix": "dasher_instruction_content_expanded"
-          }
+          },
+          "plainMask": true
         },
         {
           "comment": "#1039 belt (the #993 combined-frame precedent): the FUSED subpremise line — `Apt/Suite <n>` or `Apt/Suite: <n>` in ONE id-less node, the render the committed `dropoff_pre_arrival` fixtures carry. Declared on EVERY rule in this file (plus `navigation_generic`) rather than only on the surfaces that fielded it, because a redact protects only the frames its OWN rule wins and the rules most likely to claim an address-block frame OUT-RANK the fielded pair (`delivery_summary_collapsed` 31, `dropoff_navigation` 61, `dropoff_photo` 62, `dropoff_geofence_warning` 84). Entry is `dropoff_photo`'s #986 entry verbatim — see it for the full reasoning: the token after the label strip is a bounded ~10^4 unit number, so a 4-hex distinctness suffix is brute-recoverable (`plainMask`), while the label itself is app vocabulary and is kept for replay context. ACCEPTED COLLATERAL: the split row's BARE `Apt/Suite` LABEL node is itself an exact prefix match here, and no keepPrefix can be kept from it, so it masks whole to plain `[redacted]` — two words of app chrome lost on a debug envelope, the same fail-toward-privacy trade `DropoffBannerRedactParityTest` already documents for the `Arriving at` label. It cannot break the label-sibling entry below: redact predicates are evaluated against the ORIGINAL tree, the mask lands on a copy. Inert on any frame without the line; the #1039 parity test in `CaptureRedactionCorpusTest` pins that every rule declares it, so a new dropoff surface cannot forget.",
@@ -1928,14 +1932,18 @@
           "plainMask": true
         },
         {
+          "comment": "#1058 review (Astra xhigh) \u2014 `plainMask`, the #920/#985 posture. The node is the customer's own delivery-instruction body, and its ALPHABET is unbounded but its LENGTH is not: a SHORT instruction that IS the secret (\"Hand it to me: 4417\") masks whole to `[redacted:<4hex>]`, and enumerating `Hand it to me: 0000`\u2026`9999` against those 65 536 buckets recovers the code \u2014 the #889 F1 bounded-secret argument, arriving through length rather than through alphabet. The distinctness the hash buys is worth nothing here to trade against that: unlike a customer NAME (which `normalize: customerName` turns into a cross-surface join key) an instruction body joins nothing and is never parsed. Pre-existing on this rule; #1058's fourth `require` arm is what EXPOSED it, by making the alcohol render \u2014 whose instruction body carried a door code \u2014 a recognized frame this entry actually fires on. Both states of the field carry the same declaration, and `plainMask` is legal here precisely because there is no `normalize` (the compiler rejects the pair).",
           "find": {
             "hasIdSuffix": "dasher_instruction_content_collapsed"
-          }
+          },
+          "plainMask": true
         },
         {
+          "comment": "#1058 review: `plainMask`, for the reason spelled out on the collapsed twin directly above \u2014 same customer text, same bounded-length secret, same #920/#985 posture. Enumerating only the state that happened to field is the debt #986 already paid for once.",
           "find": {
             "hasIdSuffix": "dasher_instruction_content_expanded"
-          }
+          },
+          "plainMask": true
         },
         {
           "comment": "The customer's free-text note on an order item — the #803 class (a note routinely carries a gate code, an apartment number, or a callback instruction). Masked whole; the item NAME node (`order_item_name`) is catalog data and stays raw.",
