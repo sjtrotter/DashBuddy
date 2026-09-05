@@ -56,8 +56,43 @@
       "require": {
         "all": [
           {
+            // #1063: the card's two footer buttons — "Decline" and "Accept"/"Add to route" —
+            // have anchored this rule since the ruleset's first commit (a18b3b19, inherited
+            // verbatim from the pre-#89 Kotlin OfferMatcher): they were the offer popup's most
+            // distinguishing chrome, and the pair separated it from every other surface that
+            // merely renders the word "Accept". Six real offers in the 09-05 pull fell to
+            // UNKNOWN because DoorDash inflates the decline control a beat AFTER the rest of
+            // the card: the collar-animation frame carries the full store leg, pay, distance,
+            // deadline and a live `accept_button`, but no "Decline" node anywhere in the tree
+            // (2026-08-28 15:31:47.105, 2026-09-02 18:32:40 / 18:34:22, 2026-09-03 14:28:32,
+            // 2026-09-05 07:45:52 / 07:46:53). Three of those never produced a settled sibling
+            // at all — one was ACCEPTED from a card the app had never presented — so the offer
+            // was invisible for the whole animation window.
+            // Admitting the frame is safe because Decline was never load-bearing on its own:
+            // `accept_button` is ALREADY a required conjunct below (via the accept_button /
+            // accept_decline_footer_container arm), so "Decline OR accept_button" only relaxes
+            // the redundant half of the pair while every other guard stands unchanged — the
+            // Accept/"Add to route" text, the footer-id anchor, and the #595 store-leg guard
+            // (the two Decline-bearing, store-leg-LESS half-renders in the same pull stay
+            // UNKNOWN on that guard, as intended). The post-accept teardown frame cannot leak
+            // in either: `offer_accepting` claims it precisely because the Accept affordance is
+            // GONE, which this rule still demands. And the early frame is a #830 VARIANT, not a
+            // replace — it parses the identical store list, pay, distance and deadline as its
+            // settled sibling, so presentationKey AND offerHash match byte-for-byte
+            // (`OfferCardPreDeclineTest`); the card enriches in place instead of timing out.
+            // Residual, pre-existing and filed as #1069: presentationKey is store-anchored, so
+            // two consecutive offers at ONE store are the same presentation identity — the
+            // second enriches the first instead of replacing it. Already true between two
+            // settled frames; this change only adds one more frame shape that can carry it.
             "exists": {
-              "hasText": "Decline"
+              "any": [
+                {
+                  "hasText": "Decline"
+                },
+                {
+                  "hasIdSuffix": "accept_button"
+                }
+              ]
             }
           },
           {
