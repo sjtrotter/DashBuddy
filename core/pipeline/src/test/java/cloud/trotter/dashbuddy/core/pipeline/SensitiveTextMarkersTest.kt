@@ -32,6 +32,34 @@ class SensitiveTextMarkersTest {
         assertEquals("Driver's License", SensitiveTextMarkers.findMarker(tree("Driver's License")))
         assertEquals("provide their signature", SensitiveTextMarkers.findMarker(tree("Hand your phone to the customer so they can provide their signature.")))
         assertEquals("A recipient signature is required", SensitiveTextMarkers.findMarker(tree("A recipient signature is required for this order")))
+        // #1059 — the dasher's OWN identity/payment surfaces (Persona selfie flow, Red Card
+        // wallet, the PASSPORT variant of the ID-scan camera whose licence-specific anchors
+        // above all miss it).
+        assertEquals(
+            "verifying your selfie",
+            // The surface renders a CURLY apostrophe (U+2019), which NFKC does not fold to
+            // ASCII — the marker deliberately starts after it.
+            SensitiveTextMarkers.findMarker(tree("We\u2019re having trouble verifying your selfie")),
+        )
+        assertEquals("Activate a physical card", SensitiveTextMarkers.findMarker(tree("Activate a physical card")))
+        assertEquals("Request a physical card", SensitiveTextMarkers.findMarker(tree("Request a physical card")))
+        assertEquals("Align the character strip", SensitiveTextMarkers.findMarker(tree("Align the character strip to scan")))
+    }
+
+    @Test
+    fun `ordinary Red Card pickup instructions stay clean — the headline is deliberately not a marker (#1059)`() {
+        // The dasher's Red Card WALLET screen is blocked, but ordinary shopping-order pickup
+        // copy legitimately names the card. A "Red Card"/"Your Red Card" marker would scrub 36
+        // committed corpus fixtures and redact real INFO lines, so the markers key on the
+        // wallet screen's own buttons instead (the #738 uniqueness discipline).
+        assertNull(
+            SensitiveTextMarkers.findMarker(
+                tree(
+                    "Place order inside and pay with your Red Card.",
+                    "Wait in line, order at the register then pay with your Red Card",
+                ),
+            ),
+        )
     }
 
     @Test

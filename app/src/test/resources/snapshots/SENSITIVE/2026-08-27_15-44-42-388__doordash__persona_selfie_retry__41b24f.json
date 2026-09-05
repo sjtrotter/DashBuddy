@@ -1,0 +1,577 @@
+{
+    "captureId": "2741f854-621a-4be9-a62f-816b649c26fe",
+    "pipelineId": "accessibility.window",
+    "schemaId": "uinode.v1",
+    "timestamp": 1787863482373,
+    "platform": "doordash",
+    "ruleId": null,
+    "classificationName": "UNKNOWN",
+    "metadata": {
+        "engineVersion": 1,
+        "rulesetFormatVersion": 2,
+        "pipelineVersions": {
+            "accessibility": 1,
+            "accessibility.window": 1,
+            "accessibility.click": 1,
+            "accessibility.long_click": 1,
+            "accessibility.scroll": 1,
+            "accessibility.focus": 1,
+            "notification": 1
+        },
+        "stateMachineApiVersion": "1.0",
+        "appVersion": "0.230.0",
+        "deviceFingerprint": "google/panther/panther:17/CP2A.260705.006/15641320:user/release-keys",
+        "platformAppVersion": "8.93.7"
+    },
+    "payload": {
+        "class": "android.widget.FrameLayout",
+        "isEnabled": true,
+        "bounds": {
+            "left": 0,
+            "top": 0,
+            "right": 1080,
+            "bottom": 2400
+        },
+        "children": [
+            {
+                "class": "android.widget.LinearLayout",
+                "isEnabled": true,
+                "bounds": {
+                    "left": 0,
+                    "top": 0,
+                    "right": 1080,
+                    "bottom": 2400
+                },
+                "children": [
+                    {
+                        "class": "android.widget.FrameLayout",
+                        "isEnabled": true,
+                        "bounds": {
+                            "left": 0,
+                            "top": 0,
+                            "right": 1080,
+                            "bottom": 2400
+                        },
+                        "children": [
+                            {
+                                "id": "com.doordash.driverapp:id/action_bar_root",
+                                "class": "android.widget.LinearLayout",
+                                "isEnabled": true,
+                                "bounds": {
+                                    "left": 0,
+                                    "top": 0,
+                                    "right": 1080,
+                                    "bottom": 2400
+                                },
+                                "children": [
+                                    {
+                                        "id": "android:id/content",
+                                        "class": "android.widget.FrameLayout",
+                                        "isEnabled": true,
+                                        "bounds": {
+                                            "left": 0,
+                                            "top": 0,
+                                            "right": 1080,
+                                            "bottom": 2400
+                                        },
+                                        "children": [
+                                            {
+                                                "class": "androidx.compose.ui.platform.ComposeView",
+                                                "isEnabled": true,
+                                                "bounds": {
+                                                    "left": 0,
+                                                    "top": 0,
+                                                    "right": 1080,
+                                                    "bottom": 2400
+                                                },
+                                                "children": [
+                                                    {
+                                                        "class": "android.view.View",
+                                                        "isEnabled": true,
+                                                        "bounds": {
+                                                            "left": 0,
+                                                            "top": 0,
+                                                            "right": 1080,
+                                                            "bottom": 2400
+                                                        },
+                                                        "children": [
+                                                            {
+                                                                "class": "androidx.compose.ui.viewinterop.ViewFactoryHolder",
+                                                                "isEnabled": true,
+                                                                "bounds": {
+                                                                    "left": 0,
+                                                                    "top": 0,
+                                                                    "right": 1080,
+                                                                    "bottom": 2400
+                                                                },
+                                                                "children": [
+                                                                    {
+                                                                        "id": "com.doordash.driverapp:id/fl_container",
+                                                                        "class": "android.widget.FrameLayout",
+                                                                        "isEnabled": true,
+                                                                        "bounds": {
+                                                                            "left": 0,
+                                                                            "top": 0,
+                                                                            "right": 1080,
+                                                                            "bottom": 2400
+                                                                        },
+                                                                        "children": [
+                                                                            {
+                                                                                "class": "android.widget.FrameLayout",
+                                                                                "isEnabled": true,
+                                                                                "bounds": {
+                                                                                    "left": 0,
+                                                                                    "top": 0,
+                                                                                    "right": 1080,
+                                                                                    "bottom": 2400
+                                                                                },
+                                                                                "children": [
+                                                                                    {
+                                                                                        "id": "com.doordash.driverapp:id/persona_container",
+                                                                                        "class": "android.widget.FrameLayout",
+                                                                                        "isEnabled": true,
+                                                                                        "bounds": {
+                                                                                            "left": 0,
+                                                                                            "top": 0,
+                                                                                            "right": 1080,
+                                                                                            "bottom": 2400
+                                                                                        },
+                                                                                        "children": [
+                                                                                            {
+                                                                                                "class": "android.widget.FrameLayout",
+                                                                                                "isEnabled": true,
+                                                                                                "bounds": {
+                                                                                                    "left": 0,
+                                                                                                    "top": 0,
+                                                                                                    "right": 1080,
+                                                                                                    "bottom": 2400
+                                                                                                },
+                                                                                                "children": [
+                                                                                                    {
+                                                                                                        "id": "com.doordash.driverapp:id/workflow_layout",
+                                                                                                        "class": "android.widget.FrameLayout",
+                                                                                                        "isEnabled": true,
+                                                                                                        "bounds": {
+                                                                                                            "left": 0,
+                                                                                                            "top": 0,
+                                                                                                            "right": 1080,
+                                                                                                            "bottom": 2400
+                                                                                                        },
+                                                                                                        "children": [
+                                                                                                            {
+                                                                                                                "id": "com.doordash.driverapp:id/pi2_back_stack_screen_runner",
+                                                                                                                "class": "android.widget.FrameLayout",
+                                                                                                                "isEnabled": true,
+                                                                                                                "bounds": {
+                                                                                                                    "left": 0,
+                                                                                                                    "top": 0,
+                                                                                                                    "right": 1080,
+                                                                                                                    "bottom": 2400
+                                                                                                                },
+                                                                                                                "children": [
+                                                                                                                    {
+                                                                                                                        "id": "com.doordash.driverapp:id/pi2_disableable_container",
+                                                                                                                        "class": "android.widget.FrameLayout",
+                                                                                                                        "isEnabled": true,
+                                                                                                                        "bounds": {
+                                                                                                                            "left": 728,
+                                                                                                                            "top": 0,
+                                                                                                                            "right": 1080,
+                                                                                                                            "bottom": 2400
+                                                                                                                        },
+                                                                                                                        "children": [
+                                                                                                                            {
+                                                                                                                                "id": "com.doordash.driverapp:id/view_container",
+                                                                                                                                "class": "android.widget.FrameLayout",
+                                                                                                                                "isEnabled": true,
+                                                                                                                                "bounds": {
+                                                                                                                                    "left": 728,
+                                                                                                                                    "top": 0,
+                                                                                                                                    "right": 1080,
+                                                                                                                                    "bottom": 2400
+                                                                                                                                },
+                                                                                                                                "children": [
+                                                                                                                                    {
+                                                                                                                                        "id": "com.doordash.driverapp:id/pi2_modal_container",
+                                                                                                                                        "class": "android.widget.FrameLayout",
+                                                                                                                                        "isEnabled": true,
+                                                                                                                                        "bounds": {
+                                                                                                                                            "left": 728,
+                                                                                                                                            "top": 0,
+                                                                                                                                            "right": 1080,
+                                                                                                                                            "bottom": 2400
+                                                                                                                                        },
+                                                                                                                                        "children": [
+                                                                                                                                            {
+                                                                                                                                                "class": "android.view.ViewGroup",
+                                                                                                                                                "isEnabled": true,
+                                                                                                                                                "bounds": {
+                                                                                                                                                    "left": 728,
+                                                                                                                                                    "top": 0,
+                                                                                                                                                    "right": 1080,
+                                                                                                                                                    "bottom": 2400
+                                                                                                                                                },
+                                                                                                                                                "children": [
+                                                                                                                                                    {
+                                                                                                                                                        "id": "com.doordash.driverapp:id/root_layout",
+                                                                                                                                                        "class": "android.view.ViewGroup",
+                                                                                                                                                        "isEnabled": true,
+                                                                                                                                                        "bounds": {
+                                                                                                                                                            "left": 728,
+                                                                                                                                                            "top": 0,
+                                                                                                                                                            "right": 1080,
+                                                                                                                                                            "bottom": 2400
+                                                                                                                                                        },
+                                                                                                                                                        "children": [
+                                                                                                                                                            {
+                                                                                                                                                                "id": "com.doordash.driverapp:id/nestedScroll",
+                                                                                                                                                                "class": "android.widget.ScrollView",
+                                                                                                                                                                "isEnabled": true,
+                                                                                                                                                                "bounds": {
+                                                                                                                                                                    "left": 728,
+                                                                                                                                                                    "top": 0,
+                                                                                                                                                                    "right": 1080,
+                                                                                                                                                                    "bottom": 2172
+                                                                                                                                                                },
+                                                                                                                                                                "children": [
+                                                                                                                                                                    {
+                                                                                                                                                                        "id": "com.doordash.driverapp:id/container",
+                                                                                                                                                                        "class": "android.view.ViewGroup",
+                                                                                                                                                                        "isEnabled": true,
+                                                                                                                                                                        "bounds": {
+                                                                                                                                                                            "left": 728,
+                                                                                                                                                                            "top": 136,
+                                                                                                                                                                            "right": 1080,
+                                                                                                                                                                            "bottom": 2172
+                                                                                                                                                                        },
+                                                                                                                                                                        "children": [
+                                                                                                                                                                            {
+                                                                                                                                                                                "id": "com.doordash.driverapp:id/navigation_bar",
+                                                                                                                                                                                "class": "android.view.ViewGroup",
+                                                                                                                                                                                "isEnabled": true,
+                                                                                                                                                                                "bounds": {
+                                                                                                                                                                                    "left": 728,
+                                                                                                                                                                                    "top": 136,
+                                                                                                                                                                                    "right": 1080,
+                                                                                                                                                                                    "bottom": 295
+                                                                                                                                                                                },
+                                                                                                                                                                                "children": [
+                                                                                                                                                                                    {
+                                                                                                                                                                                        "desc": "close",
+                                                                                                                                                                                        "id": "com.doordash.driverapp:id/nav_bar_cancel_button",
+                                                                                                                                                                                        "class": "android.widget.ImageView",
+                                                                                                                                                                                        "isClickable": true,
+                                                                                                                                                                                        "isEnabled": true,
+                                                                                                                                                                                        "bounds": {
+                                                                                                                                                                                            "left": 1675,
+                                                                                                                                                                                            "top": 162,
+                                                                                                                                                                                            "right": 1080,
+                                                                                                                                                                                            "bottom": 269
+                                                                                                                                                                                        }
+                                                                                                                                                                                    }
+                                                                                                                                                                                ]
+                                                                                                                                                                            },
+                                                                                                                                                                            {
+                                                                                                                                                                                "id": "com.doordash.driverapp:id/ui_step_container",
+                                                                                                                                                                                "class": "android.widget.FrameLayout",
+                                                                                                                                                                                "isEnabled": true,
+                                                                                                                                                                                "bounds": {
+                                                                                                                                                                                    "left": 781,
+                                                                                                                                                                                    "top": 295,
+                                                                                                                                                                                    "right": 1080,
+                                                                                                                                                                                    "bottom": 1058
+                                                                                                                                                                                },
+                                                                                                                                                                                "children": [
+                                                                                                                                                                                    {
+                                                                                                                                                                                        "class": "android.view.ViewGroup",
+                                                                                                                                                                                        "isEnabled": true,
+                                                                                                                                                                                        "bounds": {
+                                                                                                                                                                                            "left": 781,
+                                                                                                                                                                                            "top": 295,
+                                                                                                                                                                                            "right": 1080,
+                                                                                                                                                                                            "bottom": 1058
+                                                                                                                                                                                        },
+                                                                                                                                                                                        "children": [
+                                                                                                                                                                                            {
+                                                                                                                                                                                                "text": "We’re having trouble verifying your selfie",
+                                                                                                                                                                                                "class": "android.widget.TextView",
+                                                                                                                                                                                                "isEnabled": true,
+                                                                                                                                                                                                "bounds": {
+                                                                                                                                                                                                    "left": 781,
+                                                                                                                                                                                                    "top": 295,
+                                                                                                                                                                                                    "right": 1080,
+                                                                                                                                                                                                    "bottom": 447
+                                                                                                                                                                                                }
+                                                                                                                                                                                            },
+                                                                                                                                                                                            {
+                                                                                                                                                                                                "text": "Before you try again, make sure you:",
+                                                                                                                                                                                                "class": "android.widget.TextView",
+                                                                                                                                                                                                "isEnabled": true,
+                                                                                                                                                                                                "bounds": {
+                                                                                                                                                                                                    "left": 781,
+                                                                                                                                                                                                    "top": 482,
+                                                                                                                                                                                                    "right": 1080,
+                                                                                                                                                                                                    "bottom": 532
+                                                                                                                                                                                                }
+                                                                                                                                                                                            },
+                                                                                                                                                                                            {
+                                                                                                                                                                                                "class": "android.view.ViewGroup",
+                                                                                                                                                                                                "isEnabled": true,
+                                                                                                                                                                                                "bounds": {
+                                                                                                                                                                                                    "left": 781,
+                                                                                                                                                                                                    "top": 566,
+                                                                                                                                                                                                    "right": 1080,
+                                                                                                                                                                                                    "bottom": 619
+                                                                                                                                                                                                },
+                                                                                                                                                                                                "children": [
+                                                                                                                                                                                                    {
+                                                                                                                                                                                                        "class": "android.widget.ImageView",
+                                                                                                                                                                                                        "isEnabled": true,
+                                                                                                                                                                                                        "bounds": {
+                                                                                                                                                                                                            "left": 781,
+                                                                                                                                                                                                            "top": 566,
+                                                                                                                                                                                                            "right": 781,
+                                                                                                                                                                                                            "bottom": 619
+                                                                                                                                                                                                        }
+                                                                                                                                                                                                    },
+                                                                                                                                                                                                    {
+                                                                                                                                                                                                        "class": "android.view.View",
+                                                                                                                                                                                                        "isEnabled": true,
+                                                                                                                                                                                                        "bounds": {
+                                                                                                                                                                                                            "left": 781,
+                                                                                                                                                                                                            "top": 592,
+                                                                                                                                                                                                            "right": 816,
+                                                                                                                                                                                                            "bottom": 593
+                                                                                                                                                                                                        }
+                                                                                                                                                                                                    },
+                                                                                                                                                                                                    {
+                                                                                                                                                                                                        "text": "Reduce glare by avoiding direct light",
+                                                                                                                                                                                                        "class": "android.widget.TextView",
+                                                                                                                                                                                                        "isEnabled": true,
+                                                                                                                                                                                                        "bounds": {
+                                                                                                                                                                                                            "left": 724,
+                                                                                                                                                                                                            "top": 566,
+                                                                                                                                                                                                            "right": 1080,
+                                                                                                                                                                                                            "bottom": 616
+                                                                                                                                                                                                        }
+                                                                                                                                                                                                    }
+                                                                                                                                                                                                ]
+                                                                                                                                                                                            },
+                                                                                                                                                                                            {
+                                                                                                                                                                                                "class": "android.view.ViewGroup",
+                                                                                                                                                                                                "isEnabled": true,
+                                                                                                                                                                                                "bounds": {
+                                                                                                                                                                                                    "left": 689,
+                                                                                                                                                                                                    "top": 653,
+                                                                                                                                                                                                    "right": 1080,
+                                                                                                                                                                                                    "bottom": 760
+                                                                                                                                                                                                },
+                                                                                                                                                                                                "children": [
+                                                                                                                                                                                                    {
+                                                                                                                                                                                                        "class": "android.widget.ImageView",
+                                                                                                                                                                                                        "isEnabled": true,
+                                                                                                                                                                                                        "bounds": {
+                                                                                                                                                                                                            "left": 689,
+                                                                                                                                                                                                            "top": 653,
+                                                                                                                                                                                                            "right": 689,
+                                                                                                                                                                                                            "bottom": 706
+                                                                                                                                                                                                        }
+                                                                                                                                                                                                    },
+                                                                                                                                                                                                    {
+                                                                                                                                                                                                        "class": "android.view.View",
+                                                                                                                                                                                                        "isEnabled": true,
+                                                                                                                                                                                                        "bounds": {
+                                                                                                                                                                                                            "left": 689,
+                                                                                                                                                                                                            "top": 706,
+                                                                                                                                                                                                            "right": 724,
+                                                                                                                                                                                                            "bottom": 707
+                                                                                                                                                                                                        }
+                                                                                                                                                                                                    },
+                                                                                                                                                                                                    {
+                                                                                                                                                                                                        "text": "Make sure your face is well lit and fully visible. If possible, remove your glasses.",
+                                                                                                                                                                                                        "class": "android.widget.TextView",
+                                                                                                                                                                                                        "isEnabled": true,
+                                                                                                                                                                                                        "bounds": {
+                                                                                                                                                                                                            "left": 724,
+                                                                                                                                                                                                            "top": 653,
+                                                                                                                                                                                                            "right": 1080,
+                                                                                                                                                                                                            "bottom": 760
+                                                                                                                                                                                                        }
+                                                                                                                                                                                                    }
+                                                                                                                                                                                                ]
+                                                                                                                                                                                            },
+                                                                                                                                                                                            {
+                                                                                                                                                                                                "class": "android.view.ViewGroup",
+                                                                                                                                                                                                "isEnabled": true,
+                                                                                                                                                                                                "bounds": {
+                                                                                                                                                                                                    "left": 689,
+                                                                                                                                                                                                    "top": 794,
+                                                                                                                                                                                                    "right": 1080,
+                                                                                                                                                                                                    "bottom": 847
+                                                                                                                                                                                                },
+                                                                                                                                                                                                "children": [
+                                                                                                                                                                                                    {
+                                                                                                                                                                                                        "class": "android.widget.ImageView",
+                                                                                                                                                                                                        "isEnabled": true,
+                                                                                                                                                                                                        "bounds": {
+                                                                                                                                                                                                            "left": 689,
+                                                                                                                                                                                                            "top": 794,
+                                                                                                                                                                                                            "right": 689,
+                                                                                                                                                                                                            "bottom": 847
+                                                                                                                                                                                                        }
+                                                                                                                                                                                                    },
+                                                                                                                                                                                                    {
+                                                                                                                                                                                                        "class": "android.view.View",
+                                                                                                                                                                                                        "isEnabled": true,
+                                                                                                                                                                                                        "bounds": {
+                                                                                                                                                                                                            "left": 689,
+                                                                                                                                                                                                            "top": 820,
+                                                                                                                                                                                                            "right": 724,
+                                                                                                                                                                                                            "bottom": 821
+                                                                                                                                                                                                        }
+                                                                                                                                                                                                    },
+                                                                                                                                                                                                    {
+                                                                                                                                                                                                        "text": "Only turn left and right when instructed",
+                                                                                                                                                                                                        "class": "android.widget.TextView",
+                                                                                                                                                                                                        "isEnabled": true,
+                                                                                                                                                                                                        "bounds": {
+                                                                                                                                                                                                            "left": 724,
+                                                                                                                                                                                                            "top": 794,
+                                                                                                                                                                                                            "right": 1080,
+                                                                                                                                                                                                            "bottom": 844
+                                                                                                                                                                                                        }
+                                                                                                                                                                                                    }
+                                                                                                                                                                                                ]
+                                                                                                                                                                                            },
+                                                                                                                                                                                            {
+                                                                                                                                                                                                "text": "If you have questions, view our ID Verification FAQ in the Dasher Help Center.",
+                                                                                                                                                                                                "class": "android.widget.TextView",
+                                                                                                                                                                                                "isEnabled": true,
+                                                                                                                                                                                                "bounds": {
+                                                                                                                                                                                                    "left": 593,
+                                                                                                                                                                                                    "top": 881,
+                                                                                                                                                                                                    "right": 1080,
+                                                                                                                                                                                                    "bottom": 988
+                                                                                                                                                                                                }
+                                                                                                                                                                                            }
+                                                                                                                                                                                        ]
+                                                                                                                                                                                    }
+                                                                                                                                                                                ]
+                                                                                                                                                                            }
+                                                                                                                                                                        ]
+                                                                                                                                                                    }
+                                                                                                                                                                ]
+                                                                                                                                                            },
+                                                                                                                                                            {
+                                                                                                                                                                "id": "com.doordash.driverapp:id/footer_container",
+                                                                                                                                                                "class": "android.widget.FrameLayout",
+                                                                                                                                                                "isEnabled": true,
+                                                                                                                                                                "bounds": {
+                                                                                                                                                                    "left": 728,
+                                                                                                                                                                    "top": 2172,
+                                                                                                                                                                    "right": 1080,
+                                                                                                                                                                    "bottom": 2400
+                                                                                                                                                                },
+                                                                                                                                                                "children": [
+                                                                                                                                                                    {
+                                                                                                                                                                        "id": "com.doordash.driverapp:id/footer_container",
+                                                                                                                                                                        "class": "android.widget.LinearLayout",
+                                                                                                                                                                        "isEnabled": true,
+                                                                                                                                                                        "bounds": {
+                                                                                                                                                                            "left": 540,
+                                                                                                                                                                            "top": 2172,
+                                                                                                                                                                            "right": 1080,
+                                                                                                                                                                            "bottom": 2400
+                                                                                                                                                                        },
+                                                                                                                                                                        "children": [
+                                                                                                                                                                            {
+                                                                                                                                                                                "id": "com.doordash.driverapp:id/hairline",
+                                                                                                                                                                                "class": "android.view.View",
+                                                                                                                                                                                "isEnabled": true,
+                                                                                                                                                                                "bounds": {
+                                                                                                                                                                                    "left": 540,
+                                                                                                                                                                                    "top": 2172,
+                                                                                                                                                                                    "right": 1080,
+                                                                                                                                                                                    "bottom": 2172
+                                                                                                                                                                                }
+                                                                                                                                                                            },
+                                                                                                                                                                            {
+                                                                                                                                                                                "id": "com.doordash.driverapp:id/footer_container_inner",
+                                                                                                                                                                                "class": "android.view.ViewGroup",
+                                                                                                                                                                                "isEnabled": true,
+                                                                                                                                                                                "bounds": {
+                                                                                                                                                                                    "left": 540,
+                                                                                                                                                                                    "top": 2172,
+                                                                                                                                                                                    "right": 1080,
+                                                                                                                                                                                    "bottom": 2347
+                                                                                                                                                                                },
+                                                                                                                                                                                "children": [
+                                                                                                                                                                                    {
+                                                                                                                                                                                        "class": "android.widget.FrameLayout",
+                                                                                                                                                                                        "isEnabled": true,
+                                                                                                                                                                                        "bounds": {
+                                                                                                                                                                                            "left": 593,
+                                                                                                                                                                                            "top": 2189,
+                                                                                                                                                                                            "right": 1080,
+                                                                                                                                                                                            "bottom": 2330
+                                                                                                                                                                                        },
+                                                                                                                                                                                        "children": [
+                                                                                                                                                                                            {
+                                                                                                                                                                                                "text": "Re-take Selfie",
+                                                                                                                                                                                                "class": "android.widget.Button",
+                                                                                                                                                                                                "isClickable": true,
+                                                                                                                                                                                                "isEnabled": true,
+                                                                                                                                                                                                "bounds": {
+                                                                                                                                                                                                    "left": 593,
+                                                                                                                                                                                                    "top": 2189,
+                                                                                                                                                                                                    "right": 1080,
+                                                                                                                                                                                                    "bottom": 2295
+                                                                                                                                                                                                }
+                                                                                                                                                                                            }
+                                                                                                                                                                                        ]
+                                                                                                                                                                                    }
+                                                                                                                                                                                ]
+                                                                                                                                                                            }
+                                                                                                                                                                        ]
+                                                                                                                                                                    }
+                                                                                                                                                                ]
+                                                                                                                                                            }
+                                                                                                                                                        ]
+                                                                                                                                                    }
+                                                                                                                                                ]
+                                                                                                                                            }
+                                                                                                                                        ]
+                                                                                                                                    }
+                                                                                                                                ]
+                                                                                                                            }
+                                                                                                                        ]
+                                                                                                                    }
+                                                                                                                ]
+                                                                                                            }
+                                                                                                        ]
+                                                                                                    }
+                                                                                                ]
+                                                                                            }
+                                                                                        ]
+                                                                                    }
+                                                                                ]
+                                                                            }
+                                                                        ]
+                                                                    }
+                                                                ]
+                                                            }
+                                                        ]
+                                                    }
+                                                ]
+                                            }
+                                        ]
+                                    }
+                                ]
+                            }
+                        ]
+                    }
+                ]
+            }
+        ]
+    }
+}

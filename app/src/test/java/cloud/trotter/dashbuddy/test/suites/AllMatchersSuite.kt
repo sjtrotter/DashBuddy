@@ -9,6 +9,7 @@ import cloud.trotter.dashbuddy.core.pipeline.recognition.matchers.GoldenSnapshot
 import cloud.trotter.dashbuddy.core.pipeline.recognition.matchers.NegativeCorpusStaysUnknownTest
 import cloud.trotter.dashbuddy.core.pipeline.recognition.matchers.OfferPipelineTest
 import cloud.trotter.dashbuddy.core.pipeline.recognition.matchers.PickupNoCustomerIdentityTest
+import cloud.trotter.dashbuddy.core.pipeline.recognition.matchers.SensitiveSurfaceBlockTest
 import cloud.trotter.dashbuddy.core.pipeline.rules.CaptureRedactionCorpusTest
 import cloud.trotter.dashbuddy.core.pipeline.rules.CurrencyShapePinTest
 import cloud.trotter.dashbuddy.core.pipeline.rules.DashSummaryReanchorTest
@@ -78,6 +79,14 @@ import org.junit.runners.Suite
  *   the frames that rule wins, and the arrival CTA hands the banner-bearing frame around),
  *   each one actually masks a real banner node, and the id is in the runtime
  *   `CustomerTextMarkers.ID_MARKERS` SSOT so the UNKNOWN path is covered too.
+ * - [SensitiveSurfaceBlockTest] — #1059: the dasher's OWN Persona selfie/ID-verification flow, the
+ *   Red Card wallet screen and the passport variant of the ID-scan camera are claimed by the
+ *   priority-0 `doordash.screen.sensitive.known` rule (not merely by the toxic scanner, which is all
+ *   [GoldenSnapshotRegressionTest]'s SENSITIVE arm requires), classify as `SensitiveFields` so the
+ *   shared content gate drops them before `CaptureWriter`, trip the rules-independent
+ *   [cloud.trotter.dashbuddy.core.pipeline.SensitiveTextMarkers] backstop on every text-bearing
+ *   frame — and, the over-match half, that the four new markers appear nowhere in the committed
+ *   non-sensitive corpus ("pay with your Red Card" is legitimate pickup copy).
  * - [SensitiveMarkerAssetCoverageTest] — #762 D10: every `parse.as == "sensitive"` rule's text
  *   anchor across ALL platforms' generated assets is independently caught by the rules-INDEPENDENT
  *   [cloud.trotter.dashbuddy.core.pipeline.SensitiveTextMarkers] backstop (a documented,
@@ -174,6 +183,7 @@ import org.junit.runners.Suite
     CaptureBackstopCorpusTest::class,
     DropoffBannerRedactParityTest::class,
     SensitiveMarkerAssetCoverageTest::class,
+    SensitiveSurfaceBlockTest::class,
     PickupNoCustomerIdentityTest::class,
     RuleIdLogSafetyTest::class,
     GoPuffRecognitionTest::class,

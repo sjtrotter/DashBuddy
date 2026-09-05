@@ -302,6 +302,17 @@ checks name shape + `ID_MARKERS` ids + lead-in prefixes, with hand-written fixtu
 exempted by the byte-exact `CorpusDecoys` enumeration rather than by loosening the guard. Sensitive
 rules prefer **view-id anchors** (locale-immune, #938) — e.g. `sensitive.dasher_direct`'s
 `dxdr_nav_host_fragment` arm closes DasherDirect's text-free pre-render skeleton at the door (#924).
+#1059 blocks three more of the dasher's OWN surfaces on the same id-first pattern, all fielded
+2026-08-27/28 reaching UNKNOWN capture: the embedded **Persona selfie / ID-verification** flow
+(`sensitive.selfie_verification` — `persona_container` / `personaComposeView` /
+`pi2_back_stack_screen_runner`; the camera steps are almost text-free, so the ids are the whole
+defence), the **Red Card wallet** screen (`sensitive.red_card` — `virtual_red_card_image` +
+the activate/request buttons; its headline "Your Red Card" is deliberately NOT an anchor, since
+ordinary shopping-order pickup copy says "pay with your Red Card"), and the **passport** variant of
+the ID-scan camera (`id_type_selector` joined `sensitive.id_verification`, whose anchors were all
+driver's-licence specific). `SensitiveSurfaceBlockTest` pins the stronger bar the SENSITIVE golden
+arm does not — claimed BY THE RULE, `sensitive.known`, and dropped at the content gate before
+`CaptureWriter`.
 A rules-independent customer-PII **marker backstop** (`CustomerTextMarkers`, #624/#632/#666/#806 —
 distinct from `SensitiveTextMarkers`, which drops the dasher's banking screens) scrubs a node
 (screen tree) or whole field (notification, incl. `actionLabels` #666) that ships a customer-PII
