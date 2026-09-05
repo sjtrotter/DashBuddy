@@ -743,7 +743,9 @@ class SideEffectEngine @Inject constructor(
             // SETTLE_UI expired ~8x in one field dash as its ordinary debounce-settle path, and
             // OFFER_EXPIRY's common case is an offer overlay vanishing without a confirming frame
             // (expected — most offers resolve via an explicit screen/click well before this
-            // fallback fires). The accept-latched no-op branch (a defended invariant in its own
+            // fallback fires). SESSION_PAY_SETTLE (#1029) is likewise routine — it is the ORDINARY
+            // commit path for a settled running-total read, which FrameGate identity dedup
+            // guarantees no further frame will land, so it fires on every figure change. The accept-latched no-op branch (a defended invariant in its own
             // right) lives downstream in OfferLifecycle/EffectMap and isn't distinguishable at
             // this call site, so it isn't logged here.
             when (type) {
@@ -754,6 +756,7 @@ class SideEffectEngine @Inject constructor(
 
                 TimeoutType.SETTLE_UI,
                 TimeoutType.OFFER_EXPIRY,
+                TimeoutType.SESSION_PAY_SETTLE,
                 -> Timber.tag("Effects").d("Timer Expired: %s", type)
             }
             _events.emit(

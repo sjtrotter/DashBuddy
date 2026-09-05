@@ -85,8 +85,8 @@ was found **broken-in-part** (raw PII in capture envelopes) and moved to that en
     settling. What would be a **failure**: it shows a number that never appeared on the pill (a
     mid-spin value like `$470.00` on a $16 dash), or it shows your **weekly** total instead of the
     dash's. Both are worse than it showing nothing, so report either immediately. A figure that
-    lags the pill by a frame or two after a delivery is EXPECTED — that is the settle gate
-    (a value commits only when two consecutive reads agree).
+    lands ~3 s after the wheel stops is EXPECTED — that is the settle gate (a read commits only
+    once it has stood unchallenged for the settle window).
   - **On-dash, after a delivery:** the receipt sheet ("This offer", with the pay breakdown). The
     bubble's "Saved: $X" should quote the receipt's real total, and expanding the breakdown should
     NOT produce anything wild.

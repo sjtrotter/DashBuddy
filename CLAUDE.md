@@ -628,16 +628,28 @@ reduction, exposes `StateFlow<AppState>`, and owns crash recovery; `EffectMap` d
 state into `AppEffect`s.
 
 **The dash running total is settle-gated (#1029).** A parsed `IdleFields.sessionPay` moves
-`Session.runningEarnings` only when **two consecutive reads agree** — `PlatformRegion.pendingSessionPayQuote`
-parks the first sighting, a matching second commits it, a read equal to the committed figure clears
-the park. §2's `parseGlyphCurrency` already rejects the malformed digit-wheel intermediates, but a
-spin value that lands well-FORMED ($470.00 during a $16.70 dash) is indistinguishable from a real
-figure by inspection — only by repetition — so the discriminator has to be TIME, which means state.
-Pure and platform-agnostic (keyed by the region's own reads, no `Platform` branch, no wall clock);
-cleared on session start and end; a genuinely changed total commits one frame late by design.
-RESIDUAL: the PostTask receipt's `sessionEarnings` feed is deliberately NOT behind the gate, so a
-well-formed mid-spin receipt read can still write `runningEarnings` — self-correcting on the next
-idle frame pair, but not if the dash ends on that receipt.
+`Session.runningEarnings` only once it has stood **unchallenged for a settle window** —
+`PlatformRegion.pendingSessionPay` parks the read with a deadline (`GraceConfig.sessionPaySettleMs`,
+3 s, resolved per-platform through `TransitionPolicy`), a DIFFERENT read replaces the park with a
+fresh deadline, a read equal to the committed figure clears it, and the commit itself is the
+stepper's **lazy expiry** on the first observation past the deadline. §2's `parseGlyphCurrency`
+already rejects the malformed digit-wheel intermediates, but a spin value that lands well-FORMED
+($470.00 during a $16.70 dash) is indistinguishable from a real figure by inspection — only by
+TIME, which means state. **Repetition was REJECTED as the discriminator** (the round-1 design): the
+idle dedup hash folds `sessionPay` into `Observation.identity()`, so `FrameGate.admit` drops every
+repeat of a settled wheel and a "second agreeing read" can never arrive — the figure would freeze
+for most of a dash. That is also why the park arms a `SESSION_PAY_SETTLE` wake timer
+(`EffectMap.diffSessionPaySettleTimer`, its own `TimeoutType` so the (type, platform) key can't
+cross-cancel the `GRACE_COMMIT`/`MODE_RESUME_COMMIT` graces sharing the region): on an unchanged
+wheel the timer is the ONLY observation that will ever come. Pure and platform-agnostic (keyed by
+the region's own reads, deadlines derived from `obs.timestamp`, no `Platform` branch, no wall
+clock); split immediate/gated fields — `zoneName`/`sessionType` still write on sight, only
+`sessionPay` is gated; cleared on session start and end; a genuinely changed total lands one settle
+window late by design. RESIDUAL: the PostTask receipt's `sessionEarnings` feed is deliberately NOT
+behind the gate (it is not wheel-rendered), so a well-formed mid-spin receipt read can still write
+`runningEarnings` — self-correcting on the next idle read, but not if the dash ends on that
+receipt; it does now CLEAR any outstanding park, so a stale parked figure can never expire over the
+newer receipt evidence.
 
 ### 4. Side Effect Engine (`app/.../state/effects/`)
 

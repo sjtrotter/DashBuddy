@@ -23,8 +23,9 @@ import timber.log.Timber
  * (mirroring the [OfferEffects]/[JobAcceptFlow] precedent) so they keep direct access to
  * [EffectMap.logEffect], [EffectMap.triggerOverrideEffects], and [EffectMap.graceConfig] — all
  * widened `private` → `internal` for this split, same as the earlier extractions. Pure move: no
- * behavior change. [diffGraceTimer] and [diffModeResumeTimer] house here (not a separate file)
- * because both are grace/resume TIMER arming for the mode lifecycle above them — [diffGraceTimer]
+ * behavior change. [diffGraceTimer], [diffModeResumeTimer] and [diffSessionPaySettleTimer] house
+ * here (not a separate file) because all three are grace/settle TIMER arming for the mode/session
+ * lifecycle above them — [diffGraceTimer]
  * generically watches [cloud.trotter.dashbuddy.domain.state.PlatformRegion.pendingDestructive]
  * (session-end AND task-retire share the one mechanism), but it is called immediately after
  * [diffMode] in [EffectMap.diffPlatformRegion] and is small enough that a fourth file would be
@@ -294,6 +295,43 @@ internal fun EffectMap.diffModeResumeTimer(
             )
         prevPend != null && nextPend == null ->
             listOf(AppEffect.CancelTimeout(TimeoutType.MODE_RESUME_COMMIT, next.platform))
+        else -> emptyList()
+    }
+}
+
+/**
+ * Schedule/cancel the wake-up timer for a parked dash running-total read (#1029) — the
+ * [PlatformRegion.pendingSessionPay] mirror of [diffModeResumeTimer]. A SEPARATE
+ * [TimeoutType.SESSION_PAY_SETTLE] for the same reason that one is separate: the park shares the
+ * platform region with the destructive and resume graces, so a reused type's (type, platform)
+ * timer key (#438 item 1) would cross-cancel a live one.
+ *
+ * Unlike the other two this timer is not merely punctual, it is LOAD-BEARING: `FrameGate` identity
+ * dedup (`IdleFields.dedupeHash` folds in `sessionPay`) drops every repeat of an unchanged wheel
+ * read, so on a settled total no further frame arrives for the stepper's lazy expiry to ride in on.
+ * Without this timer the parked figure would simply never commit.
+ *
+ * Arm (or a re-arm with a new deadline — a different read replaced the park) schedules; the park
+ * clearing (wheel at rest, receipt write, session start/end, or the commit itself) cancels.
+ */
+internal fun EffectMap.diffSessionPaySettleTimer(
+    prev: PlatformRegion,
+    next: PlatformRegion,
+    obs: Observation,
+): List<AppEffect> {
+    val prevPend = prev.pendingSessionPay
+    val nextPend = next.pendingSessionPay
+    return when {
+        nextPend != null && (prevPend == null || prevPend.deadline != nextPend.deadline) ->
+            listOf(
+                AppEffect.ScheduleTimeout(
+                    durationMs = (nextPend.deadline - obs.timestamp).coerceAtLeast(1L),
+                    type = TimeoutType.SESSION_PAY_SETTLE,
+                    platform = next.platform,
+                ),
+            )
+        prevPend != null && nextPend == null ->
+            listOf(AppEffect.CancelTimeout(TimeoutType.SESSION_PAY_SETTLE, next.platform))
         else -> emptyList()
     }
 }

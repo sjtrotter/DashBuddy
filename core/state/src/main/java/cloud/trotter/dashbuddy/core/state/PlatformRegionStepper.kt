@@ -13,6 +13,7 @@ import cloud.trotter.dashbuddy.domain.state.ParsedFields
 import cloud.trotter.dashbuddy.domain.state.PendingDestructive
 import cloud.trotter.dashbuddy.domain.state.PendingModeResume
 import cloud.trotter.dashbuddy.domain.state.PendingOffer
+import cloud.trotter.dashbuddy.domain.state.PendingSessionPay
 import cloud.trotter.dashbuddy.domain.state.Platform
 import cloud.trotter.dashbuddy.domain.state.PlatformRegion
 import cloud.trotter.dashbuddy.domain.state.Session
@@ -152,13 +153,29 @@ class PlatformRegionStepper @Inject constructor() {
         // sustained online past the deadline (no intervening paused frame cancelled
         // it) commits the resume once — flip Paused→Online. Runs BEFORE the timeout
         // branch so the MODE_RESUME_COMMIT wake timer (a non-flow observation) can
-        // commit an overdue resume, exactly like the destructive lazy expiry above.
+        // commit an overdue resume, exactly like the destructive lazy expiry above. (The
+        // #1029 SESSION_PAY_SETTLE timer below is handled the same way — by lazy expiry, so
+        // `handleTimeout`'s `else -> prev` is the correct and complete handling for both.)
         // Driven by obs.timestamp (never a wall clock) so crash-recovery replay
         // matches. Independent of pendingDestructive: during the field flap that slot
         // is BUSY holding the just-completed delivery's TASK_RETIRE grace.
         current.pendingModeResume?.let { pend ->
             if (obs.timestamp > pend.deadline) {
                 current = commitModeResume(current, obs, policy)
+            }
+        }
+
+        // #1029: lazy expiry of a parked dash running-total read. It commits once it has stood
+        // UNCHALLENGED for the settle window — a different read would have replaced it (with a
+        // fresh deadline) and a read equal to the committed figure would have cleared it, so
+        // reaching the deadline is itself the evidence that the wheel settled here. Runs BEFORE
+        // the timeout branch so the SESSION_PAY_SETTLE wake timer can land it: FrameGate identity
+        // dedup (the idle dedup hash folds in `sessionPay`) means an unchanged wheel emits no
+        // further frame for the expiry to ride in on, which is exactly why the timer exists.
+        // Driven by obs.timestamp (never a wall clock) so crash-recovery replay matches.
+        current.pendingSessionPay?.let { pend ->
+            if (obs.timestamp > pend.deadline) {
+                current = commitSessionPay(current, pend)
             }
         }
 
@@ -294,7 +311,7 @@ class PlatformRegionStepper @Inject constructor() {
                         mintCounter = region.mintCounter + 1,
                         // #1029: a running-total read parked before this dash existed
                         // describes the previous one — never settle it against this session.
-                        pendingSessionPayQuote = null,
+                        pendingSessionPay = null,
                     )
                 }
             }
@@ -468,7 +485,7 @@ class PlatformRegionStepper @Inject constructor() {
         val next = obs.flow ?: prev
 
         // Update session fields from observations
-        r = updateSessionFields(r, obs)
+        r = updateSessionFields(r, obs, policy)
 
         // Accumulate delivery pay when entering PostTask
         if (prev != Flow.PostTask && next == Flow.PostTask) {
@@ -505,7 +522,11 @@ class PlatformRegionStepper @Inject constructor() {
         return r
     }
 
-    private fun updateSessionFields(region: PlatformRegion, obs: Observation.FlowObservation): PlatformRegion {
+    private fun updateSessionFields(
+        region: PlatformRegion,
+        obs: Observation.FlowObservation,
+        policy: TransitionPolicy,
+    ): PlatformRegion {
         val parsed = obs.parsed
         var r = region
 
@@ -515,7 +536,7 @@ class PlatformRegionStepper @Inject constructor() {
                 if (parsed.sessionType != null) r = r.copy(sessionType = parsed.sessionType)
                 r.session?.let { session ->
                     val pay = parsed.sessionPay
-                    if (pay != null) r = settleSessionPay(r, session, pay)
+                    if (pay != null) r = settleSessionPay(r, session, pay, obs.timestamp, policy)
                 }
             }
             is ParsedFields.PostTaskFields -> {
@@ -553,7 +574,14 @@ class PlatformRegionStepper @Inject constructor() {
                 r.session?.let { session ->
                     val earnings = parsed.sessionEarnings
                     if (earnings != null) {
-                        r = r.copy(session = session.copy(runningEarnings = earnings))
+                        // #1029 RESIDUAL: the receipt's own session total is NOT behind the settle
+                        // gate (it is not a digit-wheel render). It is still NEWER evidence than any
+                        // parked idle read, so the park is dropped here — otherwise a stale park
+                        // could later expire and overwrite the receipt's figure.
+                        r = r.copy(
+                            session = session.copy(runningEarnings = earnings),
+                            pendingSessionPay = null,
+                        )
                     }
                 }
             }
@@ -578,31 +606,65 @@ class PlatformRegionStepper @Inject constructor() {
 
     /**
      * The **settle gate** for a parsed dash running total (#1029): a value commits to
-     * [Session.runningEarnings] only once TWO consecutive reads agree on it.
+     * [Session.runningEarnings] only once it has stood **unchallenged for the settle window**
+     * ([TransitionPolicy.sessionPaySettleMs]).
      *
      * The platform now renders that total as an animated digit-wheel, so a capture can catch it
      * mid-spin. `parseGlyphCurrency` rejects the malformed intermediates at the parse layer, but a
      * spin value that happens to be well-FORMED ($470.00 on a $16.70 dash) is indistinguishable
-     * from a real figure by inspection — only by repetition. Hence:
+     * from a real figure by inspection — only by TIME. Hence:
      *
      *  - read == committed → the wheel is at rest; drop any park and change nothing.
-     *  - read == parked    → two consecutive frames agree; COMMIT it and clear the park.
-     *  - otherwise         → first sighting; park it and leave the committed figure alone.
+     *  - read == parked    → the same value again; keep the park AND its ORIGINAL deadline (an
+     *                        intervening screen and a return must not extend the window).
+     *  - otherwise         → a new sighting; REPLACE the park with a fresh deadline.
+     *
+     * The commit itself is [commitSessionPay], run by lazy expiry in [stepCore] on the first
+     * observation past the deadline — a `SESSION_PAY_SETTLE` wake timer guarantees one arrives,
+     * which is load-bearing: `FrameGate` identity dedup (`IdleFields.dedupeHash` folds in
+     * `sessionPay`) never re-admits an identical wheel read, so "two consecutive agreeing reads"
+     * is not a signal this reducer can ever observe.
+     *
+     * Split immediate/gated fields: only `sessionPay` is gated here. The other [IdleFields]
+     * (`zoneName`, `sessionType`) are written immediately — they are not wheel-rendered and carry
+     * no mid-animation failure mode.
      *
      * Pure, platform-agnostic (state keyed by this region only, no [Platform] branch, no wall
-     * clock). See [PlatformRegion.pendingSessionPayQuote].
+     * clock — the deadline is derived from `obs.timestamp`). See
+     * [PlatformRegion.pendingSessionPay].
      */
     private fun settleSessionPay(
         region: PlatformRegion,
         session: Session,
         pay: Double,
+        now: Long,
+        policy: TransitionPolicy,
     ): PlatformRegion = when {
-        pay == session.runningEarnings -> region.copy(pendingSessionPayQuote = null)
-        pay == region.pendingSessionPayQuote -> region.copy(
-            session = session.copy(runningEarnings = pay),
-            pendingSessionPayQuote = null,
+        pay == session.runningEarnings -> region.copy(pendingSessionPay = null)
+        pay == region.pendingSessionPay?.value -> region
+        else -> region.copy(
+            pendingSessionPay = PendingSessionPay(
+                value = pay,
+                since = now,
+                deadline = now + policy.sessionPaySettleMs(region.platform),
+            ),
         )
-        else -> region.copy(pendingSessionPayQuote = pay)
+    }
+
+    /**
+     * Commit a parked running-total read whose settle window lapsed (#1029). With no session to
+     * describe the park is simply DROPPED — a figure parked against a dash that has since ended is
+     * never invented into a later one.
+     */
+    private fun commitSessionPay(
+        region: PlatformRegion,
+        pend: PendingSessionPay,
+    ): PlatformRegion {
+        val session = region.session ?: return region.copy(pendingSessionPay = null)
+        return region.copy(
+            session = session.copy(runningEarnings = pend.value),
+            pendingSessionPay = null,
+        )
     }
 
     private fun updateRatings(region: PlatformRegion, obs: Observation.FlowObservation): PlatformRegion {
@@ -761,7 +823,7 @@ class PlatformRegionStepper @Inject constructor() {
             // #438 B3: the session's over — pending/accepted offers must not leak into the next dash.
             pendingOffers = emptyList(),
             // #1029: an un-settled running-total read describes the dash that just ended.
-            pendingSessionPayQuote = null,
+            pendingSessionPay = null,
         )
     }
 

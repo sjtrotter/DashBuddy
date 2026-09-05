@@ -9,7 +9,7 @@ import cloud.trotter.dashbuddy.domain.state.Platform
  * waits on DoorDash's summary-dialog animation, not a universal truth), so they
  * are keyed by [Platform] instead of hard-coded globals.
  *
- * The five fields are seeded with today's compile-time constants (formerly
+ * The timing fields are seeded with today's compile-time constants (formerly
  * `TransitionPolicy.DEFAULT_GRACE_MS` / `AUTHORITATIVE_GRACE_MS` /
  * `PAUSE_RESUME_GRACE_MS` and `EffectMap.PAUSE_TIMEOUT_BUFFER_MS` /
  * `EXPAND_SETTLE_MS`). This companion is now the SSOT for those defaults;
@@ -42,6 +42,15 @@ data class GraceConfig(
      * consume frame — see [Companion.codeDefault].
      */
     val acceptGraceMs: Long = DEFAULT_ACCEPT_GRACE_MS,
+    /**
+     * How long a parsed dash running-total read must stand **unchallenged** before it may move
+     * `Session.runningEarnings` (#1029 — the settle gate). The platform renders that total as an
+     * animated digit-wheel whose spin is ~1 s, and the content-changed pipeline is debounced on top
+     * of that, so 3 s is comfortably past any spin while still landing the figure on the HUD within
+     * a glance. Per-platform by construction (Principle 8): a platform that renders no wheel simply
+     * never parks a read, so the value costs it nothing — hence no [CODE_DEFAULTS] override today.
+     */
+    val sessionPaySettleMs: Long = SESSION_PAY_SETTLE_MS,
 ) {
     companion object {
         const val DEFAULT_GRACE_MS = 10_000L
@@ -49,6 +58,7 @@ data class GraceConfig(
         const val PAUSE_RESUME_GRACE_MS = 8_000L
         const val PAUSE_TIMEOUT_BUFFER_MS = 1_000L
         const val EXPAND_SETTLE_MS = 500L
+        const val SESSION_PAY_SETTLE_MS = 3_000L
 
         /**
          * Default accept-consumption grace (DoorDash and any platform without an override): a fine-
@@ -94,7 +104,7 @@ data class GraceConfig(
  * use site reads one atomic snapshot **synchronously at the moment it computes a
  * deadline/duration**, and every value is immediately stored in state or a timer
  * — so a config flip landing mid-step is observationally identical to the edit
- * landing between two steps (the five fields carry no cross-field invariant).
+ * landing between two steps (the timing fields carry no cross-field invariant).
  *
  * REPLAY-DETERMINISM TRADEOFF (pre-accepted, #438 design doc §B6): a grace edited
  * between a live run and its crash replay changes the replayed commit timing — a

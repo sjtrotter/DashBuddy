@@ -114,26 +114,36 @@ data class PlatformRegion(
      */
     val lastJoinMissWarnTaskId: String? = null,
     /**
-     * A dash running-total read that has been seen ONCE and is waiting for a second, identical
-     * read before it may move [Session.runningEarnings] (#1029 — the **settle gate**).
+     * A dash running-total read that is parked, waiting out a settle window before it may move
+     * [Session.runningEarnings] (#1029 — the **settle gate**).
      *
      * The platform renders that total as an animated digit-wheel, and captures land mid-animation.
      * `parseGlyphCurrency` throws out the malformed intermediates, but roughly one fielded read in
      * eight is well-FORMED and wrong ($470.00 during a $16.70 dash) — a string function cannot tell
      * that apart from a real figure, because nothing about the string is wrong. What distinguishes
-     * them is TIME: a spin value is transient, a settled value repeats. So a parsed total that
-     * differs from the committed one is parked here, and only a second observation agreeing with
-     * the park commits it. A third distinct value simply replaces the park (it is a spin frame),
-     * and a read that already equals the committed total clears it (the wheel is at rest).
+     * them is TIME: a spin value is transient. So a parsed total that differs from the committed
+     * one is parked here, and commits once it has stood **unchallenged** for
+     * `GraceConfig.sessionPaySettleMs` — a different read REPLACES the park (with a fresh
+     * deadline), a read equal to the committed total CLEARS it (the wheel is at rest), and the
+     * commit itself happens by lazy expiry on the first observation past [PendingSessionPay.deadline]
+     * (a `SESSION_PAY_SETTLE` wake timer guarantees one arrives).
      *
-     * Cost: a genuinely-changed total commits one frame late, which for a figure the dasher is
+     * REPETITION CANNOT BE THE DISCRIMINATOR, and that is not a style choice: `IdleFields.dedupeHash`
+     * folds `sessionPay` into the screen's `Observation.identity()`, and `FrameGate.admit` drops a
+     * frame whose identity equals the last admitted one. On a settled wheel ($16.70, $16.70, …) only
+     * the FIRST frame ever reaches the state machine, so a "second agreeing read" would never arrive
+     * and the figure would freeze for most of a dash. Elapsed time without contradiction is the only
+     * signal available here.
+     *
+     * Cost: a genuinely-changed total lands one settle window late, which for a figure the dasher is
      * glancing at is the right trade against showing them a number that never existed.
      *
-     * Cleared whenever the session it describes begins or ends. Platform-agnostic: the gate is
-     * per-region state, keyed by nothing but this region's own reads. Default-null so existing
-     * snapshots deserialize unchanged.
+     * Cleared whenever the session it describes begins or ends, and whenever a receipt's
+     * `sessionEarnings` writes a newer figure. Platform-agnostic: the gate is per-region state, keyed
+     * by nothing but this region's own reads. Default-null so existing snapshots deserialize
+     * unchanged.
      */
-    val pendingSessionPayQuote: Double? = null,
+    val pendingSessionPay: PendingSessionPay? = null,
 ) {
     /**
      * This platform's current PRESENTED offer — the accepted-pending-consumption survivors
@@ -144,6 +154,26 @@ data class PlatformRegion(
      */
     fun presentedOffer(): PendingOffer? = pendingOffers.lastOrNull { it.acceptedAt == null }
 }
+
+/**
+ * A dash running-total read waiting out its settle window (#1029).
+ * See [PlatformRegion.pendingSessionPay] for why the discriminator is elapsed
+ * time rather than repetition (FrameGate identity dedup never re-admits an
+ * identical wheel read).
+ *
+ * Plain data (kotlinx-serializable) so it survives crash-recovery replay;
+ * resolution is driven by `obs.timestamp`, never a wall clock, keeping the
+ * reducer pure.
+ */
+@Serializable
+data class PendingSessionPay(
+    /** The parsed total being held. */
+    val value: Double,
+    /** The obs.timestamp of the read that parked it. */
+    val since: Long,
+    /** Once an observation's timestamp passes this, the value is committed. */
+    val deadline: Long,
+)
 
 /**
  * A provisional screen-implied resume out of [Mode.Paused], pending confirmation
