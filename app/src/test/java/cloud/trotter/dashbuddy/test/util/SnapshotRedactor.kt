@@ -62,23 +62,71 @@ object SnapshotRedactor {
     )
 
     /**
-     * Text starting with one of these keeps the anchor prefix; the rest (a name/store) is masked.
+     * Text starting with one of these keeps the anchor prefix; the rest (a name/store) is masked
+     * **unconditionally** — every one of them is a lead-in whose tail is customer data on every
+     * surface that renders it.
      *
      * This is the COMMIT-path twin of the rules' `keepPrefix` enumerations, NOT of
      * `CustomerTextMarkers.MARKERS` — the runtime backstop must stay free of chrome-ambiguous
-     * prefixes (a false positive there scrubs a live envelope), whereas an over-scrub here only
-     * costs a little triage text in a committed fixture. That asymmetry is why `"Return "` belongs
-     * here (#994) even though it was vetted and REJECTED for the runtime marker set: DoorDash's own
-     * `"Return to dash"` button would be masked to `"Return [redacted]"` on intake, which is
-     * harmless, while a real `"Return <FirstName L> to <store>"` from a return order would
-     * otherwise be committed verbatim.
+     * prefixes (a false positive there scrubs a live envelope), whereas an over-scrub here
+     * normally only costs a little triage text in a committed fixture. **That asymmetry has a
+     * floor (#1064):** an over-scrub that eats a rule's own recognition ANCHOR does not cost
+     * triage text, it costs the fixture — the frame stops classifying and the golden guard
+     * rejects it. `"Return "` was the receipt: added unconditionally by #994 for the timeline's
+     * `"Return <FirstName L> to <store>"` line, it also masked DoorDash's own `"Return to dash"`
+     * button — a `hasText` anchor on four rules — so the 09-05 intake's two `on_dash_map`
+     * fixtures re-classified as `side_nav_drawer` and were set aside. It lives in
+     * [GATED_NAME_PREFIXES] now, not here.
+     *
+     * Use [customerLeadIn], never this list directly: it is only half the enumeration.
      */
     internal val NAME_PREFIXES = listOf(
         "Pickup for ", "Pickup from ", "Deliver to ", "Delivery for ", "Order for ",
         "Message from ", "Heading to ", "Pick up at ",
-        // #994: the fourth timeline conjugation a RETURN order renders.
-        "Return ",
     )
+
+    /**
+     * Chrome-AMBIGUOUS lead-ins: the prefix alone does not prove the tail is a customer, so each
+     * carries a predicate over the tail and fires only when that predicate holds (#1064).
+     *
+     * `"Return "` is the only member. DoorDash renders it both as the timeline's return-order task
+     * line (`"Return <FirstName L> to <store>"`, #994 — the customer's name, raw) and as its own
+     * `"Return to dash"` navigation button (platform chrome, and a recognition anchor). The
+     * discriminator is the conjugation's own `" to "` separator: the segment ahead of it is a
+     * customer name on the task line (`"Riley P"`) and is not one on the button (`"to dash"` has
+     * no separator, so the whole tail is tested and fails the name shape). The shape test is
+     * [FIRST_LAST_INITIAL] itself — the byte-SSOT the rule side shares — never a second copy.
+     *
+     * The intake gate is deliberately belt-and-braces, not the primary control: on the RECOGNIZED
+     * path the `doordash.screen.timeline` rule's own `redact` masks this line at the edge (#806
+     * doctrine), and the runtime `CustomerTextMarkers` set still REJECTS a bare `"Return "` for
+     * exactly the ambiguity above. What this gate covers is the frame that arrives UNKNOWN — a
+     * layout change drops the timeline out of recognition and the raw name would reach the
+     * commit path with no rule redact behind it.
+     */
+    internal val GATED_NAME_PREFIXES: Map<String, (String) -> Boolean> = mapOf(
+        "Return " to { tail -> FIRST_LAST_INITIAL.matches(tail.substringBefore(" to ")) },
+    )
+
+    /**
+     * The ONE owner of "does this value open with a customer lead-in whose tail is raw PII?" —
+     * returns the prefix to keep, or null. Shared by [scrub] and the committed-corpus PII guard
+     * (`CaptureRedactionCorpusTest` FIX 4) so the scrubber and the gate that polices its output
+     * can never disagree about what a lead-in is (#1064).
+     */
+    internal fun customerLeadIn(text: String): String? {
+        for (p in NAME_PREFIXES) {
+            if (text.startsWith(p, ignoreCase = true) && text.length > p.length) return p
+        }
+        for ((p, tailIsCustomer) in GATED_NAME_PREFIXES) {
+            if (text.startsWith(p, ignoreCase = true) && text.length > p.length &&
+                tailIsCustomer(text.substring(p.length))
+            ) {
+                return p
+            }
+        }
+        return null
+    }
 
     private val PHONE = Regex("""\b\d{3}[-.\s]?\d{3}[-.\s]?\d{4}\b""")
     private val EMAIL = Regex("""\b[\w.+-]+@[\w-]+\.[\w.-]+\b""")
@@ -235,9 +283,7 @@ object SnapshotRedactor {
     private fun scrub(text: String, piiById: Boolean): String {
         if (text.isBlank()) return text
         if (piiById) return MASK
-        for (p in NAME_PREFIXES) {
-            if (text.startsWith(p, ignoreCase = true) && text.length > p.length) return text.substring(0, p.length) + MASK
-        }
+        customerLeadIn(text)?.let { return text.substring(0, it.length) + MASK }
         // A whole-value bare street line ("7610 Flecthers") with no recognized suffix — mask outright
         // before the token-level passes, so a residual unsuffixed street can't leak.
         if (BARE_STREET.matches(text.trim())) return "[address]"
