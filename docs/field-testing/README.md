@@ -78,6 +78,27 @@ card's **mechanical** half, #577 (re-confirmed, 24/24, ~0.55 s — with a new po
 that entry's Bug #1), the #457 path, and #554 ShadowProjector (2/2). The #462/#460 dropoff item
 was found **broken-in-part** (raw PII in capture envelopes) and moved to that entry's Bug #7.)_
 
+- **🆕 NEW — #1063 — an offer is recognized from its FIRST frame, before the Decline
+  button inflates.** DoorDash lands the offer card in two beats: the collar animation drops the
+  sheet (store leg, pay, distance, deadline, live Accept + countdown) and the decline control
+  inflates a beat later. `offer_popup` required a literal `Decline` node, so that first beat fell
+  to UNKNOWN — six real offers in the 09-05 slice, three of which produced no settled sibling at
+  all (one was ACCEPTED off a card the app had never presented). The Decline conjunct is now
+  `Decline OR the card's own accept_button id`; the #595 store-leg guard is untouched.
+  **On-dash:** every offer must produce exactly ONE bubble/voice — watch for a
+  "(offer replaced)" flicker or a doubled narration right at presentation, which would mean the
+  early frame is being read as a DIFFERENT offer instead of the same one. Offers should also feel
+  like they arrive slightly sooner (the app now sees the card on the animation frame).
+  **Desk, after the pull:**
+  1. `OFFER_PRESENTED` count in `app_events` == the number of offers you actually saw — no
+     offer missing, none doubled.
+  2. No `OFFER_TIMEOUT` carrying `Replaced by new offer` within ~2 s of an `OFFER_PRESENTED`
+     (that is the #830 replace-instead-of-enrich failure this change could cause).
+  3. No offer-shaped frame left in `captures/**/UNKNOWN/`: `grep -rl 'accept_decline_footer_container' captures/**/UNKNOWN/`
+     should return only store-leg-LESS half-renders (the #595 family), never a card with a real
+     `display_name` store row.
+  - Confirmed: 0/2
+
 - **🆕 NEW — #1059 — the Persona verification flow, the Red Card wallet and the passport
   scanner are now blocked at the matcher layer.** Three of the dasher's OWN surfaces were
   reaching UNKNOWN capture: the embedded Persona selfie / ID-verification camera (12 envelopes
