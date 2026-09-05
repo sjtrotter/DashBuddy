@@ -4,6 +4,7 @@ import android.annotation.SuppressLint
 import android.content.Context
 import android.location.Address
 import android.location.Geocoder
+import android.location.Location
 import android.os.Looper
 import cloud.trotter.dashbuddy.domain.model.location.Coordinates
 import cloud.trotter.dashbuddy.domain.model.location.UserLocation
@@ -39,7 +40,7 @@ class FusedLocationDataSource @Inject constructor(
     override val locationUpdates: Flow<Coordinates> = callbackFlow {
         val callback = object : LocationCallback() {
             override fun onLocationResult(result: LocationResult) {
-                result.locations.forEach { trySend(Coordinates(it.latitude, it.longitude)) }
+                result.locations.forEach { trySend(it.toCoordinates()) }
             }
         }
 
@@ -69,10 +70,7 @@ class FusedLocationDataSource @Inject constructor(
     override suspend fun getLastKnownLocation(): Coordinates? {
         return try {
             val loc = fusedClient.lastLocation.await() ?: return null
-            Coordinates(
-                loc.latitude,
-                loc.longitude,
-            )
+            loc.toCoordinates()
         } catch (e: Exception) {
             Timber.e(e, "Failed to get last known location")
             null
@@ -115,4 +113,22 @@ class FusedLocationDataSource @Inject constructor(
             userLocation
         }
     }
+
+    /**
+     * #1057/#918 — carry the fix's QUALITY, not just its position. `accuracy`/`time` were dropped on
+     * the floor here, which is why [cloud.trotter.dashbuddy.domain.location.OdometerFixPolicy] had
+     * nothing to judge an implausible fix with. `hasAccuracy()` is honoured rather than reading the
+     * always-present `accuracy` field, so "no estimate" stays null instead of masquerading as 0 m.
+     *
+     * `elapsedRealtimeNanos` rides along as the ORDERING key (round 2): `time` is the settable
+     * wall clock, and Android's own guidance is not to compare fixes with it — an NTP step-back
+     * mid-drive used to stall the odometer for ~110 s. It is always present on a real `Location`.
+     */
+    private fun Location.toCoordinates(): Coordinates = Coordinates(
+        latitude = latitude,
+        longitude = longitude,
+        accuracyMeters = if (hasAccuracy()) accuracy.toDouble() else null,
+        timestampMs = time,
+        monotonicMs = elapsedRealtimeNanos / 1_000_000L,
+    )
 }

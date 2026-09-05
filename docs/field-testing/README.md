@@ -78,13 +78,37 @@ card's **mechanical** half, #577 (re-confirmed, 24/24, ~0.55 s — with a new po
 that entry's Bug #1), the #457 path, and #554 ShadowProjector (2/2). The #462/#460 dropoff item
 was found **broken-in-part** (raw PII in capture envelopes) and moved to that entry's Bug #7.)_
 
-- **🆕 NEW — #1057 — the odometer's per-fix bound (the +905-mile fault).** Filed off the 09-05
-  desk analysis, so this validates the FIX once it lands. **On-dash:** nothing to watch while
-  driving. **After a dash:** open the dash's drill-down — no single dash may gain implausible
-  miles, and one delivery reading hundreds of miles is the fault back. **Desk:** the largest
-  per-leg `metadata.odometer` delta in the pull must be plausible for that leg, and no
-  `delivery_records` row may carry a `realizedMiles` far beyond its own job's drive (the 09-03
-  fault was +905.37 mi in 18.4 min, freezing a −$302.73 net on row 1801).
+- **🆕 NEW — #1057/#918 — every odometer fix is now gated (the +905-mile fault, and the
+  parked-at-the-desk phantom miles).** The gate rejects a fix whose accuracy is worse than 50 m,
+  whose implied speed tops ~150 mph, or (with no timestamps) that jumps more than 2 km; a rejected
+  or jitter-ignored fix never becomes the reference, so slow creep still accumulates.
+  **On-dash:** nothing to watch while driving. **After a dash:** open the dash's drill-down — no
+  single dash may gain implausible miles, and one delivery reading hundreds of miles is the fault
+  back. Also worth a look **before you leave the house**: start a dash, sit still for a few
+  minutes, and session miles must stay at 0.00 (that is the #918 half).
+  **Desk, three greps:**
+  1. `grep 'Odometer fix rejected' app.log` — a WARN line here is the gate **working**, not a bug.
+     Each carries `delta`/`dt`/`impliedSpeed`/`accuracy` and a reason
+     (`INVALID_FIX`/`POOR_ACCURACY`/`IMPLAUSIBLE_SPEED`/`IMPLAUSIBLE_JUMP`/`NON_MONOTONIC_TIME`) —
+     no coordinates, by design. A `IMPLAUSIBLE_SPEED` reject with a huge delta IS the 09-03 fault
+     being caught. **The WARNs are episode-gated: a WARN opens a rejection streak, an INFO
+     (`Odometer reception recovered after N rejected fixes over M s`) closes it — so a FLOOD of
+     WARNs is the bug, not the gate.** Inside a streak only every 100th repeat is re-logged
+     (`Odometer rejection streak: …`), but a rejection with a *different* reason still gets its own
+     line. What would be a **failure**: a burst of rejects during ordinary highway
+     driving (the bound is too tight) or during a normal parking-lot crawl; a `NON_MONOTONIC_TIME`
+     reject at all (elapsed time now comes off the monotonic clock, so it means a real ordering
+     fault rather than a clock correction); or any `INVALID_FIX` line (the fused provider should
+     never hand us a malformed fix — worth capturing if one appears).
+  2. `grep 'Odometer fixes:' app.log` — one DEBUG summary per 100 judged fixes
+     (`accepted=… ignored=… rejected=… +N m`). On a normal drive `rejected` should be ≈ 0 and
+     `accepted` should dominate; a large `ignored` count while parked is expected and correct.
+  3. The largest per-leg `metadata.odometer` delta in the pull must be plausible for that leg, and
+     no `delivery_records` row may carry a `realizedMiles` far beyond its own job's drive (the
+     09-03 fault was +905.37 mi in 18.4 min, freezing a −$302.73 net on row 1801).
+  **Known, deliberate residual:** the gate is forward-looking only. The existing +905 mi already
+  baked into the cumulative total (and row 1801's frozen economics) is NOT repaired by this —
+  lifetime/IRS mileage stays 905 mi high until the dev picks a repair shape (open on #1057).
   - Confirmed: 0/2
 
 - **🆕 NEW — #1029 — the money reads are re-anchored on DoorDash 8.93.7 (and the $799 tip is

@@ -725,6 +725,38 @@ enumeration, every capability lands *undecided* until the user opts in via the c
 Handlers: `OdometerEffectHandler`, `ScreenShotHandler`, `TipEffectHandler`, `TtsEffectHandler`,
 `UiInteractionHandler` (package-scoped, label-verified `RuleAction` taps — the only path that ever
 clicks a third-party app, #425), `OfferActionReceiver` (notification Accept/Decline actions).
+**Every odometer fix is gated (#1057/#918).** `OdometerRepository` used to add ANY inter-fix
+displacement over 5 m straight into the persisted cumulative total, so one spurious fused fix ~1,457 km
+away added **905.37 mi in 18.4 min** (2026-09-03) — freezing `netProfit −302.73` on a $22.95 delivery
+and leaving every session since 905 mi high — while indoor multipath jitter accrued phantom miles at a
+parked desk, both silently. The pure `:domain` `OdometerFixPolicy` now judges each fix against the last
+**accepted** one (`MIN_DELTA_METERS` 5, `MAX_ACCURACY_METERS` 50, `MAX_SPEED_MPS` 67 ≈ 150 mph,
+`MAX_DELTA_WITHOUT_TIME_METERS` 2 000 when no clock is shared by both fixes — `Coordinates` gained
+nullable `accuracyMeters`/`timestampMs`/`monotonicMs`, which `FusedLocationDataSource` had been dropping
+on the floor) and returns Accept / Reference / Ignore / Reject: **neither an Ignore nor a Reject moves the
+reference**, so a teleport anchors nothing AND slow creep inside the jitter floor still accumulates as
+one later Accept, and a poor-accuracy fix cannot even seed the reference (fail-null). Four properties
+carry the design (round 2, all four Astra-found). **`INVALID_FIX` comes first:** every bound is a
+comparison and every comparison against NaN is false, so a non-finite/out-of-range fix used to fall
+THROUGH into `Accept(NaN)` — one NaN in the cumulative total destroys it permanently — and
+`Coordinates.distanceTo` clamps its haversine intermediate into `[0, 1]` so a near-antipodal pair can
+never produce that NaN in the first place. **Elapsed time is measured on the MONOTONIC clock**
+(`Location.elapsedRealtimeNanos`) wherever both fixes carry one, falling back to wall time only for
+clock-less sources: `Location.time` is settable, and an NTP step-back mid-drive used to reject every fix
+(`NON_MONOTONIC_TIME`, then `IMPLAUSIBLE_SPEED`) for ~110 s of silently lost mileage per correction.
+**An `Ignore` refreshes the reference's TIMING, not its position** (the repository does it, so the
+policy stays a pure function of two fixes): the reference is an accrual anchor, not a last observation,
+and leaving its timestamp stale let a 1,457 km teleport after seven parked hours imply a plausible
+57.8 m/s. And **rejection logging is EPISODE-gated** — poor reception is a condition, not an event, and
+one WARN per rejected fix is 720–1,800 lines an hour that drown the exceptional rejects (principle 7):
+a streak of consecutive rejections WARNs on entry, WARNs again every `STREAK_REMINDER_EVERY` = 100, and
+closes with ONE INFO on recovery, while a rejection whose reason DIFFERS from the streak's opening one
+still WARNs individually. The repository owns only the side effects — every line carrying **numbers and
+the reason enum only** (a latitude/longitude is the dasher's location PII and is never logged, at any
+level) plus ONE bounded DEBUG `Odometer fixes:` summary per 100 judged fixes. **Standing residual:** the gate is
+forward-looking only — the pre-fix +905 mi offset in the persisted total, and delivery row 1801's
+frozen economics, are **not** auto-repaired (frozen economics are immutable by design; a rebase
+mechanism for the cumulative total is an open dev decision on #1057).
 **The evaluator fails CLOSED on a missing input (#936).** A `?: 1.0` distance fallback invented a
 favourable **one-mile trip** — near-zero operating cost, near-zero drive time, an inflated `$/hr` —
 biasing the verdict toward ACCEPT precisely where the input was least trustworthy (the #827 class of
