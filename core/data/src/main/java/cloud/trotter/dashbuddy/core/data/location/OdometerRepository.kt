@@ -2,6 +2,7 @@ package cloud.trotter.dashbuddy.core.data.location
 
 import cloud.trotter.dashbuddy.core.datastore.odometer.OdometerLocalDataSource
 import cloud.trotter.dashbuddy.core.location.LocationDataSource
+import cloud.trotter.dashbuddy.domain.location.OdometerFixPolicy
 import cloud.trotter.dashbuddy.domain.model.location.Coordinates
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
@@ -17,6 +18,7 @@ import javax.inject.Singleton
 import cloud.trotter.dashbuddy.domain.di.IoDispatcher
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.flow.first
+import java.util.Locale
 
 @Singleton
 class OdometerRepository @Inject constructor(
@@ -52,8 +54,21 @@ class OdometerRepository @Inject constructor(
             (total - anchor).coerceAtLeast(0.0) * metersToMiles
         }
 
-    private var lastCoords: Coordinates? = null
+    /**
+     * The last fix the gate ACCEPTED — the reference every displacement is measured from. #1057/#918:
+     * an ignored (jitter) or rejected (implausible) fix deliberately leaves it where it is, so a
+     * teleport anchors nothing and slow creep still accumulates against a fixed point.
+     */
+    private var lastAccepted: Coordinates? = null
     private val metersToMiles = 0.000621371
+
+    // #1057 ask 3 — bounded observability. All four are CUMULATIVE for the life of the process, so
+    // each summary line is a self-contained snapshot; ONE DEBUG line per SUMMARY_EVERY judged fixes,
+    // never a per-fix line (the 1 Hz notification DEBUG already costs 13.8 % of the firehose, #1001).
+    private var acceptedCount = 0L
+    private var ignoredCount = 0L
+    private var rejectedCount = 0L
+    private var acceptedMeters = 0.0
 
     init {
         // Read persisted values ONCE at startup (#364): the old collectors let a
@@ -110,18 +125,61 @@ class OdometerRepository @Inject constructor(
             Timber.tag(TAG).i("Stopping GPS Tracking.")
             trackingJob?.cancel()
             trackingJob = null
-            lastCoords = null
+            lastAccepted = null
         }
     }
 
+    /**
+     * The odometer's only write path. Every fix is judged by the pure [OdometerFixPolicy] (#1057/#918)
+     * — this method owns nothing but the side effects: accrual, the reference, and the log lines.
+     */
     private fun processLocation(coords: Coordinates) {
-        if (lastCoords != null) {
-            val distanceMeters = coords.distanceTo(lastCoords!!)
-            if (distanceMeters > 5) {
-                addMeters(distanceMeters)
+        when (val verdict = OdometerFixPolicy.judge(lastAccepted, coords)) {
+            is OdometerFixPolicy.Verdict.Reference -> lastAccepted = coords
+
+            is OdometerFixPolicy.Verdict.Accept -> {
+                lastAccepted = coords
+                acceptedCount++
+                acceptedMeters += verdict.deltaMeters
+                addMeters(verdict.deltaMeters)
+            }
+
+            is OdometerFixPolicy.Verdict.Ignore -> ignoredCount++ // reference deliberately unmoved
+
+            is OdometerFixPolicy.Verdict.Reject -> {
+                rejectedCount++ // reference deliberately unmoved — a bad fix anchors nothing
+                // WARN: a defended invariant fired (principle 7). NUMBERS ONLY — a latitude/longitude
+                // is the dasher's location (PII) and is never logged, at any level.
+                Timber.tag(TAG).w(
+                    String.format(
+                        Locale.ROOT,
+                        "Odometer fix rejected (%s): delta=%.0fm dt=%sms impliedSpeed=%s m/s accuracy=%s m",
+                        verdict.reason.name,
+                        verdict.deltaMeters,
+                        verdict.dtMillis?.toString() ?: "n/a",
+                        verdict.impliedMps?.let { String.format(Locale.ROOT, "%.1f", it) } ?: "n/a",
+                        verdict.accuracyMeters?.let { String.format(Locale.ROOT, "%.0f", it) } ?: "n/a",
+                    )
+                )
             }
         }
-        lastCoords = coords
+        maybeLogSummary()
+    }
+
+    /** ONE bounded DEBUG line per [SUMMARY_EVERY] judged fixes — counters and meters only. */
+    private fun maybeLogSummary() {
+        val judged = acceptedCount + ignoredCount + rejectedCount
+        if (judged == 0L || judged % SUMMARY_EVERY != 0L) return
+        Timber.tag(TAG).d(
+            String.format(
+                Locale.ROOT,
+                "Odometer fixes: accepted=%d ignored=%d rejected=%d, +%.0f m",
+                acceptedCount,
+                ignoredCount,
+                rejectedCount,
+                acceptedMeters,
+            )
+        )
     }
 
     private fun addMeters(delta: Double) {
@@ -144,5 +202,8 @@ class OdometerRepository @Inject constructor(
 
     private companion object {
         private const val TAG = "Odometer"
+
+        /** How many judged fixes between DEBUG summary lines (#1057 ask 3, bounded). */
+        private const val SUMMARY_EVERY = 100L
     }
 }

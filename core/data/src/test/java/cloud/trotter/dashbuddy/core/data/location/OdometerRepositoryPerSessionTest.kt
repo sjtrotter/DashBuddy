@@ -40,9 +40,24 @@ class OdometerRepositoryPerSessionTest {
     private fun repo(dispatcher: TestDispatcher) =
         OdometerRepository(local, location, dispatcher)
 
-    // ~110 m north per step (0.001° latitude), comfortably over the 5 m gate.
+    // ~110 m north per step (0.001° latitude), comfortably over the 5 m gate. No timestamps: the
+    // #1057 gate falls back to its bounded-jump check, which 110 m clears.
     private suspend fun drive(vararg latitudes: Double) {
         for (lat in latitudes) locationUpdates.emit(Coordinates(lat, 0.0))
+    }
+
+    /** Degrees of latitude for [meters] north — the same earth radius `Coordinates.distanceTo` uses. */
+    private fun degreesNorth(meters: Double): Double = Math.toDegrees(meters / 6_371_000.0)
+
+    private suspend fun emitFix(metersNorth: Double, accuracyMeters: Double?, timestampMs: Long?) {
+        locationUpdates.emit(
+            Coordinates(
+                latitude = degreesNorth(metersNorth),
+                longitude = 0.0,
+                accuracyMeters = accuracyMeters,
+                timestampMs = timestampMs,
+            )
+        )
     }
 
     @Test
@@ -106,5 +121,100 @@ class OdometerRepositoryPerSessionTest {
         val cumulative = repo.getCurrentMiles()
         assertTrue("cumulative accrued", cumulative > 0.0)
         assertEquals("no-arg session flow with no anchor == cumulative", cumulative, repo.sessionMilesFlow.first(), 1e-6)
+    }
+
+    /**
+     * #1057 — the fielded defect: one spurious fused fix ~1,457 km away added 905.37 mi in 18.4 min
+     * straight into the persisted cumulative total. The gate must reject it AND refuse to let it
+     * become the reference, so the good fix after it measures from the last ACCEPTED position.
+     */
+    @Test
+    fun `a teleporting fix accrues nothing and never becomes the reference`() = runTest {
+        val dispatcher = UnconfinedTestDispatcher(testScheduler)
+        val repo = repo(dispatcher)
+        repo.startTracking()
+
+        emitFix(0.0, accuracyMeters = 8.0, timestampMs = 0L)          // reference
+        emitFix(150.0, accuracyMeters = 8.0, timestampMs = 5_000L)    // good leg: +150 m
+        val afterFirstLeg = repo.getCurrentMiles()
+
+        // The 905-mile fix (1,457 km in 18.4 min ≈ 1,320 m/s).
+        emitFix(1_457_000.0, accuracyMeters = 8.0, timestampMs = 1_109_000L)
+        assertEquals("the teleport accrued nothing", afterFirstLeg, repo.getCurrentMiles(), 1e-9)
+
+        // A good fix 300 m past the last ACCEPTED position: if the teleport had become the reference,
+        // this would either accrue ~1,457 km back or be rejected as another teleport.
+        emitFix(450.0, accuracyMeters = 8.0, timestampMs = 1_114_000L)
+        val total = repo.getCurrentMiles()
+
+        val expectedMeters = 150.0 + 300.0
+        assertEquals(
+            "only the two good legs accrued",
+            expectedMeters * 0.000621371,
+            total,
+            1e-6,
+        )
+    }
+
+    /** #918 — indoor multipath inside the fixes' own error radius is not motion. */
+    @Test
+    fun `stationary jitter inside the accuracy radius accrues nothing`() = runTest {
+        val dispatcher = UnconfinedTestDispatcher(testScheduler)
+        val repo = repo(dispatcher)
+        repo.startTracking()
+
+        emitFix(0.0, accuracyMeters = 25.0, timestampMs = 0L) // reference
+        var t = 0L
+        for (bounce in listOf(12.0, -9.0, 15.0, -14.0, 8.0, -11.0, 13.0)) {
+            t += 3_000L
+            emitFix(bounce, accuracyMeters = 25.0, timestampMs = t)
+        }
+
+        assertEquals("parked at a desk accrues zero miles", 0.0, repo.getCurrentMiles(), 1e-9)
+    }
+
+    /** A fix worse than the accuracy bound is rejected outright — it is never even the reference. */
+    @Test
+    fun `a poor-accuracy fix accrues nothing and does not anchor the next measurement`() = runTest {
+        val dispatcher = UnconfinedTestDispatcher(testScheduler)
+        val repo = repo(dispatcher)
+        repo.startTracking()
+
+        emitFix(0.0, accuracyMeters = 80.0, timestampMs = 0L)      // rejected: cannot seed a reference
+        emitFix(500.0, accuracyMeters = 6.0, timestampMs = 5_000L) // first usable fix → reference
+        assertEquals("nothing accrued yet", 0.0, repo.getCurrentMiles(), 1e-9)
+
+        emitFix(650.0, accuracyMeters = 6.0, timestampMs = 10_000L) // +150 m
+        assertEquals(
+            "only the leg between the two usable fixes accrued",
+            150.0 * 0.000621371,
+            repo.getCurrentMiles(),
+            1e-6,
+        )
+    }
+
+    /**
+     * The reference-does-not-move property, end to end: three 2 m creep steps under the 5 m floor land
+     * as ONE 6 m accrual rather than being discarded (a drive-through line still counts).
+     */
+    @Test
+    fun `slow creep under the floor still accumulates because the reference stays put`() = runTest {
+        val dispatcher = UnconfinedTestDispatcher(testScheduler)
+        val repo = repo(dispatcher)
+        repo.startTracking()
+
+        emitFix(0.0, accuracyMeters = 3.0, timestampMs = 0L) // reference; floor = 5 m
+        emitFix(2.0, accuracyMeters = 3.0, timestampMs = 3_000L)
+        assertEquals(0.0, repo.getCurrentMiles(), 1e-9)
+        emitFix(4.0, accuracyMeters = 3.0, timestampMs = 6_000L)
+        assertEquals(0.0, repo.getCurrentMiles(), 1e-9)
+        emitFix(6.0, accuracyMeters = 3.0, timestampMs = 9_000L)
+
+        assertEquals(
+            "the whole 6 m displacement from the reference lands at once",
+            6.0 * 0.000621371,
+            repo.getCurrentMiles(),
+            1e-6,
+        )
     }
 }
