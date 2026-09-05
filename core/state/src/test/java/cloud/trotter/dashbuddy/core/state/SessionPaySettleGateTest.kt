@@ -114,9 +114,20 @@ class SessionPaySettleGateTest {
         pendingSessionPay = pending,
     )
 
-    /** One observation through the real steppers. */
+    /**
+     * One observation through the real steppers.
+     *
+     * R0 is stamped with `activePlatform = DoorDash` because that is what a real DoorDash frame
+     * leaves behind (`FlowRegionStepper` sets it on every flow-bearing observation) — and park
+     * ownership is (flow, PLATFORM), so a Timeout, which leaves R0 untouched, reads it from here.
+     * The cross-platform half of that rule is exercised against the REAL `StateMachine` in
+     * `SessionPayParkOwnershipTest`, where R0 is threaded rather than reconstructed.
+     */
     private fun step(region: PlatformRegion, obs: Observation): PlatformRegion {
-        val flow = FlowRegion(flow = region.lastActedFlow ?: Flow.Idle)
+        val flow = FlowRegion(
+            flow = region.lastActedFlow ?: Flow.Idle,
+            activePlatform = Platform.DoorDash,
+        )
         val nextFlow = flowStepper.step(flow, obs)
         return stepper.step(region, flow, nextFlow, obs, policy)
     }
@@ -447,6 +458,49 @@ class SessionPaySettleGateTest {
 
         val later = step(ended, timeout(t0 + settle + 1L))
         assertEarnings(16.70, later, "the dash's real total stands")
+    }
+
+    @Test
+    fun `the dash summary's own total contradicts a park expiring on that very frame`() {
+        // #1029 R2, the fielded shape the flow-scoped drop alone does NOT cover: `updateLifecycle`
+        // returns EARLY on Flow.SessionEnded with a live session (it arms the authoritative
+        // SESSION_END grace there), so the SessionEndedFields arm of updateSessionFields — and its
+        // supersedeParksOlderThan — is unreachable. If the summary frame is also the frame the
+        // park's deadline lands on, the expiry runs FIRST and commits $470 before anything looks at
+        // the flow. `Observation.sessionPayRead()` counts `totalEarnings` as a running-total read,
+        // so the contradiction check drops the park instead.
+        val parked = feed(region(runningEarnings = 16.70), t0 to 470.00)
+        assertPark(parked, 470.00, t0, t0 + settle)
+
+        val summary = Observation.Screen(
+            timestamp = t0 + settle,
+            captureId = null,
+            ruleId = "doordash.screen.dash_summary",
+            metadata = ReplayMetadata.EMPTY,
+            flow = Flow.SessionEnded,
+            modeHint = Mode.Offline,
+            parsed = ParsedFields.SessionEndedFields(totalEarnings = 16.70),
+        )
+        val ended = step(parked, summary)
+        assertEarnings(16.70, ended, "the spin value must never reach the dash's stated total")
+        assertNull("the contradicted park is dropped, not committed", ended.pendingSessionPay)
+    }
+
+    @Test
+    fun `the same holds when the summary arrives PAST the deadline`() {
+        val parked = feed(region(runningEarnings = 16.70), t0 to 470.00)
+        val summary = Observation.Screen(
+            timestamp = t0 + settle + 1L,
+            captureId = null,
+            ruleId = "doordash.screen.dash_summary",
+            metadata = ReplayMetadata.EMPTY,
+            flow = Flow.SessionEnded,
+            modeHint = Mode.Offline,
+            parsed = ParsedFields.SessionEndedFields(totalEarnings = 16.70),
+        )
+        val ended = step(parked, summary)
+        assertEarnings(16.70, ended)
+        assertNull(ended.pendingSessionPay)
     }
 
     // =========================================================================

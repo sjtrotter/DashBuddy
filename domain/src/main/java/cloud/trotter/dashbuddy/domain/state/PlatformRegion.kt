@@ -153,9 +153,11 @@ data class PlatformRegion(
      * Cost: a genuinely-changed total lands one settle window late, which for a figure the dasher is
      * glancing at is the right trade against showing them a number that never existed.
      *
-     * Cleared whenever the session it describes begins or ends. Platform-agnostic: the gate is
-     * per-region state, keyed by nothing but this region's own reads. Default-null so existing
-     * snapshots deserialize unchanged.
+     * Cleared whenever the session it describes begins or ends, and DROPPED wholesale by crash
+     * recovery (`AppState.droppingSessionPayParks`): a restored park is pre-crash evidence whose
+     * surface is long gone and whose wake timer no restore path re-arms — fail-null (#745).
+     * Platform-agnostic: the gate is per-region state, keyed by nothing but this region's own
+     * reads. Default-null so existing snapshots deserialize unchanged.
      */
     val pendingSessionPay: PendingSessionPay? = null,
 ) {
@@ -197,9 +199,16 @@ data class PendingSessionPay(
      * surface re-parks; that returning frame IS admitted, because its observation identity differs
      * from the interloper's.
      *
-     * Multi-platform caveat: R0 is shared, so another platform's screen also drops this platform's
-     * park. Fail-null, and accepted — the alternative is committing a figure this platform can no
-     * longer see.
+     * **Ownership is (this flow, the PLATFORM that put it on screen)**, not the flow alone. R0 is
+     * SHARED across platforms — `FlowRegion.activePlatform` names whose screen last set it — while
+     * `StateMachine.stepPlatforms` steps only `obs.platform`'s region, so a DoorDash park is never
+     * stepped by an Uber frame and a flow-only test would let this platform's wake timer commit a
+     * figure R0 stopped showing long ago (and two idle screens on two platforms defeat it outright:
+     * R0 stays `Idle` throughout). A NON-flow observation — a timer, a click, a loopback — cannot
+     * itself be the departure frame, so it checks ownership BEFORE the expiry and drops a park it
+     * no longer owns instead of committing it. Another platform's screen therefore still drops this
+     * platform's park; fail-null, and accepted — the alternative is committing a figure this
+     * platform can no longer see.
      */
     val flow: Flow,
 )

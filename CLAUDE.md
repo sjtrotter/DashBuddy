@@ -659,12 +659,17 @@ arrive — the figure would freeze for most of a dash. That is also why the park
 region): on an unchanged wheel the timer is the ONLY observation that will ever come. The canonical
 statement of that rationale is the `PlatformRegion.pendingSessionPay` KDoc; every other site points
 at it. The rule, as reviewed (round 3):
-**(a) the park is FLOW-SCOPED** — `PendingSessionPay.flow` records the R0 flow it was read under and
-leaving that surface DROPS it, because no other screen carries a running total and the wake timer
-would otherwise commit an unchallengeable figure (fielded 08-23 17:35: pill read → offer overlay
-0.5 s later → dash end); the drop runs AFTER the expiry, so a park that stood its whole window still
-commits on the departure frame; R0 is shared, so another platform's screen also drops this
-platform's park — fail-null, accepted.
+**(a) a park is owned by (FLOW, PLATFORM)** — `PendingSessionPay.flow` records the R0 flow it was
+read under and `FlowRegion.activePlatform` names whose screen put it there; losing either DROPS it,
+because no other screen carries a running total and the wake timer would otherwise commit an
+unchallengeable figure (fielded 08-23 17:35: pill read → offer overlay 0.5 s later → dash end). The
+platform half is load-bearing because `stepPlatforms` steps only `obs.platform`'s region, so a
+DoorDash park is never stepped by an Uber frame — and two idle screens on two platforms defeat a
+flow-only test outright (R0 stays `Idle`). A NON-flow observation (the wake timer, a click, a
+loopback) is never a departure frame, so it checks ownership BEFORE the expiry and drops a park it
+no longer owns; a flow frame runs the expiry FIRST, so a park that stood its whole window still
+commits on the departure frame. Another platform's screen therefore still drops this platform's
+park — fail-null, accepted.
 **(b) BOTH feeds go through the gate** — the on-dash pill (`IdleFields.sessionPay`) and the
 receipt's own "This dash so far" (`PostTaskFields.sessionEarnings`), which `dropoff.json5` reads off
 the SAME animated wheel via `parseGlyphCurrency`; for the settled re-render to be admittable at all,
@@ -672,7 +677,12 @@ the SAME animated wheel via `parseGlyphCurrency`; for the settled re-render to b
 receipt sits still).
 **(c) every NON-gated writer supersedes older parks** — the PostTask-entry pay accumulation and the
 dash-summary total drop any park whose `since` predates them; `since >= now` keeps the receipt's own
-same-frame park.
+same-frame park. The dash summary reaches the park by (f), not by this rule: `updateLifecycle`
+returns early on `Flow.SessionEnded` with a live session (to arm the authoritative SESSION_END
+grace), so its `updateSessionFields` arm is unreachable on the fielded path — the summary's
+`totalEarnings` is instead one of the three reads `Observation.sessionPayRead()` recognizes, which
+is what stops a pre-"End Dash" $470 park from committing on the summary frame and riding into the
+#596 close-out sweep's `DELIVERY_COMPLETED.sessionEarnings`.
 **(d) comparisons are cent-tolerant** (an accumulated `accumulatedDeliveryPay + totalPay` is not
 bit-equal to the 2-dp figure the wheel renders).
 **(e) expiry is `>=` and an early/stale wake RE-ARMS for the remainder** — the timer is armed for
@@ -689,9 +699,11 @@ dash total never legitimately returns to zero mid-dash. Deliberately NOT a gener
 Pure and platform-agnostic throughout (keyed by the region's own reads, deadlines derived from
 `obs.timestamp`, no `Platform` branch, no wall clock); split immediate/gated fields —
 `zoneName`/`sessionType` still write on sight; cleared on session start and end; a genuinely changed
-total lands one settle window late by design. RESIDUAL: **crash recovery re-arms no settle timer** —
-a restored park waits for an ordinary frame, and since `FrameGate.lastIdentity` is per-process the
-first post-restart idle frame is admitted and drives the expiry. Same shape as the other two graces.
+total lands one settle window late by design. **Crash recovery DROPS any restored park**
+(`AppState.droppingSessionPayParks`, applied to the snapshot state on both the tail and no-tail
+restore paths): a park is pre-crash evidence whose surface is gone and whose wake timer no restore
+path re-arms, so it would either sit forever or be committed by whatever frame happens past its
+deadline — fail-null (#745), at a cost of one settle window.
 
 
 ### 4. Side Effect Engine (`app/.../state/effects/`)

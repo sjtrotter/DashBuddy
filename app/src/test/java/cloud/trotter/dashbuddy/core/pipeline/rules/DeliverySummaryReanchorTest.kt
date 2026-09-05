@@ -163,20 +163,32 @@ class DeliverySummaryReanchorTest {
         // rendered, an uncapped shape scan walks out of the row and hands back Peak pay's $1.00 AS
         // the customer tip — fail-WRONG, and `sumApproxEquals` cannot catch it because `appPay` is
         // null on 8.93.7. The rule's `, 2` cap stops the scan at its own row.
+        //
+        // The `DoorDash pay` node is LOAD-BEARING, not decoration: `customerTips` is declared only
+        // by `delivery_summary_expanded`, whose `require` is `allTextContainsAll ["doordash pay",
+        // "customer tips"]`. Without it the EXPANDED rule cannot match, the collapsed rule (which
+        // parses no tips at all) wins the frame, and the null assertion below is vacuously true —
+        // it would pass even against the $799 fabrication this whole change exists to kill. Hence
+        // the rule-id assertion in front of it.
         val tree = UiNode(
             children = listOf(
                 UiNode(text = "Delivery complete"),
                 UiNode(text = "This offer"),
                 UiNode(text = "\$16.70"),
-                row("Customer tips", "799", "Peak pay", "\$1.00"),
+                row("DoorDash pay", "Customer tips", "799", "Peak pay", "\$1.00"),
             ),
         ).restoreParents()
 
         val result = ruleset.matchFirst(tree, "doordash")
         assertTrue("the synthetic must still be recognized as a summary", result != null)
+        assertEquals(
+            "the control is only meaningful against the rule that DECLARES customerTips",
+            "doordash.screen.delivery_summary_expanded",
+            result!!.ruleId,
+        )
         assertNull(
             "an absent tip must read null — reporting the next row's money is worse than nothing",
-            result!!.fields["customerTips"],
+            result.fields["customerTips"],
         )
     }
 

@@ -180,28 +180,42 @@ class PlatformRegionStepper @Inject constructor() {
         // FrameGate argument that made the timer necessary. The park would be stranded.
         // (`pendingModeResume` above keeps `>`: a resume grace is re-driven by ordinary frames.)
         current.pendingSessionPay?.let { pend ->
-            if (obs.timestamp >= pend.deadline) {
-                // A CONTRADICTING read on the very frame the park would commit on supersedes it:
-                // a late timer and a fresh idle frame can collide, and committing the stale park
-                // first and then re-parking the fresh read for another whole window shows the
-                // dasher a figure that the same frame already disproved.
-                val read = obs.sessionPayRead()
-                current = if (read != null && !centsEqual(read, pend.value)) {
-                    current.copy(pendingSessionPay = null)
-                } else {
-                    commitSessionPay(current, pend)
-                }
-            }
-        }
-
-        // #1029: the park is FLOW-SCOPED — a read is evidence only while the surface it came from
-        // is on screen. Placed immediately AFTER the expiry so a park that stood its whole window
-        // on its own surface still commits on the departure frame; anything younger is dropped
-        // (the diff emits the CancelTimeout). Timeout observations leave `nextFlow` untouched, so
-        // this is inert for them. See [PendingSessionPay.flow].
-        current.pendingSessionPay?.let { pend ->
-            if (nextFlow.flow != pend.flow) {
+            // #1029: a park is OWNED by (flow, PLATFORM) — the R0 surface the read was made on AND
+            // the platform that put that surface on screen. `FlowRegionStepper` stamps
+            // `activePlatform` on every flow-bearing frame and leaves R0 untouched on
+            // Timeout/UiInput/Loopback, so R0 carries exactly the ownership fact needed. Compared
+            // as `Platform` values — never a literal (principle 8).
+            val owned = nextFlow.flow == pend.flow && nextFlow.activePlatform == current.platform
+            if (obs !is Observation.FlowObservation && !owned) {
+                // A NON-flow observation (the `SESSION_PAY_SETTLE` wake timer, a click, a
+                // loopback) can never itself be the departure frame — it does not move R0. So if
+                // R0 no longer shows this park's surface on THIS platform at fire time, some other
+                // frame moved it and the park is stale evidence: DROP it and skip the expiry
+                // entirely. Load-bearing across platforms: `stepPlatforms` steps only
+                // `obs.platform`'s region, so a DoorDash park is never stepped by an Uber frame and
+                // the flow check alone would let this platform's timer commit a figure R0 stopped
+                // showing long ago (and two idle screens on two platforms defeat it outright — R0
+                // stays `Idle`).
                 current = current.copy(pendingSessionPay = null)
+            } else {
+                if (obs.timestamp >= pend.deadline) {
+                    // A CONTRADICTING read on the very frame the park would commit on supersedes
+                    // it: a late timer and a fresh idle frame can collide, and committing the stale
+                    // park first and then re-parking the fresh read for another whole window shows
+                    // the dasher a figure that the same frame already disproved.
+                    val read = obs.sessionPayRead()
+                    current = if (read != null && !centsEqual(read, pend.value)) {
+                        current.copy(pendingSessionPay = null)
+                    } else {
+                        commitSessionPay(current, pend)
+                    }
+                }
+
+                // The park is FLOW-SCOPED — a read is evidence only while the surface it came from
+                // is on screen. Placed immediately AFTER the expiry so a park that stood its whole
+                // window on its own surface still commits on the departure frame; anything younger
+                // is dropped (the diff emits the CancelTimeout). See [PendingSessionPay.flow].
+                if (!owned) current = current.copy(pendingSessionPay = null)
             }
         }
 
@@ -625,13 +639,15 @@ class PlatformRegionStepper @Inject constructor() {
                 if (total != null) {
                     r.session?.let { session ->
                         // #1029: a non-gated write, so it supersedes every park older than itself
-                        // (same rule as the PostTask-entry accumulation above). On the fielded
-                        // path the dash-summary frame is already handled one level up — the
-                        // flow-departure drop in stepCore kills the park the moment R0 leaves the
-                        // pill's surface, and `updateLifecycle` returns before this arm whenever
-                        // the summary arrives with a live session — but the invariant "no direct
-                        // writer leaves an older park alive" is stated at every writer, not
-                        // wherever it happens to be reachable today.
+                        // (same rule as the PostTask-entry accumulation above). This arm is
+                        // UNREACHABLE on the fielded path — `updateLifecycle` returns early on
+                        // `Flow.SessionEnded` with a live session, to arm the authoritative
+                        // SESSION_END grace — so what actually closes the case there is
+                        // `Observation.sessionPayRead()` treating the summary's total as a
+                        // contradicting read at expiry time. The call stays here because this is
+                        // still the honest place for the invariant if that early return ever moves:
+                        // "no direct writer leaves an older park alive" is stated at every writer,
+                        // not wherever it happens to be reachable today.
                         r = r.copy(session = session.copy(runningEarnings = total))
                             .supersedeParksOlderThan(obs.timestamp)
                     }
@@ -716,14 +732,25 @@ class PlatformRegionStepper @Inject constructor() {
     private fun centsEqual(a: Double, b: Double): Boolean = kotlin.math.abs(a - b) < 0.005
 
     /**
-     * The parsed dash running total this observation carries, if any (#1029) — the two feeds the
-     * settle gate owns, in ONE place, so the expiry's contradiction check and the gate itself can
+     * The parsed dash running total this observation carries, if any (#1029) — every surface that
+     * states the figure, in ONE place, so the expiry's contradiction check and the gate itself can
      * never disagree about what counts as a running-total read.
+     *
+     * The first two are the gated feeds (the on-dash pill and the receipt's wheel). The THIRD, the
+     * dash summary's `totalEarnings`, never parks — it is an authoritative direct write — but it is
+     * emphatically a running-total READ, and on the fielded path it is the ONLY thing that can
+     * contradict a park at the moment the park expires: `updateLifecycle` returns early on
+     * `Flow.SessionEnded` with a live session (it arms the authoritative SESSION_END grace there),
+     * so the [ParsedFields.SessionEndedFields] arm of [updateSessionFields] is unreachable on that
+     * path and its `supersedeParksOlderThan` never runs. Without this arm a $470 mid-spin park
+     * parked before "End Dash" would COMMIT on the summary frame and ride into the #596 close-out
+     * sweep's `DELIVERY_COMPLETED.sessionEarnings` and the HUD latch.
      */
     private fun Observation.sessionPayRead(): Double? =
         when (val parsed = (this as? Observation.FlowObservation)?.parsed) {
             is ParsedFields.IdleFields -> parsed.sessionPay
             is ParsedFields.PostTaskFields -> parsed.sessionEarnings
+            is ParsedFields.SessionEndedFields -> parsed.totalEarnings
             else -> null
         }
 

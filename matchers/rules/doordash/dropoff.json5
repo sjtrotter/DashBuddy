@@ -1768,6 +1768,14 @@
           // and the `sumApproxEquals` validator cannot catch it because `appPay` is
           // null on 8.93.7. Two is the fielded distance (label -> optional type code
           // -> value).
+          // RESIDUAL (documented, not built): the cap bounds DISTANCE, not row
+          // OWNERSHIP. With the type-code node ABSENT as well — ['Customer tips',
+          // 'Peak pay', '$1.00'] — a cap of 2 still reaches Peak pay's figure and
+          // reports it as the tip. No fielded frame has that shape (8.93.7 renders
+          // the tips row LAST and always with the code present), and tightening the
+          // cap to 1 would break the fielded row it exists for. #1051 closes it
+          // properly with the label-based `each` over the breakdown rows, which reads
+          // each row's own value instead of scanning past its end.
           "customerTips": {
             "find": {
               "hasTextContaining": "Customer tips"
