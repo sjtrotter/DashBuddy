@@ -23,6 +23,10 @@ import cloud.trotter.dashbuddy.worker.DailyGasPriceWorker
 import cloud.trotter.dashbuddy.worker.WeeklyPlanWorker
 import dagger.hilt.android.HiltAndroidApp
 import timber.log.Timber
+import java.time.Instant
+import java.time.ZoneOffset
+import java.time.format.DateTimeFormatter
+import java.util.Locale
 import java.util.concurrent.TimeUnit
 import javax.inject.Inject
 import javax.inject.Provider
@@ -64,6 +68,18 @@ class DashBuddyApplication : Application(), Configuration.Provider {
 
     // Global Context Accessor (Still useful for Utils, but avoid if possible)
     companion object {
+        /** Stable Timber tag for the build-identity startup line (#1062, principle 7). */
+        const val BUILD_TAG = "App"
+
+        /**
+         * `BuildConfig.BUILD_TIME_MS` rendered as a machine-stable ISO-8601 UTC instant.
+         * `Locale.ROOT` because this is a machine string in a log file, never user-facing copy.
+         */
+        fun buildTimeIso(): String = DateTimeFormatter.ISO_INSTANT
+            .withLocale(Locale.ROOT)
+            .withZone(ZoneOffset.UTC)
+            .format(Instant.ofEpochMilli(BuildConfig.BUILD_TIME_MS))
+
         lateinit var instance: DashBuddyApplication
             private set
 
@@ -116,6 +132,17 @@ class DashBuddyApplication : Application(), Configuration.Provider {
                 devSettingsRepository,
                 stateProvider
             )
+        )
+
+        // 1b. Build identity (#1062) — the FIRST line every log file carries, planted here so it
+        // lands in the shareable INFO+ export as well as the DEBUG firehose. A field-data pull must
+        // never again have to INFER which build the phone ran (2026-09-05: inferred from the
+        // ABSENCE of log lines, because installDebug reported an identical versionName for two
+        // different commits). PII-free by construction: our own version string and a build clock.
+        Timber.tag(BUILD_TAG).i(
+            "DashBuddy %s starting (built %s)",
+            BuildConfig.VERSION_NAME,
+            buildTimeIso(),
         )
 
         // 2. Compile the JSON rulesets off the main thread (#361): ~95KB of

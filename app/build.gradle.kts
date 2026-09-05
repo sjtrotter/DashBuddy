@@ -15,6 +15,60 @@ plugins {
     alias(libs.plugins.ksp)
 }
 
+// ---------------------------------------------------------------------------
+// Build identity (#1062): every build must be able to say which commit it is.
+//
+// The receipt: a field-data pull on 2026-09-05 had to INFER the phone's build
+// from the ABSENCE of log lines, because `:app:installDebug` reported the same
+// `versionName=0.230.0` for a branch build as for the master build it replaced.
+// So the git sha rides the versionName, BuildConfig, the startup INFO line, and
+// the periodic PipelineStats summary.
+//
+// Fail-safe by construction: every git read is wrapped, and a missing git / a
+// non-repo checkout (a source zip, a CI shallow export without .git) yields
+// "nogit" rather than failing the build.
+// ---------------------------------------------------------------------------
+
+/**
+ * Runs a git command through `providers.exec` (configuration-cache friendly) and returns its
+ * trimmed stdout, or `null` if git is absent, this is not a repo, or the command failed.
+ */
+fun gitOutput(vararg args: String): String? = try {
+    val out = providers.exec {
+        commandLine("git", *args)
+        workingDir = rootDir
+        isIgnoreExitValue = true
+    }
+    if (out.result.get().exitValue == 0) out.standardOutput.asText.get().trim().ifEmpty { null }
+    else null
+} catch (_: Exception) {
+    null
+}
+
+val gitSha: String = gitOutput("rev-parse", "--short=8", "HEAD") ?: "nogit"
+
+/**
+ * Working tree dirty? `.idea/` paths are EXCLUDED on purpose: Android Studio rewrites
+ * `.idea/gradle.xml` constantly, so counting it would mark every developer build `.dirty`
+ * and the marker would stop meaning anything.
+ */
+val gitDirty: Boolean = (gitOutput("status", "--porcelain") ?: "")
+    .lineSequence()
+    .map { it.trim() }
+    .filter { it.isNotEmpty() }
+    // porcelain v1 is `XY <path>`; a rename is `R  old -> new` — take the last path either way.
+    .map { line -> line.substringAfter(' ').trim().trim('"').substringAfterLast("-> ").trim('"') }
+    .any { !it.startsWith(".idea/") }
+
+/**
+ * Configuration-time wall clock. Deliberately NOT `Instant.now()` inside a task: the value must
+ * be baked into `BuildConfig`, which is generated from configuration. Note that under an ENABLED
+ * configuration cache a reused configuration would freeze this at the cached instant — the sha is
+ * the identity that matters, this is only a convenience.
+ */
+val buildTimeMs: Long = System.currentTimeMillis()
+
+
 android {
     namespace = "cloud.trotter.dashbuddy"
     compileSdk = 36
@@ -24,8 +78,22 @@ android {
         minSdk = 30
         targetSdk = 36
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+
+        // versionCode stays a hand-bumped constant. It must NOT be derived from git (a commit
+        // count, a timestamp): Android refuses to install an APK whose versionCode is LOWER than
+        // the installed one, so a derived-monotonic code would make installing a branch build
+        // over a newer master build fail with INSTALL_FAILED_VERSION_DOWNGRADE. The build's
+        // identity rides versionName + BuildConfig.GIT_SHA instead, which nothing enforces
+        // ordering on.
         versionCode = 1
-        versionName = "0.230.0"
+
+        // The base marketing version, hand-bumped. The `+<sha>` suffix is what makes each
+        // build self-identifying; `.dirty` marks an uncommitted working tree.
+        val baseVersionName = "0.230.0"
+        versionName = "$baseVersionName+$gitSha" + if (gitDirty) ".dirty" else ""
+
+        buildConfigField("String", "GIT_SHA", "\"$gitSha\"")
+        buildConfigField("long", "BUILD_TIME_MS", "${buildTimeMs}L")
     }
 
     signingConfigs {
