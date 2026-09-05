@@ -1,8 +1,8 @@
 {
-    "captureId": "c0804b0f-f3f9-4488-9e4c-e5cb51df3532",
+    "captureId": "f5d25737-0312-45e3-96e3-cc8f2f048120",
     "pipelineId": "accessibility.window",
     "schemaId": "uinode.v1",
-    "timestamp": 1786057642656,
+    "timestamp": 1788127408509,
     "platform": "doordash",
     "ruleId": "doordash.screen.shopping_item_status",
     "classificationName": "shopping_item_status",
@@ -21,7 +21,7 @@
         "stateMachineApiVersion": "1.0",
         "appVersion": "0.230.0",
         "deviceFingerprint": "google/panther/panther:17/CP2A.260705.006/15641320:user/release-keys",
-        "platformAppVersion": "8.91.7"
+        "platformAppVersion": "8.93.7"
     },
     "payload": {
         "class": "android.widget.FrameLayout",
@@ -38,9 +38,9 @@
                 "isEnabled": true,
                 "bounds": {
                     "left": 0,
-                    "top": 2400,
+                    "top": 2117,
                     "right": 1080,
-                    "bottom": 4747
+                    "bottom": 4464
                 },
                 "children": [
                     {
@@ -48,9 +48,9 @@
                         "isEnabled": true,
                         "bounds": {
                             "left": 0,
-                            "top": 2536,
+                            "top": 2253,
                             "right": 1080,
-                            "bottom": 4747
+                            "bottom": 4464
                         },
                         "children": [
                             {
@@ -59,9 +59,9 @@
                                 "isEnabled": true,
                                 "bounds": {
                                     "left": 0,
-                                    "top": 2536,
+                                    "top": 2253,
                                     "right": 1080,
-                                    "bottom": 4747
+                                    "bottom": 4464
                                 },
                                 "children": [
                                     {
@@ -70,9 +70,9 @@
                                         "isEnabled": true,
                                         "bounds": {
                                             "left": 0,
-                                            "top": 2536,
+                                            "top": 2253,
                                             "right": 1080,
-                                            "bottom": 4747
+                                            "bottom": 4464
                                         },
                                         "children": [
                                             {
@@ -81,9 +81,9 @@
                                                 "isEnabled": true,
                                                 "bounds": {
                                                     "left": 0,
-                                                    "top": 2536,
+                                                    "top": 2253,
                                                     "right": 1080,
-                                                    "bottom": 4747
+                                                    "bottom": 4464
                                                 },
                                                 "children": [
                                                     {
@@ -93,9 +93,9 @@
                                                         "isEnabled": true,
                                                         "bounds": {
                                                             "left": 0,
-                                                            "top": 2536,
+                                                            "top": 2253,
                                                             "right": 1080,
-                                                            "bottom": 4747
+                                                            "bottom": 4464
                                                         }
                                                     },
                                                     {
@@ -105,9 +105,9 @@
                                                         "isEnabled": true,
                                                         "bounds": {
                                                             "left": 0,
-                                                            "top": 3657,
+                                                            "top": 3085,
                                                             "right": 1080,
-                                                            "bottom": 4747
+                                                            "bottom": 4464
                                                         },
                                                         "children": [
                                                             {
@@ -116,9 +116,9 @@
                                                                 "isEnabled": true,
                                                                 "bounds": {
                                                                     "left": 0,
-                                                                    "top": 3657,
+                                                                    "top": 3085,
                                                                     "right": 1080,
-                                                                    "bottom": 3693
+                                                                    "bottom": 3121
                                                                 },
                                                                 "children": [
                                                                     {
@@ -127,9 +127,9 @@
                                                                         "isEnabled": true,
                                                                         "bounds": {
                                                                             "left": 0,
-                                                                            "top": 3657,
+                                                                            "top": 3085,
                                                                             "right": 1080,
-                                                                            "bottom": 3693
+                                                                            "bottom": 3121
                                                                         },
                                                                         "children": [
                                                                             {
@@ -138,9 +138,9 @@
                                                                                 "isEnabled": true,
                                                                                 "bounds": {
                                                                                     "left": 0,
-                                                                                    "top": 3675,
+                                                                                    "top": 3103,
                                                                                     "right": 1080,
-                                                                                    "bottom": 3684
+                                                                                    "bottom": 3112
                                                                                 }
                                                                             }
                                                                         ]
@@ -153,9 +153,9 @@
                                                                 "isEnabled": true,
                                                                 "bounds": {
                                                                     "left": 0,
-                                                                    "top": 3729,
+                                                                    "top": 3157,
                                                                     "right": 1080,
-                                                                    "bottom": 4711
+                                                                    "bottom": 4428
                                                                 },
                                                                 "children": [
                                                                     {
@@ -164,9 +164,9 @@
                                                                         "isEnabled": true,
                                                                         "bounds": {
                                                                             "left": 0,
-                                                                            "top": 3729,
+                                                                            "top": 3157,
                                                                             "right": 1080,
-                                                                            "bottom": 4711
+                                                                            "bottom": 4428
                                                                         },
                                                                         "children": [
                                                                             {
@@ -175,9 +175,9 @@
                                                                                 "isEnabled": true,
                                                                                 "bounds": {
                                                                                     "left": 0,
-                                                                                    "top": 3729,
+                                                                                    "top": 3157,
                                                                                     "right": 1080,
-                                                                                    "bottom": 4711
+                                                                                    "bottom": 4428
                                                                                 },
                                                                                 "children": [
                                                                                     {
@@ -186,9 +186,9 @@
                                                                                         "isEnabled": true,
                                                                                         "bounds": {
                                                                                             "left": 0,
-                                                                                            "top": 3729,
+                                                                                            "top": 3157,
                                                                                             "right": 1080,
-                                                                                            "bottom": 4711
+                                                                                            "bottom": 4428
                                                                                         },
                                                                                         "children": [
                                                                                             {
@@ -196,9 +196,9 @@
                                                                                                 "isEnabled": true,
                                                                                                 "bounds": {
                                                                                                     "left": 0,
-                                                                                                    "top": 3729,
+                                                                                                    "top": 3157,
                                                                                                     "right": 1080,
-                                                                                                    "bottom": 4711
+                                                                                                    "bottom": 4428
                                                                                                 },
                                                                                                 "children": [
                                                                                                     {
@@ -207,9 +207,9 @@
                                                                                                         "isEnabled": true,
                                                                                                         "bounds": {
                                                                                                             "left": 0,
-                                                                                                            "top": 3729,
+                                                                                                            "top": 3157,
                                                                                                             "right": 1080,
-                                                                                                            "bottom": 3729
+                                                                                                            "bottom": 3157
                                                                                                         },
                                                                                                         "children": [
                                                                                                             {
@@ -218,9 +218,9 @@
                                                                                                                 "isEnabled": true,
                                                                                                                 "bounds": {
                                                                                                                     "left": 0,
-                                                                                                                    "top": 3729,
+                                                                                                                    "top": 3157,
                                                                                                                     "right": 1080,
-                                                                                                                    "bottom": 3729
+                                                                                                                    "bottom": 3157
                                                                                                                 }
                                                                                                             }
                                                                                                         ]
@@ -231,9 +231,9 @@
                                                                                                         "isEnabled": true,
                                                                                                         "bounds": {
                                                                                                             "left": 0,
-                                                                                                            "top": 3729,
+                                                                                                            "top": 3157,
                                                                                                             "right": 1080,
-                                                                                                            "bottom": 4076
+                                                                                                            "bottom": 3504
                                                                                                         },
                                                                                                         "children": [
                                                                                                             {
@@ -241,9 +241,9 @@
                                                                                                                 "isEnabled": true,
                                                                                                                 "bounds": {
                                                                                                                     "left": 0,
-                                                                                                                    "top": 2883,
+                                                                                                                    "top": 3157,
                                                                                                                     "right": 1080,
-                                                                                                                    "bottom": 3230
+                                                                                                                    "bottom": 3504
                                                                                                                 },
                                                                                                                 "children": [
                                                                                                                     {
@@ -251,9 +251,9 @@
                                                                                                                         "isEnabled": true,
                                                                                                                         "bounds": {
                                                                                                                             "left": 0,
-                                                                                                                            "top": 2883,
+                                                                                                                            "top": 3157,
                                                                                                                             "right": 1080,
-                                                                                                                            "bottom": 3230
+                                                                                                                            "bottom": 3504
                                                                                                                         },
                                                                                                                         "children": [
                                                                                                                             {
@@ -261,9 +261,9 @@
                                                                                                                                 "isEnabled": true,
                                                                                                                                 "bounds": {
                                                                                                                                     "left": 0,
-                                                                                                                                    "top": 2883,
+                                                                                                                                    "top": 3157,
                                                                                                                                     "right": 1080,
-                                                                                                                                    "bottom": 3230
+                                                                                                                                    "bottom": 3504
                                                                                                                                 },
                                                                                                                                 "children": [
                                                                                                                                     {
@@ -271,9 +271,9 @@
                                                                                                                                         "isEnabled": true,
                                                                                                                                         "bounds": {
                                                                                                                                             "left": 0,
-                                                                                                                                            "top": 2883,
+                                                                                                                                            "top": 3157,
                                                                                                                                             "right": 1080,
-                                                                                                                                            "bottom": 3230
+                                                                                                                                            "bottom": 3504
                                                                                                                                         }
                                                                                                                                     }
                                                                                                                                 ]
@@ -290,9 +290,9 @@
                                                                                                         "isEnabled": true,
                                                                                                         "bounds": {
                                                                                                             "left": 0,
-                                                                                                            "top": 4076,
+                                                                                                            "top": 3504,
                                                                                                             "right": 1080,
-                                                                                                            "bottom": 4550
+                                                                                                            "bottom": 4267
                                                                                                         },
                                                                                                         "children": [
                                                                                                             {
@@ -300,9 +300,9 @@
                                                                                                                 "isEnabled": true,
                                                                                                                 "bounds": {
                                                                                                                     "left": 0,
-                                                                                                                    "top": 3230,
+                                                                                                                    "top": 3504,
                                                                                                                     "right": 1080,
-                                                                                                                    "bottom": 3459
+                                                                                                                    "bottom": 3834
                                                                                                                 },
                                                                                                                 "children": [
                                                                                                                     {
@@ -310,9 +310,9 @@
                                                                                                                         "isEnabled": true,
                                                                                                                         "bounds": {
                                                                                                                             "left": 36,
-                                                                                                                            "top": 3283,
+                                                                                                                            "top": 3557,
                                                                                                                             "right": 1044,
-                                                                                                                            "bottom": 3441
+                                                                                                                            "bottom": 3816
                                                                                                                         },
                                                                                                                         "children": [
                                                                                                                             {
@@ -320,9 +320,9 @@
                                                                                                                                 "isEnabled": true,
                                                                                                                                 "bounds": {
                                                                                                                                     "left": 36,
-                                                                                                                                    "top": 3283,
+                                                                                                                                    "top": 3557,
                                                                                                                                     "right": 1044,
-                                                                                                                                    "bottom": 3441
+                                                                                                                                    "bottom": 3715
                                                                                                                                 },
                                                                                                                                 "children": [
                                                                                                                                     {
@@ -331,9 +331,9 @@
                                                                                                                                         "isEnabled": true,
                                                                                                                                         "bounds": {
                                                                                                                                             "left": 36,
-                                                                                                                                            "top": 3283,
+                                                                                                                                            "top": 3557,
                                                                                                                                             "right": 1044,
-                                                                                                                                            "bottom": 3367
+                                                                                                                                            "bottom": 3641
                                                                                                                                         }
                                                                                                                                     },
                                                                                                                                     {
@@ -342,12 +342,23 @@
                                                                                                                                         "isEnabled": true,
                                                                                                                                         "bounds": {
                                                                                                                                             "left": 36,
-                                                                                                                                            "top": 3376,
+                                                                                                                                            "top": 3650,
                                                                                                                                             "right": 1044,
-                                                                                                                                            "bottom": 3441
+                                                                                                                                            "bottom": 3715
                                                                                                                                         }
                                                                                                                                     }
                                                                                                                                 ]
+                                                                                                                            },
+                                                                                                                            {
+                                                                                                                                "text": "Last found: This week",
+                                                                                                                                "class": "android.widget.TextView",
+                                                                                                                                "isEnabled": true,
+                                                                                                                                "bounds": {
+                                                                                                                                    "left": 36,
+                                                                                                                                    "top": 3751,
+                                                                                                                                    "right": 1044,
+                                                                                                                                    "bottom": 3816
+                                                                                                                                }
                                                                                                                             }
                                                                                                                         ]
                                                                                                                     }
@@ -358,9 +369,9 @@
                                                                                                                 "isEnabled": true,
                                                                                                                 "bounds": {
                                                                                                                     "left": 0,
-                                                                                                                    "top": 3459,
+                                                                                                                    "top": 3834,
                                                                                                                     "right": 1080,
-                                                                                                                    "bottom": 3888
+                                                                                                                    "bottom": 4263
                                                                                                                 },
                                                                                                                 "children": [
                                                                                                                     {
@@ -368,9 +379,9 @@
                                                                                                                         "isEnabled": true,
                                                                                                                         "bounds": {
                                                                                                                             "left": 36,
-                                                                                                                            "top": 3495,
+                                                                                                                            "top": 3870,
                                                                                                                             "right": 1044,
-                                                                                                                            "bottom": 3852
+                                                                                                                            "bottom": 4227
                                                                                                                         },
                                                                                                                         "children": [
                                                                                                                             {
@@ -378,9 +389,9 @@
                                                                                                                                 "isEnabled": true,
                                                                                                                                 "bounds": {
                                                                                                                                     "left": 36,
-                                                                                                                                    "top": 3495,
+                                                                                                                                    "top": 3870,
                                                                                                                                     "right": 1044,
-                                                                                                                                    "bottom": 3602
+                                                                                                                                    "bottom": 3977
                                                                                                                                 },
                                                                                                                                 "children": [
                                                                                                                                     {
@@ -389,9 +400,9 @@
                                                                                                                                         "isEnabled": true,
                                                                                                                                         "bounds": {
                                                                                                                                             "left": 36,
-                                                                                                                                            "top": 3495,
+                                                                                                                                            "top": 3870,
                                                                                                                                             "right": 1044,
-                                                                                                                                            "bottom": 3602
+                                                                                                                                            "bottom": 3977
                                                                                                                                         },
                                                                                                                                         "children": [
                                                                                                                                             {
@@ -401,9 +412,9 @@
                                                                                                                                                 "isEnabled": true,
                                                                                                                                                 "bounds": {
                                                                                                                                                     "left": 350,
-                                                                                                                                                    "top": 3516,
+                                                                                                                                                    "top": 3891,
                                                                                                                                                     "right": 731,
-                                                                                                                                                    "bottom": 3582
+                                                                                                                                                    "bottom": 3957
                                                                                                                                                 }
                                                                                                                                             }
                                                                                                                                         ]
@@ -415,9 +426,9 @@
                                                                                                                                 "isEnabled": true,
                                                                                                                                 "bounds": {
                                                                                                                                     "left": 36,
-                                                                                                                                    "top": 3620,
+                                                                                                                                    "top": 3995,
                                                                                                                                     "right": 1044,
-                                                                                                                                    "bottom": 3727
+                                                                                                                                    "bottom": 4102
                                                                                                                                 },
                                                                                                                                 "children": [
                                                                                                                                     {
@@ -426,9 +437,9 @@
                                                                                                                                         "isEnabled": true,
                                                                                                                                         "bounds": {
                                                                                                                                             "left": 36,
-                                                                                                                                            "top": 3620,
+                                                                                                                                            "top": 3995,
                                                                                                                                             "right": 1044,
-                                                                                                                                            "bottom": 3727
+                                                                                                                                            "bottom": 4102
                                                                                                                                         },
                                                                                                                                         "children": [
                                                                                                                                             {
@@ -438,9 +449,9 @@
                                                                                                                                                 "isEnabled": true,
                                                                                                                                                 "bounds": {
                                                                                                                                                     "left": 301,
-                                                                                                                                                    "top": 3641,
+                                                                                                                                                    "top": 4016,
                                                                                                                                                     "right": 779,
-                                                                                                                                                    "bottom": 3707
+                                                                                                                                                    "bottom": 4082
                                                                                                                                                 }
                                                                                                                                             }
                                                                                                                                         ]
@@ -452,9 +463,9 @@
                                                                                                                                 "isEnabled": true,
                                                                                                                                 "bounds": {
                                                                                                                                     "left": 36,
-                                                                                                                                    "top": 3745,
+                                                                                                                                    "top": 4120,
                                                                                                                                     "right": 1044,
-                                                                                                                                    "bottom": 3852
+                                                                                                                                    "bottom": 4227
                                                                                                                                 },
                                                                                                                                 "children": [
                                                                                                                                     {
@@ -463,9 +474,9 @@
                                                                                                                                         "isEnabled": true,
                                                                                                                                         "bounds": {
                                                                                                                                             "left": 36,
-                                                                                                                                            "top": 3745,
+                                                                                                                                            "top": 4120,
                                                                                                                                             "right": 1044,
-                                                                                                                                            "bottom": 3852
+                                                                                                                                            "bottom": 4227
                                                                                                                                         },
                                                                                                                                         "children": [
                                                                                                                                             {
@@ -475,9 +486,9 @@
                                                                                                                                                 "isEnabled": true,
                                                                                                                                                 "bounds": {
                                                                                                                                                     "left": 338,
-                                                                                                                                                    "top": 3766,
+                                                                                                                                                    "top": 4141,
                                                                                                                                                     "right": 743,
-                                                                                                                                                    "bottom": 3832
+                                                                                                                                                    "bottom": 4207
                                                                                                                                                 }
                                                                                                                                             }
                                                                                                                                         ]
@@ -493,9 +504,9 @@
                                                                                                                 "isEnabled": true,
                                                                                                                 "bounds": {
                                                                                                                     "left": 0,
-                                                                                                                    "top": 3888,
+                                                                                                                    "top": 4263,
                                                                                                                     "right": 1080,
-                                                                                                                    "bottom": 3892
+                                                                                                                    "bottom": 4267
                                                                                                                 },
                                                                                                                 "children": [
                                                                                                                     {
@@ -503,9 +514,9 @@
                                                                                                                         "isEnabled": true,
                                                                                                                         "bounds": {
                                                                                                                             "left": 0,
-                                                                                                                            "top": 3888,
+                                                                                                                            "top": 4263,
                                                                                                                             "right": 1080,
-                                                                                                                            "bottom": 3892
+                                                                                                                            "bottom": 4267
                                                                                                                         }
                                                                                                                     }
                                                                                                                 ]
@@ -518,9 +529,9 @@
                                                                                                         "isEnabled": true,
                                                                                                         "bounds": {
                                                                                                             "left": 0,
-                                                                                                            "top": 4550,
+                                                                                                            "top": 4267,
                                                                                                             "right": 1080,
-                                                                                                            "bottom": 4711
+                                                                                                            "bottom": 4428
                                                                                                         },
                                                                                                         "children": [
                                                                                                             {
@@ -528,9 +539,9 @@
                                                                                                                 "isEnabled": true,
                                                                                                                 "bounds": {
                                                                                                                     "left": 0,
-                                                                                                                    "top": 3892,
+                                                                                                                    "top": 4267,
                                                                                                                     "right": 1080,
-                                                                                                                    "bottom": 4053
+                                                                                                                    "bottom": 4428
                                                                                                                 },
                                                                                                                 "children": [
                                                                                                                     {
@@ -538,9 +549,9 @@
                                                                                                                         "isEnabled": true,
                                                                                                                         "bounds": {
                                                                                                                             "left": 0,
-                                                                                                                            "top": 3892,
+                                                                                                                            "top": 4267,
                                                                                                                             "right": 1080,
-                                                                                                                            "bottom": 4053
+                                                                                                                            "bottom": 4428
                                                                                                                         },
                                                                                                                         "children": [
                                                                                                                             {
@@ -549,9 +560,9 @@
                                                                                                                                 "isEnabled": true,
                                                                                                                                 "bounds": {
                                                                                                                                     "left": 27,
-                                                                                                                                    "top": 3919,
+                                                                                                                                    "top": 4294,
                                                                                                                                     "right": 1053,
-                                                                                                                                    "bottom": 4026
+                                                                                                                                    "bottom": 4401
                                                                                                                                 },
                                                                                                                                 "children": [
                                                                                                                                     {
@@ -560,9 +571,9 @@
                                                                                                                                         "isEnabled": true,
                                                                                                                                         "bounds": {
                                                                                                                                             "left": 422,
-                                                                                                                                            "top": 3947,
+                                                                                                                                            "top": 4322,
                                                                                                                                             "right": 657,
-                                                                                                                                            "bottom": 3999
+                                                                                                                                            "bottom": 4374
                                                                                                                                         }
                                                                                                                                     },
                                                                                                                                     {
@@ -570,9 +581,9 @@
                                                                                                                                         "isEnabled": true,
                                                                                                                                         "bounds": {
                                                                                                                                             "left": 27,
-                                                                                                                                            "top": 3919,
+                                                                                                                                            "top": 4294,
                                                                                                                                             "right": 1053,
-                                                                                                                                            "bottom": 4026
+                                                                                                                                            "bottom": 4401
                                                                                                                                         }
                                                                                                                                     }
                                                                                                                                 ]
@@ -601,9 +612,9 @@
                                                         "isEnabled": true,
                                                         "bounds": {
                                                             "left": 0,
-                                                            "top": 4743,
+                                                            "top": 4460,
                                                             "right": 1080,
-                                                            "bottom": 4747
+                                                            "bottom": 4464
                                                         }
                                                     },
                                                     {
@@ -612,9 +623,9 @@
                                                         "isEnabled": true,
                                                         "bounds": {
                                                             "left": 0,
-                                                            "top": 4747,
+                                                            "top": 4464,
                                                             "right": 1080,
-                                                            "bottom": 4747
+                                                            "bottom": 4464
                                                         }
                                                     }
                                                 ]
@@ -633,9 +644,9 @@
                 "isEnabled": true,
                 "bounds": {
                     "left": 0,
-                    "top": 4747,
+                    "top": 4464,
                     "right": 1080,
-                    "bottom": 4800
+                    "bottom": 4517
                 }
             }
         ]

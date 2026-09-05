@@ -1,8 +1,8 @@
 {
-    "captureId": "14d39331-3947-4000-8ccd-f46e510874d2",
+    "captureId": "ddd16cf1-a71f-40ce-b94a-9999ac0b7036",
     "pipelineId": "accessibility.window",
     "schemaId": "uinode.v1",
-    "timestamp": 1784398949792,
+    "timestamp": 1788130861256,
     "platform": "doordash",
     "ruleId": "doordash.screen.camera_capture",
     "classificationName": "camera_capture",
@@ -20,7 +20,8 @@
         },
         "stateMachineApiVersion": "1.0",
         "appVersion": "0.230.0",
-        "deviceFingerprint": "google/panther/panther:16/CP1A.260405.005/15001963:user/release-keys"
+        "deviceFingerprint": "google/panther/panther:17/CP2A.260705.006/15641320:user/release-keys",
+        "platformAppVersion": "8.93.7"
     },
     "payload": {
         "class": "android.widget.FrameLayout",
@@ -265,29 +266,7 @@
                                                                                                                             "top": 261,
                                                                                                                             "right": 1080,
                                                                                                                             "bottom": 2347
-                                                                                                                        },
-                                                                                                                        "children": [
-                                                                                                                            {
-                                                                                                                                "class": "android.view.View",
-                                                                                                                                "isEnabled": true,
-                                                                                                                                "bounds": {
-                                                                                                                                    "left": 0,
-                                                                                                                                    "top": 261,
-                                                                                                                                    "right": 1080,
-                                                                                                                                    "bottom": 2347
-                                                                                                                                }
-                                                                                                                            },
-                                                                                                                            {
-                                                                                                                                "class": "android.view.SurfaceView",
-                                                                                                                                "isEnabled": true,
-                                                                                                                                "bounds": {
-                                                                                                                                    "left": 0,
-                                                                                                                                    "top": 261,
-                                                                                                                                    "right": 1080,
-                                                                                                                                    "bottom": 2347
-                                                                                                                                }
-                                                                                                                            }
-                                                                                                                        ]
+                                                                                                                        }
                                                                                                                     },
                                                                                                                     {
                                                                                                                         "id": "com.doordash.driverapp:id/image_capture_view",
@@ -335,6 +314,19 @@
                                                                                                                                                 }
                                                                                                                                             }
                                                                                                                                         ]
+                                                                                                                                    },
+                                                                                                                                    {
+                                                                                                                                        "text": "[redacted:203c]",
+                                                                                                                                        "id": "com.doordash.driverapp:id/bottom_instruction",
+                                                                                                                                        "class": "android.widget.TextView",
+                                                                                                                                        "isClickable": true,
+                                                                                                                                        "isEnabled": true,
+                                                                                                                                        "bounds": {
+                                                                                                                                            "left": 0,
+                                                                                                                                            "top": 1910,
+                                                                                                                                            "right": 1080,
+                                                                                                                                            "bottom": 2141
+                                                                                                                                        }
                                                                                                                                     },
                                                                                                                                     {
                                                                                                                                         "id": "com.doordash.driverapp:id/button_layout",

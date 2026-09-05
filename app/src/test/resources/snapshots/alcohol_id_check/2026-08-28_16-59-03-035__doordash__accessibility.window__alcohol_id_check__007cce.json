@@ -1,11 +1,11 @@
 {
-    "captureId": "4c3a637d-c449-4671-8d2c-69b29b4e9c15",
+    "captureId": "8d7e1fba-1dfd-408e-888a-49c9825eb6b6",
     "pipelineId": "accessibility.window",
     "schemaId": "uinode.v1",
-    "timestamp": 1780096100531,
+    "timestamp": 1787954343031,
     "platform": "doordash",
-    "ruleId": null,
-    "classificationName": "UNKNOWN",
+    "ruleId": "doordash.screen.alcohol_id_check",
+    "classificationName": "alcohol_id_check",
     "metadata": {
         "engineVersion": 1,
         "rulesetFormatVersion": 2,
@@ -20,7 +20,8 @@
         },
         "stateMachineApiVersion": "1.0",
         "appVersion": "0.230.0",
-        "deviceFingerprint": "google/panther/panther:16/CP1A.260405.005/15001963:user/release-keys"
+        "deviceFingerprint": "google/panther/panther:17/CP2A.260705.006/15641320:user/release-keys",
+        "platformAppVersion": "8.93.7"
     },
     "payload": {
         "class": "android.widget.FrameLayout",
@@ -205,8 +206,8 @@
                                                                 },
                                                                 "children": [
                                                                     {
-                                                                        "text": "ID barcode scan",
-                                                                        "id": "com.doordash.driverapp:id/verify_id_intro_title",
+                                                                        "text": "Identity verification",
+                                                                        "id": "com.doordash.driverapp:id/verify_id_confirmation_title",
                                                                         "class": "android.widget.TextView",
                                                                         "isEnabled": true,
                                                                         "bounds": {
@@ -217,7 +218,7 @@
                                                                         }
                                                                     },
                                                                     {
-                                                                        "id": "com.doordash.driverapp:id/verify_id_intro_flow_progressbar",
+                                                                        "id": "com.doordash.driverapp:id/verify_id_confirmation_flow_progressbar",
                                                                         "class": "android.view.ViewGroup",
                                                                         "isEnabled": true,
                                                                         "bounds": {
@@ -228,7 +229,7 @@
                                                                         },
                                                                         "children": [
                                                                             {
-                                                                                "text": "1 of 4",
+                                                                                "text": "2 of 4",
                                                                                 "id": "com.doordash.driverapp:id/step_title",
                                                                                 "class": "android.widget.TextView",
                                                                                 "isEnabled": true,
@@ -295,19 +296,19 @@
                                                                         ]
                                                                     },
                                                                     {
-                                                                        "text": "Scan the barcode on the back of the recipient's ID",
-                                                                        "id": "com.doordash.driverapp:id/verify_id_intro_subtitle",
+                                                                        "text": "Verify that the ID matches the recipient and they aren't intoxicated.     ",
+                                                                        "id": "com.doordash.driverapp:id/verify_id_confirmation_subtitle",
                                                                         "class": "android.widget.TextView",
                                                                         "isEnabled": true,
                                                                         "bounds": {
                                                                             "left": 36,
                                                                             "top": 506,
                                                                             "right": 1044,
-                                                                            "bottom": 612
+                                                                            "bottom": 624
                                                                         }
                                                                     },
                                                                     {
-                                                                        "id": "com.doordash.driverapp:id/verify_id_intro_image",
+                                                                        "id": "com.doordash.driverapp:id/verify_id_confirmation_image",
                                                                         "class": "android.widget.ImageView",
                                                                         "isEnabled": true,
                                                                         "bounds": {
@@ -318,8 +319,35 @@
                                                                         }
                                                                     },
                                                                     {
-                                                                        "desc": "Start scan",
-                                                                        "id": "com.doordash.driverapp:id/verify_id_start_scan_btn",
+                                                                        "desc": "Verify",
+                                                                        "id": "com.doordash.driverapp:id/verify_id_confirm_btn",
+                                                                        "class": "android.widget.Button",
+                                                                        "isClickable": true,
+                                                                        "isEnabled": true,
+                                                                        "bounds": {
+                                                                            "left": 36,
+                                                                            "top": 2097,
+                                                                            "right": 1044,
+                                                                            "bottom": 2204
+                                                                        },
+                                                                        "children": [
+                                                                            {
+                                                                                "text": "Verify",
+                                                                                "id": "com.doordash.driverapp:id/textView_prism_button_title",
+                                                                                "class": "android.widget.TextView",
+                                                                                "isEnabled": true,
+                                                                                "bounds": {
+                                                                                    "left": 479,
+                                                                                    "top": 2118,
+                                                                                    "right": 601,
+                                                                                    "bottom": 2184
+                                                                                }
+                                                                            }
+                                                                        ]
+                                                                    },
+                                                                    {
+                                                                        "desc": "Can't verify",
+                                                                        "id": "com.doordash.driverapp:id/verify_id_no_confirm_btn",
                                                                         "class": "android.widget.Button",
                                                                         "isClickable": true,
                                                                         "isEnabled": true,
@@ -331,14 +359,14 @@
                                                                         },
                                                                         "children": [
                                                                             {
-                                                                                "text": "Start scan",
+                                                                                "text": "Can't verify",
                                                                                 "id": "com.doordash.driverapp:id/textView_prism_button_title",
                                                                                 "class": "android.widget.TextView",
                                                                                 "isEnabled": true,
                                                                                 "bounds": {
-                                                                                    "left": 439,
+                                                                                    "left": 422,
                                                                                     "top": 2243,
-                                                                                    "right": 641,
+                                                                                    "right": 658,
                                                                                     "bottom": 2309
                                                                                 }
                                                                             }
