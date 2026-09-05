@@ -297,9 +297,20 @@ corpus before joining the runtime set — chrome-ambiguous prefixes ("Return ", 
 "Heading to ") are REJECTED because `CaptureBackstopCorpusTest` goes red on a clean corpus,
 reasoning recorded in the `CustomerTextMarkers` KDoc; the rule redact is the primary control (#806). Intake-side prefix lists (`SnapshotRedactor.NAME_PREFIXES`,
 `PII_ID_SUFFIXES`) are deliberately ASYMMETRIC with the runtime markers — an over-scrub at intake
-costs triage text, a runtime false positive scrubs a live envelope — and the committed-corpus guard
+costs triage text, a runtime false positive scrubs a live envelope — **but that asymmetry has a
+floor (#1064): an intake over-scrub that eats a rule's own recognition ANCHOR costs the fixture,
+not triage text.** `"Return "` was the receipt (added unconditionally by #994, it masked DoorDash's
+`"Return to dash"` button — a `hasText` anchor on four rules — so the 09-05 intake's `on_dash_map`
+fixtures re-classified and were set aside), so a chrome-ambiguous intake prefix now carries a
+predicate over its tail (`SnapshotRedactor.GATED_NAME_PREFIXES`; `"Return "`'s tests the segment
+ahead of the conjugation's own `" to "` against `FIRST_LAST_INITIAL_PATTERN`, the same byte-SSOT
+the rule side shares) and `SnapshotRedactor.customerLeadIn` is the ONE owner of "is this a customer
+lead-in with a raw tail", shared by the scrubber and the committed-corpus guard. That guard
 checks name shape + `ID_MARKERS` ids + lead-in prefixes, with hand-written fixture pseudonyms
-exempted by the byte-exact `CorpusDecoys` enumeration rather than by loosening the guard. Sensitive
+exempted by the byte-exact `CorpusDecoys` enumeration rather than by loosening the guard; a
+per-folder assertion that a fixture carries a raw pseudonym is pinned to the hand-authored files
+BY VALUE, never applied folder-wide, or the folder becomes CLOSED to device captures (which arrive
+already edge-masked) — the #995 `pickup_receipt_scan` case, fixed by #1064. Sensitive
 rules prefer **view-id anchors** (locale-immune, #938) — e.g. `sensitive.dasher_direct`'s
 `dxdr_nav_host_fragment` arm closes DasherDirect's text-free pre-render skeleton at the door (#924).
 #1059 blocks three more of the dasher's OWN surfaces on the same id-first pattern, all fielded

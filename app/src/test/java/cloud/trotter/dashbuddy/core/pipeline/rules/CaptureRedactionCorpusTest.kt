@@ -799,8 +799,11 @@ class CaptureRedactionCorpusTest {
      *     holds "Turn right " on seven committed legacy nav fixtures — masked at intake because
      *     it CAN carry a street, but not a leak when it doesn't). Flagging those here would be
      *     a false positive of exactly the kind this suite exists to keep out;
-     *  3. a value opening with a [SnapshotRedactor.NAME_PREFIXES] lead-in and a non-masked tail —
-     *     this is what catches `Return <real name> to <store>` (#994).
+     *  3. a value opening with a customer lead-in and a non-masked tail — asked through
+     *     [SnapshotRedactor.customerLeadIn], the scrubber's OWN owner of that question (#1064), so
+     *     this guard and the scrubber can never disagree about what a lead-in is. It is what
+     *     catches `Return <real name> to <store>` (#994) while leaving DoorDash's own
+     *     `"Return to dash"` chrome — a recognition anchor — standing.
      *
      * **Decoys.** The #992–#995 fixtures deliberately carry hand-written pseudonyms in RAW,
      * PII-SHAPED form, because a fixture already masked to `[redacted:…]` cannot prove the
@@ -859,9 +862,8 @@ class CaptureRedactionCorpusTest {
                         val why = when {
                             idIsPii -> "PII view id '$idSuffix' carries a raw value"
                             nameShape.matches(text) -> "whole-value customer-name shape"
-                            SnapshotRedactor.NAME_PREFIXES.any {
-                                text.startsWith(it, ignoreCase = true) && text.length > it.length
-                            } -> "customer lead-in prefix with a raw tail"
+                            SnapshotRedactor.customerLeadIn(text) != null ->
+                                "customer lead-in prefix with a raw tail"
                             else -> null
                         }
                         if (why != null) leaks += "$folder/$filename: $why — \"$text\""
@@ -2271,6 +2273,37 @@ class CaptureRedactionCorpusTest {
     }
 
     /**
+     * The fielded `pickup_receipt_scan` node shape — ground truth from the 6 fielded 08-07
+     * envelopes (fully id-less below `camera_fragment_container`); every value is invented. ONE
+     * owner, shared by the synthetic mask case and the #1064 already-masked-capture case, so the
+     * two can never disagree about what this surface renders.
+     */
+    private fun receiptScanScreen(
+        name: String,
+        instructionLine: String = "Focus on $name",
+    ) = UiNode(
+        viewIdResourceName = "com.doordash.driverapp:id/camera_fragment_container",
+        className = "android.view.View",
+        children = listOf(
+            UiNode(className = "android.widget.TextView", text = instructionLine),
+            UiNode(className = "android.widget.TextView", text = "Scan customer name"),
+            UiNode(className = "android.widget.TextView", text = name),
+            UiNode(className = "android.widget.TextView", text = "#fddcf · DoorDash"),
+            UiNode(className = "android.widget.TextView", text = "No receipt"),
+            UiNode(className = "android.widget.TextView", text = "Scan receipt"),
+            UiNode(
+                className = "android.widget.TextView",
+                text = "Scan the order details by focusing on the customer name. " +
+                    "We'll share this scan as a photo with the customer.",
+            ),
+            UiNode(className = "android.widget.TextView", text = "Start scanning"),
+            UiNode(className = "android.widget.TextView", text = "Pickup complete"),
+            UiNode(className = "android.widget.TextView", text = "Continue"),
+            UiNode(className = "android.widget.TextView", text = "0:05"),
+        ),
+    ).restoreParents()
+
+    /**
      * #995 — the receipt-scan camera surface persisted the customer's name TWICE per
      * frame on id-less nodes ("Focus on <FirstName L>" plus a bare "<FirstName L>"
      * sibling), and NOTHING reached it: no view id (`ID_MARKERS` misses), no enumerated
@@ -2286,29 +2319,7 @@ class CaptureRedactionCorpusTest {
         val rule = TestRulesetFactory.screenRuleset.ruleById("doordash.screen.pickup_receipt_scan")!!
         assertFalse("pickup_receipt_scan must declare a redact block", rule.redact.isEmpty())
 
-        fun scanScreen(name: String) = UiNode(
-            viewIdResourceName = "com.doordash.driverapp:id/camera_fragment_container",
-            className = "android.view.View",
-            children = listOf(
-                UiNode(className = "android.widget.TextView", text = "Focus on $name"),
-                UiNode(className = "android.widget.TextView", text = "Scan customer name"),
-                UiNode(className = "android.widget.TextView", text = name),
-                UiNode(className = "android.widget.TextView", text = "#fddcf · DoorDash"),
-                UiNode(className = "android.widget.TextView", text = "No receipt"),
-                UiNode(className = "android.widget.TextView", text = "Scan receipt"),
-                UiNode(
-                    className = "android.widget.TextView",
-                    text = "Scan the order details by focusing on the customer name. " +
-                        "We'll share this scan as a photo with the customer.",
-                ),
-                UiNode(className = "android.widget.TextView", text = "Start scanning"),
-                UiNode(className = "android.widget.TextView", text = "Pickup complete"),
-                UiNode(className = "android.widget.TextView", text = "Continue"),
-                UiNode(className = "android.widget.TextView", text = "0:05"),
-            ),
-        ).restoreParents()
-
-        val applied = rule.redact.apply(scanScreen("Testname Q"))
+        val applied = rule.redact.apply(receiptScanScreen("Testname Q"))
         val masked = serialize(applied)
         // BOTH copies of the name are gone — the instruction line and the bare sibling.
         assertFalse("customer name must not persist anywhere", masked.contains("Testname Q"))
@@ -2351,53 +2362,119 @@ class CaptureRedactionCorpusTest {
     }
 
     /**
+     * The byte-exact pseudonym the two HAND-AUTHORED `pickup_receipt_scan` fixtures carry in raw,
+     * PII-shaped form. Pinned as a [CorpusDecoys] entry by the test below, so this constant and
+     * the guard exemption that lets the fixtures stay raw can never drift apart.
+     */
+    private val RECEIPT_SCAN_DECOY = "Jordan T"
+
+    /**
      * #995 on the REAL trees (#1010 review F9). The synthetic case above proves the predicates
-     * against a node shape the test author typed; this runs them over the two committed fixtures,
-     * which still carry their (sanitized, but structurally faithful) name nodes RAW — so it proves
-     * the entries match DoorDash's actual id-less render, and it is what would catch a layout
-     * change that, say, gives the name node an id or splits the instruction line.
+     * against a node shape the test author typed; this runs them over the committed fixtures,
+     * whose (sanitized, but structurally faithful) name nodes are RAW — so it proves the entries
+     * match DoorDash's actual id-less render, and it is what would catch a layout change that,
+     * say, gives the name node an id or splits the instruction line.
      *
      * The pseudonym is an enumerated [CorpusDecoys] entry, so the corpus PII guard skips it by
      * value while this test still gets a raw tree to mask.
+     *
+     * **The raw pre-condition is pinned to the hand-authored fixtures, not to the folder (#1064).**
+     * It used to be asserted over every file in `pickup_receipt_scan/`, which made the folder
+     * CLOSED: only a fixture whose name a human typed can carry a raw name, because a device
+     * capture arrives already masked at the edge by this very rule's `redact`. So the first
+     * receipt-scan frame a real intake admitted would have failed this suite forever — the 09-05
+     * intake hit exactly that and set its capture aside. A device-captured fixture is now
+     * exercised by [assertReceiptScanFixture]'s recognition + chrome checks (and by the FIX 4
+     * committed-corpus guard, which owns "carries no raw PII"); only the
+     * mask-the-name-and-prove-one-hex half is skipped, because there is no raw name to mask.
      */
     @Test
     fun `pickup_receipt_scan redact masks both name nodes on the committed fixtures (#995)`() {
         val rule = TestRulesetFactory.screenRuleset.ruleById("doordash.screen.pickup_receipt_scan")!!
-        val decoy = "Jordan T"
+        assertTrue(
+            "the receipt-scan pseudonym must be an enumerated CorpusDecoys entry — that " +
+                "exemption is what lets the hand-authored fixtures stay raw for this test",
+            CorpusDecoys.isDecoy(RECEIPT_SCAN_DECOY),
+        )
         val files = File("src/test/resources/snapshots/pickup_receipt_scan")
             .listFiles { _, n -> n.endsWith(".json") }!!.sortedBy { it.name }
         assertTrue("the receipt-scan corpus must not be empty", files.isNotEmpty())
 
-        for (file in files) {
-            val real = TestResourceLoader.loadNode(file)
-            // Pre-condition: raw input, and it recognizes as this rule (no vacuous pass).
-            assertTrue(
-                "${file.name} must carry the raw name (else this test proves nothing)",
-                serialize(real).contains(decoy),
-            )
-            assertEquals(
-                "${file.name} must recognize as pickup_receipt_scan",
-                "doordash.screen.pickup_receipt_scan",
-                TestRulesetFactory.screenRuleset.matchFirst(real)?.ruleId,
-            )
-
-            val masked = serialize(rule.redact.apply(real))
-            assertFalse("${file.name}: the name must not persist anywhere", masked.contains(decoy))
-            assertTrue(
-                "${file.name}: the instruction line keeps its 'Focus on ' lead-in",
-                maskAfter("Focus on ").containsMatchIn(masked),
-            )
-            // Both copies masked to ONE hex — on the real tree, not a hand-built one.
-            val hexes = MASK_HEX.findAll(masked).map { it.groupValues[1] }.toSet()
-            assertEquals("${file.name}: both name nodes mask to one customer hex", 1, hexes.size)
-            // Over-match guards: the rule's own recognition anchors must survive redaction, or a
-            // replayed envelope would stop recognizing.
-            assertTrue(
-                "${file.name}: the scan chrome (and this rule's anchors) stay raw",
-                masked.contains("Scan customer name") ||
-                    masked.contains("Scan the order details by focusing on the customer name"),
-            )
+        val rawFixtures = files.filter { file ->
+            assertReceiptScanFixture(rule, file.name, TestResourceLoader.loadNode(file))
         }
+        // Non-vacuous: at least one raw fixture must survive, or the mask has nothing to prove
+        // itself against and this test degrades into a recognition check.
+        assertTrue(
+            "at least one hand-authored raw fixture must remain in pickup_receipt_scan/ " +
+                "(else the redact entries are never exercised against a real tree)",
+            rawFixtures.isNotEmpty(),
+        )
+    }
+
+    /**
+     * #1064 — a device-captured receipt-scan frame arrives with its name nodes ALREADY masked to
+     * the `[redacted:<4hex>]` family by this rule's own edge redact. Admitting one to the corpus
+     * must be legal: it still recognizes, its chrome (which is this rule's anchors) still
+     * survives, and re-applying the redact cannot put anything raw back. This is the case the old
+     * folder-wide raw pre-condition made structurally impossible.
+     */
+    @Test
+    fun `an already-masked receipt-scan capture is admissible to the folder (#1064)`() {
+        val rule = TestRulesetFactory.screenRuleset.ruleById("doordash.screen.pickup_receipt_scan")!!
+        val edgeMasked = receiptScanScreen("[redacted:1a2b]", "Focus on [redacted:1a2b]")
+
+        val wasRaw = assertReceiptScanFixture(rule, "synthetic-device-capture.json", edgeMasked)
+        assertFalse("an edge-masked capture must not be treated as a raw fixture", wasRaw)
+        // Re-applying the redact re-hashes the already-masked token (it is not idempotent by
+        // design — `mask` hashes whatever it is given), but the value never leaves the
+        // `[redacted…]` family, which is the property that matters: nothing raw can reappear.
+        val remasked = serialize(rule.redact.apply(edgeMasked))
+        assertTrue(
+            "an already-masked name node stays inside the redacted family, got: $remasked",
+            maskAfter("Focus on ").containsMatchIn(remasked),
+        )
+        assertFalse("no raw pseudonym may appear", remasked.contains(RECEIPT_SCAN_DECOY))
+    }
+
+    /**
+     * The per-fixture receipt-scan checks, shared by the committed-corpus sweep and the
+     * already-masked case. Returns true when the fixture carried the RAW decoy — i.e. it is one
+     * of the hand-authored ones and the full mask assertions were run.
+     */
+    private fun assertReceiptScanFixture(
+        rule: CompiledRule<UiNode>,
+        name: String,
+        tree: UiNode,
+    ): Boolean {
+        assertEquals(
+            "$name must recognize as pickup_receipt_scan",
+            "doordash.screen.pickup_receipt_scan",
+            TestRulesetFactory.screenRuleset.matchFirst(tree)?.ruleId,
+        )
+        val masked = serialize(rule.redact.apply(tree))
+        // Over-match guards run on EVERY fixture: the rule's own recognition anchors must survive
+        // redaction, or a replayed envelope would stop recognizing.
+        assertTrue(
+            "$name: the scan chrome (and this rule's anchors) stay raw",
+            masked.contains("Scan customer name") ||
+                masked.contains("Scan the order details by focusing on the customer name"),
+        )
+        assertTrue(
+            "$name: the instruction line keeps its 'Focus on ' lead-in",
+            masked.contains("Focus on "),
+        )
+        if (!serialize(tree).contains(RECEIPT_SCAN_DECOY)) return false
+
+        assertFalse("$name: the name must not persist anywhere", masked.contains(RECEIPT_SCAN_DECOY))
+        assertTrue(
+            "$name: the instruction line's lead-in is followed by the hash mask",
+            maskAfter("Focus on ").containsMatchIn(masked),
+        )
+        // Both copies masked to ONE hex — on the real tree, not a hand-built one.
+        val hexes = MASK_HEX.findAll(masked).map { it.groupValues[1] }.toSet()
+        assertEquals("$name: both name nodes mask to one customer hex", 1, hexes.size)
+        return true
     }
 
     /**
