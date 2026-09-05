@@ -194,7 +194,9 @@ class PlatformRegionStepper @Inject constructor() {
             // that was off screen for the whole interlude. `ownedBefore` is what records that
             // absence: R0 as it was BEFORE this observation is the only surviving evidence of it.
             //
-            // Three-way, in order:
+            // Four-way, in order:
+            //  0. the region is not Online (#1052) → DROP. A park is a read of a LIVE dash total;
+            //     under a pause sheet or offline there is nothing for it to describe.
             //  1. `!ownedBefore` → the surface departed while this region was not being stepped.
             //     DROP, whatever this observation is; a returning frame re-parks with a FRESH
             //     deadline through [settleSessionPay], which is the honest window for a read whose
@@ -209,7 +211,15 @@ class PlatformRegionStepper @Inject constructor() {
             val ownedBefore = prevFlow.flow == pend.flow && prevFlow.activePlatform == current.platform
             val ownedAfter = nextFlow.flow == pend.flow && nextFlow.activePlatform == current.platform
             val flowBearing = (obs as? Observation.FlowObservation)?.flow != null
-            if (!ownedBefore || (!flowBearing && !ownedAfter)) {
+            // #1052: and ownership of the MODE, belt and braces. [settleSessionPay] refuses to park
+            // a read while the region is not Online, so a park on a non-Online region should not
+            // exist — but if one ever does (a mode moved by another path after the park was made,
+            // a legacy snapshot), it is dropped rather than committed: a paused or offline dash
+            // cannot change its running total, so there is nothing here for a wake timer to land.
+            // `current.mode` is the PREVIOUS frame's mode at this point (this block runs ahead of
+            // `afterMode`), which is the honest reading — a park may only ride a frame whose dash
+            // was already Online when the frame arrived.
+            if (current.mode != Mode.Online || !ownedBefore || (!flowBearing && !ownedAfter)) {
                 current = current.copy(pendingSessionPay = null)
             } else {
                 if (obs.timestamp >= pend.deadline) {
@@ -698,6 +708,19 @@ class PlatformRegionStepper @Inject constructor() {
      * spin value that happens to be well-FORMED ($470.00 on a $16.70 dash) is indistinguishable
      * from a real figure by inspection — only by TIME. Hence:
      *
+     *  - the region is NOT Online → no park at all (#1052). A paused or offline dash cannot change
+     *                        its running total, so a read taken while the mode is anything but
+     *                        Online is not evidence of a live figure. The ordering this rests on is
+     *                        explicit in [stepCore]: `afterMode` — and with it the #605 resume
+     *                        grace, which deliberately KEEPS the mode at [Mode.Paused] while it is
+     *                        armed — is resolved BEFORE `updateLifecycle` calls
+     *                        [updateSessionFields], so `region.mode` here is this frame's RESULTING
+     *                        mode, not the previous one. Without this, DoorDash's pause sheet —
+     *                        which sits on the just-completed delivery summary and makes frames flap
+     *                        paused ↔ online — re-parks the pill's read on every online flap frame
+     *                        while the mode is still Paused, and the park's own wake timer then
+     *                        commits it under the modal. Fail-null: the total lands on the first
+     *                        idle frame after the resume is CONFIRMED.
      *  - read == 0.00 with a positive committed total → the LOAD PLACEHOLDER; ignore it entirely
      *                        (the same earnings-pill component renders `$0.00` for seconds before
      *                        the figure loads — fielded 08-23 15:53:42 `$0.00` → `$61.80` at :48 —
@@ -737,6 +760,7 @@ class PlatformRegionStepper @Inject constructor() {
         flow: Flow,
         policy: TransitionPolicy,
     ): PlatformRegion = when {
+        region.mode != Mode.Online -> region
         pay == 0.0 && session.runningEarnings > 0.0 -> region
         centsEqual(pay, session.runningEarnings) -> region.copy(pendingSessionPay = null)
         region.pendingSessionPay?.let { centsEqual(pay, it.value) } == true -> region

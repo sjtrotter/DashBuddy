@@ -40,25 +40,46 @@ class SnapshotStore @Inject constructor(
 
         if (!shouldSnapshot) return
 
-        scope.launch(dispatcher) {
-            try {
-                val activeSession = next.regions.platforms.values
-                    .maxByOrNull { it.lastObservedAt }?.session
-                snapshotDao.insert(
-                    AppStateSnapshotEntity(
-                        correlationVersion = next.correlationVersion,
-                        capturedAt = System.currentTimeMillis(),
-                        sessionId = activeSession?.sessionId,
-                        stateJson = StateJson.encodeToString(next),
-                    )
+        scope.launch(dispatcher) { write(next) }
+    }
+
+    /**
+     * Write [state] as a snapshot **unconditionally** — no cadence, no major-transition gate
+     * (#1052).
+     *
+     * Crash recovery's only caller: `StateManagerV2.restoreState` installs a CLEANED final state
+     * (the #1029 park hygiene), and that cleaning is durable only if the cleaned state becomes the
+     * next replay base. Otherwise the next restart replays the ORIGINAL snapshot plus a tail that
+     * has since grown — the same pre-crash park, expiring against a live frame that landed past its
+     * deadline. Snapshot rows are keyed by `correlationVersion` with `REPLACE`, so checkpointing at
+     * the restored version overwrites exactly the row that carried the park, leaving the journal
+     * tail after it untouched.
+     *
+     * Suspends rather than launching (unlike [maybeSnapshot]) so the recovery path can order the
+     * write ahead of the first live observation. Shares [write] with [maybeSnapshot] — ONE
+     * serializer, ONE DAO path (principle 5).
+     */
+    suspend fun checkpoint(state: AppState) = write(state)
+
+    /** The snapshot writer both [maybeSnapshot] and [checkpoint] go through. Never throws. */
+    private suspend fun write(state: AppState) {
+        try {
+            val activeSession = state.regions.platforms.values
+                .maxByOrNull { it.lastObservedAt }?.session
+            snapshotDao.insert(
+                AppStateSnapshotEntity(
+                    correlationVersion = state.correlationVersion,
+                    capturedAt = System.currentTimeMillis(),
+                    sessionId = activeSession?.sessionId,
+                    stateJson = StateJson.encodeToString(state),
                 )
-                // Prune snapshots older than the retention window.
-                snapshotDao.pruneOlderThan(System.currentTimeMillis() - SNAPSHOT_RETENTION_MS)
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: Throwable) {
-                Timber.e(e, "Failed to write state snapshot")
-            }
+            )
+            // Prune snapshots older than the retention window.
+            snapshotDao.pruneOlderThan(System.currentTimeMillis() - SNAPSHOT_RETENTION_MS)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Throwable) {
+            Timber.e(e, "Failed to write state snapshot")
         }
     }
 

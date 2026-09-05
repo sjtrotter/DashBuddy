@@ -680,10 +680,18 @@ a fresh window. A flow-LESS observation (the wake timer, a click, a loopback, a 
 notification) is never a departure frame, so it orders like a timer — ownership before expiry — while
 a flow frame runs the expiry FIRST, so a park that stood its whole window still commits on the
 departure frame. Another platform's screen therefore still drops this platform's park — fail-null,
-accepted. **Leaving `Mode.Online` also drops the park (#1052)**, written at `applyModeTransition`
-(the single site that moves `mode`): a paused/offline dash cannot change its running total, and the
-pill's surface is gone even where R0 still reads the park's flow — `dash_paused` declares a mode hint
-and NO flow, and the offline map keeps `Idle`.
+accepted. **The MODE owns the park as well (#1052)**: leaving `Mode.Online` drops it, written at
+`applyModeTransition` (the single site that moves `mode`) — a paused/offline dash cannot change its
+running total, and the pill's surface is gone even where R0 still reads the park's flow
+(`dash_paused` declares a mode hint and NO flow, and the offline map keeps `Idle`) — and, round 2, a
+read PARKS only while the region is Online (`settleSessionPay`'s first arm) with the lazy expiry
+refusing a non-Online park outright. The drop alone was not enough because of the #605 resume grace:
+that grace deliberately KEEPS the mode at `Paused` while it is armed, so DoorDash's pause-sheet flap
+(online-implying frames over the just-completed summary) re-parked the pill's read on every flap
+frame and the park's own wake timer then committed it under the modal. The ordering is explicit —
+`stepCore` resolves `afterMode` BEFORE `updateLifecycle` → `updateSessionFields`, so the mode the
+gate reads is this frame's RESULTING one. Fail-null: the total lands on the first idle frame after
+the resume is CONFIRMED.
 **(b) BOTH feeds go through the gate** — the on-dash pill (`IdleFields.sessionPay`) and the
 receipt's own "This dash so far" (`PostTaskFields.sessionEarnings`), which `dropoff.json5` reads off
 the SAME animated wheel via `parseGlyphCurrency`; for the settled re-render to be admittable at all,
@@ -721,7 +729,13 @@ boundary — on the FINAL state after the tail fold, never on the snapshot** (#1
 replay against the snapshot exactly as recorded (a park whose commit timer is IN the tail committed
 live and must commit again), and scrubbing at the end also discards a park a TAIL frame re-created,
 whose `ScheduleTimeout` the recovery fold really does arm — that timer then finds no park and
-no-ops.
+no-ops. The drop is also **CHECKPOINTED**: `restoreState` writes the cleaned state back through
+`SnapshotStore.checkpoint` (unconditional, sharing `maybeSnapshot`'s writer — one encoder) at the
+restored correlation version, where snapshot rows REPLACE by key. Installing it in memory alone is
+not durable — the snapshot on disk still carried the park, and a SECOND restart with no ordinary
+snapshot in between (neither the cadence nor a major transition need fire) replayed it over a
+journal tail that had since grown, committing the pre-crash figure on the first live frame past its
+deadline.
 
 
 ### 4. Side Effect Engine (`app/.../state/effects/`)

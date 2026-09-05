@@ -5,6 +5,8 @@ import cloud.trotter.dashbuddy.core.database.observation.ObservationEntity
 import cloud.trotter.dashbuddy.core.database.snapshot.AppStateSnapshotDao
 import cloud.trotter.dashbuddy.core.database.snapshot.AppStateSnapshotEntity
 import cloud.trotter.dashbuddy.core.pipeline.PipelineV2
+import cloud.trotter.dashbuddy.domain.capture.ReplayMetadata
+import cloud.trotter.dashbuddy.domain.pipeline.Observation
 import cloud.trotter.dashbuddy.domain.model.state.StateEvent
 import cloud.trotter.dashbuddy.domain.pipeline.TimeoutType
 import cloud.trotter.dashbuddy.domain.settings.GraceConfig
@@ -48,6 +50,12 @@ import org.mockito.kotlin.whenever
  * fold really does arm — `ScheduleTimeout` is not an external effect. So the tail replays against
  * the snapshot exactly as recorded and the FINAL state is what gets scrubbed; the
  * recovery-scheduled timer then finds no park and no-ops.
+ *
+ * **Round 2 adds the other half: the drop must be DURABLE.** Installing a cleaned state in memory
+ * leaves the snapshot on disk carrying the park, so the NEXT restart — with no ordinary snapshot
+ * written in between, which is the normal case — replays it over a journal tail that has since
+ * grown, and a live frame past the deadline commits it after all. `restoreState` therefore
+ * checkpoints the cleaned state as the next replay base.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class StateManagerV2RecoveryHygieneTest {
@@ -71,6 +79,32 @@ class StateManagerV2RecoveryHygieneTest {
     private class FixedSnapshotDao(private val entity: AppStateSnapshotEntity) : AppStateSnapshotDao {
         override suspend fun insert(entity: AppStateSnapshotEntity) {}
         override suspend fun latest(): AppStateSnapshotEntity = entity
+        override suspend fun pruneOlderThan(cutoff: Long) {}
+    }
+
+    /**
+     * A real snapshot table: rows keyed by `correlationVersion`, REPLACE on conflict — exactly the
+     * production entity's `@PrimaryKey` + `OnConflictStrategy.REPLACE`. [FixedSnapshotDao] cannot
+     * express the #1052 round-2 case at all, because the whole question is what the SECOND restart
+     * reads back after the first one wrote.
+     */
+    private class FakeSnapshotDao(seed: AppStateSnapshotEntity? = null) : AppStateSnapshotDao {
+        private val rows = LinkedHashMap<Long, AppStateSnapshotEntity>()
+        var inserts = 0
+            private set
+
+        init {
+            if (seed != null) rows[seed.correlationVersion] = seed
+        }
+
+        override suspend fun insert(entity: AppStateSnapshotEntity) {
+            rows[entity.correlationVersion] = entity
+            inserts++
+        }
+
+        override suspend fun latest(): AppStateSnapshotEntity? =
+            rows.values.maxByOrNull { it.correlationVersion }
+
         override suspend fun pruneOlderThan(cutoff: Long) {}
     }
 
@@ -156,6 +190,17 @@ class StateManagerV2RecoveryHygieneTest {
         tail: List<ObservationEntity>,
         dispatcher: CoroutineDispatcher,
         snapshot: AppState = parkedState(cv = 7L),
+    ): StateManagerV2 = newManagerOn(
+        journalDao = FakeObservationDao(tail),
+        snapshotDao = FixedSnapshotDao(snapshotOf(snapshot)),
+        dispatcher = dispatcher,
+    )
+
+    /** The same manager over CALLER-OWNED persistence, so two restarts can share one disk. */
+    private fun newManagerOn(
+        journalDao: ObservationDao,
+        snapshotDao: AppStateSnapshotDao,
+        dispatcher: CoroutineDispatcher,
     ): StateManagerV2 {
         val pipeline: PipelineV2 = mock()
         whenever(pipeline.events).thenReturn(MutableSharedFlow<StateEvent>(extraBufferCapacity = 16))
@@ -170,8 +215,8 @@ class StateManagerV2RecoveryHygieneTest {
                 CrossPlatformRegionStepper(), TransitionPolicy(),
                 EffectMap(),
             ),
-            journal = ObservationJournal(FakeObservationDao(tail)),
-            snapshots = SnapshotStore(FixedSnapshotDao(snapshotOf(snapshot))),
+            journal = ObservationJournal(journalDao),
+            snapshots = SnapshotStore(snapshotDao),
             defaultDispatcher = dispatcher,
             ioDispatcher = dispatcher,
         )
@@ -256,5 +301,93 @@ class StateManagerV2RecoveryHygieneTest {
             region?.session?.runningEarnings ?: Double.NaN,
             0.0001,
         )
+    }
+
+    // =========================================================================
+    // #1052 round 2 — the drop has to be DURABLE, not merely installed
+    // =========================================================================
+
+    /** The live frame that lands after a recovery — no read, and NOT a snapshot point. */
+    private fun liveIdle(timestamp: Long) = Observation.Screen(
+        timestamp = timestamp,
+        captureId = null,
+        ruleId = "doordash.screen.waiting_for_offer",
+        metadata = ReplayMetadata.EMPTY,
+        flow = Flow.Idle,
+        modeHint = Mode.Online,
+        parsed = ParsedFields.IdleFields(sessionPay = null),
+    )
+
+    @Test
+    fun `a SECOND restart does not replay the park the first restart dropped`() = runTest {
+        // Two real managers over ONE disk. Restart 1 installs the cleaned state — but the snapshot
+        // row still carried the park, and the journal keeps growing, so restart 2 replayed that
+        // same park over a tail that now contained a frame past its deadline. The lazy expiry
+        // committed $470 and no later hygiene could undo it: a committed value is just the
+        // dasher's earnings. The checkpoint is what makes the cleaned state the next replay base.
+        val dispatcher = StandardTestDispatcher(testScheduler)
+        val journalDao = FakeObservationDao(emptyList())
+        val snapshotDao = FakeSnapshotDao(snapshotOf(parkedState(cv = 5L)))
+
+        val first = newManagerOn(journalDao, snapshotDao, dispatcher)
+        first.initialize()
+        runCurrent()
+
+        assertNull(
+            "restart 1 drops the park as it always did",
+            first.state.value.regions.platforms[Platform.DoorDash]?.pendingSessionPay,
+        )
+        assertEquals(
+            "and CHECKPOINTS the cleaned state — exactly once per recovery",
+            1,
+            snapshotDao.inserts,
+        )
+
+        // An ordinary live frame lands past the park's deadline (t0 + settle = 13_000). cv=6 is
+        // neither a cadence multiple (5) nor a major transition, so NO ordinary snapshot is
+        // written — which is precisely the gap the second restart used to fall into.
+        first.dispatch(liveIdle(20_000L))
+        runCurrent()
+
+        assertEquals("the live frame really was journalled", 6L, first.state.value.correlationVersion)
+        assertEquals(
+            "and wrote no ordinary snapshot — the recovery checkpoint is the only one on disk",
+            1,
+            snapshotDao.inserts,
+        )
+
+        val second = newManagerOn(journalDao, snapshotDao, dispatcher)
+        second.initialize()
+        runCurrent()
+
+        val region = second.state.value.regions.platforms[Platform.DoorDash]
+        assertEquals(
+            "the tail must actually have replayed on the second restart",
+            6L,
+            second.state.value.correlationVersion,
+        )
+        assertEquals(
+            "the pre-crash mid-spin read must not become the dasher's earnings two restarts later",
+            16.70,
+            region?.session?.runningEarnings ?: Double.NaN,
+            0.0001,
+        )
+        assertNull("and nothing is parked to try again", region?.pendingSessionPay)
+        assertEquals("each recovery checkpoints once", 2, snapshotDao.inserts)
+    }
+
+    @Test
+    fun `a fresh start writes no checkpoint`() = runTest {
+        // The checkpoint belongs to recovery. With no snapshot to restore there is no cleaned
+        // state to make durable, and writing one would put an empty AppState at cv=0 on disk.
+        val dispatcher = StandardTestDispatcher(testScheduler)
+        val snapshotDao = FakeSnapshotDao()
+
+        val manager = newManagerOn(FakeObservationDao(emptyList()), snapshotDao, dispatcher)
+        manager.initialize()
+        runCurrent()
+
+        assertEquals("nothing was recovered, so nothing is checkpointed", 0, snapshotDao.inserts)
+        assertEquals(AppState().correlationVersion, manager.state.value.correlationVersion)
     }
 }

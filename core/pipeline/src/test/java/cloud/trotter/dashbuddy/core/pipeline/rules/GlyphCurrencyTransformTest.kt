@@ -104,6 +104,17 @@ class GlyphCurrencyTransformTest {
     }
 
     @Test
+    fun `a SUPPLEMENTARY-plane digit rejects the read too - the scan is by code point`() {
+        // Round 2. U+1D7DA MATHEMATICAL DOUBLE-STRUCK DIGIT TWO is a surrogate PAIR, and
+        // `Character.isDigit(Char)` is false for either half on its own — so a char-wise scan
+        // waved it straight through and the keep-filter deleted both halves, reading a $126.70
+        // wheel as $16.70 with a digit silently removed from the middle. The scan is code-point-
+        // wise for exactly this.
+        assertNull(parse("This dash\$1\uD835\uDFDA6.70"))
+        assertNull(parse("\$\uD835\uDFDA6.70"))
+    }
+
+    @Test
     fun `a sign rejects the whole read rather than being deleted`() {
         // A minus and an accounting paren both change the figure's VALUE, which no glyph filter
         // can express — stripping them reports the magnitude as a positive.

@@ -31,6 +31,14 @@ import cloud.trotter.dashbuddy.domain.state.AppState
  * committed live, and scrubbing the base first would replay a different history. Running here
  * instead also covers the park a TAIL frame re-created — its `ScheduleTimeout` is not an external
  * effect, so the recovery fold really does arm it — leaving that timer to find nothing and no-op.
+ *
+ * **And the drop has to be DURABLE, not just installed** (#1052 round 2): the snapshot on disk still
+ * carries the park, so a second restart with no ordinary snapshot written in between (neither the
+ * cadence nor a major transition need fire) replays that same snapshot over a journal tail that has
+ * since grown — and a live frame past the park's deadline commits pre-crash evidence after all.
+ * `StateManagerV2.restoreState` therefore CHECKPOINTS the cleaned state ([SnapshotStore.checkpoint],
+ * at the restored correlation version, where snapshot rows REPLACE by key) before installing it:
+ * dropping the park is only durable if the cleaned state is the next replay base.
  */
 fun AppState.droppingSessionPayParks(): AppState = copy(
     regions = regions.copy(

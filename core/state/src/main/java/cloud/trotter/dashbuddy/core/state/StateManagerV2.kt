@@ -169,13 +169,25 @@ class StateManagerV2 @Inject constructor(
             // pre-crash evidence with no fresh screen behind it. The recovery-scheduled timer then
             // finds no park and no-ops (`handleTimeout`'s `else -> prev`; lazy expiry has nothing
             // to expire). Fail-null beats fail-wrong (#745).
+            //
+            // And the drop is CHECKPOINTED on both paths below (#1052 round 2): installing the
+            // cleaned state in memory is not enough, because the snapshot on disk still carries the
+            // park. A second restart — with no ordinary snapshot in between, which is the normal
+            // case since neither the cadence nor a major transition need fire — would replay that
+            // same snapshot plus a tail that has GROWN with live frames, one of which lands past
+            // the park's deadline and commits it. `SnapshotStore.checkpoint` writes the cleaned
+            // state at the restored correlation version (snapshot rows REPLACE by that key), making
+            // it the next replay base.
             val base = restored.state
 
             // Tail-replay observations after the snapshot, in cv order (#352)
             val tail = journal.tailAfter(restored.correlationVersion)
             if (tail.isEmpty()) {
                 Timber.i("Restored from snapshot at cv=%d, no tail", restored.correlationVersion)
-                _state.value = base.droppingSessionPayParks()
+                val cleaned = base.droppingSessionPayParks()
+                // #1052: the drop is only DURABLE if the cleaned state is the next replay base.
+                snapshots.checkpoint(cleaned)
+                _state.value = cleaned
                 // #438 B5: recovered a non-fresh state → reconcile the odometer on the first live obs.
                 recoveryReconcilePending = true
                 return
@@ -199,7 +211,12 @@ class StateManagerV2 @Inject constructor(
                 transition.newState
             }
 
-            _state.value = finalState.droppingSessionPayParks()
+            val cleaned = finalState.droppingSessionPayParks()
+            // #1052: same checkpoint on the tail path, at the FINAL correlation version — the tail
+            // it replayed stays in the journal but is now behind the base, so the next restart
+            // starts from the cleaned state instead of replaying the pre-hygiene park again.
+            snapshots.checkpoint(cleaned)
+            _state.value = cleaned
             // #438 B5: recovered a non-fresh state → reconcile the odometer on the first live obs.
             recoveryReconcilePending = true
             Timber.i("Recovery complete — state at cv=%d", finalState.correlationVersion)
