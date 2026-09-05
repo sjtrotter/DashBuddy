@@ -11,6 +11,28 @@ import timber.log.Timber
 /** #430 — gate/restart counters and the summary line. */
 class PipelineStatsTest {
 
+    /**
+     * PR #1066 — the build id rides the periodic summary, so a field-data pull reads WHICH build
+     * produced the frames off any log line instead of inferring it from absent lines.
+     */
+    @Test
+    fun `the summary leads with our own build id when one was injected`() {
+        val summary = PipelineStats(appVersionName = "0.230.0+ab12cd34").summary()
+
+        assertTrue("build id present", summary.contains("app=0.230.0+ab12cd34"))
+        assertTrue("build id leads the line", summary.startsWith("app=0.230.0+ab12cd34 "))
+        assertTrue("the counters still follow", summary.contains("forwarded=0"))
+    }
+
+    /** A bare `app=` would be worse than silence — the #937 `platformApps=` shape (review R8). */
+    @Test
+    fun `an absent build id renders nothing rather than a bare key`() {
+        val summary = PipelineStats().summary()
+
+        assertFalse(summary.contains("app="))
+        assertTrue(summary.startsWith("forwarded=0"))
+    }
+
     @Test
     fun `content gate drops are split by sensitive vs noise`() {
         val stats = PipelineStats()

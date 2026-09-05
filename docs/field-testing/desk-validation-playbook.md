@@ -21,6 +21,32 @@ and 3), #159, #691-mechanism. **desk-partial** (data half here; UI half needs de
 > *silently* — if a grep returns nothing where a hit was plausible, verify the string
 > against the code before reading "no hits" as "invariant held".
 
+## Step 0 — identify the build
+
+**Do this first.** Every other reading in this playbook is a reading *of a specific build*, and
+until PR #1066 the build had to be inferred (the 2026-09-05 pull inferred a pre-#1044 build from the
+ABSENCE of log lines, because `:app:installDebug` reported the same `versionName=0.230.0` for two
+different commits).
+
+```bash
+# the startup line — one per process, in app.log AND shareable.log (INFO, tag `App`)
+grep -h -m1 -E 'DashBuddy .* starting' "$D"/app.log "$D"/app_log_rotated_*.log "$D"/shareable.log
+
+# or off ANY periodic summary line — the build id leads it
+grep -h -o -m1 'app=[^ ]*' "$D"/*.log
+```
+
+Both render `<semver>+<8-hex sha>` with `.dirty` appended when the tree had uncommitted changes.
+The sha names the commit — resolve it:
+
+```bash
+git log -1 <sha>
+git log --oneline <sha>..master   # what the phone was MISSING
+```
+
+A `nogit` sha or a `.dirty` suffix means the build is not reproducible from a commit; treat any
+finding against it as provisional.
+
 ## SQL checks
 
 ```sql

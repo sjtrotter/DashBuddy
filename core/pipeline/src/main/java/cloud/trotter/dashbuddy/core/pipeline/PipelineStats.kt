@@ -6,6 +6,7 @@ import timber.log.Timber
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicLong
 import javax.inject.Inject
+import javax.inject.Named
 import javax.inject.Singleton
 
 /**
@@ -24,7 +25,30 @@ import javax.inject.Singleton
  * counters account for, not as its own counter.
  */
 @Singleton
-class PipelineStats @Inject constructor() {
+class PipelineStats @Inject constructor(
+    /**
+     * OUR build's identity — `BuildConfig.VERSION_NAME`, which since PR #1066 carries the git sha
+     * (`0.230.0+ab12cd34[.dirty]`). It rides the periodic summary next to the #937
+     * `platformApps=` stamp so a field-data pull can read WHICH build produced the frames
+     * straight off any log line, instead of inferring it from which lines are absent.
+     *
+     * Reaches `:core:pipeline` as a plain `String` through the SAME `@Named("appVersionName")`
+     * seam `ReplayMetadataProviderImpl` already uses — one owner of the version string
+     * (`AppModule.provideAppVersionName`, principle 5), and no `:core:pipeline` → `:app`
+     * BuildConfig edge.
+     */
+    @param:Named("appVersionName") private val appVersionName: String,
+) {
+
+    /**
+     * Identity-less construction for the many unit tests that only exercise counters (PR #1066).
+     *
+     * A secondary constructor rather than a default argument: Kotlin synthesizes a no-arg
+     * constructor when every primary parameter has a default AND copies the annotations onto it,
+     * which Dagger rejects as a second `@Inject` constructor. An explicit un-annotated overload
+     * leaves exactly one injection point.
+     */
+    constructor() : this(appVersionName = "")
 
     private val droppedSensitive = AtomicLong()
     private val droppedNoise = AtomicLong()
@@ -229,7 +253,8 @@ class PipelineStats @Inject constructor() {
     }
 
     fun summary(): String =
-        "forwarded=${forwarded.get()}" +
+        appVersionSuffix() +
+            "forwarded=${forwarded.get()}" +
             " dupSuppressed=${suppressedDuplicate.get()}" +
             " unknownDropped=${droppedUnknown.get()}" +
             " sensitiveDropped=${droppedSensitive.get()}" +
@@ -246,6 +271,17 @@ class PipelineStats @Inject constructor() {
             " restarts=${restarts.get()}" +
             platformAppVersionsSuffix() +
             parseShortfallSuffix()
+
+    /**
+     * `"app=0.230.0+ab12cd34 "`, or empty when no version was injected (PR #1066).
+     *
+     * Rendered FIRST — a field-data reader greps one summary line to answer "which build was
+     * this?", so it must not be buried behind fourteen counters. The emptiness check comes first
+     * for the same reason as [platformAppVersionsSuffix]: a bare `app=` would be worse than
+     * silence. PII-free — our own version string (principle 7).
+     */
+    private fun appVersionSuffix(): String =
+        if (appVersionName.isEmpty()) "" else "app=$appVersionName "
 
     /**
      * `" platformApps=com.doordash.driverapp@15.2.3,com.ubercab.driver@4.5"`, or empty.
