@@ -128,6 +128,29 @@ class SessionPaySettleTimerEffectTest {
     }
 
     @Test
+    fun `a fire AT or PAST the deadline never re-arms - a frozen park would spin at the 1ms floor`() {
+        // #1052 round 3: a park is FROZEN while the dash is not Online, so its own wake timer can
+        // now land at or past the deadline and leave the pending standing with an UNCHANGED
+        // deadline — a shape that previously only ever meant "the park committed", i.e. the cancel
+        // arm. Re-arming there would schedule `(deadline - now).coerceAtLeast(1)` = 1 ms and fire
+        // again immediately, for as long as the dasher stayed paused.
+        val park = PendingSessionPay(16.70, t0, t0 + settle, Flow.Idle)
+        for (fireAt in listOf(t0 + settle, t0 + settle + 5_000L)) {
+            val wake = Observation.Timeout(
+                timestamp = fireAt,
+                type = TimeoutType.SESSION_PAY_SETTLE,
+                targetPlatform = Platform.DoorDash,
+            )
+            assertTrue(
+                "a wake at $fireAt must not re-arm the frozen park",
+                effectMap.diff(state(region(pending = park)), state(region(pending = park)), wake)
+                    .filterIsInstance<AppEffect.ScheduleTimeout>()
+                    .none { it.type == TimeoutType.SESSION_PAY_SETTLE },
+            )
+        }
+    }
+
+    @Test
     fun `an unrelated timer's fire does not re-arm the settle timer`() {
         val park = PendingSessionPay(16.70, t0, t0 + settle, Flow.Idle)
         val wake = Observation.Timeout(

@@ -177,6 +177,20 @@ data class PlatformRegion(
  * time rather than repetition (FrameGate identity dedup never re-admits an
  * identical wheel read).
  *
+ * **A park is FROZEN, not discarded, while the dash is not [Mode.Online]; its window restarts on
+ * the transition back to Online** (#1052 round 3 — the canonical statement of this rule; the
+ * stepper's expiry block, `applyModeTransition` and CLAUDE.md §3 point here). A read taken under a
+ * pause sheet is still the freshest evidence there is, so it parks in any mode; what a non-Online
+ * dash cannot do is CONFIRM it — its total is not moving and no screen behind the sheet can
+ * contradict the figure — so the expiry is skipped wholesale while non-Online: no commit, no drop.
+ * Killing the park instead was round 1's and round 2's rule, and it stranded exactly the read the
+ * gate exists to land: the fielded #605 flap keeps the mode at Paused across the online-implying
+ * frames (the resume is graced), the confirmed resume arrives as a TIMER with no frame behind it,
+ * and every later identical idle capture is dropped by `FrameGate`'s identity dedup — so a legitimate
+ * $25.20 first seen while Paused would never be seen again. Re-basing [since]/[deadline] on the
+ * transition INTO Online is what makes the frozen evidence land: the park must still stand a FULL
+ * window unchallenged, with the ownership rules applying, before it may commit.
+ *
  * Plain data (kotlinx-serializable) so it survives crash-recovery replay;
  * resolution is driven by `obs.timestamp`, never a wall clock, keeping the
  * reducer pure.
@@ -219,10 +233,9 @@ data class PendingSessionPay(
      * frame re-parks with a FRESH window. A flow-LESS observation (a timer, a click, a notification
      * carrying no flow) orders like a timer: ownership is settled before any expiry.
      *
-     * **Leaving [Mode.Online] drops it too** (#1052). A paused or offline dash cannot change its
-     * running total, and the pill's surface is gone even where R0 still reads the park's flow —
-     * `dash_paused` declares a mode hint and NO flow, and the offline map keeps `Idle` — so nothing
-     * on screen could contradict the park any more.
+     * Ownership is checked only while the dash is [Mode.Online]: a park on a non-Online region is
+     * FROZEN (see [PendingSessionPay]), and the rules above resume the moment the dash does — the
+     * first Online observation after a resume still has to own R0 on both sides.
      */
     val flow: Flow,
 )

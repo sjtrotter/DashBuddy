@@ -76,6 +76,28 @@ class ObservationJournalTest {
     )
 
     @Test
+    fun `the replay tail carries each row's PERSISTED correlation version`() = runTest {
+        // #1052 round 3: the version is not derivable from the replay. `StateMachine.step` numbers
+        // its result `prev + 1`, which matches the journal only while the journal is gap-free —
+        // and this writer LOGS and drops a failed insert, so gaps are real. Recovery reads the
+        // row's own version instead, and (since round 2) checkpoints it.
+        val dao = FakeObservationDao()
+        val journal = ObservationJournal(dao)
+        journal.start(CoroutineScope(SupervisorJob() + StandardTestDispatcher(testScheduler)), StandardTestDispatcher(testScheduler))
+
+        // cv 6 and 7 never landed — the tail after the cv=5 snapshot is 8 then 9.
+        journal.append(screenObs(80L), state(cv = 8))
+        journal.append(screenObs(90L), state(cv = 9))
+        advanceUntilIdle()
+
+        assertEquals(
+            listOf(8L, 9L),
+            journal.tailAfter(5).map { it.correlationVersion },
+        )
+        assertEquals(80L, journal.tailAfter(5).first().observation.timestamp)
+    }
+
+    @Test
     fun `appends land in submission order with no gaps`() = runTest {
         val dao = FakeObservationDao()
         val journal = ObservationJournal(dao)
@@ -105,7 +127,7 @@ class ObservationJournalTest {
 
         journal.append(loopback, state(cv = 1))
         advanceUntilIdle()
-        val replayed = journal.tailAfter(0).single() as Observation.Loopback
+        val replayed = journal.tailAfter(0).single().observation as Observation.Loopback
 
         assertEquals("offer_evaluated", replayed.effect)
         val result = replayed.payload as ObservationPayload.EvaluationResult
@@ -150,10 +172,10 @@ class ObservationJournalTest {
         advanceUntilIdle()
         val tail = journal.tailAfter(0)
 
-        val ui = tail[0] as Observation.UiInput
+        val ui = tail[0].observation as Observation.UiInput
         assertEquals("accept_offer", ui.action)
 
-        val timeout = tail[1] as Observation.Timeout
+        val timeout = tail[1].observation as Observation.Timeout
         assertEquals(TimeoutType.SESSION_PAUSED_SAFETY, timeout.type)
         assertEquals(Platform.DoorDash, timeout.targetPlatform)
         assertEquals(Platform.DoorDash, timeout.platform) // routing (#342) preserved
@@ -173,7 +195,7 @@ class ObservationJournalTest {
             state(1),
         )
         advanceUntilIdle()
-        val ui = journal.tailAfter(0).single() as Observation.UiInput
+        val ui = journal.tailAfter(0).single().observation as Observation.UiInput
 
         assertEquals("accept_offer", ui.action)
         assertEquals(Platform.Uber, ui.targetPlatform)
@@ -196,7 +218,7 @@ class ObservationJournalTest {
             state(1),
         )
         advanceUntilIdle()
-        val loop = journal.tailAfter(0).single() as Observation.Loopback
+        val loop = journal.tailAfter(0).single().observation as Observation.Loopback
 
         assertEquals(Platform.DoorDash, loop.targetPlatform)
         assertEquals(Platform.DoorDash, loop.platform)
@@ -215,7 +237,7 @@ class ObservationJournalTest {
             payloadJson = """{"action":"accept_offer"}""",
         )
 
-        val ui = journal.tailAfter(0).single() as Observation.UiInput
+        val ui = journal.tailAfter(0).single().observation as Observation.UiInput
         assertEquals("accept_offer", ui.action)
         assertEquals(null, ui.targetPlatform)
         assertEquals(null, ui.offerHash)
@@ -238,7 +260,7 @@ class ObservationJournalTest {
 
         journal.append(obs, state(5))
         advanceUntilIdle()
-        val replayed = journal.tailAfter(0).single() as Observation.Screen
+        val replayed = journal.tailAfter(0).single().observation as Observation.Screen
 
         assertEquals(parsed, replayed.parsed)
         assertEquals(Flow.OfferPresented, replayed.flow)

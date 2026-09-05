@@ -58,11 +58,25 @@ class SnapshotStore @Inject constructor(
      * Suspends rather than launching (unlike [maybeSnapshot]) so the recovery path can order the
      * write ahead of the first live observation. Shares [write] with [maybeSnapshot] — ONE
      * serializer, ONE DAO path (principle 5).
+     *
+     * @return true iff the row is durable (#1052 round 3). [write] swallows every failure, which
+     *   is correct for the cadence — another snapshot is five observations away — and wrong for
+     *   the checkpoint, whose whole job is durability: a swallowed insert failure silently reopens
+     *   the double-recovery hole. `StateManagerV2.restoreState` retries once on false and then
+     *   reports it at ERROR; [maybeSnapshot] ignores the outcome as before.
      */
-    suspend fun checkpoint(state: AppState) = write(state)
+    suspend fun checkpoint(state: AppState): Boolean = write(state)
 
-    /** The snapshot writer both [maybeSnapshot] and [checkpoint] go through. Never throws. */
-    private suspend fun write(state: AppState) {
+    /**
+     * The snapshot writer both [maybeSnapshot] and [checkpoint] go through. Never throws; returns
+     * whether the snapshot ROW landed.
+     *
+     * The two DAO calls take separate `try`s deliberately: the insert IS the durability, while
+     * pruning is housekeeping that cannot un-write the row above it. Folding them together would
+     * report a prune failure as a lost checkpoint and send the caller into a retry + ERROR for a
+     * snapshot that is sitting safely on disk.
+     */
+    private suspend fun write(state: AppState): Boolean {
         try {
             val activeSession = state.regions.platforms.values
                 .maxByOrNull { it.lastObservedAt }?.session
@@ -74,13 +88,21 @@ class SnapshotStore @Inject constructor(
                     stateJson = StateJson.encodeToString(state),
                 )
             )
-            // Prune snapshots older than the retention window.
-            snapshotDao.pruneOlderThan(System.currentTimeMillis() - SNAPSHOT_RETENTION_MS)
         } catch (e: CancellationException) {
             throw e
         } catch (e: Throwable) {
             Timber.e(e, "Failed to write state snapshot")
+            return false
         }
+        // Prune snapshots older than the retention window.
+        try {
+            snapshotDao.pruneOlderThan(System.currentTimeMillis() - SNAPSHOT_RETENTION_MS)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Throwable) {
+            Timber.tag("StateMachine").e(e, "Failed to prune old snapshots — the row itself landed")
+        }
+        return true
     }
 
     /**

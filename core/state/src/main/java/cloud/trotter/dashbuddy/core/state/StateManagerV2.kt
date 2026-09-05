@@ -186,7 +186,7 @@ class StateManagerV2 @Inject constructor(
                 Timber.i("Restored from snapshot at cv=%d, no tail", restored.correlationVersion)
                 val cleaned = base.droppingSessionPayParks()
                 // #1052: the drop is only DURABLE if the cleaned state is the next replay base.
-                snapshots.checkpoint(cleaned)
+                checkpointRecovery(cleaned)
                 _state.value = cleaned
                 // #438 B5: recovered a non-fresh state → reconcile the odometer on the first live obs.
                 recoveryReconcilePending = true
@@ -198,24 +198,35 @@ class StateManagerV2 @Inject constructor(
                 tail.size, restored.correlationVersion,
             )
 
-            val finalState = tail.fold(base) { acc, obs ->
-                val transition = stateMachine.step(acc, obs)
+            val finalState = tail.fold(base) { acc, row ->
+                val transition = stateMachine.step(acc, row.observation)
+                // #1052 round 3: stamp the row's TRUE correlation version. `StateMachine.step`
+                // numbers its result `prev + 1`, which matches the journal only while the journal
+                // is gap-free — and `ObservationJournal.append` logs and DROPS a failed insert, so
+                // gaps are real. The undercount used to be merely cosmetic; since the recovery
+                // checkpoint (round 2) it becomes the next replay BASE, so a gapped recovery would
+                // persist a boundary BEHIND rows it had already consumed and the next restart
+                // would re-apply them — a receipt's pay accumulating twice. Effects are processed
+                // with the same true version so their idempotency keys match what ran live.
+                val stamped = transition.newState.copy(
+                    correlationVersion = row.correlationVersion,
+                )
                 // Process effects in recovery mode (external suppressed, keyed deduped)
                 transition.effects.forEach { effect ->
                     engine.process(
                         effect,
                         recovering = true,
-                        correlationVersion = transition.newState.correlationVersion,
+                        correlationVersion = row.correlationVersion,
                     )
                 }
-                transition.newState
+                stamped
             }
 
             val cleaned = finalState.droppingSessionPayParks()
             // #1052: same checkpoint on the tail path, at the FINAL correlation version — the tail
             // it replayed stays in the journal but is now behind the base, so the next restart
             // starts from the cleaned state instead of replaying the pre-hygiene park again.
-            snapshots.checkpoint(cleaned)
+            checkpointRecovery(cleaned)
             _state.value = cleaned
             // #438 B5: recovered a non-fresh state → reconcile the odometer on the first live obs.
             recoveryReconcilePending = true
@@ -224,6 +235,30 @@ class StateManagerV2 @Inject constructor(
             Timber.e(e, "State recovery failed — starting fresh")
             _state.value = AppState()
         }
+    }
+
+    /**
+     * Persist the recovery checkpoint, retrying ONCE, and fail LOUD rather than silently (#1052
+     * round 3).
+     *
+     * `SnapshotStore.write` swallows every `Throwable` by design (a snapshot is a cache and must
+     * never take the process down), which is right for the periodic cadence — the next one is five
+     * observations away — and wrong here: this write is what makes the park hygiene durable, so a
+     * swallowed failure silently reopens the double-recovery hole the checkpoint exists to close.
+     * ERROR is the level, per principle 7: a persistence failure is lost durability. The message
+     * carries no PII — a rule id would be the most it could ever carry, and it carries none.
+     *
+     * It does not block or throw: refusing to install a recovered state because the DB is failing
+     * would trade a bounded, stated risk for total sensing loss. One retry covers the transient
+     * (a locked DB, a momentary IO failure); a second failure is a real fault worth reporting.
+     */
+    private suspend fun checkpointRecovery(state: AppState) {
+        if (snapshots.checkpoint(state)) return
+        if (snapshots.checkpoint(state)) return
+        Timber.tag("StateMachine").e(
+            "Recovery checkpoint failed twice — the cleaned state is NOT durable; a second " +
+                "restart before the next snapshot will replay the pre-recovery park",
+        )
     }
 
     // ── Legacy Bridge ───────────────────────────────────────────────────

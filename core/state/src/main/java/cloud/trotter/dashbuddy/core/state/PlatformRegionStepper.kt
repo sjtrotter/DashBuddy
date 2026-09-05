@@ -195,8 +195,16 @@ class PlatformRegionStepper @Inject constructor() {
             // absence: R0 as it was BEFORE this observation is the only surviving evidence of it.
             //
             // Four-way, in order:
-            //  0. the region is not Online (#1052) → DROP. A park is a read of a LIVE dash total;
-            //     under a pause sheet or offline there is nothing for it to describe.
+            //  0. the region is not Online (#1052 round 3) → SKIP THE WHOLE BLOCK, keeping the
+            //     park. A park is a read of a LIVE dash total, so a non-Online dash cannot CONFIRM
+            //     one — its total is not moving and nothing behind the pause sheet can contradict
+            //     the figure — but neither is the evidence stale: the read taken under the sheet
+            //     is the freshest there is. Frozen, not killed (see [PendingSessionPay]); the
+            //     window restarts in [applyModeTransition] on the way back to Online, and the
+            //     ownership rules below resume with it. A `SESSION_PAY_SETTLE` fire that lands
+            //     here while non-Online is likewise inert: the park is kept, its deadline
+            //     unchanged, and `diffDeadlineTimer`'s early-wake re-arm deliberately does not
+            //     fire on a wake AT or PAST the deadline — the re-base on resume arms the next one.
             //  1. `!ownedBefore` → the surface departed while this region was not being stepped.
             //     DROP, whatever this observation is; a returning frame re-parks with a FRESH
             //     deadline through [settleSessionPay], which is the honest window for a read whose
@@ -211,15 +219,13 @@ class PlatformRegionStepper @Inject constructor() {
             val ownedBefore = prevFlow.flow == pend.flow && prevFlow.activePlatform == current.platform
             val ownedAfter = nextFlow.flow == pend.flow && nextFlow.activePlatform == current.platform
             val flowBearing = (obs as? Observation.FlowObservation)?.flow != null
-            // #1052: and ownership of the MODE, belt and braces. [settleSessionPay] refuses to park
-            // a read while the region is not Online, so a park on a non-Online region should not
-            // exist — but if one ever does (a mode moved by another path after the park was made,
-            // a legacy snapshot), it is dropped rather than committed: a paused or offline dash
-            // cannot change its running total, so there is nothing here for a wake timer to land.
-            // `current.mode` is the PREVIOUS frame's mode at this point (this block runs ahead of
-            // `afterMode`), which is the honest reading — a park may only ride a frame whose dash
-            // was already Online when the frame arrived.
-            if (current.mode != Mode.Online || !ownedBefore || (!flowBearing && !ownedAfter)) {
+            // `current.mode` is this frame's mode as resolved SO FAR: the PREVIOUS frame's, except
+            // where the graced-resume expiry a few lines above has already committed a resume on
+            // this very observation — which is precisely the frame whose re-based park is live
+            // again. Rule 0 reads it as the honest "is this dash running right now".
+            if (current.mode != Mode.Online) {
+                // Frozen — kept exactly as it stands, neither committed nor dropped.
+            } else if (!ownedBefore || (!flowBearing && !ownedAfter)) {
                 current = current.copy(pendingSessionPay = null)
             } else {
                 if (obs.timestamp >= pend.deadline) {
@@ -404,16 +410,26 @@ class PlatformRegionStepper @Inject constructor() {
             region = region.copy(pendingModeResume = null)
         }
 
-        // #1052: leaving Online DROPS a parked running-total read. A paused or offline dash cannot
-        // change its running total, so the committed figure stands and an un-settled read has
-        // nothing left that could confirm it. The flow-scoped drop does not cover this: the pill's
-        // SURFACE is gone even though R0 may still read the park's flow — `dash_paused` declares
-        // `modeHint: paused` and NO flow, and the offline map keeps `Idle` — so ownership stays
-        // "valid" while the only thing that could contradict the park is off screen. Written HERE
-        // because [applyModeTransition] is the single site that moves `mode` (the pause-safety
-        // timeout and the graced resume commit both route through it). Fail-null (#745).
-        if (newMode != Mode.Online) {
-            region = region.copy(pendingSessionPay = null)
+        // #1052 round 3: coming back Online RE-BASES a frozen running-total park. A park is frozen
+        // while the dash is not Online (the expiry block in [stepCore] skips wholesale, see
+        // [PendingSessionPay]) — killing it, as rounds 1 and 2 did, stranded a legitimate read for
+        // the rest of the dash, because the frame that first showed the figure is the only one
+        // FrameGate will ever admit for it. Freezing alone is not enough either: a window that
+        // elapsed under the pause sheet proves nothing about a wheel nobody was watching, so the
+        // park must stand a FULL window unchallenged WHILE ONLINE. Re-stamping `since`/`deadline`
+        // here is what buys that, and the effect diff sees a moved deadline and arms the timer.
+        // Written HERE because [applyModeTransition] is the single site that moves `mode` (the
+        // pause-safety timeout and the graced resume commit both route through it), and guarded on
+        // `prev.mode` because this function also runs on every ordinary Online→Online frame — an
+        // unguarded re-base would extend the window forever. Leaving Online writes NOTHING: the
+        // park rides out the pause. The session start/end clears above are unchanged.
+        if (prev.mode != Mode.Online && newMode == Mode.Online) {
+            region = region.copy(
+                pendingSessionPay = region.pendingSessionPay?.copy(
+                    since = obs.timestamp,
+                    deadline = obs.timestamp + policy.sessionPaySettleMs(region.platform),
+                ),
+            )
         }
 
         return region
@@ -708,19 +724,18 @@ class PlatformRegionStepper @Inject constructor() {
      * spin value that happens to be well-FORMED ($470.00 on a $16.70 dash) is indistinguishable
      * from a real figure by inspection — only by TIME. Hence:
      *
-     *  - the region is NOT Online → no park at all (#1052). A paused or offline dash cannot change
-     *                        its running total, so a read taken while the mode is anything but
-     *                        Online is not evidence of a live figure. The ordering this rests on is
-     *                        explicit in [stepCore]: `afterMode` — and with it the #605 resume
-     *                        grace, which deliberately KEEPS the mode at [Mode.Paused] while it is
-     *                        armed — is resolved BEFORE `updateLifecycle` calls
-     *                        [updateSessionFields], so `region.mode` here is this frame's RESULTING
-     *                        mode, not the previous one. Without this, DoorDash's pause sheet —
-     *                        which sits on the just-completed delivery summary and makes frames flap
-     *                        paused ↔ online — re-parks the pill's read on every online flap frame
-     *                        while the mode is still Paused, and the park's own wake timer then
-     *                        commits it under the modal. Fail-null: the total lands on the first
-     *                        idle frame after the resume is CONFIRMED.
+     *  - a read parks in ANY mode (#1052 round 3). The mode decides when a park may be CONFIRMED,
+     *                        never whether the evidence is worth keeping: a figure read under
+     *                        DoorDash's pause sheet is the freshest sighting there is, and rounds 1
+     *                        and 2 — which refused to park it, or dropped a park on the way out of
+     *                        Online — stranded it for the rest of the dash. The #605 resume grace
+     *                        keeps the mode at [Mode.Paused] across the online-implying flap frames,
+     *                        the confirmed resume then arrives as a wake TIMER with no frame behind
+     *                        it, and `FrameGate` never re-admits the identical idle capture, so the
+     *                        read has no second chance. A park is instead FROZEN while the dash is
+     *                        not Online and re-based on the transition back — see
+     *                        [PendingSessionPay] for the canonical statement, [stepCore]'s expiry
+     *                        block for the freeze and [applyModeTransition] for the re-base.
      *  - read == 0.00 with a positive committed total → the LOAD PLACEHOLDER; ignore it entirely
      *                        (the same earnings-pill component renders `$0.00` for seconds before
      *                        the figure loads — fielded 08-23 15:53:42 `$0.00` → `$61.80` at :48 —
@@ -760,7 +775,6 @@ class PlatformRegionStepper @Inject constructor() {
         flow: Flow,
         policy: TransitionPolicy,
     ): PlatformRegion = when {
-        region.mode != Mode.Online -> region
         pay == 0.0 && session.runningEarnings > 0.0 -> region
         centsEqual(pay, session.runningEarnings) -> region.copy(pendingSessionPay = null)
         region.pendingSessionPay?.let { centsEqual(pay, it.value) } == true -> region

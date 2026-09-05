@@ -109,6 +109,35 @@ class StateManagerV2RecoveryHygieneTest {
     }
 
     /**
+     * A snapshot table whose first [failures] inserts throw — the #1052 round-3 G3 case. The
+     * recovery checkpoint is the write that makes the park hygiene durable, so a swallowed failure
+     * silently reopens the double-recovery hole; [attempts] is what proves the retry happened.
+     */
+    private class FlakySnapshotDao(
+        seed: AppStateSnapshotEntity,
+        private val failures: Int,
+    ) : AppStateSnapshotDao {
+        private val rows = LinkedHashMap<Long, AppStateSnapshotEntity>()
+        var attempts = 0
+            private set
+
+        init {
+            rows[seed.correlationVersion] = seed
+        }
+
+        override suspend fun insert(entity: AppStateSnapshotEntity) {
+            attempts++
+            if (attempts <= failures) throw IllegalStateException("snapshot table unavailable")
+            rows[entity.correlationVersion] = entity
+        }
+
+        override suspend fun latest(): AppStateSnapshotEntity? =
+            rows.values.maxByOrNull { it.correlationVersion }
+
+        override suspend fun pruneOlderThan(cutoff: Long) {}
+    }
+
+    /**
      * A pre-crash state: $16.70 committed, and whatever [pending] the case needs parked on the
      * idle pill.
      *
@@ -161,6 +190,23 @@ class StateManagerV2RecoveryHygieneTest {
         modeHint = Mode.Online.name,
         parsedJson = StateJson.encodeToString<ParsedFields>(
             ParsedFields.IdleFields(sessionPay = sessionPay),
+        ),
+        captureId = null,
+        metadataJson = "{}",
+        correlationVersion = cv,
+    )
+
+    /** A delivery receipt — a row whose replay ACCUMULATES pay, so a double replay is visible. */
+    private fun receiptRow(cv: Long, timestamp: Long, totalPay: Double) = ObservationEntity(
+        occurredAt = timestamp,
+        sessionId = "s1",
+        pipelineId = "accessibility.window",
+        ruleId = "doordash.screen.delivery_summary_expanded",
+        platform = Platform.DoorDash.name,
+        flow = Flow.PostTask.name,
+        modeHint = Mode.Online.name,
+        parsedJson = StateJson.encodeToString<ParsedFields>(
+            ParsedFields.PostTaskFields(totalPay = totalPay, sessionEarnings = null),
         ),
         captureId = null,
         metadataJson = "{}",
@@ -389,5 +435,113 @@ class StateManagerV2RecoveryHygieneTest {
 
         assertEquals("nothing was recovered, so nothing is checkpointed", 0, snapshotDao.inserts)
         assertEquals(AppState().correlationVersion, manager.state.value.correlationVersion)
+    }
+
+    // =========================================================================
+    // #1052 round 3 — the replay stamps each row's TRUE correlation version
+    // =========================================================================
+
+    @Test
+    fun `a GAPPED tail checkpoints at the real journal boundary, so a receipt folds once`() = runTest {
+        // `StateMachine.step` numbers its result `prev + 1`, so a fold over N rows lands at
+        // `snapshot + N` — the true boundary only while the journal is gap-free. It is not:
+        // `ObservationJournal.append` is a fire-and-forget queue whose writer LOGS and drops a
+        // failed insert. Here rows 6 and 7 were lost, so the old fold ended at cv=7 while the
+        // journal's own last row was 9 — and since round 2 that undercount is CHECKPOINTED, i.e.
+        // made the next replay base. The next restart then re-consumed rows 8 and 9 and the
+        // receipt's pay accumulated a second time: $20 out of a $10 delivery.
+        val dispatcher = StandardTestDispatcher(testScheduler)
+        val journalDao = FakeObservationDao(
+            listOf(
+                receiptRow(cv = 8L, timestamp = t0 + 1_000L, totalPay = 10.00),
+                tailRow(cv = 9L, timestamp = t0 + 2_000L),
+            ),
+        )
+        val snapshotDao = FakeSnapshotDao(snapshotOf(parkedState(cv = 5L, pending = null)))
+
+        val first = newManagerOn(journalDao, snapshotDao, dispatcher)
+        first.initialize()
+        runCurrent()
+
+        assertEquals(
+            "the replayed state is stamped with the LAST ROW's version, not snapshot + count",
+            9L,
+            first.state.value.correlationVersion,
+        )
+        assertEquals(
+            "and the checkpoint therefore lands at the real journal boundary",
+            9L,
+            snapshotDao.latest()!!.correlationVersion,
+        )
+        assertEquals(
+            "the receipt folded once",
+            10.00,
+            first.state.value.regions.platforms[Platform.DoorDash]
+                ?.session?.accumulatedDeliveryPay ?: Double.NaN,
+            0.0001,
+        )
+
+        // The second restart reads that checkpoint back. With the boundary at 9 the tail is empty;
+        // with the old undercounted 7 it replayed 8 and 9 all over again.
+        val second = newManagerOn(journalDao, snapshotDao, dispatcher)
+        second.initialize()
+        runCurrent()
+
+        assertEquals(9L, second.state.value.correlationVersion)
+        assertEquals(
+            "a $10 receipt must not become $20 because two rows were lost before it",
+            10.00,
+            second.state.value.regions.platforms[Platform.DoorDash]
+                ?.session?.accumulatedDeliveryPay ?: Double.NaN,
+            0.0001,
+        )
+    }
+
+    // =========================================================================
+    // #1052 round 3 — a failed checkpoint is retried once, then LOUD
+    // =========================================================================
+
+    @Test
+    fun `a checkpoint that fails once is retried and lands`() = runTest {
+        val dispatcher = StandardTestDispatcher(testScheduler)
+        val snapshotDao = FlakySnapshotDao(snapshotOf(parkedState(cv = 5L)), failures = 1)
+
+        val manager = newManagerOn(FakeObservationDao(emptyList()), snapshotDao, dispatcher)
+        manager.initialize()
+        runCurrent()
+
+        assertEquals("the first attempt threw, the retry ran", 2, snapshotDao.attempts)
+        val onDisk = StateJson.decodeFromString<AppState>(snapshotDao.latest()!!.stateJson)
+        assertNull(
+            "and the cleaned state really is the next replay base",
+            onDisk.regions.platforms[Platform.DoorDash]?.pendingSessionPay,
+        )
+    }
+
+    @Test
+    fun `a checkpoint that never lands is attempted twice and does not block the restore`() = runTest {
+        // Refusing to install a recovered state because the DB is failing would trade a bounded,
+        // STATED risk (an ERROR line saying the cleaned state is not durable) for total sensing
+        // loss. So it proceeds — and the snapshot on disk is left carrying the pre-crash park,
+        // which is exactly what the ERROR says.
+        val dispatcher = StandardTestDispatcher(testScheduler)
+        val snapshotDao = FlakySnapshotDao(snapshotOf(parkedState(cv = 5L)), failures = Int.MAX_VALUE)
+
+        val manager = newManagerOn(FakeObservationDao(emptyList()), snapshotDao, dispatcher)
+        manager.initialize()
+        runCurrent()
+
+        assertEquals("one attempt, one retry — never a loop", 2, snapshotDao.attempts)
+        assertNull(
+            "the recovered state still installs, park dropped",
+            manager.state.value.regions.platforms[Platform.DoorDash]?.pendingSessionPay,
+        )
+        assertEquals(
+            "the committed total is untouched",
+            16.70,
+            manager.state.value.regions.platforms[Platform.DoorDash]
+                ?.session?.runningEarnings ?: Double.NaN,
+            0.0001,
+        )
     }
 }

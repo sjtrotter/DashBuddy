@@ -680,18 +680,22 @@ a fresh window. A flow-LESS observation (the wake timer, a click, a loopback, a 
 notification) is never a departure frame, so it orders like a timer — ownership before expiry — while
 a flow frame runs the expiry FIRST, so a park that stood its whole window still commits on the
 departure frame. Another platform's screen therefore still drops this platform's park — fail-null,
-accepted. **The MODE owns the park as well (#1052)**: leaving `Mode.Online` drops it, written at
-`applyModeTransition` (the single site that moves `mode`) — a paused/offline dash cannot change its
-running total, and the pill's surface is gone even where R0 still reads the park's flow
-(`dash_paused` declares a mode hint and NO flow, and the offline map keeps `Idle`) — and, round 2, a
-read PARKS only while the region is Online (`settleSessionPay`'s first arm) with the lazy expiry
-refusing a non-Online park outright. The drop alone was not enough because of the #605 resume grace:
-that grace deliberately KEEPS the mode at `Paused` while it is armed, so DoorDash's pause-sheet flap
-(online-implying frames over the just-completed summary) re-parked the pill's read on every flap
-frame and the park's own wake timer then committed it under the modal. The ordering is explicit —
-`stepCore` resolves `afterMode` BEFORE `updateLifecycle` → `updateSessionFields`, so the mode the
-gate reads is this frame's RESULTING one. Fail-null: the total lands on the first idle frame after
-the resume is CONFIRMED.
+accepted. **A park is FROZEN, not killed, while the dash is not `Mode.Online`, and its window
+RESTARTS on the way back (#1052 round 3)**: a read parks in ANY mode (the read taken under DoorDash's pause sheet is
+the freshest evidence there is), the lazy expiry SKIPS wholesale while non-Online (no commit — a
+paused dash's total is not moving and nothing behind the sheet can contradict the figure — and no
+drop), and `applyModeTransition` (the single site that moves `mode`, so the graced resume and the
+pause-safety timeout both route through it) RE-BASES `since`/`deadline` on the transition INTO
+Online, which re-arms the wake timer and makes the park stand a full window on a LIVE dash before it
+may commit. The two earlier rules were both wrong in the same direction: round 1 dropped the park on
+the way out of Online and round 2 refused to park at all while non-Online, and each STRANDED a
+legitimate figure — the #605 resume grace deliberately keeps the mode at `Paused` across the
+pause-sheet flap, the confirmed resume then arrives as a wake TIMER with no frame behind it, and
+`FrameGate` never re-admits the identical idle capture, so a real $25.20 first seen under the sheet
+would never have reached the dasher's HUD at all. The `PendingSessionPay` KDoc is the canonical
+statement. (Freezing is also why `diffDeadlineTimer`'s early-wake re-arm is guarded on
+`obs.timestamp < deadline`: a park kept across its own deadline would otherwise re-arm at the 1 ms
+floor and spin for the length of the pause.)
 **(b) BOTH feeds go through the gate** — the on-dash pill (`IdleFields.sessionPay`) and the
 receipt's own "This dash so far" (`PostTaskFields.sessionEarnings`), which `dropoff.json5` reads off
 the SAME animated wheel via `parseGlyphCurrency`; for the settled re-render to be admittable at all,
@@ -707,11 +711,12 @@ is what stops a pre-"End Dash" $470 park from committing on the summary frame an
 #596 close-out sweep's `DELIVERY_COMPLETED.sessionEarnings`.
 **(d) comparisons are cent-tolerant** (an accumulated `accumulatedDeliveryPay + totalPay` is not
 bit-equal to the 2-dp figure the wheel renders).
-**(e) expiry is `>=` and an early/stale wake RE-ARMS for the remainder** — the timer is armed for
-exactly `deadline − obs.timestamp` and fires against a wall clock, so a fire landing on the deadline
-would no-op and, by the very FrameGate argument above, no frame is coming to retry. It re-arms
-rather than commits: a stale fire from a REPLACED park would otherwise commit the new one early,
-which is precisely a mid-spin value. (All three region timers now share one
+**(e) expiry is `>=` and an EARLY/stale wake RE-ARMS for the remainder** — the timer is armed for
+exactly `deadline − obs.timestamp` and fires against a wall clock, so a fire landing before the
+deadline would no-op and, by the very FrameGate argument above, no frame is coming to retry. It
+re-arms rather than commits: a stale fire from a REPLACED park would otherwise commit the new one
+early, which is precisely a mid-spin value. A fire AT or PAST the deadline never re-arms (it either
+committed the park, or the park is frozen — see the mode rule). (All three region timers now share one
 `ModeEffects.diffDeadlineTimer` body; only this one passes `rearmOnEarlyWake`.)
 **(f) a contradicting read on the expiring frame supersedes the park** it contradicts, rather than
 committing the stale figure and re-parking the fresh one for another window.
@@ -735,7 +740,19 @@ restored correlation version, where snapshot rows REPLACE by key. Installing it 
 not durable — the snapshot on disk still carried the park, and a SECOND restart with no ordinary
 snapshot in between (neither the cadence nor a major transition need fire) replayed it over a
 journal tail that had since grown, committing the pre-crash figure on the first live frame past its
-deadline.
+deadline. Two round-3 corrections ride on that checkpoint. **Replay stamps each journal row's own
+`correlationVersion`** (`ObservationJournal.tailAfter` returns `JournalRow(cv, obs)`): `StateMachine
+.step` numbers its result `prev + 1`, which matches the journal only while the journal is gap-free,
+and `append` is a fire-and-forget queue whose writer LOGS and drops a failed insert — so after a
+lost row the fold undercounted, and the checkpoint made that wrong boundary DURABLE, leaving the
+next restart to re-consume rows it had already applied (a receipt's pay accumulating twice; the same
+undercount previously reached ordinary periodic snapshots after any gapped recovery, harmlessly).
+**And the checkpoint is retried once and fails LOUD** — `checkpoint` returns whether the row landed
+(`write` splits its try: the insert is the durability, the prune is housekeeping), `restoreState`
+retries once and then logs at ERROR under the `StateMachine` tag that the cleaned state is not
+durable, rather than letting `SnapshotStore`'s catch-all swallow the failure and silently reopen the
+double-recovery hole. It proceeds either way: blocking live observations on a failing DB would trade
+a bounded, stated risk for total sensing loss.
 
 
 ### 4. Side Effect Engine (`app/.../state/effects/`)
