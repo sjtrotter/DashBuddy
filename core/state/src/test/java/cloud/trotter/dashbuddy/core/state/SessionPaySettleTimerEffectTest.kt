@@ -65,7 +65,7 @@ class SessionPaySettleTimerEffectTest {
 
     @Test
     fun `a park appearing arms the settle timer for exactly its remaining window`() {
-        val park = PendingSessionPay(16.70, t0, t0 + settle)
+        val park = PendingSessionPay(16.70, t0, t0 + settle, Flow.Idle)
         val armed = diff(region(), region(pending = park))
             .filterIsInstance<AppEffect.ScheduleTimeout>()
             .single { it.type == TimeoutType.SESSION_PAY_SETTLE }
@@ -76,8 +76,8 @@ class SessionPaySettleTimerEffectTest {
 
     @Test
     fun `a replaced park re-arms on the new deadline`() {
-        val old = PendingSessionPay(470.00, t0 - 200L, t0 - 200L + settle)
-        val new = PendingSessionPay(16.70, t0, t0 + settle)
+        val old = PendingSessionPay(470.00, t0 - 200L, t0 - 200L + settle, Flow.Idle)
+        val new = PendingSessionPay(16.70, t0, t0 + settle, Flow.Idle)
         val armed = diff(region(pending = old), region(pending = new))
             .filterIsInstance<AppEffect.ScheduleTimeout>()
             .single { it.type == TimeoutType.SESSION_PAY_SETTLE }
@@ -87,7 +87,7 @@ class SessionPaySettleTimerEffectTest {
 
     @Test
     fun `the same park re-observed does not re-arm - the window is never extended`() {
-        val park = PendingSessionPay(16.70, t0 - 500L, t0 - 500L + settle)
+        val park = PendingSessionPay(16.70, t0 - 500L, t0 - 500L + settle, Flow.Idle)
         val effects = diff(region(pending = park), region(pending = park))
 
         assertTrue(
@@ -99,12 +99,48 @@ class SessionPaySettleTimerEffectTest {
 
     @Test
     fun `a cleared park cancels the settle timer`() {
-        val park = PendingSessionPay(16.70, t0 - 500L, t0 - 500L + settle)
+        val park = PendingSessionPay(16.70, t0 - 500L, t0 - 500L + settle, Flow.Idle)
         val cancelled = diff(region(pending = park), region())
             .filterIsInstance<AppEffect.CancelTimeout>()
             .single { it.type == TimeoutType.SESSION_PAY_SETTLE }
 
         assertEquals(Platform.DoorDash, cancelled.platform)
+    }
+
+    @Test
+    fun `an early or stale fire of the settle timer RE-ARMS for the remainder`() {
+        // #1029 S5: the wake timer's duration is exactly `deadline - obs.timestamp`, but the fired
+        // observation is stamped with the wall clock — so a fire can land AT or before the
+        // deadline. Because no frame is coming to retry (FrameGate identity dedup), a no-op fire
+        // would strand the park forever. Re-arm, never commit: a stale fire from a park that has
+        // since been REPLACED must not commit the new one early — that is a mid-spin value.
+        val park = PendingSessionPay(16.70, t0, t0 + settle, Flow.Idle)
+        val wake = Observation.Timeout(
+            timestamp = t0 + settle - 1_000L,
+            type = TimeoutType.SESSION_PAY_SETTLE,
+            targetPlatform = Platform.DoorDash,
+        )
+        val armed = effectMap.diff(state(region(pending = park)), state(region(pending = park)), wake)
+            .filterIsInstance<AppEffect.ScheduleTimeout>()
+            .single { it.type == TimeoutType.SESSION_PAY_SETTLE }
+
+        assertEquals(1_000L, armed.durationMs)
+    }
+
+    @Test
+    fun `an unrelated timer's fire does not re-arm the settle timer`() {
+        val park = PendingSessionPay(16.70, t0, t0 + settle, Flow.Idle)
+        val wake = Observation.Timeout(
+            timestamp = t0 + 100L,
+            type = TimeoutType.GRACE_COMMIT,
+            targetPlatform = Platform.DoorDash,
+        )
+        assertTrue(
+            "only the settle timer's OWN fire re-arms it",
+            effectMap.diff(state(region(pending = park)), state(region(pending = park)), wake)
+                .filterIsInstance<AppEffect.ScheduleTimeout>()
+                .none { it.type == TimeoutType.SESSION_PAY_SETTLE },
+        )
     }
 
     @Test
@@ -118,7 +154,7 @@ class SessionPaySettleTimerEffectTest {
             deadline = t0 + 60_000L,
         )
         val modeResume = PendingModeResume(since = t0 - 1_000L, deadline = t0 + 60_000L)
-        val park = PendingSessionPay(16.70, t0 - 500L, t0 - 500L + settle)
+        val park = PendingSessionPay(16.70, t0 - 500L, t0 - 500L + settle, Flow.Idle)
 
         val effects = diff(
             region(pending = park, destructive = destructive, modeResume = modeResume),

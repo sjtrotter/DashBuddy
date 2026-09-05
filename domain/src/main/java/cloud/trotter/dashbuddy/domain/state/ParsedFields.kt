@@ -205,6 +205,16 @@ sealed class ParsedFields {
             var h = totalPay.hashCode()
             h = 31 * h + appPay.hashCode()
             h = 31 * h + customerTips.hashCode()
+            // #1029: `sessionEarnings` is a DIGIT-WHEEL read on this surface too ("This dash so
+            // far"), and it is the ONLY field that moves while the receipt sits still. Without it
+            // here, a re-render whose wheel has SETTLED carries an identity identical to the
+            // mid-spin frame before it, `FrameGate.admit` drops it, and the receipt path can never
+            // self-correct — the PR's own golden had approved a pre-roll $17.75 for a $35.47 dash
+            // on exactly that shape. Cost: a spinning wheel admits a few extra frames (each a
+            // capture), bounded by the spin. Verified safe against the #427 dedupeKey templates:
+            // no post_task-shaped rule dedupes an effect on `{parsedHash}`/`{presentationHash}`
+            // (only the two offer rules do), so no effect key moves with this.
+            h = 31 * h + sessionEarnings.hashCode()
             return h
         }
     }

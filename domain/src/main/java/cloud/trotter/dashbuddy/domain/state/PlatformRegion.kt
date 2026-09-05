@@ -125,23 +125,37 @@ data class PlatformRegion(
      * one is parked here, and commits once it has stood **unchallenged** for
      * `GraceConfig.sessionPaySettleMs` — a different read REPLACES the park (with a fresh
      * deadline), a read equal to the committed total CLEARS it (the wheel is at rest), and the
-     * commit itself happens by lazy expiry on the first observation past [PendingSessionPay.deadline]
-     * (a `SESSION_PAY_SETTLE` wake timer guarantees one arrives).
+     * commit itself happens by lazy expiry on the first observation AT or past
+     * [PendingSessionPay.deadline] (a `SESSION_PAY_SETTLE` wake timer guarantees one arrives).
      *
      * REPETITION CANNOT BE THE DISCRIMINATOR, and that is not a style choice: `IdleFields.dedupeHash`
      * folds `sessionPay` into the screen's `Observation.identity()`, and `FrameGate.admit` drops a
      * frame whose identity equals the last admitted one. On a settled wheel ($16.70, $16.70, …) only
      * the FIRST frame ever reaches the state machine, so a "second agreeing read" would never arrive
      * and the figure would freeze for most of a dash. Elapsed time without contradiction is the only
-     * signal available here.
+     * signal available here. **This is the canonical statement of that rationale** — every other
+     * site (the stepper, `ModeEffects`, `TimeoutType.SESSION_PAY_SETTLE`, CLAUDE.md) points here
+     * rather than restating it.
+     *
+     * The park is **flow-scoped** ([PendingSessionPay.flow]): a read is evidence only while the
+     * surface it was read from is on screen, so leaving that surface DROPS the park instead of
+     * letting the wake timer commit a figure nothing can contradict any more — fail-null (#745).
+     * The committed total simply stands, and a return to the surface re-parks.
+     *
+     * BOTH running-total feeds are gated: the on-dash earnings pill (`IdleFields.sessionPay`) and
+     * the receipt's own "This dash so far" figure (`PostTaskFields.sessionEarnings`) — the receipt
+     * renders the SAME digit-wheel component, so exempting it would leave the identical failure
+     * mode open on the surface that closes a delivery. Conversely every write of
+     * [Session.runningEarnings] that does NOT go through the gate (the PostTask-entry pay
+     * accumulation, the dash-summary total) SUPERSEDES any park older than itself, so a stale park
+     * can never expire over fresher evidence.
      *
      * Cost: a genuinely-changed total lands one settle window late, which for a figure the dasher is
      * glancing at is the right trade against showing them a number that never existed.
      *
-     * Cleared whenever the session it describes begins or ends, and whenever a receipt's
-     * `sessionEarnings` writes a newer figure. Platform-agnostic: the gate is per-region state, keyed
-     * by nothing but this region's own reads. Default-null so existing snapshots deserialize
-     * unchanged.
+     * Cleared whenever the session it describes begins or ends. Platform-agnostic: the gate is
+     * per-region state, keyed by nothing but this region's own reads. Default-null so existing
+     * snapshots deserialize unchanged.
      */
     val pendingSessionPay: PendingSessionPay? = null,
 ) {
@@ -171,8 +185,23 @@ data class PendingSessionPay(
     val value: Double,
     /** The obs.timestamp of the read that parked it. */
     val since: Long,
-    /** Once an observation's timestamp passes this, the value is committed. */
+    /** Once an observation's timestamp reaches this, the value is committed. */
     val deadline: Long,
+    /**
+     * The R0 [Flow] the read was parked under — the surface it was read from.
+     *
+     * A read is evidence only while that surface is on screen: an offer overlay landing half a
+     * second after a mid-spin pill read would otherwise leave the park unchallengeable (no other
+     * screen carries a running total), and the wake timer would commit the spin value. Leaving the
+     * surface therefore DROPS the park — the committed figure stands, and the next return to the
+     * surface re-parks; that returning frame IS admitted, because its observation identity differs
+     * from the interloper's.
+     *
+     * Multi-platform caveat: R0 is shared, so another platform's screen also drops this platform's
+     * park. Fail-null, and accepted — the alternative is committing a figure this platform can no
+     * longer see.
+     */
+    val flow: Flow,
 )
 
 /**

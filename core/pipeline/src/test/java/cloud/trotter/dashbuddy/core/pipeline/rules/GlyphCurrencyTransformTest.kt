@@ -1,6 +1,7 @@
 package cloud.trotter.dashbuddy.core.pipeline.rules
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Test
 
@@ -54,6 +55,43 @@ class GlyphCurrencyTransformTest {
         assertEquals(0.00, parse("\$0.00"))
         assertEquals(9999.99, parse("\$9999.99"))
         assertEquals(9999.99, parse("\$9,999.99"))
+    }
+
+    @Test
+    fun `the ONE currency shape rejects a leading-zero integer`() {
+        // #1029 round 3: the old `\d{1,4}` accepted `$016.70`, and the fielded mid-spin
+        // `$016.603` is exactly one settled digit away from it. No real figure is written that
+        // way, so accepting it only widens the window for a spin frame to look settled.
+        assertNull(parse("\$016.70"))
+        assertNull(parse("This dash\$0016.70"))
+    }
+
+    @Test
+    fun `the ONE currency shape rejects a malformed thousands group`() {
+        // The old `\d{1,4}(?:,\d{3})?` matched this and folded it to 1234567.0.
+        assertNull(parse("\$1234,567.00"))
+        assertNull(parse("\$1,2345.00"))
+        assertNull(parse("\$1,23.45"))
+    }
+
+    @Test
+    fun `a five-figure integer is out of shape, not a windfall`() {
+        assertNull(parse("\$12345.00"))
+    }
+
+    @Test
+    fun `the rule-side pattern is the same shape, anchored`() {
+        // Both sides derive from CurrencyShape, so this is the pin's local half: what the
+        // transform accepts, a rule's `nextSiblingMatchingRegex` accepts, and vice versa.
+        val ruleShape = Regex(CurrencyShape.RULE_PATTERN)
+        for (good in listOf("\$0.00", "\$16.70", "\$9999.99", "\$1,234.56")) {
+            assertEquals(good, true, ruleShape.matches(good))
+            assertNotNull(parse(good))
+        }
+        for (bad in listOf("\$016.70", "\$1234,567.00", "\$12345.00", "\$,.00", "\$1,2,3.45")) {
+            assertEquals(bad, false, ruleShape.matches(bad))
+            assertNull(parse(bad))
+        }
     }
 
     // =========================================================================

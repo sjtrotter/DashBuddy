@@ -229,9 +229,8 @@ enum class TimeoutType {
      * is: the park shares the platform region with both other graces, so the
      * (type, platform) timer key (#438 item 1) would cross-cancel a live
      * destructive or resume timer if the type were reused. It is also the ONLY
-     * thing that can land a settled figure at all — `FrameGate` identity dedup
-     * (the idle dedup hash folds in `sessionPay`) means an unchanged wheel never
-     * re-admits a frame for the lazy expiry to ride in on.
+     * thing that can land a settled figure at all — see `PlatformRegion.pendingSessionPay`
+     * for why (FrameGate identity dedup), stated canonically there.
      */
     SESSION_PAY_SETTLE,
 

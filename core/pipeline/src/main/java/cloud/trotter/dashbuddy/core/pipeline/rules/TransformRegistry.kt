@@ -337,11 +337,12 @@ object TransformRegistry {
 
     /**
      * A **settled** currency figure: one leading `$` (written `\x24` so neither the Kotlin string
-     * template nor a regex anchor is in play), 1–4 integer digits with an optional single comma
-     * group, and exactly two fraction digits. Applied with [Regex.matches], which anchors the
+     * template nor a regex anchor is in play) followed by [CurrencyShape.FIGURE_CORE] — the ONE
+     * shape definition this and the rules' money scans now share, rather than two hand-written
+     * patterns that were loose in different ways. Applied with [Regex.matches], which anchors the
      * WHOLE input by construction — deliberately strict; see [parseGlyphCurrency].
      */
-    private val SETTLED_GLYPH_CURRENCY = Regex("\\x24\\d{1,4}(?:,\\d{3})?\\.\\d{2}")
+    private val SETTLED_GLYPH_CURRENCY = Regex("\\x24" + CurrencyShape.FIGURE_CORE)
 
     /**
      * Reconstructs a currency figure from an **animated digit-wheel** render (#1029).
@@ -368,11 +369,15 @@ object TransformRegistry {
      * reads `$70103.030`, the 07-17 corpus `$016.603` — every one of which fails the full match
      * and yields null rather than a fabricated figure. It cannot defend against a mid-spin read
      * that happens to be well-FORMED but wrong (`$470.00` for a $16.70 dash): that is the state
-     * layer's settle gate (two consecutive equal reads commit), not a string function's job.
+     * layer's settle gate (a read commits once it has stood unchallenged on its surface for the
+     * settle window), not a string function's job.
      *
      * Also fails closed on a label that carries its own digits — `"1 out of 1$16.70"` folds to
      * `"11$16.70"`, which no longer full-matches — and on two figures in one container
-     * (`"$8.70$1.00"`), so a mis-aimed rule reads null, never a fused number.
+     * (`"$8.70$1.00"`), so a mis-aimed rule reads null, never a fused number. Since #1029 round 3
+     * the shape also rejects a LEADING-ZERO integer (`$016.70` — the fielded mid-spin `$016.603`
+     * is one settled digit away from it) and a malformed thousands group (`$1234,567.00`, which
+     * the old `\d{1,4}(?:,\d{3})?` accepted and folded to 1234567.0).
      */
     private fun parseGlyphCurrency(text: String): Double? {
         if (text.length > MAX_GLYPH_CURRENCY_INPUT) return null

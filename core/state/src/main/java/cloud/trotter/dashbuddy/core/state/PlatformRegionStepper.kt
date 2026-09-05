@@ -169,13 +169,39 @@ class PlatformRegionStepper @Inject constructor() {
         // UNCHALLENGED for the settle window — a different read would have replaced it (with a
         // fresh deadline) and a read equal to the committed figure would have cleared it, so
         // reaching the deadline is itself the evidence that the wheel settled here. Runs BEFORE
-        // the timeout branch so the SESSION_PAY_SETTLE wake timer can land it: FrameGate identity
-        // dedup (the idle dedup hash folds in `sessionPay`) means an unchanged wheel emits no
-        // further frame for the expiry to ride in on, which is exactly why the timer exists.
-        // Driven by obs.timestamp (never a wall clock) so crash-recovery replay matches.
+        // the timeout branch so the SESSION_PAY_SETTLE wake timer can land it (see
+        // [PlatformRegion.pendingSessionPay] for why a timer is load-bearing here and repetition
+        // is not a usable signal). Driven by obs.timestamp (never a wall clock) so crash-recovery
+        // replay matches.
+        //
+        // `>=`, not `>`: the wake timer's duration is EXACTLY `deadline - obs.timestamp` and the
+        // fired observation is stamped with the wall clock, so a fire landing on the deadline (or
+        // after a clock step-back) would be a no-op — and no frame is coming to retry, by the very
+        // FrameGate argument that made the timer necessary. The park would be stranded.
+        // (`pendingModeResume` above keeps `>`: a resume grace is re-driven by ordinary frames.)
         current.pendingSessionPay?.let { pend ->
-            if (obs.timestamp > pend.deadline) {
-                current = commitSessionPay(current, pend)
+            if (obs.timestamp >= pend.deadline) {
+                // A CONTRADICTING read on the very frame the park would commit on supersedes it:
+                // a late timer and a fresh idle frame can collide, and committing the stale park
+                // first and then re-parking the fresh read for another whole window shows the
+                // dasher a figure that the same frame already disproved.
+                val read = obs.sessionPayRead()
+                current = if (read != null && !centsEqual(read, pend.value)) {
+                    current.copy(pendingSessionPay = null)
+                } else {
+                    commitSessionPay(current, pend)
+                }
+            }
+        }
+
+        // #1029: the park is FLOW-SCOPED — a read is evidence only while the surface it came from
+        // is on screen. Placed immediately AFTER the expiry so a park that stood its whole window
+        // on its own surface still commits on the departure frame; anything younger is dropped
+        // (the diff emits the CancelTimeout). Timeout observations leave `nextFlow` untouched, so
+        // this is inert for them. See [PendingSessionPay.flow].
+        current.pendingSessionPay?.let { pend ->
+            if (nextFlow.flow != pend.flow) {
+                current = current.copy(pendingSessionPay = null)
             }
         }
 
@@ -484,8 +510,9 @@ class PlatformRegionStepper @Inject constructor() {
         val prev = region.lastActedFlow ?: prevFlow.flow
         val next = obs.flow ?: prev
 
-        // Update session fields from observations
-        r = updateSessionFields(r, obs, policy)
+        // Update session fields from observations. `next` is the flow the read is being made
+        // ON — the settle gate parks it with that flow (#1029, see [PendingSessionPay.flow]).
+        r = updateSessionFields(r, obs, next, policy)
 
         // Accumulate delivery pay when entering PostTask
         if (prev != Flow.PostTask && next == Flow.PostTask) {
@@ -498,6 +525,12 @@ class PlatformRegionStepper @Inject constructor() {
                         accumulatedDeliveryPay = accumulated,
                         runningEarnings = best,
                     ))
+                    // #1029: this is a NON-gated write of runningEarnings, so it supersedes every
+                    // park older than itself — otherwise a park made before the receipt could
+                    // expire afterwards and overwrite it. `since >= now` is load-bearing: the
+                    // receipt's OWN wheel read was parked by updateSessionFields a few lines
+                    // above, on THIS same frame, and that park must survive.
+                    r = r.supersedeParksOlderThan(obs.timestamp)
                 }
             }
         }
@@ -525,6 +558,7 @@ class PlatformRegionStepper @Inject constructor() {
     private fun updateSessionFields(
         region: PlatformRegion,
         obs: Observation.FlowObservation,
+        flow: Flow,
         policy: TransitionPolicy,
     ): PlatformRegion {
         val parsed = obs.parsed
@@ -536,7 +570,7 @@ class PlatformRegionStepper @Inject constructor() {
                 if (parsed.sessionType != null) r = r.copy(sessionType = parsed.sessionType)
                 r.session?.let { session ->
                     val pay = parsed.sessionPay
-                    if (pay != null) r = settleSessionPay(r, session, pay, obs.timestamp, policy)
+                    if (pay != null) r = settleSessionPay(r, session, pay, obs.timestamp, flow, policy)
                 }
             }
             is ParsedFields.PostTaskFields -> {
@@ -574,14 +608,13 @@ class PlatformRegionStepper @Inject constructor() {
                 r.session?.let { session ->
                     val earnings = parsed.sessionEarnings
                     if (earnings != null) {
-                        // #1029 RESIDUAL: the receipt's own session total is NOT behind the settle
-                        // gate (it is not a digit-wheel render). It is still NEWER evidence than any
-                        // parked idle read, so the park is dropped here — otherwise a stale park
-                        // could later expire and overwrite the receipt's figure.
-                        r = r.copy(
-                            session = session.copy(runningEarnings = earnings),
-                            pendingSessionPay = null,
-                        )
+                        // #1029: the receipt's "This dash so far" is the SAME digit-wheel the
+                        // on-dash pill renders — `dropoff.json5` reads it through
+                        // `parseGlyphCurrency` on both summary rules — so it takes the SAME settle
+                        // gate. Exempting it would leave the identical well-formed-mid-spin hole
+                        // open on the surface that closes a delivery (the PR's own golden had
+                        // approved a pre-roll $17.75 against a $35.47 dash one second later).
+                        r = settleSessionPay(r, session, earnings, obs.timestamp, flow, policy)
                     }
                 }
             }
@@ -591,7 +624,16 @@ class PlatformRegionStepper @Inject constructor() {
                 val total = parsed.totalEarnings
                 if (total != null) {
                     r.session?.let { session ->
+                        // #1029: a non-gated write, so it supersedes every park older than itself
+                        // (same rule as the PostTask-entry accumulation above). On the fielded
+                        // path the dash-summary frame is already handled one level up — the
+                        // flow-departure drop in stepCore kills the park the moment R0 leaves the
+                        // pill's surface, and `updateLifecycle` returns before this arm whenever
+                        // the summary arrives with a live session — but the invariant "no direct
+                        // writer leaves an older park alive" is stated at every writer, not
+                        // wherever it happens to be reachable today.
                         r = r.copy(session = session.copy(runningEarnings = total))
+                            .supersedeParksOlderThan(obs.timestamp)
                     }
                 }
             }
@@ -614,20 +656,32 @@ class PlatformRegionStepper @Inject constructor() {
      * spin value that happens to be well-FORMED ($470.00 on a $16.70 dash) is indistinguishable
      * from a real figure by inspection — only by TIME. Hence:
      *
+     *  - read == 0.00 with a positive committed total → the LOAD PLACEHOLDER; ignore it entirely
+     *                        (the same earnings-pill component renders `$0.00` for seconds before
+     *                        the figure loads — fielded 08-23 15:53:42 `$0.00` → `$61.80` at :48 —
+     *                        and a dash running total never legitimately returns to zero mid-dash).
+     *                        Deliberately NOT a general monotonic guard: a genuine downward
+     *                        correction is out of scope, only the zero placeholder is refused.
      *  - read == committed → the wheel is at rest; drop any park and change nothing.
      *  - read == parked    → the same value again; keep the park AND its ORIGINAL deadline (an
      *                        intervening screen and a return must not extend the window).
-     *  - otherwise         → a new sighting; REPLACE the park with a fresh deadline.
+     *  - otherwise         → a new sighting; REPLACE the park with a fresh deadline, stamped with
+     *                        the [Flow] it was read on (the park dies when that surface leaves).
+     *
+     * Both equality tests are CENT-tolerant: `runningEarnings` can hold an accumulated sum
+     * (`accumulatedDeliveryPay + totalPay`) that is not bit-equal to the 2-dp figure the wheel
+     * renders, and an exact `Double` compare there would needlessly re-park and re-arm.
      *
      * The commit itself is [commitSessionPay], run by lazy expiry in [stepCore] on the first
-     * observation past the deadline — a `SESSION_PAY_SETTLE` wake timer guarantees one arrives,
-     * which is load-bearing: `FrameGate` identity dedup (`IdleFields.dedupeHash` folds in
-     * `sessionPay`) never re-admits an identical wheel read, so "two consecutive agreeing reads"
-     * is not a signal this reducer can ever observe.
+     * observation AT or past the deadline — a `SESSION_PAY_SETTLE` wake timer guarantees one
+     * arrives, and that timer is load-bearing rather than punctual (see
+     * [PlatformRegion.pendingSessionPay] for why repetition is not a signal this reducer can ever
+     * observe).
      *
-     * Split immediate/gated fields: only `sessionPay` is gated here. The other [IdleFields]
+     * Split immediate/gated fields: only the running total is gated here. The other [IdleFields]
      * (`zoneName`, `sessionType`) are written immediately — they are not wheel-rendered and carry
-     * no mid-animation failure mode.
+     * no mid-animation failure mode. BOTH running-total feeds go through this one function: the
+     * idle earnings pill and the receipt's own "This dash so far" wheel.
      *
      * Pure, platform-agnostic (state keyed by this region only, no [Platform] branch, no wall
      * clock — the deadline is derived from `obs.timestamp`). See
@@ -638,18 +692,50 @@ class PlatformRegionStepper @Inject constructor() {
         session: Session,
         pay: Double,
         now: Long,
+        flow: Flow,
         policy: TransitionPolicy,
     ): PlatformRegion = when {
-        pay == session.runningEarnings -> region.copy(pendingSessionPay = null)
-        pay == region.pendingSessionPay?.value -> region
+        pay == 0.0 && session.runningEarnings > 0.0 -> region
+        centsEqual(pay, session.runningEarnings) -> region.copy(pendingSessionPay = null)
+        region.pendingSessionPay?.let { centsEqual(pay, it.value) } == true -> region
         else -> region.copy(
             pendingSessionPay = PendingSessionPay(
                 value = pay,
                 since = now,
                 deadline = now + policy.sessionPaySettleMs(region.platform),
+                flow = flow,
             ),
         )
     }
+
+    /**
+     * Two money figures that describe the same total (#1029). `Session.runningEarnings` can hold an
+     * ACCUMULATED sum, which is not bit-equal to the 2-dp figure the platform renders for it, so an
+     * exact `Double` compare would treat a settled read as "new" and re-park it forever.
+     */
+    private fun centsEqual(a: Double, b: Double): Boolean = kotlin.math.abs(a - b) < 0.005
+
+    /**
+     * The parsed dash running total this observation carries, if any (#1029) — the two feeds the
+     * settle gate owns, in ONE place, so the expiry's contradiction check and the gate itself can
+     * never disagree about what counts as a running-total read.
+     */
+    private fun Observation.sessionPayRead(): Double? =
+        when (val parsed = (this as? Observation.FlowObservation)?.parsed) {
+            is ParsedFields.IdleFields -> parsed.sessionPay
+            is ParsedFields.PostTaskFields -> parsed.sessionEarnings
+            else -> null
+        }
+
+    /**
+     * Drop a parked running-total read that is OLDER than a direct write of
+     * [Session.runningEarnings] (#1029). Every writer that bypasses the settle gate calls this: a
+     * park made before that write describes staler evidence, and letting it expire afterwards
+     * would silently overwrite the newer figure. `since >= now` keeps a park made on the SAME
+     * frame (the receipt's own wheel read, parked microseconds earlier in [updateSessionFields]).
+     */
+    private fun PlatformRegion.supersedeParksOlderThan(now: Long): PlatformRegion =
+        copy(pendingSessionPay = pendingSessionPay?.takeIf { it.since >= now })
 
     /**
      * Commit a parked running-total read whose settle window lapsed (#1029). With no session to

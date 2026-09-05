@@ -369,31 +369,26 @@ internal object PredicateCompiler {
      * resolves the node's index with `List.indexOf`, i.e. structural equality —
      * so a structurally identical earlier sibling would silently resolve the
      * WRONG index and the predicate would fail to match, UNDER-masking a PII
-     * node. A privacy control must not depend on structural uniqueness, so this
-     * walks the parent's children by identity. Returns null when the tree has no
-     * parent back-references wired (`restoreParents`, always called by
-     * `AccessibilityNodeMapper` and `UiNodeDto.toDomain`) or the node is first —
-     * fail-closed for recognition, and for redaction a null simply means "no
-     * match here", with the `CustomerTextMarkers` backstop still downstream.
+     * node. A privacy control must not depend on structural uniqueness.
+     *
+     * Since #1029 the identity walk itself has ONE owner, [UiNode.precedingSibling] /
+     * [UiNode.followingSiblings], shared with the `nextSiblingMatchingRegex` navigate — the two
+     * had drifted into private copies of the same three lines. Returns null when the tree has no
+     * parent back-references wired (`restoreParents`, always called by `AccessibilityNodeMapper`
+     * and `UiNodeDto.toDomain`) or the node is first — fail-closed for recognition, and for
+     * redaction a null simply means "no match here", with the `CustomerTextMarkers` backstop
+     * still downstream.
      */
-    private fun precedingSibling(node: UiNode): UiNode? {
-        val siblings = node.parent?.children ?: return null
-        val idx = siblings.indexOfFirst { it === node }
-        return if (idx > 0) siblings[idx - 1] else null
-    }
+    private fun precedingSibling(node: UiNode): UiNode? = node.precedingSibling()
 
     /**
      * The sibling immediately AFTER [node] (#886) — [precedingSibling]'s mirror,
-     * resolved by the SAME referential-identity walk and for the same reason: a
-     * structural-equality lookup would resolve a duplicated sibling to the wrong
-     * index and UNDER-mask a PII node. Returns null with no parent
+     * through the same [UiNode.followingSiblings] identity walk and for the same
+     * reason: a structural-equality lookup would resolve a duplicated sibling to
+     * the wrong index and UNDER-mask a PII node. Returns null with no parent
      * back-references or when the node is last.
      */
-    private fun followingSibling(node: UiNode): UiNode? {
-        val siblings = node.parent?.children ?: return null
-        val idx = siblings.indexOfFirst { it === node }
-        return if (idx >= 0 && idx < siblings.lastIndex) siblings[idx + 1] else null
-    }
+    private fun followingSibling(node: UiNode): UiNode? = node.followingSiblings().firstOrNull()
 
     // -- #293 robustness helpers, predicate-scoped ------------------------------
 

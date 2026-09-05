@@ -1711,7 +1711,11 @@
           // section title, with a Collapse/Expand affordance in between — hence the
           // shape-anchored scan rather than a positional `sibling(N)`. The pattern
           // IS the safety: only a well-formed currency node can be picked up, so a
-          // re-ordered row reads null, never the wrong node.
+          // re-ordered row reads null, never the wrong node. The pattern text is
+          // byte-pinned to `CurrencyShape.RULE_PATTERN` (one shape definition shared
+          // with `parseGlyphCurrency`) and the trailing `, 2` caps the scan at this
+          // row's own width — see the tips field below for why an uncapped scan is
+          // fail-WRONG on a row whose value is missing.
           "totalPay": {
             "coalesce": [
               {
@@ -1725,7 +1729,7 @@
                 "find": {
                   "hasText": "This offer"
                 },
-                "navigate": "nextSiblingMatchingRegex(^\\$[\\d,]+\\.\\d{2}$)",
+                "navigate": "nextSiblingMatchingRegex(^\\$(?:0|[1-9]\\d{0,3}|[1-9]\\d{0,2},\\d{3})\\.\\d{2}$, 2)",
                 "read": "text",
                 "transform": "parseCurrency"
               }
@@ -1758,11 +1762,17 @@
           // following sibling whose text IS a currency figure skips the code node and
           // removes the fabrication structurally: no offset can be right on both
           // layouts, but "the next money-shaped node" is right on both.
+          // The `, 2` cap is the other half of that: if the tips VALUE is simply
+          // absent (['Customer tips', '799', 'Peak pay', '$1.00']) an uncapped scan
+          // walks out of the row and returns Peak pay's $1.00 as the tip — fail-WRONG,
+          // and the `sumApproxEquals` validator cannot catch it because `appPay` is
+          // null on 8.93.7. Two is the fielded distance (label -> optional type code
+          // -> value).
           "customerTips": {
             "find": {
               "hasTextContaining": "Customer tips"
             },
-            "navigate": "nextSiblingMatchingRegex(^\\$[\\d,]+\\.\\d{2}$)",
+            "navigate": "nextSiblingMatchingRegex(^\\$(?:0|[1-9]\\d{0,3}|[1-9]\\d{0,2},\\d{3})\\.\\d{2}$, 2)",
             "read": "text",
             "transform": "parseCurrency"
           },
@@ -1972,7 +1982,8 @@
           // `final_value` first (every corpus frame that has the id resolves there),
           // then the 8.93.7 id-less render, where the figure is a currency-shaped
           // TextView a couple of slots after the 'This offer' section title with the
-          // Expand affordance in between.
+          // Expand affordance in between. Same byte-pinned `CurrencyShape` pattern and
+          // same `, 2` row cap as the expanded rule.
           "totalPay": {
             "coalesce": [
               {
@@ -1986,7 +1997,7 @@
                 "find": {
                   "hasText": "This offer"
                 },
-                "navigate": "nextSiblingMatchingRegex(^\\$[\\d,]+\\.\\d{2}$)",
+                "navigate": "nextSiblingMatchingRegex(^\\$(?:0|[1-9]\\d{0,3}|[1-9]\\d{0,2},\\d{3})\\.\\d{2}$, 2)",
                 "read": "text",
                 "transform": "parseCurrency"
               }

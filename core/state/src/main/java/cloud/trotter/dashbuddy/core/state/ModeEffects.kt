@@ -14,6 +14,7 @@ import cloud.trotter.dashbuddy.domain.pipeline.TransitionTrigger
 import cloud.trotter.dashbuddy.domain.state.DestructiveKind
 import cloud.trotter.dashbuddy.domain.state.Mode
 import cloud.trotter.dashbuddy.domain.state.ParsedFields
+import cloud.trotter.dashbuddy.domain.state.Platform
 import cloud.trotter.dashbuddy.domain.state.PlatformRegion
 import timber.log.Timber
 
@@ -23,8 +24,9 @@ import timber.log.Timber
  * (mirroring the [OfferEffects]/[JobAcceptFlow] precedent) so they keep direct access to
  * [EffectMap.logEffect], [EffectMap.triggerOverrideEffects], and [EffectMap.graceConfig] — all
  * widened `private` → `internal` for this split, same as the earlier extractions. Pure move: no
- * behavior change. [diffGraceTimer], [diffModeResumeTimer] and [diffSessionPaySettleTimer] house
- * here (not a separate file) because all three are grace/settle TIMER arming for the mode/session
+ * behavior change. [diffGraceTimer], [diffModeResumeTimer] and [diffSessionPaySettleTimer] — all
+ * three now one-liners over the shared [diffDeadlineTimer] body (#1029 D4) — house here (not a
+ * separate file) because all three are grace/settle TIMER arming for the mode/session
  * lifecycle above them — [diffGraceTimer]
  * generically watches [cloud.trotter.dashbuddy.domain.state.PlatformRegion.pendingDestructive]
  * (session-end AND task-retire share the one mechanism), but it is called immediately after
@@ -248,20 +250,54 @@ internal fun EffectMap.diffGraceTimer(
     prev: PlatformRegion,
     next: PlatformRegion,
     obs: Observation,
+): List<AppEffect> = diffDeadlineTimer(
+    prevDeadline = prev.pendingDestructive?.deadline,
+    nextDeadline = next.pendingDestructive?.deadline,
+    type = TimeoutType.GRACE_COMMIT,
+    platform = next.platform,
+    obs = obs,
+)
+
+/**
+ * The ONE arm/re-arm/cancel shape all three region timers share (#1029 D4). Every pending in
+ * [PlatformRegion] that wants a wake-up expresses it identically — schedule for the remaining
+ * time when a deadline appears or MOVES, cancel when the pending clears — so the three diffs
+ * below differ only in which field they read and which [TimeoutType] they key. Keeping one body
+ * means a fix (like [rearmOnEarlyWake]) can't land on two of three.
+ *
+ * A commit lands in the cancel branch too — harmless, the timer has already fired or no-ops.
+ *
+ * @param rearmOnEarlyWake re-schedule for the REMAINDER when this timer's own fire arrives while
+ *   the pending is still there with an UNCHANGED deadline (#1029 S5). Only the settle timer needs
+ *   it: it is the sole observation its pending will ever get (FrameGate identity dedup drops the
+ *   repeat frames), so an early or clock-stepped-back fire that no-ops would strand the pending
+ *   forever. Deliberately NOT a commit — a stale fire from a REPLACED pending would then commit
+ *   the NEW one early, which for the settle gate is precisely a mid-spin value. The other two
+ *   pendings are re-driven by ordinary frames and keep the plain behaviour.
+ */
+internal fun EffectMap.diffDeadlineTimer(
+    prevDeadline: Long?,
+    nextDeadline: Long?,
+    type: TimeoutType,
+    platform: Platform,
+    obs: Observation,
+    rearmOnEarlyWake: Boolean = false,
 ): List<AppEffect> {
-    val prevPend = prev.pendingDestructive
-    val nextPend = next.pendingDestructive
+    fun schedule(deadline: Long) = listOf(
+        AppEffect.ScheduleTimeout(
+            durationMs = (deadline - obs.timestamp).coerceAtLeast(1L),
+            type = type,
+            platform = platform,
+        ),
+    )
     return when {
-        nextPend != null && (prevPend == null || prevPend.deadline != nextPend.deadline) ->
-            listOf(
-                AppEffect.ScheduleTimeout(
-                    durationMs = (nextPend.deadline - obs.timestamp).coerceAtLeast(1L),
-                    type = TimeoutType.GRACE_COMMIT,
-                    platform = next.platform,
-                ),
-            )
-        prevPend != null && nextPend == null ->
-            listOf(AppEffect.CancelTimeout(TimeoutType.GRACE_COMMIT, next.platform))
+        nextDeadline != null && (prevDeadline == null || prevDeadline != nextDeadline) ->
+            schedule(nextDeadline)
+        rearmOnEarlyWake && nextDeadline != null && prevDeadline == nextDeadline &&
+            obs is Observation.Timeout && obs.type == type && obs.platform == platform ->
+            schedule(nextDeadline)
+        prevDeadline != null && nextDeadline == null ->
+            listOf(AppEffect.CancelTimeout(type, platform))
         else -> emptyList()
     }
 }
@@ -281,23 +317,13 @@ internal fun EffectMap.diffModeResumeTimer(
     prev: PlatformRegion,
     next: PlatformRegion,
     obs: Observation,
-): List<AppEffect> {
-    val prevPend = prev.pendingModeResume
-    val nextPend = next.pendingModeResume
-    return when {
-        nextPend != null && (prevPend == null || prevPend.deadline != nextPend.deadline) ->
-            listOf(
-                AppEffect.ScheduleTimeout(
-                    durationMs = (nextPend.deadline - obs.timestamp).coerceAtLeast(1L),
-                    type = TimeoutType.MODE_RESUME_COMMIT,
-                    platform = next.platform,
-                ),
-            )
-        prevPend != null && nextPend == null ->
-            listOf(AppEffect.CancelTimeout(TimeoutType.MODE_RESUME_COMMIT, next.platform))
-        else -> emptyList()
-    }
-}
+): List<AppEffect> = diffDeadlineTimer(
+    prevDeadline = prev.pendingModeResume?.deadline,
+    nextDeadline = next.pendingModeResume?.deadline,
+    type = TimeoutType.MODE_RESUME_COMMIT,
+    platform = next.platform,
+    obs = obs,
+)
 
 /**
  * Schedule/cancel the wake-up timer for a parked dash running-total read (#1029) — the
@@ -306,32 +332,23 @@ internal fun EffectMap.diffModeResumeTimer(
  * platform region with the destructive and resume graces, so a reused type's (type, platform)
  * timer key (#438 item 1) would cross-cancel a live one.
  *
- * Unlike the other two this timer is not merely punctual, it is LOAD-BEARING: `FrameGate` identity
- * dedup (`IdleFields.dedupeHash` folds in `sessionPay`) drops every repeat of an unchanged wheel
- * read, so on a settled total no further frame arrives for the stepper's lazy expiry to ride in on.
- * Without this timer the parked figure would simply never commit.
+ * Unlike the other two this timer is not merely punctual, it is LOAD-BEARING — it is the only
+ * observation a settled park will ever get (see [PlatformRegion.pendingSessionPay]) — which is why
+ * it alone takes [diffDeadlineTimer]'s `rearmOnEarlyWake`.
  *
  * Arm (or a re-arm with a new deadline — a different read replaced the park) schedules; the park
- * clearing (wheel at rest, receipt write, session start/end, or the commit itself) cancels.
+ * clearing (wheel at rest, a superseding direct write, leaving the read's surface, session
+ * start/end, or the commit itself) cancels.
  */
 internal fun EffectMap.diffSessionPaySettleTimer(
     prev: PlatformRegion,
     next: PlatformRegion,
     obs: Observation,
-): List<AppEffect> {
-    val prevPend = prev.pendingSessionPay
-    val nextPend = next.pendingSessionPay
-    return when {
-        nextPend != null && (prevPend == null || prevPend.deadline != nextPend.deadline) ->
-            listOf(
-                AppEffect.ScheduleTimeout(
-                    durationMs = (nextPend.deadline - obs.timestamp).coerceAtLeast(1L),
-                    type = TimeoutType.SESSION_PAY_SETTLE,
-                    platform = next.platform,
-                ),
-            )
-        prevPend != null && nextPend == null ->
-            listOf(AppEffect.CancelTimeout(TimeoutType.SESSION_PAY_SETTLE, next.platform))
-        else -> emptyList()
-    }
-}
+): List<AppEffect> = diffDeadlineTimer(
+    prevDeadline = prev.pendingSessionPay?.deadline,
+    nextDeadline = next.pendingSessionPay?.deadline,
+    type = TimeoutType.SESSION_PAY_SETTLE,
+    platform = next.platform,
+    obs = obs,
+    rearmOnEarlyWake = true,
+)

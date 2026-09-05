@@ -22,9 +22,14 @@ import org.junit.Test
  */
 class NextSiblingMatchingRegexTest {
 
-    private val currencyNav = "nextSiblingMatchingRegex(^\\\$[\\d,]+\\.\\d{2}\$)"
+    /** The production shape, from its ONE owner — never a hand-copied pattern (#1029 E3). */
+    private val currencyNav = "nextSiblingMatchingRegex(${CurrencyShape.RULE_PATTERN})"
 
-    private fun rules(nav: String, findText: String = "Customer tips") = """[{
+    private fun rules(
+        nav: String,
+        findText: String = "Customer tips",
+        find: String = """{ "hasText": "$findText" }""",
+    ) = """[{
         "id": "doordash.screen.sibling_scan",
         "priority": 1,
         "require": { "exists": { "hasNoId": true } },
@@ -32,7 +37,7 @@ class NextSiblingMatchingRegexTest {
             "as": "idle",
             "fields": {
                 "value": {
-                    "find": { "hasText": "$findText" },
+                    "find": $find,
                     "navigate": "${nav.replace("\\", "\\\\")}",
                     "read": "text",
                     "transform": "parseCurrency"
@@ -41,19 +46,29 @@ class NextSiblingMatchingRegexTest {
         }
     }]"""
 
-    private fun rulesetFor(nav: String, findText: String = "Customer tips") =
-        Ruleset(
-            RuleCompiler.compileRules<UiNode>(
-                Json.parseToJsonElement(rules(nav, findText)).jsonArray,
-                RuleContext.SCREEN,
-            ),
-        )
+    private fun rulesetFor(
+        nav: String,
+        findText: String = "Customer tips",
+        find: String = """{ "hasText": "$findText" }""",
+    ) = Ruleset(
+        RuleCompiler.compileRules<UiNode>(
+            Json.parseToJsonElement(rules(nav, findText, find)).jsonArray,
+            RuleContext.SCREEN,
+        ),
+    )
 
     private fun row(vararg texts: String?): UiNode =
         UiNode(children = texts.map { UiNode(text = it) }).restoreParents()
 
-    private fun valueOf(tree: UiNode, nav: String = currencyNav, findText: String = "Customer tips"): Any? =
-        rulesetFor(nav, findText).matchFirst(tree, "doordash")?.fields?.get("value")
+    private fun valueOf(
+        tree: UiNode,
+        nav: String = currencyNav,
+        findText: String = "Customer tips",
+        find: String = """{ "hasText": "$findText" }""",
+    ): Any? = rulesetFor(nav, findText, find).matchFirst(tree, "doordash")?.fields?.get("value")
+
+    /** The production form of the navigate: the shared shape plus this row's own width cap. */
+    private fun cappedNav(cap: Int) = "nextSiblingMatchingRegex(${CurrencyShape.RULE_PATTERN}, $cap)"
 
     // =========================================================================
     // The $799 fabrication
@@ -122,6 +137,86 @@ class NextSiblingMatchingRegexTest {
         // One slot further out: past the bound, so it must NOT be found.
         val outOfRange = row("Customer tips", *fillers, "\$7.00")
         assertNull(valueOf(outOfRange))
+    }
+
+    // =========================================================================
+    // The rule-declared scan cap (#1029 E1)
+    // =========================================================================
+
+    @Test
+    fun `an uncapped scan walks out of the row and returns the NEXT row's money`() {
+        // Characterization of what the cap exists for: when the tips VALUE is simply absent, the
+        // unbounded scan hands back Peak pay's $1.00 AS the customer tip — fail-WRONG, and the
+        // `sumApproxEquals` validator cannot catch it because appPay is null on 8.93.7.
+        val tree = row("Customer tips", "799", "Peak pay", "\$1.00")
+        assertEquals(1.00, valueOf(tree))
+        assertNull("the cap stops the scan at this row's own width", valueOf(tree, nav = cappedNav(2)))
+    }
+
+    @Test
+    fun `the capped scan still reads its own row, code node and all`() {
+        assertEquals(7.00, valueOf(row("Customer tips", "799", "\$7.00"), nav = cappedNav(2)))
+        assertEquals(7.00, valueOf(row("Customer tips", "\$7.00"), nav = cappedNav(2)))
+    }
+
+    @Test
+    fun `an absent cap keeps the default`() {
+        val fillers = Array(MAX_SIBLING_SCAN - 1) { "filler" }
+        assertEquals(7.00, valueOf(row("Customer tips", *fillers, "\$7.00")))
+    }
+
+    @Test
+    fun `a cap outside the bound isolates the rule at compile`() {
+        // Tagged isolable (#293 item 4), like every other authoring-level navigate rejection: the
+        // worst case of dropping one malformed non-sensitive rule is that surface degrading to
+        // UNKNOWN, which is scrubbed. The sensitive-layer belt in `compileRules` still rejects the
+        // whole file if such a rule were ever sensitive. Either way it never reaches a live match.
+        for (bad in listOf(0, MAX_SIBLING_SCAN + 1, 99)) {
+            val compiled = RuleCompiler.compileRules<UiNode>(
+                Json.parseToJsonElement(rules(cappedNav(bad))).jsonArray,
+                RuleContext.SCREEN,
+            )
+            assertTrue("cap $bad must not produce a live rule", compiled.isEmpty())
+        }
+    }
+
+    @Test
+    fun `a comma inside the pattern is not mistaken for a cap`() {
+        // The split anchors on a trailing `, <digits>` at the END of the argument, and a shape
+        // pattern ends in its own anchor. `[\d,]` and `{0,3}` are both left alone.
+        assertEquals(7.00, valueOf(row("Customer tips", "799", "\$7.00")))
+        assertEquals(
+            1234.0,
+            valueOf(
+                row("Customer tips", "1,234"),
+                nav = "nextSiblingMatchingRegex(^[\\d,]+\$)",
+            ),
+        )
+    }
+
+    @Test
+    fun `the scan starts from the anchor's OWN position, not an equals-twin's`() {
+        // #1029 E2: `UiNode.equals` compares this node's own fields and NOT its children, so two
+        // wrapper Views differing only in what they contain are EQUAL. `sibling(offset)` resolves
+        // its origin with `List.indexOf` — structural equality — and would start the scan from the
+        // twin, one slot early; with a row-width cap that silently loses the value. The walk is by
+        // referential identity for exactly this reason.
+        val emptyTwin = UiNode(className = "Row")
+        val anchorRow = UiNode(className = "Row", children = listOf(UiNode(text = "Customer tips")))
+        val tree = UiNode(
+            className = "Sheet",
+            children = listOf(emptyTwin, anchorRow, UiNode(text = "799"), UiNode(text = "\$7.00")),
+        ).restoreParents()
+
+        assertEquals("the twins must actually be equal for this to test anything", emptyTwin, anchorRow)
+        assertEquals(
+            7.00,
+            valueOf(
+                tree,
+                nav = cappedNav(2),
+                find = """{ "all": [ { "hasClassName": "Row" }, { "hasChildren": true } ] }""",
+            ),
+        )
     }
 
     // =========================================================================
