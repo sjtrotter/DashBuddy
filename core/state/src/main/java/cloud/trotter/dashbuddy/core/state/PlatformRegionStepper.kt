@@ -185,17 +185,31 @@ class PlatformRegionStepper @Inject constructor() {
             // `activePlatform` on every flow-bearing frame and leaves R0 untouched on
             // Timeout/UiInput/Loopback, so R0 carries exactly the ownership fact needed. Compared
             // as `Platform` values — never a literal (principle 8).
-            val owned = nextFlow.flow == pend.flow && nextFlow.activePlatform == current.platform
-            if (obs !is Observation.FlowObservation && !owned) {
-                // A NON-flow observation (the `SESSION_PAY_SETTLE` wake timer, a click, a
-                // loopback) can never itself be the departure frame — it does not move R0. So if
-                // R0 no longer shows this park's surface on THIS platform at fire time, some other
-                // frame moved it and the park is stale evidence: DROP it and skip the expiry
-                // entirely. Load-bearing across platforms: `stepPlatforms` steps only
-                // `obs.platform`'s region, so a DoorDash park is never stepped by an Uber frame and
-                // the flow check alone would let this platform's timer commit a figure R0 stopped
-                // showing long ago (and two idle screens on two platforms defeat it outright — R0
-                // stays `Idle`).
+            //
+            // #1052: ownership is checked on BOTH sides of this observation. `ownedAfter` alone
+            // (the #1029 shape) is blind to a departure this region was never stepped for:
+            // `stepPlatforms` steps only `obs.platform`'s region, so an Uber frame moves the
+            // SHARED R0 without ever reaching the DoorDash region that holds the park — and when
+            // the owner returns, R0 reads owned again and the ORIGINAL deadline commits a figure
+            // that was off screen for the whole interlude. `ownedBefore` is what records that
+            // absence: R0 as it was BEFORE this observation is the only surviving evidence of it.
+            //
+            // Three-way, in order:
+            //  1. `!ownedBefore` → the surface departed while this region was not being stepped.
+            //     DROP, whatever this observation is; a returning frame re-parks with a FRESH
+            //     deadline through [settleSessionPay], which is the honest window for a read whose
+            //     surface has just come back.
+            //  2. a flow-LESS observation (a timer, a click, a loopback, a flow-less
+            //     notification) that no longer owns R0 → DROP, skipping the expiry: such a frame
+            //     cannot itself be the departure, so the departure already happened. (Today this
+            //     is unreachable behind rule 1 — a flow-less observation leaves R0 untouched, so
+            //     `ownedAfter == ownedBefore` — and it is stated anyway so the rule is complete on
+            //     its own terms rather than resting on that invariant holding elsewhere forever.)
+            //  3. otherwise expiry as normal, THEN `!ownedAfter` → drop.
+            val ownedBefore = prevFlow.flow == pend.flow && prevFlow.activePlatform == current.platform
+            val ownedAfter = nextFlow.flow == pend.flow && nextFlow.activePlatform == current.platform
+            val flowBearing = (obs as? Observation.FlowObservation)?.flow != null
+            if (!ownedBefore || (!flowBearing && !ownedAfter)) {
                 current = current.copy(pendingSessionPay = null)
             } else {
                 if (obs.timestamp >= pend.deadline) {
@@ -215,7 +229,7 @@ class PlatformRegionStepper @Inject constructor() {
                 // is on screen. Placed immediately AFTER the expiry so a park that stood its whole
                 // window on its own surface still commits on the departure frame; anything younger
                 // is dropped (the diff emits the CancelTimeout). See [PendingSessionPay.flow].
-                if (!owned) current = current.copy(pendingSessionPay = null)
+                if (!ownedAfter) current = current.copy(pendingSessionPay = null)
             }
         }
 
@@ -378,6 +392,18 @@ class PlatformRegionStepper @Inject constructor() {
         // (Paused→Online), and the pause-safety timeout (Paused→Offline).
         if (prev.mode == Mode.Paused && newMode != Mode.Paused) {
             region = region.copy(pendingModeResume = null)
+        }
+
+        // #1052: leaving Online DROPS a parked running-total read. A paused or offline dash cannot
+        // change its running total, so the committed figure stands and an un-settled read has
+        // nothing left that could confirm it. The flow-scoped drop does not cover this: the pill's
+        // SURFACE is gone even though R0 may still read the park's flow — `dash_paused` declares
+        // `modeHint: paused` and NO flow, and the offline map keeps `Idle` — so ownership stays
+        // "valid" while the only thing that could contradict the park is off screen. Written HERE
+        // because [applyModeTransition] is the single site that moves `mode` (the pause-safety
+        // timeout and the graced resume commit both route through it). Fail-null (#745).
+        if (newMode != Mode.Online) {
+            region = region.copy(pendingSessionPay = null)
         }
 
         return region

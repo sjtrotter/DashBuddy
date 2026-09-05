@@ -20,12 +20,16 @@ object CurrencyShape {
 
     /**
      * The figure itself, without the currency symbol: either a bare `0`, or 1–4 digits with no
-     * leading zero, or a single well-formed thousands group — then exactly two fraction digits.
+     * leading zero, or a SINGLE-digit thousands group (`1,234`) — then exactly two fraction digits.
+     * So `$0.00`, `$7.00`, `$16.70`, `$9999.99` and `$1,234.56` are in shape; `$016.70`,
+     * `$12345.00`, `$12,345.00`, `$123,456.00` and `$1234,567.00` are not.
      *
      * Four digits is the ceiling on purpose: this reads a per-delivery total or a dash/week
-     * running total, and a five-figure one of either is a mis-aimed rule, not a windfall.
+     * running total, and a five-figure one of either is a mis-aimed rule, not a windfall. The comma
+     * arm honours that ceiling too (#1052) — it used to read `[1-9]\d{0,2},\d{3}`, which admitted
+     * `$123,456.00`, six figures through the very branch the KDoc capped at four.
      */
-    const val FIGURE_CORE: String = "(?:0|[1-9]\\d{0,3}|[1-9]\\d{0,2},\\d{3})\\.\\d{2}"
+    const val FIGURE_CORE: String = "(?:0|[1-9]\\d{0,3}|[1-9],\\d{3})\\.\\d{2}"
 
     /**
      * The anchored, `$`-prefixed pattern a RULE declares (JSON5-escaped at the call site). Byte-

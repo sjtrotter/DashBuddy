@@ -3,6 +3,7 @@ package cloud.trotter.dashbuddy.core.pipeline.rules
 import cloud.trotter.dashbuddy.domain.model.order.OrderType
 import cloud.trotter.dashbuddy.domain.state.ParsedFields
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -175,6 +176,28 @@ class ParsedFieldsFactoryTest {
         assertNull(postTask(totalPay = null, customerTips = 7.00).parsedPay)
         assertNull(postTask(totalPay = 0.0, customerTips = 0.0).parsedPay)
         assertNull(postTask(totalPay = 5.00, customerTips = 7.00).parsedPay)
+    }
+
+    @Test
+    fun `the synthesized app-pay label is platform-neutral AND survives the pay partition`() {
+        // #1052 (principle 8): `:core:pipeline` is the shared recognition spine and must not name
+        // a gig platform — and the old "DoorDash pay" literal would have read as a genuine
+        // DoorDash label on any other platform's receipt. The replacement is constrained: an
+        // itemized receipt is split app-pay/tips on `type.contains("pay")`, so a synthesized
+        // component failing that token would be sorted as a customer tip.
+        assertFalse(
+            "no platform literal in the recognition spine",
+            ParsedFieldsFactory.SYNTHESIZED_APP_PAY_LABEL.contains("doordash", ignoreCase = true),
+        )
+        assertTrue(
+            "the partition heuristic must still claim it as app pay",
+            ParsedFieldsFactory.SYNTHESIZED_APP_PAY_LABEL.contains("pay", ignoreCase = true),
+        )
+        val parsed = postTask(totalPay = 16.70, customerTips = 7.00).parsedPay
+        assertEquals(
+            ParsedFieldsFactory.SYNTHESIZED_APP_PAY_LABEL,
+            parsed!!.appPayComponents.single().type,
+        )
     }
 
     @Test

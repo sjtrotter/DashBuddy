@@ -159,16 +159,23 @@ class StateManagerV2 @Inject constructor(
             // #1029: a parked running-total read is evidence from BEFORE the crash, and nothing
             // after the restore re-arms its `SESSION_PAY_SETTLE` wake timer — so a restored park
             // would either sit forever or, on the first frame past its deadline, commit a figure
-            // whose surface has been gone since the process died. Drop it on BOTH restore paths
-            // (applied to `restored.state`, ahead of the tail branch): the committed total stands
-            // and the next idle frame re-parks. Fail-null beats fail-wrong (#745).
-            val base = restored.state.droppingSessionPayParks()
+            // whose surface has been gone since the process died. It is dropped on BOTH restore
+            // paths — but at the LIVE boundary, not here (#1052): the tail is a faithful replay of
+            // what already happened, so it must run against the snapshot exactly as recorded (a
+            // park whose commit timer is IN the tail committed live and must commit again;
+            // scrubbing the base changes the replayed result). Dropping from the FINAL state
+            // instead also discards a park a tail frame re-created — whose `ScheduleTimeout` the
+            // recovery fold does execute (it is not an external effect), which would otherwise wake
+            // pre-crash evidence with no fresh screen behind it. The recovery-scheduled timer then
+            // finds no park and no-ops (`handleTimeout`'s `else -> prev`; lazy expiry has nothing
+            // to expire). Fail-null beats fail-wrong (#745).
+            val base = restored.state
 
             // Tail-replay observations after the snapshot, in cv order (#352)
             val tail = journal.tailAfter(restored.correlationVersion)
             if (tail.isEmpty()) {
                 Timber.i("Restored from snapshot at cv=%d, no tail", restored.correlationVersion)
-                _state.value = base
+                _state.value = base.droppingSessionPayParks()
                 // #438 B5: recovered a non-fresh state → reconcile the odometer on the first live obs.
                 recoveryReconcilePending = true
                 return
@@ -192,7 +199,7 @@ class StateManagerV2 @Inject constructor(
                 transition.newState
             }
 
-            _state.value = finalState
+            _state.value = finalState.droppingSessionPayParks()
             // #438 B5: recovered a non-fresh state → reconcile the odometer on the first live obs.
             recoveryReconcilePending = true
             Timber.i("Recovery complete — state at cv=%d", finalState.correlationVersion)

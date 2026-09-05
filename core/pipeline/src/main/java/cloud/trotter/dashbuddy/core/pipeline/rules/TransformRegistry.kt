@@ -336,6 +336,14 @@ object TransformRegistry {
     private const val GLYPH_CURRENCY_ALPHABET = "$0123456789.,"
 
     /**
+     * Characters that change a figure's VALUE rather than spell it (#1052): ASCII hyphen-minus,
+     * the true minus sign U+2212, and the accounting negative's opening paren. The keep-filter
+     * would delete all three and read the magnitude as a positive; they reject the whole input
+     * instead. See [parseGlyphCurrency].
+     */
+    private const val GLYPH_CURRENCY_SIGNS = "-−("
+
+    /**
      * A **settled** currency figure: one leading `$` (written `\x24` so neither the Kotlin string
      * template nor a regex anchor is in play) followed by [CurrencyShape.FIGURE_CORE] — the ONE
      * shape definition this and the rules' money scans now share, rather than two hand-written
@@ -355,7 +363,11 @@ object TransformRegistry {
      * [parseCurrency] is not merely useless on that shape, it is WRONG — it splits on space and
      * takes the first token, so a space-separated wheel reads `"$ 1 6 . 7 0"` → `$1.00`.
      *
-     * Two steps, both fail-closed:
+     * Three steps, all fail-closed:
+     *  0. **Reject what the keep-filter cannot read** (#1052) — any non-ASCII digit, and any of
+     *     `-` / `−` / `(`. A keep-filter DELETES what it does not recognise, so without this a
+     *     dropped Arabic-Indic digit or a stripped minus sign leaves a remainder that still
+     *     full-matches, turning an unreadable figure into a confident wrong one.
      *  1. **Keep only the currency glyphs**, in order. This is the "keep the `$` / digit-run / `.`
      *     / `,` tokens, drop the label words and spacers" filter expressed at CHARACTER
      *     granularity — which it has to be, because the `allText` join has no separator to
@@ -381,6 +393,18 @@ object TransformRegistry {
      */
     private fun parseGlyphCurrency(text: String): Double? {
         if (text.length > MAX_GLYPH_CURRENCY_INPUT) return null
+        // #1052: REJECT what the keep-filter cannot read, rather than deleting it. Step 1 is a
+        // KEEP filter, so a character it does not recognise vanishes and the remainder can still
+        // full-match — which turns two whole classes of unreadable input into confident numbers:
+        // a NON-ASCII digit (`"This dash$1٢6.70"` → 16.70, a digit silently dropped from the
+        // middle of the figure) and a SIGN (`"-$16.70"` → 16.70, `"($16.70)"` → 16.70 — accounting
+        // negatives read as positives). Neither can be handled by widening the alphabet: their
+        // meaning is arithmetic, not glyphic. So a container carrying either is unreadable, and
+        // unreadable is null (the transform's whole posture — see step 2).
+        for (c in text) {
+            if (c in GLYPH_CURRENCY_SIGNS) return null
+            if (Character.isDigit(c) && c !in '0'..'9') return null
+        }
         val glyphs = buildString(text.length) {
             for (c in text) if (c in GLYPH_CURRENCY_ALPHABET) append(c)
         }

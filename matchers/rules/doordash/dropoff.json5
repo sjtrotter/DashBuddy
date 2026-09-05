@@ -1729,7 +1729,7 @@
                 "find": {
                   "hasText": "This offer"
                 },
-                "navigate": "nextSiblingMatchingRegex(^\\$(?:0|[1-9]\\d{0,3}|[1-9]\\d{0,2},\\d{3})\\.\\d{2}$, 2)",
+                "navigate": "nextSiblingMatchingRegex(^\\$(?:0|[1-9]\\d{0,3}|[1-9],\\d{3})\\.\\d{2}$, 2)",
                 "read": "text",
                 "transform": "parseCurrency"
               }
@@ -1780,7 +1780,7 @@
             "find": {
               "hasTextContaining": "Customer tips"
             },
-            "navigate": "nextSiblingMatchingRegex(^\\$(?:0|[1-9]\\d{0,3}|[1-9]\\d{0,2},\\d{3})\\.\\d{2}$, 2)",
+            "navigate": "nextSiblingMatchingRegex(^\\$(?:0|[1-9]\\d{0,3}|[1-9],\\d{3})\\.\\d{2}$, 2)",
             "read": "text",
             "transform": "parseCurrency"
           },
@@ -2006,7 +2006,7 @@
                 "find": {
                   "hasText": "This offer"
                 },
-                "navigate": "nextSiblingMatchingRegex(^\\$(?:0|[1-9]\\d{0,3}|[1-9]\\d{0,2},\\d{3})\\.\\d{2}$, 2)",
+                "navigate": "nextSiblingMatchingRegex(^\\$(?:0|[1-9]\\d{0,3}|[1-9],\\d{3})\\.\\d{2}$, 2)",
                 "read": "text",
                 "transform": "parseCurrency"
               }

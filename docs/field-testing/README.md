@@ -90,7 +90,10 @@ was found **broken-in-part** (raw PII in capture envelopes) and moved to that en
     behaviours, not bugs: if you leave the waiting-for-offer screen mid-spin (an offer pops, you
     tap into something), the **old figure stands until you come back** — the half-read is thrown
     away rather than guessed at; and a `$0.00` on the pill while it loads never wipes a total you
-    already had.
+    already had. Same rule, three more ways to leave the screen (#1052): **switching to the other
+    platform**, **pausing**, or **going offline** mid-spin all keep the OLD figure — the half-read
+    is dropped, and coming back re-reads it from scratch (fail-null). A figure appearing DURING a
+    pause, or right after an Uber screen, is the failure to report.
   - **On-dash, after a delivery:** the receipt sheet ("This offer", with the pay breakdown). The
     bubble's "Saved: $X" should quote the receipt's real total, and expanding the breakdown should
     NOT produce anything wild.

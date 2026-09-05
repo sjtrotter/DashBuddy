@@ -599,8 +599,12 @@ shipped its money surfaces with NO view ids, so the parse vocabulary needed shap
 had only id and position anchors. (1) The **`parseGlyphCurrency` transform** reads an animated
 digit-wheel — a figure rendered as per-glyph id-less `TextView`s beside a label, which `read:
 allText` fuses into one string (`"This dash so far$16.70"`, or `"$3.10This dash"` when the label
-trails). It keeps only the `$`/digit/`.`/`,` characters, then **full-matches** a settled shape
-(`$` + 1–4 digits + optional comma group + exactly 2 decimals) or returns **null** — bounded input
+trails). It first **rejects** any non-ASCII digit and any `-`/`−`/`(` (#1052 — a keep-filter DELETES
+what it does not know, so a stripped Arabic-Indic digit or minus sign leaves a remainder that still
+full-matches, i.e. an unreadable figure read confidently and wrong), keeps only the `$`/digit/`.`/`,`
+characters, then **full-matches** a settled shape (`$` + 1–4 digits, or a single `[1-9],\d{3}`
+thousands group — #1052 tightened the comma arm, which had admitted six figures through the branch
+the shape's own ceiling caps at four — plus exactly 2 decimals) or returns **null** — bounded input
 (256 chars), fail-closed, and that strictness is the point: ~1 in 5 fielded reads is mid-animation
 (`$70103.030`, `$016.603`), and a fabricated figure is strictly worse than none. Note `parseCurrency`
 is not merely useless on that shape but WRONG — it splits on space and takes the first token, so a
@@ -614,8 +618,10 @@ whole-input sibling of `containsMatchIn`, same 200 ms budget, fail-closed to no-
 `799` is a DoorDash type CODE that older builds render in the `pay_line_item_title` slot — so
 `sibling(1)` + `parseCurrency` reported a **$799.00 tip on a $16.70 delivery**. No offset is right
 on both layouts; "the next money-shaped node" is. The spec takes an **optional scan cap**
-(`nextSiblingMatchingRegex(<pattern>, <n>)`, default and ceiling `MAX_SIBLING_SCAN`=8, a cap outside
-1..8 isolates the rule at load) and the three DoorDash money scans declare `2`: that is a
+(`nextSiblingMatchingRegex(<pattern>, <n>)`, default and ceiling `MAX_SIBLING_SCAN`=8; a cap outside
+1..8 — or one that is present but unparsable, #1052, where an overflowing `toIntOrNull()` used to
+fall silently to the widest scan — isolates the rule at load, and the default applies only when no
+cap was written) and the three DoorDash money scans declare `2`: that is a
 CORRECTNESS control, not merely a bound — on a row whose value is simply absent
 (`['Customer tips','799','Peak pay','$1.00']`) an unbounded scan returns the NEXT row's money AS
 this one's, fail-WRONG and invisible to `sumApproxEquals` since `appPay` is null on 8.93.7. The
@@ -665,11 +671,19 @@ because no other screen carries a running total and the wake timer would otherwi
 unchallengeable figure (fielded 08-23 17:35: pill read → offer overlay 0.5 s later → dash end). The
 platform half is load-bearing because `stepPlatforms` steps only `obs.platform`'s region, so a
 DoorDash park is never stepped by an Uber frame — and two idle screens on two platforms defeat a
-flow-only test outright (R0 stays `Idle`). A NON-flow observation (the wake timer, a click, a
-loopback) is never a departure frame, so it checks ownership BEFORE the expiry and drops a park it
-no longer owns; a flow frame runs the expiry FIRST, so a park that stood its whole window still
-commits on the departure frame. Another platform's screen therefore still drops this platform's
-park — fail-null, accepted.
+flow-only test outright (R0 stays `Idle`). **Ownership must hold on BOTH the prior and the resulting
+R0 (#1052)** — checking only the result is blind to a departure this region was never stepped for
+(another platform's frame moves the shared R0 without reaching this region, and the returning frame
+makes ownership read valid again while the original deadline still stands), so `prevFlow` is checked
+too and a failure there DROPS the park whatever the observation is; the returning frame re-parks with
+a fresh window. A flow-LESS observation (the wake timer, a click, a loopback, a flow-less
+notification) is never a departure frame, so it orders like a timer — ownership before expiry — while
+a flow frame runs the expiry FIRST, so a park that stood its whole window still commits on the
+departure frame. Another platform's screen therefore still drops this platform's park — fail-null,
+accepted. **Leaving `Mode.Online` also drops the park (#1052)**, written at `applyModeTransition`
+(the single site that moves `mode`): a paused/offline dash cannot change its running total, and the
+pill's surface is gone even where R0 still reads the park's flow — `dash_paused` declares a mode hint
+and NO flow, and the offline map keeps `Idle`.
 **(b) BOTH feeds go through the gate** — the on-dash pill (`IdleFields.sessionPay`) and the
 receipt's own "This dash so far" (`PostTaskFields.sessionEarnings`), which `dropoff.json5` reads off
 the SAME animated wheel via `parseGlyphCurrency`; for the settled re-render to be admittable at all,
@@ -700,10 +714,14 @@ Pure and platform-agnostic throughout (keyed by the region's own reads, deadline
 `obs.timestamp`, no `Platform` branch, no wall clock); split immediate/gated fields —
 `zoneName`/`sessionType` still write on sight; cleared on session start and end; a genuinely changed
 total lands one settle window late by design. **Crash recovery DROPS any restored park**
-(`AppState.droppingSessionPayParks`, applied to the snapshot state on both the tail and no-tail
-restore paths): a park is pre-crash evidence whose surface is gone and whose wake timer no restore
-path re-arms, so it would either sit forever or be committed by whatever frame happens past its
-deadline — fail-null (#745), at a cost of one settle window.
+(`AppState.droppingSessionPayParks`): a park is pre-crash evidence whose surface is gone and whose
+wake timer no restore path re-arms, so it would either sit forever or be committed by whatever frame
+happens past its deadline — fail-null (#745), at a cost of one settle window. It runs at the **LIVE
+boundary — on the FINAL state after the tail fold, never on the snapshot** (#1052): the tail must
+replay against the snapshot exactly as recorded (a park whose commit timer is IN the tail committed
+live and must commit again), and scrubbing at the end also discards a park a TAIL frame re-created,
+whose `ScheduleTimeout` the recovery fold really does arm — that timer then finds no park and
+no-ops.
 
 
 ### 4. Side Effect Engine (`app/.../state/effects/`)

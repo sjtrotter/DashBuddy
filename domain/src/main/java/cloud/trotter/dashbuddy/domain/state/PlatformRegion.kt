@@ -209,6 +209,20 @@ data class PendingSessionPay(
      * no longer owns instead of committing it. Another platform's screen therefore still drops this
      * platform's park; fail-null, and accepted — the alternative is committing a figure this
      * platform can no longer see.
+     *
+     * **Ownership must hold on BOTH sides of an observation** (#1052). Checking only the RESULTING
+     * R0 is blind to a departure this region was never stepped for: another platform's frame moves
+     * the shared R0 without reaching this region at all, and when the owner returns R0 reads owned
+     * again — so the ORIGINAL deadline would commit a figure that was off screen for the whole
+     * interlude. The stepper therefore also requires ownership on R0 as it was BEFORE the
+     * observation, and drops the park when that fails, whatever the observation is; the returning
+     * frame re-parks with a FRESH window. A flow-LESS observation (a timer, a click, a notification
+     * carrying no flow) orders like a timer: ownership is settled before any expiry.
+     *
+     * **Leaving [Mode.Online] drops it too** (#1052). A paused or offline dash cannot change its
+     * running total, and the pill's surface is gone even where R0 still reads the park's flow —
+     * `dash_paused` declares a mode hint and NO flow, and the offline map keeps `Idle` — so nothing
+     * on screen could contradict the park any more.
      */
     val flow: Flow,
 )

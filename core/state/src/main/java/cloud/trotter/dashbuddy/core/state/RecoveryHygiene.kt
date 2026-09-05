@@ -24,6 +24,13 @@ import cloud.trotter.dashbuddy.domain.state.AppState
  *
  * Dropping it costs at most one settle window: the committed total stands until the next idle
  * frame re-parks the live one. Fail-null beats fail-wrong (#745).
+ *
+ * **Applied at the LIVE boundary — to the FINAL restored state, after the tail fold, never to the
+ * snapshot it replays from** (#1052). The tail is a faithful replay of what already happened, so it
+ * has to run against the snapshot exactly as recorded: a park whose commit timer sits IN the tail
+ * committed live, and scrubbing the base first would replay a different history. Running here
+ * instead also covers the park a TAIL frame re-created — its `ScheduleTimeout` is not an external
+ * effect, so the recovery fold really does arm it — leaving that timer to find nothing and no-op.
  */
 fun AppState.droppingSessionPayParks(): AppState = copy(
     regions = regions.copy(

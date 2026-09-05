@@ -33,6 +33,16 @@ import org.junit.Test
  *
  * These tests drive the REAL [StateMachine] rather than the stepper directly, because the routing
  * (`stepPlatforms` skipping the other platform's region while R0 moves) is the whole point.
+ *
+ * **#1052 — ownership on BOTH sides.** Checking only the RESULTING R0 leaves the departure
+ * unrecorded whenever it happened on a frame this region was not stepped for, and the last three
+ * cases below are the reachable consequences: the owner returning with the SAME value (which
+ * `settleSessionPay` deliberately does not re-park, so the ORIGINAL deadline survives the
+ * interlude), a null-pay return landing past that deadline, and a flow-LESS own-platform
+ * observation, which is a `FlowObservation` and therefore skipped the round-4 non-flow guard while
+ * being just as incapable of putting the pill back on screen. The stepper now also requires
+ * ownership on `prevFlow` and orders a flow-less observation like a timer; the control case proves
+ * the rule is about ownership rather than the observation's kind.
  */
 class SessionPayParkOwnershipTest {
 
@@ -89,6 +99,22 @@ class SessionPayParkOwnershipTest {
         metadata = ReplayMetadata.EMPTY,
         flow = Flow.Idle,
         modeHint = Mode.Online,
+        parsed = ParsedFields.None,
+    )
+
+    /**
+     * A DoorDash push carrying NO flow — the second bypass #1052 names. It is a `FlowObservation`,
+     * so the #1029 `obs !is FlowObservation` guard let it take the expire-FIRST path even while
+     * another platform owned R0; it is nonetheless incapable of being the departure frame, because
+     * `FlowRegionStepper` leaves R0's flow and `activePlatform` untouched for a flow-less one.
+     */
+    private fun flowlessNotification(timestamp: Long) = Observation.Notification(
+        timestamp = timestamp,
+        captureId = null,
+        ruleId = "doordash.notification.demand_nudge",
+        metadata = ReplayMetadata.EMPTY,
+        flow = null,
+        modeHint = null,
         parsed = ParsedFields.None,
     )
 
@@ -197,5 +223,80 @@ class SessionPayParkOwnershipTest {
 
         val committed = returned.step(settleTimer(t0 + 1_000L + settle))
         assertEarnings(24.90, committed)
+    }
+
+    // =========================================================================
+    // #1052 — ownership must hold BEFORE the observation as well as after
+    // =========================================================================
+
+    @Test
+    fun `the owner returning with the SAME value re-parks with a fresh deadline, it does not resume`() {
+        // A1, the sequence the round-4 return case could not see because it returned a DIFFERENT
+        // value (which replaces the park and re-arms the timer regardless). With the same value,
+        // `settleSessionPay`'s "same read again" arm KEEPS the park and its ORIGINAL deadline — so
+        // checking ownership only on the RESULTING R0 reads "owned" again and the original timer
+        // commits a figure that was off screen for the whole interlude. The departure has to be
+        // recorded when the owner is next stepped, which is what `ownedBefore` does.
+        val returned = parkedState().step(
+            uberIdle(t0 + 500L),
+            idle("doordash.screen.waiting_for_offer", 470.00, t0 + 2_500L),
+        )
+
+        val pend = returned.doorDash?.pendingSessionPay
+        assertNotNull("the returning frame parks its read", pend)
+        assertEquals(470.00, pend!!.value, 0.0001)
+        assertEquals("the park is FRESH, not the survivor", t0 + 2_500L, pend.since)
+        assertEquals(t0 + 2_500L + settle, pend.deadline)
+
+        // The original deadline is t0 + settle. Nothing may commit there any more.
+        val atOldDeadline = returned.step(settleTimer(t0 + settle))
+        assertEarnings(
+            16.70,
+            atOldDeadline,
+            "the pre-interlude deadline belongs to a park that no longer exists",
+        )
+
+        // It commits only after standing its OWN full window back on its own surface.
+        val committed = atOldDeadline.step(settleTimer(t0 + 2_500L + settle))
+        assertEarnings(470.00, committed, "a full window on its own surface after the return")
+        assertNull(committed.doorDash?.pendingSessionPay)
+    }
+
+    @Test
+    fun `a null-pay return past the old deadline commits nothing`() {
+        // The same interlude, but the returning frame carries no running total at all — so there
+        // is no read to contradict the park and, without `ownedBefore`, the lazy expiry on that
+        // very frame would commit $470 outright.
+        val returned = parkedState().step(
+            uberIdle(t0 + 500L),
+            idle("doordash.screen.waiting_for_offer", null, t0 + settle + 1L),
+        )
+
+        assertEarnings(16.70, returned, "an absent read is not a confirmation")
+        assertNull("nothing survives the interlude to be committed", returned.doorDash?.pendingSessionPay)
+    }
+
+    @Test
+    fun `a flow-less DoorDash push cannot commit a park another platform's screen displaced`() {
+        // The second A1 bypass: a `Notification` with `flow = null` IS a `FlowObservation`, so the
+        // round-4 non-flow guard did not apply and it took the expire-first path.
+        val after = parkedState().step(
+            uberIdle(t0 + 500L),
+            flowlessNotification(t0 + settle),
+        )
+
+        assertEarnings(16.70, after, "a push is not evidence that the pill is back on screen")
+        assertNull(after.doorDash?.pendingSessionPay)
+    }
+
+    @Test
+    fun `a flow-less DoorDash push DOES ride the expiry while DoorDash still owns R0 - the control`() {
+        // With no interloper the push is an ordinary observation past the deadline: it does not
+        // move R0, ownership held before and after, and the park lands exactly as the wake timer
+        // would have landed it. The rule is about ownership, not about the observation's kind.
+        val after = parkedState().step(flowlessNotification(t0 + settle))
+
+        assertEarnings(470.00, after, "an unchallenged read on its own surface commits")
+        assertNull(after.doorDash?.pendingSessionPay)
     }
 }

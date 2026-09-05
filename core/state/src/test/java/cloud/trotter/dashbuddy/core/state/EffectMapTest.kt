@@ -1708,6 +1708,32 @@ class EffectMapTest {
         )
     }
 
+    @Test
+    fun `a SYNTHESIZED receipt renders its tip with no empty label separator - #1052`() {
+        // `ParsedFieldsFactory.buildPostTask`'s bridge for an id-less 8.93.7 itemization carries a
+        // BLANK tip type on purpose — there is no per-store label to state — and `displayLabel`
+        // renders a blank type as blank, so the unconditional separator read `Tip:  • $7.00`.
+        val (platform, _) = stateWithPlatform()
+        val session = Session("sess-1", startedAt = 100L)
+        val task = Task(taskId = "task-1", jobId = "job-1", phase = TaskPhase.DROPOFF, storeName = "HEB", startedAt = 900L, completedAt = 1000L)
+        val region = PlatformRegion(
+            platform, mode = Mode.Online, session = session, recentTasks = listOf(task),
+            lastAnnouncedPostTaskTaskId = null,
+        )
+        val prev = AppState(regions = Regions(flow = FlowRegion(flow = Flow.PostTask), platforms = mapOf(platform to region)))
+        val parsedPay = cloud.trotter.dashbuddy.domain.model.pay.ParsedPay(
+            appPayComponents = listOf(cloud.trotter.dashbuddy.domain.model.pay.ParsedPayItem("Platform pay", 9.70)),
+            customerTips = listOf(cloud.trotter.dashbuddy.domain.model.pay.ParsedPayItem("", 7.00)),
+        )
+        val effects = effectMap.diff(prev, prev, screenObs(
+            flow = Flow.PostTask,
+            parsed = ParsedFields.PostTaskFields(totalPay = 16.70, parsedPay = parsedPay),
+        ))
+        val bubbles = effects.filterIsInstance<AppEffect.UpdateBubble>()
+        assertEquals(1, bubbles.size)
+        assertEquals("Saved: \$16.70\nTip: \$7.00", bubbles[0].text)
+    }
+
     // =========================================================================
     // APP-OWNED ACTIONS (#425): expand decision + deferred-action round-trip +
     // UiInput accept/decline aimed by rule-bound targets

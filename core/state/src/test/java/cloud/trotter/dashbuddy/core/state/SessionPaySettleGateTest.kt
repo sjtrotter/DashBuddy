@@ -90,6 +90,35 @@ class SessionPaySettleGateTest {
         parsed = ParsedFields.PostTaskFields(totalPay = totalPay, sessionEarnings = sessionEarnings),
     )
 
+    /**
+     * The pause sheet, in the production shape (#1052): `doordash.screen.dash_paused` declares
+     * `modeHint: paused` and **no flow at all**, so R0 keeps reading `Idle` — which is exactly why
+     * the flow-scoped drop cannot see this departure.
+     */
+    private fun pausedScreen(timestamp: Long) = Observation.Screen(
+        timestamp = timestamp,
+        captureId = null,
+        ruleId = "doordash.screen.dash_paused",
+        metadata = ReplayMetadata.EMPTY,
+        flow = null,
+        modeHint = Mode.Paused,
+        parsed = ParsedFields.None,
+    )
+
+    /**
+     * An offline-implying idle frame — the offline map keeps the `Idle` flow, so R0 again reads
+     * the park's own surface while the pill is gone (#1052).
+     */
+    private fun offlineIdleScreen(timestamp: Long) = Observation.Screen(
+        timestamp = timestamp,
+        captureId = null,
+        ruleId = "doordash.screen.offline_map",
+        metadata = ReplayMetadata.EMPTY,
+        flow = Flow.Idle,
+        modeHint = Mode.Offline,
+        parsed = ParsedFields.None,
+    )
+
     /** The `SESSION_PAY_SETTLE` wake timer, routed at this region (#438 8a). */
     private fun timeout(timestamp: Long) = Observation.Timeout(
         timestamp = timestamp,
@@ -539,6 +568,51 @@ class SessionPaySettleGateTest {
             "an un-settled read describes the dash that just ended",
             region.pendingSessionPay,
         )
+    }
+
+    // =========================================================================
+    // Leaving Online drops the park (#1052)
+    // =========================================================================
+
+    @Test
+    fun `pausing the dash drops the park`() {
+        // A2: `dash_paused` declares a mode hint and NO flow, so R0 still reads `Idle` and the
+        // flow-scoped drop never fires — the wake timer then commits a mid-spin $470 into a dash
+        // that has been sitting on a pause sheet. A paused dash cannot change its running total.
+        val parked = feed(region(runningEarnings = 16.70), t0 to 470.00)
+        assertPark(parked, 470.00, t0, t0 + settle)
+
+        val paused = step(parked, pausedScreen(t0 + 500L))
+        assertEquals("the premise: mode really moved", Mode.Paused, paused.mode)
+        assertNull("the pill's surface is gone even though R0 still reads Idle", paused.pendingSessionPay)
+
+        val later = step(paused, timeout(t0 + settle))
+        assertEarnings(16.70, later, "the committed figure stands")
+    }
+
+    @Test
+    fun `going offline drops the park`() {
+        // Same shape through the other exit. Offline arms the SESSION_END grace, so the session is
+        // still live at the timer — which is precisely the window this closes.
+        val parked = feed(region(runningEarnings = 16.70), t0 to 470.00)
+        val offline = step(parked, offlineIdleScreen(t0 + 500L))
+        assertEquals(Mode.Offline, offline.mode)
+        assertNull(offline.pendingSessionPay)
+
+        val later = step(offline, timeout(t0 + settle))
+        assertNotNull("the session is still inside its end grace", later.session)
+        assertEarnings(16.70, later, "an un-settled read cannot outlive the dash going offline")
+    }
+
+    @Test
+    fun `a park that stood its whole window still commits on the frame that pauses`() {
+        // The mirror of the flow-scoped rule: the drop runs after [applyModeTransition]'s expiry
+        // in the same step, so a read that WAS unchallenged for its full window is not punished
+        // for the frame that happens to pause the dash.
+        val parked = feed(region(runningEarnings = 16.70), t0 to 25.20)
+        val paused = step(parked, pausedScreen(t0 + settle + 1L))
+        assertEarnings(25.20, paused)
+        assertNull(paused.pendingSessionPay)
     }
 
     @Test

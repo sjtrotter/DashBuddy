@@ -91,7 +91,11 @@ class CurrencyShapePinTest {
         for (good in listOf("\$0.00", "\$7.00", "\$16.70", "\$9999.99", "\$1,234.56")) {
             assertTrue(good, shape.matches(good))
         }
-        for (bad in listOf("\$016.70", "\$1234,567.00", "\$12345.00", "\$,.00", "\$1,2,3.45", "799")) {
+        for (bad in listOf(
+            "\$016.70", "\$1234,567.00", "\$12345.00", "\$,.00", "\$1,2,3.45", "799",
+            // #1052: the comma arm honours the shape's own four-digit ceiling now.
+            "\$12,345.00", "\$123,456.00",
+        )) {
             assertTrue(bad, !shape.matches(bad))
         }
     }
