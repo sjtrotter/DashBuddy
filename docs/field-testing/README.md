@@ -78,6 +78,32 @@ card's **mechanical** half, #577 (re-confirmed, 24/24, ~0.55 s — with a new po
 that entry's Bug #1), the #457 path, and #554 ShadowProjector (2/2). The #462/#460 dropoff item
 was found **broken-in-part** (raw PII in capture envelopes) and moved to that entry's Bug #7.)_
 
+- **🆕 NEW — #1059 — the Persona verification flow, the Red Card wallet and the passport
+  scanner are now blocked at the matcher layer.** Three of the dasher's OWN surfaces were
+  reaching UNKNOWN capture: the embedded Persona selfie / ID-verification camera (12 envelopes
+  on 08-27), the "Your Red Card" wallet screen (3), and the PASSPORT variant of the ID-scan
+  camera (1 — the two existing scanner anchors were both driver's-licence specific). None of
+  them leaked customer PII, but the Pledge blocks a document-image capture surface as a CLASS,
+  and the Red Card screen is the dasher's own payment-card management surface. Each now has an
+  id-anchored `sensitive.known` arm (locale-immune), plus four marker keywords as the
+  rules-independent backstop.
+  **On-dash:** nothing to watch while driving, and nothing should CHANGE — the block is
+  capture-side. If you happen to hit an ID-verification prompt or open the Red Card screen,
+  the app must behave exactly as before (no bubble, no narration, no state move).
+  **Desk, after the pull:**
+  1. `grep -rlE 'persona_container|personaComposeView|activate_physical_card_button|id_type_selector' captures/**/UNKNOWN/`
+     must return **nothing** — a hit means the frame still fell to UNKNOWN capture.
+  2. The same grep across the whole `captures/` tree should return nothing either: a sensitive
+     frame is dropped at the content gate BEFORE any envelope is written, so it must not appear
+     in a recognized folder either.
+  3. `grep 'Sensitive gate: dropped' app.log` (DEBUG) — `sensitive.selfie_verification` /
+     `sensitive.red_card` / `sensitive.id_verification` lines are the positive signal the new
+     arms fired on the device build.
+  4. The over-match check: an ordinary shopping-order pickup that says "pay with your Red Card"
+     must still classify `pickup_*` normally — grep `app.log` for a `sensitive.red_card` drop
+     with no wallet screen visit around it.
+  - Confirmed: 0/2
+
 - **🆕 NEW — #1058 — the two dropoff sheets that were shipping addresses and door codes to
   UNKNOWN captures are now recognized and redacted.** Leak A is the ALCOHOL variant of the drop-off
   arrival card (the one that asks you to scan an ID and collect a signature): it renders no

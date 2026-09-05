@@ -53,6 +53,31 @@
           }
         },
         {
+          "comment": "#1059: the dasher's OWN Red Card wallet screen ('Your Red Card' — virtual card art, 'Added to Google Pay', activate/request a physical card), fielded 2026-08-27 17:44 and reaching UNKNOWN capture on the shipped ruleset. This is the dasher's payment-card MANAGEMENT surface, so the payment-screens-blocked doctrine applies: block it, never recognize it. Anchored on the surface's own view ids first (locale-immune, #938/#924 — `virtual_red_card_image` is present before either button inflates), with the two button LABELS as belt-and-braces for a frame whose ids do not render. Over-match surface: none of the four anchors appears anywhere in the committed corpus or in any pull, and — critically — the surface's headline text ('Your Red Card') is deliberately NOT an anchor, because the pickup instruction copy legitimately says 'pay with your Red Card' on ordinary shopping orders.",
+          "intent": "sensitive.red_card",
+          "require": {
+            "exists": {
+              "any": [
+                {
+                  "hasIdSuffix": "virtual_red_card_image"
+                },
+                {
+                  "hasIdSuffix": "activate_physical_card_button"
+                },
+                {
+                  "hasIdSuffix": "request_physical_red_card_button"
+                },
+                {
+                  "hasTextContaining": "Activate a physical card"
+                },
+                {
+                  "hasTextContaining": "Request a physical card"
+                }
+              ]
+            }
+          }
+        },
+        {
           "intent": "sensitive.balance",
           "require": {
             "exists": {
@@ -143,7 +168,7 @@
           }
         },
         {
-          "comment": "Blocks only the document-CAPTURE surfaces of the alcohol-ID flow — the license-scan camera (an image of a government ID) and the signature pad/handoff. The instruction screens (the ID-check 'verify the ID matches the recipient' and the alcohol arrival card) are NOT blocked: they carry no document image and only customer name/address, which the dropoff parse hashes (we hash customers, we don't block them). See alcohol_id_check + dropoff_pre_arrival.",
+          "comment": "Blocks only the document-CAPTURE surfaces of the alcohol-ID flow — the license-scan camera (an image of a government ID) and the signature pad/handoff. The instruction screens (the ID-check 'verify the ID matches the recipient' and the alcohol arrival card) are NOT blocked: they carry no document image and only customer name/address, which the dropoff parse hashes (we hash customers, we don't block them). See alcohol_id_check + dropoff_pre_arrival. #1059 added the last two alternatives, the PASSPORT variant of that same scanner (fielded 2026-08-28 16:58, reaching UNKNOWN capture): every anchor above is driver's-LICENCE specific, so the document-image surface had NO coverage once the dasher picks another id type. `id_type_selector` is the scanner's own document-type picker id — present on every variant, locale-immune (#938/#924), and absent from the recognized `dropoff_alcohol_id_scan` INSTRUCTION screen (which anchors on 'ID barcode scan' + 'Start scan'), so it blocks the camera without touching the #463/#995 recognize-and-redact instruction surfaces; the 'Align the character strip' scan hint is the locale-bound belt beside it.",
           "intent": "sensitive.id_verification",
           "require": {
             "any": [
@@ -155,6 +180,16 @@
               {
                 "exists": {
                   "hasTextContaining": "Driver's License"
+                }
+              },
+              {
+                "exists": {
+                  "hasIdSuffix": "id_type_selector"
+                }
+              },
+              {
+                "exists": {
+                  "hasTextContaining": "Align the character strip"
                 }
               },
               {
@@ -173,6 +208,28 @@
                 }
               }
             ]
+          }
+        },
+        {
+          "comment": "#1059: the dasher's OWN Persona selfie / identity-verification flow (the embedded Persona SDK: initializing spinner, live selfie camera with 'Center yourself' / 'Look slightly left' hints, the 'take picture' shutter, and the 'We\u2019re having trouble verifying your selfie' retry screen), fielded 2026-08-27 across 12 UNKNOWN envelopes. The frames carry no PII TEXT, but the Pledge blocks document-image capture surfaces as a CLASS (licence scan, signature pad) regardless of content, and a biometric selfie camera of the dasher is squarely in it. Only the flow's ENTRY was covered before ('ready to start verification' above), no step of the capture itself. Anchored on the Persona SDK's own container ids (locale-immune, #938/#924, and the ONLY thing most frames carry — the camera steps are almost entirely text-free): `persona_container` and `pi2_back_stack_screen_runner` on the fragment host, plus `personaComposeView` for the Compose-hosted variant that renders neither. The retry screen's copy is the belt-and-braces text arm. Over-match surface: all four anchors are Persona-SDK-specific and appear on no delivery/offer surface in the committed corpus or any pull.",
+          "intent": "sensitive.selfie_verification",
+          "require": {
+            "exists": {
+              "any": [
+                {
+                  "hasIdSuffix": "persona_container"
+                },
+                {
+                  "hasIdSuffix": "personaComposeView"
+                },
+                {
+                  "hasIdSuffix": "pi2_back_stack_screen_runner"
+                },
+                {
+                  "hasTextContaining": "verifying your selfie"
+                }
+              ]
+            }
           }
         },
         {

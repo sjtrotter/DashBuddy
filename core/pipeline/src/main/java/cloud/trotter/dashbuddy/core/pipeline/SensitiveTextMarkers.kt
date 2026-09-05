@@ -109,6 +109,30 @@ object SensitiveTextMarkers {
         // to load. Drift-guarded by SensitiveMarkerAssetCoverageTest.
         "Fit your face in the guide",
         "Thanks for verifying",
+        // The DASHER's own DoorDash-side identity/payment surfaces (#1059), all three fielded
+        // 2026-08-27/28 reaching UNKNOWN capture with no rule and no keyword behind them. The
+        // rule-side block is `doordash.screen.sensitive.known`'s `sensitive.selfie_verification` /
+        // `sensitive.red_card` branches and the passport alternatives of `sensitive.id_verification`;
+        // those anchor on view ids first (locale-immune, #938/#924), and these keywords are the
+        // rules-independent backstop + the shareable-log scrub anchor for the frames that DO render
+        // text.
+        //  - "verifying your selfie" — the Persona retry screen ("We're having trouble verifying
+        //    your selfie"). The apostrophe is deliberately outside the marker (the surface renders a
+        //    curly U+2019, which NFKC does not fold to ASCII).
+        //  - "Activate a physical card" / "Request a physical card" — the two Red Card wallet
+        //    buttons, present on every fielded frame of that screen. The screen's own headline,
+        //    "Your Red Card", is deliberately NOT a marker: the ordinary shopping-order pickup
+        //    instructions legitimately say "pay with your Red Card" (36 committed corpus fixtures
+        //    carry the phrase), so it would over-block a delivery surface — the #738 uniqueness
+        //    discipline. Each phrase above has ZERO hits across the committed corpus.
+        //  - "Align the character strip" — the ID-scan camera's hint on the PASSPORT variant; the
+        //    two pre-existing scanner markers ("Scan barcode on the back", "Driver's License") are
+        //    licence-specific, so this document-image surface had no backstop at all.
+        // Drift-guarded by SensitiveMarkerAssetCoverageTest.
+        "verifying your selfie",
+        "Activate a physical card",
+        "Request a physical card",
+        "Align the character strip",
     )
 
     /**
