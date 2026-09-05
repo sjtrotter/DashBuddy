@@ -523,7 +523,8 @@ class StateManagerV2RecoveryHygieneTest {
         // Refusing to install a recovered state because the DB is failing would trade a bounded,
         // STATED risk (an ERROR line saying the cleaned state is not durable) for total sensing
         // loss. So it proceeds — and the snapshot on disk is left carrying the pre-crash park,
-        // which is exactly what the ERROR says.
+        // which is exactly what the ERROR says. (Round 4 then keeps trying on the live path; this
+        // case is the RECOVERY path's own budget, with no live observation to retry on.)
         val dispatcher = StandardTestDispatcher(testScheduler)
         val snapshotDao = FlakySnapshotDao(snapshotOf(parkedState(cv = 5L)), failures = Int.MAX_VALUE)
 
@@ -541,6 +542,103 @@ class StateManagerV2RecoveryHygieneTest {
             16.70,
             manager.state.value.regions.platforms[Platform.DoorDash]
                 ?.session?.runningEarnings ?: Double.NaN,
+            0.0001,
+        )
+    }
+
+    // =========================================================================
+    // #1052 round 4 — a failed checkpoint is RETRIED until it lands
+    // =========================================================================
+
+    @Test
+    fun `a checkpoint that failed twice is retried on the next live observation and lands`() = runTest {
+        // Round 3 reported the failure at ERROR and moved on — but reporting is not repairing. Two
+        // failed inserts leave the PRE-hygiene snapshot as the replay base while the journal keeps
+        // growing, so the next restart replays the pre-crash park over a tail that now holds a
+        // frame past its deadline and commits $470. The journal and the snapshot live in the SAME
+        // database, so a journal append that persists is evidence the checkpoint can land too:
+        // every live observation retries it.
+        val dispatcher = StandardTestDispatcher(testScheduler)
+        val journalDao = FakeObservationDao(emptyList())
+        val snapshotDao = FlakySnapshotDao(snapshotOf(parkedState(cv = 5L)), failures = 2)
+
+        val first = newManagerOn(journalDao, snapshotDao, dispatcher)
+        first.initialize()
+        runCurrent()
+
+        assertEquals("recovery spent its two attempts and lost them both", 2, snapshotDao.attempts)
+        assertEquals(
+            "so the snapshot on disk is still the PRE-hygiene one",
+            5L,
+            snapshotDao.latest()!!.correlationVersion,
+        )
+
+        // An ordinary live frame — not a cadence multiple (5), not a major transition, so it
+        // writes no ordinary snapshot of its own. The retry is the only write here.
+        first.dispatch(liveIdle(20_000L))
+        runCurrent()
+
+        assertEquals("the live observation retried the checkpoint", 3, snapshotDao.attempts)
+        assertEquals(
+            "and it landed at THIS observation's version, not the stale recovery one",
+            6L,
+            snapshotDao.latest()!!.correlationVersion,
+        )
+        val onDisk = StateJson.decodeFromString<AppState>(snapshotDao.latest()!!.stateJson)
+        assertNull(
+            "carrying the cleaned state — which is the whole point of the checkpoint",
+            onDisk.regions.platforms[Platform.DoorDash]?.pendingSessionPay,
+        )
+
+        // Once it lands the retry disarms — a second live frame writes nothing.
+        first.dispatch(liveIdle(21_000L))
+        runCurrent()
+        assertEquals("a landed checkpoint is not re-written on every frame", 3, snapshotDao.attempts)
+
+        // And the restart the whole mechanism exists for reads the cleaned state back.
+        val second = newManagerOn(journalDao, snapshotDao, dispatcher)
+        second.initialize()
+        runCurrent()
+
+        val region = second.state.value.regions.platforms[Platform.DoorDash]
+        assertNull("nothing pre-crash is parked", region?.pendingSessionPay)
+        assertEquals(
+            "and the mid-spin figure never becomes the dasher's earnings",
+            16.70,
+            region?.session?.runningEarnings ?: Double.NaN,
+            0.0001,
+        )
+    }
+
+    @Test
+    fun `a checkpoint that never lands keeps retrying without failing the live path`() = runTest {
+        // The pathological DB. Sensing must keep working, the state must keep installing, and the
+        // retry must simply stay armed — one attempt per live observation, no ERROR per frame.
+        val dispatcher = StandardTestDispatcher(testScheduler)
+        val journalDao = FakeObservationDao(emptyList())
+        val snapshotDao = FlakySnapshotDao(snapshotOf(parkedState(cv = 5L)), failures = Int.MAX_VALUE)
+
+        val manager = newManagerOn(journalDao, snapshotDao, dispatcher)
+        manager.initialize()
+        runCurrent()
+        assertEquals(2, snapshotDao.attempts)
+
+        manager.dispatch(liveIdle(20_000L))
+        runCurrent()
+        manager.dispatch(liveIdle(21_000L))
+        runCurrent()
+
+        assertEquals("one retry per live observation — never a loop inside one", 4, snapshotDao.attempts)
+        assertEquals(
+            "and the live path is unaffected: both frames stepped and journalled",
+            7L,
+            manager.state.value.correlationVersion,
+        )
+        val region = manager.state.value.regions.platforms[Platform.DoorDash]
+        assertNull("the installed state is still the cleaned one", region?.pendingSessionPay)
+        assertEquals(
+            16.70,
+            region?.session?.runningEarnings ?: Double.NaN,
             0.0001,
         )
     }

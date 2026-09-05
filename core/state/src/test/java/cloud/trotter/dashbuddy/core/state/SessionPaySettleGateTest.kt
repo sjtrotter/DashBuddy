@@ -174,6 +174,7 @@ class SessionPaySettleGateTest {
         since: Long,
         deadline: Long,
         flow: Flow = Flow.Idle,
+        unconfirmed: Boolean = false,
     ) {
         val pend = region.pendingSessionPay
         assertNotNull("expected a parked read", pend)
@@ -181,6 +182,7 @@ class SessionPaySettleGateTest {
         assertEquals("park.since", since, pend.since)
         assertEquals("park.deadline", deadline, pend.deadline)
         assertEquals("park.flow", flow, pend.flow)
+        assertEquals("park.unconfirmed", unconfirmed, pend.unconfirmed)
     }
 
     private fun assertEarnings(expected: Double, region: PlatformRegion, message: String = "") {
@@ -611,14 +613,61 @@ class SessionPaySettleGateTest {
         val resumed = step(offline, idleScreen(sessionPay = null, timestamp = resumedAt))
         assertEquals(Mode.Online, resumed.mode)
         assertNotNull("the same session resumed", resumed.session)
-        assertPark(resumed, 25.20, resumedAt, resumedAt + settle)
+        // #1052 round 4: re-based AND unconfirmed — the new window is not evidence until a live
+        // read on the park's own surface has been offered to it.
+        assertPark(resumed, 25.20, resumedAt, resumedAt + settle, unconfirmed = true)
 
         val tooEarly = step(resumed, timeout(resumedAt + 1_000L))
         assertEarnings(16.70, tooEarly, "the pre-pause deadline is gone with the pre-pause window")
 
-        val committed = step(tooEarly, timeout(resumedAt + settle))
+        // The live pill states the same figure: the agreement clears the flag and — as always —
+        // does NOT extend the window.
+        val agreed = step(tooEarly, idleScreen(sessionPay = 25.20, timestamp = resumedAt + 1_500L))
+        assertPark(agreed, 25.20, resumedAt, resumedAt + settle, unconfirmed = false)
+
+        val committed = step(agreed, timeout(resumedAt + settle))
         assertEarnings(25.20, committed, "a full window on a live dash lands it")
         assertNull(committed.pendingSessionPay)
+    }
+
+    @Test
+    fun `a re-based park whose only observation is its own timer is DROPPED, not committed`() {
+        // #1052 round 4. The re-base arms the settle timer, so on the fielded shape the timer is
+        // routinely the first thing to arrive in the new window — and if it is the ONLY thing,
+        // nothing was ever on screen to challenge the figure. Round 3 committed a pre-pause
+        // mid-spin $470 here. The committed total stands instead, and the wheel's settled value
+        // re-parks when it is next admitted.
+        val parked = feed(region(runningEarnings = 16.70), t0 to 470.00)
+        val offline = step(parked, offlineIdleScreen(t0 + 500L))
+        assertEquals(Mode.Offline, offline.mode)
+
+        val resumedAt = t0 + 5_000L
+        val resumed = step(offline, idleScreen(sessionPay = null, timestamp = resumedAt))
+        assertPark(resumed, 470.00, resumedAt, resumedAt + settle, unconfirmed = true)
+
+        val expired = step(resumed, timeout(resumedAt + settle))
+        assertEarnings(16.70, expired, "an unchallenged window nothing could see is not evidence")
+        assertNull("the unconfirmed park is dropped", expired.pendingSessionPay)
+    }
+
+    @Test
+    fun `a re-based park confirmed by a read on ANOTHER surface is re-parked, not inherited`() {
+        // #1052 round 4 / H3, at the stepper — and it has to be a PAUSED dash to be a test at all:
+        // while Online the ownership rule drops a departed park on the same frame, so the pill park
+        // never survives to be "kept". Under the pause sheet the expiry block is skipped wholesale,
+        // and round 3's equal-value arm then kept a park that went on describing a surface which
+        // had left the screen — dropped on the first ownership check after the resume, with no
+        // admitted frame left to re-park it. The read now parks HERE, with its own window.
+        val parked = feed(region(runningEarnings = 16.70), t0 to 25.20)
+        assertPark(parked, 25.20, t0, t0 + settle, flow = Flow.Idle)
+
+        val paused = step(parked, pausedScreen(t0 + 500L))
+        assertEquals("the premise: the sheet paused the dash", Mode.Paused, paused.mode)
+        assertPark(paused, 25.20, t0, t0 + settle, flow = Flow.Idle)
+
+        val onReceipt = step(paused, receiptScreen(t0 + 1_000L, sessionEarnings = 25.20))
+        assertEquals("still paused — the resume out of Paused is graced", Mode.Paused, onReceipt.mode)
+        assertPark(onReceipt, 25.20, t0 + 1_000L, t0 + 1_000L + settle, flow = Flow.PostTask)
     }
 
     @Test

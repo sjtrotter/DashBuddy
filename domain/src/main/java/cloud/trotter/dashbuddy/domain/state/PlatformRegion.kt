@@ -189,7 +189,9 @@ data class PlatformRegion(
  * and every later identical idle capture is dropped by `FrameGate`'s identity dedup — so a legitimate
  * $25.20 first seen while Paused would never be seen again. Re-basing [since]/[deadline] on the
  * transition INTO Online is what makes the frozen evidence land: the park must still stand a FULL
- * window unchallenged, with the ownership rules applying, before it may commit.
+ * window unchallenged, with the ownership rules applying, before it may commit — and, since
+ * round 4, only once a fresh readable read on its own surface has AGREED with it
+ * ([unconfirmed]), because a window in which nothing was ever on screen challenges nothing.
  *
  * Plain data (kotlinx-serializable) so it survives crash-recovery replay;
  * resolution is driven by `obs.timestamp`, never a wall clock, keeping the
@@ -238,6 +240,32 @@ data class PendingSessionPay(
      * first Online observation after a resume still has to own R0 on both sides.
      */
     val flow: Flow,
+    /**
+     * True while this park is RE-BASED pre-pause evidence that no live read has agreed with yet
+     * (#1052 round 4).
+     *
+     * Re-basing on the resume ([PlatformRegionStepper]'s `applyModeTransition`) hands a frozen read
+     * a brand-new window — and a window is only evidence if something could have challenged it.
+     * On the fielded shape nothing can: the resume commits as a wake TIMER, the settle timer is
+     * re-armed by that same re-base, and if no readable idle frame lands in between then the FIRST
+     * observation of the new window is the settle fire itself. The old rule committed there, which
+     * means a mid-spin figure read before the pause became the dasher's earnings on the strength of
+     * a window in which nothing was ever on screen.
+     *
+     * So a re-based park is held UNCONFIRMED until a fresh read on its own surface agrees with it
+     * (`settleSessionPay`'s equal-value arm clears the flag; a different value replaces the park
+     * outright, which parks confirmed by construction). At the deadline an unconfirmed park is
+     * DROPPED rather than committed: a null read means the wheel was unreadable, and a bare timer
+     * means nothing was looked at at all — fail-null (#745). The committed figure stands, and the
+     * settled value arrives later as a NEW observation identity (`FrameGate` admits it, because the
+     * pause frames moved `lastIdentity`) and re-parks normally.
+     *
+     * Costs nothing when the wheel is stable and readable: the resume is exactly the point at which
+     * FrameGate guarantees one admitted idle frame, since the paused frames displaced the identity
+     * the pre-pause read was admitted under. Default false so an ordinary live park — and every
+     * pre-#1052-round-4 snapshot — is confirmed by construction.
+     */
+    val unconfirmed: Boolean = false,
 )
 
 /**

@@ -695,7 +695,19 @@ pause-sheet flap, the confirmed resume then arrives as a wake TIMER with no fram
 would never have reached the dasher's HUD at all. The `PendingSessionPay` KDoc is the canonical
 statement. (Freezing is also why `diffDeadlineTimer`'s early-wake re-arm is guarded on
 `obs.timestamp < deadline`: a park kept across its own deadline would otherwise re-arm at the 1 ms
-floor and spin for the length of the pause.)
+floor and spin for the length of the pause.) **A re-based park is UNCONFIRMED
+(`PendingSessionPay.unconfirmed`) until a fresh readable read on its OWN surface agrees with it; a
+null read or a bare timer at the deadline DROPS it instead of committing (#1052 round 4)** — the
+re-base hands pre-pause evidence a new window and arms the timer that closes it, so if no readable
+frame lands in between then the first observation of that window is the fire itself and the old rule
+committed a mid-spin figure on a window in which nothing was ever on screen; the agreeing read
+clears the flag without extending the deadline, a different value replaces the park (confirmed by
+construction), and the requirement costs nothing on the fielded shape because the pause frames moved
+`FrameGate.lastIdentity`, so the pill IS admitted once after the resume. **An equal-value read on a
+DIFFERENT surface RE-PARKS there (#1052 round 4)** rather than keeping the old park: the keep arm
+requires `flow == pend.flow`, because inheriting the old surface left the park owned by a screen
+that had left (the fielded receipt→pill→resume sequence then dropped it on the first ownership check
+with no admittable frame left to re-park it).
 **(b) BOTH feeds go through the gate** — the on-dash pill (`IdleFields.sessionPay`) and the
 receipt's own "This dash so far" (`PostTaskFields.sessionEarnings`), which `dropoff.json5` reads off
 the SAME animated wheel via `parseGlyphCurrency`; for the settled re-render to be admittable at all,
@@ -752,7 +764,12 @@ undercount previously reached ordinary periodic snapshots after any gapped recov
 retries once and then logs at ERROR under the `StateMachine` tag that the cleaned state is not
 durable, rather than letting `SnapshotStore`'s catch-all swallow the failure and silently reopen the
 double-recovery hole. It proceeds either way: blocking live observations on a failing DB would trade
-a bounded, stated risk for total sensing loss.
+a bounded, stated risk for total sensing loss — **and since round 4 a failed checkpoint stays
+PENDING and is retried on every live observation until it lands** (`StateManagerV2
+.recoveryCheckpointPending`, cleared on the first successful write, one DEBUG line per attempt):
+reporting the loss at ERROR left the pre-hygiene snapshot standing as the next replay base, and the
+journal and the snapshot share one database, so a journal append that persists is direct evidence
+the checkpoint can land too.
 
 
 ### 4. Side Effect Engine (`app/.../state/effects/`)

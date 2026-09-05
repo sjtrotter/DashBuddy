@@ -234,10 +234,18 @@ class PlatformRegionStepper @Inject constructor() {
                     // park first and then re-parking the fresh read for another whole window shows
                     // the dasher a figure that the same frame already disproved.
                     val read = obs.sessionPayRead()
-                    current = if (read != null && !centsEqual(read, pend.value)) {
-                        current.copy(pendingSessionPay = null)
-                    } else {
-                        commitSessionPay(current, pend)
+                    current = when {
+                        read != null && !centsEqual(read, pend.value) ->
+                            current.copy(pendingSessionPay = null)
+                        // #1052 round 4: an UNCONFIRMED park is re-based pre-pause evidence that
+                        // no live read has agreed with. Reaching the deadline proves nothing here
+                        // — a null read means the wheel was unreadable, and a bare timer means
+                        // nothing was looked at at all — so DROP rather than commit. The committed
+                        // figure stands and the settled value re-parks when it is next admitted
+                        // (a new observation identity, since the pause frames moved FrameGate's
+                        // `lastIdentity`). Fail-null beats fail-wrong (#745).
+                        pend.unconfirmed -> current.copy(pendingSessionPay = null)
+                        else -> commitSessionPay(current, pend)
                     }
                 }
 
@@ -428,6 +436,16 @@ class PlatformRegionStepper @Inject constructor() {
                 pendingSessionPay = region.pendingSessionPay?.copy(
                     since = obs.timestamp,
                     deadline = obs.timestamp + policy.sessionPaySettleMs(region.platform),
+                    // #1052 round 4: a re-based park is UNCONFIRMED. The new window is only
+                    // evidence if something could have challenged it, and on the fielded shape
+                    // nothing can — the resume commits as a wake TIMER, this very re-base re-arms
+                    // the settle timer, and if no readable idle frame lands in between then the
+                    // FIRST observation of the new window is that fire. Committing there would
+                    // mint a pre-pause mid-spin figure on the strength of a window in which
+                    // nothing was ever on screen. A fresh agreeing read on the park's own surface
+                    // clears the flag (settleSessionPay); the expiry DROPS it otherwise. See
+                    // [PendingSessionPay.unconfirmed].
+                    unconfirmed = true,
                 ),
             )
         }
@@ -743,10 +761,17 @@ class PlatformRegionStepper @Inject constructor() {
      *                        Deliberately NOT a general monotonic guard: a genuine downward
      *                        correction is out of scope, only the zero placeholder is refused.
      *  - read == committed → the wheel is at rest; drop any park and change nothing.
-     *  - read == parked    → the same value again; keep the park AND its ORIGINAL deadline (an
-     *                        intervening screen and a return must not extend the window).
+     *  - read == parked, SAME surface → the same value again on the surface it was parked from;
+     *                        keep the park AND its ORIGINAL deadline (an intervening screen and a
+     *                        return must not extend the window), and CLEAR
+     *                        [PendingSessionPay.unconfirmed] — this is the agreement a re-based
+     *                        park is waiting for (#1052 round 4).
      *  - otherwise         → a new sighting; REPLACE the park with a fresh deadline, stamped with
      *                        the [Flow] it was read on (the park dies when that surface leaves).
+     *                        An equal value on a DIFFERENT surface takes this arm too (#1052 round
+     *                        4): keeping the old park would leave it owned by a surface that is no
+     *                        longer on screen, and the fielded receipt→pill→resume sequence then
+     *                        stranded the figure for the rest of the dash.
      *
      * Both equality tests are CENT-tolerant: `runningEarnings` can hold an accumulated sum
      * (`accumulatedDeliveryPay + totalPay`) that is not bit-equal to the 2-dp figure the wheel
@@ -774,18 +799,29 @@ class PlatformRegionStepper @Inject constructor() {
         now: Long,
         flow: Flow,
         policy: TransitionPolicy,
-    ): PlatformRegion = when {
-        pay == 0.0 && session.runningEarnings > 0.0 -> region
-        centsEqual(pay, session.runningEarnings) -> region.copy(pendingSessionPay = null)
-        region.pendingSessionPay?.let { centsEqual(pay, it.value) } == true -> region
-        else -> region.copy(
-            pendingSessionPay = PendingSessionPay(
-                value = pay,
-                since = now,
-                deadline = now + policy.sessionPaySettleMs(region.platform),
-                flow = flow,
-            ),
-        )
+    ): PlatformRegion {
+        val pend = region.pendingSessionPay
+        return when {
+            pay == 0.0 && session.runningEarnings > 0.0 -> region
+            centsEqual(pay, session.runningEarnings) -> region.copy(pendingSessionPay = null)
+            // The AGREEING arm (#1052 round 4): same value AND the same surface. The flow test is
+            // what keeps the agreement honest — a read on ANOTHER surface that happens to state
+            // the same figure used to leave the park sitting on the surface it was first read
+            // from, which then has to come back before it can ever commit; on the fielded shape
+            // (a receipt park agreed with by the idle pill, then a resume onto Idle) it never did,
+            // and identical idle frames are deduplicated, so the figure was stranded. Falling
+            // through to the replace arm re-parks it HERE, on the surface actually on screen.
+            pend != null && centsEqual(pay, pend.value) && pend.flow == flow ->
+                region.copy(pendingSessionPay = pend.copy(unconfirmed = false))
+            else -> region.copy(
+                pendingSessionPay = PendingSessionPay(
+                    value = pay,
+                    since = now,
+                    deadline = now + policy.sessionPaySettleMs(region.platform),
+                    flow = flow,
+                ),
+            )
+        }
     }
 
     /**
