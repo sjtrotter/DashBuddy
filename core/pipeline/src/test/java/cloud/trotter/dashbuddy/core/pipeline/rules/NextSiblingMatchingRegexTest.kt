@@ -181,6 +181,23 @@ class NextSiblingMatchingRegexTest {
     }
 
     @Test
+    fun `an unparsable declared cap isolates the rule, it does not fall back to the default`() {
+        // #1052: `toIntOrNull()` returns null on overflow, and the old `?: MAX_SIBLING_SCAN` folded
+        // that into the DEFAULT — silently handing a rule the widest scan it can have while its
+        // author had asked for something else entirely. A cap that is PRESENT is honoured or the
+        // rule isolates; the default belongs only to a cap that was never written.
+        for (bad in listOf("2147483648", "99999999999999999999")) {
+            val compiled = RuleCompiler.compileRules<UiNode>(
+                Json.parseToJsonElement(
+                    rules("nextSiblingMatchingRegex(${CurrencyShape.RULE_PATTERN}, $bad)"),
+                ).jsonArray,
+                RuleContext.SCREEN,
+            )
+            assertTrue("cap $bad must not produce a live rule", compiled.isEmpty())
+        }
+    }
+
+    @Test
     fun `a comma inside the pattern is not mistaken for a cap`() {
         // The split anchors on a trailing `, <digits>` at the END of the argument, and a shape
         // pattern ends in its own anchor. `[\d,]` and `{0,3}` are both left alone.

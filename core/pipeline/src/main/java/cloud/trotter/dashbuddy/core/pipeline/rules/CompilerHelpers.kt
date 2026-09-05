@@ -72,21 +72,30 @@ internal fun compileNavigation(navSpec: JsonElement): (UiNode) -> UiNode? {
         //
         // The optional trailing integer caps the scan (default and ceiling [MAX_SIBLING_SCAN]) so
         // a rule can say how far its OWN row extends — see the constant for why that is a
-        // correctness control, not merely a bound. A cap outside 1..MAX_SIBLING_SCAN is an
-        // authoring error and fails the rule LOAD. Siblings are walked by REFERENTIAL identity
-        // ([UiNode.followingSiblings]), not `sibling(offset)`'s structural `indexOf`: a flattened
-        // row routinely holds twin blank wrappers, and a structural lookup would silently start
-        // the scan from the wrong node. The pattern goes through [RegexSafety] here, at load time,
+        // correctness control, not merely a bound. A cap outside 1..MAX_SIBLING_SCAN — or one
+        // that is present but unparsable (#1052) — is an authoring error and fails the rule LOAD.
+        // Siblings are walked by REFERENTIAL identity ([UiNode.followingSiblings]), not
+        // `sibling(offset)`'s structural `indexOf`: a flattened row routinely holds twin blank
+        // wrappers, and a structural lookup would silently start the scan from the wrong node.
+        // The pattern goes through [RegexSafety] here, at load time,
         // so an over-long/ReDoS-prone pattern is a loud [RuleCompileException] and never a
         // hot-path hang. Fail-null when nothing matches.
         nav.startsWith("nextSiblingMatchingRegex(") -> {
             val arg = nav.removePrefix("nextSiblingMatchingRegex(").removeSuffix(")")
             val capMatch = SIBLING_SCAN_CAP.matchEntire(arg)
             val pattern = capMatch?.groupValues?.get(1) ?: arg
-            val cap = capMatch?.groupValues?.get(2)?.toIntOrNull() ?: MAX_SIBLING_SCAN
+            // #1052: the DEFAULT applies only when no `, n` suffix was written at all. When one
+            // WAS written, an unparsable value is an authoring error like any out-of-range one —
+            // `toIntOrNull()` returns null on overflow (`2147483648`), and folding that into the
+            // default silently gave a rule the widest scan it can have while its author asked for
+            // something else entirely. Rejecting keeps "a declared cap is honoured or the rule
+            // isolates" true with no third, silent outcome.
+            val declaredCap = capMatch?.groupValues?.get(2)
+            val cap = if (declaredCap == null) MAX_SIBLING_SCAN else declaredCap.toIntOrNull() ?: -1
             if (cap < 1 || cap > MAX_SIBLING_SCAN) {
                 throw RuleCompileException(
-                    "nextSiblingMatchingRegex scan cap must be 1..$MAX_SIBLING_SCAN, got $cap",
+                    "nextSiblingMatchingRegex scan cap must be 1..$MAX_SIBLING_SCAN, got " +
+                        (declaredCap ?: "$cap"),
                     isolable = true, // authoring typo — the rule isolates (#293 item 4)
                 )
             }

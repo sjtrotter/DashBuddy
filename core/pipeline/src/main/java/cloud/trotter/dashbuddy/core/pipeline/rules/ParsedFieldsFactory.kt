@@ -25,6 +25,18 @@ import timber.log.Timber
 object ParsedFieldsFactory {
 
     /**
+     * The label on the SYNTHESIZED app-pay component of a receipt whose itemization is missing
+     * (see [buildPostTask]). Platform-NEUTRAL by requirement (#1052, principle 8): `:core:pipeline`
+     * is the shared recognition spine and must not name a gig platform, and the old `"DoorDash pay"`
+     * literal would also have read as a real DoorDash label on any other platform's receipt.
+     *
+     * It must keep containing `"pay"` (case-insensitively): [buildPostTask]'s partition of a REAL
+     * itemization splits app-pay from tips on exactly that token, and a synthesized component that
+     * failed it would be sorted as a customer tip. Asserted in the factory's own test.
+     */
+    const val SYNTHESIZED_APP_PAY_LABEL = "Platform pay"
+
+    /**
      * Required parse fields per shape. The rule compiler verifies at load time
      * that any parse block declaring a shape includes these field names.
      * Shapes not listed here have no required fields.
@@ -154,9 +166,9 @@ object ParsedFieldsFactory {
      *    The tips line is exposed only while the breakdown is VISIBLE, which is what keeps every
      *    COLLAPSED receipt (old or new) at `parsedPay == null` — the `sameTaskCollapsedDowngrade`
      *    logic in `PlatformRegionStepper` depends on that being the collapsed signal.
-     *  - the app-pay side is one synthetic `"DoorDash pay"` component of `total - tips`; the tip
-     *    side carries a BLANK type, so `injectiveTipMatch` declines and a stacked job even-splits
-     *    (which is what it already did whenever the tip types didn't match anyway).
+     *  - the app-pay side is one synthetic [SYNTHESIZED_APP_PAY_LABEL] component of `total - tips`;
+     *    the tip side carries a BLANK type, so `injectiveTipMatch` declines and a stacked job
+     *    even-splits (which is what it already did whenever the tip types didn't match anyway).
      * Per-store tip itemization off the flat 8.93.7 row is #1051's ask — it needs a fielded
      * STACKED 8.93.7 receipt to pin, and this bridge is what keeps single-drop and expanded
      * receipts on a real `DROP_SHARE` basis until then.
@@ -186,7 +198,7 @@ object ParsedFieldsFactory {
             ParsedPay(appPayComponents = appPay, customerTips = tipItems)
         } else if (total != null && total > 0.0 && tips != null && total - tips >= 0.0) {
             ParsedPay(
-                appPayComponents = listOf(ParsedPayItem("DoorDash pay", total - tips)),
+                appPayComponents = listOf(ParsedPayItem(SYNTHESIZED_APP_PAY_LABEL, total - tips)),
                 customerTips = if (tips > 0.0) listOf(ParsedPayItem("", tips)) else emptyList(),
             )
         } else null

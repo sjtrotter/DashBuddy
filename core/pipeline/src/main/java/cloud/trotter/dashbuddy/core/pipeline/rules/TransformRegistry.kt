@@ -336,6 +336,28 @@ object TransformRegistry {
     private const val GLYPH_CURRENCY_ALPHABET = "$0123456789.,"
 
     /**
+     * Characters that change a figure's VALUE rather than spell it (#1052): ASCII hyphen-minus,
+     * the true minus sign U+2212, and the accounting negative's opening paren. The keep-filter
+     * would delete all three and read the magnitude as a positive; they reject the whole input
+     * instead. See [parseGlyphCurrency].
+     */
+    private const val GLYPH_CURRENCY_SIGNS = "-−("
+
+    /**
+     * [GLYPH_CURRENCY_SIGNS] as CODE POINTS (#1052 round 2), derived from that one string rather
+     * than listed twice. The scan below is code-point-wise, so membership has to be too — a sign
+     * outside the BMP would otherwise be tested one surrogate half at a time and never match.
+     */
+    private val GLYPH_CURRENCY_SIGN_CODE_POINTS: Set<Int> = buildSet {
+        var i = 0
+        while (i < GLYPH_CURRENCY_SIGNS.length) {
+            val cp = GLYPH_CURRENCY_SIGNS.codePointAt(i)
+            add(cp)
+            i += Character.charCount(cp)
+        }
+    }
+
+    /**
      * A **settled** currency figure: one leading `$` (written `\x24` so neither the Kotlin string
      * template nor a regex anchor is in play) followed by [CurrencyShape.FIGURE_CORE] — the ONE
      * shape definition this and the rules' money scans now share, rather than two hand-written
@@ -355,7 +377,15 @@ object TransformRegistry {
      * [parseCurrency] is not merely useless on that shape, it is WRONG — it splits on space and
      * takes the first token, so a space-separated wheel reads `"$ 1 6 . 7 0"` → `$1.00`.
      *
-     * Two steps, both fail-closed:
+     * Three steps, all fail-closed:
+     *  0. **Reject what the keep-filter cannot read** (#1052) — any non-ASCII digit, and any of
+     *     `-` / `−` / `(`. A keep-filter DELETES what it does not recognise, so without this a
+     *     dropped Arabic-Indic digit or a stripped minus sign leaves a remainder that still
+     *     full-matches, turning an unreadable figure into a confident wrong one. Scanned by CODE
+     *     POINT, not by `Char`: a supplementary-plane digit (U+1D7DA `𝟚`, a mathematical
+     *     two) is a surrogate PAIR, and `Character.isDigit` is false for either half on its own —
+     *     so a char-wise scan waved it through and the keep-filter then deleted it, reading
+     *     `"This dash$1𝟚6.70"` as 16.70.
      *  1. **Keep only the currency glyphs**, in order. This is the "keep the `$` / digit-run / `.`
      *     / `,` tokens, drop the label words and spacers" filter expressed at CHARACTER
      *     granularity — which it has to be, because the `allText` join has no separator to
@@ -381,6 +411,26 @@ object TransformRegistry {
      */
     private fun parseGlyphCurrency(text: String): Double? {
         if (text.length > MAX_GLYPH_CURRENCY_INPUT) return null
+        // #1052: REJECT what the keep-filter cannot read, rather than deleting it. Step 1 is a
+        // KEEP filter, so a character it does not recognise vanishes and the remainder can still
+        // full-match — which turns two whole classes of unreadable input into confident numbers:
+        // a NON-ASCII digit (`"This dash$1٢6.70"` → 16.70, a digit silently dropped from the
+        // middle of the figure) and a SIGN (`"-$16.70"` → 16.70, `"($16.70)"` → 16.70 — accounting
+        // negatives read as positives). Neither can be handled by widening the alphabet: their
+        // meaning is arithmetic, not glyphic. So a container carrying either is unreadable, and
+        // unreadable is null (the transform's whole posture — see step 2).
+        //
+        // Round 2: by CODE POINT. `Character.isDigit(Char)` cannot see a supplementary-plane digit
+        // at all — each surrogate half is false — so a char-wise scan passed U+1D7DA and the
+        // keep-filter deleted it: `"This dash$1𝟚6.70"` → `"$16.70"` → 16.70, a digit
+        // silently removed from the middle of the figure.
+        var i = 0
+        while (i < text.length) {
+            val cp = text.codePointAt(i)
+            if (cp in GLYPH_CURRENCY_SIGN_CODE_POINTS) return null
+            if (Character.isDigit(cp) && cp !in '0'.code..'9'.code) return null
+            i += Character.charCount(cp)
+        }
         val glyphs = buildString(text.length) {
             for (c in text) if (c in GLYPH_CURRENCY_ALPHABET) append(c)
         }

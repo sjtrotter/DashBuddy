@@ -80,6 +80,51 @@ class GlyphCurrencyTransformTest {
     }
 
     @Test
+    fun `the comma arm honours the same four-digit ceiling`() {
+        // #1052 E3: the arm read `[1-9]\d{0,2},\d{3}`, so it let SIX figures through the very
+        // branch the shape's KDoc caps at four. A four-digit grouped figure still parses.
+        assertEquals(1234.56, parse("\$1,234.56"))
+        assertNull(parse("\$12,345.00"))
+        assertNull(parse("\$123,456.00"))
+    }
+
+    // =========================================================================
+    // #1052 E1 — unreadable input is REJECTED, not silently repaired
+    // =========================================================================
+
+    @Test
+    fun `a non-ASCII digit rejects the whole read rather than being deleted`() {
+        // Step 1 is a KEEP filter, so an unrecognised character simply vanishes and the remainder
+        // can still full-match — turning a figure we cannot read into a confident wrong one. Here
+        // the Arabic-Indic 2 sat INSIDE the figure, so the strip read $16.70 off a $126.70 wheel.
+        assertNull(parse("This dash\$1\u06626.70"))
+        assertNull(parse("\$\u06616.70"))
+        // Devanagari, to show the rule is the digit PROPERTY and not one enumerated script.
+        assertNull(parse("\$\u096716.70"))
+    }
+
+    @Test
+    fun `a SUPPLEMENTARY-plane digit rejects the read too - the scan is by code point`() {
+        // Round 2. U+1D7DA MATHEMATICAL DOUBLE-STRUCK DIGIT TWO is a surrogate PAIR, and
+        // `Character.isDigit(Char)` is false for either half on its own — so a char-wise scan
+        // waved it straight through and the keep-filter deleted both halves, reading a $126.70
+        // wheel as $16.70 with a digit silently removed from the middle. The scan is code-point-
+        // wise for exactly this.
+        assertNull(parse("This dash\$1\uD835\uDFDA6.70"))
+        assertNull(parse("\$\uD835\uDFDA6.70"))
+    }
+
+    @Test
+    fun `a sign rejects the whole read rather than being deleted`() {
+        // A minus and an accounting paren both change the figure's VALUE, which no glyph filter
+        // can express — stripping them reports the magnitude as a positive.
+        assertNull(parse("-\$16.70"))
+        assertNull(parse("\u2212\$16.70"))
+        assertNull(parse("(\$16.70)"))
+        assertNull(parse("This dash so far-\$16.70"))
+    }
+
+    @Test
     fun `the rule-side pattern is the same shape, anchored`() {
         // Both sides derive from CurrencyShape, so this is the pin's local half: what the
         // transform accepts, a rule's `nextSiblingMatchingRegex` accepts, and vice versa.

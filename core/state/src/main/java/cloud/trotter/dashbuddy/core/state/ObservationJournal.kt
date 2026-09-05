@@ -76,9 +76,24 @@ class ObservationJournal @Inject constructor(
         writeQueue.trySend(obs.toEntity(state))
     }
 
+    /**
+     * One row of the replay tail: the observation and the correlation version it was PERSISTED
+     * with (#1052 round 3).
+     *
+     * The version is not derivable from the replay. `StateMachine.step` numbers its result
+     * `prev.correlationVersion + 1`, so a fold over N rows lands at `snapshot + N` — which is the
+     * true boundary only while the journal is gap-free, and it is not: [append] is a fire-and-
+     * forget queue whose writer LOGS and drops a failed insert. After one lost row the replayed
+     * state undercounts, and since #1052 round 2 the recovery checkpoint makes that wrong boundary
+     * DURABLE — the next restart then replays rows the previous one already consumed and
+     * re-applies their effects (a receipt's pay accumulates twice). The row's own version is the
+     * only honest answer, and it costs one field.
+     */
+    data class JournalRow(val correlationVersion: Long, val observation: Observation)
+
     /** The replay tail after [afterVersion], in correlation-version order. */
-    suspend fun tailAfter(afterVersion: Long): List<Observation> =
-        observationDao.since(afterVersion).map { it.toObservation() }
+    suspend fun tailAfter(afterVersion: Long): List<JournalRow> =
+        observationDao.since(afterVersion).map { JournalRow(it.correlationVersion, it.toObservation()) }
 
     suspend fun pruneOlderThan(cutoff: Long) = observationDao.pruneOlderThan(cutoff)
 

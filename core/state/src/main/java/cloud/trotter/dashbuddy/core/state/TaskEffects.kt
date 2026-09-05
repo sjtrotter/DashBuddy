@@ -511,7 +511,16 @@ internal fun EffectMap.diffPostTask(
         buildString {
             append("Saved: ${Formats.money(payData.total)}")
             payData.customerTips.forEach { item ->
-                append("\nTip: ${item.displayLabel} • ${Formats.money(item.amount)}")
+                // #1052: a SYNTHESIZED receipt (`ParsedFieldsFactory.buildPostTask`'s bridge for an
+                // id-less 8.93.7 itemization) carries a BLANK tip type on purpose — there is no
+                // per-store label to state — and `displayLabel` renders a blank type as blank, so
+                // the unconditional separator read `Tip:  • $7.00`. No label, no separator.
+                val label = item.displayLabel
+                if (label.isBlank()) {
+                    append("\nTip: ${Formats.money(item.amount)}")
+                } else {
+                    append("\nTip: $label • ${Formats.money(item.amount)}")
+                }
             }
         }
     } else {

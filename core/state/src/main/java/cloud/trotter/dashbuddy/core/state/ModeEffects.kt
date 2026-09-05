@@ -267,13 +267,21 @@ internal fun EffectMap.diffGraceTimer(
  *
  * A commit lands in the cancel branch too — harmless, the timer has already fired or no-ops.
  *
- * @param rearmOnEarlyWake re-schedule for the REMAINDER when this timer's own fire arrives while
- *   the pending is still there with an UNCHANGED deadline (#1029 S5). Only the settle timer needs
- *   it: it is the sole observation its pending will ever get (FrameGate identity dedup drops the
- *   repeat frames), so an early or clock-stepped-back fire that no-ops would strand the pending
- *   forever. Deliberately NOT a commit — a stale fire from a REPLACED pending would then commit
- *   the NEW one early, which for the settle gate is precisely a mid-spin value. The other two
- *   pendings are re-driven by ordinary frames and keep the plain behaviour.
+ * @param rearmOnEarlyWake re-schedule for the REMAINDER when this timer's own fire arrives EARLY
+ *   (`obs.timestamp < deadline`) while the pending is still there with an UNCHANGED deadline
+ *   (#1029 S5). Only the settle timer needs it: it is the sole observation its pending will ever
+ *   get (FrameGate identity dedup drops the repeat frames), so an early or clock-stepped-back fire
+ *   that no-ops would strand the pending forever. Deliberately NOT a commit — a stale fire from a
+ *   REPLACED pending would then commit the NEW one early, which for the settle gate is precisely a
+ *   mid-spin value. The other two pendings are re-driven by ordinary frames and keep the plain
+ *   behaviour.
+ *
+ *   The `obs.timestamp < deadline` half is what keeps it a re-arm rather than a spin (#1052 round
+ *   3): a park is now FROZEN while the dash is not Online, so a fire AT or PAST the deadline can
+ *   legitimately leave the pending standing with its deadline unchanged — re-arming there would
+ *   schedule the 1 ms floor and fire again, over and over, for as long as the dasher stays paused.
+ *   Landing on the deadline while ONLINE cannot reach this branch at all: the expiry consumed the
+ *   park, so the pending is gone and the cancel arm below runs instead.
  */
 internal fun EffectMap.diffDeadlineTimer(
     prevDeadline: Long?,
@@ -294,6 +302,7 @@ internal fun EffectMap.diffDeadlineTimer(
         nextDeadline != null && (prevDeadline == null || prevDeadline != nextDeadline) ->
             schedule(nextDeadline)
         rearmOnEarlyWake && nextDeadline != null && prevDeadline == nextDeadline &&
+            obs.timestamp < nextDeadline &&
             obs is Observation.Timeout && obs.type == type && obs.platform == platform ->
             schedule(nextDeadline)
         prevDeadline != null && nextDeadline == null ->

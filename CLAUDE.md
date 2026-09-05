@@ -599,8 +599,12 @@ shipped its money surfaces with NO view ids, so the parse vocabulary needed shap
 had only id and position anchors. (1) The **`parseGlyphCurrency` transform** reads an animated
 digit-wheel — a figure rendered as per-glyph id-less `TextView`s beside a label, which `read:
 allText` fuses into one string (`"This dash so far$16.70"`, or `"$3.10This dash"` when the label
-trails). It keeps only the `$`/digit/`.`/`,` characters, then **full-matches** a settled shape
-(`$` + 1–4 digits + optional comma group + exactly 2 decimals) or returns **null** — bounded input
+trails). It first **rejects** any non-ASCII digit and any `-`/`−`/`(` (#1052 — a keep-filter DELETES
+what it does not know, so a stripped Arabic-Indic digit or minus sign leaves a remainder that still
+full-matches, i.e. an unreadable figure read confidently and wrong), keeps only the `$`/digit/`.`/`,`
+characters, then **full-matches** a settled shape (`$` + 1–4 digits, or a single `[1-9],\d{3}`
+thousands group — #1052 tightened the comma arm, which had admitted six figures through the branch
+the shape's own ceiling caps at four — plus exactly 2 decimals) or returns **null** — bounded input
 (256 chars), fail-closed, and that strictness is the point: ~1 in 5 fielded reads is mid-animation
 (`$70103.030`, `$016.603`), and a fabricated figure is strictly worse than none. Note `parseCurrency`
 is not merely useless on that shape but WRONG — it splits on space and takes the first token, so a
@@ -614,8 +618,10 @@ whole-input sibling of `containsMatchIn`, same 200 ms budget, fail-closed to no-
 `799` is a DoorDash type CODE that older builds render in the `pay_line_item_title` slot — so
 `sibling(1)` + `parseCurrency` reported a **$799.00 tip on a $16.70 delivery**. No offset is right
 on both layouts; "the next money-shaped node" is. The spec takes an **optional scan cap**
-(`nextSiblingMatchingRegex(<pattern>, <n>)`, default and ceiling `MAX_SIBLING_SCAN`=8, a cap outside
-1..8 isolates the rule at load) and the three DoorDash money scans declare `2`: that is a
+(`nextSiblingMatchingRegex(<pattern>, <n>)`, default and ceiling `MAX_SIBLING_SCAN`=8; a cap outside
+1..8 — or one that is present but unparsable, #1052, where an overflowing `toIntOrNull()` used to
+fall silently to the widest scan — isolates the rule at load, and the default applies only when no
+cap was written) and the three DoorDash money scans declare `2`: that is a
 CORRECTNESS control, not merely a bound — on a row whose value is simply absent
 (`['Customer tips','799','Peak pay','$1.00']`) an unbounded scan returns the NEXT row's money AS
 this one's, fail-WRONG and invisible to `sumApproxEquals` since `appPay` is null on 8.93.7. The
@@ -665,11 +671,43 @@ because no other screen carries a running total and the wake timer would otherwi
 unchallengeable figure (fielded 08-23 17:35: pill read → offer overlay 0.5 s later → dash end). The
 platform half is load-bearing because `stepPlatforms` steps only `obs.platform`'s region, so a
 DoorDash park is never stepped by an Uber frame — and two idle screens on two platforms defeat a
-flow-only test outright (R0 stays `Idle`). A NON-flow observation (the wake timer, a click, a
-loopback) is never a departure frame, so it checks ownership BEFORE the expiry and drops a park it
-no longer owns; a flow frame runs the expiry FIRST, so a park that stood its whole window still
-commits on the departure frame. Another platform's screen therefore still drops this platform's
-park — fail-null, accepted.
+flow-only test outright (R0 stays `Idle`). **Ownership must hold on BOTH the prior and the resulting
+R0 (#1052)** — checking only the result is blind to a departure this region was never stepped for
+(another platform's frame moves the shared R0 without reaching this region, and the returning frame
+makes ownership read valid again while the original deadline still stands), so `prevFlow` is checked
+too and a failure there DROPS the park whatever the observation is; the returning frame re-parks with
+a fresh window. A flow-LESS observation (the wake timer, a click, a loopback, a flow-less
+notification) is never a departure frame, so it orders like a timer — ownership before expiry — while
+a flow frame runs the expiry FIRST, so a park that stood its whole window still commits on the
+departure frame. Another platform's screen therefore still drops this platform's park — fail-null,
+accepted. **A park is FROZEN, not killed, while the dash is not `Mode.Online`, and its window
+RESTARTS on the way back (#1052 round 3)**: a read parks in ANY mode (the read taken under DoorDash's pause sheet is
+the freshest evidence there is), the lazy expiry SKIPS wholesale while non-Online (no commit — a
+paused dash's total is not moving and nothing behind the sheet can contradict the figure — and no
+drop), and `applyModeTransition` (the single site that moves `mode`, so the graced resume and the
+pause-safety timeout both route through it) RE-BASES `since`/`deadline` on the transition INTO
+Online, which re-arms the wake timer and makes the park stand a full window on a LIVE dash before it
+may commit. The two earlier rules were both wrong in the same direction: round 1 dropped the park on
+the way out of Online and round 2 refused to park at all while non-Online, and each STRANDED a
+legitimate figure — the #605 resume grace deliberately keeps the mode at `Paused` across the
+pause-sheet flap, the confirmed resume then arrives as a wake TIMER with no frame behind it, and
+`FrameGate` never re-admits the identical idle capture, so a real $25.20 first seen under the sheet
+would never have reached the dasher's HUD at all. The `PendingSessionPay` KDoc is the canonical
+statement. (Freezing is also why `diffDeadlineTimer`'s early-wake re-arm is guarded on
+`obs.timestamp < deadline`: a park kept across its own deadline would otherwise re-arm at the 1 ms
+floor and spin for the length of the pause.) **A re-based park is UNCONFIRMED
+(`PendingSessionPay.unconfirmed`) until a fresh readable read on its OWN surface agrees with it; a
+null read or a bare timer at the deadline DROPS it instead of committing (#1052 round 4)** — the
+re-base hands pre-pause evidence a new window and arms the timer that closes it, so if no readable
+frame lands in between then the first observation of that window is the fire itself and the old rule
+committed a mid-spin figure on a window in which nothing was ever on screen; the agreeing read
+clears the flag without extending the deadline, a different value replaces the park (confirmed by
+construction), and the requirement costs nothing on the fielded shape because the pause frames moved
+`FrameGate.lastIdentity`, so the pill IS admitted once after the resume. **An equal-value read on a
+DIFFERENT surface RE-PARKS there (#1052 round 4)** rather than keeping the old park: the keep arm
+requires `flow == pend.flow`, because inheriting the old surface left the park owned by a screen
+that had left (the fielded receipt→pill→resume sequence then dropped it on the first ownership check
+with no admittable frame left to re-park it).
 **(b) BOTH feeds go through the gate** — the on-dash pill (`IdleFields.sessionPay`) and the
 receipt's own "This dash so far" (`PostTaskFields.sessionEarnings`), which `dropoff.json5` reads off
 the SAME animated wheel via `parseGlyphCurrency`; for the settled re-render to be admittable at all,
@@ -685,11 +723,12 @@ is what stops a pre-"End Dash" $470 park from committing on the summary frame an
 #596 close-out sweep's `DELIVERY_COMPLETED.sessionEarnings`.
 **(d) comparisons are cent-tolerant** (an accumulated `accumulatedDeliveryPay + totalPay` is not
 bit-equal to the 2-dp figure the wheel renders).
-**(e) expiry is `>=` and an early/stale wake RE-ARMS for the remainder** — the timer is armed for
-exactly `deadline − obs.timestamp` and fires against a wall clock, so a fire landing on the deadline
-would no-op and, by the very FrameGate argument above, no frame is coming to retry. It re-arms
-rather than commits: a stale fire from a REPLACED park would otherwise commit the new one early,
-which is precisely a mid-spin value. (All three region timers now share one
+**(e) expiry is `>=` and an EARLY/stale wake RE-ARMS for the remainder** — the timer is armed for
+exactly `deadline − obs.timestamp` and fires against a wall clock, so a fire landing before the
+deadline would no-op and, by the very FrameGate argument above, no frame is coming to retry. It
+re-arms rather than commits: a stale fire from a REPLACED park would otherwise commit the new one
+early, which is precisely a mid-spin value. A fire AT or PAST the deadline never re-arms (it either
+committed the park, or the park is frozen — see the mode rule). (All three region timers now share one
 `ModeEffects.diffDeadlineTimer` body; only this one passes `rearmOnEarlyWake`.)
 **(f) a contradicting read on the expiring frame supersedes the park** it contradicts, rather than
 committing the stale figure and re-parking the fresh one for another window.
@@ -700,10 +739,37 @@ Pure and platform-agnostic throughout (keyed by the region's own reads, deadline
 `obs.timestamp`, no `Platform` branch, no wall clock); split immediate/gated fields —
 `zoneName`/`sessionType` still write on sight; cleared on session start and end; a genuinely changed
 total lands one settle window late by design. **Crash recovery DROPS any restored park**
-(`AppState.droppingSessionPayParks`, applied to the snapshot state on both the tail and no-tail
-restore paths): a park is pre-crash evidence whose surface is gone and whose wake timer no restore
-path re-arms, so it would either sit forever or be committed by whatever frame happens past its
-deadline — fail-null (#745), at a cost of one settle window.
+(`AppState.droppingSessionPayParks`): a park is pre-crash evidence whose surface is gone and whose
+wake timer no restore path re-arms, so it would either sit forever or be committed by whatever frame
+happens past its deadline — fail-null (#745), at a cost of one settle window. It runs at the **LIVE
+boundary — on the FINAL state after the tail fold, never on the snapshot** (#1052): the tail must
+replay against the snapshot exactly as recorded (a park whose commit timer is IN the tail committed
+live and must commit again), and scrubbing at the end also discards a park a TAIL frame re-created,
+whose `ScheduleTimeout` the recovery fold really does arm — that timer then finds no park and
+no-ops. The drop is also **CHECKPOINTED**: `restoreState` writes the cleaned state back through
+`SnapshotStore.checkpoint` (unconditional, sharing `maybeSnapshot`'s writer — one encoder) at the
+restored correlation version, where snapshot rows REPLACE by key. Installing it in memory alone is
+not durable — the snapshot on disk still carried the park, and a SECOND restart with no ordinary
+snapshot in between (neither the cadence nor a major transition need fire) replayed it over a
+journal tail that had since grown, committing the pre-crash figure on the first live frame past its
+deadline. Two round-3 corrections ride on that checkpoint. **Replay stamps each journal row's own
+`correlationVersion`** (`ObservationJournal.tailAfter` returns `JournalRow(cv, obs)`): `StateMachine
+.step` numbers its result `prev + 1`, which matches the journal only while the journal is gap-free,
+and `append` is a fire-and-forget queue whose writer LOGS and drops a failed insert — so after a
+lost row the fold undercounted, and the checkpoint made that wrong boundary DURABLE, leaving the
+next restart to re-consume rows it had already applied (a receipt's pay accumulating twice; the same
+undercount previously reached ordinary periodic snapshots after any gapped recovery, harmlessly).
+**And the checkpoint is retried once and fails LOUD** — `checkpoint` returns whether the row landed
+(`write` splits its try: the insert is the durability, the prune is housekeeping), `restoreState`
+retries once and then logs at ERROR under the `StateMachine` tag that the cleaned state is not
+durable, rather than letting `SnapshotStore`'s catch-all swallow the failure and silently reopen the
+double-recovery hole. It proceeds either way: blocking live observations on a failing DB would trade
+a bounded, stated risk for total sensing loss — **and since round 4 a failed checkpoint stays
+PENDING and is retried on every live observation until it lands** (`StateManagerV2
+.recoveryCheckpointPending`, cleared on the first successful write, one DEBUG line per attempt):
+reporting the loss at ERROR left the pre-hygiene snapshot standing as the next replay base, and the
+journal and the snapshot share one database, so a journal append that persists is direct evidence
+the checkpoint can land too.
 
 
 ### 4. Side Effect Engine (`app/.../state/effects/`)

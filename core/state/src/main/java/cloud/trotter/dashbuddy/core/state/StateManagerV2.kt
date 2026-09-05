@@ -50,6 +50,25 @@ class StateManagerV2 @Inject constructor(
      */
     private var recoveryReconcilePending = false
 
+    /**
+     * #1052 round 4: the recovery checkpoint has not landed yet, and every LIVE observation retries
+     * it until it does.
+     *
+     * [checkpointRecovery] writes the park-hygiene-cleaned state as the next replay base, retries
+     * once, and then reports at ERROR — but reporting is not repairing. Two failed inserts leave
+     * the PRE-hygiene snapshot on disk as the replay base while the journal keeps growing, so the
+     * next restart replays the pre-crash park over a tail that now contains a frame past its
+     * deadline and commits a mid-spin figure: exactly the hole round 2 opened the checkpoint to
+     * close, reopened by a transient DB failure at the one moment it matters.
+     *
+     * The retry costs nothing and is bounded by its own success. The journal and the snapshot live
+     * in the SAME database, so a journal append that persists is direct evidence that the
+     * checkpoint can land too; retrying it on the live path is therefore not hope, it is following
+     * the write that just worked. Cleared on the first successful write, and simply left standing
+     * on a failure — one DEBUG line per attempt at most, never an ERROR per frame.
+     */
+    private var recoveryCheckpointPending = false
+
     fun initialize() {
         Timber.i("Initializing V2 State Machine (multi-region)...")
         journal.start(scope, ioDispatcher)
@@ -79,7 +98,7 @@ class StateManagerV2 @Inject constructor(
         uiInputChannel.trySend(stateEvent)
     }
 
-    private fun processEvent(stateEvent: StateEvent) {
+    private suspend fun processEvent(stateEvent: StateEvent) {
         val obs = toObservation(stateEvent) ?: return
 
         val currentState = _state.value
@@ -103,6 +122,22 @@ class StateManagerV2 @Inject constructor(
 
         // Persist observation to the append-only log (ordered single writer, #352)
         journal.append(obs, transition.newState)
+
+        // #1052 round 4: a recovery checkpoint that never landed is retried here, on the first
+        // live observation after it and every one after that until it does. Ordered AFTER the
+        // journal append so the checkpoint can only ever be at or ahead of the log it is the base
+        // for, and written at THIS observation's state so the retry keeps closing the gap rather
+        // than re-offering a stale one. Cheap by construction: the flag is false on every normal
+        // recovery and always false when nothing was recovered at all.
+        if (recoveryCheckpointPending) {
+            val landed = snapshots.checkpoint(transition.newState)
+            if (landed) recoveryCheckpointPending = false
+            Timber.tag("StateMachine").d(
+                "Recovery checkpoint retry at cv=%d: %s",
+                transition.newState.correlationVersion,
+                if (landed) "landed" else "still pending",
+            )
+        }
 
         // Periodic + major-transition snapshots
         snapshots.maybeSnapshot(scope, ioDispatcher, currentState, transition.newState)
@@ -159,16 +194,35 @@ class StateManagerV2 @Inject constructor(
             // #1029: a parked running-total read is evidence from BEFORE the crash, and nothing
             // after the restore re-arms its `SESSION_PAY_SETTLE` wake timer — so a restored park
             // would either sit forever or, on the first frame past its deadline, commit a figure
-            // whose surface has been gone since the process died. Drop it on BOTH restore paths
-            // (applied to `restored.state`, ahead of the tail branch): the committed total stands
-            // and the next idle frame re-parks. Fail-null beats fail-wrong (#745).
-            val base = restored.state.droppingSessionPayParks()
+            // whose surface has been gone since the process died. It is dropped on BOTH restore
+            // paths — but at the LIVE boundary, not here (#1052): the tail is a faithful replay of
+            // what already happened, so it must run against the snapshot exactly as recorded (a
+            // park whose commit timer is IN the tail committed live and must commit again;
+            // scrubbing the base changes the replayed result). Dropping from the FINAL state
+            // instead also discards a park a tail frame re-created — whose `ScheduleTimeout` the
+            // recovery fold does execute (it is not an external effect), which would otherwise wake
+            // pre-crash evidence with no fresh screen behind it. The recovery-scheduled timer then
+            // finds no park and no-ops (`handleTimeout`'s `else -> prev`; lazy expiry has nothing
+            // to expire). Fail-null beats fail-wrong (#745).
+            //
+            // And the drop is CHECKPOINTED on both paths below (#1052 round 2): installing the
+            // cleaned state in memory is not enough, because the snapshot on disk still carries the
+            // park. A second restart — with no ordinary snapshot in between, which is the normal
+            // case since neither the cadence nor a major transition need fire — would replay that
+            // same snapshot plus a tail that has GROWN with live frames, one of which lands past
+            // the park's deadline and commits it. `SnapshotStore.checkpoint` writes the cleaned
+            // state at the restored correlation version (snapshot rows REPLACE by that key), making
+            // it the next replay base.
+            val base = restored.state
 
             // Tail-replay observations after the snapshot, in cv order (#352)
             val tail = journal.tailAfter(restored.correlationVersion)
             if (tail.isEmpty()) {
                 Timber.i("Restored from snapshot at cv=%d, no tail", restored.correlationVersion)
-                _state.value = base
+                val cleaned = base.droppingSessionPayParks()
+                // #1052: the drop is only DURABLE if the cleaned state is the next replay base.
+                checkpointRecovery(cleaned)
+                _state.value = cleaned
                 // #438 B5: recovered a non-fresh state → reconcile the odometer on the first live obs.
                 recoveryReconcilePending = true
                 return
@@ -179,20 +233,36 @@ class StateManagerV2 @Inject constructor(
                 tail.size, restored.correlationVersion,
             )
 
-            val finalState = tail.fold(base) { acc, obs ->
-                val transition = stateMachine.step(acc, obs)
+            val finalState = tail.fold(base) { acc, row ->
+                val transition = stateMachine.step(acc, row.observation)
+                // #1052 round 3: stamp the row's TRUE correlation version. `StateMachine.step`
+                // numbers its result `prev + 1`, which matches the journal only while the journal
+                // is gap-free — and `ObservationJournal.append` logs and DROPS a failed insert, so
+                // gaps are real. The undercount used to be merely cosmetic; since the recovery
+                // checkpoint (round 2) it becomes the next replay BASE, so a gapped recovery would
+                // persist a boundary BEHIND rows it had already consumed and the next restart
+                // would re-apply them — a receipt's pay accumulating twice. Effects are processed
+                // with the same true version so their idempotency keys match what ran live.
+                val stamped = transition.newState.copy(
+                    correlationVersion = row.correlationVersion,
+                )
                 // Process effects in recovery mode (external suppressed, keyed deduped)
                 transition.effects.forEach { effect ->
                     engine.process(
                         effect,
                         recovering = true,
-                        correlationVersion = transition.newState.correlationVersion,
+                        correlationVersion = row.correlationVersion,
                     )
                 }
-                transition.newState
+                stamped
             }
 
-            _state.value = finalState
+            val cleaned = finalState.droppingSessionPayParks()
+            // #1052: same checkpoint on the tail path, at the FINAL correlation version — the tail
+            // it replayed stays in the journal but is now behind the base, so the next restart
+            // starts from the cleaned state instead of replaying the pre-hygiene park again.
+            checkpointRecovery(cleaned)
+            _state.value = cleaned
             // #438 B5: recovered a non-fresh state → reconcile the odometer on the first live obs.
             recoveryReconcilePending = true
             Timber.i("Recovery complete — state at cv=%d", finalState.correlationVersion)
@@ -200,6 +270,34 @@ class StateManagerV2 @Inject constructor(
             Timber.e(e, "State recovery failed — starting fresh")
             _state.value = AppState()
         }
+    }
+
+    /**
+     * Persist the recovery checkpoint, retrying ONCE, and fail LOUD rather than silently (#1052
+     * round 3).
+     *
+     * `SnapshotStore.write` swallows every `Throwable` by design (a snapshot is a cache and must
+     * never take the process down), which is right for the periodic cadence — the next one is five
+     * observations away — and wrong here: this write is what makes the park hygiene durable, so a
+     * swallowed failure silently reopens the double-recovery hole the checkpoint exists to close.
+     * ERROR is the level, per principle 7: a persistence failure is lost durability. The message
+     * carries no PII — a rule id would be the most it could ever carry, and it carries none.
+     *
+     * It does not block or throw: refusing to install a recovered state because the DB is failing
+     * would trade a bounded, stated risk for total sensing loss. One retry covers the transient
+     * (a locked DB, a momentary IO failure); a second failure is a real fault worth reporting —
+     * and, since round 4, worth REPAIRING: it arms [recoveryCheckpointPending], and every live
+     * observation retries the write until it lands. Reporting a lost checkpoint at ERROR still
+     * left the pre-hygiene snapshot standing as the next replay base.
+     */
+    private suspend fun checkpointRecovery(state: AppState) {
+        if (snapshots.checkpoint(state)) return
+        if (snapshots.checkpoint(state)) return
+        recoveryCheckpointPending = true
+        Timber.tag("StateMachine").e(
+            "Recovery checkpoint failed twice — the cleaned state is NOT durable; retrying on " +
+                "every live observation until it lands",
+        )
     }
 
     // ── Legacy Bridge ───────────────────────────────────────────────────

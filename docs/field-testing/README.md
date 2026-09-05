@@ -90,7 +90,15 @@ was found **broken-in-part** (raw PII in capture envelopes) and moved to that en
     behaviours, not bugs: if you leave the waiting-for-offer screen mid-spin (an offer pops, you
     tap into something), the **old figure stands until you come back** — the half-read is thrown
     away rather than guessed at; and a `$0.00` on the pill while it loads never wipes a total you
-    already had.
+    already had. **Switching to the other platform** mid-spin is the same
+    thing (#1052): the half-read is dropped and coming back re-reads it from scratch, so a figure
+    appearing right after an Uber screen is a failure to report. **Pausing or going offline
+    mid-spin behaves differently on purpose** (#1052 round 3): the figure is FROZEN, not thrown
+    away — nothing may land while you are paused, and about **3 s after you resume** the figure
+    lands (the window restarts on the resume). So: a number appearing DURING a pause is a failure;
+    a number that appears a few seconds AFTER you resume is the fix working. And if you pause
+    mid-spin, resume, and the pill's figure NEVER lands, report that too — that is the stranding
+    round 3 fixed.
   - **On-dash, after a delivery:** the receipt sheet ("This offer", with the pay breakdown). The
     bubble's "Saved: $X" should quote the receipt's real total, and expanding the breakdown should
     NOT produce anything wild.

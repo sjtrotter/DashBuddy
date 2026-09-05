@@ -338,7 +338,7 @@ class ParseOutputGoldenTest {
 
     @Test
     fun `dedupeKey templates reference fields the rule actually parses`() {
-        val template = Regex("\\{(\\w+)}")
+        val template = Regex("\\{(\\w+)\\}")
         // dedupeKeys are scanned POST-resolution, so a `{field}` token only
         // reaches `template.findAll` on a frame where that field parsed null (it
         // survived interpolation). A frame that parsed the field non-null resolved
@@ -434,7 +434,7 @@ class ParseOutputGoldenTest {
 
     @Test
     fun `effect arg templates reference fields the rule actually parses`() {
-        val template = Regex("\\{(\\w+)}")
+        val template = Regex("\\{(\\w+)\\}")
         // A (ruleId, field) whose {token} SURVIVED resolution in an effect arg
         // on ≥1 corpus frame — i.e. the template failed to interpolate there and
         // the saved string would carry a literal `{field}`. Args are scanned

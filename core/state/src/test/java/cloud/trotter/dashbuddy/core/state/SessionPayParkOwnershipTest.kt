@@ -3,16 +3,24 @@ package cloud.trotter.dashbuddy.core.state
 import cloud.trotter.dashbuddy.domain.capture.ReplayMetadata
 import cloud.trotter.dashbuddy.domain.pipeline.Observation
 import cloud.trotter.dashbuddy.domain.pipeline.TimeoutType
+import cloud.trotter.dashbuddy.domain.pipeline.identity
 import cloud.trotter.dashbuddy.domain.settings.GraceConfig
 import cloud.trotter.dashbuddy.domain.state.AppState
 import cloud.trotter.dashbuddy.domain.state.Flow
+import cloud.trotter.dashbuddy.domain.state.FlowRegion
 import cloud.trotter.dashbuddy.domain.state.Mode
 import cloud.trotter.dashbuddy.domain.state.ParsedFields
+import cloud.trotter.dashbuddy.domain.state.PendingSessionPay
 import cloud.trotter.dashbuddy.domain.state.Platform
 import cloud.trotter.dashbuddy.domain.state.PlatformRegion
+import cloud.trotter.dashbuddy.domain.state.Regions
+import cloud.trotter.dashbuddy.domain.state.Session
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 
@@ -33,6 +41,27 @@ import org.junit.Test
  *
  * These tests drive the REAL [StateMachine] rather than the stepper directly, because the routing
  * (`stepPlatforms` skipping the other platform's region while R0 moves) is the whole point.
+ *
+ * **#1052 — ownership on BOTH sides.** Checking only the RESULTING R0 leaves the departure
+ * unrecorded whenever it happened on a frame this region was not stepped for, and the last three
+ * cases below are the reachable consequences: the owner returning with the SAME value (which
+ * `settleSessionPay` deliberately does not re-park, so the ORIGINAL deadline survives the
+ * interlude), a null-pay return landing past that deadline, and a flow-LESS own-platform
+ * observation, which is a `FlowObservation` and therefore skipped the round-4 non-flow guard while
+ * being just as incapable of putting the pill back on screen. The stepper now also requires
+ * ownership on `prevFlow` and orders a flow-less observation like a timer; the control case proves
+ * the rule is about ownership rather than the observation's kind.
+ *
+ * **#1052 round 3 — a park is FROZEN while the dash is not Online, and its window RESTARTS on the
+ * way back.** Rounds 1 and 2 killed it instead (dropping on the way out of Online, then refusing
+ * to park at all), and that stranded exactly the read the gate exists to land: the #605 resume
+ * grace deliberately keeps the mode at Paused across the online-implying flap frames, the
+ * confirmed resume arrives as a wake TIMER with no frame behind it, and `FrameGate`'s identity
+ * dedup never re-admits the identical idle capture — so a legitimate figure first seen under the
+ * pause sheet had no second chance for the rest of the dash. A non-Online dash cannot CONFIRM a
+ * park (its total is not moving, and nothing behind the sheet can contradict the figure), so the
+ * expiry is skipped wholesale; [PlatformRegionStepper]'s `applyModeTransition` re-bases the park
+ * on the transition INTO Online, and it must then stand a full window unchallenged while live.
  */
 class SessionPayParkOwnershipTest {
 
@@ -92,6 +121,62 @@ class SessionPayParkOwnershipTest {
         parsed = ParsedFields.None,
     )
 
+    /**
+     * A DoorDash push carrying NO flow — the second bypass #1052 names. It is a `FlowObservation`,
+     * so the #1029 `obs !is FlowObservation` guard let it take the expire-FIRST path even while
+     * another platform owned R0; it is nonetheless incapable of being the departure frame, because
+     * `FlowRegionStepper` leaves R0's flow and `activePlatform` untouched for a flow-less one.
+     */
+    private fun flowlessNotification(timestamp: Long) = Observation.Notification(
+        timestamp = timestamp,
+        captureId = null,
+        ruleId = "doordash.notification.demand_nudge",
+        metadata = ReplayMetadata.EMPTY,
+        flow = null,
+        modeHint = null,
+        parsed = ParsedFields.None,
+    )
+
+    /**
+     * DoorDash's pause sheet over the waiting screen: an explicit `Mode.Paused` hint on the SAME
+     * flow the park was read on. Keeping the flow identical is deliberate — it isolates the mode
+     * rule (#1052 round 2) from the (flow, platform) ownership rule above, which would otherwise
+     * be the thing dropping the park.
+     */
+    private fun pausedIdle(timestamp: Long, remainingMillis: Long = 300_000L) = Observation.Screen(
+        timestamp = timestamp,
+        captureId = null,
+        ruleId = "doordash.screen.pause_sheet",
+        metadata = ReplayMetadata.EMPTY,
+        flow = Flow.Idle,
+        modeHint = Mode.Paused,
+        parsed = ParsedFields.PausedFields(
+            remainingText = "5:00",
+            remainingMillis = remainingMillis,
+        ),
+    )
+
+    /**
+     * The delivery receipt — the OTHER wheel-rendered running total (#1029 S2), and a DIFFERENT R0
+     * surface from the pill. Used by the #1052 round-4 cases where the same figure is stated on
+     * two surfaces in a row.
+     */
+    private fun receipt(timestamp: Long, sessionEarnings: Double?) = Observation.Screen(
+        timestamp = timestamp,
+        captureId = null,
+        ruleId = "doordash.screen.delivery_summary_expanded",
+        metadata = ReplayMetadata.EMPTY,
+        flow = Flow.PostTask,
+        modeHint = Mode.Online,
+        parsed = ParsedFields.PostTaskFields(totalPay = 0.0, sessionEarnings = sessionEarnings),
+    )
+
+    private fun resumeCommitTimer(timestamp: Long) = Observation.Timeout(
+        timestamp = timestamp,
+        type = TimeoutType.MODE_RESUME_COMMIT,
+        targetPlatform = Platform.DoorDash,
+    )
+
     private fun settleTimer(timestamp: Long) = Observation.Timeout(
         timestamp = timestamp,
         type = TimeoutType.SESSION_PAY_SETTLE,
@@ -124,6 +209,22 @@ class SessionPayParkOwnershipTest {
             0.0001,
         )
         assertEquals(Platform.DoorDash, state.regions.flow.activePlatform)
+        return state
+    }
+
+    /** The same live dash with $16.70 committed and NOTHING parked. */
+    private fun committedState(): AppState {
+        val state = AppState().step(
+            idle("doordash.screen.waiting_for_offer", 16.70, t0 - (2 * settle)),
+            settleTimer(t0 - settle),
+        )
+        assertEquals(
+            "the fixture's committed figure",
+            16.70,
+            state.doorDash?.session?.runningEarnings ?: Double.NaN,
+            0.0001,
+        )
+        assertNull("and nothing outstanding", state.doorDash?.pendingSessionPay)
         return state
     }
 
@@ -197,5 +298,367 @@ class SessionPayParkOwnershipTest {
 
         val committed = returned.step(settleTimer(t0 + 1_000L + settle))
         assertEarnings(24.90, committed)
+    }
+
+    // =========================================================================
+    // #1052 — ownership must hold BEFORE the observation as well as after
+    // =========================================================================
+
+    @Test
+    fun `the owner returning with the SAME value re-parks with a fresh deadline, it does not resume`() {
+        // A1, the sequence the round-4 return case could not see because it returned a DIFFERENT
+        // value (which replaces the park and re-arms the timer regardless). With the same value,
+        // `settleSessionPay`'s "same read again" arm KEEPS the park and its ORIGINAL deadline — so
+        // checking ownership only on the RESULTING R0 reads "owned" again and the original timer
+        // commits a figure that was off screen for the whole interlude. The departure has to be
+        // recorded when the owner is next stepped, which is what `ownedBefore` does.
+        val returned = parkedState().step(
+            uberIdle(t0 + 500L),
+            idle("doordash.screen.waiting_for_offer", 470.00, t0 + 2_500L),
+        )
+
+        val pend = returned.doorDash?.pendingSessionPay
+        assertNotNull("the returning frame parks its read", pend)
+        assertEquals(470.00, pend!!.value, 0.0001)
+        assertEquals("the park is FRESH, not the survivor", t0 + 2_500L, pend.since)
+        assertEquals(t0 + 2_500L + settle, pend.deadline)
+
+        // The original deadline is t0 + settle. Nothing may commit there any more.
+        val atOldDeadline = returned.step(settleTimer(t0 + settle))
+        assertEarnings(
+            16.70,
+            atOldDeadline,
+            "the pre-interlude deadline belongs to a park that no longer exists",
+        )
+
+        // It commits only after standing its OWN full window back on its own surface.
+        val committed = atOldDeadline.step(settleTimer(t0 + 2_500L + settle))
+        assertEarnings(470.00, committed, "a full window on its own surface after the return")
+        assertNull(committed.doorDash?.pendingSessionPay)
+    }
+
+    @Test
+    fun `a null-pay return past the old deadline commits nothing`() {
+        // The same interlude, but the returning frame carries no running total at all — so there
+        // is no read to contradict the park and, without `ownedBefore`, the lazy expiry on that
+        // very frame would commit $470 outright.
+        val returned = parkedState().step(
+            uberIdle(t0 + 500L),
+            idle("doordash.screen.waiting_for_offer", null, t0 + settle + 1L),
+        )
+
+        assertEarnings(16.70, returned, "an absent read is not a confirmation")
+        assertNull("nothing survives the interlude to be committed", returned.doorDash?.pendingSessionPay)
+    }
+
+    @Test
+    fun `a flow-less DoorDash push cannot commit a park another platform's screen displaced`() {
+        // The second A1 bypass: a `Notification` with `flow = null` IS a `FlowObservation`, so the
+        // round-4 non-flow guard did not apply and it took the expire-first path.
+        val after = parkedState().step(
+            uberIdle(t0 + 500L),
+            flowlessNotification(t0 + settle),
+        )
+
+        assertEarnings(16.70, after, "a push is not evidence that the pill is back on screen")
+        assertNull(after.doorDash?.pendingSessionPay)
+    }
+
+    @Test
+    fun `a flow-less DoorDash push DOES ride the expiry while DoorDash still owns R0 - the control`() {
+        // With no interloper the push is an ordinary observation past the deadline: it does not
+        // move R0, ownership held before and after, and the park lands exactly as the wake timer
+        // would have landed it. The rule is about ownership, not about the observation's kind.
+        val after = parkedState().step(flowlessNotification(t0 + settle))
+
+        assertEarnings(470.00, after, "an unchallenged read on its own surface commits")
+        assertNull(after.doorDash?.pendingSessionPay)
+    }
+
+    // =========================================================================
+    // #1052 round 3 — a park is FROZEN while the dash is not Online
+    // =========================================================================
+
+    @Test
+    fun `a read first seen while Paused is not stranded - it lands one window after the resume`() {
+        // The round-2 regression, verified against the real machine and the real FrameGate
+        // argument. $25.20 is a GENUINE figure that happens to be first rendered while DoorDash's
+        // pause sheet is up: the resume out of Paused is graced, so the mode is still Paused when
+        // the frame arrives, and rounds 1 and 2 therefore refused to park it. Nothing was ever
+        // coming to re-offer it — the confirmed resume is a TIMER, and every later identical idle
+        // capture is dropped by FrameGate identity dedup — so the dasher's HUD would have shown
+        // $16.70 for the rest of the dash.
+        //
+        // Round 4 adds the CONFIRMATION the re-based park now waits for, and this test is where
+        // that requirement has to be shown to cost nothing: the pill really does re-render on the
+        // live dash, with an identity FrameGate has not seen since the flap moved it.
+        var state = committedState().step(pausedIdle(t0 + 500L))
+        assertEquals("the premise: the sheet paused the dash", Mode.Paused, state.doorDash?.mode)
+
+        state = state.step(idle("doordash.screen.waiting_for_offer", 25.20, t0 + 1_000L))
+        val parked = state.doorDash?.pendingSessionPay
+        assertNotNull("a read parks in ANY mode — the evidence is kept", parked)
+        assertEquals(25.20, parked!!.value, 0.0001)
+        assertFalse("a live read parks CONFIRMED — nothing was re-based here", parked.unconfirmed)
+        assertEquals("the resume is graced, so the mode has NOT flipped", Mode.Paused, state.doorDash?.mode)
+
+        // The sheet comes back — the flap. It cancels the resume grace and, just as importantly,
+        // moves FrameGate's `lastIdentity` off the $25.20 read, which is what lets the pill be
+        // admitted again later.
+        state = state.step(pausedIdle(t0 + 1_500L, remainingMillis = 240_000L))
+        assertNull("the paused frame cancelled the resume grace", state.doorDash?.pendingModeResume)
+
+        // Its own wake timer fires while the dash is still paused: FROZEN — no commit, no drop.
+        state = state.step(settleTimer(t0 + 1_000L + settle))
+        assertEarnings(16.70, state, "a paused dash cannot confirm a running total")
+        assertEquals("the park is kept, untouched", parked, state.doorDash?.pendingSessionPay)
+
+        // A pill frame whose figure has not re-rendered yet arms the resume grace again.
+        val reArm = idle("doordash.screen.waiting_for_offer", null, t0 + 9_000L)
+        state = state.step(reArm)
+        val resumeDeadline = state.doorDash!!.pendingModeResume!!.deadline
+
+        // The resume COMMITS (the #605 wake timer, no frame behind it) — and re-bases the park,
+        // which is what arms the settle timer that will finally land the figure. The re-based park
+        // is UNCONFIRMED (#1052 round 4): its new window has not been offered to a single frame.
+        val resumeAt = resumeDeadline + 1L
+        val resumed = machine.step(state, resumeCommitTimer(resumeAt))
+        state = resumed.newState
+        assertEquals("the resume committed", Mode.Online, state.doorDash?.mode)
+        val rebased = state.doorDash?.pendingSessionPay
+        assertNotNull("the frozen park survives into the live dash", rebased)
+        assertEquals(25.20, rebased!!.value, 0.0001)
+        assertEquals("re-based: the window restarts on the resume", resumeAt, rebased.since)
+        assertEquals(resumeAt + settle, rebased.deadline)
+        assertTrue("and it is pre-pause evidence until a live read agrees", rebased.unconfirmed)
+        val armed = resumed.effects
+            .filterIsInstance<AppEffect.ScheduleTimeout>()
+            .single { it.type == TimeoutType.SESSION_PAY_SETTLE }
+        assertEquals("and the moved deadline arms the wake timer", settle, armed.durationMs)
+
+        // The pill states $25.20 on a LIVE dash. FrameGate admits it — the last screen frame it
+        // saw was the re-arming null-pay pill, whose identity differs — and the agreement is what
+        // the round-4 gate was waiting for. The window is NOT extended by it.
+        val confirming = idle("doordash.screen.waiting_for_offer", 25.20, resumeAt + 1_000L)
+        assertNotEquals(
+            "the premise: FrameGate admits this frame — a different identity from the last one",
+            reArm.identity(),
+            confirming.identity(),
+        )
+        state = state.step(confirming)
+        val agreed = state.doorDash?.pendingSessionPay
+        assertNotNull("the agreeing read keeps the park", agreed)
+        assertFalse("and CONFIRMS it", agreed!!.unconfirmed)
+        assertEquals("without extending the window", resumeAt + settle, agreed.deadline)
+
+        val committed = state.step(settleTimer(resumeAt + settle))
+        assertEarnings(25.20, committed, "a full window on a LIVE dash lands the figure")
+        assertNull(committed.doorDash?.pendingSessionPay)
+    }
+
+    @Test
+    fun `the paused flap freezes the mid-spin read and the resume frame disproves it`() {
+        // The fielded #605 flap. DoorDash's pause sheet sits on the just-completed delivery
+        // summary, so frames flap paused <-> online while a $470 mid-spin read is parked. Freezing
+        // is not the same as believing: nothing commits while the dash is paused, the re-based
+        // window has to be stood back on a live dash, and the very first live read that
+        // contradicts the park CLEARS it (equal to the committed figure = the wheel at rest).
+        var state = parkedState().step(pausedIdle(t0 + 500L))
+        assertEquals("the premise: the sheet paused the dash", Mode.Paused, state.doorDash?.mode)
+        assertNotNull("the pre-pause park is FROZEN, not killed", state.doorDash?.pendingSessionPay)
+
+        // A flap frame repeating the same value keeps the park AND its original deadline.
+        state = state.step(idle("doordash.screen.waiting_for_offer", 470.00, t0 + 1_000L))
+        assertEquals("the resume is graced — the mode has NOT flipped", Mode.Paused, state.doorDash?.mode)
+        assertEquals(t0 + settle, state.doorDash?.pendingSessionPay?.deadline)
+
+        // The sheet returns and cancels the resume — the flap was noise, exactly as #605 says.
+        state = state.step(pausedIdle(t0 + 1_500L, remainingMillis = 240_000L))
+        assertNull("the paused frame cancelled the resume grace", state.doorDash?.pendingModeResume)
+
+        // The park's own wake timer fires, well past its deadline, on a paused dash.
+        val frozen = machine.step(state, settleTimer(t0 + settle + 1_000L))
+        state = frozen.newState
+        assertEarnings(16.70, state, "no figure may land on a dash that is paused")
+        assertNotNull("and it is not discarded either", state.doorDash?.pendingSessionPay)
+        assertTrue(
+            "a fire at or past a frozen deadline must not re-arm — that would spin at the 1ms floor",
+            frozen.effects.none {
+                it is AppEffect.ScheduleTimeout && it.type == TimeoutType.SESSION_PAY_SETTLE
+            },
+        )
+
+        // A real resume: an online-implying frame re-arms the grace, the wake timer commits it.
+        state = state.step(idle("doordash.screen.waiting_for_offer", 470.00, t0 + 9_000L))
+        val resumeAt = state.doorDash!!.pendingModeResume!!.deadline + 1L
+        state = state.step(resumeCommitTimer(resumeAt))
+        assertEquals(Mode.Online, state.doorDash?.mode)
+        assertEquals("re-based on the resume", resumeAt + settle, state.doorDash?.pendingSessionPay?.deadline)
+
+        // The first live read disagrees with the park and agrees with the committed figure.
+        state = state.step(idle("doordash.screen.waiting_for_offer", 16.70, resumeAt + 500L))
+        assertNull("the wheel is at rest — the mid-spin park is cleared", state.doorDash?.pendingSessionPay)
+
+        val later = state.step(settleTimer(resumeAt + settle))
+        assertEarnings(16.70, later, "the mid-spin figure never lands")
+    }
+
+    @Test
+    fun `after a CONFIRMED resume a fresh read takes its ordinary window - the control`() {
+        // The rule is about the dash being live, not about pause being a latch. Once the resume
+        // COMMITS, a NEW value on the pill is an ordinary live read and parks with its own window.
+        var state = committedState().step(
+            pausedIdle(t0 + 500L),
+            idle("doordash.screen.waiting_for_offer", 24.90, t0 + 1_000L),
+        )
+        val resumeAt = state.doorDash!!.pendingModeResume!!.deadline + 1L
+        state = state.step(resumeCommitTimer(resumeAt))
+        assertEquals("the resume committed", Mode.Online, state.doorDash?.mode)
+        assertEarnings(16.70, state, "committing the resume commits no money")
+
+        assertTrue(
+            "the frozen 24.90 park was re-based, so it is unconfirmed until something agrees",
+            state.doorDash!!.pendingSessionPay!!.unconfirmed,
+        )
+
+        val readAt = resumeAt + 1_000L
+        state = state.step(idle("doordash.screen.waiting_for_offer", 470.00, readAt))
+        val pend = state.doorDash?.pendingSessionPay
+        assertNotNull("a live dash parks its read", pend)
+        assertEquals("a DIFFERENT value replaces the frozen one, with a fresh window", 470.00, pend!!.value, 0.0001)
+        assertEquals(readAt + settle, pend.deadline)
+        assertFalse(
+            "and the replacement is a live sighting — confirmed by construction (#1052 round 4)",
+            pend.unconfirmed,
+        )
+
+        val committed = state.step(settleTimer(readAt + settle))
+        assertEarnings(470.00, committed, "an unchallenged read on a LIVE dash commits")
+        assertNull(committed.doorDash?.pendingSessionPay)
+    }
+
+    @Test
+    fun `a park on a paused region is kept and never committed, whatever arrives`() {
+        // Belt and braces, and the shape a legacy snapshot can still deliver: a park sitting on a
+        // region that is already Paused. It must neither commit (the dash total is not moving) nor
+        // be thrown away (it may be the only sighting of a real figure).
+        val paused = AppState(
+            regions = Regions(
+                flow = FlowRegion(
+                    flow = Flow.Idle,
+                    sourceRuleId = "doordash.screen.waiting_for_offer",
+                    activePlatform = Platform.DoorDash,
+                    lastObservedAt = t0,
+                ),
+                platforms = mapOf(
+                    Platform.DoorDash to PlatformRegion(
+                        platform = Platform.DoorDash,
+                        mode = Mode.Paused,
+                        session = Session("s1", startedAt = 100L, runningEarnings = 16.70),
+                        lastActedFlow = Flow.Idle,
+                        lastObservedAt = t0,
+                        pendingSessionPay = PendingSessionPay(470.00, t0, t0 + settle, Flow.Idle),
+                    ),
+                ),
+            ),
+            timestamp = t0,
+        )
+
+        val after = paused.step(settleTimer(t0 + settle))
+
+        assertEarnings(16.70, after, "a paused dash's total cannot move")
+        assertEquals(470.00, after.doorDash?.pendingSessionPay?.value ?: Double.NaN, 0.0001)
+    }
+
+    // =========================================================================
+    // #1052 round 4 — a re-based park is UNCONFIRMED until a fresh read agrees
+    // =========================================================================
+
+    @Test
+    fun `the timer a re-base armed cannot commit the read the re-base carried`() {
+        // The round-3 hole, in the exact fielded shape. A mid-spin $470 is read on a LIVE dash;
+        // the pause sheet goes up half a second later; the park's original timer fires while
+        // paused and is correctly frozen; a long while later a pill frame with NO figure on it
+        // arms the resume grace, and the resume commits as a TIMER. That re-base handed pre-pause
+        // evidence a brand-new window AND armed the timer that closes it — and because no frame
+        // came in between, the FIRST observation of that window was the fire itself. Round 3
+        // committed there: $470 became the dasher's earnings on the strength of a window in which
+        // nothing was ever on screen.
+        var state = parkedState()
+        assertEarnings(16.70, state, "the premise: the committed figure")
+
+        state = state.step(pausedIdle(t0 + 500L))
+        assertEquals("the premise: the sheet paused the dash", Mode.Paused, state.doorDash?.mode)
+
+        state = state.step(settleTimer(t0 + settle))
+        assertNotNull("frozen, not killed", state.doorDash?.pendingSessionPay)
+        assertEarnings(16.70, state, "and a paused dash commits nothing")
+
+        // Much later, a figure-less pill frame arms the resume.
+        state = state.step(idle("doordash.screen.waiting_for_offer", null, 100_000L))
+        val resumeAt = state.doorDash!!.pendingModeResume!!.deadline + 1L
+        state = state.step(resumeCommitTimer(resumeAt))
+        assertEquals("the resume committed", Mode.Online, state.doorDash?.mode)
+        val rebased = state.doorDash?.pendingSessionPay
+        assertNotNull(rebased)
+        assertTrue("the re-based park is unconfirmed", rebased!!.unconfirmed)
+        assertEquals(resumeAt + settle, rebased.deadline)
+
+        // The re-base's own timer is the very next thing to arrive — nothing has been on screen.
+        val expired = state.step(settleTimer(resumeAt + settle))
+
+        assertEarnings(
+            16.70,
+            expired,
+            "a window nothing could challenge is not evidence — the mid-spin read must not commit",
+        )
+        assertNull("and the unconfirmed park is dropped, not left to try again", expired.doorDash?.pendingSessionPay)
+    }
+
+    @Test
+    fun `an equal read on a DIFFERENT surface re-parks on the surface actually on screen`() {
+        // #1052 round 4 / H3. The receipt states "$25.20 this dash so far" and parks on
+        // Flow.PostTask; the pill then states the SAME figure. Round 3's equal-value arm kept the
+        // park exactly as it was — including its PostTask ownership — so the park went on
+        // describing a surface that had left the screen. On the resume the ownership check runs
+        // against R0 (Idle) and drops it, and FrameGate never re-admits the identical pill frame:
+        // a genuine figure stranded for the rest of the dash. The read now RE-PARKS where it was
+        // actually read.
+        var state = committedState().step(pausedIdle(t0 + 500L))
+        assertEquals(Mode.Paused, state.doorDash?.mode)
+
+        state = state.step(receipt(t0 + 1_000L, sessionEarnings = 25.20))
+        val onReceipt = state.doorDash?.pendingSessionPay
+        assertNotNull("the receipt's own wheel parks", onReceipt)
+        assertEquals(Flow.PostTask, onReceipt!!.flow)
+
+        val readAt = t0 + 2_000L
+        state = state.step(idle("doordash.screen.waiting_for_offer", 25.20, readAt))
+        val onPill = state.doorDash?.pendingSessionPay
+        assertNotNull(onPill)
+        assertEquals("the same figure — but read HERE", 25.20, onPill!!.value, 0.0001)
+        assertEquals("so the park moves to the surface on screen", Flow.Idle, onPill.flow)
+        assertEquals("with the window this sighting earns", readAt + settle, onPill.deadline)
+        assertFalse("a live sighting parks confirmed", onPill.unconfirmed)
+
+        // The resume re-bases it — and, being pre-pause evidence, it waits for one live agreement.
+        val resumeAt = state.doorDash!!.pendingModeResume!!.deadline + 1L
+        state = state.step(resumeCommitTimer(resumeAt))
+        assertEquals(Mode.Online, state.doorDash?.mode)
+        assertEquals(
+            "the re-based park is still the pill's — which is what R0 owns after the resume",
+            Flow.Idle,
+            state.doorDash?.pendingSessionPay?.flow,
+        )
+
+        state = state.step(idle("doordash.screen.waiting_for_offer", 25.20, resumeAt + 500L))
+        assertFalse(
+            "the live pill agrees, on the park's own surface",
+            state.doorDash!!.pendingSessionPay!!.unconfirmed,
+        )
+
+        val committed = state.step(settleTimer(resumeAt + settle))
+        assertEarnings(25.20, committed, "and the figure the dasher actually earned lands")
+        assertNull(committed.doorDash?.pendingSessionPay)
     }
 }

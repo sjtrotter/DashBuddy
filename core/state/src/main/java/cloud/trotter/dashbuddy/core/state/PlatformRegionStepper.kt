@@ -185,17 +185,47 @@ class PlatformRegionStepper @Inject constructor() {
             // `activePlatform` on every flow-bearing frame and leaves R0 untouched on
             // Timeout/UiInput/Loopback, so R0 carries exactly the ownership fact needed. Compared
             // as `Platform` values — never a literal (principle 8).
-            val owned = nextFlow.flow == pend.flow && nextFlow.activePlatform == current.platform
-            if (obs !is Observation.FlowObservation && !owned) {
-                // A NON-flow observation (the `SESSION_PAY_SETTLE` wake timer, a click, a
-                // loopback) can never itself be the departure frame — it does not move R0. So if
-                // R0 no longer shows this park's surface on THIS platform at fire time, some other
-                // frame moved it and the park is stale evidence: DROP it and skip the expiry
-                // entirely. Load-bearing across platforms: `stepPlatforms` steps only
-                // `obs.platform`'s region, so a DoorDash park is never stepped by an Uber frame and
-                // the flow check alone would let this platform's timer commit a figure R0 stopped
-                // showing long ago (and two idle screens on two platforms defeat it outright — R0
-                // stays `Idle`).
+            //
+            // #1052: ownership is checked on BOTH sides of this observation. `ownedAfter` alone
+            // (the #1029 shape) is blind to a departure this region was never stepped for:
+            // `stepPlatforms` steps only `obs.platform`'s region, so an Uber frame moves the
+            // SHARED R0 without ever reaching the DoorDash region that holds the park — and when
+            // the owner returns, R0 reads owned again and the ORIGINAL deadline commits a figure
+            // that was off screen for the whole interlude. `ownedBefore` is what records that
+            // absence: R0 as it was BEFORE this observation is the only surviving evidence of it.
+            //
+            // Four-way, in order:
+            //  0. the region is not Online (#1052 round 3) → SKIP THE WHOLE BLOCK, keeping the
+            //     park. A park is a read of a LIVE dash total, so a non-Online dash cannot CONFIRM
+            //     one — its total is not moving and nothing behind the pause sheet can contradict
+            //     the figure — but neither is the evidence stale: the read taken under the sheet
+            //     is the freshest there is. Frozen, not killed (see [PendingSessionPay]); the
+            //     window restarts in [applyModeTransition] on the way back to Online, and the
+            //     ownership rules below resume with it. A `SESSION_PAY_SETTLE` fire that lands
+            //     here while non-Online is likewise inert: the park is kept, its deadline
+            //     unchanged, and `diffDeadlineTimer`'s early-wake re-arm deliberately does not
+            //     fire on a wake AT or PAST the deadline — the re-base on resume arms the next one.
+            //  1. `!ownedBefore` → the surface departed while this region was not being stepped.
+            //     DROP, whatever this observation is; a returning frame re-parks with a FRESH
+            //     deadline through [settleSessionPay], which is the honest window for a read whose
+            //     surface has just come back.
+            //  2. a flow-LESS observation (a timer, a click, a loopback, a flow-less
+            //     notification) that no longer owns R0 → DROP, skipping the expiry: such a frame
+            //     cannot itself be the departure, so the departure already happened. (Today this
+            //     is unreachable behind rule 1 — a flow-less observation leaves R0 untouched, so
+            //     `ownedAfter == ownedBefore` — and it is stated anyway so the rule is complete on
+            //     its own terms rather than resting on that invariant holding elsewhere forever.)
+            //  3. otherwise expiry as normal, THEN `!ownedAfter` → drop.
+            val ownedBefore = prevFlow.flow == pend.flow && prevFlow.activePlatform == current.platform
+            val ownedAfter = nextFlow.flow == pend.flow && nextFlow.activePlatform == current.platform
+            val flowBearing = (obs as? Observation.FlowObservation)?.flow != null
+            // `current.mode` is this frame's mode as resolved SO FAR: the PREVIOUS frame's, except
+            // where the graced-resume expiry a few lines above has already committed a resume on
+            // this very observation — which is precisely the frame whose re-based park is live
+            // again. Rule 0 reads it as the honest "is this dash running right now".
+            if (current.mode != Mode.Online) {
+                // Frozen — kept exactly as it stands, neither committed nor dropped.
+            } else if (!ownedBefore || (!flowBearing && !ownedAfter)) {
                 current = current.copy(pendingSessionPay = null)
             } else {
                 if (obs.timestamp >= pend.deadline) {
@@ -204,10 +234,18 @@ class PlatformRegionStepper @Inject constructor() {
                     // park first and then re-parking the fresh read for another whole window shows
                     // the dasher a figure that the same frame already disproved.
                     val read = obs.sessionPayRead()
-                    current = if (read != null && !centsEqual(read, pend.value)) {
-                        current.copy(pendingSessionPay = null)
-                    } else {
-                        commitSessionPay(current, pend)
+                    current = when {
+                        read != null && !centsEqual(read, pend.value) ->
+                            current.copy(pendingSessionPay = null)
+                        // #1052 round 4: an UNCONFIRMED park is re-based pre-pause evidence that
+                        // no live read has agreed with. Reaching the deadline proves nothing here
+                        // — a null read means the wheel was unreadable, and a bare timer means
+                        // nothing was looked at at all — so DROP rather than commit. The committed
+                        // figure stands and the settled value re-parks when it is next admitted
+                        // (a new observation identity, since the pause frames moved FrameGate's
+                        // `lastIdentity`). Fail-null beats fail-wrong (#745).
+                        pend.unconfirmed -> current.copy(pendingSessionPay = null)
+                        else -> commitSessionPay(current, pend)
                     }
                 }
 
@@ -215,7 +253,7 @@ class PlatformRegionStepper @Inject constructor() {
                 // is on screen. Placed immediately AFTER the expiry so a park that stood its whole
                 // window on its own surface still commits on the departure frame; anything younger
                 // is dropped (the diff emits the CancelTimeout). See [PendingSessionPay.flow].
-                if (!owned) current = current.copy(pendingSessionPay = null)
+                if (!ownedAfter) current = current.copy(pendingSessionPay = null)
             }
         }
 
@@ -378,6 +416,38 @@ class PlatformRegionStepper @Inject constructor() {
         // (Paused→Online), and the pause-safety timeout (Paused→Offline).
         if (prev.mode == Mode.Paused && newMode != Mode.Paused) {
             region = region.copy(pendingModeResume = null)
+        }
+
+        // #1052 round 3: coming back Online RE-BASES a frozen running-total park. A park is frozen
+        // while the dash is not Online (the expiry block in [stepCore] skips wholesale, see
+        // [PendingSessionPay]) — killing it, as rounds 1 and 2 did, stranded a legitimate read for
+        // the rest of the dash, because the frame that first showed the figure is the only one
+        // FrameGate will ever admit for it. Freezing alone is not enough either: a window that
+        // elapsed under the pause sheet proves nothing about a wheel nobody was watching, so the
+        // park must stand a FULL window unchallenged WHILE ONLINE. Re-stamping `since`/`deadline`
+        // here is what buys that, and the effect diff sees a moved deadline and arms the timer.
+        // Written HERE because [applyModeTransition] is the single site that moves `mode` (the
+        // pause-safety timeout and the graced resume commit both route through it), and guarded on
+        // `prev.mode` because this function also runs on every ordinary Online→Online frame — an
+        // unguarded re-base would extend the window forever. Leaving Online writes NOTHING: the
+        // park rides out the pause. The session start/end clears above are unchanged.
+        if (prev.mode != Mode.Online && newMode == Mode.Online) {
+            region = region.copy(
+                pendingSessionPay = region.pendingSessionPay?.copy(
+                    since = obs.timestamp,
+                    deadline = obs.timestamp + policy.sessionPaySettleMs(region.platform),
+                    // #1052 round 4: a re-based park is UNCONFIRMED. The new window is only
+                    // evidence if something could have challenged it, and on the fielded shape
+                    // nothing can — the resume commits as a wake TIMER, this very re-base re-arms
+                    // the settle timer, and if no readable idle frame lands in between then the
+                    // FIRST observation of the new window is that fire. Committing there would
+                    // mint a pre-pause mid-spin figure on the strength of a window in which
+                    // nothing was ever on screen. A fresh agreeing read on the park's own surface
+                    // clears the flag (settleSessionPay); the expiry DROPS it otherwise. See
+                    // [PendingSessionPay.unconfirmed].
+                    unconfirmed = true,
+                ),
+            )
         }
 
         return region
@@ -672,6 +742,18 @@ class PlatformRegionStepper @Inject constructor() {
      * spin value that happens to be well-FORMED ($470.00 on a $16.70 dash) is indistinguishable
      * from a real figure by inspection — only by TIME. Hence:
      *
+     *  - a read parks in ANY mode (#1052 round 3). The mode decides when a park may be CONFIRMED,
+     *                        never whether the evidence is worth keeping: a figure read under
+     *                        DoorDash's pause sheet is the freshest sighting there is, and rounds 1
+     *                        and 2 — which refused to park it, or dropped a park on the way out of
+     *                        Online — stranded it for the rest of the dash. The #605 resume grace
+     *                        keeps the mode at [Mode.Paused] across the online-implying flap frames,
+     *                        the confirmed resume then arrives as a wake TIMER with no frame behind
+     *                        it, and `FrameGate` never re-admits the identical idle capture, so the
+     *                        read has no second chance. A park is instead FROZEN while the dash is
+     *                        not Online and re-based on the transition back — see
+     *                        [PendingSessionPay] for the canonical statement, [stepCore]'s expiry
+     *                        block for the freeze and [applyModeTransition] for the re-base.
      *  - read == 0.00 with a positive committed total → the LOAD PLACEHOLDER; ignore it entirely
      *                        (the same earnings-pill component renders `$0.00` for seconds before
      *                        the figure loads — fielded 08-23 15:53:42 `$0.00` → `$61.80` at :48 —
@@ -679,10 +761,17 @@ class PlatformRegionStepper @Inject constructor() {
      *                        Deliberately NOT a general monotonic guard: a genuine downward
      *                        correction is out of scope, only the zero placeholder is refused.
      *  - read == committed → the wheel is at rest; drop any park and change nothing.
-     *  - read == parked    → the same value again; keep the park AND its ORIGINAL deadline (an
-     *                        intervening screen and a return must not extend the window).
+     *  - read == parked, SAME surface → the same value again on the surface it was parked from;
+     *                        keep the park AND its ORIGINAL deadline (an intervening screen and a
+     *                        return must not extend the window), and CLEAR
+     *                        [PendingSessionPay.unconfirmed] — this is the agreement a re-based
+     *                        park is waiting for (#1052 round 4).
      *  - otherwise         → a new sighting; REPLACE the park with a fresh deadline, stamped with
      *                        the [Flow] it was read on (the park dies when that surface leaves).
+     *                        An equal value on a DIFFERENT surface takes this arm too (#1052 round
+     *                        4): keeping the old park would leave it owned by a surface that is no
+     *                        longer on screen, and the fielded receipt→pill→resume sequence then
+     *                        stranded the figure for the rest of the dash.
      *
      * Both equality tests are CENT-tolerant: `runningEarnings` can hold an accumulated sum
      * (`accumulatedDeliveryPay + totalPay`) that is not bit-equal to the 2-dp figure the wheel
@@ -710,18 +799,29 @@ class PlatformRegionStepper @Inject constructor() {
         now: Long,
         flow: Flow,
         policy: TransitionPolicy,
-    ): PlatformRegion = when {
-        pay == 0.0 && session.runningEarnings > 0.0 -> region
-        centsEqual(pay, session.runningEarnings) -> region.copy(pendingSessionPay = null)
-        region.pendingSessionPay?.let { centsEqual(pay, it.value) } == true -> region
-        else -> region.copy(
-            pendingSessionPay = PendingSessionPay(
-                value = pay,
-                since = now,
-                deadline = now + policy.sessionPaySettleMs(region.platform),
-                flow = flow,
-            ),
-        )
+    ): PlatformRegion {
+        val pend = region.pendingSessionPay
+        return when {
+            pay == 0.0 && session.runningEarnings > 0.0 -> region
+            centsEqual(pay, session.runningEarnings) -> region.copy(pendingSessionPay = null)
+            // The AGREEING arm (#1052 round 4): same value AND the same surface. The flow test is
+            // what keeps the agreement honest — a read on ANOTHER surface that happens to state
+            // the same figure used to leave the park sitting on the surface it was first read
+            // from, which then has to come back before it can ever commit; on the fielded shape
+            // (a receipt park agreed with by the idle pill, then a resume onto Idle) it never did,
+            // and identical idle frames are deduplicated, so the figure was stranded. Falling
+            // through to the replace arm re-parks it HERE, on the surface actually on screen.
+            pend != null && centsEqual(pay, pend.value) && pend.flow == flow ->
+                region.copy(pendingSessionPay = pend.copy(unconfirmed = false))
+            else -> region.copy(
+                pendingSessionPay = PendingSessionPay(
+                    value = pay,
+                    since = now,
+                    deadline = now + policy.sessionPaySettleMs(region.platform),
+                    flow = flow,
+                ),
+            )
+        }
     }
 
     /**

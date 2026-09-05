@@ -177,6 +177,22 @@ data class PlatformRegion(
  * time rather than repetition (FrameGate identity dedup never re-admits an
  * identical wheel read).
  *
+ * **A park is FROZEN, not discarded, while the dash is not [Mode.Online]; its window restarts on
+ * the transition back to Online** (#1052 round 3 — the canonical statement of this rule; the
+ * stepper's expiry block, `applyModeTransition` and CLAUDE.md §3 point here). A read taken under a
+ * pause sheet is still the freshest evidence there is, so it parks in any mode; what a non-Online
+ * dash cannot do is CONFIRM it — its total is not moving and no screen behind the sheet can
+ * contradict the figure — so the expiry is skipped wholesale while non-Online: no commit, no drop.
+ * Killing the park instead was round 1's and round 2's rule, and it stranded exactly the read the
+ * gate exists to land: the fielded #605 flap keeps the mode at Paused across the online-implying
+ * frames (the resume is graced), the confirmed resume arrives as a TIMER with no frame behind it,
+ * and every later identical idle capture is dropped by `FrameGate`'s identity dedup — so a legitimate
+ * $25.20 first seen while Paused would never be seen again. Re-basing [since]/[deadline] on the
+ * transition INTO Online is what makes the frozen evidence land: the park must still stand a FULL
+ * window unchallenged, with the ownership rules applying, before it may commit — and, since
+ * round 4, only once a fresh readable read on its own surface has AGREED with it
+ * ([unconfirmed]), because a window in which nothing was ever on screen challenges nothing.
+ *
  * Plain data (kotlinx-serializable) so it survives crash-recovery replay;
  * resolution is driven by `obs.timestamp`, never a wall clock, keeping the
  * reducer pure.
@@ -209,8 +225,47 @@ data class PendingSessionPay(
      * no longer owns instead of committing it. Another platform's screen therefore still drops this
      * platform's park; fail-null, and accepted — the alternative is committing a figure this
      * platform can no longer see.
+     *
+     * **Ownership must hold on BOTH sides of an observation** (#1052). Checking only the RESULTING
+     * R0 is blind to a departure this region was never stepped for: another platform's frame moves
+     * the shared R0 without reaching this region at all, and when the owner returns R0 reads owned
+     * again — so the ORIGINAL deadline would commit a figure that was off screen for the whole
+     * interlude. The stepper therefore also requires ownership on R0 as it was BEFORE the
+     * observation, and drops the park when that fails, whatever the observation is; the returning
+     * frame re-parks with a FRESH window. A flow-LESS observation (a timer, a click, a notification
+     * carrying no flow) orders like a timer: ownership is settled before any expiry.
+     *
+     * Ownership is checked only while the dash is [Mode.Online]: a park on a non-Online region is
+     * FROZEN (see [PendingSessionPay]), and the rules above resume the moment the dash does — the
+     * first Online observation after a resume still has to own R0 on both sides.
      */
     val flow: Flow,
+    /**
+     * True while this park is RE-BASED pre-pause evidence that no live read has agreed with yet
+     * (#1052 round 4).
+     *
+     * Re-basing on the resume ([PlatformRegionStepper]'s `applyModeTransition`) hands a frozen read
+     * a brand-new window — and a window is only evidence if something could have challenged it.
+     * On the fielded shape nothing can: the resume commits as a wake TIMER, the settle timer is
+     * re-armed by that same re-base, and if no readable idle frame lands in between then the FIRST
+     * observation of the new window is the settle fire itself. The old rule committed there, which
+     * means a mid-spin figure read before the pause became the dasher's earnings on the strength of
+     * a window in which nothing was ever on screen.
+     *
+     * So a re-based park is held UNCONFIRMED until a fresh read on its own surface agrees with it
+     * (`settleSessionPay`'s equal-value arm clears the flag; a different value replaces the park
+     * outright, which parks confirmed by construction). At the deadline an unconfirmed park is
+     * DROPPED rather than committed: a null read means the wheel was unreadable, and a bare timer
+     * means nothing was looked at at all — fail-null (#745). The committed figure stands, and the
+     * settled value arrives later as a NEW observation identity (`FrameGate` admits it, because the
+     * pause frames moved `lastIdentity`) and re-parks normally.
+     *
+     * Costs nothing when the wheel is stable and readable: the resume is exactly the point at which
+     * FrameGate guarantees one admitted idle frame, since the paused frames displaced the identity
+     * the pre-pause read was admitted under. Default false so an ordinary live park — and every
+     * pre-#1052-round-4 snapshot — is confirmed by construction.
+     */
+    val unconfirmed: Boolean = false,
 )
 
 /**

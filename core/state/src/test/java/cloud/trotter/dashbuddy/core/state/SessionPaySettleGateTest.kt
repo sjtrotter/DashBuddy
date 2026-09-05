@@ -90,6 +90,35 @@ class SessionPaySettleGateTest {
         parsed = ParsedFields.PostTaskFields(totalPay = totalPay, sessionEarnings = sessionEarnings),
     )
 
+    /**
+     * The pause sheet, in the production shape (#1052): `doordash.screen.dash_paused` declares
+     * `modeHint: paused` and **no flow at all**, so R0 keeps reading `Idle` — which is exactly why
+     * the flow-scoped drop cannot see this departure.
+     */
+    private fun pausedScreen(timestamp: Long) = Observation.Screen(
+        timestamp = timestamp,
+        captureId = null,
+        ruleId = "doordash.screen.dash_paused",
+        metadata = ReplayMetadata.EMPTY,
+        flow = null,
+        modeHint = Mode.Paused,
+        parsed = ParsedFields.None,
+    )
+
+    /**
+     * An offline-implying idle frame — the offline map keeps the `Idle` flow, so R0 again reads
+     * the park's own surface while the pill is gone (#1052).
+     */
+    private fun offlineIdleScreen(timestamp: Long) = Observation.Screen(
+        timestamp = timestamp,
+        captureId = null,
+        ruleId = "doordash.screen.offline_map",
+        metadata = ReplayMetadata.EMPTY,
+        flow = Flow.Idle,
+        modeHint = Mode.Offline,
+        parsed = ParsedFields.None,
+    )
+
     /** The `SESSION_PAY_SETTLE` wake timer, routed at this region (#438 8a). */
     private fun timeout(timestamp: Long) = Observation.Timeout(
         timestamp = timestamp,
@@ -145,6 +174,7 @@ class SessionPaySettleGateTest {
         since: Long,
         deadline: Long,
         flow: Flow = Flow.Idle,
+        unconfirmed: Boolean = false,
     ) {
         val pend = region.pendingSessionPay
         assertNotNull("expected a parked read", pend)
@@ -152,6 +182,7 @@ class SessionPaySettleGateTest {
         assertEquals("park.since", since, pend.since)
         assertEquals("park.deadline", deadline, pend.deadline)
         assertEquals("park.flow", flow, pend.flow)
+        assertEquals("park.unconfirmed", unconfirmed, pend.unconfirmed)
     }
 
     private fun assertEarnings(expected: Double, region: PlatformRegion, message: String = "") {
@@ -335,9 +366,12 @@ class SessionPaySettleGateTest {
 
     @Test
     fun `expiry with no session drops the park without inventing a figure`() {
+        // `Mode.Online` because the expiry has to actually RUN to reach `commitSessionPay`'s
+        // no-session guard — a park on a non-Online region is frozen and never expires at all
+        // (#1052 round 3), which would prove nothing about the guard under test.
         val sessionless = PlatformRegion(
             platform = Platform.DoorDash,
-            mode = Mode.Offline,
+            mode = Mode.Online,
             pendingSessionPay = PendingSessionPay(470.00, t0, t0 + settle, Flow.Idle),
         )
         val result = step(sessionless, timeout(t0 + settle + 1L))
@@ -539,6 +573,133 @@ class SessionPaySettleGateTest {
             "an un-settled read describes the dash that just ended",
             region.pendingSessionPay,
         )
+    }
+
+    // =========================================================================
+    // Leaving Online FREEZES the park; coming back re-bases it (#1052 round 3)
+    // =========================================================================
+
+    @Test
+    fun `pausing the dash freezes the park - it neither commits nor dies`() {
+        // A2: `dash_paused` declares a mode hint and NO flow, so R0 still reads `Idle` and the
+        // flow-scoped drop never fires — the wake timer would otherwise commit a mid-spin $470
+        // into a dash that has been sitting on a pause sheet. A paused dash cannot CONFIRM a
+        // running total; round 3 is that it cannot disprove one either, so the evidence is kept.
+        val parked = feed(region(runningEarnings = 16.70), t0 to 470.00)
+        assertPark(parked, 470.00, t0, t0 + settle)
+
+        val paused = step(parked, pausedScreen(t0 + 500L))
+        assertEquals("the premise: mode really moved", Mode.Paused, paused.mode)
+        assertPark(paused, 470.00, t0, t0 + settle)
+
+        val later = step(paused, timeout(t0 + settle))
+        assertEarnings(16.70, later, "the committed figure stands")
+        assertPark(later, 470.00, t0, t0 + settle)
+    }
+
+    @Test
+    fun `resuming re-bases the frozen park so it must stand a full LIVE window`() {
+        // The window that elapsed under the pause sheet proves nothing about a wheel nobody was
+        // watching, so `applyModeTransition` re-stamps `since`/`deadline` on the way back to
+        // Online. Here the resume is authoritative (an offline map, then an online idle frame),
+        // which is the Offline->Online edge; the graced Paused->Online edge routes through the
+        // same function and is covered against the real machine in SessionPayParkOwnershipTest.
+        val parked = feed(region(runningEarnings = 16.70), t0 to 25.20)
+        val offline = step(parked, offlineIdleScreen(t0 + 500L))
+        assertEquals(Mode.Offline, offline.mode)
+
+        // Inside the SESSION_END grace, so this is a resume of the SAME dash, not a new one.
+        val resumedAt = t0 + 5_000L
+        val resumed = step(offline, idleScreen(sessionPay = null, timestamp = resumedAt))
+        assertEquals(Mode.Online, resumed.mode)
+        assertNotNull("the same session resumed", resumed.session)
+        // #1052 round 4: re-based AND unconfirmed — the new window is not evidence until a live
+        // read on the park's own surface has been offered to it.
+        assertPark(resumed, 25.20, resumedAt, resumedAt + settle, unconfirmed = true)
+
+        val tooEarly = step(resumed, timeout(resumedAt + 1_000L))
+        assertEarnings(16.70, tooEarly, "the pre-pause deadline is gone with the pre-pause window")
+
+        // The live pill states the same figure: the agreement clears the flag and — as always —
+        // does NOT extend the window.
+        val agreed = step(tooEarly, idleScreen(sessionPay = 25.20, timestamp = resumedAt + 1_500L))
+        assertPark(agreed, 25.20, resumedAt, resumedAt + settle, unconfirmed = false)
+
+        val committed = step(agreed, timeout(resumedAt + settle))
+        assertEarnings(25.20, committed, "a full window on a live dash lands it")
+        assertNull(committed.pendingSessionPay)
+    }
+
+    @Test
+    fun `a re-based park whose only observation is its own timer is DROPPED, not committed`() {
+        // #1052 round 4. The re-base arms the settle timer, so on the fielded shape the timer is
+        // routinely the first thing to arrive in the new window — and if it is the ONLY thing,
+        // nothing was ever on screen to challenge the figure. Round 3 committed a pre-pause
+        // mid-spin $470 here. The committed total stands instead, and the wheel's settled value
+        // re-parks when it is next admitted.
+        val parked = feed(region(runningEarnings = 16.70), t0 to 470.00)
+        val offline = step(parked, offlineIdleScreen(t0 + 500L))
+        assertEquals(Mode.Offline, offline.mode)
+
+        val resumedAt = t0 + 5_000L
+        val resumed = step(offline, idleScreen(sessionPay = null, timestamp = resumedAt))
+        assertPark(resumed, 470.00, resumedAt, resumedAt + settle, unconfirmed = true)
+
+        val expired = step(resumed, timeout(resumedAt + settle))
+        assertEarnings(16.70, expired, "an unchallenged window nothing could see is not evidence")
+        assertNull("the unconfirmed park is dropped", expired.pendingSessionPay)
+    }
+
+    @Test
+    fun `a re-based park confirmed by a read on ANOTHER surface is re-parked, not inherited`() {
+        // #1052 round 4 / H3, at the stepper — and it has to be a PAUSED dash to be a test at all:
+        // while Online the ownership rule drops a departed park on the same frame, so the pill park
+        // never survives to be "kept". Under the pause sheet the expiry block is skipped wholesale,
+        // and round 3's equal-value arm then kept a park that went on describing a surface which
+        // had left the screen — dropped on the first ownership check after the resume, with no
+        // admitted frame left to re-park it. The read now parks HERE, with its own window.
+        val parked = feed(region(runningEarnings = 16.70), t0 to 25.20)
+        assertPark(parked, 25.20, t0, t0 + settle, flow = Flow.Idle)
+
+        val paused = step(parked, pausedScreen(t0 + 500L))
+        assertEquals("the premise: the sheet paused the dash", Mode.Paused, paused.mode)
+        assertPark(paused, 25.20, t0, t0 + settle, flow = Flow.Idle)
+
+        val onReceipt = step(paused, receiptScreen(t0 + 1_000L, sessionEarnings = 25.20))
+        assertEquals("still paused — the resume out of Paused is graced", Mode.Paused, onReceipt.mode)
+        assertPark(onReceipt, 25.20, t0 + 1_000L, t0 + 1_000L + settle, flow = Flow.PostTask)
+    }
+
+    @Test
+    fun `going offline freezes the park, and ending the dash clears it`() {
+        // Offline arms the SESSION_END grace, so the session is still live at the timer — the park
+        // rides that out frozen. What ends it is the dash ending: `endSession` clears the park,
+        // because a figure parked against a finished dash may never settle against anything.
+        val parked = feed(region(runningEarnings = 16.70), t0 to 470.00)
+        val offline = step(parked, offlineIdleScreen(t0 + 500L))
+        assertEquals(Mode.Offline, offline.mode)
+        assertPark(offline, 470.00, t0, t0 + settle)
+
+        val later = step(offline, timeout(t0 + settle))
+        assertNotNull("the session is still inside its end grace", later.session)
+        assertEarnings(16.70, later, "an un-settled read cannot commit while the dash is offline")
+        assertPark(later, 470.00, t0, t0 + settle)
+
+        // Well past the SESSION_END grace: the end commits and takes the park with it.
+        val ended = step(later, offlineIdleScreen(t0 + 500L + (60L * 60_000L)))
+        assertNull("the dash really ended", ended.session)
+        assertNull("a park describes a dash that no longer exists", ended.pendingSessionPay)
+    }
+
+    @Test
+    fun `a park that stood its whole window still commits on the frame that pauses`() {
+        // The mirror of the flow-scoped rule: the drop runs after [applyModeTransition]'s expiry
+        // in the same step, so a read that WAS unchallenged for its full window is not punished
+        // for the frame that happens to pause the dash.
+        val parked = feed(region(runningEarnings = 16.70), t0 to 25.20)
+        val paused = step(parked, pausedScreen(t0 + settle + 1L))
+        assertEarnings(25.20, paused)
+        assertNull(paused.pendingSessionPay)
     }
 
     @Test
