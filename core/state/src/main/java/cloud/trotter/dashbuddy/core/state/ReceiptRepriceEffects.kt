@@ -87,21 +87,31 @@ internal fun actedFlowEdge(
  *     `completedAt` is not stamped until the retire grace commits, so arrival is the live evidence;
  *  2. else the job's last COMPLETED accountable dropoff (job-scoped while a job is live; the
  *     unscoped fallback is reached only after the close, where the receipt's own job is gone);
- *  3. else the ACTIVE accountable dropoff even un-arrived — reached ONLY when the job has no
- *     finished drop at all, so there is nothing else the receipt could be about.
+ *  3. else the ACTIVE dropoff even un-arrived — but ONLY while no OTHER job's receipt is already on
+ *     file (see below); else NULL.
  *
  * The predecessor was `activeTask?.taskId ?: recentTasks.lastOrNull()?.taskId` — unscoped and
  * unfiltered, so a PostTask-classified frame landing while a NEWER, UNDELIVERED drop was active
  * named that drop: the exit fabricated a `DELIVERY_COMPLETED` for it (burning its durable key) and a
  * dash end on that frame re-priced its delivered siblings DOWN to make room for it. A pickup could
- * be named too. Rung 2 is what closes that: the un-arrived drop loses to a finished sibling.
+ * be named too. Rung 2 closes the same-job version of that: a finished sibling always wins.
  *
- * Rung 3 is deliberate and was measured, not assumed (#1073 round 14): requiring arrival OUTRIGHT
- * refused the fielded blown-through-arrival shape (#615 class — a delivery whose DELIVERY_ARRIVED
- * frame was never recognized), which then announced no receipt bubble, cached an EMPTY coverage and
- * folded the drop unpriced. It cannot revive the d3 defect, because any finished sibling wins at
- * rung 2 first. Fail-null: no qualifying task means no subject, and a receipt with no subject
- * describes nothing.
+ * **Rung 3 is GUARDED, not deleted** (#1073 round 15). Astra's attack is one job over: close job A
+ * on its $20 receipt, accept job B, finish B's pickup, start navigating to B's sole customer — then
+ * let A's receipt re-show. Rung 2 finds nothing inside B, and an unguarded rung 3 names B's
+ * un-ARRIVED drop, so the exit off that frame mints B's completion (consuming
+ * `log:DELIVERY_COMPLETED:<B-drop>` before B is reached) with A's money attached. What makes that
+ * frame a RE-SHOW is a state fact, not the pixels: the region is already holding a receipt announced
+ * for a task of a DIFFERENT job. So rung 3 is refused exactly then — and a receipt whose subject
+ * cannot be named describes nobody: nothing is cached, nothing is announced, nothing is minted
+ * (fail-null, #745).
+ *
+ * Deleting rung 3 outright was tried first and REJECTED against the corpus: the fielded 06-16
+ * single-delivery session (`ReceiptRepriceReplayTest`) never renders an arrival frame at all — its
+ * dropoff runs `dropoff_navigation` → `dropoff_pre_arrival` (a `task:dropoff:navigation` rule) →
+ * the receipt — so the delivered drop reaches its own receipt with `arrivedAt == null` and rung 2
+ * has nothing yet either. Requiring arrival there detached the receipt from the ONE delivery it
+ * described. Arrival is evidence when it exists, never a precondition of being a subject.
  */
 internal fun PlatformRegion.receiptSubjectTaskId(): String? {
     val live = activeTask?.takeIf { it.isReceiptSubject }
@@ -110,7 +120,13 @@ internal fun PlatformRegion.receiptSubjectTaskId(): String? {
     val lastFinished = recentTasks.lastOrNull {
         it.isReceiptSubject && it.completedAt != null && (jobId == null || it.jobId == jobId)
     }
-    return lastFinished?.taskId ?: live?.taskId
+    if (lastFinished != null) return lastFinished.taskId
+    // Rung 3's guard: a cached receipt announced for ANOTHER job's task means the frame on screen is
+    // that job's receipt re-showing, and this job's un-arrived drop is not its subject.
+    val announced = lastAnnouncedPostTaskTaskId ?: return live?.taskId
+    val announcedTask = (recentTasks + listOfNotNull(activeTask)).firstOrNull { it.taskId == announced }
+    val foreignReceiptOnFile = announcedTask != null && announcedTask.jobId != jobId
+    return if (foreignReceiptOnFile) null else live?.taskId
 }
 
 /**
@@ -120,9 +136,9 @@ internal fun PlatformRegion.receiptSubjectTaskId(): String? {
  * Deliberately WEAKER than [isAccountableDropoff], which also demands a resolved customer identity
  * (#1073 round 14): identity is a MINT firewall (`#498`), not a question about which drop a screen
  * is showing. A delivery whose customer hashes never resolved still puts its receipt on screen and
- * still earns the "Saved: \$X" bubble, and naming it costs nothing downstream — the mint's own
- * `identityLess` firewall and `mintingDropoffTasks`' accountable filter both exclude it from every
- * row and every denominator regardless.
+ * still earns the "Saved: \$X" bubble, and naming it costs nothing downstream — the mint keeps its
+ * own `identityLess` firewall, and `mintingDropoffTasks`' accountable filter excludes it from every
+ * denominator regardless.
  */
 private val Task.isReceiptSubject: Boolean
     get() = phase == TaskPhase.DROPOFF && unassignedAt == null

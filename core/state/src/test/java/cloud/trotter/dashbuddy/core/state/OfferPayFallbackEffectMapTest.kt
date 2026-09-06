@@ -61,6 +61,9 @@ class OfferPayFallbackEffectMapTest {
         store: String?,
         cust: String?,
         completedAt: Long? = 400L,
+        // #1073 round 15: a delivery ARRIVES before its receipt, and the mint now requires that
+        // evidence. These fixtures predate the rule and left it null.
+        arrivedAt: Long? = 350L,
     ) = Task(
         taskId = id,
         jobId = "J",
@@ -68,6 +71,7 @@ class OfferPayFallbackEffectMapTest {
         storeName = store,
         customerNameHash = cust,
         startedAt = 300L,
+        arrivedAt = arrivedAt,
         completedAt = completedAt,
     )
 
@@ -340,6 +344,10 @@ class OfferPayFallbackEffectMapTest {
             recentTasks = listOf(d1),
             lastPostTaskFields = unattributable,
             lastAnnouncedPostTaskTaskId = null,
+            // #1073 round 15: the receipt is a REAL one (it describes this job's drop) — only its
+            // ANNOUNCE id is missing, which is what this test is about. A receipt whose coverage
+            // names nobody is a different case, and no longer suppresses (see the round-15 test).
+            lastPostTaskCoverage = ReceiptCoverage(setOf("d1")),
         )
         val regionNext = regionPrev.copy(activeJob = null)
 

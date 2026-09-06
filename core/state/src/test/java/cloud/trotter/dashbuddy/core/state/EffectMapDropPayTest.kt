@@ -58,6 +58,9 @@ class EffectMapDropPayTest {
         store: String?,
         cust: String,
         completedAt: Long? = 400L,
+        // #1073 round 15: a delivery ARRIVES before its receipt, and the mint now requires that
+        // evidence. These fixtures predate the rule and left it null.
+        arrivedAt: Long? = 350L,
     ) = Task(
         taskId = id,
         jobId = "J",
@@ -65,6 +68,7 @@ class EffectMapDropPayTest {
         storeName = store,
         customerNameHash = cust,
         startedAt = 300L,
+        arrivedAt = arrivedAt,
         completedAt = completedAt,
     )
 
@@ -477,7 +481,9 @@ class EffectMapDropPayTest {
             customerTips = listOf(ParsedPayItem("Wendy's", 3.0)),
         )
         val postFields = ParsedFields.PostTaskFields(totalPay = 7.5, parsedPay = receipt, sessionEarnings = 47.5)
-        val drop = dropoff("T6", "Wendy's", "cW", completedAt = null)
+        // #1073 round 15: a drop in `recentTasks` has been retired, so it carries a completion
+        // instant — the receipt subject resolver reads that as the delivery this receipt closes.
+        val drop = dropoff("T6", "Wendy's", "cW")
 
         val regionPrev = PlatformRegion(
             platform = Platform.DoorDash,

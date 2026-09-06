@@ -23,6 +23,7 @@ import cloud.trotter.dashbuddy.domain.state.SessionType
 import cloud.trotter.dashbuddy.domain.state.Task
 import cloud.trotter.dashbuddy.domain.state.TaskPhase
 import cloud.trotter.dashbuddy.domain.state.TaskSubFlow
+import timber.log.Timber
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -738,8 +739,17 @@ class PlatformRegionStepper @Inject constructor() {
                     r.lastPostTaskFields?.parsedPay != null &&
                     postTaskTaskId != null &&
                     postTaskTaskId == r.lastAnnouncedPostTaskTaskId
-                if (!sameTaskCollapsedDowngrade) {
-                    // #1073 round 13: ONE owner writes the receipt, the drops it describes, and the
+                if (postTaskTaskId == null) {
+                    // #1073 round 15: no nameable SUBJECT — no arrived dropoff, no completed one
+                    // either — so this receipt describes nobody in this region. Refresh NOTHING (an
+                    // old job's re-shown receipt must not attach itself to the next job's
+                    // not-yet-reached delivery). Fail-null (#745); ids only (P7).
+                    Timber.tag("StateMachine").d(
+                        "#1073 receipt frame with no nameable subject — cache untouched (job %s)",
+                        r.activeJob?.jobId,
+                    )
+                } else if (!sameTaskCollapsedDowngrade) {
+                    // #1033 round 13: ONE owner writes the receipt, the drops it describes, and the
                     // task it was announced for — see [cacheReceipt] / [ReceiptCoverage].
                     r = cacheReceipt(r, parsed, postTaskTaskId)
                 }

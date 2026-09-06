@@ -465,7 +465,9 @@ class EffectMapPayloadTest {
             jobId = "J6",
             phase = TaskPhase.DROPOFF,
             arrivedAt = 2500L,
-        ).copy(customerNameHash = "cust-t6") // #653: identity-bearing so the PostTask-exit firewall admits it
+            // #653: identity-bearing so the PostTask-exit firewall admits it; #1073 round 15: a task
+            // sitting in `recentTasks` has been retired, so it carries its completion instant.
+        ).copy(customerNameHash = "cust-t6", completedAt = 3_000L)
         val regionPrev = PlatformRegion(
             platform = Platform.DoorDash,
             mode = Mode.Online,

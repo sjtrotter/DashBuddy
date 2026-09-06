@@ -1392,11 +1392,22 @@ with it — one owner, so they cannot disagree and Σ `dropRealizedPay` == the r
 construction; an uncovered sibling folds unpriced (fail-null, one WARN at the close) instead of taking
 an older receipt's money. Gating the SHARE alone was not enough: the fold prices any drop carrying a
 receipt at the whole `totalPay` (`RECEIPT_TOTAL`), so an uncovered drop folded $20 while the covered
-one was re-priced at the same $20. The **subject** is one resolver — `receiptSubjectTaskId()`, read by
-the cache, the "Saved: \$X" announce and the PostTask-exit mint — and it is the arrived accountable
-dropoff, never a pickup and never an un-arrived drop (which used to fabricate that drop's completion
-and burn its durable key). A `completedAt` timestamp was tried first and rejected in the same series:
-it is the LATEST retire arm, so the receipt's own anchor could fall outside its own receipt. Stated
+one was re-priced at the same $20. But **completion eligibility is NEVER coverage-gated** — a
+delivered, arrived drop always mints, and coverage gates only the attach and the share (round 14
+coupled them and could delete a delivered drop's row forever: the exit refused it while it was still
+active, so the close-out sweep, which scans `recentTasks`, never saw it either). The **subject** is
+one resolver — `receiptSubjectTaskId()`, read by the cache, the "Saved: \$X" announce AND the
+PostTask-exit mint — and it is the ARRIVED accountable dropoff, else the job's last completed one,
+else — only while no OTHER job's receipt is already on file — the active un-arrived one: never a
+pickup, and never the next job's not-yet-reached drop while the previous job's receipt is cached (a
+re-shown receipt with no nameable subject caches nothing, announces nothing and mints nothing; before
+that guard, an old job's re-shown receipt fabricated the NEXT job's first completion and burnt its
+durable key). Arrival is evidence where it exists, not a precondition — the fielded 06-16 session
+delivers with no arrival frame at all, so requiring one detached that delivery from its own receipt.
+A cached receipt that names no drop of the job is not evidence about it, so it does not suppress the
+#691 estimate either. A `completedAt` timestamp was tried first as the coverage discriminator and
+rejected in the same series: it is the LATEST retire arm, so the receipt's own anchor could fall
+outside its own receipt. Stated
 cost: after a multi-drop job closes, a re-render of ONE drop's own receipt would be split across every
 covered drop (DoorDash fields one combined end receipt, so the shape is not known to occur). Effect keys are
 `…:<taskId>:<jobId>:r<revision>` off `repriceRevision`, NOT the receipt's content hash: an X→Y→X

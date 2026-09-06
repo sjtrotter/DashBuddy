@@ -886,7 +886,7 @@ class EffectMapTest {
         val job = Job("job-new", offerStoreHint = emptyList(), parentOfferHash = null, startedAt = 1000L)
         val active = Task(
             taskId = "task-36", jobId = "job-new", phase = TaskPhase.DROPOFF,
-            customerNameHash = "abc123", startedAt = 100L, completedAt = null,
+            customerNameHash = "abc123", startedAt = 100L, arrivedAt = 1_500L, completedAt = null,
         )
         // prev: PostTask, the delivered task is ACTIVE (NOT yet in recentTasks).
         val prevRegion = base.copy(activeJob = job, activeTask = active, recentTasks = emptyList())
@@ -1452,7 +1452,7 @@ class EffectMapTest {
         val (platform, _) = stateWithPlatform()
         val session = Session("sess-1", startedAt = 100L)
         // #653: identity-bearing (a real delivered drop) so the PostTask-exit firewall admits it.
-        val completedTask = Task(taskId = "task-1", jobId = "job-1", phase = TaskPhase.DROPOFF, storeName = "Chipotle", customerNameHash = "cust-1", startedAt = 900L, completedAt = 950L)
+        val completedTask = Task(taskId = "task-1", jobId = "job-1", phase = TaskPhase.DROPOFF, storeName = "Chipotle", customerNameHash = "cust-1", startedAt = 900L, arrivedAt = 940L, completedAt = 950L)
         // #596: a real receipt exit has the job still ACTIVE going in (it closes on this same step),
         // so completedJobId is non-null → the SCOPED fallback finds the task. The unscoped (job-less)
         // fallback is now gated when there's genuinely nothing to complete (job already closed, no
@@ -1532,7 +1532,7 @@ class EffectMapTest {
         val (platform, _) = stateWithPlatform()
         val session = Session("sess-1", startedAt = 100L)
         // #653: identity-bearing (a real delivered drop) so the PostTask-exit firewall admits it.
-        val active = Task(taskId = "task-9", jobId = "job-1", phase = TaskPhase.DROPOFF, storeName = "Chipotle", customerNameHash = "cust-9", startedAt = 900L)
+        val active = Task(taskId = "task-9", jobId = "job-1", phase = TaskPhase.DROPOFF, storeName = "Chipotle", customerNameHash = "cust-9", startedAt = 900L, arrivedAt = 940L)
         val pend = PendingDestructive(
             kind = DestructiveKind.TASK_RETIRE, since = 950L, deadline = 3_450L, authoritative = true,
         )
@@ -1570,7 +1570,7 @@ class EffectMapTest {
         // double-fire (the old recentTasks-only stamp lagged by one frame).
         val (platform, _) = stateWithPlatform()
         val session = Session("sess-1", startedAt = 100L)
-        val active = Task(taskId = "task-1", jobId = "job-1", phase = TaskPhase.DROPOFF, storeName = "Chipotle", startedAt = 900L)
+        val active = Task(taskId = "task-1", jobId = "job-1", phase = TaskPhase.DROPOFF, storeName = "Chipotle", startedAt = 900L, arrivedAt = 940L)
         fun regionWith(announced: String?) = PlatformRegion(
             platform, mode = Mode.Online, session = session,
             activeTask = active,
