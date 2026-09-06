@@ -5,6 +5,8 @@ import cloud.trotter.dashbuddy.domain.pipeline.Observation
 import cloud.trotter.dashbuddy.domain.pipeline.TimeoutType
 import cloud.trotter.dashbuddy.domain.state.DestructiveKind
 import cloud.trotter.dashbuddy.domain.state.ClosedJobReceipt
+import cloud.trotter.dashbuddy.domain.state.FirstCompletion
+import cloud.trotter.dashbuddy.domain.state.JobReceiptAnchors
 import cloud.trotter.dashbuddy.domain.state.Flow
 import cloud.trotter.dashbuddy.domain.state.FlowRegion
 import cloud.trotter.dashbuddy.domain.state.AcceptedOfferEconomics
@@ -124,9 +126,15 @@ class PlatformRegionStepper @Inject constructor() {
      * close-then-mint (the #596 T2 accept path) correctly clears.
      */
     private fun closeReceiptRepriceWindow(region: PlatformRegion): PlatformRegion {
-        val mark = region.lastClosedJobReceipt ?: return region
         val active = region.activeJob ?: return region
-        return if (active.jobId == mark.jobId) region else region.copy(lastClosedJobReceipt = null)
+        var r = region
+        val mark = r.lastClosedJobReceipt
+        if (mark != null && active.jobId != mark.jobId) r = r.copy(lastClosedJobReceipt = null)
+        // #1033 round 7: the first-occurrence anchors belong to ONE job — a new job starts a new
+        // receipt, so they reset with it (and only here, so they survive their own job's close).
+        val anchors = r.jobReceiptAnchors
+        if (anchors != null && anchors.jobId != active.jobId) r = r.copy(jobReceiptAnchors = null)
+        return r
     }
 
     /**
@@ -644,12 +652,21 @@ class PlatformRegionStepper @Inject constructor() {
 
         // Accumulate delivery pay when entering PostTask
         if (prev != Flow.PostTask && next == Flow.PostTask) {
-            // #1033 review round 6: the instant this delivery's receipt appeared. The ONE ownership
-            // anchor a late-arriving itemization can be judged against — see
+            // #1033 review rounds 6–7: the instant this delivery's receipt FIRST appeared. The ONE
+            // ownership anchor a late-arriving itemization can be judged against — see
             // [ClosedJobReceipt.receiptSeenAt]. Stamped on the flow EDGE (the same edge that arms the
-            // receipt's TASK_RETIRE grace), unconditionally: a frame that fails to parse a receipt
-            // still put one on screen.
-            r = r.copy(lastPostTaskEnteredAt = obs.timestamp)
+            // receipt's TASK_RETIRE grace), unconditionally (a frame that fails to parse a receipt
+            // still put one on screen) — and ONLY when absent: a re-entry after an offer overlay
+            // would otherwise move the cutoff forward and step over an accept that resolved during
+            // it. Reset with the job, in [closeReceiptRepriceWindow].
+            if (r.jobReceiptAnchors == null) {
+                r = r.copy(
+                    jobReceiptAnchors = JobReceiptAnchors(
+                        jobId = r.activeJob?.jobId,
+                        firstEnteredAt = obs.timestamp,
+                    ),
+                )
+            }
             val postFields = obs.parsed as? ParsedFields.PostTaskFields
             if (postFields != null && postFields.totalPay > 0) {
                 r.session?.let { session ->
@@ -670,6 +687,26 @@ class PlatformRegionStepper @Inject constructor() {
         }
 
         // (Ratings stamping moved to stepCore, ahead of this function's early returns — #967.)
+
+        // #1033 review round 7: what the job's FIRST emitted `DELIVERY_COMPLETED` carried. Mirrors
+        // `DeliveryCompletionEffects`' PostTask-exit mint predicate exactly, and runs BEFORE
+        // `updateJobLifecycle` can close the job (which reads this). The completion's durable key is
+        // per-taskId, so the FIRST emission is the one that persists — a marker built from the
+        // receipt as it stood at the CLOSE would describe a completion that was never written. Only
+        // when absent, and reset with the job.
+        if (prev == Flow.PostTask && next != Flow.PostTask) {
+            val anchors = r.jobReceiptAnchors
+            if (anchors != null && anchors.firstCompletion == null) {
+                r = r.copy(
+                    jobReceiptAnchors = anchors.copy(
+                        firstCompletion = FirstCompletion(
+                            totalPay = r.lastPostTaskFields?.totalPay,
+                            itemized = r.lastPostTaskFields?.parsedPay != null,
+                        ),
+                    ),
+                )
+            }
+        }
 
         // Job lifecycle
         r = updateJobLifecycle(r, prev, next, obs, policy)
@@ -1096,13 +1133,17 @@ class PlatformRegionStepper @Inject constructor() {
             // let a next-dash receipt frame re-price the previous dash's drops. Its two anchors go
             // with it (round 6): an accept and a receipt both belong to the dash they happened in.
             lastClosedJobReceipt = null,
-            lastPostTaskEnteredAt = null,
+            jobReceiptAnchors = null,
             lastAcceptResolvedAt = null,
         )
     }
 
     internal fun completeActiveJob(region: PlatformRegion): PlatformRegion {
         val job = region.activeJob ?: return region
+        // What the job's FIRST completion carried — the emission that actually persisted under the
+        // per-taskId `effects_fired` key (#1033 round 7); the receipt on file only when no completion
+        // was ever minted (a receipt-skip close).
+        val firstCompletion = region.jobReceiptAnchors?.firstCompletion
         return region.copy(
             activeJob = null,
             lastPostTaskPayHash = null,
@@ -1113,14 +1154,14 @@ class PlatformRegionStepper @Inject constructor() {
             // both read `lastPostTaskFields` from the PRE-step region — so this marker is exactly
             // what those payloads carried. Without it a receipt EXPANDED after the close cannot be
             // told apart from a re-render of one the completions already priced off.
+            // #1033 rounds 6–7: both halves come from the job's FIRST occurrences, never its latest.
+            // The anchors are deliberately NOT cleared here — the receipt is still on screen after
+            // the close, and a later expansion is judged against them.
             lastClosedJobReceipt = ClosedJobReceipt(
                 jobId = job.jobId,
-                totalPay = region.lastPostTaskFields?.totalPay,
-                itemized = region.lastPostTaskFields?.parsedPay != null,
-                // #1033 round 6: when this job's receipt first appeared. `lastPostTaskEnteredAt` is
-                // deliberately NOT cleared here — the receipt is still on screen after the close, and
-                // this value is what a later expansion is judged against.
-                receiptSeenAt = region.lastPostTaskEnteredAt,
+                totalPay = firstCompletion?.totalPay ?: region.lastPostTaskFields?.totalPay,
+                itemized = firstCompletion?.itemized ?: (region.lastPostTaskFields?.parsedPay != null),
+                receiptSeenAt = region.jobReceiptAnchors?.firstEnteredAt,
             ),
         )
     }

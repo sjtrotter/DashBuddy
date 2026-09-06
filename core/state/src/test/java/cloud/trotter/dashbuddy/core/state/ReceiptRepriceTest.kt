@@ -20,6 +20,7 @@ import cloud.trotter.dashbuddy.domain.state.DestructiveKind
 import cloud.trotter.dashbuddy.domain.state.Flow
 import cloud.trotter.dashbuddy.domain.state.FlowRegion
 import cloud.trotter.dashbuddy.domain.state.Job
+import cloud.trotter.dashbuddy.domain.state.JobReceiptAnchors
 import cloud.trotter.dashbuddy.domain.state.Mode
 import cloud.trotter.dashbuddy.domain.state.ParsedFields
 import cloud.trotter.dashbuddy.domain.state.Platform
@@ -200,7 +201,9 @@ class ReceiptRepriceTest {
         lastActedFlow = Flow.PostTask,
         lastAnnouncedPostTaskTaskId = announceId,
         lastClosedJobReceipt = mark,
-        lastPostTaskEnteredAt = mark?.receiptSeenAt,
+        jobReceiptAnchors = mark?.receiptSeenAt?.let {
+            JobReceiptAnchors(jobId = mark.jobId, firstEnteredAt = it)
+        },
         lastAcceptResolvedAt = acceptResolvedAt,
     )
 
@@ -492,8 +495,10 @@ class ReceiptRepriceTest {
         var region: PlatformRegion = start
         private var flow: Flow = start.lastActedFlow ?: Flow.Idle
         val events = mutableListOf<AppEvent>()
-        /** Effect keys as the engine's `effects_fired` table would see them. */
+        /** Re-price effect keys as the engine's `effects_fired` table would see them. */
         val effectKeys = mutableListOf<String?>()
+        /** EVERY log effect's (type, durable key) — the fake `effects_fired` these tests dedup against. */
+        val allKeys = mutableListOf<Pair<AppEventType, String?>>()
 
         fun step(obs: Observation): Fold {
             val prevRegion = region
@@ -507,6 +512,7 @@ class ReceiptRepriceTest {
             effectKeys += logged
                 .filter { it.event.type == AppEventType.DELIVERY_RECEIPT_REPRICE }
                 .map { it.effectKeyOverride }
+            allKeys += logged.map { it.event.type to it.effectKeyOverride }
             flow = nextFlow
             return this
         }
@@ -609,10 +615,10 @@ class ReceiptRepriceTest {
             .step(postTaskObs(collapsed(), 13_000L)) // back to A's receipt → the accept RESOLVES here
             .step(idleObs(18_001L)) // A retires and closes
         assertEquals(13_000L, fold.region.lastAcceptResolvedAt)
-        // The receipt was left for the offer and came BACK, which is a fresh appearance — the anchor
-        // re-stamps on every PostTask ENTRY, so it is 13,000 here, not the original 10,000. The
-        // conservative direction: the later the anchor, the more accepts count as "since".
-        assertEquals(13_000L, fold.region.lastClosedJobReceipt!!.receiptSeenAt)
+        // The receipt was left for the offer and came BACK, but the anchor FREEZES on the job's FIRST
+        // appearance (round 7). Re-stamping would move the cutoff forward to 13,000 — and a later
+        // cutoff admits MORE receipts, since fewer accepts then satisfy `resolvedAt >= receiptSeenAt`.
+        assertEquals(10_000L, fold.region.lastClosedJobReceipt!!.receiptSeenAt)
 
         fold.step(postTaskObs(expanded(), 19_000L)) // A's OWN receipt, same $16.70 total
         assertEquals(
@@ -707,6 +713,77 @@ class ReceiptRepriceTest {
 
         fold.step(postTaskObs(expanded(), 25_000L))
         assertEquals(0, fold.reprices().size)
+    }
+
+    // ---- round 7: both anchors freeze on the job's FIRST occurrence ----------------------
+
+    @Test
+    fun `round 7 — an offer overlay between two receipt frames cannot move the ownership cutoff`() {
+        // The accept resolves DURING the overlay, then the receipt returns. If the anchor re-stamped
+        // on that re-entry the cutoff would jump past the accept and admit the next job's receipt —
+        // a later cutoff admits MORE, because fewer accepts satisfy `resolvedAt >= receiptSeenAt`.
+        val fold = MachineFold(liveDropoffRegion(), Flow.TaskDropoffArrived)
+            .step(postTaskObs(collapsed(), 10_000L)) // A's receipt FIRST appears
+            .step(offerObs(11_000L, "hash-B")) // an offer overlays it
+            .step(acceptClick(12_000L))
+            .step(idleObs(12_500L)) // the accept RESOLVES here
+            .step(postTaskObs(collapsed(), 13_000L)) // A's receipt RETURNS — a re-entry, not a new one
+            .step(idleObs(18_001L)) // A retires and closes
+        assertEquals(12_500L, fold.region.lastAcceptResolvedAt)
+        assertEquals(
+            "the anchor froze on the FIRST appearance",
+            10_000L,
+            fold.region.lastClosedJobReceipt!!.receiptSeenAt,
+        )
+
+        val bigReceipt = ParsedPay(
+            appPayComponents = listOf(ParsedPayItem("Base Pay", 30.00)),
+            customerTips = listOf(ParsedPayItem("Next Store", 10.00)),
+        )
+        fold.step(postTaskObs(expanded(bigReceipt), 622_000L))
+        assertEquals("12,500 >= 10,000 — the window is shut", 0, fold.reprices().size)
+    }
+
+    @Test
+    fun `round 7 — the marker records what the FIRST completion carried, not the receipt at close`() {
+        // The completion's durable key is per-taskId, so the FIRST emission is the one that persists.
+        // An offer overlay pops the receipt and mints the UN-itemized completion; the receipt returns
+        // EXPANDED; the close re-emits a completion that `effects_fired` drops. A marker built from
+        // the receipt at CLOSE would claim "itemized $20" for a row that is still un-itemized, and
+        // every later $20 frame would then be dismissed as already priced.
+        val updated = ParsedPay(
+            appPayComponents = listOf(ParsedPayItem("Base Pay", 9.70)),
+            customerTips = listOf(ParsedPayItem("Bill Millers", 10.30)),
+        )
+        val fold = Fold(liveDropoffRegion())
+            .step(postTaskObs(collapsed(), 10_000L)) // A's collapsed receipt
+            .step(offerObs(11_000L, "hash-B")) // overlay → the PostTask EXIT mints the completion
+            .step(postTaskObs(expanded(updated), 13_000L)) // the receipt returns EXPANDED ($20)
+            .step(idleObs(14_000L)) // A closes; a completion is re-emitted for the same task
+
+        val completions = fold.events.filter { it.type == AppEventType.DELIVERY_COMPLETED }
+        assertEquals("the exit and the close each emit one", 2, completions.size)
+        assertNull(
+            "the FIRST carried the COLLAPSED receipt",
+            (completions.first().payload as DeliveryPayload).parsedPay,
+        )
+        // The fake durable table: both emissions share one key, so only the first is ever written.
+        val completionKeys = fold.allKeys.filter { it.first == AppEventType.DELIVERY_COMPLETED }.map { it.second }
+        assertEquals("both completions share ONE durable key: $completionKeys", 1, completionKeys.toSet().size)
+        val fired = mutableSetOf<String?>()
+        val persisted = completions.filterIndexed { i, _ -> fired.add(completionKeys[i]) }
+        assertEquals("so exactly one row is written", 1, persisted.size)
+        assertNull("…un-itemized", (persisted.single().payload as DeliveryPayload).parsedPay)
+
+        val mark = fold.region.lastClosedJobReceipt!!
+        assertTrue("the marker must NOT claim the row is itemized", !mark.itemized)
+        assertEquals("it describes the completion that persisted", 16.70, mark.totalPay!!, 0.0001)
+
+        // …so the next $20 frame is what carries the itemization to the row.
+        val before = fold.reprices().size
+        fold.step(postTaskObs(expanded(updated), 15_000L))
+        assertEquals("the expanded receipt re-prices", before + 1, fold.reprices().size)
+        assertEquals(20.00, fold.region.lastClosedJobReceipt!!.totalPay!!, 0.0001)
     }
 
     // ---- revision keying + the handoff ---------------------------------------------------

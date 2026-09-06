@@ -198,15 +198,12 @@ data class PlatformRegion(
      */
     val pendingReceiptReprice: PendingReceiptReprice? = null,
     /**
-     * `obs.timestamp` of the last time this region's flow ENTERED `PostTask` — when the current
-     * delivery receipt first appeared on screen (#1033 review round 6).
-     *
-     * Read once, at the close, into [ClosedJobReceipt.receiptSeenAt]; kept across that close (the
-     * receipt is still on screen after it) and cleared only when the dash ends. It exists because a
-     * receipt carries no job identity of its own, so the only defensible ownership question is a
-     * temporal one — see [ClosedJobReceipt.receiptSeenAt].
+     * The current job's FIRST-occurrence receipt anchors (#1033 review rounds 6–7) — see
+     * [JobReceiptAnchors]. Read at the close into [ClosedJobReceipt]; kept across that close (the
+     * receipt is still on screen after it), reset when another job becomes active, cleared at
+     * `endSession`.
      */
-    val lastPostTaskEnteredAt: Long? = null,
+    val jobReceiptAnchors: JobReceiptAnchors? = null,
     /**
      * `obs.timestamp` of the last accept-latch RESOLUTION on this platform (#1033 review round 6) —
      * the moment `OfferLifecycle` turned a latched offer into an accepted-pending-consumption
@@ -240,12 +237,16 @@ data class PlatformRegion(
 data class ClosedJobReceipt(
     /** The job whose completions were minted at this close. */
     val jobId: String,
-    /** `lastPostTaskFields.totalPay` at the close, then whatever a re-price last wrote. */
+    /**
+     * What the job's rows actually hold: [JobReceiptAnchors.firstCompletion]'s total at the close
+     * (the completion that DID persist — see that field), else the receipt on file; then whatever a
+     * re-price last wrote.
+     */
     val totalPay: Double? = null,
-    /** True once the rows hold an itemized receipt — at the close, or from a later re-price. */
+    /** True once the rows hold an itemized receipt — from that first completion, or a later re-price. */
     val itemized: Boolean = false,
     /**
-     * When this job's receipt FIRST appeared on screen ([PlatformRegion.lastPostTaskEnteredAt] at the
+     * When this job's receipt FIRST appeared on screen ([JobReceiptAnchors.firstEnteredAt] at the
      * close) — the anchor for the ONE ownership question the machine can actually answer (#1033
      * review round 6).
      *
@@ -258,7 +259,10 @@ data class ClosedJobReceipt(
      * resolves, that guarantee is gone and nothing on a later frame restores it.
      *
      * So the rule is exactly: re-price while
-     * `lastAcceptResolvedAt == null || lastAcceptResolvedAt < receiptSeenAt`. There is deliberately
+     * `lastAcceptResolvedAt == null || lastAcceptResolvedAt < receiptSeenAt`. FIRST appearance, not
+     * latest (round 7): moving the cutoff forward on a re-entry admits MORE receipts, because fewer
+     * accepts then satisfy the comparison — an accept resolved during an offer overlay would be
+     * stepped straight over. There is deliberately
      * NO same-total exception — a total is not identity, and it let a stacked job's $20 receipt
      * redistribute the closed job's drops ($5/$15 over a real $10/$10) and install a foreign
      * tip/base split.
@@ -281,6 +285,49 @@ data class ClosedJobReceipt(
      * earlier and more cheaply, by the already-priced check.
      */
     val repriceRevision: Int = 0,
+)
+
+/**
+ * The current job's receipt anchors, both of which must describe the job's **FIRST** occurrence of
+ * something rather than its latest (#1033 review round 7 — both round-6 defects were the same shape:
+ * an anchor that has to freeze being overwritten by a later occurrence).
+ *
+ * Created on the job's first `PostTask` ENTRY, completed on its first `PostTask` EXIT, reset when any
+ * other job becomes active, cleared at `endSession`.
+ */
+@Serializable
+data class JobReceiptAnchors(
+    /** The job that owned the flow when the receipt first appeared; null if it had already closed. */
+    val jobId: String?,
+    /**
+     * `obs.timestamp` of the job's FIRST entry into `PostTask` — when its receipt first appeared.
+     *
+     * **Not the latest entry.** Leaving the receipt for an offer overlay and coming back is a
+     * re-entry, and re-stamping there moved the ownership cutoff FORWARD — which admits MORE
+     * receipts, because fewer accepts then satisfy `acceptResolvedAt >= receiptSeenAt`. An accept
+     * that resolved during the overlay would have been stepped over entirely.
+     */
+    val firstEnteredAt: Long,
+    /**
+     * What the job's FIRST emitted `DELIVERY_COMPLETED` carried — captured on its first `PostTask`
+     * EXIT, the edge `DeliveryCompletionEffects` mints on.
+     *
+     * **Not the receipt at close.** The completion's durable idempotency key is
+     * `log:DELIVERY_COMPLETED:<taskId>`, so the FIRST emission is the one that persists and every
+     * re-emission on a later exit is dropped by `effects_fired`. A marker built from the receipt as
+     * it stood at the CLOSE therefore described a completion that was never written: an offer overlay
+     * that pops the receipt mints the un-itemized completion, the receipt returns EXPANDED, the close
+     * records "itemized $20" — and the row stays un-itemized forever, with every later $20 frame
+     * dismissed as already priced.
+     */
+    val firstCompletion: FirstCompletion? = null,
+)
+
+/** What a job's first emitted completion carried — see [JobReceiptAnchors.firstCompletion]. */
+@Serializable
+data class FirstCompletion(
+    val totalPay: Double? = null,
+    val itemized: Boolean = false,
 )
 
 /**
