@@ -60,23 +60,28 @@ sealed interface ObservationPayload {
     ) : ObservationPayload
 
     /**
-     * The deadline a region grace/settle wake was armed FOR (#1054) — [TimeoutType.GRACE_COMMIT],
+     * WHICH arm of a region timer this fire is (#1054) — — [TimeoutType.GRACE_COMMIT],
      * [TimeoutType.MODE_RESUME_COMMIT], [TimeoutType.SESSION_PAY_SETTLE] and
      * [TimeoutType.SESSION_PAUSED_SAFETY]. The [OfferExpiry] idea applied to the pendings that
      * carry a deadline instead of a hash: **the fire resolves BY identity, not by arithmetic.**
      *
-     * The lazy expiry matches this against the pending's CURRENT deadline, so a fire is
-     * authoritative for exactly the pending that armed it, whatever its wall-clock stamp says. Two
-     * consequences, and they are the reason this exists:
+     * [wakeId] is a generation drawn from the owning region's
+     * `PlatformRegion.wakeSeq`, minted fresh wherever a pending is created, replaced, re-based or
+     * has its deadline moved. The lazy expiry matches it against the pending's CURRENT id, so a
+     * fire is authoritative for exactly the pending that armed it, whatever its wall-clock stamp
+     * says. Two consequences, and they are the reason this exists:
      *
      * - **A fire's own stamp no longer has to be trusted.** The timer is armed for
      *   `deadline - obs.timestamp` and fires stamped with `System.currentTimeMillis()`, so it lands
      *   ON the deadline in the ordinary case and BEFORE it after an NTP step-back. An NTP step
      *   between arm and fire changes the stamp, not the fact that the window elapsed.
-     * - **A fire from a REPLACED pending is inert.** A different deadline means a different
-     *   pending, so a stale timer cannot commit the pending that superseded it — which for the
-     *   settle gate would be a mid-spin figure, and for a resume grace a mode flip nothing on
-     *   screen supports.
+     * - **A fire from a REPLACED pending is inert.** A stale timer cannot commit the pending that
+     *   superseded it — which for the settle gate would be a mid-spin figure, and for a resume
+     *   grace a mode flip nothing on screen supports. Round 4 carried the DEADLINE here and that
+     *   was not enough: two successive pendings can hold the SAME deadline (after a clock step-back
+     *   a replacement park computes the identical `now + settleWindow`), and the superseded wake
+     *   then committed the replacement after essentially no time in its own window. A generation
+     *   cannot collide.
      *
      * Before this, the expiries compared timestamps and every hole in the series (the strict `>`
      * that ignored an exact landing, the early-wake re-arm, the equality carve-out and its
@@ -86,6 +91,6 @@ sealed interface ObservationPayload {
     @Serializable
     @SerialName("graceWake")
     data class GraceWake(
-        val deadline: Long,
+        val wakeId: Long,
     ) : ObservationPayload
 }

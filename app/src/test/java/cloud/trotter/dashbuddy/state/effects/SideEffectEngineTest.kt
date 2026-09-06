@@ -930,7 +930,60 @@ class SideEffectEngineTest {
     }
 
     @Test
-    fun `timers still arm during recovery (loopback, not external)`() = runTest {
+    fun `a NON-region timer still arms during recovery (loopback, not external)`() = runTest {
+        val engine = buildEngine(StandardTestDispatcher(testScheduler))
+        val fired = mutableListOf<TimeoutEvent>()
+        backgroundScope.launch(StandardTestDispatcher(testScheduler)) {
+            engine.events.collect { if (it is TimeoutEvent) fired.add(it) }
+        }
+        runCurrent()
+
+        // `SETTLE_UI` and `OFFER_EXPIRY` are deliberately NOT in `REGION_TIMERS`: nothing re-arms
+        // them after a restore, so suppressing them would strand a deferred action or an offer
+        // (#1076). They keep replaying exactly as they always did.
+        engine.process(
+            AppEffect.ScheduleTimeout(durationMs = 10, type = TimeoutType.SETTLE_UI),
+            recovering = true,
+        )
+        advanceTimeBy(11)
+        runCurrent()
+        assertEquals(1, fired.size)
+    }
+
+    // =========================================================================
+    // #1054 round 5 — a REGION timer is never armed or cancelled by the replay
+    // =========================================================================
+
+    @Test
+    fun `a region timer armed during recovery is SKIPPED`() = runTest {
+        // A replayed arm is scheduled against a REPLAYED frame's timestamp, so it is already
+        // overdue against the real clock and fires at the 1 ms floor, mid-recovery, before the
+        // hygiene has decided anything. It logs a `Timer Expired` WARN into the shareable log for a
+        // pending that may be about to be dropped, and its fire is not merely inert — an
+        // `obs.timestamp > deadline` arm can still COMMIT. The recovery reconcile is the sole
+        // authoritative armer, so the engine drops these on the floor.
+        val engine = buildEngine(StandardTestDispatcher(testScheduler))
+        val fired = mutableListOf<TimeoutEvent>()
+        backgroundScope.launch(StandardTestDispatcher(testScheduler)) {
+            engine.events.collect { if (it is TimeoutEvent) fired.add(it) }
+        }
+        runCurrent()
+
+        for (type in TimeoutType.REGION_TIMERS) {
+            engine.process(
+                AppEffect.ScheduleTimeout(durationMs = 10, type = type, platform = Platform.DoorDash),
+                recovering = true,
+            )
+        }
+        advanceTimeBy(5_000)
+        runCurrent()
+
+        assertEquals("nothing was armed, so nothing fires", 0, fired.size)
+    }
+
+    @Test
+    fun `the SAME region timer arms normally on the live path`() = runTest {
+        // The control: the skip is conditioned on `recovering`, nothing else.
         val engine = buildEngine(StandardTestDispatcher(testScheduler))
         val fired = mutableListOf<TimeoutEvent>()
         backgroundScope.launch(StandardTestDispatcher(testScheduler)) {
@@ -939,12 +992,15 @@ class SideEffectEngineTest {
         runCurrent()
 
         engine.process(
-            AppEffect.ScheduleTimeout(durationMs = 10, type = TimeoutType.SESSION_PAUSED_SAFETY),
-            recovering = true,
+            AppEffect.ScheduleTimeout(
+                durationMs = 10, type = TimeoutType.GRACE_COMMIT, platform = Platform.DoorDash,
+            ),
         )
         advanceTimeBy(11)
         runCurrent()
+
         assertEquals(1, fired.size)
+        assertEquals(TimeoutType.GRACE_COMMIT, fired.single().type)
     }
 
     // =========================================================================

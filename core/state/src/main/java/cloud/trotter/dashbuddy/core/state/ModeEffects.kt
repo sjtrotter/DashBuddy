@@ -15,6 +15,7 @@ import cloud.trotter.dashbuddy.domain.pipeline.TransitionTrigger
 import cloud.trotter.dashbuddy.domain.state.DestructiveKind
 import cloud.trotter.dashbuddy.domain.state.Mode
 import cloud.trotter.dashbuddy.domain.state.ParsedFields
+import cloud.trotter.dashbuddy.domain.state.PendingWake
 import cloud.trotter.dashbuddy.domain.state.Platform
 import cloud.trotter.dashbuddy.domain.state.PlatformRegion
 import timber.log.Timber
@@ -177,7 +178,7 @@ internal fun EffectMap.diffMode(
                 }
 
                 // #1054 round 4: the SESSION_PAUSED_SAFETY cancel is no longer hand-built here —
-                // `PlatformRegion.pauseSafetyDeadline` clears on the way out of Paused and
+                // `PlatformRegion.pauseSafety` clears on the way out of Paused and
                 // [diffPauseSafetyTimer] emits the cancel off that, like every other region timer.
                 // Only the rule-declared override remains a per-site decision.
                 if (prev.mode == Mode.Paused) {
@@ -190,7 +191,7 @@ internal fun EffectMap.diffMode(
             // defers while a grace window keeps the session alive. Only the
             // pause-safety-timer cancel remains here.
             prev.mode != Mode.Offline && next.mode == Mode.Offline -> {
-                // #1054 round 4: as above — the cancel rides `pauseSafetyDeadline` clearing.
+                // #1054 round 4: as above — the cancel rides `pauseSafety` clearing.
                 if (prev.mode == Mode.Paused) {
                     triggerOverrideEffects(obs, TransitionTrigger.RESUME_FROM_PAUSE)?.let(::addAll)
                 }
@@ -214,7 +215,7 @@ internal fun EffectMap.diffMode(
                     )
                     add(logEffect(sessionId, AppEventType.DASH_PAUSED, obs.timestamp, pausePayload))
                     // #1054 round 4: the timer itself is armed by [diffPauseSafetyTimer] off
-                    // `PlatformRegion.pauseSafetyDeadline`, which the stepper set on this same
+                    // `PlatformRegion.pauseSafety`, which the stepper set on this same
                     // transition. It used to be hand-built here, which is exactly why it could
                     // not survive a restore: the deadline existed only inside the engine's timer
                     // map, so a process death left a paused dash with nothing to end it.
@@ -245,8 +246,8 @@ internal fun EffectMap.diffGraceTimer(
     next: PlatformRegion,
     obs: Observation,
 ): List<AppEffect> = diffDeadlineTimer(
-    prevDeadline = prev.pendingDestructive?.deadline,
-    nextDeadline = next.pendingDestructive?.deadline,
+    prev = prev.pendingDestructive?.let { PendingWake(it.deadline, it.wakeId) },
+    next = next.pendingDestructive?.let { PendingWake(it.deadline, it.wakeId) },
     type = TimeoutType.GRACE_COMMIT,
     platform = next.platform,
     obs = obs,
@@ -255,9 +256,15 @@ internal fun EffectMap.diffGraceTimer(
 /**
  * The ONE arm/cancel shape every region timer shares (#1029 D4, widened to the pause-safety net by
  * #1054 round 4). Each deadline-bearing pending on [PlatformRegion] expresses its wake identically —
- * schedule for the remaining time when a deadline appears or MOVES, cancel when the pending clears —
- * so the diffs below differ only in which field they read and which [TimeoutType] they key. Keeping
- * one body means a fix cannot land on three of four.
+ * schedule when the pending's GENERATION changes, cancel when the pending clears — so the diffs
+ * below differ only in which field they read and which [TimeoutType] they key. Keeping one body
+ * means a fix cannot land on three of four.
+ *
+ * Arming on the id rather than on the deadline (#1054 round 5) subsumes "the deadline moved", since
+ * a moved deadline mints a new id by construction, and it also covers the case a deadline
+ * comparison cannot see: a REPLACEMENT pending that happens to carry the same deadline as the one
+ * it replaced. Under round 4 that emitted nothing, leaving the superseded arm live to commit the
+ * replacement.
  *
  * A commit lands in the cancel branch too — harmless, the timer has already fired or no-ops.
  *
@@ -266,11 +273,11 @@ internal fun EffectMap.diffGraceTimer(
  * The two do different jobs and both are load-bearing:
  *
  * - The **payload** is what the lazy expiry matches on. A fire carrying the pending's CURRENT
- *   deadline lapses it whenever it arrives, so the expiry never has to reason about the fire's own
- *   wall-clock stamp — which is armed as `deadline - obs.timestamp` and lands ON the deadline
+ *   generation lapses it whenever it arrives, so the expiry never has to reason about the fire's
+ *   own wall-clock stamp — which is armed as `deadline - obs.timestamp` and lands ON the deadline
  *   ordinarily, BEFORE it after an NTP step-back. And a fire from a REPLACED pending carries the
- *   OLD deadline, so it is inert by construction. That is why there is no early-wake re-arm branch
- *   here any more: nothing needs re-arming, because nothing gets lost.
+ *   OLD generation, so it is inert by construction. That is why there is no early-wake re-arm
+ *   branch here any more: nothing needs re-arming, because nothing gets lost.
  * - The **`deadlineMs`** is what the engine waits on. A stepper deadline IS a wall-clock instant
  *   (`obs.timestamp` is stamped from `System.currentTimeMillis()` at capture), so handing it over
  *   makes a tail-REPLAYED arm land on time instead of a full window late — the timer is armed
@@ -278,33 +285,31 @@ internal fun EffectMap.diffGraceTimer(
  *   and `SETTLE_UI` do not do this yet; they stay on #1076.)
  */
 internal fun EffectMap.diffDeadlineTimer(
-    prevDeadline: Long?,
-    nextDeadline: Long?,
+    prev: PendingWake?,
+    next: PendingWake?,
     type: TimeoutType,
     platform: Platform,
     obs: Observation,
 ): List<AppEffect> {
-    fun schedule(deadline: Long) = listOf(
+    fun schedule(wake: PendingWake) = listOf(
         AppEffect.ScheduleTimeout(
-            durationMs = (deadline - obs.timestamp).coerceAtLeast(1L),
+            durationMs = (wake.deadline - obs.timestamp).coerceAtLeast(1L),
             type = type,
             platform = platform,
-            payload = ObservationPayload.GraceWake(deadline),
-            deadlineMs = deadline,
+            payload = ObservationPayload.GraceWake(wake.wakeId),
+            deadlineMs = wake.deadline,
         ),
     )
     return when {
-        nextDeadline != null && (prevDeadline == null || prevDeadline != nextDeadline) ->
-            schedule(nextDeadline)
-        prevDeadline != null && nextDeadline == null ->
-            listOf(AppEffect.CancelTimeout(type, platform))
+        next != null && prev?.wakeId != next.wakeId -> schedule(next)
+        prev != null && next == null -> listOf(AppEffect.CancelTimeout(type, platform))
         else -> emptyList()
     }
 }
 
 /**
  * Schedule/cancel the pause-safety net (#1054 round 4) — the
- * [PlatformRegion.pauseSafetyDeadline] mirror of the other three.
+ * [PlatformRegion.pauseSafety] mirror of the other three.
  *
  * This timer used to be hand-built at the Online→Paused site in [diffMode], with its two cancels
  * hand-built at the exits, and its deadline living ONLY inside `SideEffectEngine`'s in-memory timer
@@ -319,8 +324,8 @@ internal fun EffectMap.diffPauseSafetyTimer(
     next: PlatformRegion,
     obs: Observation,
 ): List<AppEffect> = diffDeadlineTimer(
-    prevDeadline = prev.pauseSafetyDeadline,
-    nextDeadline = next.pauseSafetyDeadline,
+    prev = prev.pauseSafety,
+    next = next.pauseSafety,
     type = TimeoutType.SESSION_PAUSED_SAFETY,
     platform = next.platform,
     obs = obs,
@@ -342,8 +347,8 @@ internal fun EffectMap.diffModeResumeTimer(
     next: PlatformRegion,
     obs: Observation,
 ): List<AppEffect> = diffDeadlineTimer(
-    prevDeadline = prev.pendingModeResume?.deadline,
-    nextDeadline = next.pendingModeResume?.deadline,
+    prev = prev.pendingModeResume?.let { PendingWake(it.deadline, it.wakeId) },
+    next = next.pendingModeResume?.let { PendingWake(it.deadline, it.wakeId) },
     type = TimeoutType.MODE_RESUME_COMMIT,
     platform = next.platform,
     obs = obs,
@@ -370,8 +375,8 @@ internal fun EffectMap.diffSessionPaySettleTimer(
     next: PlatformRegion,
     obs: Observation,
 ): List<AppEffect> = diffDeadlineTimer(
-    prevDeadline = prev.pendingSessionPay?.deadline,
-    nextDeadline = next.pendingSessionPay?.deadline,
+    prev = prev.pendingSessionPay?.let { PendingWake(it.deadline, it.wakeId) },
+    next = next.pendingSessionPay?.let { PendingWake(it.deadline, it.wakeId) },
     type = TimeoutType.SESSION_PAY_SETTLE,
     platform = next.platform,
     obs = obs,

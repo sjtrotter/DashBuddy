@@ -52,6 +52,27 @@ data class PlatformRegion(
      * an observation timestamp still get distinct IDs.
      */
     val mintCounter: Long = 0,
+    /**
+     * Monotonic generation counter for wake-timer identity (#1054 round 5) — the `mintCounter`
+     * idea applied to timers instead of entity ids.
+     *
+     * Every deadline-bearing pending on this region carries a `wakeId` drawn from here, and every
+     * `ScheduleTimeout` the effect diff emits for one carries that id in its
+     * `ObservationPayload.GraceWake`. The lazy expiry then matches the FIRE against the pending's
+     * own id, so a superseded timer is inert by construction.
+     *
+     * A deadline could not do this job. Two successive pendings can legitimately hold the same
+     * deadline — after a clock step-back a replacement park computes the identical
+     * `now + settleWindow` — and the old timer's fire would then commit the replacement after
+     * essentially no time in its own window, which is precisely the mid-spin figure #1029's settle
+     * gate exists to reject.
+     *
+     * Bumped ONLY through [mintWakeId], and persisted with snapshots so identity survives a crash
+     * (a restored pending keeps its id; a re-based one gets a fresh one). Starts at 0, and 0 is
+     * reserved to mean "legacy, unidentified" — a pending decoded from a pre-round-5 snapshot,
+     * which is matched by timestamp alone.
+     */
+    val wakeSeq: Long = 0,
     /** Timestamp when Flow entered Idle while mode is Online. Null otherwise. */
     val idleEnteredAt: Long? = null,
     /**
@@ -99,8 +120,11 @@ data class PlatformRegion(
      * time counted against it in reality, so a deadline already past fires immediately and ends the
      * dash — the designed outcome. Default-null so pre-round-4 snapshots decode unchanged, and a
      * restore from one simply has nothing to re-arm (fail-null, the pre-existing behaviour).
+     *
+     * A [PendingWake] rather than a bare `Long` since round 5, so a re-pause's arm can be told from
+     * the arm it replaced (see [PendingWake.wakeId]).
      */
-    val pauseSafetyDeadline: Long? = null,
+    val pauseSafety: PendingWake? = null,
     /**
      * This platform's presented + accepted-pending-consumption offers (#438 item 7 / B3), moved off
      * the shared global `FlowRegion.pendingOffer` so concurrent platforms no longer collide on one
@@ -496,6 +520,22 @@ data class PendingSessionPay(
      * pre-#1052-round-4 snapshot — is confirmed by construction.
      */
     val unconfirmed: Boolean = false,
+    /**
+     * Which arm of this pending's wake timer belongs to it (#1054 round 5) — see
+     * [PlatformRegion.wakeSeq].
+     *
+     * A DEADLINE is not an identity. A replacement pending can carry the same deadline as the one
+     * it replaced (a $30 read parked at wall 10 000 after a 3 s clock step-back gets deadline 13 000
+     * again, exactly like the $20 park it superseded), and the superseded timer's fire would then
+     * commit the replacement after essentially zero time in its own window. A generation cannot
+     * collide: it is minted fresh wherever a pending is created, replaced, re-based, or has its
+     * deadline moved.
+     *
+     * `0` means "legacy, unidentified" — a pending decoded from a pre-round-5 snapshot. Such a
+     * pending is never matched by identity and is lapsed only by `obs.timestamp` passing its
+     * deadline, which is exactly the pre-#1054 behaviour it was written under.
+     */
+    val wakeId: Long = 0,
 )
 
 /**
@@ -521,6 +561,40 @@ data class PendingModeResume(
     val since: Long,
     /** Once an observation's timestamp passes this, the resume is committed. */
     val deadline: Long,
+    /** Which arm of the `MODE_RESUME_COMMIT` timer belongs to it — see [PlatformRegion.wakeSeq]. */
+    val wakeId: Long = 0,
+)
+
+/**
+ * Draw the next wake generation for this region (#1054 round 5) — the ONE place [PlatformRegion.wakeSeq]
+ * is ever bumped.
+ *
+ * Returns the region with the counter advanced and the id to stamp on the pending being created or
+ * re-based, so a caller cannot take an id without recording that it did. Pure and deterministic, so
+ * a crash-recovery replay reproduces exactly the ids the live run minted — which matters, because a
+ * replayed arm's identity has to match the pending the replay produced.
+ *
+ * Mint a NEW id wherever a pending is CREATED, REPLACED, RE-BASED, or has its deadline MOVED. An
+ * otherwise-unchanged pending keeps its id, so its live timer stays valid.
+ */
+fun PlatformRegion.mintWakeId(): Pair<PlatformRegion, Long> {
+    val id = wakeSeq + 1
+    return copy(wakeSeq = id) to id
+}
+
+/**
+ * A bare deadline plus the identity of the timer arm that serves it (#1054 round 5) — the shape a
+ * pending takes when it carries no other state.
+ *
+ * Today that is the pause-safety net alone ([PlatformRegion.pauseSafety]). It was a naked
+ * `Long?` in round 4, which was enough to re-arm it across a restore but not enough to tell one
+ * arm from another: see [wakeId] and [PlatformRegion.wakeSeq].
+ */
+@Serializable
+data class PendingWake(
+    val deadline: Long,
+    /** Which arm of this pending's wake timer belongs to it — see [PlatformRegion.wakeSeq]. */
+    val wakeId: Long = 0,
 )
 
 /**
@@ -564,6 +638,39 @@ data class PendingDestructive(
      * grace timeout, not the summary itself.
      */
     val endFields: ParsedFields.SessionEndedFields? = null,
+    /**
+     * Which arm of this pending's wake timer belongs to it (#1054 round 5) — see
+     * [PlatformRegion.wakeSeq].
+     *
+     * A DEADLINE is not an identity. A replacement pending can carry the same deadline as the one
+     * it replaced (a $30 read parked at wall 10 000 after a 3 s clock step-back gets deadline 13 000
+     * again, exactly like the $20 park it superseded), and the superseded timer's fire would then
+     * commit the replacement after essentially zero time in its own window. A generation cannot
+     * collide: it is minted fresh wherever a pending is created, replaced, re-based, or has its
+     * deadline moved.
+     *
+     * `0` means "legacy, unidentified" — a pending decoded from a pre-round-5 snapshot. Such a
+     * pending is never matched by identity and is lapsed only by `obs.timestamp` passing its
+     * deadline, which is exactly the pre-#1054 behaviour it was written under.
+     */
+    val wakeId: Long = 0,
+    /**
+     * The wall instant at which this grace last began serving its REMAINING window live after a
+     * crash recovery (#1054 round 5); null = never restored.
+     *
+     * It exists to make the serve-live re-base a FIXED POINT. `recoveryHygiene` re-bases the
+     * deadline onto "now" and CHECKPOINTS the result, but `AppState.timestamp` — the anchor for
+     * "how much of the window was already observed" — stays where the crash left it. Without a
+     * second anchor, a restart before any new observation recomputes `observed` against that stale
+     * timestamp and hands back the entire elapsed dead time as remaining window: a 2.5 s summary
+     * grace restored at 100 000 and again at 101 000 stretched to 193 500 ms, and a crash loop
+     * stretched it without bound. Anchoring on `servedFrom` when it is set makes the second restore
+     * return the same 2.5 s the first one did.
+     *
+     * Distinct from [since], which is untouched by recovery because #732 stamps the eventual
+     * commit's domain timestamp at it.
+     */
+    val servedFrom: Long? = null,
 )
 
 enum class DestructiveKind {

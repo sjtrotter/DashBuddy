@@ -112,12 +112,15 @@ was found **broken-in-part** (raw PII in capture envelopes) and moved to that en
   phone kept the session alive indefinitely, which the next morning's dash then RESUMED.
   **On-dash:** pause the dash, force-stop DashBuddy while the pause sheet is up, relaunch. The HUD
   must read PAUSED, and stay that way until you actually bring DoorDash back online. Then do it
-  again and simply let the DoorDash countdown run out with the app relaunched but idle — the dash
-  should END on its own within about a second of the countdown reaching zero. **Desk, after the
-  pull:** a `DASH_STOP` in `app_events` whose payload `endedAt` is within ~1 s of the countdown's
-  end; no `DASH_START` in the seconds after a recovery; and no `Timer Expired` WARN for a
-  `MODE_RESUME_COMMIT` or `SESSION_PAY_SETTLE` after a restart (those pendings are dropped, and
-  their timers are now cancelled with them).
+  again and simply let the DoorDash countdown run out with the app relaunched but idle. **Two
+  separate things happen, about ten seconds apart** — the safety net fires ~1 s after the countdown
+  reaches zero and takes the dash Paused→Offline, which then arms the ORDINARY 10 s `SESSION_END`
+  grace, so the dash actually ends ~11 s after zero. **Desk, after the pull:** a `DASH_STOP` in
+  `app_events` whose payload `endedAt` is ≈ countdown + 1 s (the safety transition) while the row's
+  own `occurredAt` is ≈ countdown + 11 s (the graced commit) — two assertions, not one; no
+  `DASH_START` in the seconds after a recovery; and no `Timer Expired` WARN for a
+  `MODE_RESUME_COMMIT` or `SESSION_PAY_SETTLE` after a restart (those pendings are dropped on
+  restore, and a replayed arm for them is never executed at all).
   - Confirmed: 0/2
 
 - **🆕 NEW — #1033 — a collapsed delivery receipt now gets 8 s to be expanded, and an expansion

@@ -30,6 +30,7 @@ import cloud.trotter.dashbuddy.domain.state.OfferIntent
 import cloud.trotter.dashbuddy.domain.state.ParsedFields
 import cloud.trotter.dashbuddy.domain.state.PendingDestructive
 import cloud.trotter.dashbuddy.domain.state.PendingOffer
+import cloud.trotter.dashbuddy.domain.state.PendingWake
 import cloud.trotter.dashbuddy.domain.state.Platform
 import cloud.trotter.dashbuddy.domain.state.PlatformRegion
 import cloud.trotter.dashbuddy.domain.state.Regions
@@ -725,7 +726,7 @@ class EffectMapTest {
             platforms = mapOf(
                 platform to onlineRegion.copy(
                     mode = Mode.Paused,
-                    pauseSafetyDeadline = 301_000L,
+                    pauseSafety = PendingWake(301_000L, 1L),
                 ),
             ),
         ))
@@ -751,7 +752,7 @@ class EffectMapTest {
         // that on every exit from Paused), so the hand-built pair carries the field.
         val pausedRegion = PlatformRegion(
             platform, mode = Mode.Paused, session = Session("sess-1", startedAt = 100L),
-            pauseSafetyDeadline = 301_000L,
+            pauseSafety = PendingWake(301_000L, 1L),
         )
         val prev = AppState(regions = Regions(
             platforms = mapOf(platform to pausedRegion),
@@ -759,7 +760,7 @@ class EffectMapTest {
 
         val next = AppState(regions = Regions(
             platforms = mapOf(
-                platform to pausedRegion.copy(mode = Mode.Online, pauseSafetyDeadline = null),
+                platform to pausedRegion.copy(mode = Mode.Online, pauseSafety = null),
             ),
         ))
 

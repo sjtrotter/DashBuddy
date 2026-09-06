@@ -90,7 +90,7 @@ class StateManagerV2 @Inject constructor(
             // the 1 ms floor, and if `restoreState` does not happen to suspend long enough on the
             // DAOs the fire races the subscription and the grace is stranded again, which is the
             // whole bug this issue exists to close. So wait for it.
-            // The engine's flow is the one at risk: `reconcileRecoveredTimers` emits into it and a
+            // The engine's flow is the one at risk: `rearmRecoveredTimers` emits into it and a
             // fire can come straight back. `onSubscription` runs once THIS collector is registered
             // with that `SharedFlow` — the real guarantee, since a launched coroutine is not yet a
             // subscribed one — and awaiting it costs nothing: the merge subscribes on its first
@@ -204,10 +204,6 @@ class StateManagerV2 @Inject constructor(
 
     private suspend fun restoreState() {
         try {
-            // #1054 round 4: the ONE wall-clock read in the recovery path, taken here at the effect
-            // edge and passed down so `AppState.recoveryHygiene` stays pure (Principle 1). Read once
-            // so both restore paths, and every region within one, re-base against the same instant.
-            val nowMs = System.currentTimeMillis()
             val restored = snapshots.restoreLatest()
             if (restored == null) {
                 Timber.i("No usable snapshot — starting fresh")
@@ -237,7 +233,7 @@ class StateManagerV2 @Inject constructor(
             val tail = journal.tailAfter(restored.correlationVersion)
             if (tail.isEmpty()) {
                 Timber.i("Restored from snapshot at cv=%d, no tail", restored.correlationVersion)
-                finishRestore(base, base.recoveryHygiene(nowMs))
+                finishRestore(base)
                 return
             }
 
@@ -270,7 +266,7 @@ class StateManagerV2 @Inject constructor(
                 stamped
             }
 
-            finishRestore(finalState, finalState.recoveryHygiene(nowMs))
+            finishRestore(finalState)
             Timber.i("Recovery complete — state at cv=%d", finalState.correlationVersion)
         } catch (e: Exception) {
             Timber.e(e, "State recovery failed — starting fresh")
@@ -282,67 +278,38 @@ class StateManagerV2 @Inject constructor(
      * The tail both [restoreState] exits share (#1054 round 3) — order-constrained, so it has one
      * owner rather than two copies that can drift apart.
      *
-     * [cleaned] has already been through [AppState.recoveryHygiene]. The order is the whole content
-     * of this method:
+     * The hygiene runs **twice**, and that is the content of the method (#1054 round 5):
      *
-     * 1. **Checkpoint first** (#1052): dropping stale evidence is only DURABLE if the cleaned state
-     *    is the next replay base. The snapshot on disk still carries what the hygiene just removed,
-     *    and a second restart with no ordinary snapshot in between (neither the cadence nor a major
-     *    transition need fire) would replay it over a journal tail that has since grown.
-     * 2. **Re-arm before installing** (#1054): a decision in flight gets its wake timer back, and
-     *    emitting it ahead of `_state.value` means no live observation can be interleaved between
-     *    the state the timers describe and the timers themselves. On the tail path this also
-     *    supersedes any timer the replay armed against a replayed frame's timestamp — those fire
-     *    late by the whole replay lag — because `SideEffectEngine.scheduleTimer` REPLACES by
-     *    (type, platform).
-     * 3. **Install**, then arm the #438 B5 odometer reconciliation for the first live observation:
-     *    recovery suppresses external effects, so GPS is dead until something re-establishes it.
+     * 1. **`recoveryHygiene(now0)` → checkpoint.** Dropping stale evidence and re-basing the
+     *    destructive grace is only DURABLE if the cleaned state is the next replay base (#1052):
+     *    the snapshot on disk still carries what was dropped, and a second restart with no ordinary
+     *    snapshot in between (neither the cadence nor a major transition need fire) would replay it
+     *    over a journal tail that has since grown.
+     * 2. **`recoveryHygiene(nowInstall)` → arm → install.** The re-base is a fixed point
+     *    ([AppState.recoveryHygiene]), so applying it again costs nothing but slides the deadline
+     *    forward by exactly the checkpoint latency. Without it the served window starts at a clock
+     *    read taken BEFORE the snapshot load, the tail replay and the checkpoint write, and all of
+     *    that latency is subtracted from the window #1054 exists to give back — a 2.5 s summary
+     *    grace restored through a 4 s recovery was already overdue on arrival, so the engine fired
+     *    at the 1 ms floor and a contradicting task frame 50 ms later found the session already
+     *    ended. The checkpointed deadline therefore lags the installed one, deliberately: nothing
+     *    depends on their being equal, because a further restart re-bases from the same
+     *    `servedFrom` either way.
+     *
+     * Arming before `_state.value` means no live observation can be interleaved between the state
+     * the timers describe and the timers themselves. Then the #438 B5 odometer reconciliation is
+     * armed for the first live observation: recovery suppresses external effects, so GPS is dead
+     * until something re-establishes it.
+     *
+     * No cancels here since round 5 — `SideEffectEngine` skips a [TimeoutType.REGION_TIMERS] arm
+     * while `recovering == true`, so the replay never armed one to cancel.
      */
-    private suspend fun finishRestore(restored: AppState, cleaned: AppState) {
-        checkpointRecovery(cleaned)
-        reconcileRecoveredTimers(restored, cleaned)
+    private suspend fun finishRestore(restored: AppState) {
+        checkpointRecovery(restored.recoveryHygiene(System.currentTimeMillis()))
+        val cleaned = restored.recoveryHygiene(System.currentTimeMillis())
+        rearmRecoveredTimers(cleaned)
         _state.value = cleaned
         recoveryReconcilePending = true
-    }
-
-    /**
-     * Make the engine's live timers match the state that is about to be installed (#1054).
-     *
-     * Two halves, and the cancel half is easy to forget because it is invisible in state: a timer
-     * the TAIL replay armed is a real coroutine on the engine's scope (`ScheduleTimeout` is not an
-     * external effect, so recovery genuinely executes it). If the hygiene then drops the pending it
-     * belonged to, that coroutine still runs to completion and logs a `Timer Expired` WARN into the
-     * shareable log for something that no longer exists — noise in the exact stream principle 7
-     * reserves for a defended invariant firing. So every drop the hygiene made emits its cancel.
-     *
-     * Then the re-arms. Both go out on the LIVE path (`recovering = false`) — recovery mode
-     * suppresses external effects, and these timers exist to fire for real — and BEFORE
-     * `_state.value` is set, so no live observation can be interleaved between the state the timers
-     * describe and the timers themselves.
-     */
-    private fun reconcileRecoveredTimers(restored: AppState, cleaned: AppState) {
-        cancelDroppedTimers(restored, cleaned)
-        rearmRecoveredTimers(cleaned)
-    }
-
-    private fun cancelDroppedTimers(restored: AppState, cleaned: AppState) {
-        restored.regions.platforms.forEach { (platform, before) ->
-            val after = cleaned.regions.platforms[platform] ?: return@forEach
-            if (before.pendingModeResume != null && after.pendingModeResume == null) {
-                cancel(TimeoutType.MODE_RESUME_COMMIT, platform, cleaned.correlationVersion)
-            }
-            if (before.pendingSessionPay != null && after.pendingSessionPay == null) {
-                cancel(TimeoutType.SESSION_PAY_SETTLE, platform, cleaned.correlationVersion)
-            }
-        }
-    }
-
-    private fun cancel(type: TimeoutType, platform: Platform, correlationVersion: Long) {
-        engine.process(
-            AppEffect.CancelTimeout(type, platform),
-            recovering = false,
-            correlationVersion = correlationVersion,
-        )
     }
 
     /**
@@ -380,8 +347,8 @@ class StateManagerV2 @Inject constructor(
                     durationMs = 1L,
                     type = pending.type,
                     platform = pending.platform,
-                    payload = ObservationPayload.GraceWake(pending.deadline),
-                    deadlineMs = pending.deadline,
+                    payload = ObservationPayload.GraceWake(pending.wake.wakeId),
+                    deadlineMs = pending.wake.deadline,
                 ),
                 recovering = false,
                 correlationVersion = restored.correlationVersion,

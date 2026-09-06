@@ -8,6 +8,7 @@ import cloud.trotter.dashbuddy.domain.state.Mode
 import cloud.trotter.dashbuddy.domain.state.PendingDestructive
 import cloud.trotter.dashbuddy.domain.state.PendingModeResume
 import cloud.trotter.dashbuddy.domain.state.PendingSessionPay
+import cloud.trotter.dashbuddy.domain.state.PendingWake
 import cloud.trotter.dashbuddy.domain.state.Platform
 import cloud.trotter.dashbuddy.domain.state.PlatformRegion
 import cloud.trotter.dashbuddy.domain.state.Regions
@@ -39,7 +40,7 @@ class PendingDeadlineTimersTest {
         modeResume: PendingModeResume? = null,
         park: PendingSessionPay? = null,
         session: Session? = Session("live", startedAt = 100L),
-        pauseSafetyDeadline: Long? = null,
+        pauseSafety: PendingWake? = null,
     ) = PlatformRegion(
         platform = platform,
         mode = Mode.Online,
@@ -47,7 +48,7 @@ class PendingDeadlineTimersTest {
         pendingDestructive = destructive,
         pendingModeResume = modeResume,
         pendingSessionPay = park,
-        pauseSafetyDeadline = pauseSafetyDeadline,
+        pauseSafety = pauseSafety,
     )
 
     private fun state(vararg regions: PlatformRegion) = AppState(
@@ -67,6 +68,12 @@ class PendingDeadlineTimersTest {
     /** "Now" at the moment of the restore — far past every deadline above. */
     private val NOW = 1_000_000L
 
+    /**
+     * (type, platform, deadline) — what an enumeration test is actually about. The `wakeId` is
+     * MINTED by the hygiene, so it is not a fixture value; it gets its own test below.
+     */
+    private fun List<PendingDeadline>.described() = map { Triple(it.type, it.platform, it.wake.deadline) }
+
     @Test
     fun `a state with no pendings enumerates nothing`() {
         assertTrue(state(region(Platform.DoorDash)).pendingDeadlineTimers().isEmpty())
@@ -76,8 +83,8 @@ class PendingDeadlineTimersTest {
     @Test
     fun `a restored destructive grace enumerates its GRACE_COMMIT deadline`() {
         assertEquals(
-            listOf(PendingDeadline(TimeoutType.GRACE_COMMIT, Platform.DoorDash, 20_500L)),
-            state(region(Platform.DoorDash, destructive = destructive)).pendingDeadlineTimers(),
+            listOf(Triple(TimeoutType.GRACE_COMMIT, Platform.DoorDash, 20_500L)),
+            state(region(Platform.DoorDash, destructive = destructive)).pendingDeadlineTimers().described(),
         )
     }
 
@@ -117,9 +124,9 @@ class PendingDeadlineTimersTest {
         // other two, its commit fails toward the SAFE side: it ends a dash that in all likelihood
         // really did end, rather than inventing one.
         assertEquals(
-            listOf(PendingDeadline(TimeoutType.GRACE_COMMIT, Platform.DoorDash, 20_500L)),
+            listOf(Triple(TimeoutType.GRACE_COMMIT, Platform.DoorDash, 20_500L)),
             state(region(Platform.DoorDash, destructive = destructive, session = null))
-                .pendingDeadlineTimers(),
+                .pendingDeadlineTimers().described(),
         )
     }
 
@@ -131,14 +138,14 @@ class PendingDeadlineTimersTest {
                 destructive = destructive,
                 modeResume = modeResume,
                 park = park,
-                pauseSafetyDeadline = 40_000L,
+                pauseSafety = PendingWake(40_000L, 3L),
             ),
-        ).pendingDeadlineTimers()
+        ).pendingDeadlineTimers().described()
 
         assertEquals(
             listOf(
-                PendingDeadline(TimeoutType.GRACE_COMMIT, Platform.DoorDash, 20_500L),
-                PendingDeadline(TimeoutType.SESSION_PAUSED_SAFETY, Platform.DoorDash, 40_000L),
+                Triple(TimeoutType.GRACE_COMMIT, Platform.DoorDash, 20_500L),
+                Triple(TimeoutType.SESSION_PAUSED_SAFETY, Platform.DoorDash, 40_000L),
             ),
             enumerated,
         )
@@ -153,8 +160,9 @@ class PendingDeadlineTimersTest {
         // for a pocketed phone whose countdown ended overnight, leaving a session the next
         // morning's dash would RESUME.
         assertEquals(
-            listOf(PendingDeadline(TimeoutType.SESSION_PAUSED_SAFETY, Platform.DoorDash, 1_000L)),
-            state(region(Platform.DoorDash, pauseSafetyDeadline = 1_000L)).pendingDeadlineTimers(),
+            listOf(Triple(TimeoutType.SESSION_PAUSED_SAFETY, Platform.DoorDash, 1_000L)),
+            state(region(Platform.DoorDash, pauseSafety = PendingWake(1_000L, 2L)))
+                .pendingDeadlineTimers().described(),
         )
     }
 
@@ -163,12 +171,12 @@ class PendingDeadlineTimersTest {
         val enumerated = state(
             region(Platform.DoorDash, destructive = destructive),
             region(Platform.Uber, destructive = destructive.copy(deadline = 30_000L)),
-        ).pendingDeadlineTimers()
+        ).pendingDeadlineTimers().described()
 
         assertEquals(
             setOf(
-                PendingDeadline(TimeoutType.GRACE_COMMIT, Platform.DoorDash, 20_500L),
-                PendingDeadline(TimeoutType.GRACE_COMMIT, Platform.Uber, 30_000L),
+                Triple(TimeoutType.GRACE_COMMIT, Platform.DoorDash, 20_500L),
+                Triple(TimeoutType.GRACE_COMMIT, Platform.Uber, 30_000L),
             ),
             enumerated.toSet(),
         )
@@ -212,8 +220,8 @@ class PendingDeadlineTimersTest {
         assertEquals("`since` never moves — #732 stamps the commit at it", 10_500L, kept.since)
         assertEquals(
             "and the enumerator re-arms the re-based deadline, not the stale one",
-            listOf(PendingDeadline(TimeoutType.GRACE_COMMIT, Platform.DoorDash, NOW + 10_000L)),
-            cleaned.pendingDeadlineTimers(),
+            listOf(Triple(TimeoutType.GRACE_COMMIT, Platform.DoorDash, NOW + 10_000L)),
+            cleaned.pendingDeadlineTimers().described(),
         )
     }
 
@@ -244,13 +252,75 @@ class PendingDeadlineTimersTest {
     }
 
     @Test
+    fun `re-basing is a FIXED POINT — a second restart with no observation returns the same window`() {
+        // Astra's finding 1. Re-basing moves the deadline but NOT `AppState.timestamp`, so a naive
+        // second pass measured `observed` against a timestamp the first pass had already accounted
+        // for and handed back the whole elapsed interval as fresh window: a 2.5 s grace restored at
+        // 100 000 and again at 101 000 became 193 500 ms, and a crash loop stretched it without
+        // bound. `servedFrom` is the anchor that closes it.
+        val short = PendingDestructive(
+            kind = DestructiveKind.SESSION_END, since = 10_000L, deadline = 12_500L,
+        )
+        val crashed = state(region(Platform.DoorDash, destructive = short)).copy(timestamp = 10_000L)
+
+        val first = crashed.recoveryHygiene(nowMs = 100_000L)
+        val firstPend = first.regions.platforms.getValue(Platform.DoorDash).pendingDestructive!!
+        assertEquals("the full 2.5 s window, re-based", 102_500L, firstPend.deadline)
+        assertEquals("and the anchor is recorded", 100_000L, firstPend.servedFrom)
+
+        // The second restart replays the CHECKPOINTED state, which still carries timestamp 10 000.
+        val second = first.recoveryHygiene(nowMs = 101_000L)
+        assertEquals(
+            "the same 2.5 s again, not 92.5 s of dead time handed back as window",
+            103_500L,
+            second.regions.platforms.getValue(Platform.DoorDash).pendingDestructive?.deadline,
+        )
+    }
+
+    @Test
+    fun `a restart AFTER a live observation serves only what that observation left`() {
+        // The other side of the fixed point: `servedFrom` must not freeze the accounting either.
+        // A second crash at 101 000 with a live frame at 101 000 means 1 s of the window really
+        // was served, so 1.5 s remain.
+        val short = PendingDestructive(
+            kind = DestructiveKind.SESSION_END, since = 10_000L, deadline = 12_500L,
+        )
+        val first = state(region(Platform.DoorDash, destructive = short))
+            .copy(timestamp = 10_000L)
+            .recoveryHygiene(nowMs = 100_000L)
+
+        val observed = first.copy(timestamp = 101_000L)
+        val second = observed.recoveryHygiene(nowMs = 101_000L)
+
+        assertEquals(
+            101_000L + 1_500L,
+            second.regions.platforms.getValue(Platform.DoorDash).pendingDestructive?.deadline,
+        )
+    }
+
+    @Test
+    fun `a re-based grace takes a FRESH generation, and keeps its arm time`() {
+        val cleaned = state(region(Platform.DoorDash, destructive = destructive))
+            .recoveryHygiene(nowMs = NOW)
+        val pend = cleaned.regions.platforms.getValue(Platform.DoorDash).pendingDestructive!!
+
+        assertTrue("never the legacy 0 — a restored arm must be identifiable", pend.wakeId > 0L)
+        assertEquals("`since` never moves — #732 stamps the commit at it", 10_500L, pend.since)
+        assertEquals(
+            "and the enumerator carries that generation to the arm",
+            pend.wakeId,
+            cleaned.pendingDeadlineTimers().single { it.type == TimeoutType.GRACE_COMMIT }.wake.wakeId,
+        )
+    }
+
+    @Test
     fun `the pause-safety deadline is left exactly as it was`() {
-        val cleaned = state(region(Platform.DoorDash, pauseSafetyDeadline = 1_000L))
+        val cleaned = state(region(Platform.DoorDash, pauseSafety = PendingWake(1_000L, 2L)))
             .recoveryHygiene(nowMs = NOW)
 
         assertEquals(
             1_000L,
-            cleaned.regions.platforms.getValue(Platform.DoorDash).pauseSafetyDeadline,
+            cleaned.regions.platforms.getValue(Platform.DoorDash).pauseSafety?.deadline,
         )
     }
 }

@@ -15,6 +15,7 @@ import cloud.trotter.dashbuddy.domain.model.event.payload.SessionEndSource
 import cloud.trotter.dashbuddy.domain.state.Flow
 import cloud.trotter.dashbuddy.domain.state.FlowRegion
 import cloud.trotter.dashbuddy.domain.state.Mode
+import cloud.trotter.dashbuddy.domain.state.PendingWake
 import cloud.trotter.dashbuddy.domain.state.PlatformRegion
 import cloud.trotter.dashbuddy.domain.state.ParsedFields
 import cloud.trotter.dashbuddy.domain.state.Platform
@@ -40,6 +41,9 @@ class StateMachineTest {
         regions.platforms.values.firstNotNullOfOrNull { it.presentedOffer() }
 
     private lateinit var machine: StateMachine
+
+    /** #1054 round 5: the pause-safety net's wake generation in these fixtures. */
+    private val SAFETY_WAKE = 11L
 
     @Before
     fun setUp() {
@@ -749,7 +753,7 @@ class StateMachineTest {
             platform = Platform.DoorDash,
             mode = Mode.Paused,
             session = session,
-            pauseSafetyDeadline = safetyDeadline,
+            pauseSafety = PendingWake(safetyDeadline, SAFETY_WAKE),
         )
         val flow = FlowRegion(flow = Flow.Idle)
 
@@ -757,7 +761,7 @@ class StateMachineTest {
             pausedRegion, flow, flow,
             timeoutObs(
                 type = TimeoutType.SESSION_PAUSED_SAFETY,
-                payload = ObservationPayload.GraceWake(safetyDeadline),
+                payload = ObservationPayload.GraceWake(SAFETY_WAKE),
             ),
             policy,
         )
@@ -860,15 +864,15 @@ class StateMachineTest {
             // Grace still un-expired at the timeout instant (deadline in the future) so the
             // safety-timeout path — not lazy expiry — resolves the pending.
             pendingModeResume = cloud.trotter.dashbuddy.domain.state.PendingModeResume(since = 4_000L, deadline = 12_000L),
-            // #1054 round 4: the safety fire matches this deadline by identity.
-            pauseSafetyDeadline = 9_000L,
+            // #1054 rounds 4–5: the safety fire matches this net by GENERATION.
+            pauseSafety = PendingWake(9_000L, SAFETY_WAKE),
         )
         val flow = FlowRegion(flow = Flow.Idle)
         val result = stepper.step(
             pausedRegion, flow, flow,
             timeoutObs(
                 type = TimeoutType.SESSION_PAUSED_SAFETY, timestamp = 5_000L,
-                payload = ObservationPayload.GraceWake(9_000L),
+                payload = ObservationPayload.GraceWake(SAFETY_WAKE),
             ),
             policy,
         )

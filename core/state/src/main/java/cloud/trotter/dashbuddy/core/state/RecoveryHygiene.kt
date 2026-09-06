@@ -2,6 +2,8 @@ package cloud.trotter.dashbuddy.core.state
 
 import cloud.trotter.dashbuddy.domain.pipeline.TimeoutType
 import cloud.trotter.dashbuddy.domain.state.AppState
+import cloud.trotter.dashbuddy.domain.state.PendingWake
+import cloud.trotter.dashbuddy.domain.state.mintWakeId
 import cloud.trotter.dashbuddy.domain.state.Platform
 
 /**
@@ -36,9 +38,11 @@ import cloud.trotter.dashbuddy.domain.state.Platform
  * toward **Paused**, the honest reading of a process that died under a pause sheet, and the next
  * Online-implying frame arms a fresh grace screen-driven, exactly as #605 intends.
  *
- * Both drops emit a `CancelTimeout` at the edge (`StateManagerV2.reconcileRecoveredTimers`): a
- * tail-replayed arm is a real coroutine, and without the cancel it later fires a `Timer Expired`
- * WARN into the shareable log for a pending that no longer exists (principle 7).
+ * Neither drop needs a cancel any more (#1054 round 5): `SideEffectEngine` SKIPS arming a
+ * [TimeoutType.REGION_TIMERS] member while `recovering == true`, so the replay never armed one to
+ * begin with. Round 4 cancelled them instead, which could not work — the replayed arm had already
+ * executed by the time the reconcile ran, so its `Timer Expired` WARN and its journalled fire were
+ * beyond recall.
  *
  * ## Re-based — a DECISION in flight that has observed none of its window
  *
@@ -52,14 +56,30 @@ import cloud.trotter.dashbuddy.domain.state.Platform
  * restored grace re-armed at the 1 ms floor and committed before any live frame could arrive; a
  * collapsed-receipt `TASK_RETIRE` lost its whole expansion window that way.
  *
- * [lastSeen] is `AppState.timestamp` — set by `StateMachine.step` on EVERY accepted observation
+ * `lastSeen` is `AppState.timestamp` — set by `StateMachine.step` on EVERY accepted observation
  * regardless of platform, so it is the honest "when did this state last see anything". A region's
  * own `lastObservedAt` only moves when that region is stepped with a mode signal, so it lags and
  * would overstate the remaining window.
  *
+ * **The re-base is a FIXED POINT, which is why it can be applied more than once** (#1054 round 5).
+ * Re-basing moves the deadline but NOT `AppState.timestamp`, so a naive second pass would measure
+ * `observed` against a timestamp the first pass already accounted for and hand back the whole
+ * elapsed interval as fresh window — a 2.5 s summary grace restored at 100 000 and again at 101 000
+ * stretched to 193 500 ms, and a crash loop stretched it without bound. [PendingDestructive.servedFrom]
+ * is the second anchor that closes it: once set, the window is measured from THERE, so re-running
+ * the hygiene with no intervening observation returns the same remaining window it did the first
+ * time (only the absolute deadline slides forward with `nowMs`).
+ *
+ * That idempotence is load-bearing, not incidental: `StateManagerV2.restoreState` applies the
+ * hygiene TWICE — once to produce the durable checkpoint, then again immediately before installing
+ * — so the served window starts at the LIVE boundary rather than at a clock read taken before the
+ * snapshot load, the tail replay and the checkpoint write. The checkpointed deadline therefore lags
+ * the installed one by the checkpoint latency, deliberately; nothing depends on their being equal,
+ * because a further restart simply re-bases again from the same `servedFrom`.
+ *
  * ## Re-armed as-is — a countdown that is not ours
  *
- * **The pause-safety deadline** (`pauseSafetyDeadline`, #1054 round 4) is left alone here and
+ * **The pause-safety deadline** (`pauseSafety`, #1054 round 4) is left alone here and
  * re-armed verbatim by [pendingDeadlineTimers]: it belongs to the PLATFORM and ran on the platform's
  * clock while we were dead. See the field's KDoc.
  *
@@ -87,14 +107,20 @@ fun AppState.recoveryHygiene(nowMs: Long): AppState {
     return copy(
         regions = regions.copy(
             platforms = regions.platforms.mapValues { (_, region) ->
-                region.copy(
-                    pendingSessionPay = null,
-                    pendingModeResume = null,
-                    pendingDestructive = region.pendingDestructive?.let { pend ->
-                        val observed = (lastSeen - pend.since).coerceAtLeast(0L)
-                        val remaining = (pend.deadline - pend.since - observed).coerceAtLeast(0L)
-                        pend.copy(deadline = nowMs + remaining)
-                    },
+                val scrubbed = region.copy(pendingSessionPay = null, pendingModeResume = null)
+                val pend = scrubbed.pendingDestructive ?: return@mapValues scrubbed
+                // The window is measured from `servedFrom` once one exists — see the KDoc's
+                // fixed-point argument. `since` is untouched (#732 stamps the commit at it).
+                val base = pend.servedFrom ?: pend.since
+                val observed = (lastSeen - base).coerceAtLeast(0L)
+                val remaining = (pend.deadline - base - observed).coerceAtLeast(0L)
+                val (withId, wakeId) = scrubbed.mintWakeId()
+                withId.copy(
+                    pendingDestructive = pend.copy(
+                        deadline = nowMs + remaining,
+                        servedFrom = nowMs,
+                        wakeId = wakeId,
+                    ),
                 )
             },
         ),
@@ -114,7 +140,7 @@ fun AppState.recoveryHygiene(nowMs: Long): AppState {
 internal data class PendingDeadline(
     val type: TimeoutType,
     val platform: Platform,
-    val deadline: Long,
+    val wake: PendingWake,
 )
 
 /**
@@ -127,7 +153,7 @@ internal data class PendingDeadline(
  *   so the grace serves its REMAINING window live. It is a decision already taken, and the one
  *   pending whose commit fails toward the SAFE side: it ends a dash that in all likelihood really
  *   ended, where the others would invent something (a figure, a dash).
- * - **`SESSION_PAUSED_SAFETY`** (`pauseSafetyDeadline`) — re-armed AS-IS, dead time included,
+ * - **`SESSION_PAUSED_SAFETY`** (`pauseSafety`) — re-armed AS-IS, dead time included,
  *   because it is the PLATFORM's countdown running on the platform's clock (see the field's KDoc). A
  *   deadline already past fires at once and ends the dash: the designed outcome, and the fix for a
  *   pocketed phone whose countdown ended overnight leaving the session live for the next morning's
@@ -147,9 +173,15 @@ internal fun AppState.pendingDeadlineTimers(): List<PendingDeadline> =
     regions.platforms.values.flatMap { region ->
         buildList {
             region.pendingDestructive?.let {
-                add(PendingDeadline(TimeoutType.GRACE_COMMIT, region.platform, it.deadline))
+                add(
+                    PendingDeadline(
+                        TimeoutType.GRACE_COMMIT,
+                        region.platform,
+                        PendingWake(it.deadline, it.wakeId),
+                    ),
+                )
             }
-            region.pauseSafetyDeadline?.let {
+            region.pauseSafety?.let {
                 add(PendingDeadline(TimeoutType.SESSION_PAUSED_SAFETY, region.platform, it))
             }
         }

@@ -8,6 +8,7 @@ import cloud.trotter.dashbuddy.domain.state.DestructiveKind
 import cloud.trotter.dashbuddy.domain.state.Job
 import cloud.trotter.dashbuddy.domain.state.Mode
 import cloud.trotter.dashbuddy.domain.state.PendingDestructive
+import cloud.trotter.dashbuddy.domain.state.PendingWake
 import cloud.trotter.dashbuddy.domain.state.Platform
 import cloud.trotter.dashbuddy.domain.state.PlatformRegion
 import cloud.trotter.dashbuddy.domain.state.Regions
@@ -35,13 +36,16 @@ class TimeoutRoutingTest {
     )
 
     /** #1054 round 4: the pause-safety net's deadline is region state and its fire matches it. */
+
+    /** #1054 round 5: the pause-safety net's wake generation in these fixtures. */
+    private val SAFETY_WAKE = 11L
     private val safetyDeadline = 4_000L
 
     private fun pausedRegion() = PlatformRegion(
         platform = Platform.DoorDash,
         mode = Mode.Paused,
         session = Session("sess-1", startedAt = 1_000L),
-        pauseSafetyDeadline = safetyDeadline,
+        pauseSafety = PendingWake(safetyDeadline, SAFETY_WAKE),
     )
 
     private fun state(region: PlatformRegion) = AppState(
@@ -55,7 +59,7 @@ class TimeoutRoutingTest {
             timestamp = 5_000L,
             type = TimeoutType.SESSION_PAUSED_SAFETY,
             targetPlatform = Platform.DoorDash,
-            payload = ObservationPayload.GraceWake(safetyDeadline),
+            payload = ObservationPayload.GraceWake(SAFETY_WAKE),
         )
 
         val next = machine.step(state(pausedRegion()), obs).newState
@@ -71,7 +75,7 @@ class TimeoutRoutingTest {
         val obs = Observation.Timeout(
             timestamp = 5_000L,
             type = TimeoutType.SESSION_PAUSED_SAFETY,
-            payload = ObservationPayload.GraceWake(safetyDeadline),
+            payload = ObservationPayload.GraceWake(SAFETY_WAKE),
         )
 
         val next = machine.step(state(pausedRegion()), obs).newState

@@ -603,10 +603,15 @@ pre-"End Dash" park committing on the summary frame and riding into the #596 clo
 armed for `deadline − obs.timestamp` against a wall clock, so its fire lands ON the deadline
 ordinarily and BEFORE it after a step-back, with no frame coming to retry. **Since #1054 round 4 that is settled by IDENTITY, not arithmetic** — the one rule, in
 `GraceExpiry` (`isWakeFor` / `graceLapsed`, housed outside the oversized stepper): every arm from the
-shared `ModeEffects.diffDeadlineTimer` carries `ObservationPayload.GraceWake(deadline)`, so **a
-pending's OWN wake lapses it whenever it arrives** (an NTP step between arm and fire changes the
-stamp, not the fact that the window elapsed) and a fire from a REPLACED pending — different deadline
-— is inert. **A FRAME lapses a grace strictly PAST the deadline and the park at-or-past**, so a
+shared `ModeEffects.diffDeadlineTimer` carries `ObservationPayload.GraceWake(wakeId)` — **a
+per-region GENERATION drawn from `PlatformRegion.wakeSeq` through the one `mintWakeId()` helper, not
+the deadline** (#1054 round 5; a deadline is not unique — a replacement park computed after a clock
+step-back holds the identical `now + settleWindow`, and the superseded wake then committed it after
+zero time in its own window). So **a pending's OWN wake lapses it whenever it arrives** (an NTP step
+between arm and fire changes the stamp, not the fact that the window elapsed) and a fire from a
+REPLACED pending is inert. A new id is minted wherever a pending is created, replaced, re-based or
+has its deadline MOVED; id `0` is the reserved "legacy, unidentified" value a pre-round-5 snapshot
+decodes to and never matches, so such a pending is lapsed by its timestamp alone. **A FRAME lapses a grace strictly PAST the deadline and the park at-or-past**, so a
 contradicting frame stamped exactly on a grace's deadline still reaches its own cancel arm (a paused
 frame cancels a resume #605, a task frame cancels a misrecognized `SESSION_END` #431; on the resume
 the alternative also MINTED a session whose Online→Paused follow-up left `diffMode` with no edge, a
@@ -657,11 +662,19 @@ is dropped, a decision in flight is re-armed*. `AppState.recoveryHygiene(nowMs)`
 park and the graced resume; a resume's 8 s window is UN-CONTRADICTED observation, so committing one
 after a restart asserts dead process time was nobody contradicting it — and the commit MINTS a
 session when the region has none and CANCELS `SESSION_PAUSED_SAFETY` through `diffMode`. It **re-bases**
-`pendingDestructive` to serve its REMAINING window live (`remaining = (deadline − since) − (lastSeen
-− since)`, `lastSeen` = `AppState.timestamp`, `since` untouched per #732): a restored grace has
-observed NONE of its window, and dead time is not un-contradicted time — the collapsed receipt's
-expansion (#1033) and the misrecognized summary's contradicting task frame can still land, where
-round 3's re-arm at the stale deadline fired at the 1 ms floor and committed first.
+`pendingDestructive` to serve its REMAINING window live (`remaining = (deadline − base) − (lastSeen −
+base)` where `base = servedFrom ?: since`, `lastSeen` = `AppState.timestamp`, `since` untouched per
+#732): a restored grace has observed NONE of its window, and dead time is not un-contradicted time —
+the collapsed receipt's expansion (#1033) and the misrecognized summary's contradicting task frame
+can still land, where round 3's re-arm at the stale deadline fired at the 1 ms floor and committed
+first. **`PendingDestructive.servedFrom` is what makes that re-base a FIXED POINT** (round 5): the
+re-base moves the deadline but not `AppState.timestamp`, so without a second anchor a restart before
+any new observation handed the whole elapsed dead time back as fresh window — a 2.5 s grace restored
+twice became 193 500 ms, and a crash loop stretched it without bound. Idempotence is load-bearing
+rather than incidental, because `finishRestore` applies the hygiene **twice**: once for the durable
+checkpoint, then again immediately before install, so the served window starts at the LIVE boundary
+instead of losing the snapshot load, the tail replay and the checkpoint write to latency. The
+checkpointed deadline therefore lags the installed one, deliberately.
 `AppState.pendingDeadlineTimers()` then **re-arms** exactly two things: that grace, and the
 **pause-safety net** at the platform's own deadline, AS-IS with dead time included (it is the
 platform's countdown on the platform's clock). That net is state now — `PlatformRegion.pauseSafetyDeadline`,
@@ -669,9 +682,16 @@ stamped by `applyModeTransition` into Paused and cleared on the way out, armed/c
 `EffectMap.diffPauseSafetyTimer` like the other three region timers — because before round 4 its
 deadline lived ONLY in the engine's in-memory timer map, so a restore into Paused had no timer of any
 kind and a pocketed phone whose countdown ended kept the session live for the next morning's dash to
-RESUME. Each drop emits a `CancelTimeout` (`StateManagerV2.reconcileRecoveredTimers`): a tail-replayed
-arm is a real coroutine and would otherwise fire a `Timer Expired` WARN into the shareable log for a
-pending that no longer exists (P7). `initialize()` awaits the merge collector's SUBSCRIPTION before
+RESUME. **A replayed REGION timer is never executed** (round 5): `SideEffectEngine` skips a
+`TimeoutType.REGION_TIMERS` arm or cancel while `recovering == true`, because such an arm is
+scheduled against a replayed frame's timestamp and so fires at the 1 ms floor mid-recovery — logging
+a `Timer Expired` WARN into the shareable log for a pending the hygiene may be about to drop (P7),
+and not merely inertly, since `graceLapsed`'s timestamp arm can still COMMIT. The recovery reconcile
+is their sole authoritative armer, which is also why round 4's cancel-after-the-fact is gone: by the
+time it ran, the coroutine had already fired. A **legacy payload-less `SESSION_PAUSED_SAFETY`** fire
+is honoured when the region has no `pauseSafety` of its own (a pre-round-4 arm has no identity to
+check) — refusing it was an upgrade regression that left a master-era snapshot's ended dash
+checkpointed as still running. `initialize()` awaits the merge collector's SUBSCRIPTION before
 `restoreState`, because `engine.events` is a `replay = 0` `SharedFlow` and an already-elapsed re-arm
 fires at once — emitted with no subscriber it would be dropped silently. Everything goes out on the
 LIVE path (`recovering = false`) before `_state.value` is set, `durationMs` is the bare 1 ms floor

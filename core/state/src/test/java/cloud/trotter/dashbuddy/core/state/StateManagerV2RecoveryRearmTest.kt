@@ -1,5 +1,7 @@
 package cloud.trotter.dashbuddy.core.state
 
+import cloud.trotter.dashbuddy.core.database.snapshot.AppStateSnapshotDao
+import cloud.trotter.dashbuddy.core.database.snapshot.AppStateSnapshotEntity
 import cloud.trotter.dashbuddy.core.database.observation.ObservationEntity
 import cloud.trotter.dashbuddy.domain.model.state.StateEvent
 import cloud.trotter.dashbuddy.domain.model.state.TimeoutEvent
@@ -15,6 +17,7 @@ import cloud.trotter.dashbuddy.domain.state.ParsedFields
 import cloud.trotter.dashbuddy.domain.state.PendingDestructive
 import cloud.trotter.dashbuddy.domain.state.PendingModeResume
 import cloud.trotter.dashbuddy.domain.state.PendingSessionPay
+import cloud.trotter.dashbuddy.domain.state.PendingWake
 import cloud.trotter.dashbuddy.domain.state.Platform
 import cloud.trotter.dashbuddy.domain.state.PlatformRegion
 import cloud.trotter.dashbuddy.domain.state.Regions
@@ -24,6 +27,7 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.test.StandardTestDispatcher
+import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.encodeToString
@@ -66,6 +70,9 @@ class StateManagerV2RecoveryRearmTest {
     private val endDeadline = armedAt + graceWindow
     private val resumeDeadline = 19_000L
     private val safetyDeadline = 30_000L
+
+    /** #1054 round 5: the generation the fixtures' pause-safety net is armed under. */
+    private val SAFETY_WAKE = 11L
 
     /** Records everything the manager hands the engine, with the flags it handed it under. */
     private open class RecordingEngine : EffectExecutor {
@@ -118,7 +125,7 @@ class StateManagerV2RecoveryRearmTest {
                     pendingDestructive = destructive,
                     pendingModeResume = modeResume,
                     pendingSessionPay = park,
-                    pauseSafetyDeadline = safety,
+                    pauseSafety = safety?.let { PendingWake(it, SAFETY_WAKE) },
                 ),
             ),
         ),
@@ -152,6 +159,32 @@ class StateManagerV2RecoveryRearmTest {
         ),
     )
 
+    /** A master-era, payload-less `SESSION_PAUSED_SAFETY` journal row. */
+    private fun legacySafetyRow(cv: Long, timestamp: Long) =
+        legacyTimeoutRow(cv, timestamp, TimeoutType.SESSION_PAUSED_SAFETY)
+
+    /** A master-era, payload-less `GRACE_COMMIT` journal row. */
+    private fun legacyGraceCommitRow(cv: Long, timestamp: Long) =
+        legacyTimeoutRow(cv, timestamp, TimeoutType.GRACE_COMMIT)
+
+    private fun legacyTimeoutRow(cv: Long, timestamp: Long, type: TimeoutType) = ObservationEntity(
+        occurredAt = timestamp,
+        sessionId = "s1",
+        pipelineId = "internal.timeout",
+        ruleId = null,
+        platform = Platform.DoorDash.name,
+        flow = null,
+        modeHint = null,
+        parsedJson = "{}",
+        captureId = null,
+        metadataJson = "{}",
+        correlationVersion = cv,
+        timeoutType = type.name,
+        payloadJson = StateJson.encodeToString(
+            InternalObsPayload(targetPlatform = Platform.DoorDash.wire),
+        ),
+    )
+
     /** A journalled online-idle SCREEN row — replayed over a Paused snapshot it ARMS a resume. */
     private fun onlineIdleRow(cv: Long, timestamp: Long) = ObservationEntity(
         occurredAt = timestamp,
@@ -167,12 +200,42 @@ class StateManagerV2RecoveryRearmTest {
         correlationVersion = cv,
     )
 
+    /**
+     * A snapshot table whose write costs REAL wall time — the checkpoint-latency case.
+     *
+     * It has to be real, not `delay`: the hygiene re-bases against `System.currentTimeMillis()`, so
+     * virtual time would leave both passes reading the same millisecond and the test would assert
+     * nothing. A few tens of milliseconds is enough to be unambiguous and cheap.
+     */
+    private class SlowSnapshotDao(
+        seed: AppStateSnapshotEntity,
+        private val delayMs: Long,
+    ) : AppStateSnapshotDao {
+        private val rows = LinkedHashMap<Long, AppStateSnapshotEntity>()
+
+        init {
+            rows[seed.correlationVersion] = seed
+        }
+
+        override suspend fun insert(entity: AppStateSnapshotEntity) {
+            val until = System.currentTimeMillis() + delayMs
+            @Suppress("BlockingMethodInNonBlockingContext")
+            while (System.currentTimeMillis() < until) Thread.sleep(5)
+            rows[entity.correlationVersion] = entity
+        }
+
+        override suspend fun latest(): AppStateSnapshotEntity? =
+            rows.values.maxByOrNull { it.correlationVersion }
+
+        override suspend fun pruneOlderThan(cutoff: Long) {}
+    }
+
     private fun newManager(
         snapshot: AppState,
         tail: List<ObservationEntity> = emptyList(),
         engine: RecordingEngine,
         dispatcher: CoroutineDispatcher,
-        snapshotDao: FakeSnapshotDao = FakeSnapshotDao(snapshotOf(snapshot)),
+        snapshotDao: AppStateSnapshotDao = FakeSnapshotDao(snapshotOf(snapshot)),
     ): StateManagerV2 = recoveryManager(
         journalDao = FakeObservationDao(tail),
         snapshotDao = snapshotDao,
@@ -213,11 +276,14 @@ class StateManagerV2RecoveryRearmTest {
             "the whole window is served live: expected ~now + $graceWindow, got $deadline",
             deadline in (before + graceWindow)..(after + graceWindow),
         )
+        val installedId = manager.state.value.regions.platforms[Platform.DoorDash]
+            ?.pendingDestructive?.wakeId
         assertEquals(
-            "and the arm carries its own identity, so its fire is recognised whenever it lands",
-            ObservationPayload.GraceWake(deadline),
+            "the arm carries the generation the re-base minted, so its fire is recognised",
+            ObservationPayload.GraceWake(installedId!!),
             effect.payload,
         )
+        assertTrue("a re-based pending gets a FRESH generation, never the legacy 0", installedId > 0L)
         assertEquals(
             "`durationMs` is the bare floor — `deadlineMs` is the authority",
             1L,
@@ -305,6 +371,46 @@ class StateManagerV2RecoveryRearmTest {
         assertEquals("the recovery checkpoint was already on disk", 1, engine.insertsAtFirstEffect)
     }
 
+    @Test
+    fun `the served window starts at the LIVE boundary, not before the checkpoint`() = runTest {
+        // Astra's finding 2. `nowMs` used to be read at the TOP of `restoreState`, so the snapshot
+        // load, the tail replay and the checkpoint write all came out of the window #1054 exists to
+        // give back: a 2.5 s grace restored through a 4 s recovery was already overdue on arrival,
+        // the engine fired at the 1 ms floor, and a contradicting task frame 50 ms later found the
+        // session ended. The hygiene is a fixed point, so it is simply applied AGAIN immediately
+        // before install — the checkpointed deadline lags the installed one by exactly the
+        // checkpoint latency, deliberately.
+        val dispatcher = StandardTestDispatcher(testScheduler)
+        val engine = RecordingEngine()
+        val slowDao = SlowSnapshotDao(snapshotOf(snapshotState(destructive = sessionEnd())), delayMs = 60L)
+        val manager = newManager(
+            snapshot = snapshotState(destructive = sessionEnd()),
+            engine = engine,
+            dispatcher = dispatcher,
+            snapshotDao = slowDao,
+        )
+
+        manager.initialize()
+        testScheduler.advanceUntilIdle()
+
+        val checkpointed = StateJson.decodeFromString<AppState>(slowDao.latest()!!.stateJson)
+            .regions.platforms.getValue(Platform.DoorDash).pendingDestructive!!.deadline
+        val installed = manager.state.value.regions.platforms
+            .getValue(Platform.DoorDash).pendingDestructive!!.deadline
+
+        assertTrue(
+            "the installed deadline is re-based past the checkpoint's by the write's own latency " +
+                "(checkpointed=$checkpointed installed=$installed) — under round 4 that latency " +
+                "came out of the served window instead",
+            installed - checkpointed >= 50L,
+        )
+        assertEquals(
+            "and the arm is for the state actually installed, not the checkpointed one",
+            installed,
+            engine.armed(TimeoutType.GRACE_COMMIT).deadlineMs,
+        )
+    }
+
     // =====================================================================
     // The pause-safety net — state since round 4, so a restore can re-arm it
     // =====================================================================
@@ -326,7 +432,11 @@ class StateManagerV2RecoveryRearmTest {
 
         val effect = engine.armed(TimeoutType.SESSION_PAUSED_SAFETY)
         assertEquals("not re-based — the platform's countdown is not ours to extend", safetyDeadline, effect.deadlineMs)
-        assertEquals(ObservationPayload.GraceWake(safetyDeadline), effect.payload)
+        assertEquals(
+            "and it carries the generation the net was armed under, unchanged by the restore",
+            ObservationPayload.GraceWake(SAFETY_WAKE),
+            effect.payload,
+        )
         assertEquals(Platform.DoorDash, effect.platform)
     }
 
@@ -355,7 +465,7 @@ class StateManagerV2RecoveryRearmTest {
                 timestamp = safetyDeadline,
                 type = TimeoutType.SESSION_PAUSED_SAFETY,
                 targetPlatform = Platform.DoorDash,
-                payload = ObservationPayload.GraceWake(safetyDeadline),
+                payload = ObservationPayload.GraceWake(SAFETY_WAKE),
             ),
         )
         runCurrent()
@@ -492,13 +602,17 @@ class StateManagerV2RecoveryRearmTest {
     }
 
     @Test
-    fun `a tail-armed resume timer is CANCELLED when the hygiene drops its pending`() = runTest {
-        // #1054 round 4 (D). The tail's online-idle frame arms a real `MODE_RESUME_COMMIT`
-        // coroutine — `ScheduleTimeout` is not an external effect, so the recovery fold executes
-        // it — and the hygiene then drops the pending it belonged to. Without a cancel that
-        // coroutine still runs to completion and logs a `Timer Expired` WARN into the SHAREABLE
-        // log for something that no longer exists: noise in the one stream principle 7 reserves for
-        // a defended invariant firing.
+    fun `a replayed region timer is never armed during recovery`() = runTest {
+        // #1054 round 5 (F5), replacing round 4's cancel-after-the-fact. The tail's online-idle
+        // frame produces a `MODE_RESUME_COMMIT` arm, and round 4 EXECUTED it — a real coroutine,
+        // scheduled against a replayed frame's timestamp, so already overdue and firing at the 1 ms
+        // floor mid-recovery. Two harms: a `Timer Expired` WARN into the SHAREABLE log for a
+        // pending the hygiene is about to drop (principle 7 reserves that stream for a defended
+        // invariant firing), and a fire that is NOT merely inert — identity stops the wake path,
+        // but `graceLapsed`'s `obs.timestamp > deadline` arm would still COMMIT a grace the
+        // replayed stamp happens to outrun. Cancelling afterwards cannot recall either, because by
+        // then it has already run. So the engine skips it, and the recovery reconcile is the sole
+        // authoritative armer.
         val dispatcher = StandardTestDispatcher(testScheduler)
         val engine = RecordingEngine()
         val manager = newManager(
@@ -512,19 +626,80 @@ class StateManagerV2RecoveryRearmTest {
         runCurrent()
 
         assertTrue(
-            "the tail really did arm one, in recovery mode",
+            "the tail's arm reached the engine — the SKIP is the engine's decision, not the " +
+                "state machine's, so this test would pass vacuously without it",
             engine.schedules(TimeoutType.MODE_RESUME_COMMIT).any { it.recovering },
         )
         assertNull(
             "and the hygiene dropped the pending it belonged to",
             manager.state.value.regions.platforms[Platform.DoorDash]?.pendingModeResume,
         )
-        val cancelled = engine.cancels(TimeoutType.MODE_RESUME_COMMIT).single()
-        assertTrue("the cancel goes out live, or the engine ignores it", !cancelled.recovering)
-        assertEquals(
-            Platform.DoorDash,
-            (cancelled.effect as AppEffect.CancelTimeout).platform,
+        assertTrue(
+            "no cancel is emitted any more — there is nothing armed to cancel",
+            engine.cancels(TimeoutType.MODE_RESUME_COMMIT).isEmpty(),
         )
+    }
+
+    // =====================================================================
+    // #1054 round 5 (F4) — a legacy payload-less safety fire must still act
+    // =====================================================================
+
+    @Test
+    fun `a master-era safety tail row still ends the dash it ended before the upgrade`() = runTest {
+        // Astra's finding 4, an UPGRADE regression. A master-era snapshot has no pause safety in
+        // state at all — the deadline lived only in the engine's timer map — and its journal tail
+        // holds a payload-less `SESSION_PAUSED_SAFETY` row followed by the `GRACE_COMMIT` that
+        // ended the session. Against master the first row armed SESSION_END and the second
+        // committed it. Round 4's identity gate ignored the first, so the second found no
+        // destructive pending and recovery checkpointed a genuinely-ended dash as still running.
+        // The fail-open arm (no identity in state ⇒ nothing to confuse it with) restores that.
+        val dispatcher = StandardTestDispatcher(testScheduler)
+        val engine = RecordingEngine()
+        val manager = newManager(
+            // `safety = null` is exactly the master-era shape.
+            snapshot = snapshotState(mode = Mode.Paused, safety = null, lastSeen = 9_000L),
+            tail = listOf(
+                legacySafetyRow(cv = 8L, timestamp = 10_000L),
+                legacyGraceCommitRow(cv = 9L, timestamp = 20_001L),
+            ),
+            engine = engine,
+            dispatcher = dispatcher,
+        )
+
+        manager.initialize()
+        runCurrent()
+
+        val region = manager.state.value.regions.platforms[Platform.DoorDash]
+        assertEquals("the tail must actually have replayed", 9L, manager.state.value.correlationVersion)
+        assertNull("the dash the replay ended stays ended", region?.session)
+        assertNull("and nothing is left pending", region?.pendingDestructive)
+    }
+
+    @Test
+    fun `a payload-less safety fire is REFUSED once the region has a net of its own`() {
+        // The other side of the fail-open: an unidentified fire is strictly older than an arm that
+        // exists in state, so it must not end the pause that arm belongs to.
+        val stepper = PlatformRegionStepper()
+        val paused = PlatformRegion(
+            platform = Platform.DoorDash,
+            mode = Mode.Paused,
+            session = Session("s1", startedAt = 100L),
+            pauseSafety = PendingWake(30_000L, SAFETY_WAKE),
+        )
+        val flow = FlowRegion(flow = Flow.Idle, activePlatform = Platform.DoorDash)
+
+        val after = stepper.step(
+            paused, flow, flow,
+            Observation.Timeout(
+                timestamp = 31_000L,
+                type = TimeoutType.SESSION_PAUSED_SAFETY,
+                targetPlatform = Platform.DoorDash,
+            ),
+            TransitionPolicy(),
+        )
+
+        assertEquals("the armed pause is untouched", Mode.Paused, after.mode)
+        assertEquals(SAFETY_WAKE, after.pauseSafety?.wakeId)
     }
 
     // =====================================================================
