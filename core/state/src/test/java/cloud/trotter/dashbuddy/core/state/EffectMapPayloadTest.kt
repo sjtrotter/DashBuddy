@@ -27,6 +27,7 @@ import cloud.trotter.dashbuddy.domain.state.PendingOffer
 import cloud.trotter.dashbuddy.domain.state.PendingDestructive
 import cloud.trotter.dashbuddy.domain.state.Platform
 import cloud.trotter.dashbuddy.domain.state.PlatformRegion
+import cloud.trotter.dashbuddy.domain.state.ReceiptCoverage
 import cloud.trotter.dashbuddy.domain.state.Regions
 import cloud.trotter.dashbuddy.domain.state.Session
 import cloud.trotter.dashbuddy.domain.state.Task
@@ -474,6 +475,10 @@ class EffectMapPayloadTest {
             activeJob = Job("J6", offerStoreHint = emptyList(), parentOfferHash = null, startedAt = 400L),
             recentTasks = listOf(completedTask),
             lastPostTaskFields = postFields,
+            // #1073 round 14: hand-built region — it never saw a receipt FRAME, so stamp the
+            // coverage one would have computed (the receipt attach is coverage-gated now).
+            lastAnnouncedPostTaskTaskId = "T6",
+            lastPostTaskCoverage = ReceiptCoverage(setOf("T6")),
         )
         val regionNext = regionPrev.copy()
         val prev = appState(

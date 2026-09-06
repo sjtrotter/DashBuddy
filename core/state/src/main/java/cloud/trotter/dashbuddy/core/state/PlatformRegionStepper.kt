@@ -138,8 +138,7 @@ class PlatformRegionStepper @Inject constructor() {
         prevFlow: FlowRegion,
         obs: Observation,
     ): PlatformRegion {
-        val prev = region.lastActedFlow ?: prevFlow.flow
-        val next = (obs as? Observation.FlowObservation)?.flow ?: prev
+        val (prev, next) = actedFlowEdge(region, prevFlow, obs)
         if (prev != Flow.PostTask || next == Flow.PostTask) return region
         val anchors = region.jobReceiptAnchors ?: return region
         return if (anchors.exitedPostTask) region
@@ -591,14 +590,8 @@ class PlatformRegionStepper @Inject constructor() {
     ): PlatformRegion {
         var r = region
         // #438 item 5 (D3): the lifecycle edges below diff THIS region's own acted flow, not the
-        // shared global R0 flow. `region.lastActedFlow` is still the pre-step value here (the stamp
-        // runs in the [step] wrapper, after stepCore). Fallback to the global prev flow for legacy
-        // snapshots (lastActedFlow=null) keeps single-platform behavior byte-identical — the sole
-        // region acts on every own frame, so its lastActedFlow tracks R0.flow. A flow-less own obs
-        // (flow=null) is not a flow edge (next=prev), never a diff against the other platform's
-        // nextFlow.flow. ([stampPostTaskExit] derives the same edge in the [step] wrapper.)
-        val prev = region.lastActedFlow ?: prevFlow.flow
-        val next = obs.flow ?: prev
+        // shared global R0 flow — see [actedFlowEdge], the one owner of that derivation.
+        val (prev, next) = actedFlowEdge(region, prevFlow, obs)
 
         // Authoritative session end: the dash-summary screen. It no longer ends
         // the session on the spot (#431) — one misrecognized frame used to split
@@ -682,7 +675,6 @@ class PlatformRegionStepper @Inject constructor() {
         }
 
         // (Ratings stamping moved to stepCore, ahead of this function's early returns — #967.)
-        // (The #1033 round-10 `exitedPostTask` latch moved to [stampPostTaskExit] — #1073 round 13.)
 
         // Job lifecycle
         r = updateJobLifecycle(r, prev, next, obs, policy)
@@ -728,8 +720,10 @@ class PlatformRegionStepper @Inject constructor() {
                 // committed task. MUST be the same resolution diffPostTask
                 // uses — the old recentTasks-only stamp lagged the commit by
                 // one frame and double-fired the receipt bubble on the
-                // expanded re-observation.
-                val postTaskTaskId = r.activeTask?.taskId ?: r.recentTasks.lastOrNull()?.taskId
+                // expanded re-observation. Since #1073 round 14 BOTH read the
+                // one [receiptSubjectTaskId] resolver, which additionally
+                // refuses a pickup and an un-arrived drop.
+                val postTaskTaskId = r.receiptSubjectTaskId()
                 // #630 R3: never let a COLLAPSED re-render (parsedPay == null) clobber an already-
                 // captured EXPANDED receipt for the SAME announced task. A PostTask re-entry (e.g.
                 // after a chained-offer decline) can render collapsed first, and if the retire-grace
@@ -747,7 +741,7 @@ class PlatformRegionStepper @Inject constructor() {
                 if (!sameTaskCollapsedDowngrade) {
                     // #1073 round 13: ONE owner writes the receipt, the drops it describes, and the
                     // task it was announced for — see [cacheReceipt] / [ReceiptCoverage].
-                    r = cacheReceipt(r, parsed, postTaskTaskId, obs.timestamp)
+                    r = cacheReceipt(r, parsed, postTaskTaskId)
                 }
                 // #1033 round 4: decide the late-receipt re-price HERE, where state can be written —
                 // the itemization has just landed in `lastPostTaskFields`, and the marker has to be
@@ -755,14 +749,11 @@ class PlatformRegionStepper @Inject constructor() {
                 // what this decides. The flow gate lives at this call site (round 9), because the
                 // OTHER caller is the job close, which has no frame.
                 if (flow == Flow.PostTask) {
-                    // #1073 round 13: the receipt is THIS frame's, so its coverage is computed fresh
-                    // here rather than read from the cache — a downgraded collapsed re-render did not
-                    // refresh the cache, and this frame's own drops are what it describes.
                     r = decideReceiptReprice(
                         region = r,
                         parsed = parsed,
                         postTaskTaskId = postTaskTaskId,
-                        coverage = receiptCoverageAt(r, postTaskTaskId, obs.timestamp),
+                        coverage = r.lastPostTaskCoverage,
                         decidedAt = obs.timestamp,
                         captureId = obs.captureId,
                     )

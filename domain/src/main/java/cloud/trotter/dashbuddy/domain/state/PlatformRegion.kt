@@ -327,12 +327,11 @@ data class ClosedJobReceipt(
  * admitted any active drop under a `TASK_RETIRE` grace, not just the anchor. A SET captured at read
  * time has neither failure mode, and — unlike a timestamp — it can be handed to the mint too.
  *
- * [readAt] is kept for diagnosis and replay ordering only; nothing branches on it.
+ * Assumes ONE receipt describes the whole job — see #1077 for add-on jobs, where a second accepted
+ * offer can bring its own receipt and that premise stops holding.
  */
 @Serializable
 data class ReceiptCoverage(
-    /** `obs.timestamp` of the frame the receipt was read from. Diagnostic; not a discriminator. */
-    val readAt: Long,
     /** The `taskId`s this receipt describes. Empty means it describes nothing. */
     val taskIds: Set<String> = emptySet(),
 )

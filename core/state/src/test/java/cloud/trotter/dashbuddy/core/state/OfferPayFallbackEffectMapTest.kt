@@ -16,6 +16,7 @@ import cloud.trotter.dashbuddy.domain.state.Mode
 import cloud.trotter.dashbuddy.domain.state.ParsedFields
 import cloud.trotter.dashbuddy.domain.state.Platform
 import cloud.trotter.dashbuddy.domain.state.PlatformRegion
+import cloud.trotter.dashbuddy.domain.state.ReceiptCoverage
 import cloud.trotter.dashbuddy.domain.state.Regions
 import cloud.trotter.dashbuddy.domain.state.Session
 import cloud.trotter.dashbuddy.domain.state.Task
@@ -136,6 +137,9 @@ class OfferPayFallbackEffectMapTest {
             recentTasks = listOf(dropA, dropB),
             lastPostTaskFields = postFields,
             lastAnnouncedPostTaskTaskId = "d1",
+            // #1073 round 14: hand-built region — stamp the coverage a receipt FRAME would have
+            // computed (both drops were delivered when it was read); the attach is gated on it.
+            lastPostTaskCoverage = ReceiptCoverage(setOf("d1", "d2")),
         )
         val regionNext = regionPrev.copy(activeJob = null)
 

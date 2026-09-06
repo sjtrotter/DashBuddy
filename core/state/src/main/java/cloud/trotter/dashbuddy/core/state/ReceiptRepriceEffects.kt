@@ -2,13 +2,17 @@ package cloud.trotter.dashbuddy.core.state
 
 import cloud.trotter.dashbuddy.domain.model.event.AppEventType
 import cloud.trotter.dashbuddy.domain.model.event.payload.DeliveryReceiptRepricePayload
+import cloud.trotter.dashbuddy.domain.pipeline.Observation
 import cloud.trotter.dashbuddy.domain.state.DestructiveKind
 import cloud.trotter.dashbuddy.domain.state.DropPayApportioner
+import cloud.trotter.dashbuddy.domain.state.Flow
+import cloud.trotter.dashbuddy.domain.state.FlowRegion
 import cloud.trotter.dashbuddy.domain.state.ParsedFields
 import cloud.trotter.dashbuddy.domain.state.PendingReceiptReprice
 import cloud.trotter.dashbuddy.domain.state.PlatformRegion
 import cloud.trotter.dashbuddy.domain.state.ReceiptCoverage
 import cloud.trotter.dashbuddy.domain.state.Task
+import cloud.trotter.dashbuddy.domain.state.TaskPhase
 import cloud.trotter.dashbuddy.domain.state.isAccountableDropoff
 import timber.log.Timber
 
@@ -48,32 +52,106 @@ internal fun closeReceiptRepriceWindow(region: PlatformRegion): PlatformRegion {
 }
 
 /**
+ * **The** acted-flow edge this observation drives for this region (#438 item 5 / D3, hoisted to one
+ * owner by #1073 round 14) — `prev to next`.
+ *
+ * The lifecycle edges diff THIS region's own acted flow, not the shared global R0 flow: `diff`
+ * iterates every platform, and under concurrency `FlowRegion.flow` is whatever platform last touched
+ * the screen. `region.lastActedFlow` is the pre-step value (the [PlatformRegionStepper.step] wrapper
+ * stamps the new one after `stepCore`); the fallback to the global prev flow keeps a legacy
+ * `lastActedFlow == null` snapshot byte-identical, since a sole region acts on every own frame. A
+ * flow-less observation (a timer, a click, a flow-less notification) is NOT an edge — `next` falls
+ * back to `prev` — so it can never diff against another platform's `nextFlow.flow`.
+ *
+ * Three sites derived this by hand before: `updateLifecycle`, `stampPostTaskExit`, and
+ * `EffectMap.diffPlatformRegion`. The first two share this; `EffectMap` cannot, because its `next`
+ * side reads the POST-step region's own stamped `lastActedFlow` rather than the observation (by then
+ * the wrapper has written it), which is the same edge arrived at from the other side of the step.
+ */
+internal fun actedFlowEdge(
+    region: PlatformRegion,
+    prevFlow: FlowRegion,
+    obs: Observation,
+): Pair<Flow, Flow> {
+    val prev = region.lastActedFlow ?: prevFlow.flow
+    return prev to ((obs as? Observation.FlowObservation)?.flow ?: prev)
+}
+
+/**
+ * **The** drop a post-delivery receipt is ABOUT (#1073 round 14) — the one resolver the cache, the
+ * "Saved: \$X" announce and the PostTask-exit mint all read, so they cannot name three different
+ * tasks for one screen.
+ *
+ * A receipt follows a delivery, so the ladder is evidence-ordered:
+ *  1. the ACTIVE task when it is an accountable dropoff that has ARRIVED — the normal shape, where
+ *     `completedAt` is not stamped until the retire grace commits, so arrival is the live evidence;
+ *  2. else the job's last COMPLETED accountable dropoff (job-scoped while a job is live; the
+ *     unscoped fallback is reached only after the close, where the receipt's own job is gone);
+ *  3. else the ACTIVE accountable dropoff even un-arrived — reached ONLY when the job has no
+ *     finished drop at all, so there is nothing else the receipt could be about.
+ *
+ * The predecessor was `activeTask?.taskId ?: recentTasks.lastOrNull()?.taskId` — unscoped and
+ * unfiltered, so a PostTask-classified frame landing while a NEWER, UNDELIVERED drop was active
+ * named that drop: the exit fabricated a `DELIVERY_COMPLETED` for it (burning its durable key) and a
+ * dash end on that frame re-priced its delivered siblings DOWN to make room for it. A pickup could
+ * be named too. Rung 2 is what closes that: the un-arrived drop loses to a finished sibling.
+ *
+ * Rung 3 is deliberate and was measured, not assumed (#1073 round 14): requiring arrival OUTRIGHT
+ * refused the fielded blown-through-arrival shape (#615 class — a delivery whose DELIVERY_ARRIVED
+ * frame was never recognized), which then announced no receipt bubble, cached an EMPTY coverage and
+ * folded the drop unpriced. It cannot revive the d3 defect, because any finished sibling wins at
+ * rung 2 first. Fail-null: no qualifying task means no subject, and a receipt with no subject
+ * describes nothing.
+ */
+internal fun PlatformRegion.receiptSubjectTaskId(): String? {
+    val live = activeTask?.takeIf { it.isReceiptSubject }
+    if (live?.arrivedAt != null) return live.taskId
+    val jobId = activeJob?.jobId
+    val lastFinished = recentTasks.lastOrNull {
+        it.isReceiptSubject && it.completedAt != null && (jobId == null || it.jobId == jobId)
+    }
+    return lastFinished?.taskId ?: live?.taskId
+}
+
+/**
+ * Can this task be the subject of a post-delivery receipt at all — a DROPOFF the dasher did not
+ * unassign?
+ *
+ * Deliberately WEAKER than [isAccountableDropoff], which also demands a resolved customer identity
+ * (#1073 round 14): identity is a MINT firewall (`#498`), not a question about which drop a screen
+ * is showing. A delivery whose customer hashes never resolved still puts its receipt on screen and
+ * still earns the "Saved: \$X" bubble, and naming it costs nothing downstream — the mint's own
+ * `identityLess` firewall and `mintingDropoffTasks`' accountable filter both exclude it from every
+ * row and every denominator regardless.
+ */
+private val Task.isReceiptSubject: Boolean
+    get() = phase == TaskPhase.DROPOFF && unassignedAt == null
+
+/**
  * The drops a receipt read on THIS frame describes (#1073 round 13) — see [ReceiptCoverage].
  *
- * The announced task is always in its own receipt (it is the delivery the receipt closed), plus
- * every accountable dropoff of that task's job that already carried completion evidence. The job is
- * the live one, falling back to the announced task's own `jobId` so a post-close re-render still
+ * Every accountable dropoff of the subject's job that already carried completion evidence, plus the
+ * subject itself — which is in its own receipt by definition, and whose `completedAt` is not stamped
+ * until its retire grace commits. Nothing UNQUALIFIED can enter: since round 14 the subject comes
+ * from [receiptSubjectTaskId], which is a non-unassigned DROPOFF of this job or null — never a
+ * pickup, and never an un-arrived drop while a finished sibling exists.
+ * The job is the live one, falling back to the subject's own `jobId` so a post-close re-render still
  * resolves (`completeActiveJob` has already nulled `activeJob` by then).
  *
- * Pure: region records + the frame's own timestamp, no wall clock, no `Platform` literal.
+ * Pure: region records only — no wall clock, no `Platform` literal.
  */
-internal fun receiptCoverageAt(
-    region: PlatformRegion,
-    postTaskTaskId: String?,
-    readAt: Long,
-): ReceiptCoverage {
+internal fun receiptCoverageAt(region: PlatformRegion, subjectTaskId: String?): ReceiptCoverage {
     val tasks = region.recentTasks + listOfNotNull(region.activeTask)
     val jobId = region.activeJob?.jobId
-        ?: tasks.firstOrNull { it.taskId == postTaskTaskId }?.jobId
+        ?: tasks.firstOrNull { it.taskId == subjectTaskId }?.jobId
     val covered = tasks
         .filter {
             it.jobId == jobId && it.isAccountableDropoff &&
-                (it.taskId == postTaskTaskId || (it.completedAt != null && it.unassignedAt == null))
+                (it.taskId == subjectTaskId || it.completedAt != null)
         }
         .map { it.taskId }
-        .toMutableSet()
-    if (postTaskTaskId != null) covered += postTaskTaskId
-    return ReceiptCoverage(readAt = readAt, taskIds = covered)
+        .toSet()
+    return ReceiptCoverage(taskIds = covered)
 }
 
 /**
@@ -84,12 +162,11 @@ internal fun receiptCoverageAt(
 internal fun cacheReceipt(
     region: PlatformRegion,
     parsed: ParsedFields.PostTaskFields,
-    postTaskTaskId: String?,
-    readAt: Long,
+    subjectTaskId: String?,
 ): PlatformRegion = region.copy(
     lastPostTaskFields = parsed,
-    lastPostTaskCoverage = receiptCoverageAt(region, postTaskTaskId, readAt),
-    lastAnnouncedPostTaskTaskId = postTaskTaskId ?: region.lastAnnouncedPostTaskTaskId,
+    lastPostTaskCoverage = receiptCoverageAt(region, subjectTaskId),
+    lastAnnouncedPostTaskTaskId = subjectTaskId ?: region.lastAnnouncedPostTaskTaskId,
 )
 
 /** The ONE clearer — both `endSession` and `completeActiveJob` drop the receipt AND its coverage. */
@@ -204,6 +281,13 @@ internal fun PlatformRegionStepper.decideReceiptReprice(
     // STACKED shape — accept the next offer off this receipt, then expand it late — is refused. Layer
     // 1's 8 s collapsed-receipt window is the path that lands that expansion in time; an expansion
     // later than that keeps the #691 `OFFER_PAY` estimate.
+    //
+    // A second cost is stated rather than defended (#1073 round 14): on a CLOSED multi-drop job the
+    // subject is the last completed drop, so a post-close re-render of ONE drop's own receipt (a late
+    // tip adjustment) is apportioned across every covered drop. DoorDash fields one combined
+    // end-of-job receipt, so the shape is not known to occur; a tip-line-count heuristic was
+    // considered and rejected because a stacked order where only one customer tipped has fewer tip
+    // lines than drops and would be refused — fail-null on a legitimate correction.
     val receiptSeenAt = mark.receiptSeenAt ?: return region
     val acceptResolvedAt = region.lastAcceptResolvedAt
     if (acceptResolvedAt != null && acceptResolvedAt >= receiptSeenAt) return region
@@ -238,14 +322,23 @@ internal fun PlatformRegionStepper.decideReceiptReprice(
     // [ReceiptCoverage] is that set, and `DeliveryCompletionEffects` intersects the MINT's
     // `apportion` denominator with the SAME one — which is what makes Σ `dropRealizedPay` == the
     // receipt total hold by construction instead of by two copies of a rule agreeing.
+    //
+    // The base denominator is [mintingDropoffTasks] ITSELF (#1073 round 14), not a re-spelling of
+    // it: `p` and `next` are both this region because a cached-receipt decision has no step to
+    // straddle, and `emittedThisStep` is empty because nothing is minting on this one. The ONE thing
+    // added is the round-10/11 teardown widening, stated explicitly.
     val retirePending = region.pendingDestructive?.kind == DestructiveKind.TASK_RETIRE
-    val drops = (region.recentTasks + listOfNotNull(region.activeTask))
-        .filter { it.jobId == mark.jobId && it.isAccountableDropoff }
+    val widened = region.activeTask?.takeIf {
+        mintRanForJob && it.taskId == anchor && it.jobId == mark.jobId && it.isAccountableDropoff
+    }
+    val drops = (
+        mintingDropoffTasks(
+            region, region, mark.jobId,
+            retirePending = retirePending,
+            emittedThisStep = emptySet(),
+        ) + listOfNotNull(widened)
+        )
         .distinctBy { it.taskId }
-        .filter {
-            mintQualified(region, retirePending, it) ||
-                (mintRanForJob && it.taskId == region.activeTask?.taskId && it.taskId == anchor)
-        }
         .describedBy(coverage)
     if (drops.isEmpty()) return region
     if (drops.none { it.taskId == anchor }) return region
@@ -291,7 +384,6 @@ internal fun PlatformRegionStepper.decideFromCachedReceipt(
     mintRanForJob: Boolean = false,
 ): PlatformRegion {
     val cached = source.lastPostTaskFields ?: return closed
-    if (cached.parsedPay == null) return closed
     return decideReceiptReprice(
         region = closed,
         parsed = cached,
@@ -305,7 +397,9 @@ internal fun PlatformRegionStepper.decideFromCachedReceipt(
 
 /**
  * Emit what [decideReceiptReprice] decided — one `DELIVERY_RECEIPT_REPRICE` per delivered drop of the
- * job, idempotent per `(taskId, parsedPay.hashCode())` through the `effects_fired` key.
+ * job, keyed `…:<taskId>:<jobId>:r<revision>` in `effects_fired` (a monotonic DECISION revision, not
+ * the receipt's content: an X→Y→X itemization hashed back onto its own first key and the third
+ * emission was dropped).
  *
  * Reads state only: no observation, no re-derivation. The handoff is cleared at the top of the next
  * step, and the `!= p.pendingReceiptReprice` guard makes a value that somehow survived (a snapshot

@@ -499,10 +499,11 @@ internal fun EffectMap.diffPostTask(
 
     // The completing task stays ACTIVE while its retire grace is pending
     // (#431 pt 2) — resolve it first, falling back to the last committed
-    // task. Must mirror the stepper's lastAnnouncedPostTaskTaskId stamp.
-    val taskId = next.activeTask?.taskId
-        ?: next.recentTasks.lastOrNull()?.taskId
-        ?: return emptyList()
+    // task. Must mirror the stepper's lastAnnouncedPostTaskTaskId stamp,
+    // which is why both read the ONE [receiptSubjectTaskId] resolver
+    // (#1073 round 14): a receipt follows an arrival, so a pickup or an
+    // un-arrived drop can never be the task this bubble names.
+    val taskId = next.receiptSubjectTaskId() ?: return emptyList()
     if (prev.lastAnnouncedPostTaskTaskId == taskId) return emptyList()
     if (parsed.totalPay <= 0) return emptyList()
 

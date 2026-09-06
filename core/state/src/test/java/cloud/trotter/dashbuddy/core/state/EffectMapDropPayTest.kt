@@ -82,8 +82,8 @@ class EffectMapDropPayTest {
      * nobody (fail-null). Stamp the set the frame WOULD have computed, through the production owner
      * [receiptCoverageAt] rather than a second copy of the rule.
      */
-    private fun PlatformRegion.withReceiptCoverage(readAt: Long = 0L): PlatformRegion =
-        copy(lastPostTaskCoverage = receiptCoverageAt(this, lastAnnouncedPostTaskTaskId, readAt))
+    private fun PlatformRegion.withReceiptCoverage(): PlatformRegion =
+        copy(lastPostTaskCoverage = receiptCoverageAt(this, lastAnnouncedPostTaskTaskId))
 
     @Test
     fun `stacked close-out — per-drop shares sum to the receipt total`() {

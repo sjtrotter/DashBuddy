@@ -891,7 +891,7 @@ class ReceiptRepriceTest {
             lastAnnouncedPostTaskTaskId = "t1", // the receipt on file is DROP 1's
             lastPostTaskFields = expanded(twoTenReceipt),
             // #1073 round 13: read after drop 1 was delivered, so it describes drop 1 only.
-            lastPostTaskCoverage = ReceiptCoverage(readAt = 12_000L, taskIds = setOf("t1")),
+            lastPostTaskCoverage = ReceiptCoverage(setOf("t1")),
             // The job already left PostTask once, so the teardown widening is armed.
             jobReceiptAnchors = JobReceiptAnchors(jobId = "J1", firstEnteredAt = 10_000L, exitedPostTask = true),
         )
@@ -929,7 +929,7 @@ class ReceiptRepriceTest {
             lastAnnouncedPostTaskTaskId = "t1",
             lastPostTaskFields = expanded(),
             // Coverage DOES include the anchor — the latch is the only thing refusing here.
-            lastPostTaskCoverage = ReceiptCoverage(readAt = 10_000L, taskIds = setOf("t1")),
+            lastPostTaskCoverage = ReceiptCoverage(setOf("t1")),
             jobReceiptAnchors = JobReceiptAnchors(
                 jobId = "J1", firstEnteredAt = 10_000L, exitedPostTask = false,
             ),
@@ -992,7 +992,7 @@ class ReceiptRepriceTest {
      * when the dash ends. [coverage] is what T1's receipt described when it was read — T1 alone.
      */
     private fun threeDropJob(
-        coverage: ReceiptCoverage? = ReceiptCoverage(readAt = 11_000L, taskIds = setOf("t1")),
+        coverage: ReceiptCoverage? = ReceiptCoverage(setOf("t1")),
     ): PlatformRegion {
         val t1 = dropoff("t1", "Bill Millers", completedAt = 10_000L)
         val t2 = dropoff("t2", "Maple Street", completedAt = 15_000L)
@@ -1018,10 +1018,19 @@ class ReceiptRepriceTest {
         )
     }
 
-    /** Every `DELIVERY_COMPLETED` this fold minted, as `taskId -> dropRealizedPay`. */
-    private fun Fold.completionShares(): Map<String, Double?> = events
+    /** Every `DELIVERY_COMPLETED` this fold minted, by `taskId`. */
+    private fun Fold.completions(): Map<String?, DeliveryPayload> = events
         .filter { it.type == AppEventType.DELIVERY_COMPLETED }
-        .associate { (it.payload as DeliveryPayload).let { p -> p.taskId to p.dropRealizedPay } }
+        .associate { (it.payload as DeliveryPayload).let { p -> p.taskId to p } }
+
+    /** An UNCOVERED drop must carry no share AND no receipt — the fold prices a receipt-bearing
+     *  row at the WHOLE `totalPay`, so a null share alone left Σ over the receipt (#1073 R1). */
+    private fun assertUnpriced(payload: DeliveryPayload?) {
+        assertNotNull(payload)
+        assertNull("no share", payload!!.dropRealizedPay)
+        assertNull("no receipt total", payload.totalPay)
+        assertNull("no itemization", payload.parsedPay)
+    }
 
     @Test
     fun `round 13 — a teardown re-prices only what the cached receipt described, and the mint agrees`() {
@@ -1039,20 +1048,22 @@ class ReceiptRepriceTest {
         assertEquals("t1", payload.taskId)
         assertEquals(20.00, payload.dropRealizedPay, 0.0001)
 
-        val shares = fold.completionShares()
-        assertEquals("t1 is minted at the receipt, t2 unpriced", setOf("t1", "t2"), shares.keys)
+        val minted = fold.completions()
+        assertEquals("t1 is minted at the receipt, t2 unpriced", setOf("t1", "t2"), minted.keys)
         assertEquals(
             "the mint and the correction agree to the cent",
             payload.dropRealizedPay,
-            shares.getValue("t1")!!,
+            minted.getValue("t1").dropRealizedPay!!,
             0.0001,
         )
-        assertNull("an UNCOVERED sibling folds unpriced, never off an older receipt", shares["t2"])
-        assertNull("the bail's force-completion of T3 is not a delivery", shares["t3"])
+        // #1073 R1: the ATTACH is gated too — a receipt on an uncovered row folds at the WHOLE
+        // total (`RECEIPT_TOTAL`), which is how Σ reached $40 on one $20 receipt.
+        assertUnpriced(minted["t2"])
+        assertNull("the bail's force-completion of T3 is not a delivery", minted["t3"])
         assertEquals(
             "Σ dropRealizedPay == the receipt total",
             Math.round(twoTenReceipt.total * 100.0),
-            shares.values.filterNotNull().sumOf { Math.round(it * 100.0) },
+            minted.values.mapNotNull { it.dropRealizedPay }.sumOf { Math.round(it * 100.0) },
         )
     }
 
@@ -1064,20 +1075,20 @@ class ReceiptRepriceTest {
         val prev = threeDropJob()
         val next = stepper.completeActiveJob(prev, at = 16_000L)
         val flow = Flow.TaskDropoffArrived
-        val shares = effectMap.diff(appState(prev, flow), appState(next, flow), graceCommit(16_000L))
+        val minted = effectMap.diff(appState(prev, flow), appState(next, flow), graceCommit(16_000L))
             .filterIsInstance<AppEffect.LogEvent>()
             .filter { it.event.type == AppEventType.DELIVERY_COMPLETED }
-            .associate { (it.event.payload as DeliveryPayload).let { p -> p.taskId to p.dropRealizedPay } }
+            .associate { (it.event.payload as DeliveryPayload).let { p -> p.taskId to p } }
 
         val decided = next.pendingReceiptReprice
         assertEquals(setOf("t1"), decided!!.shares.keys)
         assertEquals(20.00, decided.shares.getValue("t1"), 0.0001)
-        assertEquals(20.00, shares.getValue("t1")!!, 0.0001)
-        assertNull("the uncovered sibling is unpriced on the mint side too", shares["t2"])
+        assertEquals(20.00, minted.getValue("t1").dropRealizedPay!!, 0.0001)
+        assertUnpriced(minted["t2"])
         assertEquals(
             "Σ dropRealizedPay == the receipt total",
             Math.round(twoTenReceipt.total * 100.0),
-            shares.values.filterNotNull().sumOf { Math.round(it * 100.0) },
+            minted.values.mapNotNull { it.dropRealizedPay }.sumOf { Math.round(it * 100.0) },
         )
     }
 
@@ -1104,14 +1115,21 @@ class ReceiptRepriceTest {
     }
 
     @Test
-    fun `round 13 — a frame-path decision computes coverage from its own frame`() {
-        // A STALE cached coverage ({t1}) must not scope the receipt on screen NOW — the frame
-        // recomputes.
+    fun `round 14 — a frame REFRESHES the cache, and the decision reads what it just wrote`() {
+        // A STALE cached coverage ({t1}) must not scope the receipt on screen NOW: `cacheReceipt`
+        // rewrites the coverage on this very frame and the decision reads that (#1073 round 14 R8 —
+        // a second `receiptCoverageAt` call computing the identical set was dead weight).
         val region = twoDropClosedJob().copy(
             lastPostTaskFields = collapsed(),
-            lastPostTaskCoverage = ReceiptCoverage(readAt = 12_000L, taskIds = setOf("t1")),
+            lastPostTaskCoverage = ReceiptCoverage(setOf("t1")),
         )
-        assertEquals(2, repriceEvents(region, parsed = expanded(stackedReceipt), at = 21_000L).size)
+        val fold = Fold(region).step(postTaskObs(expanded(stackedReceipt), 21_000L))
+        assertEquals(
+            "the frame refreshed the cache",
+            setOf("t1", "t2"),
+            fold.region.lastPostTaskCoverage!!.taskIds,
+        )
+        assertEquals(2, fold.reprices().size)
     }
 
     @Test
@@ -1200,10 +1218,7 @@ class ReceiptRepriceTest {
             .step(graceCommit(18_501L))
         assertNull("the dash still ends normally", fold.region.session)
         assertTrue("a receipt of unknown scope is not evidence", fold.reprices().isEmpty())
-        assertTrue(
-            "…and no drop is priced off it",
-            fold.completionShares().values.all { it == null },
-        )
+        fold.completions().values.forEach { assertUnpriced(it) }
 
         assertNull(
             "…and the close refuses it too",
@@ -1212,17 +1227,176 @@ class ReceiptRepriceTest {
     }
 
     @Test
-    fun `round 13 — a snapshot carrying the retired round-12 keys still decodes`() {
-        // `lastPostTaskFieldsAt` and the write-only `lastPostTaskPayHash` are gone; `StateJson` has
-        // `ignoreUnknownKeys`, so a region persisted before this round decodes with a null coverage.
-        val json = """
+    fun `round 14 — a snapshot carrying every retired key still decodes`() {
+        // `lastPostTaskFieldsAt` + `lastPostTaskPayHash` (round 13) and `ReceiptCoverage.readAt`
+        // (round 14) are all gone; `StateJson` has `ignoreUnknownKeys`, so a region persisted before
+        // either round decodes — the pre-round-13 one with a null coverage (fail-null), the
+        // pre-round-14 one with its task set intact.
+        val preRound13 = """
             {"platform":"DoorDash","mode":"Online","lastPostTaskPayHash":123,
              "lastPostTaskFieldsAt":11000,
              "lastPostTaskFields":{"totalPay":16.7,"isExpanded":false}}
         """.trimIndent()
-        val decoded = StateJson.decodeFromString<PlatformRegion>(json)
-        assertEquals(16.70, decoded.lastPostTaskFields!!.totalPay, 0.0001)
-        assertNull("no coverage survives the drop — fail-null", decoded.lastPostTaskCoverage)
+        StateJson.decodeFromString<PlatformRegion>(preRound13).let {
+            assertEquals(16.70, it.lastPostTaskFields!!.totalPay, 0.0001)
+            assertNull("no coverage survives the drop — fail-null", it.lastPostTaskCoverage)
+        }
+
+        val preRound14 = """
+            {"platform":"DoorDash","mode":"Online",
+             "lastPostTaskCoverage":{"readAt":11000,"taskIds":["t1","t2"]}}
+        """.trimIndent()
+        assertEquals(
+            setOf("t1", "t2"),
+            StateJson.decodeFromString<PlatformRegion>(preRound14).lastPostTaskCoverage!!.taskIds,
+        )
+    }
+
+    // ---- round 14 (#1073): the attach, the subject, and the unpriced-drop signal --------------
+
+    @Test
+    fun `round 14 — a PostTask frame that parses nothing leaves the cache alone and its drop unpriced`() {
+        // The R1 repro. T2's own delivery-summary frame parses to `ParsedFields.None` (a parser
+        // exception, or a parse-less `post:task` rule), so nothing refreshes the cache: T1's receipt
+        // and its coverage {t1} are still what the mint reads. Before the attach was gated, T2's exit
+        // minted a share-less row that still CARRIED that receipt — and the fold prices a
+        // receipt-bearing row at the whole `totalPay`, so the job took $40 out of one $20 receipt.
+        val t1 = dropoff("t1", "Bill Millers", completedAt = 10_000L)
+        val t2 = dropoff("t2", "Maple Street", completedAt = null).copy(arrivedAt = 14_000L)
+        val region = PlatformRegion(
+            platform = Platform.DoorDash,
+            mode = Mode.Online,
+            session = Session("S1", startedAt = 100L),
+            activeJob = Job(
+                "J1", offerStoreHint = emptyList(), parentOfferHash = null, startedAt = 200L,
+                tasks = listOf(t1, t2),
+            ),
+            activeTask = t2,
+            recentTasks = listOf(t1),
+            lastActedFlow = Flow.TaskDropoffArrived,
+            lastAnnouncedPostTaskTaskId = "t1",
+            lastPostTaskFields = expanded(twoTenReceipt),
+            lastPostTaskCoverage = ReceiptCoverage(setOf("t1")),
+            jobReceiptAnchors = JobReceiptAnchors(
+                jobId = "J1", firstEnteredAt = 10_000L, exitedPostTask = true,
+            ),
+        )
+
+        val fold = Fold(region)
+            // T2's receipt frame parses to NOTHING — the cache keeps T1's receipt and coverage.
+            .step(
+                Observation.Screen(
+                    timestamp = 15_000L, captureId = "cap-15000",
+                    ruleId = "doordash.screen.delivery_summary", metadata = ReplayMetadata.EMPTY,
+                    flow = Flow.PostTask, modeHint = Mode.Online, parsed = ParsedFields.None,
+                ),
+            )
+        assertEquals(
+            "the frame refreshed nothing",
+            setOf("t1"),
+            fold.region.lastPostTaskCoverage!!.taskIds,
+        )
+
+        fold.step(idleObs(16_000L)).step(graceCommit(19_000L))
+
+        val minted = fold.completions()
+        // T2 is not described by the receipt on file, so this exit does not complete it at all
+        // (#1073 R2) — and wherever it IS eventually minted it carries neither share nor receipt.
+        minted["t2"]?.let { assertUnpriced(it) }
+        assertEquals(
+            "Σ dropRealizedPay never exceeds the one receipt",
+            Math.round(twoTenReceipt.total * 100.0),
+            minted.values.mapNotNull { it.dropRealizedPay }.sumOf { Math.round(it * 100.0) },
+        )
+        assertTrue(
+            "…and no row carries the receipt it is not described by",
+            minted.filterKeys { it != "t1" }.values.all { it.totalPay == null && it.parsedPay == null },
+        )
+    }
+
+    @Test
+    fun `round 14 — an un-arrived drop is neither the receipt's subject nor completed by its exit`() {
+        // The fielded PostTask → nav → PostTask re-show (and the open #935 misclassification): a
+        // receipt-classified frame lands while a NEWER, UNDELIVERED drop is active. The subject used
+        // to be `activeTask ?: recentTasks.last()`, so d3 was named — the exit fabricated d3's
+        // `DELIVERY_COMPLETED` (burning `log:DELIVERY_COMPLETED:d3`, so its real completion could
+        // never mint) and a dash end on that frame re-priced d1/d2 DOWN to make room for it.
+        val d1 = dropoff("d1", "Bill Millers", completedAt = 10_000L)
+        val d2 = dropoff("d2", "Maple Street", completedAt = 12_000L)
+        val d3 = dropoff("d3", "Rio Grande", completedAt = null).copy(arrivedAt = null)
+        val region = PlatformRegion(
+            platform = Platform.DoorDash,
+            mode = Mode.Online,
+            session = Session("S1", startedAt = 100L),
+            activeJob = Job(
+                "J1", offerStoreHint = emptyList(), parentOfferHash = null, startedAt = 200L,
+                tasks = listOf(d1, d2, d3),
+            ),
+            activeTask = d3, // en route, never arrived — it cannot have a receipt
+            recentTasks = listOf(d1, d2),
+            lastActedFlow = Flow.TaskDropoffNavigation,
+            jobReceiptAnchors = JobReceiptAnchors(jobId = "J1", firstEnteredAt = 10_000L),
+        )
+
+        val fold = Fold(region).step(postTaskObs(expanded(stackedReceipt), 13_000L))
+        assertEquals(
+            "the subject is the last DELIVERED drop, never the un-arrived one",
+            "d2",
+            fold.region.lastAnnouncedPostTaskTaskId,
+        )
+        assertEquals(setOf("d1", "d2"), fold.region.lastPostTaskCoverage!!.taskIds)
+
+        // The exit off that frame must not complete d3.
+        fold.step(idleObs(14_000L))
+        assertNull(
+            "no fabricated completion, and its durable key is not burnt",
+            fold.completions()["d3"],
+        )
+    }
+
+    @Test
+    fun `round 14 — an uncovered, estimate-suppressed drop is stated once at the close`() {
+        // The drop folds `PayBasis.NONE` — real delivered work priced at nothing — and every other
+        // signal is structurally silent there. One ids-only WARN is what makes it reviewable.
+        val logged = mutableListOf<String>()
+        val tree = object : timber.log.Timber.Tree() {
+            override fun log(priority: Int, tag: String?, message: String, t: Throwable?) {
+                if (priority >= android.util.Log.WARN) logged += message
+            }
+        }
+        timber.log.Timber.plant(tree)
+        try {
+            Fold(threeDropJob()).step(sessionEndedObs(16_000L)).step(graceCommit(18_501L))
+        } finally {
+            timber.log.Timber.uproot(tree)
+        }
+        assertEquals(
+            "one line, for the one uncovered drop: $logged",
+            1,
+            logged.count { it.contains("#1073 close-out") && it.contains("t2") },
+        )
+    }
+
+    @Test
+    fun `round 14 — a COLLAPSED receipt that only expands after the dash ended still re-prices`() {
+        // The fielded 08-23 shape taken to its limit: the receipt is collapsed when the dash-summary
+        // frame arrives, the completion is minted off it, and the expansion lands during the
+        // SESSION_END grace. The teardown decides from the receipt it is about to drop.
+        // The summary returns after the expansion — an Online PostTask frame cancels the first
+        // SESSION_END grace, exactly as a contradicting more-active frame should.
+        val fold = Fold(liveDropoffRegion())
+            .step(postTaskObs(collapsed(), 10_000L))
+            .step(sessionEndedObs(11_000L))
+            .step(postTaskObs(expanded(), 12_000L))
+            .step(sessionEndedObs(13_000L))
+            .step(graceCommit(15_501L))
+
+        assertNull("the dash is over", fold.region.session)
+        val repriced = fold.reprices()
+        assertEquals(1, repriced.size)
+        val payload = repriced.single().payload as DeliveryReceiptRepricePayload
+        assertEquals("t1", payload.taskId)
+        assertEquals(16.70, payload.dropRealizedPay, 0.0001)
     }
 
     // ---- revision keying + the handoff ---------------------------------------------------

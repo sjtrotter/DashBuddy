@@ -1357,7 +1357,8 @@ render another frame, and its row can still be un-itemized (its first completion
 earlier PostTask exit, and the close's re-emission is dropped by the per-taskId completion key); the
 two cached-receipt points share ONE implementation (`decideFromCachedReceipt`). It can fire at all
 only because of TWO markers: `PlatformRegion.lastClosedJobReceipt` (jobId + `receiptSeenAt` +
-`repriceRevision` + `lastDecidedPay`, stamped at that one close site, cleared by `endSession`) and
+`repriceRevision` + `lastDecidedPay`, stamped at the job close and SYNTHESIZED at a terminal
+teardown, cleared by `endSession`) and
 `JobReceiptAnchors` (the job's FIRST `PostTask` entry, plus `exitedPostTask` — the latch saying the
 completion mint has RUN for this job, stamped in the `step` wrapper beside `lastActedFlow` so no
 early return in `stepCore`/`updateLifecycle` can skip the acted-flow edge the emitter mints on).
@@ -1384,13 +1385,20 @@ is not identity, and it let a stacked job's $20 receipt redistribute the closed 
 over a real $10/$10). **Stated cost (fail-null, #745): the STACKED shape — accept the next offer while
 this receipt is up, then expand it LATE — is refused and keeps the `OFFER_PAY` estimate; layer 1's 8 s
 window is the path that lands it in time.** **A receipt speaks only for the drops it described when it
-was read (#1073, round 13):** `ReceiptCoverage` (the announced task + every accountable drop of its
-job with completion evidence at that frame) is captured beside the cached receipt and BOTH the mint's
-`apportion` denominators and the re-price's are intersected with it — one owner, so the two cannot
-disagree and Σ `dropRealizedPay` == the receipt total holds by construction; an uncovered sibling folds
-unpriced (fail-null) instead of taking an older receipt's money. A `completedAt` timestamp was tried
-first and rejected in the same series: it is the LATEST retire arm, so the receipt's own anchor could
-fall outside its own receipt. Effect keys are
+was read (#1073, rounds 13–14):** `ReceiptCoverage` (the receipt's SUBJECT + every accountable drop of
+its job with completion evidence at that frame) is captured beside the cached receipt, and the mint's
+`apportion` denominator, the mint's receipt ATTACH and the re-price's denominator are all intersected
+with it — one owner, so they cannot disagree and Σ `dropRealizedPay` == the receipt total holds by
+construction; an uncovered sibling folds unpriced (fail-null, one WARN at the close) instead of taking
+an older receipt's money. Gating the SHARE alone was not enough: the fold prices any drop carrying a
+receipt at the whole `totalPay` (`RECEIPT_TOTAL`), so an uncovered drop folded $20 while the covered
+one was re-priced at the same $20. The **subject** is one resolver — `receiptSubjectTaskId()`, read by
+the cache, the "Saved: \$X" announce and the PostTask-exit mint — and it is the arrived accountable
+dropoff, never a pickup and never an un-arrived drop (which used to fabricate that drop's completion
+and burn its durable key). A `completedAt` timestamp was tried first and rejected in the same series:
+it is the LATEST retire arm, so the receipt's own anchor could fall outside its own receipt. Stated
+cost: after a multi-drop job closes, a re-render of ONE drop's own receipt would be split across every
+covered drop (DoorDash fields one combined end receipt, so the shape is not known to occur). Effect keys are
 `…:<taskId>:<jobId>:r<revision>` off `repriceRevision`, NOT the receipt's content hash: an X→Y→X
 itemization sequence hashed back onto its own first key and the durable `effects_fired` idempotency
 dropped the third emission, freezing the row at Y. `CorrectionFolds.foldDeliveryReceiptReprice` → a `ReceiptRepriceFold` the projector applies
