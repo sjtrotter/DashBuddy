@@ -59,6 +59,13 @@ internal fun PlatformRegionStepper.decideReceiptReprice(
     postTaskTaskId: String?,
     decidedAt: Long,
     captureId: String?,
+    /**
+     * Admit the region's ACTIVE accountable dropoff into the denominator even though no `TASK_RETIRE`
+     * is pending (#1033 review round 10). True only at a terminal-session teardown whose job had
+     * already left `PostTask` — the mint ran, so the drop has a row to correct. Everywhere else the
+     * amdt-#5 qualification is the whole test.
+     */
+    mintRanForJob: Boolean = false,
 ): PlatformRegion {
     // The caller decides WHEN this is asked (#1033 round 9): the PostTask arm asks on a receipt
     // FRAME, and `completeActiveJob` asks once more at the close, from the receipt it is about to
@@ -78,7 +85,7 @@ internal fun PlatformRegionStepper.decideReceiptReprice(
     // filtering; one task's first completion cannot describe a multi-drop job). The stepper cannot
     // know what persisted; the projector can, and `applyReceiptReprice` no-ops a re-price whose
     // values the row already holds. A redundant event is cheap; a refused correction is not.
-    if (parsedPay.hashCode() == mark.lastDecidedPayHash) return region
+    if (parsedPay == mark.lastDecidedPay) return region
 
     // OWNERSHIP, and this is the whole of it (#1033 review round 6).
     //
@@ -111,7 +118,10 @@ internal fun PlatformRegionStepper.decideReceiptReprice(
     val drops = (region.recentTasks + listOfNotNull(region.activeTask))
         .filter { it.jobId == mark.jobId && it.isAccountableDropoff }
         .distinctBy { it.taskId }
-        .filter { mintQualified(region, retirePending, it) }
+        .filter {
+            mintQualified(region, retirePending, it) ||
+                (mintRanForJob && it.taskId == region.activeTask?.taskId)
+        }
     if (drops.isEmpty()) return region
 
     // The receipt on screen must belong to THAT job — the announce anchor names the task the receipt
@@ -138,7 +148,7 @@ internal fun PlatformRegionStepper.decideReceiptReprice(
         // made from, so an unchanged re-render does not spend another revision.
         lastClosedJobReceipt = mark.copy(
             repriceRevision = revision,
-            lastDecidedPayHash = parsedPay.hashCode(),
+            lastDecidedPay = parsedPay,
         ),
     )
 }

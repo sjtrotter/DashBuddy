@@ -320,7 +320,7 @@ class PlatformRegionStepper @Inject constructor() {
                 val startParsed = (obs as? Observation.FlowObservation)?.parsed
                 if ((startParsed as? ParsedFields.IdleFields)?.startingSession == true) {
                     // Honest end time = when the destructive signal appeared (#431).
-                    current = endSession(current, pend.since)
+                    current = endSession(current, pend.since, obs.timestamp)
                 }
             }
         }
@@ -686,6 +686,16 @@ class PlatformRegionStepper @Inject constructor() {
         }
 
         // (Ratings stamping moved to stepCore, ahead of this function's early returns — #967.)
+
+        // #1033 round 10: record that the completion mint has RUN for this job — the flow left
+        // PostTask at least once. A structural flow fact only (round 8's lesson: never a claim about
+        // what a completion carried); the terminal teardown uses it to tell a drop that already has a
+        // row from one it is force-completing right now.
+        if (prev == Flow.PostTask && next != Flow.PostTask) {
+            r.jobReceiptAnchors?.let { a ->
+                if (!a.exitedPostTask) r = r.copy(jobReceiptAnchors = a.copy(exitedPostTask = true))
+            }
+        }
 
         // Job lifecycle
         r = updateJobLifecycle(r, prev, next, obs, policy)
@@ -1054,7 +1064,7 @@ class PlatformRegionStepper @Inject constructor() {
         timestamp: Long,
         observedAt: Long,
     ): PlatformRegion = when (kind) {
-        DestructiveKind.SESSION_END -> endSession(region, timestamp)
+        DestructiveKind.SESSION_END -> endSession(region, timestamp, observedAt)
         // [timestamp] is the honest completion instant (the grace's `since`, #732); [observedAt] is
         // the frame that commits it, which is what a re-price decided here must be stamped with.
         DestructiveKind.TASK_RETIRE -> retireActiveTask(region, timestamp, observedAt)
@@ -1099,7 +1109,43 @@ class PlatformRegionStepper @Inject constructor() {
         }
     }
 
-    private fun endSession(region: PlatformRegion, timestamp: Long): PlatformRegion {
+    private fun endSession(
+        region: PlatformRegion,
+        timestamp: Long,
+        observedAt: Long = timestamp,
+    ): PlatformRegion {
+        // #1033 round 10: a terminal session end tears down the job WITHOUT going through
+        // [completeActiveJob], so it bypassed the close-time re-price decision entirely — and then
+        // cleared the cached receipt. The fielded shape: an offer overlay pops a collapsed receipt
+        // (the completion mints at the estimate and burns its durable key), the receipt returns
+        // EXPANDED, and the dash ends before any further frame. Ask here too, from the receipt this
+        // teardown is about to drop, under exactly the same guards.
+        //
+        // The denominator is the load-bearing part. `pendingDestructive` is the SESSION_END that
+        // brought us here, so [mintQualified] already excludes the active task — which is right for a
+        // drop this bail is force-completing (the amdt-#5 T3 guard: it has no row), and wrong for one
+        // whose completion was already minted on an earlier PostTask exit. `exitedPostTask` is what
+        // separates them; a mistake either way is caught by the projector finding no row.
+        val cachedReceipt = region.lastPostTaskFields
+        val endingJob = region.activeJob
+        val repriceHandoff = if (cachedReceipt?.parsedPay != null && endingJob != null) {
+            decideReceiptReprice(
+                region.copy(
+                    activeJob = null,
+                    lastClosedJobReceipt = ClosedJobReceipt(
+                        jobId = endingJob.jobId,
+                        receiptSeenAt = region.jobReceiptAnchors?.firstEnteredAt,
+                    ),
+                ),
+                cachedReceipt,
+                postTaskTaskId = null,
+                decidedAt = observedAt,
+                captureId = null,
+                mintRanForJob = region.jobReceiptAnchors?.exitedPostTask == true,
+            ).pendingReceiptReprice
+        } else {
+            null
+        }
         val completedTask = region.activeTask?.copy(completedAt = timestamp)
         val recentTasks = if (completedTask != null) {
             (region.recentTasks + completedTask).takeLast(MAX_RECENT_TASKS)
@@ -1124,6 +1170,10 @@ class PlatformRegionStepper @Inject constructor() {
             lastClosedJobReceipt = null,
             jobReceiptAnchors = null,
             lastAcceptResolvedAt = null,
+            // The one thing that OUTLIVES the teardown: a correction decided from the receipt it just
+            // dropped. `EffectMap` emits it on this same step; the next step's top-of-step clear
+            // drops it (#1033 round 10).
+            pendingReceiptReprice = repriceHandoff,
         )
     }
 

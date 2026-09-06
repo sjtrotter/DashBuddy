@@ -277,7 +277,12 @@ data class ClosedJobReceipt(
     val repriceRevision: Int = 0,
     /**
      * The itemization this marker's LAST decision was made from (#1033 review round 8) — the only
-     * thing the stepper suppresses on.
+     * thing the stepper suppresses on, compared STRUCTURALLY (round 10).
+     *
+     * It was a `hashCode()` for one round, which silently swallowed a real correction: base $2.05 +
+     * tip $5.50 and base $2.00 + tip $5.60 collide on Kotlin's `-1866903064`, so the second receipt
+     * read as "already decided" and the row kept $7.55. `ParsedPay` is `@Serializable` and a data
+     * class, so keeping the value itself costs a few bytes of snapshot and cannot alias.
      *
      * **The marker deliberately does NOT model what the completion rows hold.** It tried, through
      * rounds 6–7, and both attempts failed toward refusing a legitimate correction: mirroring the
@@ -292,7 +297,7 @@ data class ClosedJobReceipt(
      * emits one redundant event per drop — "the receipt says X" — which the apply resolves to a
      * no-op. Cheap, and it cannot lose a correction.
      */
-    val lastDecidedPayHash: Int? = null,
+    val lastDecidedPay: ParsedPay? = null,
 )
 
 /**
@@ -315,6 +320,18 @@ data class JobReceiptAnchors(
      * that resolved during the overlay would have been stepped over entirely.
      */
     val firstEnteredAt: Long,
+    /**
+     * Has this job's flow left `PostTask` at least once — i.e. has the completion mint RUN for it?
+     * (#1033 review round 10.)
+     *
+     * A purely structural fact about the flow; deliberately NOT a claim about what any completion
+     * carried (round 8 deleted that, twice burnt). Its one use is the terminal-session teardown,
+     * which must tell a drop whose completion was already emitted on an earlier PostTask exit — and
+     * so has a row to correct — from one the bail is force-completing right now, which has none. A
+     * mistake in either direction is caught downstream: the projector's by-(jobId, taskId) lookup
+     * finds no row and counts a skip.
+     */
+    val exitedPostTask: Boolean = false,
 )
 
 /**

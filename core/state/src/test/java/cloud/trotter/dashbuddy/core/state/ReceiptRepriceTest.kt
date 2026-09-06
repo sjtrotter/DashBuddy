@@ -273,7 +273,7 @@ class ReceiptRepriceTest {
         val region = closedJobRegion()
         val obs = postTaskObs(expanded(), 21_000L)
         val after = stepper.step(region, FlowRegion(flow = Flow.PostTask), FlowRegion(flow = Flow.PostTask), obs, policy)
-        assertEquals(receipt.hashCode(), after.lastClosedJobReceipt!!.lastDecidedPayHash)
+        assertEquals(receipt, after.lastClosedJobReceipt!!.lastDecidedPay)
         assertEquals(1, after.lastClosedJobReceipt!!.repriceRevision)
     }
 
@@ -440,7 +440,7 @@ class ReceiptRepriceTest {
         // `updateSessionFields` stores this frame's expanded parse and decides the re-price. The
         // marker therefore ends the step already updated to the expanded figures.
         assertEquals("the same frame re-priced it", 1, next.lastClosedJobReceipt!!.repriceRevision)
-        assertEquals(receipt.hashCode(), next.lastClosedJobReceipt!!.lastDecidedPayHash)
+        assertEquals(receipt, next.lastClosedJobReceipt!!.lastDecidedPay)
 
         val logged = effectMap
             .diff(appState(afterReceipt, Flow.PostTask), appState(next, Flow.PostTask), obs)
@@ -782,12 +782,12 @@ class ReceiptRepriceTest {
     @Test
     fun `round 9 — the close-time decision is suppressed once it has already been decided`() {
         // The frame at 13,000 decides nothing (job open); the close decides. A LATER identical frame
-        // must not decide again — `lastDecidedPayHash` is the stepper's own-decision suppression.
+        // must not decide again — `lastDecidedPay` is the stepper's own-decision suppression.
         val fold = Fold(liveDropoffRegion())
             .step(postTaskObs(collapsed(), 10_000L))
             .step(idleObs(18_001L)) // A retires and closes; the receipt on file is COLLAPSED → no decision
         assertEquals(0, fold.reprices().size)
-        assertNull(fold.region.lastClosedJobReceipt!!.lastDecidedPayHash)
+        assertNull(fold.region.lastClosedJobReceipt!!.lastDecidedPay)
 
         fold.step(postTaskObs(expanded(), 19_000L))
         assertEquals(1, fold.reprices().size)
@@ -827,6 +827,121 @@ class ReceiptRepriceTest {
         assertEquals(2, fold.effectKeys.count { fired.add(it) })
     }
 
+    // ---- round 10: the terminal session end, and structural decision equality --------------
+
+    private fun sessionEndedObs(at: Long) = Observation.Screen(
+        timestamp = at, captureId = "cap-$at", ruleId = "doordash.screen.dash_summary",
+        metadata = ReplayMetadata.EMPTY, flow = Flow.SessionEnded, modeHint = Mode.Offline,
+        parsed = ParsedFields.SessionEndedFields(totalEarnings = 40.0),
+    )
+
+    private fun graceCommit(at: Long) = Observation.Timeout(
+        timestamp = at,
+        type = cloud.trotter.dashbuddy.domain.pipeline.TimeoutType.GRACE_COMMIT,
+        targetPlatform = Platform.DoorDash,
+    )
+
+    @Test
+    fun `round 10 — a SESSION END decides from its cached receipt before tearing the dash down`() {
+        // `endSession` bypasses `completeActiveJob` entirely, so round 9's close-time decision never
+        // ran on this path — and then the teardown cleared the cached receipt. The drop's completion
+        // was minted at the estimate on the overlay's PostTask exit, so its row is the one that needs
+        // the correction.
+        val fold = Fold(liveDropoffRegion())
+            .step(postTaskObs(collapsed(), 10_000L)) // A's collapsed receipt
+            .step(offerObs(11_000L, "hash-B")) // an UNACCEPTED offer overlays → the exit mints
+            .step(postTaskObs(expanded(), 13_000L)) // the receipt returns EXPANDED
+            .step(sessionEndedObs(14_000L)) // the summary arms the SESSION_END grace
+        assertEquals(DestructiveKind.SESSION_END, fold.region.pendingDestructive?.kind)
+        assertEquals("nothing decided while the dash is still open", 0, fold.reprices().size)
+
+        fold.step(graceCommit(16_501L)) // the grace commits → endSession
+
+        assertNull("the dash is over", fold.region.session)
+        val repriced = fold.reprices()
+        assertEquals("the teardown decided from the receipt it dropped", 1, repriced.size)
+        val payload = repriced.single().payload as DeliveryReceiptRepricePayload
+        assertEquals("t1", payload.taskId)
+        assertEquals(16.70, payload.totalPay, 0.0001)
+        assertEquals(16.70, payload.dropRealizedPay, 0.0001)
+    }
+
+    @Test
+    fun `round 10 — the OFFLINE-timeout variant of the teardown decides too`() {
+        // Same shape, reached through the offline grace rather than the summary screen.
+        val fold = Fold(liveDropoffRegion())
+            .step(postTaskObs(collapsed(), 10_000L))
+            .step(offerObs(11_000L, "hash-B"))
+            .step(postTaskObs(expanded(), 13_000L))
+            .step(
+                Observation.Screen(
+                    timestamp = 14_000L, captureId = "cap-off", ruleId = "doordash.screen.idle",
+                    metadata = ReplayMetadata.EMPTY, flow = Flow.Idle, modeHint = Mode.Offline,
+                    parsed = ParsedFields.None,
+                ),
+            )
+        assertEquals(DestructiveKind.SESSION_END, fold.region.pendingDestructive?.kind)
+
+        fold.step(graceCommit(fold.region.pendingDestructive!!.deadline + 1))
+        assertNull(fold.region.session)
+        assertEquals("the offline teardown decided too", 1, fold.reprices().size)
+    }
+
+    @Test
+    fun `round 10 — a task the BAIL force-completed is never re-priced`() {
+        // The drop never reached a PostTask exit, so the mint never ran for it and there is no row to
+        // correct. `endSession` force-stamps its `completedAt` as pure teardown bookkeeping (the
+        // amdt-#5 T3 guard keeps the close-out sweep off it too) — the re-price must agree.
+        val fold = Fold(liveDropoffRegion())
+            .step(postTaskObs(expanded(), 10_000L)) // an itemized receipt IS on file…
+            .step(sessionEndedObs(11_000L)) // …but the flow never LEFT PostTask
+        val beforeTeardown = fold.reprices().size
+        fold.step(graceCommit(fold.region.pendingDestructive!!.deadline + 1))
+
+        assertNull(fold.region.session)
+        assertEquals(
+            "the bail's own force-completion is not a delivery",
+            beforeTeardown,
+            fold.reprices().size,
+        )
+    }
+
+    @Test
+    fun `round 10 — two receipts whose hashes COLLIDE are two distinct decisions`() {
+        // base $2.05 + tip $5.50 and base $2.00 + tip $5.60 share Kotlin's -1866903064. A hash
+        // comparison suppressed the second and froze the row at $7.55.
+        val x = ParsedPay(
+            appPayComponents = listOf(ParsedPayItem("Base Pay", 2.05)),
+            customerTips = listOf(ParsedPayItem("Bill Millers", 5.50)),
+        )
+        val y = ParsedPay(
+            appPayComponents = listOf(ParsedPayItem("Base Pay", 2.00)),
+            customerTips = listOf(ParsedPayItem("Bill Millers", 5.60)),
+        )
+        assertEquals("the fixture really is a collision", x.hashCode(), y.hashCode())
+        assertTrue("…of two DIFFERENT receipts", x != y)
+
+        val fold = Fold(closedJobRegion())
+            .step(postTaskObs(expanded(x), 21_000L))
+            .step(postTaskObs(expanded(y), 22_000L))
+
+        assertEquals("both decided", 2, fold.reprices().size)
+        assertEquals(
+            listOf(
+                "log:DELIVERY_RECEIPT_REPRICE:t1:J1:r1",
+                "log:DELIVERY_RECEIPT_REPRICE:t1:J1:r2",
+            ),
+            fold.effectKeys,
+        )
+        assertEquals(
+            "the row ends at Y",
+            7.60,
+            (fold.reprices().last().payload as DeliveryReceiptRepricePayload).totalPay,
+            0.0001,
+        )
+        assertEquals(y, fold.region.lastClosedJobReceipt!!.lastDecidedPay)
+    }
+
     // ---- revision keying + the handoff ---------------------------------------------------
 
     @Test
@@ -859,8 +974,8 @@ class ReceiptRepriceTest {
         )
         assertEquals(
             "the marker's last decision is X again",
-            receipt.hashCode(),
-            fold.region.lastClosedJobReceipt!!.lastDecidedPayHash,
+            receipt,
+            fold.region.lastClosedJobReceipt!!.lastDecidedPay,
         )
         assertEquals(3, fold.region.lastClosedJobReceipt!!.repriceRevision)
     }
@@ -988,6 +1103,6 @@ class ReceiptRepriceTest {
         assertNotNull(mark)
         assertEquals("J1", mark!!.jobId)
         assertEquals("…and its ownership anchor is when the receipt appeared", 10_000L, mark.receiptSeenAt)
-        assertNull("no decision has been made from it yet", mark.lastDecidedPayHash)
+        assertNull("no decision has been made from it yet", mark.lastDecidedPay)
     }
 }
