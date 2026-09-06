@@ -1016,22 +1016,27 @@ class SideEffectEngineTest {
         }
         runCurrent()
 
+        // The remainder is computed from the REAL clock while the `delay` runs on `runTest`'s
+        // VIRTUAL one, so the two margins have to be far enough apart that no plausible real-time
+        // drift between `System.currentTimeMillis()` here and the same call inside the coroutine
+        // can cross either boundary. A minute out with 30 s / 31 s probes leaves ~30 s of slack on
+        // each side; the 2 s / 500 ms shape this replaced was a latent flake on a loaded host.
         engine.process(
             AppEffect.ScheduleTimeout(
-                // A wildly wrong estimate in BOTH directions is what proves the deadline is the
-                // authority: 1 ms would fire at once, and the deadline is ~2 s out.
+                // A wildly wrong estimate is what proves the deadline is the authority: 1 ms would
+                // fire at once, and the deadline is a minute out.
                 durationMs = 1L,
                 type = TimeoutType.MODE_RESUME_COMMIT,
                 platform = Platform.DoorDash,
-                deadlineMs = System.currentTimeMillis() + 2_000L,
+                deadlineMs = System.currentTimeMillis() + 60_000L,
             ),
         )
         runCurrent()
-        advanceTimeBy(1_500)
+        advanceTimeBy(30_000)
         runCurrent()
         assertEquals("the 1 ms estimate is ignored — the deadline is still ahead", 0, fired.size)
 
-        advanceTimeBy(1_000)
+        advanceTimeBy(31_000)
         runCurrent()
         assertEquals("and it fires once the remainder is out", 1, fired.size)
     }

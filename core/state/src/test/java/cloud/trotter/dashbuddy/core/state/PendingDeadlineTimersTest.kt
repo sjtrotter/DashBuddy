@@ -13,20 +13,23 @@ import cloud.trotter.dashbuddy.domain.state.PlatformRegion
 import cloud.trotter.dashbuddy.domain.state.Regions
 import cloud.trotter.dashbuddy.domain.state.Session
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * #1054 part 2 — [pendingDeadlineTimers], the ONE enumeration of "what did the recovery restore
- * that is still waiting on a clock".
+ * #1054 part 2 — [pendingDeadlineTimers], the enumeration of what crash recovery RE-ARMS.
+ *
+ * Since round 3 that is the destructive grace and nothing else. Everything else deadline-bearing is
+ * either dropped as stale evidence by [recoveryHygiene] (the settle park, the graced resume) or a
+ * pre-existing gap this issue does not close (`OFFER_EXPIRY`, `SESSION_PAUSED_SAFETY`, `SETTLE_UI`
+ * — tracked as #1076). These tests pin the boundary in both directions, because the tempting
+ * mistake in either is silent: enumerate one more and a phantom dash gets minted, enumerate one
+ * fewer and a dash never ends.
  *
  * Pure and platform-agnostic: it states deadlines and never durations (a duration is a wall-clock
- * question, answered at the `StateManagerV2` effect boundary), and every platform it names comes
- * from the region itself.
- *
- * The deliberate omission is the settle park — see [droppingSessionPayParks]. A park is stale
- * EVIDENCE and is dropped; a grace is a COMMITMENT in flight and is re-armed. The two rules are
- * complements, and this test pins that they stay complements.
+ * question, answered where the timer is actually scheduled), and every platform it names comes from
+ * the region itself.
  */
 class PendingDeadlineTimersTest {
 
@@ -70,27 +73,23 @@ class PendingDeadlineTimersTest {
     }
 
     @Test
-    fun `a restored resume grace enumerates its MODE_RESUME_COMMIT deadline`() {
-        assertEquals(
-            listOf(PendingDeadline(TimeoutType.MODE_RESUME_COMMIT, Platform.DoorDash, 19_000L)),
-            state(region(Platform.DoorDash, modeResume = modeResume)).pendingDeadlineTimers(),
-        )
-    }
-
-    @Test
-    fun `both graces on one region enumerate separately - they are separate timer keys`() {
-        // Both graces live on the SAME platform region, which is exactly why MODE_RESUME_COMMIT is
-        // its own TimeoutType (#605): under a shared type the (type, platform) timer key would make
-        // one re-arm cancel the other.
-        val enumerated = state(
-            region(Platform.DoorDash, destructive = destructive, modeResume = modeResume),
-        ).pendingDeadlineTimers()
-
-        assertEquals(2, enumerated.size)
-        assertEquals(
-            setOf(TimeoutType.GRACE_COMMIT, TimeoutType.MODE_RESUME_COMMIT),
-            enumerated.map { it.type }.toSet(),
-        )
+    fun `a graced resume is NEVER enumerated, with a session or without one`() {
+        // #1054 round 3. Round 2 guarded this on `session != null`, reasoning that a session-less
+        // resume would MINT a phantom dash (`applyModeTransition(…, Online)` mints when there is
+        // none) while one with a live session was a real commitment. Both halves were wrong: the
+        // guard suppressed only the RE-ARM, leaving the resume installed for the tail's own
+        // replayed timer or any later observation to commit; and even with a live session, a
+        // resume's window is 8 s of UN-CONTRADICTED observation, so committing it after a restart
+        // asserts that dead process time was nobody contradicting it — and the commit CANCELS the
+        // `SESSION_PAUSED_SAFETY` net on its way through `diffMode`. [recoveryHygiene] drops it
+        // outright now; there is nothing left here to enumerate either way.
+        for (session in listOf(Session("live", startedAt = 100L), null)) {
+            assertTrue(
+                "a resume is evidence, not a commitment (session = $session)",
+                state(region(Platform.DoorDash, modeResume = modeResume, session = session))
+                    .pendingDeadlineTimers().isEmpty(),
+            )
+        }
     }
 
     @Test
@@ -103,23 +102,11 @@ class PendingDeadlineTimersTest {
     }
 
     @Test
-    fun `a resume on a SESSION-LESS region is not enumerated`() {
-        // #1054 round 2. `commitModeResume` runs through `applyModeTransition(…, Mode.Online)`,
-        // which MINTS a session when the region has none — so a resume standing without a session
-        // is an intent to START a dash, not a commitment about one that exists, and waking it from
-        // a restore would mint a phantom. The live path can no longer produce this shape
-        // (`endSession` clears the resume), but a pre-fix SNAPSHOT can, and the restore has to be
-        // safe against its own history.
-        assertTrue(
-            state(region(Platform.DoorDash, modeResume = modeResume, session = null))
-                .pendingDeadlineTimers().isEmpty(),
-        )
-    }
-
-    @Test
-    fun `a destructive grace on a SESSION-LESS region IS still enumerated`() {
-        // The asymmetry is deliberate: a `SESSION_END` with no session is already a no-op at
-        // commit, so re-arming it costs one inert fire at worst — nothing is minted out of it.
+    fun `a destructive grace is enumerated even on a SESSION-LESS region`() {
+        // The one thing that IS re-armed, and unconditionally. A `SESSION_END` with no session is
+        // already a no-op at commit, so the re-arm costs one inert fire at worst — and unlike the
+        // other two, its commit fails toward the SAFE side: it ends a dash that in all likelihood
+        // really did end, rather than inventing one.
         assertEquals(
             listOf(PendingDeadline(TimeoutType.GRACE_COMMIT, Platform.DoorDash, 20_500L)),
             state(region(Platform.DoorDash, destructive = destructive, session = null))
@@ -128,18 +115,57 @@ class PendingDeadlineTimersTest {
     }
 
     @Test
+    fun `a region holding all three pendings enumerates only the destructive grace`() {
+        val enumerated = state(
+            region(
+                Platform.DoorDash,
+                destructive = destructive,
+                modeResume = modeResume,
+                park = park,
+            ),
+        ).pendingDeadlineTimers()
+
+        assertEquals(
+            listOf(PendingDeadline(TimeoutType.GRACE_COMMIT, Platform.DoorDash, 20_500L)),
+            enumerated,
+        )
+    }
+
+    @Test
     fun `each platform's pendings carry that platform, never a literal`() {
         val enumerated = state(
             region(Platform.DoorDash, destructive = destructive),
-            region(Platform.Uber, modeResume = modeResume),
+            region(Platform.Uber, destructive = destructive.copy(deadline = 30_000L)),
         ).pendingDeadlineTimers()
 
         assertEquals(
             setOf(
                 PendingDeadline(TimeoutType.GRACE_COMMIT, Platform.DoorDash, 20_500L),
-                PendingDeadline(TimeoutType.MODE_RESUME_COMMIT, Platform.Uber, 19_000L),
+                PendingDeadline(TimeoutType.GRACE_COMMIT, Platform.Uber, 30_000L),
             ),
             enumerated.toSet(),
+        )
+    }
+
+    // =====================================================================
+    // #1054 round 3 — the hygiene half of the same rule
+    // =====================================================================
+
+    @Test
+    fun `recoveryHygiene drops the park and the resume on every region, keeping the destructive grace`() {
+        val cleaned = state(
+            region(Platform.DoorDash, destructive = destructive, modeResume = modeResume, park = park),
+            region(Platform.Uber, modeResume = modeResume, park = park),
+        ).recoveryHygiene()
+
+        for ((platform, region) in cleaned.regions.platforms) {
+            assertNull("the park is stale evidence on $platform", region.pendingSessionPay)
+            assertNull("so is the resume on $platform", region.pendingModeResume)
+        }
+        assertEquals(
+            "the decision in flight survives",
+            destructive,
+            cleaned.regions.platforms.getValue(Platform.DoorDash).pendingDestructive,
         )
     }
 }

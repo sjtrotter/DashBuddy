@@ -69,6 +69,14 @@ data class PlatformRegion(
      * snapshots deserialize unchanged. Distinct from [pendingDestructive]
      * because during the field flap that pending is BUSY holding the
      * just-completed delivery's `TASK_RETIRE` grace — the two slots cannot share.
+     *
+     * Cleared by a terminal session end and DROPPED wholesale by crash recovery
+     * (`AppState.recoveryHygiene`, #1054 round 3). Its window is 8 s of UN-CONTRADICTED
+     * observation — a paused frame inside it cancels — so committing one after a restart would
+     * assert that dead process time was nobody contradicting it; and the commit is not inert, since
+     * `applyModeTransition(…, Online)` MINTS a session when there is none and `diffMode`'s
+     * Paused→Online arm CANCELS the `SESSION_PAUSED_SAFETY` net. Dropping fails toward Paused, and
+     * the next Online-implying frame arms a fresh grace screen-driven, exactly as #605 intends.
      */
     val pendingModeResume: PendingModeResume? = null,
     /**
@@ -155,8 +163,8 @@ data class PlatformRegion(
      * glancing at is the right trade against showing them a number that never existed.
      *
      * Cleared whenever the session it describes begins or ends, and DROPPED wholesale by crash
-     * recovery (`AppState.droppingSessionPayParks`): a restored park is pre-crash evidence whose
-     * surface is long gone and whose wake timer no restore path re-arms — fail-null (#745).
+     * recovery (`AppState.recoveryHygiene`): a restored park is pre-crash evidence whose surface is
+     * long gone and whose wake timer no restore path re-arms — fail-null (#745).
      * Platform-agnostic: the gate is per-region state, keyed by nothing but this region's own
      * reads. Default-null so existing snapshots deserialize unchanged.
      */

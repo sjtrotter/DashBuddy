@@ -100,6 +100,12 @@ was found **broken-in-part** (raw PII in capture envelopes) and moved to that en
      opened, which is what the bug produced.
   3. No dash left with a live `session` in the HUD after the app has been closed on an offline
      screen for minutes.
+  4. **After a relaunch mid-PAUSE the HUD must stay PAUSED** until a real screen resumes it — a
+     phantom resume (the HUD showing Online, or a brand-new dash appearing, with no online screen
+     behind it) is the bug. A graced resume is dropped on restore, deliberately, so the next
+     online-implying frame is what brings the dash back. Desk check: no `DASH_START` in
+     `app_events` within a few seconds of a recovery, and no `Recovery re-armed` line naming more
+     than the dash-end grace.
   - Confirmed: 0/2
 
 - **🆕 NEW — #1033 — a collapsed delivery receipt now gets 8 s to be expanded, and an expansion

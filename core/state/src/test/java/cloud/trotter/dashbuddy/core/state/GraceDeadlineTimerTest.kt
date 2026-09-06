@@ -395,6 +395,72 @@ class GraceDeadlineTimerTest {
     )
 
     // =====================================================================
+    // #1054 round 3 — equality belongs to the timer's OWN (type, platform)
+    // =====================================================================
+
+    @Test
+    fun `a SESSION_PAUSED_SAFETY fire on a resume deadline does not commit the resume`() {
+        // Round 2 granted equality to ANY `Observation.Timeout`, which looked harmless until you
+        // notice the deadlines coincide SYSTEMATICALLY: `PAUSE_RESUME_GRACE_MS` and
+        // `RECEIPT_EXPAND_GRACE_MS` are both 8 000 ms and every timer in a region shares one clock.
+        // The safety fire would then commit Paused→Online at the top of `stepCore` — and
+        // `handleTimeout`'s own `prev.mode == Paused` guard, evaluated after, is now false, so the
+        // safety net's Paused→Offline + SESSION_END grace is silently dropped and the dash stays
+        // Online with nothing left to end it.
+        val region = region(
+            mode = Mode.Paused,
+            modeResume = PendingModeResume(since = resumeArmedAt, deadline = resumeDeadline),
+        )
+
+        val after = machine.step(state(region), wake(TimeoutType.SESSION_PAUSED_SAFETY, resumeDeadline))
+            .newState.dd()
+
+        assertEquals("the safety transition ran: Paused → Offline", Mode.Offline, after.mode)
+        assertEquals(
+            "with its own graced end armed, which is the whole point of the net",
+            DestructiveKind.SESSION_END,
+            after.pendingDestructive?.kind,
+        )
+        assertNull(
+            "the resume is resolved by that Paused→Offline commit (#605), not committed by it — " +
+                "the failure mode being guarded is Mode.Online, which the mode assertion above pins",
+            after.pendingModeResume,
+        )
+        assertNotNull("and the session survives into its own grace", after.session)
+    }
+
+    @Test
+    fun `the resume's OWN fire at that same instant still commits`() {
+        // The control for the case above: nothing about the narrowing weakens the fix it narrows.
+        val region = region(
+            mode = Mode.Paused,
+            modeResume = PendingModeResume(since = resumeArmedAt, deadline = resumeDeadline),
+        )
+
+        val after = machine.step(state(region), wake(TimeoutType.MODE_RESUME_COMMIT, resumeDeadline))
+            .newState.dd()
+
+        assertEquals(Mode.Online, after.mode)
+        assertNull(after.pendingModeResume)
+    }
+
+    @Test
+    fun `another platform's GRACE_COMMIT fire never lapses this region's grace at equality`() {
+        // The platform half of the same test. `stepPlatforms` steps only `obs.platform`'s region,
+        // so this is belt-and-braces — but the predicate states (type, platform) because a timer's
+        // fire is evidence about the pending it was armed for and about nothing else.
+        val uberWake = Observation.Timeout(
+            timestamp = endDeadline,
+            type = TimeoutType.GRACE_COMMIT,
+            targetPlatform = Platform.Uber,
+        )
+
+        val after = machine.step(state(region(destructive = sessionEnd())), uberWake).newState.dd()
+        assertNotNull("DoorDash's dash is untouched by Uber's timer", after.session)
+        assertNotNull("and its grace still stands", after.pendingDestructive)
+    }
+
+    // =====================================================================
     // #1054 round 2 — a terminal end invalidates that session's graced resume
     // =====================================================================
 
