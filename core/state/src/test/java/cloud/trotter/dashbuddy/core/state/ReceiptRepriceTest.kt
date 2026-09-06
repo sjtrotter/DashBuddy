@@ -2,6 +2,7 @@ package cloud.trotter.dashbuddy.core.state
 
 import cloud.trotter.dashbuddy.domain.capture.ReplayMetadata
 import cloud.trotter.dashbuddy.domain.model.event.AppEventType
+import cloud.trotter.dashbuddy.domain.model.event.payload.DeliveryPayload
 import cloud.trotter.dashbuddy.domain.model.event.payload.DeliveryReceiptRepricePayload
 import cloud.trotter.dashbuddy.domain.model.pay.ParsedPay
 import cloud.trotter.dashbuddy.domain.model.pay.ParsedPayItem
@@ -319,6 +320,132 @@ class ReceiptRepriceTest {
             listOf("log:${AppEventType.DELIVERY_RECEIPT_REPRICE}:t1:${receipt.hashCode()}"),
             keys,
         )
+    }
+
+    // =====================================================================================
+    // Review round 2 (#1033) — the three emission defects Astra found
+    // =====================================================================================
+
+    /**
+     * R1 — cross-job OWNERSHIP. `lastAnnouncedPostTaskTaskId` falls back to
+     * `recentTasks.lastOrNull()`, so if job B is accepted and every one of its task screens is
+     * MISSED, B's receipt is still anchored on job A's last drop. Without a positive ownership rule
+     * B's money would be appended as a re-price of A.
+     */
+    @Test
+    fun `R1 — a NEW job's receipt is never appended as a re-price of the closed job`() {
+        val jobB = Job("J2", offerStoreHint = emptyList(), parentOfferHash = null, startedAt = 20_000L)
+        // Job A closed off an un-itemized receipt; job B is now live but produced no task frames at
+        // all, so the announce anchor still names A's drop.
+        val region = closedJobRegion().copy(activeJob = jobB)
+        assertTrue(
+            "B's expanded receipt must not re-price A's drop",
+            repriceEvents(region).isEmpty(),
+        )
+    }
+
+    @Test
+    fun `R1 — minting a new job CLEARS the closed-job marker in the stepper`() {
+        val jobB = Job("J2", offerStoreHint = emptyList(), parentOfferHash = null, startedAt = 20_000L)
+        val region = closedJobRegion().copy(activeJob = jobB)
+        val next = stepper.step(
+            region,
+            FlowRegion(flow = Flow.PostTask),
+            FlowRegion(flow = Flow.PostTask),
+            postTaskObs(expanded(), 21_000L),
+            policy,
+        )
+        assertNull(
+            "the re-price window is strictly between the close and the next job's mint",
+            next.lastClosedJobReceipt,
+        )
+        // …and the ordinary happy path is untouched: no live job, the marker survives and fires.
+        assertEquals(1, repriceEvents(closedJobRegion()).size)
+    }
+
+    /**
+     * R2 — the PostTask-exit mint can complete a task that is STILL ACTIVE under its retire grace
+     * (`completedAt` is stamped only when that grace commits), so a `recentTasks` + `completedAt`
+     * scan finds an empty denominator for exactly the job whose receipt is on screen.
+     */
+    @Test
+    fun `R2 — a completion minted from the still-ACTIVE task is still re-priced`() {
+        // 10_000: the collapsed receipt arms the 8 s window.
+        val afterReceipt = armGrace(collapsed(), at = 10_000L)
+        assertEquals(18_000L, afterReceipt.pendingDestructive?.deadline)
+
+        // 11_000: an Idle frame exits PostTask → the job closes while the task is STILL ACTIVE with
+        // its retire grace pending, and the completion is minted off the collapsed receipt.
+        val idleObs = Observation.Screen(
+            timestamp = 11_000L, captureId = "cap-idle", ruleId = "doordash.screen.idle",
+            metadata = ReplayMetadata.EMPTY, flow = Flow.Idle, modeHint = Mode.Online,
+            parsed = ParsedFields.None,
+        )
+        val afterExit = stepper.step(
+            afterReceipt, FlowRegion(flow = Flow.PostTask), FlowRegion(flow = Flow.Idle), idleObs, policy,
+        )
+        val completions = effectMap
+            .diff(appState(afterReceipt, Flow.PostTask), appState(afterExit, Flow.Idle), idleObs)
+            .filterIsInstance<AppEffect.LogEvent>()
+            .filter { it.event.type == AppEventType.DELIVERY_COMPLETED }
+        assertEquals("the exit minted the completion", 1, completions.size)
+        assertNull("off the COLLAPSED receipt", (completions.single().event.payload as DeliveryPayload).parsedPay)
+        assertNull("the job closed", afterExit.activeJob)
+        assertEquals("but the task is still ACTIVE", "t1", afterExit.activeTask?.taskId)
+        assertNull("with no completedAt yet", afterExit.activeTask?.completedAt)
+        assertEquals(DestructiveKind.TASK_RETIRE, afterExit.pendingDestructive?.kind)
+
+        // 14_000: the expansion lands. The denominator has to include the still-active task.
+        val events = repriceEvents(afterExit, at = 14_000L)
+        assertEquals(1, events.size)
+        assertEquals("t1", events.single().taskId)
+        assertEquals(16.70, events.single().dropRealizedPay, 0.0001)
+    }
+
+    /**
+     * R3 — the expansion that itself trips the lazy expiry. The retire commits FIRST (closing the
+     * job and stamping the marker off the COLLAPSED receipt), then this frame's expanded parse is
+     * stored — so the marker exists only in the RESULTING region, and the completion this same step
+     * mints carries no itemization. Identical later renders are FrameGate-suppressed, so if this
+     * frame emits nothing the delivery is never corrected at all.
+     */
+    @Test
+    fun `R3 — an expansion that trips the lazy expiry re-prices on the SAME frame, after the completion`() {
+        val afterReceipt = armGrace(collapsed(), at = 10_000L)
+        assertEquals(18_000L, afterReceipt.pendingDestructive?.deadline)
+
+        val obs = postTaskObs(expanded(), 18_001L) // one ms past the deadline
+        val next = stepper.step(
+            afterReceipt, FlowRegion(flow = Flow.PostTask), FlowRegion(flow = Flow.PostTask), obs, policy,
+        )
+        assertNull("the expiry closed the job on this frame", next.activeJob)
+        assertNotNull("…stamping the marker in the RESULTING region only", next.lastClosedJobReceipt)
+        assertTrue("off the collapsed receipt", !next.lastClosedJobReceipt!!.itemized)
+        assertNull("while `prev` still has none", afterReceipt.lastClosedJobReceipt)
+
+        val logged = effectMap
+            .diff(appState(afterReceipt, Flow.PostTask), appState(next, Flow.PostTask), obs)
+            .filterIsInstance<AppEffect.LogEvent>()
+            .map { it.event }
+        val types = logged.map { it.type }
+        assertTrue(
+            "the completion is minted on this frame: $types",
+            types.contains(AppEventType.DELIVERY_COMPLETED),
+        )
+        assertNull(
+            "and it carries the COLLAPSED receipt",
+            (logged.first { it.type == AppEventType.DELIVERY_COMPLETED }.payload as DeliveryPayload).parsedPay,
+        )
+        val repriced = logged.filter { it.type == AppEventType.DELIVERY_RECEIPT_REPRICE }
+        assertEquals("exactly one re-price on the same frame: $types", 1, repriced.size)
+        assertTrue(
+            "ORDERING is load-bearing — the re-price must land after the completion it corrects",
+            types.indexOf(AppEventType.DELIVERY_RECEIPT_REPRICE) >
+                types.indexOf(AppEventType.DELIVERY_COMPLETED),
+        )
+        val e = repriced.single().payload as DeliveryReceiptRepricePayload
+        assertEquals("t1", e.taskId)
+        assertEquals(16.70, e.dropRealizedPay, 0.0001)
     }
 
     // =====================================================================================

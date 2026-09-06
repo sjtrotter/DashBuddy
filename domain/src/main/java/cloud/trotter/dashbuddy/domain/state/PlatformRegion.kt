@@ -173,6 +173,14 @@ data class PlatformRegion(
      * and `EffectMap` compares it against this marker to decide whether a `DELIVERY_RECEIPT_REPRICE`
      * is owed.
      *
+     * **The re-price window is strictly between the close and the next job's mint** (#1033 review R1).
+     * `lastAnnouncedPostTaskTaskId` falls back to `recentTasks.lastOrNull()`, so a marker that
+     * outlived its job would let a NEXT job whose task screens were all missed anchor its receipt on
+     * the PREVIOUS job's last drop — appending that job's money as a re-price of this one. The
+     * stepper therefore clears this the moment any other job is active
+     * (`clearClosedJobReceiptOnNewJob`), and the emitter independently refuses to fire while any job
+     * is live.
+     *
      * Derived wholly from the region's own records at the close, so it is replay-stable; cleared by
      * `endSession` (a dash's receipt must not survive into the next one). Fail-null by construction:
      * with no marker no re-price is ever emitted, so a close path that never stamps one (an

@@ -224,9 +224,12 @@ class EffectMap @Inject constructor(
             // emits a log effect; the sweep's emittedThisStep set is local to diffDeliveryCompletion).
             addAll(diffJobClose(p, next, obs))
             // #1033 layer 2: a receipt EXPANDED after its job's completions were already minted off
-            // the collapsed shape re-prices those drops from the itemization. Emitted AFTER the mint
-            // blocks so it can never race a same-step completion — its own guard requires the job to
-            // have closed on a PRIOR step, which is what makes the two mutually exclusive.
+            // the collapsed shape re-prices those drops from the itemization. Ordering is
+            // LOAD-BEARING (review R3): this must stay AFTER `diffDeliveryCompletion`, because an
+            // expansion can arrive on the very frame whose lazy expiry closes the job — the engine
+            // writes one step's effects serially, so the re-price then lands in `app_events` after
+            // the `DELIVERY_COMPLETED` it corrects, and the projector applies adjustments after the
+            // batch's own delivery upserts in sequence order.
             addAll(diffReceiptReprice(p, next, actedNextFlow, obs))
         }
     }

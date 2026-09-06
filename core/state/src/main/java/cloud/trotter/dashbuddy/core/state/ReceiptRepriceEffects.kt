@@ -3,6 +3,7 @@ package cloud.trotter.dashbuddy.core.state
 import cloud.trotter.dashbuddy.domain.model.event.AppEventType
 import cloud.trotter.dashbuddy.domain.model.event.payload.DeliveryReceiptRepricePayload
 import cloud.trotter.dashbuddy.domain.pipeline.Observation
+import cloud.trotter.dashbuddy.domain.state.DestructiveKind
 import cloud.trotter.dashbuddy.domain.state.DropPayApportioner
 import cloud.trotter.dashbuddy.domain.state.Flow
 import cloud.trotter.dashbuddy.domain.state.ParsedFields
@@ -55,10 +56,35 @@ internal fun EffectMap.diffReceiptReprice(
     if (next.lastPostTaskFields?.parsedPay == null) return emptyList()
 
     // The job whose completions have already been minted, and what receipt they carried.
-    val mark = p.lastClosedJobReceipt ?: return emptyList()
-    // It must still be CLOSED on both sides of the step. A re-opened jobId cannot happen (ids are
-    // minted monotonically), so this is the fail-closed spelling of "the mint already ran".
-    if (p.activeJob?.jobId == mark.jobId || next.activeJob?.jobId == mark.jobId) return emptyList()
+    //
+    // Read from the RESULTING region (#1033 review R3), not the prior one: an expansion whose own
+    // frame is ALSO the one that trips the collapsed grace's lazy expiry closes the job on this very
+    // step, so `p.lastClosedJobReceipt` is still null while `next`'s is the marker this frame just
+    // stamped. `p` was the blind spot — that ordering (expiry, then the receipt store) is the normal
+    // shape for an expansion arriving a hair past the deadline, and FrameGate suppresses the
+    // identical later renders, so nothing would ever have corrected it. On every other frame the two
+    // are the same value. The marker's `itemized`/`totalPay` describe the receipt as it stood AT the
+    // close (the expiry runs before `updateSessionFields` stores this frame's parse), so the
+    // `alreadyPriced` check below still compares the completion's receipt against the new one.
+    val mark = next.lastClosedJobReceipt ?: return emptyList()
+    // No job may be live AFTER this step, and the only job that may have been live BEFORE it is the
+    // marker's own — i.e. the one closing on this very frame (#1033 review R1 + R3 together).
+    //
+    // R1: the re-price window is strictly between a close and the next job's mint.
+    // `lastAnnouncedPostTaskTaskId` falls back to `recentTasks.lastOrNull()`, so a live job whose
+    // task screens were all MISSED would otherwise have its receipt anchored on the PREVIOUS job's
+    // last drop and its money appended as a re-price of that job. The stepper's
+    // `clearClosedJobReceiptOnNewJob` closes the same hole from the state side; this is the
+    // emitter's own half, and it also covers the frames before a new job's mint lands.
+    //
+    // R3: a flat "no job on either side" would ALSO reject the same-frame close — the expansion that
+    // itself trips the collapsed grace's lazy expiry, where `p.activeJob` is still the job the
+    // marker names. That frame is the whole point of reading the marker from `next`, so the prior
+    // side is checked by IDENTITY, not by emptiness. Nothing else can reach this line with
+    // `p.activeJob` set: a job still open in `next` already returned above.
+    if (next.activeJob != null) return emptyList()
+    val priorJob = p.activeJob
+    if (priorJob != null && priorJob.jobId != mark.jobId) return emptyList()
     // Nothing is owed when the completions already carried THIS itemization — the marker is the only
     // thing that can tell that apart from a genuinely late expansion, because the close cleared the
     // receipt out of the region.
@@ -66,14 +92,24 @@ internal fun EffectMap.diffReceiptReprice(
     val alreadyPriced = mark.itemized && markTotal != null && abs(markTotal - receipt.totalPay) < 0.005
     if (alreadyPriced) return emptyList()
 
-    // The denominator: the job's delivered, accountable dropoffs — the same
-    // [Task.isAccountableDropoff] SSOT `DeliveryCompletionEffects.mintingDropoffTasks` filters
-    // through, so Σ shares lands on exactly the rows the mint wrote. The amdt-#5 mint qualification
-    // needs no re-check here: every one of these completed at or before the close, and the only
-    // completion that is force-stamped without minting (an `endSession` bail) also CLEARS the marker.
-    val drops = p.recentTasks
-        .filter { it.jobId == mark.jobId && it.isAccountableDropoff && it.completedAt != null }
+    // The denominator, rebuilt as the mint built it — `Task.isAccountableDropoff` (the #498 phantom +
+    // #736 unassign firewalls) plus the SAME amdt-#5 [mintQualified] predicate
+    // `DeliveryCompletionEffects.mintingDropoffTasks` applies, so Σ shares lands on exactly the rows
+    // the mint wrote.
+    //
+    // The active task is a CANDIDATE, not an afterthought (#1033 review R2): the PostTask-exit mint
+    // can complete a task that is STILL ACTIVE under its retire grace — `completedAt` is stamped only
+    // when that grace commits — so a plain `recentTasks + completedAt != null` scan finds an empty
+    // denominator for exactly the job whose receipt is on screen, and the re-price silently never
+    // fires (the later `TASK_RETIRE` timer moves the task, but a timer is not a receipt observation,
+    // so no frame is coming to retry). [mintQualified] is what makes including it safe: it admits the
+    // active task only while a `TASK_RETIRE` really is pending, which is the same evidence the mint
+    // required of it.
+    val retirePending = p.pendingDestructive?.kind == DestructiveKind.TASK_RETIRE
+    val drops = (p.recentTasks + listOfNotNull(p.activeTask))
+        .filter { it.jobId == mark.jobId && it.isAccountableDropoff }
         .distinctBy { it.taskId }
+        .filter { mintQualified(p, retirePending, it) }
     if (drops.isEmpty()) return emptyList()
 
     // The receipt on screen must belong to THAT job — the stepper's announce anchor names the task

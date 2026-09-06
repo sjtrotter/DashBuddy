@@ -81,10 +81,41 @@ class PlatformRegionStepper @Inject constructor() {
         // accept-latched offer is marked accepted-pending-consumption before stepCore's task edge
         // consumes it (the old armAcceptStash mirror, run AFTER stepCore, is retired).
         reconcileDropoffStore(
-            reconcileJobTasks(stepCore(stepOffers(prev, obs, policy), prevFlow, nextFlow, obs, policy)),
+            reconcileJobTasks(
+                // #1033 review R1: the re-price window closes the moment the NEXT job is minted —
+                // run this where `activeJob` is final for the step (nothing after stepCore changes
+                // whether a job is active).
+                clearClosedJobReceiptOnNewJob(
+                    stepCore(stepOffers(prev, obs, policy), prevFlow, nextFlow, obs, policy),
+                ),
+            ),
         ),
         obs,
     )
+
+    /**
+     * #1033 review R1 — the receipt re-price window is **strictly between a job's close and the next
+     * job's mint**, and this is what enforces the closing half.
+     *
+     * `PlatformRegion.lastClosedJobReceipt` names the job whose completions have already been minted.
+     * Without this rule the marker outlives its job: `lastAnnouncedPostTaskTaskId` falls back to
+     * `recentTasks.lastOrNull()`, so if job B is accepted but every one of its task screens is MISSED,
+     * B's receipt would still be anchored on job A's last drop and B's money would be appended as a
+     * re-price of A — money attributed to the wrong job, silently. Clearing the marker as soon as ANY
+     * new job is active makes that structurally unreachable (the emitter additionally refuses to fire
+     * while any job is live — the two are belt and braces, and the emitter's half also covers the
+     * frames before the new job's own mint lands).
+     *
+     * Deliberately keyed on "an active job that is not the marker's own", not on "a job was minted
+     * this step": the marker's own job is null-ed out of `activeJob` by `completeActiveJob` at the
+     * same moment the marker is stamped, so the two can never be live together — and a same-step
+     * close-then-mint (the #596 T2 accept path) correctly clears.
+     */
+    private fun clearClosedJobReceiptOnNewJob(region: PlatformRegion): PlatformRegion {
+        val active = region.activeJob ?: return region
+        val mark = region.lastClosedJobReceipt ?: return region
+        return if (active.jobId == mark.jobId) region else region.copy(lastClosedJobReceipt = null)
+    }
 
     /**
      * #438 item 5 (D3): record the last **non-null** own-platform flow this region stepped on
