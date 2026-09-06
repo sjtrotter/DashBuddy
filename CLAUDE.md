@@ -1375,8 +1375,14 @@ job identity, so every other test tried in review — the announce anchor (which
 is not identity, and it let a stacked job's $20 receipt redistribute the closed job's drops ($5/$15
 over a real $10/$10). **Stated cost (fail-null, #745): the STACKED shape — accept the next offer while
 this receipt is up, then expand it LATE — is refused and keeps the `OFFER_PAY` estimate; layer 1's 8 s
-window is the path that lands it in time.** Effect keys are `…:<taskId>:<jobId>:r<revision>` off
-`repriceRevision`, NOT the receipt's content hash: an X→Y→X itemization sequence hashed back onto its
+window is the path that lands it in time.** **A receipt speaks only for drops completed at or before
+the frame it was read from (#1073):** `lastPostTaskFieldsAt` rides beside the cached receipt and the
+denominator drops any sibling whose `completedAt` is later — round 11 scoped the active-task exception
+to the anchor, and a completed sibling delivered after the receipt appeared was the same hole one rung
+down (a 3-drop job's T1 receipt was split $10/$10 over T1 and a receipt-less T2 at the close/teardown).
+And the `exitedPostTask` stamp is taken ahead of `updateLifecycle`'s Offline/SessionEnded early
+returns, on the same acted-flow edge the emitter mints on. Effect keys are
+`…:<taskId>:<jobId>:r<revision>` off `repriceRevision`, NOT the receipt's content hash: an X→Y→X itemization sequence hashed back onto its
 own first key and the durable `effects_fired` idempotency dropped the third emission, freezing the row
 at Y. `CorrectionFolds.foldDeliveryReceiptReprice` → a `ReceiptRepriceFold` the projector applies
 by **(jobId, taskId)** — the state machine never sees sequence ids — setting `realizedPay`/`tip`/

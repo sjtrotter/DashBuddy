@@ -593,6 +593,34 @@ class PlatformRegionStepper @Inject constructor() {
         obs: Observation.FlowObservation,
         policy: TransitionPolicy,
     ): PlatformRegion {
+        var r = region
+        // #438 item 5 (D3): the lifecycle edges below diff THIS region's own acted flow, not the
+        // shared global R0 flow. `region.lastActedFlow` is still the pre-step value here (the stamp
+        // runs in the [step] wrapper, after stepCore). Fallback to the global prev flow for legacy
+        // snapshots (lastActedFlow=null) keeps single-platform behavior byte-identical — the sole
+        // region acts on every own frame, so its lastActedFlow tracks R0.flow. A flow-less own obs
+        // (flow=null) is not a flow edge (next=prev), never a diff against the other platform's
+        // nextFlow.flow.
+        val prev = region.lastActedFlow ?: prevFlow.flow
+        val next = obs.flow ?: prev
+
+        // #1033 round 10: record that the completion mint has RUN for this job — the flow left
+        // PostTask at least once. A structural flow fact only (round 8's lesson: never a claim about
+        // what a completion carried); the terminal teardown uses it to tell a drop that already has a
+        // row from one it is force-completing right now.
+        //
+        // Taken ahead of the early returns (#1073): an Offline or SessionEnded frame IS a PostTask
+        // exit the emitter mints on. `EffectMap.diffDeliveryCompletion` diffs
+        // `p.lastActedFlow`/`next.lastActedFlow` — stamped by the [step] wrapper, outside this
+        // function — so it fires on that edge unconditionally, while the stamp below the returns was
+        // skipped on exactly those exits. The stamp touches only [PlatformRegion.jobReceiptAnchors],
+        // which nothing between here and its old position reads, so the ordinary path is unchanged.
+        if (prev == Flow.PostTask && next != Flow.PostTask) {
+            r.jobReceiptAnchors?.let { a ->
+                if (!a.exitedPostTask) r = r.copy(jobReceiptAnchors = a.copy(exitedPostTask = true))
+            }
+        }
+
         // Authoritative session end: the dash-summary screen. It no longer ends
         // the session on the spot (#431) — one misrecognized frame used to split
         // a live session irrecoverably. Instead it arms (or tightens) a SHORT
@@ -602,10 +630,10 @@ class PlatformRegionStepper @Inject constructor() {
         // the pending so the deferred DASH_STOP payload keeps full fidelity.
         // Runs before the Offline early-return below because the summary commonly
         // shows AFTER the idle/offline screen, mid-grace.
-        if (obs.flow == Flow.SessionEnded && region.session != null) {
+        if (obs.flow == Flow.SessionEnded && r.session != null) {
             val endFields = obs.parsed as? ParsedFields.SessionEndedFields
-            val newDeadline = obs.timestamp + policy.authoritativeGraceMs(region.platform)
-            val existing = region.pendingDestructive
+            val newDeadline = obs.timestamp + policy.authoritativeGraceMs(r.platform)
+            val existing = r.pendingDestructive
             val pend = if (existing?.kind == DestructiveKind.SESSION_END) {
                 // Offline-grace already armed (idle/offline before summary) —
                 // tighten to the short window, keep the original `since` (the
@@ -624,26 +652,15 @@ class PlatformRegionStepper @Inject constructor() {
                     endFields = endFields,
                 )
             }
-            return region.copy(pendingDestructive = pend)
+            return r.copy(pendingDestructive = pend)
         }
-        if (region.mode == Mode.Offline) {
+        if (r.mode == Mode.Offline) {
             // Clear the idle anchor and any TASK_RETIRE pending, but PRESERVE a
             // SESSION_END pending — that IS the graced-offline state.
-            val keptPending = region.pendingDestructive
+            val keptPending = r.pendingDestructive
                 ?.takeIf { it.kind == DestructiveKind.SESSION_END }
-            return region.copy(idleEnteredAt = null, pendingDestructive = keptPending)
+            return r.copy(idleEnteredAt = null, pendingDestructive = keptPending)
         }
-
-        var r = region
-        // #438 item 5 (D3): the lifecycle edges below diff THIS region's own acted flow, not the
-        // shared global R0 flow. `region.lastActedFlow` is still the pre-step value here (the stamp
-        // runs in the [step] wrapper, after stepCore). Fallback to the global prev flow for legacy
-        // snapshots (lastActedFlow=null) keeps single-platform behavior byte-identical — the sole
-        // region acts on every own frame, so its lastActedFlow tracks R0.flow. A flow-less own obs
-        // (flow=null) is not a flow edge (next=prev), never a diff against the other platform's
-        // nextFlow.flow.
-        val prev = region.lastActedFlow ?: prevFlow.flow
-        val next = obs.flow ?: prev
 
         // Update session fields from observations. `next` is the flow the read is being made
         // ON — the settle gate parks it with that flow (#1029, see [PendingSessionPay.flow]).
@@ -686,16 +703,7 @@ class PlatformRegionStepper @Inject constructor() {
         }
 
         // (Ratings stamping moved to stepCore, ahead of this function's early returns — #967.)
-
-        // #1033 round 10: record that the completion mint has RUN for this job — the flow left
-        // PostTask at least once. A structural flow fact only (round 8's lesson: never a claim about
-        // what a completion carried); the terminal teardown uses it to tell a drop that already has a
-        // row from one it is force-completing right now.
-        if (prev == Flow.PostTask && next != Flow.PostTask) {
-            r.jobReceiptAnchors?.let { a ->
-                if (!a.exitedPostTask) r = r.copy(jobReceiptAnchors = a.copy(exitedPostTask = true))
-            }
-        }
+        // (The #1033 round-10 `exitedPostTask` stamp moved to the TOP of this function — #1073.)
 
         // Job lifecycle
         r = updateJobLifecycle(r, prev, next, obs, policy)
@@ -762,6 +770,10 @@ class PlatformRegionStepper @Inject constructor() {
                     r = r.copy(
                         lastPostTaskPayHash = payHash,
                         lastPostTaskFields = parsed,
+                        // #1073: the receipt's own age rides beside it. A close/teardown decision
+                        // apportions off this CACHED receipt, and a drop delivered AFTER this frame
+                        // cannot be described by it — see [PlatformRegion.lastPostTaskFieldsAt].
+                        lastPostTaskFieldsAt = obs.timestamp,
                         lastAnnouncedPostTaskTaskId = postTaskTaskId ?: r.lastAnnouncedPostTaskTaskId,
                     )
                 }
@@ -771,7 +783,16 @@ class PlatformRegionStepper @Inject constructor() {
                 // what this decides. The flow gate lives at this call site (round 9), because the
                 // OTHER caller is the job close, which has no frame.
                 if (flow == Flow.PostTask) {
-                    r = decideReceiptReprice(r, parsed, postTaskTaskId, obs.timestamp, obs.captureId)
+                    // #1073: the receipt is THIS frame's, so the frame's own timestamp scopes the
+                    // denominator — the cached-receipt stamp is irrelevant here.
+                    r = decideReceiptReprice(
+                        region = r,
+                        parsed = parsed,
+                        postTaskTaskId = postTaskTaskId,
+                        receiptFrameAt = obs.timestamp,
+                        decidedAt = obs.timestamp,
+                        captureId = obs.captureId,
+                    )
                 }
                 r.session?.let { session ->
                     val earnings = parsed.sessionEarnings
@@ -1133,9 +1154,16 @@ class PlatformRegionStepper @Inject constructor() {
         // `activeJob != null`. A job is therefore either closed-then-re-priced (real marker, revisions
         // from the close) or active-at-teardown (synthesized marker, revision 1) — never both. A
         // DIFFERENT job that closed earlier is a different `jobId`, which is in the key.
+        //
+        // #1073: the receipt here is the CACHED one, so its own frame time scopes the denominator —
+        // a sibling delivered after that frame is not described by it. Unknown age (a pre-#1073
+        // snapshot) decides nothing: fail-null (#745).
         val cachedReceipt = region.lastPostTaskFields
+        val cachedReceiptAt = region.lastPostTaskFieldsAt
         val endingJob = region.activeJob
-        val repriceHandoff = if (cachedReceipt?.parsedPay != null && endingJob != null) {
+        val repriceHandoff = if (
+            cachedReceipt?.parsedPay != null && cachedReceiptAt != null && endingJob != null
+        ) {
             decideReceiptReprice(
                 region.copy(
                     activeJob = null,
@@ -1146,6 +1174,7 @@ class PlatformRegionStepper @Inject constructor() {
                 ),
                 cachedReceipt,
                 postTaskTaskId = null,
+                receiptFrameAt = cachedReceiptAt,
                 decidedAt = observedAt,
                 captureId = null,
                 mintRanForJob = region.jobReceiptAnchors?.exitedPostTask == true,
@@ -1167,6 +1196,8 @@ class PlatformRegionStepper @Inject constructor() {
             idleEnteredAt = null,
             lastPostTaskPayHash = null,
             lastPostTaskFields = null,
+            // #1073: the receipt's age is cleared with the receipt, at both sites.
+            lastPostTaskFieldsAt = null,
             // #438 B3: the session's over — pending/accepted offers must not leak into the next dash.
             pendingOffers = emptyList(),
             // #1029: an un-settled running-total read describes the dash that just ended.
@@ -1190,6 +1221,8 @@ class PlatformRegionStepper @Inject constructor() {
             activeJob = null,
             lastPostTaskPayHash = null,
             lastPostTaskFields = null,
+            // #1073: the receipt's age is cleared with the receipt, at both sites.
+            lastPostTaskFieldsAt = null,
             // #1033 layer 2: record what the receipt looked like BEFORE this line drops it. Closing
             // the job is the step on which the `DELIVERY_COMPLETED`s for its delivered drops are
             // minted (the #596 close-out sweep, or the PostTask-exit block on this same step), and
@@ -1218,9 +1251,20 @@ class PlatformRegionStepper @Inject constructor() {
         // no-op makes this free whenever the mint DID carry the itemization. If a receipt frame on
         // this same step then decides something newer, it overwrites this handoff: that is correct
         // (the frame is fresher evidence for the same job) and costs only a skipped revision number.
+        //
+        // #1073: like the teardown, this apportions off the CACHED receipt — so the frame it was read
+        // on scopes the denominator, and an unknown age (a pre-#1073 snapshot) decides nothing.
         val cached = region.lastPostTaskFields
-        return if (cached?.parsedPay != null) {
-            decideReceiptReprice(closed, cached, postTaskTaskId = null, decidedAt = at, captureId = null)
+        val cachedAt = region.lastPostTaskFieldsAt
+        return if (cached?.parsedPay != null && cachedAt != null) {
+            decideReceiptReprice(
+                region = closed,
+                parsed = cached,
+                postTaskTaskId = null,
+                receiptFrameAt = cachedAt,
+                decidedAt = at,
+                captureId = null,
+            )
         } else {
             closed
         }

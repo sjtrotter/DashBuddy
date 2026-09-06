@@ -57,6 +57,12 @@ internal fun PlatformRegionStepper.decideReceiptReprice(
     region: PlatformRegion,
     parsed: ParsedFields.PostTaskFields,
     postTaskTaskId: String?,
+    /**
+     * `obs.timestamp` of the frame this receipt was READ from (#1073) — its own time on the frame
+     * path, [PlatformRegion.lastPostTaskFieldsAt] wherever the receipt is the cached one. Scopes the
+     * denominator: a drop delivered after the receipt appeared is not described by it.
+     */
+    receiptFrameAt: Long,
     decidedAt: Long,
     captureId: String?,
     /**
@@ -129,6 +135,16 @@ internal fun PlatformRegionStepper.decideReceiptReprice(
     // by the bail — drop 2 joined the denominator and `apportion` split drop 1's $20 receipt $10/$10
     // across both. Fail-WRONG, not fail-null. The anchor is the only task the receipt actually speaks
     // for.
+    //
+    // And the receipt speaks only for drops delivered at or BEFORE the frame it was read on
+    // (#1073) — the round-11 class one rung down. Round 11 scoped the ACTIVE-task exception to the
+    // anchor; a COMPLETED sibling delivered after the receipt appeared was still admitted, so a
+    // 3-drop job's T1 receipt was split $10/$10 over T1 and a receipt-less T2 at the close or the
+    // teardown, rewriting T1's already-correct row. `<=` because an inline-retired drop's
+    // `completedAt` is its retire grace's `since` — the PostTask ENTRY frame the receipt was first
+    // read on. A `completedAt == null` candidate is the still-active anchor (admitted by
+    // [retirePending] or by the round-10/11 teardown exception), which the receipt on screen belongs
+    // to by construction.
     val retirePending = region.pendingDestructive?.kind == DestructiveKind.TASK_RETIRE
     val drops = (region.recentTasks + listOfNotNull(region.activeTask))
         .filter { it.jobId == mark.jobId && it.isAccountableDropoff }
@@ -137,6 +153,7 @@ internal fun PlatformRegionStepper.decideReceiptReprice(
             mintQualified(region, retirePending, it) ||
                 (mintRanForJob && it.taskId == region.activeTask?.taskId && it.taskId == anchor)
         }
+        .filter { task -> task.completedAt?.let { it <= receiptFrameAt } ?: true }
     if (drops.isEmpty()) return region
     if (drops.none { it.taskId == anchor }) return region
 

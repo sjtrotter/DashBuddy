@@ -104,6 +104,11 @@ was found **broken-in-part** (raw PII in capture envelopes) and moved to that en
      payload `dropRealizedPay` must equal the payload `totalPay` to the cent.
   4. No `DELIVERY_RECEIPT_REPRICE: no delivery row` WARN in the log (that would mean the event is
      firing for a drop whose completion was never folded).
+  5. #1073: an Offline/dash-end straight off a receipt still re-prices it (log:
+     `#1033 receipt re-price: job …, 1 drop(s)`) — end a dash from the delivery-summary screen
+     with a late expansion and watch for that line; and on a STACKED job, a re-price decided at
+     the close/teardown must name only the drops delivered before the receipt appeared (never a
+     sibling delivered afterwards).
   - Confirmed: 0/2
 
 - **🆕 NEW — #1063 — an offer is recognized from its FIRST frame, before the Decline

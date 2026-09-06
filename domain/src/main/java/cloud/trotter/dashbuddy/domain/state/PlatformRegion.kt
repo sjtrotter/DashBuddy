@@ -44,6 +44,19 @@ data class PlatformRegion(
      * leaving PostTask) can include the full pay breakdown.
      */
     val lastPostTaskFields: ParsedFields.PostTaskFields? = null,
+    /**
+     * `obs.timestamp` of the frame [lastPostTaskFields] was read from; the receipt-scope anchor for
+     * #1073 — set and cleared exactly where [lastPostTaskFields] is.
+     *
+     * A receipt speaks only for drops whose delivery evidence PREDATES the frame it was read on: a
+     * sibling completed after that frame cannot be described by it. The close/teardown decisions
+     * apportion off the CACHED receipt, which can be minutes old, so they need the receipt's own age
+     * to scope the denominator (`decideReceiptReprice(receiptFrameAt = …)`). A frame-path decision
+     * passes its own `obs.timestamp` instead and never reads this. Default-null so existing
+     * snapshots deserialize unchanged — a cached receipt of unknown age decides nothing (fail-null,
+     * #745).
+     */
+    val lastPostTaskFieldsAt: Long? = null,
     val lastObservedAt: Long = 0,
     /**
      * Monotonic counter for deterministic entity-id minting (#344). Bumped by the
