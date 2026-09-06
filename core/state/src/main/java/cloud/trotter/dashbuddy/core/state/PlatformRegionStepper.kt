@@ -165,8 +165,16 @@ class PlatformRegionStepper @Inject constructor() {
         // Runs BEFORE the timeout branch: a routed timeout (#342) is exactly the
         // kind of non-flow observation that must be able to commit an overdue
         // provisional transition.
+        //
+        // `>=`, not `>` (#1054): the `GRACE_COMMIT` wake timer is armed for EXACTLY
+        // `deadline - obs.timestamp` and the fired observation is stamped with the wall clock,
+        // so a fire landing ON the deadline (or after a clock step-back) would be a no-op — and
+        // nothing would re-arm it. The grace would then wait for an ordinary frame, which an
+        // offline, backgrounded dash is not guaranteed to produce: an unchanged screen is
+        // FrameGate-deduplicated. All three region pendings now expire at-or-past their deadline
+        // for the same reason.
         current.pendingDestructive?.let { pend ->
-            if (obs.timestamp > pend.deadline) {
+            if (obs.timestamp >= pend.deadline) {
                 // #736 same-frame supersession: an incoming `task:unassigned` frame is the
                 // authoritative abandon of the active task. Committing an overdue TASK_RETIRE here
                 // FIRST would stamp `completedAt` on the (arrived) pickup — the seq-71 fabrication
@@ -210,8 +218,13 @@ class PlatformRegionStepper @Inject constructor() {
         // Driven by obs.timestamp (never a wall clock) so crash-recovery replay
         // matches. Independent of pendingDestructive: during the field flap that slot
         // is BUSY holding the just-completed delivery's TASK_RETIRE grace.
+        //
+        // `>=`, not `>` (#1054) — the same reason as the destructive expiry above: the
+        // `MODE_RESUME_COMMIT` timer's own fire is stamped at (or, after a clock step-back,
+        // before) the deadline it was armed for, and a no-op there would strand the resume until
+        // some later admitted frame.
         current.pendingModeResume?.let { pend ->
-            if (obs.timestamp > pend.deadline) {
+            if (obs.timestamp >= pend.deadline) {
                 current = commitModeResume(current, obs, policy)
             }
         }
@@ -229,7 +242,11 @@ class PlatformRegionStepper @Inject constructor() {
         // fired observation is stamped with the wall clock, so a fire landing on the deadline (or
         // after a clock step-back) would be a no-op — and no frame is coming to retry, by the very
         // FrameGate argument that made the timer necessary. The park would be stranded.
-        // (`pendingModeResume` above keeps `>`: a resume grace is re-driven by ordinary frames.)
+        // (All three region pendings expire at-or-past their deadline since #1054, for exactly
+        // this reason: each one's own wake timer is armed for `deadline - obs.timestamp`, so its
+        // fire lands ON the deadline in the ordinary case. The two graces above used to keep `>`
+        // on the theory that ordinary frames re-drive them; an offline, backgrounded dash produces
+        // no such frame.)
         current.pendingSessionPay?.let { pend ->
             // #1029: a park is OWNED by (flow, PLATFORM) — the R0 surface the read was made on AND
             // the platform that put that surface on screen. `FlowRegionStepper` stamps

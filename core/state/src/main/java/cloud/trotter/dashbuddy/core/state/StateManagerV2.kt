@@ -33,6 +33,21 @@ class StateManagerV2 @Inject constructor(
 
     private val scope = CoroutineScope(defaultDispatcher + SupervisorJob())
 
+    /**
+     * The wall clock, and the ONLY one in this class's recovery path (#1054).
+     *
+     * [rearmRecoveredTimers] has to answer "how long is left on this deadline", which is a wall-clock
+     * question — a restored deadline is an absolute instant and the process has been dead for an
+     * unknown interval. That read belongs HERE, at the effect boundary, and nowhere below it: the
+     * steppers stay `obs.timestamp`-driven so a replay is reproducible (Principle 1), which is why
+     * [pendingDeadlineTimers] states deadlines and computes no durations.
+     *
+     * A `var` with a default rather than a constructor parameter because the constructor is Hilt's
+     * (`@Inject`), and Dagger has no binding for a `() -> Long` — a defaulted parameter would simply
+     * fail to build. `internal`, so only this module's tests can move it.
+     */
+    internal var clock: () -> Long = System::currentTimeMillis
+
     // UI input stream (clicks, debug buttons)
     private val uiInputChannel = Channel<StateEvent>(Channel.UNLIMITED)
 
@@ -222,6 +237,10 @@ class StateManagerV2 @Inject constructor(
                 val cleaned = base.droppingSessionPayParks()
                 // #1052: the drop is only DURABLE if the cleaned state is the next replay base.
                 checkpointRecovery(cleaned)
+                // #1054: a commitment in flight is re-armed (the park above is not — it is stale
+                // evidence). Emitted BEFORE the state installs, so no live observation can be
+                // interleaved between the state the timers describe and the timers themselves.
+                rearmRecoveredTimers(cleaned)
                 _state.value = cleaned
                 // #438 B5: recovered a non-fresh state → reconcile the odometer on the first live obs.
                 recoveryReconcilePending = true
@@ -262,6 +281,11 @@ class StateManagerV2 @Inject constructor(
             // it replayed stays in the journal but is now behind the base, so the next restart
             // starts from the cleaned state instead of replaying the pre-hygiene park again.
             checkpointRecovery(cleaned)
+            // #1054: same re-arm on the tail path. The tail's OWN `ScheduleTimeout`s were armed
+            // against the replayed frames' timestamps (so they fire late by the whole replay lag);
+            // this one is based on the real clock and, because `SideEffectEngine.scheduleTimer`
+            // REPLACES by (type, platform), simply supersedes them.
+            rearmRecoveredTimers(cleaned)
             _state.value = cleaned
             // #438 B5: recovered a non-fresh state → reconcile the odometer on the first live obs.
             recoveryReconcilePending = true
@@ -269,6 +293,45 @@ class StateManagerV2 @Inject constructor(
         } catch (e: Exception) {
             Timber.e(e, "State recovery failed — starting fresh")
             _state.value = AppState()
+        }
+    }
+
+    /**
+     * Re-arm the wake timer of every deadline-bearing pending the recovery restored (#1054).
+     *
+     * `restoreState` installs `pendingDestructive` / `pendingModeResume` from the snapshot and the
+     * tail fold emits a `ScheduleTimeout` only where the TAIL itself moved a deadline — so an empty
+     * or deadline-neutral tail leaves both graces live with no timer behind them, and a tail that
+     * did arm one armed it against a replayed frame's timestamp (late by the whole replay lag). A
+     * `SESSION_END` grace from a dash-summary snapshot then waits for the next admitted
+     * observation, which an offline, backgrounded dash need never produce.
+     *
+     * The complement of the park drop, not a contradiction of it: a park is stale evidence and is
+     * dropped, a grace is a commitment already in flight and is re-armed. [pendingDeadlineTimers]
+     * is the one owner of that distinction.
+     *
+     * Emitted on the LIVE path (`recovering = false`) — recovery mode suppresses external effects,
+     * and this timer's whole purpose is to fire for real. `SideEffectEngine.scheduleTimer` REPLACES
+     * by (type, platform), so a timer the tail already armed is superseded by this correctly-based
+     * one rather than duplicated. A deadline already in the past arms the 1 ms floor and its fire
+     * lands with `obs.timestamp >= deadline`, which the stepper's lazy expiry commits (#1054 part
+     * 1). One INFO line, counts only (principle 7).
+     */
+    private fun rearmRecoveredTimers(restored: AppState) {
+        val pendings = restored.pendingDeadlineTimers()
+        if (pendings.isEmpty()) return
+        val nowMs = clock()
+        Timber.tag("StateMachine").i("Recovery re-armed %d grace timers", pendings.size)
+        pendings.forEach { pending ->
+            engine.process(
+                AppEffect.ScheduleTimeout(
+                    durationMs = (pending.deadline - nowMs).coerceAtLeast(1L),
+                    type = pending.type,
+                    platform = pending.platform,
+                ),
+                recovering = false,
+                correlationVersion = restored.correlationVersion,
+            )
         }
     }
 

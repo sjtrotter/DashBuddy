@@ -245,6 +245,11 @@ internal fun EffectMap.diffMode(
  * performs the actual commit when the timeout observation arrives.
  * A commit (pending → null with the destructive applied) also lands in
  * the cancel branch — harmless, the timer has already fired or no-ops.
+ *
+ * #1054: this timer is not merely punctual either. The case it was built for — offline with the
+ * app backgrounded — is exactly the case where no ordinary frame is coming to re-drive the lazy
+ * expiry, so an early fire that no-ops strands the session-end for hours. It takes
+ * [diffDeadlineTimer]'s early-wake re-arm like the other two.
  */
 internal fun EffectMap.diffGraceTimer(
     prev: PlatformRegion,
@@ -261,27 +266,30 @@ internal fun EffectMap.diffGraceTimer(
 /**
  * The ONE arm/re-arm/cancel shape all three region timers share (#1029 D4). Every pending in
  * [PlatformRegion] that wants a wake-up expresses it identically — schedule for the remaining
- * time when a deadline appears or MOVES, cancel when the pending clears — so the three diffs
- * below differ only in which field they read and which [TimeoutType] they key. Keeping one body
- * means a fix (like [rearmOnEarlyWake]) can't land on two of three.
+ * time when a deadline appears or MOVES, re-schedule for the REMAINDER when this timer's own fire
+ * arrives EARLY, cancel when the pending clears — so the three diffs below differ only in which
+ * field they read and which [TimeoutType] they key. Keeping one body means a fix can't land on two
+ * of three: the early-wake re-arm shipped for the settle timer alone (#1029 S5) and #1054 found the
+ * other two stranded by the same hole, so it is now the SHARED behaviour and there is no knob.
  *
  * A commit lands in the cancel branch too — harmless, the timer has already fired or no-ops.
  *
- * @param rearmOnEarlyWake re-schedule for the REMAINDER when this timer's own fire arrives EARLY
- *   (`obs.timestamp < deadline`) while the pending is still there with an UNCHANGED deadline
- *   (#1029 S5). Only the settle timer needs it: it is the sole observation its pending will ever
- *   get (FrameGate identity dedup drops the repeat frames), so an early or clock-stepped-back fire
- *   that no-ops would strand the pending forever. Deliberately NOT a commit — a stale fire from a
- *   REPLACED pending would then commit the NEW one early, which for the settle gate is precisely a
- *   mid-spin value. The other two pendings are re-driven by ordinary frames and keep the plain
- *   behaviour.
+ * **The early-wake re-arm** (`obs.timestamp < deadline`, this timer's OWN fire, the pending still
+ * there with an UNCHANGED deadline): a timer is armed for exactly `deadline - obs.timestamp` but
+ * its fired observation is stamped with the wall clock, so it can land early (a clock step-back, a
+ * coarse scheduler). Without the re-arm that fire is a no-op and nothing else is coming — the
+ * settle park is the sole observation its pending will ever get (FrameGate identity dedup drops
+ * the repeat frames), and an offline, backgrounded dash produces no ordinary frame to re-drive a
+ * grace either. Deliberately NOT a commit: a stale fire from a REPLACED pending would then commit
+ * the NEW one early, which for the settle gate is precisely a mid-spin value.
  *
- *   The `obs.timestamp < deadline` half is what keeps it a re-arm rather than a spin (#1052 round
- *   3): a park is now FROZEN while the dash is not Online, so a fire AT or PAST the deadline can
- *   legitimately leave the pending standing with its deadline unchanged — re-arming there would
- *   schedule the 1 ms floor and fire again, over and over, for as long as the dasher stays paused.
- *   Landing on the deadline while ONLINE cannot reach this branch at all: the expiry consumed the
- *   park, so the pending is gone and the cancel arm below runs instead.
+ * The `obs.timestamp < deadline` half is what keeps it a re-arm rather than a spin (#1052 round
+ * 3): a park is FROZEN while the dash is not Online, so a fire AT or PAST the deadline can
+ * legitimately leave that pending standing with its deadline unchanged — re-arming there would
+ * schedule the 1 ms floor and fire again, over and over, for as long as the dasher stays paused.
+ * Neither grace has a frozen arm — a fire at or past the deadline always CONSUMES them (a
+ * destructive commits or is dropped, a resume commits, #1054's `>=` expiries) — so for those two
+ * this branch is reachable only while genuinely early.
  */
 internal fun EffectMap.diffDeadlineTimer(
     prevDeadline: Long?,
@@ -289,7 +297,6 @@ internal fun EffectMap.diffDeadlineTimer(
     type: TimeoutType,
     platform: Platform,
     obs: Observation,
-    rearmOnEarlyWake: Boolean = false,
 ): List<AppEffect> {
     fun schedule(deadline: Long) = listOf(
         AppEffect.ScheduleTimeout(
@@ -301,7 +308,7 @@ internal fun EffectMap.diffDeadlineTimer(
     return when {
         nextDeadline != null && (prevDeadline == null || prevDeadline != nextDeadline) ->
             schedule(nextDeadline)
-        rearmOnEarlyWake && nextDeadline != null && prevDeadline == nextDeadline &&
+        nextDeadline != null && prevDeadline == nextDeadline &&
             obs.timestamp < nextDeadline &&
             obs is Observation.Timeout && obs.type == type && obs.platform == platform ->
             schedule(nextDeadline)
@@ -320,7 +327,8 @@ internal fun EffectMap.diffDeadlineTimer(
  * GRACE_COMMIT — a resume-grace timer would cross-cancel a live destructive grace
  * timer. Arm (or a re-arm with a new deadline) schedules; a cancel (paused frame
  * within the window, or the resume committing) cancels. A commit lands in the
- * cancel branch too — harmless, the timer has already fired or no-ops.
+ * cancel branch too — harmless, the timer has already fired or no-ops. Takes
+ * [diffDeadlineTimer]'s early-wake re-arm since #1054, for the same reason the other two do.
  */
 internal fun EffectMap.diffModeResumeTimer(
     prev: PlatformRegion,
@@ -341,9 +349,10 @@ internal fun EffectMap.diffModeResumeTimer(
  * platform region with the destructive and resume graces, so a reused type's (type, platform)
  * timer key (#438 item 1) would cross-cancel a live one.
  *
- * Unlike the other two this timer is not merely punctual, it is LOAD-BEARING — it is the only
- * observation a settled park will ever get (see [PlatformRegion.pendingSessionPay]) — which is why
- * it alone takes [diffDeadlineTimer]'s `rearmOnEarlyWake`.
+ * This timer is LOAD-BEARING, not merely punctual — it is the only observation a settled park will
+ * ever get (see [PlatformRegion.pendingSessionPay]), which is why [diffDeadlineTimer]'s early-wake
+ * re-arm was built here first (#1029 S5). #1054 made it the shared behaviour: the two graces are
+ * stranded by the same hole whenever the dash is offline and backgrounded.
  *
  * Arm (or a re-arm with a new deadline — a different read replaced the park) schedules; the park
  * clearing (wheel at rest, a superseding direct write, leaving the read's surface, session
@@ -359,5 +368,4 @@ internal fun EffectMap.diffSessionPaySettleTimer(
     type = TimeoutType.SESSION_PAY_SETTLE,
     platform = next.platform,
     obs = obs,
-    rearmOnEarlyWake = true,
 )

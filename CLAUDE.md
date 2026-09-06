@@ -603,7 +603,14 @@ pre-"End Dash" park committing on the summary frame and riding into the #596 clo
 `deadline − obs.timestamp` against a wall clock, so an early fire would no-op with no frame coming to
 retry; it re-arms rather than commits, because a stale fire from a REPLACED park would commit the new
 one early, which is precisely a mid-spin value. A fire AT or PAST the deadline never re-arms. All
-three region timers share one `ModeEffects.diffDeadlineTimer`; only this one passes `rearmOnEarlyWake`.
+three region timers share one `ModeEffects.diffDeadlineTimer`, and since **#1054 all three behave
+this way** — expire at-or-past their deadline, re-arm on an early wake — so the parameter that used
+to single the settle timer out is gone. The two older graces were stranded by exactly the same hole:
+their own timer is armed for `deadline − obs.timestamp` so its fire lands ON the deadline, a strict
+`>` made that a no-op, and the ordinary frame that was supposed to re-drive the lazy expiry does not
+exist for the case `GRACE_COMMIT` was built for (offline with the app backgrounded — an unchanged
+screen is FrameGate-deduplicated). Neither grace has a frozen arm, so a fire at or past the deadline
+always CONSUMES them and the re-arm branch is reachable only while genuinely early.
 **(f) a contradicting read on the expiring frame supersedes the park** it contradicts, rather than
 committing the stale figure and re-parking the fresh one.
 **(g) a `$0.00` read never overwrites a positive total** — the pill renders that placeholder for
@@ -638,6 +645,20 @@ loss), **and a failed checkpoint stays PENDING, retried on every live observatio
 attempt) — an ERROR alone left the pre-hygiene snapshot standing as the next replay base, and since
 the journal and the snapshot share one database, a journal append that persists is direct evidence
 the checkpoint can land too.
+**The two GRACES on that same restored state are RE-ARMED, not dropped** (#1054) — a commitment in
+flight is re-armed, stale evidence is not, and that distinction is the whole rule. The pure
+`AppState.pendingDeadlineTimers()` is the ONE enumerator of deadline-bearing pendings
+(`pendingDestructive` → `GRACE_COMMIT`, `pendingModeResume` → `MODE_RESUME_COMMIT`, never the park),
+and `StateManagerV2.rearmRecoveredTimers` schedules each for `deadline − now` on BOTH restore paths,
+at the same live boundary the drop runs at. Without it a `SESSION_END` grace from a dash-summary
+snapshot survives the restart with nothing left to wake it: the tail fold emits only the
+`ScheduleTimeout`s the tail ITSELF produced, and those are based on a replayed frame's timestamp
+(late by the whole replay lag). The wall-clock read is the effect edge's — stated, and injectable as
+`StateManagerV2.clock` — while the enumerator computes no durations, so the steppers stay
+`obs.timestamp`-only (Principle 1). `SideEffectEngine.scheduleTimer` REPLACES by `(type, platform)`,
+so a timer the tail already armed is superseded rather than duplicated; a deadline already past arms
+the 1 ms floor, whose fire the `>=` expiry commits. One counts-only INFO line
+(`Recovery re-armed N grace timers`, tag `StateMachine`).
 
 **Graces.** Destructive commits are graced through the unified `pendingDestructive` slot and woken
 by `GRACE_COMMIT` timers (#431), including short authoritative windows for the dash summary AND the

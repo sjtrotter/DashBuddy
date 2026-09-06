@@ -1,6 +1,8 @@
 package cloud.trotter.dashbuddy.core.state
 
+import cloud.trotter.dashbuddy.domain.pipeline.TimeoutType
 import cloud.trotter.dashbuddy.domain.state.AppState
+import cloud.trotter.dashbuddy.domain.state.Platform
 
 /**
  * Crash-recovery hygiene on a restored [AppState] (#1029) — pure, total, and platform-agnostic.
@@ -47,3 +49,51 @@ fun AppState.droppingSessionPayParks(): AppState = copy(
         },
     ),
 )
+
+/**
+ * A deadline-bearing pending that a restored [AppState] is still holding, and the wake timer it
+ * needs (#1054).
+ *
+ * Deliberately carries no duration: how long is left is a WALL-CLOCK question, and a wall clock has
+ * no business in `:core:state`'s pure half (Principle 1 — the steppers see only `obs.timestamp`).
+ * The enumerator states the deadline; `StateManagerV2`, which is the effect boundary, is where
+ * "now" is read.
+ */
+internal data class PendingDeadline(
+    val type: TimeoutType,
+    val platform: Platform,
+    val deadline: Long,
+)
+
+/**
+ * Every deadline-bearing pending a restored [AppState] carries that must be RE-ARMED (#1054) —
+ * one owner, so a fourth pending with a wake timer cannot be added without this list noticing.
+ *
+ * `StateManagerV2.restoreState` installs `pendingDestructive` / `pendingModeResume` straight from
+ * the snapshot and emits no timer for them: the tail fold executes only the `ScheduleTimeout`s the
+ * tail ITSELF produced (and those are based on the replayed frame's timestamp, so they fire late by
+ * the whole replay lag), and an empty or deadline-neutral tail produces none at all. A `SESSION_END`
+ * grace armed by a dash-summary frame therefore stays live until some later admitted observation —
+ * which, for an offline dash with the app backgrounded, may never come.
+ *
+ * This is the deliberate COMPLEMENT of [droppingSessionPayParks], and the distinction is the whole
+ * design: a park is stale EVIDENCE — a read of a surface that has been gone since the process died,
+ * so it is dropped — while a destructive grace or a graced resume is a COMMITMENT already in
+ * flight, decided before the crash and merely waiting out its window. A commitment is re-armed;
+ * evidence is not. `SESSION_PAY_SETTLE` is therefore absent here BY DESIGN — see
+ * [cloud.trotter.dashbuddy.domain.state.PlatformRegion.pendingSessionPay].
+ *
+ * Pure, total, and platform-agnostic: the platform comes from the region itself, never a literal
+ * (Principle 8).
+ */
+internal fun AppState.pendingDeadlineTimers(): List<PendingDeadline> =
+    regions.platforms.values.flatMap { region ->
+        buildList {
+            region.pendingDestructive?.let {
+                add(PendingDeadline(TimeoutType.GRACE_COMMIT, region.platform, it.deadline))
+            }
+            region.pendingModeResume?.let {
+                add(PendingDeadline(TimeoutType.MODE_RESUME_COMMIT, region.platform, it.deadline))
+            }
+        }
+    }
