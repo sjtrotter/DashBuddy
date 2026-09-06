@@ -48,6 +48,12 @@ internal fun EffectMap.diffReceiptReprice(
     // never re-price this region's drops.
     if (actedNextFlow != Flow.PostTask) return emptyList()
     val flowObs = obs as? Observation.FlowObservation ?: return emptyList()
+    // The frame must be THIS region's own (#1033 review round 3). `EffectMap.diff` visits every
+    // platform region on every observation, and a region that did not act keeps `p === next` — but
+    // `actedNextFlow` falls back to the shared global R0 flow while `lastActedFlow` is null, so a
+    // foreign platform's receipt frame could reach this. Defensive today (no Uber rule parses a
+    // receipt), structural tomorrow.
+    if (flowObs.platform != next.platform) return emptyList()
     val receipt = flowObs.parsed as? ParsedFields.PostTaskFields ?: return emptyList()
     // ONLY an itemized receipt re-prices — an un-itemized re-render carries no new evidence.
     val parsedPay = receipt.parsedPay ?: return emptyList()
@@ -89,8 +95,27 @@ internal fun EffectMap.diffReceiptReprice(
     // thing that can tell that apart from a genuinely late expansion, because the close cleared the
     // receipt out of the region.
     val markTotal = mark.totalPay
-    val alreadyPriced = mark.itemized && markTotal != null && abs(markTotal - receipt.totalPay) < 0.005
+    // Does the receipt on screen carry the SAME total the closed job's own receipt showed? On 8.93.7
+    // the #1029 collapsed parse yields `totalPay` even with no itemization, so this is a POSITIVE
+    // identity: it says the frame is a re-render of THAT job's receipt, which a different job's
+    // receipt cannot satisfy except by a coincidence of totals — and a coincidence re-prices with the
+    // identical total, so the itemization split changes and the money does not (accepted).
+    val ownershipByTotal = markTotal != null && abs(markTotal - receipt.totalPay) < 0.005
+    val alreadyPriced = mark.itemized && ownershipByTotal
     if (alreadyPriced) return emptyList()
+
+    // Once an offer has been ACCEPTED since the close, "no job is live" stops being evidence of
+    // ownership (#1033 review round 3): the accept and the job mint are separate transitions, so a
+    // next job whose task screens were all missed never sets `activeJob` at all, and its receipt
+    // would otherwise be re-priced onto this one. From that point a re-price needs the positive
+    // same-total identity above.
+    //
+    // This is exactly what preserves the COMMON stacked case: the dasher accepts the next offer while
+    // the previous delivery's receipt is still up, then expands that receipt — same total, so it
+    // re-prices normally. What it refuses is the ambiguous shape: a DIFFERENT total after an accept
+    // (which job's receipt is this?), and — fail-null — a marker whose collapsed parse yielded NO
+    // total at all, where there is no identity to check.
+    if (mark.acceptedSince && !ownershipByTotal) return emptyList()
 
     // The denominator, rebuilt as the mint built it — `Task.isAccountableDropoff` (the #498 phantom +
     // #736 unassign firewalls) plus the SAME amdt-#5 [mintQualified] predicate

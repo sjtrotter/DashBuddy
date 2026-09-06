@@ -1,6 +1,11 @@
 package cloud.trotter.dashbuddy.core.state
 
 import cloud.trotter.dashbuddy.domain.capture.ReplayMetadata
+import cloud.trotter.dashbuddy.domain.model.event.AppEvent
+import cloud.trotter.dashbuddy.domain.model.offer.ParsedOffer
+import cloud.trotter.dashbuddy.domain.model.order.OrderType
+import cloud.trotter.dashbuddy.domain.model.order.ParsedOrder
+import cloud.trotter.dashbuddy.domain.state.OfferIntent
 import cloud.trotter.dashbuddy.domain.model.event.AppEventType
 import cloud.trotter.dashbuddy.domain.model.event.payload.DeliveryPayload
 import cloud.trotter.dashbuddy.domain.model.event.payload.DeliveryReceiptRepricePayload
@@ -446,6 +451,195 @@ class ReceiptRepriceTest {
         val e = repriced.single().payload as DeliveryReceiptRepricePayload
         assertEquals("t1", e.taskId)
         assertEquals(16.70, e.dropRealizedPay, 0.0001)
+    }
+
+    // =====================================================================================
+    // Review round 3 (#1033) — ownership across an UNMINTED accept
+    // =====================================================================================
+
+    /**
+     * A fold of real observations through the real stepper + `EffectMap`, tracking R0 the way
+     * `StateMachine` does (a flow-less observation — a click — leaves the flow where it was). Round 3
+     * is specifically about state that only ARISES from transitions (an accepted-pending-consumption
+     * survivor, minted by the offer lifecycle on the leave-presentation edge), so these tests may not
+     * hand-build it.
+     */
+    private inner class Fold(start: PlatformRegion) {
+        var region: PlatformRegion = start
+        private var flow: Flow = start.lastActedFlow ?: Flow.Idle
+        val events = mutableListOf<AppEvent>()
+
+        fun step(obs: Observation): Fold {
+            val prevRegion = region
+            val prevFlow = flow
+            val nextFlow = (obs as? Observation.FlowObservation)?.flow ?: prevFlow
+            region = stepper.step(prevRegion, FlowRegion(flow = prevFlow), FlowRegion(flow = nextFlow), obs, policy)
+            events += effectMap
+                .diff(appState(prevRegion, prevFlow), appState(region, nextFlow), obs)
+                .filterIsInstance<AppEffect.LogEvent>()
+                .map { it.event }
+            flow = nextFlow
+            return this
+        }
+
+        fun reprices() = events.filter { it.type == AppEventType.DELIVERY_RECEIPT_REPRICE }
+    }
+
+    private fun idleObs(at: Long) = Observation.Screen(
+        timestamp = at, captureId = "cap-$at", ruleId = "doordash.screen.idle",
+        metadata = ReplayMetadata.EMPTY, flow = Flow.Idle, modeHint = Mode.Online, parsed = ParsedFields.None,
+    )
+
+    private fun offerObs(at: Long, hash: String) = Observation.Screen(
+        timestamp = at, captureId = "cap-$at", ruleId = "doordash.screen.offer_popup",
+        metadata = ReplayMetadata.EMPTY, flow = Flow.OfferPresented, modeHint = Mode.Online,
+        parsed = ParsedFields.OfferFields(
+            parsedOffer = ParsedOffer(
+                offerHash = hash, payAmount = 12.0, distanceMiles = 5.0,
+                orders = listOf(
+                    ParsedOrder(
+                        orderIndex = 0, orderType = OrderType.PICKUP, storeName = "Next Store",
+                        itemCount = 1, isItemCountEstimated = false, badges = emptySet(),
+                    ),
+                ),
+            ),
+        ),
+    )
+
+    private fun acceptClick(at: Long) = Observation.Click(
+        timestamp = at, captureId = "cap-$at", ruleId = "doordash.click.accept_offer",
+        metadata = ReplayMetadata.EMPTY, flow = null, modeHint = null,
+        parsed = ParsedFields.ClickFields(intent = OfferIntent.ACCEPT),
+    )
+
+    /** Drives job A to its close off a COLLAPSED receipt: the marker is stamped by real transitions. */
+    private fun foldWithClosedJobA(): Fold {
+        val fold = Fold(liveDropoffRegion())
+            .step(postTaskObs(collapsed(), 10_000L)) // the collapsed receipt arms the 8 s window
+            .step(idleObs(18_001L)) // past the deadline → retire commits, job A closes, marker stamped
+        assertNull("job A closed", fold.region.activeJob)
+        assertNotNull("…and stamped its marker", fold.region.lastClosedJobReceipt)
+        return fold
+    }
+
+    /** The offer→accept→leave-presentation edge that mints an accepted-pending-consumption survivor. */
+    private fun Fold.acceptNextOffer(offerAt: Long, clickAt: Long, leaveAt: Long): Fold {
+        val jobBefore = region.activeJob?.jobId
+        step(offerObs(offerAt, "hash-B"))
+        step(acceptClick(clickAt))
+        step(idleObs(leaveAt))
+        assertTrue(
+            "the accept produced an accepted-pending-consumption survivor",
+            region.pendingOffers.any { it.acceptedAt != null },
+        )
+        // THE point of round 3: accept and mint are separate transitions. The survivor exists, but no
+        // new job does — the mint waits for a TASK-flow frame, which these sequences never send.
+        assertEquals(
+            "the accept minted no NEW job — that is what `activeJob`-based ownership misses",
+            jobBefore,
+            region.activeJob?.jobId,
+        )
+        return this
+    }
+
+    @Test
+    fun `round 3 — a next job accepted but never minted cannot re-price the closed job (Astra's sequence)`() {
+        val fold = foldWithClosedJobA()
+            .acceptNextOffer(offerAt = 20_000L, clickAt = 21_000L, leaveAt = 22_000L)
+        assertTrue(
+            "the accept is recorded on the marker, stickily",
+            fold.region.lastClosedJobReceipt!!.acceptedSince,
+        )
+
+        // Step 5 of the sequence: the survivor EXPIRES (acceptGraceMs) long before B's receipt shows.
+        fold.step(idleObs(600_000L))
+        assertTrue("the survivor expired", fold.region.pendingOffers.none { it.acceptedAt != null })
+        assertTrue(
+            "…but the marker's flag is STICKY — that expiry must not re-open the window",
+            fold.region.lastClosedJobReceipt!!.acceptedSince,
+        )
+
+        // B's $40 receipt finally renders. Every one of B's task screens was missed, so the announce
+        // anchor still names A's last drop.
+        val bigReceipt = ParsedPay(
+            appPayComponents = listOf(ParsedPayItem("Base Pay", 30.00)),
+            customerTips = listOf(ParsedPayItem("Next Store", 10.00)),
+        )
+        val before = fold.events.size
+        fold.step(postTaskObs(expanded(bigReceipt), 622_000L))
+        assertEquals(
+            "B's money must never be appended as a re-price of A",
+            0,
+            fold.events.drop(before).count { it.type == AppEventType.DELIVERY_RECEIPT_REPRICE },
+        )
+    }
+
+    @Test
+    fun `round 3 — the STACKED case still re-prices - accept B on A's receipt, then expand A (same total)`() {
+        // A's collapsed receipt is up; the dasher accepts the next offer from it, then expands A.
+        val fold = Fold(liveDropoffRegion())
+            .step(postTaskObs(collapsed(), 10_000L))
+            .acceptNextOffer(offerAt = 11_000L, clickAt = 12_000L, leaveAt = 13_000L)
+            .step(idleObs(18_001L)) // A's retire lapses → A closes
+        assertTrue("the accept flagged the marker", fold.region.lastClosedJobReceipt!!.acceptedSince)
+
+        val before = fold.events.size
+        fold.step(postTaskObs(expanded(), 19_000L)) // A's OWN receipt, same $16.70 total
+        val repriced = fold.events.drop(before).filter { it.type == AppEventType.DELIVERY_RECEIPT_REPRICE }
+        assertEquals("the same total is positive ownership — A is still re-priced", 1, repriced.size)
+        assertEquals("t1", (repriced.single().payload as DeliveryReceiptRepricePayload).taskId)
+    }
+
+    @Test
+    fun `round 3 — after an accept, a DIFFERENT total is ambiguous and re-prices nothing`() {
+        val fold = foldWithClosedJobA()
+            .acceptNextOffer(offerAt = 20_000L, clickAt = 21_000L, leaveAt = 22_000L)
+        val other = ParsedPay(
+            appPayComponents = listOf(ParsedPayItem("Base Pay", 15.00)),
+            customerTips = listOf(ParsedPayItem("Somewhere", 7.00)),
+        )
+        val before = fold.events.size
+        fold.step(postTaskObs(expanded(other), 25_000L))
+        assertEquals(0, fold.events.drop(before).count { it.type == AppEventType.DELIVERY_RECEIPT_REPRICE })
+    }
+
+    @Test
+    fun `round 3 — a receipt-LESS close leaves no total to own by, so an accept refuses (fail-null)`() {
+        // The #596 receipt-skip shape: A closes with no receipt at all → the marker has no totalPay.
+        val fold = Fold(liveDropoffRegion())
+            .step(idleObs(10_000L)) // leaving the task flow arms the 10 s idle retire grace
+            .step(idleObs(20_001L)) // lapses → A retires and closes
+        assertNull("job A closed", fold.region.activeJob)
+        assertNull("with no receipt ever seen", fold.region.lastClosedJobReceipt!!.totalPay)
+
+        fold.acceptNextOffer(offerAt = 21_000L, clickAt = 22_000L, leaveAt = 23_000L)
+        val before = fold.events.size
+        fold.step(postTaskObs(expanded(), 25_000L))
+        assertEquals(
+            "no total to check ownership against — fail-null",
+            0,
+            fold.events.drop(before).count { it.type == AppEventType.DELIVERY_RECEIPT_REPRICE },
+        )
+    }
+
+    @Test
+    fun `round 3 — a FOREIGN platform's receipt never re-prices this region's drops`() {
+        val region = closedJobRegion()
+        val uberReceipt = Observation.Screen(
+            timestamp = 21_000L, captureId = "cap-uber", ruleId = "uber.screen.delivery_summary",
+            metadata = ReplayMetadata.EMPTY, flow = Flow.PostTask, modeHint = Mode.Online,
+            parsed = expanded(),
+        )
+        assertEquals("the fixture really is a foreign frame", Platform.Uber, uberReceipt.platform)
+        // Step the DoorDash region with it anyway (simulating the leak the guard defends against).
+        val next = stepper.step(
+            region, FlowRegion(flow = Flow.PostTask), FlowRegion(flow = Flow.PostTask), uberReceipt, policy,
+        )
+        val events = effectMap
+            .diff(appState(region, Flow.PostTask), appState(next, Flow.PostTask), uberReceipt)
+            .filterIsInstance<AppEffect.LogEvent>()
+            .filter { it.event.type == AppEventType.DELIVERY_RECEIPT_REPRICE }
+        assertTrue(events.isEmpty())
     }
 
     // =====================================================================================

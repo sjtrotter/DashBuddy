@@ -94,8 +94,8 @@ class PlatformRegionStepper @Inject constructor() {
     )
 
     /**
-     * #1033 review R1 — the receipt re-price window is **strictly between a job's close and the next
-     * job's mint**, and this is what enforces the closing half.
+     * #1033 review R1 (+ round 3) — the receipt re-price window is **strictly between a job's close
+     * and the next job's ACCEPT**, and this is what enforces the closing half.
      *
      * `PlatformRegion.lastClosedJobReceipt` names the job whose completions have already been minted.
      * Without this rule the marker outlives its job: `lastAnnouncedPostTaskTaskId` falls back to
@@ -112,9 +112,26 @@ class PlatformRegionStepper @Inject constructor() {
      * close-then-mint (the #596 T2 accept path) correctly clears.
      */
     private fun clearClosedJobReceiptOnNewJob(region: PlatformRegion): PlatformRegion {
-        val active = region.activeJob ?: return region
         val mark = region.lastClosedJobReceipt ?: return region
-        return if (active.jobId == mark.jobId) region else region.copy(lastClosedJobReceipt = null)
+        val active = region.activeJob
+        if (active != null && active.jobId != mark.jobId) return region.copy(lastClosedJobReceipt = null)
+        // #1033 review round 3 — the mint is only the LAST of the two edges that end this window.
+        // An accept lands earlier and separately: `OfferLifecycle` marks the survivor when the own
+        // flow leaves offer-presentation, and the job is minted only on a later TASK-FLOW frame. If
+        // every one of that job's task screens is missed, `activeJob` never becomes non-null at all
+        // — so the rule above would never fire and the next job's receipt could be re-priced onto
+        // this one. Record the accept on the marker instead.
+        //
+        // STICKY by construction (`|| mark.acceptedSince`): the survivor expires after
+        // `GraceConfig.acceptGraceMs`, and a flag that expired with it would re-open the hole
+        // minutes later — precisely the fielded window in which a missed-task-screen job's receipt
+        // finally renders.
+        if (mark.acceptedSince) return region
+        val acceptedSince = region.pendingOffers.any { offer ->
+            val at = offer.acceptedAt
+            at != null && at >= mark.closedAt
+        }
+        return if (acceptedSince) region.copy(lastClosedJobReceipt = mark.copy(acceptedSince = true)) else region
     }
 
     /**
@@ -994,7 +1011,7 @@ class PlatformRegionStepper @Inject constructor() {
         // wrong close on a stacked job is fabrication, and an open job fails toward absorption —
         // the preferred failure direction. See ADR-0002 amendment 2026-07-15 (residual).
         if (prevFlowVal == Flow.PostTask && !nextFlowVal.isTaskFlow() && nextFlowVal != Flow.PostTask && nextFlowVal != Flow.OfferPresented) {
-            return completeActiveJob(current)
+            return completeActiveJob(current, obs.timestamp)
         }
 
         return current
@@ -1044,7 +1061,7 @@ class PlatformRegionStepper @Inject constructor() {
         return if (job != null && armedFromFlow != Flow.OfferPresented &&
             isJobPhysicallyComplete(job, recentTasks, justRetired = completed)
         ) {
-            completeActiveJob(retired)
+            completeActiveJob(retired, timestamp)
         } else {
             retired
         }
@@ -1075,7 +1092,7 @@ class PlatformRegionStepper @Inject constructor() {
         )
     }
 
-    internal fun completeActiveJob(region: PlatformRegion): PlatformRegion {
+    internal fun completeActiveJob(region: PlatformRegion, closedAt: Long): PlatformRegion {
         val job = region.activeJob ?: return region
         return region.copy(
             activeJob = null,
@@ -1091,6 +1108,14 @@ class PlatformRegionStepper @Inject constructor() {
                 jobId = job.jobId,
                 totalPay = region.lastPostTaskFields?.totalPay,
                 itemized = region.lastPostTaskFields?.parsedPay != null,
+                // The instant the re-price window opened — the anchor `acceptedSince` compares an
+                // accepted survivor's `acceptedAt` against (#1033 review round 3). On the grace-lapse
+                // path this is `pend.since` (the honest completion instant the drop's own
+                // `completedAt` carries, #732), not the committing frame's clock — which makes the
+                // predicate strictly MORE conservative: an accept landing during the receipt's own
+                // grace also flags the marker, and that is the stacked case, which then has to prove
+                // ownership by total like any other.
+                closedAt = closedAt,
             ),
         )
     }

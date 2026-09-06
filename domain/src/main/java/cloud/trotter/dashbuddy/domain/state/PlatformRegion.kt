@@ -215,6 +215,23 @@ data class ClosedJobReceipt(
     val totalPay: Double? = null,
     /** True when that receipt carried an itemized `parsedPay` — i.e. the completions were priced from it. */
     val itemized: Boolean = false,
+    /** The `obs.timestamp` of the close — the instant the re-price window opened. */
+    val closedAt: Long = 0L,
+    /**
+     * **Sticky:** an offer was ACCEPTED after [closedAt] (#1033 review round 3).
+     *
+     * Acceptance and the job mint are two different transitions — `OfferLifecycle` records the
+     * accepted-pending-consumption survivor when the own flow leaves offer-presentation, while the
+     * stepper mints the job only on a later TASK-FLOW observation. Between the two, `activeJob` is
+     * null, so "no job is live" is NOT evidence that no next job exists: with every one of B's task
+     * screens missed, B's receipt would land while this marker still stands and be re-priced onto A.
+     *
+     * Once set this never clears while the marker lives — deliberately, because the accepted
+     * survivor itself EXPIRES (`GraceConfig.acceptGraceMs`), and a marker that re-cleared with it
+     * would re-open the exact hole minutes later. From here a re-price needs a POSITIVE identity
+     * instead (the same-total check in `diffReceiptReprice`), never the mere absence of a job.
+     */
+    val acceptedSince: Boolean = false,
 )
 
 /**

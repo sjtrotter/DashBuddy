@@ -142,7 +142,7 @@ internal fun PlatformRegionStepper.consumeAcceptIntoJob(
                     pendingDestructive = null,
                 )
             } else region
-            return mintFreshJobFromAccept(completeActiveJob(committed), obs, inputs)
+            return mintFreshJobFromAccept(completeActiveJob(committed, obs.timestamp), obs, inputs)
         }
     }
 
