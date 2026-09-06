@@ -107,6 +107,7 @@ class StateManagerV2RecoveryRearmTest {
         modeResume: PendingModeResume? = null,
         park: PendingSessionPay? = null,
         mode: Mode = Mode.Offline,
+        session: Session? = Session("s1", startedAt = 100L, runningEarnings = 16.70),
     ) = AppState(
         regions = Regions(
             flow = FlowRegion(
@@ -119,7 +120,7 @@ class StateManagerV2RecoveryRearmTest {
                 Platform.DoorDash to PlatformRegion(
                     platform = Platform.DoorDash,
                     mode = mode,
-                    session = Session("s1", startedAt = 100L, runningEarnings = 16.70),
+                    session = session,
                     lastActedFlow = Flow.Idle,
                     lastObservedAt = nowMs - 10_000L,
                     pendingDestructive = destructive,
@@ -215,6 +216,13 @@ class StateManagerV2RecoveryRearmTest {
         val effect = armed.effect as AppEffect.ScheduleTimeout
         assertEquals("armed for what is actually left of the window", 40_000L, effect.durationMs)
         assertEquals("and for the region that owns the grace", Platform.DoorDash, effect.platform)
+        assertEquals(
+            "carrying the ABSOLUTE deadline (#1054 round 2) — the engine is a queue, so a duration " +
+                "computed at enqueue time can start its wait arbitrarily late and then run the full " +
+                "length late; the scheduler recomputes the remainder from this",
+            endDeadline,
+            effect.deadlineMs,
+        )
         assertTrue(
             "on the LIVE path — recovery mode suppresses externals, and this timer must fire",
             !armed.recovering,
@@ -256,6 +264,41 @@ class StateManagerV2RecoveryRearmTest {
             engine.schedules(TimeoutType.GRACE_COMMIT).isEmpty(),
         )
         assertEquals(Mode.Paused, manager.state.value.regions.platforms[Platform.DoorDash]?.mode)
+    }
+
+    @Test
+    fun `a resume standing on a SESSION-LESS snapshot is never re-armed`() = runTest {
+        // #1054 round 2. This is the shape a PRE-FIX build could persist: the dash ended (session
+        // null) while a graced resume was still standing, because `endSession` did not clear it.
+        // Re-arming that timer would fire `commitModeResume` → `applyModeTransition(…, Online)`,
+        // which MINTS a session when there is none — a phantom dash on a restart, with no screen
+        // behind it and no `DASH_START` to describe it. The live path can no longer create the
+        // shape; the restore must still be safe against snapshots that already have.
+        val dispatcher = StandardTestDispatcher(testScheduler)
+        val engine = RecordingEngine()
+        val manager = newManager(
+            snapshot = snapshotState(
+                cv = 7L,
+                modeResume = PendingModeResume(since = nowMs - 10_000L, deadline = resumeDeadline),
+                mode = Mode.Paused,
+                session = null,
+            ),
+            tail = emptyList(),
+            engine = engine,
+            dispatcher = dispatcher,
+        )
+
+        manager.initialize()
+        runCurrent()
+
+        assertTrue(
+            "nothing is re-armed for a resume that would have to invent the dash it resumes",
+            engine.schedules(TimeoutType.MODE_RESUME_COMMIT).isEmpty(),
+        )
+        assertNull(
+            "and no session exists to be resumed",
+            manager.state.value.regions.platforms[Platform.DoorDash]?.session,
+        )
     }
 
     @Test

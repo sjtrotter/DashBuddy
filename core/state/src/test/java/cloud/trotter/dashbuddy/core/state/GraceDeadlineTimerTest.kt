@@ -19,6 +19,7 @@ import cloud.trotter.dashbuddy.domain.state.Regions
 import cloud.trotter.dashbuddy.domain.state.Session
 import cloud.trotter.dashbuddy.domain.state.Task
 import cloud.trotter.dashbuddy.domain.state.TaskPhase
+import cloud.trotter.dashbuddy.domain.state.TaskSubFlow
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
@@ -39,6 +40,14 @@ import org.junit.Test
  *
  * The settle park already had both halves (#1029 rule (e) / S5). This is the other two catching up,
  * which is also why `diffDeadlineTimer` no longer has a `rearmOnEarlyWake` knob to get wrong.
+ *
+ * **Round 2 narrows the inclusive half to a TIMER's own fire** (`PlatformRegionStepper.deadlineLapsed`).
+ * Both graces have a cancel arm competing with their own commit, and the expiry runs at the TOP of
+ * the step — so under a plain `>=` a contradicting frame stamped exactly on the deadline committed
+ * the thing it arrived to contradict. On the resume that was worse than a lost cancel: the commit
+ * MINTS a session, and the frame's own Online→Paused transition then left `diffMode` with no edge to
+ * report, producing a dash no `DASH_START` describes. Round 2 also has `endSession` clear the graced
+ * resume, since a resume surviving its session's end mints a phantom dash the same way.
  */
 class GraceDeadlineTimerTest {
 
@@ -251,20 +260,182 @@ class GraceDeadlineTimerTest {
     // =====================================================================
 
     @Test
-    fun `an ordinary frame at the deadline commits too - the expiry is at-or-past for every observation`() {
-        // The `>=` is a property of the lazy expiry, not of the timer: an ordinary screen landing
-        // exactly on the deadline is the same evidence the timer would have carried.
-        val frame = Observation.Screen(
-            timestamp = endDeadline,
-            captureId = null,
-            ruleId = "doordash.screen.waiting_for_offer",
-            metadata = ReplayMetadata.EMPTY,
-            flow = Flow.Idle,
-            modeHint = Mode.Offline,
-            parsed = ParsedFields.IdleFields(),
+    fun `an ordinary frame stamped ON the deadline does NOT commit - equality belongs to the timer`() {
+        // #1054 round 2: the inclusive case exists for a TIMER's own fire, which is stamped at the
+        // deadline it was armed for. An ordinary frame keeps the strict semantics, because the
+        // expiry runs at the top of the step — ahead of the frame's own transition — so a frame
+        // that arrived to CONTRADICT the pending would otherwise commit the very thing it
+        // contradicts. See `a contradicting frame ON the resume deadline reaches the cancel arm`
+        // for the shape that made this matter.
+        val onDeadline = offlineFrame(endDeadline)
+
+        val after = machine.step(state(region(destructive = sessionEnd())), onDeadline).newState.dd()
+        assertNotNull("equality alone is not a lapse for a frame", after.session)
+        assertNotNull("the grace stands, waiting for its timer or a later frame", after.pendingDestructive)
+    }
+
+    @Test
+    fun `an ordinary frame stamped one millisecond LATER commits exactly as it always did`() {
+        val afterDeadline = offlineFrame(endDeadline + 1L)
+
+        val ended = machine.step(state(region(destructive = sessionEnd())), afterDeadline).newState.dd()
+        assertNull("a strictly-later frame commits the grace, unchanged by round 2", ended.session)
+    }
+
+    private fun offlineFrame(at: Long) = Observation.Screen(
+        timestamp = at,
+        captureId = null,
+        ruleId = "doordash.screen.waiting_for_offer",
+        metadata = ReplayMetadata.EMPTY,
+        flow = Flow.Idle,
+        modeHint = Mode.Offline,
+        parsed = ParsedFields.IdleFields(),
+    )
+
+    // =====================================================================
+    // #1054 round 2 — a contradicting frame at equality reaches its cancel arm
+    // =====================================================================
+
+    @Test
+    fun `a contradicting frame ON the resume deadline reaches the cancel arm, minting no session`() {
+        // Astra's sequence, driven end-to-end from a FRESH state so nothing is hand-assembled: a
+        // paused screen, an online idle frame that arms the resume grace, then a paused screen
+        // stamped exactly on the deadline. Under a plain `>=` the expiry ran first and committed
+        // Paused→Online — which MINTS a session, `applyModeTransition` doing so whenever
+        // `session == null` — and the frame's own Online→Paused transition then left `diffMode`
+        // seeing Paused→Paused, so no `DASH_START` was ever emitted for it. A session no event
+        // describes.
+        var s = AppState()
+        s = machine.step(s, pausedFrame(1_000L)).newState
+        s = machine.step(s, onlineIdleFrame(2_000L)).newState
+
+        val pend = s.dd().pendingModeResume
+        assertNotNull("the online frame armed the resume grace", pend)
+        assertEquals("armed for the 8 s resume window", 10_000L, pend!!.deadline)
+
+        val transition = machine.step(s, pausedFrame(pend.deadline))
+        val dd = transition.newState.dd()
+
+        assertNull("no phantom dash was minted", dd.session)
+        assertNull("the paused frame CANCELLED the resume, as it does one millisecond earlier", dd.pendingModeResume)
+        assertTrue(
+            "and nothing claims a dash started",
+            transition.effects.filterIsInstance<AppEffect.LogEvent>()
+                .none { it.event.type == AppEventType.DASH_START },
+        )
+    }
+
+    @Test
+    fun `a contradicting task frame ON a SESSION_END deadline cancels the misrecognized end`() {
+        // The destructive analogue: an authoritative `SESSION_END` (a dash summary) that was a
+        // misrecognition, contradicted by a task-flow frame landing exactly on the deadline. The
+        // #431 cancel arm must win the tie — committing the end first would tear down a live dash
+        // on the strength of a frame that proves it is still running.
+        val summaryAt = 2_000L
+        val deadline = summaryAt + TransitionPolicy.AUTHORITATIVE_GRACE_MS
+
+        var s = AppState()
+        s = machine.step(s, onlineIdleFrame(1_000L)).newState
+        s = machine.step(
+            s,
+            Observation.Screen(
+                timestamp = summaryAt,
+                captureId = null,
+                ruleId = "doordash.screen.dash_summary",
+                metadata = ReplayMetadata.EMPTY,
+                flow = Flow.SessionEnded,
+                modeHint = Mode.Offline,
+                parsed = ParsedFields.SessionEndedFields(totalEarnings = 25.0),
+            ),
+        ).newState
+        val sessionId = s.dd().session?.sessionId
+        assertNotNull("a live session is what the summary is about to end", sessionId)
+        assertEquals("the authoritative grace is armed", deadline, s.dd().pendingDestructive?.deadline)
+
+        val contradicted = machine.step(s, taskFrame(deadline)).newState.dd()
+        assertNull("the misrecognition is cancelled at equality", contradicted.pendingDestructive)
+        assertEquals("the same dash is still running", sessionId, contradicted.session?.sessionId)
+
+        // ...while the timer's own fire at that same instant commits, which is the whole point of
+        // the asymmetry.
+        val committed = machine.step(s, wake(TimeoutType.GRACE_COMMIT, deadline)).newState.dd()
+        assertNull("a GRACE_COMMIT at the deadline still ends the dash", committed.session)
+    }
+
+    private fun pausedFrame(at: Long) = Observation.Screen(
+        timestamp = at,
+        captureId = null,
+        ruleId = "doordash.screen.dash_paused",
+        metadata = ReplayMetadata.EMPTY,
+        flow = null,
+        modeHint = Mode.Paused,
+        parsed = ParsedFields.PausedFields(remainingText = "5:00", remainingMillis = 300_000L),
+    )
+
+    private fun onlineIdleFrame(at: Long) = Observation.Screen(
+        timestamp = at,
+        captureId = null,
+        ruleId = "doordash.screen.waiting_for_offer",
+        metadata = ReplayMetadata.EMPTY,
+        flow = Flow.Idle,
+        modeHint = Mode.Online,
+        parsed = ParsedFields.IdleFields(),
+    )
+
+    private fun taskFrame(at: Long) = Observation.Screen(
+        timestamp = at,
+        captureId = null,
+        ruleId = "doordash.screen.pickup_navigation",
+        metadata = ReplayMetadata.EMPTY,
+        flow = Flow.TaskPickupNavigation,
+        modeHint = null,
+        parsed = ParsedFields.TaskFields(
+            phase = TaskPhase.PICKUP, subFlow = TaskSubFlow.NAVIGATION, storeName = "Chipotle",
+        ),
+    )
+
+    // =====================================================================
+    // #1054 round 2 — a terminal end invalidates that session's graced resume
+    // =====================================================================
+
+    @Test
+    fun `a committing SESSION_END clears the standing resume and cancels its timer`() {
+        // The phantom-dash shape: pause sheet → online idle (resume armed) → the summary's grace
+        // commits the end. `endSession` used to leave `pendingModeResume` standing on a now
+        // session-less region, and `commitModeResume` MINTS a session when there is none — so the
+        // resume's own timer (or the #1054 recovery re-arm) started a dash out of a stale intent.
+        val region = region(
+            mode = Mode.Paused,
+            destructive = sessionEnd(),
+            modeResume = PendingModeResume(since = resumeArmedAt, deadline = resumeDeadline),
         )
 
-        val ended = machine.step(state(region(destructive = sessionEnd())), frame).newState.dd()
-        assertNull("the dash ended on the frame that reached the deadline", ended.session)
+        val transition = machine.step(state(region), wake(TimeoutType.GRACE_COMMIT, endDeadline))
+        val dd = transition.newState.dd()
+
+        assertNull("the dash ended", dd.session)
+        assertNull("and its graced resume went with it", dd.pendingModeResume)
+        assertTrue(
+            "the resume's wake timer is cancelled, not left to fire into a dead session",
+            transition.effects.filterIsInstance<AppEffect.CancelTimeout>()
+                .any { it.type == TimeoutType.MODE_RESUME_COMMIT && it.platform == platform },
+        )
+
+        // And the stale fire that used to mint the phantom now finds nothing to commit.
+        val stale = machine.step(
+            AppState(
+                regions = Regions(
+                    flow = FlowRegion(flow = Flow.Idle, activePlatform = platform),
+                    platforms = mapOf(platform to dd),
+                ),
+            ),
+            wake(TimeoutType.MODE_RESUME_COMMIT, resumeDeadline + 1_000L),
+        )
+        assertNull("no session is minted out of thin air", stale.newState.dd().session)
+        assertTrue(
+            "and nothing claims a dash started",
+            stale.effects.filterIsInstance<AppEffect.LogEvent>()
+                .none { it.event.type == AppEventType.DASH_START },
+        )
     }
 }

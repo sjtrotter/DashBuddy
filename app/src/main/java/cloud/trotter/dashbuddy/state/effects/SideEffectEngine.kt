@@ -533,7 +533,9 @@ class SideEffectEngine @Inject constructor(
             // --- TIMING LOGIC (Pure Coroutines) ---
 
             is AppEffect.ScheduleTimeout ->
-                scheduleTimer(effect.type, effect.durationMs, effect.platform, effect.payload)
+                scheduleTimer(
+                    effect.type, effect.durationMs, effect.platform, effect.payload, effect.deadlineMs,
+                )
 
             is AppEffect.CancelTimeout -> {
                 // Untracking happens via the job's self-removing completion handler.
@@ -723,17 +725,27 @@ class SideEffectEngine @Inject constructor(
      * Keyed by (type, platform) (#438 item 1): a schedule replaces only the
      * same platform's timer of that type, so two platforms' timers of the same
      * type coexist.
+     *
+     * [deadlineMs], when set, is an ABSOLUTE wall-clock instant and wins over [durationMs]
+     * (#1054 round 2). The remainder is recomputed INSIDE the coroutine, immediately before the
+     * delay — which is scheduling time, not enqueue time. That distinction is load-bearing for the
+     * crash-recovery re-arm: `process` enqueues into an UNLIMITED channel drained by one worker in
+     * order, so a timer emitted behind a recovery burst can start well after its duration was
+     * computed and then run the FULL length late. REPLACE-by-key prevents a duplicate timer, not a
+     * stale duration. A past deadline floors at 1 ms.
      */
     private fun scheduleTimer(
         type: TimeoutType,
         durationMs: Long,
         platform: Platform?,
         payload: ObservationPayload?,
+        deadlineMs: Long? = null,
     ) {
         val key = TimerKey(type, platform)
         activeTimers[key]?.cancel()
         val job = engineScope.launch(start = CoroutineStart.LAZY) {
-            delay(durationMs)
+            // Evaluated here, inside the coroutine: this is the moment the wait actually starts.
+            delay(deadlineMs?.let { (it - System.currentTimeMillis()).coerceAtLeast(1L) } ?: durationMs)
             // #692 P7: level is per-type, not one blanket WARN under the catch-all `App` tag.
             // GRACE_COMMIT/MODE_RESUME_COMMIT/SESSION_PAUSED_SAFETY are all "a grace timer waking
             // a commit" verbatim — the taxonomy's defended-invariant WARN bucket (a graced

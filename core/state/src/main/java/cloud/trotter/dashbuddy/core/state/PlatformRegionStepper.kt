@@ -150,6 +150,35 @@ class PlatformRegionStepper @Inject constructor() {
         return if (region.lastActedFlow == flow) region else region.copy(lastActedFlow = flow)
     }
 
+    /**
+     * Has a GRACE deadline lapsed as of [obs]? — the ONE predicate both grace expiries use (#1054).
+     *
+     * Past the deadline is always a lapse. Landing exactly ON it is a lapse **only for a timer's
+     * own fire**, and the asymmetry is deliberate on both sides:
+     *
+     * - **A timer must count at equality.** `ModeEffects.diffDeadlineTimer` arms for exactly
+     *   `deadline - obs.timestamp`, so the ordinary landing IS the deadline. Under a strict `>`
+     *   that fire was a no-op with nothing left to wake the pending, and the ordinary frame the old
+     *   code assumed would re-drive the lazy expiry does not exist for the case `GRACE_COMMIT` was
+     *   built for (#431 — offline with the app backgrounded; an unchanged screen is
+     *   FrameGate-deduplicated).
+     * - **An ordinary FRAME must not** (round 2). Both graces have a CANCEL arm that competes with
+     *   their own commit: a paused frame cancels a graced resume (#605), a task-flow frame cancels
+     *   a misrecognized `SESSION_END` (#431). The expiry runs at the top of `stepCore`, before the
+     *   frame's own transition, so a plain `>=` let a frame stamped exactly on the deadline commit
+     *   the very thing it arrived to contradict — and the resume case did worse than that, minting
+     *   a session (`applyModeTransition` mints when `session == null`) that the following
+     *   Online→Paused transition then left with no `DASH_START` describing it. A frame stamped
+     *   strictly LATER than the deadline commits exactly as it always did; only the tie changes,
+     *   and it changes toward the arm that has evidence on screen.
+     *
+     * `pendingSessionPay` deliberately does NOT use this — see the settle block, which keeps a
+     * plain `>=` because rule (f) already makes a contradicting read on the expiring frame
+     * supersede the park.
+     */
+    private fun deadlineLapsed(deadline: Long, obs: Observation): Boolean =
+        obs.timestamp > deadline || (obs.timestamp == deadline && obs is Observation.Timeout)
+
     private fun stepCore(
         prev: PlatformRegion,
         prevFlow: FlowRegion,
@@ -166,15 +195,13 @@ class PlatformRegionStepper @Inject constructor() {
         // kind of non-flow observation that must be able to commit an overdue
         // provisional transition.
         //
-        // `>=`, not `>` (#1054): the `GRACE_COMMIT` wake timer is armed for EXACTLY
-        // `deadline - obs.timestamp` and the fired observation is stamped with the wall clock,
-        // so a fire landing ON the deadline (or after a clock step-back) would be a no-op — and
-        // nothing would re-arm it. The grace would then wait for an ordinary frame, which an
-        // offline, backgrounded dash is not guaranteed to produce: an unchanged screen is
-        // FrameGate-deduplicated. All three region pendings now expire at-or-past their deadline
-        // for the same reason.
+        // Lapse is [deadlineLapsed], not a bare comparison (#1054): the `GRACE_COMMIT` wake timer
+        // is armed for EXACTLY `deadline - obs.timestamp`, so its own fire lands ON the deadline
+        // and a strict `>` would make it a no-op with nothing left to re-arm it. An ordinary FRAME
+        // stamped on the deadline keeps the strict semantics so the misrecognition cancel arm
+        // below can still win at equality — see the predicate's KDoc.
         current.pendingDestructive?.let { pend ->
-            if (obs.timestamp >= pend.deadline) {
+            if (deadlineLapsed(pend.deadline, obs)) {
                 // #736 same-frame supersession: an incoming `task:unassigned` frame is the
                 // authoritative abandon of the active task. Committing an overdue TASK_RETIRE here
                 // FIRST would stamp `completedAt` on the (arrived) pickup — the seq-71 fabrication
@@ -219,12 +246,14 @@ class PlatformRegionStepper @Inject constructor() {
         // matches. Independent of pendingDestructive: during the field flap that slot
         // is BUSY holding the just-completed delivery's TASK_RETIRE grace.
         //
-        // `>=`, not `>` (#1054) — the same reason as the destructive expiry above: the
+        // [deadlineLapsed] (#1054) — the same reason as the destructive expiry above: the
         // `MODE_RESUME_COMMIT` timer's own fire is stamped at (or, after a clock step-back,
         // before) the deadline it was armed for, and a no-op there would strand the resume until
-        // some later admitted frame.
+        // some later admitted frame. A PAUSED frame stamped exactly on the deadline still reaches
+        // the #605 cancel arm in `applyModeTransition` instead, which is the whole point of the
+        // predicate's timer condition.
         current.pendingModeResume?.let { pend ->
-            if (obs.timestamp >= pend.deadline) {
+            if (deadlineLapsed(pend.deadline, obs)) {
                 current = commitModeResume(current, obs, policy)
             }
         }
@@ -242,11 +271,19 @@ class PlatformRegionStepper @Inject constructor() {
         // fired observation is stamped with the wall clock, so a fire landing on the deadline (or
         // after a clock step-back) would be a no-op — and no frame is coming to retry, by the very
         // FrameGate argument that made the timer necessary. The park would be stranded.
-        // (All three region pendings expire at-or-past their deadline since #1054, for exactly
-        // this reason: each one's own wake timer is armed for `deadline - obs.timestamp`, so its
-        // fire lands ON the deadline in the ordinary case. The two graces above used to keep `>`
-        // on the theory that ordinary frames re-drive them; an offline, backgrounded dash produces
-        // no such frame.)
+        // (All three region pendings lapse at-or-past their deadline since #1054, for exactly this
+        // reason: each one's own wake timer is armed for `deadline - obs.timestamp`, so its fire
+        // lands ON the deadline in the ordinary case. The two graces above used to keep `>` on the
+        // theory that ordinary frames re-drive them; an offline, backgrounded dash produces no
+        // such frame.
+        //
+        // The park keeps the PLAIN `>=` while the two graces take [deadlineLapsed]'s narrower
+        // timer-only equality (#1054 round 2). A grace has a cancel arm that competes with its own
+        // commit — a paused frame cancels a resume, a task frame cancels a misrecognized session
+        // end — so a contradicting FRAME landing exactly on the deadline must reach that arm
+        // rather than be pre-empted by the expiry running first. The park has no such race: rule
+        // (f) below makes a contradicting read on the expiring frame SUPERSEDE the park, so the
+        // frame's own evidence already wins at equality by construction.)
         current.pendingSessionPay?.let { pend ->
             // #1029: a park is OWNED by (flow, PLATFORM) — the R0 surface the read was made on AND
             // the platform that put that surface on screen. `FlowRegionStepper` stamps
@@ -1181,6 +1218,14 @@ class PlatformRegionStepper @Inject constructor() {
             activeTask = null,
             recentTasks = recentTasks,
             pendingDestructive = null,
+            // #1054 round 2: a terminal end invalidates the ended session's graced resume —
+            // committing it later would mint a session out of a stale intent. `commitModeResume`
+            // goes through `applyModeTransition(…, Mode.Online)`, which MINTS a session when
+            // `session == null`, so a resume armed before the end (pause sheet → online idle → the
+            // summary grace commits) would start a phantom dash with no screen behind it, on its
+            // own already-armed timer or on the #1054 recovery re-arm. The `diffModeResumeTimer`
+            // cancel arm turns this into a `CancelTimeout(MODE_RESUME_COMMIT)`.
+            pendingModeResume = null,
             idleEnteredAt = null,
             lastPostTaskPayHash = null,
             lastPostTaskFields = null,

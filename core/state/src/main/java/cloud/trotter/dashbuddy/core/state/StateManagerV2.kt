@@ -314,8 +314,16 @@ class StateManagerV2 @Inject constructor(
      * and this timer's whole purpose is to fire for real. `SideEffectEngine.scheduleTimer` REPLACES
      * by (type, platform), so a timer the tail already armed is superseded by this correctly-based
      * one rather than duplicated. A deadline already in the past arms the 1 ms floor and its fire
-     * lands with `obs.timestamp >= deadline`, which the stepper's lazy expiry commits (#1054 part
-     * 1). One INFO line, counts only (principle 7).
+     * lands as a `GRACE_COMMIT`/`MODE_RESUME_COMMIT` timeout at or past the deadline, which the
+     * stepper's lazy expiry commits (#1054 part 1). One INFO line, counts only (principle 7).
+     *
+     * **The effect carries the ABSOLUTE deadline** (#1054 round 2), not just the duration computed
+     * here. The engine is a queue, and this emission lands behind every effect the tail replay just
+     * produced, so a duration computed at THIS moment can start its wait an arbitrary interval
+     * later and then run its full length late — the one case where a recovered grace is most
+     * overdue is the one where the queue is longest. `durationMs` stays as the enqueue-time
+     * estimate (and is what a scheduler ignoring `deadlineMs` would use); the engine recomputes the
+     * remainder immediately before it waits.
      */
     private fun rearmRecoveredTimers(restored: AppState) {
         val pendings = restored.pendingDeadlineTimers()
@@ -328,6 +336,7 @@ class StateManagerV2 @Inject constructor(
                     durationMs = (pending.deadline - nowMs).coerceAtLeast(1L),
                     type = pending.type,
                     platform = pending.platform,
+                    deadlineMs = pending.deadline,
                 ),
                 recovering = false,
                 correlationVersion = restored.correlationVersion,

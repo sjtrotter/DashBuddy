@@ -948,6 +948,95 @@ class SideEffectEngineTest {
     }
 
     // =========================================================================
+    // #1054 round 2 — an absolute deadline is resolved at SCHEDULING time
+    // =========================================================================
+
+    @Test
+    fun `a ScheduleTimeout carrying an absolute deadline in the past fires immediately`() = runTest {
+        // The engine is a QUEUE. A duration computed when the effect was emitted can start its wait
+        // arbitrarily later — for the crash-recovery re-arm, behind the whole tail replay's effects
+        // — and then run its FULL length late. REPLACE-by-key prevents a duplicate timer, not a
+        // stale duration. So the re-arm carries the absolute instant and the engine computes the
+        // remainder immediately before it waits. Here `durationMs` is a deliberately wrong 10 s
+        // estimate: the deadline has already passed, so the timer must floor at 1 ms.
+        val engine = buildEngine(StandardTestDispatcher(testScheduler))
+        val fired = mutableListOf<TimeoutEvent>()
+        backgroundScope.launch(StandardTestDispatcher(testScheduler)) {
+            engine.events.collect { if (it is TimeoutEvent) fired.add(it) }
+        }
+        runCurrent()
+
+        engine.process(
+            AppEffect.ScheduleTimeout(
+                durationMs = 10_000,
+                type = TimeoutType.GRACE_COMMIT,
+                platform = Platform.DoorDash,
+                deadlineMs = System.currentTimeMillis() - 1L,
+            ),
+        )
+        runCurrent()
+        advanceTimeBy(5)
+        runCurrent()
+
+        assertEquals("the past deadline wins over the stale 10 s estimate", 1, fired.size)
+        assertEquals(TimeoutType.GRACE_COMMIT, fired.single().type)
+    }
+
+    @Test
+    fun `a ScheduleTimeout with no deadline keeps its plain duration`() = runTest {
+        // The steppers' diffs carry no wall clock and set no deadline (Principle 1) — their
+        // durations are derived from `obs.timestamp` on the very step that emits them, so nothing
+        // about their behaviour may change.
+        val engine = buildEngine(StandardTestDispatcher(testScheduler))
+        val fired = mutableListOf<TimeoutEvent>()
+        backgroundScope.launch(StandardTestDispatcher(testScheduler)) {
+            engine.events.collect { if (it is TimeoutEvent) fired.add(it) }
+        }
+        runCurrent()
+
+        engine.process(
+            AppEffect.ScheduleTimeout(durationMs = 10_000, type = TimeoutType.GRACE_COMMIT),
+        )
+        runCurrent()
+        advanceTimeBy(5)
+        runCurrent()
+        assertEquals("nothing fires early", 0, fired.size)
+
+        advanceTimeBy(10_000)
+        runCurrent()
+        assertEquals("and the plain duration is honoured in full", 1, fired.size)
+    }
+
+    @Test
+    fun `a future absolute deadline waits out its remainder, not its estimate`() = runTest {
+        val engine = buildEngine(StandardTestDispatcher(testScheduler))
+        val fired = mutableListOf<TimeoutEvent>()
+        backgroundScope.launch(StandardTestDispatcher(testScheduler)) {
+            engine.events.collect { if (it is TimeoutEvent) fired.add(it) }
+        }
+        runCurrent()
+
+        engine.process(
+            AppEffect.ScheduleTimeout(
+                // A wildly wrong estimate in BOTH directions is what proves the deadline is the
+                // authority: 1 ms would fire at once, and the deadline is ~2 s out.
+                durationMs = 1L,
+                type = TimeoutType.MODE_RESUME_COMMIT,
+                platform = Platform.DoorDash,
+                deadlineMs = System.currentTimeMillis() + 2_000L,
+            ),
+        )
+        runCurrent()
+        advanceTimeBy(1_500)
+        runCurrent()
+        assertEquals("the 1 ms estimate is ignored — the deadline is still ahead", 0, fired.size)
+
+        advanceTimeBy(1_000)
+        runCurrent()
+        assertEquals("and it fires once the remainder is out", 1, fired.size)
+    }
+
+    // =========================================================================
     // #551 P7 — RecordShopRate: rate math is INFO-safe, the store name stays on DEBUG
     // =========================================================================
 

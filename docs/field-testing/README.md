@@ -92,10 +92,12 @@ was found **broken-in-part** (raw PII in capture envelopes) and moved to that en
   1. `grep "Recovery re-armed" *.log` — one INFO line under the `StateMachine` tag per recovery
      that restored a live grace, carrying a count only. Absent on a recovery with no pending
      grace, which is the normal case.
-  2. `SELECT eventType, occurredAt, sequenceId FROM app_events WHERE eventType='DASH_STOP'` — the
-     backgrounded end's `occurredAt` should be the moment the offline/summary screen appeared
-     (`pend.since`, unchanged by #1054), and its row should land ~a grace window after it, not
-     hours later when the app was next opened.
+  2. `SELECT eventType, occurredAt, payload FROM app_events WHERE eventType='DASH_STOP'` — the
+     backgrounded end's payload `endedAt` is the ARM time (the moment the offline/summary screen
+     appeared, `pend.since`, unchanged by #1054), while the row's own `occurredAt` is the COMMIT
+     observation's time (#732). So `occurredAt ≈ endedAt` + the grace window (~10 s from an
+     idle/offline screen, ~2.5 s from the summary) — **not** hours later when the app was next
+     opened, which is what the bug produced.
   3. No dash left with a live `session` in the HUD after the app has been closed on an offline
      screen for minutes.
   - Confirmed: 0/2

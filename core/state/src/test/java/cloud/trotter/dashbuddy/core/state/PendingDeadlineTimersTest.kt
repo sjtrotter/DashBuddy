@@ -35,10 +35,11 @@ class PendingDeadlineTimersTest {
         destructive: PendingDestructive? = null,
         modeResume: PendingModeResume? = null,
         park: PendingSessionPay? = null,
+        session: Session? = Session("live", startedAt = 100L),
     ) = PlatformRegion(
         platform = platform,
         mode = Mode.Online,
-        session = Session("s-${platform.wire}", startedAt = 100L),
+        session = session,
         pendingDestructive = destructive,
         pendingModeResume = modeResume,
         pendingSessionPay = park,
@@ -98,6 +99,31 @@ class PendingDeadlineTimersTest {
             "a park is pre-crash evidence; re-arming its timer would wake a figure nothing can " +
                 "contradict — the drop rule owns it",
             state(region(Platform.DoorDash, park = park)).pendingDeadlineTimers().isEmpty(),
+        )
+    }
+
+    @Test
+    fun `a resume on a SESSION-LESS region is not enumerated`() {
+        // #1054 round 2. `commitModeResume` runs through `applyModeTransition(…, Mode.Online)`,
+        // which MINTS a session when the region has none — so a resume standing without a session
+        // is an intent to START a dash, not a commitment about one that exists, and waking it from
+        // a restore would mint a phantom. The live path can no longer produce this shape
+        // (`endSession` clears the resume), but a pre-fix SNAPSHOT can, and the restore has to be
+        // safe against its own history.
+        assertTrue(
+            state(region(Platform.DoorDash, modeResume = modeResume, session = null))
+                .pendingDeadlineTimers().isEmpty(),
+        )
+    }
+
+    @Test
+    fun `a destructive grace on a SESSION-LESS region IS still enumerated`() {
+        // The asymmetry is deliberate: a `SESSION_END` with no session is already a no-op at
+        // commit, so re-arming it costs one inert fire at worst — nothing is minted out of it.
+        assertEquals(
+            listOf(PendingDeadline(TimeoutType.GRACE_COMMIT, Platform.DoorDash, 20_500L)),
+            state(region(Platform.DoorDash, destructive = destructive, session = null))
+                .pendingDeadlineTimers(),
         )
     }
 

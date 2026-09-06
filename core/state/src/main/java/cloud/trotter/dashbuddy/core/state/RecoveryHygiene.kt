@@ -83,6 +83,19 @@ internal data class PendingDeadline(
  * evidence is not. `SESSION_PAY_SETTLE` is therefore absent here BY DESIGN — see
  * [cloud.trotter.dashbuddy.domain.state.PlatformRegion.pendingSessionPay].
  *
+ * **A graced resume is re-armed only for a LIVE session** (#1054 round 2). `commitModeResume` runs
+ * through `applyModeTransition(…, Mode.Online)`, which MINTS a session when the region has none — so
+ * a resume standing on a session-less region is not a commitment about an existing dash, it is an
+ * intent to start one, and waking it from a restore would mint a phantom dash with no screen behind
+ * it. The live path can no longer produce that shape (`endSession` clears the resume since round 2),
+ * but a snapshot written before this fix can, and the restore must be safe against its own history.
+ * The cost is that the genuine cold-start case — Paused with no session, an online frame arming the
+ * resume, then a crash — merely loses its auto-mint across the restart, and the next Online frame
+ * mints screen-driven instead. Fail-null, and cheap (#745).
+ *
+ * `GRACE_COMMIT` carries no such condition: a `SESSION_END` on a session-less region is already a
+ * no-op at commit, so re-arming it costs one inert fire at worst.
+ *
  * Pure, total, and platform-agnostic: the platform comes from the region itself, never a literal
  * (Principle 8).
  */
@@ -92,7 +105,7 @@ internal fun AppState.pendingDeadlineTimers(): List<PendingDeadline> =
             region.pendingDestructive?.let {
                 add(PendingDeadline(TimeoutType.GRACE_COMMIT, region.platform, it.deadline))
             }
-            region.pendingModeResume?.let {
+            region.pendingModeResume?.takeIf { region.session != null }?.let {
                 add(PendingDeadline(TimeoutType.MODE_RESUME_COMMIT, region.platform, it.deadline))
             }
         }

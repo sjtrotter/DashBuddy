@@ -603,14 +603,23 @@ pre-"End Dash" park committing on the summary frame and riding into the #596 clo
 `deadline − obs.timestamp` against a wall clock, so an early fire would no-op with no frame coming to
 retry; it re-arms rather than commits, because a stale fire from a REPLACED park would commit the new
 one early, which is precisely a mid-spin value. A fire AT or PAST the deadline never re-arms. All
-three region timers share one `ModeEffects.diffDeadlineTimer`, and since **#1054 all three behave
-this way** — expire at-or-past their deadline, re-arm on an early wake — so the parameter that used
-to single the settle timer out is gone. The two older graces were stranded by exactly the same hole:
-their own timer is armed for `deadline − obs.timestamp` so its fire lands ON the deadline, a strict
-`>` made that a no-op, and the ordinary frame that was supposed to re-drive the lazy expiry does not
-exist for the case `GRACE_COMMIT` was built for (offline with the app backgrounded — an unchanged
-screen is FrameGate-deduplicated). Neither grace has a frozen arm, so a fire at or past the deadline
-always CONSUMES them and the re-arm branch is reachable only while genuinely early.
+three region timers share one `ModeEffects.diffDeadlineTimer`, and since **#1054 all three re-arm on
+an early wake** — the parameter that used to single the settle timer out is gone. The two older
+graces were stranded by exactly the same hole: their own timer is armed for `deadline − obs.timestamp`
+so its fire lands ON the deadline, a strict `>` made that a no-op, and the ordinary frame that was
+supposed to re-drive the lazy expiry does not exist for the case `GRACE_COMMIT` was built for
+(offline with the app backgrounded — an unchanged screen is FrameGate-deduplicated). Neither grace
+has a frozen arm, so a fire at or past the deadline always CONSUMES them and the re-arm branch is
+reachable only while genuinely early. **Expiry at equality is asymmetric** (#1054 round 2,
+`PlatformRegionStepper.deadlineLapsed` — the ONE predicate both graces use): the two graces expire at
+`>=` for a **TIMER's** fire and stay **strict for an ordinary frame** stamped on the deadline, while
+the settle park is a plain `>=` throughout. Both graces have a CANCEL arm competing with their own
+commit (a paused frame cancels a resume #605, a task frame cancels a misrecognized `SESSION_END`
+#431), and the expiry runs at the TOP of the step — so a blanket `>=` let a contradicting frame commit
+the thing it arrived to contradict; on the resume that also MINTED a session (`applyModeTransition`
+mints when `session == null`) whose Online→Paused follow-up then left `diffMode` with no edge, i.e. a
+dash no `DASH_START` describes. The park needs no such carve-out: rule (f) already makes a
+contradicting read on the expiring frame supersede it.
 **(f) a contradicting read on the expiring frame supersedes the park** it contradicts, rather than
 committing the stale figure and re-parking the fresh one.
 **(g) a `$0.00` read never overwrites a positive total** — the pill renders that placeholder for
@@ -658,7 +667,17 @@ snapshot survives the restart with nothing left to wake it: the tail fold emits 
 `obs.timestamp`-only (Principle 1). `SideEffectEngine.scheduleTimer` REPLACES by `(type, platform)`,
 so a timer the tail already armed is superseded rather than duplicated; a deadline already past arms
 the 1 ms floor, whose fire the `>=` expiry commits. One counts-only INFO line
-(`Recovery re-armed N grace timers`, tag `StateMachine`).
+(`Recovery re-armed N grace timers`, tag `StateMachine`). Two round-2 corrections ride on it. **A
+graced resume is re-armed only for a LIVE session, and a terminal end clears it** — `commitModeResume`
+MINTS a session when the region has none, so a resume outliving its own dash (or restored from a
+pre-fix snapshot) started a phantom one; `endSession` now nulls `pendingModeResume` (the diff's cancel
+arm emits the `CancelTimeout`) and the enumerator skips a session-less region's resume, at the stated
+cost of a cold-start Paused→Online losing its auto-mint across a crash. **And the re-arm carries the
+ABSOLUTE deadline** (`AppEffect.ScheduleTimeout.deadlineMs`, null on every stepper diff — they have no
+wall clock): the engine is a queue, so a duration computed at emit time can start its wait behind the
+whole tail's effects and then run its full length late; `scheduleTimer` recomputes the remainder
+inside the coroutine, immediately before the delay, and REPLACE-by-key guards against a duplicate
+timer, not a stale duration.
 
 **Graces.** Destructive commits are graced through the unified `pendingDestructive` slot and woken
 by `GRACE_COMMIT` timers (#431), including short authoritative windows for the dash summary AND the

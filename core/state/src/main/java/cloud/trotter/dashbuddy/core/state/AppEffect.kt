@@ -116,6 +116,23 @@ sealed class AppEffect {
          * firing must wait for the UI to settle.
          */
         val payload: ObservationPayload? = null,
+        /**
+         * Absolute wall-clock instant the timer must fire at. When present the scheduler computes
+         * the remainder at SCHEDULING time and [durationMs] is only the enqueue-time estimate
+         * (#1054 round 2).
+         *
+         * The engine is a queue: `process` enqueues into an UNLIMITED channel that one worker
+         * drains in order, so an effect emitted during a crash-recovery burst can wait behind the
+         * whole tail's effects before its timer is actually started — and a duration computed at
+         * emit time then runs the FULL length late. `SideEffectEngine.scheduleTimer` REPLACES by
+         * (type, platform), which prevents a duplicate timer, not a stale duration.
+         *
+         * Set by [cloud.trotter.dashbuddy.core.state.StateManagerV2]'s recovery re-arm, which is
+         * the one emitter that already holds a wall-clock instant. The steppers' diffs leave it
+         * null — they have no wall clock (Principle 1), and their durations are derived from
+         * `obs.timestamp` on the very step that emits them.
+         */
+        val deadlineMs: Long? = null,
     ) : AppEffect()
     data class CancelTimeout(
         val type: TimeoutType,
