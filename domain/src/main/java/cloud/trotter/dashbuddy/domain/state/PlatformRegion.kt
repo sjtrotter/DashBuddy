@@ -37,7 +37,6 @@ data class PlatformRegion(
     val sessionType: SessionType? = null,
     val ratings: RatingsSnapshot? = null,
     val surgeMultiplier: Double? = null,
-    val lastPostTaskPayHash: Int? = null,
     /**
      * Most recent PostTask observation's parsed fields. Captured during
      * PostTask so the closing `DELIVERY_COMPLETED` event (emitted on
@@ -45,18 +44,15 @@ data class PlatformRegion(
      */
     val lastPostTaskFields: ParsedFields.PostTaskFields? = null,
     /**
-     * `obs.timestamp` of the frame [lastPostTaskFields] was read from; the receipt-scope anchor for
-     * #1073 — set and cleared exactly where [lastPostTaskFields] is.
+     * The drops [lastPostTaskFields] describes, captured when it was read — see [ReceiptCoverage]
+     * (#1073 round 13). Set and cleared exactly where [lastPostTaskFields] is, by the one owner
+     * (`ReceiptRepriceEffects.cacheReceipt` / `clearCachedReceipt`).
      *
-     * A receipt speaks only for drops whose delivery evidence PREDATES the frame it was read on: a
-     * sibling completed after that frame cannot be described by it. The close/teardown decisions
-     * apportion off the CACHED receipt, which can be minutes old, so they need the receipt's own age
-     * to scope the denominator (`decideReceiptReprice(receiptFrameAt = …)`). A frame-path decision
-     * passes its own `obs.timestamp` instead and never reads this. Default-null so existing
-     * snapshots deserialize unchanged — a cached receipt of unknown age decides nothing (fail-null,
-     * #745).
+     * Default-null so existing snapshots deserialize unchanged; null coverage describes NOTHING, so
+     * a pre-#1073 cached receipt neither prices a mint nor decides a re-price (fail-null, #745 — the
+     * drop falls to the receipt-less path).
      */
-    val lastPostTaskFieldsAt: Long? = null,
+    val lastPostTaskCoverage: ReceiptCoverage? = null,
     val lastObservedAt: Long = 0,
     /**
      * Monotonic counter for deterministic entity-id minting (#344). Bumped by the
@@ -311,6 +307,34 @@ data class ClosedJobReceipt(
      * no-op. Cheap, and it cannot lose a correction.
      */
     val lastDecidedPay: ParsedPay? = null,
+)
+
+/**
+ * The set of drops a post-delivery receipt actually describes, captured at the moment it was READ
+ * (#1073 round 13) — the discriminator the mint's `apportion` denominator and the re-price's are
+ * BOTH intersected with, so the two cannot disagree.
+ *
+ * The rule: a receipt speaks for the announced task plus every accountable dropoff of that task's
+ * job which already had completion evidence (`completedAt != null && unassignedAt == null`) when the
+ * receipt was on screen. A sibling delivered LATER is not in it — the receipt could not have priced
+ * a delivery that had not happened.
+ *
+ * **A `completedAt` timestamp comparison was tried first and rejected in the same series.**
+ * `Task.completedAt` carries the LATEST retire arm's `since` (`TaskLifecycle` clears and re-arms it
+ * on every task-frame branch, an Online→Offline arm REPLACES it, and a displacement stamps
+ * `retireSince ?: obs.timestamp`), so the receipt's OWN anchor could carry a stamp later than the
+ * frame the receipt was read on and be excluded from its own receipt; and "no `completedAt` yet"
+ * admitted any active drop under a `TASK_RETIRE` grace, not just the anchor. A SET captured at read
+ * time has neither failure mode, and — unlike a timestamp — it can be handed to the mint too.
+ *
+ * [readAt] is kept for diagnosis and replay ordering only; nothing branches on it.
+ */
+@Serializable
+data class ReceiptCoverage(
+    /** `obs.timestamp` of the frame the receipt was read from. Diagnostic; not a discriminator. */
+    val readAt: Long,
+    /** The `taskId`s this receipt describes. Empty means it describes nothing. */
+    val taskIds: Set<String> = emptySet(),
 )
 
 /**

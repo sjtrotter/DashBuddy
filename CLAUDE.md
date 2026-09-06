@@ -1344,21 +1344,29 @@ shape, the itemization is real evidence that arrived late, and the drop is re-pr
 of being left on the estimate forever. A machine **Tier-1** correction with the same append-only
 posture as the driver ones: the original `DELIVERY_COMPLETED` is never rewritten.
 `EffectMap.diffReceiptReprice` emits ONE `DELIVERY_RECEIPT_REPRICE` per delivered drop of the job
-(a stacked receipt re-prices every sibling), with shares from the SAME `DropPayApportioner.apportion`
-over the SAME `Task.isAccountableDropoff` denominator the mint uses, so `Σ dropRealizedPay ==
-parsedPay.total` to the cent; keyed `…:<taskId>:<jobId>:r<repriceRevision>` in `effects_fired`, so a
+(a stacked receipt re-prices every sibling), with shares from LITERALLY the same expression the mint
+apportions over — `DropPayApportioner.apportion` across `mintingDropoffTasks(…).describedBy(coverage)`
+(the `Task.isAccountableDropoff` denominator, intersected with the receipt's own `ReceiptCoverage`) —
+so `Σ dropRealizedPay == parsedPay.total` to the cent holds by construction rather than by two copies
+of a rule agreeing; keyed `…:<taskId>:<jobId>:r<repriceRevision>` in `effects_fired`, so a
 distinct DECISION always lands (a content hash collided with itself on an X→Y→X sequence and the
-third emission was dropped). Decided at TWO points (round 9): every itemized receipt FRAME, and once
-more at the job close from the receipt `completeActiveJob` is about to clear — a job whose itemized
-receipt was already on screen when it closed may never render another frame, and its row can still be
-un-itemized (its first completion was minted on an earlier PostTask exit, and the close's re-emission
-is dropped by the per-taskId completion key). It can fire at all only because of ONE marker: `PlatformRegion.lastClosedJobReceipt` (jobId +
-`receiptSeenAt` + `repriceRevision` + `lastDecidedPayHash`, stamped at that one close site, cleared by
-`endSession`). The marker deliberately does NOT model what the completion ROWS hold — it tried
+third emission was dropped). Decided at THREE points: every itemized receipt FRAME (round 4), the job
+close from the receipt `completeActiveJob` is about to clear (round 9), and the terminal teardown
+`endSession` (round 10) — a job whose itemized receipt was already on screen when it closed may never
+render another frame, and its row can still be un-itemized (its first completion was minted on an
+earlier PostTask exit, and the close's re-emission is dropped by the per-taskId completion key); the
+two cached-receipt points share ONE implementation (`decideFromCachedReceipt`). It can fire at all
+only because of TWO markers: `PlatformRegion.lastClosedJobReceipt` (jobId + `receiptSeenAt` +
+`repriceRevision` + `lastDecidedPay`, stamped at that one close site, cleared by `endSession`) and
+`JobReceiptAnchors` (the job's FIRST `PostTask` entry, plus `exitedPostTask` — the latch saying the
+completion mint has RUN for this job, stamped in the `step` wrapper beside `lastActedFlow` so no
+early return in `stepCore`/`updateLifecycle` can skip the acted-flow edge the emitter mints on).
+The closed-job marker deliberately does NOT model what the completion ROWS hold — it tried
 through two review rounds and both attempts failed toward REFUSING a legitimate correction (mirroring
 the mint's exit edge misses its eligibility/final-shape filtering; one task's first completion cannot
 describe a multi-drop job). The stepper suppresses only its OWN repeated decision
-(`lastDecidedPayHash`), so a receipt whose itemization the mint already carried emits a redundant
+(`lastDecidedPay`, compared STRUCTURALLY since round 10 — a `hashCode` collided two real receipts),
+so a receipt whose itemization the mint already carried emits a redundant
 "the receipt says X" event that **`AnalyticsProjector.applyReceiptReprice` resolves to a no-op** by
 comparing the row (no rewrite, so no `receiptRepricedAt` churn). "Already priced" is the projector's
 question: the stepper cannot know which completions persisted, the projector can just look.
@@ -1375,16 +1383,17 @@ job identity, so every other test tried in review — the announce anchor (which
 is not identity, and it let a stacked job's $20 receipt redistribute the closed job's drops ($5/$15
 over a real $10/$10). **Stated cost (fail-null, #745): the STACKED shape — accept the next offer while
 this receipt is up, then expand it LATE — is refused and keeps the `OFFER_PAY` estimate; layer 1's 8 s
-window is the path that lands it in time.** **A receipt speaks only for drops completed at or before
-the frame it was read from (#1073):** `lastPostTaskFieldsAt` rides beside the cached receipt and the
-denominator drops any sibling whose `completedAt` is later — round 11 scoped the active-task exception
-to the anchor, and a completed sibling delivered after the receipt appeared was the same hole one rung
-down (a 3-drop job's T1 receipt was split $10/$10 over T1 and a receipt-less T2 at the close/teardown).
-And the `exitedPostTask` stamp is taken ahead of `updateLifecycle`'s Offline/SessionEnded early
-returns, on the same acted-flow edge the emitter mints on. Effect keys are
-`…:<taskId>:<jobId>:r<revision>` off `repriceRevision`, NOT the receipt's content hash: an X→Y→X itemization sequence hashed back onto its
-own first key and the durable `effects_fired` idempotency dropped the third emission, freezing the row
-at Y. `CorrectionFolds.foldDeliveryReceiptReprice` → a `ReceiptRepriceFold` the projector applies
+window is the path that lands it in time.** **A receipt speaks only for the drops it described when it
+was read (#1073, round 13):** `ReceiptCoverage` (the announced task + every accountable drop of its
+job with completion evidence at that frame) is captured beside the cached receipt and BOTH the mint's
+`apportion` denominators and the re-price's are intersected with it — one owner, so the two cannot
+disagree and Σ `dropRealizedPay` == the receipt total holds by construction; an uncovered sibling folds
+unpriced (fail-null) instead of taking an older receipt's money. A `completedAt` timestamp was tried
+first and rejected in the same series: it is the LATEST retire arm, so the receipt's own anchor could
+fall outside its own receipt. Effect keys are
+`…:<taskId>:<jobId>:r<revision>` off `repriceRevision`, NOT the receipt's content hash: an X→Y→X
+itemization sequence hashed back onto its own first key and the durable `effects_fired` idempotency
+dropped the third emission, freezing the row at Y. `CorrectionFolds.foldDeliveryReceiptReprice` → a `ReceiptRepriceFold` the projector applies
 by **(jobId, taskId)** — the state machine never sees sequence ids — setting `realizedPay`/`tip`/
 `basePay` (itemization only on the receipt's sole drop, via the new shared `soleDropOfReceipt` SSOT
 `DeliveryFolds` now also reads), flipping `payBasis` → `DROP_SHARE`, recomputing `netProfit` against

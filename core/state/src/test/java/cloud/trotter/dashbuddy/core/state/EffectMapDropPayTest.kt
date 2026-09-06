@@ -76,6 +76,15 @@ class EffectMapDropPayTest {
 
     private fun cents(v: Double): Long = Math.round(v * 100.0)
 
+    /**
+     * #1073 round 13: these fixtures build a region directly, so they have never seen a receipt
+     * FRAME and carry no [PlatformRegion.lastPostTaskCoverage] — and a coverage-less receipt prices
+     * nobody (fail-null). Stamp the set the frame WOULD have computed, through the production owner
+     * [receiptCoverageAt] rather than a second copy of the rule.
+     */
+    private fun PlatformRegion.withReceiptCoverage(readAt: Long = 0L): PlatformRegion =
+        copy(lastPostTaskCoverage = receiptCoverageAt(this, lastAnnouncedPostTaskTaskId, readAt))
+
     @Test
     fun `stacked close-out — per-drop shares sum to the receipt total`() {
         val receipt = ParsedPay(
@@ -101,7 +110,7 @@ class EffectMapDropPayTest {
             recentTasks = listOf(dropA, dropB),
             lastPostTaskFields = postFields,
             lastAnnouncedPostTaskTaskId = "d-target",
-        )
+        ).withReceiptCoverage()
         // Job closes this step (activeJob → null) → #596 close-out mints a completion per drop.
         val regionNext = regionPrev.copy(activeJob = null)
 
@@ -138,7 +147,7 @@ class EffectMapDropPayTest {
             recentTasks = listOf(drop),
             lastPostTaskFields = postFields,
             lastAnnouncedPostTaskTaskId = "d1",
-        )
+        ).withReceiptCoverage()
         val regionNext = regionPrev.copy(activeJob = null)
 
         val prev = appState(FlowRegion(flow = Flow.Idle), mapOf(Platform.DoorDash to regionPrev))
@@ -160,7 +169,7 @@ class EffectMapDropPayTest {
             activeJob = Job("J", offerStoreHint = emptyList(), parentOfferHash = null, startedAt = 50L),
             recentTasks = listOf(drop),
             lastPostTaskFields = null,
-        )
+        ).withReceiptCoverage()
         val regionNext = regionPrev.copy(activeJob = null)
 
         val prev = appState(FlowRegion(flow = Flow.Idle), mapOf(Platform.DoorDash to regionPrev))
@@ -214,7 +223,7 @@ class EffectMapDropPayTest {
                 recentTasks = listOf(dropA),
                 lastPostTaskFields = postFieldsAB,
                 lastAnnouncedPostTaskTaskId = "dB",
-            )
+            ).withReceiptCoverage()
             val regionNext = regionPrev.copy()
 
             val prev = appState(FlowRegion(flow = Flow.PostTask), mapOf(Platform.DoorDash to regionPrev))
@@ -265,7 +274,7 @@ class EffectMapDropPayTest {
             recentTasks = listOf(dropA, dropB, dropC),
             lastPostTaskFields = postFieldsABC,
             lastAnnouncedPostTaskTaskId = "dC",
-        )
+        ).withReceiptCoverage()
         val regionNext = regionPrev.copy(activeJob = null)
 
         val prev = appState(FlowRegion(flow = Flow.Idle), mapOf(Platform.DoorDash to regionPrev))
@@ -318,7 +327,7 @@ class EffectMapDropPayTest {
             recentTasks = listOf(d1, d2),
             lastPostTaskFields = postFields,
             lastAnnouncedPostTaskTaskId = "d2",
-        )
+        ).withReceiptCoverage()
         // The endSession shape: session/job/task cleared, d3 force-stamped into recentTasks.
         val regionNext = regionPrev.copy(
             session = null,
@@ -326,7 +335,6 @@ class EffectMapDropPayTest {
             activeTask = null,
             recentTasks = listOf(d1, d2, d3.copy(completedAt = 5000L)),
             lastPostTaskFields = null,
-            lastPostTaskPayHash = null,
         )
 
         val prev = appState(FlowRegion(flow = Flow.Idle), mapOf(Platform.DoorDash to regionPrev))
@@ -384,7 +392,7 @@ class EffectMapDropPayTest {
             recentTasks = listOf(delivered),
             lastPostTaskFields = postFields,
             lastAnnouncedPostTaskTaskId = "dDelivered",
-        )
+        ).withReceiptCoverage()
         val regionNext = regionPrev.copy() // job stays open → only the PostTask-exit mint fires
 
         val prev = appState(FlowRegion(flow = Flow.PostTask), mapOf(Platform.DoorDash to regionPrev))
@@ -419,7 +427,7 @@ class EffectMapDropPayTest {
             recentTasks = listOf(abandoned),
             lastPostTaskFields = postFields,
             lastAnnouncedPostTaskTaskId = "dSurvivor",
-        )
+        ).withReceiptCoverage()
         val regionNext = regionPrev.copy() // job stays open → only the PostTask-exit mint fires
 
         val prev = appState(FlowRegion(flow = Flow.PostTask), mapOf(Platform.DoorDash to regionPrev))
@@ -452,7 +460,7 @@ class EffectMapDropPayTest {
             recentTasks = listOf(abandoned),
             lastPostTaskFields = postFields,
             lastAnnouncedPostTaskTaskId = "dAbandoned",
-        )
+        ).withReceiptCoverage()
         val regionNext = regionPrev.copy() // job stays open → close-out doesn't fire; isolate the exit mint
 
         val prev = appState(FlowRegion(flow = Flow.PostTask), mapOf(Platform.DoorDash to regionPrev))
@@ -478,7 +486,10 @@ class EffectMapDropPayTest {
             activeJob = Job("J", offerStoreHint = emptyList(), parentOfferHash = null, startedAt = 50L),
             recentTasks = listOf(drop),
             lastPostTaskFields = postFields,
-        )
+            // #1073 round 13: the receipt this exit reads was announced for the drop it closes —
+            // the stepper always stamps one. The fixture had left it null, which no real frame does.
+            lastAnnouncedPostTaskTaskId = "T6",
+        ).withReceiptCoverage()
         val regionNext = regionPrev.copy()
 
         val prev = appState(FlowRegion(flow = Flow.PostTask), mapOf(Platform.DoorDash to regionPrev))

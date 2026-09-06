@@ -7,8 +7,102 @@ import cloud.trotter.dashbuddy.domain.state.DropPayApportioner
 import cloud.trotter.dashbuddy.domain.state.ParsedFields
 import cloud.trotter.dashbuddy.domain.state.PendingReceiptReprice
 import cloud.trotter.dashbuddy.domain.state.PlatformRegion
+import cloud.trotter.dashbuddy.domain.state.ReceiptCoverage
+import cloud.trotter.dashbuddy.domain.state.Task
 import cloud.trotter.dashbuddy.domain.state.isAccountableDropoff
 import timber.log.Timber
+
+/**
+ * #1033 review R1 — a marker never outlives its job: the moment ANY other job is active, drop it.
+ *
+ * This is the cheap structural half of the re-price window. The load-bearing half is temporal and
+ * lives in the decision itself (round 6): a re-price is refused once any acceptance has resolved
+ * since the closed job's receipt appeared — which covers the case this rule cannot see at all,
+ * where the next job is accepted but never minted (every one of its task screens missed), so
+ * `activeJob` is never set.
+ *
+ * `PlatformRegion.lastClosedJobReceipt` names the job whose completions have already been minted.
+ * Without this rule the marker outlives its job: `lastAnnouncedPostTaskTaskId` falls back to
+ * `recentTasks.lastOrNull()`, so if job B is accepted but every one of its task screens is MISSED,
+ * B's receipt would still be anchored on job A's last drop and B's money would be appended as a
+ * re-price of A — money attributed to the wrong job, silently. Clearing the marker as soon as ANY
+ * new job is active makes that structurally unreachable (the emitter additionally refuses to fire
+ * while any job is live — the two are belt and braces, and the emitter's half also covers the
+ * frames before the new job's own mint lands).
+ *
+ * Deliberately keyed on "an active job that is not the marker's own", not on "a job was minted
+ * this step": the marker's own job is null-ed out of `activeJob` by `completeActiveJob` at the
+ * same moment the marker is stamped, so the two can never be live together — and a same-step
+ * close-then-mint (the #596 T2 accept path) correctly clears.
+ */
+internal fun closeReceiptRepriceWindow(region: PlatformRegion): PlatformRegion {
+    val active = region.activeJob ?: return region
+    var r = region
+    val mark = r.lastClosedJobReceipt
+    if (mark != null && active.jobId != mark.jobId) r = r.copy(lastClosedJobReceipt = null)
+    // #1033 round 7: the first-occurrence anchors belong to ONE job — a new job starts a new
+    // receipt, so they reset with it (and only here, so they survive their own job's close).
+    val anchors = r.jobReceiptAnchors
+    if (anchors != null && anchors.jobId != active.jobId) r = r.copy(jobReceiptAnchors = null)
+    return r
+}
+
+/**
+ * The drops a receipt read on THIS frame describes (#1073 round 13) — see [ReceiptCoverage].
+ *
+ * The announced task is always in its own receipt (it is the delivery the receipt closed), plus
+ * every accountable dropoff of that task's job that already carried completion evidence. The job is
+ * the live one, falling back to the announced task's own `jobId` so a post-close re-render still
+ * resolves (`completeActiveJob` has already nulled `activeJob` by then).
+ *
+ * Pure: region records + the frame's own timestamp, no wall clock, no `Platform` literal.
+ */
+internal fun receiptCoverageAt(
+    region: PlatformRegion,
+    postTaskTaskId: String?,
+    readAt: Long,
+): ReceiptCoverage {
+    val tasks = region.recentTasks + listOfNotNull(region.activeTask)
+    val jobId = region.activeJob?.jobId
+        ?: tasks.firstOrNull { it.taskId == postTaskTaskId }?.jobId
+    val covered = tasks
+        .filter {
+            it.jobId == jobId && it.isAccountableDropoff &&
+                (it.taskId == postTaskTaskId || (it.completedAt != null && it.unassignedAt == null))
+        }
+        .map { it.taskId }
+        .toMutableSet()
+    if (postTaskTaskId != null) covered += postTaskTaskId
+    return ReceiptCoverage(readAt = readAt, taskIds = covered)
+}
+
+/**
+ * The ONE writer of the cached-receipt triple (#1073 round 13): the receipt, the drops it describes,
+ * and the task it was announced for. Keeping them in one `copy` is what makes "the mint and the
+ * re-price read the same denominator" structural rather than a convention.
+ */
+internal fun cacheReceipt(
+    region: PlatformRegion,
+    parsed: ParsedFields.PostTaskFields,
+    postTaskTaskId: String?,
+    readAt: Long,
+): PlatformRegion = region.copy(
+    lastPostTaskFields = parsed,
+    lastPostTaskCoverage = receiptCoverageAt(region, postTaskTaskId, readAt),
+    lastAnnouncedPostTaskTaskId = postTaskTaskId ?: region.lastAnnouncedPostTaskTaskId,
+)
+
+/** The ONE clearer — both `endSession` and `completeActiveJob` drop the receipt AND its coverage. */
+internal fun PlatformRegion.clearCachedReceipt(): PlatformRegion =
+    copy(lastPostTaskFields = null, lastPostTaskCoverage = null)
+
+/**
+ * Intersect a denominator with what the receipt actually described (#1073 round 13). Null coverage
+ * describes NOTHING — a pre-round-13 snapshot's cached receipt prices nobody, and the drop falls to
+ * the receipt-less path (fail-null, #745) rather than taking a share of a receipt no one can scope.
+ */
+internal fun List<Task>.describedBy(coverage: ReceiptCoverage?): List<Task> =
+    if (coverage == null) emptyList() else filter { it.taskId in coverage.taskIds }
 
 /**
  * #1033 layer 2 — the machine's own Tier-1 receipt correction: the DECISION (a pure stepper
@@ -24,8 +118,9 @@ import timber.log.Timber
  *
  * **Append-only, exactly like a driver correction.** No completion event is rewritten: a new
  * `DELIVERY_RECEIPT_REPRICE` per delivered drop of the job carries the receipt + that drop's share
- * (from the SAME [DropPayApportioner.apportion] the mint uses, over the SAME denominator), and the
- * fold re-prices the row in place. Frozen economy is never re-costed — net recomputes against the
+ * (from the SAME [DropPayApportioner.apportion] the mint uses, over the SAME denominator — literally
+ * the same since round 13: both are `mintingDropoffTasks(…).describedBy(coverage)`), and the fold
+ * re-prices the row in place. Frozen economy is never re-costed — net recomputes against the
  * row's OWN `frozenCostPerMile` at the orchestrator.
  *
  * **Two decision points (round 9).** The PostTask arm asks on every itemized receipt FRAME, and the
@@ -58,11 +153,11 @@ internal fun PlatformRegionStepper.decideReceiptReprice(
     parsed: ParsedFields.PostTaskFields,
     postTaskTaskId: String?,
     /**
-     * `obs.timestamp` of the frame this receipt was READ from (#1073) — its own time on the frame
-     * path, [PlatformRegion.lastPostTaskFieldsAt] wherever the receipt is the cached one. Scopes the
-     * denominator: a drop delivered after the receipt appeared is not described by it.
+     * What this receipt described when it was READ (#1073 round 13) — a fresh [receiptCoverageAt] on
+     * the frame path, [PlatformRegion.lastPostTaskCoverage] wherever the receipt is the cached one.
+     * The denominator is intersected with it; null describes nothing.
      */
-    receiptFrameAt: Long,
+    coverage: ReceiptCoverage?,
     decidedAt: Long,
     captureId: String?,
     /**
@@ -136,15 +231,13 @@ internal fun PlatformRegionStepper.decideReceiptReprice(
     // across both. Fail-WRONG, not fail-null. The anchor is the only task the receipt actually speaks
     // for.
     //
-    // And the receipt speaks only for drops delivered at or BEFORE the frame it was read on
-    // (#1073) — the round-11 class one rung down. Round 11 scoped the ACTIVE-task exception to the
-    // anchor; a COMPLETED sibling delivered after the receipt appeared was still admitted, so a
-    // 3-drop job's T1 receipt was split $10/$10 over T1 and a receipt-less T2 at the close or the
-    // teardown, rewriting T1's already-correct row. `<=` because an inline-retired drop's
-    // `completedAt` is its retire grace's `since` — the PostTask ENTRY frame the receipt was first
-    // read on. A `completedAt == null` candidate is the still-active anchor (admitted by
-    // [retirePending] or by the round-10/11 teardown exception), which the receipt on screen belongs
-    // to by construction.
+    // And whatever survives that, the receipt only speaks for the drops it DESCRIBED when it was
+    // read (#1073 round 13) — the round-11 class one rung down: round 11 scoped the ACTIVE-task
+    // exception to the anchor, and a COMPLETED sibling delivered after the receipt appeared was
+    // still admitted, so a 3-drop job's T1 receipt was split $10/$10 over T1 and a receipt-less T2.
+    // [ReceiptCoverage] is that set, and `DeliveryCompletionEffects` intersects the MINT's
+    // `apportion` denominator with the SAME one — which is what makes Σ `dropRealizedPay` == the
+    // receipt total hold by construction instead of by two copies of a rule agreeing.
     val retirePending = region.pendingDestructive?.kind == DestructiveKind.TASK_RETIRE
     val drops = (region.recentTasks + listOfNotNull(region.activeTask))
         .filter { it.jobId == mark.jobId && it.isAccountableDropoff }
@@ -153,7 +246,7 @@ internal fun PlatformRegionStepper.decideReceiptReprice(
             mintQualified(region, retirePending, it) ||
                 (mintRanForJob && it.taskId == region.activeTask?.taskId && it.taskId == anchor)
         }
-        .filter { task -> task.completedAt?.let { it <= receiptFrameAt } ?: true }
+        .describedBy(coverage)
     if (drops.isEmpty()) return region
     if (drops.none { it.taskId == anchor }) return region
 
@@ -177,6 +270,36 @@ internal fun PlatformRegionStepper.decideReceiptReprice(
             repriceRevision = revision,
             lastDecidedPay = parsedPay,
         ),
+    )
+}
+
+/**
+ * Both CACHED-receipt decision points, in one place (#1073 round 13): the job close
+ * (`completeActiveJob`, round 9) and the terminal teardown (`endSession`, round 10) ask the same
+ * question of the same evidence, and the two hand-copied blocks were one edit apart from drifting.
+ *
+ * [source] is the pre-close region that still holds the receipt and its [ReceiptCoverage]; [closed]
+ * is the region the decision is made against (its `activeJob` already nulled and its
+ * `lastClosedJobReceipt` stamped), returned unchanged when nothing is owed. Null coverage decides
+ * nothing on its own — `describedBy` empties the denominator — so a pre-round-13 snapshot is
+ * fail-null with no extra guard.
+ */
+internal fun PlatformRegionStepper.decideFromCachedReceipt(
+    source: PlatformRegion,
+    closed: PlatformRegion,
+    decidedAt: Long,
+    mintRanForJob: Boolean = false,
+): PlatformRegion {
+    val cached = source.lastPostTaskFields ?: return closed
+    if (cached.parsedPay == null) return closed
+    return decideReceiptReprice(
+        region = closed,
+        parsed = cached,
+        postTaskTaskId = null,
+        coverage = source.lastPostTaskCoverage,
+        decidedAt = decidedAt,
+        captureId = null,
+        mintRanForJob = mintRanForJob,
     )
 }
 

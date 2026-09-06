@@ -106,9 +106,10 @@ was found **broken-in-part** (raw PII in capture envelopes) and moved to that en
      firing for a drop whose completion was never folded).
   5. #1073: an Offline/dash-end straight off a receipt still re-prices it (log:
      `#1033 receipt re-price: job …, 1 drop(s)`) — end a dash from the delivery-summary screen
-     with a late expansion and watch for that line; and on a STACKED job, a re-price decided at
-     the close/teardown must name only the drops delivered before the receipt appeared (never a
-     sibling delivered afterwards).
+     with a late expansion and watch for that line. And on a STACKED job, both the completion and
+     any re-price must name only the drops that receipt COVERED (a sibling delivered after it
+     appeared folds unpriced, never at a share of it): `SELECT jobId, SUM(realizedPay)` for the job
+     must not exceed the receipt total.
   - Confirmed: 0/2
 
 - **🆕 NEW — #1063 — an offer is recognized from its FIRST frame, before the Decline

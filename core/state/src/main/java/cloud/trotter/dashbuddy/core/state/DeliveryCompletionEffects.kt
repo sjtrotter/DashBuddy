@@ -116,11 +116,19 @@ internal fun EffectMap.diffDeliveryCompletion(
                 val dropShare = if (finalShape) {
                     DropPayApportioner.apportion(
                         parsedPay = p.lastPostTaskFields?.parsedPay,
+                        // #1073 round 13: a receipt prices only the drops it DESCRIBED when it was
+                        // read — see [ReceiptCoverage]. Same intersection the re-price applies, so
+                        // the mint and a later correction cannot disagree and Σ shares == the
+                        // receipt total by construction. An UNCOVERED sibling takes no share (and,
+                        // by the amdt-#3 rule below, no receipt on its payload either), so it folds
+                        // unpriced and rides the review flag rather than taking money out of an
+                        // older receipt — fail-null (#745). Null coverage (a pre-round-13 snapshot)
+                        // covers nothing, same direction.
                         dropoffTasks = mintingDropoffTasks(
                             p, next, p.activeJob?.jobId,
                             retirePending = retireSince != null,
                             emittedThisStep = emittedThisStep + completedTask.taskId,
-                        ),
+                        ).describedBy(p.lastPostTaskCoverage),
                     )[completedTask.taskId]
                 } else {
                     null
@@ -276,11 +284,16 @@ internal fun EffectMap.diffDeliveryCompletion(
         // one over-full row become per-drop shares that sum to the receipt total).
         val dropShares = DropPayApportioner.apportion(
             parsedPay = p.lastPostTaskFields?.parsedPay,
+            // #1073 round 13: intersected with what the CACHED receipt described when it was read
+            // (see the PostTask-exit site above). This is the copy that made the round-12 rule
+            // wrong — the teardown's re-price scoped its denominator while this one did not, so a
+            // 3-drop job's T1 receipt was re-priced whole to T1 here AND split $10 to a
+            // receipt-less T2 there: Σ $30 over a $20 receipt.
             dropoffTasks = mintingDropoffTasks(
                 p, next, closedJob.jobId,
                 retirePending = retirePending,
                 emittedThisStep = emittedThisStep,
-            ),
+            ).describedBy(p.lastPostTaskCoverage),
         )
         for (task in next.recentTasks) {
             if (task.jobId != closedJob.jobId || task.phase != TaskPhase.DROPOFF) continue
