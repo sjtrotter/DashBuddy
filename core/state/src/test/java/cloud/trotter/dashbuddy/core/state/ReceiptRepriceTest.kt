@@ -888,6 +888,51 @@ class ReceiptRepriceTest {
     }
 
     @Test
+    fun `round 11 — a MID-STACK teardown re-prices only the receipt's own anchor drop`() {
+        // Drop 1 is delivered and anchors the cached receipt; drop 2 is ACTIVE and undelivered (the
+        // bail is about to force-complete it). Widening the denominator to "the active task" put drop
+        // 2 in it, and `apportion` split drop 1's $20 receipt $10/$10 across both — money moved.
+        val bigReceipt = ParsedPay(
+            appPayComponents = listOf(ParsedPayItem("Base Pay", 10.00)),
+            customerTips = listOf(ParsedPayItem("Bill Millers", 10.00)),
+        )
+        val drop1 = dropoff("t1", "Bill Millers", completedAt = 11_000L)
+        val drop2 = dropoff("t2", "Maple Street", completedAt = null).copy(arrivedAt = null)
+        val region = PlatformRegion(
+            platform = Platform.DoorDash,
+            mode = Mode.Online,
+            session = Session("S1", startedAt = 100L),
+            activeJob = Job(
+                "J1", offerStoreHint = emptyList(), parentOfferHash = null, startedAt = 200L,
+                tasks = listOf(drop1, drop2),
+            ),
+            activeTask = drop2, // undelivered, about to be force-completed
+            recentTasks = listOf(drop1), // delivered, its completion already minted
+            lastActedFlow = Flow.PostTask,
+            lastAnnouncedPostTaskTaskId = "t1", // the receipt on file is DROP 1's
+            lastPostTaskFields = expanded(bigReceipt),
+            // The job already left PostTask once, so the teardown widening is armed.
+            jobReceiptAnchors = JobReceiptAnchors(jobId = "J1", firstEnteredAt = 10_000L, exitedPostTask = true),
+        )
+
+        val fold = Fold(region)
+            .step(sessionEndedObs(14_000L))
+            .step(graceCommit(16_501L))
+
+        val repriced = fold.reprices()
+        assertEquals("only the anchor drop is re-priced", 1, repriced.size)
+        val payload = repriced.single().payload as DeliveryReceiptRepricePayload
+        assertEquals("t1", payload.taskId)
+        assertEquals(
+            "…at the FULL receipt total — drop 2 never entered the denominator",
+            20.00,
+            payload.dropRealizedPay,
+            0.0001,
+        )
+        assertTrue("drop 2 is untouched", repriced.none { (it.payload as DeliveryReceiptRepricePayload).taskId == "t2" })
+    }
+
+    @Test
     fun `round 10 — a task the BAIL force-completed is never re-priced`() {
         // The drop never reached a PostTask exit, so the mint never ran for it and there is no row to
         // correct. `endSession` force-stamps its `completedAt` as pure teardown bookkeeping (the

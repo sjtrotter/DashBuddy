@@ -107,27 +107,37 @@ internal fun PlatformRegionStepper.decideReceiptReprice(
     val acceptResolvedAt = region.lastAcceptResolvedAt
     if (acceptResolvedAt != null && acceptResolvedAt >= receiptSeenAt) return region
 
+    // The receipt on screen must belong to THIS job — the announce anchor names the task the receipt
+    // was attributed to. Resolved BEFORE the denominator, because the teardown widening below is
+    // scoped to it (round 11). A receipt anchored on some other job's drop (or on a pickup) is not
+    // evidence about these rows: fail-null.
+    val anchor = postTaskTaskId ?: region.lastAnnouncedPostTaskTaskId ?: return region
+
     // The denominator, rebuilt as the mint built it — `Task.isAccountableDropoff` (the #498 phantom +
     // #736 unassign firewalls) plus the SAME amdt-#5 [mintQualified] predicate
     // `DeliveryCompletionEffects.mintingDropoffTasks` applies, so Σ shares lands on exactly the rows
-    // the mint wrote. The active task is a CANDIDATE: the PostTask-exit mint can complete a task that
-    // is STILL ACTIVE under its retire grace (`completedAt` is stamped only when that grace commits),
-    // and [mintQualified] admits it only while a `TASK_RETIRE` really is pending — the same evidence
-    // the mint required of it.
+    // the mint wrote.
+    //
+    // The active task is a CANDIDATE: the PostTask-exit mint can complete a task that is STILL ACTIVE
+    // under its retire grace (`completedAt` is stamped only when that grace commits), and
+    // [mintQualified] admits it only while a `TASK_RETIRE` really is pending — the same evidence the
+    // mint required of it.
+    //
+    // [mintRanForJob] widens that ONLY at a terminal teardown, and ONLY to the receipt's own anchor
+    // task (round 11). Widening to "the active task" alone moved money: at a mid-stack session end —
+    // drop 1 delivered and anchoring the cached receipt, drop 2 active and about to be force-completed
+    // by the bail — drop 2 joined the denominator and `apportion` split drop 1's $20 receipt $10/$10
+    // across both. Fail-WRONG, not fail-null. The anchor is the only task the receipt actually speaks
+    // for.
     val retirePending = region.pendingDestructive?.kind == DestructiveKind.TASK_RETIRE
     val drops = (region.recentTasks + listOfNotNull(region.activeTask))
         .filter { it.jobId == mark.jobId && it.isAccountableDropoff }
         .distinctBy { it.taskId }
         .filter {
             mintQualified(region, retirePending, it) ||
-                (mintRanForJob && it.taskId == region.activeTask?.taskId)
+                (mintRanForJob && it.taskId == region.activeTask?.taskId && it.taskId == anchor)
         }
     if (drops.isEmpty()) return region
-
-    // The receipt on screen must belong to THAT job — the announce anchor names the task the receipt
-    // was attributed to. A receipt anchored on some other job's drop (or on a pickup) is not evidence
-    // about these rows: fail-null.
-    val anchor = postTaskTaskId ?: region.lastAnnouncedPostTaskTaskId ?: return region
     if (drops.none { it.taskId == anchor }) return region
 
     val shares = DropPayApportioner.apportion(parsedPay, drops)

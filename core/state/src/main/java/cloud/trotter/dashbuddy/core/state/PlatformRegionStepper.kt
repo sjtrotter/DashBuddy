@@ -1126,6 +1126,13 @@ class PlatformRegionStepper @Inject constructor() {
         // drop this bail is force-completing (the amdt-#5 T3 guard: it has no row), and wrong for one
         // whose completion was already minted on an earlier PostTask exit. `exitedPostTask` is what
         // separates them; a mistake either way is caught by the projector finding no row.
+        // KEY SAFETY (round 11): the synthesized marker starts at revision 0, so its decision emits
+        // `…:<taskId>:<jobId>:r1` — the same key a job's FIRST post-close decision would use. The two
+        // can never both exist for one jobId: a post-close decision requires `completeActiveJob` to
+        // have run for that job, which leaves `activeJob` null, and this branch is guarded on
+        // `activeJob != null`. A job is therefore either closed-then-re-priced (real marker, revisions
+        // from the close) or active-at-teardown (synthesized marker, revision 1) — never both. A
+        // DIFFERENT job that closed earlier is a different `jobId`, which is in the key.
         val cachedReceipt = region.lastPostTaskFields
         val endingJob = region.activeJob
         val repriceHandoff = if (cachedReceipt?.parsedPay != null && endingJob != null) {
