@@ -1061,8 +1061,14 @@ class StateMachineTest {
         assertTrue(dd.pendingDestructive!!.authoritative)
 
         // Past the deadline (the GRACE_COMMIT timer in production; any later
-        // observation commits via lazy expiry here).
-        state = machine.step(state, screenObs(flow = Flow.Idle, timestamp = tick(3000))).newState
+        // observation commits via lazy expiry here). #1033 layer 1: this receipt is COLLAPSED
+        // (`parsedPay == null`), so its window is `receiptExpandGraceMs`, not the 2.5 s
+        // authoritative one — read the armed deadline rather than assuming a fixed tick.
+        val deadline = dd.pendingDestructive!!.deadline
+        state = machine.step(
+            state,
+            screenObs(flow = Flow.Idle, timestamp = deadline + 1),
+        ).newState
 
         dd = state.regions.platforms[Platform.DoorDash]!!
         assertNull("expiry completed the task", dd.activeTask)

@@ -643,6 +643,17 @@ the checkpoint can land too.
 by `GRACE_COMMIT` timers (#431), including short authoritative windows for the dash summary AND the
 delivery receipt; a separate `pendingModeResume`/`MODE_RESUME_COMMIT` grace debounces a
 screen-implied Paused→Online *resume* so a pause-sheet-over-receipt can't flap `DASH_PAUSED` (#605).
+**The delivery-receipt window is receipt-SHAPE-keyed (#1033 layer 1):** a COLLAPSED receipt
+(`parsedPay == null`) arms `GraceConfig.receiptExpandGraceMs` (8 s, per-platform through
+`TransitionPolicy`) instead of the 2.5 s `authoritativeGraceMs`, because a collapsed receipt states a
+total and nothing else — a completion committed off one is priced by the #691 `OFFER_PAY` estimate,
+and the fielded 2026-08-23 expansion landed 3.9 s later, 1.3 s past the old window. An EXPANDED frame
+keeps 2.5 s and, through the arm's `minOf(existing, new)`, TIGHTENS the widened deadline the moment
+it arrives; a PostTask frame that parses no receipt at all keeps the pre-#1033 timing (fail toward the
+old behaviour). Cost: a receipt that never expands commits ≤ 5.5 s later; the receipt bubble is
+unaffected (it fires on the PostTask frame, not the commit) and the #596 T2 next-offer guard tolerates
+it. **Layer 1 is also the ONLY path that lands an expansion in the STACKED shape** (accept the next
+offer off the receipt, then expand it): layer 2's ownership rule refuses that case outright — see §5.
 
 **Offers are platform-owned** — `pendingOffers: List<PendingOffer>` on the `PlatformRegion` (#438
 B3, moved off the shared global R0 slot so concurrent platforms don't collide; N≥1 satisfies
@@ -1325,6 +1336,64 @@ emits `JOB_ACCEPT_MISMATCH` AFTER the closing job's final `DELIVERY_COMPLETED`, 
 evidence is complete by construction and the fold is paging-independent (historical logs carrying
 the old mismatch-first order deterministically fall to Tier 2). The only state-machine touch is that
 emission ORDER within one close step — no new events, no reducer change.
+
+**#1033 layer 2 (late-expanded receipt → `DELIVERY_RECEIPT_REPRICE`, Room v15→v16 additive
+`delivery_records.receiptRepricedAt` + `.driverAdjustedAt`, `PROJECTOR_VERSION` UNCHANGED):** layer 1 widens the window; this
+is the other half — when the expansion still lands AFTER the completion was minted off the collapsed
+shape, the itemization is real evidence that arrived late, and the drop is re-priced from it instead
+of being left on the estimate forever. A machine **Tier-1** correction with the same append-only
+posture as the driver ones: the original `DELIVERY_COMPLETED` is never rewritten.
+`EffectMap.diffReceiptReprice` emits ONE `DELIVERY_RECEIPT_REPRICE` per delivered drop of the job
+(a stacked receipt re-prices every sibling), with shares from the SAME `DropPayApportioner.apportion`
+over the SAME `Task.isAccountableDropoff` denominator the mint uses, so `Σ dropRealizedPay ==
+parsedPay.total` to the cent; keyed `…:<taskId>:<jobId>:r<repriceRevision>` in `effects_fired`, so a
+distinct DECISION always lands (a content hash collided with itself on an X→Y→X sequence and the
+third emission was dropped). Decided at TWO points (round 9): every itemized receipt FRAME, and once
+more at the job close from the receipt `completeActiveJob` is about to clear — a job whose itemized
+receipt was already on screen when it closed may never render another frame, and its row can still be
+un-itemized (its first completion was minted on an earlier PostTask exit, and the close's re-emission
+is dropped by the per-taskId completion key). It can fire at all only because of ONE marker: `PlatformRegion.lastClosedJobReceipt` (jobId +
+`receiptSeenAt` + `repriceRevision` + `lastDecidedPayHash`, stamped at that one close site, cleared by
+`endSession`). The marker deliberately does NOT model what the completion ROWS hold — it tried
+through two review rounds and both attempts failed toward REFUSING a legitimate correction (mirroring
+the mint's exit edge misses its eligibility/final-shape filtering; one task's first completion cannot
+describe a multi-drop job). The stepper suppresses only its OWN repeated decision
+(`lastDecidedPayHash`), so a receipt whose itemization the mint already carried emits a redundant
+"the receipt says X" event that **`AnalyticsProjector.applyReceiptReprice` resolves to a no-op** by
+comparing the row (no rewrite, so no `receiptRepricedAt` churn). "Already priced" is the projector's
+question: the stepper cannot know which completions persisted, the projector can just look.
+**The decision is a pure STEPPER transition, not an effect diff** (`decideReceiptReprice`, in
+`updateSessionFields`' PostTask arm): it must update the marker atomically as it decides, which an
+effect diff cannot do — `EffectMap.diffReceiptReprice` only reports the one-step
+`pendingReceiptReprice` handoff (cleared at the top of the next step, so a snapshot-restored value
+can never re-emit). **Ownership is ONE temporal question — "has any acceptance resolved since this
+receipt appeared?"** (`lastAcceptResolvedAt` vs `receiptSeenAt`, two region facts; the accept anchor
+is stamped at the `OfferLifecycle` accept-latch resolution and survives BOTH the survivor's expiry
+and the mint, since forgetting either is what re-opened the window in review). A receipt carries no
+job identity, so every other test tried in review — the announce anchor (which falls back to
+`recentTasks.lastOrNull()`), an accepted-since flag, a matching total — leaked; a total in particular
+is not identity, and it let a stacked job's $20 receipt redistribute the closed job's drops ($5/$15
+over a real $10/$10). **Stated cost (fail-null, #745): the STACKED shape — accept the next offer while
+this receipt is up, then expand it LATE — is refused and keeps the `OFFER_PAY` estimate; layer 1's 8 s
+window is the path that lands it in time.** Effect keys are `…:<taskId>:<jobId>:r<revision>` off
+`repriceRevision`, NOT the receipt's content hash: an X→Y→X itemization sequence hashed back onto its
+own first key and the durable `effects_fired` idempotency dropped the third emission, freezing the row
+at Y. `CorrectionFolds.foldDeliveryReceiptReprice` → a `ReceiptRepriceFold` the projector applies
+by **(jobId, taskId)** — the state machine never sees sequence ids — setting `realizedPay`/`tip`/
+`basePay` (itemization only on the receipt's sole drop, via the new shared `soleDropOfReceipt` SSOT
+`DeliveryFolds` now also reads), flipping `payBasis` → `DROP_SHARE`, recomputing `netProfit` against
+the row's OWN frozen cpm, preserving `originalPayBasis`, and stamping `receiptRepricedAt`. Two
+fail-closed guards: a missing target row is a counted skip (the mid-stack shape where the mint is
+still pending — that mint carries the itemization itself), and a DRIVER-owned row is never
+overwritten — `MANUAL`/`USER_CORRECTED`, **or** the new `delivery_records.driverAdjustedAt` (v16,
+stamped by any monetary `DELIVERY_ADJUSTMENT`/`PAY_ADJUSTMENT`). That column is load-bearing because a
+TIP-ONLY edit deliberately leaves `payBasis` intact (#688 VET F1), so the basis test alone let a later
+re-price overwrite the driver's own tip. **Log-order rule:** a LATER driver `DELIVERY_ADJUSTMENT` wins
+the pay (the driver is the higher authority on their own money) while the `receiptRepricedAt` trail
+survives; an EARLIER one is never superseded. Read side: the drill-down shows "re-priced from the receipt" wherever
+`receiptRepricedAt != null` (the never-silent #689/#691 disclosure family). Named residual:
+`payoutStoreForms` is NOT back-stamped by a re-price, so a job whose only receipt arrived late keeps
+its pre-existing #159 store keys.
 
 ## Development Principles
 

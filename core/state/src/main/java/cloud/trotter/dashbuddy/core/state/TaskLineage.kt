@@ -375,7 +375,7 @@ internal fun PlatformRegionStepper.abandonActiveTask(
             it.phase == TaskPhase.DROPOFF && it.completedAt == null && it.unassignedAt == null
         }
         if (!hasOutstandingDropoff) {
-            r = completeActiveJob(r)
+            r = completeActiveJob(r, timestamp)
         }
     }
     return r

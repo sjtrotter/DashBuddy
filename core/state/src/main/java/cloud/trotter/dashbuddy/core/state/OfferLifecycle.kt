@@ -181,16 +181,26 @@ private fun PlatformRegionStepper.resolveOnLeave(
 ): PlatformRegion {
     if (region.pendingOffers.none { it.acceptedAt == null }) return region
     val destination = obs.flow
+    // #1033 review round 6: did an acceptance resolve on THIS frame? Recorded on the region so the
+    // receipt re-price can ask the one ownership question it can actually answer ("has any accept
+    // resolved since this receipt appeared") — see [ClosedJobReceipt.receiptSeenAt]. Stamped with the
+    // RESOLUTION instant, not the click's, which is the conservative side of the comparison.
+    var resolvedAnAccept = false
     val newOffers = region.pendingOffers.mapNotNull { offer ->
         when {
             offer.acceptedAt != null -> offer // existing survivor — consumption is the mint's job
             offer.declineCommittedAt != null -> null // committed decline (#594 FIX2b) — never survives
-            offer.isAcceptLatched() || destinationImpliesAccept(destination, offer) ->
+            offer.isAcceptLatched() || destinationImpliesAccept(destination, offer) -> {
+                resolvedAnAccept = true
                 offer.copy(acceptedAt = offer.acceptClickAt ?: obs.timestamp)
+            }
             else -> null // declined / timed out → resolved away
         }
     }
-    return region.copy(pendingOffers = newOffers)
+    return region.copy(
+        pendingOffers = newOffers,
+        lastAcceptResolvedAt = if (resolvedAnAccept) obs.timestamp else region.lastAcceptResolvedAt,
+    )
 }
 
 /**

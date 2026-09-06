@@ -3,6 +3,7 @@ package cloud.trotter.dashbuddy.domain.model.event
 import cloud.trotter.dashbuddy.domain.model.event.payload.AppEventPayload
 import cloud.trotter.dashbuddy.domain.model.event.payload.DeliveryAdjustmentPayload
 import cloud.trotter.dashbuddy.domain.model.event.payload.DeliveryPayload
+import cloud.trotter.dashbuddy.domain.model.event.payload.DeliveryReceiptRepricePayload
 import cloud.trotter.dashbuddy.domain.model.event.payload.DeliverySessionAssignPayload
 import cloud.trotter.dashbuddy.domain.model.event.payload.ManualDeliveryPayload
 import cloud.trotter.dashbuddy.domain.model.event.payload.OfferOutcomeCorrectionPayload
@@ -44,6 +45,7 @@ object AppEventCodec {
         is ManualDeliveryPayload -> json.encodeToString(payload)
         is PayAdjustmentPayload -> json.encodeToString(payload)
         is DeliveryAdjustmentPayload -> json.encodeToString(payload)
+        is DeliveryReceiptRepricePayload -> json.encodeToString(payload)
         is DeliverySessionAssignPayload -> json.encodeToString(payload)
         is OfferOutcomeCorrectionPayload -> json.encodeToString(payload)
         is TaskUnassignedPayload -> json.encodeToString(payload)
@@ -95,6 +97,9 @@ object AppEventCodec {
 
             AppEventType.DELIVERY_ADJUSTMENT ->
                 json.decodeFromString<DeliveryAdjustmentPayload>(payloadJson)
+
+            AppEventType.DELIVERY_RECEIPT_REPRICE ->
+                json.decodeFromString<DeliveryReceiptRepricePayload>(payloadJson)
 
             AppEventType.DELIVERY_SESSION_ASSIGN ->
                 json.decodeFromString<DeliverySessionAssignPayload>(payloadJson)

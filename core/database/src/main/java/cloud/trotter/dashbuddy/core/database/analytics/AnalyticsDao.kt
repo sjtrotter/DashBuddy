@@ -1017,6 +1017,17 @@ interface AnalyticsDao {
     @Query("SELECT * FROM delivery_records WHERE taskId = :taskId LIMIT 1")
     suspend fun deliveryRecordByTask(taskId: String): DeliveryRecordEntity?
 
+    /**
+     * One delivery row by its (jobId, taskId) identity — the target of a machine
+     * `DELIVERY_RECEIPT_REPRICE` (#1033 layer 2). The state machine that emits that event never sees
+     * sequence ids, so the re-price addresses its row the only way it can: by the identity it does
+     * own. Job-SCOPED (not the bare `deliveryRecordByTask` above) so a taskId collision across jobs
+     * can never re-price a foreign row; null ⇒ the target does not exist (a counted skip, never a
+     * crash).
+     */
+    @Query("SELECT * FROM delivery_records WHERE jobId = :jobId AND taskId = :taskId LIMIT 1")
+    suspend fun deliveryRecordByJobTask(jobId: String, taskId: String): DeliveryRecordEntity?
+
     /** Still-live sessions for a platform — the next DASH_START infers their close. */
     @Query("SELECT * FROM session_records WHERE platform = :platform AND endedAt IS NULL")
     suspend fun openSessions(platform: String): List<SessionRecordEntity>

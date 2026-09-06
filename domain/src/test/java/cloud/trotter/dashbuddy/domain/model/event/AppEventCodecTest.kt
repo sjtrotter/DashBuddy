@@ -4,6 +4,9 @@ import cloud.trotter.dashbuddy.domain.evaluation.OfferAction
 import cloud.trotter.dashbuddy.domain.evaluation.OfferEvaluation
 import cloud.trotter.dashbuddy.domain.model.event.payload.AppEventPayload
 import cloud.trotter.dashbuddy.domain.model.event.payload.DeliveryPayload
+import cloud.trotter.dashbuddy.domain.model.event.payload.DeliveryReceiptRepricePayload
+import cloud.trotter.dashbuddy.domain.model.pay.ParsedPay
+import cloud.trotter.dashbuddy.domain.model.pay.ParsedPayItem
 import cloud.trotter.dashbuddy.domain.model.event.payload.JobAcceptMismatchPayload
 import cloud.trotter.dashbuddy.domain.model.event.payload.OfferOutcomeCorrectionPayload
 import cloud.trotter.dashbuddy.domain.model.event.payload.OfferOutcomeResolution
@@ -106,6 +109,16 @@ class AppEventCodecTest {
             AppEventType.OFFER_OUTCOME_CORRECTION to OfferOutcomeCorrectionPayload(
                 targetOfferEventSequenceId = 42L,
                 resolvedOutcome = OfferOutcomeResolution.UNASSIGNED_ATTESTED, note = "chat unassign",
+            ),
+            // #1033 layer 2 — the itemization is the whole point of the event, so the nested
+            // ParsedPay has to survive the wire (a lossy round-trip would re-price off nothing).
+            AppEventType.DELIVERY_RECEIPT_REPRICE to DeliveryReceiptRepricePayload(
+                jobId = "j1", taskId = "t2", totalPay = 16.70,
+                parsedPay = ParsedPay(
+                    appPayComponents = listOf(ParsedPayItem("Base Pay", 9.70)),
+                    customerTips = listOf(ParsedPayItem("Wendy's", 7.00)),
+                ),
+                dropRealizedPay = 16.70, sourceCaptureId = "cap-1",
             ),
         )
 

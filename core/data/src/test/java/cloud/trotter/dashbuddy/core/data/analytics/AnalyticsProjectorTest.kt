@@ -20,6 +20,7 @@ import cloud.trotter.dashbuddy.domain.model.event.AppEventType
 import cloud.trotter.dashbuddy.domain.model.event.payload.AppEventPayload
 import cloud.trotter.dashbuddy.domain.model.event.payload.DeliveryAdjustmentPayload
 import cloud.trotter.dashbuddy.domain.model.event.payload.DeliveryPayload
+import cloud.trotter.dashbuddy.domain.model.event.payload.DeliveryReceiptRepricePayload
 import cloud.trotter.dashbuddy.domain.model.event.payload.DeliverySessionAssignPayload
 import cloud.trotter.dashbuddy.domain.model.event.payload.ManualDeliveryPayload
 import cloud.trotter.dashbuddy.domain.model.event.payload.OfferPayload
@@ -30,6 +31,8 @@ import cloud.trotter.dashbuddy.domain.model.event.payload.SessionStartPayload
 import cloud.trotter.dashbuddy.domain.model.event.payload.SessionStartSource
 import cloud.trotter.dashbuddy.domain.model.event.payload.SessionStopPayload
 import cloud.trotter.dashbuddy.domain.model.offer.ParsedOffer
+import cloud.trotter.dashbuddy.domain.model.pay.ParsedPay
+import cloud.trotter.dashbuddy.domain.model.pay.ParsedPayItem
 import cloud.trotter.dashbuddy.domain.state.Flow
 import cloud.trotter.dashbuddy.domain.state.Platform
 import kotlinx.coroutines.CancellationException
@@ -733,6 +736,291 @@ class AnalyticsProjectorTest {
             deliveriesBefore, analyticsDao.deliveriesBetween(Long.MIN_VALUE, Long.MAX_VALUE),
         )
         assertEquals(sessionsBefore, analyticsDao.sessionsBetween(Long.MIN_VALUE, Long.MAX_VALUE))
+    }
+
+    // ── DELIVERY_RECEIPT_REPRICE (#1033 layer 2) ────────────────────────
+
+    /** The fielded shape: a wholly receipt-less-looking job whose one drop folds an OFFER_PAY estimate. */
+    private suspend fun seedCollapsedReceiptJob(sid: String = "S1"): Long {
+        insert(
+            AppEventType.DASH_START, sid, 1_000,
+            SessionStartPayload(sid, Platform.DoorDash.name, 1_000, SessionStartSource.INTERACTION, "x"),
+            odometer = 100.0,
+        )
+        insert(
+            AppEventType.OFFER_ACCEPTED, sid, 2_000,
+            OfferPayload(
+                offerHash = "h1",
+                parsedOffer = ParsedOffer(offerHash = "h1", payAmount = 12.0, distanceMiles = 3.0),
+                evaluation = eval(0.25), outcome = AppEventType.OFFER_ACCEPTED,
+                presentedAt = 1_970, decidedAt = 2_000, returnFlow = Flow.Idle,
+            ),
+        )
+        return insert(
+            AppEventType.DELIVERY_COMPLETED, sid, 3_000,
+            DeliveryPayload(
+                jobId = "J1", taskId = "T1", storeName = "StoreX", customerHash = "c1",
+                phaseStartedAt = 2_400, completedAt = 3_000, offerPayShare = 12.95,
+            ),
+            odometer = 105.0,
+        )
+    }
+
+    /** A job whose completion already carried the itemization → the row folds DROP_SHARE at $16.70. */
+    private suspend fun seedReceiptedJob(sid: String = "S1"): Long {
+        insert(
+            AppEventType.DASH_START, sid, 1_000,
+            SessionStartPayload(sid, Platform.DoorDash.name, 1_000, SessionStartSource.INTERACTION, "x"),
+            odometer = 100.0,
+        )
+        insert(
+            AppEventType.OFFER_ACCEPTED, sid, 2_000,
+            OfferPayload(
+                offerHash = "h1",
+                parsedOffer = ParsedOffer(offerHash = "h1", payAmount = 12.0, distanceMiles = 3.0),
+                evaluation = eval(0.25), outcome = AppEventType.OFFER_ACCEPTED,
+                presentedAt = 1_970, decidedAt = 2_000, returnFlow = Flow.Idle,
+            ),
+        )
+        return insert(
+            AppEventType.DELIVERY_COMPLETED, sid, 3_000,
+            DeliveryPayload(
+                jobId = "J1", taskId = "T1", storeName = "StoreX", customerHash = "c1",
+                phaseStartedAt = 2_400, completedAt = 3_000,
+                totalPay = 16.70, parsedPay = lateReceipt, dropRealizedPay = 16.70,
+            ),
+            odometer = 105.0,
+        )
+    }
+
+    private val lateReceipt = ParsedPay(
+        appPayComponents = listOf(ParsedPayItem("Base Pay", 9.70)),
+        customerTips = listOf(ParsedPayItem("StoreX", 7.00)),
+    )
+
+    private suspend fun insertReprice(
+        at: Long,
+        taskId: String = "T1",
+        share: Double = 16.70,
+        jobId: String = "J1",
+        pay: ParsedPay = lateReceipt,
+    ) = insert(
+        AppEventType.DELIVERY_RECEIPT_REPRICE, "S1", at,
+        DeliveryReceiptRepricePayload(
+            jobId = jobId, taskId = taskId, totalPay = pay.total,
+            parsedPay = pay, dropRealizedPay = share,
+        ),
+    )
+
+    @Test
+    fun `a DELIVERY_RECEIPT_REPRICE re-prices the row by (jobId, taskId) against its OWN frozen cpm (#1033)`() = runBlocking {
+        val seq = seedCollapsedReceiptJob()
+        projector().catchUp()
+        val before = analyticsDao.deliveryRecord(seq)!!
+        assertEquals("the collapsed receipt left it on the offer-pay estimate", "OFFER_PAY", before.payBasis)
+        assertNull(before.receiptRepricedAt)
+
+        insertReprice(at = 3_400)
+        projector().catchUp()
+
+        val d = analyticsDao.deliveryRecord(seq)!!
+        assertEquals(16.70, d.realizedPay!!, 1e-9)
+        assertEquals("DROP_SHARE", d.payBasis)
+        assertEquals(7.00, d.tip!!, 1e-9)
+        assertEquals(9.70, d.basePay!!, 1e-9)
+        // Net recomputed against the row's OWN frozen cpm (0.25) over its own miles (5) — never today's economy.
+        assertEquals(16.70 - 5.0 * 0.25, d.netProfit!!, 1e-9)
+        assertEquals("frozen cpm untouched", 0.25, d.frozenCostPerMile!!, 1e-9)
+        assertEquals("originalPayBasis preserved (#703)", "OFFER_PAY", d.originalPayBasis)
+        assertEquals(3_400L, d.receiptRepricedAt)
+    }
+
+    @Test
+    fun `a re-price whose target row does not exist is a counted skip, never a crash (#1033)`() = runBlocking {
+        seedCollapsedReceiptJob()
+        projector().catchUp()
+        insertReprice(at = 3_400, taskId = "GHOST")
+        projector().catchUp()
+        // Nothing changed and the watermark still advanced past the event.
+        assertEquals("OFFER_PAY", analyticsDao.deliveryRecordByTask("T1")!!.payBasis)
+        assertEquals(4L, analyticsDao.getWatermark()!!.watermarkSequenceId)
+    }
+
+    @Test
+    fun `a re-price never re-prices a foreign job's row with the same taskId (#1033 job scoping)`() = runBlocking {
+        seedCollapsedReceiptJob()
+        projector().catchUp()
+        insertReprice(at = 3_400, jobId = "J-OTHER")
+        projector().catchUp()
+        assertEquals("OFFER_PAY", analyticsDao.deliveryRecordByTask("T1")!!.payBasis)
+        assertNull(analyticsDao.deliveryRecordByTask("T1")!!.receiptRepricedAt)
+    }
+
+    @Test
+    fun `a LATER driver DELIVERY_ADJUSTMENT wins the pay over an earlier re-price (log order, #1033)`() = runBlocking {
+        val seq = seedCollapsedReceiptJob()
+        projector().catchUp()
+        insertReprice(at = 3_400)
+        insert(
+            AppEventType.DELIVERY_ADJUSTMENT, "S1", 6_000,
+            DeliveryAdjustmentPayload(targetEventSequenceId = seq, sessionId = "S1", newPay = 21.0),
+        )
+        projector().catchUp()
+
+        val d = analyticsDao.deliveryRecord(seq)!!
+        assertEquals("the driver is the higher authority on their own money", 21.0, d.realizedPay!!, 1e-9)
+        assertEquals("USER_CORRECTED", d.payBasis)
+        assertEquals("the machine's trail survives the driver edit", 3_400L, d.receiptRepricedAt)
+        assertEquals("originalPayBasis is still the first-fold basis", "OFFER_PAY", d.originalPayBasis)
+    }
+
+    @Test
+    fun `an EARLIER driver adjustment is never overwritten by a later re-price (#1033 driver-owned guard)`() = runBlocking {
+        val seq = seedCollapsedReceiptJob()
+        projector().catchUp()
+        insert(
+            AppEventType.DELIVERY_ADJUSTMENT, "S1", 3_100,
+            DeliveryAdjustmentPayload(targetEventSequenceId = seq, sessionId = "S1", newPay = 21.0),
+        )
+        insertReprice(at = 3_400)
+        projector().catchUp()
+
+        val d = analyticsDao.deliveryRecord(seq)!!
+        assertEquals(21.0, d.realizedPay!!, 1e-9)
+        assertEquals("USER_CORRECTED", d.payBasis)
+        assertNull("the re-price was skipped, so no marker", d.receiptRepricedAt)
+    }
+
+    @Test
+    fun `a REDUNDANT re-price is a no-op at the projector — no rewrite, no marker (#1033 round 8)`() = runBlocking {
+        // The mint already carried this itemization, so the row is already DROP_SHARE at these
+        // values. Since round 8 the stepper no longer tries to know that (two rounds of fail-null) —
+        // it emits, and the apply compares the row and skips WITHOUT rewriting it, so no
+        // `receiptRepricedAt` is stamped for a correction that corrected nothing.
+        val seq = seedReceiptedJob()
+        projector().catchUp()
+        val before = analyticsDao.deliveryRecord(seq)!!
+        assertEquals("DROP_SHARE", before.payBasis)
+        assertNull(before.receiptRepricedAt)
+
+        insertReprice(at = 3_400)
+        projector().catchUp()
+
+        assertEquals("byte-identical — the apply never touched it", before, analyticsDao.deliveryRecord(seq)!!)
+    }
+
+    @Test
+    fun `the CLOSE-time re-price of an already-itemized job projects to nothing (#1033 round 9 mirror)`() = runBlocking {
+        // The stepper now decides at the job close from its cached receipt, without knowing whether
+        // the mint already carried that itemization. When it did, the emitted event must land as a
+        // pure no-op — this is the control for the close-time decision being free.
+        val seq = seedReceiptedJob()
+        projector().catchUp()
+        val before = analyticsDao.deliveryRecord(seq)!!
+
+        insertReprice(at = 3_400) // exactly what the mint already wrote
+        projector().catchUp()
+
+        assertEquals("byte-identical", before, analyticsDao.deliveryRecord(seq)!!)
+        assertNull("and no correction marker for a correction that corrected nothing", analyticsDao.deliveryRecord(seq)!!.receiptRepricedAt)
+    }
+
+    @Test
+    fun `a re-price that CHANGES the row still applies after a redundant one (#1033 round 8)`() = runBlocking {
+        val seq = seedReceiptedJob()
+        projector().catchUp()
+        insertReprice(at = 3_400) // redundant → no-op
+        projector().catchUp()
+        assertNull(analyticsDao.deliveryRecord(seq)!!.receiptRepricedAt)
+
+        val updated = ParsedPay(
+            appPayComponents = listOf(ParsedPayItem("Base Pay", 9.70)),
+            customerTips = listOf(ParsedPayItem("StoreX", 10.30)),
+        )
+        insertReprice(at = 3_500, share = 20.00, pay = updated)
+        projector().catchUp()
+
+        val d = analyticsDao.deliveryRecord(seq)!!
+        assertEquals(20.00, d.realizedPay!!, 1e-9)
+        assertEquals(10.30, d.tip!!, 1e-9)
+        assertEquals(3_500L, d.receiptRepricedAt)
+    }
+
+    @Test
+    fun `a driver TIP-ONLY edit is never overwritten by a later re-price (#1033 round 6)`() = runBlocking {
+        val seq = seedCollapsedReceiptJob()
+        projector().catchUp()
+        // A tip-only DELIVERY_ADJUSTMENT deliberately LEAVES payBasis alone (#688 VET F1), so the
+        // basis guard alone never saw it — `driverAdjustedAt` is what refuses the re-price.
+        insert(
+            AppEventType.DELIVERY_ADJUSTMENT, "S1", 3_200,
+            DeliveryAdjustmentPayload(targetEventSequenceId = seq, sessionId = "S1", newTip = 5.0),
+        )
+        projector().catchUp()
+        val afterEdit = analyticsDao.deliveryRecord(seq)!!
+        assertEquals("the basis is intact — that is the point", "OFFER_PAY", afterEdit.payBasis)
+        assertEquals(3_200L, afterEdit.driverAdjustedAt)
+
+        insertReprice(at = 3_400)
+        projector().catchUp()
+
+        val d = analyticsDao.deliveryRecord(seq)!!
+        assertEquals("the driver's tip stands", 5.0, d.tip!!, 1e-9)
+        assertEquals("OFFER_PAY", d.payBasis)
+        assertNull("…and the machine left no re-price marker", d.receiptRepricedAt)
+    }
+
+    @Test
+    fun `a legacy PAY_ADJUSTMENT also blocks a later re-price (#1033 round 6)`() = runBlocking {
+        val seq = seedCollapsedReceiptJob()
+        projector().catchUp()
+        insert(
+            AppEventType.PAY_ADJUSTMENT, "S1", 3_200,
+            PayAdjustmentPayload(targetEventSequenceId = seq, sessionId = "S1", newPay = 11.0),
+        )
+        projector().catchUp()
+        assertEquals(3_200L, analyticsDao.deliveryRecord(seq)!!.driverAdjustedAt)
+
+        insertReprice(at = 3_400)
+        projector().catchUp()
+        assertEquals(11.0, analyticsDao.deliveryRecord(seq)!!.realizedPay!!, 1e-9)
+        assertNull(analyticsDao.deliveryRecord(seq)!!.receiptRepricedAt)
+    }
+
+    @Test
+    fun `a store-name-only edit is NOT monetary and leaves the re-price path open (#1033 round 6)`() = runBlocking {
+        val seq = seedCollapsedReceiptJob()
+        projector().catchUp()
+        insert(
+            AppEventType.DELIVERY_ADJUSTMENT, "S1", 3_200,
+            DeliveryAdjustmentPayload(targetEventSequenceId = seq, sessionId = "S1", newStoreName = "Bill Millers"),
+        )
+        projector().catchUp()
+        assertNull("a store rename says nothing about the money", analyticsDao.deliveryRecord(seq)!!.driverAdjustedAt)
+
+        insertReprice(at = 3_400)
+        projector().catchUp()
+        val d = analyticsDao.deliveryRecord(seq)!!
+        assertEquals("DROP_SHARE", d.payBasis)
+        assertEquals(16.70, d.realizedPay!!, 1e-9)
+        assertEquals("Bill Millers", d.storeName)
+    }
+
+    @Test
+    fun `a re-price is rebuild-faithful — a from-zero refold reproduces the identical row (#1033)`() = runBlocking {
+        val seq = seedCollapsedReceiptJob()
+        projector().catchUp()
+        insertReprice(at = 3_400)
+        projector().catchUp()
+        val incremental = analyticsDao.deliveryRecord(seq)!!
+
+        // Force the PROJECTOR_VERSION wipe+refold path (rebuild ≡ backfill).
+        analyticsDao.setWatermark(
+            AnalyticsProjectionStateEntity(watermarkSequenceId = 0, projectorVersion = -1),
+        )
+        projector().catchUp()
+
+        assertEquals(incremental, analyticsDao.deliveryRecord(seq)!!)
     }
 
     // ── DELIVERY_ADJUSTMENT (#688) + #703 originalPayBasis ──────────────

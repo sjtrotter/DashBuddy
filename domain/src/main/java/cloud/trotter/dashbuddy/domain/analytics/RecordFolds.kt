@@ -256,6 +256,13 @@ data class FoldOutcome(
     /** A store-resolution trigger (#159) the orchestrator runs against the job's committed rows. */
     val resolution: StoreResolution? = null,
     /**
+     * A machine `DELIVERY_RECEIPT_REPRICE` decision (#1033 layer 2): the receipt was expanded after the
+     * completion was already minted off the collapsed shape, so this drop is re-priced from the
+     * itemization. Same shape as the driver corrections — the pure fold decides WHICH row and WHICH
+     * values; the orchestrator applies it by (jobId, taskId) inside the batch transaction.
+     */
+    val receiptReprice: ReceiptRepriceFold? = null,
+    /**
      * A driver DELIVERY_SESSION_ASSIGN decision (#660 piece 2): the pure fold decides WHICH row and
      * WHICH session (null ⇒ unassign), but cannot read/guard the target `delivery_record` here — the
      * orchestrator applies the re-attribution (with its fail-closed guards) inside the batch transaction.
@@ -304,6 +311,35 @@ data class DeliveryAdjustmentFold(
     val newTip: Double? = null,
     val newCashTip: Double? = null,
     val newMiles: Double? = null,
+)
+
+/**
+ * A machine receipt re-price decision (#1033 layer 2) — the pure fold's output for a
+ * `DELIVERY_RECEIPT_REPRICE`. The orchestrator looks up the row by ([jobId], [taskId]) — the state
+ * machine never sees sequence ids, which is the one structural difference from the driver-correction
+ * folds — and copies [realizedPay]/[tip]/[basePay] into it, flipping `payBasis` to
+ * [PayBasis.DROP_SHARE], recomputing net against the row's OWN frozen cpm, preserving
+ * `originalPayBasis`, and stamping `receiptRepricedAt`.
+ *
+ * [tip]/[basePay] follow the SAME sole-drop rule the completion fold uses ([soleDropOfReceipt]) — the
+ * itemization is only attributable to a drop that carries the WHOLE receipt; a stacked drop gets its
+ * apportioned share as pay and null itemization, exactly as `DeliveryFolds.foldDeliveryCompleted`
+ * would have stamped it had the expanded receipt arrived in time.
+ *
+ * Because the re-price always sequences AFTER its target's completion, a from-zero refold replays
+ * them in order and reproduces identical rows.
+ */
+data class ReceiptRepriceFold(
+    val jobId: String,
+    val taskId: String,
+    /** This drop's apportioned share of the expanded receipt. */
+    val realizedPay: Double,
+    /** `parsedPay.totalTip` when this drop IS the receipt's sole drop, else null. */
+    val tip: Double? = null,
+    /** `parsedPay.totalBasePay` under the same sole-drop rule. */
+    val basePay: Double? = null,
+    /** The event's own `occurredAt` — stamped into `delivery_records.receiptRepricedAt`. */
+    val repricedAt: Long,
 )
 
 /**
@@ -396,6 +432,7 @@ object RecordFolds {
             AppEventType.MANUAL_DELIVERY -> CorrectionFolds.foldManualDelivery(event, context, currentCostPerMile)
             AppEventType.PAY_ADJUSTMENT -> CorrectionFolds.foldPayAdjustment(event, context)
             AppEventType.DELIVERY_ADJUSTMENT -> CorrectionFolds.foldDeliveryAdjustment(event, context)
+            AppEventType.DELIVERY_RECEIPT_REPRICE -> CorrectionFolds.foldDeliveryReceiptReprice(event, context)
             AppEventType.DELIVERY_SESSION_ASSIGN -> CorrectionFolds.foldDeliverySessionAssign(event, context)
             AppEventType.OFFER_OUTCOME_CORRECTION -> CorrectionFolds.foldOfferOutcomeCorrection(event, context)
             // #810 B2 Tier 1: emit the orphan-reconcile trigger (the orchestrator runs the store-evidence
@@ -682,3 +719,16 @@ internal fun SessionFoldContext.advance(occurredAt: Long, odometer: Double?): Se
         lastEventAt = maxOf(lastEventAt, occurredAt),
         lastOdometer = odometer ?: lastOdometer,
     )
+
+/**
+ * "Does this drop carry the WHOLE receipt?" — the ONE definition of the sole-drop rule that gates
+ * per-drop tip/base itemization (#528/#1033).
+ *
+ * The apportioner stamps a share even on a single drop (its share == the receipt total), so a null
+ * share (a bare receipt with no apportionment) OR a share equal to the total is the sole-drop signal;
+ * a smaller share is a stacked drop, which has no per-drop tip split. `internal` top-level so
+ * [DeliveryFolds]'s completion mint and [CorrectionFolds]'s receipt re-price read one definition — a
+ * duplicate would let a re-priced row's itemization disagree with the mint's.
+ */
+internal fun soleDropOfReceipt(dropRealizedPay: Double?, receiptTotal: Double): Boolean =
+    dropRealizedPay == null || kotlin.math.abs(dropRealizedPay - receiptTotal) < 0.005

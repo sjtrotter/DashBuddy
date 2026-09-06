@@ -80,6 +80,15 @@ class TransitionPolicy @Inject constructor(
         graceConfig.forPlatform(platform).sessionPaySettleMs
 
     /**
+     * Collapsed-receipt retire grace for [platform] (#1033 layer 1): how long an un-itemized
+     * post-delivery receipt gets to be EXPANDED before its authoritative `TASK_RETIRE` grace commits
+     * the completion — see [GraceConfig.receiptExpandGraceMs]. An itemized (expanded) receipt keeps
+     * [authoritativeGraceMs].
+     */
+    fun receiptExpandGraceMs(platform: Platform): Long =
+        graceConfig.forPlatform(platform).receiptExpandGraceMs
+
+    /**
      * Accept-consumption grace for [platform] (#438 B3 / #762 D2): how long an accepted-pending-
      * consumption offer stays consumable by the task-edge mint. Per-platform (DoorDash 120s, Uber
      * 600s) — see [GraceConfig.acceptGraceMs].

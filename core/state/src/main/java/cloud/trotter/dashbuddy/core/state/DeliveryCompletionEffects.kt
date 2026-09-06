@@ -403,8 +403,14 @@ private fun warnIfUnsplit(job: Job, taskId: String, result: OfferPayFallback.Res
  * `endSession`'s force-stamp of an active, UNDELIVERED task at a bail — which, for a drop that had
  * already ARRIVED, would otherwise satisfy the #749 coverage arm and FORGE a completeness proof for
  * an abandoned job.
+ *
+ * `internal` since #1033: the receipt re-price ([diffReceiptReprice]) has to rebuild the SAME
+ * denominator the mint used, a step or more later. Re-spelling it there was the #1033 review's R2
+ * defect in embryo — a completion minted from the STILL-ACTIVE task (its `completedAt` is stamped
+ * only when the retire grace commits) is invisible to a naive `recentTasks + completedAt != null`
+ * scan, so the re-price found an empty denominator and silently emitted nothing.
  */
-private fun mintQualified(p: PlatformRegion, retirePending: Boolean, task: Task): Boolean =
+internal fun mintQualified(p: PlatformRegion, retirePending: Boolean, task: Task): Boolean =
     p.recentTasks.any { it.taskId == task.taskId && it.completedAt != null } ||
         (retirePending && p.activeTask?.taskId == task.taskId)
 

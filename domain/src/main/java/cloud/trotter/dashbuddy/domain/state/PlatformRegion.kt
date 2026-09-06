@@ -2,6 +2,7 @@ package cloud.trotter.dashbuddy.domain.state
 
 import kotlinx.serialization.Serializable
 
+import cloud.trotter.dashbuddy.domain.model.pay.ParsedPay
 import cloud.trotter.dashbuddy.domain.model.ratings.RatingsSnapshot
 
 /**
@@ -160,6 +161,59 @@ data class PlatformRegion(
      * reads. Default-null so existing snapshots deserialize unchanged.
      */
     val pendingSessionPay: PendingSessionPay? = null,
+    /**
+     * What the just-CLOSED job's post-delivery receipt looked like at the moment the job closed
+     * (#1033 layer 2) — the minimal marker that says "this job's `DELIVERY_COMPLETED`s have been
+     * minted, and here is the receipt they carried".
+     *
+     * `completeActiveJob` is the ONE place a job leaves the active slot, and it CLEARS
+     * [lastPostTaskFields] as it goes — which is exactly why this marker is needed: after the close
+     * there is nothing left in the region to say whether the completions were priced off an itemized
+     * receipt or off a bare/absent one. A receipt that is EXPANDED after that close (the fielded
+     * 2026-08-23 shape: collapsed → commit → expand 1.3 s late) then re-sets [lastPostTaskFields],
+     * and `EffectMap` compares it against this marker to decide whether a `DELIVERY_RECEIPT_REPRICE`
+     * is owed.
+     *
+     * **The re-price window is strictly between the close and the next job's mint** (#1033 review R1).
+     * `lastAnnouncedPostTaskTaskId` falls back to `recentTasks.lastOrNull()`, so a marker that
+     * outlived its job would let a NEXT job whose task screens were all missed anchor its receipt on
+     * the PREVIOUS job's last drop — appending that job's money as a re-price of this one. The
+     * stepper therefore clears this the moment any other job is active
+     * (`clearClosedJobReceiptOnNewJob`), and the emitter independently refuses to fire while any job
+     * is live.
+     *
+     * Derived wholly from the region's own records at the close, so it is replay-stable; cleared by
+     * `endSession` (a dash's receipt must not survive into the next one). Fail-null by construction:
+     * with no marker no re-price is ever emitted, so a close path that never stamps one (an
+     * `endSession` bail) simply keeps today's behaviour. Default-null so existing snapshots
+     * deserialize unchanged.
+     */
+    val lastClosedJobReceipt: ClosedJobReceipt? = null,
+    /**
+     * A receipt re-price decided by the stepper on THIS transition (#1033 review round 4) — see
+     * [PendingReceiptReprice]. Set by the PostTask arm of `updateSessionFields` at the same moment it
+     * updates [lastClosedJobReceipt], and cleared at the top of the next step, so it is a one-step
+     * handoff to `EffectMap` rather than durable state. Default-null so existing snapshots
+     * deserialize unchanged.
+     */
+    val pendingReceiptReprice: PendingReceiptReprice? = null,
+    /**
+     * The current job's FIRST-occurrence receipt anchors (#1033 review rounds 6–7) — see
+     * [JobReceiptAnchors]. Read at the close into [ClosedJobReceipt]; kept across that close (the
+     * receipt is still on screen after it), reset when another job becomes active, cleared at
+     * `endSession`.
+     */
+    val jobReceiptAnchors: JobReceiptAnchors? = null,
+    /**
+     * `obs.timestamp` of the last accept-latch RESOLUTION on this platform (#1033 review round 6) —
+     * the moment `OfferLifecycle` turned a latched offer into an accepted-pending-consumption
+     * survivor, whether or not a job was ever minted from it.
+     *
+     * **Never cleared by the survivor's expiry, nor by the mint** — those are exactly the events that
+     * used to make the machine forget an acceptance had happened and re-open the re-price window
+     * minutes later. Cleared only at `endSession`: an accept belongs to the dash it was taken in.
+     */
+    val lastAcceptResolvedAt: Long? = null,
 ) {
     /**
      * This platform's current PRESENTED offer — the accepted-pending-consumption survivors
@@ -170,6 +224,152 @@ data class PlatformRegion(
      */
     fun presentedOffer(): PendingOffer? = pendingOffers.lastOrNull { it.acceptedAt == null }
 }
+
+/**
+ * The receipt state of a job at the instant it closed (#1033 layer 2) — see
+ * [PlatformRegion.lastClosedJobReceipt].
+ *
+ * Deliberately NOT the receipt itself: all the re-price decision needs is "which job" and "did the
+ * completions that were just minted already carry THIS itemization". Keeping only the total + the
+ * itemized flag also keeps the marker cheap to serialize into every snapshot.
+ */
+@Serializable
+data class ClosedJobReceipt(
+    /** The job whose completions were minted at this close. */
+    val jobId: String,
+    /**
+     * When this job's receipt FIRST appeared on screen ([JobReceiptAnchors.firstEnteredAt] at the
+     * close) — the anchor for the ONE ownership question the machine can actually answer (#1033
+     * review round 6).
+     *
+     * **A receipt carries no job identity.** Rounds 2–5 each tried a heuristic to decide whether a
+     * late-arriving itemization belonged to the closed job — the announce anchor (which falls back to
+     * `recentTasks.lastOrNull()`), an accepted-since flag, a same-total match — and every one of them
+     * leaked, because none of them is evidence about the receipt itself. What IS knowable is
+     * temporal: while no acceptance has resolved since this receipt appeared, no other job can exist
+     * to own a receipt, so the frame must be a re-render of this one's. The moment an acceptance
+     * resolves, that guarantee is gone and nothing on a later frame restores it.
+     *
+     * So the rule is exactly: re-price while
+     * `lastAcceptResolvedAt == null || lastAcceptResolvedAt < receiptSeenAt`. FIRST appearance, not
+     * latest (round 7): moving the cutoff forward on a re-entry admits MORE receipts, because fewer
+     * accepts then satisfy the comparison — an accept resolved during an offer overlay would be
+     * stepped straight over. There is deliberately NO same-total exception — a total is not identity,
+     * and it let a stacked job's $20 receipt redistribute the closed job's drops ($5/$15 over a real
+     * $10/$10) and install a foreign tip/base split.
+     *
+     * **Documented consequence (fail-null, #745):** the stacked shape — accept the next offer while
+     * this receipt is up, then expand it LATE — is refused. Layer 1's 8 s collapsed-receipt window is
+     * the path that lands that expansion; an expansion later than that keeps the #691 `OFFER_PAY`
+     * estimate. Null (no PostTask entry known at the close) refuses everything, same direction.
+     */
+    val receiptSeenAt: Long? = null,
+    /**
+     * How many times this job's drops have been re-priced (#1033 review round 6). Bumped on every
+     * admitted decision and carried into the emitted effect key
+     * (`log:DELIVERY_RECEIPT_REPRICE:<taskId>:<jobId>:r<n>`).
+     *
+     * The key USED to fold in the receipt's own hash, which made an X → Y → X itemization sequence
+     * collide with its own first event: the durable `effects_fired` idempotency dropped the third
+     * emission, so the row stayed at Y while this marker said X. A monotonic revision cannot repeat,
+     * so the row always follows the marker.
+     */
+    val repriceRevision: Int = 0,
+    /**
+     * The itemization this marker's LAST decision was made from (#1033 review round 8) — the only
+     * thing the stepper suppresses on, compared STRUCTURALLY (round 10).
+     *
+     * It was a `hashCode()` for one round, which silently swallowed a real correction: base $2.05 +
+     * tip $5.50 and base $2.00 + tip $5.60 collide on Kotlin's `-1866903064`, so the second receipt
+     * read as "already decided" and the row kept $7.55. `ParsedPay` is `@Serializable` and a data
+     * class, so keeping the value itself costs a few bytes of snapshot and cannot alias.
+     *
+     * **The marker deliberately does NOT model what the completion rows hold.** It tried, through
+     * rounds 6–7, and both attempts failed toward refusing a legitimate correction: mirroring the
+     * mint's exit edge does not mirror its task-eligibility/final-shape filtering, and one task's
+     * first completion cannot describe a multi-drop job at all. The stepper cannot know what
+     * persisted — the projector can, and that is where "already priced" now lives
+     * (`AnalyticsProjector.applyReceiptReprice` compares the row and no-ops).
+     *
+     * What is left here is the narrow, honest thing the stepper DOES know: whether it has already
+     * decided this exact itemization, so a receipt frame re-rendering unchanged does not spend a
+     * revision. A post-close expanded receipt whose itemization the mint already carried therefore
+     * emits one redundant event per drop — "the receipt says X" — which the apply resolves to a
+     * no-op. Cheap, and it cannot lose a correction.
+     */
+    val lastDecidedPay: ParsedPay? = null,
+)
+
+/**
+ * The current job's receipt ownership anchor, which must describe the job's **FIRST** occurrence
+ * rather than its latest (#1033 review round 7).
+ *
+ * Created on the job's first `PostTask` ENTRY, reset when any other job becomes active, cleared at
+ * `endSession`.
+ */
+@Serializable
+data class JobReceiptAnchors(
+    /** The job that owned the flow when the receipt first appeared; null if it had already closed. */
+    val jobId: String?,
+    /**
+     * `obs.timestamp` of the job's FIRST entry into `PostTask` — when its receipt first appeared.
+     *
+     * **Not the latest entry.** Leaving the receipt for an offer overlay and coming back is a
+     * re-entry, and re-stamping there moved the ownership cutoff FORWARD — which admits MORE
+     * receipts, because fewer accepts then satisfy `acceptResolvedAt >= receiptSeenAt`. An accept
+     * that resolved during the overlay would have been stepped over entirely.
+     */
+    val firstEnteredAt: Long,
+    /**
+     * Has this job's flow left `PostTask` at least once — i.e. has the completion mint RUN for it?
+     * (#1033 review round 10.)
+     *
+     * A purely structural fact about the flow; deliberately NOT a claim about what any completion
+     * carried (round 8 deleted that, twice burnt). Its one use is the terminal-session teardown,
+     * which must tell a drop whose completion was already emitted on an earlier PostTask exit — and
+     * so has a row to correct — from one the bail is force-completing right now, which has none. A
+     * mistake in either direction is caught downstream: the projector's by-(jobId, taskId) lookup
+     * finds no row and counts a skip.
+     */
+    val exitedPostTask: Boolean = false,
+)
+
+/**
+ * A receipt re-price the stepper DECIDED on this transition, handed to `EffectMap` to emit (#1033
+ * review round 4).
+ *
+ * UDF: the decision is pure state (the stepper owns "is this receipt this job's, and is it owed a
+ * re-price"), the effect diff only reports what was decided. The alternative — deciding inside
+ * `EffectMap.diffReceiptReprice` — is what made the round-3 defects unfixable in place: an effect
+ * diff cannot update [ClosedJobReceipt] as it emits, so the marker could never learn that the job
+ * had just been re-priced.
+ *
+ * A **one-step handoff**: the stepper clears it at the top of the very next transition, before
+ * anything else, so it describes exactly one step. `@Serializable` because it can be caught in a
+ * snapshot mid-flight; on restore the next step's top-of-step clear drops it, so a restored value
+ * can never re-emit (the effect diff also requires it to have CHANGED).
+ */
+@Serializable
+data class PendingReceiptReprice(
+    /** The closed job whose delivered drops are being re-priced. */
+    val jobId: String,
+    /** The late-expanded receipt itself — rides the payload verbatim. */
+    val parsedPay: ParsedPay,
+    /** `taskId -> this drop's apportioned share`; Σ == `parsedPay.total` to the cent. */
+    val shares: Map<String, Double>,
+    /**
+     * The deciding observation's `obs.timestamp` — the emitted events' `occurredAt`. Carried
+     * explicitly rather than read back off the region, so the emission is `obs`-driven and
+     * replay-stable exactly as it was when the diff still saw the observation.
+     */
+    val decidedAt: Long,
+    /**
+     * [ClosedJobReceipt.repriceRevision] AFTER this decision — the effect key's uniqueness carrier.
+     */
+    val revision: Int,
+    /** The capture the expanded receipt was read from, when the observation carried one (debug). */
+    val sourceCaptureId: String? = null,
+)
 
 /**
  * A dash running-total read waiting out its settle window (#1029).

@@ -381,7 +381,23 @@ internal fun PlatformRegionStepper.updateTaskLifecycle(
     // dashing" (single-slot pending — noted on the issue).
     val postTask = region.activeTask
     if (nextFlowVal == Flow.PostTask && postTask != null) {
-        val newDeadline = obs.timestamp + policy.authoritativeGraceMs(region.platform)
+        // #1033 layer 1: a COLLAPSED receipt (`parsedPay == null`) states a total and nothing else,
+        // so a completion committed off one is priced by the #691 OFFER_PAY estimate rather than by
+        // the receipt. Give that shape — and ONLY that shape — the longer
+        // [TransitionPolicy.receiptExpandGraceMs] so the expansion (dasher tap or the app's own
+        // EXPAND_EARNINGS tap) has time to land in `lastPostTaskFields` before the commit reads it.
+        // An EXPANDED frame keeps the 2.5 s authoritative window and, via the `minOf` below, TIGHTENS
+        // a collapsed frame's wider deadline the moment it arrives — so the itemized path is
+        // unchanged and a receipt that never expands costs at most the extra window. A PostTask frame
+        // whose parse is not a receipt at all (`ParsedFields.None`) is not evidence of a collapsed
+        // receipt and keeps the authoritative window (fail toward the pre-#1033 timing).
+        val armingReceipt = obs.parsed as? ParsedFields.PostTaskFields
+        val graceMs = if (armingReceipt != null && armingReceipt.parsedPay == null) {
+            policy.receiptExpandGraceMs(region.platform)
+        } else {
+            policy.authoritativeGraceMs(region.platform)
+        }
+        val newDeadline = obs.timestamp + graceMs
         val existing = region.pendingDestructive
         val pend = if (existing?.kind == DestructiveKind.TASK_RETIRE) {
             // Already armed (idle-grace, or an earlier receipt frame) —
