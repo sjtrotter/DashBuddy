@@ -461,7 +461,13 @@ class AnalyticsProjector @Inject constructor(
      *    hydration still reads the FIRST-fold basis.
      *  - **Cash, store keys, mileage and every other column are untouched.**
      *
-     * Two fail-closed guards, each a counted skip:
+     * Three guards, each a counted skip:
+     *  0. **Already priced** — the row already holds exactly these values on a `DROP_SHARE` basis, so
+     *     the re-price is redundant (the completion mint carried the same itemization). Skipped
+     *     WITHOUT a rewrite, so no `receiptRepricedAt` is stamped for a correction that corrected
+     *     nothing. This is where "already priced" lives since round 8: the state machine cannot know
+     *     which completions persisted, and its two attempts to model it both refused legitimate
+     *     corrections.
      *  1. **Target row exists** (a re-price whose completion was never folded — the mid-stack shape
      *     where the mint is still pending — leaves nothing to do; the pending mint will carry the
      *     itemization itself).
@@ -494,6 +500,23 @@ class AnalyticsProjector @Inject constructor(
             )
             return true
         }
+        // #1033 round 8: "already priced" is answered HERE, against the row itself — the state
+        // machine cannot know which completions actually persisted (it tried, through two review
+        // rounds, and both attempts refused legitimate corrections). A re-price whose values the row
+        // already holds is a no-op: no rewrite, so no `receiptRepricedAt` churn either. Refold-stable
+        // by construction — the comparison sees the same rows on a from-zero refold.
+        if (row.payBasis == PayBasis.DROP_SHARE &&
+            sameCents(row.realizedPay, adj.realizedPay) &&
+            sameCents(row.tip, adj.tip) &&
+            sameCents(row.basePay, adj.basePay)
+        ) {
+            // P7: ids + cents only.
+            Timber.tag(TAG).d(
+                "DELIVERY_RECEIPT_REPRICE: row %d already holds %d¢ — no-op",
+                row.eventSequenceId, Math.round(adj.realizedPay * 100.0),
+            )
+            return true
+        }
         val net = if (row.frozenCostPerMile != null && row.realizedMiles != null) {
             NetProfit.net(adj.realizedPay, row.realizedMiles!!, row.frozenCostPerMile!!)
         } else {
@@ -511,6 +534,13 @@ class AnalyticsProjector @Inject constructor(
             ),
         )
         return false
+    }
+
+    /** Cent-exact equality for two nullable money figures; two nulls are equal. */
+    private fun sameCents(a: Double?, b: Double?): Boolean = when {
+        a == null && b == null -> true
+        a == null || b == null -> false
+        else -> Math.round(a * 100.0) == Math.round(b * 100.0)
     }
 
     /**

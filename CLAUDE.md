@@ -1347,10 +1347,16 @@ posture as the driver ones: the original `DELIVERY_COMPLETED` is never rewritten
 (a stacked receipt re-prices every sibling), with shares from the SAME `DropPayApportioner.apportion`
 over the SAME `Task.isAccountableDropoff` denominator the mint uses, so `Σ dropRealizedPay ==
 parsedPay.total` to the cent; idempotent per `(taskId, parsedPay.hashCode())` via the `effects_fired`
-key. It can fire at all only because of ONE marker: `completeActiveJob` CLEARS `lastPostTaskFields`, so the
-region alone cannot say what the completions carried — `PlatformRegion.lastClosedJobReceipt` (jobId +
-totalPay + `itemized` + `receiptSeenAt` + `repriceRevision`, stamped at that one close site, cleared
-by `endSession`) records exactly that, and an itemized completion at the same total emits nothing.
+key. It can fire at all only because of ONE marker: `PlatformRegion.lastClosedJobReceipt` (jobId +
+`receiptSeenAt` + `repriceRevision` + `lastDecidedPayHash`, stamped at that one close site, cleared by
+`endSession`). The marker deliberately does NOT model what the completion ROWS hold — it tried
+through two review rounds and both attempts failed toward REFUSING a legitimate correction (mirroring
+the mint's exit edge misses its eligibility/final-shape filtering; one task's first completion cannot
+describe a multi-drop job). The stepper suppresses only its OWN repeated decision
+(`lastDecidedPayHash`), so a receipt whose itemization the mint already carried emits a redundant
+"the receipt says X" event that **`AnalyticsProjector.applyReceiptReprice` resolves to a no-op** by
+comparing the row (no rewrite, so no `receiptRepricedAt` churn). "Already priced" is the projector's
+question: the stepper cannot know which completions persisted, the projector can just look.
 **The decision is a pure STEPPER transition, not an effect diff** (`decideReceiptReprice`, in
 `updateSessionFields`' PostTask arm): it must update the marker atomically as it decides, which an
 effect diff cannot do — `EffectMap.diffReceiptReprice` only reports the one-step

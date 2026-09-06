@@ -238,14 +238,6 @@ data class ClosedJobReceipt(
     /** The job whose completions were minted at this close. */
     val jobId: String,
     /**
-     * What the job's rows actually hold: [JobReceiptAnchors.firstCompletion]'s total at the close
-     * (the completion that DID persist — see that field), else the receipt on file; then whatever a
-     * re-price last wrote.
-     */
-    val totalPay: Double? = null,
-    /** True once the rows hold an itemized receipt — from that first completion, or a later re-price. */
-    val itemized: Boolean = false,
-    /**
      * When this job's receipt FIRST appeared on screen ([JobReceiptAnchors.firstEnteredAt] at the
      * close) — the anchor for the ONE ownership question the machine can actually answer (#1033
      * review round 6).
@@ -262,10 +254,9 @@ data class ClosedJobReceipt(
      * `lastAcceptResolvedAt == null || lastAcceptResolvedAt < receiptSeenAt`. FIRST appearance, not
      * latest (round 7): moving the cutoff forward on a re-entry admits MORE receipts, because fewer
      * accepts then satisfy the comparison — an accept resolved during an offer overlay would be
-     * stepped straight over. There is deliberately
-     * NO same-total exception — a total is not identity, and it let a stacked job's $20 receipt
-     * redistribute the closed job's drops ($5/$15 over a real $10/$10) and install a foreign
-     * tip/base split.
+     * stepped straight over. There is deliberately NO same-total exception — a total is not identity,
+     * and it let a stacked job's $20 receipt redistribute the closed job's drops ($5/$15 over a real
+     * $10/$10) and install a foreign tip/base split.
      *
      * **Documented consequence (fail-null, #745):** the stacked shape — accept the next offer while
      * this receipt is up, then expand it LATE — is refused. Layer 1's 8 s collapsed-receipt window is
@@ -281,19 +272,35 @@ data class ClosedJobReceipt(
      * The key USED to fold in the receipt's own hash, which made an X → Y → X itemization sequence
      * collide with its own first event: the durable `effects_fired` idempotency dropped the third
      * emission, so the row stayed at Y while this marker said X. A monotonic revision cannot repeat,
-     * so the row always follows the marker. Consecutive IDENTICAL receipts are still suppressed
-     * earlier and more cheaply, by the already-priced check.
+     * so the row always follows the marker.
      */
     val repriceRevision: Int = 0,
+    /**
+     * The itemization this marker's LAST decision was made from (#1033 review round 8) — the only
+     * thing the stepper suppresses on.
+     *
+     * **The marker deliberately does NOT model what the completion rows hold.** It tried, through
+     * rounds 6–7, and both attempts failed toward refusing a legitimate correction: mirroring the
+     * mint's exit edge does not mirror its task-eligibility/final-shape filtering, and one task's
+     * first completion cannot describe a multi-drop job at all. The stepper cannot know what
+     * persisted — the projector can, and that is where "already priced" now lives
+     * (`AnalyticsProjector.applyReceiptReprice` compares the row and no-ops).
+     *
+     * What is left here is the narrow, honest thing the stepper DOES know: whether it has already
+     * decided this exact itemization, so a receipt frame re-rendering unchanged does not spend a
+     * revision. A post-close expanded receipt whose itemization the mint already carried therefore
+     * emits one redundant event per drop — "the receipt says X" — which the apply resolves to a
+     * no-op. Cheap, and it cannot lose a correction.
+     */
+    val lastDecidedPayHash: Int? = null,
 )
 
 /**
- * The current job's receipt anchors, both of which must describe the job's **FIRST** occurrence of
- * something rather than its latest (#1033 review round 7 — both round-6 defects were the same shape:
- * an anchor that has to freeze being overwritten by a later occurrence).
+ * The current job's receipt ownership anchor, which must describe the job's **FIRST** occurrence
+ * rather than its latest (#1033 review round 7).
  *
- * Created on the job's first `PostTask` ENTRY, completed on its first `PostTask` EXIT, reset when any
- * other job becomes active, cleared at `endSession`.
+ * Created on the job's first `PostTask` ENTRY, reset when any other job becomes active, cleared at
+ * `endSession`.
  */
 @Serializable
 data class JobReceiptAnchors(
@@ -308,26 +315,6 @@ data class JobReceiptAnchors(
      * that resolved during the overlay would have been stepped over entirely.
      */
     val firstEnteredAt: Long,
-    /**
-     * What the job's FIRST emitted `DELIVERY_COMPLETED` carried — captured on its first `PostTask`
-     * EXIT, the edge `DeliveryCompletionEffects` mints on.
-     *
-     * **Not the receipt at close.** The completion's durable idempotency key is
-     * `log:DELIVERY_COMPLETED:<taskId>`, so the FIRST emission is the one that persists and every
-     * re-emission on a later exit is dropped by `effects_fired`. A marker built from the receipt as
-     * it stood at the CLOSE therefore described a completion that was never written: an offer overlay
-     * that pops the receipt mints the un-itemized completion, the receipt returns EXPANDED, the close
-     * records "itemized $20" — and the row stays un-itemized forever, with every later $20 frame
-     * dismissed as already priced.
-     */
-    val firstCompletion: FirstCompletion? = null,
-)
-
-/** What a job's first emitted completion carried — see [JobReceiptAnchors.firstCompletion]. */
-@Serializable
-data class FirstCompletion(
-    val totalPay: Double? = null,
-    val itemized: Boolean = false,
 )
 
 /**

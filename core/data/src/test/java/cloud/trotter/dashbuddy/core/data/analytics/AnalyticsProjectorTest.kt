@@ -766,6 +766,33 @@ class AnalyticsProjectorTest {
         )
     }
 
+    /** A job whose completion already carried the itemization → the row folds DROP_SHARE at $16.70. */
+    private suspend fun seedReceiptedJob(sid: String = "S1"): Long {
+        insert(
+            AppEventType.DASH_START, sid, 1_000,
+            SessionStartPayload(sid, Platform.DoorDash.name, 1_000, SessionStartSource.INTERACTION, "x"),
+            odometer = 100.0,
+        )
+        insert(
+            AppEventType.OFFER_ACCEPTED, sid, 2_000,
+            OfferPayload(
+                offerHash = "h1",
+                parsedOffer = ParsedOffer(offerHash = "h1", payAmount = 12.0, distanceMiles = 3.0),
+                evaluation = eval(0.25), outcome = AppEventType.OFFER_ACCEPTED,
+                presentedAt = 1_970, decidedAt = 2_000, returnFlow = Flow.Idle,
+            ),
+        )
+        return insert(
+            AppEventType.DELIVERY_COMPLETED, sid, 3_000,
+            DeliveryPayload(
+                jobId = "J1", taskId = "T1", storeName = "StoreX", customerHash = "c1",
+                phaseStartedAt = 2_400, completedAt = 3_000,
+                totalPay = 16.70, parsedPay = lateReceipt, dropRealizedPay = 16.70,
+            ),
+            odometer = 105.0,
+        )
+    }
+
     private val lateReceipt = ParsedPay(
         appPayComponents = listOf(ParsedPayItem("Base Pay", 9.70)),
         customerTips = listOf(ParsedPayItem("StoreX", 7.00)),
@@ -862,6 +889,45 @@ class AnalyticsProjectorTest {
         assertEquals(21.0, d.realizedPay!!, 1e-9)
         assertEquals("USER_CORRECTED", d.payBasis)
         assertNull("the re-price was skipped, so no marker", d.receiptRepricedAt)
+    }
+
+    @Test
+    fun `a REDUNDANT re-price is a no-op at the projector — no rewrite, no marker (#1033 round 8)`() = runBlocking {
+        // The mint already carried this itemization, so the row is already DROP_SHARE at these
+        // values. Since round 8 the stepper no longer tries to know that (two rounds of fail-null) —
+        // it emits, and the apply compares the row and skips WITHOUT rewriting it, so no
+        // `receiptRepricedAt` is stamped for a correction that corrected nothing.
+        val seq = seedReceiptedJob()
+        projector().catchUp()
+        val before = analyticsDao.deliveryRecord(seq)!!
+        assertEquals("DROP_SHARE", before.payBasis)
+        assertNull(before.receiptRepricedAt)
+
+        insertReprice(at = 3_400)
+        projector().catchUp()
+
+        assertEquals("byte-identical — the apply never touched it", before, analyticsDao.deliveryRecord(seq)!!)
+    }
+
+    @Test
+    fun `a re-price that CHANGES the row still applies after a redundant one (#1033 round 8)`() = runBlocking {
+        val seq = seedReceiptedJob()
+        projector().catchUp()
+        insertReprice(at = 3_400) // redundant → no-op
+        projector().catchUp()
+        assertNull(analyticsDao.deliveryRecord(seq)!!.receiptRepricedAt)
+
+        val updated = ParsedPay(
+            appPayComponents = listOf(ParsedPayItem("Base Pay", 9.70)),
+            customerTips = listOf(ParsedPayItem("StoreX", 10.30)),
+        )
+        insertReprice(at = 3_500, share = 20.00, pay = updated)
+        projector().catchUp()
+
+        val d = analyticsDao.deliveryRecord(seq)!!
+        assertEquals(20.00, d.realizedPay!!, 1e-9)
+        assertEquals(10.30, d.tip!!, 1e-9)
+        assertEquals(3_500L, d.receiptRepricedAt)
     }
 
     @Test

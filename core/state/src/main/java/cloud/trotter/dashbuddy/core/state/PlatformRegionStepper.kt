@@ -5,7 +5,6 @@ import cloud.trotter.dashbuddy.domain.pipeline.Observation
 import cloud.trotter.dashbuddy.domain.pipeline.TimeoutType
 import cloud.trotter.dashbuddy.domain.state.DestructiveKind
 import cloud.trotter.dashbuddy.domain.state.ClosedJobReceipt
-import cloud.trotter.dashbuddy.domain.state.FirstCompletion
 import cloud.trotter.dashbuddy.domain.state.JobReceiptAnchors
 import cloud.trotter.dashbuddy.domain.state.Flow
 import cloud.trotter.dashbuddy.domain.state.FlowRegion
@@ -688,26 +687,6 @@ class PlatformRegionStepper @Inject constructor() {
 
         // (Ratings stamping moved to stepCore, ahead of this function's early returns — #967.)
 
-        // #1033 review round 7: what the job's FIRST emitted `DELIVERY_COMPLETED` carried. Mirrors
-        // `DeliveryCompletionEffects`' PostTask-exit mint predicate exactly, and runs BEFORE
-        // `updateJobLifecycle` can close the job (which reads this). The completion's durable key is
-        // per-taskId, so the FIRST emission is the one that persists — a marker built from the
-        // receipt as it stood at the CLOSE would describe a completion that was never written. Only
-        // when absent, and reset with the job.
-        if (prev == Flow.PostTask && next != Flow.PostTask) {
-            val anchors = r.jobReceiptAnchors
-            if (anchors != null && anchors.firstCompletion == null) {
-                r = r.copy(
-                    jobReceiptAnchors = anchors.copy(
-                        firstCompletion = FirstCompletion(
-                            totalPay = r.lastPostTaskFields?.totalPay,
-                            itemized = r.lastPostTaskFields?.parsedPay != null,
-                        ),
-                    ),
-                )
-            }
-        }
-
         // Job lifecycle
         r = updateJobLifecycle(r, prev, next, obs, policy)
 
@@ -1140,10 +1119,6 @@ class PlatformRegionStepper @Inject constructor() {
 
     internal fun completeActiveJob(region: PlatformRegion): PlatformRegion {
         val job = region.activeJob ?: return region
-        // What the job's FIRST completion carried — the emission that actually persisted under the
-        // per-taskId `effects_fired` key (#1033 round 7); the receipt on file only when no completion
-        // was ever minted (a receipt-skip close).
-        val firstCompletion = region.jobReceiptAnchors?.firstCompletion
         return region.copy(
             activeJob = null,
             lastPostTaskPayHash = null,
@@ -1154,13 +1129,12 @@ class PlatformRegionStepper @Inject constructor() {
             // both read `lastPostTaskFields` from the PRE-step region — so this marker is exactly
             // what those payloads carried. Without it a receipt EXPANDED after the close cannot be
             // told apart from a re-render of one the completions already priced off.
-            // #1033 rounds 6–7: both halves come from the job's FIRST occurrences, never its latest.
-            // The anchors are deliberately NOT cleared here — the receipt is still on screen after
-            // the close, and a later expansion is judged against them.
+            // #1033 rounds 6–8: the marker carries the OWNERSHIP anchor and nothing about what the
+            // rows hold — modelling that was two rounds of fail-null, and the projector can just look.
+            // The anchor is deliberately NOT cleared here: the receipt is still on screen after the
+            // close, and a later expansion is judged against it.
             lastClosedJobReceipt = ClosedJobReceipt(
                 jobId = job.jobId,
-                totalPay = firstCompletion?.totalPay ?: region.lastPostTaskFields?.totalPay,
-                itemized = firstCompletion?.itemized ?: (region.lastPostTaskFields?.parsedPay != null),
                 receiptSeenAt = region.jobReceiptAnchors?.firstEnteredAt,
             ),
         )

@@ -64,11 +64,14 @@ internal fun PlatformRegionStepper.decideReceiptReprice(
     // has already dropped a marker belonging to some OTHER job).
     if (region.activeJob != null) return region
 
-    // Nothing is owed when the rows already hold THIS itemization. The marker is the only thing that
-    // can tell that apart from a genuinely late expansion, because the close cleared the receipt out
-    // of the region — and since round 4 it also tracks re-prices, so a re-render of a receipt this
-    // job was ALREADY re-priced from is a no-op rather than a second event.
-    if (mark.itemized && centsEqual(mark.totalPay, parsed.totalPay)) return region
+    // The ONE thing the stepper suppresses on: its own last decision (#1033 review round 8). A
+    // receipt frame re-rendering unchanged must not spend a revision. It deliberately does NOT try to
+    // model what the completion ROWS hold — rounds 6–7 did, and both attempts failed toward refusing
+    // a legitimate correction (mirroring the mint's exit edge misses its eligibility/final-shape
+    // filtering; one task's first completion cannot describe a multi-drop job). The stepper cannot
+    // know what persisted; the projector can, and `applyReceiptReprice` no-ops a re-price whose
+    // values the row already holds. A redundant event is cheap; a refused correction is not.
+    if (parsedPay.hashCode() == mark.lastDecidedPayHash) return region
 
     // OWNERSHIP, and this is the whole of it (#1033 review round 6).
     //
@@ -123,21 +126,14 @@ internal fun PlatformRegionStepper.decideReceiptReprice(
             revision = revision,
             sourceCaptureId = captureId,
         ),
-        // ATOMIC with the decision: from here the marker describes what the ROWS hold, not what the
-        // completion originally carried — and the revision it was written at, which is what keeps the
-        // emitted events distinct across an X → Y → X itemization sequence.
+        // ATOMIC with the decision: the revision the events are keyed at (which keeps an X → Y → X
+        // itemization sequence's three emissions distinct), and the itemization this decision was
+        // made from, so an unchanged re-render does not spend another revision.
         lastClosedJobReceipt = mark.copy(
-            totalPay = parsed.totalPay,
-            itemized = true,
             repriceRevision = revision,
+            lastDecidedPayHash = parsedPay.hashCode(),
         ),
     )
-}
-
-/** Cent-exact equality for two money figures; a null figure equals nothing. */
-private fun centsEqual(a: Double?, b: Double?): Boolean {
-    if (a == null || b == null) return false
-    return Math.round(a * 100.0) == Math.round(b * 100.0)
 }
 
 /**

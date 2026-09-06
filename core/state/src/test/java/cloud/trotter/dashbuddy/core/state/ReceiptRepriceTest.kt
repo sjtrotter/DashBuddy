@@ -186,9 +186,7 @@ class ReceiptRepriceTest {
     /** The region as it stands AFTER the collapsed receipt's grace committed and closed the job. */
     private fun closedJobRegion(
         drops: List<Task> = listOf(dropoff("t1", "Bill Millers")),
-        mark: ClosedJobReceipt? = ClosedJobReceipt(
-            jobId = "J1", totalPay = 16.70, itemized = false, receiptSeenAt = 9_000L,
-        ),
+        mark: ClosedJobReceipt? = ClosedJobReceipt(jobId = "J1", receiptSeenAt = 9_000L),
         announceId: String? = "t1",
         acceptResolvedAt: Long? = null,
     ) = PlatformRegion(
@@ -250,9 +248,7 @@ class ReceiptRepriceTest {
         )
         val region = closedJobRegion(
             drops = listOf(dropoff("t1", "Bill Millers"), dropoff("t2", "Maple Street")),
-            mark = ClosedJobReceipt(
-                jobId = "J1", totalPay = stackedReceipt.total, itemized = false, receiptSeenAt = 9_000L,
-            ),
+            mark = ClosedJobReceipt(jobId = "J1", receiptSeenAt = 9_000L),
         )
         val events = repriceEvents(region, parsed = expanded(stackedReceipt))
         assertEquals("one event per delivered drop", 2, events.size)
@@ -265,23 +261,20 @@ class ReceiptRepriceTest {
     }
 
     @Test
-    fun `no re-price when the completion already carried this itemization`() {
-        val region = closedJobRegion(
-            mark = ClosedJobReceipt(
-                jobId = "J1", totalPay = receipt.total, itemized = true, receiptSeenAt = 9_000L,
-            ),
-        )
-        assertTrue(repriceEvents(region).isEmpty())
+    fun `a receipt whose itemization the MINT already carried still emits — the projector no-ops it`() {
+        // Round 8: the stepper stopped modelling what the rows hold (two rounds of fail-null). A
+        // redundant "the receipt says X" event is honest and cheap; `applyReceiptReprice` compares the
+        // row and skips without rewriting it.
+        assertEquals(1, repriceEvents(closedJobRegion()).size)
     }
 
     @Test
-    fun `an itemized completion at a DIFFERENT total still re-prices`() {
-        val region = closedJobRegion(
-            mark = ClosedJobReceipt(
-                jobId = "J1", totalPay = 12.00, itemized = true, receiptSeenAt = 9_000L,
-            ),
-        )
-        assertEquals(1, repriceEvents(region).size)
+    fun `the stepper suppresses only its OWN repeated decision`() {
+        val region = closedJobRegion()
+        val obs = postTaskObs(expanded(), 21_000L)
+        val after = stepper.step(region, FlowRegion(flow = Flow.PostTask), FlowRegion(flow = Flow.PostTask), obs, policy)
+        assertEquals(receipt.hashCode(), after.lastClosedJobReceipt!!.lastDecidedPayHash)
+        assertEquals(1, after.lastClosedJobReceipt!!.repriceRevision)
     }
 
     @Test
@@ -447,8 +440,7 @@ class ReceiptRepriceTest {
         // `updateSessionFields` stores this frame's expanded parse and decides the re-price. The
         // marker therefore ends the step already updated to the expanded figures.
         assertEquals("the same frame re-priced it", 1, next.lastClosedJobReceipt!!.repriceRevision)
-        assertTrue(next.lastClosedJobReceipt!!.itemized)
-        assertEquals(16.70, next.lastClosedJobReceipt!!.totalPay!!, 0.0001)
+        assertEquals(receipt.hashCode(), next.lastClosedJobReceipt!!.lastDecidedPayHash)
 
         val logged = effectMap
             .diff(appState(afterReceipt, Flow.PostTask), appState(next, Flow.PostTask), obs)
@@ -689,17 +681,16 @@ class ReceiptRepriceTest {
         )
         fold.step(postTaskObs(expanded(updated), 20_000L)) // re-price #2 → $20.00
         assertEquals(2, fold.reprices().size)
-        assertEquals(20.00, fold.region.lastClosedJobReceipt!!.totalPay!!, 0.0001)
+        assertEquals(2, fold.region.lastClosedJobReceipt!!.repriceRevision)
 
         fold.step(offerObs(21_000L, "hash-B"))
             .step(acceptClick(22_000L))
             .step(postTaskObs(expanded(), 23_000L)) // B's receipt totals the ORIGINAL $16.70
         assertEquals("no third re-price", 2, fold.reprices().size)
         assertEquals(
-            "A stays at the corrected \$20.00",
-            20.00,
-            fold.region.lastClosedJobReceipt!!.totalPay!!,
-            0.0001,
+            "A's last decision stands — nothing re-priced it back down",
+            2,
+            fold.region.lastClosedJobReceipt!!.repriceRevision,
         )
     }
 
@@ -775,15 +766,50 @@ class ReceiptRepriceTest {
         assertEquals("so exactly one row is written", 1, persisted.size)
         assertNull("…un-itemized", (persisted.single().payload as DeliveryPayload).parsedPay)
 
-        val mark = fold.region.lastClosedJobReceipt!!
-        assertTrue("the marker must NOT claim the row is itemized", !mark.itemized)
-        assertEquals("it describes the completion that persisted", 16.70, mark.totalPay!!, 0.0001)
+        // Round 8: the marker no longer claims anything about what the rows hold, so the close cannot
+        // suppress the correction that is still owed.
+        assertNull("the close made no decision", fold.region.lastClosedJobReceipt!!.lastDecidedPayHash)
 
-        // …so the next $20 frame is what carries the itemization to the row.
+        // …and the next $20 frame is what carries the itemization to the row.
         val before = fold.reprices().size
         fold.step(postTaskObs(expanded(updated), 15_000L))
         assertEquals("the expanded receipt re-prices", before + 1, fold.reprices().size)
-        assertEquals(20.00, fold.region.lastClosedJobReceipt!!.totalPay!!, 0.0001)
+        assertEquals(
+            20.00,
+            (fold.reprices().last().payload as DeliveryReceiptRepricePayload).totalPay,
+            0.0001,
+        )
+    }
+
+    @Test
+    fun `round 8 — a two-drop job's late receipt apportions across BOTH rows`() {
+        // One task's completion cannot describe a multi-drop job — which is why the marker stopped
+        // trying. The whole-job receipt re-prices every delivered drop, $10/$10, under distinct
+        // durable keys.
+        val stacked = ParsedPay(
+            appPayComponents = listOf(ParsedPayItem("Base Pay", 4.00)),
+            customerTips = listOf(
+                ParsedPayItem("Bill Millers", 8.00),
+                ParsedPayItem("Maple Street", 8.00),
+            ),
+        )
+        val region = closedJobRegion(
+            drops = listOf(dropoff("t1", "Bill Millers"), dropoff("t2", "Maple Street")),
+        )
+        val fold = Fold(region).step(postTaskObs(expanded(stacked), 21_000L))
+
+        val payloads = fold.reprices().map { it.payload as DeliveryReceiptRepricePayload }
+        assertEquals("one event per delivered drop", 2, payloads.size)
+        assertEquals(setOf("t1", "t2"), payloads.map { it.taskId }.toSet())
+        payloads.forEach { assertEquals(10.00, it.dropRealizedPay, 0.0001) }
+        assertEquals(
+            "Σ shares == the receipt total",
+            Math.round(stacked.total * 100.0),
+            payloads.sumOf { Math.round(it.dropRealizedPay * 100.0) },
+        )
+        // The fake durable table: one key per drop, so both rows are written.
+        val fired = mutableSetOf<String?>()
+        assertEquals(2, fold.effectKeys.count { fired.add(it) })
     }
 
     // ---- revision keying + the handoff ---------------------------------------------------
@@ -816,7 +842,11 @@ class ReceiptRepriceTest {
             ),
             fold.effectKeys,
         )
-        assertEquals("the marker ends where the row does", 16.70, fold.region.lastClosedJobReceipt!!.totalPay!!, 0.0001)
+        assertEquals(
+            "the marker's last decision is X again",
+            receipt.hashCode(),
+            fold.region.lastClosedJobReceipt!!.lastDecidedPayHash,
+        )
         assertEquals(3, fold.region.lastClosedJobReceipt!!.repriceRevision)
     }
 
@@ -942,7 +972,7 @@ class ReceiptRepriceTest {
         val mark = afterCommit.lastClosedJobReceipt
         assertNotNull(mark)
         assertEquals("J1", mark!!.jobId)
-        assertEquals(16.70, mark.totalPay!!, 0.0001)
-        assertTrue("the completions were priced off an UN-itemized receipt", !mark.itemized)
+        assertEquals("…and its ownership anchor is when the receipt appeared", 10_000L, mark.receiptSeenAt)
+        assertNull("no decision has been made from it yet", mark.lastDecidedPayHash)
     }
 }
