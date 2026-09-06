@@ -72,6 +72,17 @@ class TransitionPolicy @Inject constructor(
         graceConfig.forPlatform(platform).pauseResumeGraceMs
 
     /**
+     * Safety buffer added to the platform's own reported pause countdown before the pause-safety
+     * net fires on [platform] (#1054 round 4) — see [GraceConfig.pauseTimeoutBufferMs].
+     *
+     * Exposed here, like every other grace value, because since round 4 the deadline is computed in
+     * the STEPPER (`PlatformRegion.pauseSafetyDeadline`) rather than at the `EffectMap` site that
+     * used to hand-build the timer. One owner for "what does this platform's timing mean".
+     */
+    fun pauseTimeoutBufferMs(platform: Platform): Long =
+        graceConfig.forPlatform(platform).pauseTimeoutBufferMs
+
+    /**
      * Settle window for a parsed dash running-total read on [platform] (#1029): how long a parked
      * read must stand unchallenged before it may move `Session.runningEarnings` — see
      * [GraceConfig.sessionPaySettleMs].

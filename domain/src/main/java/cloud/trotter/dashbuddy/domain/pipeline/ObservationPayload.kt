@@ -58,4 +58,34 @@ sealed interface ObservationPayload {
     data class OfferExpiry(
         val offerHash: String,
     ) : ObservationPayload
+
+    /**
+     * The deadline a region grace/settle wake was armed FOR (#1054) — [TimeoutType.GRACE_COMMIT],
+     * [TimeoutType.MODE_RESUME_COMMIT], [TimeoutType.SESSION_PAY_SETTLE] and
+     * [TimeoutType.SESSION_PAUSED_SAFETY]. The [OfferExpiry] idea applied to the pendings that
+     * carry a deadline instead of a hash: **the fire resolves BY identity, not by arithmetic.**
+     *
+     * The lazy expiry matches this against the pending's CURRENT deadline, so a fire is
+     * authoritative for exactly the pending that armed it, whatever its wall-clock stamp says. Two
+     * consequences, and they are the reason this exists:
+     *
+     * - **A fire's own stamp no longer has to be trusted.** The timer is armed for
+     *   `deadline - obs.timestamp` and fires stamped with `System.currentTimeMillis()`, so it lands
+     *   ON the deadline in the ordinary case and BEFORE it after an NTP step-back. An NTP step
+     *   between arm and fire changes the stamp, not the fact that the window elapsed.
+     * - **A fire from a REPLACED pending is inert.** A different deadline means a different
+     *   pending, so a stale timer cannot commit the pending that superseded it — which for the
+     *   settle gate would be a mid-spin figure, and for a resume grace a mode flip nothing on
+     *   screen supports.
+     *
+     * Before this, the expiries compared timestamps and every hole in the series (the strict `>`
+     * that ignored an exact landing, the early-wake re-arm, the equality carve-out and its
+     * narrowing to `(type, platform)`) was a patch on that one substitution of coincidence for
+     * identity. Round-trips losslessly through the observation journal.
+     */
+    @Serializable
+    @SerialName("graceWake")
+    data class GraceWake(
+        val deadline: Long,
+    ) : ObservationPayload
 }

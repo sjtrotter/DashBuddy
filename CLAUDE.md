@@ -599,32 +599,24 @@ pre-"End Dash" park committing on the summary frame and riding into the #596 clo
 `DELIVERY_COMPLETED.sessionEarnings`.
 **(d) comparisons are cent-tolerant** (`accumulatedDeliveryPay + totalPay` is not bit-equal to the
 2-dp figure the wheel renders).
-**(e) expiry is `>=` and an EARLY/stale wake RE-ARMS for the remainder** — the timer is armed for
-`deadline − obs.timestamp` against a wall clock, so an early fire would no-op with no frame coming to
-retry; it re-arms rather than commits, because a stale fire from a REPLACED park would commit the new
-one early, which is precisely a mid-spin value. A fire AT or PAST the deadline never re-arms. All
-three region timers share one `ModeEffects.diffDeadlineTimer`, and since **#1054 all three re-arm on
-an early wake** — the parameter that used to single the settle timer out is gone. The two older
-graces were stranded by exactly the same hole: their own timer is armed for `deadline − obs.timestamp`
-so its fire lands ON the deadline, a strict `>` made that a no-op, and the ordinary frame that was
-supposed to re-drive the lazy expiry does not exist for the case `GRACE_COMMIT` was built for
-(offline with the app backgrounded — an unchanged screen is FrameGate-deduplicated). Neither grace
-has a frozen arm, so a fire at or past the deadline always CONSUMES them and the re-arm branch is
-reachable only while genuinely early. **Expiry at equality is asymmetric** (#1054,
-`GraceExpiry.deadlineLapsed` — the ONE predicate both graces use, housed outside the oversized
-stepper): the two graces expire at `>=` only for **that timer's OWN `(type, platform)`** fire and stay
-**strict for an ordinary frame** stamped on the deadline, while the settle park is a plain `>=`
-throughout. Both graces have a CANCEL arm competing with their own
-commit (a paused frame cancels a resume #605, a task frame cancels a misrecognized `SESSION_END`
-#431), and the expiry runs at the TOP of the step — so a blanket `>=` let a contradicting frame commit
-the thing it arrived to contradict; on the resume that also MINTED a session (`applyModeTransition`
-mints when `session == null`) whose Online→Paused follow-up then left `diffMode` with no edge, i.e. a
-dash no `DASH_START` describes. The `(type, platform)` half closes the sibling hole: coincident
-deadlines are SYSTEMATIC (`PAUSE_RESUME_GRACE_MS` and `RECEIPT_EXPAND_GRACE_MS` are both 8 s), so a
-`SESSION_PAUSED_SAFETY` fire landing on a resume deadline used to commit Paused→Online here and then
-find `handleTimeout`'s own `prev.mode == Paused` guard false, silently dropping the safety net's
-Paused→Offline. The park needs no carve-out at all: rule (f) already makes a contradicting read on
-the expiring frame supersede it.
+**(e) a pending's own wake lapses it by IDENTITY; a frame lapses the park at-or-past** — the timer is
+armed for `deadline − obs.timestamp` against a wall clock, so its fire lands ON the deadline
+ordinarily and BEFORE it after a step-back, with no frame coming to retry. **Since #1054 round 4 that is settled by IDENTITY, not arithmetic** — the one rule, in
+`GraceExpiry` (`isWakeFor` / `graceLapsed`, housed outside the oversized stepper): every arm from the
+shared `ModeEffects.diffDeadlineTimer` carries `ObservationPayload.GraceWake(deadline)`, so **a
+pending's OWN wake lapses it whenever it arrives** (an NTP step between arm and fire changes the
+stamp, not the fact that the window elapsed) and a fire from a REPLACED pending — different deadline
+— is inert. **A FRAME lapses a grace strictly PAST the deadline and the park at-or-past**, so a
+contradicting frame stamped exactly on a grace's deadline still reaches its own cancel arm (a paused
+frame cancels a resume #605, a task frame cancels a misrecognized `SESSION_END` #431; on the resume
+the alternative also MINTED a session whose Online→Paused follow-up left `diffMode` with no edge, a
+dash no `DASH_START` describes). The park needs no such carve-out — rule (f) already makes a
+contradicting read on the expiring frame supersede it. **There is no re-arm logic left at all:**
+rounds 1–3's early-wake re-arm, equality carve-out and its `(type, platform)` narrowing were four
+patches on one substitution of coincidence for identity, and all four are deleted. The arms also
+carry `deadlineMs`, so a tail-REPLAYED arm lands on time instead of a full window late
+(`OFFER_EXPIRY`/`SETTLE_UI` do not yet — #1076), and the pause-safety net joined the shared diff as
+the fourth region timer (see the recovery paragraph).
 **(f) a contradicting read on the expiring frame supersedes the park** it contradicts, rather than
 committing the stale figure and re-parking the fresh one.
 **(g) a `$0.00` read never overwrites a positive total** — the pill renders that placeholder for
@@ -634,7 +626,7 @@ Pure and platform-agnostic throughout (keyed by the region's own reads, deadline
 `obs.timestamp`, no `Platform` branch, no wall clock); split immediate/gated fields —
 `zoneName`/`sessionType` still write on sight; cleared on session start and end; a genuinely changed
 total lands one settle window late by design. **Crash recovery DROPS any restored park**
-(`AppState.droppingSessionPayParks`): its surface is gone and no restore path re-arms its wake timer,
+(`AppState.recoveryHygiene`): its surface is gone and no restore path re-arms its wake timer,
 so it would sit forever or be committed by whatever frame happens past its deadline — fail-null
 (#745), at a cost of one settle window. It runs at the **LIVE boundary — on the FINAL state after the
 tail fold, never on the snapshot** (#1052), because the tail must replay against the snapshot exactly
@@ -659,37 +651,34 @@ loss), **and a failed checkpoint stays PENDING, retried on every live observatio
 attempt) — an ERROR alone left the pre-hygiene snapshot standing as the next replay base, and since
 the journal and the snapshot share one database, a journal append that persists is direct evidence
 the checkpoint can land too.
-**Recovery re-arms ONLY the destructive grace** (#1054) — the whole rule being *evidence is dropped,
-a decision in flight is re-armed*. `AppState.recoveryHygiene()` (the widened
-`droppingSessionPayParks`) drops the settle park AND the graced resume; the pure
-`AppState.pendingDeadlineTimers()` enumerates what is re-armed (`pendingDestructive` →
-`GRACE_COMMIT`, nothing else, its KDoc naming the omissions), and
-`StateManagerV2.rearmRecoveredTimers` emits each on BOTH restore paths through the shared
-`finishRestore` tail (checkpoint → re-arm → install). Without it a `SESSION_END` grace from a
-dash-summary snapshot survives the restart with nothing left to wake it: the tail fold emits only
-the `ScheduleTimeout`s the tail ITSELF produced, based on a replayed frame's timestamp (late by the
-whole replay lag). The destructive grace earns the re-arm because it is a decision already taken —
-the signal was on screen, the window is only the courtesy before we believe it — and because it
-fails toward the SAFE side, ENDING a dash that in all likelihood really ended. **A graced resume is
-NOT that** (round 3, correcting round 2's attempt to keep it): its window is 8 s of *un-contradicted*
-observation, so committing one after a restart asserts that dead process time was nobody
-contradicting it — and the commit is not inert, since `applyModeTransition(…, Online)` MINTS a
-session when there is none (a phantom dash off a notification or click) and `diffMode`'s
-Paused→Online arm CANCELS the `SESSION_PAUSED_SAFETY` net, which state cannot reconstruct. Dropping
-fails toward Paused and the next Online frame arms a fresh grace, screen-driven, exactly as #605
-intends; `endSession` clears it live for the same reason. **A timer's fire counts at equality only
-for its OWN `(type, platform)`** (`GraceExpiry.deadlineLapsed`) — `PAUSE_RESUME_GRACE_MS` and
-`RECEIPT_EXPAND_GRACE_MS` are both 8 s so coincident deadlines are systematic, and a
-`SESSION_PAUSED_SAFETY` fire that committed a resume would leave `handleTimeout`'s `prev.mode ==
-Paused` guard false, silently dropping the safety net's own Paused→Offline. **And the re-arm carries
-the ABSOLUTE deadline** (`AppEffect.ScheduleTimeout.deadlineMs`, null on every stepper diff — they
-have no wall clock): the engine is a queue, so a duration computed at emit time can start its wait
-behind the whole tail's effects and then run its full length late; `scheduleTimer` computes the
-remainder inside the coroutine immediately before the delay, which is also why nothing in
-`StateManagerV2` reads a clock. One counts-only INFO line (`Recovery re-armed N grace timers`, tag
-`StateMachine`). Known gaps this does NOT close, tracked as **#1076**: a tail-replayed `OFFER_EXPIRY`
-/ `SESSION_PAUSED_SAFETY` / `SETTLE_UI` fires late by the replay lag, and a restored pending offer
-gets no fresh `OFFER_EXPIRY` at all.
+**Recovery: what is dropped, what is re-based, what is re-armed** (#1054) — the rule being *evidence
+is dropped, a decision in flight is re-armed*. `AppState.recoveryHygiene(nowMs)` (the widened
+`droppingSessionPayParks`, taking the ONE wall-clock read of the recovery path) **drops** the settle
+park and the graced resume; a resume's 8 s window is UN-CONTRADICTED observation, so committing one
+after a restart asserts dead process time was nobody contradicting it — and the commit MINTS a
+session when the region has none and CANCELS `SESSION_PAUSED_SAFETY` through `diffMode`. It **re-bases**
+`pendingDestructive` to serve its REMAINING window live (`remaining = (deadline − since) − (lastSeen
+− since)`, `lastSeen` = `AppState.timestamp`, `since` untouched per #732): a restored grace has
+observed NONE of its window, and dead time is not un-contradicted time — the collapsed receipt's
+expansion (#1033) and the misrecognized summary's contradicting task frame can still land, where
+round 3's re-arm at the stale deadline fired at the 1 ms floor and committed first.
+`AppState.pendingDeadlineTimers()` then **re-arms** exactly two things: that grace, and the
+**pause-safety net** at the platform's own deadline, AS-IS with dead time included (it is the
+platform's countdown on the platform's clock). That net is state now — `PlatformRegion.pauseSafetyDeadline`,
+stamped by `applyModeTransition` into Paused and cleared on the way out, armed/cancelled by
+`EffectMap.diffPauseSafetyTimer` like the other three region timers — because before round 4 its
+deadline lived ONLY in the engine's in-memory timer map, so a restore into Paused had no timer of any
+kind and a pocketed phone whose countdown ended kept the session live for the next morning's dash to
+RESUME. Each drop emits a `CancelTimeout` (`StateManagerV2.reconcileRecoveredTimers`): a tail-replayed
+arm is a real coroutine and would otherwise fire a `Timer Expired` WARN into the shareable log for a
+pending that no longer exists (P7). `initialize()` awaits the merge collector's SUBSCRIPTION before
+`restoreState`, because `engine.events` is a `replay = 0` `SharedFlow` and an already-elapsed re-arm
+fires at once — emitted with no subscriber it would be dropped silently. Everything goes out on the
+LIVE path (`recovering = false`) before `_state.value` is set, `durationMs` is the bare 1 ms floor
+(`deadlineMs` is the authority), and one counts-only INFO line reports the re-arms
+(`Recovery re-armed N grace timers`, tag `StateMachine`). Known gaps left open, tracked as **#1076**:
+a tail-replayed `OFFER_EXPIRY` / `SETTLE_UI` still fires late, a restored pending offer gets no fresh
+`OFFER_EXPIRY`, and the Offline arm can overwrite a standing `TASK_RETIRE` with `SESSION_END`.
 
 **Graces.** Destructive commits are graced through the unified `pendingDestructive` slot and woken
 by `GRACE_COMMIT` timers (#431), including short authoritative windows for the dash summary AND the

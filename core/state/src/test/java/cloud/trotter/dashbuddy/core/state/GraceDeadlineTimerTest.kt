@@ -3,6 +3,7 @@ package cloud.trotter.dashbuddy.core.state
 import cloud.trotter.dashbuddy.domain.capture.ReplayMetadata
 import cloud.trotter.dashbuddy.domain.model.event.AppEventType
 import cloud.trotter.dashbuddy.domain.pipeline.Observation
+import cloud.trotter.dashbuddy.domain.pipeline.ObservationPayload
 import cloud.trotter.dashbuddy.domain.pipeline.TimeoutType
 import cloud.trotter.dashbuddy.domain.state.AppState
 import cloud.trotter.dashbuddy.domain.state.DestructiveKind
@@ -41,13 +42,16 @@ import org.junit.Test
  * The settle park already had both halves (#1029 rule (e) / S5). This is the other two catching up,
  * which is also why `diffDeadlineTimer` no longer has a `rearmOnEarlyWake` knob to get wrong.
  *
- * **Round 2 narrows the inclusive half to a TIMER's own fire** (`PlatformRegionStepper.deadlineLapsed`).
- * Both graces have a cancel arm competing with their own commit, and the expiry runs at the TOP of
- * the step — so under a plain `>=` a contradicting frame stamped exactly on the deadline committed
- * the thing it arrived to contradict. On the resume that was worse than a lost cancel: the commit
- * MINTS a session, and the frame's own Online→Paused transition then left `diffMode` with no edge to
- * report, producing a dash no `DASH_START` describes. Round 2 also has `endSession` clear the graced
- * resume, since a resume surviving its session's end mints a phantom dash the same way.
+ * **Round 4 replaces the arithmetic with identity** (`GraceExpiry.graceLapsed` / `isWakeFor`). Every
+ * earlier round patched the same substitution — the strict `>`, the early-wake re-arm, round 2's
+ * equality carve-out, round 3's narrowing of it to `(type, platform)` — all of them timestamp
+ * COINCIDENCE tests standing in for "is this the wake armed for THIS pending". An arm now carries
+ * `ObservationPayload.GraceWake(deadline)`, so its fire is authoritative whenever it lands and a
+ * fire from a REPLACED pending is inert. A FRAME still lapses a grace only strictly PAST the
+ * deadline, so a contradicting frame stamped exactly on it reaches its own cancel arm — on the
+ * resume that mattered doubly, because the commit MINTS a session and the frame's own Online→Paused
+ * follow-up then left `diffMode` with no edge, i.e. a dash no `DASH_START` describes. Round 2's
+ * `endSession` clearing of the resume stays, for the same phantom-dash reason.
  */
 class GraceDeadlineTimerTest {
 
@@ -77,6 +81,7 @@ class GraceDeadlineTimerTest {
         modeResume: PendingModeResume? = null,
         job: Job? = null,
         task: Task? = null,
+        pauseSafetyDeadline: Long? = null,
     ) = PlatformRegion(
         platform = platform,
         mode = mode,
@@ -85,6 +90,7 @@ class GraceDeadlineTimerTest {
         activeTask = task,
         pendingDestructive = destructive,
         pendingModeResume = modeResume,
+        pauseSafetyDeadline = pauseSafetyDeadline,
         lastActedFlow = Flow.Idle,
     )
 
@@ -95,8 +101,13 @@ class GraceDeadlineTimerTest {
         ),
     )
 
-    private fun wake(type: TimeoutType, at: Long) =
-        Observation.Timeout(timestamp = at, type = type, targetPlatform = platform)
+    /** This pending's OWN wake: the type it was armed under, carrying the deadline it was armed for. */
+    private fun wake(type: TimeoutType, at: Long, armedFor: Long = at) = Observation.Timeout(
+        timestamp = at,
+        type = type,
+        targetPlatform = platform,
+        payload = ObservationPayload.GraceWake(armedFor),
+    )
 
     private fun AppState.dd() = regions.platforms.getValue(platform)
 
@@ -159,58 +170,76 @@ class GraceDeadlineTimerTest {
     }
 
     // =====================================================================
-    // GRACE_COMMIT — the early fire re-arms rather than stranding
+    // GRACE_COMMIT — an early fire is still THIS pending's wake
     // =====================================================================
 
     @Test
-    fun `a GRACE_COMMIT fire one millisecond early re-arms for the remainder and commits nothing`() {
+    fun `a GRACE_COMMIT fire one millisecond early still commits - identity, not arithmetic`() {
+        // Round 1 rescued this case with a re-arm; round 4 deleted the re-arm because the fire is
+        // recognised on its own terms. The timer was armed for `deadline - obs.timestamp` and is
+        // stamped with the wall clock, so a step-back lands it early — but the window it was armed
+        // for still elapsed, and the payload says which window that was.
         val transition = machine.step(
             state(region(destructive = sessionEnd())),
-            wake(TimeoutType.GRACE_COMMIT, endDeadline - 1L),
+            wake(TimeoutType.GRACE_COMMIT, at = endDeadline - 1L, armedFor = endDeadline),
         )
         val dd = transition.newState.dd()
 
-        assertNotNull("nothing is committed early — the deadline has not been reached", dd.session)
-        assertNotNull("the grace stands", dd.pendingDestructive)
-        val rearm = transition.effects.scheduled(TimeoutType.GRACE_COMMIT).single()
-        assertEquals("re-armed for exactly the remaining millisecond", 1L, rearm.durationMs)
-        assertEquals("and for THIS region", platform, rearm.platform)
+        assertNull("the dash ended on its own wake", dd.session)
+        assertNull("and the grace is consumed", dd.pendingDestructive)
+        assertTrue(
+            "nothing is re-armed — there is nothing left to rescue",
+            transition.effects.scheduled(TimeoutType.GRACE_COMMIT).isEmpty(),
+        )
     }
 
     @Test
-    fun `a GRACE_COMMIT fire well before the deadline re-arms for the whole remainder`() {
-        val transition = machine.step(
+    fun `a GRACE_COMMIT fire arriving well early still commits`() {
+        val ended = machine.step(
             state(region(destructive = sessionEnd())),
-            wake(TimeoutType.GRACE_COMMIT, 19_000L),
-        )
+            wake(TimeoutType.GRACE_COMMIT, at = 19_000L, armedFor = endDeadline),
+        ).newState.dd()
 
-        assertNotNull("still pending", transition.newState.dd().pendingDestructive)
-        assertEquals(
-            "re-armed for the remainder, never for a fresh full window",
-            1_500L,
-            transition.effects.scheduled(TimeoutType.GRACE_COMMIT).single().durationMs,
-        )
+        assertNull("a 1.5 s clock step-back does not un-elapse the window", ended.session)
     }
 
     @Test
-    fun `a stale GRACE_COMMIT fire for a REPLACED destructive re-arms and does NOT commit`() {
+    fun `a stale GRACE_COMMIT fire for a REPLACED destructive is INERT`() {
         // The grace was re-armed later (a fresh destructive signal moved the deadline out) while
-        // the OLD timer was already in flight. Its fire is now early against the new deadline —
-        // and re-arming, never committing, is the whole reason the early-wake branch schedules
-        // instead of expiring: committing here would commit a decision the machine has already
-        // superseded.
+        // the OLD timer was already in flight. Its fire carries the OLD deadline, so it matches
+        // nothing — which is what round 1 needed a "re-arm, never commit" rule to approximate and
+        // round 3 needed an equality carve-out to approximate. Now it simply is not this pending's
+        // wake.
         val replaced = sessionEnd(deadline = 30_000L)
 
-        val transition = machine.step(state(region(destructive = replaced)), wake(TimeoutType.GRACE_COMMIT, endDeadline))
+        val transition = machine.step(
+            state(region(destructive = replaced)),
+            wake(TimeoutType.GRACE_COMMIT, at = endDeadline, armedFor = endDeadline),
+        )
         val dd = transition.newState.dd()
 
         assertNotNull("the superseded fire commits nothing", dd.session)
         assertEquals("the live deadline is untouched", replaced, dd.pendingDestructive)
-        assertEquals(
-            "and the timer is re-armed against the NEW deadline",
-            9_500L,
-            transition.effects.scheduled(TimeoutType.GRACE_COMMIT).single().durationMs,
+        assertTrue(
+            "and nothing is scheduled off a stale fire",
+            transition.effects.scheduled(TimeoutType.GRACE_COMMIT).isEmpty(),
         )
+    }
+
+    @Test
+    fun `a payload-less GRACE_COMMIT fire before the deadline commits nothing`() {
+        // An old-shape fire — a journal row written before round 4, or a hand-built timeout. It
+        // carries no identity, so it lapses nothing and the pending waits for its own wake.
+        // Fail-closed: the frame path still commits it strictly past the deadline.
+        val bare = Observation.Timeout(
+            timestamp = endDeadline,
+            type = TimeoutType.GRACE_COMMIT,
+            targetPlatform = platform,
+        )
+
+        val after = machine.step(state(region(destructive = sessionEnd())), bare).newState.dd()
+        assertNotNull("an unidentifiable fire is not evidence", after.session)
+        assertNotNull(after.pendingDestructive)
     }
 
     // =====================================================================
@@ -237,22 +266,35 @@ class GraceDeadlineTimerTest {
     }
 
     @Test
-    fun `a MODE_RESUME_COMMIT fire one millisecond early re-arms and stays Paused`() {
+    fun `a MODE_RESUME_COMMIT fire one millisecond early still commits the resume`() {
         val region = region(
             mode = Mode.Paused,
             modeResume = PendingModeResume(since = resumeArmedAt, deadline = resumeDeadline),
         )
 
-        val transition = machine.step(state(region), wake(TimeoutType.MODE_RESUME_COMMIT, resumeDeadline - 1L))
-        val dd = transition.newState.dd()
+        val dd = machine.step(
+            state(region),
+            wake(TimeoutType.MODE_RESUME_COMMIT, at = resumeDeadline - 1L, armedFor = resumeDeadline),
+        ).newState.dd()
 
-        assertEquals("still Paused — the window is not up", Mode.Paused, dd.mode)
-        assertNotNull("the resume grace stands", dd.pendingModeResume)
-        assertEquals(
-            "re-armed for exactly the remaining millisecond",
-            1L,
-            transition.effects.scheduled(TimeoutType.MODE_RESUME_COMMIT).single().durationMs,
+        assertEquals("its own wake, so the window elapsed", Mode.Online, dd.mode)
+        assertNull(dd.pendingModeResume)
+    }
+
+    @Test
+    fun `a MODE_RESUME_COMMIT fire for a REPLACED resume is inert`() {
+        val region = region(
+            mode = Mode.Paused,
+            modeResume = PendingModeResume(since = resumeArmedAt, deadline = resumeDeadline + 5_000L),
         )
+
+        val dd = machine.step(
+            state(region),
+            wake(TimeoutType.MODE_RESUME_COMMIT, at = resumeDeadline, armedFor = resumeDeadline),
+        ).newState.dd()
+
+        assertEquals("still Paused", Mode.Paused, dd.mode)
+        assertNotNull("the live resume stands", dd.pendingModeResume)
     }
 
     // =====================================================================
@@ -399,17 +441,18 @@ class GraceDeadlineTimerTest {
     // =====================================================================
 
     @Test
-    fun `a SESSION_PAUSED_SAFETY fire on a resume deadline does not commit the resume`() {
-        // Round 2 granted equality to ANY `Observation.Timeout`, which looked harmless until you
-        // notice the deadlines coincide SYSTEMATICALLY: `PAUSE_RESUME_GRACE_MS` and
+    fun `a SESSION_PAUSED_SAFETY fire on a coincident resume deadline does not commit the resume`() {
+        // Coincident deadlines are SYSTEMATIC, not a curiosity: `PAUSE_RESUME_GRACE_MS` and
         // `RECEIPT_EXPAND_GRACE_MS` are both 8 000 ms and every timer in a region shares one clock.
-        // The safety fire would then commit Paused→Online at the top of `stepCore` — and
-        // `handleTimeout`'s own `prev.mode == Paused` guard, evaluated after, is now false, so the
-        // safety net's Paused→Offline + SESSION_END grace is silently dropped and the dash stays
-        // Online with nothing left to end it.
+        // Round 2 granted equality to ANY timeout, so the safety fire committed Paused→Online at
+        // the top of `stepCore` — after which `handleTimeout`'s own `prev.mode == Paused` guard was
+        // false and the safety net's Paused→Offline + SESSION_END grace was silently dropped,
+        // leaving the dash Online with nothing left to end it. Identity makes the question moot:
+        // the fire carries the SAFETY deadline, so it is not the resume's wake.
         val region = region(
             mode = Mode.Paused,
             modeResume = PendingModeResume(since = resumeArmedAt, deadline = resumeDeadline),
+            pauseSafetyDeadline = resumeDeadline,
         )
 
         val after = machine.step(state(region), wake(TimeoutType.SESSION_PAUSED_SAFETY, resumeDeadline))
@@ -431,10 +474,10 @@ class GraceDeadlineTimerTest {
 
     @Test
     fun `the resume's OWN fire at that same instant still commits`() {
-        // The control for the case above: nothing about the narrowing weakens the fix it narrows.
         val region = region(
             mode = Mode.Paused,
             modeResume = PendingModeResume(since = resumeArmedAt, deadline = resumeDeadline),
+            pauseSafetyDeadline = resumeDeadline,
         )
 
         val after = machine.step(state(region), wake(TimeoutType.MODE_RESUME_COMMIT, resumeDeadline))
@@ -445,19 +488,18 @@ class GraceDeadlineTimerTest {
     }
 
     @Test
-    fun `another platform's GRACE_COMMIT fire never lapses this region's grace at equality`() {
-        // The platform half of the same test. `stepPlatforms` steps only `obs.platform`'s region,
-        // so this is belt-and-braces — but the predicate states (type, platform) because a timer's
-        // fire is evidence about the pending it was armed for and about nothing else.
-        val uberWake = Observation.Timeout(
-            timestamp = endDeadline,
-            type = TimeoutType.GRACE_COMMIT,
-            targetPlatform = Platform.Uber,
-        )
+    fun `a STALE safety fire from a previous pause does not end the current one`() {
+        // #1054 round 4, the other half of identity-gating `handleTimeout`. The deadline is state
+        // now, so a re-pause arms a new one while an old coroutine may still be in flight.
+        val region = region(mode = Mode.Paused, pauseSafetyDeadline = 50_000L)
 
-        val after = machine.step(state(region(destructive = sessionEnd())), uberWake).newState.dd()
-        assertNotNull("DoorDash's dash is untouched by Uber's timer", after.session)
-        assertNotNull("and its grace still stands", after.pendingDestructive)
+        val after = machine.step(
+            state(region),
+            wake(TimeoutType.SESSION_PAUSED_SAFETY, at = 60_000L, armedFor = 20_000L),
+        ).newState.dd()
+
+        assertEquals("the current pause stands", Mode.Paused, after.mode)
+        assertEquals("and its deadline is untouched", 50_000L, after.pauseSafetyDeadline)
     }
 
     // =====================================================================

@@ -100,12 +100,24 @@ was found **broken-in-part** (raw PII in capture envelopes) and moved to that en
      opened, which is what the bug produced.
   3. No dash left with a live `session` in the HUD after the app has been closed on an offline
      screen for minutes.
-  4. **After a relaunch mid-PAUSE the HUD must stay PAUSED** until a real screen resumes it — a
-     phantom resume (the HUD showing Online, or a brand-new dash appearing, with no online screen
-     behind it) is the bug. A graced resume is dropped on restore, deliberately, so the next
-     online-implying frame is what brings the dash back. Desk check: no `DASH_START` in
-     `app_events` within a few seconds of a recovery, and no `Recovery re-armed` line naming more
-     than the dash-end grace.
+  - Confirmed: 0/2
+
+- **🆕 NEW — #1054 — a pause survives a relaunch: the HUD stays PAUSED, and the dash still ends on
+  its own when the countdown runs out.** Two behaviours that used to be broken in opposite
+  directions. A graced resume is now DROPPED on restore (it is 8 s of *un-contradicted* observation,
+  and dead process time is not that), so a relaunch mid-pause must NOT come back Online — a phantom
+  resume, or a brand-new dash appearing with no online screen behind it, is the bug. And the
+  pause-safety deadline is now real state rather than a coroutine in memory, so it is re-armed on
+  restore: before this, a restore into Paused left the dash with no timer of any kind and a pocketed
+  phone kept the session alive indefinitely, which the next morning's dash then RESUMED.
+  **On-dash:** pause the dash, force-stop DashBuddy while the pause sheet is up, relaunch. The HUD
+  must read PAUSED, and stay that way until you actually bring DoorDash back online. Then do it
+  again and simply let the DoorDash countdown run out with the app relaunched but idle — the dash
+  should END on its own within about a second of the countdown reaching zero. **Desk, after the
+  pull:** a `DASH_STOP` in `app_events` whose payload `endedAt` is within ~1 s of the countdown's
+  end; no `DASH_START` in the seconds after a recovery; and no `Timer Expired` WARN for a
+  `MODE_RESUME_COMMIT` or `SESSION_PAY_SETTLE` after a restart (those pendings are dropped, and
+  their timers are now cancelled with them).
   - Confirmed: 0/2
 
 - **🆕 NEW — #1033 — a collapsed delivery receipt now gets 8 s to be expanded, and an expansion

@@ -1,18 +1,17 @@
 package cloud.trotter.dashbuddy.core.state
 
-import cloud.trotter.dashbuddy.core.database.observation.ObservationDao
 import cloud.trotter.dashbuddy.core.database.observation.ObservationEntity
-import cloud.trotter.dashbuddy.core.database.snapshot.AppStateSnapshotDao
-import cloud.trotter.dashbuddy.core.database.snapshot.AppStateSnapshotEntity
-import cloud.trotter.dashbuddy.core.pipeline.PipelineV2
 import cloud.trotter.dashbuddy.domain.model.state.StateEvent
+import cloud.trotter.dashbuddy.domain.model.state.TimeoutEvent
 import cloud.trotter.dashbuddy.domain.pipeline.Observation
+import cloud.trotter.dashbuddy.domain.pipeline.ObservationPayload
 import cloud.trotter.dashbuddy.domain.pipeline.TimeoutType
 import cloud.trotter.dashbuddy.domain.state.AppState
 import cloud.trotter.dashbuddy.domain.state.DestructiveKind
 import cloud.trotter.dashbuddy.domain.state.Flow
 import cloud.trotter.dashbuddy.domain.state.FlowRegion
 import cloud.trotter.dashbuddy.domain.state.Mode
+import cloud.trotter.dashbuddy.domain.state.ParsedFields
 import cloud.trotter.dashbuddy.domain.state.PendingDestructive
 import cloud.trotter.dashbuddy.domain.state.PendingModeResume
 import cloud.trotter.dashbuddy.domain.state.PendingSessionPay
@@ -33,64 +32,48 @@ import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
-import org.mockito.kotlin.mock
-import org.mockito.kotlin.whenever
 
 /**
- * #1054 part 2 — crash recovery RE-ARMS the two grace timers it restores.
+ * What crash recovery does with the timers it restores (#1054).
  *
- * `restoreState` installs `pendingDestructive` / `pendingModeResume` straight from the snapshot and
- * emits a `ScheduleTimeout` only for what the TAIL itself produced: an empty or deadline-neutral
- * tail produces none at all, and one that did arm a timer armed it against a REPLAYED frame's
- * timestamp — i.e. late by the whole replay lag. So a `SESSION_END` grace from a dash-summary
- * snapshot survived the restart with nothing left to wake it, and waited for the next admitted
- * observation. For the case the timer exists for (#431 — offline, app backgrounded) that
- * observation may simply never come.
+ * The rule the suite exists to pin: **stale EVIDENCE is dropped, a DECISION in flight is re-armed,
+ * and a countdown that is not ours is re-armed as it stands.**
  *
- * The complement of the drop rule (`StateManagerV2RecoveryHygieneTest`), and since round 3 the line
- * between them is drawn where it belongs: stale EVIDENCE is dropped — the settle park AND the graced
- * resume — while the destructive grace, a decision already taken and serving out its courtesy
- * window, is re-armed. Round 2 tried to keep the resume and got it wrong twice over; see
- * [AppState.recoveryHygiene].
+ * - The settle park and the graced resume are DROPPED (round 3) — and their engine timers CANCELLED
+ *   (round 4), because a tail-replayed arm is a real coroutine that would otherwise fire a
+ *   `Timer Expired` WARN into the shareable log for a pending that no longer exists.
+ * - The destructive grace is kept and **serves its REMAINING window live** (round 4): a grace
+ *   observes nothing while the process is dead, so re-arming at the old deadline — which round 3
+ *   did, at the 1 ms floor — committed before any live frame could arrive, and a collapsed-receipt
+ *   `TASK_RETIRE` lost its whole #1033 expansion window that way.
+ * - The pause-safety net is re-armed AS-IS (round 4). Before this its deadline lived only in the
+ *   engine's in-memory timer map, so a restore into Paused had no timer of ANY kind: a pocketed
+ *   phone whose platform countdown ended kept the session live indefinitely, and the next morning's
+ *   dash RESUMED it.
  *
- * The re-arm carries the ABSOLUTE deadline and lets `SideEffectEngine` compute the remainder when it
- * actually schedules, so there is no wall clock anywhere in this path — not in the enumerator (pure,
- * by design) and, since round 3, not in `StateManagerV2` either.
+ * Every arm carries `GraceWake(deadline)` (identity) and `deadlineMs` (the instant the engine waits
+ * on), so `durationMs` is the bare 1 ms floor and never a second answer to the same question.
+ *
+ * Timing note: `restoreState` reads `System.currentTimeMillis()` once, so a re-based deadline is
+ * asserted as a WINDOW around the real clock either side of the restore, not as a constant.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class StateManagerV2RecoveryRearmTest {
 
-    /** "Now", as the recovered process reads it — the snapshot's deadlines are ~40 s out. */
-    private val nowMs = 1_000_000L
-    private val endDeadline = nowMs + 40_000L
-    private val resumeDeadline = nowMs + 25_000L
-
-    private class FakeObservationDao(rows: List<ObservationEntity>) : ObservationDao {
-        private val rows = rows.toMutableList()
-        override suspend fun insert(entity: ObservationEntity): Long {
-            rows += entity; return rows.size.toLong()
-        }
-
-        override suspend fun since(afterVersion: Long): List<ObservationEntity> =
-            rows.filter { it.correlationVersion > afterVersion }.sortedBy { it.correlationVersion }
-
-        override suspend fun latest(): ObservationEntity? = rows.maxByOrNull { it.correlationVersion }
-        override suspend fun pruneOlderThan(cutoff: Long) {}
-    }
-
-    private class FixedSnapshotDao(private val entity: AppStateSnapshotEntity) : AppStateSnapshotDao {
-        override suspend fun insert(entity: AppStateSnapshotEntity) {}
-        override suspend fun latest(): AppStateSnapshotEntity = entity
-        override suspend fun pruneOlderThan(cutoff: Long) {}
-    }
+    // A pre-crash timeline, all well in the past relative to any real clock.
+    private val armedAt = 10_000L
+    private val graceWindow = 10_000L
+    private val endDeadline = armedAt + graceWindow
+    private val resumeDeadline = 19_000L
+    private val safetyDeadline = 30_000L
 
     /** Records everything the manager hands the engine, with the flags it handed it under. */
-    private class RecordingEngine : EffectExecutor {
+    private open class RecordingEngine : EffectExecutor {
         data class Processed(val effect: AppEffect, val recovering: Boolean, val correlationVersion: Long)
 
         val processed = mutableListOf<Processed>()
-        private val _events = MutableSharedFlow<StateEvent>(extraBufferCapacity = 16)
-        override val events: SharedFlow<StateEvent> = _events
+        protected val sink = MutableSharedFlow<StateEvent>(extraBufferCapacity = 16)
+        override val events: SharedFlow<StateEvent> = sink
 
         override fun process(effect: AppEffect, recovering: Boolean, correlationVersion: Long) {
             processed += Processed(effect, recovering, correlationVersion)
@@ -98,26 +81,32 @@ class StateManagerV2RecoveryRearmTest {
 
         fun schedules(type: TimeoutType) = processed
             .filter { (it.effect as? AppEffect.ScheduleTimeout)?.type == type }
+
+        fun cancels(type: TimeoutType) = processed
+            .filter { (it.effect as? AppEffect.CancelTimeout)?.type == type }
     }
 
     /**
-     * A pre-crash state carrying whatever commitment the case needs. R0 is `Idle` on DoorDash
-     * because that is what an offline dash's last frame leaves behind.
+     * A pre-crash state carrying whatever the case needs. R0 is `Idle` on DoorDash because that is
+     * what an offline dash's last frame leaves behind; [lastSeen] is `AppState.timestamp`, which is
+     * `recoveryHygiene`'s anchor for "how much of the window was actually observed".
      */
     private fun snapshotState(
-        cv: Long,
+        cv: Long = 7L,
         destructive: PendingDestructive? = null,
         modeResume: PendingModeResume? = null,
         park: PendingSessionPay? = null,
+        safety: Long? = null,
         mode: Mode = Mode.Offline,
         session: Session? = Session("s1", startedAt = 100L, runningEarnings = 16.70),
+        lastSeen: Long = armedAt,
     ) = AppState(
         regions = Regions(
             flow = FlowRegion(
                 flow = Flow.Idle,
                 sourceRuleId = "doordash.screen.waiting_for_offer",
                 activePlatform = Platform.DoorDash,
-                lastObservedAt = nowMs - 10_000L,
+                lastObservedAt = lastSeen,
             ),
             platforms = mapOf(
                 Platform.DoorDash to PlatformRegion(
@@ -125,29 +114,26 @@ class StateManagerV2RecoveryRearmTest {
                     mode = mode,
                     session = session,
                     lastActedFlow = Flow.Idle,
-                    lastObservedAt = nowMs - 10_000L,
+                    lastObservedAt = lastSeen,
                     pendingDestructive = destructive,
                     pendingModeResume = modeResume,
                     pendingSessionPay = park,
+                    pauseSafetyDeadline = safety,
                 ),
             ),
         ),
-        timestamp = nowMs - 10_000L,
+        timestamp = lastSeen,
         correlationVersion = cv,
     )
 
-    private fun snapshotOf(state: AppState) = AppStateSnapshotEntity(
-        correlationVersion = state.correlationVersion,
-        capturedAt = 1L,
-        sessionId = "s1",
-        stateJson = StateJson.encodeToString(state),
+    private fun sessionEnd(deadline: Long = endDeadline) = PendingDestructive(
+        kind = DestructiveKind.SESSION_END,
+        since = armedAt,
+        deadline = deadline,
+        armedFromFlow = Flow.Idle,
     )
 
-    /**
-     * A journalled non-flow timeout of an UNRELATED type: it replays, advancing the correlation
-     * version, without touching either grace's deadline — the "tail that leaves the deadline
-     * unchanged" case.
-     */
+    /** A journalled non-flow timeout of an UNRELATED type: replays without moving any deadline. */
     private fun neutralTimerRow(cv: Long, timestamp: Long) = ObservationEntity(
         occurredAt = timestamp,
         sessionId = "s1",
@@ -166,48 +152,171 @@ class StateManagerV2RecoveryRearmTest {
         ),
     )
 
-    private fun newManager(
-        snapshot: AppState,
-        tail: List<ObservationEntity>,
-        engine: RecordingEngine,
-        dispatcher: CoroutineDispatcher,
-    ): StateManagerV2 {
-        val pipeline: PipelineV2 = mock()
-        whenever(pipeline.events).thenReturn(MutableSharedFlow<StateEvent>(extraBufferCapacity = 16))
-
-        return StateManagerV2(
-            pipeline = pipeline,
-            engine = engine,
-            stateMachine = StateMachine(
-                FlowRegionStepper(), PlatformRegionStepper(),
-                CrossPlatformRegionStepper(), TransitionPolicy(),
-                EffectMap(),
-            ),
-            journal = ObservationJournal(FakeObservationDao(tail)),
-            snapshots = SnapshotStore(FixedSnapshotDao(snapshotOf(snapshot))),
-            defaultDispatcher = dispatcher,
-            ioDispatcher = dispatcher,
-        )
-    }
-
-    private fun sessionEnd(deadline: Long = endDeadline) = PendingDestructive(
-        kind = DestructiveKind.SESSION_END,
-        since = nowMs - 10_000L,
-        deadline = deadline,
-        armedFromFlow = Flow.Idle,
+    /** A journalled online-idle SCREEN row — replayed over a Paused snapshot it ARMS a resume. */
+    private fun onlineIdleRow(cv: Long, timestamp: Long) = ObservationEntity(
+        occurredAt = timestamp,
+        sessionId = "s1",
+        pipelineId = "accessibility.window",
+        ruleId = "doordash.screen.waiting_for_offer",
+        platform = Platform.DoorDash.name,
+        flow = Flow.Idle.name,
+        modeHint = Mode.Online.name,
+        parsedJson = StateJson.encodeToString<ParsedFields>(ParsedFields.IdleFields()),
+        captureId = null,
+        metadataJson = "{}",
+        correlationVersion = cv,
     )
 
+    private fun newManager(
+        snapshot: AppState,
+        tail: List<ObservationEntity> = emptyList(),
+        engine: RecordingEngine,
+        dispatcher: CoroutineDispatcher,
+        snapshotDao: FakeSnapshotDao = FakeSnapshotDao(snapshotOf(snapshot)),
+    ): StateManagerV2 = recoveryManager(
+        journalDao = FakeObservationDao(tail),
+        snapshotDao = snapshotDao,
+        engine = engine,
+        dispatcher = dispatcher,
+    )
+
+    /** The single `ScheduleTimeout` of [type] the manager emitted, as an effect. */
+    private fun RecordingEngine.armed(type: TimeoutType) =
+        schedules(type).single().effect as AppEffect.ScheduleTimeout
+
     // =====================================================================
-    // The empty tail — the case that emitted nothing at all
+    // The destructive grace — re-armed, serving its REMAINING window live
     // =====================================================================
 
     @Test
-    fun `a restored SESSION_END grace is re-armed for its remaining window`() = runTest {
+    fun `a restored SESSION_END grace is re-armed to serve its FULL remaining window from now`() = runTest {
+        // The snapshot's newest observation IS the grace's arm time, so none of the 10 s window was
+        // observed before the crash. Round 3 re-armed at the stale deadline, which floors at 1 ms
+        // and commits before any live frame can arrive; round 4 gives the window back, because dead
+        // time is not un-contradicted time.
         val dispatcher = StandardTestDispatcher(testScheduler)
         val engine = RecordingEngine()
         val manager = newManager(
-            snapshot = snapshotState(cv = 7L, destructive = sessionEnd()),
-            tail = emptyList(),
+            snapshot = snapshotState(destructive = sessionEnd()),
+            engine = engine,
+            dispatcher = dispatcher,
+        )
+
+        val before = System.currentTimeMillis()
+        manager.initialize()
+        runCurrent()
+        val after = System.currentTimeMillis()
+
+        val effect = engine.armed(TimeoutType.GRACE_COMMIT)
+        val deadline = effect.deadlineMs!!
+        assertTrue(
+            "the whole window is served live: expected ~now + $graceWindow, got $deadline",
+            deadline in (before + graceWindow)..(after + graceWindow),
+        )
+        assertEquals(
+            "and the arm carries its own identity, so its fire is recognised whenever it lands",
+            ObservationPayload.GraceWake(deadline),
+            effect.payload,
+        )
+        assertEquals(
+            "`durationMs` is the bare floor — `deadlineMs` is the authority",
+            1L,
+            effect.durationMs,
+        )
+        assertEquals("armed for the region that owns the grace", Platform.DoorDash, effect.platform)
+        assertTrue(
+            "on the LIVE path — recovery mode suppresses externals, and this timer must fire",
+            !engine.schedules(TimeoutType.GRACE_COMMIT).single().recovering,
+        )
+
+        val kept = manager.state.value.regions.platforms[Platform.DoorDash]?.pendingDestructive
+        assertEquals("the state carries the re-based deadline too", deadline, kept?.deadline)
+        assertEquals("while `since` never moves — #732 stamps the commit at it", armedAt, kept?.since)
+    }
+
+    @Test
+    fun `a PARTLY observed window is re-armed for only what is left`() = runTest {
+        // 4 s of the 10 s window elapsed with frames landing before the crash.
+        val dispatcher = StandardTestDispatcher(testScheduler)
+        val engine = RecordingEngine()
+        val manager = newManager(
+            snapshot = snapshotState(destructive = sessionEnd(), lastSeen = armedAt + 4_000L),
+            engine = engine,
+            dispatcher = dispatcher,
+        )
+
+        val before = System.currentTimeMillis()
+        manager.initialize()
+        runCurrent()
+        val after = System.currentTimeMillis()
+
+        val deadline = engine.armed(TimeoutType.GRACE_COMMIT).deadlineMs!!
+        assertTrue(
+            "6 s remaining, not 10: got ${deadline - before}",
+            deadline in (before + 6_000L)..(after + 6_000L),
+        )
+    }
+
+    @Test
+    fun `a window that fully elapsed before the crash re-arms at now`() = runTest {
+        val dispatcher = StandardTestDispatcher(testScheduler)
+        val engine = RecordingEngine()
+        val manager = newManager(
+            snapshot = snapshotState(destructive = sessionEnd(), lastSeen = 25_000L),
+            engine = engine,
+            dispatcher = dispatcher,
+        )
+
+        val before = System.currentTimeMillis()
+        manager.initialize()
+        runCurrent()
+        val after = System.currentTimeMillis()
+
+        val deadline = engine.armed(TimeoutType.GRACE_COMMIT).deadlineMs!!
+        assertTrue("clamped at zero remaining: $deadline", deadline in before..after)
+    }
+
+    @Test
+    fun `the checkpoint lands BEFORE the re-arm`() = runTest {
+        // `finishRestore`'s order is the content of the method: making the hygiene durable comes
+        // first, so a fire that commits immediately can never beat the write that records what the
+        // recovery decided.
+        val dispatcher = StandardTestDispatcher(testScheduler)
+        val engine = object : RecordingEngine() {
+            var insertsAtFirstEffect: Int? = null
+            lateinit var dao: FakeSnapshotDao
+            override fun process(effect: AppEffect, recovering: Boolean, correlationVersion: Long) {
+                if (insertsAtFirstEffect == null) insertsAtFirstEffect = dao.inserts
+                super.process(effect, recovering, correlationVersion)
+            }
+        }
+        val snapshotDao = FakeSnapshotDao(snapshotOf(snapshotState(destructive = sessionEnd())))
+        engine.dao = snapshotDao
+        val manager = newManager(
+            snapshot = snapshotState(destructive = sessionEnd()),
+            engine = engine,
+            dispatcher = dispatcher,
+            snapshotDao = snapshotDao,
+        )
+
+        manager.initialize()
+        runCurrent()
+
+        assertEquals("the recovery checkpoint was already on disk", 1, engine.insertsAtFirstEffect)
+    }
+
+    // =====================================================================
+    // The pause-safety net — state since round 4, so a restore can re-arm it
+    // =====================================================================
+
+    @Test
+    fun `a restore into Paused re-arms the pause-safety net at the platform's own deadline`() = runTest {
+        // AS-IS, dead time included: this countdown belongs to the PLATFORM and ran on the
+        // platform's clock while we were gone. A deadline already past fires at once.
+        val dispatcher = StandardTestDispatcher(testScheduler)
+        val engine = RecordingEngine()
+        val manager = newManager(
+            snapshot = snapshotState(mode = Mode.Paused, safety = safetyDeadline),
             engine = engine,
             dispatcher = dispatcher,
         )
@@ -215,58 +324,70 @@ class StateManagerV2RecoveryRearmTest {
         manager.initialize()
         runCurrent()
 
-        val armed = engine.schedules(TimeoutType.GRACE_COMMIT).single()
-        val effect = armed.effect as AppEffect.ScheduleTimeout
-        assertEquals(
-            "the effect states the ABSOLUTE deadline (#1054 round 2) — the engine is a queue, so a " +
-                "duration computed at enqueue time can start its wait arbitrarily late and then run " +
-                "the full length late; the scheduler computes the remainder from this instead",
-            endDeadline,
-            effect.deadlineMs,
-        )
-        assertEquals(
-            "and `durationMs` is the bare floor, never a second (stale) answer to the same question",
-            1L,
-            effect.durationMs,
-        )
-        assertEquals("armed for the region that owns the grace", Platform.DoorDash, effect.platform)
-        assertTrue(
-            "on the LIVE path — recovery mode suppresses externals, and this timer must fire",
-            !armed.recovering,
-        )
-        assertEquals(
-            "stamped at the version of the state it describes",
-            7L,
-            armed.correlationVersion,
-        )
-        assertNotNull(
-            "the grace itself is untouched — re-arming is not committing",
-            manager.state.value.regions.platforms[Platform.DoorDash]?.pendingDestructive,
-        )
+        val effect = engine.armed(TimeoutType.SESSION_PAUSED_SAFETY)
+        assertEquals("not re-based — the platform's countdown is not ours to extend", safetyDeadline, effect.deadlineMs)
+        assertEquals(ObservationPayload.GraceWake(safetyDeadline), effect.payload)
+        assertEquals(Platform.DoorDash, effect.platform)
     }
 
     @Test
+    fun `the re-armed safety net's own fire ends the pocketed dash`() = runTest {
+        // The finding, end to end: before round 4 the deadline lived only in the engine's timer
+        // map, so a restore into Paused had NO timer and the session stayed live all night — the
+        // next morning's dash then resumed it.
+        val dispatcher = StandardTestDispatcher(testScheduler)
+        val engine = RecordingEngine()
+        val manager = newManager(
+            snapshot = snapshotState(mode = Mode.Paused, safety = safetyDeadline),
+            engine = engine,
+            dispatcher = dispatcher,
+        )
+
+        manager.initialize()
+        runCurrent()
+        assertNotNull(
+            "a live session is what the net is about to end",
+            manager.state.value.regions.platforms[Platform.DoorDash]?.session,
+        )
+
+        manager.dispatch(
+            Observation.Timeout(
+                timestamp = safetyDeadline,
+                type = TimeoutType.SESSION_PAUSED_SAFETY,
+                targetPlatform = Platform.DoorDash,
+                payload = ObservationPayload.GraceWake(safetyDeadline),
+            ),
+        )
+        runCurrent()
+
+        val region = manager.state.value.regions.platforms[Platform.DoorDash]
+        assertEquals("Paused → Offline", Mode.Offline, region?.mode)
+        assertEquals(
+            "with the graced end armed, which is what actually ends the dash",
+            DestructiveKind.SESSION_END,
+            region?.pendingDestructive?.kind,
+        )
+    }
+
+    // =====================================================================
+    // The dropped pendings — no re-arm, and their timers CANCELLED
+    // =====================================================================
+
+    @Test
     fun `a restored graced resume is DROPPED on both restore paths, never re-armed`() = runTest {
-        // #1054 round 3, the correction round 2 needed. A resume's window is 8 s of
-        // UN-CONTRADICTED observation — a paused frame inside it cancels — so committing one after
-        // a restart asserts that dead process time was nobody contradicting it. And the commit is
-        // not inert: `applyModeTransition(…, Online)` MINTS a session when the region has none, and
-        // `diffMode`'s Paused→Online arm CANCELS the `SESSION_PAUSED_SAFETY` net, which nothing in
-        // state can reconstruct. Round 2's session-null guard suppressed only the RE-ARM, so the
-        // resume stayed INSTALLED for the tail's own replayed timer — or any later observation past
-        // the deadline — to commit anyway. Dropping it is the fix; the state assertion is the half
-        // that guard was missing.
-        //
-        // Both paths, and both session states, because the failure differs: session-less it mints a
-        // phantom dash, session-live it silently disarms the pause-safety net.
+        // Round 3's correction. A resume's window is 8 s of UN-CONTRADICTED observation — a paused
+        // frame inside it cancels — so committing one after a restart asserts that dead process
+        // time was nobody contradicting it. And the commit is not inert: `applyModeTransition(…,
+        // Online)` MINTS a session when the region has none, and `diffMode`'s Paused→Online arm
+        // CANCELS the pause-safety net. Round 2's session-null guard suppressed only the RE-ARM, so
+        // the resume stayed INSTALLED for the tail's own timer or any later observation to commit.
         for (session in listOf(Session("s1", startedAt = 100L, runningEarnings = 16.70), null)) {
-            for (tail in listOf(emptyList(), listOf(neutralTimerRow(cv = 8L, timestamp = nowMs - 5_000L)))) {
+            for (tail in listOf(emptyList(), listOf(neutralTimerRow(cv = 8L, timestamp = 12_000L)))) {
                 val dispatcher = StandardTestDispatcher(testScheduler)
                 val engine = RecordingEngine()
                 val manager = newManager(
                     snapshot = snapshotState(
-                        cv = 7L,
-                        modeResume = PendingModeResume(since = nowMs - 10_000L, deadline = resumeDeadline),
+                        modeResume = PendingModeResume(since = 11_000L, deadline = resumeDeadline),
                         mode = Mode.Paused,
                         session = session,
                     ),
@@ -299,77 +420,51 @@ class StateManagerV2RecoveryRearmTest {
 
     @Test
     fun `a MODE_RESUME_COMMIT fire arriving after the drop commits nothing`() = runTest {
-        // The tail can arm a resume timer of its own (a `ScheduleTimeout` is not an external
-        // effect, so the recovery fold really executes it), and a pre-#1054 process may have left
-        // one running. Either way its fire lands on a state whose resume the hygiene removed, so it
-        // finds nothing to expire: `handleTimeout`'s `else -> prev`, with the lazy expiry having
-        // nothing to work on. That no-op is what makes the drop safe rather than merely tidy.
         val dispatcher = StandardTestDispatcher(testScheduler)
         val engine = RecordingEngine()
         val manager = newManager(
             snapshot = snapshotState(
-                cv = 7L,
-                modeResume = PendingModeResume(since = nowMs - 10_000L, deadline = resumeDeadline),
+                modeResume = PendingModeResume(since = 11_000L, deadline = resumeDeadline),
                 mode = Mode.Paused,
             ),
-            tail = emptyList(),
             engine = engine,
             dispatcher = dispatcher,
         )
 
         manager.initialize()
         runCurrent()
+        val cvAfterRestore = manager.state.value.correlationVersion
 
         manager.dispatch(
             Observation.Timeout(
                 timestamp = resumeDeadline + 1_000L,
                 type = TimeoutType.MODE_RESUME_COMMIT,
                 targetPlatform = Platform.DoorDash,
+                payload = ObservationPayload.GraceWake(resumeDeadline),
             ),
         )
         runCurrent()
 
         val region = manager.state.value.regions.platforms[Platform.DoorDash]
+        assertEquals(
+            "the fire really was PROCESSED — a stalled dispatch would pass the assertions below " +
+                "for the wrong reason",
+            cvAfterRestore + 1,
+            manager.state.value.correlationVersion,
+        )
         assertEquals("still Paused — no phantom resume", Mode.Paused, region?.mode)
         assertEquals("and the same session, not a minted one", "s1", region?.session?.sessionId)
     }
 
     @Test
-    fun `a deadline already in the past still rides as an absolute deadline`() = runTest {
-        // The process was dead longer than the window. The engine floors the remainder at 1 ms and
-        // the fire lands past the deadline, which part 1's lazy expiry commits — so the dash ends
-        // now rather than whenever a frame next happens by. Nothing about the EFFECT changes: it
-        // states the instant, and resolving that into "immediately" is the scheduler's job.
-        val dispatcher = StandardTestDispatcher(testScheduler)
-        val engine = RecordingEngine()
-        val manager = newManager(
-            snapshot = snapshotState(cv = 7L, destructive = sessionEnd(deadline = nowMs - 60_000L)),
-            tail = emptyList(),
-            engine = engine,
-            dispatcher = dispatcher,
-        )
-
-        manager.initialize()
-        runCurrent()
-
-        val effect = engine.schedules(TimeoutType.GRACE_COMMIT).single().effect as AppEffect.ScheduleTimeout
-        assertEquals(nowMs - 60_000L, effect.deadlineMs)
-    }
-
-    @Test
     fun `a restored settle park is dropped, never re-armed`() = runTest {
-        // The two rules on one state: the park is dropped (stale evidence) while the destructive
-        // grace beside it is re-armed (a decision in flight). Re-arming the park would wake a
-        // pre-crash mid-spin figure that nothing on screen can contradict.
         val dispatcher = StandardTestDispatcher(testScheduler)
         val engine = RecordingEngine()
         val manager = newManager(
             snapshot = snapshotState(
-                cv = 7L,
                 destructive = sessionEnd(),
-                park = PendingSessionPay(470.00, nowMs - 2_000L, nowMs + 1_000L, Flow.Idle),
+                park = PendingSessionPay(470.00, 12_000L, 15_000L, Flow.Idle),
             ),
-            tail = emptyList(),
             engine = engine,
             dispatcher = dispatcher,
         )
@@ -382,7 +477,7 @@ class StateManagerV2RecoveryRearmTest {
             engine.schedules(TimeoutType.SESSION_PAY_SETTLE).isEmpty(),
         )
         assertEquals(
-            "while the grace beside it is",
+            "while the decision in flight beside it is",
             1,
             engine.schedules(TimeoutType.GRACE_COMMIT).size,
         )
@@ -396,8 +491,44 @@ class StateManagerV2RecoveryRearmTest {
         )
     }
 
+    @Test
+    fun `a tail-armed resume timer is CANCELLED when the hygiene drops its pending`() = runTest {
+        // #1054 round 4 (D). The tail's online-idle frame arms a real `MODE_RESUME_COMMIT`
+        // coroutine — `ScheduleTimeout` is not an external effect, so the recovery fold executes
+        // it — and the hygiene then drops the pending it belonged to. Without a cancel that
+        // coroutine still runs to completion and logs a `Timer Expired` WARN into the SHAREABLE
+        // log for something that no longer exists: noise in the one stream principle 7 reserves for
+        // a defended invariant firing.
+        val dispatcher = StandardTestDispatcher(testScheduler)
+        val engine = RecordingEngine()
+        val manager = newManager(
+            snapshot = snapshotState(mode = Mode.Paused, safety = safetyDeadline),
+            tail = listOf(onlineIdleRow(cv = 8L, timestamp = 12_000L)),
+            engine = engine,
+            dispatcher = dispatcher,
+        )
+
+        manager.initialize()
+        runCurrent()
+
+        assertTrue(
+            "the tail really did arm one, in recovery mode",
+            engine.schedules(TimeoutType.MODE_RESUME_COMMIT).any { it.recovering },
+        )
+        assertNull(
+            "and the hygiene dropped the pending it belonged to",
+            manager.state.value.regions.platforms[Platform.DoorDash]?.pendingModeResume,
+        )
+        val cancelled = engine.cancels(TimeoutType.MODE_RESUME_COMMIT).single()
+        assertTrue("the cancel goes out live, or the engine ignores it", !cancelled.recovering)
+        assertEquals(
+            Platform.DoorDash,
+            (cancelled.effect as AppEffect.CancelTimeout).platform,
+        )
+    }
+
     // =====================================================================
-    // The deadline-neutral tail — the case that emitted a stale-based timer
+    // The tail path, and the round trip
     // =====================================================================
 
     @Test
@@ -405,39 +536,35 @@ class StateManagerV2RecoveryRearmTest {
         val dispatcher = StandardTestDispatcher(testScheduler)
         val engine = RecordingEngine()
         val manager = newManager(
-            snapshot = snapshotState(cv = 7L, destructive = sessionEnd()),
-            tail = listOf(neutralTimerRow(cv = 8L, timestamp = nowMs - 5_000L)),
+            snapshot = snapshotState(destructive = sessionEnd()),
+            tail = listOf(neutralTimerRow(cv = 8L, timestamp = 12_000L)),
             engine = engine,
             dispatcher = dispatcher,
         )
 
+        val before = System.currentTimeMillis()
         manager.initialize()
         runCurrent()
+        val after = System.currentTimeMillis()
 
         assertEquals("the tail must actually have replayed", 8L, manager.state.value.correlationVersion)
         val last = engine.schedules(TimeoutType.GRACE_COMMIT).last()
-        val effect = last.effect as AppEffect.ScheduleTimeout
-        assertEquals(
-            "the LAST arm for this key states the true deadline, not a duration off a replayed " +
-                "frame's timestamp",
-            endDeadline,
-            effect.deadlineMs,
+        val deadline = (last.effect as AppEffect.ScheduleTimeout).deadlineMs!!
+        assertTrue(
+            "the LAST arm is based on the real clock, not on a replayed frame's timestamp",
+            // 2 s of the window were observed (the tail row at 12 000), so 8 s remain.
+            deadline in (before + 8_000L)..(after + 8_000L),
         )
         assertTrue("and it is the live one", !last.recovering)
         assertEquals("stamped at the FINAL replayed version", 8L, last.correlationVersion)
     }
 
-    // =====================================================================
-    // The round trip — part 1 lands what part 2 armed
-    // =====================================================================
-
     @Test
-    fun `the re-armed timer's own fire ends the dash - part 1 lands what part 2 armed`() = runTest {
+    fun `the re-armed timer's own fire ends the dash`() = runTest {
         val dispatcher = StandardTestDispatcher(testScheduler)
         val engine = RecordingEngine()
         val manager = newManager(
-            snapshot = snapshotState(cv = 7L, destructive = sessionEnd()),
-            tail = emptyList(),
+            snapshot = snapshotState(destructive = sessionEnd()),
             engine = engine,
             dispatcher = dispatcher,
         )
@@ -445,19 +572,20 @@ class StateManagerV2RecoveryRearmTest {
         manager.initialize()
         runCurrent()
 
-        val effect = engine.schedules(TimeoutType.GRACE_COMMIT).single().effect as AppEffect.ScheduleTimeout
+        val effect = engine.armed(TimeoutType.GRACE_COMMIT)
         assertNotNull(
             "the session is still live at the moment the timer is armed",
             manager.state.value.regions.platforms[Platform.DoorDash]?.session,
         )
 
-        // The engine waits out `deadlineMs - now` and fires a routed `Observation.Timeout` stamped
-        // with the wall clock — which, for that remainder, lands ON the deadline.
+        // The engine waits out `deadlineMs - now` and fires this back, stamped with the wall clock
+        // and carrying the identity it was armed with.
         manager.dispatch(
             Observation.Timeout(
                 timestamp = effect.deadlineMs!!,
                 type = TimeoutType.GRACE_COMMIT,
                 targetPlatform = Platform.DoorDash,
+                payload = effect.payload,
             ),
         )
         runCurrent()
@@ -466,4 +594,54 @@ class StateManagerV2RecoveryRearmTest {
         assertNull("the recovered dash ends on its re-armed timer", region?.session)
         assertNull("and the grace is consumed", region?.pendingDestructive)
     }
+
+    // =====================================================================
+    // #1054 round 4 (G) — the fire must not beat the collector's subscription
+    // =====================================================================
+
+    @Test
+    fun `a fire emitted the instant the re-arm is processed is still received`() = runTest {
+        // `SideEffectEngine._events` is a `MutableSharedFlow(replay = 0)`: anything emitted before
+        // the merge collector SUBSCRIBES goes to zero subscribers and is dropped, silently, with no
+        // log line and invisible to an ordinary recording executor (whose `events` never emits).
+        // The recovery re-arm is exactly the emitter at risk — a grace whose window already elapsed
+        // fires at the 1 ms floor — so `initialize()` awaits the subscription before `restoreState`.
+        // This engine models the worst case: the fire comes back SYNCHRONOUSLY, inside `process`.
+        val dispatcher = StandardTestDispatcher(testScheduler)
+        val engine = object : RecordingEngine() {
+            override fun process(effect: AppEffect, recovering: Boolean, correlationVersion: Long) {
+                super.process(effect, recovering, correlationVersion)
+                val schedule = effect as? AppEffect.ScheduleTimeout ?: return
+                if (schedule.type != TimeoutType.GRACE_COMMIT) return
+                check(
+                    sink.tryEmit(
+                        TimeoutEvent(
+                            timestamp = schedule.deadlineMs!!,
+                            type = schedule.type,
+                            platform = schedule.platform,
+                            payload = schedule.payload,
+                        ),
+                    ),
+                ) { "the buffered emit itself must succeed" }
+            }
+        }
+        val manager = newManager(
+            // Already elapsed, so the real engine would fire it at once too.
+            snapshot = snapshotState(destructive = sessionEnd(), lastSeen = 25_000L),
+            engine = engine,
+            dispatcher = dispatcher,
+        )
+
+        manager.initialize()
+        runCurrent()
+
+        val region = manager.state.value.regions.platforms[Platform.DoorDash]
+        assertNull(
+            "the fire reached the machine and committed the grace — with the subscription race " +
+                "open it went to zero subscribers and the dash stayed live",
+            region?.session,
+        )
+        assertNull(region?.pendingDestructive)
+    }
+
 }

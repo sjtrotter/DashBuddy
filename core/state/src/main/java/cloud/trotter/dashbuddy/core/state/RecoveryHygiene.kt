@@ -5,78 +5,101 @@ import cloud.trotter.dashbuddy.domain.state.AppState
 import cloud.trotter.dashbuddy.domain.state.Platform
 
 /**
- * Crash-recovery hygiene on a restored [AppState] (#1029) — pure, total, and platform-agnostic.
+ * Crash-recovery hygiene on a restored [AppState] (#1029, widened by #1054) — pure, total, and
+ * platform-agnostic.
  *
  * A snapshot preserves state faithfully, which is exactly the problem for state whose meaning is
  * "this is provisional and something is about to challenge it". Anything of that shape has to be
- * re-examined at restore rather than trusted, because the machinery that would have resolved it
- * did not survive the process.
+ * re-examined at restore rather than trusted, because the machinery that would have resolved it did
+ * not survive the process. Three answers, one per class of pending:
  *
- * **The rule the whole file turns on: evidence is DROPPED, a commitment is RE-ARMED** (#1054 round
- * 3). A pending whose meaning is "this is what I last saw, and I am waiting to be contradicted" is
- * an observation of a screen that has been gone since the process died — nothing after the restore
- * can contradict it, so waiting it out is not a wait, it is a rubber stamp. A pending whose meaning
- * is "this has been decided and is serving out its window" survives, because the decision was made
- * on evidence that was live at the time and the window is merely a courtesy.
+ * ## Dropped — stale EVIDENCE
  *
- * By that test: [AppState.recoveryHygiene] drops `pendingSessionPay` and `pendingModeResume`, while
- * `pendingDestructive` is kept and re-armed by [pendingDeadlineTimers]. The destructive grace is
- * additionally the only one of the three that fails toward the SAFE side — ending a dash that may
- * already be over — where the other two fail toward inventing something (a figure, a dash).
+ * **The park** (`pendingSessionPay`, #1029) is a read waiting out a settle window on the surface it
+ * came from. After a crash it is evidence from BEFORE the crash: the surface is long gone, and
+ * nothing on the restore path re-arms its `SESSION_PAY_SETTLE` wake (an identical read after the
+ * restore keeps the deadline without scheduling anything). So a restored park either sits forever
+ * or is committed by the first frame past its deadline, minting a figure nothing can contradict —
+ * unacceptable for a number the dasher reads as their earnings. Dropping costs at most one settle
+ * window: the committed total stands until the next idle frame re-parks the live one.
+ *
+ * **The graced resume** (`pendingModeResume`, #605 — dropped since #1054 round 3) is the same class
+ * of thing, which round 2 got wrong by trying to keep it. Its window is 8 s of *un-contradicted
+ * observation* — a paused frame inside it cancels — so committing one after a restart asserts that
+ * 8 s of dead process time were 8 s of nobody contradicting it. And the commit is not inert:
+ * `applyModeTransition(…, Mode.Online)` MINTS a session when the region has none (a phantom dash off
+ * any observation past the deadline — a notification, a click — with no online screen behind it),
+ * and even with a live session `EffectMap.diffMode`'s Paused→Online arm CANCELS the
+ * `SESSION_PAUSED_SAFETY` net. Round 2's session-null guard suppressed only the RE-ARM, which is not
+ * the same thing: the resume stayed installed for the tail's own replayed `ScheduleTimeout` (not an
+ * external effect, so recovery really arms it) or any later observation to commit. Dropping fails
+ * toward **Paused**, the honest reading of a process that died under a pause sheet, and the next
+ * Online-implying frame arms a fresh grace screen-driven, exactly as #605 intends.
+ *
+ * Both drops emit a `CancelTimeout` at the edge (`StateManagerV2.reconcileRecoveredTimers`): a
+ * tail-replayed arm is a real coroutine, and without the cancel it later fires a `Timer Expired`
+ * WARN into the shareable log for a pending that no longer exists (principle 7).
+ *
+ * ## Re-based — a DECISION in flight that has observed none of its window
+ *
+ * **The destructive grace** (`pendingDestructive`) is not an observation waiting to be contradicted:
+ * the destructive signal was on screen and the window is only the courtesy before we believe it. It
+ * survives — but not untouched. A grace observes nothing while the process is dead, and **dead time
+ * is not un-contradicted time**: the collapsed receipt's expansion (#1033) and the misrecognized
+ * summary's contradicting task frame (#431) can both still land. So the REMAINING window is served
+ * LIVE from [nowMs] — `remaining = (deadline − since) − (lastSeen − since)`, re-based onto now —
+ * while `since` is left exactly as it was, because #732 stamps the commit at `since`. Before this a
+ * restored grace re-armed at the 1 ms floor and committed before any live frame could arrive; a
+ * collapsed-receipt `TASK_RETIRE` lost its whole expansion window that way.
+ *
+ * [lastSeen] is `AppState.timestamp` — set by `StateMachine.step` on EVERY accepted observation
+ * regardless of platform, so it is the honest "when did this state last see anything". A region's
+ * own `lastObservedAt` only moves when that region is stepped with a mode signal, so it lags and
+ * would overstate the remaining window.
+ *
+ * ## Re-armed as-is — a countdown that is not ours
+ *
+ * **The pause-safety deadline** (`pauseSafetyDeadline`, #1054 round 4) is left alone here and
+ * re-armed verbatim by [pendingDeadlineTimers]: it belongs to the PLATFORM and ran on the platform's
+ * clock while we were dead. See the field's KDoc.
+ *
+ * ## Where and when
+ *
+ * **At the LIVE boundary — on the FINAL restored state, after the tail fold, never on the snapshot
+ * it replays from** (#1052). The tail is a faithful replay of what already happened, so it must run
+ * against the snapshot exactly as recorded: a park whose commit timer sits IN the tail committed
+ * live, and scrubbing the base would replay a different history. Running here also covers a pending
+ * a TAIL frame re-created, whose `ScheduleTimeout` the recovery fold really does execute; that timer
+ * then finds nothing and no-ops.
+ *
+ * **And the result has to be DURABLE, not just installed** (#1052 round 2): the snapshot on disk
+ * still carries what was dropped, so a second restart with no ordinary snapshot in between (neither
+ * the cadence nor a major transition need fire) replays it over a journal tail that has since grown.
+ * `StateManagerV2.finishRestore` therefore CHECKPOINTS the cleaned state
+ * ([SnapshotStore.checkpoint], at the restored correlation version, where snapshot rows REPLACE by
+ * key) before installing it.
+ *
+ * @param nowMs the wall clock, read ONCE at the `StateManagerV2` edge and passed in so this stays
+ *   pure (Principle 1). It is the only thing here that could not come from the state itself.
  */
-
-/**
- * Scrub the restored state of every pending that is stale EVIDENCE (#1029, widened by #1054 round
- * 3) — the parked dash running-total read, and the graced screen-implied resume out of Paused.
- *
- * **The park** (#1029) is a read waiting out a settle window on the surface it came from. After a
- * crash it is evidence from BEFORE the crash: the surface is long gone, and nothing on the restore
- * path re-arms its `SESSION_PAY_SETTLE` wake timer (an identical read after the restore keeps the
- * deadline without scheduling anything). So a restored park either sits forever or is committed by
- * the first frame that happens past its deadline, minting a figure nothing can contradict. Neither
- * is acceptable for a number the dasher reads as their earnings. Dropping it costs at most one
- * settle window: the committed total stands until the next idle frame re-parks the live one.
- *
- * **The resume** (#605, dropped since #1054 round 3) is the same class of thing, which round 2 got
- * wrong by trying to keep it. Its window is 8 s of *un-contradicted observation* — a paused frame
- * inside it cancels — so committing one after a restart is asserting that 8 s of dead process time
- * were 8 s of nobody contradicting it. Worse, the commit is not inert: `applyModeTransition(…,
- * Mode.Online)` MINTS a session when the region has none (a phantom dash off any observation past
- * the deadline — a notification, a click — with no online screen behind it), and even with a live
- * session `EffectMap.diffMode`'s Paused→Online arm CANCELS the `SESSION_PAUSED_SAFETY` timer, a net
- * that is not reconstructible from state once dropped. Round 2's session-null guard suppressed only
- * the RE-ARM, which is not the same thing: the resume was still installed into live state, and the
- * tail path's own replayed `ScheduleTimeout` (not an external effect, so recovery really does arm
- * it) or any later observation past the deadline still committed it.
- *
- * Dropping fails toward **Paused**, which is the honest reading of a process that died while a
- * pause sheet was up — and it is cheap, because the next Online-implying frame arms a fresh resume
- * grace, screen-driven, exactly as the #605 design intends. Fail-null beats fail-wrong (#745).
- *
- * `pendingDestructive` is deliberately NOT touched — see [pendingDeadlineTimers].
- *
- * **Applied at the LIVE boundary — to the FINAL restored state, after the tail fold, never to the
- * snapshot it replays from** (#1052). The tail is a faithful replay of what already happened, so it
- * has to run against the snapshot exactly as recorded: a park whose commit timer sits IN the tail
- * committed live, and scrubbing the base first would replay a different history. Running here
- * instead also covers a pending a TAIL frame re-created — its `ScheduleTimeout` is not an external
- * effect, so the recovery fold really does arm it — leaving that timer to find nothing and no-op.
- *
- * **And the drop has to be DURABLE, not just installed** (#1052 round 2): the snapshot on disk still
- * carries the park, so a second restart with no ordinary snapshot written in between (neither the
- * cadence nor a major transition need fire) replays that same snapshot over a journal tail that has
- * since grown — and a live frame past the park's deadline commits pre-crash evidence after all.
- * `StateManagerV2.restoreState` therefore CHECKPOINTS the cleaned state ([SnapshotStore.checkpoint],
- * at the restored correlation version, where snapshot rows REPLACE by key) before installing it:
- * dropping the park is only durable if the cleaned state is the next replay base.
- */
-fun AppState.recoveryHygiene(): AppState = copy(
-    regions = regions.copy(
-        platforms = regions.platforms.mapValues { (_, region) ->
-            region.copy(pendingSessionPay = null, pendingModeResume = null)
-        },
-    ),
-)
+fun AppState.recoveryHygiene(nowMs: Long): AppState {
+    val lastSeen = timestamp
+    return copy(
+        regions = regions.copy(
+            platforms = regions.platforms.mapValues { (_, region) ->
+                region.copy(
+                    pendingSessionPay = null,
+                    pendingModeResume = null,
+                    pendingDestructive = region.pendingDestructive?.let { pend ->
+                        val observed = (lastSeen - pend.since).coerceAtLeast(0L)
+                        val remaining = (pend.deadline - pend.since - observed).coerceAtLeast(0L)
+                        pend.copy(deadline = nowMs + remaining)
+                    },
+                )
+            },
+        ),
+    )
+}
 
 /**
  * A deadline-bearing pending that a restored [AppState] is still holding, and the wake timer it
@@ -95,34 +118,39 @@ internal data class PendingDeadline(
 )
 
 /**
- * What crash recovery RE-ARMS: the destructive grace, and nothing else (#1054).
+ * What crash recovery RE-ARMS (#1054), and — just as importantly — what it does not.
  *
- * This is the one owner of that question — **not** of "every deadline-bearing pending", a claim
- * round 2 made and round 3 withdrew as untrue. The known omissions, by name:
+ * This is the one owner of that question, not of "every deadline-bearing pending" (a claim round 2
+ * made and round 3 withdrew as untrue). The full ledger:
  *
- * - **`MODE_RESUME_COMMIT`** — dropped by [recoveryHygiene] as stale evidence (round 3). There is
- *   nothing left to re-arm, and that is the point.
- * - **`SESSION_PAY_SETTLE`** — dropped by [recoveryHygiene] too, for the same reason (#1029).
- * - **`OFFER_EXPIRY`, `SESSION_PAUSED_SAFETY`, `SETTLE_UI`** — PRE-EXISTING gaps this issue does not
- *   close. A timer the tail replay re-arms is scheduled against a replayed frame's timestamp, so it
- *   fires late by the whole replay lag, and an offer restored with no `OFFER_EXPIRY` behind it can
- *   sit pending indefinitely. Tracked as #1076; nothing here regresses them.
- *
- * `pendingDestructive` earns its place because it is a DECISION already taken, not an observation
- * waiting to be contradicted: the destructive signal was on screen, the grace is only the courtesy
- * window before we believe it. Without a re-arm it stays live until some later admitted observation
- * — which, for the case `GRACE_COMMIT` exists for (#431, offline with the app backgrounded), may
- * never come; `restoreState` installs the pending straight from the snapshot and the tail fold emits
- * only the `ScheduleTimeout`s the tail ITSELF produced, so an empty or deadline-neutral tail emits
- * none at all. And it is the one pending whose commit fails toward the SAFE side: it ends a dash
- * that in all likelihood really did end, where a resume or a park would invent one.
+ * - **`GRACE_COMMIT`** (`pendingDestructive`) — re-armed, at the deadline [recoveryHygiene] re-based
+ *   so the grace serves its REMAINING window live. It is a decision already taken, and the one
+ *   pending whose commit fails toward the SAFE side: it ends a dash that in all likelihood really
+ *   ended, where the others would invent something (a figure, a dash).
+ * - **`SESSION_PAUSED_SAFETY`** (`pauseSafetyDeadline`) — re-armed AS-IS, dead time included,
+ *   because it is the PLATFORM's countdown running on the platform's clock (see the field's KDoc). A
+ *   deadline already past fires at once and ends the dash: the designed outcome, and the fix for a
+ *   pocketed phone whose countdown ended overnight leaving the session live for the next morning's
+ *   dash to RESUME. Before round 4 this deadline lived only in the engine's in-memory timer map, so
+ *   a restore into Paused had no timer of any kind.
+ * - **`MODE_RESUME_COMMIT`** and **`SESSION_PAY_SETTLE`** — NOT re-armed, because [recoveryHygiene]
+ *   dropped the pendings as stale evidence. The edge emits a `CancelTimeout` for each drop instead.
+ * - **`OFFER_EXPIRY` / `SETTLE_UI`** — pre-existing gaps this issue does not close: a tail-replayed
+ *   arm is scheduled against a replayed frame's timestamp and so fires late, and a restored pending
+ *   offer gets no fresh expiry at all. Tracked as **#1076**; nothing here regresses them. (The three
+ *   region timers no longer have the first half of that problem — their arms carry `deadlineMs`.)
  *
  * Pure, total, and platform-agnostic: the platform comes from the region itself, never a literal
  * (Principle 8).
  */
 internal fun AppState.pendingDeadlineTimers(): List<PendingDeadline> =
-    regions.platforms.values.mapNotNull { region ->
-        region.pendingDestructive?.let {
-            PendingDeadline(TimeoutType.GRACE_COMMIT, region.platform, it.deadline)
+    regions.platforms.values.flatMap { region ->
+        buildList {
+            region.pendingDestructive?.let {
+                add(PendingDeadline(TimeoutType.GRACE_COMMIT, region.platform, it.deadline))
+            }
+            region.pauseSafetyDeadline?.let {
+                add(PendingDeadline(TimeoutType.SESSION_PAUSED_SAFETY, region.platform, it))
+            }
         }
     }

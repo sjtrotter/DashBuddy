@@ -142,18 +142,27 @@ class PerPlatformGraceConfigTest {
 
     // ---- EffectMap side: pause buffer + expand settle key per platform ----
 
+    /**
+     * #1054 round 4: the buffer is applied by the STEPPER now (`PlatformRegion.pauseSafetyDeadline`),
+     * not at the `EffectMap` site that used to hand-build this timer — so the real stepper drives
+     * the transition and the diff reads the deadline it stamped. Strictly stronger than the old
+     * shape, which fed `EffectMap` a hand-built `next`: the per-platform lookup under test is now
+     * exercised where it actually lives.
+     */
     private fun pauseTimeoutDuration(platform: Platform): Long {
         val online = PlatformRegion(
             platform = platform, mode = Mode.Online,
             session = Session("sess-1", startedAt = 100L),
         )
-        val prev = AppState(regions = Regions(platforms = mapOf(platform to online)))
-        val next = AppState(regions = Regions(platforms = mapOf(platform to online.copy(mode = Mode.Paused))))
         val obs = Observation.Screen(
             timestamp = 1_000L, captureId = null, ruleId = "${platform.wire}.screen.paused",
             metadata = ReplayMetadata.EMPTY, flow = null, modeHint = Mode.Paused,
             parsed = ParsedFields.PausedFields(remainingText = "5:00", remainingMillis = 300_000L),
         )
+        val flow = FlowRegion(activePlatform = platform)
+        val paused = stepper.step(online, flow, flow, obs, policy)
+        val prev = AppState(regions = Regions(platforms = mapOf(platform to online)))
+        val next = AppState(regions = Regions(platforms = mapOf(platform to paused)))
         val timeout = effectMap.diff(prev, next, obs)
             .filterIsInstance<AppEffect.ScheduleTimeout>()
             .single { it.type == TimeoutType.SESSION_PAUSED_SAFETY }

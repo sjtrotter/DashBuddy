@@ -63,51 +63,6 @@ class StateManagerV2RecoveryHygieneTest {
     private val settle = GraceConfig.SESSION_PAY_SETTLE_MS
     private val t0 = 10_000L
 
-    private class FakeObservationDao(rows: List<ObservationEntity>) : ObservationDao {
-        private val rows = rows.toMutableList()
-        override suspend fun insert(entity: ObservationEntity): Long {
-            rows += entity; return rows.size.toLong()
-        }
-
-        override suspend fun since(afterVersion: Long): List<ObservationEntity> =
-            rows.filter { it.correlationVersion > afterVersion }.sortedBy { it.correlationVersion }
-
-        override suspend fun latest(): ObservationEntity? = rows.maxByOrNull { it.correlationVersion }
-        override suspend fun pruneOlderThan(cutoff: Long) {}
-    }
-
-    private class FixedSnapshotDao(private val entity: AppStateSnapshotEntity) : AppStateSnapshotDao {
-        override suspend fun insert(entity: AppStateSnapshotEntity) {}
-        override suspend fun latest(): AppStateSnapshotEntity = entity
-        override suspend fun pruneOlderThan(cutoff: Long) {}
-    }
-
-    /**
-     * A real snapshot table: rows keyed by `correlationVersion`, REPLACE on conflict — exactly the
-     * production entity's `@PrimaryKey` + `OnConflictStrategy.REPLACE`. [FixedSnapshotDao] cannot
-     * express the #1052 round-2 case at all, because the whole question is what the SECOND restart
-     * reads back after the first one wrote.
-     */
-    private class FakeSnapshotDao(seed: AppStateSnapshotEntity? = null) : AppStateSnapshotDao {
-        private val rows = LinkedHashMap<Long, AppStateSnapshotEntity>()
-        var inserts = 0
-            private set
-
-        init {
-            if (seed != null) rows[seed.correlationVersion] = seed
-        }
-
-        override suspend fun insert(entity: AppStateSnapshotEntity) {
-            rows[entity.correlationVersion] = entity
-            inserts++
-        }
-
-        override suspend fun latest(): AppStateSnapshotEntity? =
-            rows.values.maxByOrNull { it.correlationVersion }
-
-        override suspend fun pruneOlderThan(cutoff: Long) {}
-    }
-
     /**
      * A snapshot table whose first [failures] inserts throw — the #1052 round-3 G3 case. The
      * recovery checkpoint is the write that makes the park hygiene durable, so a swallowed failure
@@ -170,13 +125,6 @@ class StateManagerV2RecoveryHygieneTest {
         ),
         timestamp = t0,
         correlationVersion = cv,
-    )
-
-    private fun snapshotOf(state: AppState) = AppStateSnapshotEntity(
-        correlationVersion = state.correlationVersion,
-        capturedAt = 1L,
-        sessionId = "s1",
-        stateJson = StateJson.encodeToString(state),
     )
 
     /** An idle frame, optionally carrying a running-total read. */
@@ -248,24 +196,9 @@ class StateManagerV2RecoveryHygieneTest {
         snapshotDao: AppStateSnapshotDao,
         dispatcher: CoroutineDispatcher,
     ): StateManagerV2 {
-        val pipeline: PipelineV2 = mock()
-        whenever(pipeline.events).thenReturn(MutableSharedFlow<StateEvent>(extraBufferCapacity = 16))
         val engine: EffectExecutor = mock()
-        whenever(engine.events).thenReturn(MutableSharedFlow<StateEvent>(extraBufferCapacity = 16))
-
-        return StateManagerV2(
-            pipeline = pipeline,
-            engine = engine,
-            stateMachine = StateMachine(
-                FlowRegionStepper(), PlatformRegionStepper(),
-                CrossPlatformRegionStepper(), TransitionPolicy(),
-                EffectMap(),
-            ),
-            journal = ObservationJournal(journalDao),
-            snapshots = SnapshotStore(snapshotDao),
-            defaultDispatcher = dispatcher,
-            ioDispatcher = dispatcher,
-        )
+        whenever(engine.events).thenReturn(MutableSharedFlow(extraBufferCapacity = 16))
+        return recoveryManager(journalDao, snapshotDao, engine, dispatcher)
     }
 
     @Test

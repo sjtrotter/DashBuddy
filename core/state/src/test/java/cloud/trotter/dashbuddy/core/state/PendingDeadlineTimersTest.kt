@@ -39,6 +39,7 @@ class PendingDeadlineTimersTest {
         modeResume: PendingModeResume? = null,
         park: PendingSessionPay? = null,
         session: Session? = Session("live", startedAt = 100L),
+        pauseSafetyDeadline: Long? = null,
     ) = PlatformRegion(
         platform = platform,
         mode = Mode.Online,
@@ -46,10 +47,15 @@ class PendingDeadlineTimersTest {
         pendingDestructive = destructive,
         pendingModeResume = modeResume,
         pendingSessionPay = park,
+        pauseSafetyDeadline = pauseSafetyDeadline,
     )
 
     private fun state(vararg regions: PlatformRegion) = AppState(
         regions = Regions(platforms = regions.associateBy { it.platform }),
+        // The newest observation this state has seen — `recoveryHygiene`'s `lastSeen` anchor. Set
+        // to the graces' arm time so `observed == 0` and a full window is served live by default;
+        // the serve-live cases below move it deliberately.
+        timestamp = 10_500L,
     )
 
     private val destructive = PendingDestructive(
@@ -57,6 +63,9 @@ class PendingDeadlineTimersTest {
     )
     private val modeResume = PendingModeResume(since = 11_000L, deadline = 19_000L)
     private val park = PendingSessionPay(16.70, 12_000L, 15_000L, Flow.Idle)
+
+    /** "Now" at the moment of the restore — far past every deadline above. */
+    private val NOW = 1_000_000L
 
     @Test
     fun `a state with no pendings enumerates nothing`() {
@@ -115,19 +124,37 @@ class PendingDeadlineTimersTest {
     }
 
     @Test
-    fun `a region holding all three pendings enumerates only the destructive grace`() {
+    fun `a region holding every pending enumerates only the two that are re-armed`() {
         val enumerated = state(
             region(
                 Platform.DoorDash,
                 destructive = destructive,
                 modeResume = modeResume,
                 park = park,
+                pauseSafetyDeadline = 40_000L,
             ),
         ).pendingDeadlineTimers()
 
         assertEquals(
-            listOf(PendingDeadline(TimeoutType.GRACE_COMMIT, Platform.DoorDash, 20_500L)),
+            listOf(
+                PendingDeadline(TimeoutType.GRACE_COMMIT, Platform.DoorDash, 20_500L),
+                PendingDeadline(TimeoutType.SESSION_PAUSED_SAFETY, Platform.DoorDash, 40_000L),
+            ),
             enumerated,
+        )
+    }
+
+    @Test
+    fun `the pause-safety net is enumerated AS-IS, dead time included`() {
+        // #1054 round 4. Unlike a destructive grace — which observes nothing while the process is
+        // dead, so `recoveryHygiene` serves its remaining window live — this countdown belongs to
+        // the PLATFORM and ran on the platform's clock throughout. A deadline already past is a
+        // real fact, and firing at once (ending the dash) is the designed outcome: it is the fix
+        // for a pocketed phone whose countdown ended overnight, leaving a session the next
+        // morning's dash would RESUME.
+        assertEquals(
+            listOf(PendingDeadline(TimeoutType.SESSION_PAUSED_SAFETY, Platform.DoorDash, 1_000L)),
+            state(region(Platform.DoorDash, pauseSafetyDeadline = 1_000L)).pendingDeadlineTimers(),
         )
     }
 
@@ -156,16 +183,74 @@ class PendingDeadlineTimersTest {
         val cleaned = state(
             region(Platform.DoorDash, destructive = destructive, modeResume = modeResume, park = park),
             region(Platform.Uber, modeResume = modeResume, park = park),
-        ).recoveryHygiene()
+        ).recoveryHygiene(nowMs = NOW)
 
         for ((platform, region) in cleaned.regions.platforms) {
             assertNull("the park is stale evidence on $platform", region.pendingSessionPay)
             assertNull("so is the resume on $platform", region.pendingModeResume)
         }
+        val kept = cleaned.regions.platforms.getValue(Platform.DoorDash).pendingDestructive
+        assertEquals("the decision in flight survives, and its arm time is untouched (#732)", 10_500L, kept?.since)
+    }
+
+    // =====================================================================
+    // #1054 round 4 — a restored destructive grace serves its REMAINING window live
+    // =====================================================================
+
+    @Test
+    fun `a grace that observed none of its window is re-based to a FULL window from now`() {
+        // The state's own `timestamp` (its newest observation) equals the grace's `since`, so
+        // nothing was observed before the process died. Dead time is not un-contradicted time: the
+        // collapsed receipt's expansion (#1033) and the misrecognized summary's contradicting task
+        // frame (#431) can both still land, and before round 4 a restored grace re-armed at the
+        // 1 ms floor and committed before any live frame could arrive.
+        val cleaned = state(region(Platform.DoorDash, destructive = destructive))
+            .recoveryHygiene(nowMs = NOW)
+
+        val kept = cleaned.regions.platforms.getValue(Platform.DoorDash).pendingDestructive!!
+        assertEquals("the full 10 s window, re-based onto now", NOW + 10_000L, kept.deadline)
+        assertEquals("`since` never moves — #732 stamps the commit at it", 10_500L, kept.since)
         assertEquals(
-            "the decision in flight survives",
-            destructive,
-            cleaned.regions.platforms.getValue(Platform.DoorDash).pendingDestructive,
+            "and the enumerator re-arms the re-based deadline, not the stale one",
+            listOf(PendingDeadline(TimeoutType.GRACE_COMMIT, Platform.DoorDash, NOW + 10_000L)),
+            cleaned.pendingDeadlineTimers(),
+        )
+    }
+
+    @Test
+    fun `a partly-observed window is re-based to only what is LEFT`() {
+        // 4 s of the 10 s window elapsed with frames landing before the crash; 6 s remain.
+        val cleaned = state(region(Platform.DoorDash, destructive = destructive))
+            .copy(timestamp = 14_500L)
+            .recoveryHygiene(nowMs = NOW)
+
+        assertEquals(
+            NOW + 6_000L,
+            cleaned.regions.platforms.getValue(Platform.DoorDash).pendingDestructive?.deadline,
+        )
+    }
+
+    @Test
+    fun `a window already fully elapsed re-bases to now, not to the past`() {
+        val cleaned = state(region(Platform.DoorDash, destructive = destructive))
+            .copy(timestamp = 25_000L)
+            .recoveryHygiene(nowMs = NOW)
+
+        assertEquals(
+            "clamped at zero remaining — the engine's 1 ms floor then fires it immediately",
+            NOW,
+            cleaned.regions.platforms.getValue(Platform.DoorDash).pendingDestructive?.deadline,
+        )
+    }
+
+    @Test
+    fun `the pause-safety deadline is left exactly as it was`() {
+        val cleaned = state(region(Platform.DoorDash, pauseSafetyDeadline = 1_000L))
+            .recoveryHygiene(nowMs = NOW)
+
+        assertEquals(
+            1_000L,
+            cleaned.regions.platforms.getValue(Platform.DoorDash).pauseSafetyDeadline,
         )
     }
 }

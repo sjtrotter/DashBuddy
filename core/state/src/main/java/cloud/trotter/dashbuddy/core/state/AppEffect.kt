@@ -102,6 +102,11 @@ sealed class AppEffect {
 
     // Dash Paused!
     data class ScheduleTimeout(
+        /**
+         * How long to wait. **Ignored by the engine whenever [deadlineMs] is set** (#1054 round 4) —
+         * that is the authority, and this is then only what a scheduler that did not understand
+         * `deadlineMs` would fall back to.
+         */
         val durationMs: Long,
         val type: TimeoutType,
         /**
@@ -118,8 +123,7 @@ sealed class AppEffect {
         val payload: ObservationPayload? = null,
         /**
          * Absolute wall-clock instant the timer must fire at. When present the scheduler computes
-         * the remainder at SCHEDULING time and [durationMs] is only the enqueue-time estimate
-         * (#1054 round 2).
+         * the remainder at SCHEDULING time and [durationMs] is ignored (#1054 round 2).
          *
          * The engine is a queue: `process` enqueues into an UNLIMITED channel that one worker
          * drains in order, so an effect emitted during a crash-recovery burst can wait behind the
@@ -127,10 +131,12 @@ sealed class AppEffect {
          * emit time then runs the FULL length late. `SideEffectEngine.scheduleTimer` REPLACES by
          * (type, platform), which prevents a duplicate timer, not a stale duration.
          *
-         * Set by [cloud.trotter.dashbuddy.core.state.StateManagerV2]'s recovery re-arm, which is
-         * the one emitter that already holds a wall-clock instant. The steppers' diffs leave it
-         * null — they have no wall clock (Principle 1), and their durations are derived from
-         * `obs.timestamp` on the very step that emits them.
+         * Set by [cloud.trotter.dashbuddy.core.state.StateManagerV2]'s recovery re-arm AND, since
+         * #1054 round 4, by every region-timer arm in `ModeEffects.diffDeadlineTimer`: a stepper
+         * deadline IS a wall-clock instant (`obs.timestamp` is stamped from
+         * `System.currentTimeMillis()` at capture), so handing it over makes a tail-REPLAYED arm
+         * land on time instead of a full window late. `OFFER_EXPIRY` and `SETTLE_UI` do not yet —
+         * they stay on #1076.
          */
         val deadlineMs: Long? = null,
     ) : AppEffect()

@@ -2,6 +2,7 @@ package cloud.trotter.dashbuddy.core.state
 
 import cloud.trotter.dashbuddy.domain.capture.ReplayMetadata
 import cloud.trotter.dashbuddy.domain.pipeline.Observation
+import cloud.trotter.dashbuddy.domain.pipeline.ObservationPayload
 import cloud.trotter.dashbuddy.domain.pipeline.TimeoutType
 import cloud.trotter.dashbuddy.domain.settings.GraceConfig
 import cloud.trotter.dashbuddy.domain.state.AppState
@@ -108,46 +109,42 @@ class SessionPaySettleTimerEffectTest {
     }
 
     @Test
-    fun `an early or stale fire of the settle timer RE-ARMS for the remainder`() {
-        // #1029 S5: the wake timer's duration is exactly `deadline - obs.timestamp`, but the fired
-        // observation is stamped with the wall clock — so a fire can land AT or before the
-        // deadline. Because no frame is coming to retry (FrameGate identity dedup), a no-op fire
-        // would strand the park forever. Re-arm, never commit: a stale fire from a park that has
-        // since been REPLACED must not commit the new one early — that is a mid-spin value.
+    fun `an early or stale fire no longer needs a re-arm — the arm carries its own identity`() {
+        // #1029 S5 added an early-wake RE-ARM here: the timer is armed for exactly
+        // `deadline - obs.timestamp` but its fire is stamped with the wall clock, so a clock
+        // step-back made it land early, and a no-op fire would strand the park forever (FrameGate
+        // identity dedup means no frame is coming to retry). #1054 round 4 fixed that at the root
+        // instead — the arm carries `GraceWake(deadline)`, so the expiry recognises the fire
+        // whenever it lands and there is nothing left to rescue. The re-arm branch is deleted, and
+        // this test now pins its ABSENCE: an early fire schedules nothing, because it commits.
         val park = PendingSessionPay(16.70, t0, t0 + settle, Flow.Idle)
         val wake = Observation.Timeout(
             timestamp = t0 + settle - 1_000L,
             type = TimeoutType.SESSION_PAY_SETTLE,
             targetPlatform = Platform.DoorDash,
+            payload = ObservationPayload.GraceWake(t0 + settle),
         )
-        val armed = effectMap.diff(state(region(pending = park)), state(region(pending = park)), wake)
-            .filterIsInstance<AppEffect.ScheduleTimeout>()
-            .single { it.type == TimeoutType.SESSION_PAY_SETTLE }
 
-        assertEquals(1_000L, armed.durationMs)
+        assertTrue(
+            "no re-arm — identity made it unnecessary",
+            effectMap.diff(state(region(pending = park)), state(region(pending = park)), wake)
+                .filterIsInstance<AppEffect.ScheduleTimeout>()
+                .none { it.type == TimeoutType.SESSION_PAY_SETTLE },
+        )
     }
 
     @Test
-    fun `a fire AT or PAST the deadline never re-arms - a frozen park would spin at the 1ms floor`() {
-        // #1052 round 3: a park is FROZEN while the dash is not Online, so its own wake timer can
-        // now land at or past the deadline and leave the pending standing with an UNCHANGED
-        // deadline — a shape that previously only ever meant "the park committed", i.e. the cancel
-        // arm. Re-arming there would schedule `(deadline - now).coerceAtLeast(1)` = 1 ms and fire
-        // again immediately, for as long as the dasher stayed paused.
+    fun `an arm carries the deadline it was armed for, as identity and as an absolute instant`() {
+        // The two halves of #1054 round 4, both on one effect: the `GraceWake` payload is what the
+        // expiry matches on (so a superseded fire is inert), and `deadlineMs` is what the engine
+        // waits on (so a tail-REPLAYED arm lands on time rather than a full window late).
         val park = PendingSessionPay(16.70, t0, t0 + settle, Flow.Idle)
-        for (fireAt in listOf(t0 + settle, t0 + settle + 5_000L)) {
-            val wake = Observation.Timeout(
-                timestamp = fireAt,
-                type = TimeoutType.SESSION_PAY_SETTLE,
-                targetPlatform = Platform.DoorDash,
-            )
-            assertTrue(
-                "a wake at $fireAt must not re-arm the frozen park",
-                effectMap.diff(state(region(pending = park)), state(region(pending = park)), wake)
-                    .filterIsInstance<AppEffect.ScheduleTimeout>()
-                    .none { it.type == TimeoutType.SESSION_PAY_SETTLE },
-            )
-        }
+        val armed = diff(region(), region(pending = park))
+            .filterIsInstance<AppEffect.ScheduleTimeout>()
+            .single { it.type == TimeoutType.SESSION_PAY_SETTLE }
+
+        assertEquals(ObservationPayload.GraceWake(t0 + settle), armed.payload)
+        assertEquals(t0 + settle, armed.deadlineMs)
     }
 
     @Test

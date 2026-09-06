@@ -80,6 +80,28 @@ data class PlatformRegion(
      */
     val pendingModeResume: PendingModeResume? = null,
     /**
+     * When this platform's pause-safety net fires (#1054 round 4) — the platform's own reported
+     * countdown plus `GraceConfig.pauseTimeoutBufferMs`, stamped on the transition INTO [Mode.Paused]
+     * and cleared on every transition out of it.
+     *
+     * State, not just a scheduled coroutine, and that is the entire point. The deadline used to live
+     * ONLY inside `SideEffectEngine`'s in-memory timer map, built by hand at the Online→Paused site
+     * in `EffectMap`. Nothing described it, so nothing could restore it: a process death while
+     * paused left a dash with no timer of any kind, and a pocketed phone whose platform countdown
+     * ended kept the session live indefinitely — the next morning's dash then RESUMED that session
+     * rather than starting a fresh one. As a region field it is armed by the same
+     * `diffPauseSafetyTimer` shape as the other three region timers and re-armed by
+     * `AppState.pendingDeadlineTimers()` on restore.
+     *
+     * Re-armed AS-IS across a recovery, deliberately: unlike a destructive grace (which observes
+     * nothing while the process is dead, so #1054 serves its remaining window live), this countdown
+     * belongs to the PLATFORM and runs on the platform's clock whether we are watching or not. Dead
+     * time counted against it in reality, so a deadline already past fires immediately and ends the
+     * dash — the designed outcome. Default-null so pre-round-4 snapshots decode unchanged, and a
+     * restore from one simply has nothing to re-arm (fail-null, the pre-existing behaviour).
+     */
+    val pauseSafetyDeadline: Long? = null,
+    /**
      * This platform's presented + accepted-pending-consumption offers (#438 item 7 / B3), moved off
      * the shared global `FlowRegion.pendingOffer` so concurrent platforms no longer collide on one
      * scalar slot. Default-empty so existing snapshots deserialize unchanged (a live pending offer

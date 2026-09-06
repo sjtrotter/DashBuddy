@@ -5,6 +5,7 @@ import cloud.trotter.dashbuddy.domain.model.offer.ParsedOffer
 import cloud.trotter.dashbuddy.domain.model.order.OrderType
 import cloud.trotter.dashbuddy.domain.model.order.ParsedOrder
 import cloud.trotter.dashbuddy.domain.pipeline.Observation
+import cloud.trotter.dashbuddy.domain.pipeline.ObservationPayload
 import cloud.trotter.dashbuddy.domain.pipeline.TimeoutType
 import cloud.trotter.dashbuddy.domain.state.AppState
 import cloud.trotter.dashbuddy.domain.state.DestructiveKind
@@ -98,7 +99,10 @@ class StateMachineTest {
         type: TimeoutType = TimeoutType.SESSION_PAUSED_SAFETY,
         timestamp: Long = tick(),
         targetPlatform: Platform? = null,
-    ) = Observation.Timeout(timestamp = timestamp, type = type, targetPlatform = targetPlatform)
+        payload: ObservationPayload? = null,
+    ) = Observation.Timeout(
+        timestamp = timestamp, type = type, targetPlatform = targetPlatform, payload = payload,
+    )
 
     private fun offerFields(storeName: String = "Chipotle", hash: String = "hash-123") =
         ParsedFields.OfferFields(
@@ -737,16 +741,24 @@ class StateMachineTest {
             sessionId = "sess-1",
             startedAt = 100L,
         )
+        // #1054 round 4: the safety fire is identity-gated — it ends the pause it was armed for,
+        // matched on `pauseSafetyDeadline` via its `GraceWake` payload, so a stale fire from a
+        // PREVIOUS pause cannot end the current one.
+        val safetyDeadline = 9_000L
         val pausedRegion = PlatformRegion(
             platform = Platform.DoorDash,
             mode = Mode.Paused,
             session = session,
+            pauseSafetyDeadline = safetyDeadline,
         )
         val flow = FlowRegion(flow = Flow.Idle)
 
         val result = stepper.step(
             pausedRegion, flow, flow,
-            timeoutObs(type = TimeoutType.SESSION_PAUSED_SAFETY),
+            timeoutObs(
+                type = TimeoutType.SESSION_PAUSED_SAFETY,
+                payload = ObservationPayload.GraceWake(safetyDeadline),
+            ),
             policy,
         )
 
@@ -848,11 +860,16 @@ class StateMachineTest {
             // Grace still un-expired at the timeout instant (deadline in the future) so the
             // safety-timeout path — not lazy expiry — resolves the pending.
             pendingModeResume = cloud.trotter.dashbuddy.domain.state.PendingModeResume(since = 4_000L, deadline = 12_000L),
+            // #1054 round 4: the safety fire matches this deadline by identity.
+            pauseSafetyDeadline = 9_000L,
         )
         val flow = FlowRegion(flow = Flow.Idle)
         val result = stepper.step(
             pausedRegion, flow, flow,
-            timeoutObs(type = TimeoutType.SESSION_PAUSED_SAFETY, timestamp = 5_000L),
+            timeoutObs(
+                type = TimeoutType.SESSION_PAUSED_SAFETY, timestamp = 5_000L,
+                payload = ObservationPayload.GraceWake(9_000L),
+            ),
             policy,
         )
         assertEquals(Mode.Offline, result.mode)
