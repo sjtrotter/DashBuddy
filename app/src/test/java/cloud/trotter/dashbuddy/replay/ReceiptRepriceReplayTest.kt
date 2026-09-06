@@ -105,10 +105,17 @@ class ReceiptRepriceReplayTest {
             payload.dropRealizedPay!!,
             0.005,
         )
-        assertTrue(
-            "nothing is owed a re-price when the completion already carried the receipt",
-            reprices(steps).isEmpty(),
-        )
+        // The stepper no longer tries to know that the mint already carried this itemization (#1033
+        // review round 8 — two rounds of trying refused legitimate corrections), so it may still emit
+        // a REDUNDANT "the receipt says X". What matters is that it says the same X: the projector
+        // compares the row and no-ops it, leaving the row byte-identical.
+        reprices(steps).forEach {
+            assertEquals(
+                "a redundant re-price must carry the SAME itemization the completion did",
+                payload.parsedPay,
+                it.parsedPay,
+            )
+        }
     }
 
     @Test

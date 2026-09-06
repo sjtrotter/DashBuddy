@@ -910,6 +910,22 @@ class AnalyticsProjectorTest {
     }
 
     @Test
+    fun `the CLOSE-time re-price of an already-itemized job projects to nothing (#1033 round 9 mirror)`() = runBlocking {
+        // The stepper now decides at the job close from its cached receipt, without knowing whether
+        // the mint already carried that itemization. When it did, the emitted event must land as a
+        // pure no-op — this is the control for the close-time decision being free.
+        val seq = seedReceiptedJob()
+        projector().catchUp()
+        val before = analyticsDao.deliveryRecord(seq)!!
+
+        insertReprice(at = 3_400) // exactly what the mint already wrote
+        projector().catchUp()
+
+        assertEquals("byte-identical", before, analyticsDao.deliveryRecord(seq)!!)
+        assertNull("and no correction marker for a correction that corrected nothing", analyticsDao.deliveryRecord(seq)!!.receiptRepricedAt)
+    }
+
+    @Test
     fun `a re-price that CHANGES the row still applies after a redundant one (#1033 round 8)`() = runBlocking {
         val seq = seedReceiptedJob()
         projector().catchUp()

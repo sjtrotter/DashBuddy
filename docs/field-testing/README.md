@@ -97,8 +97,11 @@ was found **broken-in-part** (raw PII in capture envelopes) and moved to that en
      **"re-priced from the receipt"** on that row (and `receiptRepricedAt` non-null in
      `delivery_records`); a normally-expanded one should show neither that nor "est. offer pay".
   3. `SELECT eventType, COUNT(*) FROM app_events WHERE eventType='DELIVERY_RECEIPT_REPRICE'` —
-     one row per delivered drop of an affected job, never more; and for a stacked job, the Σ of
-     the payload `dropRealizedPay` must equal the payload `totalPay` to the cent.
+     one event per drop per DISTINCT itemization decision (a receipt that legitimately changes
+     — a tip landing late — decides again, so X→Y→X is three per drop, each under its own
+     revision key); the drill-down row follows the LATEST, and a redundant event whose values
+     the row already holds is a projector no-op counted at DEBUG. For a stacked job the Σ of the
+     payload `dropRealizedPay` must equal the payload `totalPay` to the cent.
   4. No `DELIVERY_RECEIPT_REPRICE: no delivery row` WARN in the log (that would mean the event is
      firing for a drop whose completion was never folded).
   - Confirmed: 0/2

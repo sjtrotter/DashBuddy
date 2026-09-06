@@ -736,49 +736,64 @@ class ReceiptRepriceTest {
     }
 
     @Test
-    fun `round 7 — the marker records what the FIRST completion carried, not the receipt at close`() {
-        // The completion's durable key is per-taskId, so the FIRST emission is the one that persists.
-        // An offer overlay pops the receipt and mints the UN-itemized completion; the receipt returns
-        // EXPANDED; the close re-emits a completion that `effects_fired` drops. A marker built from
-        // the receipt at CLOSE would claim "itemized $20" for a row that is still un-itemized, and
-        // every later $20 frame would then be dismissed as already priced.
+    fun `round 9 — a job that closes with an ITEMIZED receipt on file decides at the close itself`() {
+        // Astra's sequence, ENDING at the close — no further receipt frame ever renders. The first
+        // completion was minted UN-itemized on the overlay's PostTask exit, the close's re-emission is
+        // dropped by the per-taskId durable key, and `completeActiveJob` is about to clear
+        // `lastPostTaskFields`. If the close does not decide, the row keeps its estimate forever.
         val updated = ParsedPay(
             appPayComponents = listOf(ParsedPayItem("Base Pay", 9.70)),
             customerTips = listOf(ParsedPayItem("Bill Millers", 10.30)),
         )
         val fold = Fold(liveDropoffRegion())
             .step(postTaskObs(collapsed(), 10_000L)) // A's collapsed receipt
-            .step(offerObs(11_000L, "hash-B")) // overlay → the PostTask EXIT mints the completion
+            .step(offerObs(11_000L, "hash-B")) // an UNACCEPTED offer overlays it → the exit mints
             .step(postTaskObs(expanded(updated), 13_000L)) // the receipt returns EXPANDED ($20)
-            .step(idleObs(14_000L)) // A closes; a completion is re-emitted for the same task
 
-        val completions = fold.events.filter { it.type == AppEventType.DELIVERY_COMPLETED }
-        assertEquals("the exit and the close each emit one", 2, completions.size)
-        assertNull(
-            "the FIRST carried the COLLAPSED receipt",
-            (completions.first().payload as DeliveryPayload).parsedPay,
+        val beforeClose = fold.reprices().size
+        assertEquals("the job is still open, so no decision yet", 0, beforeClose)
+
+        fold.step(idleObs(14_000L)) // the close — and the LAST step of the sequence
+
+        val repriced = fold.reprices()
+        assertEquals("the close decided from the receipt it was about to drop", 1, repriced.size)
+        val payload = repriced.single().payload as DeliveryReceiptRepricePayload
+        assertEquals("t1", payload.taskId)
+        assertEquals(20.00, payload.totalPay, 0.0001)
+        assertEquals("the row the projector will write", 20.00, payload.dropRealizedPay, 0.0001)
+
+        // Ordering on that same step: the completion first, then the correction to it.
+        val types = fold.events.map { it.type }
+        assertTrue(
+            "the re-price must land after the completion: $types",
+            types.lastIndexOf(AppEventType.DELIVERY_RECEIPT_REPRICE) >
+                types.lastIndexOf(AppEventType.DELIVERY_COMPLETED),
         )
-        // The fake durable table: both emissions share one key, so only the first is ever written.
+        // Both completions shared one durable key, so only the UN-itemized first one was ever written
+        // — which is exactly why the close-time decision is what carries the itemization.
         val completionKeys = fold.allKeys.filter { it.first == AppEventType.DELIVERY_COMPLETED }.map { it.second }
         assertEquals("both completions share ONE durable key: $completionKeys", 1, completionKeys.toSet().size)
-        val fired = mutableSetOf<String?>()
-        val persisted = completions.filterIndexed { i, _ -> fired.add(completionKeys[i]) }
-        assertEquals("so exactly one row is written", 1, persisted.size)
-        assertNull("…un-itemized", (persisted.single().payload as DeliveryPayload).parsedPay)
-
-        // Round 8: the marker no longer claims anything about what the rows hold, so the close cannot
-        // suppress the correction that is still owed.
-        assertNull("the close made no decision", fold.region.lastClosedJobReceipt!!.lastDecidedPayHash)
-
-        // …and the next $20 frame is what carries the itemization to the row.
-        val before = fold.reprices().size
-        fold.step(postTaskObs(expanded(updated), 15_000L))
-        assertEquals("the expanded receipt re-prices", before + 1, fold.reprices().size)
-        assertEquals(
-            20.00,
-            (fold.reprices().last().payload as DeliveryReceiptRepricePayload).totalPay,
-            0.0001,
+        assertNull(
+            "…and the first carried no itemization",
+            (fold.events.first { it.type == AppEventType.DELIVERY_COMPLETED }.payload as DeliveryPayload).parsedPay,
         )
+    }
+
+    @Test
+    fun `round 9 — the close-time decision is suppressed once it has already been decided`() {
+        // The frame at 13,000 decides nothing (job open); the close decides. A LATER identical frame
+        // must not decide again — `lastDecidedPayHash` is the stepper's own-decision suppression.
+        val fold = Fold(liveDropoffRegion())
+            .step(postTaskObs(collapsed(), 10_000L))
+            .step(idleObs(18_001L)) // A retires and closes; the receipt on file is COLLAPSED → no decision
+        assertEquals(0, fold.reprices().size)
+        assertNull(fold.region.lastClosedJobReceipt!!.lastDecidedPayHash)
+
+        fold.step(postTaskObs(expanded(), 19_000L))
+        assertEquals(1, fold.reprices().size)
+        fold.step(postTaskObs(expanded(), 20_000L))
+        assertEquals("an unchanged re-render decides nothing", 1, fold.reprices().size)
+        assertEquals(1, fold.region.lastClosedJobReceipt!!.repriceRevision)
     }
 
     @Test

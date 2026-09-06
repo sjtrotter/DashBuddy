@@ -4,7 +4,6 @@ import cloud.trotter.dashbuddy.domain.model.event.AppEventType
 import cloud.trotter.dashbuddy.domain.model.event.payload.DeliveryReceiptRepricePayload
 import cloud.trotter.dashbuddy.domain.state.DestructiveKind
 import cloud.trotter.dashbuddy.domain.state.DropPayApportioner
-import cloud.trotter.dashbuddy.domain.state.Flow
 import cloud.trotter.dashbuddy.domain.state.ParsedFields
 import cloud.trotter.dashbuddy.domain.state.PendingReceiptReprice
 import cloud.trotter.dashbuddy.domain.state.PlatformRegion
@@ -29,6 +28,13 @@ import timber.log.Timber
  * fold re-prices the row in place. Frozen economy is never re-costed — net recomputes against the
  * row's OWN `frozenCostPerMile` at the orchestrator.
  *
+ * **Two decision points (round 9).** The PostTask arm asks on every itemized receipt FRAME, and the
+ * job close asks once more from the receipt it has cached — because `completeActiveJob` CLEARS
+ * `lastPostTaskFields`, and a job whose itemized receipt was already on screen when it closed may
+ * never render another frame. Without the close-time ask, that row keeps its estimate forever: its
+ * first completion was minted un-itemized on an earlier PostTask exit, and the close's re-emission is
+ * dropped by the per-taskId `effects_fired` key.
+ *
  * **Why the decision is in the stepper (review round 4, UDF).** It has to write state as it decides:
  * `PlatformRegion.lastClosedJobReceipt` must learn, atomically, that the job has just been re-priced
  * and what its receipt now totals. An effect diff cannot do that, and the round-3 shape — deciding
@@ -50,12 +56,13 @@ import timber.log.Timber
 internal fun PlatformRegionStepper.decideReceiptReprice(
     region: PlatformRegion,
     parsed: ParsedFields.PostTaskFields,
-    flow: Flow,
     postTaskTaskId: String?,
     decidedAt: Long,
     captureId: String?,
 ): PlatformRegion {
-    if (flow != Flow.PostTask) return region
+    // The caller decides WHEN this is asked (#1033 round 9): the PostTask arm asks on a receipt
+    // FRAME, and `completeActiveJob` asks once more at the close, from the receipt it is about to
+    // drop. Both hand the fields in directly, so no flow test belongs in here.
     // ONLY an itemized receipt re-prices — an un-itemized re-render carries no new evidence.
     val parsedPay = parsed.parsedPay ?: return region
     // The job whose completions have already been minted, and what its rows currently hold.

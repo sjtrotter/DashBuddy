@@ -1346,8 +1346,13 @@ posture as the driver ones: the original `DELIVERY_COMPLETED` is never rewritten
 `EffectMap.diffReceiptReprice` emits ONE `DELIVERY_RECEIPT_REPRICE` per delivered drop of the job
 (a stacked receipt re-prices every sibling), with shares from the SAME `DropPayApportioner.apportion`
 over the SAME `Task.isAccountableDropoff` denominator the mint uses, so `Σ dropRealizedPay ==
-parsedPay.total` to the cent; idempotent per `(taskId, parsedPay.hashCode())` via the `effects_fired`
-key. It can fire at all only because of ONE marker: `PlatformRegion.lastClosedJobReceipt` (jobId +
+parsedPay.total` to the cent; keyed `…:<taskId>:<jobId>:r<repriceRevision>` in `effects_fired`, so a
+distinct DECISION always lands (a content hash collided with itself on an X→Y→X sequence and the
+third emission was dropped). Decided at TWO points (round 9): every itemized receipt FRAME, and once
+more at the job close from the receipt `completeActiveJob` is about to clear — a job whose itemized
+receipt was already on screen when it closed may never render another frame, and its row can still be
+un-itemized (its first completion was minted on an earlier PostTask exit, and the close's re-emission
+is dropped by the per-taskId completion key). It can fire at all only because of ONE marker: `PlatformRegion.lastClosedJobReceipt` (jobId +
 `receiptSeenAt` + `repriceRevision` + `lastDecidedPayHash`, stamped at that one close site, cleared by
 `endSession`). The marker deliberately does NOT model what the completion ROWS hold — it tried
 through two review rounds and both attempts failed toward REFUSING a legitimate correction (mirroring

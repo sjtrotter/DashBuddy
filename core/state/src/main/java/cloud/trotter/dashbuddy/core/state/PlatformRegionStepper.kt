@@ -195,7 +195,7 @@ class PlatformRegionStepper @Inject constructor() {
                     // AppEventEntity's class KDoc ("sequenceId vs occurredAt") for the full
                     // invariant; this is a documented, accepted tradeoff (Option B), not a
                     // bug to silently "fix" by re-stamping here.
-                    commitDestructive(current, pend.kind, pend.since)
+                    commitDestructive(current, pend.kind, pend.since, obs.timestamp)
                 }
             }
         }
@@ -758,8 +758,11 @@ class PlatformRegionStepper @Inject constructor() {
                 // #1033 round 4: decide the late-receipt re-price HERE, where state can be written —
                 // the itemization has just landed in `lastPostTaskFields`, and the marker has to be
                 // updated in the same breath (see [PendingReceiptReprice]). `EffectMap` only emits
-                // what this decides.
-                r = decideReceiptReprice(r, parsed, flow, postTaskTaskId, obs.timestamp, obs.captureId)
+                // what this decides. The flow gate lives at this call site (round 9), because the
+                // OTHER caller is the job close, which has no frame.
+                if (flow == Flow.PostTask) {
+                    r = decideReceiptReprice(r, parsed, postTaskTaskId, obs.timestamp, obs.captureId)
+                }
                 r.session?.let { session ->
                     val earnings = parsed.sessionEarnings
                     if (earnings != null) {
@@ -1033,7 +1036,7 @@ class PlatformRegionStepper @Inject constructor() {
         // wrong close on a stacked job is fabrication, and an open job fails toward absorption —
         // the preferred failure direction. See ADR-0002 amendment 2026-07-15 (residual).
         if (prevFlowVal == Flow.PostTask && !nextFlowVal.isTaskFlow() && nextFlowVal != Flow.PostTask && nextFlowVal != Flow.OfferPresented) {
-            return completeActiveJob(current)
+            return completeActiveJob(current, obs.timestamp)
         }
 
         return current
@@ -1049,9 +1052,12 @@ class PlatformRegionStepper @Inject constructor() {
         region: PlatformRegion,
         kind: DestructiveKind,
         timestamp: Long,
+        observedAt: Long,
     ): PlatformRegion = when (kind) {
         DestructiveKind.SESSION_END -> endSession(region, timestamp)
-        DestructiveKind.TASK_RETIRE -> retireActiveTask(region, timestamp)
+        // [timestamp] is the honest completion instant (the grace's `since`, #732); [observedAt] is
+        // the frame that commits it, which is what a re-price decided here must be stamped with.
+        DestructiveKind.TASK_RETIRE -> retireActiveTask(region, timestamp, observedAt)
     }
 
     /**
@@ -1067,7 +1073,11 @@ class PlatformRegionStepper @Inject constructor() {
      * add-on offer ([Flow.OfferPresented]) does NOT close (that drop isn't
      * delivered — the accept is an add-on).
      */
-    private fun retireActiveTask(region: PlatformRegion, timestamp: Long): PlatformRegion {
+    private fun retireActiveTask(
+        region: PlatformRegion,
+        timestamp: Long,
+        observedAt: Long = timestamp,
+    ): PlatformRegion {
         val armedFromFlow = region.pendingDestructive
             ?.takeIf { it.kind == DestructiveKind.TASK_RETIRE }?.armedFromFlow
         // ONE spelling of the inline-committed retire copy (#997 amendment) — see [completedInline].
@@ -1083,7 +1093,7 @@ class PlatformRegionStepper @Inject constructor() {
         return if (job != null && armedFromFlow != Flow.OfferPresented &&
             isJobPhysicallyComplete(job, recentTasks, justRetired = completed)
         ) {
-            completeActiveJob(retired)
+            completeActiveJob(retired, observedAt)
         } else {
             retired
         }
@@ -1117,9 +1127,9 @@ class PlatformRegionStepper @Inject constructor() {
         )
     }
 
-    internal fun completeActiveJob(region: PlatformRegion): PlatformRegion {
+    internal fun completeActiveJob(region: PlatformRegion, at: Long): PlatformRegion {
         val job = region.activeJob ?: return region
-        return region.copy(
+        val closed = region.copy(
             activeJob = null,
             lastPostTaskPayHash = null,
             lastPostTaskFields = null,
@@ -1138,6 +1148,25 @@ class PlatformRegionStepper @Inject constructor() {
                 receiptSeenAt = region.jobReceiptAnchors?.firstEnteredAt,
             ),
         )
+        // #1033 round 9: ask ONCE MORE, from the receipt this close is about to drop.
+        //
+        // A job whose ITEMIZED receipt was already on screen when it closed may never render another
+        // frame — and its row can still be un-itemized, because its first completion was minted on an
+        // earlier PostTask exit (an offer overlay popping the receipt, say) and the close's
+        // re-emission is dropped by the per-taskId `effects_fired` key. `lastPostTaskFields` is the
+        // last place that evidence exists; one line later it is gone.
+        //
+        // Same guards, same denominator, same handoff — `closed` already has `activeJob = null` and
+        // the fresh marker, so the ownership rules read exactly as they do on a frame. The projector's
+        // no-op makes this free whenever the mint DID carry the itemization. If a receipt frame on
+        // this same step then decides something newer, it overwrites this handoff: that is correct
+        // (the frame is fresher evidence for the same job) and costs only a skipped revision number.
+        val cached = region.lastPostTaskFields
+        return if (cached?.parsedPay != null) {
+            decideReceiptReprice(closed, cached, postTaskTaskId = null, decidedAt = at, captureId = null)
+        } else {
+            closed
+        }
     }
 }
 
