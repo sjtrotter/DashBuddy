@@ -197,6 +197,26 @@ data class PlatformRegion(
      * deserialize unchanged.
      */
     val pendingReceiptReprice: PendingReceiptReprice? = null,
+    /**
+     * `obs.timestamp` of the last time this region's flow ENTERED `PostTask` — when the current
+     * delivery receipt first appeared on screen (#1033 review round 6).
+     *
+     * Read once, at the close, into [ClosedJobReceipt.receiptSeenAt]; kept across that close (the
+     * receipt is still on screen after it) and cleared only when the dash ends. It exists because a
+     * receipt carries no job identity of its own, so the only defensible ownership question is a
+     * temporal one — see [ClosedJobReceipt.receiptSeenAt].
+     */
+    val lastPostTaskEnteredAt: Long? = null,
+    /**
+     * `obs.timestamp` of the last accept-latch RESOLUTION on this platform (#1033 review round 6) —
+     * the moment `OfferLifecycle` turned a latched offer into an accepted-pending-consumption
+     * survivor, whether or not a job was ever minted from it.
+     *
+     * **Never cleared by the survivor's expiry, nor by the mint** — those are exactly the events that
+     * used to make the machine forget an acceptance had happened and re-open the re-price window
+     * minutes later. Cleared only at `endSession`: an accept belongs to the dash it was taken in.
+     */
+    val lastAcceptResolvedAt: Long? = null,
 ) {
     /**
      * This platform's current PRESENTED offer — the accepted-pending-consumption survivors
@@ -220,50 +240,47 @@ data class PlatformRegion(
 data class ClosedJobReceipt(
     /** The job whose completions were minted at this close. */
     val jobId: String,
-    /** `lastPostTaskFields.totalPay` at the close; null when no receipt had been seen at all. */
+    /** `lastPostTaskFields.totalPay` at the close, then whatever a re-price last wrote. */
     val totalPay: Double? = null,
-    /** True when that receipt carried an itemized `parsedPay` — i.e. the completions were priced from it. */
+    /** True once the rows hold an itemized receipt — at the close, or from a later re-price. */
     val itemized: Boolean = false,
     /**
-     * **Sticky:** an unconsumed ACCEPT existed at some point while this marker was alive (#1033
-     * review rounds 3–4).
+     * When this job's receipt FIRST appeared on screen ([PlatformRegion.lastPostTaskEnteredAt] at the
+     * close) — the anchor for the ONE ownership question the machine can actually answer (#1033
+     * review round 6).
      *
-     * Acceptance and the job mint are two different transitions — `OfferLifecycle` records the
-     * accepted-pending-consumption survivor when the own flow leaves offer-presentation, while the
-     * stepper mints the job only on a later TASK-FLOW observation. Between the two, `activeJob` is
-     * null, so "no job is live" is NOT evidence that no next job exists: with every one of the next
-     * job's task screens missed, ITS receipt would land while this marker still stands and be
-     * re-priced onto this job.
+     * **A receipt carries no job identity.** Rounds 2–5 each tried a heuristic to decide whether a
+     * late-arriving itemization belonged to the closed job — the announce anchor (which falls back to
+     * `recentTasks.lastOrNull()`), an accepted-since flag, a same-total match — and every one of them
+     * leaked, because none of them is evidence about the receipt itself. What IS knowable is
+     * temporal: while no acceptance has resolved since this receipt appeared, no other job can exist
+     * to own a receipt, so the frame must be a re-render of this one's. The moment an acceptance
+     * resolves, that guarantee is gone and nothing on a later frame restores it.
      *
-     * Flagged by PRESENCE, never by a timestamp comparison (round 4): an accept latched BEFORE the
-     * close — the dasher taking the next offer off the receipt that is still on screen — is exactly
-     * the ambiguous case, and an `acceptedAt >= closedAt` test silently let it through, because the
-     * close it must be compared against had not happened yet. Any unconsumed survivor alive while
-     * the marker lives flags it.
+     * So the rule is exactly: re-price while
+     * `lastAcceptResolvedAt == null || lastAcceptResolvedAt < receiptSeenAt`. There is deliberately
+     * NO same-total exception — a total is not identity, and it let a stacked job's $20 receipt
+     * redistribute the closed job's drops ($5/$15 over a real $10/$10) and install a foreign
+     * tip/base split.
      *
-     * Once set this never clears while the marker lives — deliberately, because the survivor itself
-     * EXPIRES (`GraceConfig.acceptGraceMs`), and a marker that re-cleared with it would re-open the
-     * exact hole minutes later. From here a re-price needs a POSITIVE identity instead (the
-     * same-total check in the stepper's re-price decision), never the mere absence of a job.
+     * **Documented consequence (fail-null, #745):** the stacked shape — accept the next offer while
+     * this receipt is up, then expand it LATE — is refused. Layer 1's 8 s collapsed-receipt window is
+     * the path that lands that expansion; an expansion later than that keeps the #691 `OFFER_PAY`
+     * estimate. Null (no PostTask entry known at the close) refuses everything, same direction.
      */
-    val acceptedSince: Boolean = false,
+    val receiptSeenAt: Long? = null,
     /**
-     * This job's drops have already been re-priced once from a late-expanded receipt (#1033 review
-     * round 4).
+     * How many times this job's drops have been re-priced (#1033 review round 6). Bumped on every
+     * admitted decision and carried into the emitted effect key
+     * (`log:DELIVERY_RECEIPT_REPRICE:<taskId>:<jobId>:r<n>`).
      *
-     * [totalPay]/[itemized] are rewritten to the re-priced receipt's own figures at the same instant
-     * this is set, so the marker always describes what the rows currently hold rather than what the
-     * completion originally carried. Without that atomic update the marker kept quoting the ORIGINAL
-     * collapsed total forever, and a later same-store receipt that happened to total the same figure
-     * satisfied the ownership check and re-priced the job back DOWN — undoing a correct tip update.
-     * The effect diff cannot write state, so this is the stepper's to own.
-     *
-     * Combined with [acceptedSince] it is also a terminal gate: once a job has been re-priced AND an
-     * accept has been seen, no further re-price is admitted at all. A genuine later tip update in
-     * that window is therefore refused — fail-null (#745), because at that point nothing on the
-     * frame can distinguish it from the next job's receipt.
+     * The key USED to fold in the receipt's own hash, which made an X → Y → X itemization sequence
+     * collide with its own first event: the durable `effects_fired` idempotency dropped the third
+     * emission, so the row stayed at Y while this marker said X. A monotonic revision cannot repeat,
+     * so the row always follows the marker. Consecutive IDENTICAL receipts are still suppressed
+     * earlier and more cheaply, by the already-priced check.
      */
-    val repriced: Boolean = false,
+    val repriceRevision: Int = 0,
 )
 
 /**
@@ -295,6 +312,10 @@ data class PendingReceiptReprice(
      * replay-stable exactly as it was when the diff still saw the observation.
      */
     val decidedAt: Long,
+    /**
+     * [ClosedJobReceipt.repriceRevision] AFTER this decision — the effect key's uniqueness carrier.
+     */
+    val revision: Int,
     /** The capture the expanded receipt was read from, when the observation carried one (debug). */
     val sourceCaptureId: String? = null,
 )

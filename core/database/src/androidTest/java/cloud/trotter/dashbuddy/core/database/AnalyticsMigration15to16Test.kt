@@ -12,8 +12,9 @@ import org.junit.runner.RunWith
 
 /**
  * #1033 layer 2 — execute the REAL committed `AutoMigration(15→16)` against a **populated** v15
- * database and prove it is additive-only: the pre-existing analytics rows survive, and the one new
- * nullable column (delivery_records.receiptRepricedAt) is present and NULL on existing rows.
+ * database and prove it is additive-only: the pre-existing analytics rows survive, and BOTH new
+ * nullable columns (delivery_records.receiptRepricedAt and .driverAdjustedAt) are present and NULL on
+ * existing rows.
  *
  * NULL is correct FOREVER for that history — unlike the #810 v14→v15 case there is no
  * `PROJECTOR_VERSION` bump, because `DELIVERY_RECEIPT_REPRICE` is a new event type that cannot exist
@@ -38,7 +39,7 @@ class AnalyticsMigration15to16Test {
     )
 
     @Test
-    fun migrate15To16_preservesRows_addsReceiptRepricedAtColumnNull() {
+    fun migrate15To16_preservesRows_addsRepriceAndDriverEditColumnsNull() {
         helper.createDatabase(dbName, 15).use { db ->
             db.execSQL(
                 """INSERT INTO delivery_records
@@ -66,10 +67,13 @@ class AnalyticsMigration15to16Test {
             assertEquals(9.25, c.getDouble(0), 0.0001)
             assertEquals("OFFER_PAY", c.getString(1))
         }
-        // New receiptRepricedAt column exists and is NULL on the pre-existing row.
-        db.query("SELECT receiptRepricedAt FROM delivery_records WHERE eventSequenceId = 1").use { c ->
+        // Both new columns exist and are NULL on the pre-existing row.
+        db.query(
+            "SELECT receiptRepricedAt, driverAdjustedAt FROM delivery_records WHERE eventSequenceId = 1",
+        ).use { c ->
             c.moveToFirst()
             assertTrue("receiptRepricedAt NULL post-migration", c.isNull(0))
+            assertTrue("driverAdjustedAt NULL post-migration", c.isNull(1))
         }
         db.close()
     }

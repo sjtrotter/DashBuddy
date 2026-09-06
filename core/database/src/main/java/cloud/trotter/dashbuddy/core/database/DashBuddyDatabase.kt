@@ -85,12 +85,14 @@ import cloud.trotter.dashbuddy.core.database.snapshot.AppStateSnapshotEntity
     // seq-114 orphan), stamping `UNASSIGNED_INFERRED` on any cross-store single orphan and leaving the
     // same-store fielded shape NULL for Tier-2 driver attestation. Additive ⇒ never wipes app_events or
     // the existing analytics rows.
-    // v15→v16 (#1033 layer 2) is additive-only: one new nullable INTEGER column on delivery_records
-    // (receiptRepricedAt — set when a DELIVERY_RECEIPT_REPRICE re-prices a drop from a late-expanded
-    // receipt; NULL for every row the machine priced correctly first time, back-filled NULL on
-    // existing rows). There is NO `PROJECTOR_VERSION` bump: DELIVERY_RECEIPT_REPRICE is a new event
+    // v15→v16 (#1033 layer 2) is additive-only: TWO new nullable INTEGER columns on delivery_records
+    // — receiptRepricedAt (set when a DELIVERY_RECEIPT_REPRICE re-prices a drop from a late-expanded
+    // receipt) and driverAdjustedAt (set by any DRIVER monetary correction, the re-price's
+    // never-overwrite-the-driver guard). Both NULL for every untouched row and back-filled NULL on
+    // existing ones. There is NO `PROJECTOR_VERSION` bump: DELIVERY_RECEIPT_REPRICE is a new event
     // type that cannot exist in already-folded history, and NULL is correct for all of it — a fresh
-    // drain folds new re-prices; nothing needs refolding. Additive ⇒ never wipes app_events or the
+    // drain folds new re-prices; nothing needs refolding. `driverAdjustedAt` likewise re-derives from
+    // the immutable correction events on any future refold. Additive ⇒ never wipes app_events or the
     // existing analytics rows.
     autoMigrations = [
         AutoMigration(from = 8, to = 9),

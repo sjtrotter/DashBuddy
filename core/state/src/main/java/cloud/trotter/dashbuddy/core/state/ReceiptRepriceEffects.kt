@@ -68,28 +68,27 @@ internal fun PlatformRegionStepper.decideReceiptReprice(
     // can tell that apart from a genuinely late expansion, because the close cleared the receipt out
     // of the region — and since round 4 it also tracks re-prices, so a re-render of a receipt this
     // job was ALREADY re-priced from is a no-op rather than a second event.
-    val sameTotal = centsEqual(mark.totalPay, parsed.totalPay)
-    if (mark.itemized && sameTotal) return region
+    if (mark.itemized && centsEqual(mark.totalPay, parsed.totalPay)) return region
 
-    // Acceptance, evaluated on THIS transition (#1033 review round 5). The marker's own flag is only
-    // as fresh as the last post-step hook, and `step` resolves offers BEFORE `stepCore`: on the frame
-    // where the next job's accept latch is resolved AND its receipt is parsed — the same frame, when
-    // that receipt is the first thing to leave offer-presentation — the marker still said false, the
-    // decision was admitted, and only then did the hook flag it. So read the region the decision was
-    // handed, which already carries this step's resolved offers (and any marker the lazy expiry
-    // created this step).
-    val acceptedSince = mark.acceptedSince || region.pendingOffers.any { it.acceptedAt != null }
-
-    // Ownership. Before any accept, "no job is live" is enough. After one, it proves nothing (the
-    // next job may exist with no `activeJob` ever set), so the receipt must carry the SAME total this
-    // job's own receipt showed — a positive identity a foreign job's receipt cannot satisfy except by
-    // a coincidence of totals, which re-prices with the identical total anyway (the split moves, the
-    // money does not). Two deliberate refusals, both fail-null (#745):
-    //  - a marker with NO total (its collapsed parse yielded none) has no identity to check;
-    //  - a job already re-priced ONCE and since exposed to an accept is terminal — a genuine later
-    //    tip update there is indistinguishable from the next job's receipt, and admitting it is how
-    //    a corrected $20.00 got dragged back down to a coincidental $16.70.
-    if (acceptedSince && !(sameTotal && !mark.repriced && mark.totalPay != null)) return region
+    // OWNERSHIP, and this is the whole of it (#1033 review round 6).
+    //
+    // A receipt carries no job identity. Rounds 2–5 each tried a heuristic — the announce anchor, an
+    // accepted-since flag, a same-total match — and every one leaked, because none is evidence about
+    // the receipt. What IS knowable is temporal: while no acceptance has resolved since this receipt
+    // appeared, no other job can exist to own a receipt, so this frame must be a re-render of this
+    // one's. The instant an acceptance resolves that guarantee is gone, and nothing on a later frame
+    // brings it back — not a matching total (a total is not identity: a stacked job's $20 receipt
+    // redistributed the closed job's drops $5/$15 over a real $10/$10 and installed a foreign
+    // tip/base split), not the absence of a live job (a job accepted but never minted never sets
+    // `activeJob` at all).
+    //
+    // Both refusals below are fail-null (#745), and the cost is stated rather than hidden: the
+    // STACKED shape — accept the next offer off this receipt, then expand it late — is refused. Layer
+    // 1's 8 s collapsed-receipt window is the path that lands that expansion in time; an expansion
+    // later than that keeps the #691 `OFFER_PAY` estimate.
+    val receiptSeenAt = mark.receiptSeenAt ?: return region
+    val acceptResolvedAt = region.lastAcceptResolvedAt
+    if (acceptResolvedAt != null && acceptResolvedAt >= receiptSeenAt) return region
 
     // The denominator, rebuilt as the mint built it — `Task.isAccountableDropoff` (the #498 phantom +
     // #736 unassign firewalls) plus the SAME amdt-#5 [mintQualified] predicate
@@ -114,24 +113,23 @@ internal fun PlatformRegionStepper.decideReceiptReprice(
     val shares = DropPayApportioner.apportion(parsedPay, drops)
     if (shares.isEmpty()) return region
 
+    val revision = mark.repriceRevision + 1
     return region.copy(
         pendingReceiptReprice = PendingReceiptReprice(
             jobId = mark.jobId,
             parsedPay = parsedPay,
             shares = shares,
             decidedAt = decidedAt,
+            revision = revision,
             sourceCaptureId = captureId,
         ),
         // ATOMIC with the decision: from here the marker describes what the ROWS hold, not what the
-        // completion originally carried.
+        // completion originally carried — and the revision it was written at, which is what keeps the
+        // emitted events distinct across an X → Y → X itemization sequence.
         lastClosedJobReceipt = mark.copy(
             totalPay = parsed.totalPay,
             itemized = true,
-            repriced = true,
-            // Carry this step's acceptance forward too (round 5): the post-step hook would otherwise
-            // overwrite nothing (it returns early on an already-flagged marker) but a marker written
-            // HERE must never leave the step claiming `false` after a transition that saw an accept.
-            acceptedSince = acceptedSince,
+            repriceRevision = revision,
         ),
     )
 }
@@ -158,7 +156,6 @@ internal fun EffectMap.diffReceiptReprice(
     if (decided == p.pendingReceiptReprice) return emptyList()
 
     val sessionId = next.session?.sessionId ?: p.session?.sessionId
-    val payHash = decided.parsedPay.hashCode()
     val effects = decided.shares.map { (taskId, share) ->
         logEffect(
             sessionId,
@@ -172,7 +169,13 @@ internal fun EffectMap.diffReceiptReprice(
                 dropRealizedPay = share,
                 sourceCaptureId = decided.sourceCaptureId,
             ),
-            effectKeyOverride = "log:${AppEventType.DELIVERY_RECEIPT_REPRICE}:$taskId:$payHash",
+            // Keyed by DECISION REVISION, not by the receipt's content (#1033 review round 6): an
+            // X → Y → X itemization sequence hashes back to the FIRST key, and the durable
+            // `effects_fired` idempotency then drops the third emission — leaving the row at Y while
+            // the marker says X. A monotonic revision cannot repeat. Identical consecutive receipts
+            // never get here at all; the already-priced check suppresses them earlier and cheaper.
+            effectKeyOverride =
+                "log:${AppEventType.DELIVERY_RECEIPT_REPRICE}:$taskId:${decided.jobId}:r${decided.revision}",
         )
     }
     // P7: ids + counts + cents only — no store/customer text. One line per decision; the durable

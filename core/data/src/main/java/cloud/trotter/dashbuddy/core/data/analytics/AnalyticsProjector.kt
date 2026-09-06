@@ -198,12 +198,12 @@ class AnalyticsProjector @Inject constructor(
             outcome.offer?.let { offers += it }
             outcome.pickup?.let { pickups += it }
             outcome.resolution?.let { resolutions += ResolutionTask(ev.sequenceId, it) }
-            outcome.payAdjustment?.let { adjustments += Adjustment.Pay(ev.sequenceId, it) }
-            outcome.deliveryAdjustment?.let { adjustments += Adjustment.Delivery(ev.sequenceId, it) }
-            outcome.receiptReprice?.let { adjustments += Adjustment.ReceiptReprice(ev.sequenceId, it) }
-            outcome.sessionAssign?.let { adjustments += Adjustment.SessionAssign(ev.sequenceId, it) }
-            outcome.offerReconcile?.let { adjustments += Adjustment.OfferReconcile(ev.sequenceId, it) }
-            outcome.offerOutcomeCorrection?.let { adjustments += Adjustment.OfferOutcomeCorrect(ev.sequenceId, it) }
+            outcome.payAdjustment?.let { adjustments += Adjustment.Pay(ev.sequenceId, ev.event.occurredAt, it) }
+            outcome.deliveryAdjustment?.let { adjustments += Adjustment.Delivery(ev.sequenceId, ev.event.occurredAt, it) }
+            outcome.receiptReprice?.let { adjustments += Adjustment.ReceiptReprice(ev.sequenceId, ev.event.occurredAt, it) }
+            outcome.sessionAssign?.let { adjustments += Adjustment.SessionAssign(ev.sequenceId, ev.event.occurredAt, it) }
+            outcome.offerReconcile?.let { adjustments += Adjustment.OfferReconcile(ev.sequenceId, ev.event.occurredAt, it) }
+            outcome.offerOutcomeCorrection?.let { adjustments += Adjustment.OfferOutcomeCorrect(ev.sequenceId, ev.event.occurredAt, it) }
             outcome.context?.let { ctx ->
                 contexts[ctx.sessionId] = ctx
                 touched += ctx.sessionId
@@ -235,8 +235,8 @@ class AnalyticsProjector @Inject constructor(
             // refold replays this same ascending order and reproduces identical rows.
             adjustments.sortedBy { it.sequenceId }.forEach { adj ->
                 val skipped = when (adj) {
-                    is Adjustment.Pay -> applyPayAdjustment(adj.fold)
-                    is Adjustment.Delivery -> applyDeliveryAdjustment(adj.fold)
+                    is Adjustment.Pay -> applyPayAdjustment(adj.fold, adj.occurredAt)
+                    is Adjustment.Delivery -> applyDeliveryAdjustment(adj.fold, adj.occurredAt)
                     is Adjustment.ReceiptReprice -> applyReceiptReprice(adj.fold)
                     is Adjustment.SessionAssign -> applySessionAssign(adj.fold)
                     is Adjustment.OfferReconcile -> applyOfferReconcile(adj.fold, adj.sequenceId)
@@ -270,12 +270,38 @@ class AnalyticsProjector @Inject constructor(
      */
     private sealed interface Adjustment {
         val sequenceId: Long
-        data class Pay(override val sequenceId: Long, val fold: PayAdjustmentFold) : Adjustment
-        data class Delivery(override val sequenceId: Long, val fold: DeliveryAdjustmentFold) : Adjustment
-        data class ReceiptReprice(override val sequenceId: Long, val fold: ReceiptRepriceFold) : Adjustment
-        data class SessionAssign(override val sequenceId: Long, val fold: SessionAssignFold) : Adjustment
-        data class OfferReconcile(override val sequenceId: Long, val fold: OfferReconcileFold) : Adjustment
-        data class OfferOutcomeCorrect(override val sequenceId: Long, val fold: OfferOutcomeCorrectionFold) : Adjustment
+        /** The source event's own `occurredAt` — the driver-edit stamp (#1033 round 6). */
+        val occurredAt: Long
+        data class Pay(
+            override val sequenceId: Long,
+            override val occurredAt: Long,
+            val fold: PayAdjustmentFold,
+        ) : Adjustment
+        data class Delivery(
+            override val sequenceId: Long,
+            override val occurredAt: Long,
+            val fold: DeliveryAdjustmentFold,
+        ) : Adjustment
+        data class ReceiptReprice(
+            override val sequenceId: Long,
+            override val occurredAt: Long,
+            val fold: ReceiptRepriceFold,
+        ) : Adjustment
+        data class SessionAssign(
+            override val sequenceId: Long,
+            override val occurredAt: Long,
+            val fold: SessionAssignFold,
+        ) : Adjustment
+        data class OfferReconcile(
+            override val sequenceId: Long,
+            override val occurredAt: Long,
+            val fold: OfferReconcileFold,
+        ) : Adjustment
+        data class OfferOutcomeCorrect(
+            override val sequenceId: Long,
+            override val occurredAt: Long,
+            val fold: OfferOutcomeCorrectionFold,
+        ) : Adjustment
     }
 
     /** A #159 store-resolution trigger carrying its source event's [sequenceId] for the seq-ordered
@@ -292,7 +318,7 @@ class AnalyticsProjector @Inject constructor(
      * The re-price recomputes net against the row's OWN frozen cpm (never today's economy — an
      * immutable historical fact); tip/basePay are left untouched.
      */
-    private suspend fun applyPayAdjustment(adj: PayAdjustmentFold): Boolean {
+    private suspend fun applyPayAdjustment(adj: PayAdjustmentFold, occurredAt: Long): Boolean {
         val row = analyticsDao.deliveryRecord(adj.targetEventSequenceId) ?: run {
             // P7: counts only, no payload text.
             Timber.tag(TAG).w("PAY_ADJUSTMENT: target row %d not found", adj.targetEventSequenceId)
@@ -310,6 +336,8 @@ class AnalyticsProjector @Inject constructor(
                 realizedPay = adj.newPay,
                 payBasis = if (manual) PayBasis.MANUAL else PayBasis.USER_CORRECTED,
                 netProfit = net,
+                // #1033 round 6: a driver monetary edit — the machine re-price must never overwrite it.
+                driverAdjustedAt = occurredAt,
             ),
         )
         return false
@@ -321,7 +349,7 @@ class AnalyticsProjector @Inject constructor(
      * unchanged. Two same-row edits compose because each apply reads the row fresh (a prior same-batch
      * upsert is already visible).
      */
-    private suspend fun applyDeliveryAdjustment(adj: DeliveryAdjustmentFold): Boolean {
+    private suspend fun applyDeliveryAdjustment(adj: DeliveryAdjustmentFold, occurredAt: Long): Boolean {
         val row = analyticsDao.deliveryRecord(adj.targetEventSequenceId) ?: run {
             // P7: counts only, no payload text.
             Timber.tag(TAG).w("DELIVERY_ADJUSTMENT: target row %d not found", adj.targetEventSequenceId)
@@ -401,6 +429,18 @@ class AnalyticsProjector @Inject constructor(
                 netProfit = net,
                 storeKey = if (storeChanged) null else row.storeKey,
                 storeKeyPinned = if (storeChanged) 1 else row.storeKeyPinned,
+                // #1033 round 6: stamp only a MONETARY edit that actually APPLIED — a store/note-only
+                // correction says nothing about the money, and a term the guards above rejected
+                // changed nothing. `payBasis` alone could not carry this: a TIP-ONLY edit deliberately
+                // leaves the basis intact (#688 VET F1), so the re-price's basis guard never saw it.
+                driverAdjustedAt = if (
+                    reqNewPay != null || reqNewTip != null || adj.newMiles != null ||
+                    (adj.newCashTip != null && !cashRejected)
+                ) {
+                    occurredAt
+                } else {
+                    row.driverAdjustedAt
+                },
             ),
         )
         return false
@@ -441,10 +481,16 @@ class AnalyticsProjector @Inject constructor(
             )
             return true
         }
-        if (row.payBasis == PayBasis.MANUAL || row.payBasis == PayBasis.USER_CORRECTED) {
+        // #1033 round 6: `driverAdjustedAt` is the load-bearing half of this guard. A TIP-ONLY
+        // DELIVERY_ADJUSTMENT deliberately leaves `payBasis` alone (#688 VET F1 — the row keeps its
+        // "est. offer pay" disclosure), so the basis test alone let a later re-price overwrite the
+        // driver's own tip. Either signal refuses.
+        if (row.driverAdjustedAt != null ||
+            row.payBasis == PayBasis.MANUAL || row.payBasis == PayBasis.USER_CORRECTED
+        ) {
             Timber.tag(TAG).w(
-                "DELIVERY_RECEIPT_REPRICE: skipped driver-owned row %d (basis %s)",
-                row.eventSequenceId, row.payBasis,
+                "DELIVERY_RECEIPT_REPRICE: skipped driver-owned row %d (basis %s, driverAdjusted=%b)",
+                row.eventSequenceId, row.payBasis, row.driverAdjustedAt != null,
             )
             return true
         }
@@ -882,9 +928,10 @@ class AnalyticsProjector @Inject constructor(
         // rewrites these — see applyDeliveryAdjustment).
         milesToStore = milesToStore,
         milesToDropoff = milesToDropoff,
-        // #1033: null at fold time — only a later DELIVERY_RECEIPT_REPRICE stamps it (applied below,
-        // in this same transaction, in event-sequence order).
+        // #1033: null at fold time — only the later correction applies stamp these (below, in this
+        // same transaction, in event-sequence order).
         receiptRepricedAt = null,
+        driverAdjustedAt = null,
     )
 
     private fun PickupFold.toEntity() = PickupRecordEntity(

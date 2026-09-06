@@ -202,4 +202,16 @@ data class DeliveryRecordEntity(
      * adjustment wins the pay, and this stamp stays as the trail of what the machine had done).
      */
     val receiptRepricedAt: Long? = null,
+    /**
+     * When a DRIVER last made a MONETARY edit to this row (#1033 review round 6) —
+     * `DELIVERY_ADJUSTMENT` or the legacy `PAY_ADJUSTMENT`, stamped with the correction event's own
+     * `occurredAt`; null on an untouched machine row and on a store/note-only edit.
+     *
+     * The machine receipt re-price refuses any row carrying this, on top of the `payBasis` guard. The
+     * basis alone was not enough: a TIP-ONLY adjustment deliberately LEAVES `payBasis` intact (so a
+     * row keeps its "est. offer pay" disclosure — #688 VET F1), so a re-price arriving afterwards
+     * would have overwritten the driver's own tip with the receipt's. The driver is the higher
+     * authority on their own money; the machine never overwrites them, in either order.
+     */
+    val driverAdjustedAt: Long? = null,
 )

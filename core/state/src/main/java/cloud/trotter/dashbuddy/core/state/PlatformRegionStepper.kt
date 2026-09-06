@@ -101,8 +101,13 @@ class PlatformRegionStepper @Inject constructor() {
     )
 
     /**
-     * #1033 review R1 (+ rounds 3–4) — the receipt re-price window is **strictly between a job's
-     * close and the next job's ACCEPT**, and this is what enforces the closing half.
+     * #1033 review R1 — a marker never outlives its job: the moment ANY other job is active, drop it.
+     *
+     * This is the cheap structural half of the re-price window. The load-bearing half is temporal and
+     * lives in the decision itself (round 6): a re-price is refused once any acceptance has resolved
+     * since the closed job's receipt appeared — which covers the case this rule cannot see at all,
+     * where the next job is accepted but never minted (every one of its task screens missed), so
+     * `activeJob` is never set.
      *
      * `PlatformRegion.lastClosedJobReceipt` names the job whose completions have already been minted.
      * Without this rule the marker outlives its job: `lastAnnouncedPostTaskTaskId` falls back to
@@ -120,27 +125,8 @@ class PlatformRegionStepper @Inject constructor() {
      */
     private fun closeReceiptRepriceWindow(region: PlatformRegion): PlatformRegion {
         val mark = region.lastClosedJobReceipt ?: return region
-        val active = region.activeJob
-        if (active != null && active.jobId != mark.jobId) return region.copy(lastClosedJobReceipt = null)
-        // #1033 review round 3 — the mint is only the LAST of the two edges that end this window.
-        // An accept lands earlier and separately: `OfferLifecycle` marks the survivor when the own
-        // flow leaves offer-presentation, and the job is minted only on a later TASK-FLOW frame. If
-        // every one of that job's task screens is missed, `activeJob` never becomes non-null at all
-        // — so the rule above would never fire and the next job's receipt could be re-priced onto
-        // this one. Record the accept on the marker instead.
-        //
-        // By PRESENCE, not by a timestamp comparison (round 4): the accept that matters most is the
-        // one taken OFF the receipt still on screen, which latches BEFORE the close — so any
-        // `acceptedAt >= closedAt` test compares against a close that had not happened yet and lets
-        // it straight through. Any unconsumed survivor alive while the marker lives flags it, and
-        // because this hook runs after `stepCore` it is evaluated on the close step too.
-        //
-        // STICKY (`mark.acceptedSince ||`): the survivor expires after `GraceConfig.acceptGraceMs`,
-        // and a flag that expired with it would re-open the hole minutes later — precisely the
-        // fielded window in which a missed-task-screen job's receipt finally renders.
-        if (mark.acceptedSince) return region
-        val accepted = region.pendingOffers.any { it.acceptedAt != null }
-        return if (accepted) region.copy(lastClosedJobReceipt = mark.copy(acceptedSince = true)) else region
+        val active = region.activeJob ?: return region
+        return if (active.jobId == mark.jobId) region else region.copy(lastClosedJobReceipt = null)
     }
 
     /**
@@ -658,6 +644,12 @@ class PlatformRegionStepper @Inject constructor() {
 
         // Accumulate delivery pay when entering PostTask
         if (prev != Flow.PostTask && next == Flow.PostTask) {
+            // #1033 review round 6: the instant this delivery's receipt appeared. The ONE ownership
+            // anchor a late-arriving itemization can be judged against — see
+            // [ClosedJobReceipt.receiptSeenAt]. Stamped on the flow EDGE (the same edge that arms the
+            // receipt's TASK_RETIRE grace), unconditionally: a frame that fails to parse a receipt
+            // still put one on screen.
+            r = r.copy(lastPostTaskEnteredAt = obs.timestamp)
             val postFields = obs.parsed as? ParsedFields.PostTaskFields
             if (postFields != null && postFields.totalPay > 0) {
                 r.session?.let { session ->
@@ -1101,8 +1093,11 @@ class PlatformRegionStepper @Inject constructor() {
             // #1029: an un-settled running-total read describes the dash that just ended.
             pendingSessionPay = null,
             // #1033: the receipt marker belongs to the dash that just ended — a stale one must not
-            // let a next-dash receipt frame re-price the previous dash's drops.
+            // let a next-dash receipt frame re-price the previous dash's drops. Its two anchors go
+            // with it (round 6): an accept and a receipt both belong to the dash they happened in.
             lastClosedJobReceipt = null,
+            lastPostTaskEnteredAt = null,
+            lastAcceptResolvedAt = null,
         )
     }
 
@@ -1122,6 +1117,10 @@ class PlatformRegionStepper @Inject constructor() {
                 jobId = job.jobId,
                 totalPay = region.lastPostTaskFields?.totalPay,
                 itemized = region.lastPostTaskFields?.parsedPay != null,
+                // #1033 round 6: when this job's receipt first appeared. `lastPostTaskEnteredAt` is
+                // deliberately NOT cleared here — the receipt is still on screen after the close, and
+                // this value is what a later expansion is judged against.
+                receiptSeenAt = region.lastPostTaskEnteredAt,
             ),
         )
     }

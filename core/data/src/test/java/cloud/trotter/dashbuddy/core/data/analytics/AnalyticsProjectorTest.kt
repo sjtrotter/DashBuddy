@@ -865,6 +865,66 @@ class AnalyticsProjectorTest {
     }
 
     @Test
+    fun `a driver TIP-ONLY edit is never overwritten by a later re-price (#1033 round 6)`() = runBlocking {
+        val seq = seedCollapsedReceiptJob()
+        projector().catchUp()
+        // A tip-only DELIVERY_ADJUSTMENT deliberately LEAVES payBasis alone (#688 VET F1), so the
+        // basis guard alone never saw it — `driverAdjustedAt` is what refuses the re-price.
+        insert(
+            AppEventType.DELIVERY_ADJUSTMENT, "S1", 3_200,
+            DeliveryAdjustmentPayload(targetEventSequenceId = seq, sessionId = "S1", newTip = 5.0),
+        )
+        projector().catchUp()
+        val afterEdit = analyticsDao.deliveryRecord(seq)!!
+        assertEquals("the basis is intact — that is the point", "OFFER_PAY", afterEdit.payBasis)
+        assertEquals(3_200L, afterEdit.driverAdjustedAt)
+
+        insertReprice(at = 3_400)
+        projector().catchUp()
+
+        val d = analyticsDao.deliveryRecord(seq)!!
+        assertEquals("the driver's tip stands", 5.0, d.tip!!, 1e-9)
+        assertEquals("OFFER_PAY", d.payBasis)
+        assertNull("…and the machine left no re-price marker", d.receiptRepricedAt)
+    }
+
+    @Test
+    fun `a legacy PAY_ADJUSTMENT also blocks a later re-price (#1033 round 6)`() = runBlocking {
+        val seq = seedCollapsedReceiptJob()
+        projector().catchUp()
+        insert(
+            AppEventType.PAY_ADJUSTMENT, "S1", 3_200,
+            PayAdjustmentPayload(targetEventSequenceId = seq, sessionId = "S1", newPay = 11.0),
+        )
+        projector().catchUp()
+        assertEquals(3_200L, analyticsDao.deliveryRecord(seq)!!.driverAdjustedAt)
+
+        insertReprice(at = 3_400)
+        projector().catchUp()
+        assertEquals(11.0, analyticsDao.deliveryRecord(seq)!!.realizedPay!!, 1e-9)
+        assertNull(analyticsDao.deliveryRecord(seq)!!.receiptRepricedAt)
+    }
+
+    @Test
+    fun `a store-name-only edit is NOT monetary and leaves the re-price path open (#1033 round 6)`() = runBlocking {
+        val seq = seedCollapsedReceiptJob()
+        projector().catchUp()
+        insert(
+            AppEventType.DELIVERY_ADJUSTMENT, "S1", 3_200,
+            DeliveryAdjustmentPayload(targetEventSequenceId = seq, sessionId = "S1", newStoreName = "Bill Millers"),
+        )
+        projector().catchUp()
+        assertNull("a store rename says nothing about the money", analyticsDao.deliveryRecord(seq)!!.driverAdjustedAt)
+
+        insertReprice(at = 3_400)
+        projector().catchUp()
+        val d = analyticsDao.deliveryRecord(seq)!!
+        assertEquals("DROP_SHARE", d.payBasis)
+        assertEquals(16.70, d.realizedPay!!, 1e-9)
+        assertEquals("Bill Millers", d.storeName)
+    }
+
+    @Test
     fun `a re-price is rebuild-faithful — a from-zero refold reproduces the identical row (#1033)`() = runBlocking {
         val seq = seedCollapsedReceiptJob()
         projector().catchUp()

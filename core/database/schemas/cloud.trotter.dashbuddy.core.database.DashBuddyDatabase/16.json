@@ -2,7 +2,7 @@
   "formatVersion": 1,
   "database": {
     "version": 16,
-    "identityHash": "c309fd528030057efc34d8ade3a3c583",
+    "identityHash": "f608bfb9fadb5ecac14a0d95806e816b",
     "entities": [
       {
         "tableName": "app_events",
@@ -338,7 +338,7 @@
       },
       {
         "tableName": "delivery_records",
-        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`eventSequenceId` INTEGER NOT NULL, `sessionId` TEXT, `platform` TEXT NOT NULL, `jobId` TEXT NOT NULL, `taskId` TEXT NOT NULL, `storeName` TEXT, `customerHash` TEXT, `addressHash` TEXT, `phaseStartedAt` INTEGER NOT NULL, `arrivedAt` INTEGER, `completedAt` INTEGER NOT NULL, `deadlineMillis` INTEGER, `realizedPay` REAL, `payBasis` TEXT NOT NULL, `tip` REAL, `basePay` REAL, `odometerAtCompletion` REAL, `realizedMiles` REAL, `realizedMinutes` REAL, `frozenCostPerMile` REAL, `frozenFuelPerMile` REAL, `frozenNonFuelPerMile` REAL, `netProfit` REAL, `costBasis` TEXT NOT NULL, `cashTip` REAL, `originalPayBasis` TEXT, `storeKey` TEXT, `payoutStoreForms` TEXT, `storeKeyPinned` INTEGER NOT NULL DEFAULT 0, `milesToStore` REAL, `milesToDropoff` REAL, `sessionAssigned` INTEGER NOT NULL DEFAULT 0, `receiptRepricedAt` INTEGER, PRIMARY KEY(`eventSequenceId`))",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`eventSequenceId` INTEGER NOT NULL, `sessionId` TEXT, `platform` TEXT NOT NULL, `jobId` TEXT NOT NULL, `taskId` TEXT NOT NULL, `storeName` TEXT, `customerHash` TEXT, `addressHash` TEXT, `phaseStartedAt` INTEGER NOT NULL, `arrivedAt` INTEGER, `completedAt` INTEGER NOT NULL, `deadlineMillis` INTEGER, `realizedPay` REAL, `payBasis` TEXT NOT NULL, `tip` REAL, `basePay` REAL, `odometerAtCompletion` REAL, `realizedMiles` REAL, `realizedMinutes` REAL, `frozenCostPerMile` REAL, `frozenFuelPerMile` REAL, `frozenNonFuelPerMile` REAL, `netProfit` REAL, `costBasis` TEXT NOT NULL, `cashTip` REAL, `originalPayBasis` TEXT, `storeKey` TEXT, `payoutStoreForms` TEXT, `storeKeyPinned` INTEGER NOT NULL DEFAULT 0, `milesToStore` REAL, `milesToDropoff` REAL, `sessionAssigned` INTEGER NOT NULL DEFAULT 0, `receiptRepricedAt` INTEGER, `driverAdjustedAt` INTEGER, PRIMARY KEY(`eventSequenceId`))",
         "fields": [
           {
             "fieldPath": "eventSequenceId",
@@ -515,6 +515,11 @@
           {
             "fieldPath": "receiptRepricedAt",
             "columnName": "receiptRepricedAt",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "driverAdjustedAt",
+            "columnName": "driverAdjustedAt",
             "affinity": "INTEGER"
           }
         ],
@@ -1129,7 +1134,7 @@
     ],
     "setupQueries": [
       "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
-      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, 'c309fd528030057efc34d8ade3a3c583')"
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, 'f608bfb9fadb5ecac14a0d95806e816b')"
     ]
   }
 }
