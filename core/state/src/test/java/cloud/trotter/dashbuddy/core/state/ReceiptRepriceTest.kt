@@ -30,6 +30,7 @@ import cloud.trotter.dashbuddy.domain.state.Session
 import cloud.trotter.dashbuddy.domain.state.Task
 import cloud.trotter.dashbuddy.domain.state.TaskPhase
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -766,6 +767,129 @@ class ReceiptRepriceTest {
             .filterIsInstance<AppEffect.LogEvent>()
             .filter { it.event.type == AppEventType.DELIVERY_RECEIPT_REPRICE }
         assertTrue(events.isEmpty())
+    }
+
+    // =====================================================================================
+    // Review round 5 (#1033) — acceptance resolved on the SAME frame as the receipt
+    // =====================================================================================
+
+    /**
+     * The whole machine, not just the platform stepper — round 5 is about the ORDER in which `step`
+     * runs its stages (`stepOffers` before `stepCore`, the post-step hook after both), which only a
+     * real transition exercises.
+     */
+    private inner class MachineFold(start: PlatformRegion, startFlow: Flow) {
+        private val machine = StateMachine(
+            flowStepper = FlowRegionStepper(),
+            platformStepper = stepper,
+            crossPlatformStepper = CrossPlatformRegionStepper(),
+            transitionPolicy = policy,
+            effectMap = effectMap,
+        )
+        private var state: AppState = appState(start, startFlow)
+        val events = mutableListOf<AppEvent>()
+
+        fun step(obs: Observation): MachineFold {
+            val t = machine.step(state, obs)
+            state = t.newState
+            events += t.effects.filterIsInstance<AppEffect.LogEvent>().map { it.event }
+            return this
+        }
+
+        val region: PlatformRegion get() = state.regions.platforms.getValue(Platform.DoorDash)
+        fun reprices() = events.filter { it.type == AppEventType.DELIVERY_RECEIPT_REPRICE }
+    }
+
+    private fun machineWithClosedJobA() =
+        MachineFold(liveDropoffRegion(), Flow.TaskDropoffArrived)
+            .step(postTaskObs(collapsed(), 10_000L)) // A's collapsed receipt arms the 8 s window
+            .step(idleObs(18_001L)) // past the deadline → A retires and closes, marker stamped
+            .also {
+                assertNull("A closed", it.region.activeJob)
+                assertNotNull("…marker stamped", it.region.lastClosedJobReceipt)
+            }
+
+    @Test
+    fun `round 5 — an accept resolving ON the next job's receipt frame cannot re-price the closed job`() {
+        // `step` resolves offers BEFORE `stepCore`, and the post-step hook flags the marker only
+        // AFTER both — so on the ONE frame that both resolves B's accept latch and parses B's
+        // receipt, the marker still read `acceptedSince = false` and the decision was admitted.
+        val fold = machineWithClosedJobA()
+            .step(offerObs(20_000L, "hash-B"))
+            .step(acceptClick(21_000L))
+        assertTrue("B's accept is latched but unresolved", fold.region.pendingOffers.isNotEmpty())
+        assertFalse(
+            "…and the marker still says no accept — the hook has had nothing to see yet",
+            fold.region.lastClosedJobReceipt!!.acceptedSince,
+        )
+
+        // Every one of B's task screens is missed; B's own $40 receipt is the FIRST frame to leave
+        // offer-presentation, so this single step resolves the acceptance AND parses the receipt.
+        val bigReceipt = ParsedPay(
+            appPayComponents = listOf(ParsedPayItem("Base Pay", 30.00)),
+            customerTips = listOf(ParsedPayItem("Next Store", 10.00)),
+        )
+        fold.step(postTaskObs(expanded(bigReceipt), 622_000L))
+
+        assertEquals(
+            "B's money must never be appended as a re-price of A",
+            0,
+            fold.reprices().size,
+        )
+        assertTrue(
+            "…and the marker leaves the step flagged",
+            fold.region.lastClosedJobReceipt!!.acceptedSince,
+        )
+    }
+
+    @Test
+    fun `round 5 — the same-frame accept cannot reduce an ALREADY re-priced job either`() {
+        val fold = machineWithClosedJobA()
+            .step(postTaskObs(expanded(), 19_000L)) // re-price #1 → $16.70
+        assertEquals(1, fold.reprices().size)
+
+        val updated = ParsedPay(
+            appPayComponents = listOf(ParsedPayItem("Base Pay", 9.70)),
+            customerTips = listOf(ParsedPayItem("Bill Millers", 10.30)),
+        )
+        fold.step(postTaskObs(expanded(updated), 20_000L)) // re-price #2 → $20.00
+        assertEquals(2, fold.reprices().size)
+        assertEquals(20.00, fold.region.lastClosedJobReceipt!!.totalPay!!, 0.0001)
+
+        // B is accepted, and its acceptance resolves on B's OWN same-store receipt, which happens to
+        // total the $16.70 A once showed.
+        fold.step(offerObs(21_000L, "hash-B"))
+            .step(acceptClick(22_000L))
+            .step(postTaskObs(expanded(), 23_000L))
+
+        assertEquals("no third re-price", 2, fold.reprices().size)
+        assertEquals(
+            "A stays at the corrected \$20.00",
+            20.00,
+            fold.region.lastClosedJobReceipt!!.totalPay!!,
+            0.0001,
+        )
+    }
+
+    @Test
+    fun `round 5 — the stacked happy path still re-prices when the accept resolved on an EARLIER step`() {
+        val fold = MachineFold(liveDropoffRegion(), Flow.TaskDropoffArrived)
+            .step(postTaskObs(collapsed(), 10_000L)) // A's collapsed receipt
+            .step(offerObs(11_000L, "hash-B")) // B's offer over it
+            .step(acceptClick(12_000L))
+            .step(postTaskObs(collapsed(), 13_000L)) // back to A's receipt → the accept RESOLVES here
+            .step(idleObs(18_001L)) // A retires and closes
+        assertTrue(
+            "the accept flagged the marker on the close",
+            fold.region.lastClosedJobReceipt!!.acceptedSince,
+        )
+
+        fold.step(postTaskObs(expanded(), 19_000L)) // A's OWN receipt, same $16.70 total
+        assertEquals("the same total is positive ownership — A is still re-priced", 1, fold.reprices().size)
+        assertEquals(
+            "t1",
+            (fold.reprices().single().payload as DeliveryReceiptRepricePayload).taskId,
+        )
     }
 
     // =====================================================================================

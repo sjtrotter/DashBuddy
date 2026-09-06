@@ -71,6 +71,15 @@ internal fun PlatformRegionStepper.decideReceiptReprice(
     val sameTotal = centsEqual(mark.totalPay, parsed.totalPay)
     if (mark.itemized && sameTotal) return region
 
+    // Acceptance, evaluated on THIS transition (#1033 review round 5). The marker's own flag is only
+    // as fresh as the last post-step hook, and `step` resolves offers BEFORE `stepCore`: on the frame
+    // where the next job's accept latch is resolved AND its receipt is parsed — the same frame, when
+    // that receipt is the first thing to leave offer-presentation — the marker still said false, the
+    // decision was admitted, and only then did the hook flag it. So read the region the decision was
+    // handed, which already carries this step's resolved offers (and any marker the lazy expiry
+    // created this step).
+    val acceptedSince = mark.acceptedSince || region.pendingOffers.any { it.acceptedAt != null }
+
     // Ownership. Before any accept, "no job is live" is enough. After one, it proves nothing (the
     // next job may exist with no `activeJob` ever set), so the receipt must carry the SAME total this
     // job's own receipt showed — a positive identity a foreign job's receipt cannot satisfy except by
@@ -80,7 +89,7 @@ internal fun PlatformRegionStepper.decideReceiptReprice(
     //  - a job already re-priced ONCE and since exposed to an accept is terminal — a genuine later
     //    tip update there is indistinguishable from the next job's receipt, and admitting it is how
     //    a corrected $20.00 got dragged back down to a coincidental $16.70.
-    if (mark.acceptedSince && !(sameTotal && !mark.repriced && mark.totalPay != null)) return region
+    if (acceptedSince && !(sameTotal && !mark.repriced && mark.totalPay != null)) return region
 
     // The denominator, rebuilt as the mint built it — `Task.isAccountableDropoff` (the #498 phantom +
     // #736 unassign firewalls) plus the SAME amdt-#5 [mintQualified] predicate
@@ -119,6 +128,10 @@ internal fun PlatformRegionStepper.decideReceiptReprice(
             totalPay = parsed.totalPay,
             itemized = true,
             repriced = true,
+            // Carry this step's acceptance forward too (round 5): the post-step hook would otherwise
+            // overwrite nothing (it returns early on an already-flagged marker) but a marker written
+            // HERE must never leave the step claiming `false` after a transition that saw an accept.
+            acceptedSince = acceptedSince,
         ),
     )
 }
