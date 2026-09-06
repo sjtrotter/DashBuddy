@@ -2,20 +2,19 @@ package cloud.trotter.dashbuddy.core.state
 
 import cloud.trotter.dashbuddy.domain.model.event.AppEventType
 import cloud.trotter.dashbuddy.domain.model.event.payload.DeliveryReceiptRepricePayload
-import cloud.trotter.dashbuddy.domain.pipeline.Observation
 import cloud.trotter.dashbuddy.domain.state.DestructiveKind
 import cloud.trotter.dashbuddy.domain.state.DropPayApportioner
 import cloud.trotter.dashbuddy.domain.state.Flow
 import cloud.trotter.dashbuddy.domain.state.ParsedFields
+import cloud.trotter.dashbuddy.domain.state.PendingReceiptReprice
 import cloud.trotter.dashbuddy.domain.state.PlatformRegion
 import cloud.trotter.dashbuddy.domain.state.isAccountableDropoff
 import timber.log.Timber
-import kotlin.math.abs
 
 /**
- * #1033 layer 2 — the machine's own Tier-1 receipt correction, extracted as its own file beside
- * [DeliveryCompletionEffects] (the `internal` extension-on-[EffectMap] convention [OfferEffects] /
- * [JobAcceptFlow] set).
+ * #1033 layer 2 — the machine's own Tier-1 receipt correction: the DECISION (a pure stepper
+ * transition) and its EMISSION (a one-line effect diff), kept in one file because they are one
+ * concern.
  *
  * **The seam.** A COLLAPSED post-delivery receipt carries a total but no itemization, so
  * `DropPayApportioner.apportion(parsedPay = null, …)` returns nothing and the `DELIVERY_COMPLETED`
@@ -30,154 +29,144 @@ import kotlin.math.abs
  * fold re-prices the row in place. Frozen economy is never re-costed — net recomputes against the
  * row's OWN `frozenCostPerMile` at the orchestrator.
  *
- * **Why it can fire at all:** `completeActiveJob` clears `lastPostTaskFields`, so the region alone
- * cannot say what the completions carried; [PlatformRegion.lastClosedJobReceipt] is the minimal
- * marker recording exactly that, stamped at the one close site.
+ * **Why the decision is in the stepper (review round 4, UDF).** It has to write state as it decides:
+ * `PlatformRegion.lastClosedJobReceipt` must learn, atomically, that the job has just been re-priced
+ * and what its receipt now totals. An effect diff cannot do that, and the round-3 shape — deciding
+ * in `EffectMap` off a marker nobody could update — is exactly why a re-priced job could be re-priced
+ * back DOWN by a later same-total receipt from a different job. So [decideReceiptReprice] runs inside
+ * `updateSessionFields`, parks its result on [PlatformRegion.pendingReceiptReprice] (a one-step
+ * handoff), and [diffReceiptReprice] just reports it.
+ *
+ * **Ownership** is the other thing the rounds taught. `lastAnnouncedPostTaskTaskId` falls back to
+ * `recentTasks.lastOrNull()`, so a receipt with no job of its own attaches to whatever drop happened
+ * to finish last. Absence of a live job is NOT evidence of ownership — acceptance and the job mint
+ * are separate transitions, and a job whose task screens were all missed never sets `activeJob` at
+ * all. Once any accept has been seen (`ClosedJobReceipt.acceptedSince`), a re-price therefore needs a
+ * POSITIVE identity: the same total the closed job's own receipt showed.
  *
  * Platform-agnostic (Principle 8): every input is this region's own records — no `Platform` literal,
- * no wire string. Pure: `obs.timestamp`-driven, no wall clock, no side effect beyond the emitted
- * log effects.
+ * no wire string. Pure: `obs`-driven, no wall clock, no side effect beyond the emitted log effects.
  */
-internal fun EffectMap.diffReceiptReprice(
-    p: PlatformRegion,
-    next: PlatformRegion,
-    actedNextFlow: Flow,
-    obs: Observation,
-): List<AppEffect> {
-    // #438 item 5: gate on THIS region's own acted flow — a foreign platform's receipt frame must
-    // never re-price this region's drops.
-    if (actedNextFlow != Flow.PostTask) return emptyList()
-    val flowObs = obs as? Observation.FlowObservation ?: return emptyList()
-    // The frame must be THIS region's own (#1033 review round 3). `EffectMap.diff` visits every
-    // platform region on every observation, and a region that did not act keeps `p === next` — but
-    // `actedNextFlow` falls back to the shared global R0 flow while `lastActedFlow` is null, so a
-    // foreign platform's receipt frame could reach this. Defensive today (no Uber rule parses a
-    // receipt), structural tomorrow.
-    if (flowObs.platform != next.platform) return emptyList()
-    val receipt = flowObs.parsed as? ParsedFields.PostTaskFields ?: return emptyList()
+internal fun PlatformRegionStepper.decideReceiptReprice(
+    region: PlatformRegion,
+    parsed: ParsedFields.PostTaskFields,
+    flow: Flow,
+    postTaskTaskId: String?,
+    decidedAt: Long,
+    captureId: String?,
+): PlatformRegion {
+    if (flow != Flow.PostTask) return region
     // ONLY an itemized receipt re-prices — an un-itemized re-render carries no new evidence.
-    val parsedPay = receipt.parsedPay ?: return emptyList()
-    // Coherence with the stepper: an expanded frame always refreshes `lastPostTaskFields` (the #630
-    // downgrade guard only ever skips a COLLAPSED one), so this is a belt, not a second decision.
-    if (next.lastPostTaskFields?.parsedPay == null) return emptyList()
+    val parsedPay = parsed.parsedPay ?: return region
+    // The job whose completions have already been minted, and what its rows currently hold.
+    val mark = region.lastClosedJobReceipt ?: return region
+    // A live job means the receipt is not a post-close correction at all (and the window-closing hook
+    // has already dropped a marker belonging to some OTHER job).
+    if (region.activeJob != null) return region
 
-    // The job whose completions have already been minted, and what receipt they carried.
-    //
-    // Read from the RESULTING region (#1033 review R3), not the prior one: an expansion whose own
-    // frame is ALSO the one that trips the collapsed grace's lazy expiry closes the job on this very
-    // step, so `p.lastClosedJobReceipt` is still null while `next`'s is the marker this frame just
-    // stamped. `p` was the blind spot — that ordering (expiry, then the receipt store) is the normal
-    // shape for an expansion arriving a hair past the deadline, and FrameGate suppresses the
-    // identical later renders, so nothing would ever have corrected it. On every other frame the two
-    // are the same value. The marker's `itemized`/`totalPay` describe the receipt as it stood AT the
-    // close (the expiry runs before `updateSessionFields` stores this frame's parse), so the
-    // `alreadyPriced` check below still compares the completion's receipt against the new one.
-    val mark = next.lastClosedJobReceipt ?: return emptyList()
-    // No job may be live AFTER this step, and the only job that may have been live BEFORE it is the
-    // marker's own — i.e. the one closing on this very frame (#1033 review R1 + R3 together).
-    //
-    // R1: the re-price window is strictly between a close and the next job's mint.
-    // `lastAnnouncedPostTaskTaskId` falls back to `recentTasks.lastOrNull()`, so a live job whose
-    // task screens were all MISSED would otherwise have its receipt anchored on the PREVIOUS job's
-    // last drop and its money appended as a re-price of that job. The stepper's
-    // `clearClosedJobReceiptOnNewJob` closes the same hole from the state side; this is the
-    // emitter's own half, and it also covers the frames before a new job's mint lands.
-    //
-    // R3: a flat "no job on either side" would ALSO reject the same-frame close — the expansion that
-    // itself trips the collapsed grace's lazy expiry, where `p.activeJob` is still the job the
-    // marker names. That frame is the whole point of reading the marker from `next`, so the prior
-    // side is checked by IDENTITY, not by emptiness. Nothing else can reach this line with
-    // `p.activeJob` set: a job still open in `next` already returned above.
-    if (next.activeJob != null) return emptyList()
-    val priorJob = p.activeJob
-    if (priorJob != null && priorJob.jobId != mark.jobId) return emptyList()
-    // Nothing is owed when the completions already carried THIS itemization — the marker is the only
-    // thing that can tell that apart from a genuinely late expansion, because the close cleared the
-    // receipt out of the region.
-    val markTotal = mark.totalPay
-    // Does the receipt on screen carry the SAME total the closed job's own receipt showed? On 8.93.7
-    // the #1029 collapsed parse yields `totalPay` even with no itemization, so this is a POSITIVE
-    // identity: it says the frame is a re-render of THAT job's receipt, which a different job's
-    // receipt cannot satisfy except by a coincidence of totals — and a coincidence re-prices with the
-    // identical total, so the itemization split changes and the money does not (accepted).
-    val ownershipByTotal = markTotal != null && abs(markTotal - receipt.totalPay) < 0.005
-    val alreadyPriced = mark.itemized && ownershipByTotal
-    if (alreadyPriced) return emptyList()
+    // Nothing is owed when the rows already hold THIS itemization. The marker is the only thing that
+    // can tell that apart from a genuinely late expansion, because the close cleared the receipt out
+    // of the region — and since round 4 it also tracks re-prices, so a re-render of a receipt this
+    // job was ALREADY re-priced from is a no-op rather than a second event.
+    val sameTotal = centsEqual(mark.totalPay, parsed.totalPay)
+    if (mark.itemized && sameTotal) return region
 
-    // Once an offer has been ACCEPTED since the close, "no job is live" stops being evidence of
-    // ownership (#1033 review round 3): the accept and the job mint are separate transitions, so a
-    // next job whose task screens were all missed never sets `activeJob` at all, and its receipt
-    // would otherwise be re-priced onto this one. From that point a re-price needs the positive
-    // same-total identity above.
-    //
-    // This is exactly what preserves the COMMON stacked case: the dasher accepts the next offer while
-    // the previous delivery's receipt is still up, then expands that receipt — same total, so it
-    // re-prices normally. What it refuses is the ambiguous shape: a DIFFERENT total after an accept
-    // (which job's receipt is this?), and — fail-null — a marker whose collapsed parse yielded NO
-    // total at all, where there is no identity to check.
-    if (mark.acceptedSince && !ownershipByTotal) return emptyList()
+    // Ownership. Before any accept, "no job is live" is enough. After one, it proves nothing (the
+    // next job may exist with no `activeJob` ever set), so the receipt must carry the SAME total this
+    // job's own receipt showed — a positive identity a foreign job's receipt cannot satisfy except by
+    // a coincidence of totals, which re-prices with the identical total anyway (the split moves, the
+    // money does not). Two deliberate refusals, both fail-null (#745):
+    //  - a marker with NO total (its collapsed parse yielded none) has no identity to check;
+    //  - a job already re-priced ONCE and since exposed to an accept is terminal — a genuine later
+    //    tip update there is indistinguishable from the next job's receipt, and admitting it is how
+    //    a corrected $20.00 got dragged back down to a coincidental $16.70.
+    if (mark.acceptedSince && !(sameTotal && !mark.repriced && mark.totalPay != null)) return region
 
     // The denominator, rebuilt as the mint built it — `Task.isAccountableDropoff` (the #498 phantom +
     // #736 unassign firewalls) plus the SAME amdt-#5 [mintQualified] predicate
     // `DeliveryCompletionEffects.mintingDropoffTasks` applies, so Σ shares lands on exactly the rows
-    // the mint wrote.
-    //
-    // The active task is a CANDIDATE, not an afterthought (#1033 review R2): the PostTask-exit mint
-    // can complete a task that is STILL ACTIVE under its retire grace — `completedAt` is stamped only
-    // when that grace commits — so a plain `recentTasks + completedAt != null` scan finds an empty
-    // denominator for exactly the job whose receipt is on screen, and the re-price silently never
-    // fires (the later `TASK_RETIRE` timer moves the task, but a timer is not a receipt observation,
-    // so no frame is coming to retry). [mintQualified] is what makes including it safe: it admits the
-    // active task only while a `TASK_RETIRE` really is pending, which is the same evidence the mint
-    // required of it.
-    val retirePending = p.pendingDestructive?.kind == DestructiveKind.TASK_RETIRE
-    val drops = (p.recentTasks + listOfNotNull(p.activeTask))
+    // the mint wrote. The active task is a CANDIDATE: the PostTask-exit mint can complete a task that
+    // is STILL ACTIVE under its retire grace (`completedAt` is stamped only when that grace commits),
+    // and [mintQualified] admits it only while a `TASK_RETIRE` really is pending — the same evidence
+    // the mint required of it.
+    val retirePending = region.pendingDestructive?.kind == DestructiveKind.TASK_RETIRE
+    val drops = (region.recentTasks + listOfNotNull(region.activeTask))
         .filter { it.jobId == mark.jobId && it.isAccountableDropoff }
         .distinctBy { it.taskId }
-        .filter { mintQualified(p, retirePending, it) }
-    if (drops.isEmpty()) return emptyList()
+        .filter { mintQualified(region, retirePending, it) }
+    if (drops.isEmpty()) return region
 
-    // The receipt on screen must belong to THAT job — the stepper's announce anchor names the task
-    // the receipt was attributed to. A receipt anchored on some other job's drop (or on a pickup) is
-    // not evidence about these rows: fail-null.
-    val announceId = next.lastAnnouncedPostTaskTaskId ?: return emptyList()
-    if (drops.none { it.taskId == announceId }) return emptyList()
+    // The receipt on screen must belong to THAT job — the announce anchor names the task the receipt
+    // was attributed to. A receipt anchored on some other job's drop (or on a pickup) is not evidence
+    // about these rows: fail-null.
+    val anchor = postTaskTaskId ?: region.lastAnnouncedPostTaskTaskId ?: return region
+    if (drops.none { it.taskId == anchor }) return region
 
     val shares = DropPayApportioner.apportion(parsedPay, drops)
-    if (shares.isEmpty()) return emptyList()
+    if (shares.isEmpty()) return region
+
+    return region.copy(
+        pendingReceiptReprice = PendingReceiptReprice(
+            jobId = mark.jobId,
+            parsedPay = parsedPay,
+            shares = shares,
+            decidedAt = decidedAt,
+            sourceCaptureId = captureId,
+        ),
+        // ATOMIC with the decision: from here the marker describes what the ROWS hold, not what the
+        // completion originally carried.
+        lastClosedJobReceipt = mark.copy(
+            totalPay = parsed.totalPay,
+            itemized = true,
+            repriced = true,
+        ),
+    )
+}
+
+/** Cent-exact equality for two money figures; a null figure equals nothing. */
+private fun centsEqual(a: Double?, b: Double?): Boolean {
+    if (a == null || b == null) return false
+    return Math.round(a * 100.0) == Math.round(b * 100.0)
+}
+
+/**
+ * Emit what [decideReceiptReprice] decided — one `DELIVERY_RECEIPT_REPRICE` per delivered drop of the
+ * job, idempotent per `(taskId, parsedPay.hashCode())` through the `effects_fired` key.
+ *
+ * Reads state only: no observation, no re-derivation. The handoff is cleared at the top of the next
+ * step, and the `!= p.pendingReceiptReprice` guard makes a value that somehow survived (a snapshot
+ * restored mid-flight) emit nothing.
+ */
+internal fun EffectMap.diffReceiptReprice(
+    p: PlatformRegion,
+    next: PlatformRegion,
+): List<AppEffect> {
+    val decided = next.pendingReceiptReprice ?: return emptyList()
+    if (decided == p.pendingReceiptReprice) return emptyList()
 
     val sessionId = next.session?.sessionId ?: p.session?.sessionId
-    // Idempotency: one durable `effects_fired` row per (taskId, itemization). A repeat frame carrying
-    // the same receipt is dropped by the engine's dedup; a genuinely DIFFERENT itemization (a tip
-    // added after the fact) is a new key and re-prices again, which is the correct behaviour.
-    val payHash = parsedPay.hashCode()
-    val effects = drops.mapNotNull { task ->
-        val share = shares[task.taskId] ?: return@mapNotNull null
+    val payHash = decided.parsedPay.hashCode()
+    val effects = decided.shares.map { (taskId, share) ->
         logEffect(
             sessionId,
             AppEventType.DELIVERY_RECEIPT_REPRICE,
-            obs.timestamp,
+            decided.decidedAt,
             DeliveryReceiptRepricePayload(
-                jobId = mark.jobId,
-                taskId = task.taskId,
-                totalPay = parsedPay.total,
-                parsedPay = parsedPay,
+                jobId = decided.jobId,
+                taskId = taskId,
+                totalPay = decided.parsedPay.total,
+                parsedPay = decided.parsedPay,
                 dropRealizedPay = share,
-                sourceCaptureId = flowObs.captureId,
+                sourceCaptureId = decided.sourceCaptureId,
             ),
-            effectKeyOverride = "log:${AppEventType.DELIVERY_RECEIPT_REPRICE}:${task.taskId}:$payHash",
+            effectKeyOverride = "log:${AppEventType.DELIVERY_RECEIPT_REPRICE}:$taskId:$payHash",
         )
     }
-    if (effects.isNotEmpty()) {
-        // P7: ids + cents only — no store/customer text. One line per job per emitting frame; the
-        // durable dedup makes a repeat frame silent.
-        Timber.tag("StateMachine").d(
-            "#1033 receipt re-price: job %s, %d drop(s), receipt %d¢ (completion was %s)",
-            mark.jobId,
-            effects.size,
-            Math.round(parsedPay.total * 100.0),
-            if (mark.itemized) "itemized at a different total" else "un-itemized",
-        )
-    }
+    // P7: ids + counts + cents only — no store/customer text. One line per decision; the durable
+    // dedup makes a repeat frame silent.
+    Timber.tag("StateMachine").d(
+        "#1033 receipt re-price: job %s, %d drop(s), receipt %d¢",
+        decided.jobId, effects.size, Math.round(decided.parsedPay.total * 100.0),
+    )
     return effects
 }

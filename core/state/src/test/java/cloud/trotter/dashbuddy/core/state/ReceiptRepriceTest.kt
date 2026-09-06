@@ -23,6 +23,7 @@ import cloud.trotter.dashbuddy.domain.state.Job
 import cloud.trotter.dashbuddy.domain.state.Mode
 import cloud.trotter.dashbuddy.domain.state.ParsedFields
 import cloud.trotter.dashbuddy.domain.state.Platform
+import cloud.trotter.dashbuddy.domain.state.PendingReceiptReprice
 import cloud.trotter.dashbuddy.domain.state.PlatformRegion
 import cloud.trotter.dashbuddy.domain.state.Regions
 import cloud.trotter.dashbuddy.domain.state.Session
@@ -425,8 +426,14 @@ class ReceiptRepriceTest {
         )
         assertNull("the expiry closed the job on this frame", next.activeJob)
         assertNotNull("…stamping the marker in the RESULTING region only", next.lastClosedJobReceipt)
-        assertTrue("off the collapsed receipt", !next.lastClosedJobReceipt!!.itemized)
         assertNull("while `prev` still has none", afterReceipt.lastClosedJobReceipt)
+        // ORDERING inside the step is what makes this work (round 4): `stepCore`'s lazy expiry
+        // closes the job — stamping the marker off the COLLAPSED receipt — strictly before
+        // `updateSessionFields` stores this frame's expanded parse and decides the re-price. The
+        // marker therefore ends the step already updated to the expanded figures.
+        assertTrue("the same frame re-priced it", next.lastClosedJobReceipt!!.repriced)
+        assertTrue(next.lastClosedJobReceipt!!.itemized)
+        assertEquals(16.70, next.lastClosedJobReceipt!!.totalPay!!, 0.0001)
 
         val logged = effectMap
             .diff(appState(afterReceipt, Flow.PostTask), appState(next, Flow.PostTask), obs)
@@ -624,19 +631,138 @@ class ReceiptRepriceTest {
 
     @Test
     fun `round 3 — a FOREIGN platform's receipt never re-prices this region's drops`() {
-        val region = closedJobRegion()
+        // Round 4 moved the decision into the stepper, so the platform question is answered where it
+        // belongs: `StateMachine.stepPlatforms` routes an observation to its OWN platform's region
+        // only. Driven through the real machine rather than a redundant guard in the diff.
+        val machine = StateMachine(
+            flowStepper = FlowRegionStepper(),
+            platformStepper = stepper,
+            crossPlatformStepper = CrossPlatformRegionStepper(),
+            transitionPolicy = policy,
+            effectMap = effectMap,
+        )
+        val state = appState(closedJobRegion(), Flow.PostTask)
         val uberReceipt = Observation.Screen(
             timestamp = 21_000L, captureId = "cap-uber", ruleId = "uber.screen.delivery_summary",
             metadata = ReplayMetadata.EMPTY, flow = Flow.PostTask, modeHint = Mode.Online,
             parsed = expanded(),
         )
         assertEquals("the fixture really is a foreign frame", Platform.Uber, uberReceipt.platform)
-        // Step the DoorDash region with it anyway (simulating the leak the guard defends against).
-        val next = stepper.step(
-            region, FlowRegion(flow = Flow.PostTask), FlowRegion(flow = Flow.PostTask), uberReceipt, policy,
+
+        val transition = machine.step(state, uberReceipt)
+
+        assertNull(
+            "the DoorDash region was never stepped, so it decided nothing",
+            transition.newState.regions.platforms[Platform.DoorDash]?.pendingReceiptReprice,
         )
+        assertTrue(
+            transition.effects.filterIsInstance<AppEffect.LogEvent>()
+                .none { it.event.type == AppEventType.DELIVERY_RECEIPT_REPRICE },
+        )
+    }
+
+    // =====================================================================================
+    // Review round 4 (#1033) — the two findings the timestamp/marker-less design could not hold
+    // =====================================================================================
+
+    @Test
+    fun `round 4 P1 — an accept latched BEFORE the close still flags the marker (presence, not timestamps)`() {
+        // Astra's sequence: the dasher takes the next offer straight off the receipt that is still
+        // up, and the job closes AFTER that. `acceptedAt (12,000) >= closedAt (14,000)` is false, so
+        // a timestamp test left the marker unflagged forever.
+        val fold = Fold(liveDropoffRegion())
+            .step(postTaskObs(collapsed(), 10_000L)) // A's collapsed receipt
+            .step(offerObs(11_000L, "hash-B")) // B's offer, over the receipt
+            .step(acceptClick(12_000L))
+            .step(postTaskObs(collapsed(), 13_000L)) // back to A's receipt → the survivor latches
+            .step(idleObs(14_000L)) // PostTask-EXIT closes A
+        assertNull("A closed on the exit", fold.region.activeJob)
+        assertTrue(
+            "an accept that predates the close must still flag the marker",
+            fold.region.lastClosedJobReceipt!!.acceptedSince,
+        )
+
+        // The survivor expires; much later B's $40 receipt renders with every B task screen missed.
+        fold.step(idleObs(200_000L))
+        assertTrue("the survivor expired", fold.region.pendingOffers.none { it.acceptedAt != null })
+        val bigReceipt = ParsedPay(
+            appPayComponents = listOf(ParsedPayItem("Base Pay", 30.00)),
+            customerTips = listOf(ParsedPayItem("Next Store", 10.00)),
+        )
+        val before = fold.events.size
+        fold.step(postTaskObs(expanded(bigReceipt), 622_000L))
+        assertEquals(
+            "B's money must never be appended as a re-price of A",
+            0,
+            fold.events.drop(before).count { it.type == AppEventType.DELIVERY_RECEIPT_REPRICE },
+        )
+    }
+
+    @Test
+    fun `round 4 P2 — a re-priced job is never dragged back down by a coincidental later total`() {
+        val fold = foldWithClosedJobA()
+
+        // 1. The late expansion re-prices A to $16.70.
+        fold.step(postTaskObs(expanded(), 19_000L))
+        assertEquals(1, fold.reprices().size)
+        var mark = fold.region.lastClosedJobReceipt!!
+        assertTrue("the marker now records the re-price", mark.repriced)
+        assertTrue(mark.itemized)
+        assertEquals("…and what the ROWS now hold", 16.70, mark.totalPay!!, 0.0001)
+
+        // 2. The customer adds a tip: the receipt re-renders at $20.00 and re-prices again.
+        val updated = ParsedPay(
+            appPayComponents = listOf(ParsedPayItem("Base Pay", 9.70)),
+            customerTips = listOf(ParsedPayItem("Bill Millers", 10.30)),
+        )
+        fold.step(postTaskObs(expanded(updated), 20_000L))
+        assertEquals("a genuine tip update still re-prices", 2, fold.reprices().size)
+        mark = fold.region.lastClosedJobReceipt!!
+        assertEquals(20.00, mark.totalPay!!, 0.0001)
+
+        // 3. B is accepted (never minted), then B's own same-store receipt happens to total $16.70 —
+        //    the ORIGINAL figure. Under the round-3 marker that passed `ownershipByTotal` and dragged
+        //    A back down by $3.30.
+        fold.acceptNextOffer(offerAt = 21_000L, clickAt = 22_000L, leaveAt = 23_000L)
+        val before = fold.reprices().size
+        fold.step(postTaskObs(expanded(), 25_000L)) // the $16.70 receipt again
+        assertEquals(
+            "a re-priced job that has since seen an accept is terminal — A stays at \$20.00",
+            before,
+            fold.reprices().size,
+        )
+        assertEquals(20.00, fold.region.lastClosedJobReceipt!!.totalPay!!, 0.0001)
+    }
+
+    @Test
+    fun `round 4 — the decision handoff lives exactly one transition`() {
+        val fold = foldWithClosedJobA()
+        fold.step(postTaskObs(expanded(), 19_000L))
+        assertNotNull("set on the deciding step", fold.region.pendingReceiptReprice)
+        assertEquals(1, fold.reprices().size)
+
+        fold.step(idleObs(19_500L))
+        assertNull("cleared at the top of the very next step", fold.region.pendingReceiptReprice)
+        assertEquals("and emitted exactly once", 1, fold.reprices().size)
+    }
+
+    @Test
+    fun `round 4 — a stale handoff restored from a snapshot emits nothing`() {
+        // A snapshot caught mid-flight carries the handoff; the next step's top-of-step clear drops
+        // it before anything else, so it can never re-emit.
+        val restored = closedJobRegion().copy(
+            pendingReceiptReprice = PendingReceiptReprice(
+                jobId = "J1", parsedPay = receipt, shares = mapOf("t1" to 16.70),
+                decidedAt = 1_000L, sourceCaptureId = "cap-old",
+            ),
+        )
+        val obs = idleObs(30_000L)
+        val next = stepper.step(
+            restored, FlowRegion(flow = Flow.PostTask), FlowRegion(flow = Flow.Idle), obs, policy,
+        )
+        assertNull("dropped by the top-of-step clear", next.pendingReceiptReprice)
         val events = effectMap
-            .diff(appState(region, Flow.PostTask), appState(next, Flow.PostTask), uberReceipt)
+            .diff(appState(restored, Flow.PostTask), appState(next, Flow.Idle), obs)
             .filterIsInstance<AppEffect.LogEvent>()
             .filter { it.event.type == AppEventType.DELIVERY_RECEIPT_REPRICE }
         assertTrue(events.isEmpty())

@@ -85,8 +85,15 @@ class PlatformRegionStepper @Inject constructor() {
                 // #1033 review R1: the re-price window closes the moment the NEXT job is minted —
                 // run this where `activeJob` is final for the step (nothing after stepCore changes
                 // whether a job is active).
-                clearClosedJobReceiptOnNewJob(
-                    stepCore(stepOffers(prev, obs, policy), prevFlow, nextFlow, obs, policy),
+                closeReceiptRepriceWindow(
+                    stepCore(
+                        // #1033 round 4: the re-price handoff lives exactly ONE transition. Clearing
+                        // it at the very top means the value `EffectMap` sees is always the one THIS
+                        // step decided — and a stale one restored from a snapshot is dropped before
+                        // it can be re-emitted.
+                        stepOffers(prev.copy(pendingReceiptReprice = null), obs, policy),
+                        prevFlow, nextFlow, obs, policy,
+                    ),
                 ),
             ),
         ),
@@ -94,8 +101,8 @@ class PlatformRegionStepper @Inject constructor() {
     )
 
     /**
-     * #1033 review R1 (+ round 3) — the receipt re-price window is **strictly between a job's close
-     * and the next job's ACCEPT**, and this is what enforces the closing half.
+     * #1033 review R1 (+ rounds 3–4) — the receipt re-price window is **strictly between a job's
+     * close and the next job's ACCEPT**, and this is what enforces the closing half.
      *
      * `PlatformRegion.lastClosedJobReceipt` names the job whose completions have already been minted.
      * Without this rule the marker outlives its job: `lastAnnouncedPostTaskTaskId` falls back to
@@ -111,7 +118,7 @@ class PlatformRegionStepper @Inject constructor() {
      * same moment the marker is stamped, so the two can never be live together — and a same-step
      * close-then-mint (the #596 T2 accept path) correctly clears.
      */
-    private fun clearClosedJobReceiptOnNewJob(region: PlatformRegion): PlatformRegion {
+    private fun closeReceiptRepriceWindow(region: PlatformRegion): PlatformRegion {
         val mark = region.lastClosedJobReceipt ?: return region
         val active = region.activeJob
         if (active != null && active.jobId != mark.jobId) return region.copy(lastClosedJobReceipt = null)
@@ -122,16 +129,18 @@ class PlatformRegionStepper @Inject constructor() {
         // — so the rule above would never fire and the next job's receipt could be re-priced onto
         // this one. Record the accept on the marker instead.
         //
-        // STICKY by construction (`|| mark.acceptedSince`): the survivor expires after
-        // `GraceConfig.acceptGraceMs`, and a flag that expired with it would re-open the hole
-        // minutes later — precisely the fielded window in which a missed-task-screen job's receipt
-        // finally renders.
+        // By PRESENCE, not by a timestamp comparison (round 4): the accept that matters most is the
+        // one taken OFF the receipt still on screen, which latches BEFORE the close — so any
+        // `acceptedAt >= closedAt` test compares against a close that had not happened yet and lets
+        // it straight through. Any unconsumed survivor alive while the marker lives flags it, and
+        // because this hook runs after `stepCore` it is evaluated on the close step too.
+        //
+        // STICKY (`mark.acceptedSince ||`): the survivor expires after `GraceConfig.acceptGraceMs`,
+        // and a flag that expired with it would re-open the hole minutes later — precisely the
+        // fielded window in which a missed-task-screen job's receipt finally renders.
         if (mark.acceptedSince) return region
-        val acceptedSince = region.pendingOffers.any { offer ->
-            val at = offer.acceptedAt
-            at != null && at >= mark.closedAt
-        }
-        return if (acceptedSince) region.copy(lastClosedJobReceipt = mark.copy(acceptedSince = true)) else region
+        val accepted = region.pendingOffers.any { it.acceptedAt != null }
+        return if (accepted) region.copy(lastClosedJobReceipt = mark.copy(acceptedSince = true)) else region
     }
 
     /**
@@ -738,6 +747,11 @@ class PlatformRegionStepper @Inject constructor() {
                         lastAnnouncedPostTaskTaskId = postTaskTaskId ?: r.lastAnnouncedPostTaskTaskId,
                     )
                 }
+                // #1033 round 4: decide the late-receipt re-price HERE, where state can be written —
+                // the itemization has just landed in `lastPostTaskFields`, and the marker has to be
+                // updated in the same breath (see [PendingReceiptReprice]). `EffectMap` only emits
+                // what this decides.
+                r = decideReceiptReprice(r, parsed, flow, postTaskTaskId, obs.timestamp, obs.captureId)
                 r.session?.let { session ->
                     val earnings = parsed.sessionEarnings
                     if (earnings != null) {
@@ -1011,7 +1025,7 @@ class PlatformRegionStepper @Inject constructor() {
         // wrong close on a stacked job is fabrication, and an open job fails toward absorption —
         // the preferred failure direction. See ADR-0002 amendment 2026-07-15 (residual).
         if (prevFlowVal == Flow.PostTask && !nextFlowVal.isTaskFlow() && nextFlowVal != Flow.PostTask && nextFlowVal != Flow.OfferPresented) {
-            return completeActiveJob(current, obs.timestamp)
+            return completeActiveJob(current)
         }
 
         return current
@@ -1061,7 +1075,7 @@ class PlatformRegionStepper @Inject constructor() {
         return if (job != null && armedFromFlow != Flow.OfferPresented &&
             isJobPhysicallyComplete(job, recentTasks, justRetired = completed)
         ) {
-            completeActiveJob(retired, timestamp)
+            completeActiveJob(retired)
         } else {
             retired
         }
@@ -1092,7 +1106,7 @@ class PlatformRegionStepper @Inject constructor() {
         )
     }
 
-    internal fun completeActiveJob(region: PlatformRegion, closedAt: Long): PlatformRegion {
+    internal fun completeActiveJob(region: PlatformRegion): PlatformRegion {
         val job = region.activeJob ?: return region
         return region.copy(
             activeJob = null,
@@ -1108,14 +1122,6 @@ class PlatformRegionStepper @Inject constructor() {
                 jobId = job.jobId,
                 totalPay = region.lastPostTaskFields?.totalPay,
                 itemized = region.lastPostTaskFields?.parsedPay != null,
-                // The instant the re-price window opened — the anchor `acceptedSince` compares an
-                // accepted survivor's `acceptedAt` against (#1033 review round 3). On the grace-lapse
-                // path this is `pend.since` (the honest completion instant the drop's own
-                // `completedAt` carries, #732), not the committing frame's clock — which makes the
-                // predicate strictly MORE conservative: an accept landing during the receipt's own
-                // grace also flags the marker, and that is the stacked case, which then has to prove
-                // ownership by total like any other.
-                closedAt = closedAt,
             ),
         )
     }

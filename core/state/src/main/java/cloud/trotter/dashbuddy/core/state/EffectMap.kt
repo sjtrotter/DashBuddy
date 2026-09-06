@@ -230,7 +230,7 @@ class EffectMap @Inject constructor(
             // writes one step's effects serially, so the re-price then lands in `app_events` after
             // the `DELIVERY_COMPLETED` it corrects, and the projector applies adjustments after the
             // batch's own delivery upserts in sequence order.
-            addAll(diffReceiptReprice(p, next, actedNextFlow, obs))
+            addAll(diffReceiptReprice(p, next))
         }
     }
 

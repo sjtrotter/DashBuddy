@@ -2,6 +2,7 @@ package cloud.trotter.dashbuddy.domain.state
 
 import kotlinx.serialization.Serializable
 
+import cloud.trotter.dashbuddy.domain.model.pay.ParsedPay
 import cloud.trotter.dashbuddy.domain.model.ratings.RatingsSnapshot
 
 /**
@@ -188,6 +189,14 @@ data class PlatformRegion(
      * deserialize unchanged.
      */
     val lastClosedJobReceipt: ClosedJobReceipt? = null,
+    /**
+     * A receipt re-price decided by the stepper on THIS transition (#1033 review round 4) — see
+     * [PendingReceiptReprice]. Set by the PostTask arm of `updateSessionFields` at the same moment it
+     * updates [lastClosedJobReceipt], and cleared at the top of the next step, so it is a one-step
+     * handoff to `EffectMap` rather than durable state. Default-null so existing snapshots
+     * deserialize unchanged.
+     */
+    val pendingReceiptReprice: PendingReceiptReprice? = null,
 ) {
     /**
      * This platform's current PRESENTED offer — the accepted-pending-consumption survivors
@@ -215,23 +224,79 @@ data class ClosedJobReceipt(
     val totalPay: Double? = null,
     /** True when that receipt carried an itemized `parsedPay` — i.e. the completions were priced from it. */
     val itemized: Boolean = false,
-    /** The `obs.timestamp` of the close — the instant the re-price window opened. */
-    val closedAt: Long = 0L,
     /**
-     * **Sticky:** an offer was ACCEPTED after [closedAt] (#1033 review round 3).
+     * **Sticky:** an unconsumed ACCEPT existed at some point while this marker was alive (#1033
+     * review rounds 3–4).
      *
      * Acceptance and the job mint are two different transitions — `OfferLifecycle` records the
      * accepted-pending-consumption survivor when the own flow leaves offer-presentation, while the
      * stepper mints the job only on a later TASK-FLOW observation. Between the two, `activeJob` is
-     * null, so "no job is live" is NOT evidence that no next job exists: with every one of B's task
-     * screens missed, B's receipt would land while this marker still stands and be re-priced onto A.
+     * null, so "no job is live" is NOT evidence that no next job exists: with every one of the next
+     * job's task screens missed, ITS receipt would land while this marker still stands and be
+     * re-priced onto this job.
      *
-     * Once set this never clears while the marker lives — deliberately, because the accepted
-     * survivor itself EXPIRES (`GraceConfig.acceptGraceMs`), and a marker that re-cleared with it
-     * would re-open the exact hole minutes later. From here a re-price needs a POSITIVE identity
-     * instead (the same-total check in `diffReceiptReprice`), never the mere absence of a job.
+     * Flagged by PRESENCE, never by a timestamp comparison (round 4): an accept latched BEFORE the
+     * close — the dasher taking the next offer off the receipt that is still on screen — is exactly
+     * the ambiguous case, and an `acceptedAt >= closedAt` test silently let it through, because the
+     * close it must be compared against had not happened yet. Any unconsumed survivor alive while
+     * the marker lives flags it.
+     *
+     * Once set this never clears while the marker lives — deliberately, because the survivor itself
+     * EXPIRES (`GraceConfig.acceptGraceMs`), and a marker that re-cleared with it would re-open the
+     * exact hole minutes later. From here a re-price needs a POSITIVE identity instead (the
+     * same-total check in the stepper's re-price decision), never the mere absence of a job.
      */
     val acceptedSince: Boolean = false,
+    /**
+     * This job's drops have already been re-priced once from a late-expanded receipt (#1033 review
+     * round 4).
+     *
+     * [totalPay]/[itemized] are rewritten to the re-priced receipt's own figures at the same instant
+     * this is set, so the marker always describes what the rows currently hold rather than what the
+     * completion originally carried. Without that atomic update the marker kept quoting the ORIGINAL
+     * collapsed total forever, and a later same-store receipt that happened to total the same figure
+     * satisfied the ownership check and re-priced the job back DOWN — undoing a correct tip update.
+     * The effect diff cannot write state, so this is the stepper's to own.
+     *
+     * Combined with [acceptedSince] it is also a terminal gate: once a job has been re-priced AND an
+     * accept has been seen, no further re-price is admitted at all. A genuine later tip update in
+     * that window is therefore refused — fail-null (#745), because at that point nothing on the
+     * frame can distinguish it from the next job's receipt.
+     */
+    val repriced: Boolean = false,
+)
+
+/**
+ * A receipt re-price the stepper DECIDED on this transition, handed to `EffectMap` to emit (#1033
+ * review round 4).
+ *
+ * UDF: the decision is pure state (the stepper owns "is this receipt this job's, and is it owed a
+ * re-price"), the effect diff only reports what was decided. The alternative — deciding inside
+ * `EffectMap.diffReceiptReprice` — is what made the round-3 defects unfixable in place: an effect
+ * diff cannot update [ClosedJobReceipt] as it emits, so the marker could never learn that the job
+ * had just been re-priced.
+ *
+ * A **one-step handoff**: the stepper clears it at the top of the very next transition, before
+ * anything else, so it describes exactly one step. `@Serializable` because it can be caught in a
+ * snapshot mid-flight; on restore the next step's top-of-step clear drops it, so a restored value
+ * can never re-emit (the effect diff also requires it to have CHANGED).
+ */
+@Serializable
+data class PendingReceiptReprice(
+    /** The closed job whose delivered drops are being re-priced. */
+    val jobId: String,
+    /** The late-expanded receipt itself — rides the payload verbatim. */
+    val parsedPay: ParsedPay,
+    /** `taskId -> this drop's apportioned share`; Σ == `parsedPay.total` to the cent. */
+    val shares: Map<String, Double>,
+    /**
+     * The deciding observation's `obs.timestamp` — the emitted events' `occurredAt`. Carried
+     * explicitly rather than read back off the region, so the emission is `obs`-driven and
+     * replay-stable exactly as it was when the diff still saw the observation.
+     */
+    val decidedAt: Long,
+    /** The capture the expanded receipt was read from, when the observation carried one (debug). */
+    val sourceCaptureId: String? = null,
 )
 
 /**
