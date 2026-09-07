@@ -149,33 +149,33 @@ class RegexSafetyTest {
         // LOAD — on the device, once per rule. The length cap cannot see it.
         assertRejected("(a{1000}){1000}", "MAX_REPEAT")
         assertRejected("a{1000}", "MAX_REPEAT")
-        assertRejected("a{0,65}", "MAX_REPEAT")
-        assertRejected("a{65,}", "MAX_REPEAT")
-        assertRejected("(a{65}){64}", "MAX_REPEAT")
+        assertRejected("a{0,201}", "MAX_REPEAT")
+        assertRejected("a{201,}", "MAX_REPEAT")
+        assertRejected("(a{201}){2}", "MAX_REPEAT")
     }
 
     @Test
     fun `nested counted repeats over MAX_REPEAT_PRODUCT are rejected`() {
         // Each factor is legal on its own; the PRODUCT is what the compiler expands.
         assertRejected("((a{50}){50}){50}", "MAX_REPEAT_PRODUCT") // 125 000 — the shape that OOMs
-        assertRejected("((a{20}){20}){20}", "MAX_REPEAT_PRODUCT") // 8 000
-        assertRejected("((a{17}){16}){16}", "MAX_REPEAT_PRODUCT") // 4 352 — just over the cap
+        assertRejected("((a{21}){20}){20}", "MAX_REPEAT_PRODUCT") // 8 400
+        assertRejected("(a{129}){64}", "MAX_REPEAT_PRODUCT") // 8 256 — just over the cap
     }
 
     @Test
     fun `sequential repeats add, only NESTING multiplies`() {
         // The arithmetic the cap encodes: a concatenation grows the program by ADDITION, and the
         // pattern's own length already bounds how much of that can fit. `((a{16}){16}){16}` is
-        // 4 096 — exactly at the cap, and legal — while putting more repeated atoms BESIDE a
+        // 8 192 — exactly at the cap, and legal — while putting more repeated atoms BESIDE a
         // capped group is not a multiplication at all.
         RegexSafety.compileRegex("((a{16}){16}){16}")
-        RegexSafety.compileRegex("(a{64}){64}b{2}c+d{50}")
+        RegexSafety.compileRegex("(a{128}){64}b{2}c+d{50}") // 8 192 — exactly at the cap
     }
 
     @Test
     fun `the product arithmetic admits what it should`() {
         RegexSafety.compileRegex("(a{50}){50}")   // 2 500
-        RegexSafety.compileRegex("(a{64}){64}")   // 4 096 — exactly at the cap
+        RegexSafety.compileRegex("(a{64}){64}")   // 8 192 — exactly at the cap
         RegexSafety.compileRegex("a{64}")
         // An unbounded quantifier counts as MAX_REPEAT, so the ReDoS catalog stays LEGAL: on a
         // non-backtracking engine these are safe, and rejecting them would resurrect the heuristic.

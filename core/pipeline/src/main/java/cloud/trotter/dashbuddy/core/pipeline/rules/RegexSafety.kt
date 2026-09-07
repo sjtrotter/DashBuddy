@@ -41,15 +41,14 @@ internal object RegexSafety {
      * Ceiling on any single counted repeat (`{n}`, `{n,m}`, `{n,}`) and the factor an unbounded
      * quantifier (`*`, `+`) contributes to [MAX_REPEAT_PRODUCT].
      *
-     * **This is tight against the shipped corpus and deliberately so — read before raising a rule's
-     * repeat.** The largest counted repeat in either ruleset today is **60**
-     * (`^.{1,60} \((\d{2,6}…)\)$`, the payout store-name shape), with `{1,48}` behind it. A rule
-     * that legitimately needs a longer bound — a store name, an address line — will hit this cap,
-     * and the honest fix is to raise the constant *here* after checking the product arithmetic
-     * below, not to work around it in the rule. The cap is a backstop; [MAX_REPEAT_PRODUCT] is what
-     * actually bounds the program.
+     * The largest counted repeat in either ruleset today is **60** (`^.{1,60} \((\d{2,6}…)\)$`,
+     * the payout store-name shape), with `{1,48}` behind it; a store-name or address bound is exactly
+     * the kind that grows, so this cap sits at 200 — over three times the corpus — and is a backstop
+     * only: [MAX_REPEAT_PRODUCT] is what actually bounds the program. A rule that needs more than 200
+     * of one atom is not describing a screen string; raise the constant *here*, deliberately, after
+     * re-checking the product arithmetic below, never by working around it in the rule.
      */
-    const val MAX_REPEAT = 64
+    const val MAX_REPEAT = 200
 
     /**
      * Ceiling on the product of NESTED repeat factors — the multiplier RE2J's compiler applies when
@@ -57,17 +56,19 @@ internal object RegexSafety {
      *
      * The arithmetic: a group's own repeat multiplies every repeat inside it, so `(a{50}){50}` is
      * 2 500 copies of `a` (≈ 2 602 instructions) and `((a{50}){50}){50}` is 125 000 (≈ 130 102 —
-     * the shape that OOMs). At this cap, `(a{64}){64}` is 4 096 copies of one atom; the worst
-     * pattern that fits in [RuleCompiler.MAX_REGEX_LENGTH] characters *and* the cap — 30 atoms in a
-     * group, each `{64}`, the group `{64}` — measures **123 010** instructions and 8 ms to compile,
-     * versus the 1 002 002 an uncapped 15-char pattern reaches. Bounded, and bounded by a number
-     * derived from the two constants rather than hoped for.
+     * the shape that OOMs). At this cap the worst pattern that fits in [RuleCompiler.MAX_REGEX_LENGTH]
+     * characters — a group of ~30 atoms whose repeats multiply out to 8 192 each — is on the order of
+     * 250 000 instructions and tens of milliseconds to compile (the 64/4 096 predecessor measured
+     * 123 010 and 8 ms), versus the 1 002 002 an uncapped 15-char pattern reaches. Bounded, and bounded
+     * by a number derived from the two constants rather than hoped for.
      *
-     * An unbounded quantifier contributes [MAX_REPEAT], so `(a+)+` costs 4 096 — legal, because on
-     * a non-backtracking engine it is also perfectly safe (`RegexReDoSTest` proves it matches in
-     * microseconds). The corpus's largest product is far below: its deepest nesting is 2 groups.
+     * An unbounded quantifier (`*`, `+`) contributes a factor of ONE: RE2 compiles `x+` as the body of
+     * `x` plus a loop instruction, so its program size is the body's, not a multiple of it — and on a
+     * non-backtracking engine `(a+)+` is perfectly safe (`RegexReDoSTest` proves the whole catastrophic
+     * family matches in microseconds), so it stays legal. `{n,}` contributes `n` (n copies plus a loop).
+     * The corpus's largest product is far below the cap: its deepest nesting is 2 groups.
      */
-    const val MAX_REPEAT_PRODUCT = 4_096L
+    const val MAX_REPEAT_PRODUCT = 8_192L
 
     /**
      * Ceiling on group nesting. The corpus's deepest pattern nests **2** groups, so this is 8×
@@ -276,14 +277,14 @@ internal object RegexSafety {
     /**
      * Read a quantifier at [start], or null when this position is not one (a literal `{`, a `?`
      * that has already been consumed as part of `(?:`). Enforces [MAX_REPEAT] on every written
-     * bound; an unbounded quantifier reports [MAX_REPEAT] as its factor.
+     * bound; an unbounded quantifier reports a factor of 1 (a loop over its body), `{n,}` reports `n`.
      */
     private fun readQuantifier(pattern: String, start: Int): Quantifier? {
         fun withLazy(end: Int): Int =
             if (end < pattern.length && (pattern[end] == '?' || pattern[end] == '+')) end + 1 else end
 
         return when (pattern[start]) {
-            '*', '+' -> Quantifier(MAX_REPEAT.toLong(), withLazy(start + 1))
+            '*', '+' -> Quantifier(1L, withLazy(start + 1)) // a loop: program size is the body's
             '?' -> Quantifier(1L, withLazy(start + 1))
             '{' -> {
                 val close = pattern.indexOf('}', start + 1)
@@ -308,7 +309,7 @@ internal object RegexSafety {
                 }
                 val factor = when {
                     max != null -> max.toLong()
-                    hasComma -> MAX_REPEAT.toLong() // {n,} is unbounded
+                    hasComma -> min.toLong() // {n,} = n copies + a loop
                     else -> min.toLong()
                 }
                 Quantifier(factor, withLazy(close + 1))

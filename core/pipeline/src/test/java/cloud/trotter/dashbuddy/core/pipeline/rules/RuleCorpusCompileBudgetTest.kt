@@ -26,7 +26,7 @@ import java.io.File
  *
  * It also prints the corpus's largest counted repeat against [RegexSafety.MAX_REPEAT] on failure,
  * because that margin is genuinely tight (the payout store-name shape declares `{1,60}` against a
- * cap of 64) and an author who trips it deserves to be told the number rather than left guessing.
+ * cap of 200) and an author who trips it deserves to be told the number rather than left guessing.
  */
 class RuleCorpusCompileBudgetTest {
 
@@ -174,7 +174,7 @@ class RuleCorpusCompileBudgetTest {
                 "KDoc first, the product arithmetic is what actually bounds the program size.",
             largest <= RegexSafety.MAX_REPEAT,
         )
-        // Stated, not silently passed: this margin is 60 vs 64 today.
+        // Stated, not silently passed: this margin is 60 vs 200 today.
         println("[#1053] corpus largest counted repeat = $largest (MAX_REPEAT=${RegexSafety.MAX_REPEAT}) at $where")
     }
 
