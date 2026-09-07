@@ -617,7 +617,9 @@ class PlatformRegionStepper @Inject constructor() {
                 // #1054 round 4: identity-gated like the graces. The deadline is state now, so a
                 // re-pause arms a new one while an old coroutine may still be in flight — and a
                 // stale fire carries the PREVIOUS pause's deadline, so it must not end this one.
-                // A payload-less fire matches nothing and the pause waits: fail-closed.
+                // A payload-less fire is honoured only by the legacy rule in [safetyFireIsAuthoritative]
+                // (no net in state, or landing at/after the reconstructed one — see #1083 for the
+                // rollback residual); otherwise it matches nothing and the pause waits.
                 if (prev.mode == Mode.Paused && safetyFireIsAuthoritative(prev, obs)) {
                     applyModeTransition(prev, Mode.Offline, obs, policy)
                 } else prev

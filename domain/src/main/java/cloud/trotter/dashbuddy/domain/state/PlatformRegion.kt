@@ -674,7 +674,8 @@ data class PendingDestructive(
     /**
      * The `obs.timestamp` that last SET or MOVED this deadline (#1054 round 7) — the accounting
      * anchor for how much of the CURRENT window has been observed. Null on a pre-round-7 snapshot,
-     * where [since] is the correct fallback (nothing had moved the deadline yet).
+     * where [since] is the fallback — correct unless that snapshot already holds a rollback-tightened
+     * deadline (`deadline < since`), which restores with no remaining window (#1083, accepted).
      *
      * [since] cannot serve as that anchor once a tighten has happened, because the two answer
      * different questions: `since` is the historical moment the destructive signal appeared, which

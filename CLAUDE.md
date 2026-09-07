@@ -638,8 +638,9 @@ total lands one settle window late by design. **Crash recovery DROPS any restore
 so it would sit forever or be committed by whatever frame happens past its deadline — fail-null
 (#745), at a cost of one settle window. It runs at the **LIVE boundary — on the FINAL state after the
 tail fold, never on the snapshot** (#1052), because the tail must replay against the snapshot exactly
-as recorded and scrubbing at the end also discards a park a TAIL frame re-created (whose
-`ScheduleTimeout` the recovery fold does arm; that timer then finds no park and no-ops). The drop is
+as recorded and scrubbing at the end also discards a park a TAIL frame re-created (its
+`ScheduleTimeout` is a region timer, which the recovery fold SKIPS since #1054 — `reconcileRecoveredTimers`
+is their sole armer after a restore). The drop is
 **CHECKPOINTED**: `restoreState` writes the cleaned state back through `SnapshotStore.checkpoint`
 (unconditional, sharing `maybeSnapshot`'s writer — one encoder) at the restored correlation version,
 where snapshot rows REPLACE by key — in memory alone is not durable, and a SECOND restart with no
@@ -666,7 +667,8 @@ park and the graced resume; a resume's 8 s window is UN-CONTRADICTED observation
 after a restart asserts dead process time was nobody contradicting it — and the commit MINTS a
 session when the region has none and CANCELS `SESSION_PAUSED_SAFETY` through `diffMode`. It **re-bases**
 `pendingDestructive` to serve its REMAINING window live (`remaining = (deadline − base) − (lastSeen −
-base)` where `base = servedFrom ?: since`, `lastSeen` = `AppState.timestamp`, `since` untouched per
+base)` where `base = servedFrom ?: windowFrom ?: since` — `windowFrom` is the observation that last set or
+moved the deadline, so a tighten after a clock rollback keeps its window (#1054 round 7), `lastSeen` = `AppState.timestamp`, `since` untouched per
 #732): a restored grace has observed NONE of its window, and dead time is not un-contradicted time —
 the collapsed receipt's expansion (#1033) and the misrecognized summary's contradicting task frame
 can still land, where round 3's re-arm at the stale deadline fired at the 1 ms floor and committed
