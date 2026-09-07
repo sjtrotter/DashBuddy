@@ -54,7 +54,12 @@ class RegexReDoSTest {
     /** The classic pumping input: a run of the class the pattern chews on, then a non-match. */
     private fun pumping(n: Int) = "a".repeat(n) + "!"
 
-    private fun assertMatchesWithinBudget(pattern: String, input: CharSequence, what: String) {
+    private fun assertMatchesWithinBudget(
+        pattern: String,
+        input: CharSequence,
+        what: String,
+        budgetMs: Long = BUDGET_MS,
+    ) {
         val regex = RuleCompiler.compileRegex(pattern)
         // Warm the engine once so the assertion measures the match, not class loading.
         regex.containsMatchIn("a")
@@ -63,8 +68,8 @@ class RegexReDoSTest {
         val elapsedMs = (System.nanoTime() - start) / 1_000_000
         assertTrue(
             "$what: <$pattern> against ${input.length} chars took ${elapsedMs}ms, over the " +
-                "${BUDGET_MS}ms linear-time budget",
-            elapsedMs < BUDGET_MS,
+                "${budgetMs}ms linear-time budget",
+            elapsedMs < budgetMs,
         )
     }
 
@@ -101,7 +106,12 @@ class RegexReDoSTest {
         // not about small inputs.
         val long = pumping(RuleCompiler.MAX_REGEX_LENGTH * 50)
         for (pattern in catastrophic) {
-            assertMatchesWithinBudget(pattern, long, "long input")
+            // A larger budget than the other cases, on purpose: this one multiplies a 10 001-char
+            // input by twelve patterns on whatever core a shared CI runner gives it, and it went
+            // red once at 50 ms. The property under test is linear-vs-exponential — a gap of many
+            // orders of magnitude — so a quarter of a second still fails loudly on a regression
+            // while not failing on a slow morning.
+            assertMatchesWithinBudget(pattern, long, "long input", budgetMs = 250)
         }
     }
 
