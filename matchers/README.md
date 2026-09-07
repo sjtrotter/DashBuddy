@@ -46,6 +46,24 @@ Full JSON-Schema validation against `docs/rules.schema.json` is deferred to the 
 (ADR-0009); `verifyMatchersCanonical` does a cheap schema-aware structural check (required top-level
 keys, read from the schema) plus the idempotency fixed-point assertion.
 
+## Regex pattern language: RE2, not PCRE (#1053)
+
+Every regex a rule carries — `…MatchesRegex` predicates, parse `find`/`regex` patterns, `redact`
+`match`, `nextSiblingMatchingRegex`'s argument — is compiled by the app onto **RE2J**, a
+non-backtracking engine, so an accepted pattern's match time is linear in `input × pattern` **by
+construction** rather than by a watchdog (the previous 200 ms budget could not fire on Android at
+all). That matters most for the milestone-2 CDN channel below: an untrusted pattern language must be
+one whose worst case is known.
+
+The cost is syntax. **No lookaround** (`(?!…)`, `(?=…)`, `(?<…)`), **no backreferences**, no
+possessive or atomic groups. Everything this ruleset uses is supported: character classes,
+`\d\s\w\S`, `\b` (ASCII word boundary), `\p{L}`, lazy quantifiers, `(?:…)`, numbered capture
+groups, `^`/`$`. Two behaviours differ from the JVM/ICU engines: `$` matches only at end of **text**
+(not before a trailing newline), and `\b` is ASCII-only — neither is exercised by this English-only
+ruleset. Patterns are case-**insensitive** and capped at 200 chars; an over-long or unsupported
+pattern fails the rule LOAD loudly, per file, so a bad pattern can never degrade quietly into one
+that just never matches. See `docs/adr/ADR-0010-linear-time-rule-regex.md`.
+
 ## Locale scope: this ruleset is English-only (#938)
 
 Every anchor in `rules/` is a **literal English string** — `require` text predicates, `matchesRegex`

@@ -1,72 +1,25 @@
 package cloud.trotter.dashbuddy.core.pipeline.rules
 
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Assert.fail
 import org.junit.Test
 
 /**
- * Focused unit test for the extracted [RegexSafety] guard (audit #11). The
- * end-to-end ReDoS contract through the compiler is in `RegexReDoSTest` (via
- * `RuleCompiler.compileRegex`); this hits the extracted object directly so the
- * security unit has its own home and the catastrophic-backtracking detector is
- * exercised in isolation — including a pattern that WOULD hang the matcher if it
- * compiled.
+ * Focused unit test for the [RegexSafety] seam (audit #11, reshaped by #1053).
+ *
+ * After #1053 this object owns exactly two controls — the [RuleCompiler.MAX_REGEX_LENGTH] ingestion
+ * cap and fail-loud parsing — so this file tests those, plus the [BoundedRegex] API contract the
+ * rule engine's four call sites depend on. The match-TIME property moved to `RegexReDoSTest`, where
+ * it is now asserted rather than approximated by a compile-time heuristic.
  */
 class RegexSafetyTest {
 
     // =========================================================================
-    // assertNoCatastrophicBacktracking — direct
+    // The two remaining load-time controls
     // =========================================================================
-
-    @Test
-    fun `nested unbounded quantifier is flagged before any Regex is built`() {
-        try {
-            RegexSafety.assertNoCatastrophicBacktracking("(a+)+")
-            fail("expected RuleCompileException for nested unbounded quantifier")
-        } catch (e: RuleCompileException) {
-            assertTrue(
-                "error should name the ReDoS risk: ${e.message}",
-                e.message!!.contains("ReDoS"),
-            )
-        }
-    }
-
-    @Test
-    fun `linear pattern passes the structural check`() {
-        // Must not throw — a group with an unbounded body that is not itself
-        // quantified is linear.
-        RegexSafety.assertNoCatastrophicBacktracking("(\\d+)\\.(\\d+)")
-    }
-
-    // =========================================================================
-    // compileRegex — the guard short-circuits the hang
-    // =========================================================================
-
-    @Test
-    fun `compileRegex rejects a catastrophic pattern fast instead of hanging at match time`() {
-        // `(a+)+$` is the classic ReDoS exploit: matched against a long run of
-        // 'a' followed by a non-'a', a real Regex backtracks exponentially and
-        // hangs the per-event classification thread (Kotlin Regex has no match
-        // timeout). The guard must reject it at COMPILE time, well under a
-        // second — the assertion below would never return if the engine instead
-        // tried to match the exploit string.
-        val start = System.nanoTime()
-        try {
-            RegexSafety.compileRegex("(a+)+\$")
-            fail("expected RuleCompileException (ReDoS) for (a+)+\$")
-        } catch (e: RuleCompileException) {
-            val elapsedMs = (System.nanoTime() - start) / 1_000_000
-            assertTrue("guard should reject quickly, took ${elapsedMs}ms", elapsedMs < 1_000)
-        }
-    }
-
-    @Test
-    fun `compileRegex returns a usable case-insensitive Regex for a safe pattern`() {
-        val regex = RegexSafety.compileRegex("\\\$\\d+\\.\\d{2}")
-        assertNotNull(regex)
-        assertTrue(regex.containsMatchIn("total \$12.34 due"))
-    }
 
     @Test
     fun `compileRegex enforces the length cap owned by RuleCompiler`() {
@@ -90,5 +43,86 @@ class RegexSafetyTest {
         } catch (e: RuleCompileException) {
             assertTrue(e.message!!.contains("Invalid regex"))
         }
+    }
+
+    @Test
+    fun `an RE2-unsupported construct is a LOAD failure, not a silent never-match`() {
+        // Lookaround and backreferences are the two things the linear-time guarantee costs. A rule
+        // that reaches for either must fail the load loudly (fail-closed, the #192 CDN posture),
+        // never compile into a matcher that quietly never fires.
+        for (pattern in listOf("^Going to (?!\\d)", "(?=abc)x", "(\\w+)\\1+")) {
+            try {
+                RegexSafety.compileRegex(pattern)
+                fail("expected RuleCompileException for RE2-unsupported pattern <$pattern>")
+            } catch (e: RuleCompileException) {
+                assertTrue(
+                    "the rejection must name the pattern language: ${e.message}",
+                    e.message!!.contains("RE2"),
+                )
+            }
+        }
+    }
+
+    // =========================================================================
+    // The BoundedRegex contract the four call sites rely on
+    // =========================================================================
+
+    @Test
+    fun `compileRegex returns a usable case-insensitive matcher for a safe pattern`() {
+        val regex = RegexSafety.compileRegex("\\\$\\d+\\.\\d{2}")
+        assertNotNull(regex)
+        assertTrue(regex.containsMatchIn("total \$12.34 due"))
+        assertTrue("patterns compile CASE_INSENSITIVE", RegexSafety.compileRegex("abc").containsMatchIn("xABCy"))
+    }
+
+    @Test
+    fun `matches is whole-input while containsMatchIn is a substring search`() {
+        val regex = RegexSafety.compileRegex("\\d{3}")
+        assertTrue(regex.containsMatchIn("ab123cd"))
+        assertTrue(!regex.matches("ab123cd"))
+        assertTrue(regex.matches("123"))
+    }
+
+    @Test
+    fun `find exposes group values and ranges the way its Kotlin predecessor did`() {
+        // TransformRegistry reads groupValues[n]; CompiledNotifRedact.maskGroup reads
+        // groups[n].value + .range and feeds the range straight to String.replaceRange.
+        val regex = RegexSafety.compileRegex("(\\d+)\\.(\\d+)")
+        val m = regex.find("price 12.34 usd")!!
+        assertEquals("12.34", m.value)
+        assertEquals(6 until 11, m.range)
+        assertEquals(listOf("12.34", "12", "34"), m.groupValues)
+        assertEquals("12", m.groups[1]!!.value)
+        assertEquals(6 until 8, m.groups[1]!!.range)
+        assertEquals("34", "price 12.34 usd".substring(m.groups[2]!!.range))
+    }
+
+    @Test
+    fun `a group that did not participate is null in groups and empty in groupValues`() {
+        // Kotlin's MatchResult convention, which maskGroup's fail-closed null check depends on.
+        val regex = RegexSafety.compileRegex("(a)|(b)")
+        val m = regex.find("b")!!
+        assertEquals(3, m.groupValues.size)
+        assertNull(m.groups[1])
+        assertEquals("", m.groupValues[1])
+        assertEquals("b", m.groups[2]!!.value)
+    }
+
+    @Test
+    fun `find returns null when nothing matches`() {
+        assertNull(RegexSafety.compileRegex("\\d+").find("no digits here"))
+    }
+
+    @Test
+    fun `groupCount reports the capturing groups without running a match`() {
+        // RuleCompiler bounds a notification redact's maskGroup against this at COMPILE time.
+        assertEquals(0, RegexSafety.compileRegex("abc").groupCount())
+        assertEquals(2, RegexSafety.compileRegex("(\\d+)\\.(\\d+)").groupCount())
+        assertEquals(1, RegexSafety.compileRegex("(?:x)(\\d+)").groupCount())
+    }
+
+    @Test
+    fun `toString reports the raw pattern for logging`() {
+        assertEquals("\\d{5}\$", RegexSafety.compileRegex("\\d{5}\$").toString())
     }
 }

@@ -29,7 +29,8 @@ import java.util.Locale
  *
  * Security caps enforced at compile time:
  * - [MAX_DEPTH] — maximum nesting depth of predicate objects
- * - [MAX_REGEX_LENGTH] — maximum characters in any regex pattern
+ * - [MAX_REGEX_LENGTH] — maximum characters in any regex pattern (match TIME needs no cap:
+ *   rule patterns run on a non-backtracking engine, #1053)
  * - [MAX_RULES_PER_FILE] — maximum rules in one platform file (enforced at load)
  * - [MAX_BRANCHES_PER_RULE] — maximum branches in one rule
  * - [MAX_EFFECTS_PER_RULE] — maximum effects a rule may declare
@@ -421,7 +422,7 @@ object RuleCompiler {
      * (title/text/bigText/tickerText/subText). Each value is either a whole-field
      * spec (optional `keepPrefix`) or a regex-capture spec (`match` + `maskGroup`,
      * default group 1). Regexes go through the bounded [compileRegex]/[RegexSafety]
-     * guard — notification rules are untrusted input on the #192 CDN path too.
+     * seam — notification rules are untrusted input on the #192 CDN path too.
      */
     private fun compileNotifRedactBlock(obj: JsonObject): CompiledNotifRedact {
         val fields = obj.entries.associate { (fieldName, spec) ->
@@ -443,7 +444,7 @@ object RuleCompiler {
                 // group would throw IndexOutOfBoundsException at capture (inside the
                 // supervised upstream) → a crash/restart loop, once per matching
                 // notification arrival. Group 0 is the whole match; 1..N the captures.
-                val groupCount = regex.toPattern().matcher("").groupCount()
+                val groupCount = regex.groupCount()
                 if (group < 0 || group > groupCount) {
                     throw RuleCompileException(
                         "notification redact: field '$fieldName' maskGroup $group is out of range " +
@@ -953,9 +954,10 @@ object RuleCompiler {
     ): Map<String, List<CompiledEffect>> = EffectEntryCompiler.compileTransitionOverrides(obj)
 
     /**
-     * Compile a rule-supplied regex through the [RegexSafety] guard (length cap
-     * + ReDoS rejection, #418). Kept here as the compiler's call site / public
-     * entry point; the security logic lives in [RegexSafety] (audit #11).
+     * Compile a rule-supplied regex through the [RegexSafety] seam (length cap + fail-loud
+     * parsing, #418/#1053). Kept here as the compiler's call site / public entry point; the
+     * security logic lives in [RegexSafety] (audit #11), and the linear-time match bound is a
+     * property of the [BoundedRegex] engine it returns.
      */
     internal fun compileRegex(pattern: String): BoundedRegex = RegexSafety.compileRegex(pattern)
 

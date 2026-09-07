@@ -361,6 +361,17 @@ There is no `{ bound: "$name" }` predicate — bindings are consumed only by the
 These predicates operate on a single `UiNode`. Used inside `exists`/`notExists`, or combined
 with `all`/`any`/`not` at the node level. Every predicate object carries exactly one key.
 
+> **Regex pattern language (ADR-0010 / #1053).** Every `…MatchesRegex` predicate, every parse
+> `find`/`regex` pattern, every `redact` `match`, and `nextSiblingMatchingRegex`'s argument compile
+> through the one `RegexSafety.compileRegex` seam onto **RE2J**, a non-backtracking engine — so an
+> accepted pattern's match time is linear in `input × pattern` by construction. The cost is
+> **RE2 syntax**: no lookaround (`(?!…)`, `(?=…)`, `(?<…)`), no backreferences, no possessive or
+> atomic groups. Everything the rulesets use is supported — character classes, `\d\s\w\S`, `\b`
+> (ASCII), `\p{L}`, lazy quantifiers, `(?:…)`, numbered capture groups, anchors. Two behaviours
+> differ from the JDK engine: `$` is end-of-**text** (it does not match before a trailing newline),
+> and `\b` is ASCII-only. Patterns are case-**insensitive** and capped at 200 chars
+> (`MAX_REGEX_LENGTH`, #418); an over-long or unsupported pattern fails the rule LOAD loudly.
+
 | Predicate                                | Meaning                                                                  | Kotlin equivalent                   |
 |------------------------------------------|--------------------------------------------------------------------------|-------------------------------------|
 | `{ hasIdSuffix: "s" }`                   | `viewIdResourceName` ends with `s`, case-insensitive (Android fully-qualifies IDs with package) | `.endsWith(s, ignoreCase=true)`     |
@@ -371,9 +382,9 @@ with `all`/`any`/`not` at the node level. Every predicate object carries exactly
 | `{ hasTextCaseSensitive: "s" }`          | `text` exactly equals `s`                                                | `== "s"`                            |
 | `{ hasTextContaining: "s" }`             | `text` contains `s` (case-insensitive)                                   | `.contains("s", ignoreCase=true)`   |
 | `{ hasTextStartsWith: "s" }`             | `text` starts with `s` (case-insensitive)                                | `.startsWith("s", ignoreCase=true)` |
-| `{ hasTextMatchesRegex: "p" }`           | `text` matches regex pattern `p` (bounded — max 200 chars, #418)         | `Regex(p).containsMatchIn(text)`    |
+| `{ hasTextMatchesRegex: "p" }`           | `text` matches regex pattern `p` (bounded — max 200 chars, #418)         | `BoundedRegex(p).containsMatchIn(text)` |
 | `{ hasPrecedingSiblingText: "s" }`       | The node's IMMEDIATELY PRECEDING sibling's `text` equals `s` (case-insensitive) — the label→value predicate for id-less `<label><value>` pairs (#860); resolved by referential identity, so a structural twin can't shift the index | `node.parent.children[idx-1].text.equals(s, ignoreCase=true)` |
-| `{ hasFollowingSiblingTextMatchesRegex: "p" }` | The node's IMMEDIATELY FOLLOWING sibling's `text` matches `p` (case-insensitive, bounded like `hasTextMatchesRegex`) — the mirror of the above for a block whose PII value comes FIRST: an id-less address line 1 (street line **or** venue name) anchored on the stable city/ST/ZIP line beneath it (#886); same referential-identity walk | `Regex(p).containsMatchIn(node.parent.children[idx+1].text)` |
+| `{ hasFollowingSiblingTextMatchesRegex: "p" }` | The node's IMMEDIATELY FOLLOWING sibling's `text` matches `p` (case-insensitive, bounded like `hasTextMatchesRegex`) — the mirror of the above for a block whose PII value comes FIRST: an id-less address line 1 (street line **or** venue name) anchored on the stable city/ST/ZIP line beneath it (#886); same referential-identity walk | `BoundedRegex(p).containsMatchIn(node.parent.children[idx+1].text)` |
 | `{ hasAnyText: "s" }`                    | Some text anywhere in this subtree (node or any descendant's text/contentDescription) equals `s` (case-insensitive) — for buttons whose visible label lives in a nested child | `node.allText.any { it.equals(s, ignoreCase=true) }` |
 | `{ hasDesc: "s" }`                       | `contentDescription` equals `s` (case-insensitive)                       | `.equals("s", ignoreCase=true)`     |
 | `{ hasDescContaining: "s" }`             | `contentDescription` contains `s` (case-insensitive)                     | `.contains("s", ignoreCase=true)`   |
@@ -494,7 +505,7 @@ nested predicate object:
 | `"sibling(N)"`                    | `node.sibling(N)` — sibling at offset N in parent's children |
 | `"findChild(s)"`                  | First direct child whose id ends with `s`                    |
 | `"findDescendant(s)"`             | First descendant whose id ends with `s`                      |
-| `"nextSiblingMatchingRegex(p[, n])"` | First FOLLOWING sibling whose own text full-matches `p` (#1029). Identity-based walk; optional cap `n` (default/max 8) bounds the scan to the row's own width — an uncapped scan on a row missing its value returns the NEXT row's; pattern compiled through `RegexSafety` at load |
+| `"nextSiblingMatchingRegex(p[, n])"` | First FOLLOWING sibling whose own text full-matches `p` (#1029). Identity-based walk; optional cap `n` (default/max 8) bounds the scan to the row's own width — an uncapped scan on a row missing its value returns the NEXT row's; pattern compiled through `RegexSafety` at load (RE2 syntax, ADR-0010) |
 
 ```json5
 // WaitingForOfferParser: find button, then read its child's text

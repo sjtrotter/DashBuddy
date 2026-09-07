@@ -396,7 +396,7 @@
         },
         "match": {
           "type": "string",
-          "description": "Regex-capture mask: mask only capture group 'maskGroup' of this pattern, keeping the rest of the field (e.g. mask the name in \"<name>'s order is ready ... at <store>\", keeping the store). Bounded by RegexSafety."
+          "description": "Regex-capture mask: mask only capture group 'maskGroup' of this pattern, keeping the rest of the field (e.g. mask the name in \"<name>'s order is ready ... at <store>\", keeping the store). Compiled through RegexSafety: max 200 chars, RE2 syntax (no lookaround, no backreferences): rule patterns run on a non-backtracking engine, so match time is linear by construction (#1053)."
         },
         "maskGroup": {
           "type": "integer",
@@ -568,7 +568,7 @@
             },
             "find": {
               "type": "string",
-              "description": "Regex pattern to match within the source field.",
+              "description": "Regex pattern to match within the source field. Case-insensitive, max 200 chars. RE2 syntax (no lookaround, no backreferences): rule patterns run on a non-backtracking engine, so match time is linear by construction (#1053).",
               "maxLength": 200
             },
             "group": {
@@ -885,7 +885,7 @@
 
     "navigateSpec": {
       "type": "string",
-      "description": "Navigation from a found node. Supported: 'parent', 'ancestor(N)', 'sibling(N)', 'findChild(idSuffix)', 'findDescendant(idSuffix)', 'nextSiblingMatchingRegex(pattern[, n])'. The last one (#1029) scans the FOLLOWING siblings in order — by referential identity, so a structural twin cannot shift the origin — and returns the first whose own text FULL-matches the pattern: the shape-anchored alternative to a positional 'sibling(N)' on a flat, id-less row. The optional trailing integer caps the scan at the row's own width (default and maximum 8; a cap outside 1..8 isolates the rule at load). The cap is a correctness control, not just a bound: with the row's value simply absent, an unbounded scan returns the NEXT row's value as this one's. The pattern is compiled through the RegexSafety guard at rule-load time (length cap + ReDoS rejection), so a bad pattern fails the load loudly.",
+      "description": "Navigation from a found node. Supported: 'parent', 'ancestor(N)', 'sibling(N)', 'findChild(idSuffix)', 'findDescendant(idSuffix)', 'nextSiblingMatchingRegex(pattern[, n])'. The last one (#1029) scans the FOLLOWING siblings in order — by referential identity, so a structural twin cannot shift the origin — and returns the first whose own text FULL-matches the pattern: the shape-anchored alternative to a positional 'sibling(N)' on a flat, id-less row. The optional trailing integer caps the scan at the row's own width (default and maximum 8; a cap outside 1..8 isolates the rule at load). The cap is a correctness control, not just a bound: with the row's value simply absent, an unbounded scan returns the NEXT row's value as this one's. The pattern is compiled through the RegexSafety seam at rule-load time (length cap + fail-loud parsing), so a bad pattern fails the load loudly. RE2 syntax (no lookaround, no backreferences): rule patterns run on a non-backtracking engine, so match time is linear by construction (#1053).",
       "pattern": "^(parent|ancestor\\(-?\\d+\\)|sibling\\(-?\\d+\\)|findChild\\([^)]+\\)|findDescendant\\([^)]+\\)|nextSiblingMatchingRegex\\(.+\\))$"
     },
 
@@ -1043,7 +1043,7 @@
               "properties": {
                 "pattern": {
                   "type": "string",
-                  "description": "Regex pattern (case-insensitive). Max 200 chars.",
+                  "description": "Regex pattern (case-insensitive). Max 200 chars. RE2 syntax (no lookaround, no backreferences): rule patterns run on a non-backtracking engine, so match time is linear by construction (#1053).",
                   "maxLength": 200
                 },
                 "group": {
@@ -1397,7 +1397,7 @@
         },
         {
           "required": ["hasFollowingSiblingTextMatchesRegex"],
-          "properties": { "hasFollowingSiblingTextMatchesRegex": { "type": "string", "description": "The IMMEDIATELY FOLLOWING sibling's text matches this regex, case-insensitive (#886) — the mirror of hasPrecedingSiblingText for a block whose PII value comes FIRST (an id-less address block's line 1, which may be a street line OR a venue name, followed by a stable city/ST/ZIP line). Pattern goes through the same ReDoS/length guard as hasTextMatchesRegex. Requires parent back-references (always wired in production)." } }
+          "properties": { "hasFollowingSiblingTextMatchesRegex": { "type": "string", "description": "The IMMEDIATELY FOLLOWING sibling's text matches this regex, case-insensitive (#886) — the mirror of hasPrecedingSiblingText for a block whose PII value comes FIRST (an id-less address block's line 1, which may be a street line OR a venue name, followed by a stable city/ST/ZIP line). Pattern goes through the same length/parse guard as hasTextMatchesRegex. RE2 syntax (no lookaround, no backreferences): rule patterns run on a non-backtracking engine, so match time is linear by construction (#1053). Requires parent back-references (always wired in production)." } }
         },
         {
           "required": ["hasTextCaseSensitive"],
@@ -1413,7 +1413,7 @@
         },
         {
           "required": ["hasTextMatchesRegex"],
-          "properties": { "hasTextMatchesRegex": { "type": "string", "description": "Text matches regex (case-insensitive, max 200 chars).", "maxLength": 200 } }
+          "properties": { "hasTextMatchesRegex": { "type": "string", "description": "Text matches regex (case-insensitive, max 200 chars). RE2 syntax (no lookaround, no backreferences): rule patterns run on a non-backtracking engine, so match time is linear by construction (#1053).", "maxLength": 200 } }
         },
         {
           "required": ["hasDesc"],
@@ -1594,7 +1594,7 @@
         },
         {
           "required": ["titleMatchesRegex"],
-          "properties": { "titleMatchesRegex": { "type": "string", "description": "Title matches regex.", "maxLength": 200 } }
+          "properties": { "titleMatchesRegex": { "type": "string", "description": "Title matches regex (case-insensitive, max 200 chars). RE2 syntax (no lookaround, no backreferences): rule patterns run on a non-backtracking engine, so match time is linear by construction (#1053).", "maxLength": 200 } }
         },
         {
           "required": ["textEquals"],
@@ -1606,7 +1606,7 @@
         },
         {
           "required": ["textMatchesRegex"],
-          "properties": { "textMatchesRegex": { "type": "string", "description": "Body text matches regex.", "maxLength": 200 } }
+          "properties": { "textMatchesRegex": { "type": "string", "description": "Body text matches regex (case-insensitive, max 200 chars). RE2 syntax (no lookaround, no backreferences): rule patterns run on a non-backtracking engine, so match time is linear by construction (#1053).", "maxLength": 200 } }
         },
         {
           "required": ["bigTextContains"],
@@ -1614,7 +1614,7 @@
         },
         {
           "required": ["bigTextMatchesRegex"],
-          "properties": { "bigTextMatchesRegex": { "type": "string", "description": "Expanded text matches regex.", "maxLength": 200 } }
+          "properties": { "bigTextMatchesRegex": { "type": "string", "description": "Expanded text matches regex (case-insensitive, max 200 chars). RE2 syntax (no lookaround, no backreferences): rule patterns run on a non-backtracking engine, so match time is linear by construction (#1053).", "maxLength": 200 } }
         },
         {
           "required": ["tickerTextContains"],
@@ -1622,7 +1622,7 @@
         },
         {
           "required": ["tickerTextMatchesRegex"],
-          "properties": { "tickerTextMatchesRegex": { "type": "string", "description": "Ticker text matches regex.", "maxLength": 200 } }
+          "properties": { "tickerTextMatchesRegex": { "type": "string", "description": "Ticker text matches regex (case-insensitive, max 200 chars). RE2 syntax (no lookaround, no backreferences): rule patterns run on a non-backtracking engine, so match time is linear by construction (#1053).", "maxLength": 200 } }
         },
         {
           "required": ["isClearable"],
@@ -1676,7 +1676,7 @@
         },
         {
           "required": ["anyFieldMatchesRegex"],
-          "properties": { "anyFieldMatchesRegex": { "type": "string", "description": "Any field matches regex.", "maxLength": 200 } }
+          "properties": { "anyFieldMatchesRegex": { "type": "string", "description": "Any field matches regex (case-insensitive, max 200 chars). RE2 syntax (no lookaround, no backreferences): rule patterns run on a non-backtracking engine, so match time is linear by construction (#1053).", "maxLength": 200 } }
         },
         {
           "required": ["all"],

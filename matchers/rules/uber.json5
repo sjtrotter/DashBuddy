@@ -1694,7 +1694,7 @@
       "id": "uber.notification.trip_en_route_pickup",
       "priority": 3,
       "require": {
-        "titleMatchesRegex": "^Going to (?!\\d)"
+        "titleMatchesRegex": "^Going to (?:\\D|$)"
       },
       "intent": "trip_en_route_pickup",
       "parse": {

@@ -492,6 +492,38 @@ changing recognition means editing rule JSON plus corpus tests. **Rules cannot d
 bindings* (`acceptButton`, `declineButton`, `expandButton`) that the app-owned `RuleAction`
 registry (`:domain`) consumes — see `docs/design/rule-capability-consent.md`.
 
+**Rule-authored regexes run on a linear-time engine (#1053, ADR-0010).** Every rule pattern —
+predicate, parse `find`, redact `match`, `nextSiblingMatchingRegex` — funnels through the ONE
+`RegexSafety.compileRegex` → `BoundedRegex` seam, which now compiles onto **RE2J** (pure Java,
+BSD-3): an NFA simulation that cannot backtrack, so match time is linear in `input × pattern` and
+"accepted ⇒ bounded" is a property of the engine rather than a promise about a timer. It replaces
+two controls that were both unsound. The #418 compile-time ReDoS heuristic rejected the
+nested-unbounded family but could never be complete (`(a|aa)+$`, `(a?)*b`, `(.*a){20}` all passed
+it); the #590 200 ms watchdog could not fire **on Android at all** — `Matcher.reset(CharSequence)`
+stringifies its input and hands the match to native ICU, so the `InterruptibleCharSequence` the
+interrupt depended on was never consulted again, and `java.util.regex` reaches no ICU timeout API.
+The budget held only on the host, i.e. only where it was not needed: the #909 class of defect, one
+layer down. Both are DELETED — the heuristic, the watchdog executor, `InterruptibleCharSequence`,
+`RegexBudgetExceeded` and the `StackOverflowError` catch — and `(a+)+$` is now a legal, safe,
+microsecond pattern. **Bounded ingestion is unchanged** (`MAX_REGEX_LENGTH` 200 chars; an
+unparseable pattern is still a loud per-file `RuleCompileException`); what moved is the TIME bound.
+The price is the pattern **language**: rule regexes are RE2 syntax — no lookaround, no
+backreferences, no possessive/atomic groups — which is exactly the language an untrusted CDN rule
+source (#192/#640) needs, one whose worst case is known. The corpus cost was a single pattern:
+uber's `^Going to (?!\d)` → `^Going to (?:\D|$)` (same language, verified identical over 2 842
+corpus strings; it is a boolean predicate, so the zero-width-vs-consuming difference is
+unobservable). Because RE2J is pure Java the SAME engine runs on host and ART, so for rule patterns
+the ICU/JDK divergence is gone and every host regex test is a faithful device test; one instrumented
+spot-check (`RuleRegexIsLinearTimeTest`) runs the headline exploit on ART for provenance. Kotlin
+`MatchResult` no longer escapes the seam — `find` returns a `BoundedMatch` mirroring Kotlin's
+conventions (`groupValues` `""`/`groups` null for a non-participating group) and `groupCount()`
+replaced the compile-time `toPattern()` — and `RuleRegexEngineGuardTest` source-scans the rule
+package (no `java.util.regex`; every `Regex(…)` takes a string LITERAL, never a value from rule
+JSON; the app-authored constants sit in a frozen count ledger that only burns down). Known semantic
+deltas, all toward one consistent behaviour and none exercised by the corpus: RE2's `$` is
+end-of-text (it does not match before a final newline — a tightening `CurrencyShape` wants), `\b` is
+ASCII (the layer already assumes an English device), `\p{L}` and `(?i)` follow Unicode simple rules.
+
 **Two primitives exist for reading an id-less render (#1029), both bounded.** DoorDash 8.93.7
 shipped its money surfaces with NO view ids, so the parse vocabulary needed shape anchors where it
 had only id and position anchors. (1) The **`parseGlyphCurrency` transform** reads an animated
@@ -510,9 +542,9 @@ and takes the first token, so a space-separated wheel reads `$1.00`. (2) The
 **`nextSiblingMatchingRegex(<pattern>)` navigate spec** scans up to `MAX_SIBLING_SCAN`=8 FOLLOWING
 siblings and returns the first whose own text full-matches, so a rule states the SHAPE it expects
 instead of a positional `sibling(N)`. The pattern compiles through `RegexSafety` at rule-LOAD time
-(length cap + ReDoS rejection, a loud `RuleCompileException`, never a hot-path hang) and matches
-through `BoundedRegex.matches` (the whole-input sibling of `containsMatchIn`, same 200 ms budget,
-fail-closed to no-match). Its receipt: 8.93.7 flattened the pay breakdown into id-less siblings
+(length cap + fail-loud RE2 parsing, a loud `RuleCompileException`, never a hot-path hang) and
+matches through `BoundedRegex.matches` (the whole-input sibling of `containsMatchIn`, same
+linear-time engine, fail-closed to no-match). Its receipt: 8.93.7 flattened the pay breakdown into id-less siblings
 `'Customer tips', '799', '$7.00'`, where `799` is a DoorDash type CODE older builds render in the
 `pay_line_item_title` slot — so `sibling(1)` + `parseCurrency` reported a **$799.00 tip on a $16.70
 delivery**. No offset is right on both layouts; "the next money-shaped node" is. The spec
@@ -928,8 +960,8 @@ posts); (3) the ICU/JVM regex divergence is **not executable from any unit or Ro
 it is caught by source scan — `IcuRegexGuardTest` (`:app`, the #764 `TimberTagGuardTest` doctrine)
 fails the build on a bare, unescaped `}` in any main-source `Regex(…)`/`.toRegex()` literal. Write
 `\}`, never `}` (reference shape: `Ruleset.TEMPLATE_PATTERN` = `\{(\w+)\}`). Rule-authored
-patterns are a separate, already-fail-closed path (`RegexSafety.compileRegex` → loud
-`RuleCompileException` at load).
+patterns are a separate path that #1053 closed differently: they do not run on that engine at all
+(§2 — RE2J, not `java.util.regex`).
 **The offer voice is the family's fifth member (#991).** `TtsEffectHandler` built its `TextToSpeech`
 once in `init` and latched `isReady` true forever, so a dropped engine binder lost every utterance
 across three dashes with nothing but a WARN. The engine now comes from a `TtsEngineFactory` seam and
@@ -1555,7 +1587,9 @@ Every new feature or refactor holds to these — they are forefront design input
    rules:
    - **Treat third-party UI and (eventually) downloaded rules as untrusted input.** The
      accessibility tree comes from another app; once the matchers split (#192) lands, rule JSON
-     comes from a CDN. Both get bounded ingestion (size/depth/node/regex caps), fail-closed
+     comes from a CDN. Both get bounded ingestion (size/depth/node/regex caps), a **linear-time
+     regex engine** so an accepted pattern's match time is bounded by construction rather than by a
+     watchdog (#1053 / ADR-0010, §2), fail-closed
      validation, and — for any remote rule source — **signature/integrity verification before
      compile** (#416, in-tree): `RulesetVerifier` (ECDSA P-256/SHA-256, no new crypto dep) gates
      `JsonRuleInterpreter.load`, which now accepts only a `VerifiedRulesetBytes` mintable solely by

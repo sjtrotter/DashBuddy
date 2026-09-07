@@ -18,7 +18,8 @@ import org.junit.Test
  * reported a **$799.00 tip on a $16.70 delivery**. This navigate states the shape it wants instead
  * of an offset, so the code node is skipped structurally.
  *
- * Bounded by [MAX_SIBLING_SCAN]; the pattern goes through [RegexSafety] at COMPILE time.
+ * Bounded by [MAX_SIBLING_SCAN]; the pattern goes through [RegexSafety] at COMPILE time (length
+ * cap + fail-loud RE2 parsing, #1053).
  */
 class NextSiblingMatchingRegexTest {
 
@@ -259,13 +260,24 @@ class NextSiblingMatchingRegexTest {
     }
 
     @Test
-    fun `a ReDoS-prone pattern is rejected at compile`() {
-        // Untagged (non-isolable) by design: RegexSafety is a security control, so it rejects the
-        // whole FILE rather than silently degrading one surface.
+    fun `an RE2-unsupported pattern is rejected at compile`() {
+        // #1053: a nested-unbounded shape like `(a+)+b` is no longer rejected — RE2J cannot
+        // backtrack, so it is not a ReDoS (see RegexReDoSTest). What IS rejected is a construct the
+        // linear-time engine does not have: lookaround. Untagged (non-isolable) by design —
+        // RegexSafety is a security control, so it rejects the whole FILE rather than silently
+        // degrading one surface.
         assertTrue(
-            "the rejection must name the ReDoS guard",
-            compileFailure("nextSiblingMatchingRegex((a+)+b)").contains("unbounded"),
+            "the rejection must name the pattern language",
+            compileFailure("nextSiblingMatchingRegex((?!a)b)").contains("RE2"),
         )
+    }
+
+    @Test
+    fun `a nested-unbounded pattern now LOADS - the heuristic that rejected it is retired`() {
+        // `(a+)+b` was a hard load failure before #1053. It is an ordinary linear-time pattern on a
+        // non-backtracking engine, so the nav must compile it like any other (match-time bound
+        // asserted in RegexReDoSTest).
+        rulesetFor("nextSiblingMatchingRegex((a+)+b)")
     }
 
     @Test

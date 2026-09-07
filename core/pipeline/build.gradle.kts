@@ -47,6 +47,11 @@ dependencies {
     implementation(libs.hilt.android)
     implementation(libs.kotlinx.serialization.json)
     implementation(libs.timber)
+    // #1053 — RE2J backs every rule-authored regex (BoundedRegex). A pure-Java
+    // linear-time engine: the same implementation runs on the host JVM and on
+    // ART, so "accepted => bounded match time" is structural rather than a
+    // watchdog Android could never honour. BSD-3-Clause.
+    implementation(libs.re2j)
 
     implementation(project(":domain"))
 
@@ -62,6 +67,11 @@ dependencies {
     // it runs inside plain JUnit-4 @Test bodies via runTest/runBlocking. NOT the
     // Kotest runner, NOT jqwik/Jazzer (both JUnit-Platform-only; this repo is JUnit 4).
     testImplementation(libs.kotest.property)
+
+    // #1053 — one instrumented spot-check that the linear-time bound holds on ART
+    // (the device engine is the one the old watchdog could not reach).
+    androidTestImplementation(libs.androidx.junit)
+    androidTestImplementation(libs.androidx.espresso.core)
 }
 
 // ===========================================================================
