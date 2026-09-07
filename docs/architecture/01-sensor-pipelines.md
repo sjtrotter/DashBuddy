@@ -231,6 +231,9 @@ grains: a per-rule count rendered as `parseShortfall{<ruleId>=n,…}` on the per
 8, `+k more`, rule ids and counts only, P7) and one WARN per rule per process under the
 `ParseHealth` tag. Keyed by rule id ONLY (P8), and inert. Deliberately **no** dasher-visible notice:
 escalation is a later decision. A rule whose one evidence field is legitimately optional trips
-benignly (`dash_along_the_way`, `idle_map`, `set_dash_end_time` in the committed corpus), which is
+benignly (`dash_along_the_way`, `idle_map`, `set_dash_end_time` in the committed corpus; in the field
+(09-06/09-07 pulls, DoorDash 8.95.6) also `waiting_for_offer` — its `earnings_pill` is a CAROUSEL that
+alternates the dash total with a `Weekly goal` render, on which `sessionPay` is correctly null — and
+`pickup_shopping` on a pre-render frame), which is
 why the WARN is a once-per-process breadcrumb rather than an alarm; the same corpus shows the real
 finds (`delivery_summary_expanded`/`_collapsed`, `waiting_for_offer`, `timeline`).
