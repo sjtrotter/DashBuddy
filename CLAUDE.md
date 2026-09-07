@@ -503,9 +503,11 @@ it); the #590 200 ms watchdog could not fire **on Android at all** — `Matcher.
 stringifies its input and hands the match to native ICU, so the `InterruptibleCharSequence` the
 interrupt depended on was never consulted again, and `java.util.regex` reaches no ICU timeout API.
 The budget held only on the host, i.e. only where it was not needed: the #909 class of defect, one
-layer down. Both are DELETED — the heuristic, the watchdog executor, `InterruptibleCharSequence`,
-`RegexBudgetExceeded` and the `StackOverflowError` catch — and `(a+)+$` is now a legal, safe,
-microsecond pattern. **The program size is MEASURED, not estimated.** Linear MATCH time says nothing about COMPILE cost,
+layer down. Both are DELETED — the heuristic, the watchdog executor, `InterruptibleCharSequence` and
+`RegexBudgetExceeded` — and `(a+)+$` is now a legal, safe, microsecond pattern. (The
+`StackOverflowError` catch was deleted with them and then RESTORED in round 2: it is retained today
+as `BoundedRegex.evaluating`, which no longer swallows the failure into a default but raises
+`RegexEvaluationFailed` — see below.) **The program size is MEASURED, not estimated.** Linear MATCH time says nothing about COMPILE cost,
 and RE2J 1.8 has no program-size ceiling (the C++ `max_mem` has no equivalent in the port), so
 `(a{1000}){1000}` is 15 chars and 1 002 002 instructions and rule load runs on the DEVICE once per
 rule. Round 2 bounded that with a structural walk over the pattern text and the round-3 review
@@ -524,13 +526,16 @@ rejected, `(?i:…)` scoped flag groups accepted, and a cost estimate capped at
 (building the message can itself fail), it over-classifies unrelated VM errors as bad patterns, and
 the outcome is WHOLE-FILE rejection (`isolable = false`), which is the repo's existing policy for
 resource limits;
-(3) **the bound** — `Pattern.programSize()` ≤ `MAX_PROGRAM_SIZE`=**2 000**. The corpus's largest
-MEASURED program is **240** instructions (the #885 name shape) — an 8× margin, re-measured and
+(3) **the bound** — `Pattern.programSize()` ≤ `MAX_PROGRAM_SIZE`=**1 000**. The corpus's largest
+MEASURED program is **240** instructions (the #885 name shape) — a 4× margin, re-measured and
 printed by `RuleCorpusCompileBudgetTest` every run. **Round 5 lowered that from 20 000 for a
 match-time reason, not a memory one:** `^((.?){100}){40}$` is 17 chars, estimates 28 244, compiles to
 16 084 — both gates accepted it — and matching a FIVE-char input overflows RE2J's `Machine.add` on
-256 KiB, 512 KiB AND 1 MiB stacks (ART's coroutine threads are ~1 MiB); the smallest still-overflowing
-shape measures 2 044, so the ceiling sits just under the empirical threshold. **And an evaluation
+256 KiB, 512 KiB AND 1 MiB stacks (ART's coroutine threads are ~1 MiB). **Round 6 lowered it again to
+1 000 and struck the "threshold instruction count" claim:** recursion depth in `Machine.add` grows
+with NULLABLE NESTING, not with instruction count alone — a 20-char `^((((a?)?)?)?){150}$` is 1 954
+instructions and recurses ~45 % deeper than a 1 644-instruction shape that does NOT overflow — so the
+cap bounds EXPOSURE and `RegexEvaluationFailed` is the backstop for whatever remains inside it. **And an evaluation
 failure no longer has a single default** — `BoundedRegex` raises `RegexEvaluationFailed` (pattern
 LENGTH only, one WARN per pattern per process) and each boundary answers it: recognition
 (`Ruleset.matchFirst`) treats the rule as no-match and moves on, parse yields null (#745), and
@@ -543,8 +548,8 @@ predicate propagates. A product-of-all-bounds estimate was rejected on
 measurement: it scores that 240-instruction shape at 109 363 200, higher than the 1.5M attack, so no
 ceiling separates them. The class scanner also handles a leading `]` (a MEMBER, not the terminator —
 `[]\s]` was being rewritten into something that matched space-then-bracket) and opaque POSIX
-`[:alpha:]` classes. The `StackOverflowError` catch is kept (`BoundedRegex.failClosed`,
-`internal inline` so it is testable) and is **load-bearing**: round 2 said a match-time overflow
+`[:alpha:]` classes. The `StackOverflowError` catch is kept (`BoundedRegex.evaluating`) and is
+**load-bearing**: round 2 said a match-time overflow
 could not be reproduced and that was wrong — `((a?){200}){40}` against `""` overflows in RE2J's
 `Machine.add` at a 256 KiB stack.
 The price is the pattern **language**: rule regexes are RE2 syntax — no lookaround, no
@@ -573,9 +578,10 @@ superscript `²` (deliberate — over-matching `\w` widens a match while under-m
 `\b` cannot be translated at all (ASCII-only, no Unicode form — and naming the ASCII word on ONE
 side is not enough, since the character on the other side decides too: the shipped distance finder
 takes `17 mié` under RE2J and not under ICU), and RE2J's `\p{L}`/`\p{Nd}` LAG Android's Unicode
-tables by a version so an Adlam letter/digit is a letter/digit to ART and not here — which no
-translation closes, and which can drop the #885 name redact or send an Adlam-digit address to the
-redact-less uber pickup rule, and case folding is SIMPLE where ICU's is FULL (`straße`/`STRASSE`). One consequence
+tables by a version so an Adlam letter/digit is a letter/digit to ART and not here — which an explicit class COULD
+close one character at a time (`[\p{Nd}\x{1E951}]`) but which we decline to hand-maintain against a
+moving ICU version (#1086), and which can drop the #885 name redact or send an Adlam-digit address to
+the redact-less uber pickup rule, and case folding is SIMPLE where ICU's is FULL (`straße`/`STRASSE`). One consequence
 that looks like a regression and is not: `CurrencyShape`'s `\d` become Unicode so a mixed-script
 `$16.٧٠` now satisfies the money SCAN (its leading `[1-9]` is a literal ASCII range), and #1052's
 code-point rejection in `parseGlyphCurrency` then reads it as NULL — fail-null, never a fabricated
@@ -1662,7 +1668,7 @@ Every new feature or refactor holds to these — they are forefront design input
      accessibility tree comes from another app; once the matchers split (#192) lands, rule JSON
      comes from a CDN. Both get bounded ingestion (size/depth/node/regex caps — for a rule regex
      that means length 200, repeat/depth caps, and the compiled program **measured** at
-     `programSize()` ≤ 2 000, since a linear-time MATCH says nothing about COMPILE cost or
+     `programSize()` ≤ 1 000, since a linear-time MATCH says nothing about COMPILE cost or
      match-time stack DEPTH and RE2J has no program-size ceiling), a **linear-time regex engine** so
      an accepted pattern's match time is bounded by construction rather than by a watchdog, an
      evaluation failure that is a distinguishable exception each boundary answers safely

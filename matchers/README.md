@@ -61,7 +61,8 @@ possessive or atomic groups. Everything this ruleset uses is supported: characte
 
 Write `\d`, `\s` and `\w` exactly as you always have: the app **translates them at compile toward
 Android's Unicode classes** (`\d` → `\p{Nd}`, `\s` → `[\s\p{Z}\x{0B}\x{85}]`, `\w` →
-`[\p{L}\p{M}\p{N}\p{Pc}]`), because Android's ICU-backed engine has always read them that way and
+`[\p{L}\p{M}\p{N}\p{Pc}\x{200C}\x{200D}]` — the join controls are there because Android's `\w`
+includes `Join_Control` and a shipped merchant shape was matching ZWJ on the device), because Android's ICU-backed engine has always read them that way and
 letting them narrow to ASCII silently broke two redacts on the device while every host test stayed
 green. It is an **approximation, not parity** — RE2J and ART's ICU ship different Unicode table
 versions — and the residual differences are listed in ADR-0010. Three that matter here: `$` matches
@@ -73,16 +74,20 @@ character class are rejected outright, since a negated union cannot be a class m
 Patterns are case-**insensitive** and bounded at load: 200 chars, no single repeat bound over
 **200**, at most **16** nested groups, no `\Q…\E` quoting, no leading-zero repeat bounds
 (`a{0201}` — RE2 reads that as literal text, so it is refused rather than silently meaning something
-else), and — the real bound — the **compiled program** at most **2 000 instructions**, measured
-after compiling. The largest program either ruleset produces today is 240, so that is an 8× margin.
+else), and — the real bound — the **compiled program** at most **1 000 instructions**, measured
+after compiling. The largest program either ruleset produces today is 240, so that is a 4× margin.
 
 Two things the program bound is and is not. It is **not** what keeps compilation affordable: it is
 measured *after* the compile, so a pattern can build a large program and only then be rejected
 (`a{0,200}(?i){0,198}(?i){5}` constructs 396 987 instructions before it is turned away). A separate,
 deliberately crude pre-compile estimate does that job, approximately. What the program bound **is**
-for is match-time depth: `^((.?){100}){40}$` is seventeen characters and 16 084 instructions, and
-matching a five-character input with it overflows the stack on threads up to 1 MiB. Deep nullable
-repetition is what reaches that depth, and only a large program can express it.
+for is match-time stack depth: `^((.?){100}){40}$` is seventeen characters and 16 084 instructions,
+and matching a five-character input with it overflows the stack on threads up to 1 MiB. Note that
+depth grows with **nullable nesting**, not with instruction count alone — a 20-character
+`^((((a?)?)?)?){150}$` is only 1 954 instructions and recurses about 45 % deeper than a 1 644-
+instruction shape that does not overflow — so the cap bounds exposure rather than proving safety.
+A pattern that gets through and still cannot be evaluated is caught at the match: recognition treats
+it as no-match, a parse field goes null, and **redaction masks the whole node**.
 
 Anything over-long, over-sized, too deep, or unsupported fails the rule LOAD loudly, and the whole
 FILE is rejected — a file whose patterns exhaust the device is not one to half-load — so a bad

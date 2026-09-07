@@ -63,24 +63,29 @@ internal object RegexSafety {
      *
      * Measured, not reasoned about: the largest program either shipped ruleset produces today is
      * **240** instructions (the #885 first-last-initial name shape), with 199 and 157 behind it —
-     * an **8× margin**. `RuleCorpusCompileBudgetTest` re-measures that maximum on every run and
+     * a **4× margin**. `RuleCorpusCompileBudgetTest` re-measures that maximum on every run and
      * prints it, so the margin is a number in the build log rather than a claim in a comment.
      *
-     * **Lowered from 20 000 in round 5, and the reason is a match-time stack overflow, not memory.**
-     * `^((.?){100}){40}$` is seventeen characters, estimates at 28 244 and compiles to **16 084**
-     * instructions — comfortably inside the old ceiling — and overflows RE2J's `Machine.add` while
-     * matching a five-character input on 256 KiB, 512 KiB **and 1 MiB** stacks. ART's coroutine
-     * threads are about 1 MiB. Deep nullable repetition is what reaches that depth, and only a large
-     * program can express it, so a low program ceiling is the cheap structural defence: at 2 000 the
-     * shape does not load at all. A 200-character screen-rule pattern has no business compiling past
-     * 2 000 instructions — the corpus proves it, at 240.
+     * **Lowered twice, and the reason is match-time stack depth, not memory.** `^((.?){100}){40}$`
+     * is seventeen characters, estimates at 28 244 and compiles to 16 084 instructions — comfortably
+     * inside the original 20 000 ceiling — and overflows RE2J's `Machine.add` while matching a
+     * five-character input on 256 KiB, 512 KiB **and 1 MiB** stacks. ART's coroutine threads are
+     * about 1 MiB.
      *
-     * This is a bound, not a guarantee. [BoundedRegex.evaluating] handles the residue: some other
-     * deep-nullable pattern under 2 000, on some smaller stack, raises [RegexEvaluationFailed] and
-     * each boundary answers it safely — recognition does not match, parse yields null, **redaction
-     * masks the whole node**.
+     * **Instruction count does not order recursion depth.** Round 6's review made that concrete:
+     * `^((((a?)?)?)?){150}$` is twenty characters and 1 954 instructions — under the previous
+     * 2 000 cap — yet its estimated `Machine.add` recursion on empty input is about **45 % deeper**
+     * than `^((.?){20}){20}$`, which measures 1 644 and does not overflow at 256 KiB. Capturing
+     * groups keep nested optionals from collapsing, so depth grows with **nullable nesting**, not
+     * with size alone. There is therefore no "threshold instruction count" to quote, and this
+     * constant is not one: it **bounds exposure**, it does not prove safety.
+     * [BoundedRegex.evaluating] and its [RegexEvaluationFailed] are the backstop for whatever
+     * remains inside the cap — that is the layer that makes an unevaluable pattern safe rather than
+     * silent, and it is why this number can be a judgement call at all.
+     *
+     * 1 000 leaves the corpus a 4× margin and rejects both of the shapes above.
      */
-    const val MAX_PROGRAM_SIZE = 2_000
+    const val MAX_PROGRAM_SIZE = 1_000
 
     /**
      * Ceiling on any single counted repeat bound (`{n}`, `{n,m}`, `{n,}`).
@@ -256,9 +261,10 @@ internal object RegexSafety {
      *    ALIF is a letter to ART and not to RE2J, and U+1E951 ADLAM DIGIT ONE likewise. Two shipped
      *    shapes can feel it: the uber `Going to \d` / `Going to (?:\D|$)` pair (an Adlam-digit
      *    address falls to the redact-less pickup rule) and the #885 name shape (an Adlam-letter name
-     *    stops matching, so its customer-name redact stops firing). Writing the classes out by hand
-     *    would not help — the repertoire lives in RE2J's tables, not in the class name. Tracked as a
-     *    residual, not fixable here.
+     *    stops matching, so its customer-name redact stops firing). An explicit class CAN add a
+     *    named character — `[\p{Nd}\x{1E951}]` closes exactly that one — so this is not impossible,
+     *    it is a **maintenance burden we decline**: hand-maintaining a full Unicode repertoire
+     *    against a moving ICU version is a standing cost with no owner. Tracked in #1086.
      *  - **`\b`** — cannot be translated at all. RE2's word boundary is ASCII-only and there is no
      *    Unicode form to map it to. Naming the ASCII word on one side is NOT enough to establish
      *    that nothing changed: the character on the OTHER side decides too, and the shipped distance

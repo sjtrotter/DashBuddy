@@ -136,8 +136,8 @@ gates:
    trusts its number;
 2. the compile, wrapped in `catch (Throwable)` so an `OutOfMemoryError` or `StackOverflowError` from
    gate 1's residue is a loud per-rule `RuleCompileException` rather than process death;
-3. **the bound**: `Pattern.programSize()` ≤ `MAX_PROGRAM_SIZE` = **2 000** (lowered from 20 000 in
-   round 5 — see below).
+3. **the bound**: `Pattern.programSize()` ≤ `MAX_PROGRAM_SIZE` = **1 000** (lowered from 20 000 in
+   round 5 and again in round 6 — see below).
 
 The estimate is a cost walk — atom 1, concatenation sums, alternation and captures add overhead, a
 quantifier multiplies the preceding unit — rather than the product of every bound in the pattern. A
@@ -147,7 +147,7 @@ so no single ceiling separates the corpus from the exploit. The cost walk scores
 the attack 1 565 058.
 
 > **The corpus's largest measured program is 240 instructions** (the #885 first-last-initial name
-> shape), with 199 and 157 behind it — an **8× margin** under the 2 000 ceiling.
+> shape), with 199 and 157 behind it — a **4× margin** under the 1 000 ceiling.
 > `RuleCorpusCompileBudgetTest` re-measures and prints it on every run, so the margin is a number in
 > the build log rather than a claim in a comment.
 
@@ -183,9 +183,10 @@ is exactly how #909 lost 91.7 % of a dash's data.
 Round 2 recorded that a match-time overflow could not be reproduced. **That was wrong**, and round
 3's review reproduced one: `((a?){200}){40}` matched against the empty string overflows inside
 RE2J's own `Machine.add` on a 256 KiB thread stack. The catch is load-bearing, not precautionary.
-`MAX_GROUP_DEPTH` bounds the same risk from the load side, and `BoundedRegex.failClosed` is
-`internal inline` so the fail-closed contract is asserted directly — the reproduction is stack-size
-dependent and would make a flaky test.
+`MAX_GROUP_DEPTH` bounds the same risk from the load side. Round 5 replaced the swallow-to-a-default
+helper with `BoundedRegex.evaluating`, which raises `RegexEvaluationFailed` instead; the contract is
+asserted by the consumer tests in `RegexEvaluationFailureTest`, which provoke a real overflow on a
+dedicated 256 KiB thread and check what each boundary does with it.
 
 ### Perl classes are translated toward ART's Unicode classes — an approximation
 
@@ -211,8 +212,8 @@ So `RegexSafety` translates at the one compile seam and rule authors keep writin
 | `\D` | `\P{Nd}` | `\P{Nd}` |
 | `\s` | `[\s\p{Z}\x{0B}\x{85}]` | `\s\p{Z}\x{0B}\x{85}` |
 | `\S` | `[^\s\p{Z}\x{0B}\x{85}]` | **rejected** |
-| `\w` | `[\p{L}\p{M}\p{N}\p{Pc}]` | `\p{L}\p{M}\p{N}\p{Pc}` |
-| `\W` | `[^\p{L}\p{M}\p{N}\p{Pc}]` | **rejected** |
+| `\w` | `[\p{L}\p{M}\p{N}\p{Pc}\x{200C}\x{200D}]` | `\p{L}\p{M}\p{N}\p{Pc}\x{200C}\x{200D}` |
+| `\W` | `[^\p{L}\p{M}\p{N}\p{Pc}\x{200C}\x{200D}]` | **rejected** |
 
 `\S`/`\W` inside a character class are the negation of a *union*, which cannot be expressed as class
 members; leaving them ASCII would recreate the gap this table closes, so they fail the load. No rule
@@ -260,11 +261,20 @@ cannot serve a positive predicate, a negated predicate and a redaction selector 
 
 Both halves are fixed.
 
-**1. `MAX_PROGRAM_SIZE` is 2 000.** The corpus maximum is 240, so the margin is 8×, and the smallest
-shape that still overflows a 256 KiB stack measures **2 044** instructions — the ceiling sits just
-below the empirical threshold rather than at a round number picked for comfort. Deep nullable
-repetition is what reaches that depth and only a large program can express it, so a low program
-ceiling is the cheap structural defence.
+**1. `MAX_PROGRAM_SIZE` is 1 000** (2 000 in round 5, lowered again in round 6). The corpus maximum
+is 240, so the margin is 4×.
+
+There is deliberately **no "threshold instruction count" quoted here**. Round 5's draft named 2 044 —
+the smallest shape in the measured `^((.?){n}){m}$` family that still overflowed a 256 KiB stack —
+and round 6's review showed that generalizes badly: `^((((a?)?)?)?){150}$` is twenty characters and
+**1 954** instructions, under that cap, yet its estimated `Machine.add` recursion on empty input is
+about **45 % deeper** than the 1 644-instruction reference that does *not* overflow. Capturing groups
+keep nested optionals from collapsing, so **recursion depth grows with nullable nesting, not with
+instruction count alone**.
+
+So the cap **bounds exposure; it does not prove safety**. What makes a pattern inside the cap safe
+rather than silent is the second half of the fix — `RegexEvaluationFailed` and its per-boundary
+answers. Both shapes above are rejected at 1 000.
 
 **2. An evaluation failure is a distinguishable exception, answered per boundary.** `BoundedRegex`
 raises `RegexEvaluationFailed` (carrying the pattern's *length* only — a rule pattern can quote
@@ -290,8 +300,10 @@ shape was matching ZWJ/ZWNJ on the device, so `\w` is now
 Android's Unicode tables, so U+1E900 ADLAM CAPITAL LETTER ALIF is a letter to ART and not to RE2J,
 and U+1E951 ADLAM DIGIT ONE likewise. Two shipped shapes can feel it — the uber `Going to` pair (an
 Adlam-digit address falls to the redact-less pickup rule) and the #885 name shape (an Adlam-letter
-name stops matching, so its customer-name redact stops firing). Writing the classes out by hand does
-not help: the repertoire lives in RE2J's tables, not in the class name. Recorded as a residual.
+name stops matching, so its customer-name redact stops firing). An explicit class *can* add a named
+character — `[\p{Nd}\x{1E951}]` closes exactly that one — so this is not impossible; it is a
+**maintenance burden we decline**, because hand-maintaining a full Unicode repertoire against a
+moving ICU version is a standing cost with no owner. Tracked in #1086.
 
 ## Known semantic deltas (RE2 vs JDK/ICU)
 
@@ -331,6 +343,16 @@ thing this change buys: for rule patterns, the ICU/JDK divergence that bit #909 
   which round 2 found it did not.
 - The corpus is the compile proof: `AllMatchersSuite` compiles all 121 rule patterns, and
   `ParseOutputGoldenTest` proves recognition output is unchanged.
+
+## One deliberate logging exception
+
+`RegexSafety`'s compile-error message embeds the offending **pattern**, and `JsonRuleInterpreter`
+logs that exception. That is intentional and should stay: a rule pattern is *rule data* — something
+this repo (or, later, a CDN rule source) authored — never customer data, and a load failure is
+unactionable without seeing which pattern failed. It is called out here so nobody "fixes" it into
+silence while tightening Principle 7. The *evaluation* path is different and does not name the
+pattern: `RegexEvaluationFailed` carries the pattern's length only, because that WARN fires on the
+hot path where a rule pattern quoting screen text would ride alongside frame content.
 
 ## Licensing
 

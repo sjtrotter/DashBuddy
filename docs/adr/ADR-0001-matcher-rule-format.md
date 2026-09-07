@@ -381,10 +381,13 @@ with `all`/`any`/`not` at the node level. Every predicate object carries exactly
 > Patterns are case-**insensitive** and bounded at LOAD — 200 chars (`MAX_REGEX_LENGTH`, #418), no
 > single repeat bound over `MAX_REPEAT` = 200, at most `MAX_GROUP_DEPTH` = 16 nested groups, no
 > `\Q…\E` quoting, no leading-zero repeat bounds (`a{0201}`, which RE2 reads as literal text), and
-> — the real bound — the **compiled program** at most `MAX_PROGRAM_SIZE` = 2 000 instructions,
-> measured after compiling (the corpus maximum is 240). That bound is about match-time DEPTH, not
-> compile cost: `^((.?){100}){40}$` is seventeen characters and 16 084 instructions, and matching a
-> five-character input with it overflows the stack on threads up to 1 MiB. A separate pre-compile
+> — the real bound — the **compiled program** at most `MAX_PROGRAM_SIZE` = 1 000 instructions,
+> measured after compiling (the corpus maximum is 240). That bound is about match-time stack DEPTH,
+> not compile cost: `^((.?){100}){40}$` is seventeen characters and 16 084 instructions, and matching
+> a five-character input with it overflows the stack on threads up to 1 MiB. Depth grows with
+> **nullable nesting**, not with instruction count alone, so the cap bounds exposure rather than
+> proving safety — a pattern inside it that still cannot be evaluated is caught at the match
+> (recognition: no match; a parse field: null; redaction: the whole node masked). A separate pre-compile
 > estimate keeps compilation itself affordable, approximately. Anything over-long, over-sized, too
 > deep, or unsupported fails the rule LOAD loudly — and the whole FILE is rejected, per the repo's
 > existing policy for resource limits.

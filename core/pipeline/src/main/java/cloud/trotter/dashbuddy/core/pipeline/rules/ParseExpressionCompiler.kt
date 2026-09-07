@@ -237,7 +237,20 @@ internal object ParseExpressionCompiler {
         // `conditionalEnum` and any `fallback`-bearing extraction a declared default) — one such
         // field on a rule pinned the whole signal silent, and they sit on exactly the money
         // surfaces this exists to watch. Adding an arm below without a kind is now a compile error.
-        return when {
+        // #1053 round 6 — EVERY arm below is wrapped so a `RegexEvaluationFailed` makes THIS FIELD
+        // null and leaves the rest of the parsed map intact. Wrapped here, at the one dispatch, so
+        // an arm added later is covered without anyone remembering to: the seven arms that evaluate
+        // a compiled node predicate (`find`, `siblingOf`, `findAll`, `each`, `presence`,
+        // `conditionalEnum`, `textAfterLabel`) had no catch of their own, so the exception reached
+        // `Ruleset`'s generic parse catch — which replaces the ENTIRE map with `emptyMap()` and logs
+        // once per FRAME. A good `totalPay` was being lost along with a failing `merchantName`, a
+        // validator could then skip the branch, and the per-frame warning drowned the one
+        // per-pattern WARN `BoundedRegex` already emits.
+        //
+        // `PredicateCompiler` still propagates — the redaction boundary has to be able to see this
+        // exception, and a redact `find` compiles through the very same predicates.
+        return failNullOnEvaluationFailure(
+            when {
             "literal" in obj -> ScreenExpr(compileLiteral(obj), ParseFieldKind.CONSTANT)
             // A COLLECTION resolves to a List that may be EMPTY — "found nothing" wearing a
             // non-null value, which is precisely the rot shape on a line-item/orders parse.
@@ -259,8 +272,28 @@ internal object ParseExpressionCompiler {
             "read" in obj && fromName != null ->
                 ScreenExpr(compileReadFromBinding(obj, fromName), kindFor("fallback" in obj))
             else -> throw RuleCompileException("Unknown parse expression keys: ${obj.keys}")
-        }
+            },
+        )
     }
+
+    /**
+     * Wrap a compiled screen expression so an unevaluable rule regex yields **null for that field**
+     * rather than escaping to the generic parse catch and discarding the whole map (#1053 round 6).
+     *
+     * Fail-null, the #745 posture: a field we could not evaluate is absent, never wrong. The
+     * expression's declared [ParseFieldKind] is preserved untouched — the #1036 shortfall census
+     * reads that kind, and an evaluation failure is not the anchor rot that signal exists to name.
+     */
+    private fun failNullOnEvaluationFailure(expr: ScreenExpr): ScreenExpr =
+        expr.copy(
+            eval = { node, bindings ->
+                try {
+                    expr.eval(node, bindings)
+                } catch (e: RegexEvaluationFailed) {
+                    null
+                }
+            },
+        )
 
     /** True when a `conditionalEnum` declares an `else` arm — then it always resolves (#1036). */
     private fun hasElseCase(obj: JsonObject): Boolean =

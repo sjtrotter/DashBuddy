@@ -213,6 +213,21 @@ class RegexSafetyTest {
     }
 
     @Test
+    fun `instruction count does not order recursion depth - the cap bounds, it does not prove`() {
+        // #1053 round 6. Round 5 named 2 044 as "the threshold", from the `^((.?){n}){m}$` family.
+        // It does not generalize: this 20-character shape is only 1 954 instructions — it would have
+        // passed that cap — yet its `Machine.add` recursion on empty input is about 45 % deeper than
+        // a 1 644-instruction shape from the measured family. Capturing groups keep the nested
+        // optionals from collapsing, so depth grows with NULLABLE NESTING, not with size.
+        //
+        // Which is why MAX_PROGRAM_SIZE is documented as bounding EXPOSURE rather than proving
+        // safety, and why RegexEvaluationFailed exists: `RegexEvaluationFailureTest` drives a
+        // 924-instruction pattern — one that LOADS under this cap — into a real overflow.
+        assertRejected("^((((a?)?)?)?){150}\$", "MAX_PROGRAM_SIZE")
+        assertRejected("^((((a?)?)?)?){150}\$", "1954")
+    }
+
+    @Test
     fun `the estimate is charged against the corpus's real shapes`() {
         // Pinned so the next person can see the margin rather than trust it. `estimate` is the
         // pre-compile guard's number; `actual` is `Pattern.programSize()` measured on the jar.

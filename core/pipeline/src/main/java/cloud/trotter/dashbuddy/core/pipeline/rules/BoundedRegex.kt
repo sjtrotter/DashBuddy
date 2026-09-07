@@ -27,10 +27,12 @@ import com.google.re2j.Pattern as Re2Pattern
  *  - there is no catastrophic pattern to reject: `(a+)+$` against 64 `a`s and a `!` is a
  *    microsecond match, not a hang, which is why [RegexSafety] no longer carries a ReDoS heuristic;
  *  - the bound is a property of the engine rather than a promise about a timer, so it holds on ART
- *    as well as on the host — one engine on both, modulo the Unicode TABLE versions RE2J 1.8 and
- *    ART's ICU each ship (see [RegexSafety] for the residual list), so a host regex test is a
- *    faithful device test for structure and for everything but those edges; one instrumented
- *    spot-check pins the bound on ART for provenance;
+ *    as well as on the host. **Not the same as "a host test is a device test", though**: RE2J
+ *    carries its own Unicode tables to both, so those agree — but **stack size and JIT do not**. A
+ *    match that succeeds on a host thread can overflow on an ART coroutine thread, which is exactly
+ *    the shape [evaluating] exists for. Host tests are faithful about *structure*; one instrumented
+ *    spot-check pins the bound on ART for provenance, and the small-stack consumer tests
+ *    (`RegexEvaluationFailureTest`) cover the depth axis the host would otherwise flatter;
  *  - the price is RE2 *syntax*: no lookaround, no backreferences. Rule authors get a language whose
  *    worst case is known, which is the language an untrusted CDN rule source (#192/#640) needs.
  *
