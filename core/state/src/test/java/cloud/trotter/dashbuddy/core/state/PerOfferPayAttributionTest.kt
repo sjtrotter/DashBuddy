@@ -24,6 +24,7 @@ import cloud.trotter.dashbuddy.domain.state.PendingDestructive
 import cloud.trotter.dashbuddy.domain.state.PendingOffer
 import cloud.trotter.dashbuddy.domain.state.Platform
 import cloud.trotter.dashbuddy.domain.state.PlatformRegion
+import cloud.trotter.dashbuddy.domain.state.ReceiptCoverage
 import cloud.trotter.dashbuddy.domain.state.Regions
 import cloud.trotter.dashbuddy.domain.state.Session
 import cloud.trotter.dashbuddy.domain.state.Task
@@ -465,6 +466,9 @@ class PerOfferPayAttributionTest {
                 totalPay = 25.0, parsedPay = null, sessionEarnings = 25.0,
             ),
             lastAnnouncedPostTaskTaskId = d2.taskId,
+            // #1073 round 15: a receipt suppresses the estimate only when it DESCRIBES this job's
+            // drops — the coverage a real receipt frame would have computed for these two.
+            lastPostTaskCoverage = ReceiptCoverage(setOf(d1.taskId, d2.taskId)),
         )
 
         val out = closeOutRows(regionPrev)

@@ -41,6 +41,26 @@ class PlatformRegionStepperTest {
     private val session = Session("sess-1", startedAt = 100L)
     private val job = Job(jobId = "job-1", offerStoreHint = emptyList(), parentOfferHash = null, startedAt = 200L)
 
+    /**
+     * #1073 round 14: a post-delivery receipt is about a DROPOFF — `receiptSubjectTaskId` refuses a
+     * pickup outright, so these two receipt fixtures (which used [pickupTask] purely as "some active
+     * task") name the drop the receipt actually closes.
+     */
+    private fun dropoffTask(
+        taskId: String,
+        storeName: String,
+        arrivedAt: Long? = 500L,
+        startedAt: Long = 300L,
+    ) = Task(
+        taskId = taskId,
+        jobId = "job-1",
+        phase = TaskPhase.DROPOFF,
+        storeName = storeName,
+        customerNameHash = "cust-$taskId",
+        startedAt = startedAt,
+        arrivedAt = arrivedAt,
+    )
+
     private fun pickupTask(
         taskId: String,
         storeName: String,
@@ -365,7 +385,7 @@ class PlatformRegionStepperTest {
 
     @Test
     fun `same-task collapsed PostTask re-render does not clobber the captured expanded receipt (#630 R3)`() {
-        val task = pickupTask("task-D", "Wendy's")
+        val task = dropoffTask("task-D", "Wendy's")
         val prev = region(activeTask = task)
 
         // Frame 1: EXPANDED receipt for task-D.
@@ -405,7 +425,7 @@ class PlatformRegionStepperTest {
 
     @Test
     fun `different-task collapsed PostTask frame DOES overwrite (a new receipt, not a downgrade)`() {
-        val taskD = pickupTask("task-D", "Wendy's")
+        val taskD = dropoffTask("task-D", "Wendy's")
         val prev = region(activeTask = taskD).copy(
             // An expanded receipt already held for a PRIOR task.
             lastPostTaskFields = ParsedFields.PostTaskFields(

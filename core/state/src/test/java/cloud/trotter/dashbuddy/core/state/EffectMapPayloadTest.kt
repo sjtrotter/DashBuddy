@@ -27,6 +27,7 @@ import cloud.trotter.dashbuddy.domain.state.PendingOffer
 import cloud.trotter.dashbuddy.domain.state.PendingDestructive
 import cloud.trotter.dashbuddy.domain.state.Platform
 import cloud.trotter.dashbuddy.domain.state.PlatformRegion
+import cloud.trotter.dashbuddy.domain.state.ReceiptCoverage
 import cloud.trotter.dashbuddy.domain.state.Regions
 import cloud.trotter.dashbuddy.domain.state.Session
 import cloud.trotter.dashbuddy.domain.state.Task
@@ -464,7 +465,9 @@ class EffectMapPayloadTest {
             jobId = "J6",
             phase = TaskPhase.DROPOFF,
             arrivedAt = 2500L,
-        ).copy(customerNameHash = "cust-t6") // #653: identity-bearing so the PostTask-exit firewall admits it
+            // #653: identity-bearing so the PostTask-exit firewall admits it; #1073 round 15: a task
+            // sitting in `recentTasks` has been retired, so it carries its completion instant.
+        ).copy(customerNameHash = "cust-t6", completedAt = 3_000L)
         val regionPrev = PlatformRegion(
             platform = Platform.DoorDash,
             mode = Mode.Online,
@@ -474,6 +477,10 @@ class EffectMapPayloadTest {
             activeJob = Job("J6", offerStoreHint = emptyList(), parentOfferHash = null, startedAt = 400L),
             recentTasks = listOf(completedTask),
             lastPostTaskFields = postFields,
+            // #1073 round 14: hand-built region — it never saw a receipt FRAME, so stamp the
+            // coverage one would have computed (the receipt attach is coverage-gated now).
+            lastAnnouncedPostTaskTaskId = "T6",
+            lastPostTaskCoverage = ReceiptCoverage(setOf("T6")),
         )
         val regionNext = regionPrev.copy()
         val prev = appState(

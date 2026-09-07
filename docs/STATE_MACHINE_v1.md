@@ -628,7 +628,8 @@ Per-platform durable state. One instance per active platform.
 | `sessionType` | `SessionType?` | `PerOffer` or `ByTime` |
 | `ratings` | `RatingsSnapshot?` | Driver ratings snapshot |
 | `surgeMultiplier` | `Double?` | Surge pricing |
-| `lastPostTaskPayHash` | `Int?` | Dedup for payout screen |
+| `lastPostTaskFields` | `ParsedFields.PostTaskFields?` | The cached post-delivery receipt |
+| `lastPostTaskCoverage` | `ReceiptCoverage?` | The drops that receipt describes (#1073) |
 | `lastObservedAt` | `Long` | Timestamp |
 
 **Session:**

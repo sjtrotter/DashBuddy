@@ -149,6 +149,34 @@ was found **broken-in-part** (raw PII in capture envelopes) and moved to that en
      payload `dropRealizedPay` must equal the payload `totalPay` to the cent.
   4. No `DELIVERY_RECEIPT_REPRICE: no delivery row` WARN in the log (that would mean the event is
      firing for a drop whose completion was never folded).
+  5. #1073: an Offline/dash-end straight off a receipt still re-prices it (log:
+     `#1033 receipt re-price: job …, 1 drop(s)`) — end a dash from the delivery-summary screen
+     with a late expansion and watch for that line. EXCEPTION (#1084): if the machine never saw
+     that drop ARRIVE (no arrival frame) and the dash ends before the retire grace, the correction is
+     refused by design and the row keeps its first pricing — not a bug. And on a STACKED job, no job may be paid more
+     than its receipt says. Per `jobId`, compare the machine-priced rows against the last figure the
+     machine stated for that job:
+
+     ```sql
+     SELECT d.jobId,
+            SUM(d.realizedPay)                                   AS rows_total,
+            (SELECT json_extract(e.payload, '$.totalPay')
+               FROM app_events e
+              WHERE json_extract(e.payload, '$.jobId') = d.jobId
+                AND e.eventType IN ('DELIVERY_COMPLETED', 'DELIVERY_RECEIPT_REPRICE')
+              ORDER BY e.sequenceId DESC LIMIT 1)                AS receipt_total
+       FROM delivery_records d
+      WHERE d.driverAdjustedAt IS NULL
+        AND d.payBasis NOT IN ('MANUAL', 'USER_CORRECTED')
+      GROUP BY d.jobId;
+     ```
+
+     `rows_total > receipt_total` is the bug this round closes (an uncovered sibling folding the
+     whole receipt). `rows_total < receipt_total` is expected in two cases and is NOT a defect: an
+     uncovered drop folds unpriced (look for the `#1073 close-out: job …, drop … not described by
+     the cached receipt` WARN), and the fold's `SUSPECT_FULL_RECEIPT` guard nulls a duplicate
+     whole-receipt row. Driver-edited rows are excluded by the WHERE clause because the driver
+     outranks the receipt.
   - Confirmed: 0/2 (desk 09-06, the 09-05 dashes on `38036999` — #1033 NOT on that build: its PREMISE confirmed 3/3 — every 8.95.6 receipt auto-expanded 41 / 172 / 463 ms AFTER the 2.5 s `GRACE_COMMIT`, at a tight 2.56–3.00 s collapsed→expanded interval, so the old grace is ALWAYS late on 8.95.6, not occasionally; all three drops folded `RECEIPT_TOTAL` with no tip/base and empty `payoutStoreForms`. First real test is the 09-06 dash on `aabb56d0`.)
 
 - **🆕 NEW — #1063 — an offer is recognized from its FIRST frame, before the Decline

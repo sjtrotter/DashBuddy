@@ -16,6 +16,7 @@ import cloud.trotter.dashbuddy.domain.state.Mode
 import cloud.trotter.dashbuddy.domain.state.ParsedFields
 import cloud.trotter.dashbuddy.domain.state.Platform
 import cloud.trotter.dashbuddy.domain.state.PlatformRegion
+import cloud.trotter.dashbuddy.domain.state.ReceiptCoverage
 import cloud.trotter.dashbuddy.domain.state.Regions
 import cloud.trotter.dashbuddy.domain.state.Session
 import cloud.trotter.dashbuddy.domain.state.Task
@@ -136,6 +137,9 @@ class OfferPayFallbackEffectMapTest {
             recentTasks = listOf(dropA, dropB),
             lastPostTaskFields = postFields,
             lastAnnouncedPostTaskTaskId = "d1",
+            // #1073 round 14: hand-built region — stamp the coverage a receipt FRAME would have
+            // computed (both drops were delivered when it was read); the attach is gated on it.
+            lastPostTaskCoverage = ReceiptCoverage(setOf("d1", "d2")),
         )
         val regionNext = regionPrev.copy(activeJob = null)
 
@@ -336,6 +340,10 @@ class OfferPayFallbackEffectMapTest {
             recentTasks = listOf(d1),
             lastPostTaskFields = unattributable,
             lastAnnouncedPostTaskTaskId = null,
+            // #1073 round 15: the receipt is a REAL one (it describes this job's drop) — only its
+            // ANNOUNCE id is missing, which is what this test is about. A receipt whose coverage
+            // names nobody is a different case, and no longer suppresses (see the round-15 test).
+            lastPostTaskCoverage = ReceiptCoverage(setOf("d1")),
         )
         val regionNext = regionPrev.copy(activeJob = null)
 
