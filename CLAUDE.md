@@ -670,11 +670,16 @@ can still land, where round 3's re-arm at the stale deadline fired at the 1 ms f
 first. **`PendingDestructive.servedFrom` is what makes that re-base a FIXED POINT** (round 5): the
 re-base moves the deadline but not `AppState.timestamp`, so without a second anchor a restart before
 any new observation handed the whole elapsed dead time back as fresh window — a 2.5 s grace restored
-twice became 193 500 ms, and a crash loop stretched it without bound. Idempotence is load-bearing
-rather than incidental, because `finishRestore` applies the hygiene **twice**: once for the durable
-checkpoint, then again immediately before install, so the served window starts at the LIVE boundary
-instead of losing the snapshot load, the tail replay and the checkpoint write to latency. The
-checkpointed deadline therefore lags the installed one, deliberately.
+twice became 193 500 ms, and a crash loop stretched it without bound. Idempotence is what makes a crash LOOP safe — each restart
+serves the same remaining window — but the hygiene runs exactly **once** per restore (round 6):
+`finishRestore` checkpoints and installs the SAME state. Round 5 ran it twice so the served window
+would start at the live boundary, which made the durable base describe a different deadline from the
+one the process was running, and an observation that was a no-op live then COMMITTED when the next
+restart replayed it. The checkpoint write's own latency is deducted from the window instead —
+milliseconds ordinarily, and a stated cost. **A live deadline MOVE re-anchors the accounting:**
+`withWakeIdIfDeadlineMoved` clears `servedFrom` on a tighten, or a tighten arriving after a clock
+step-back would leave the anchor in the new deadline's future and the next recovery would compute
+zero remaining, committing a window that was never served.
 `AppState.pendingDeadlineTimers()` then **re-arms** exactly two things: that grace, and the
 **pause-safety net** at the platform's own deadline, AS-IS with dead time included (it is the
 platform's countdown on the platform's clock). That net is state now — `PlatformRegion.pauseSafetyDeadline`,
@@ -689,9 +694,11 @@ a `Timer Expired` WARN into the shareable log for a pending the hygiene may be a
 and not merely inertly, since `graceLapsed`'s timestamp arm can still COMMIT. The recovery reconcile
 is their sole authoritative armer, which is also why round 4's cancel-after-the-fact is gone: by the
 time it ran, the coroutine had already fired. A **legacy payload-less `SESSION_PAUSED_SAFETY`** fire
-is honoured when the region has no `pauseSafety` of its own (a pre-round-4 arm has no identity to
-check) — refusing it was an upgrade regression that left a master-era snapshot's ended dash
-checkpointed as still running. `initialize()` awaits the merge collector's SUBSCRIPTION before
+is honoured when the region has no `pauseSafety` of its own **or when it lands at/after the armed
+one's deadline** (round 6) — a payload-less fire is by construction a pre-round-5 arm, and a
+master-era tail can contain the PAUSE FRAME itself, so the replay may have just reconstructed the
+very net whose countdown produced the fire. Refusing it left a dash master had ended checkpointed as
+still running; one landing strictly BEFORE the armed deadline is still refused. `initialize()` awaits the merge collector's SUBSCRIPTION before
 `restoreState`, because `engine.events` is a `replay = 0` `SharedFlow` and an already-elapsed re-arm
 fires at once — emitted with no subscriber it would be dropped silently. Everything goes out on the
 LIVE path (`recovering = false`) before `_state.value` is set, `durationMs` is the bare 1 ms floor

@@ -14,6 +14,7 @@ import cloud.trotter.dashbuddy.domain.state.PlatformRegion
 import cloud.trotter.dashbuddy.domain.state.Regions
 import cloud.trotter.dashbuddy.domain.state.Session
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -249,6 +250,61 @@ class PendingDeadlineTimersTest {
             NOW,
             cleaned.regions.platforms.getValue(Platform.DoorDash).pendingDestructive?.deadline,
         )
+    }
+
+    @Test
+    fun `a tighten RE-ANCHORS servedFrom, so the next recovery serves the window it granted`() {
+        // Astra's finding 4. A restored grace carries `servedFrom = 100 000` and deadline 110 000;
+        // the clock steps back and a summary frame at 90 000 tightens it to 92 500, correctly
+        // minting a new id. Keeping the old anchor made the NEXT recovery compute
+        // `observed = max(90 000 − 100 000, 0) = 0` and `remaining = max(92 500 − 100 000, 0) = 0`,
+        // committing a window that had never been served at all. A live tighten replaces the
+        // window, so it re-anchors on `since`.
+        val restored = PendingDestructive(
+            kind = DestructiveKind.SESSION_END,
+            since = 10_000L,
+            deadline = 110_000L,
+            servedFrom = 100_000L,
+            wakeId = 4L,
+        )
+        val region = region(Platform.DoorDash, destructive = restored)
+
+        val tightened = region
+            .withWakeIdIfDeadlineMoved(restored, restored.copy(deadline = 92_500L, authoritative = true))
+            .pendingDestructive!!
+        assertNull("the stale anchor is cleared by the move", tightened.servedFrom)
+        assertNotEquals("and the moved deadline is a new pending to its timer", 4L, tightened.wakeId)
+
+        // Crash immediately; the next recovery must serve the 2.5 s the tighten granted.
+        val next = state(region(Platform.DoorDash, destructive = tightened))
+            .copy(timestamp = 90_000L)
+            .recoveryHygiene(nowMs = 95_000L)
+
+        assertEquals(
+            "95 000 + 2 500, not an immediate commit",
+            97_500L,
+            next.regions.platforms.getValue(Platform.DoorDash).pendingDestructive?.deadline,
+        )
+    }
+
+    @Test
+    fun `an UNCHANGED deadline keeps both its generation and its anchor`() {
+        // The other side: the tighten sites re-derive their pending on most frames without
+        // changing anything, and re-minting there would cancel and re-arm the timer every frame —
+        // while clearing the anchor would restart the serve-live accounting for no reason.
+        val restored = PendingDestructive(
+            kind = DestructiveKind.SESSION_END,
+            since = 10_000L,
+            deadline = 110_000L,
+            servedFrom = 100_000L,
+            wakeId = 4L,
+        )
+        val same = region(Platform.DoorDash, destructive = restored)
+            .withWakeIdIfDeadlineMoved(restored, restored.copy(authoritative = true))
+            .pendingDestructive!!
+
+        assertEquals(4L, same.wakeId)
+        assertEquals(100_000L, same.servedFrom)
     }
 
     @Test

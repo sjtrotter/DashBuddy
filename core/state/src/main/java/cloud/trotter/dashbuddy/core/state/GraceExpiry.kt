@@ -85,15 +85,27 @@ internal fun graceLapsed(deadline: Long, wakeId: Long, obs: Observation, type: T
     obs.timestamp > deadline || obs.isWakeFor(type, wakeId)
 
 /**
- * Install [next] as this region's destructive pending, minting a fresh [PendingDestructive.wakeId]
- * only when the deadline actually MOVED (#1054 round 5).
+ * THE way a destructive pending reaches a region (#1054 rounds 5–6) — every create and every
+ * tighten in `PlatformRegionStepper` and `TaskLifecycle` goes through here.
  *
- * The two tighten sites — the dash summary's `minOf` against a standing offline grace, and #1033's
- * collapsed-vs-expanded receipt `minOf` — re-derive the pending on every qualifying frame, and most
- * of those frames change nothing. A moved deadline is a new pending as far as its timer is
- * concerned, because the standing arm would fire at the old, LATER instant and by then the window
- * it was meant to protect has been over for a while. An unchanged deadline must keep its id, or a
- * re-render would cancel and re-arm the timer on every frame.
+ * It does two things when, and only when, the deadline actually MOVED:
+ *
+ * 1. **Mints a fresh [PendingDestructive.wakeId].** A moved deadline is a new pending as far as its
+ *    timer is concerned, because the standing arm would fire at the old, LATER instant and by then
+ *    the window it was meant to protect has been over for a while. The tighten sites — the dash
+ *    summary's `minOf` against a standing offline grace, and #1033's collapsed-vs-expanded receipt
+ *    `minOf` — re-derive the pending on every qualifying frame and most of those frames change
+ *    nothing, so an unchanged deadline must KEEP its id or a re-render would cancel and re-arm the
+ *    timer every frame.
+ * 2. **Clears [PendingDestructive.servedFrom]** (round 6). That field anchors crash recovery's
+ *    serve-live accounting to the instant a restore last began serving the window; a live tighten
+ *    replaces the window itself, so the old anchor no longer describes it. Keeping it was wrong in
+ *    a way only a clock step-back exposes: a grace restored at 100 000 (`servedFrom = 100 000`,
+ *    deadline 110 000) tightened by a summary frame at 90 000 to deadline 92 500 would, on the next
+ *    recovery, compute `observed = max(90 000 − 100 000, 0) = 0` and
+ *    `remaining = max(92 500 − 100 000, 0) = 0` — committing an entirely UNSERVED 2.5 s window.
+ *    Clearing it re-anchors on `since`, which is the honest base for a window a live frame just
+ *    granted. `since` itself is never touched here (#732 stamps the commit at it).
  *
  * [prev] is the pending as it stood (null for a fresh arm, which always mints).
  */
@@ -102,10 +114,10 @@ internal fun PlatformRegion.withWakeIdIfDeadlineMoved(
     next: PendingDestructive,
 ): PlatformRegion {
     if (prev != null && prev.deadline == next.deadline) {
-        return copy(pendingDestructive = next.copy(wakeId = prev.wakeId))
+        return copy(pendingDestructive = next.copy(wakeId = prev.wakeId, servedFrom = prev.servedFrom))
     }
     val (withId, wakeId) = mintWakeId()
-    return withId.copy(pendingDestructive = next.copy(wakeId = wakeId))
+    return withId.copy(pendingDestructive = next.copy(wakeId = wakeId, servedFrom = null))
 }
 
 /**
@@ -118,20 +130,26 @@ internal fun PlatformRegion.withWakeIdIfDeadlineMoved(
  *    A stale fire from a PREVIOUS pause carries the earlier one and must not end this one — which
  *    matters because the deadline is state now, so a re-pause arms a new net while an old coroutine
  *    may still be in flight.
- * 2. **Legacy fail-OPEN.** A payload-less fire is accepted when the region has NO pause safety
- *    armed at all. That is a pre-round-4 arm: its deadline lived only in the engine's timer map, so
- *    there is no identity to check and nothing it could be confused with. Refusing it was a real
- *    upgrade regression — a master-era snapshot's journal tail holds exactly such a row, and
- *    ignoring it left the region Paused with the session still live, so the `GRACE_COMMIT` row
- *    behind it found no destructive pending to commit and a genuinely-ended dash was checkpointed
- *    as running. Once the region HAS a `pauseSafety`, an unidentified fire is refused: it is
- *    strictly older than the arm in state.
+ * 2. **Legacy fail-OPEN.** A payload-less fire is by construction a pre-round-5 arm — its deadline
+ *    lived only in the engine's timer map, so there is no identity to check. It is accepted when
+ *    the region has NO pause safety armed, OR when it lands **at or after** the armed one's
+ *    deadline. Refusing such a fire was a real upgrade regression, and round 5's `== null` test was
+ *    only half of it: a master-era journal tail can contain the PAUSE FRAME too, and replaying that
+ *    frame reconstructs a `pauseSafety` — after which round 5 refused the very legacy fire that
+ *    frame's own countdown produced, leaving the region Paused with the session still live, so the
+ *    `GRACE_COMMIT` row behind it found no destructive pending and a genuinely-ended dash was
+ *    checkpointed as running. A non-null net does not prove an unidentified fire predates it: the
+ *    replay may have just reconstructed that net from the same legacy history. Landing at or after
+ *    the reconstructed deadline is what identifies it as that net's own fire. An unidentified fire
+ *    landing strictly BEFORE the armed deadline is still refused — that one really is older than
+ *    the arm in state.
  *
  * The caller still requires [Mode.Paused]; this answers only "is this fire about the pause we are
  * in".
  */
 internal fun safetyFireIsAuthoritative(region: PlatformRegion, obs: Observation.Timeout): Boolean {
     val armed = region.pauseSafety
-    if (armed != null) return obs.isWakeFor(TimeoutType.SESSION_PAUSED_SAFETY, armed.wakeId)
-    return (obs.payload as? ObservationPayload.GraceWake) == null
+    if (obs.isWakeFor(TimeoutType.SESSION_PAUSED_SAFETY, armed?.wakeId)) return true
+    if ((obs.payload as? ObservationPayload.GraceWake) != null) return false
+    return armed == null || obs.timestamp >= armed.deadline
 }

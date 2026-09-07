@@ -38,7 +38,7 @@ import cloud.trotter.dashbuddy.domain.state.Platform
  * toward **Paused**, the honest reading of a process that died under a pause sheet, and the next
  * Online-implying frame arms a fresh grace screen-driven, exactly as #605 intends.
  *
- * Neither drop needs a cancel any more (#1054 round 5): `SideEffectEngine` SKIPS arming a
+ * Neither drop needs a cancel (#1054 round 5): `SideEffectEngine` SKIPS arming a
  * [TimeoutType.REGION_TIMERS] member while `recovering == true`, so the replay never armed one to
  * begin with. Round 4 cancelled them instead, which could not work — the replayed arm had already
  * executed by the time the reconcile ran, so its `Timer Expired` WARN and its journalled fire were

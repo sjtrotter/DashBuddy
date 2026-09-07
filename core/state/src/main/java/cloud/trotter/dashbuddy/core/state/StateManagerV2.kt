@@ -223,10 +223,10 @@ class StateManagerV2 @Inject constructor(
             // replay of what already happened, so it must run against the snapshot exactly as
             // recorded — a park whose commit timer is IN the tail committed live and must commit
             // again, and scrubbing the base would replay a different history. Scrubbing the final
-            // state instead also covers a pending a TAIL frame re-created, whose `ScheduleTimeout`
-            // the recovery fold really does execute (it is not an external effect); that timer then
-            // finds nothing and no-ops (`handleTimeout`'s `else -> prev`, lazy expiry with nothing
-            // to expire). Fail-null beats fail-wrong (#745).
+            // state instead also covers a pending a TAIL frame re-created; its `ScheduleTimeout` is
+            // never executed (round 5 — `SideEffectEngine` skips a region timer while recovering),
+            // so the replay leaves no coroutine behind for the hygiene to have to chase.
+            // Fail-null beats fail-wrong (#745).
             val base = restored.state
 
             // Tail-replay observations after the snapshot, in cv order (#352)
@@ -278,35 +278,37 @@ class StateManagerV2 @Inject constructor(
      * The tail both [restoreState] exits share (#1054 round 3) — order-constrained, so it has one
      * owner rather than two copies that can drift apart.
      *
-     * The hygiene runs **twice**, and that is the content of the method (#1054 round 5):
+     * **ONE hygiene pass, and the state it produces is BOTH checkpointed and installed** (#1054
+     * round 6). Round 5 ran it twice — once with a clock read for the checkpoint, once with a later
+     * one for the install — so the served window would start at the live boundary rather than
+     * before the snapshot load and tail replay. That fixed real latency but broke something worse:
+     * the durable replay base then described a DIFFERENT deadline from the one the process was
+     * actually running (102 500 checkpointed vs 106 500 installed), so an observation that was a
+     * no-op live — a neutral timeout at 104 050 — COMMITTED the session end when the next restart
+     * replayed it from that checkpoint. A replay base has to reproduce the decisions made against
+     * the installed state; fixed-point arithmetic after the fold cannot undo a destructive
+     * transition the fold already made.
      *
-     * 1. **`recoveryHygiene(now0)` → checkpoint.** Dropping stale evidence and re-basing the
-     *    destructive grace is only DURABLE if the cleaned state is the next replay base (#1052):
-     *    the snapshot on disk still carries what was dropped, and a second restart with no ordinary
-     *    snapshot in between (neither the cadence nor a major transition need fire) would replay it
-     *    over a journal tail that has since grown.
-     * 2. **`recoveryHygiene(nowInstall)` → arm → install.** The re-base is a fixed point
-     *    ([AppState.recoveryHygiene]), so applying it again costs nothing but slides the deadline
-     *    forward by exactly the checkpoint latency. Without it the served window starts at a clock
-     *    read taken BEFORE the snapshot load, the tail replay and the checkpoint write, and all of
-     *    that latency is subtracted from the window #1054 exists to give back — a 2.5 s summary
-     *    grace restored through a 4 s recovery was already overdue on arrival, so the engine fired
-     *    at the 1 ms floor and a contradicting task frame 50 ms later found the session already
-     *    ended. The checkpointed deadline therefore lags the installed one, deliberately: nothing
-     *    depends on their being equal, because a further restart re-bases from the same
-     *    `servedFrom` either way.
+     * The cost is stated rather than engineered away: `nowMs` is read immediately before the
+     * checkpoint, so the CHECKPOINT WRITE's own latency comes out of the served window. That is
+     * ordinarily a few milliseconds against a 2.5–10 s grace, and seconds only if the database is
+     * in a busy-timeout — which is exactly the case round 4's F2 was about, where the whole restore
+     * (snapshot load + tail replay + write) was being deducted. Trading a bounded write latency for
+     * a durable base that tells the truth is the right way round.
      *
-     * Arming before `_state.value` means no live observation can be interleaved between the state
-     * the timers describe and the timers themselves. Then the #438 B5 odometer reconciliation is
-     * armed for the first live observation: recovery suppresses external effects, so GPS is dead
-     * until something re-establishes it.
+     * The rest of the order is unchanged: checkpoint first, because dropping stale evidence and
+     * re-basing the grace is only DURABLE if the cleaned state is the next replay base (#1052);
+     * then arm, before `_state.value`, so no live observation can be interleaved between the state
+     * the timers describe and the timers themselves; then arm the #438 B5 odometer reconciliation
+     * for the first live observation, recovery having suppressed the external effects that keep GPS
+     * alive.
      *
      * No cancels here since round 5 — `SideEffectEngine` skips a [TimeoutType.REGION_TIMERS] arm
      * while `recovering == true`, so the replay never armed one to cancel.
      */
     private suspend fun finishRestore(restored: AppState) {
-        checkpointRecovery(restored.recoveryHygiene(System.currentTimeMillis()))
         val cleaned = restored.recoveryHygiene(System.currentTimeMillis())
+        checkpointRecovery(cleaned)
         rearmRecoveredTimers(cleaned)
         _state.value = cleaned
         recoveryReconcilePending = true

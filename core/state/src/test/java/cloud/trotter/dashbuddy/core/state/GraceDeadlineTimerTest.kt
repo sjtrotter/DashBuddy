@@ -2,6 +2,8 @@ package cloud.trotter.dashbuddy.core.state
 
 import cloud.trotter.dashbuddy.domain.capture.ReplayMetadata
 import cloud.trotter.dashbuddy.domain.model.event.AppEventType
+import cloud.trotter.dashbuddy.domain.model.pay.ParsedPay
+import cloud.trotter.dashbuddy.domain.model.pay.ParsedPayItem
 import cloud.trotter.dashbuddy.domain.pipeline.Observation
 import cloud.trotter.dashbuddy.domain.pipeline.ObservationPayload
 import cloud.trotter.dashbuddy.domain.pipeline.TimeoutType
@@ -23,6 +25,7 @@ import cloud.trotter.dashbuddy.domain.state.Task
 import cloud.trotter.dashbuddy.domain.state.TaskPhase
 import cloud.trotter.dashbuddy.domain.state.TaskSubFlow
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -156,30 +159,128 @@ class GraceDeadlineTimerTest {
 
     @Test
     fun `a TASK_RETIRE grace commits on a GRACE_COMMIT fire landing exactly on the deadline`() {
-        val retireDeadline = 5_000L
-        val region = region(
-            mode = Mode.Online,
-            destructive = PendingDestructive(
-                kind = DestructiveKind.TASK_RETIRE,
-                since = 4_000L,
-                deadline = retireDeadline,
-                armedFromFlow = Flow.Idle,
-                wakeId = retireWake,
-            ),
-            job = Job("job-1", offerStoreHint = emptyList(), parentOfferHash = null, startedAt = 200L),
-            task = Task(
-                taskId = "task-1", jobId = "job-1", phase = TaskPhase.PICKUP,
-                storeName = "H-E-B", startedAt = 300L,
-            ),
-        )
+        // #1054 round 6: the retire is armed by the PRODUCTION path (a PostTask receipt frame) and
+        // the fire carries the generation that path minted. Round 5's version supplied a non-zero
+        // id by hand, which hid the fact that `TaskLifecycle` never minted one at all — every
+        // fielded retire carried id 0, so its own fire could never match.
+        val armed = machine.step(state(retiringRegion(), Flow.TaskDropoffArrived), collapsedReceipt(10_000L))
+            .newState.dd()
+        val pend = armed.pendingDestructive!!
+        assertEquals("the retire really was armed by the receipt", DestructiveKind.TASK_RETIRE, pend.kind)
+        assertTrue("and the production path minted it a usable generation", pend.wakeId > 0L)
 
-        val transition = machine.step(state(region), wake(TimeoutType.GRACE_COMMIT, retireDeadline, retireWake))
+        val transition = machine.step(
+            state(armed, Flow.PostTask),
+            wake(TimeoutType.GRACE_COMMIT, pend.deadline, pend.wakeId),
+        )
         val dd = transition.newState.dd()
 
         assertNull("the overdue retire committed on its own timer's fire", dd.activeTask)
         assertNull("and the grace is consumed", dd.pendingDestructive)
         assertEquals("the task is retired, not lost", "task-1", dd.recentTasks.lastOrNull()?.taskId)
     }
+
+    // =====================================================================
+    // #1054 round 6 — the TASK_RETIRE pendings join the rollout
+    // =====================================================================
+
+    @Test
+    fun `a receipt tighten mints a new generation and emits the replacement arm`() {
+        // #1033: a COLLAPSED receipt gets the 8 s window, an EXPANDED one tightens to 2.5 s. Round
+        // 5 left this site unminted, so the tighten moved the deadline 18 000 → 13 500 while
+        // `diffGraceTimer` saw an unchanged id and emitted NOTHING — the completion then waited for
+        // the old 18 000 timer, losing the tighten entirely.
+        val collapsedAt = 10_000L
+        val armed = machine.step(state(retiringRegion(), Flow.TaskDropoffArrived), collapsedReceipt(collapsedAt))
+            .newState.dd()
+        val collapsed = armed.pendingDestructive!!
+        assertEquals("the collapsed receipt's 8 s window", collapsedAt + 8_000L, collapsed.deadline)
+
+        val transition = machine.step(state(armed, Flow.PostTask), expandedReceipt(11_000L))
+        val tightened = transition.newState.dd().pendingDestructive!!
+
+        assertEquals("tightened to the expanded receipt's 2.5 s", 13_500L, tightened.deadline)
+        assertNotEquals("a moved deadline is a new pending to its timer", collapsed.wakeId, tightened.wakeId)
+
+        val rearm = transition.effects.scheduled(TimeoutType.GRACE_COMMIT).single()
+        assertEquals(ObservationPayload.GraceWake(tightened.wakeId), rearm.payload)
+        assertEquals(13_500L, rearm.deadlineMs)
+    }
+
+    @Test
+    fun `the tightened retire commits on its OWN wake, and the superseded one is inert`() {
+        val armed = machine.step(state(retiringRegion(), Flow.TaskDropoffArrived), collapsedReceipt(10_000L))
+            .newState.dd()
+        val staleId = armed.pendingDestructive!!.wakeId
+        val tightenedRegion = machine.step(state(armed, Flow.PostTask), expandedReceipt(11_000L))
+            .newState.dd()
+        val liveId = tightenedRegion.pendingDestructive!!.wakeId
+
+        val stale = machine.step(
+            state(tightenedRegion, Flow.PostTask),
+            wake(TimeoutType.GRACE_COMMIT, at = 13_400L, armedFor = staleId),
+        ).newState.dd()
+        assertNotNull("the superseded 18 000 arm commits nothing", stale.activeTask)
+
+        val committed = machine.step(
+            state(tightenedRegion, Flow.PostTask),
+            wake(TimeoutType.GRACE_COMMIT, at = 13_500L, armedFor = liveId),
+        ).newState.dd()
+        assertNull("its own wake retires the task", committed.activeTask)
+    }
+
+    @Test
+    fun `an idle-flash retire is minted too`() {
+        // The other `TaskLifecycle` constructor: a task flow giving way to idle while Online.
+        val armed = machine.step(state(retiringRegion(), Flow.TaskDropoffArrived), idleFrame(10_000L))
+            .newState.dd()
+        val pend = armed.pendingDestructive!!
+
+        assertEquals(DestructiveKind.TASK_RETIRE, pend.kind)
+        assertTrue("never the legacy 0", pend.wakeId > 0L)
+    }
+
+    /** An Online region mid-dropoff, so a receipt or an idle flash arms a retire. */
+    private fun retiringRegion() = region(
+        mode = Mode.Online,
+        job = Job("job-1", offerStoreHint = emptyList(), parentOfferHash = null, startedAt = 200L),
+        task = Task(
+            taskId = "task-1", jobId = "job-1", phase = TaskPhase.DROPOFF,
+            storeName = "H-E-B", startedAt = 300L,
+        ),
+    ).copy(lastActedFlow = Flow.TaskDropoffArrived)
+
+    private fun receipt(at: Long, parsedPay: ParsedPay?) = Observation.Screen(
+        timestamp = at,
+        captureId = null,
+        ruleId = "doordash.screen.delivery_summary",
+        metadata = ReplayMetadata.EMPTY,
+        flow = Flow.PostTask,
+        modeHint = Mode.Online,
+        parsed = ParsedFields.PostTaskFields(totalPay = 12.00, parsedPay = parsedPay),
+    )
+
+    /** No itemization — #1033's 8 s expand window. */
+    private fun collapsedReceipt(at: Long) = receipt(at, parsedPay = null)
+
+    /** Itemized — the ordinary 2.5 s authoritative window. */
+    private fun expandedReceipt(at: Long) = receipt(
+        at,
+        parsedPay = ParsedPay(
+            appPayComponents = listOf(ParsedPayItem("Base Pay", 12.00)),
+            customerTips = emptyList(),
+        ),
+    )
+
+    private fun idleFrame(at: Long) = Observation.Screen(
+        timestamp = at,
+        captureId = null,
+        ruleId = "doordash.screen.waiting_for_offer",
+        metadata = ReplayMetadata.EMPTY,
+        flow = Flow.Idle,
+        modeHint = Mode.Online,
+        parsed = ParsedFields.IdleFields(),
+    )
 
     // =====================================================================
     // GRACE_COMMIT — an early fire is still THIS pending's wake
