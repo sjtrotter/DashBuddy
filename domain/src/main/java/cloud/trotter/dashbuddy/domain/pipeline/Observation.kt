@@ -245,4 +245,29 @@ enum class TimeoutType {
      * mint (the #526 regression the survival rule prevents).
      */
     OFFER_EXPIRY,
+    ;
+
+    companion object {
+        /**
+         * The wake timers owned by a [cloud.trotter.dashbuddy.domain.state.PlatformRegion]'s own
+         * deadline-bearing pendings (#1054 round 5) — the ONE definition of that set.
+         *
+         * Two consumers, and they have to agree. `AppState.pendingDeadlineTimers()` decides which
+         * of these a crash recovery re-arms, and `SideEffectEngine` SKIPS arming or cancelling one
+         * while `recovering == true`: a replayed arm is scheduled against a replayed frame's
+         * timestamp, so it can only fire early (and an early fire past the restored deadline
+         * COMMITS, it does not merely no-op) or log a spurious `Timer Expired` WARN into the
+         * shareable log. The recovery reconcile is their sole authoritative armer.
+         *
+         * `OFFER_EXPIRY` and `SETTLE_UI` are deliberately absent: they belong to an offer and to a
+         * deferred UI action, neither of which the recovery re-arms, so they keep replaying exactly
+         * as they did — the gap is #1076's, not this set's.
+         */
+        val REGION_TIMERS: Set<TimeoutType> = setOf(
+            GRACE_COMMIT,
+            MODE_RESUME_COMMIT,
+            SESSION_PAY_SETTLE,
+            SESSION_PAUSED_SAFETY,
+        )
+    }
 }

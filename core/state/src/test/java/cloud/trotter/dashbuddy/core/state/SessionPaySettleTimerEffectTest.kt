@@ -2,11 +2,13 @@ package cloud.trotter.dashbuddy.core.state
 
 import cloud.trotter.dashbuddy.domain.capture.ReplayMetadata
 import cloud.trotter.dashbuddy.domain.pipeline.Observation
+import cloud.trotter.dashbuddy.domain.pipeline.ObservationPayload
 import cloud.trotter.dashbuddy.domain.pipeline.TimeoutType
 import cloud.trotter.dashbuddy.domain.settings.GraceConfig
 import cloud.trotter.dashbuddy.domain.state.AppState
 import cloud.trotter.dashbuddy.domain.state.DestructiveKind
 import cloud.trotter.dashbuddy.domain.state.Flow
+import cloud.trotter.dashbuddy.domain.state.FlowRegion
 import cloud.trotter.dashbuddy.domain.state.Mode
 import cloud.trotter.dashbuddy.domain.state.ParsedFields
 import cloud.trotter.dashbuddy.domain.state.PendingDestructive
@@ -17,6 +19,7 @@ import cloud.trotter.dashbuddy.domain.state.PlatformRegion
 import cloud.trotter.dashbuddy.domain.state.Regions
 import cloud.trotter.dashbuddy.domain.state.Session
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -75,19 +78,35 @@ class SessionPaySettleTimerEffectTest {
     }
 
     @Test
-    fun `a replaced park re-arms on the new deadline`() {
-        val old = PendingSessionPay(470.00, t0 - 200L, t0 - 200L + settle, Flow.Idle)
-        val new = PendingSessionPay(16.70, t0, t0 + settle, Flow.Idle)
+    fun `a replaced park re-arms on the new generation`() {
+        val old = PendingSessionPay(470.00, t0 - 200L, t0 - 200L + settle, Flow.Idle, wakeId = 1L)
+        val new = PendingSessionPay(16.70, t0, t0 + settle, Flow.Idle, wakeId = 2L)
         val armed = diff(region(pending = old), region(pending = new))
             .filterIsInstance<AppEffect.ScheduleTimeout>()
             .single { it.type == TimeoutType.SESSION_PAY_SETTLE }
 
         assertEquals(settle, armed.durationMs)
+        assertEquals(ObservationPayload.GraceWake(2L), armed.payload)
+    }
+
+    @Test
+    fun `a replacement with the SAME deadline still re-arms - the generation changed`() {
+        // #1054 round 5. Round 4 armed on a deadline CHANGE, so this pair emitted nothing and the
+        // superseded coroutine stayed live to commit the replacement. Two successive parks really
+        // can share a deadline: after a clock step-back the replacement computes the identical
+        // `now + settleWindow`.
+        val old = PendingSessionPay(20.00, t0, t0 + settle, Flow.Idle, wakeId = 1L)
+        val new = PendingSessionPay(30.00, t0, t0 + settle, Flow.Idle, wakeId = 2L)
+        val armed = diff(region(pending = old), region(pending = new))
+            .filterIsInstance<AppEffect.ScheduleTimeout>()
+            .single { it.type == TimeoutType.SESSION_PAY_SETTLE }
+
+        assertEquals(ObservationPayload.GraceWake(2L), armed.payload)
     }
 
     @Test
     fun `the same park re-observed does not re-arm - the window is never extended`() {
-        val park = PendingSessionPay(16.70, t0 - 500L, t0 - 500L + settle, Flow.Idle)
+        val park = PendingSessionPay(16.70, t0 - 500L, t0 - 500L + settle, Flow.Idle, wakeId = 1L)
         val effects = diff(region(pending = park), region(pending = park))
 
         assertTrue(
@@ -108,46 +127,65 @@ class SessionPaySettleTimerEffectTest {
     }
 
     @Test
-    fun `an early or stale fire of the settle timer RE-ARMS for the remainder`() {
-        // #1029 S5: the wake timer's duration is exactly `deadline - obs.timestamp`, but the fired
-        // observation is stamped with the wall clock — so a fire can land AT or before the
-        // deadline. Because no frame is coming to retry (FrameGate identity dedup), a no-op fire
-        // would strand the park forever. Re-arm, never commit: a stale fire from a park that has
-        // since been REPLACED must not commit the new one early — that is a mid-spin value.
-        val park = PendingSessionPay(16.70, t0, t0 + settle, Flow.Idle)
+    fun `an early own-wake COMMITS the park, so no re-arm is needed`() {
+        // #1029 S5 added an early-wake RE-ARM here: the timer is armed for exactly
+        // `deadline - obs.timestamp` but its fire is stamped with the wall clock, so a clock
+        // step-back made it land early, and a no-op fire would strand the park forever (FrameGate
+        // identity dedup means no frame is coming to retry). #1054 round 4 fixed that at the root
+        // instead — the arm carries `GraceWake(deadline)`, so the expiry recognises the fire
+        // whenever it lands and there is nothing left to rescue. The re-arm branch is deleted, and
+        // this test pins the COMMIT (Astra: the old shape fed identical states to `EffectMap` and
+        // proved only that no re-arm was emitted — it never showed the park landing). So drive the
+        // real machine and read the money.
+        val park = PendingSessionPay(16.70, t0, t0 + settle, Flow.Idle, wakeId = 9L)
+        val machine = StateMachine(
+            FlowRegionStepper(), PlatformRegionStepper(),
+            CrossPlatformRegionStepper(), TransitionPolicy(), EffectMap(),
+        )
         val wake = Observation.Timeout(
             timestamp = t0 + settle - 1_000L,
             type = TimeoutType.SESSION_PAY_SETTLE,
             targetPlatform = Platform.DoorDash,
+            payload = ObservationPayload.GraceWake(9L),
         )
-        val armed = effectMap.diff(state(region(pending = park)), state(region(pending = park)), wake)
-            .filterIsInstance<AppEffect.ScheduleTimeout>()
-            .single { it.type == TimeoutType.SESSION_PAY_SETTLE }
 
-        assertEquals(1_000L, armed.durationMs)
+        val transition = machine.step(
+            AppState(
+                regions = Regions(
+                    flow = FlowRegion(flow = Flow.Idle, activePlatform = Platform.DoorDash),
+                    platforms = mapOf(Platform.DoorDash to region(pending = park)),
+                ),
+            ),
+            wake,
+        )
+        val dd = transition.newState.regions.platforms.getValue(Platform.DoorDash)
+
+        assertEquals(
+            "the park committed on its own wake, a full second 'early' by the wall clock",
+            16.70,
+            dd.session?.runningEarnings ?: Double.NaN,
+            0.0001,
+        )
+        assertNull("and the park is consumed", dd.pendingSessionPay)
+        assertTrue(
+            "nothing is re-armed — identity made a rescue unnecessary",
+            transition.effects.filterIsInstance<AppEffect.ScheduleTimeout>()
+                .none { it.type == TimeoutType.SESSION_PAY_SETTLE },
+        )
     }
 
     @Test
-    fun `a fire AT or PAST the deadline never re-arms - a frozen park would spin at the 1ms floor`() {
-        // #1052 round 3: a park is FROZEN while the dash is not Online, so its own wake timer can
-        // now land at or past the deadline and leave the pending standing with an UNCHANGED
-        // deadline — a shape that previously only ever meant "the park committed", i.e. the cancel
-        // arm. Re-arming there would schedule `(deadline - now).coerceAtLeast(1)` = 1 ms and fire
-        // again immediately, for as long as the dasher stayed paused.
-        val park = PendingSessionPay(16.70, t0, t0 + settle, Flow.Idle)
-        for (fireAt in listOf(t0 + settle, t0 + settle + 5_000L)) {
-            val wake = Observation.Timeout(
-                timestamp = fireAt,
-                type = TimeoutType.SESSION_PAY_SETTLE,
-                targetPlatform = Platform.DoorDash,
-            )
-            assertTrue(
-                "a wake at $fireAt must not re-arm the frozen park",
-                effectMap.diff(state(region(pending = park)), state(region(pending = park)), wake)
-                    .filterIsInstance<AppEffect.ScheduleTimeout>()
-                    .none { it.type == TimeoutType.SESSION_PAY_SETTLE },
-            )
-        }
+    fun `an arm carries its generation as identity and its deadline as an absolute instant`() {
+        // The two halves of #1054, both on one effect: the `GraceWake` payload is what the expiry
+        // matches on (so a superseded fire is inert), and `deadlineMs` is what the engine waits on
+        // (so a tail-REPLAYED arm lands on time rather than a full window late).
+        val park = PendingSessionPay(16.70, t0, t0 + settle, Flow.Idle, wakeId = 4L)
+        val armed = diff(region(), region(pending = park))
+            .filterIsInstance<AppEffect.ScheduleTimeout>()
+            .single { it.type == TimeoutType.SESSION_PAY_SETTLE }
+
+        assertEquals(ObservationPayload.GraceWake(4L), armed.payload)
+        assertEquals(t0 + settle, armed.deadlineMs)
     }
 
     @Test

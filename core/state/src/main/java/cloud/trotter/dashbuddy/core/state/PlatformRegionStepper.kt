@@ -16,8 +16,10 @@ import cloud.trotter.dashbuddy.domain.state.PendingDestructive
 import cloud.trotter.dashbuddy.domain.state.PendingModeResume
 import cloud.trotter.dashbuddy.domain.state.PendingOffer
 import cloud.trotter.dashbuddy.domain.state.PendingSessionPay
+import cloud.trotter.dashbuddy.domain.state.PendingWake
 import cloud.trotter.dashbuddy.domain.state.Platform
 import cloud.trotter.dashbuddy.domain.state.PlatformRegion
+import cloud.trotter.dashbuddy.domain.state.mintWakeId
 import cloud.trotter.dashbuddy.domain.state.Session
 import cloud.trotter.dashbuddy.domain.state.SessionType
 import cloud.trotter.dashbuddy.domain.state.Task
@@ -165,8 +167,10 @@ class PlatformRegionStepper @Inject constructor() {
         // Runs BEFORE the timeout branch: a routed timeout (#342) is exactly the
         // kind of non-flow observation that must be able to commit an overdue
         // provisional transition.
+        // Lapse is [graceLapsed] (#1054): strictly past for a frame, or this pending's OWN wake
+        // (identified by its `GraceWake` payload) whenever it lands. See `GraceExpiry.kt`.
         current.pendingDestructive?.let { pend ->
-            if (obs.timestamp > pend.deadline) {
+            if (graceLapsed(pend.deadline, pend.wakeId, obs, TimeoutType.GRACE_COMMIT)) {
                 // #736 same-frame supersession: an incoming `task:unassigned` frame is the
                 // authoritative abandon of the active task. Committing an overdue TASK_RETIRE here
                 // FIRST would stamp `completedAt` on the (arrived) pickup — the seq-71 fabrication
@@ -210,8 +214,9 @@ class PlatformRegionStepper @Inject constructor() {
         // Driven by obs.timestamp (never a wall clock) so crash-recovery replay
         // matches. Independent of pendingDestructive: during the field flap that slot
         // is BUSY holding the just-completed delivery's TASK_RETIRE grace.
+        // [graceLapsed] (#1054), as above.
         current.pendingModeResume?.let { pend ->
-            if (obs.timestamp > pend.deadline) {
+            if (graceLapsed(pend.deadline, pend.wakeId, obs, TimeoutType.MODE_RESUME_COMMIT)) {
                 current = commitModeResume(current, obs, policy)
             }
         }
@@ -225,11 +230,10 @@ class PlatformRegionStepper @Inject constructor() {
         // is not a usable signal). Driven by obs.timestamp (never a wall clock) so crash-recovery
         // replay matches.
         //
-        // `>=`, not `>`: the wake timer's duration is EXACTLY `deadline - obs.timestamp` and the
-        // fired observation is stamped with the wall clock, so a fire landing on the deadline (or
-        // after a clock step-back) would be a no-op — and no frame is coming to retry, by the very
-        // FrameGate argument that made the timer necessary. The park would be stranded.
-        // (`pendingModeResume` above keeps `>`: a resume grace is re-driven by ordinary frames.)
+        // Lapse is `>=` for a FRAME — rule (e)'s own choice, safe because rule (f) below lets a
+        // contradicting read supersede the park at equality — OR this park's own wake, matched by
+        // its `GraceWake` payload, which is what makes the timer reliable and a re-based park's old
+        // wake inert (#1054 round 4; the reasoning is in `GraceExpiry.kt`).
         current.pendingSessionPay?.let { pend ->
             // #1029: a park is OWNED by (flow, PLATFORM) — the R0 surface the read was made on AND
             // the platform that put that surface on screen. `FlowRegionStepper` stamps
@@ -254,8 +258,8 @@ class PlatformRegionStepper @Inject constructor() {
             //     window restarts in [applyModeTransition] on the way back to Online, and the
             //     ownership rules below resume with it. A `SESSION_PAY_SETTLE` fire that lands
             //     here while non-Online is likewise inert: the park is kept, its deadline
-            //     unchanged, and `diffDeadlineTimer`'s early-wake re-arm deliberately does not
-            //     fire on a wake AT or PAST the deadline — the re-base on resume arms the next one.
+            //     unchanged, and the re-base on resume arms a NEW deadline — so that old wake
+            //     matches nothing afterwards, by identity (#1054 round 4).
             //  1. `!ownedBefore` → the surface departed while this region was not being stepped.
             //     DROP, whatever this observation is; a returning frame re-parks with a FRESH
             //     deadline through [settleSessionPay], which is the honest window for a read whose
@@ -279,7 +283,9 @@ class PlatformRegionStepper @Inject constructor() {
             } else if (!ownedBefore || (!flowBearing && !ownedAfter)) {
                 current = current.copy(pendingSessionPay = null)
             } else {
-                if (obs.timestamp >= pend.deadline) {
+                if (obs.timestamp >= pend.deadline ||
+                    obs.isWakeFor(TimeoutType.SESSION_PAY_SETTLE, pend.wakeId)
+                ) {
                     // A CONTRADICTING read on the very frame the park would commit on supersedes
                     // it: a late timer and a fresh idle frame can collide, and committing the stale
                     // park first and then re-parking the fresh read for another whole window shows
@@ -358,13 +364,24 @@ class PlatformRegionStepper @Inject constructor() {
             current.mode == Mode.Paused && impliedMode == Mode.Online &&
                 obs is Observation.Screen && flowObs.flow != Flow.OfferPresented -> {
                 val since = current.pendingModeResume?.since ?: obs.timestamp
-                current.copy(
-                    lastObservedAt = obs.timestamp,
-                    pendingModeResume = PendingModeResume(
-                        since = since,
-                        deadline = since + policy.pauseResumeGraceMs(current.platform),
-                    ),
-                )
+                val deadline = since + policy.pauseResumeGraceMs(current.platform)
+                // #1054 round 5: repeated online frames keep the ORIGINAL `since`, so the deadline
+                // does not move and the standing arm stays valid — mint only on a genuinely new
+                // pending, or the re-mint would cancel and re-arm on every frame of the flap.
+                val existing = current.pendingModeResume
+                if (existing != null && existing.deadline == deadline) {
+                    current.copy(lastObservedAt = obs.timestamp)
+                } else {
+                    val (withId, wakeId) = current.mintWakeId()
+                    withId.copy(
+                        lastObservedAt = obs.timestamp,
+                        pendingModeResume = PendingModeResume(
+                            since = since,
+                            deadline = deadline,
+                            wakeId = wakeId,
+                        ),
+                    )
+                }
             }
 
             // Screen or Notification — authoritative, apply immediately
@@ -450,11 +467,14 @@ class PlatformRegionStepper @Inject constructor() {
                 if (region.session != null &&
                     region.pendingDestructive?.kind != DestructiveKind.SESSION_END
                 ) {
-                    region = region.copy(
+                    val (withId, wakeId) = region.mintWakeId()
+                    region = withId.copy(
                         pendingDestructive = PendingDestructive(
                             kind = DestructiveKind.SESSION_END,
                             since = obs.timestamp,
                             deadline = obs.timestamp + policy.gracePeriodMs(region.platform),
+                            wakeId = wakeId,
+                            windowFrom = obs.timestamp,
                         ),
                     )
                 }
@@ -465,8 +485,26 @@ class PlatformRegionStepper @Inject constructor() {
         // screen-implied resume — clear the pending. Covers all three exits: a
         // sustained-online commit (Paused→Online), an instant OfferPresented commit
         // (Paused→Online), and the pause-safety timeout (Paused→Offline).
+        //
+        // #1054 round 4: the pause-safety DEADLINE rides the same edge both ways — stamped from
+        // the platform's reported countdown plus this platform's buffer, cleared on the way out —
+        // and `EffectMap.diffPauseSafetyTimer` turns each into the arm/cancel that used to be
+        // hand-built at three sites in `diffMode`. Here for the same reason the park's re-base is:
+        // this is the single site that moves `mode`.
+        if (prev.mode != Mode.Paused && newMode == Mode.Paused) {
+            val remaining = ((obs as? Observation.FlowObservation)?.parsed
+                as? ParsedFields.PausedFields)?.remainingMillis ?: 0L
+            val (withId, wakeId) = region.mintWakeId()
+            region = withId.copy(
+                pauseSafety = PendingWake(
+                    deadline = obs.timestamp + remaining +
+                        policy.pauseTimeoutBufferMs(region.platform),
+                    wakeId = wakeId,
+                ),
+            )
+        }
         if (prev.mode == Mode.Paused && newMode != Mode.Paused) {
-            region = region.copy(pendingModeResume = null)
+            region = region.copy(pendingModeResume = null, pauseSafety = null)
         }
 
         // #1052 round 3: coming back Online RE-BASES a frozen running-total park. A park is frozen
@@ -482,11 +520,15 @@ class PlatformRegionStepper @Inject constructor() {
         // `prev.mode` because this function also runs on every ordinary Online→Online frame — an
         // unguarded re-base would extend the window forever. Leaving Online writes NOTHING: the
         // park rides out the pause. The session start/end clears above are unchanged.
-        if (prev.mode != Mode.Online && newMode == Mode.Online) {
-            region = region.copy(
+        if (prev.mode != Mode.Online && newMode == Mode.Online && region.pendingSessionPay != null) {
+            // #1054 round 5: a re-based park is a NEW window, so it takes a new identity — the
+            // pre-pause arm must not be able to land on it.
+            val (withId, wakeId) = region.mintWakeId()
+            region = withId.copy(
                 pendingSessionPay = region.pendingSessionPay?.copy(
                     since = obs.timestamp,
                     deadline = obs.timestamp + policy.sessionPaySettleMs(region.platform),
+                    wakeId = wakeId,
                     // #1052 round 4: a re-based park is UNCONFIRMED. The new window is only
                     // evidence if something could have challenged it, and on the fielded shape
                     // nothing can — the resume commits as a wake TIMER, this very re-base re-arms
@@ -570,8 +612,15 @@ class PlatformRegionStepper @Inject constructor() {
         return when (obs.type) {
             TimeoutType.SESSION_PAUSED_SAFETY -> {
                 // Pause timer expired — transition to offline via applyModeTransition
-                // so it gets grace treatment
-                if (prev.mode == Mode.Paused) {
+                // so it gets grace treatment.
+                //
+                // #1054 round 4: identity-gated like the graces. The deadline is state now, so a
+                // re-pause arms a new one while an old coroutine may still be in flight — and a
+                // stale fire carries the PREVIOUS pause's deadline, so it must not end this one.
+                // A payload-less fire is honoured only by the legacy rule in [safetyFireIsAuthoritative]
+                // (no net in state, or landing at/after the reconstructed one — see #1083 for the
+                // rollback residual); otherwise it matches nothing and the pause waits.
+                if (prev.mode == Mode.Paused && safetyFireIsAuthoritative(prev, obs)) {
                     applyModeTransition(prev, Mode.Offline, obs, policy)
                 } else prev
             }
@@ -624,7 +673,15 @@ class PlatformRegionStepper @Inject constructor() {
                     endFields = endFields,
                 )
             }
-            return region.copy(pendingDestructive = pend)
+            // #1054 round 5: a MOVED deadline is a new pending as far as its timer is concerned —
+            // the standing arm would fire at the old, later instant. An unchanged one (the tighten
+            // that did not actually tighten) keeps its id and its live arm.
+            // Round 7: the predecessor is passed ONLY when this frame is tightening the SAME kind.
+            // The `else` branch built a fresh SESSION_END that REPLACES whatever stood there, and a
+            // replacement must never inherit an identity (the installer's kind test is the belt to
+            // this call site's braces).
+            val tightened = existing?.takeIf { it.kind == DestructiveKind.SESSION_END }
+            return region.withWakeIdIfDeadlineMoved(tightened, pend, obs)
         }
         if (region.mode == Mode.Offline) {
             // Clear the idle anchor and any TASK_RETIRE pending, but PRESERVE a
@@ -897,14 +954,22 @@ class PlatformRegionStepper @Inject constructor() {
             // through to the replace arm re-parks it HERE, on the surface actually on screen.
             pend != null && centsEqual(pay, pend.value) && pend.flow == flow ->
                 region.copy(pendingSessionPay = pend.copy(unconfirmed = false))
-            else -> region.copy(
-                pendingSessionPay = PendingSessionPay(
-                    value = pay,
-                    since = now,
-                    deadline = now + policy.sessionPaySettleMs(region.platform),
-                    flow = flow,
-                ),
-            )
+            else -> {
+                // #1054 round 5: a replacement park is a NEW window and takes a new identity. A
+                // deadline alone would not separate them — after a clock step-back the replacement
+                // computes the identical `now + settleWindow`, and the superseded arm then
+                // committed it after essentially no time in its own window.
+                val (withId, wakeId) = region.mintWakeId()
+                withId.copy(
+                    pendingSessionPay = PendingSessionPay(
+                        value = pay,
+                        since = now,
+                        deadline = now + policy.sessionPaySettleMs(region.platform),
+                        flow = flow,
+                        wakeId = wakeId,
+                    ),
+                )
+            }
         }
     }
 
@@ -1164,6 +1229,10 @@ class PlatformRegionStepper @Inject constructor() {
             activeTask = null,
             recentTasks = recentTasks,
             pendingDestructive = null,
+            // #1054 round 2: a terminal end invalidates the ended session's graced resume —
+            // `commitModeResume` → `applyModeTransition(…, Online)` MINTS a session when there is
+            // none, so keeping one would later start a phantom dash. (The diff cancels its timer.)
+            pendingModeResume = null,
             idleEnteredAt = null,
             lastPostTaskPayHash = null,
             lastPostTaskFields = null,

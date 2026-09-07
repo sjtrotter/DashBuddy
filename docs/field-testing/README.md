@@ -78,6 +78,51 @@ card's **mechanical** half, #577 (re-confirmed, 24/24, ~0.55 s — with a new po
 that entry's Bug #1), the #457 path, and #554 ShadowProjector (2/2). The #462/#460 dropoff item
 was found **broken-in-part** (raw PII in capture envelopes) and moved to that entry's Bug #7.)_
 
+- **🆕 NEW — #1054 — a grace that lapses while nothing is on screen still commits, and survives a
+  restart.** Both older grace timers (`GRACE_COMMIT` for a dash end / task retire,
+  `MODE_RESUME_COMMIT` for a resume out of Paused) are armed for exactly `deadline − now` but their
+  fire is stamped with the wall clock, so the ordinary case lands ON the deadline — which a strict
+  `>` expiry ignored, with nothing left to wake the pending. And crash recovery restored those
+  pendings without re-arming anything at all. **On-dash:** go offline (or let the dash summary
+  come up) and then leave the app backgrounded, untouched, with the phone idle — the dash should
+  end on its own about a grace window later (~10 s from an idle/offline screen, ~2.5 s from the
+  summary), NOT the next time you happen to open DoorDash. Then the harder half: while a dash-end
+  grace is open, force-stop DashBuddy and relaunch it — the pending end must still commit within
+  its window rather than hanging around. **Desk, after the pull:**
+  1. `grep "Recovery re-armed" *.log` — one INFO line under the `StateMachine` tag per recovery
+     that restored a live grace, carrying a count only. Absent on a recovery with no pending
+     grace, which is the normal case.
+  2. `SELECT eventType, occurredAt, payload FROM app_events WHERE eventType='DASH_STOP'` — the
+     backgrounded end's payload `endedAt` is the ARM time (the moment the offline/summary screen
+     appeared, `pend.since`, unchanged by #1054), while the row's own `occurredAt` is the COMMIT
+     observation's time (#732). So `occurredAt ≈ endedAt` + the grace window (~10 s from an
+     idle/offline screen, ~2.5 s from the summary) — **not** hours later when the app was next
+     opened, which is what the bug produced.
+  3. No dash left with a live `session` in the HUD after the app has been closed on an offline
+     screen for minutes.
+  - Confirmed: 0/2
+
+- **🆕 NEW — #1054 — a pause survives a relaunch: the HUD stays PAUSED, and the dash still ends on
+  its own when the countdown runs out.** Two behaviours that used to be broken in opposite
+  directions. A graced resume is now DROPPED on restore (it is 8 s of *un-contradicted* observation,
+  and dead process time is not that), so a relaunch mid-pause must NOT come back Online — a phantom
+  resume, or a brand-new dash appearing with no online screen behind it, is the bug. And the
+  pause-safety deadline is now real state rather than a coroutine in memory, so it is re-armed on
+  restore: before this, a restore into Paused left the dash with no timer of any kind and a pocketed
+  phone kept the session alive indefinitely, which the next morning's dash then RESUMED.
+  **On-dash:** pause the dash, force-stop DashBuddy while the pause sheet is up, relaunch. The HUD
+  must read PAUSED, and stay that way until you actually bring DoorDash back online. Then do it
+  again and simply let the DoorDash countdown run out with the app relaunched but idle. **Two
+  separate things happen, about ten seconds apart** — the safety net fires ~1 s after the countdown
+  reaches zero and takes the dash Paused→Offline, which then arms the ORDINARY 10 s `SESSION_END`
+  grace, so the dash actually ends ~11 s after zero. **Desk, after the pull:** a `DASH_STOP` in
+  `app_events` whose payload `endedAt` is ≈ countdown + 1 s (the safety transition) while the row's
+  own `occurredAt` is ≈ countdown + 11 s (the graced commit) — two assertions, not one; no
+  `DASH_START` in the seconds after a recovery; and no `Timer Expired` WARN for a
+  `MODE_RESUME_COMMIT` or `SESSION_PAY_SETTLE` after a restart (those pendings are dropped on
+  restore, and a replayed arm for them is never executed at all).
+  - Confirmed: 0/2
+
 - **🆕 NEW — #1033 — a collapsed delivery receipt now gets 8 s to be expanded, and an expansion
   that lands too late re-prices the delivery anyway.** DoorDash's post-delivery receipt renders
   COLLAPSED (a total, no breakdown). A completion committed off that shape has no itemization, so

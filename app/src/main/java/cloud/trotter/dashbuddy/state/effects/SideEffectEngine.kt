@@ -286,6 +286,31 @@ class SideEffectEngine @Inject constructor(
             Timber.tag("Effects").d("Suppressing external effect during recovery: %s", effect::class.simpleName)
             return
         }
+
+        // #1054 round 5: a REGION timer is never armed or cancelled by the replay — the recovery's
+        // own reconcile is its sole authoritative armer.
+        //
+        // A replayed arm is scheduled against a REPLAYED frame's timestamp, so it is already
+        // overdue against the real clock and fires at the 1 ms floor, during recovery, before the
+        // hygiene has decided anything. Two ways that hurt, both observed: it logs a
+        // `Timer Expired` WARN into the shareable log for a pending the hygiene is about to drop
+        // (principle 7 reserves that stream for a defended invariant firing), and its fire is NOT
+        // merely inert on arrival — identity mismatch stops the wake path, but `graceLapsed`'s
+        // `obs.timestamp > deadline` arm would still COMMIT a grace whose re-based deadline the
+        // replayed stamp happens to exceed. Round 4 tried to cancel these after the fact, which
+        // cannot work: by the time the reconcile runs the coroutine has already fired.
+        //
+        // `OFFER_EXPIRY` and `SETTLE_UI` are deliberately NOT in the set — nothing re-arms them
+        // after a restore, so suppressing them would strand an offer (#1076).
+        val regionTimerType = when (effect) {
+            is AppEffect.ScheduleTimeout -> effect.type
+            is AppEffect.CancelTimeout -> effect.type
+            else -> null
+        }
+        if (recovering && regionTimerType in TimeoutType.REGION_TIMERS) {
+            Timber.tag("Effects").d("Skipping region timer during recovery: %s", regionTimerType)
+            return
+        }
         when (effect) {
             // --- FIRE & FORGET (UI / IO) ---
             is AppEffect.LogEvent -> {
@@ -533,7 +558,9 @@ class SideEffectEngine @Inject constructor(
             // --- TIMING LOGIC (Pure Coroutines) ---
 
             is AppEffect.ScheduleTimeout ->
-                scheduleTimer(effect.type, effect.durationMs, effect.platform, effect.payload)
+                scheduleTimer(
+                    effect.type, effect.durationMs, effect.platform, effect.payload, effect.deadlineMs,
+                )
 
             is AppEffect.CancelTimeout -> {
                 // Untracking happens via the job's self-removing completion handler.
@@ -723,17 +750,27 @@ class SideEffectEngine @Inject constructor(
      * Keyed by (type, platform) (#438 item 1): a schedule replaces only the
      * same platform's timer of that type, so two platforms' timers of the same
      * type coexist.
+     *
+     * [deadlineMs], when set, is an ABSOLUTE wall-clock instant and wins over [durationMs]
+     * (#1054 round 2). The remainder is recomputed INSIDE the coroutine, immediately before the
+     * delay — which is scheduling time, not enqueue time. That distinction is load-bearing for the
+     * crash-recovery re-arm: `process` enqueues into an UNLIMITED channel drained by one worker in
+     * order, so a timer emitted behind a recovery burst can start well after its duration was
+     * computed and then run the FULL length late. REPLACE-by-key prevents a duplicate timer, not a
+     * stale duration. A past deadline floors at 1 ms.
      */
     private fun scheduleTimer(
         type: TimeoutType,
         durationMs: Long,
         platform: Platform?,
         payload: ObservationPayload?,
+        deadlineMs: Long? = null,
     ) {
         val key = TimerKey(type, platform)
         activeTimers[key]?.cancel()
         val job = engineScope.launch(start = CoroutineStart.LAZY) {
-            delay(durationMs)
+            // Evaluated here, inside the coroutine: this is the moment the wait actually starts.
+            delay(deadlineMs?.let { (it - System.currentTimeMillis()).coerceAtLeast(1L) } ?: durationMs)
             // #692 P7: level is per-type, not one blanket WARN under the catch-all `App` tag.
             // GRACE_COMMIT/MODE_RESUME_COMMIT/SESSION_PAUSED_SAFETY are all "a grace timer waking
             // a commit" verbatim — the taxonomy's defended-invariant WARN bucket (a graced
