@@ -302,7 +302,8 @@ window is ≥ 0.80 UNKNOWN. `Ruleset.matchFirst` reports a `ParseShortfall` when
 nothing usable — every evidence field unresolved, or a shape-REQUIRED field null — judged per field by
 `ParseFieldKind` (`CONSTANT` excluded, `NULLABLE` null, `COLLECTION` empty), measured pre-validate and
 even when a `Skip` validator discards the branch; counted post-admission in `PipelineStats` (per-rule
-`parseShortfall{…}` + one WARN per rule per process, tag `ParseHealth`, rule ids only). Notices share
+`parseShortfall{…}` + one WARN per rule per process, tag `ParseHealth`, rule ids only; the benign baseline — rules whose one evidence field is legitimately optional, incl.
+the 8.95.6 `earnings_pill` carousel on `waiting_for_offer` — is listed in the reference). Notices share
 `AppNoticeChannel` (ids 102 locale / 103 recognition / 105 TTS; 104 is `weekly_plan_channel`).
 
 ### 2. JSON Rule Engine (`core/pipeline/.../rules/` + generated `assets/rules/`)
