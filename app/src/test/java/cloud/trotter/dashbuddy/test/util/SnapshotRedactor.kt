@@ -177,8 +177,9 @@ object SnapshotRedactor {
      * a warehouse zone code ("SAT_San-Antonio_187"), or a count ("2 items"). Character classes are
      * `\p{L}` (accented/Unicode letters — José, Muñoz; interior capitals — McKenna) plus `'` and
      * `-` (O'Brien, D'Angelo, Mary-Jo); the last token is a single letter with an optional trailing
-     * period. Every quantifier is bounded ({0,20}/{0,3}/{0,8}/{1,4}) so it passes RegexSafety's
-     * ReDoS guard when the identical string is compiled on the rule side.
+     * period. Every construct here is RE2-compatible (`\p{L}`, bounded quantifiers, char classes,
+     * no lookaround) so the identical string compiles on the rule side, where it runs on RE2J
+     * (#1053). This test-side copy stays a Kotlin [Regex]: it is app-authored, not rule-authored.
      *
      * **INTERIOR whitespace is `\s{1,4}`, not a literal space (#885).** The 07-27 pull fielded
      * `dropoff_multi_order_confirm` rendering the name with a DOUBLE space ("Firstname  L.") — the

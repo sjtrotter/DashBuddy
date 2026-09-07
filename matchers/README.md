@@ -46,6 +46,54 @@ Full JSON-Schema validation against `docs/rules.schema.json` is deferred to the 
 (ADR-0009); `verifyMatchersCanonical` does a cheap schema-aware structural check (required top-level
 keys, read from the schema) plus the idempotency fixed-point assertion.
 
+## Regex pattern language: RE2, not PCRE (#1053)
+
+Every regex a rule carries — `…MatchesRegex` predicates, parse `find`/`regex` patterns, `redact`
+`match`, `nextSiblingMatchingRegex`'s argument — is compiled by the app onto **RE2J**, a
+non-backtracking engine, so an accepted pattern's match time is linear in `input × pattern` **by
+construction** rather than by a watchdog (the previous 200 ms budget could not fire on Android at
+all). That matters most for the milestone-2 CDN channel below: an untrusted pattern language must be
+one whose worst case is known.
+
+The cost is syntax. **No lookaround** (`(?!…)`, `(?=…)`, `(?<…)`), **no backreferences**, no
+possessive or atomic groups. Everything this ruleset uses is supported: character classes,
+`\d\s\w\S`, `\b`, `\p{L}`, lazy quantifiers, `(?:…)`, numbered capture groups, `^`/`$`.
+
+Write `\d`, `\s` and `\w` exactly as you always have: the app **translates them at compile toward
+Android's Unicode classes** (`\d` → `\p{Nd}`, `\s` → `[\s\p{Z}\x{0B}\x{85}]`, `\w` →
+`[\p{L}\p{M}\p{N}\p{Pc}\x{200C}\x{200D}]` — the join controls are there because Android's `\w`
+includes `Join_Control` and a shipped merchant shape was matching ZWJ on the device), because Android's ICU-backed engine has always read them that way and
+letting them narrow to ASCII silently broke two redacts on the device while every host test stayed
+green. It is an **approximation, not parity** — RE2J and ART's ICU ship different Unicode table
+versions — and the residual differences are listed in ADR-0010. Three that matter here: `$` matches
+only at end of **text** (not before a trailing newline), `\b` is ASCII-only (no Unicode form to
+translate it to, and every `\b` here sits against an ASCII word — `mi\b`, `\bby`, `\bgate`), and case
+folding is *simple* where ICU's is *full* (`straße` vs `STRASSE`). `\S` and `\W` **inside** a
+character class are rejected outright, since a negated union cannot be a class member.
+
+Patterns are case-**insensitive** and bounded at load: 200 chars, no single repeat bound over
+**200**, at most **16** nested groups, no `\Q…\E` quoting, no leading-zero repeat bounds
+(`a{0201}` — RE2 reads that as literal text, so it is refused rather than silently meaning something
+else), and — the real bound — the **compiled program** at most **1 000 instructions**, measured
+after compiling. The largest program either ruleset produces today is 240, so that is a 4× margin.
+
+Two things the program bound is and is not. It is **not** what keeps compilation affordable: it is
+measured *after* the compile, so a pattern can build a large program and only then be rejected
+(`a{0,200}(?i){0,198}(?i){5}` constructs 396 987 instructions before it is turned away). A separate,
+deliberately crude pre-compile estimate does that job, approximately. What the program bound **is**
+for is match-time stack depth: `^((.?){100}){40}$` is seventeen characters and 16 084 instructions,
+and matching a five-character input with it overflows the stack on threads up to 1 MiB. Note that
+depth grows with **nullable nesting**, not with instruction count alone — a 20-character
+`^((((a?)?)?)?){150}$` is only 1 954 instructions and recurses about 45 % deeper than a 1 644-
+instruction shape that does not overflow — so the cap bounds exposure rather than proving safety.
+A pattern that gets through and still cannot be evaluated is caught at the match: recognition treats
+it as no-match, a parse field goes null, and **redaction masks the whole node**.
+
+Anything over-long, over-sized, too deep, or unsupported fails the rule LOAD loudly, and the whole
+FILE is rejected — a file whose patterns exhaust the device is not one to half-load — so a bad
+pattern can never degrade quietly into one that just never matches. See
+`docs/adr/ADR-0010-linear-time-rule-regex.md`.
+
 ## Locale scope: this ruleset is English-only (#938)
 
 Every anchor in `rules/` is a **literal English string** — `require` text predicates, `matchesRegex`

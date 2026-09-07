@@ -91,3 +91,17 @@ Use means anything you do with the software requiring one of your licenses.
 Trademark means trademarks, service marks, and similar rights.
 
 Copyright 2026 Stephen Trotter
+
+---
+
+## Third-party components (non-normative note)
+
+DashBuddy links third-party libraries, each distributed under its own license; those licenses govern
+those components, not the terms above.
+
+Called out here because its license was reviewed as part of adopting it (#1053): **RE2J**
+(`com.google.re2j:re2j`) is licensed **BSD-3-Clause**. It backs the recognition layer's
+rule-authored regexes — see `docs/adr/ADR-0010-linear-time-rule-regex.md`.
+
+This note is not an exhaustive dependency inventory; the authoritative list of what is linked is
+`gradle/libs.versions.toml`.

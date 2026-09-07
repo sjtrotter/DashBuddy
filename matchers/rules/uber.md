@@ -68,8 +68,9 @@ session). Recognizing a screen on Uber is less about "does this exact tree match
 - **The "Going to " prefix is store/address-ambiguous** — Uber's en-route pickup and en-route
   dropoff notifications share the same `"Going to "` prefix, distinguished only by whether what
   follows starts with a digit (a dropoff street address) or not (a store name):
-  `uber.notification.trip_en_route_pickup` requires `^Going to (?!\d)`, `trip_en_route_dropoff`
-  requires `^Going to \d`. This is a documented residual (CLAUDE.md) that a generic prefix-based PII
+  `uber.notification.trip_en_route_pickup` requires `^Going to (?:\D|$)`, `trip_en_route_dropoff`
+  requires `^Going to \d`. (The pickup arm was a negative lookahead `(?!\d)` until #1053 moved rule
+  regexes onto RE2 syntax; `(?:\D|$)` states the same language — a non-digit, or end of title.) This is a documented residual (CLAUDE.md) that a generic prefix-based PII
   scrub can't own on its own — the rule-declared `redact` on the dropoff notification is the primary
   control for that field, not the cross-platform text-marker backstop.
 - **Overlay-rendered offers are captured via `getWindows()`.** The 2026-05-09 session found some
@@ -96,7 +97,7 @@ Same two-tier posture as DoorDash, applied to Uber's own screens:
   literal-text match) still recognizes the redacted title on replay — the #598/#623 replay-
   fidelity property. `trip_en_route_dropoff` instead masks the **whole title, no keepPrefix** —
   deliberately, because its require is `titleMatchesRegex: "^Going to \\d"` (digit-anchored, to
-  distinguish a dropoff address from the pickup notification's `^Going to (?!\d)` store name); if
+  distinguish a dropoff address from the pickup notification's `^Going to (?:\D|$)` store name); if
   the mask kept the `"Going to "` prefix, the character right after it would be the
   `[redacted:…]` marker rather than a digit, and the rule's own require could no longer re-match
   the redacted envelope on replay — so whole-masking is the only replay-safe choice here, not an

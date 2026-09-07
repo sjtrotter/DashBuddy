@@ -1,146 +1,219 @@
 package cloud.trotter.dashbuddy.core.pipeline.rules
 
 import timber.log.Timber
-import java.util.concurrent.Executors
-import java.util.concurrent.ScheduledExecutorService
-import java.util.concurrent.TimeUnit
-import java.util.regex.Pattern
+import com.google.re2j.Pattern as Re2Pattern
 
 /**
- * A rule-authored [Regex] with a **runtime match-time budget** (#590).
+ * A rule-authored regex whose match time is **bounded by construction** (#1053, superseding the
+ * #590 watchdog).
  *
- * [RegexSafety] rejects the nested-unbounded ReDoS family at COMPILE time, but
- * its own KDoc admits Kotlin/Java [Regex] has **no match timeout**, and the
- * structural heuristic cannot catch every catastrophic shape — ambiguous
- * alternation (`(a|aa)+$`), optional-inside-star (`(a?)*b`), bounded-outer over
- * unbounded-inner (`(.*a){20}`), and backreference blowups (`(\w+)\1+`) all slip
- * through and then backtrack unbounded on the per-event classification thread.
- * A single such pattern (careless author today; hostile CDN rule once #192
- * opens) hangs recognition. This makes "accepted ⇒ bounded match time" true by
- * construction: the compile heuristic no longer has to be sound on its own.
+ * ## Why the old bound was false
  *
- * Catastrophic patterns fail two ways, and both are closed here:
- *  - **Exponential hang** (ambiguous alternation on a moderate input): the match
- *    runs on the calling thread against an [InterruptibleCharSequence]; a shared
- *    daemon watchdog interrupts that thread after [BUDGET_MS]. `Matcher` reads
- *    the input via `charAt` on every backtracking step, so the guarded sequence
- *    throws [RegexBudgetExceeded] the moment the interrupt lands.
- *  - **Stack overflow** (deep quantifier recursion on a long input): Java's
- *    regex engine recurses per repetition, so a long input overflows the stack
- *    with a [StackOverflowError] — an [Error] that would otherwise escape every
- *    `Exception`-only catch downstream. Caught here on the match thread.
+ * This class used to run a Kotlin [Regex] on the calling thread behind a 200 ms watchdog that
+ * interrupted the thread, with an `InterruptibleCharSequence` whose `charAt` threw on the
+ * interrupt. That works on the desktop JVM. It **cannot work on Android**: `Matcher.reset(
+ * CharSequence)` stringifies its input and hands the match to native ICU, so the guarded sequence
+ * is never consulted again and there is no ICU timeout API reachable from `java.util.regex` on
+ * ART. The watchdog fired into a native match it could not stop — the "accepted ⇒ bounded" claim
+ * held only on the host, i.e. exactly where it was never needed. Same class of host/device
+ * divergence as #909, and the compile-time ReDoS heuristic that was supposed to back it up is
+ * unsound by nature (`(a|aa)+$`, `(a?)*b`, `(.*a){20}` all pass it).
  *
- * Either way the match **fails closed** — no-match (`false`/`null`), so the frame
- * simply doesn't recognize (→ UNKNOWN → scrubbed) rather than hanging or crashing
- * the thread — and one WARN fires (a defended invariant, no rule/PII text —
- * Principle 7). Well-formed matches finish in microseconds and cancel the
- * watchdog before it fires, so there is **zero behavior change** for the linear
- * patterns the production rules use.
+ * ## The bound now
  *
- * Only rule-authored regexes (everything from [RegexSafety.compileRegex]) are
- * wrapped; app-authored constant patterns keep the plain hot path.
+ * Rule patterns compile to **RE2J** — a pure-Java RE2 engine that simulates an NFA instead of
+ * backtracking. Match time is linear in `input.length × pattern.size`, with no exponential blowup
+ * and no per-repetition recursion, so:
+ *  - there is no catastrophic pattern to reject: `(a+)+$` against 64 `a`s and a `!` is a
+ *    microsecond match, not a hang, which is why [RegexSafety] no longer carries a ReDoS heuristic;
+ *  - the bound is a property of the engine rather than a promise about a timer, so it holds on ART
+ *    as well as on the host. **Not the same as "a host test is a device test", though**: RE2J
+ *    carries its own Unicode tables to both, so those agree — but **stack size and JIT do not**. A
+ *    match that succeeds on a host thread can overflow on an ART coroutine thread, which is exactly
+ *    the shape [evaluating] exists for. Host tests are faithful about *structure*; one instrumented
+ *    spot-check pins the bound on ART for provenance, and the small-stack consumer tests
+ *    (`RegexEvaluationFailureTest`) cover the depth axis the host would otherwise flatter;
+ *  - the price is RE2 *syntax*: no lookaround, no backreferences. Rule authors get a language whose
+ *    worst case is known, which is the language an untrusted CDN rule source (#192/#640) needs.
+ *
+ * ## What the engine does NOT bound, and who does
+ *
+ * Linear *match* time says nothing about *compile* cost, and RE2J 1.8 has no program-size ceiling —
+ * `(a{1000}){1000}` is fifteen characters and 1 002 002 instructions. So bounded ingestion grew a
+ * second half at the door ([RegexSafety]): the pattern-length cap
+ * ([RuleCompiler.MAX_REGEX_LENGTH]) is joined by [RegexSafety.MAX_REPEAT] and
+ * [RegexSafety.MAX_GROUP_DEPTH], a coarse pre-compile estimate, and — the actual bound —
+ * [RegexSafety.MAX_PROGRAM_SIZE] **measured** on the compiled program with
+ * `com.google.re2j.Pattern.programSize()`. An over-long, over-sized, too-deep or unparseable
+ * pattern is a loud [RuleCompileException] at load. The same seam also translates the Perl classes
+ * toward ART's Unicode classes, so a rule means roughly on the device what it meant before this
+ * engine change (an approximation, with the residual differences listed there).
+ *
+ * The one runtime guard kept from #590 is the `StackOverflowError` catch — but it no longer
+ * converts the failure to a default. See [evaluating] for why one Boolean answer cannot serve a
+ * positive predicate, a negated predicate and a redaction selector alike, and what each boundary
+ * does instead.
+ *
+ * Kotlin [Regex] never escapes this seam — [find] returns a [BoundedMatch], not a `MatchResult` —
+ * so the engine behind the rule language stays swappable and no caller can reach a raw matcher.
+ * Only rule-authored regexes are wrapped; app-authored constant patterns keep the plain hot path.
  */
-class BoundedRegex internal constructor(private val regex: Regex) {
+class BoundedRegex internal constructor(private val pattern: Re2Pattern) {
 
+    /** True if [input] contains a match anywhere (the 7 `…MatchesRegex` predicates). */
     fun containsMatchIn(input: CharSequence): Boolean =
-        runBounded(default = false, input) { regex.containsMatchIn(it) }
-
-    fun find(input: CharSequence): MatchResult? =
-        runBounded(default = null, input) { regex.find(it) }
+        evaluating(this) { pattern.matcher(input).find() }
 
     /**
      * WHOLE-input match (#1029) — the strict sibling of [containsMatchIn], for a rule that names
      * the exact shape a node's text must have rather than a substring it must contain
-     * (`nextSiblingMatchingRegex`). Same budget, same fail-closed `false` on an abort.
+     * (`nextSiblingMatchingRegex`).
      */
     fun matches(input: CharSequence): Boolean =
-        runBounded(default = false, input) { regex.matches(it) }
+        evaluating(this) { pattern.matcher(input).matches() }
 
-    /** The underlying [Pattern] — compile-time introspection only (no match). */
-    fun toPattern(): Pattern = regex.toPattern()
+    /** The first match in [input], or null. */
+    fun find(input: CharSequence): BoundedMatch? = evaluating(this) { findOrNull(input) }
 
-    /** The raw pattern string, for logging/debugging. */
-    override fun toString(): String = regex.pattern
-
-    private inline fun <T> runBounded(default: T, input: CharSequence, block: (CharSequence) -> T): T {
-        val guarded = InterruptibleCharSequence(input)
-        val self = Thread.currentThread()
-        // The gate closes a race (#590 review F1): without it, a watchdog firing
-        // concurrently with match completion could interrupt AFTER the finally
-        // block's Thread.interrupted() clear — leaving a stray interrupt flag on
-        // a dispatcher thread for some later, unrelated blocking call to trip
-        // over. The task interrupts only while `done` is false under the gate;
-        // finally flips `done` under the same gate BEFORE clearing, so no
-        // interrupt can land after the clear.
-        val gate = Any()
-        var done = false
-        val watchdog = WATCHDOG.schedule(
-            { synchronized(gate) { if (!done) self.interrupt() } },
-            BUDGET_MS, TimeUnit.MILLISECONDS,
-        )
-        return try {
-            block(guarded)
-        } catch (e: RegexBudgetExceeded) {
-            Timber.tag("Pipeline").w(
-                "Rule regex match aborted: exceeded %dms budget (ReDoS runtime guard, #590)",
-                BUDGET_MS,
-            )
-            default
-        } catch (e: StackOverflowError) {
-            // Deep quantifier recursion on a long input (#590). An Error, so it
-            // would escape every downstream Exception-only catch = fail open.
-            // Treat as no-match — the match is a self-contained operation and the
-            // stack has already unwound to here.
-            Timber.tag("Pipeline").w("Rule regex match overflowed the stack (ReDoS runtime guard, #590)")
-            default
-        } finally {
-            watchdog.cancel(false)
-            synchronized(gate) { done = true }
-            // Clear any interrupt the watchdog set — safe AFTER the gate flip
-            // above, which guarantees no further interrupt can land. The
-            // classification pipeline is coroutine-based (cooperative
-            // cancellation, not thread-interrupt), so nothing else on this
-            // thread relies on the interrupt flag.
-            Thread.interrupted()
+    private fun findOrNull(input: CharSequence): BoundedMatch? {
+        val m = pattern.matcher(input)
+        if (!m.find()) return null
+        val count = m.groupCount()
+        val groups = ArrayList<BoundedGroup?>(count + 1)
+        val values = ArrayList<String>(count + 1)
+        for (i in 0..count) {
+            val start = m.start(i)
+            if (start < 0) {
+                // A group that did not participate. Kotlin's MatchResult reports null in `groups`
+                // and "" in `groupValues`; both callers depend on exactly that shape.
+                groups.add(null)
+                values.add("")
+            } else {
+                val text = m.group(i).orEmpty()
+                groups.add(BoundedGroup(text, start until m.end(i)))
+                values.add(text)
+            }
         }
-    }
-
-    private class RegexBudgetExceeded : RuntimeException() {
-        override fun fillInStackTrace(): Throwable = this // cheap: control-flow only
+        return BoundedMatch(values[0], groups[0]!!.range, values, groups)
     }
 
     /**
-     * Wraps a [CharSequence] so `charAt` throws [RegexBudgetExceeded] once the
-     * current thread is interrupted — the hook the watchdog uses to abort a
-     * runaway backtracking match. `get` maps to `CharSequence.charAt` on the JVM.
+     * Number of capturing groups — compile-time introspection only (no match). Replaces the old
+     * `toPattern().matcher("").groupCount()`, which leaked a `java.util.regex.Pattern` out of the
+     * seam for the sake of one integer.
      */
-    private inner class InterruptibleCharSequence(private val inner: CharSequence) : CharSequence {
-        override val length: Int get() = inner.length
-        override fun get(index: Int): Char {
-            if (Thread.currentThread().isInterrupted) throw RegexBudgetExceeded()
-            return inner[index]
-        }
-        override fun subSequence(startIndex: Int, endIndex: Int): CharSequence =
-            InterruptibleCharSequence(inner.subSequence(startIndex, endIndex))
-        override fun toString(): String = inner.toString()
-    }
+    fun groupCount(): Int = pattern.groupCount()
+
+    /**
+     * Instructions in the compiled RE2J program — the quantity [RegexSafety.MAX_PROGRAM_SIZE]
+     * bounds, exposed so a test can state the corpus's real margin instead of asserting a
+     * prediction of it.
+     */
+    fun programSize(): Int = pattern.programSize()
+
+    /** The raw pattern string, for logging/debugging. */
+    override fun toString(): String = pattern.pattern()
 
     companion object {
-        /**
-         * Wall-clock budget for a single rule-authored match. Generous next to a
-         * well-formed match (microseconds); small enough that a catastrophic
-         * pattern can't stall the classification thread for a user-visible beat.
-         */
-        const val BUDGET_MS = 200L
+        /** One WARN per distinct pattern per process — a stack overflow is a condition, not an event. */
+        private val warnedPatterns = java.util.concurrent.ConcurrentHashMap.newKeySet<String>()
 
-        private val WATCHDOG: ScheduledExecutorService =
-            java.util.concurrent.ScheduledThreadPoolExecutor(1) { r ->
-                Thread(r, "regex-redos-watchdog").apply { isDaemon = true }
-            }.apply {
-                // Cancelled watchdogs (the overwhelming majority — every healthy
-                // match cancels its own) leave the queue immediately instead of
-                // lingering until their 200 ms deadline (#590 review L1).
-                removeOnCancelPolicy = true
+        /**
+         * Run a match and turn a [StackOverflowError] into a **distinguishable**
+         * [RegexEvaluationFailed] (#1053 round 5).
+         *
+         * ## Why this is not a Boolean default any more
+         *
+         * Round 2 restored a `catch (StackOverflowError)` that returned the operation's default —
+         * `false` for a predicate, `null` for a find. Round 4's review showed why one default
+         * cannot serve every caller. `^((.?){100}){40}$` is seventeen characters, estimates at
+         * 28 244, compiles to 16 084 instructions — both load-time gates accepted it — and
+         * overflows in RE2J's `Machine.add` while matching a five-character input on 256 KiB,
+         * 512 KiB **and 1 MiB** stacks (ART's coroutine threads are about 1 MiB). Put that pattern
+         * in a screen rule's `redact[].find.hasTextMatchesRegex` and the `false` means
+         * `CompiledRedact.maskNode` finds no matching entry and ships the node **RAW**. The default
+         * that is fail-closed for a positive predicate is fail-OPEN for a redaction selector, and
+         * silently so.
+         *
+         * So the failure is no longer swallowed here. It is raised as its own exception and each
+         * boundary decides what its own safe answer is:
+         *
+         *  - **recognition** (`Ruleset.matchFirst`) — the rule does not match, and evaluation moves
+         *    on to the next rule. A rule that cannot be evaluated cannot claim a frame.
+         *  - **parse** (`TransformRegistry`, `ParseExpressionCompiler`, `nextSiblingMatchingRegex`)
+         *    — the field is null. Fail-null beats fail-wrong (#745).
+         *  - **redaction** (`CompiledRedact`, `CompiledNotifRedact`) — the whole node or field is
+         *    masked with the plain `[redacted]` constant. A redact entry that cannot be evaluated
+         *    must fail toward privacy; there is no reading of "we could not tell" that justifies
+         *    shipping the raw value.
+         *
+         * [RegexSafety.MAX_PROGRAM_SIZE] is the other half of the fix: at 2 000 instructions this
+         * particular shape no longer loads at all. The exception is what makes the residue — some
+         * other deep-nullable-repetition pattern, on some smaller stack — safe rather than silent.
+         *
+         * The message carries the pattern's LENGTH and nothing else: a rule pattern can quote
+         * screen text, and this line is INFO-adjacent (Principle 7).
+         */
+        internal inline fun <T> evaluating(regex: BoundedRegex, block: () -> T): T =
+            try {
+                block()
+            } catch (e: StackOverflowError) {
+                throw regex.evaluationFailed()
             }
+
+        /** Builds the exception and WARNs once per pattern per process. Not inline — it is cold. */
+        internal fun BoundedRegex.evaluationFailed(): RegexEvaluationFailed {
+            val key = pattern.pattern()
+            if (warnedPatterns.add(key)) {
+                Timber.tag("Pipeline").w(
+                    "Rule regex evaluation overflowed the stack (pattern length %d, program %d) — " +
+                        "the caller decides its own safe answer; a redact entry masks the whole node (#1053)",
+                    key.length,
+                    pattern.programSize(),
+                )
+            }
+            return RegexEvaluationFailed(key.length)
+        }
     }
 }
+
+/**
+ * A rule-authored regex could not be EVALUATED — the match itself blew the stack (#1053 round 5).
+ *
+ * Distinct from [RuleCompileException], which is a load-time rejection. This one happens on the hot
+ * path, on a pattern that loaded cleanly, and it is deliberately **not** convertible to a single
+ * default: see [BoundedRegex.evaluating] for why one Boolean answer cannot serve a positive
+ * predicate, a negated predicate and a redaction selector alike.
+ *
+ * Carries the pattern's [patternLength] only — never its text, which can quote screen content
+ * (Principle 7).
+ */
+class RegexEvaluationFailed internal constructor(val patternLength: Int) : RuntimeException(
+    "rule regex evaluation failed (pattern length $patternLength)",
+) {
+    /** Control-flow only; the stack trace is the overflow's, not ours, and costs more than it tells. */
+    override fun fillInStackTrace(): Throwable = this
+}
+
+/**
+ * One capturing group of a [BoundedMatch]. Mirrors Kotlin's `MatchGroup` so the rule engine can
+ * drop `kotlin.text.Regex` without changing any caller's arithmetic — [range] is `start until end`,
+ * which is what `String.replaceRange` consumes at the redaction site.
+ */
+class BoundedGroup internal constructor(val value: String, val range: IntRange)
+
+/**
+ * The result of [BoundedRegex.find] — the rule engine's own match type, so that no Kotlin
+ * `MatchResult` (and therefore no `java.util.regex` engine) escapes the [BoundedRegex] seam.
+ *
+ * [groupValues] and [groups] are both `groupCount + 1` long and follow Kotlin's conventions
+ * exactly: index 0 is the whole match, a group that did not participate is `""` in [groupValues]
+ * and `null` in [groups]. RE2J reports UTF-16 offsets, so [range] indexes the input string the way
+ * every caller already assumes.
+ */
+class BoundedMatch internal constructor(
+    val value: String,
+    val range: IntRange,
+    val groupValues: List<String>,
+    val groups: List<BoundedGroup?>,
+)

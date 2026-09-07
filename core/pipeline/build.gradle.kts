@@ -47,6 +47,11 @@ dependencies {
     implementation(libs.hilt.android)
     implementation(libs.kotlinx.serialization.json)
     implementation(libs.timber)
+    // #1053 — RE2J backs every rule-authored regex (BoundedRegex). A pure-Java
+    // linear-time engine: the same implementation runs on the host JVM and on
+    // ART, so "accepted => bounded match time" is structural rather than a
+    // watchdog Android could never honour. BSD-3-Clause.
+    implementation(libs.re2j)
 
     implementation(project(":domain"))
 
@@ -62,6 +67,11 @@ dependencies {
     // it runs inside plain JUnit-4 @Test bodies via runTest/runBlocking. NOT the
     // Kotest runner, NOT jqwik/Jazzer (both JUnit-Platform-only; this repo is JUnit 4).
     testImplementation(libs.kotest.property)
+
+    // #1053 — one instrumented spot-check that the linear-time bound holds on ART
+    // (the device engine is the one the old watchdog could not reach).
+    androidTestImplementation(libs.androidx.junit)
+    androidTestImplementation(libs.androidx.espresso.core)
 }
 
 // ===========================================================================
@@ -133,6 +143,16 @@ val importMatchersRules = tasks.register<ImportMatchersRules>("importMatchersRul
     group = "matchers"
     description = "Import canonicalized rules from the matchers build into generated assets/rules/."
     source.from(matchersRules)
+}
+
+// Unit-test path (#1053): this module's own tests read the generated rules off the filesystem —
+// RuleCorpusCompileBudgetTest compiles every shipped pattern through RegexSafety, whose caps and
+// class translation are `internal` and so can only be exercised from inside this module. JVM unit
+// tests do NOT run AGP asset merge, so the import task has to be an explicit predecessor or the
+// generated dir is absent on a clean `:core:pipeline:testDebugUnitTest` (the `:app` build file
+// carries the same wiring for the same reason).
+tasks.withType<Test>().configureEach {
+    dependsOn(importMatchersRules)
 }
 
 // APK path: register the generated dir as an assets source for every variant so

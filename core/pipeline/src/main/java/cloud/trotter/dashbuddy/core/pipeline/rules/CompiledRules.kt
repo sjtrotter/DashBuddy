@@ -186,10 +186,16 @@ data class CompiledNotifRedact(
 
     private fun maskField(field: NotifTextField, value: String?): String? {
         if (value == null) return null
-        return when (val m = fields[field]) {
-            null -> value
-            is NotifFieldMask.Whole -> CompiledRedact.mask(value, m.keepPrefix)
-            is NotifFieldMask.RegexGroup -> maskGroup(value, m.regex, m.group)
+        // #1053 round 5 — an unevaluable capture regex masks the WHOLE field, for the same reason
+        // maskNode masks the whole node: "we could not tell" must never resolve to the raw value.
+        return try {
+            when (val m = fields[field]) {
+                null -> value
+                is NotifFieldMask.Whole -> CompiledRedact.mask(value, m.keepPrefix)
+                is NotifFieldMask.RegexGroup -> maskGroup(value, m.regex, m.group)
+            }
+        } catch (e: RegexEvaluationFailed) {
+            CompiledRedact.REDACTED
         }
     }
 
@@ -275,7 +281,21 @@ data class CompiledRedact(
     fun apply(tree: UiNode): UiNode = maskNode(tree)
 
     private fun maskNode(node: UiNode): UiNode {
-        val match = entries.firstOrNull { it.find(node) }
+        // #1053 round 5 — a redact selector that cannot be EVALUATED masks the whole node.
+        //
+        // `find` is an ordinary compiled node predicate, so it can raise RegexEvaluationFailed when
+        // a pattern's match blows the stack. The old behaviour turned that into `false` inside
+        // BoundedRegex, which read here as "no entry matched" and shipped the node RAW — fail-OPEN,
+        // silently, on the one code path whose entire job is not leaking customer PII. There is no
+        // reading of "we could not tell whether this node carries PII" that justifies the raw
+        // value, so the answer is the plain `[redacted]` constant: no keepPrefix (we do not know
+        // which entry would have matched, so we cannot honour its prefix) and no distinctness hash.
+        val match = try {
+            entries.firstOrNull { it.find(node) }
+        } catch (e: RegexEvaluationFailed) {
+            return node.mapScrubbableStrings { REDACTED }
+                .copy(children = node.children.map { maskNode(it) })
+        }
         // #835: mask EVERY serialized string field of the matched node via the
         // UiNode scrubbable-fields SSOT — `stateDescription` used to be skipped
         // here, so a matched node's `state` shipped verbatim. Each field is

@@ -1,0 +1,346 @@
+package cloud.trotter.dashbuddy.core.pipeline.guard
+
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
+import org.junit.Test
+import java.io.File
+
+/**
+ * Source-scan ratchet for the #1053 boundary: **a rule-authored pattern never reaches a
+ * backtracking engine.**
+ *
+ * `RegexSafety.compileRegex` compiles rule JSON onto RE2J, whose linear-time bound is what makes
+ * "accepted ⇒ bounded" a theorem rather than the promise the retired 200 ms watchdog could not keep
+ * on Android. That property is only as strong as the claim that *nothing else in the rule engine
+ * builds a matcher* — one `Regex(patternFromJson)` slipped in later would reopen the whole class
+ * silently, because a backtracking hang is invisible to every test that does not happen to feed it
+ * a pumping input.
+ *
+ * Following the `TimberTagGuardTest` (#764) / `IcuRegexGuardTest` (#909) doctrine: a small,
+ * predictable scanner over the source text, with a **frozen allowlist that can only burn down**.
+ * Three rules:
+ *
+ *  1. **No `java.util.regex`** anywhere in the rule package — neither the package name nor its two
+ *     entry points, `Pattern.compile(…)` and `.toPattern()`. The JDK/ICU engine is exactly what the
+ *     seam exists to keep out (and it is the engine whose host/device divergence bit #909).
+ *  2. **Every `Regex(…)` / `.toRegex()` / `Regex.fromLiteral(…)` construction takes a STRING
+ *     LITERAL** — with no `${'$'}` interpolation and no concatenation, because `Regex("${'$'}pattern")`
+ *     opens with a quote and still puts a runtime value into the engine (round 4).** That is the
+ *     structural line between an *app-authored constant* — a pattern this repo wrote, reviewed, and
+ *     can reason about, matching against text it already trusts to be small — and a *rule-authored*
+ *     one, which arrives as a value from JSON (today from assets; tomorrow, #192/#640, from a CDN)
+ *     and must go through `compileRegex`. A `Regex(someVariable)` in this package is the violation.
+ *  3. **The app-authored constants are enumerated and counted**, and so are the constant symbols
+ *     they may be concatenated with ([ALLOWED_OPERANDS]). Adding one is a deliberate act
+ *     that edits this list; removing one (folding it into the shared vocabulary, or onto RE2J) is
+ *     free. Counts may only drop, so the list is a visible debt ledger, not a permanent exemption.
+ *
+ * What it does NOT claim: that the app-authored constants are themselves ReDoS-free. They are not
+ * rule data — an author wrote them and a reviewer read them — and every one of them today is a
+ * bounded, linear shape. Widening that judgement into an automated check is out of scope; keeping
+ * *untrusted* patterns off that engine entirely is the property this file defends.
+ */
+class RuleRegexEngineGuardTest {
+
+    /**
+     * Files in the rule package permitted to construct an app-authored Kotlin [Regex], with the
+     * number of constructions each carries today. **These numbers may only go down.**
+     */
+    private val appAuthoredConstants: Map<String, Int> = mapOf(
+        // The `nextSiblingMatchingRegex(<pattern>[, <n>])` navigate-spec parser (#1029) — it reads
+        // the rule's own SYNTAX, not the rule's pattern; the pattern it extracts goes to compileRegex.
+        "CompilerHelpers.kt" to 1,
+        // Whitespace collapse for the customer-name canonical key (#733).
+        "CustomerNameKey.kt" to 1,
+        // The `{field}` dedupeKey template + the control-character strip (#427).
+        "Ruleset.kt" to 2,
+        // The parse transforms' own vocabulary (miles/minutes/items/time-of-day/glyph currency).
+        "TransformRegistry.kt" to 9,
+    )
+
+    private val ruleSourceDir: File by lazy {
+        File(locateRepoRoot(), "core/pipeline/src/main/java/cloud/trotter/dashbuddy/core/pipeline/rules")
+    }
+
+    @Test
+    fun `the rule package never references java_util_regex`() {
+        val problems = scan().flatMap { f ->
+            f.javaUtilRegexLines.map { "${f.name}:$it: java.util.regex reference" } +
+                f.jdkRouteLines.map { "${f.name}:$it — the java.util.regex route" }
+        }
+        assertTrue(
+            "The rule engine must not reach the JDK/ICU regex engine (#1053): rule-authored " +
+                "patterns compile onto RE2J through RegexSafety, whose linear-time bound is the " +
+                "whole defence. Problems:\n" + problems.joinToString("\n"),
+            problems.isEmpty(),
+        )
+    }
+
+    @Test
+    fun `every Regex construction in the rule package takes a string literal`() {
+        val problems = scan().flatMap { f ->
+            f.dynamicConstructions.map {
+                "${f.name}:$it: Regex(...) built from a non-literal — a rule-authored pattern must " +
+                    "go through RegexSafety.compileRegex (#1053)"
+            }
+        }
+        assertTrue(
+            "A pattern that came from rule JSON must never be compiled onto a backtracking " +
+                "engine — that is the #1053 boundary, and a hang it reopens is invisible to every " +
+                "test that does not feed it a pumping input. Problems:\n" + problems.joinToString("\n"),
+            problems.isEmpty(),
+        )
+    }
+
+    @Test
+    fun `the app-authored constant ledger only burns down`() {
+        val actual = scan().filter { it.literalConstructions > 0 }
+            .associate { it.name to it.literalConstructions }
+
+        val newFiles = actual.keys - appAuthoredConstants.keys
+        assertTrue(
+            "New file(s) in the rule package construct a Kotlin Regex: ${newFiles.sorted()}. " +
+                "If the pattern is app-authored and linear, add it to `appAuthoredConstants` with " +
+                "its count and say why; if it came from rule JSON, route it through " +
+                "RegexSafety.compileRegex instead (#1053).",
+            newFiles.isEmpty(),
+        )
+
+        for ((file, frozen) in appAuthoredConstants.toSortedMap()) {
+            val now = actual[file] ?: 0
+            assertTrue(
+                "$file now constructs $now Kotlin Regex(es), over its frozen ceiling of $frozen. " +
+                    "The ledger only burns down (#1053).",
+                now <= frozen,
+            )
+            if (now < frozen) {
+                // Not a failure — but the ledger must be re-frozen so it keeps ratcheting.
+                assertEquals(
+                    "$file is down to $now Kotlin Regex(es) from $frozen — lower its entry in " +
+                        "`appAuthoredConstants` so the ratchet stays tight (#1053).",
+                    frozen, now,
+                )
+            }
+        }
+    }
+
+    @Test
+    fun `the scan actually reads the rule package`() {
+        // A guard that silently scans nothing is worse than no guard.
+        val files = scan()
+        assertTrue("no .kt files found under ${ruleSourceDir.path}", files.size > 10)
+        assertTrue(
+            "the scanner must see the compileRegex owner",
+            files.any { it.name == "RegexSafety.kt" },
+        )
+    }
+
+    // =========================================================================
+    // The scan
+    // =========================================================================
+
+    private data class Scanned(
+        val name: String,
+        val literalConstructions: Int,
+        val dynamicConstructions: List<Int>,
+        val javaUtilRegexLines: List<Int>,
+        val jdkRouteLines: List<String>,
+    )
+
+    private fun scan(): List<Scanned> =
+        ruleSourceDir.listFiles { f -> f.isFile && f.extension == "kt" }
+            .orEmpty().sortedBy { it.name }.map { scanFile(it) }
+
+    private fun scanFile(file: File): Scanned {
+        val source = file.readText()
+        val code = stripComments(source)
+        var literal = 0
+        val dynamic = mutableListOf<Int>()
+        for (m in KOTLIN_MATCHER.findAll(code)) {
+            val after = code.drop(m.range.last + 1).trimStart()
+            val line = lineOf(code, m.range.first)
+            if (isConstantArgument(after)) literal++ else dynamic += line
+        }
+        val jur = JAVA_UTIL_REGEX.findAll(code).map { lineOf(code, it.range.first) }.toList()
+        val jdk = JDK_ROUTE.findAll(code).map { "${lineOf(code, it.range.first)}: ${it.value.trim()}" }.toList()
+        return Scanned(file.name, literal, dynamic, jur, jdk)
+    }
+
+    /**
+     * Is the argument text starting at [after] a genuine compile-time constant?
+     *
+     * An opening quote is NOT enough (#1053 round 4): `Regex("$pattern")` starts with one and
+     * interpolates a variable straight into the engine — exactly the escape this guard exists to
+     * catch, passing it while keeping the ledger count unchanged. So the literal must also carry no
+     * `${'$'}` interpolation and must not be concatenated onto anything.
+     *
+     * Deliberately simple, in the `TimberTagGuardTest` doctrine: it reads the literal up to its
+     * closing quote and then requires the next non-space character to CLOSE the call (`)` or `,`).
+     * A `+` after the literal is a concatenation and fails, which is stricter than strictly
+     * necessary and is the right direction for a security ratchet.
+     */
+    private fun isConstantArgument(after: String): Boolean {
+        if (after.startsWith("\"\"\"")) {
+            val end = after.indexOf("\"\"\"", 3)
+            if (end < 0) return false
+            if (interpolates(after.substring(3, end))) return false
+            return closesCall(after.drop(end + 3))
+        }
+        if (!after.startsWith("\"")) return false
+        var i = 1
+        val body = StringBuilder()
+        while (i < after.length && after[i] != '"') {
+            if (after[i] == '\\') {
+                i += 2
+                continue
+            }
+            body.append(after[i])
+            i++
+        }
+        if (i >= after.length) return false
+        if (interpolates(body.toString())) return false
+        return closesCall(after.drop(i + 1))
+    }
+
+    /**
+     * A `${'$'}` is interpolation only when a name or `{` follows it. `"\\d+)${'$'}"` ends with a
+     * literal dollar — an anchor, the most ordinary thing a regex can contain — and must not be
+     * mistaken for one.
+     */
+    private fun interpolates(body: String): Boolean {
+        var i = 0
+        while (i < body.length - 1) {
+            if (body[i] == '$' && (body[i + 1] == '{' || body[i + 1].isLetter() || body[i + 1] == '_')) {
+                return true
+            }
+            i++
+        }
+        return false
+    }
+
+    /**
+     * After the literal the call must end — or continue with one of the [ALLOWED_OPERANDS].
+     *
+     * Concatenating a literal onto a shared shape constant is how the SSOTs are composed
+     * (`Regex("\\x24" + CurrencyShape.FIGURE_CORE)` is the #1029 currency shape), so concatenation
+     * cannot be banned outright. But UPPERCASE SPELLING IS NOT `const val` (#1053 round 5): a
+     * reviewer showed that `val PATTERN = patternFromRuleJson; Regex("" + PATTERN)` satisfied a
+     * "last segment is uppercase" rule while putting rule-authored text straight into the engine,
+     * and it kept the file's frozen count unchanged while doing it. So the permitted operands are
+     * **enumerated by name**, and every other one fails — adding a shared shape means adding it
+     * here, deliberately, which is the whole point of a ratchet.
+     */
+    private fun closesCall(rest: String): Boolean {
+        val t = rest.trimStart()
+        if (t.startsWith(")") || t.startsWith(",")) return true
+        if (!t.startsWith("+")) return false
+        val afterPlus = t.drop(1).trimStart()
+        val operand = afterPlus.takeWhile { it.isLetterOrDigit() || it == '_' || it == '.' }
+        if (operand !in ALLOWED_OPERANDS) return false
+        return closesCall(afterPlus.drop(operand.length))
+    }
+
+    /** 1-based line number of [index] in [code] (comment-stripped, so it is an approximation). */
+    private fun lineOf(code: String, index: Int): Int = code.take(index).count { it == '\n' } + 1
+
+    /**
+     * Drop `//` and block comments while KEEPING string literals verbatim, and preserving newlines
+     * so reported line numbers stay usable. KDoc in this very package discusses `java.util.regex`
+     * by name, so scanning raw source would false-positive on prose.
+     */
+    private fun stripComments(text: String): String {
+        val out = StringBuilder(text.length)
+        var i = 0
+        while (i < text.length) {
+            when {
+                text.startsWith("/*", i) -> {
+                    val end = text.indexOf("*/", i + 2)
+                    val stop = if (end < 0) text.length else end + 2
+                    // keep the newlines so line numbers survive
+                    text.substring(i, stop).forEach { if (it == '\n') out.append('\n') }
+                    i = stop
+                }
+                text.startsWith("//", i) -> {
+                    val end = text.indexOf('\n', i)
+                    i = if (end < 0) text.length else end
+                }
+                text.startsWith("\"\"\"", i) -> {
+                    val end = text.indexOf("\"\"\"", i + 3)
+                    val stop = if (end < 0) text.length else end + 3
+                    out.append(text, i, stop)
+                    i = stop
+                }
+                text[i] == '"' -> {
+                    var j = i + 1
+                    while (j < text.length && text[j] != '"') {
+                        if (text[j] == '\\') j++
+                        j++
+                    }
+                    val stop = minOf(j + 1, text.length)
+                    out.append(text, i, stop)
+                    i = stop
+                }
+                else -> { out.append(text[i]); i++ }
+            }
+        }
+        return out.toString()
+    }
+
+    private fun locateRepoRoot(): File {
+        var dir = File(".").absoluteFile.normalize()
+        while (true) {
+            if (File(dir, "settings.gradle.kts").isFile) return dir
+            dir = dir.parentFile ?: error("Could not locate repo root (settings.gradle.kts)")
+        }
+    }
+
+    private companion object {
+        /**
+         * Every way this codebase knows of to get a JDK/Kotlin matcher (#1053 round 2 widened this
+         * from `Regex(` alone):
+         *  - `Regex(…)` — the lookbehind keeps `BoundedRegex(`, the seam's own constructor, and any
+         *    qualified `Foo.Regex(` out of the count;
+         *  - `"…".toRegex()`, `Regex.fromLiteral(…)`;
+         *  - `Pattern.compile(…)` and `.toPattern()` — the `java.util.regex` route, which is also
+         *    caught by [JAVA_UTIL_REGEX] when the import is present but NOT when the name is
+         *    reachable some other way;
+         *  - `.matches(Regex…)` / `.replace(Regex…)` etc. are covered by the `Regex(` arm itself.
+         */
+        /**
+         * Ways to build a **Kotlin** matcher. A string LITERAL argument means app-authored (counted
+         * against the ledger); anything else is a rule-authored pattern escaping the seam.
+         * The lookbehind keeps `BoundedRegex(` — the seam's own constructor — and any qualified
+         * `Foo.Regex(` out of the count.
+         */
+        val KOTLIN_MATCHER = Regex(
+            """(?<![A-Za-z0-9_.])Regex\s*\(""" +
+                """|\.toRegex\s*\(""" +
+                """|(?<![A-Za-z0-9_.])Regex\.fromLiteral\s*\(""",
+        )
+
+        /**
+         * The `java.util.regex` route, forbidden outright regardless of what it is handed: it is
+         * the engine whose host/device divergence bit #909 and whose backtracking #1053 exists to
+         * keep away from rule data. `.toPattern()` is here because it is how a `Regex` is *turned
+         * into* one — the exact call this PR removed from `RuleCompiler`.
+         */
+        val JDK_ROUTE = Regex(
+            """(?<![A-Za-z0-9_.])Pattern\.compile\s*\(|\.toPattern\s*\(""",
+        )
+
+        val JAVA_UTIL_REGEX = Regex("""java\.util\.regex""")
+
+        /**
+         * The ONLY symbols a Kotlin `Regex(…)` in the rule package may be concatenated with.
+         *
+         * Each is a `const val` holding a shape this repo authored, so it cannot carry a value from
+         * rule JSON. Enumerated rather than pattern-matched on spelling: a `val` named in constant
+         * case is not a `const val`, and the difference is exactly the escape this guard exists to
+         * catch. Adding one is a deliberate edit here.
+         */
+        val ALLOWED_OPERANDS = setOf(
+            // #1029 — the one definition of "a well-formed currency figure", shared with the rules.
+            "CurrencyShape.FIGURE_CORE",
+        )
+    }
+}

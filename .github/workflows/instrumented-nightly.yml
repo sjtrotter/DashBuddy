@@ -1,6 +1,6 @@
 # #939 — the instrumented tier PR CI structurally cannot cover.
 #
-# Two device-class blind spots exist today, both admitted in their own guard's docs:
+# Three device-class blind spots exist today, each admitted in its own guard's docs:
 #   1. The 8 real MigrationTestHelper cases under core/database/src/androidTest (7 per-step
 #      AnalyticsMigrationNtoMTest + the full-chain MigrationTest) require an on-disk SQLite DB
 #      via the framework factory — instrumented-only, and with the destructive-fallback retired
@@ -12,6 +12,12 @@
 #      lists what it can't see (concatenated/variable patterns, `Pattern.compile`). Only a real
 #      Android device/emulator runs the actual ICU regex engine PR CI (Robolectric, host JVM)
 #      never touches.
+#   3. :core:pipeline's RuleRegexIsLinearTimeTest (#1053) — rule-authored patterns run on RE2J,
+#      whose linear-time bound replaced a 200 ms watchdog that could never fire on ART (ICU takes
+#      the match natively and exposes no timeout). RE2J is pure Java, so the host tests are already
+#      faithful; this one runs the headline catastrophic pattern on the DEVICE engine so the claim
+#      is observed rather than reasoned about — the provenance case for the bound the whole change
+#      rests on.
 #
 # This is a NIGHTLY (not PR-gating) emulator job — reactivecircus/android-emulator-runner is slow
 # and occasionally flaky, which is exactly why it doesn't belong on the PR path. A red run here is
@@ -71,7 +77,7 @@ jobs:
           # No target specified — default (google_apis) matches minSdk 30 (#793); the migration
           # tests and app instrumented tests need no Play Services surface.
           disable-animations: true
-          script: ./gradlew :core:database:connectedAndroidTest :app:connectedAndroidTest
+          script: ./gradlew :core:database:connectedAndroidTest :core:pipeline:connectedAndroidTest :app:connectedAndroidTest
 
       - name: Upload instrumented test reports
         if: ${{ failure() }}
@@ -93,6 +99,7 @@ jobs:
             echo "- the Room migration chain (MigrationTestHelper, core/database/src/androidTest)"
             echo "- a real ICU-backed regex engine (the #909 guard's admitted blind spot —"
             echo "  IcuRegexGuardTest is a source scan, not an execution test)"
+            echo "- the #1053 linear-time bound on the DEVICE engine (RuleRegexIsLinearTimeTest)"
             echo
             echo "A red run here is a device-class failure PR CI structurally cannot see."
             echo "Download the reports artifact above and investigate before the next dash."

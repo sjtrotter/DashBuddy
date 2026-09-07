@@ -163,8 +163,8 @@ internal object PredicateCompiler {
             // FOLLOWING sibling is the city/ST/ZIP line, which DOES have a stable
             // shape — so the anchor is a regex on the next sibling's text. Text
             // shape is rule DATA (no platform literal, principle 8); the pattern
-            // runs through the same [compileRegex] ReDoS/length guard as
-            // `hasTextMatchesRegex`. Redaction evaluates every entry against the
+            // runs through the same [compileRegex] length/parse seam as
+            // `hasTextMatchesRegex`, onto the same linear-time engine (#1053). Redaction evaluates every entry against the
             // ORIGINAL tree (the mask is applied to a copy), so a sibling that is
             // itself masked by another entry still reads raw here.
             "hasFollowingSiblingTextMatchesRegex" -> {
