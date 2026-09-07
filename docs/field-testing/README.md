@@ -106,7 +106,9 @@ was found **broken-in-part** (raw PII in capture envelopes) and moved to that en
      firing for a drop whose completion was never folded).
   5. #1073: an Offline/dash-end straight off a receipt still re-prices it (log:
      `#1033 receipt re-price: job …, 1 drop(s)`) — end a dash from the delivery-summary screen
-     with a late expansion and watch for that line. And on a STACKED job, no job may be paid more
+     with a late expansion and watch for that line. EXCEPTION (#1084): if the machine never saw
+     that drop ARRIVE (no arrival frame) and the dash ends before the retire grace, the correction is
+     refused by design and the row keeps its first pricing — not a bug. And on a STACKED job, no job may be paid more
      than its receipt says. Per `jobId`, compare the machine-priced rows against the last figure the
      machine stated for that job:
 

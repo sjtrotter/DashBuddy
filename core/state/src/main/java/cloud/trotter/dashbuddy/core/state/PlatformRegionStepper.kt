@@ -721,8 +721,8 @@ class PlatformRegionStepper @Inject constructor() {
                 // uses — the old recentTasks-only stamp lagged the commit by
                 // one frame and double-fired the receipt bubble on the
                 // expanded re-observation. Since #1073 round 14 BOTH read the
-                // one [receiptSubjectTaskId] resolver, which additionally
-                // refuses a pickup and an un-arrived drop.
+                // one [receiptSubjectTaskId] resolver (the active dropoff first,
+                // arrival or not; else the job's last completed one; never a pickup).
                 val postTaskTaskId = r.receiptSubjectTaskId()
                 // #630 R3: never let a COLLAPSED re-render (parsedPay == null) clobber an already-
                 // captured EXPANDED receipt for the SAME announced task. A PostTask re-entry (e.g.

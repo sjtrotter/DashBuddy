@@ -345,9 +345,11 @@ internal fun PlatformRegionStepper.decideReceiptReprice(
     // while an un-arrived drop is active makes THAT drop the anchor (#1081), and a dash end on the
     // very next frame would then re-price the job's genuinely delivered siblings DOWN to make room
     // for it. Fail-null (#745): the cost is the rare genuine receipt for a drop with neither arrival
-    // nor completion observed, followed immediately by a dash end — that row keeps its #691
-    // estimate — and what it buys is that no delivered sibling is ever re-priced for a drop the
-    // machine has no evidence was delivered.
+    // nor completion observed, followed immediately by a dash end — that row keeps whatever its
+    // FIRST completion carried (a collapsed receipt's `RECEIPT_TOTAL`, a #691 estimate, or `NONE`),
+    // and because the anchor must survive the denominator the refusal also withholds the correction
+    // from its covered siblings (#1084) — and what it buys is that no delivered sibling is ever
+    // re-priced for a drop the machine has no evidence was delivered.
     val retirePending = region.pendingDestructive?.kind == DestructiveKind.TASK_RETIRE
     val widened = region.activeTask?.takeIf {
         mintRanForJob && it.taskId == anchor && it.jobId == mark.jobId && it.isAccountableDropoff &&

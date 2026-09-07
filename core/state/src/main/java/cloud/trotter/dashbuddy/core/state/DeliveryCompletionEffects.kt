@@ -56,8 +56,10 @@ internal fun EffectMap.diffDeliveryCompletion(
             // the PRE-step region — the delivered task is still ACTIVE there while its retire grace
             // runs (#431 pt 2), and already in `recentTasks` when it retired on this very step. The
             // resolver is job-scoped (#518: a PRIOR job's stale drop can never be the fallback — the
-            // cross-job leak, db seq 117/100) and refuses an UN-ARRIVED drop outright, which is what
-            // stops a re-shown receipt from minting the next job's not-yet-reached delivery.
+            // cross-job leak, db seq 117/100) and names the ACTIVE dropoff first, arrival or not — the
+            // field renders deliveries with no arrival frame. A false `post:task` frame while an
+            // un-arrived drop is active can therefore still complete it on this exit: pre-existing,
+            // tracked as #1081 (three discriminators tried and refuted in #1075 rounds 14–16).
             //
             // #596 amdt 2 survives as its own guard: when there is genuinely nothing being completed
             // on this exit — job already closed by T1 on a prior step, no active task, no retire
@@ -113,8 +115,8 @@ internal fun EffectMap.diffDeliveryCompletion(
             // left to sweep. A delivered, arrived drop therefore ALWAYS mints here, exactly as it
             // did before — only its `dropRealizedPay` and the receipt on its payload are
             // coverage-gated below, so an uncovered drop folds UNPRICED rather than unrecorded.
-            // Fabricating an un-arrived drop is prevented by the SUBJECT rule above, never by
-            // coverage.
+            // Coverage never decides WHICH drop completes — that is the subject's job, and its
+            // un-arrived-drop residual is #1081.
             val coveredTaskIds = p.lastPostTaskCoverage?.taskIds
             val describedByReceipt =
                 completedTask != null && coveredTaskIds?.contains(completedTask.taskId) == true
