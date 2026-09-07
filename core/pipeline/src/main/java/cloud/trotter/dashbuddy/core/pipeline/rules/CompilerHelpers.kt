@@ -77,9 +77,10 @@ internal fun compileNavigation(navSpec: JsonElement): (UiNode) -> UiNode? {
         // Siblings are walked by REFERENTIAL identity ([UiNode.followingSiblings]), not
         // `sibling(offset)`'s structural `indexOf`: a flattened row routinely holds twin blank
         // wrappers, and a structural lookup would silently start the scan from the wrong node.
-        // The pattern goes through [RegexSafety] here, at load time,
-        // so an over-long/ReDoS-prone pattern is a loud [RuleCompileException] and never a
-        // hot-path hang. Fail-null when nothing matches.
+        // The pattern goes through [RegexSafety] here, at load time, so an over-long or
+        // unparseable pattern is a loud [RuleCompileException]; the match itself cannot hang the
+        // hot path because it runs on a non-backtracking engine (#1053). Fail-null when nothing
+        // matches.
         nav.startsWith("nextSiblingMatchingRegex(") -> {
             val arg = nav.removePrefix("nextSiblingMatchingRegex(").removeSuffix(")")
             val capMatch = SIBLING_SCAN_CAP.matchEntire(arg)
@@ -133,8 +134,8 @@ internal fun resolveLiteral(json: JsonElement): Any? = when (json) {
 }
 
 /**
- * Compile a rule-supplied regex through the [RegexSafety] guard (length cap
- * + ReDoS rejection, #418). [RuleCompiler.compileRegex] is the facade's own
+ * Compile a rule-supplied regex through the [RegexSafety] seam (length cap + fail-loud
+ * parsing, #418/#1053). [RuleCompiler.compileRegex] is the facade's own
  * one-line forward to [RegexSafety] (unchanged by this extraction); this
  * package-level twin is what [PredicateCompiler] and [ParseExpressionCompiler]
  * call directly so neither needs a dependency on the [RuleCompiler] facade —

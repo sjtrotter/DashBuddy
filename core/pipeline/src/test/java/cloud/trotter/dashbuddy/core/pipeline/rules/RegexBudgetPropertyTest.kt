@@ -8,85 +8,74 @@ import io.kotest.property.checkAll
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertTrue
 import org.junit.Test
-import java.util.concurrent.Executors
-import java.util.concurrent.TimeUnit
-import java.util.concurrent.TimeoutException
 
 /**
- * #590 🔴 Invariant 2 — an ACCEPTED rule regex has BOUNDED match time.
+ * #590 🔴 Invariant 2, re-based on #1053 — an ACCEPTED rule regex has BOUNDED match time.
  *
- * [RegexSafety] rejects the nested-unbounded ReDoS family at COMPILE time, but
- * its own KDoc admits Kotlin [Regex] has no match timeout and the structural
- * heuristic is not sound on every catastrophic shape. Any pattern that evades it
- * runs unbounded on the per-event classification thread.
+ * The invariant is unchanged; what changed is that it is now **true**. The original version proved
+ * only that a 200 ms watchdog fired on the host JVM — and #1053 established the watchdog could
+ * never fire on Android at all, because `Matcher.reset(CharSequence)` stringifies its input and
+ * hands the match to native ICU, which exposes no timeout to `java.util.regex`. So the property was
+ * being asserted in the one place it did not need to hold.
  *
- * Red-first observation (pre-[BoundedRegex] probe): the compile heuristic
- * ACCEPTS all four soundness-catalog patterns — `(a|aa)+$`, `(\w+)\1+`,
- * `(a?)*b`, `(.*a){20}` — yet running the RAW `Regex` of `(a|aa)+$` and `(a?)*b`
- * against a ~3 000-char pumping input threw `java.lang.StackOverflowError` (Java
- * regex recurses per repetition) — an Error escaping every downstream
- * Exception-only catch = a fail-OPEN crash of the classification thread. The fix
- * routes every rule-authored match through [BoundedRegex] (interrupt watchdog +
- * StackOverflowError catch, fail-closed no-match); the same patterns then return
- * in single-digit ms.
+ * Rule patterns now compile onto RE2J (see [BoundedRegex]), a non-backtracking engine, so the
+ * property is structural and the assertion can be direct: **generated patterns match in bounded
+ * wall-clock time**, measured on the calling thread with no watchdog to hide behind. The generator
+ * is deliberately biased toward the catastrophic shapes — ambiguous alternation under an outer
+ * quantifier, optional-inside-star — that a backtracking engine explodes on, and that the retired
+ * compile-time heuristic could not detect.
  *
- * **Determinism (#878).** The seed below pins PR CI, so a failure is a reproducible
- * finding rather than a dice roll; bump it **deliberately** to explore new samples.
- * Unseeded breadth lives on the `-Ddashbuddy.propExplore=true` path ([PropSeeds]).
+ * **Determinism (#878).** The seed below pins PR CI, so a failure is a reproducible finding rather
+ * than a dice roll; bump it **deliberately** to explore new samples. Unseeded breadth lives on the
+ * `-Ddashbuddy.propExplore=true` path ([PropSeeds]).
  */
 class RegexBudgetPropertyTest {
 
     private companion object {
         /** #878 pinned seed — pins PR CI. Bump deliberately to explore new samples. */
         const val SEED = 0x0590_0002L
+
+        /**
+         * Wall-clock ceiling for a single match. Linear beats exponential by many orders of
+         * magnitude on these inputs, so this is a cushion for a cold JIT on shared CI, not a fit.
+         */
+        const val BUDGET_MS = 50L
     }
 
-    private val catalog = listOf("(a|aa)+$", "(\\w+)\\1+", "(a?)*b", "(.*a){20}")
+    private val catalog = listOf("(a|aa)+$", "(a?)*b", "(.*a){20}", "(a+)+$", "(\\d+\\s*)+")
 
     /** A pumping amplifier: a long run of the class + a non-matching tail. */
     private fun pumpingInput(): String = "a".repeat(4_000) + "!"
 
     /**
-     * Run [regex] against [input] on a watchdog thread; true iff it finished
-     * within [budgetMs]. [BoundedRegex]'s own 200 ms budget should always beat
-     * this 1 s outer net — a timeout here means the runtime guard failed.
+     * Match [regex] against [input] on THIS thread and return the elapsed milliseconds. No worker,
+     * no watchdog: a bound that needs a second thread to observe is exactly the bound #1053 found
+     * to be unenforceable where it mattered. If the engine could backtrack, this call would simply
+     * never return — which is a louder failure than a timeout, and an honest one.
      */
-    private fun matchWithinBudget(regex: BoundedRegex, input: CharSequence, budgetMs: Long = 1_000): Boolean {
-        val exec = Executors.newSingleThreadExecutor()
-        return try {
-            val f = exec.submit<Boolean> { regex.containsMatchIn(input) }
-            try {
-                f.get(budgetMs, TimeUnit.MILLISECONDS)
-                true
-            } catch (e: TimeoutException) {
-                f.cancel(true)
-                false
-            }
-        } finally {
-            exec.shutdownNow()
-        }
+    private fun matchMillis(regex: BoundedRegex, input: CharSequence): Long {
+        regex.containsMatchIn("a") // warm the engine; measure the match, not class loading
+        val start = System.nanoTime()
+        regex.containsMatchIn(input)
+        return (System.nanoTime() - start) / 1_000_000
     }
 
     @Test
-    fun `soundness catalog - each pattern is rejected or provably bounded`() {
+    fun `soundness catalog - every shape a heuristic cannot catch is provably bounded`() {
         for (pattern in catalog) {
-            val bounded = try {
-                RegexSafety.compileRegex(pattern)
-            } catch (e: RuleCompileException) {
-                continue // rejected at compile — the other acceptable arm
-            }
-            // Accepted by the heuristic ⇒ the runtime budget must bound it.
+            val bounded = RuleCompiler.compileRegex(pattern) // must COMPILE — nothing rejects these now
+            val ms = matchMillis(bounded, pumpingInput())
             assertTrue(
-                "accepted catalog pattern <$pattern> did not bound its match",
-                matchWithinBudget(bounded, pumpingInput()),
+                "catalog pattern <$pattern> took ${ms}ms, over the ${BUDGET_MS}ms bound",
+                ms < BUDGET_MS,
             )
         }
     }
 
     // --- Pattern grammar: well-formed regexes biased toward catastrophic shapes
-    //     (ambiguous alternation + outer quantifier, optional-inside-star). Most
-    //     nested-unbounded shapes are rejected by RegexSafety; the survivors are
-    //     what the property must prove bounded. --------------------------------
+    //     (ambiguous alternation + outer quantifier, optional-inside-star). Under the old
+    //     heuristic most of these were rejected at compile and the property never saw them;
+    //     RE2J accepts them all, so every sample is now a real measurement. ------------------
 
     private val atom = Arb.element("a", "b", "\\w", "\\d", ".")
     private val quant = Arb.element("", "*", "+", "?", "{2}", "{2,}")
@@ -106,14 +95,12 @@ class RegexBudgetPropertyTest {
             val body = shape.joinToString("") { if (it == 0) u else g }
             val pat = body + anchor
             val bounded = try {
-                RegexSafety.compileRegex(pat)
+                RuleCompiler.compileRegex(pat)
             } catch (e: RuleCompileException) {
-                return@checkAll // rejected/invalid — nothing to bound
+                return@checkAll // an unparseable draw (e.g. a bare `{2,}` head) — nothing to bound
             }
-            assertTrue(
-                "accepted pattern <$pat> did not bound its match within the watchdog",
-                matchWithinBudget(bounded, pumpingInput()),
-            )
+            val ms = matchMillis(bounded, pumpingInput())
+            assertTrue("accepted pattern <$pat> took ${ms}ms, over the ${BUDGET_MS}ms bound", ms < BUDGET_MS)
         }
     }
 }

@@ -328,11 +328,13 @@ class RuleCompilerTest {
     }
 
     @Test
-    fun `hasFollowingSiblingTextMatchesRegex rejects a ReDoS-prone pattern at compile time`() {
-        // The new predicate routes through the SAME RegexSafety guard as hasTextMatchesRegex.
+    fun `hasFollowingSiblingTextMatchesRegex rejects an RE2-unsupported pattern at compile time`() {
+        // The new predicate routes through the SAME RegexSafety seam as hasTextMatchesRegex.
+        // #1053: a nested-unbounded shape is no longer a rejection (RE2J cannot backtrack); what is
+        // rejected is a construct the linear-time engine does not have.
         try {
-            RuleCompiler.compileNodePred(json("hasFollowingSiblingTextMatchesRegex" to "(a+)+b"))
-            throw AssertionError("expected a RuleCompileException for a nested-unbounded pattern")
+            RuleCompiler.compileNodePred(json("hasFollowingSiblingTextMatchesRegex" to "(?!a)b"))
+            throw AssertionError("expected a RuleCompileException for a lookaround pattern")
         } catch (e: RuleCompileException) {
             assertTrue(e.message!!.isNotBlank())
         }
