@@ -57,12 +57,24 @@ one whose worst case is known.
 
 The cost is syntax. **No lookaround** (`(?!…)`, `(?=…)`, `(?<…)`), **no backreferences**, no
 possessive or atomic groups. Everything this ruleset uses is supported: character classes,
-`\d\s\w\S`, `\b` (ASCII word boundary), `\p{L}`, lazy quantifiers, `(?:…)`, numbered capture
-groups, `^`/`$`. Two behaviours differ from the JVM/ICU engines: `$` matches only at end of **text**
-(not before a trailing newline), and `\b` is ASCII-only — neither is exercised by this English-only
-ruleset. Patterns are case-**insensitive** and capped at 200 chars; an over-long or unsupported
-pattern fails the rule LOAD loudly, per file, so a bad pattern can never degrade quietly into one
-that just never matches. See `docs/adr/ADR-0010-linear-time-rule-regex.md`.
+`\d\s\w\S`, `\b`, `\p{L}`, lazy quantifiers, `(?:…)`, numbered capture groups, `^`/`$`.
+
+Write `\d`, `\s` and `\w` exactly as you always have: the app **translates them to Unicode-aware
+RE2 classes at compile** (`\d` → `\p{Nd}`, `\s` → `[\s\p{Z}]`, `\w` → `[\p{L}\p{N}_]`), because
+Android's ICU-backed engine has always read them that way and letting them narrow to ASCII silently
+broke two redacts on the device while every host test stayed green. Two residuals: `$` matches only
+at end of **text** (not before a trailing newline), and `\b` is ASCII-only — there is no Unicode form
+to translate it to, and every `\b` here sits against an ASCII word (`mi\b`, `\bby`, `\bgate`). `\S`
+and `\W` **inside** a character class are rejected outright, since a negated union cannot be a class
+member.
+
+Patterns are case-**insensitive** and bounded at load: 200 chars, no single repeat over **64**, the
+product of NESTED repeats at most **4 096**, at most **16** nested groups. Those repeat caps are not
+about match time — they bound COMPILE cost, which RE2J does not bound itself: `(a{1000}){1000}` is
+fifteen characters and a million instructions, and rule load happens on the device. Anything
+over-long, over-sized, too deep, or unsupported fails the rule LOAD loudly, per file, so a bad
+pattern can never degrade quietly into one that just never matches. See
+`docs/adr/ADR-0010-linear-time-rule-regex.md`.
 
 ## Locale scope: this ruleset is English-only (#938)
 

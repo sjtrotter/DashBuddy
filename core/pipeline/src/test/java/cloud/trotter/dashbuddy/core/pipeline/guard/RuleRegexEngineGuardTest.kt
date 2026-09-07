@@ -20,9 +20,11 @@ import java.io.File
  * predictable scanner over the source text, with a **frozen allowlist that can only burn down**.
  * Three rules:
  *
- *  1. **No `java.util.regex`** anywhere in the rule package. The JDK/ICU engine is exactly what the
+ *  1. **No `java.util.regex`** anywhere in the rule package — neither the package name nor its two
+ *     entry points, `Pattern.compile(…)` and `.toPattern()`. The JDK/ICU engine is exactly what the
  *     seam exists to keep out (and it is the engine whose host/device divergence bit #909).
- *  2. **Every `Regex(…)` / `.toRegex()` construction takes a STRING LITERAL.** That is the
+ *  2. **Every `Regex(…)` / `.toRegex()` / `Regex.fromLiteral(…)` construction takes a STRING
+ *     LITERAL.** That is the
  *     structural line between an *app-authored constant* — a pattern this repo wrote, reviewed, and
  *     can reason about, matching against text it already trusts to be small — and a *rule-authored*
  *     one, which arrives as a value from JSON (today from assets; tomorrow, #192/#640, from a CDN)
@@ -60,8 +62,10 @@ class RuleRegexEngineGuardTest {
 
     @Test
     fun `the rule package never references java_util_regex`() {
-        val problems = scan().filter { it.javaUtilRegexLines.isNotEmpty() }
-            .flatMap { f -> f.javaUtilRegexLines.map { "${f.name}:$it: java.util.regex reference" } }
+        val problems = scan().flatMap { f ->
+            f.javaUtilRegexLines.map { "${f.name}:$it: java.util.regex reference" } +
+                f.jdkRouteLines.map { "${f.name}:$it — the java.util.regex route" }
+        }
         assertTrue(
             "The rule engine must not reach the JDK/ICU regex engine (#1053): rule-authored " +
                 "patterns compile onto RE2J through RegexSafety, whose linear-time bound is the " +
@@ -138,6 +142,7 @@ class RuleRegexEngineGuardTest {
         val literalConstructions: Int,
         val dynamicConstructions: List<Int>,
         val javaUtilRegexLines: List<Int>,
+        val jdkRouteLines: List<String>,
     )
 
     private fun scan(): List<Scanned> =
@@ -149,13 +154,14 @@ class RuleRegexEngineGuardTest {
         val code = stripComments(source)
         var literal = 0
         val dynamic = mutableListOf<Int>()
-        for (m in CONSTRUCTION.findAll(code)) {
+        for (m in KOTLIN_MATCHER.findAll(code)) {
             val after = code.drop(m.range.last + 1).trimStart()
             val line = lineOf(code, m.range.first)
             if (after.startsWith("\"")) literal++ else dynamic += line
         }
         val jur = JAVA_UTIL_REGEX.findAll(code).map { lineOf(code, it.range.first) }.toList()
-        return Scanned(file.name, literal, dynamic, jur)
+        val jdk = JDK_ROUTE.findAll(code).map { "${lineOf(code, it.range.first)}: ${it.value.trim()}" }.toList()
+        return Scanned(file.name, literal, dynamic, jur, jdk)
     }
 
     /** 1-based line number of [index] in [code] (comment-stripped, so it is an approximation). */
@@ -214,10 +220,38 @@ class RuleRegexEngineGuardTest {
 
     private companion object {
         /**
-         * A Kotlin `Regex(` construction or a `.toRegex(` call. The lookbehind keeps `BoundedRegex(`
-         * — the seam's own constructor — and any qualified `Foo.Regex(` out of the count.
+         * Every way this codebase knows of to get a JDK/Kotlin matcher (#1053 round 2 widened this
+         * from `Regex(` alone):
+         *  - `Regex(…)` — the lookbehind keeps `BoundedRegex(`, the seam's own constructor, and any
+         *    qualified `Foo.Regex(` out of the count;
+         *  - `"…".toRegex()`, `Regex.fromLiteral(…)`;
+         *  - `Pattern.compile(…)` and `.toPattern()` — the `java.util.regex` route, which is also
+         *    caught by [JAVA_UTIL_REGEX] when the import is present but NOT when the name is
+         *    reachable some other way;
+         *  - `.matches(Regex…)` / `.replace(Regex…)` etc. are covered by the `Regex(` arm itself.
          */
-        val CONSTRUCTION = Regex("""(?<![A-Za-z0-9_.])Regex\s*\(|\.toRegex\s*\(""")
+        /**
+         * Ways to build a **Kotlin** matcher. A string LITERAL argument means app-authored (counted
+         * against the ledger); anything else is a rule-authored pattern escaping the seam.
+         * The lookbehind keeps `BoundedRegex(` — the seam's own constructor — and any qualified
+         * `Foo.Regex(` out of the count.
+         */
+        val KOTLIN_MATCHER = Regex(
+            """(?<![A-Za-z0-9_.])Regex\s*\(""" +
+                """|\.toRegex\s*\(""" +
+                """|(?<![A-Za-z0-9_.])Regex\.fromLiteral\s*\(""",
+        )
+
+        /**
+         * The `java.util.regex` route, forbidden outright regardless of what it is handed: it is
+         * the engine whose host/device divergence bit #909 and whose backtracking #1053 exists to
+         * keep away from rule data. `.toPattern()` is here because it is how a `Regex` is *turned
+         * into* one — the exact call this PR removed from `RuleCompiler`.
+         */
+        val JDK_ROUTE = Regex(
+            """(?<![A-Za-z0-9_.])Pattern\.compile\s*\(|\.toPattern\s*\(""",
+        )
+
         val JAVA_UTIL_REGEX = Regex("""java\.util\.regex""")
     }
 }

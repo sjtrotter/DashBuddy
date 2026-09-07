@@ -366,11 +366,22 @@ with `all`/`any`/`not` at the node level. Every predicate object carries exactly
 > through the one `RegexSafety.compileRegex` seam onto **RE2J**, a non-backtracking engine — so an
 > accepted pattern's match time is linear in `input × pattern` by construction. The cost is
 > **RE2 syntax**: no lookaround (`(?!…)`, `(?=…)`, `(?<…)`), no backreferences, no possessive or
-> atomic groups. Everything the rulesets use is supported — character classes, `\d\s\w\S`, `\b`
-> (ASCII), `\p{L}`, lazy quantifiers, `(?:…)`, numbered capture groups, anchors. Two behaviours
-> differ from the JDK engine: `$` is end-of-**text** (it does not match before a trailing newline),
-> and `\b` is ASCII-only. Patterns are case-**insensitive** and capped at 200 chars
-> (`MAX_REGEX_LENGTH`, #418); an over-long or unsupported pattern fails the rule LOAD loudly.
+> atomic groups. Everything the rulesets use is supported — character classes, `\d\s\w\S`, `\b`,
+> `\p{L}`, lazy quantifiers, `(?:…)`, numbered capture groups, anchors.
+>
+> `\d`, `\D`, `\s`, `\S`, `\w` and `\W` are **translated to Unicode-aware RE2 classes at compile**
+> (`\d` → `\p{Nd}`, `\s` → `[\s\p{Z}]`, …), so they keep the meaning Android's ICU-backed engine
+> always gave them — write them as you always have. Two things still differ from the JDK engine:
+> `$` is end-of-**text** (it does not match before a trailing newline), and `\b` is ASCII-only
+> (there is no Unicode form to translate it to). `\S`/`\W` **inside** a character class are
+> rejected: a negated union is not a class member.
+>
+> Patterns are case-**insensitive** and bounded at LOAD — 200 chars (`MAX_REGEX_LENGTH`, #418), no
+> single repeat over `MAX_REPEAT` = 64, the product of NESTED repeats at most
+> `MAX_REPEAT_PRODUCT` = 4 096, at most `MAX_GROUP_DEPTH` = 16 nested groups. The repeat caps exist
+> because a linear-time *match* says nothing about *compile* cost and RE2J has no program-size
+> ceiling: `(a{1000}){1000}` is fifteen characters and a million instructions. Anything over-long,
+> over-sized, too deep, or unsupported fails the rule LOAD loudly.
 
 | Predicate                                | Meaning                                                                  | Kotlin equivalent                   |
 |------------------------------------------|--------------------------------------------------------------------------|-------------------------------------|

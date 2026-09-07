@@ -505,21 +505,54 @@ interrupt depended on was never consulted again, and `java.util.regex` reaches n
 The budget held only on the host, i.e. only where it was not needed: the #909 class of defect, one
 layer down. Both are DELETED — the heuristic, the watchdog executor, `InterruptibleCharSequence`,
 `RegexBudgetExceeded` and the `StackOverflowError` catch — and `(a+)+$` is now a legal, safe,
-microsecond pattern. **Bounded ingestion is unchanged** (`MAX_REGEX_LENGTH` 200 chars; an
-unparseable pattern is still a loud per-file `RuleCompileException`); what moved is the TIME bound.
+microsecond pattern. **Bounded ingestion GREW** (round 2): linear MATCH time says nothing about COMPILE cost, and RE2J
+1.8 has no program-size ceiling (the C++ `max_mem` has no equivalent in the port), so
+`(a{1000}){1000}` is 15 chars and 1 002 002 instructions and a 23-char nested repeat OOMs the DEVICE
+at rule load. `RegexSafety` now walks the pattern before RE2J sees it and caps
+`MAX_REPEAT`=64 (any written bound), `MAX_REPEAT_PRODUCT`=4 096 (the product of NESTED repeats; an
+unbounded `*`/`+` counts as 64 — sequential repeats ADD, only nesting multiplies) and
+`MAX_GROUP_DEPTH`=16, each a loud per-file `RuleCompileException`; under them the worst 200-char
+pattern measures 123 010 instructions and 8 ms. **`MAX_REPEAT`=64 is TIGHT** — the corpus's largest
+counted repeat is 60 (the payout store-name `^.{1,60} …`), so `RuleCorpusCompileBudgetTest` prints
+that margin and a rule needing a longer bound raises the constant rather than working around it. The
+`StackOverflowError` catch is also RESTORED (`BoundedRegex.failClosed`, `internal inline` so the
+fail-closed contract is testable): RE2J walks its parse tree recursively at compile, ART's stacks are
+smaller than the host's, and an `Error` escapes every `catch (e: Exception)` downstream — the #909
+death. Honest state: the reviewer's ≤200-char match-time overflow could NOT be reproduced here
+(99-deep nesting matches fine at a 256 KB stack), so it is a defence, not a fix.
 The price is the pattern **language**: rule regexes are RE2 syntax — no lookaround, no
 backreferences, no possessive/atomic groups — which is exactly the language an untrusted CDN rule
 source (#192/#640) needs, one whose worst case is known. The corpus cost was a single pattern:
 uber's `^Going to (?!\d)` → `^Going to (?:\D|$)` (same language, verified identical over 2 842
 corpus strings; it is a boolean predicate, so the zero-width-vs-consuming difference is
-unobservable). Because RE2J is pure Java the SAME engine runs on host and ART, so for rule patterns
-the ICU/JDK divergence is gone and every host regex test is a faithful device test; one instrumented
-spot-check (`RuleRegexIsLinearTimeTest`) runs the headline exploit on ART for provenance. Kotlin
+unobservable). **The Perl classes are TRANSLATED to Unicode RE2 classes at that same seam** (round 2, a Pledge
+fix): Android's `java.util.regex` is ICU-backed and ICU's `\d`/`\s`/`\w` are UNICODE (`\d` is
+`\p{Nd}`, `\s` includes `\p{Z}`) while RE2's are ASCII — so moving to RE2J silently NARROWED every
+rule on the device while the host stayed green, and two redacts regressed: the #885 name shape's
+`\s{1,4}` stops matching a name rendered with a non-breaking space (the customer-name mask never
+fires), and an Uber `Going to <non-ASCII digits>` address falls from the address-masking dropoff rule
+to the redact-LESS pickup rule, which `CustomerTextMarkers` deliberately excludes. So `RegexSafety`
+emits `\d`→`\p{Nd}`, `\D`→`\P{Nd}`, `\s`→`[\s\p{Z}]`, `\S`→`[^\s\p{Z}]`, `\w`→`[\p{L}\p{N}_]`,
+`\W`→`[^\p{L}\p{N}_]` (escape- and class-aware; inside a class the un-bracketed forms, and `\S`/`\W`
+there are REJECTED — a negated union isn't a class member and leaving it ASCII would reopen the gap),
+authors keep writing `\d`, and the byte-SSOT pins are pins on a shape's SOURCE BYTES, not on engine
+semantics, so they are unchanged as written. The length cap is measured on the pattern AS WRITTEN,
+before translation. `\b` is the stated residual — RE2's is ASCII-only with no Unicode form to
+translate to; every corpus `\b` sits against an ASCII word (`mi\b`, `\bby`, `\bgate`, `\bpin`). One
+consequence that looks like a regression and is not: `CurrencyShape`'s `\d` become Unicode so a
+mixed-script `$16.٧٠` now satisfies the money SCAN (its leading `[1-9]` is a literal ASCII range),
+and #1052's code-point rejection in `parseGlyphCurrency` then reads it as NULL — fail-null, never a
+fabricated figure. Because RE2J is pure Java the SAME engine runs on host and ART, so for rule
+patterns the ICU/JDK divergence is gone and every host regex test is a faithful device test; one
+instrumented spot-check (`RuleRegexIsLinearTimeTest`) runs the headline exploit on ART for
+provenance, wired into `instrumented-nightly.yml` as `:core:pipeline:connectedAndroidTest`. Kotlin
 `MatchResult` no longer escapes the seam — `find` returns a `BoundedMatch` mirroring Kotlin's
 conventions (`groupValues` `""`/`groups` null for a non-participating group) and `groupCount()`
 replaced the compile-time `toPattern()` — and `RuleRegexEngineGuardTest` source-scans the rule
-package (no `java.util.regex`; every `Regex(…)` takes a string LITERAL, never a value from rule
-JSON; the app-authored constants sit in a frozen count ledger that only burns down). Known semantic
+package (no `java.util.regex` — neither the package name nor `Pattern.compile(…)`/`.toPattern()`;
+every `Regex(…)`/`.toRegex()`/`Regex.fromLiteral(…)` takes a string LITERAL, never a value from rule
+JSON; the app-authored constants sit in a frozen count ledger that only burns down), and
+`RuleCorpusCompileBudgetTest` compiles every shipped pattern under a 50 ms load budget. Known semantic
 deltas, all toward one consistent behaviour and none exercised by the corpus: RE2's `$` is
 end-of-text (it does not match before a final newline — a tightening `CurrencyShape` wants), `\b` is
 ASCII (the layer already assumes an English device), `\p{L}` and `(?i)` follow Unicode simple rules.
@@ -1587,9 +1620,12 @@ Every new feature or refactor holds to these — they are forefront design input
    rules:
    - **Treat third-party UI and (eventually) downloaded rules as untrusted input.** The
      accessibility tree comes from another app; once the matchers split (#192) lands, rule JSON
-     comes from a CDN. Both get bounded ingestion (size/depth/node/regex caps), a **linear-time
-     regex engine** so an accepted pattern's match time is bounded by construction rather than by a
-     watchdog (#1053 / ADR-0010, §2), fail-closed
+     comes from a CDN. Both get bounded ingestion (size/depth/node/regex caps — for a rule regex
+     that means length 200 **plus** repeat/product/depth caps, since a linear-time MATCH says
+     nothing about COMPILE cost and RE2J has no program-size ceiling), a **linear-time regex
+     engine** so an accepted pattern's match time is bounded by construction rather than by a
+     watchdog, with the Perl classes translated to Unicode RE2 classes at compile so device
+     semantics are preserved (#1053 / ADR-0010, §2), fail-closed
      validation, and — for any remote rule source — **signature/integrity verification before
      compile** (#416, in-tree): `RulesetVerifier` (ECDSA P-256/SHA-256, no new crypto dep) gates
      `JsonRuleInterpreter.load`, which now accepts only a `VerifiedRulesetBytes` mintable solely by

@@ -1,5 +1,6 @@
 package cloud.trotter.dashbuddy.core.pipeline.rules
 
+import timber.log.Timber
 import com.google.re2j.Pattern as Re2Pattern
 
 /**
@@ -27,13 +28,24 @@ import com.google.re2j.Pattern as Re2Pattern
  *    microsecond match, not a hang, which is why [RegexSafety] no longer carries a ReDoS heuristic;
  *  - the bound is a property of the engine rather than a promise about a timer, so it holds on ART
  *    as well as on the host — and every host unit test of a rule pattern is now a faithful device
- *    test (one instrumented spot-check pins that for provenance);
+ *    test (one instrumented spot-check pins that for provenance), once [RegexSafety] has restored
+ *    the Unicode class semantics ART's ICU engine gave `\d`/`\s`/`\w` before the move;
  *  - the price is RE2 *syntax*: no lookaround, no backreferences. Rule authors get a language whose
  *    worst case is known, which is the language an untrusted CDN rule source (#192/#640) needs.
  *
- * Bounded **ingestion** is unchanged and still lives at the door: [RuleCompiler.MAX_REGEX_LENGTH]
- * caps the pattern, and an unparseable pattern is a loud [RuleCompileException] at load
- * ([RegexSafety.compileRegex]).
+ * ## What the engine does NOT bound, and who does
+ *
+ * Linear *match* time says nothing about *compile* cost, and RE2J 1.8 has no program-size ceiling —
+ * `(a{1000}){1000}` is fifteen characters and 1 002 002 instructions. So bounded ingestion grew a
+ * second half at the door ([RegexSafety]): the pattern-length cap
+ * ([RuleCompiler.MAX_REGEX_LENGTH]) is joined by [RegexSafety.MAX_REPEAT] /
+ * [RegexSafety.MAX_REPEAT_PRODUCT] / [RegexSafety.MAX_GROUP_DEPTH], and an over-long, over-sized,
+ * too-deep or unparseable pattern is a loud [RuleCompileException] at load. The same seam also
+ * translates the Perl classes to Unicode-aware RE2 classes, so a rule means on ART what it meant
+ * before this engine change.
+ *
+ * The one runtime guard kept from #590 is the [failClosed] `StackOverflowError` catch — see its
+ * KDoc for why a non-backtracking engine still gets one.
  *
  * Kotlin [Regex] never escapes this seam — [find] returns a [BoundedMatch], not a `MatchResult` —
  * so the engine behind the rule language stays swappable and no caller can reach a raw matcher.
@@ -42,17 +54,21 @@ import com.google.re2j.Pattern as Re2Pattern
 class BoundedRegex internal constructor(private val pattern: Re2Pattern) {
 
     /** True if [input] contains a match anywhere (the 7 `…MatchesRegex` predicates). */
-    fun containsMatchIn(input: CharSequence): Boolean = pattern.matcher(input).find()
+    fun containsMatchIn(input: CharSequence): Boolean =
+        failClosed(false) { pattern.matcher(input).find() }
 
     /**
      * WHOLE-input match (#1029) — the strict sibling of [containsMatchIn], for a rule that names
      * the exact shape a node's text must have rather than a substring it must contain
      * (`nextSiblingMatchingRegex`).
      */
-    fun matches(input: CharSequence): Boolean = pattern.matcher(input).matches()
+    fun matches(input: CharSequence): Boolean =
+        failClosed(false) { pattern.matcher(input).matches() }
 
     /** The first match in [input], or null. */
-    fun find(input: CharSequence): BoundedMatch? {
+    fun find(input: CharSequence): BoundedMatch? = failClosed(null) { findOrNull(input) }
+
+    private fun findOrNull(input: CharSequence): BoundedMatch? {
         val m = pattern.matcher(input)
         if (!m.find()) return null
         val count = m.groupCount()
@@ -83,6 +99,46 @@ class BoundedRegex internal constructor(private val pattern: Re2Pattern) {
 
     /** The raw pattern string, for logging/debugging. */
     override fun toString(): String = pattern.pattern()
+
+    companion object {
+        /**
+         * Run a match and **fail closed on a [StackOverflowError]** (#1053 round 2).
+         *
+         * The #590 version of this class carried the same catch because the JDK engine recursed
+         * once per repetition; the first #1053 pass removed it on the premise that a
+         * non-backtracking engine cannot recurse deeply. That premise is not safe enough to bet a
+         * subsystem on. RE2J walks the parsed tree recursively when it simplifies and compiles,
+         * ART's thread stacks are smaller than the host JVM's, and a `StackOverflowError` is an
+         * **`Error`** — it escapes every `catch (e: Exception)` downstream and would take the
+         * classification coroutine with it, which is precisely the #909 failure mode
+         * (`SideEffectEngine` catching `Exception` while an `Error` killed the drain worker) and
+         * the #430 one (an unsupervised pipeline crash silencing all sensing).
+         *
+         * The honest state of the evidence, so the next reader can weigh it: the round-2 reviewer
+         * reported a ≤ 200-character pattern that overflows during a match, and it could NOT be
+         * reproduced here — 99-deep nesting (the deepest that fits the length cap) compiles and
+         * matches at a 256 KB stack. So this is a **defence, not a fix for a demonstrated crash**.
+         * It costs one `try` on a path that is already microseconds, and the alternative — being
+         * wrong about it on a device — costs the log. [RegexSafety.MAX_GROUP_DEPTH] bounds the
+         * same risk at load, from the other side.
+         *
+         * The match fails closed: no-match (`false`/`null`), so the frame simply does not recognize
+         * (→ UNKNOWN → scrubbed) rather than crashing the thread, and one WARN fires — a defended
+         * invariant, no rule or PII text (Principle 7).
+         *
+         * `internal` and `inline` so the fail-closed contract is unit-testable directly, without a
+         * pattern that has to actually overflow a real stack to exercise it.
+         */
+        internal inline fun <T> failClosed(default: T, block: () -> T): T =
+            try {
+                block()
+            } catch (e: StackOverflowError) {
+                Timber.tag("Pipeline").w(
+                    "Rule regex match overflowed the stack — failing closed to no-match (#1053)",
+                )
+                default
+            }
+    }
 }
 
 /**

@@ -145,6 +145,16 @@ val importMatchersRules = tasks.register<ImportMatchersRules>("importMatchersRul
     source.from(matchersRules)
 }
 
+// Unit-test path (#1053): this module's own tests read the generated rules off the filesystem —
+// RuleCorpusCompileBudgetTest compiles every shipped pattern through RegexSafety, whose caps and
+// class translation are `internal` and so can only be exercised from inside this module. JVM unit
+// tests do NOT run AGP asset merge, so the import task has to be an explicit predecessor or the
+// generated dir is absent on a clean `:core:pipeline:testDebugUnitTest` (the `:app` build file
+// carries the same wiring for the same reason).
+tasks.withType<Test>().configureEach {
+    dependsOn(importMatchersRules)
+}
+
 // APK path: register the generated dir as an assets source for every variant so
 // AGP merges rules/*.json into the APK and orders the import task before merge.
 androidComponents {
