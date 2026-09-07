@@ -5,15 +5,20 @@ import cloud.trotter.dashbuddy.domain.di.IoDispatcher
 import cloud.trotter.dashbuddy.domain.model.state.StateEvent
 import cloud.trotter.dashbuddy.domain.model.state.TimeoutEvent
 import cloud.trotter.dashbuddy.domain.pipeline.Observation
+import cloud.trotter.dashbuddy.domain.pipeline.ObservationPayload
+import cloud.trotter.dashbuddy.domain.pipeline.TimeoutType
 import cloud.trotter.dashbuddy.domain.state.AppState
+import cloud.trotter.dashbuddy.domain.state.Platform
 import cloud.trotter.dashbuddy.core.pipeline.PipelineV2
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.merge
+import kotlinx.coroutines.flow.onSubscription
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.launch
 import timber.log.Timber
@@ -77,13 +82,28 @@ class StateManagerV2 @Inject constructor(
             // replay, so events arriving during recovery used to be silently lost.
             // They buffer here and process — in arrival order — once restore is done.
             val buffer = Channel<StateEvent>(Channel.UNLIMITED)
+            // #1054 round 4: launching the collector is not the same as it being SUBSCRIBED.
+            // `SideEffectEngine._events` is a `MutableSharedFlow(replay = 0)`, so anything emitted
+            // before the merge actually subscribes goes to zero collectors and is DROPPED —
+            // silently, with no log line and invisible to a recording executor. The recovery
+            // re-arm is exactly the emitter at risk: a grace whose window already elapsed fires at
+            // the 1 ms floor, and if `restoreState` does not happen to suspend long enough on the
+            // DAOs the fire races the subscription and the grace is stranded again, which is the
+            // whole bug this issue exists to close. So wait for it.
+            // The engine's flow is the one at risk: `rearmRecoveredTimers` emits into it and a
+            // fire can come straight back. `onSubscription` runs once THIS collector is registered
+            // with that `SharedFlow` — the real guarantee, since a launched coroutine is not yet a
+            // subscribed one — and awaiting it costs nothing: the merge subscribes on its first
+            // dispatch.
+            val collectorReady = CompletableDeferred<Unit>()
             scope.launch {
                 merge(
                     pipeline.events,
-                    engine.events,
+                    engine.events.onSubscription { collectorReady.complete(Unit) },
                     uiInputChannel.receiveAsFlow(),
                 ).collect { buffer.send(it) }
             }
+            collectorReady.await()
 
             restoreState()
 
@@ -191,40 +211,29 @@ class StateManagerV2 @Inject constructor(
                 return
             }
 
-            // #1029: a parked running-total read is evidence from BEFORE the crash, and nothing
-            // after the restore re-arms its `SESSION_PAY_SETTLE` wake timer — so a restored park
-            // would either sit forever or, on the first frame past its deadline, commit a figure
-            // whose surface has been gone since the process died. It is dropped on BOTH restore
-            // paths — but at the LIVE boundary, not here (#1052): the tail is a faithful replay of
-            // what already happened, so it must run against the snapshot exactly as recorded (a
-            // park whose commit timer is IN the tail committed live and must commit again;
-            // scrubbing the base changes the replayed result). Dropping from the FINAL state
-            // instead also discards a park a tail frame re-created — whose `ScheduleTimeout` the
-            // recovery fold does execute (it is not an external effect), which would otherwise wake
-            // pre-crash evidence with no fresh screen behind it. The recovery-scheduled timer then
-            // finds no park and no-ops (`handleTimeout`'s `else -> prev`; lazy expiry has nothing
-            // to expire). Fail-null beats fail-wrong (#745).
+            // Both exits below end in `recoveryHygiene(nowMs)` → [finishRestore]: stale EVIDENCE —
+            // the #1029 parked running-total read and the #605 graced resume — is dropped, while the
+            // destructive grace (a decision in flight) is kept, re-based to serve its REMAINING
+            // window live, and re-armed alongside the pause-safety net.
+            // `AppState.recoveryHygiene` states the rule and why each pending falls where it does;
+            // [finishRestore] states why the checkpoint/reconcile/install order is what it is.
             //
-            // And the drop is CHECKPOINTED on both paths below (#1052 round 2): installing the
-            // cleaned state in memory is not enough, because the snapshot on disk still carries the
-            // park. A second restart — with no ordinary snapshot in between, which is the normal
-            // case since neither the cadence nor a major transition need fire — would replay that
-            // same snapshot plus a tail that has GROWN with live frames, one of which lands past
-            // the park's deadline and commits it. `SnapshotStore.checkpoint` writes the cleaned
-            // state at the restored correlation version (snapshot rows REPLACE by that key), making
-            // it the next replay base.
+            // What belongs HERE is only WHERE the hygiene runs: at the LIVE boundary, on the FINAL
+            // state, never on the snapshot the tail replays from (#1052). The tail is a faithful
+            // replay of what already happened, so it must run against the snapshot exactly as
+            // recorded — a park whose commit timer is IN the tail committed live and must commit
+            // again, and scrubbing the base would replay a different history. Scrubbing the final
+            // state instead also covers a pending a TAIL frame re-created; its `ScheduleTimeout` is
+            // never executed (round 5 — `SideEffectEngine` skips a region timer while recovering),
+            // so the replay leaves no coroutine behind for the hygiene to have to chase.
+            // Fail-null beats fail-wrong (#745).
             val base = restored.state
 
             // Tail-replay observations after the snapshot, in cv order (#352)
             val tail = journal.tailAfter(restored.correlationVersion)
             if (tail.isEmpty()) {
                 Timber.i("Restored from snapshot at cv=%d, no tail", restored.correlationVersion)
-                val cleaned = base.droppingSessionPayParks()
-                // #1052: the drop is only DURABLE if the cleaned state is the next replay base.
-                checkpointRecovery(cleaned)
-                _state.value = cleaned
-                // #438 B5: recovered a non-fresh state → reconcile the odometer on the first live obs.
-                recoveryReconcilePending = true
+                finishRestore(base)
                 return
             }
 
@@ -257,18 +266,95 @@ class StateManagerV2 @Inject constructor(
                 stamped
             }
 
-            val cleaned = finalState.droppingSessionPayParks()
-            // #1052: same checkpoint on the tail path, at the FINAL correlation version — the tail
-            // it replayed stays in the journal but is now behind the base, so the next restart
-            // starts from the cleaned state instead of replaying the pre-hygiene park again.
-            checkpointRecovery(cleaned)
-            _state.value = cleaned
-            // #438 B5: recovered a non-fresh state → reconcile the odometer on the first live obs.
-            recoveryReconcilePending = true
+            finishRestore(finalState)
             Timber.i("Recovery complete — state at cv=%d", finalState.correlationVersion)
         } catch (e: Exception) {
             Timber.e(e, "State recovery failed — starting fresh")
             _state.value = AppState()
+        }
+    }
+
+    /**
+     * The tail both [restoreState] exits share (#1054 round 3) — order-constrained, so it has one
+     * owner rather than two copies that can drift apart.
+     *
+     * **ONE hygiene pass, and the state it produces is BOTH checkpointed and installed** (#1054
+     * round 6). Round 5 ran it twice — once with a clock read for the checkpoint, once with a later
+     * one for the install — so the served window would start at the live boundary rather than
+     * before the snapshot load and tail replay. That fixed real latency but broke something worse:
+     * the durable replay base then described a DIFFERENT deadline from the one the process was
+     * actually running (102 500 checkpointed vs 106 500 installed), so an observation that was a
+     * no-op live — a neutral timeout at 104 050 — COMMITTED the session end when the next restart
+     * replayed it from that checkpoint. A replay base has to reproduce the decisions made against
+     * the installed state; fixed-point arithmetic after the fold cannot undo a destructive
+     * transition the fold already made.
+     *
+     * The cost is stated rather than engineered away: `nowMs` is read immediately before the
+     * checkpoint, so the CHECKPOINT WRITE's own latency comes out of the served window. That is
+     * ordinarily a few milliseconds against a 2.5–10 s grace, and seconds only if the database is
+     * in a busy-timeout — which is exactly the case round 4's F2 was about, where the whole restore
+     * (snapshot load + tail replay + write) was being deducted. Trading a bounded write latency for
+     * a durable base that tells the truth is the right way round.
+     *
+     * The rest of the order is unchanged: checkpoint first, because dropping stale evidence and
+     * re-basing the grace is only DURABLE if the cleaned state is the next replay base (#1052);
+     * then arm, before `_state.value`, so no live observation can be interleaved between the state
+     * the timers describe and the timers themselves; then arm the #438 B5 odometer reconciliation
+     * for the first live observation, recovery having suppressed the external effects that keep GPS
+     * alive.
+     *
+     * No cancels here since round 5 — `SideEffectEngine` skips a [TimeoutType.REGION_TIMERS] arm
+     * while `recovering == true`, so the replay never armed one to cancel.
+     */
+    private suspend fun finishRestore(restored: AppState) {
+        val cleaned = restored.recoveryHygiene(System.currentTimeMillis())
+        checkpointRecovery(cleaned)
+        rearmRecoveredTimers(cleaned)
+        _state.value = cleaned
+        recoveryReconcilePending = true
+    }
+
+    /**
+     * Re-arm the wake timers of what the recovery kept (#1054) — the destructive grace, at the
+     * deadline `recoveryHygiene` re-based so it serves its remaining window live, and the
+     * pause-safety net at the platform's own countdown. [pendingDeadlineTimers] owns that list and
+     * names everything it deliberately omits.
+     *
+     * Without this a restored pending has nothing behind it: `restoreState` installs it straight
+     * from the snapshot, and the tail fold emits a `ScheduleTimeout` only where the TAIL itself
+     * moved a deadline — so an empty or deadline-neutral tail leaves it live with no wake at all. A
+     * `SESSION_END` grace from a dash-summary snapshot then waits for the next admitted observation,
+     * which an offline, backgrounded dash need never produce; a restore into Paused had no timer of
+     * ANY kind before round 4 made the safety deadline state.
+     *
+     * The effect carries the ABSOLUTE deadline and a `GraceWake` identity, and nothing else:
+     * `durationMs` is the 1 ms floor because the engine ignores it whenever `deadlineMs` is set.
+     * That matters here more than anywhere — the engine is a queue, and this emission lands behind
+     * every effect the tail replay just produced, so a duration computed at THIS moment could start
+     * its wait an arbitrary interval later and run its full length late, in exactly the case where
+     * a recovered grace is most overdue. `SideEffectEngine.scheduleTimer` REPLACES by
+     * (type, platform), so a timer the tail already armed is superseded rather than duplicated. One
+     * INFO line, counts only (principle 7).
+     */
+    private fun rearmRecoveredTimers(restored: AppState) {
+        val pendings = restored.pendingDeadlineTimers()
+        if (pendings.isEmpty()) return
+        Timber.tag("StateMachine").i("Recovery re-armed %d grace timers", pendings.size)
+        pendings.forEach { pending ->
+            engine.process(
+                AppEffect.ScheduleTimeout(
+                    // The floor, not a computed remainder (#1054 round 3): `deadlineMs` is set, so
+                    // the engine computes the real wait at scheduling time and this value is never
+                    // read. Computing one here would be dead code pretending to be a fallback.
+                    durationMs = 1L,
+                    type = pending.type,
+                    platform = pending.platform,
+                    payload = ObservationPayload.GraceWake(pending.wake.wakeId),
+                    deadlineMs = pending.wake.deadline,
+                ),
+                recovering = false,
+                correlationVersion = restored.correlationVersion,
+            )
         }
     }
 

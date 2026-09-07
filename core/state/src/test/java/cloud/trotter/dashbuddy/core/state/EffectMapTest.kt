@@ -30,6 +30,7 @@ import cloud.trotter.dashbuddy.domain.state.OfferIntent
 import cloud.trotter.dashbuddy.domain.state.ParsedFields
 import cloud.trotter.dashbuddy.domain.state.PendingDestructive
 import cloud.trotter.dashbuddy.domain.state.PendingOffer
+import cloud.trotter.dashbuddy.domain.state.PendingWake
 import cloud.trotter.dashbuddy.domain.state.Platform
 import cloud.trotter.dashbuddy.domain.state.PlatformRegion
 import cloud.trotter.dashbuddy.domain.state.Regions
@@ -718,8 +719,16 @@ class EffectMapTest {
             platforms = mapOf(platform to onlineRegion),
         ))
 
+        // #1054 round 4: the safety timer is armed off `pauseSafetyDeadline`, which the STEPPER
+        // stamps on this transition — so a hand-built `next` has to carry it to describe the same
+        // edge. (It used to be built inside `diffMode` from the observation's own parsed fields.)
         val next = AppState(regions = Regions(
-            platforms = mapOf(platform to onlineRegion.copy(mode = Mode.Paused)),
+            platforms = mapOf(
+                platform to onlineRegion.copy(
+                    mode = Mode.Paused,
+                    pauseSafety = PendingWake(301_000L, 1L),
+                ),
+            ),
         ))
 
         val effects = effectMap.diff(prev, next, screenObs(
@@ -739,13 +748,20 @@ class EffectMapTest {
     @Test
     fun `resume from pause cancels safety timeout`() {
         val (platform, _) = stateWithPlatform(mode = Mode.Paused, sessionId = "sess-1")
-        val pausedRegion = PlatformRegion(platform, mode = Mode.Paused, session = Session("sess-1", startedAt = 100L))
+        // #1054 round 4: the cancel now rides `pauseSafetyDeadline` clearing (the stepper does
+        // that on every exit from Paused), so the hand-built pair carries the field.
+        val pausedRegion = PlatformRegion(
+            platform, mode = Mode.Paused, session = Session("sess-1", startedAt = 100L),
+            pauseSafety = PendingWake(301_000L, 1L),
+        )
         val prev = AppState(regions = Regions(
             platforms = mapOf(platform to pausedRegion),
         ))
 
         val next = AppState(regions = Regions(
-            platforms = mapOf(platform to pausedRegion.copy(mode = Mode.Online)),
+            platforms = mapOf(
+                platform to pausedRegion.copy(mode = Mode.Online, pauseSafety = null),
+            ),
         ))
 
         val effects = effectMap.diff(prev, next, screenObs())

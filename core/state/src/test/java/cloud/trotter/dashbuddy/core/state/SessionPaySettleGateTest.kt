@@ -2,6 +2,7 @@ package cloud.trotter.dashbuddy.core.state
 
 import cloud.trotter.dashbuddy.domain.capture.ReplayMetadata
 import cloud.trotter.dashbuddy.domain.pipeline.Observation
+import cloud.trotter.dashbuddy.domain.pipeline.ObservationPayload
 import cloud.trotter.dashbuddy.domain.pipeline.TimeoutType
 import cloud.trotter.dashbuddy.domain.settings.GraceConfig
 import cloud.trotter.dashbuddy.domain.state.Flow
@@ -13,6 +14,7 @@ import cloud.trotter.dashbuddy.domain.state.Platform
 import cloud.trotter.dashbuddy.domain.state.PlatformRegion
 import cloud.trotter.dashbuddy.domain.state.Session
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Test
@@ -119,11 +121,17 @@ class SessionPaySettleGateTest {
         parsed = ParsedFields.None,
     )
 
-    /** The `SESSION_PAY_SETTLE` wake timer, routed at this region (#438 8a). */
-    private fun timeout(timestamp: Long) = Observation.Timeout(
+    /**
+     * The `SESSION_PAY_SETTLE` wake timer, routed at this region (#438 8a).
+     *
+     * [armedFor] is the park GENERATION the timer was armed under (#1054 round 5); null models an
+     * old-shape fire, which lapses a park only by [timestamp] passing the deadline.
+     */
+    private fun timeout(timestamp: Long, armedFor: Long? = null) = Observation.Timeout(
         timestamp = timestamp,
         type = TimeoutType.SESSION_PAY_SETTLE,
         targetPlatform = Platform.DoorDash,
+        payload = armedFor?.let { ObservationPayload.GraceWake(it) },
     )
 
     private fun region(
@@ -318,6 +326,36 @@ class SessionPaySettleGateTest {
         val result = step(parked, timeout(t0 + settle - 1L))
         assertEarnings(0.0, result)
         assertPark(result, 16.70, t0, t0 + settle)
+    }
+
+    @Test
+    fun `a SUPERSEDED wake never commits the park that replaced it, even at the same deadline`() {
+        // Astra's finding 3, the case that forced identity to become a GENERATION rather than a
+        // deadline. Park $20 at 10 000 (deadline 13 000); the wall clock steps back 3 s; the $30
+        // read that replaces it is stamped 10 000 too, so it computes the IDENTICAL deadline
+        // 13 000. Under round 4 the superseded coroutine's `GraceWake(13 000)` matched the
+        // replacement and committed $30 after essentially zero time in its own window — precisely
+        // the mid-spin figure this gate exists to reject.
+        val parked20 = feed(region(runningEarnings = 16.70), t0 to 20.00)
+        val firstWake = parked20.pendingSessionPay!!.wakeId
+
+        val parked30 = step(parked20, idleScreen(30.00, t0))
+        val secondWake = parked30.pendingSessionPay!!.wakeId
+        assertEquals(
+            "the replacement really does share the superseded park's deadline",
+            parked20.pendingSessionPay!!.deadline,
+            parked30.pendingSessionPay!!.deadline,
+        )
+        assertNotEquals("but not its generation", firstWake, secondWake)
+
+        val stale = step(parked30, timeout(t0 + 1L, armedFor = firstWake))
+        assertEarnings(16.70, stale, "the superseded wake commits nothing")
+        assertPark(stale, 30.00, t0, t0 + settle)
+
+        // ...and the replacement's OWN wake lands it, once its window is genuinely up.
+        val committed = step(stale, timeout(t0 + settle, armedFor = secondWake))
+        assertEarnings(30.00, committed)
+        assertNull(committed.pendingSessionPay)
     }
 
     @Test

@@ -78,6 +78,51 @@ card's **mechanical** half, #577 (re-confirmed, 24/24, ~0.55 s — with a new po
 that entry's Bug #1), the #457 path, and #554 ShadowProjector (2/2). The #462/#460 dropoff item
 was found **broken-in-part** (raw PII in capture envelopes) and moved to that entry's Bug #7.)_
 
+- **🆕 NEW — #1054 — a grace that lapses while nothing is on screen still commits, and survives a
+  restart.** Both older grace timers (`GRACE_COMMIT` for a dash end / task retire,
+  `MODE_RESUME_COMMIT` for a resume out of Paused) are armed for exactly `deadline − now` but their
+  fire is stamped with the wall clock, so the ordinary case lands ON the deadline — which a strict
+  `>` expiry ignored, with nothing left to wake the pending. And crash recovery restored those
+  pendings without re-arming anything at all. **On-dash:** go offline (or let the dash summary
+  come up) and then leave the app backgrounded, untouched, with the phone idle — the dash should
+  end on its own about a grace window later (~10 s from an idle/offline screen, ~2.5 s from the
+  summary), NOT the next time you happen to open DoorDash. Then the harder half: while a dash-end
+  grace is open, force-stop DashBuddy and relaunch it — the pending end must still commit within
+  its window rather than hanging around. **Desk, after the pull:**
+  1. `grep "Recovery re-armed" *.log` — one INFO line under the `StateMachine` tag per recovery
+     that restored a live grace, carrying a count only. Absent on a recovery with no pending
+     grace, which is the normal case.
+  2. `SELECT eventType, occurredAt, payload FROM app_events WHERE eventType='DASH_STOP'` — the
+     backgrounded end's payload `endedAt` is the ARM time (the moment the offline/summary screen
+     appeared, `pend.since`, unchanged by #1054), while the row's own `occurredAt` is the COMMIT
+     observation's time (#732). So `occurredAt ≈ endedAt` + the grace window (~10 s from an
+     idle/offline screen, ~2.5 s from the summary) — **not** hours later when the app was next
+     opened, which is what the bug produced.
+  3. No dash left with a live `session` in the HUD after the app has been closed on an offline
+     screen for minutes.
+  - Confirmed: 0/2
+
+- **🆕 NEW — #1054 — a pause survives a relaunch: the HUD stays PAUSED, and the dash still ends on
+  its own when the countdown runs out.** Two behaviours that used to be broken in opposite
+  directions. A graced resume is now DROPPED on restore (it is 8 s of *un-contradicted* observation,
+  and dead process time is not that), so a relaunch mid-pause must NOT come back Online — a phantom
+  resume, or a brand-new dash appearing with no online screen behind it, is the bug. And the
+  pause-safety deadline is now real state rather than a coroutine in memory, so it is re-armed on
+  restore: before this, a restore into Paused left the dash with no timer of any kind and a pocketed
+  phone kept the session alive indefinitely, which the next morning's dash then RESUMED.
+  **On-dash:** pause the dash, force-stop DashBuddy while the pause sheet is up, relaunch. The HUD
+  must read PAUSED, and stay that way until you actually bring DoorDash back online. Then do it
+  again and simply let the DoorDash countdown run out with the app relaunched but idle. **Two
+  separate things happen, about ten seconds apart** — the safety net fires ~1 s after the countdown
+  reaches zero and takes the dash Paused→Offline, which then arms the ORDINARY 10 s `SESSION_END`
+  grace, so the dash actually ends ~11 s after zero. **Desk, after the pull:** a `DASH_STOP` in
+  `app_events` whose payload `endedAt` is ≈ countdown + 1 s (the safety transition) while the row's
+  own `occurredAt` is ≈ countdown + 11 s (the graced commit) — two assertions, not one; no
+  `DASH_START` in the seconds after a recovery; and no `Timer Expired` WARN for a
+  `MODE_RESUME_COMMIT` or `SESSION_PAY_SETTLE` after a restart (those pendings are dropped on
+  restore, and a replayed arm for them is never executed at all).
+  - Confirmed: 0/2
+
 - **🆕 NEW — #1033 — a collapsed delivery receipt now gets 8 s to be expanded, and an expansion
   that lands too late re-prices the delivery anyway.** DoorDash's post-delivery receipt renders
   COLLAPSED (a total, no breakdown). A completion committed off that shape has no itemization, so
@@ -132,7 +177,7 @@ was found **broken-in-part** (raw PII in capture envelopes) and moved to that en
      the cached receipt` WARN), and the fold's `SUSPECT_FULL_RECEIPT` guard nulls a duplicate
      whole-receipt row. Driver-edited rows are excluded by the WHERE clause because the driver
      outranks the receipt.
-  - Confirmed: 0/2
+  - Confirmed: 0/2 (desk 09-06, the 09-05 dashes on `38036999` — #1033 NOT on that build: its PREMISE confirmed 3/3 — every 8.95.6 receipt auto-expanded 41 / 172 / 463 ms AFTER the 2.5 s `GRACE_COMMIT`, at a tight 2.56–3.00 s collapsed→expanded interval, so the old grace is ALWAYS late on 8.95.6, not occasionally; all three drops folded `RECEIPT_TOTAL` with no tip/base and empty `payoutStoreForms`. First real test is the 09-06 dash on `aabb56d0`.)
 
 - **🆕 NEW — #1063 — an offer is recognized from its FIRST frame, before the Decline
   button inflates.** DoorDash lands the offer card in two beats: the collar animation drops the
@@ -237,7 +282,7 @@ was found **broken-in-part** (raw PII in capture envelopes) and moved to that en
   **Known, deliberate residual:** the gate is forward-looking only. The existing +905 mi already
   baked into the cumulative total (and row 1801's frozen economics) is NOT repaired by this —
   lifetime/IRS mileage stays 905 mi high until the dev picks a repair shape (open on #1057).
-  - Confirmed: 0/2
+  - Confirmed: 1/2 (desk 09-06, the 09-05 dashes: 2,310 fixes judged, 190 ignored (the 5 m jitter floor), **0 rejected** over ~4 h — no WARN burst on ordinary driving; per-session spans 11.7 / 17.6 / 11.7 / 16.2 mi, Σ realizedMiles never exceeds the span; the 09-03 +911 mi baseline is still in the cumulative total by design)
 
 - **🆕 NEW — #1029 — the money reads are re-anchored on DoorDash 8.93.7 (and the $799 tip is
   gone).** Two things to watch, one while driving and one at the desk.
@@ -271,7 +316,7 @@ was found **broken-in-part** (raw PII in capture envelopes) and moved to that en
     a DoorDash type code being read as a $799 tip). Then `grep -o 'parseShortfall{[^}]*}' app.log | tail -1` and
     `grep 'parse shortfall' app.log`: **`delivery_summary_expanded` / `_collapsed` must no longer
     appear for `required [totalPay]`**, and `waiting_for_offer` should have dropped off too.
-  - Confirmed: 0/2
+  - Confirmed: 1/2, HALF (desk 09-06: totals parsed on **8.95.6** (the app moved; the corpus is 8.93.7-era), exactly 3 `runningEarnings` commits, all correct, no `799`, no mid-spin figure, the `$0.00` placeholder guard exercised 4×, the receipt bubbles quote the real receipt. NOT yet exercised: pause/resume mid-spin (#1052), and `parsedPay` was null on 3/3 receipts because of the #1033 timing above — so `DROP_SHARE`/tips are still unproven)
     - desk 09-05: NOT TESTABLE — device ran the pre-#1044 build.
 
 - **🆕 NEW — #1036 — "matched, but parsed nothing" is now loud.** Purely a **desk** item — nothing
@@ -294,7 +339,7 @@ was found **broken-in-part** (raw PII in capture envelopes) and moved to that en
   - **Any OTHER rule id is a new anchor-rot find** — capture the frame and file it. #1029 has since
     landed, so the `delivery_summary_*` pair and `waiting_for_offer` should now be OFF the list;
     their reappearance is a regression, not the known rot.
-  - Confirmed: 0/2
+  - Confirmed: 1/2 (desk 09-06: `parseShortfall{…}` present on every summary; the only tripping rule was `waiting_for_offer` ×5 and those are BENIGN pre-render frames (a 17-node tree with no `earnings_pill`), not rot — add it to the benign baseline named in CLAUDE.md §1)
     - desk 09-05: NOT TESTABLE — device ran the pre-#1044 build.
 
 - **🆕 NEW — #1032 — the dash-end summary sheet is recognized again (DoorDash 8.93.7).** End a dash
@@ -312,7 +357,7 @@ was found **broken-in-part** (raw PII in capture envelopes) and moved to that en
   Desk checks on the next pull: `session_records.endSource = 'summary_screen'` with a non-null
   `reportedEarnings` for that dash, and **no** `Dash summary`-shaped frame left in
   `captures/.../UNKNOWN/` (`grep -l 'Dash summary' captures/**/UNKNOWN/*.json` → empty).
-  - Confirmed: 0/2
+  - Confirmed: 1/2 (desk 09-06: `dash_summary` classified 3×; all three dashes `endSource=summary_screen` with real totals $34.60 / $22.25 / $48.38; zero `Dash summary` frames in UNKNOWN)
     - desk 09-05: NOT TESTABLE — device ran the pre-#1044 build.
 
 - **🆕 NEW — #1034 — a negative dollar reads `-$12`, never `$-12`.** `Formats.money`/`money0`/
@@ -360,7 +405,7 @@ was found **broken-in-part** (raw PII in capture envelopes) and moved to that en
   `SELECT sessionId, reportedEarnings FROM session_records WHERE endSource='early_offline';` → **no
   row reads exactly 0.0** after the v11 refold (a positive early_offline total is kept by design;
   41 of 42 rows were a hard `0.0` before the fix).
-  - Confirmed: 0/2
+  - Confirmed: 1/2 (desk 09-06: projectorVersion 11; 49/50 `early_offline` rows `reportedEarnings` NULL, zero hard-zeros; the morning 07:45 early_offline session shows NULL, not $0)
     - desk 09-05: NOT TESTABLE — device ran the pre-#1044 build.
 - **🆕 NEW — #1024 part 1 (PR #1025) — the Playbook destination.** Open Home → **Playbook** tile.
   Check: (a) *This week's plan* shows `Xh worked in your windows · $Y kept of the $Z you planned
@@ -400,12 +445,6 @@ was found **broken-in-part** (raw PII in capture envelopes) and moved to that en
   offer/task churn) — the rule is lifecycle-neutral by test. (#985 itself stays OPEN for the
   capture-gated "Switch to pick up at <store>" sheet re-homed from #806.)
   - Confirmed: 0/2
-- **🆕 NEW — #924 (PR #1014) — DasherDirect is blocked from the first frame.** Open DasherDirect
-  from the DoorDash menu and let it load. Working = zero new UNKNOWN captures around that
-  timestamp and a sensitive-gate drop in the log from the *entry* frame, not only after the
-  balance renders. Broken = an UNKNOWN envelope containing `dxdr_nav_host_fragment`.
-  - Confirmed: 1/2 (desk 09-05: `sensitiveDropped=546` with no `dxdr_*` frame anywhere
-    on the UNKNOWN path — the desk half; still wants a live open-and-watch.)
 - **🆕 NEW — #996/#997 (PR #1012) — per-offer pay attribution on a receipt-less dash.** On any
   dash with no post-drop receipt (an out-of-zone "Dash Along the Way" start, or a shop order),
   watch three shapes. (a) **Multi-accept job at DIFFERENT stores:** each drop's drill-down shows
@@ -2765,6 +2804,76 @@ Accept and Decline registered on DoorDash — and moved to that session's entry 
   the redesign, because the parse is still anchored on the old `textView_title` layout. That was
   already true before this change; re-anchoring the parse is separate, data-enrichment work.
   - Confirmed: 0/2.
+
+---
+
+## 2026-09-05 (desk analysis of the 09-06 pull — first field run of #1029/#1030/#1032/#1036/#1052/#1057/#1066)
+
+**Date:** 2026-09-05 · **Platform(s) tested:** DoorDash (app **8.95.6** — moved from 8.93.7; every one of the 493
+envelopes) · **Branch under test:** `master` at `38036999` (read straight off the logs — `DashBuddy 0.230.0+38036999
+starting`, #1066's first pull), installed 14:35; the 07:45–09:19 `early_offline` session predates the install and
+is old-build data · **Field conditions:** three afternoon/evening dashes (16:19–17:46 $34.60 · 17:46–18:46 $22.25 ·
+18:54–20:37 $48.38), all ended on the summary screen; 6 deliveries; Uber Offline the whole slice; no pause/resume
+mid-spin, no unassign, no orphan. 493 captures (48 UNKNOWN screens, 63 UNKNOWN clicks, 5 UNKNOWN notifs), zero
+`ERROR` lines, `restarts=0`, 16 % UNKNOWN ratio, no `RecognitionHealth` alarm, `shareable.log` PII-free.
+Issues filed this analysis: **#1078**, **#1079**. Not on this build: #1058/#1059/#1063/#1064/#1033.
+
+### Bugs
+
+**1. Session 409 silently lost a delivered drop — $9.95 unattributed → #1078.** Job −413 had two dropoffs; `DASH_STOP`
+(seq 1881) sequenced AHEAD of the second drop's own `DELIVERY_CONFIRMED` (1882) on the same 17:46:24 step, and only
+one `DELIVERY_COMPLETED` (1883) emitted although the shadow projector logged both customer hashes. The offer quoted
+$19.90, the surviving drop was stamped $9.95 (`PER_OFFER_STORE`), and $34.60 − $24.65 = $9.95 closes the session's
+gap to the cent. *Hypothesis:* End Dash tapped on the second doorstep; the SESSION_END grace committed with the
+close-out sweep completing only the already-retired task and `endSession`'s bail force-stamping the other. Nothing
+WARNed and `session_records.deliveries` still reads 2. Would need the 17:44–17:47 sequence replayed through
+`SessionReplay.reduceMixed` to confirm.
+- **Status:** Open (#1078).
+
+**2. Every 8.95.6 receipt auto-expands just past the 2.5 s grace — 3 for 3.** Collapsed→`GRACE_COMMIT`→expanded:
++172 ms (job −418), +463 ms (−424), +41 ms (−427); the collapsed→expanded interval is a tight 2.56–3.00 s, i.e. an
+animation, not a tap. Consequence right through the read model: `parsedPay` null on all three → `RECEIPT_TOTAL`, no
+tip/base, empty `payoutStoreForms` (#653's guard silently off); on the stacked job −418 one drop took the whole
+$22.25 and its sibling folded `NONE` with NULL pay (no receipt AND `offerPayShare` null — the #691 FIX-1 residual).
+This is #1033's premise, confirmed: the old grace is not occasionally late on 8.95.6, it is always late. #1033
+(8 s + re-price) is on the 09-06 build.
+- **Status:** Shipped in #1072 (2026-09-06) — first field test pending; the `NONE` sibling stays the #691 FIX-1 residual.
+
+**3. Two 8.95.6 sheet families still unruled + one pickup-side redact asymmetry → #1079.** `alcoholWarningBottomSheet`
+(not #1058's leak A — a separate warning sheet, no PII in this capture); the id-less `address_instructions_view`
+"Delivery for <customer>" sheet ×4, two of which the #910 `user_name` backstop masked (the backstop acting as the
+primary control, which #1058 argued it must not); and `address_subpremise_line` rendering the MERCHANT's suite raw on
+6 recognized `pickup_*` frames while the same id is in `ID_MARKERS` — `pickup.json5` has no `Apt` entry, so #986's
+scan cannot see it. Needs a ruling (mask, or document the pickup exemption beside #886).
+- **Status:** Open (#1079).
+
+### Verification (desk)
+
+**4. Working:** #1030 (no fake $0 — 49/50 early_offline rows NULL), #1032 (summary recognized 3/3), #1036 (census
+present; `waiting_for_offer` ×5 is the benign pre-render class), #1057/#918 (2,310 fixes, 0 rejected, 190 ignored,
+plausible spans), #1066 (build read from the logs), #159/#773/#1000 store + offer linkage, #688B (Σ realizedMiles ≤
+span everywhere), #588 shop rate learning (`0.76/min n=70`), #731 (no listener flaps), #924 (DasherDirect: 217
+`sensitive.dasher_direct` drops, zero `dxdr_*` UNKNOWN — **2/2, item retired below**), the #992–#995/#920 redact
+batch (zero raw `For …`/`Return …`/`Focus on …`/`Customer Notes` hits across `captures/`).
+**Half:** #1029 (totals + settle commits correct on 8.95.6; `DROP_SHARE`/tips unproven because of item 2), #1034
+(no negative window occurred), #996/#997 (two jobs match their quote to the cent; job −413 is item 1).
+**Not exercised:** #1052 (no pause/resume mid-spin, no platform switch), #1059 (no Persona/Red Card/passport surface;
+the existing licence anchors dropped 17 `id_verification` frames), #736/#752, #660p2, #810 B2, #991 (24 utterances,
+0 failures — ladder untouched).
+**Recurring, not on device:** #1063 (4 more offer cards with a real store row, no functional loss), #1058 leak B ×2.
+
+### Open questions
+
+**5. #843 consent never answered → #577 quick-decline is OFF.** `Consent: reconciled 4 capabilit(ies) … none granted —
+awaiting consent` on all three process starts and 34 × `Denied confirm_decline (fail closed)`. Correct behaviour; the
+log cannot tell "never saw the prompt" from "Not now". Dev-eyes: Settings → Data & Privacy → Automation & Consent.
+
+**6. DoorDash 8.95.6.** The #1029 re-anchors held on the bump, but the frozen corpus is 8.93.7-era and the new
+id-less sheets (item 3) are the first 8.95.6-only shapes. Worth a corpus intake from this slice.
+
+### Retired from the checklist this analysis
+
+- **#924 (PR #1014) — DasherDirect is blocked from the first frame.** Confirmed 2/2 (desk 09-05 + desk 09-06).
 
 ---
 
