@@ -234,7 +234,8 @@ parallel `NotificationPipeline` emit `PipelineEvent`s. `AccessibilityPipeline.ou
 **UNKNOWN** (captured to disk for triage, never forwarded to the state machine). Snapshots are attributed
 to the window's *real* package, so our own overlay is dropped. `FrameGate` admits frames (identity dedup +
 UNKNOWN hash suppression, #360); `CaptureWriter` assembles envelopes (#361) and applies the matched
-rule's **`redact`** block (#598). `PipelineV2.events` is a HOT `shareIn` stream (side effects never
+rule's **`redact`** block (#598) — **envelope-only**: recognition, parse and dedup run on the original
+tree, and a click's `contentHash` stays on the original node. `PipelineV2.events` is a HOT `shareIn` stream (side effects never
 double-run); the upstream is supervised with restart backoff (#430); `PipelineStats` counts every gate
 decision and prints a periodic INFO summary whose head carries `app=<versionName>` (`<base>+<git sha>`,
 PR #1066 — read a pull's build from the logs, never infer it).
@@ -254,7 +255,9 @@ PR #1066 — read a pull's build from the logs, never infer it).
 - **Combined-frame class (#993):** a redact protects only frames its OWN rule wins, so a banner that can
   inflate over another rule's frame (`arriving_at_title`) is declared by EVERY rule in `dropoff.json5`
   plus `navigation_generic` (parity test). The Google-Nav maneuver cluster is masked on dropoff-phase nav
-  rules + `navigation_generic`; `pickup_navigation`'s MERCHANT address stays raw by design (#886).
+  rules + `navigation_generic`; `pickup_navigation`'s MERCHANT address stays raw by design (#886), while a phase-ambiguous slot
+  over-masks toward privacy — `timeline_task_detail` (#985) anchors on `Copy address` text AND
+  `Close sheet` contentDescription, BOTH required, and masks the merchant render too (store names raw).
 - The id-less **name shape** joins tokens with `\s{1,4}` (never a literal space, #885) and is byte-SSOT
   with `SnapshotRedactor.FIRST_LAST_INITIAL_PATTERN`. A sub-flow sibling copies the entry verbatim so
   the hex stays equal (#992/#1031). A name entry enumerates every conjugation a surface renders;
@@ -278,7 +281,8 @@ markers, with a floor (#1064): a chrome-ambiguous intake prefix carries a tail p
 (`GATED_NAME_PREFIXES`), `SnapshotRedactor.customerLeadIn` is the one owner, hand-written fixture
 pseudonyms are exempted by the byte-exact `CorpusDecoys` list, and a raw-pseudonym assertion is pinned
 to files BY VALUE, never folder-wide. Field-enumeration SSOTs keep a new model field from missing a
-scrub site: `RawNotificationData.textFields()` (#666) and `UiNodeTextField` +
+scrub site: `RawNotificationData.textFields()` (#666 — the 5 flat text fields; `actionLabels` is
+deliberately outside it and scrubbed separately) and `UiNodeTextField` +
 `UiNode.scrubbableStrings()` (#835; `stateDescription` is scrubbed but `UiNode.allText` — what rules
 match on — still excludes it: widening a scrub layer must never move a classification). Rules skip a
 file with duplicate ids and a later file re-declaring an id (#624/#633). Release binds `NoOpCaptureBus`
@@ -290,7 +294,8 @@ defence. `RecognitionLocale` (`:domain`) + `LocaleBoundaryNotifier` (`:app`) mak
 sensor start + a once-per-install notice (`app_state` flag `locale_boundary_notice_shown`). Translating
 anchors is deliberately NOT done until a non-English corpus exists.
 
-**Liveness (#937/#1036, the #909 silent-death family):** `PlatformAppVersions` stamps the observed
+**Liveness (#937/#1036, the #909 silent-death family) — every piece fail-OPEN and inert to frame
+processing; a diagnostic failure must never become a recognition gate:** `PlatformAppVersions` stamps the observed
 app's `versionName` onto `ReplayMetadata.platformAppVersion` (additive, nullable, no test may require
 it); `RecognitionHealth` trips one WARN + notice per platform per process when a full 50-frame admitted
 window is ≥ 0.80 UNKNOWN. `Ruleset.matchFirst` reports a `ParseShortfall` when a matched branch parsed
@@ -317,13 +322,17 @@ compiles, `ObservationClassifier` matches.
   `sensitive.catchall` is priority 999 + overrideable.
 - **Blocks:** `require` predicates, `bind`, `parse` (typed via `ParsedFieldsFactory`), `redact`
   (#598 — a screen rule using the `sha256` transform MUST declare a non-empty `redact`; branch-level
-  `redact` is rejected). Effect `dedupeKey`s interpolate `{field}` plus the derived `{parsedHash}` (content
-  identity, #427) and `{presentationHash}` (presentation identity, #859) tokens (`DedupeTokens`).
+  `redact` is rejected). Effect `dedupeKey`s interpolate `{field}` against the branch's RAW parse, plus two DERIVED
+  reserved tokens the classifier resolves post-factory (`DedupeTokens`, the lint's SSOT):
+  `{parsedHash}` (content identity, #427) and `{presentationHash}` (presentation identity, #859 —
+  fail-closed to `offerHash` when `presentationKey` is null). A derived field is never an ordinary
+  `{field}` template.
 - **No actuation from rules (#425):** click/gesture verbs are compile-rejected; rules expose target
   bindings (`acceptButton`, `declineButton`, `expandButton`) that the app-owned `RuleAction` registry
   consumes (`docs/design/rule-capability-consent.md`).
-- New rule↔state vocabulary goes through `StateMachineContract` (`REQUIRED_FIELDS_BY_SHAPE`,
-  `EFFECT_INTENTS`, `REQUIRED_FIELDS_BY_FLOW`), enforced at compile per file (principle 8).
+- New rule↔state vocabulary goes through the enumerated, load-validated contract —
+  `ParsedFieldsFactory.REQUIRED_FIELDS_BY_SHAPE` plus `StateMachineContract.EFFECT_INTENTS` /
+  `.REQUIRED_FIELDS_BY_FLOW` — enforced at compile per file (principle 8).
 
 **Rule regexes run on RE2J (#1053, ADR-0010).** Every rule pattern — predicate, parse `find`, redact
 `match`, `nextSiblingMatchingRegex` — compiles through the ONE seam `RegexSafety.compileRegex` →
@@ -353,7 +362,8 @@ frozen count ledger), `RuleCorpusCompileBudgetTest` (50 ms load budget + program
 **Two bounded primitives for id-less renders (#1029, DoorDash 8.93.7 shipped its money surfaces with no
 view ids):** (1) the **`parseGlyphCurrency` transform** reads an animated digit-wheel fused by `read:
 allText` — rejects any non-ASCII digit and any `-`/`−`/`(` (#1052), keeps only `$`/digit/`.`/`,`, then
-full-matches `CurrencyShape` (`$` + 1–4 digits or one `[1-9],\d{3}` group + exactly 2 decimals) or returns
+full-matches `CurrencyShape` (`$` + a bare `0` or 1–4 digits with NO leading zero, or one
+`[1-9],\d{3}` thousands group, + exactly 2 decimals — `$016.70` is out of shape) or returns
 null (bounded 256 chars, fail-closed — ~1 in 5 fielded reads is mid-animation; `parseCurrency` is WRONG on
 that shape). (2) the **`nextSiblingMatchingRegex(<pattern>[, <cap>])` navigate** scans ≤ `MAX_SIBLING_SCAN`
 = 8 following siblings for the first whose text full-matches (pattern compiled at rule load; cap outside
@@ -382,9 +392,11 @@ parks the read; commit is the stepper's lazy expiry, woken by a `SESSION_PAY_SET
 hash folds `sessionPay` into `Observation.identity()`, so a repeat can never arrive — repetition was
 REJECTED as the discriminator). Rules: (a) a park is owned by (FLOW, PLATFORM), checked on both prior and
 resulting R0; losing either DROPS it; (b) BOTH wheel feeds are gated (`IdleFields.sessionPay`,
-`PostTaskFields.sessionEarnings`); (c) every non-gated writer supersedes older parks; (d) comparisons are
+`PostTaskFields.sessionEarnings` — and `PostTaskFields.dedupeHash` folds in `sessionEarnings` so the
+settled re-render is admittable at all); (c) every non-gated writer supersedes older parks; (d) comparisons are
 cent-tolerant; (e) a pending's OWN wake lapses it by IDENTITY, a frame lapses a grace strictly PAST its
-deadline and a park at-or-past; (f) a contradicting read on the expiring frame supersedes the park; (g) a
+deadline and a park at-or-past — and ORDER matters: a flow frame runs the expiry FIRST (a park that
+stood its window commits on the departure frame), a flow-LESS observation checks ownership first; (f) a contradicting read on the expiring frame supersedes the park; (g) a
 `$0.00` read never overwrites a positive total. A park is FROZEN while the dash is not `Mode.Online` and
 re-based UNCONFIRMED on the way back (a fresh agreeing read on its own surface is required to commit).
 Crash recovery DROPS any restored park.
@@ -412,22 +424,25 @@ the armed deadline. Open gaps: #1076 (tail-replayed offers), #1083.
 delivery receipt, task retire); `pendingModeResume`/`MODE_RESUME_COMMIT` debounces a screen-implied
 Paused→Online resume (#605). The receipt window is SHAPE-keyed (#1033): a COLLAPSED receipt
 (`parsedPay == null`) arms `receiptExpandGraceMs` (8 s); an EXPANDED frame keeps 2.5 s and tightens via
-`minOf`. Layer 1 is the ONLY path that lands an expansion in the STACKED shape (§5's re-price refuses it).
+`minOf`; a PostTask frame that parses NO receipt at all keeps the pre-#1033 timing. Layer 1 is the ONLY path that lands an expansion in the STACKED shape (§5's re-price refuses it).
 
 **Offers are platform-owned** (`PlatformRegion.pendingOffers`, #438 B3; `OfferLifecycle.kt`/`OfferEffects.kt`).
 Identity is presentation-scoped (#830): `ParsedOffer.presentationKey = sha256(storeNames|orders.size|orderTypes)`
 beside the churn-prone `offerHash`; a same-key different-hash frame is an **enrich-as-variant** (keep
 `presentedAt`, click latches, speak-once; re-eval; `OFFER_EXPIRY` stays anchored on the original
 `presentedAt`), a null key degrades to replace-on-any-change (a false MERGE is impossible). `offerKind`
-(`match|direct`, #881) is a read-through, never a scoring input; DIRECT over MATCH logs "Superseded by
+(`match|direct`, #881) is a read-through — never a scoring input, never in `offerHash` or
+`presentationKey`; DIRECT over MATCH logs "Superseded by
 direct offer" and suppresses the replaced bubble. Display store reads go through
 `ParsedOffer.displayStores`/`displayStoreText` (#882; the `orders[]` list deliberately keeps the
 `Delivery (N)` chip so `presentationKey` is immune to store cycling).
 
 **Accept survives the offer-presentation edge** as an `acceptedAt`-marked pending entry; the task edge
 mints the survivor (`acceptInputsFromPending`). The accept grace is per-platform (`GraceConfig.acceptGraceMs`,
-#762 D2), which also added the phase-less `task:active` flow (`Flow.TaskActive`, `toTaskPhase()` → null).
-A per-offer `OFFER_EXPIRY` timer resolves an overlay offer that vanishes without a frame.
+#762 D2), which also added the phase-less `task:active` flow (`Flow.TaskActive`, `toTaskPhase()` → null;
+leaving offer-presentation to it infers a click-less accept ONLY from a non-task `returnFlow`).
+A per-offer `OFFER_EXPIRY` timer resolves an overlay offer that vanishes without a frame and no-ops on
+an accept-latched offer.
 
 **Placeholders and store lineage.** An accepted offer pre-creates symmetric placeholders (one dropoff per
 order + one pickup per distinct store; dropoffs stamped `Task.mintedByOfferHash`, a HINT not an identity,
@@ -435,11 +450,15 @@ order + one pickup per distinct store; dropoffs stamped `Task.mintedByOfferHash`
 lineage via the normalized **customer-hash join** (#526/#733/#745: single store → resolve; ≥2 stores →
 earliest-confirmed only when this is the sole activated drop with that hash; else fall back to store-name
 tokens, never outside the lineage; fail-null beats fail-wrong). `JobCompleteness.kt`'s per-customer
-coverage arm (#749) proves completion from the pickup side when the strict arm fails.
+coverage arm (#749) proves completion from the pickup side when the strict arm fails — ONLY when pickups
+map 1:1 to orders at distinct stores (their hash set IS the customer set) and every customer hash has a
+finished, arrived drop.
 
 **Unassign-via-help** (`Flow.TaskUnassigned`, #736/#752) is an inline ungraced abandon: `Task.unassignedAt`
 set, `completedAt` null; the `unassignedAt == null` filters in the `PICKUP_CONFIRMED` close-out sweep and
-`isJobPhysicallyComplete` are load-bearing. Same-frame and cross-frame retro-mark shapes are handled;
+`isJobPhysicallyComplete` are load-bearing. The abandoned drop's placeholder is retired by `taskId` for a dropoff-phase abandon (never a
+hash join that could over-remove a sibling), by customer hash for a pickup-phase one; the cross-frame
+retro-mark is edge-gated to the ENTRY into `task:unassigned` and leaves `completedAt` intact;
 `Job.tasks` is reconciled every step as the non-unassigned lineage mirror; one `TASK_UNASSIGNED` event per
 `taskId`; a misread self-heals only while the job stayed open.
 
@@ -463,8 +482,11 @@ capability consent gate (`RuleCapabilityRepository`; **no auto-grant, #843**). H
 - **The evaluator fails CLOSED on a missing distance (#936):** no `?: 1.0` fallback; an offer that would
   be scored without one returns the no-verdict shape (`NOTHING` / score 0 / `UNKNOWN`) after the three
   distance-independent verdicts (shopping opt-out, protect-stats, merchant BLOCK).
-  `OfferEvaluation.hasDistanceMetrics` is the one predicate consumers branch on so placeholders are never
-  rendered as measurements.
+  The returned economics keep the REAL gross and the economy's real `operatingCostPerMile` (zeroing cpm
+  would make the session's deliveries look cost-free) with `netPayAmount == gross` and every
+  distance-derived figure an explicit `0.0` placeholder; `OfferEvaluation.hasDistanceMetrics` is the one
+  predicate consumers branch on so placeholders are never rendered as measurements, and the offer fold
+  persists the frozen estimates as NULL, not zero.
 - **Dedupe granularity is the rule's to declare (#859):** a rule effect with `throttleMs` opts out of the
   48 h `effects_fired` row into its own wall-clock window (in-memory; a restart re-arms it). Evidence
   filenames are sanitized at the one gate (`EvidenceFilename.sanitizePrefix`).
@@ -476,8 +498,9 @@ capability consent gate (`RuleCapabilityRepository`; **no auto-grant, #843**). H
   engine at all (§2, RE2J).
 - **The offer voice (#991):** `TtsEffectHandler` builds its engine from a `TtsEngineFactory` seam; every
   way an utterance can be lost escalates through the pure `TtsRecoveryPolicy` (rebuild → backoff → a
-  once-per-process `TtsHealthNotifier` notice after 3 losses ∧ ≥2 rebuilds ∧ ≥60 s); engine identity is
-  generation-checked; the rebuild is detached from the drain worker.
+  once-per-process `TtsHealthNotifier` notice after 3 losses ∧ ≥2 rebuilds ∧ ≥60 s); a `speak()` SUCCESS means only QUEUED, so the
+  streak resets on `onDone`; notify and rebuild COMPOSE (telling the dasher never skips the rebuild);
+  engine identity is generation-checked; the rebuild is detached from the drain worker.
 
 ### 5. Analytics Read-Model (`core/data/.../analytics/`, `core/database/.../analytics/`, #314)
 
@@ -494,15 +517,19 @@ bump wipes + refolds the whole log. **Ordering contract (#732):** `sequenceId` i
 **Economics are FROZEN per record, never recomputed** (dev decision): `netProfit`, `frozenCostPerMile` and
 the fuel/non-fuel split (#659) are computed at projection time against the offer's own frozen
 `OfferEvaluation` cpm; `NetProfit` (`:domain`) is the one cost-math SSOT; `AnalyticsRepository` is
-**DAO-only** (no economy dependency). `cashTip` stays outside `realizedPay`/`netProfit` (#688);
+**DAO-only** (no economy dependency). `cashTip` stays outside `realizedPay`/`netProfit` and is added to gross/net only at the read
+sites, so the reconciliation's Σ-attributed stays cash-free (#688);
 `originalPayBasis` is stamped at first fold and never rewritten (#703).
 
 **Pay basis ladder:** real pay from `DeliveryPayload.dropRealizedPay`/`totalPay` (#528); a receipt with
 no itemization still prices its drops because `buildPostTask` SYNTHESIZES `ParsedPay` from the receipt's
 scalars on the flat 8.93.7 layout (#1029; a COLLAPSED receipt stays `parsedPay == null`); else a
-`PayBasis.OFFER_PAY` ESTIMATE from `offerPayShare` (#691). The estimate split is
-store-correspondence-attributed at the terminal close (`OfferPayFallback.closeAttribution`, #996/#997):
-eligible-owed shrink (proven-complete jobs drop never-mintable placeholders; UNASSIGNED never shrunk) →
+`PayBasis.OFFER_PAY` ESTIMATE from `offerPayShare` (#691), consumed only if no sibling drop already
+folded a real receipt. Two mint sites, two policies: the INLINE (PostTask-exit) mint keeps the
+conservative pooled split over the QUOTED owed orders (`OfferPayFallback.shareFor`); the whole
+attribution ladder runs ONCE at the terminal close (`OfferPayFallback.closeAttribution`, #996/#997):
+eligible-owed shrink (proven-complete jobs drop never-mintable placeholders; UNASSIGNED never shrunk;
+an `endSession` bail can never prove completeness — it force-stamps `completedAt`) →
 store ladder (`PER_OFFER_STORE` / `SUB_POOLED_STORE` / `STAMP_FALLBACK` / `CONSOLIDATED_CUSTOMER`,
 matched through `StoreKeys.normalizedChain`) → wholesale `JOB_POOLED` degrade. Σ stamped ≤ Σ quotes is
 structural. **A receipt speaks only for the drops it described when read (#1073):** `ReceiptCoverage` is
@@ -515,9 +542,14 @@ else the job's last completed drop (`receiptSubjectTaskId()`); residual #1081.
 (`decideReceiptReprice`, at every itemized receipt frame, at the job close, and at `endSession`), keyed
 `…:<taskId>:<jobId>:r<repriceRevision>`. Ownership is ONE temporal question — has any acceptance
 resolved since this receipt appeared (`lastAcceptResolvedAt` vs `receiptSeenAt`) — so the STACKED
-late-expand shape is refused (fail-null, #745). The projector applies by (jobId, taskId), no-ops when the
-row already matches, never overwrites a DRIVER-owned row (`MANUAL`/`USER_CORRECTED`/`driverAdjustedAt`,
-Room v16), and a later driver adjustment wins the pay while `receiptRepricedAt` survives.
+late-expand shape is refused (fail-null, #745). Stepper state: `lastDecidedPay` is compared STRUCTURALLY (a hash collided), the one-step
+`pendingReceiptReprice` handoff is cleared at the top of the next step (a restored value can never
+re-emit), and `lastAcceptResolvedAt` survives both the survivor's expiry and the mint. The projector
+applies by (jobId, taskId) — itemization only on the receipt's sole drop (`soleDropOfReceipt`),
+`payBasis` → `DROP_SHARE`, net against the row's own frozen cpm, a missing row is a counted skip —
+no-ops when the row already matches, never overwrites a DRIVER-owned row
+(`MANUAL`/`USER_CORRECTED`/`driverAdjustedAt`, Room v16); a later driver adjustment wins the pay while
+`receiptRepricedAt` survives, and the drill-down discloses "re-priced from the receipt" whenever it is set.
 
 **#1030 — `RecordFolds.reportedEarningsOf` is the rule's one owner:** a `totalEarnings` of `0.0` is a
 report only when the end source is the summary screen; the stamp is `takeIf { > 0.0 }`, the fold
@@ -532,26 +564,43 @@ correction pins (`storeKeyPinned`); superseded zero-reference identity rows are 
 Per-store reads group on the resolved key.
 
 **Corrections are append-only events**, folded non-destructively and rebuild-faithfully:
-`MANUAL_DELIVERY`, `DELIVERY_ADJUSTMENT` (`payBasis` → `USER_CORRECTED` iff pay changes; `newCompletedAt`
-banned), `DELIVERY_SESSION_ASSIGN` (attribution ONLY, five fail-closed guards, #660), and
-`OFFER_OUTCOME_CORRECTION`/Tier-1 `JobAcceptMismatchResolver` writing `outcomeResolved` (#810 B2; read
-side excludes resolved orphans). **Per-leg mileage (#688 B):** lifecycle odometer stamps fold into
-`milesToStore`/`milesToDropoff` with claim-once store legs; `session_records.legStateJson` keeps
-incremental ≡ refold. The **"(No session)" bucket** counts in gross and per-day (#660 piece 1).
+`MANUAL_DELIVERY`, `DELIVERY_ADJUSTMENT` (a machine row's `payBasis` → `USER_CORRECTED` iff pay changes,
+a MANUAL row stays MANUAL; net recomputes only when pay/miles change, against the row's OWN frozen cpm;
+`newCompletedAt` banned; new UI never writes legacy `PAY_ADJUSTMENT`), `DELIVERY_SESSION_ASSIGN`
+(attribution ONLY — `sessionId` + `sessionAssigned`, no re-pricing — behind five fail-closed guards:
+row exists, row is null-session or already-assigned, target is a real ENDED session, platform
+coherence, no cash-bearing unassign; the session `deliveries` counter moves by a relative ±1; #660),
+and `OFFER_OUTCOME_CORRECTION` / Tier-1 `JobAcceptMismatchResolver` writing `outcomeResolved` (#810 B2:
+Tier 1 resolves only when EXACTLY one accepted offer is store-unaccounted and all others accounted —
+anything else is INCONCLUSIVE → driver attestation; `EffectMap` emits `JOB_ACCEPT_MISMATCH` AFTER the
+closing job's final `DELIVERY_COMPLETED` because the reconcile reads only earlier rows). The outcome,
+funnel and list reads exclude a resolved orphan; `WorkGaps` deliberately KEEPS it (the accept is the
+instant waiting ended). **Per-leg mileage (#688 B):** lifecycle odometer stamps fold into
+`milesToStore`/`milesToDropoff` with claim-once store legs; `realizedMiles` becomes the leg SUM only when
+`milesToDropoff != null` while session/period/IRS/CSV totals stay odometer-span-anchored; a driver
+`newMiles` edit wins `realizedMiles`/net but the machine leg columns are never rewritten (provenance);
+`session_records.legStateJson` keeps incremental ≡ refold. The **"(No session)" bucket** counts in gross and per-day (#660 piece 1).
 
-**Read surfaces (all window-anchored, one assembly path each):** `AnalyticsWindow` +
+**Read surfaces (the Analytics HUB's sources are all window-anchored — the Playbook's heatmap,
+leaderboard and plan are deliberately LIFETIME under a declaring badge; one assembly path each):** `AnalyticsWindow` +
 `PeriodBounds.of(window|period)` (#970; Monday weeks, fixed bounds for a paged window, selection persisted
 as `AnalyticsWindowSelection`); pay mix + platform split through the same `assemble` (#973;
 `bonuses & other` is the floored residue, zero coverage renders "not recorded"); Offers tab (#975;
-`AnalyticsTab` order is declaration order, selection transient; estimate-vs-reality drops null estimates,
-unlinked offers and stacks; `MAX_OFFER_PAGE` 250); Home = "Today" (#977; `DayPlanner` over the lifetime
+`AnalyticsTab` order is declaration order, selection transient; estimate-vs-reality keeps the DAO's
+unfiltered accepted-offer LEFT JOIN as the stated denominator, applies its exclusions in the pure factory —
+null estimate, unlinked offer, a stack, missing realized net/minutes — and renders both bars as a MEAN of
+per-offer rates; `MAX_OFFER_PAGE` 250); Home = "Today" (#977; `DayPlanner` over the lifetime
 heatmap, `MIN_SAMPLED_HOURS` 5, `Recap →` writes the persisted selection before navigating); heatmap
 Rate/Hours toggle + store leaderboard (#979, outlier ≥ 1.5× fleet median p50 dwell, ≥3 stores); **Weekly
-Plan (#981)** — `HourOfWeekSampler` (median per weekday×hour, `MIN_SAMPLE_DAYS` 3) + `WeeklyPlanner`
-(≥2 h/≤4 h runs, edits REPLAYED, every weekday reported with a measured reason), `SavedWeeklyPlan` FROZEN at
+Plan (#981)** — `HourOfWeekSampler` (per-day (date, hour) samples off the heatmap's two lifetime reads) + `WeeklyPlanner`
+(median ranking with `MIN_SAMPLE_DAYS` 3 separate days per cell, ≥2 h/≤4 h runs, edits REPLAYED, every
+weekday reported with a measured reason), `SavedWeeklyPlan` FROZEN at
 save in the `weekly_plan` DataStore (a user artifact, deliberately NOT a Room table), `WeeklyPlanWorker`
-grades Sunday 18:00 on its own channel 104; Time tab (#983; `WorkGaps` pairs a completion with the next
-accept in the same dash — `sequenceId` for "which", timestamps for "how long"; while-working vs
+grades Sunday 18:00 on its own channel 104 — planned vs actual INSIDE the planned windows only, money
+outside reported separately, never folded in; Time tab (#983; `WorkGaps` pairs a completion with the next
+accept in the same dash — never across dashes or days, an accept past the dash's effective end is
+dropped, a dash's last drop is a tail not a gap, a gap ≥ 2 h is counted and STATED never excluded;
+`sequenceId` for "which", timestamps for "how long"; while-working vs
 whole-shift net/hr, null never `$0.00/hr`; `HourComposition` states coverage as a field); the **three
 destinations (#1024)**: Home = today, the hub (Money · Offers · Time) = the past, the Playbook = the next
 move, with `HowNumbersWorkFooter` as the one disclosure per screen and `PlanProgress` a VIEW of
@@ -700,7 +749,7 @@ Every new feature or refactor holds to these — they are forefront design input
    offer slots, lifecycle-edge anchors, learned rate models — is either ruleset data validated at
    load or state keyed by `Platform`, never a global tuned to whichever platform we field-test
    most. New rule↔state vocabulary goes through the enumerated, load-validated contract
-   (`StateMachineContract` — `REQUIRED_FIELDS_BY_SHAPE`, plus #762's `EFFECT_INTENTS`
+   (`ParsedFieldsFactory.REQUIRED_FIELDS_BY_SHAPE`, plus `StateMachineContract`'s #762 `EFFECT_INTENTS`
    (effect-bearing notification intent → its required parse fields) and `REQUIRED_FIELDS_BY_FLOW`
    (deliberately empty today — every `task:*` flow has a legitimate parse-less rule), both enforced
    at compile by `RuleCompiler` as *declaration* checks, fail-loud per file; unknown intents stay
