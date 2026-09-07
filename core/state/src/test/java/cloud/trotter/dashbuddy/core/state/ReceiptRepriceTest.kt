@@ -1337,14 +1337,17 @@ class ReceiptRepriceTest {
     }
 
     @Test
-    fun `round 14 — an un-arrived drop is neither the receipt's subject nor completed by its exit`() {
-        // The fielded PostTask → nav → PostTask re-show (and the open #935 misclassification): a
-        // receipt-classified frame lands while a NEWER, UNDELIVERED drop is active. The subject used
-        // to be `activeTask ?: recentTasks.last()`, so d3 was named — the exit fabricated d3's
-        // `DELIVERY_COMPLETED` (burning `log:DELIVERY_COMPLETED:d3`, so its real completion could
-        // never mint) and a dash end on that frame re-priced d1/d2 DOWN to make room for it.
+    fun `round 16 — a receipt frame contradicted by the same task's own nav mints nothing`() {
+        // #1073 round 16: what separates a genuine receipt from a misclassified PostTask frame is
+        // not on the frame — the field delivers with no arrival frame at all, so neither arrival nor
+        // "whose receipt was announced" can tell them apart (both were tried, both refused genuine
+        // receipts). It is what FOLLOWS: a real receipt is followed by idle, an offer or the next
+        // task; a misclassified one is contradicted by this task's OWN navigation coming back, which
+        // cancels the retire grace the receipt frame armed.
+        //
+        // STATED RESIDUAL: a misclassified frame followed immediately by a dash end has no
+        // following frame to contradict it. Bounded by #935.
         val d1 = dropoff("d1", "Bill Millers", completedAt = 10_000L)
-        val d2 = dropoff("d2", "Maple Street", completedAt = 12_000L)
         val d3 = dropoff("d3", "Rio Grande", completedAt = null).copy(arrivedAt = null)
         val region = PlatformRegion(
             platform = Platform.DoorDash,
@@ -1352,28 +1355,37 @@ class ReceiptRepriceTest {
             session = Session("S1", startedAt = 100L),
             activeJob = Job(
                 "J1", offerStoreHint = emptyList(), parentOfferHash = null, startedAt = 200L,
-                tasks = listOf(d1, d2, d3),
+                tasks = listOf(d1, d3),
             ),
-            activeTask = d3, // en route, never arrived — it cannot have a receipt
-            recentTasks = listOf(d1, d2),
+            activeTask = d3, // en route, never arrived
+            recentTasks = listOf(d1),
             lastActedFlow = Flow.TaskDropoffNavigation,
             jobReceiptAnchors = JobReceiptAnchors(jobId = "J1", firstEnteredAt = 10_000L),
         )
 
         val fold = Fold(region).step(postTaskObs(expanded(stackedReceipt), 13_000L))
         assertEquals(
-            "the subject is the last DELIVERED drop, never the un-arrived one",
-            "d2",
+            "the frame is taken at face value — the active dropoff is its subject",
+            "d3",
             fold.region.lastAnnouncedPostTaskTaskId,
         )
-        assertEquals(setOf("d1", "d2"), fold.region.lastPostTaskCoverage!!.taskIds)
+        assertEquals(DestructiveKind.TASK_RETIRE, fold.region.pendingDestructive?.kind)
 
-        // The exit off that frame must not complete d3.
-        fold.step(idleObs(14_000L))
-        assertNull(
-            "no fabricated completion, and its durable key is not burnt",
-            fold.completions()["d3"],
+        // …and then D3's own navigation returns inside the grace: the delivery is still in flight.
+        fold.step(
+            Observation.Screen(
+                timestamp = 14_000L, captureId = "cap-14000",
+                ruleId = "doordash.screen.dropoff_navigation", metadata = ReplayMetadata.EMPTY,
+                flow = Flow.TaskDropoffNavigation, modeHint = Mode.Online, parsed = ParsedFields.None,
+            ),
         )
+        assertNull("no fabricated completion", fold.completions()["d3"])
+        assertTrue(
+            "…its durable key is not consumed either",
+            fold.allKeys.none { it.second == "log:${AppEventType.DELIVERY_COMPLETED}:d3" },
+        )
+        assertNull("…and the frame's cached receipt is dropped — it was not a receipt", fold.region.lastPostTaskFields)
+        assertNull(fold.region.lastPostTaskCoverage)
     }
 
     @Test
@@ -1422,12 +1434,12 @@ class ReceiptRepriceTest {
     }
 
     @Test
-    fun `round 15 — an old job's re-shown receipt cannot mint the NEXT job's un-arrived drop`() {
-        // Astra's second P1. Job A closed on its $20 receipt; job B is accepted, its pickup done,
-        // and the dasher is NAVIGATING to B's sole customer (`arrivedAt == null`). A's receipt
-        // re-shows as PostTask. Round 14's un-arrived fallback named B's drop as the subject, so the
-        // exit off that frame minted B's `DELIVERY_COMPLETED` — consuming `log:DELIVERY_COMPLETED:b1`
-        // before B was even reached, and attaching A's money to it.
+    fun `round 16 — an old job's re-shown receipt cannot mint the NEXT job's drop either`() {
+        // Astra's cross-job shape. Job A closed on its $20 receipt; job B is accepted, its pickup
+        // done, and the dasher is navigating to B's sole customer. A's receipt re-shows. Rounds 14
+        // and 15 tried to refuse it on the FRAME (arrival, then "whose receipt was announced") and
+        // both refused genuine receipts elsewhere; round 16 takes the frame at face value and lets
+        // B's own navigation returning refuse the completion.
         val bDrop = dropoff("b1", "Rio Grande", completedAt = null).copy(jobId = "J2", arrivedAt = null)
         val region = PlatformRegion(
             platform = Platform.DoorDash,
@@ -1438,35 +1450,27 @@ class ReceiptRepriceTest {
                 tasks = listOf(bDrop),
             ),
             activeTask = bDrop,
-            // A's drop, delivered and closed out on a prior step.
             recentTasks = listOf(dropoff("a1", "Bill Millers", completedAt = 10_000L)),
             lastActedFlow = Flow.TaskDropoffNavigation,
             lastAnnouncedPostTaskTaskId = "a1",
-            lastPostTaskFields = expanded(twoTenReceipt),
-            lastPostTaskCoverage = ReceiptCoverage(setOf("a1")),
         )
 
         val fold = Fold(region)
             .step(postTaskObs(expanded(twoTenReceipt), 13_000L)) // A's receipt re-shows
-        assertEquals(
-            "no subject inside B, and A's drop is another job's — the cache is untouched",
-            setOf("a1"),
-            fold.region.lastPostTaskCoverage!!.taskIds,
-        )
-        assertEquals("…and nothing new is announced", "a1", fold.region.lastAnnouncedPostTaskTaskId)
-
-        fold.step( // back to B's navigation screen, inside the grace
-            Observation.Screen(
-                timestamp = 14_000L, captureId = "cap-14000",
-                ruleId = "doordash.screen.dropoff_navigation", metadata = ReplayMetadata.EMPTY,
-                flow = Flow.TaskDropoffNavigation, modeHint = Mode.Online, parsed = ParsedFields.None,
-            ),
-        )
+            .step( // back to B's navigation screen, inside the grace it armed
+                Observation.Screen(
+                    timestamp = 14_000L, captureId = "cap-14000",
+                    ruleId = "doordash.screen.dropoff_navigation", metadata = ReplayMetadata.EMPTY,
+                    flow = Flow.TaskDropoffNavigation, modeHint = Mode.Online,
+                    parsed = ParsedFields.None,
+                ),
+            )
         assertNull("B's drop has not been delivered — nothing may complete it", fold.completions()["b1"])
         assertTrue(
             "…so its durable key is not consumed either",
             fold.allKeys.none { it.second == "log:${AppEventType.DELIVERY_COMPLETED}:b1" },
         )
+        assertNull("…and A's money is not left attached to B", fold.region.lastPostTaskFields)
     }
 
     @Test
@@ -1499,6 +1503,82 @@ class ReceiptRepriceTest {
         assertNotNull("the delivered drop still completes", payload)
         assertNull("with no share off a receipt that does not describe it", payload!!.dropRealizedPay)
         assertNotNull("…and the offer estimate is NOT suppressed", payload.offerPayShare)
+    }
+
+    /** A second job's sole drop, mid-delivery with NO observed arrival — the fielded shape. */
+    private fun secondJobRegion() = PlatformRegion(
+        platform = Platform.DoorDash,
+        mode = Mode.Online,
+        session = Session("S1", startedAt = 100L),
+        activeJob = Job(
+            "J2", offerStoreHint = emptyList(), parentOfferHash = null, startedAt = 12_000L,
+            tasks = listOf(dropoff("b1", "Rio Grande", completedAt = null).copy(jobId = "J2")),
+        ),
+        activeTask = dropoff("b1", "Rio Grande", completedAt = null)
+            .copy(jobId = "J2", arrivedAt = null),
+        // A delivered and closed on a prior step; its announce id outlives it.
+        recentTasks = listOf(dropoff("a1", "Bill Millers", completedAt = 10_000L)),
+        lastActedFlow = Flow.TaskDropoffNavigation,
+        lastAnnouncedPostTaskTaskId = "a1",
+    )
+
+    @Test
+    fun `round 16 — a SECOND job's genuine no-arrival receipt is cached and its drop completes`() {
+        // Round 15's foreign-announce guard refused exactly this: A's announce id survives A's close,
+        // so B's REAL receipt was not cached, B's subject resolved null, and B's completion was never
+        // emitted at all (the close-out sweep scans `recentTasks`, which B only joins later).
+        val fold = Fold(secondJobRegion())
+            .step(postTaskObs(expanded(twoTenReceipt), 15_000L))
+        assertEquals("B's own receipt names B's drop", "b1", fold.region.lastAnnouncedPostTaskTaskId)
+        assertEquals(setOf("b1"), fold.region.lastPostTaskCoverage!!.taskIds)
+
+        fold.step(idleObs(16_000L))
+        val minted = fold.completions()["b1"]
+        assertNotNull("the delivery is recorded", minted)
+        assertEquals(20.00, minted!!.dropRealizedPay!!, 0.0001)
+    }
+
+    @Test
+    fun `round 16 — the SessionEnded-first variant records it too`() {
+        val fold = Fold(secondJobRegion())
+            .step(postTaskObs(expanded(twoTenReceipt), 15_000L))
+            .step(sessionEndedObs(16_000L))
+        assertNotNull("the dash-summary frame is a PostTask exit", fold.completions()["b1"])
+        fold.step(graceCommit(18_501L))
+        assertNull("the dash is over", fold.region.session)
+    }
+
+    @Test
+    fun `round 16 — a same-job final drop with no observed arrival still completes`() {
+        // T1 delivered, T2 delivered with no arrival frame ever recognised. Round 15's ladder put
+        // completed T1 ahead of active T2, so T2 was never the subject and never minted; its
+        // re-price then had no row to land on ($15 persisted against a $30 receipt).
+        val t1 = dropoff("t1", "Bill Millers", completedAt = 10_000L)
+        val t2 = dropoff("t2", "Maple Street", completedAt = null).copy(arrivedAt = null)
+        val region = PlatformRegion(
+            platform = Platform.DoorDash,
+            mode = Mode.Online,
+            session = Session("S1", startedAt = 100L),
+            activeJob = Job(
+                "J1", offerStoreHint = emptyList(), parentOfferHash = null, startedAt = 200L,
+                tasks = listOf(t1, t2),
+            ),
+            activeTask = t2,
+            recentTasks = listOf(t1),
+            lastActedFlow = Flow.TaskDropoffNavigation,
+            lastAnnouncedPostTaskTaskId = "t1",
+        )
+
+        val fold = Fold(region).step(postTaskObs(expanded(stackedReceipt), 15_000L))
+        assertEquals("the ACTIVE drop is the subject, arrival or not", "t2", fold.region.lastAnnouncedPostTaskTaskId)
+        assertEquals(
+            "…and its receipt covers the whole job",
+            setOf("t1", "t2"),
+            fold.region.lastPostTaskCoverage!!.taskIds,
+        )
+
+        fold.step(idleObs(16_000L))
+        assertNotNull("T2's completion exists — a re-price has a row to land on", fold.completions()["t2"])
     }
 
     // ---- revision keying + the handoff ---------------------------------------------------

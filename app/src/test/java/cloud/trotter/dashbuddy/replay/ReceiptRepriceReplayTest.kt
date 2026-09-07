@@ -53,6 +53,12 @@ class ReceiptRepriceReplayTest {
         return screens + click
     }
 
+    /** The session's own dropoff-NAVIGATION frame, re-stamped — the drop is still in flight. */
+    private fun dropoffNavAt(atMs: Long): SessionReplay.ScreenInput {
+        val nav = SessionReplay.loadSession(session).first { it.file.contains("dropoff_navigation") }
+        return SessionReplay.ScreenInput(nav.copy(capturedAtMs = atMs))
+    }
+
     /** The session's own trailing idle frame, re-stamped — the PostTask exit that mints the completion. */
     private fun idleAt(atMs: Long): SessionReplay.ScreenInput {
         val idle = SessionReplay.loadSession(session).first { it.file.contains("waiting_for_offer") }
@@ -68,6 +74,47 @@ class ReceiptRepriceReplayTest {
         steps.flatMap { it.events }
             .filter { it.type == AppEventType.DELIVERY_RECEIPT_REPRICE }
             .map { it.payload as DeliveryReceiptRepricePayload }
+
+    @Test
+    fun `round 16 — a receipt frame contradicted by the drop's own navigation mints nothing`() {
+        // #1073 round 16, over the REAL frames: a PostTask frame while the drop is still in flight is
+        // not a receipt if the drop's OWN navigation comes back inside the grace it armed. Nothing
+        // may be completed on that exit, and the durable key must stay unspent so the delivery's
+        // REAL receipt can still record it.
+        val base = chainBeforeTheReceipt()
+        val t0 = base.maxOf { it.atMs } + 1_000L
+
+        val steps = SessionReplay.reduceMixed(
+            base +
+                // A misclassified/stale receipt frame…
+                SessionReplay.ScreenInput(SessionReplay.loadScreenFrame(expandedFrame, t0)) +
+                // …contradicted by this same drop's navigation, inside the 8 s window it armed.
+                dropoffNavAt(t0 + 1_500L),
+        )
+        assertTrue(
+            "no completion off a frame the drop's own navigation contradicted\n" +
+                SessionReplay.trace(steps),
+            completions(steps).isEmpty(),
+        )
+
+        // The real receipt then arrives and the delivery records exactly once.
+        val finished = SessionReplay.reduceMixed(
+            base +
+                SessionReplay.ScreenInput(SessionReplay.loadScreenFrame(expandedFrame, t0)) +
+                dropoffNavAt(t0 + 1_500L) +
+                SessionReplay.ScreenInput(
+                    SessionReplay.loadScreenFrame(expandedFrame, t0 + 10_000L),
+                ) +
+                idleAt(t0 + 14_000L),
+        )
+        val recorded = completions(finished)
+        assertEquals(
+            "the delivery is recorded once, off its REAL receipt\n" + SessionReplay.trace(finished),
+            1,
+            recorded.size,
+        )
+        assertNotNull(recorded.single().parsedPay)
+    }
 
     @Test
     fun `layer 1 — the fielded 3_9s expansion now lands INSIDE the grace, so the completion is receipt-priced`() {

@@ -1397,13 +1397,17 @@ delivered, arrived drop always mints, and coverage gates only the attach and the
 coupled them and could delete a delivered drop's row forever: the exit refused it while it was still
 active, so the close-out sweep, which scans `recentTasks`, never saw it either). The **subject** is
 one resolver — `receiptSubjectTaskId()`, read by the cache, the "Saved: \$X" announce AND the
-PostTask-exit mint — and it is the ARRIVED accountable dropoff, else the job's last completed one,
-else — only while no OTHER job's receipt is already on file — the active un-arrived one: never a
-pickup, and never the next job's not-yet-reached drop while the previous job's receipt is cached (a
-re-shown receipt with no nameable subject caches nothing, announces nothing and mints nothing; before
-that guard, an old job's re-shown receipt fabricated the NEXT job's first completion and burnt its
-durable key). Arrival is evidence where it exists, not a precondition — the fielded 06-16 session
-delivers with no arrival frame at all, so requiring one detached that delivery from its own receipt.
+PostTask-exit mint — and it is the ACTIVE dropoff (arrival or not: the field renders deliveries with
+no arrival frame at all — the 06-16 session runs `dropoff_navigation` → `dropoff_pre_arrival` → the
+receipt), else the job's last COMPLETED drop; never a pickup, never a prior job's. **Fabrication is
+refused by what FOLLOWS the frame**, not by anything on it: a PostTask exit that RESUMES the same
+task — its own navigation returning while the retire grace is cancelled — is not a completion (the
+frame was not a receipt, so the mint refuses and the stepper drops what it cached). Arrival and
+"whose receipt was last announced" were both tried as discriminators and both refused a genuine
+receipt: the first detached the 06-16 delivery from its own receipt, the second lost a second job's
+receipt entirely (a closed job's announce id outlives it). Stated residual: a misclassified frame
+followed IMMEDIATELY by a dash end has no following frame to contradict it, so it can still
+force-complete the drop — bounded by #935.
 A cached receipt that names no drop of the job is not evidence about it, so it does not suppress the
 #691 estimate either. A `completedAt` timestamp was tried first as the coverage discriminator and
 rejected in the same series: it is the LATEST retire arm, so the receipt's own anchor could fall

@@ -82,51 +82,34 @@ internal fun actedFlowEdge(
  * "Saved: \$X" announce and the PostTask-exit mint all read, so they cannot name three different
  * tasks for one screen.
  *
- * A receipt follows a delivery, so the ladder is evidence-ordered:
- *  1. the ACTIVE task when it is an accountable dropoff that has ARRIVED — the normal shape, where
- *     `completedAt` is not stamped until the retire grace commits, so arrival is the live evidence;
- *  2. else the job's last COMPLETED accountable dropoff (job-scoped while a job is live; the
- *     unscoped fallback is reached only after the close, where the receipt's own job is gone);
- *  3. else the ACTIVE dropoff even un-arrived — but ONLY while no OTHER job's receipt is already on
- *     file (see below); else NULL.
+ * A receipt shown while a dropoff is ACTIVE is about that dropoff. Two rungs, in that order:
+ *  1. the ACTIVE task when it is a dropoff the dasher did not unassign — **arrival or not**;
+ *  2. else the job's last COMPLETED one (job-scoped while a job is live; the unscoped fallback is
+ *     reached only after the close, where the receipt's own job is gone).
  *
  * The predecessor was `activeTask?.taskId ?: recentTasks.lastOrNull()?.taskId` — unscoped and
- * unfiltered, so a PostTask-classified frame landing while a NEWER, UNDELIVERED drop was active
- * named that drop: the exit fabricated a `DELIVERY_COMPLETED` for it (burning its durable key) and a
- * dash end on that frame re-priced its delivered siblings DOWN to make room for it. A pickup could
- * be named too. Rung 2 closes the same-job version of that: a finished sibling always wins.
+ * unfiltered, so a PICKUP or a PRIOR job's drop could be named. That much is fixed here.
  *
- * **Rung 3 is GUARDED, not deleted** (#1073 round 15). Astra's attack is one job over: close job A
- * on its $20 receipt, accept job B, finish B's pickup, start navigating to B's sole customer — then
- * let A's receipt re-show. Rung 2 finds nothing inside B, and an unguarded rung 3 names B's
- * un-ARRIVED drop, so the exit off that frame mints B's completion (consuming
- * `log:DELIVERY_COMPLETED:<B-drop>` before B is reached) with A's money attached. What makes that
- * frame a RE-SHOW is a state fact, not the pixels: the region is already holding a receipt announced
- * for a task of a DIFFERENT job. So rung 3 is refused exactly then — and a receipt whose subject
- * cannot be named describes nobody: nothing is cached, nothing is announced, nothing is minted
- * (fail-null, #745).
+ * **Arrival is NOT a discriminator, and neither is a foreign announce** (#1073 round 16, after two
+ * rounds of trying both). The field renders deliveries with NO arrival frame at all — the 06-16
+ * session runs `dropoff_navigation` → `dropoff_pre_arrival` (a `task:dropoff:navigation` rule) →
+ * the receipt — so `arrivedAt == null` is the shape of a perfectly ordinary delivery, and every gate
+ * built on it refused a genuine receipt somewhere: round 14's arrival requirement detached that
+ * session's own receipt from its delivery, and round 15's foreign-announce guard lost a SECOND job's
+ * genuine receipt (job A's announce id survives A's close, so B's real receipt was refused and B's
+ * completion was never emitted at all).
  *
- * Deleting rung 3 outright was tried first and REJECTED against the corpus: the fielded 06-16
- * single-delivery session (`ReceiptRepriceReplayTest`) never renders an arrival frame at all — its
- * dropoff runs `dropoff_navigation` → `dropoff_pre_arrival` (a `task:dropoff:navigation` rule) →
- * the receipt — so the delivered drop reaches its own receipt with `arrivedAt == null` and rung 2
- * has nothing yet either. Requiring arrival there detached the receipt from the ONE delivery it
- * described. Arrival is evidence when it exists, never a precondition of being a subject.
+ * What separates a genuine receipt from a misclassified frame is not visible on the frame: it is
+ * what FOLLOWS. A real receipt is followed by idle, an offer, or the next task; a misclassified one
+ * is contradicted by the same task's own navigation returning. That test lives at the mint
+ * (`DeliveryCompletionEffects`, round 16 R2), which is where the fabrication would land.
  */
 internal fun PlatformRegion.receiptSubjectTaskId(): String? {
-    val live = activeTask?.takeIf { it.isReceiptSubject }
-    if (live?.arrivedAt != null) return live.taskId
+    activeTask?.takeIf { it.isReceiptSubject }?.let { return it.taskId }
     val jobId = activeJob?.jobId
-    val lastFinished = recentTasks.lastOrNull {
+    return recentTasks.lastOrNull {
         it.isReceiptSubject && it.completedAt != null && (jobId == null || it.jobId == jobId)
-    }
-    if (lastFinished != null) return lastFinished.taskId
-    // Rung 3's guard: a cached receipt announced for ANOTHER job's task means the frame on screen is
-    // that job's receipt re-showing, and this job's un-arrived drop is not its subject.
-    val announced = lastAnnouncedPostTaskTaskId ?: return live?.taskId
-    val announcedTask = (recentTasks + listOfNotNull(activeTask)).firstOrNull { it.taskId == announced }
-    val foreignReceiptOnFile = announcedTask != null && announcedTask.jobId != jobId
-    return if (foreignReceiptOnFile) null else live?.taskId
+    }?.taskId
 }
 
 /**

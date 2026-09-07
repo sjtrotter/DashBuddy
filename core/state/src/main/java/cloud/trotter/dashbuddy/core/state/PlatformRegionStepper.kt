@@ -23,7 +23,6 @@ import cloud.trotter.dashbuddy.domain.state.SessionType
 import cloud.trotter.dashbuddy.domain.state.Task
 import cloud.trotter.dashbuddy.domain.state.TaskPhase
 import cloud.trotter.dashbuddy.domain.state.TaskSubFlow
-import timber.log.Timber
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -683,6 +682,19 @@ class PlatformRegionStepper @Inject constructor() {
         // Task lifecycle
         r = updateTaskLifecycle(r, prev, next, obs, policy)
 
+        // #1073 round 16: the frame we just left `PostTask` FOR is this same task's own flow, and
+        // `updateTaskLifecycle` has just cancelled its retire grace — the drop is still in flight, so
+        // the PostTask frame behind us was NOT its receipt. Drop what it cached (the receipt, its
+        // coverage and the announce id), or a misclassified frame's money stays attached to a
+        // delivery that has not happened. `EffectMap` refuses the completion on the same edge.
+        if (prev == Flow.PostTask && next.toTaskPhase() != null &&
+            r.activeTask != null && r.activeTask?.taskId == region.activeTask?.taskId &&
+            region.pendingDestructive?.kind == DestructiveKind.TASK_RETIRE &&
+            r.pendingDestructive?.kind != DestructiveKind.TASK_RETIRE
+        ) {
+            r = r.clearCachedReceipt().copy(lastAnnouncedPostTaskTaskId = null)
+        }
+
         // Idle anchor: track when we started waiting for offers
         r = when {
             next == Flow.Idle && r.mode == Mode.Online && r.idleEnteredAt == null ->
@@ -740,14 +752,10 @@ class PlatformRegionStepper @Inject constructor() {
                     postTaskTaskId != null &&
                     postTaskTaskId == r.lastAnnouncedPostTaskTaskId
                 if (postTaskTaskId == null) {
-                    // #1073 round 15: no nameable SUBJECT — no arrived dropoff, no completed one
-                    // either — so this receipt describes nobody in this region. Refresh NOTHING (an
-                    // old job's re-shown receipt must not attach itself to the next job's
-                    // not-yet-reached delivery). Fail-null (#745); ids only (P7).
-                    Timber.tag("StateMachine").d(
-                        "#1073 receipt frame with no nameable subject — cache untouched (job %s)",
-                        r.activeJob?.jobId,
-                    )
+                    // #1073: no nameable SUBJECT — no dropoff active and none completed — so this
+                    // receipt describes nobody in this region and refreshes NOTHING. Fail-null
+                    // (#745); silent, because the reducer is log-free and the absent announce is
+                    // itself the observable (no "Saved: \$X" bubble fires).
                 } else if (!sameTaskCollapsedDowngrade) {
                     // #1033 round 13: ONE owner writes the receipt, the drops it describes, and the
                     // task it was announced for — see [cacheReceipt] / [ReceiptCoverage].

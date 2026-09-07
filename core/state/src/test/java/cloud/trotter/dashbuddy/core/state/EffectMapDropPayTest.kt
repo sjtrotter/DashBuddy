@@ -58,9 +58,6 @@ class EffectMapDropPayTest {
         store: String?,
         cust: String,
         completedAt: Long? = 400L,
-        // #1073 round 15: a delivery ARRIVES before its receipt, and the mint now requires that
-        // evidence. These fixtures predate the rule and left it null.
-        arrivedAt: Long? = 350L,
     ) = Task(
         taskId = id,
         jobId = "J",
@@ -68,7 +65,6 @@ class EffectMapDropPayTest {
         storeName = store,
         customerNameHash = cust,
         startedAt = 300L,
-        arrivedAt = arrivedAt,
         completedAt = completedAt,
     )
 
