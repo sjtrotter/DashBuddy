@@ -99,10 +99,21 @@ internal fun actedFlowEdge(
  * genuine receipt (job A's announce id survives A's close, so B's real receipt was refused and B's
  * completion was never emitted at all).
  *
- * What separates a genuine receipt from a misclassified frame is not visible on the frame: it is
- * what FOLLOWS. A real receipt is followed by idle, an offer, or the next task; a misclassified one
- * is contradicted by the same task's own navigation returning. That test lives at the mint
- * (`DeliveryCompletionEffects`, round 16 R2), which is where the fabrication would land.
+ * **STATED RESIDUAL — #1081, and it is PRE-EXISTING on master.** Nothing here can tell a genuine
+ * receipt from a false `post:task` frame, so a false frame landing while an un-arrived drop is
+ * active makes that drop the subject, and the PostTask exit AFTER it — the same task's own
+ * navigation, an offer overlay, idle, or a dash end, any of them — completes it and consumes its
+ * durable key. Master's announce (`activeTask ?: recentTasks.last()`) selects the same drop, so
+ * #1073 neither fixes nor worsens this; the coverage layer's teardown widening admits such an
+ * anchor by design (narrowed in round 17 to one carrying arrival or completion evidence, which is
+ * what stops a false frame from re-pricing its delivered siblings DOWN at a dash end).
+ *
+ * Three discriminators were tried and refuted across rounds 14–16, which is why the class is now its
+ * own issue rather than a guess inside this PR: arrival evidence (the field delivers with no arrival
+ * frame at all), a foreign announce id (inert for a dash's first job), and refusing an exit that
+ * resumes the same task (it swallowed a GENUINE receipt followed by a `dropoff_handoff` re-render —
+ * that flow is `task:dropoff:arrived`, the same edge — and it read a different pre-step region than
+ * the stepper's own lazy expiry, so the two disagreed).
  */
 internal fun PlatformRegion.receiptSubjectTaskId(): String? {
     activeTask?.takeIf { it.isReceiptSubject }?.let { return it.taskId }
@@ -131,9 +142,10 @@ private val Task.isReceiptSubject: Boolean
  *
  * Every accountable dropoff of the subject's job that already carried completion evidence, plus the
  * subject itself — which is in its own receipt by definition, and whose `completedAt` is not stamped
- * until its retire grace commits. Nothing UNQUALIFIED can enter: since round 14 the subject comes
- * from [receiptSubjectTaskId], which is a non-unassigned DROPOFF of this job or null — never a
- * pickup, and never an un-arrived drop while a finished sibling exists.
+ * until its retire grace commits. Nothing UNQUALIFIED can enter: the subject comes from
+ * [receiptSubjectTaskId], which is a non-unassigned DROPOFF of this job or null — never a pickup.
+ * It CAN be an un-arrived drop when one is active, which is the #1081 residual stated there: a false
+ * `post:task` frame then covers a drop that has not been delivered.
  * The job is the live one, falling back to the subject's own `jobId` so a post-close re-render still
  * resolves (`completeActiveJob` has already nulled `activeJob` by then).
  *
@@ -326,9 +338,20 @@ internal fun PlatformRegionStepper.decideReceiptReprice(
     // it: `p` and `next` are both this region because a cached-receipt decision has no step to
     // straddle, and `emittedThisStep` is empty because nothing is minting on this one. The ONE thing
     // added is the round-10/11 teardown widening, stated explicitly.
+    //
+    // The widening additionally requires the anchor to carry evidence of its OWN delivery —
+    // `arrivedAt` (a dropoff has no separate `confirmedAt`; its confirmation IS its completion, so
+    // the two together are the whole of the evidence) — because a false `post:task` frame landing
+    // while an un-arrived drop is active makes THAT drop the anchor (#1081), and a dash end on the
+    // very next frame would then re-price the job's genuinely delivered siblings DOWN to make room
+    // for it. Fail-null (#745): the cost is the rare genuine receipt for a drop with neither arrival
+    // nor completion observed, followed immediately by a dash end — that row keeps its #691
+    // estimate — and what it buys is that no delivered sibling is ever re-priced for a drop the
+    // machine has no evidence was delivered.
     val retirePending = region.pendingDestructive?.kind == DestructiveKind.TASK_RETIRE
     val widened = region.activeTask?.takeIf {
-        mintRanForJob && it.taskId == anchor && it.jobId == mark.jobId && it.isAccountableDropoff
+        mintRanForJob && it.taskId == anchor && it.jobId == mark.jobId && it.isAccountableDropoff &&
+            (it.arrivedAt != null || it.completedAt != null)
     }
     val drops = (
         mintingDropoffTasks(

@@ -682,19 +682,6 @@ class PlatformRegionStepper @Inject constructor() {
         // Task lifecycle
         r = updateTaskLifecycle(r, prev, next, obs, policy)
 
-        // #1073 round 16: the frame we just left `PostTask` FOR is this same task's own flow, and
-        // `updateTaskLifecycle` has just cancelled its retire grace — the drop is still in flight, so
-        // the PostTask frame behind us was NOT its receipt. Drop what it cached (the receipt, its
-        // coverage and the announce id), or a misclassified frame's money stays attached to a
-        // delivery that has not happened. `EffectMap` refuses the completion on the same edge.
-        if (prev == Flow.PostTask && next.toTaskPhase() != null &&
-            r.activeTask != null && r.activeTask?.taskId == region.activeTask?.taskId &&
-            region.pendingDestructive?.kind == DestructiveKind.TASK_RETIRE &&
-            r.pendingDestructive?.kind != DestructiveKind.TASK_RETIRE
-        ) {
-            r = r.clearCachedReceipt().copy(lastAnnouncedPostTaskTaskId = null)
-        }
-
         // Idle anchor: track when we started waiting for offers
         r = when {
             next == Flow.Idle && r.mode == Mode.Online && r.idleEnteredAt == null ->

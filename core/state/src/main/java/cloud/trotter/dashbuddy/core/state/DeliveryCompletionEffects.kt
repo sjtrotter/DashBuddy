@@ -93,39 +93,16 @@ internal fun EffectMap.diffDeliveryCompletion(
             // DELIVERY_COMPLETED for a never-delivered order. Mirrors the close-out's `unassignedAt`
             // firewall (below) at this second mint site.
             val unassigned = completedTask?.unassignedAt != null
-            // FABRICATION is refused by what FOLLOWS the frame, not by anything on it (#1073 round
-            // 16). A receipt cannot be told from a misclassified PostTask frame by arrival (the field
-            // delivers with no arrival frame at all — 06-16 runs nav → pre-arrival → receipt) nor by
-            // whose receipt was last announced (a previous job's announce survives its close, so
-            // that test refused the NEXT job's genuine receipt). But a real receipt is followed by
-            // idle, an offer, or the next task — never by the SAME task's own navigation coming
-            // back. When it is, `TaskLifecycle` has just cancelled the retire grace for that task
-            // (the drop is still in flight), and this exit is not a completion at all: refuse it,
-            // and the stepper drops the frame's cached receipt on the same step. Astra's sequence:
-            // B navigating un-arrived, a stale $20 PostTask frame, B's nav returning inside the
-            // grace — which used to mint B at $20 and burn `log:DELIVERY_COMPLETED:<B-drop>` before
-            // B was ever delivered.
-            //
-            // STATED RESIDUAL: a misclassified frame followed IMMEDIATELY by a dash end has no
-            // following frame to contradict it, so it is indistinguishable from a genuine
-            // receipt-then-end and can still force-complete the drop. Bounded by #935 (the
-            // misclassification itself); accepted, not hidden.
-            val resumedTaskId = completedTask?.taskId?.takeIf { id ->
-                next.activeTask?.taskId == id &&
-                    // The receipt's own retire grace was ARMED and is now GONE — `TaskLifecycle`
-                    // cancelled it because a frame for this very task arrived. Both halves matter: a
-                    // mid-stack exit toward the NEXT drop's navigation never had a retire pending to
-                    // cancel, so it is not a resume and still mints (#630).
-                    p.pendingDestructive?.kind == DestructiveKind.TASK_RETIRE &&
-                    next.pendingDestructive?.kind != DestructiveKind.TASK_RETIRE &&
-                    actedNextFlow.toTaskPhase() != null
-            }
-            if (resumedTaskId != null) {
-                Timber.tag("StateMachine").d(
-                    "#1073 PostTask exit RESUMES task %s — the frame was not a receipt, no completion",
-                    resumedTaskId,
-                )
-            }
+            // WHICH drop a PostTask frame completes is NOT this PR's subject (#1073 round 17). A
+            // false `post:task` frame while an un-arrived drop is active can still complete that drop
+            // — on ANY exit: the same task's navigation returning, an offer overlay, idle, or a dash
+            // end. That is PRE-EXISTING on master, and #1073 does not change it: it is tracked as
+            // **#1081**. Three discriminators were tried across rounds 14–16 and each was refuted by
+            // a concrete sequence — arrival evidence (the field delivers with NO arrival frame:
+            // 06-16 runs nav → pre-arrival → receipt), a foreign announce id (inert for the first
+            // job of a dash), and refusing an exit that resumes the same task (which swallows a
+            // GENUINE receipt followed by a `dropoff_handoff` re-render, losing the delivery
+            // entirely, and reads a different pre-step region than the stepper's own lazy expiry).
             //
             // COMPLETION and RECEIPT are two questions (#1073 round 15). Round 14 coupled them —
             // this exit refused to complete a drop the cached receipt did not describe — and that
@@ -142,7 +119,7 @@ internal fun EffectMap.diffDeliveryCompletion(
             val describedByReceipt =
                 completedTask != null && coveredTaskIds?.contains(completedTask.taskId) == true
             if (completedTask != null && completedTask.phase == TaskPhase.DROPOFF &&
-                !identityLess && !unassigned && resumedTaskId == null
+                !identityLess && !unassigned
             ) {
                 val retireSince = p.pendingDestructive
                     ?.takeIf { it.kind == DestructiveKind.TASK_RETIRE }?.since

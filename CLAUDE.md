@@ -1399,15 +1399,18 @@ active, so the close-out sweep, which scans `recentTasks`, never saw it either).
 one resolver — `receiptSubjectTaskId()`, read by the cache, the "Saved: \$X" announce AND the
 PostTask-exit mint — and it is the ACTIVE dropoff (arrival or not: the field renders deliveries with
 no arrival frame at all — the 06-16 session runs `dropoff_navigation` → `dropoff_pre_arrival` → the
-receipt), else the job's last COMPLETED drop; never a pickup, never a prior job's. **Fabrication is
-refused by what FOLLOWS the frame**, not by anything on it: a PostTask exit that RESUMES the same
-task — its own navigation returning while the retire grace is cancelled — is not a completion (the
-frame was not a receipt, so the mint refuses and the stepper drops what it cached). Arrival and
-"whose receipt was last announced" were both tried as discriminators and both refused a genuine
-receipt: the first detached the 06-16 delivery from its own receipt, the second lost a second job's
-receipt entirely (a closed job's announce id outlives it). Stated residual: a misclassified frame
-followed IMMEDIATELY by a dash end has no following frame to contradict it, so it can still
-force-complete the drop — bounded by #935.
+receipt), else the job's last COMPLETED drop; never a pickup, never a prior job's. **Which drop a PostTask frame completes is
+NOT changed by #1073** — that is master's semantics, made explicit and shared. **Stated residual,
+`#1081`:** a false `post:task` frame while an un-arrived drop is active makes that drop the subject,
+and the exit after it — the same task's navigation, an offer overlay, idle, a dash end, any of them —
+completes it and spends its durable key. Pre-existing on master (whose announce picks the same drop),
+so the coverage layer neither fixes nor worsens it. Three discriminators were tried and each refuted
+by a sequence: arrival evidence (the field delivers with NO arrival frame), a foreign announce id
+(inert for a dash's first job), and refusing an exit that resumes the same task (it swallowed a
+GENUINE receipt followed by a `dropoff_handoff` re-render, and disagreed with the stepper's own lazy
+expiry). The one half #1073 does close is its own: the round-10/11 teardown widening now admits the
+announced anchor only when that anchor carries arrival or completion evidence, so a false frame can
+never re-price its genuinely delivered siblings DOWN (fail-null, #745).
 A cached receipt that names no drop of the job is not evidence about it, so it does not suppress the
 #691 estimate either. A `completedAt` timestamp was tried first as the coverage discriminator and
 rejected in the same series: it is the LATEST retire arm, so the receipt's own anchor could fall
