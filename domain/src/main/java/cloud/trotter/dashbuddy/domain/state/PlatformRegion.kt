@@ -671,6 +671,24 @@ data class PendingDestructive(
      * commit's domain timestamp at it.
      */
     val servedFrom: Long? = null,
+    /**
+     * The `obs.timestamp` that last SET or MOVED this deadline (#1054 round 7) — the accounting
+     * anchor for how much of the CURRENT window has been observed. Null on a pre-round-7 snapshot,
+     * where [since] is the correct fallback (nothing had moved the deadline yet).
+     *
+     * [since] cannot serve as that anchor once a tighten has happened, because the two answer
+     * different questions: `since` is the historical moment the destructive signal appeared, which
+     * #732 stamps the eventual commit at, while this is the moment the window now being served
+     * began. They agree at creation and diverge on a tighten — and a wall-clock rollback makes the
+     * divergence load-bearing. A grace with `since = 100 000` tightened by a summary frame at 97 000
+     * to deadline 99 500 has a real 2 500 ms window, but measured from `since` the next recovery
+     * computes `remaining = max(99 500 − 100 000, 0) = 0` and commits a window that was never served
+     * at all. Anchored at 97 000 it serves the 2 500 ms the tighten actually granted.
+     *
+     * Read as `servedFrom ?: windowFrom ?: since` — a restore anchor if one exists, else the last
+     * live move, else the arm.
+     */
+    val windowFrom: Long? = null,
 )
 
 enum class DestructiveKind {

@@ -610,7 +610,10 @@ step-back holds the identical `now + settleWindow`, and the superseded wake then
 zero time in its own window). So **a pending's OWN wake lapses it whenever it arrives** (an NTP step
 between arm and fire changes the stamp, not the fact that the window elapsed) and a fire from a
 REPLACED pending is inert. A new id is minted wherever a pending is created, replaced, re-based or
-has its deadline MOVED; id `0` is the reserved "legacy, unidentified" value a pre-round-5 snapshot
+has its deadline MOVED — `withWakeIdIfDeadlineMoved` is the one installer for a destructive pending
+and preserves an identity only for the SAME logical pending (same kind AND unchanged deadline; a
+kind change is a replacement, and after a clock rollback a fresh `TASK_RETIRE` really can land on a
+standing `SESSION_END`'s deadline, whose nearly-elapsed timer then committed it after ~10 ms); id `0` is the reserved "legacy, unidentified" value a pre-round-5 snapshot
 decodes to and never matches, so such a pending is lapsed by its timestamp alone. **A FRAME lapses a grace strictly PAST the deadline and the park at-or-past**, so a
 contradicting frame stamped exactly on a grace's deadline still reaches its own cancel arm (a paused
 frame cancels a resume #605, a task frame cancels a misrecognized `SESSION_END` #431; on the resume
@@ -676,10 +679,12 @@ serves the same remaining window — but the hygiene runs exactly **once** per r
 would start at the live boundary, which made the durable base describe a different deadline from the
 one the process was running, and an observation that was a no-op live then COMMITTED when the next
 restart replayed it. The checkpoint write's own latency is deducted from the window instead —
-milliseconds ordinarily, and a stated cost. **A live deadline MOVE re-anchors the accounting:**
-`withWakeIdIfDeadlineMoved` clears `servedFrom` on a tighten, or a tighten arriving after a clock
-step-back would leave the anchor in the new deadline's future and the next recovery would compute
-zero remaining, committing a window that was never served.
+milliseconds ordinarily, and a stated cost. **A live deadline MOVE re-anchors the accounting:** `withWakeIdIfDeadlineMoved` clears `servedFrom`
+and stamps `PendingDestructive.windowFrom` with the MOVING observation, so the hygiene reads
+`servedFrom ?: windowFrom ?: since`. Neither of the other two anchors survives a wall-clock rollback:
+a stale `servedFrom` sits in the new deadline's future, and `since` — the historical arm instant #732
+stamps the commit at — can be AHEAD of a tighten that landed behind it, both computing zero remaining
+for a window that was never served.
 `AppState.pendingDeadlineTimers()` then **re-arms** exactly two things: that grace, and the
 **pause-safety net** at the platform's own deadline, AS-IS with dead time included (it is the
 platform's countdown on the platform's clock). That net is state now — `PlatformRegion.pauseSafetyDeadline`,
@@ -698,7 +703,13 @@ is honoured when the region has no `pauseSafety` of its own **or when it lands a
 one's deadline** (round 6) — a payload-less fire is by construction a pre-round-5 arm, and a
 master-era tail can contain the PAUSE FRAME itself, so the replay may have just reconstructed the
 very net whose countdown produced the fire. Refusing it left a dash master had ended checkpointed as
-still running; one landing strictly BEFORE the armed deadline is still refused. `initialize()` awaits the merge collector's SUBSCRIPTION before
+still running; one landing strictly BEFORE the armed deadline is still refused. **Two stated
+residuals** (round 7): a legacy fire whose OLD build's clock rolled back between arm and fire lands
+before its reconstructed deadline and is refused, losing that terminal transition — identity cannot
+be recovered across a wall-clock discontinuity, and the exposure is one process lifetime (the journal
+tail is 48 h; every arm from this build's first run carries an id); and "payload-less means
+pre-round-5" is not strictly true, since the rule-driven timer API can emit a payload-less fire of any
+type (no checked-in rule does so for safety — a provenance residual on #1076). `initialize()` awaits the merge collector's SUBSCRIPTION before
 `restoreState`, because `engine.events` is a `replay = 0` `SharedFlow` and an already-elapsed re-arm
 fires at once — emitted with no subscriber it would be dropped silently. Everything goes out on the
 LIVE path (`recovering = false`) before `_state.value` is set, `durationMs` is the bare 1 ms floor

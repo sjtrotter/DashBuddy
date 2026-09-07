@@ -1,5 +1,8 @@
 package cloud.trotter.dashbuddy.core.state
 
+import cloud.trotter.dashbuddy.domain.capture.ReplayMetadata
+import cloud.trotter.dashbuddy.domain.pipeline.Observation
+import cloud.trotter.dashbuddy.domain.state.ParsedFields
 import cloud.trotter.dashbuddy.domain.pipeline.TimeoutType
 import cloud.trotter.dashbuddy.domain.state.AppState
 import cloud.trotter.dashbuddy.domain.state.DestructiveKind
@@ -252,6 +255,13 @@ class PendingDeadlineTimersTest {
         )
     }
 
+    /** A frame at [at], for the installer's `obs` (only its timestamp is read). */
+    private fun frame(at: Long) = Observation.Screen(
+        timestamp = at, captureId = null, ruleId = "doordash.screen.test",
+        metadata = ReplayMetadata.EMPTY, flow = Flow.Idle, modeHint = null,
+        parsed = ParsedFields.None,
+    )
+
     @Test
     fun `a tighten RE-ANCHORS servedFrom, so the next recovery serves the window it granted`() {
         // Astra's finding 4. A restored grace carries `servedFrom = 100 000` and deadline 110 000;
@@ -270,7 +280,11 @@ class PendingDeadlineTimersTest {
         val region = region(Platform.DoorDash, destructive = restored)
 
         val tightened = region
-            .withWakeIdIfDeadlineMoved(restored, restored.copy(deadline = 92_500L, authoritative = true))
+            .withWakeIdIfDeadlineMoved(
+                restored,
+                restored.copy(deadline = 92_500L, authoritative = true),
+                frame(90_000L),
+            )
             .pendingDestructive!!
         assertNull("the stale anchor is cleared by the move", tightened.servedFrom)
         assertNotEquals("and the moved deadline is a new pending to its timer", 4L, tightened.wakeId)
@@ -288,6 +302,72 @@ class PendingDeadlineTimersTest {
     }
 
     @Test
+    fun `a tighten that moves BEHIND since still serves its own window`() {
+        // Astra's round-6 finding 1. Round 6 cleared `servedFrom` on a move and fell back to
+        // `since` — which is fine while the clock runs forward, and wrong after a rollback. Here
+        // `since = 100 000`, a restore at 101 000 sets deadline 111 000, and then the clock steps
+        // back and a summary frame at 97 000 tightens to 99 500. Measured from `since` the next
+        // recovery computes `observed = max(97 000 − 100 000, 0) = 0` and
+        // `remaining = max(99 500 − 100 000, 0) = 0` — an immediate commit of an entirely UNSERVED
+        // 2 500 ms window. `windowFrom` anchors it at the frame that granted it.
+        val restored = PendingDestructive(
+            kind = DestructiveKind.SESSION_END,
+            since = 100_000L,
+            deadline = 111_000L,
+            servedFrom = 101_000L,
+            windowFrom = 100_000L,
+            wakeId = 4L,
+        )
+        val tightened = region(Platform.DoorDash, destructive = restored)
+            .withWakeIdIfDeadlineMoved(
+                restored,
+                restored.copy(deadline = 99_500L, authoritative = true),
+                frame(97_000L),
+            )
+            .pendingDestructive!!
+
+        assertEquals("anchored at the frame that moved it", 97_000L, tightened.windowFrom)
+        assertNull(tightened.servedFrom)
+        assertEquals("and `since` is untouched — #732 stamps the commit at it", 100_000L, tightened.since)
+
+        val next = state(region(Platform.DoorDash, destructive = tightened))
+            .copy(timestamp = 97_000L)
+            .recoveryHygiene(nowMs = 98_000L)
+
+        assertEquals(
+            "98 000 + the full 2 500 the tighten granted, not an immediate commit",
+            100_500L,
+            next.regions.platforms.getValue(Platform.DoorDash).pendingDestructive?.deadline,
+        )
+    }
+
+    @Test
+    fun `a REPLACEMENT of a different KIND never inherits the identity, even at the same deadline`() {
+        // Astra's round-6 finding 2. The receipt caller passes the standing `pendingDestructive`
+        // even when its constructor has just replaced a SESSION_END with a brand-new TASK_RETIRE,
+        // and after a clock rollback the two can carry the SAME deadline. Round 6 read that as
+        // "unchanged" and copied the end's generation onto the retire — so the end's nearly-elapsed
+        // timer matched and committed the retire after ~10 ms of its own window.
+        val end = PendingDestructive(
+            kind = DestructiveKind.SESSION_END,
+            since = 8_000L, deadline = 12_500L, authoritative = true, wakeId = 2L,
+        )
+        val retire = PendingDestructive(
+            kind = DestructiveKind.TASK_RETIRE,
+            since = 10_000L, deadline = 12_500L, authoritative = true,
+        )
+
+        val installed = region(Platform.DoorDash, destructive = end)
+            .withWakeIdIfDeadlineMoved(end, retire, frame(10_000L))
+            .pendingDestructive!!
+
+        assertEquals(DestructiveKind.TASK_RETIRE, installed.kind)
+        assertNotEquals("a different kind is a different pending", 2L, installed.wakeId)
+        assertTrue("and it is a real generation", installed.wakeId > 0L)
+        assertEquals("anchored at the frame that created it", 10_000L, installed.windowFrom)
+    }
+
+    @Test
     fun `an UNCHANGED deadline keeps both its generation and its anchor`() {
         // The other side: the tighten sites re-derive their pending on most frames without
         // changing anything, and re-minting there would cancel and re-arm the timer every frame —
@@ -300,11 +380,12 @@ class PendingDeadlineTimersTest {
             wakeId = 4L,
         )
         val same = region(Platform.DoorDash, destructive = restored)
-            .withWakeIdIfDeadlineMoved(restored, restored.copy(authoritative = true))
+            .withWakeIdIfDeadlineMoved(restored, restored.copy(authoritative = true), frame(90_000L))
             .pendingDestructive!!
 
         assertEquals(4L, same.wakeId)
         assertEquals(100_000L, same.servedFrom)
+        assertEquals("and its window anchor", 10_000L, same.windowFrom ?: 10_000L)
     }
 
     @Test

@@ -427,7 +427,14 @@ internal fun PlatformRegionStepper.updateTaskLifecycle(
         // original #1054 bug, intact for retires), and the #1033 collapsed→expanded tighten moved
         // the deadline 18 000 → 13 500 while `diffGraceTimer` saw an unchanged id and emitted no
         // replacement, so the completion waited for the OLD timer.
-        return region.withWakeIdIfDeadlineMoved(existing, pend)
+        //
+        // Round 7: `existing` is passed as the predecessor ONLY when it is the retire this frame is
+        // tightening. When it is a SESSION_END the `else` branch above built a brand-new
+        // TASK_RETIRE that REPLACES it, and after a clock rollback the two can carry the same
+        // deadline — the installer's kind test catches that, and passing null here says the same
+        // thing at the call site.
+        val tightened = existing?.takeIf { it.kind == DestructiveKind.TASK_RETIRE }
+        return region.withWakeIdIfDeadlineMoved(tightened, pend, obs)
     }
 
     // Leaving a task flow to idle/offer while online → do NOT retire the task
@@ -442,6 +449,7 @@ internal fun PlatformRegionStepper.updateTaskLifecycle(
             // reaches a region.
             return region.withWakeIdIfDeadlineMoved(
                 prev = null,
+                obs = obs,
                 next = PendingDestructive(
                     kind = DestructiveKind.TASK_RETIRE,
                     since = obs.timestamp,

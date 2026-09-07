@@ -18,6 +18,7 @@ import cloud.trotter.dashbuddy.domain.state.Regions
 import cloud.trotter.dashbuddy.domain.state.Session
 import cloud.trotter.dashbuddy.domain.state.Task
 import cloud.trotter.dashbuddy.domain.state.TaskPhase
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -89,6 +90,9 @@ class WakeIdMintCoverageTest {
 
     @Test
     fun `the dash-summary SESSION_END grace is minted`() {
+        // NOTE (Astra, round 6): starting Online and supplying Offline reaches the summary arm via
+        // the ordinary offline end, i.e. through the TIGHTEN branch. That is a real path and stays,
+        // but it is NOT the fresh constructor — see the next case, which starts with nothing armed.
         val armed = step(
             region(), Flow.Idle,
             screen(
@@ -97,6 +101,58 @@ class WakeIdMintCoverageTest {
             ),
         )
         assertMinted(armed.pendingDestructive, "summary SESSION_END")
+    }
+
+    @Test
+    fun `the FRESH summary constructor is minted`() {
+        // The `else` branch of the summary arm — reached only when nothing destructive stands.
+        // A region that is already Offline supplies no mode transition, so no offline end is armed
+        // first and the summary constructs its pending outright.
+        val armed = step(
+            region(mode = Mode.Offline), Flow.Idle,
+            screen(
+                10_000L, Flow.SessionEnded, Mode.Offline,
+                ParsedFields.SessionEndedFields(totalEarnings = 25.0),
+            ),
+        )
+        assertMinted(armed.pendingDestructive, "fresh summary SESSION_END")
+        assertEquals(
+            "and it is authoritative — proving the summary constructor, not the offline one",
+            true,
+            armed.pendingDestructive!!.authoritative,
+        )
+    }
+
+    @Test
+    fun `a destructive KIND replacement is minted, not inherited`() {
+        // Round 7. A summary leaves an authoritative SESSION_END; a receipt then replaces it with a
+        // TASK_RETIRE. Even when the two deadlines coincide, the replacement must take a fresh
+        // generation — otherwise the end's own timer commits the retire.
+        val ended = step(
+            dashing(), Flow.TaskDropoffArrived,
+            screen(
+                10_000L, Flow.SessionEnded, Mode.Offline,
+                ParsedFields.SessionEndedFields(totalEarnings = 25.0),
+            ),
+        )
+        val end = ended.pendingDestructive!!
+        assertEquals(DestructiveKind.SESSION_END, end.kind)
+
+        val replaced = step(
+            ended.copy(mode = Mode.Online), Flow.SessionEnded,
+            screen(
+                end.deadline - 2_500L, Flow.PostTask, Mode.Online,
+                ParsedFields.PostTaskFields(
+                    totalPay = 12.00,
+                    parsedPay = ParsedPay(listOf(ParsedPayItem("Base Pay", 12.0)), emptyList()),
+                ),
+                ruleId = "doordash.screen.delivery_summary",
+            ),
+        ).pendingDestructive!!
+
+        assertEquals(DestructiveKind.TASK_RETIRE, replaced.kind)
+        assertEquals("the deadlines really do coincide", end.deadline, replaced.deadline)
+        assertTrue("and the replacement never inherits", replaced.wakeId != end.wakeId)
     }
 
     @Test

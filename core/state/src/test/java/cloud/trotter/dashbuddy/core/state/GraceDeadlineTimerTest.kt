@@ -240,6 +240,52 @@ class GraceDeadlineTimerTest {
         assertTrue("never the legacy 0", pend.wakeId > 0L)
     }
 
+    @Test
+    fun `a receipt REPLACING a session end at the same deadline does not inherit its generation`() {
+        // Astra's round-6 finding 2, end to end through the production path. A summary leaves an
+        // authoritative SESSION_END; the clock rolls back; an expanded receipt at the same instant
+        // constructs a brand-new TASK_RETIRE that lands on the SAME deadline. Round 6's installer
+        // read equal deadlines as "unchanged" and copied the end's generation onto the retire, so
+        // the end's nearly-elapsed timer matched it and retired the task after ~10 ms of its own
+        // window — with no replacement arm, because the diff saw an unchanged id.
+        val summaryAt = 10_000L
+        val ended = machine.step(
+            state(retiringRegion(), Flow.TaskDropoffArrived),
+            Observation.Screen(
+                timestamp = summaryAt, captureId = null, ruleId = "doordash.screen.dash_summary",
+                metadata = ReplayMetadata.EMPTY, flow = Flow.SessionEnded, modeHint = Mode.Offline,
+                parsed = ParsedFields.SessionEndedFields(totalEarnings = 25.0),
+            ),
+        ).newState.dd()
+        val end = ended.pendingDestructive!!
+        assertEquals(DestructiveKind.SESSION_END, end.kind)
+
+        // The clock rolls back: the receipt lands at the same instant, and its 2.5 s expanded
+        // window happens to reproduce the end's deadline exactly.
+        val onlineAgain = ended.copy(mode = Mode.Online)
+        val transition = machine.step(
+            state(onlineAgain, Flow.SessionEnded),
+            expandedReceipt(end.deadline - 2_500L),
+        )
+        val retire = transition.newState.dd().pendingDestructive!!
+
+        assertEquals("the receipt replaced the end with a retire", DestructiveKind.TASK_RETIRE, retire.kind)
+        assertEquals("at the very same deadline", end.deadline, retire.deadline)
+        assertNotEquals("but never with the end's generation", end.wakeId, retire.wakeId)
+        assertEquals(
+            "and a replacement arm is emitted for it",
+            ObservationPayload.GraceWake(retire.wakeId),
+            transition.effects.scheduled(TimeoutType.GRACE_COMMIT).single().payload,
+        )
+
+        // The end's own old fire is now inert against the retire that replaced it.
+        val stale = machine.step(
+            state(transition.newState.dd(), Flow.PostTask),
+            wake(TimeoutType.GRACE_COMMIT, at = end.deadline - 2_490L, armedFor = end.wakeId),
+        ).newState.dd()
+        assertNotNull("the retire survives its predecessor's timer", stale.activeTask)
+    }
+
     /** An Online region mid-dropoff, so a receipt or an idle flash arms a retire. */
     private fun retiringRegion() = region(
         mode = Mode.Online,

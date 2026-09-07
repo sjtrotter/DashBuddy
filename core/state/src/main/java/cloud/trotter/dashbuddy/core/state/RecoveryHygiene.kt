@@ -70,12 +70,21 @@ import cloud.trotter.dashbuddy.domain.state.Platform
  * the hygiene with no intervening observation returns the same remaining window it did the first
  * time (only the absolute deadline slides forward with `nowMs`).
  *
- * That idempotence is load-bearing, not incidental: `StateManagerV2.restoreState` applies the
- * hygiene TWICE — once to produce the durable checkpoint, then again immediately before installing
- * — so the served window starts at the LIVE boundary rather than at a clock read taken before the
- * snapshot load, the tail replay and the checkpoint write. The checkpointed deadline therefore lags
- * the installed one by the checkpoint latency, deliberately; nothing depends on their being equal,
- * because a further restart simply re-bases again from the same `servedFrom`.
+ * That idempotence is what makes a crash LOOP safe: each restart re-bases from the same anchor and
+ * serves the same remaining window, however many times it happens.
+ *
+ * It is applied exactly ONCE per restore, though (#1054 round 6). Round 5 ran it twice so the served
+ * window could start at the live boundary rather than before the snapshot load and tail replay — but
+ * that made the durable checkpoint describe a DIFFERENT deadline from the state actually installed,
+ * and an observation that was a no-op live then COMMITTED when the next restart replayed it from
+ * that base. `StateManagerV2.finishRestore` therefore checkpoints and installs the SAME state, at
+ * the cost of the checkpoint write's own latency; see its KDoc.
+ *
+ * **A live deadline MOVE re-anchors this** (rounds 6–7): `withWakeIdIfDeadlineMoved` clears
+ * `servedFrom` and sets [PendingDestructive.windowFrom] to the moving observation, because a tighten
+ * replaces the window and neither the old restore anchor nor `since` describes it — after a
+ * wall-clock rollback a tighten can land BEHIND `since`, and measuring from there computes zero
+ * remaining for a window that was never served.
  *
  * ## Re-armed as-is — a countdown that is not ours
  *
@@ -89,8 +98,9 @@ import cloud.trotter.dashbuddy.domain.state.Platform
  * it replays from** (#1052). The tail is a faithful replay of what already happened, so it must run
  * against the snapshot exactly as recorded: a park whose commit timer sits IN the tail committed
  * live, and scrubbing the base would replay a different history. Running here also covers a pending
- * a TAIL frame re-created, whose `ScheduleTimeout` the recovery fold really does execute; that timer
- * then finds nothing and no-ops.
+ * a TAIL frame re-created. (Its `ScheduleTimeout` is never executed: since round 5
+ * `SideEffectEngine` skips a [TimeoutType.REGION_TIMERS] arm while recovering, so the replay leaves
+ * no coroutine behind at all.)
  *
  * **And the result has to be DURABLE, not just installed** (#1052 round 2): the snapshot on disk
  * still carries what was dropped, so a second restart with no ordinary snapshot in between (neither
@@ -109,9 +119,12 @@ fun AppState.recoveryHygiene(nowMs: Long): AppState {
             platforms = regions.platforms.mapValues { (_, region) ->
                 val scrubbed = region.copy(pendingSessionPay = null, pendingModeResume = null)
                 val pend = scrubbed.pendingDestructive ?: return@mapValues scrubbed
-                // The window is measured from `servedFrom` once one exists — see the KDoc's
-                // fixed-point argument. `since` is untouched (#732 stamps the commit at it).
-                val base = pend.servedFrom ?: pend.since
+                // The window is measured from the restore anchor once one exists, else from the
+                // observation that last MOVED the deadline, else from the arm. `since` is never an
+                // anchor beyond that fallback and is never written (#732 stamps the commit at it) —
+                // after a clock rollback a tighten can land BEHIND it, and measuring from `since`
+                // then computes zero remaining for a window that was never served (round 7).
+                val base = pend.servedFrom ?: pend.windowFrom ?: pend.since
                 val observed = (lastSeen - base).coerceAtLeast(0L)
                 val remaining = (pend.deadline - base - observed).coerceAtLeast(0L)
                 val (withId, wakeId) = scrubbed.mintWakeId()
@@ -160,7 +173,8 @@ internal data class PendingDeadline(
  *   dash to RESUME. Before round 4 this deadline lived only in the engine's in-memory timer map, so
  *   a restore into Paused had no timer of any kind.
  * - **`MODE_RESUME_COMMIT`** and **`SESSION_PAY_SETTLE`** — NOT re-armed, because [recoveryHygiene]
- *   dropped the pendings as stale evidence. The edge emits a `CancelTimeout` for each drop instead.
+ *   dropped the pendings as stale evidence. No cancel is needed either: the replay never armed one,
+ *   because `SideEffectEngine` skips a region timer while recovering (round 5).
  * - **`OFFER_EXPIRY` / `SETTLE_UI`** — pre-existing gaps this issue does not close: a tail-replayed
  *   arm is scheduled against a replayed frame's timestamp and so fires late, and a restored pending
  *   offer gets no fresh expiry at all. Tracked as **#1076**; nothing here regresses them. (The three

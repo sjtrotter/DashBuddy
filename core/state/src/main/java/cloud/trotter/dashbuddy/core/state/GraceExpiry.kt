@@ -85,39 +85,66 @@ internal fun graceLapsed(deadline: Long, wakeId: Long, obs: Observation, type: T
     obs.timestamp > deadline || obs.isWakeFor(type, wakeId)
 
 /**
- * THE way a destructive pending reaches a region (#1054 rounds 5–6) — every create and every
+ * THE way a destructive pending reaches a region (#1054 rounds 5–7) — every create and every
  * tighten in `PlatformRegionStepper` and `TaskLifecycle` goes through here.
  *
- * It does two things when, and only when, the deadline actually MOVED:
+ * It answers one question: **is [next] the same logical pending as [prev], merely re-derived?**
+ * Only then does it keep the existing identity and accounting. Everything else is a replacement, and
+ * a replacement always mints.
  *
- * 1. **Mints a fresh [PendingDestructive.wakeId].** A moved deadline is a new pending as far as its
- *    timer is concerned, because the standing arm would fire at the old, LATER instant and by then
- *    the window it was meant to protect has been over for a while. The tighten sites — the dash
- *    summary's `minOf` against a standing offline grace, and #1033's collapsed-vs-expanded receipt
- *    `minOf` — re-derive the pending on every qualifying frame and most of those frames change
- *    nothing, so an unchanged deadline must KEEP its id or a re-render would cancel and re-arm the
- *    timer every frame.
- * 2. **Clears [PendingDestructive.servedFrom]** (round 6). That field anchors crash recovery's
- *    serve-live accounting to the instant a restore last began serving the window; a live tighten
- *    replaces the window itself, so the old anchor no longer describes it. Keeping it was wrong in
- *    a way only a clock step-back exposes: a grace restored at 100 000 (`servedFrom = 100 000`,
- *    deadline 110 000) tightened by a summary frame at 90 000 to deadline 92 500 would, on the next
- *    recovery, compute `observed = max(90 000 − 100 000, 0) = 0` and
- *    `remaining = max(92 500 − 100 000, 0) = 0` — committing an entirely UNSERVED 2.5 s window.
- *    Clearing it re-anchors on `since`, which is the honest base for a window a live frame just
- *    granted. `since` itself is never touched here (#732 stamps the commit at it).
+ * "Same logical pending" is `prev != null && prev.kind == next.kind && prev.deadline ==
+ * next.deadline`. Each conjunct earns its place:
  *
- * [prev] is the pending as it stood (null for a fresh arm, which always mints).
+ * - **Non-null and unchanged deadline** — the tighten sites (the dash summary's `minOf` against a
+ *   standing offline grace, and #1033's collapsed-vs-expanded receipt `minOf`) re-derive the pending
+ *   on every qualifying frame, and most of those frames change nothing. Re-minting there would
+ *   cancel and re-arm the timer on every frame.
+ * - **Same KIND** (round 7). The receipt caller passes the standing `pendingDestructive` even when
+ *   its constructor has just replaced a `SESSION_END` with a brand-new `TASK_RETIRE`, and after a
+ *   clock rollback the two can carry the SAME deadline. Round 6 read that as "unchanged" and copied
+ *   the session end's generation onto the retire — so the end's old, nearly-elapsed timer matched
+ *   the retire and committed it after about 10 ms of its own window, with no replacement arm emitted
+ *   because the diff saw an unchanged id. A different kind is a different pending however the
+ *   deadlines line up.
+ *
+ * On a genuine move (or a replacement) it mints a fresh [PendingDestructive.wakeId] — the standing
+ * arm would otherwise fire at the old instant, by which time the window it protects has been over
+ * for a while — and re-anchors the accounting:
+ *
+ * - **[PendingDestructive.windowFrom] = the moving observation's timestamp.** That is the moment the
+ *   window now being served began. [PendingDestructive.since] cannot serve: it is the historical
+ *   moment the destructive signal appeared (#732 stamps the commit at it), and after a wall-clock
+ *   rollback a tighten can legitimately land BEHIND it — a grace with `since = 100 000` tightened at
+ *   97 000 to deadline 99 500 has a real 2 500 ms window, but measured from `since` the next
+ *   recovery computes zero remaining and commits a window that was never served (round 7).
+ * - **[PendingDestructive.servedFrom] = null.** That field anchors crash recovery's serve-live
+ *   accounting to the instant a restore last began serving the window; a live tighten replaces the
+ *   window, so the restore anchor no longer describes it (round 6).
+ *
+ * [prev] is the pending as it stood; pass null when constructing a replacement, which always mints.
  */
 internal fun PlatformRegion.withWakeIdIfDeadlineMoved(
     prev: PendingDestructive?,
     next: PendingDestructive,
+    obs: Observation,
 ): PlatformRegion {
-    if (prev != null && prev.deadline == next.deadline) {
-        return copy(pendingDestructive = next.copy(wakeId = prev.wakeId, servedFrom = prev.servedFrom))
+    if (prev != null && prev.kind == next.kind && prev.deadline == next.deadline) {
+        return copy(
+            pendingDestructive = next.copy(
+                wakeId = prev.wakeId,
+                servedFrom = prev.servedFrom,
+                windowFrom = prev.windowFrom,
+            ),
+        )
     }
     val (withId, wakeId) = mintWakeId()
-    return withId.copy(pendingDestructive = next.copy(wakeId = wakeId, servedFrom = null))
+    return withId.copy(
+        pendingDestructive = next.copy(
+            wakeId = wakeId,
+            servedFrom = null,
+            windowFrom = obs.timestamp,
+        ),
+    )
 }
 
 /**
@@ -143,6 +170,23 @@ internal fun PlatformRegion.withWakeIdIfDeadlineMoved(
  *    the reconstructed deadline is what identifies it as that net's own fire. An unidentified fire
  *    landing strictly BEFORE the armed deadline is still refused — that one really is older than
  *    the arm in state.
+ *
+ * **Two stated residuals** (round 7), both about the second arm:
+ *
+ * - **A legacy fire stamped BEFORE its own reconstructed deadline is refused, and that can lose a
+ *   terminal transition.** A master-era safety coroutine armed for 20 s whose wall clock rolled back
+ *   5 s between arm and fire lands at 25 000 against a reconstructed deadline of 30 000. Master
+ *   accepted it, armed the end grace and ended the dash; the replay refuses it, so the
+ *   `GRACE_COMMIT` behind it finds no destructive pending and the session is checkpointed as still
+ *   running. There is no fix available: identity cannot be recovered across a wall-clock
+ *   discontinuity, and a timestamp comparison is the only signal such a fire carries. The exposure
+ *   is bounded to ONE process lifetime — the journal tail is 48 h, and every arm from the first run
+ *   of this build onward carries an id — so it is accepted rather than papered over with a looser
+ *   rule that would let genuinely stale fires end live pauses.
+ * - **"Payload-less means pre-round-5" is not strictly true.** `SideEffectEngine`'s rule-driven
+ *   timer API accepts any [TimeoutType] and supplies `payload = null`, so a LIVE payload-less safety
+ *   fire is constructible today. No checked-in rule invokes it for safety, and the compiler cannot
+ *   express that; it is tracked as a provenance residual on #1076.
  *
  * The caller still requires [Mode.Paused]; this answers only "is this fire about the pause we are
  * in".

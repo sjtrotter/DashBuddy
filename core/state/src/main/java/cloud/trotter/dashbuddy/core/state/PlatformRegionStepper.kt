@@ -474,6 +474,7 @@ class PlatformRegionStepper @Inject constructor() {
                             since = obs.timestamp,
                             deadline = obs.timestamp + policy.gracePeriodMs(region.platform),
                             wakeId = wakeId,
+                            windowFrom = obs.timestamp,
                         ),
                     )
                 }
@@ -673,7 +674,12 @@ class PlatformRegionStepper @Inject constructor() {
             // #1054 round 5: a MOVED deadline is a new pending as far as its timer is concerned —
             // the standing arm would fire at the old, later instant. An unchanged one (the tighten
             // that did not actually tighten) keeps its id and its live arm.
-            return region.withWakeIdIfDeadlineMoved(existing, pend)
+            // Round 7: the predecessor is passed ONLY when this frame is tightening the SAME kind.
+            // The `else` branch built a fresh SESSION_END that REPLACES whatever stood there, and a
+            // replacement must never inherit an identity (the installer's kind test is the belt to
+            // this call site's braces).
+            val tightened = existing?.takeIf { it.kind == DestructiveKind.SESSION_END }
+            return region.withWakeIdIfDeadlineMoved(tightened, pend, obs)
         }
         if (region.mode == Mode.Offline) {
             // Clear the idle anchor and any TASK_RETIRE pending, but PRESERVE a

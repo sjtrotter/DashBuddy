@@ -217,6 +217,41 @@ class StateManagerV2RecoveryRearmTest {
         correlationVersion = cv,
     )
 
+    /**
+     * A snapshot table whose checkpoint write burns a KNOWN real interval (#1054 round 7).
+     *
+     * Astra's note on the round-6 pair: without a forced displacement both of the OLD
+     * implementation's clock reads could land in the same millisecond, so the equality test passed
+     * on luck and the replay test's observation (installed − 1 000 ms) sat inside the old gap
+     * whenever that gap was under a second. Real time, because the hygiene reads the wall clock —
+     * virtual time would leave every read identical.
+     */
+    private class SlowCheckpointDao(
+        seed: AppStateSnapshotEntity,
+        private val writeMs: Long,
+    ) : AppStateSnapshotDao {
+        private val rows = LinkedHashMap<Long, AppStateSnapshotEntity>()
+
+        init {
+            rows[seed.correlationVersion] = seed
+        }
+
+        override suspend fun insert(entity: AppStateSnapshotEntity) {
+            val until = System.currentTimeMillis() + writeMs
+            @Suppress("BlockingMethodInNonBlockingContext")
+            while (System.currentTimeMillis() < until) Thread.sleep(5)
+            rows[entity.correlationVersion] = entity
+        }
+
+        override suspend fun latest(): AppStateSnapshotEntity? =
+            rows.values.maxByOrNull { it.correlationVersion }
+
+        override suspend fun pruneOlderThan(cutoff: Long) {}
+    }
+
+    /** The displacement the old two-pass implementation would open between checkpoint and install. */
+    private val checkpointWriteMs = 400L
+
     private fun newManager(
         snapshot: AppState,
         tail: List<ObservationEntity> = emptyList(),
@@ -366,9 +401,14 @@ class StateManagerV2RecoveryRearmTest {
         // deadline from the one the process was running (102 500 vs 106 500), so an observation
         // that was a no-op live COMMITTED when the next restart replayed it from that base. A
         // replay base has to reproduce the decisions made against the installed state.
+        // The write burns a known 400 ms of REAL time, which is exactly the interval the old
+        // two-pass implementation put between its two clock reads — so this cannot pass on
+        // same-millisecond luck (Astra, round 6).
         val dispatcher = StandardTestDispatcher(testScheduler)
         val engine = RecordingEngine()
-        val snapshotDao = FakeSnapshotDao(snapshotOf(snapshotState(destructive = sessionEnd())))
+        val snapshotDao = SlowCheckpointDao(
+            snapshotOf(snapshotState(destructive = sessionEnd())), writeMs = checkpointWriteMs,
+        )
         val manager = newManager(
             snapshot = snapshotState(destructive = sessionEnd()),
             engine = engine,
@@ -377,7 +417,7 @@ class StateManagerV2RecoveryRearmTest {
         )
 
         manager.initialize()
-        runCurrent()
+        testScheduler.advanceUntilIdle()
 
         val checkpointed = StateJson.decodeFromString<AppState>(snapshotDao.latest()!!.stateJson)
         val installed = manager.state.value
@@ -402,23 +442,31 @@ class StateManagerV2RecoveryRearmTest {
         // deadline, so the same observation committed the session end. Same base, same outcome.
         val dispatcher = StandardTestDispatcher(testScheduler)
         val journalDao = FakeObservationDao(emptyList())
-        val snapshotDao = FakeSnapshotDao(snapshotOf(snapshotState(destructive = sessionEnd())))
+        // Again a forced 400 ms write, so the observation below can be placed BETWEEN the two
+        // deadlines the old implementation would have produced — where it was a no-op live and a
+        // commit on replay. Without the displacement the observation sat inside the old gap and the
+        // test passed against the broken code (Astra, round 6).
+        val snapshotDao = SlowCheckpointDao(
+            snapshotOf(snapshotState(destructive = sessionEnd())), writeMs = checkpointWriteMs,
+        )
 
         val first = recoveryManager(journalDao, snapshotDao, RecordingEngine(), dispatcher)
         first.initialize()
-        runCurrent()
+        testScheduler.advanceUntilIdle()
         val servedDeadline = first.state.value.regions.platforms
             .getValue(Platform.DoorDash).pendingDestructive!!.deadline
 
-        // Inside the served window, and NOT this grace's own wake — a no-op by both arms.
+        // 200 ms before the installed deadline — i.e. INSIDE the 400 ms the old checkpoint lagged
+        // by, so under the two-pass implementation this is past the CHECKPOINTED deadline while
+        // being a no-op against the installed one. Not this grace's own wake either.
         first.dispatch(
             Observation.Timeout(
-                timestamp = servedDeadline - 1_000L,
+                timestamp = servedDeadline - 200L,
                 type = TimeoutType.SETTLE_UI,
                 targetPlatform = Platform.DoorDash,
             ),
         )
-        runCurrent()
+        testScheduler.advanceUntilIdle()
         assertNotNull(
             "live: the session survives, its window not yet up",
             first.state.value.regions.platforms[Platform.DoorDash]?.session,
@@ -426,7 +474,7 @@ class StateManagerV2RecoveryRearmTest {
 
         val second = recoveryManager(journalDao, snapshotDao, RecordingEngine(), dispatcher)
         second.initialize()
-        runCurrent()
+        testScheduler.advanceUntilIdle()
 
         assertNotNull(
             "and the replay from the checkpoint reaches the same verdict — under round 5 this " +
