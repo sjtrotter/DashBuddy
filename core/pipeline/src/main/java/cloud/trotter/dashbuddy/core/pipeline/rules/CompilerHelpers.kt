@@ -102,8 +102,13 @@ internal fun compileNavigation(navSpec: JsonElement): (UiNode) -> UiNode? {
             }
             val regex = compileRegex(pattern)
             ;{ node ->
-                node.followingSiblings().asSequence().take(cap)
-                    .firstOrNull { s -> s.text?.let(regex::matches) == true }
+                // #1053 round 5 — an unevaluable match resolves no sibling, never the wrong one.
+                try {
+                    node.followingSiblings().asSequence().take(cap)
+                        .firstOrNull { s -> s.text?.let(regex::matches) == true }
+                } catch (e: RegexEvaluationFailed) {
+                    null
+                }
             }
         }
         nav.startsWith("findChild(") -> {

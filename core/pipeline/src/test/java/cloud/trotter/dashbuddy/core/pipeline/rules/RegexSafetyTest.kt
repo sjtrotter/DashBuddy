@@ -198,6 +198,21 @@ class RegexSafetyTest {
     }
 
     @Test
+    fun `the stack-overflow shape does not load at all`() {
+        // #1053 round 5, the reason MAX_PROGRAM_SIZE came down from 20 000 to 2 000. Seventeen
+        // characters; estimate 28 244; program 16 084 — both of round 4's gates accepted it — and
+        // matching a FIVE-character input overflows RE2J's Machine.add on 256 KiB, 512 KiB and
+        // 1 MiB stacks. ART's coroutine threads are about 1 MiB.
+        val overflowing = "^((.?){100}){40}\$"
+        assertTrue(
+            "it must pass the estimate — the point is that the MEASURED gate is what stops it",
+            RegexSafety.estimateInstructions(overflowing) <= RegexSafety.MAX_ESTIMATED_INSTRUCTIONS,
+        )
+        assertRejected(overflowing, "MAX_PROGRAM_SIZE")
+        assertRejected(overflowing, "16084")
+    }
+
+    @Test
     fun `the estimate is charged against the corpus's real shapes`() {
         // Pinned so the next person can see the margin rather than trust it. `estimate` is the
         // pre-compile guard's number; `actual` is `Pattern.programSize()` measured on the jar.
@@ -230,8 +245,14 @@ class RegexSafetyTest {
                     "rejected a ${c.actual}-instruction pattern",
                 estimate < RegexSafety.MAX_ESTIMATED_INSTRUCTIONS / 100,
             )
-            // And it really compiles to what the KDoc says it does.
-            RegexSafety.compileRegex(c.pattern)
+            // And it really compiles to what the KDoc says it does. Asserted, not just quoted in
+            // a message: round 4's review pointed out that `actual` appeared only inside the
+            // failure string, so changing 240 to 1 would have left the test green.
+            assertEquals(
+                "${c.what}: pinned program size",
+                c.actual,
+                RegexSafety.compileRegex(c.pattern).programSize(),
+            )
         }
     }
 
@@ -271,8 +292,11 @@ class RegexSafetyTest {
         for (p in listOf("(a+)+\$", "(a*)*", "(.*)+", "(a|aa)+\$", "(a?)*b", "(.*a){20}", "(\\d+\\s*)+")) {
             RegexSafety.compileRegex(p)
         }
-        RegexSafety.compileRegex("(a{50}){50}")
+        RegexSafety.compileRegex("(a{30}){30}") // 902 — comfortably under MAX_PROGRAM_SIZE
         RegexSafety.compileRegex("a{200}")
+        // ...and a shape whose PROGRAM is what stops it, not its bounds: every bound here is legal
+        // and the nesting is shallow, but 50x50 copies is 2 602 instructions.
+        assertRejected("(a{50}){50}", "MAX_PROGRAM_SIZE")
     }
 
     @Test
@@ -312,24 +336,32 @@ class RegexSafetyTest {
     }
 
     @Test
-    fun `a match that overflows the stack fails closed instead of killing the thread`() {
-        // A StackOverflowError is an Error: it escapes every `catch (e: Exception)` downstream and
-        // would take the classification coroutine with it (#909/#430). Round 2 said this could not
-        // be reproduced; the round-3 review DID reproduce it — `((a?){200}){40}` against "" 
-        // overflows inside RE2J's `Machine.add` on a 256 KiB thread stack. So the catch is load-
-        // bearing, not merely defensive. Asserted through the seam rather than through a pattern
-        // that has to actually overflow a real stack, because that reproduction is stack-size
-        // dependent and would be a flaky test.
-        assertEquals(false, BoundedRegex.failClosed(false) { throw StackOverflowError() })
-        assertNull(BoundedRegex.failClosed<String?>(null) { throw StackOverflowError() })
-        assertEquals("ok", BoundedRegex.failClosed("nope") { "ok" })
+    fun `a match that overflows the stack raises a distinguishable failure, not a default`() {
+        // #1053 round 5. Round 2 turned a StackOverflowError into the operation's default; round
+        // 4's review showed one default cannot serve every caller — `false` is fail-closed for a
+        // positive predicate and fail-OPEN for a redaction selector, which ships the node raw.
+        // So the failure is now its own exception and each boundary answers it (see the boundary
+        // tests in RegexEvaluationFailureTest).
+        val regex = RegexSafety.compileRegex("abc")
+        try {
+            BoundedRegex.evaluating(regex) { throw StackOverflowError() }
+            fail("expected RegexEvaluationFailed")
+        } catch (e: RegexEvaluationFailed) {
+            assertEquals("the pattern LENGTH is carried, never its text (Principle 7)", 3, e.patternLength)
+            assertTrue(
+                "the message must not quote the pattern — a rule pattern can quote screen text",
+                !e.message!!.contains("abc"),
+            )
+        }
+        // A healthy match is untouched.
+        assertEquals("ok", BoundedRegex.evaluating(regex) { "ok" })
     }
 
     @Test
-    fun `an ordinary exception is NOT swallowed by the fail-closed guard`() {
-        // Fail-closed is for the Error class specifically. A programming bug must still surface.
+    fun `an ordinary exception is NOT converted by the evaluation seam`() {
+        val regex = RegexSafety.compileRegex("abc")
         try {
-            BoundedRegex.failClosed(false) { throw IllegalStateException("boom") }
+            BoundedRegex.evaluating(regex) { throw IllegalStateException("boom") }
             fail("expected the exception to propagate")
         } catch (e: IllegalStateException) {
             assertEquals("boom", e.message)
@@ -346,15 +378,15 @@ class RegexSafetyTest {
         assertEquals("\\P{Nd}", RegexSafety.prepare("\\D"))
         assertEquals("[\\s\\p{Z}\\x{0B}\\x{85}]", RegexSafety.prepare("\\s"))
         assertEquals("[^\\s\\p{Z}\\x{0B}\\x{85}]", RegexSafety.prepare("\\S"))
-        assertEquals("[\\p{L}\\p{M}\\p{N}\\p{Pc}]", RegexSafety.prepare("\\w"))
-        assertEquals("[^\\p{L}\\p{M}\\p{N}\\p{Pc}]", RegexSafety.prepare("\\W"))
+        assertEquals("[\\p{L}\\p{M}\\p{N}\\p{Pc}\\x{200C}\\x{200D}]", RegexSafety.prepare("\\w"))
+        assertEquals("[^\\p{L}\\p{M}\\p{N}\\p{Pc}\\x{200C}\\x{200D}]", RegexSafety.prepare("\\W"))
     }
 
     @Test
     fun `inside a character class the un-bracketed forms are emitted`() {
         assertEquals("[\\p{Nd}.]", RegexSafety.prepare("[\\d.]"))
         assertEquals("[\\s\\p{Z}\\x{0B}\\x{85}:]", RegexSafety.prepare("[\\s:]"))
-        assertEquals("[\\p{L}\\p{M}\\p{N}\\p{Pc}-]", RegexSafety.prepare("[\\w-]"))
+        assertEquals("[\\p{L}\\p{M}\\p{N}\\p{Pc}\\x{200C}\\x{200D}-]", RegexSafety.prepare("[\\w-]"))
         assertEquals("[^\\p{Nd}]", RegexSafety.prepare("[^\\d]"))
         assertEquals("[\\P{Nd}x]", RegexSafety.prepare("[\\Dx]"))
     }
@@ -477,6 +509,11 @@ class RegexSafetyTest {
         assertTrue("connector punctuation is a word char to Android", word.matches("a\u203fb"))
         assertTrue("underscore still is", word.matches("a_b"))
         assertTrue("a hyphen still is not", !word.matches("a-b"))
+        // Round 5: Android's `\w` includes Join_Control, and the shipped merchant-pair shape was
+        // matching ZWJ/ZWNJ on the device before the move to RE2J.
+        assertTrue("ZWJ (U+200D) is a word char to Android", pair.containsMatchIn("Cafe\u200d - Market"))
+        assertTrue("ZWNJ (U+200C) too", pair.containsMatchIn("Cafe\u200c - Market"))
+        assertTrue(word.matches("a\u200db"))
     }
 
     @Test
@@ -491,6 +528,16 @@ class RegexSafetyTest {
             "RESIDUAL: U+1E951 ADLAM DIGIT ONE is a decimal digit to Android and not to RE2J 1.8. " +
                 "If this starts passing, RE2J's tables caught up — update the residual list.",
             !digit.matches("\ud83a\udd51"),
+        )
+        // The same table lag on the LETTER side, which is what touches the #885 name shape: an
+        // Adlam-letter name matches on ART and not here, so its customer-name redact stops firing.
+        // No translation closes this — the repertoire lives in RE2J's tables, not the class name.
+        val letter = RegexSafety.compileRegex("^\\p{L}\$")
+        assertTrue("ordinary letters, obviously", letter.matches("a"))
+        assertTrue("accented letters too", letter.matches("\u00e9"))
+        assertTrue(
+            "RESIDUAL: U+1E900 ADLAM CAPITAL LETTER ALIF is a letter to Android and not to RE2J 1.8",
+            !letter.matches("\ud83a\udd00"),
         )
     }
 

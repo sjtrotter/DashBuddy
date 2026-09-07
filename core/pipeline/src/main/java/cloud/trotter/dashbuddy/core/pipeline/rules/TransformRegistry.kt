@@ -192,7 +192,12 @@ object TransformRegistry {
                 val group = obj["group"]?.jsonPrimitive?.intOrNull ?: 0
                 val thenTransform = obj["then"]
                 val regex = regexCache.getOrPut(pattern) { RuleCompiler.compileRegex(pattern) }
-                val match = regex.find(value) ?: return null
+                // #1053 round 5 — an unevaluable match yields NO field, never a wrong one (#745).
+                val match = try {
+                    regex.find(value)
+                } catch (e: RegexEvaluationFailed) {
+                    null
+                } ?: return null
                 val extracted = match.groupValues.getOrNull(group) ?: return null
                 if (thenTransform != null) {
                     applyAny(thenTransform, extracted)

@@ -136,7 +136,8 @@ gates:
    trusts its number;
 2. the compile, wrapped in `catch (Throwable)` so an `OutOfMemoryError` or `StackOverflowError` from
    gate 1's residue is a loud per-rule `RuleCompileException` rather than process death;
-3. **the bound**: `Pattern.programSize()` ≤ `MAX_PROGRAM_SIZE` = **20 000**.
+3. **the bound**: `Pattern.programSize()` ≤ `MAX_PROGRAM_SIZE` = **2 000** (lowered from 20 000 in
+   round 5 — see below).
 
 The estimate is a cost walk — atom 1, concatenation sums, alternation and captures add overhead, a
 quantifier multiplies the preceding unit — rather than the product of every bound in the pattern. A
@@ -146,7 +147,7 @@ so no single ceiling separates the corpus from the exploit. The cost walk scores
 the attack 1 565 058.
 
 > **The corpus's largest measured program is 240 instructions** (the #885 first-last-initial name
-> shape), with 199 and 157 behind it — an **83× margin** under the 20 000 ceiling.
+> shape), with 199 and 157 behind it — an **8× margin** under the 2 000 ceiling.
 > `RuleCorpusCompileBudgetTest` re-measures and prints it on every run, so the margin is a number in
 > the build log rather than a claim in a comment.
 
@@ -242,6 +243,55 @@ mixed-script figure (`$16.٧٠`) now satisfies the rule-side money *scan* — it
 literal ASCII range and stays ASCII. That is the correct division of labour: the scan finds a
 money-shaped node, and #1052's code-point rejection inside `parseGlyphCurrency` refuses to read a
 figure it cannot read. The end-to-end result is **null**, never a fabricated number.
+
+### Round 5 — an evaluation failure cannot have one default, and the bound comes down
+
+Two gates decide what *loads*. Neither says anything about what happens when a pattern that loaded
+cleanly cannot be **evaluated**, and round 4's review found that the answer was unsafe.
+
+`^((.?){100}){40}$` is seventeen characters. It estimated at 28 244, compiled to 16 084 instructions
+— **both gates accepted it** — and overflows RE2J's `Machine.add` while matching a *five-character*
+input on 256 KiB, 512 KiB **and 1 MiB** stacks. ART's coroutine threads are about 1 MiB.
+
+`BoundedRegex` converted that `StackOverflowError` into the operation's default. For a positive
+`require` predicate, `false` is fail-closed and fine. For a **redaction selector** it is fail-OPEN:
+`CompiledRedact.maskNode` reads `false` as "no entry matched" and ships the node **raw**. One default
+cannot serve a positive predicate, a negated predicate and a redaction selector at once.
+
+Both halves are fixed.
+
+**1. `MAX_PROGRAM_SIZE` is 2 000.** The corpus maximum is 240, so the margin is 8×, and the smallest
+shape that still overflows a 256 KiB stack measures **2 044** instructions — the ceiling sits just
+below the empirical threshold rather than at a round number picked for comfort. Deep nullable
+repetition is what reaches that depth and only a large program can express it, so a low program
+ceiling is the cheap structural defence.
+
+**2. An evaluation failure is a distinguishable exception, answered per boundary.** `BoundedRegex`
+raises `RegexEvaluationFailed` (carrying the pattern's *length* only — a rule pattern can quote
+screen text, Principle 7 — and WARNing once per pattern per process). Each boundary then chooses its
+own safe answer:
+
+| boundary | answer | why |
+|---|---|---|
+| recognition (`Ruleset.matchFirst`) | the rule does not match; evaluation moves to the next rule | a rule that cannot be evaluated cannot claim a frame |
+| parse (`TransformRegistry`, `ParseExpressionCompiler`, `nextSiblingMatchingRegex`) | the field is null | fail-null beats fail-wrong (#745) |
+| **redaction** (`CompiledRedact`, `CompiledNotifRedact`) | **mask the whole node/field** with the plain `[redacted]` constant | there is no reading of "we could not tell whether this carries PII" that justifies the raw value |
+
+The catch is deliberately **not** inside `PredicateCompiler`. A redact entry's `find` compiles
+through the very same `compileNodePred` as a `require`, so swallowing the failure at the predicate
+would hand redaction a `false` and reproduce the original fail-open one layer down. Each *consumer*
+catches; the predicate propagates.
+
+**Join controls join `\w`.** Android's `\w` includes `Join_Control`, and the shipped merchant-pair
+shape was matching ZWJ/ZWNJ on the device, so `\w` is now
+`[\p{L}\p{M}\p{N}\p{Pc}\x{200C}\x{200D}]`.
+
+**One residual is not fixable by translation at all.** RE2J 1.8's `\p{L}` and `\p{Nd}` predate
+Android's Unicode tables, so U+1E900 ADLAM CAPITAL LETTER ALIF is a letter to ART and not to RE2J,
+and U+1E951 ADLAM DIGIT ONE likewise. Two shipped shapes can feel it — the uber `Going to` pair (an
+Adlam-digit address falls to the redact-less pickup rule) and the #885 name shape (an Adlam-letter
+name stops matching, so its customer-name redact stops firing). Writing the classes out by hand does
+not help: the repertoire lives in RE2J's tables, not in the class name. Recorded as a residual.
 
 ## Known semantic deltas (RE2 vs JDK/ICU)
 

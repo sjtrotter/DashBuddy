@@ -116,6 +116,16 @@ class Ruleset<TInput>(rules: List<CompiledRule<TInput>>) {
             evalOrder
         }
         for (rule in rules) {
+          // #1053 round 5 — a rule whose own predicate cannot be EVALUATED (a match that blew the
+          // stack) does not match, and evaluation moves on to the next rule. Fail-closed for
+          // recognition: an unevaluable rule cannot claim a frame.
+          //
+          // The catch is HERE and deliberately NOT inside PredicateCompiler, because a redact
+          // entry's `find` compiles through the very same `compileNodePred`. Swallowing the failure
+          // at the predicate would hand redaction a `false` — "no entry matched" — and ship the node
+          // RAW, which is the exact fail-open this round exists to close. Each boundary has to
+          // choose its own safe answer; see BoundedRegex.evaluating.
+          try {
             // Phase 1: Resolve rule-level bindings (screen rules only)
             val ruleBindings = resolveBindings(input, rule.bindings) ?: continue
 
@@ -209,6 +219,10 @@ class Ruleset<TInput>(rules: List<CompiledRule<TInput>>) {
                     transitionOverrides = resolvedOverrides,
                 )
             }
+          } catch (e: RegexEvaluationFailed) {
+            // WARNed once per pattern inside BoundedRegex; here it is just "this rule is out".
+            continue
+          }
         }
         return null
     }

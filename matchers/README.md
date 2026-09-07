@@ -73,12 +73,20 @@ character class are rejected outright, since a negated union cannot be a class m
 Patterns are case-**insensitive** and bounded at load: 200 chars, no single repeat bound over
 **200**, at most **16** nested groups, no `\Q…\E` quoting, no leading-zero repeat bounds
 (`a{0201}` — RE2 reads that as literal text, so it is refused rather than silently meaning something
-else), and — the real bound — the **compiled program** at most **20 000 instructions**, measured
-after compiling. That last one is not about match time: it bounds COMPILE cost, which RE2J does not
-bound itself (`(a{1000}){1000}` is fifteen characters and a million instructions), and rule load
-happens on the device. The largest program either ruleset produces today is 240 instructions.
-Anything over-long, over-sized, too deep, or unsupported fails the rule LOAD loudly, per file, so a
-bad pattern can never degrade quietly into one that just never matches. See
+else), and — the real bound — the **compiled program** at most **2 000 instructions**, measured
+after compiling. The largest program either ruleset produces today is 240, so that is an 8× margin.
+
+Two things the program bound is and is not. It is **not** what keeps compilation affordable: it is
+measured *after* the compile, so a pattern can build a large program and only then be rejected
+(`a{0,200}(?i){0,198}(?i){5}` constructs 396 987 instructions before it is turned away). A separate,
+deliberately crude pre-compile estimate does that job, approximately. What the program bound **is**
+for is match-time depth: `^((.?){100}){40}$` is seventeen characters and 16 084 instructions, and
+matching a five-character input with it overflows the stack on threads up to 1 MiB. Deep nullable
+repetition is what reaches that depth, and only a large program can express it.
+
+Anything over-long, over-sized, too deep, or unsupported fails the rule LOAD loudly, and the whole
+FILE is rejected — a file whose patterns exhaust the device is not one to half-load — so a bad
+pattern can never degrade quietly into one that just never matches. See
 `docs/adr/ADR-0010-linear-time-rule-regex.md`.
 
 ## Locale scope: this ruleset is English-only (#938)

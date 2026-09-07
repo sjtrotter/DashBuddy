@@ -30,7 +30,8 @@ import java.io.File
  *     can reason about, matching against text it already trusts to be small — and a *rule-authored*
  *     one, which arrives as a value from JSON (today from assets; tomorrow, #192/#640, from a CDN)
  *     and must go through `compileRegex`. A `Regex(someVariable)` in this package is the violation.
- *  3. **The app-authored constants are enumerated and counted.** Adding one is a deliberate act
+ *  3. **The app-authored constants are enumerated and counted**, and so are the constant symbols
+ *     they may be concatenated with ([ALLOWED_OPERANDS]). Adding one is a deliberate act
  *     that edits this list; removing one (folding it into the shared vocabulary, or onto RE2J) is
  *     free. Counts may only drop, so the list is a visible debt ledger, not a permanent exemption.
  *
@@ -218,23 +219,25 @@ class RuleRegexEngineGuardTest {
     }
 
     /**
-     * After the literal the call must end — or continue with `+ SOME_CONSTANT`.
+     * After the literal the call must end — or continue with one of the [ALLOWED_OPERANDS].
      *
-     * Concatenating a literal onto a `const val` is how the shared shapes are composed
-     * (`Regex("\\x24" + CurrencyShape.FIGURE_CORE)` is the #1029 currency SSOT), and that is
-     * app-authored by construction: a `const` cannot hold a value from rule JSON. A concatenation
-     * with anything NOT in constant case is rejected, which is the case that matters.
+     * Concatenating a literal onto a shared shape constant is how the SSOTs are composed
+     * (`Regex("\\x24" + CurrencyShape.FIGURE_CORE)` is the #1029 currency shape), so concatenation
+     * cannot be banned outright. But UPPERCASE SPELLING IS NOT `const val` (#1053 round 5): a
+     * reviewer showed that `val PATTERN = patternFromRuleJson; Regex("" + PATTERN)` satisfied a
+     * "last segment is uppercase" rule while putting rule-authored text straight into the engine,
+     * and it kept the file's frozen count unchanged while doing it. So the permitted operands are
+     * **enumerated by name**, and every other one fails — adding a shared shape means adding it
+     * here, deliberately, which is the whole point of a ratchet.
      */
     private fun closesCall(rest: String): Boolean {
         val t = rest.trimStart()
         if (t.startsWith(")") || t.startsWith(",")) return true
         if (!t.startsWith("+")) return false
-        val operand = t.drop(1).trimStart().takeWhile { it.isLetterOrDigit() || it == '_' || it == '.' }
-        if (operand.isEmpty()) return false
-        val last = operand.substringAfterLast('.')
-        val isConstantCase = last.isNotEmpty() && last.all { it.isUpperCase() || it.isDigit() || it == '_' }
-        if (!isConstantCase) return false
-        return closesCall(t.drop(1).trimStart().drop(operand.length))
+        val afterPlus = t.drop(1).trimStart()
+        val operand = afterPlus.takeWhile { it.isLetterOrDigit() || it == '_' || it == '.' }
+        if (operand !in ALLOWED_OPERANDS) return false
+        return closesCall(afterPlus.drop(operand.length))
     }
 
     /** 1-based line number of [index] in [code] (comment-stripped, so it is an approximation). */
@@ -326,5 +329,18 @@ class RuleRegexEngineGuardTest {
         )
 
         val JAVA_UTIL_REGEX = Regex("""java\.util\.regex""")
+
+        /**
+         * The ONLY symbols a Kotlin `Regex(…)` in the rule package may be concatenated with.
+         *
+         * Each is a `const val` holding a shape this repo authored, so it cannot carry a value from
+         * rule JSON. Enumerated rather than pattern-matched on spelling: a `val` named in constant
+         * case is not a `const val`, and the difference is exactly the escape this guard exists to
+         * catch. Adding one is a deliberate edit here.
+         */
+        val ALLOWED_OPERANDS = setOf(
+            // #1029 — the one definition of "a well-formed currency figure", shared with the rules.
+            "CurrencyShape.FIGURE_CORE",
+        )
     }
 }

@@ -57,20 +57,30 @@ import com.google.re2j.Pattern as Re2Pattern
  */
 internal object RegexSafety {
 
-    /**
+     /**
      * **The bound.** Maximum instructions in the compiled RE2J program, measured with
      * `Pattern.programSize()` after the compile.
      *
      * Measured, not reasoned about: the largest program either shipped ruleset produces today is
      * **240** instructions (the #885 first-last-initial name shape), with 199 and 157 behind it —
-     * an **83× margin**. `RuleCorpusCompileBudgetTest` re-measures that maximum on every run and
+     * an **8× margin**. `RuleCorpusCompileBudgetTest` re-measures that maximum on every run and
      * prints it, so the margin is a number in the build log rather than a claim in a comment.
      *
-     * 20 000 instructions is a few hundred KiB of `Inst` objects and single-digit milliseconds to
-     * compile: comfortably affordable once per rule on a device, and four orders of magnitude below
-     * the 1.5 M-instruction pattern that motivated this gate.
+     * **Lowered from 20 000 in round 5, and the reason is a match-time stack overflow, not memory.**
+     * `^((.?){100}){40}$` is seventeen characters, estimates at 28 244 and compiles to **16 084**
+     * instructions — comfortably inside the old ceiling — and overflows RE2J's `Machine.add` while
+     * matching a five-character input on 256 KiB, 512 KiB **and 1 MiB** stacks. ART's coroutine
+     * threads are about 1 MiB. Deep nullable repetition is what reaches that depth, and only a large
+     * program can express it, so a low program ceiling is the cheap structural defence: at 2 000 the
+     * shape does not load at all. A 200-character screen-rule pattern has no business compiling past
+     * 2 000 instructions — the corpus proves it, at 240.
+     *
+     * This is a bound, not a guarantee. [BoundedRegex.evaluating] handles the residue: some other
+     * deep-nullable pattern under 2 000, on some smaller stack, raises [RegexEvaluationFailed] and
+     * each boundary answers it safely — recognition does not match, parse yields null, **redaction
+     * masks the whole node**.
      */
-    const val MAX_PROGRAM_SIZE = 20_000
+    const val MAX_PROGRAM_SIZE = 2_000
 
     /**
      * Ceiling on any single counted repeat bound (`{n}`, `{n,m}`, `{n,}`).
@@ -86,10 +96,17 @@ internal object RegexSafety {
     /**
      * Ceiling on the **pre-compile estimate** ([estimateInstructions]) — gate 1.
      *
-     * This number exists to keep the compile in gate 2 affordable, nothing more. It is set two
-     * orders of magnitude above the largest corpus estimate (126, for a pattern whose real program
-     * is 240) and an order of magnitude below the 1.5 M-instruction pattern that motivated the
-     * measured gate, so in practice it fires only on patterns that are trying to be expensive.
+     * This number exists to keep the compile in gate 2 affordable, nothing more. It is set three
+     * orders of magnitude above the largest corpus estimate (**156**, for the pattern whose real
+     * program is 240) and an order of magnitude below the 1.5 M-instruction pattern that motivated
+     * the measured gate, so in practice it fires only on patterns that are trying to be expensive.
+     *
+     * It bounds the compile only **approximately**, and the gap is real: `a{0,200}(?i){0,198}(?i){5}`
+     * estimates at 199 992 — inside this ceiling — and builds **396 987** instructions (~19 MiB,
+     * ~16 ms warmed) before [MAX_PROGRAM_SIZE] rejects the finished program. And a pattern can
+     * exhaust the stack *during* the compile at a smaller stack size: `a{0,200}(?i){0,200}`
+     * (estimate 40 402) overflows compiling on a 256 KiB thread, though not on 512 KiB or 1 MiB.
+     * That residue is what [compileRegex]'s `catch (Throwable)` is for.
      */
     const val MAX_ESTIMATED_INSTRUCTIONS = 200_000L
 
@@ -130,9 +147,21 @@ internal object RegexSafety {
         }
         val prepared = analysis.translated
 
-        // Gate 2's compile can still be expensive for anything gate 1 under-counted, and BOTH of its
-        // failure modes are `Error`s that would otherwise escape every Exception-only catch
-        // downstream and kill the load (the #909 class). Fail loud, per rule, never process death.
+        // Gate 2's compile can still be expensive for anything gate 1 under-counted, and its two
+        // resource failure modes are `Error`s that would otherwise escape every Exception-only
+        // catch downstream and kill the load (the #909 class). `a{0,200}(?i){0,200}` estimates at
+        // 40 402 and exhausts a 256 KiB stack DURING the compile; ART's coroutine threads are about
+        // 1 MiB, so this is a residue the pre-compile guard does not eliminate, not a hypothetical.
+        //
+        // Three honest caveats, because a catch this broad invites over-claiming (#1053 round 5):
+        //  - **Recovery is best effort.** Building the message, allocating the exception and logging
+        //    it can each fail in turn on the way out of an OutOfMemoryError.
+        //  - **It over-classifies.** An unrelated linkage or VM error caught here is reported as an
+        //    invalid rule pattern, which is wrong but strictly safer than letting it escape.
+        //  - **The outcome is WHOLE-FILE rejection, not one isolated rule.** RuleCompileException
+        //    defaults `isolable = false`, RuleCompiler rethrows, and JsonRuleInterpreter drops the
+        //    file. That is the repo's existing policy for resource limits and it is deliberate here
+        //    too — a file whose patterns exhaust the device is not one to half-load.
         val compiled = try {
             Re2Pattern.compile(prepared, Re2Pattern.CASE_INSENSITIVE)
         } catch (t: Throwable) {
@@ -200,8 +229,8 @@ internal object RegexSafety {
      * | `\D` | `\P{Nd}`                       | `\P{Nd}`                     |
      * | `\s` | `[\s\p{Z}\x{0B}\x{85}]`        | `\s\p{Z}\x{0B}\x{85}`        |
      * | `\S` | `[^\s\p{Z}\x{0B}\x{85}]`       | **rejected**                 |
-     * | `\w` | `[\p{L}\p{M}\p{N}\p{Pc}]`      | `\p{L}\p{M}\p{N}\p{Pc}`      |
-     * | `\W` | `[^\p{L}\p{M}\p{N}\p{Pc}]`     | **rejected**                 |
+     * | `\w` | `[\p{L}\p{M}\p{N}\p{Pc}\x{200C}\x{200D}]`  | `\p{L}\p{M}\p{N}\p{Pc}\x{200C}\x{200D}` |
+     * | `\W` | `[^\p{L}\p{M}\p{N}\p{Pc}\x{200C}\x{200D}]` | **rejected**                 |
      *
      * `\S` and `\W` inside a character class are rejected rather than passed through: they are the
      * negation of a *union*, which cannot be expressed as class members, and silently leaving them
@@ -222,9 +251,20 @@ internal object RegexSafety {
      *    `²`, which ICU's `\w` excludes). Chosen deliberately: over-matching `\w` widens a match,
      *    while under-matching it would drop a redact, and the whole point of this table is that a
      *    dropped redact is the failure that costs.
+     *  - **letters and digits lag ICU by a Unicode TABLE VERSION, and no translation closes that.**
+     *    RE2J 1.8's `\p{L}` and `\p{Nd}` predate Android's tables, so U+1E900 ADLAM CAPITAL LETTER
+     *    ALIF is a letter to ART and not to RE2J, and U+1E951 ADLAM DIGIT ONE likewise. Two shipped
+     *    shapes can feel it: the uber `Going to \d` / `Going to (?:\D|$)` pair (an Adlam-digit
+     *    address falls to the redact-less pickup rule) and the #885 name shape (an Adlam-letter name
+     *    stops matching, so its customer-name redact stops firing). Writing the classes out by hand
+     *    would not help — the repertoire lives in RE2J's tables, not in the class name. Tracked as a
+     *    residual, not fixable here.
      *  - **`\b`** — cannot be translated at all. RE2's word boundary is ASCII-only and there is no
-     *    Unicode form to map it to. Every `\b` in the corpus sits against an ASCII word (`mi\b`,
-     *    `min\b`, `\bby`, `\bgate`, `\bpin`), so nothing regresses today.
+     *    Unicode form to map it to. Naming the ASCII word on one side is NOT enough to establish
+     *    that nothing changed: the character on the OTHER side decides too, and the shipped distance
+     *    finder accepts `17 mié` under RE2J while ICU rejects it (`é` is a word character to ICU, so
+     *    there is no boundary after `mi`). Every `\b` in the corpus sits against an ASCII word
+     *    (`mi\b`, `min\b`, `\bby`, `\bgate`, `\bpin`), which bounds the exposure without removing it.
      *  - **case folding** — RE2J uses *simple* folding; ICU uses *full* folding for literals, so
      *    case-insensitive `straße` matches `STRASSE` on Android and does not here. No corpus pattern
      *    relies on it.
@@ -435,9 +475,9 @@ internal object RegexSafety {
      * already consumed as part of `(?:`).
      *
      * Factors are **body-copy** counts, matching what RE2J's compiler actually does: `{n}` and
-     * `{n,m}` copy the body `n`/`m` times, while `*`, `+` and `{n,}` compile to a *loop* over one
-     * copy — so an unbounded quantifier contributes 1, not a multiple. Enforces [MAX_REPEAT] on
-     * every written bound.
+     * `{n,m}` copy the body `n`/`m` times; `*` and `+` compile to a *loop* over ONE copy, so they
+     * contribute 1; and `{n,}` is `n` copies **plus** a loop, so it contributes `n` (`x{3,}` is six
+     * instructions where `x+` is four). Enforces [MAX_REPEAT] on every written bound.
      */
     private fun readQuantifier(pattern: String, start: Int): Quantifier? {
         fun withLazy(end: Int): Int =
@@ -592,15 +632,15 @@ internal object RegexSafety {
         'D' to "\\P{Nd}",
         's' to "[\\s\\p{Z}\\x{0B}\\x{85}]",
         'S' to "[^\\s\\p{Z}\\x{0B}\\x{85}]",
-        'w' to "[\\p{L}\\p{M}\\p{N}\\p{Pc}]",
-        'W' to "[^\\p{L}\\p{M}\\p{N}\\p{Pc}]",
+        'w' to "[\\p{L}\\p{M}\\p{N}\\p{Pc}\\x{200C}\\x{200D}]",
+        'W' to "[^\\p{L}\\p{M}\\p{N}\\p{Pc}\\x{200C}\\x{200D}]",
     )
 
     private val IN_CLASS: Map<Char, String> = mapOf(
         'd' to "\\p{Nd}",
         'D' to "\\P{Nd}",
         's' to "\\s\\p{Z}\\x{0B}\\x{85}",
-        'w' to "\\p{L}\\p{M}\\p{N}\\p{Pc}",
+        'w' to "\\p{L}\\p{M}\\p{N}\\p{Pc}\\x{200C}\\x{200D}",
         // 'S' and 'W' are rejected — see emitEscape.
     )
 }

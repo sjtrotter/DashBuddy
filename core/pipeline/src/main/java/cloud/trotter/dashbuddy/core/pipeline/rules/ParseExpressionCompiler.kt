@@ -160,7 +160,12 @@ internal object ParseExpressionCompiler {
             val sourceText = readNotificationField(raw, fromField)
 
             val rawValue = if (findRegex != null && sourceText != null) {
-                findRegex.find(sourceText)?.groupValues?.getOrNull(group)
+                // #1053 round 5 — an unevaluable match yields NO field, never a wrong one (#745).
+                try {
+                    findRegex.find(sourceText)?.groupValues?.getOrNull(group)
+                } catch (e: RegexEvaluationFailed) {
+                    null
+                }
             } else {
                 sourceText
             }

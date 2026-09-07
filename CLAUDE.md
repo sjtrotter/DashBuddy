@@ -520,10 +520,26 @@ over pattern TEXT cannot predict what a compiler EMITS. So `compileRegex` is two
 rejected, `(?i:…)` scoped flag groups accepted, and a cost estimate capped at
 `MAX_ESTIMATED_INSTRUCTIONS`=200 000 whose ONLY job is to keep the compile from exhausting memory
 (approximate, may under-count, nothing trusts its number); (2) the compile wrapped in
-`catch (Throwable)` so an OOM/SOE is a loud per-rule `RuleCompileException`, never process death;
-(3) **the bound** — `Pattern.programSize()` ≤ `MAX_PROGRAM_SIZE`=**20 000**. The corpus's largest
-MEASURED program is **240** instructions (the #885 name shape) — an 83× margin, re-measured and
-printed by `RuleCorpusCompileBudgetTest` every run. A product-of-all-bounds estimate was rejected on
+`catch (Throwable)` so an OOM/SOE is a loud `RuleCompileException` — recovery is BEST-EFFORT
+(building the message can itself fail), it over-classifies unrelated VM errors as bad patterns, and
+the outcome is WHOLE-FILE rejection (`isolable = false`), which is the repo's existing policy for
+resource limits;
+(3) **the bound** — `Pattern.programSize()` ≤ `MAX_PROGRAM_SIZE`=**2 000**. The corpus's largest
+MEASURED program is **240** instructions (the #885 name shape) — an 8× margin, re-measured and
+printed by `RuleCorpusCompileBudgetTest` every run. **Round 5 lowered that from 20 000 for a
+match-time reason, not a memory one:** `^((.?){100}){40}$` is 17 chars, estimates 28 244, compiles to
+16 084 — both gates accepted it — and matching a FIVE-char input overflows RE2J's `Machine.add` on
+256 KiB, 512 KiB AND 1 MiB stacks (ART's coroutine threads are ~1 MiB); the smallest still-overflowing
+shape measures 2 044, so the ceiling sits just under the empirical threshold. **And an evaluation
+failure no longer has a single default** — `BoundedRegex` raises `RegexEvaluationFailed` (pattern
+LENGTH only, one WARN per pattern per process) and each boundary answers it: recognition
+(`Ruleset.matchFirst`) treats the rule as no-match and moves on, parse yields null (#745), and
+**redaction masks the WHOLE node/field** with plain `[redacted]`. That last one is the defect: a
+`false` default read as "no redact entry matched" and shipped the node RAW — fail-closed for a
+positive predicate is fail-OPEN for a redaction selector. The catch is deliberately NOT in
+`PredicateCompiler`, because a redact `find` compiles through the same `compileNodePred` and
+swallowing it there would reproduce the fail-open one layer down; each CONSUMER catches, the
+predicate propagates. A product-of-all-bounds estimate was rejected on
 measurement: it scores that 240-instruction shape at 109 363 200, higher than the 1.5M attack, so no
 ceiling separates them. The class scanner also handles a leading `]` (a MEMBER, not the terminator —
 `[]\s]` was being rewritten into something that matched space-then-bracket) and opaque POSIX
@@ -544,7 +560,8 @@ the #885 name shape's `\s{1,4}` stops matching a name rendered with a non-breaki
 customer-name mask never fires), and an Uber `Going to <non-ASCII digits>` address falls from the
 address-masking dropoff rule to the redact-LESS pickup rule, which `CustomerTextMarkers` deliberately
 excludes. So `RegexSafety` emits `\d`→`\p{Nd}`, `\D`→`\P{Nd}`, `\s`→`[\s\p{Z}\x{0B}\x{85}]`,
-`\S`→the negation, `\w`→`[\p{L}\p{M}\p{N}\p{Pc}]`, `\W`→the negation (escape- and class-aware;
+`\S`→the negation, `\w`→`[\p{L}\p{M}\p{N}\p{Pc}]`, `\W`→the negation, with join controls `\x{200C}\x{200D}` in `\w` (Android's `\w` has
+`Join_Control`, and the shipped merchant-pair shape was matching ZWJ on device) (escape- and class-aware;
 inside a class the un-bracketed forms, and `\S`/`\W` there are REJECTED — a negated union isn't a
 class member and leaving it ASCII would reopen the gap), authors keep writing `\d`, and the
 byte-SSOT pins are pins on a shape's SOURCE BYTES, not on engine semantics, so they are unchanged as
@@ -553,8 +570,12 @@ APPROXIMATION, not parity** — RE2J 1.8 and ART's ICU ship different Unicode TA
 identical property names disagree at the edges, and the residuals are stated rather than claimed
 away: RE2J's `\p{Nd}` lags ICU (U+1E951 Adlam), its `\p{Z}` still has U+180E, the `\w` form admits
 superscript `²` (deliberate — over-matching `\w` widens a match while under-matching DROPS a redact),
-`\b` cannot be translated at all (ASCII-only, no Unicode form; every corpus `\b` sits against an
-ASCII word), and case folding is SIMPLE where ICU's is FULL (`straße`/`STRASSE`). One consequence
+`\b` cannot be translated at all (ASCII-only, no Unicode form — and naming the ASCII word on ONE
+side is not enough, since the character on the other side decides too: the shipped distance finder
+takes `17 mié` under RE2J and not under ICU), and RE2J's `\p{L}`/`\p{Nd}` LAG Android's Unicode
+tables by a version so an Adlam letter/digit is a letter/digit to ART and not here — which no
+translation closes, and which can drop the #885 name redact or send an Adlam-digit address to the
+redact-less uber pickup rule, and case folding is SIMPLE where ICU's is FULL (`straße`/`STRASSE`). One consequence
 that looks like a regression and is not: `CurrencyShape`'s `\d` become Unicode so a mixed-script
 `$16.٧٠` now satisfies the money SCAN (its leading `[1-9]` is a literal ASCII range), and #1052's
 code-point rejection in `parseGlyphCurrency` then reads it as NULL — fail-null, never a fabricated
@@ -1641,9 +1662,11 @@ Every new feature or refactor holds to these — they are forefront design input
      accessibility tree comes from another app; once the matchers split (#192) lands, rule JSON
      comes from a CDN. Both get bounded ingestion (size/depth/node/regex caps — for a rule regex
      that means length 200, repeat/depth caps, and the compiled program **measured** at
-     `programSize()` ≤ 20 000, since a linear-time MATCH says nothing about COMPILE cost and RE2J
-     has no program-size ceiling), a **linear-time regex engine** so an accepted pattern's match
-     time is bounded by construction rather than by a watchdog, with the Perl classes translated at
+     `programSize()` ≤ 2 000, since a linear-time MATCH says nothing about COMPILE cost or
+     match-time stack DEPTH and RE2J has no program-size ceiling), a **linear-time regex engine** so
+     an accepted pattern's match time is bounded by construction rather than by a watchdog, an
+     evaluation failure that is a distinguishable exception each boundary answers safely
+     (**redaction masks the whole node**, never ships it raw), and the Perl classes translated at
      compile so device class semantics are **approximated** rather than silently narrowed to ASCII
      (residual differences listed — #1053 / ADR-0010, §2), fail-closed
      validation, and — for any remote rule source — **signature/integrity verification before
