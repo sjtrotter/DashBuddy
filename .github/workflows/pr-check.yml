@@ -19,6 +19,13 @@ on:
 jobs:
   build-and-test:
     runs-on: ubuntu-latest
+    # The workflow_dispatch escape hatch (CLAUDE.md § Git Workflow) posts a real `build-and-test`
+    # commit status onto the PR head; the default GITHUB_TOKEN cannot (`Resource not accessible by
+    # integration`, seen on PR #1075's dispatched run 34070019980), so the job asks for it explicitly.
+    permissions:
+      contents: read
+      statuses: write
+      pull-requests: read
     # Docs-only PRs skip via the literal token `[skip ci]` in the PR BODY (see CLAUDE.md).
     # #902 footgun guard: a PR whose body merely DESCRIBES the token (PR #928 documented the
     # mechanism and silently skipped its own CI) can force the run back on with `[force ci]`.
