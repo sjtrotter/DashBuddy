@@ -154,34 +154,135 @@ class RegexSafetyTest {
         assertRejected("(a{201}){2}", "MAX_REPEAT")
     }
 
+    // -------------------------------------------------------------------------
+    // Gate 2 — the MEASURED bound. Round 3 tried to bound program size with a
+    // structural walk and the review defeated it three ways; the compiled program
+    // is now simply asked how big it is (#1053 round 4).
+    // -------------------------------------------------------------------------
+
     @Test
-    fun `nested counted repeats over MAX_REPEAT_PRODUCT are rejected`() {
-        // Each factor is legal on its own; the PRODUCT is what the compiler expands.
-        assertRejected("((a{50}){50}){50}", "MAX_REPEAT_PRODUCT") // 125 000 — the shape that OOMs
-        assertRejected("((a{21}){20}){20}", "MAX_REPEAT_PRODUCT") // 8 400
-        assertRejected("(a{129}){64}", "MAX_REPEAT_PRODUCT") // 8 256 — just over the cap
+    fun `the reviewer's counterexamples are all rejected`() {
+        // Each of these passed round 3's product ceiling. The instruction counts are measured
+        // against the RE2J 1.8 jar, so they are facts about the engine, not estimates.
+
+        // 200 chars, group depth 2, product exactly 8 192 — and 1 548 418 instructions (~88 MiB,
+        // ~131 ms). A long literal packs far more atoms into the length cap than a product can see.
+        assertRejected("((" + "a".repeat(187) + "){128}){64}", "instructions")
+
+        // A standalone flag group emits nothing and introduces no atom, so the `{200}` after it
+        // applies to `x{200}`. Round 3 settled the pending atom away and scored this 200.
+        assertRejected("x{200}(?i){200}", "instructions") // 40 002 actual
+
+        // `{0,}` means `*`, so its factor is 1 — not 0, which zeroed the product.
+        assertRejected("((x{200}){0,}){200}", "instructions") // 41 002 actual
     }
 
     @Test
-    fun `sequential repeats add, only NESTING multiplies`() {
-        // The arithmetic the cap encodes: a concatenation grows the program by ADDITION, and the
-        // pattern's own length already bounds how much of that can fit. `((a{16}){16}){16}` is
-        // 8 192 — exactly at the cap, and legal — while putting more repeated atoms BESIDE a
-        // capped group is not a multiplication at all.
-        RegexSafety.compileRegex("((a{16}){16}){16}")
-        RegexSafety.compileRegex("(a{128}){64}b{2}c+d{50}") // 8 192 — exactly at the cap
+    fun `both gates are live - one pattern is caught by each`() {
+        // The pre-compile estimate catches what would be expensive to COMPILE...
+        val huge = "((" + "a".repeat(187) + "){128}){64}"
+        assertTrue(
+            "the estimate must exceed its ceiling for this one",
+            RegexSafety.estimateInstructions(huge) > RegexSafety.MAX_ESTIMATED_INSTRUCTIONS,
+        )
+        assertRejected(huge, "MAX_ESTIMATED_INSTRUCTIONS")
+
+        // ...and the MEASURED gate catches what slips past it. This is the case that proves the
+        // measurement is doing real work rather than shadowing the estimate.
+        val slipsEstimate = "x{200}(?i){200}"
+        assertTrue(
+            "this one must PASS the estimate, or it proves nothing about the measured gate",
+            RegexSafety.estimateInstructions(slipsEstimate) <= RegexSafety.MAX_ESTIMATED_INSTRUCTIONS,
+        )
+        assertRejected(slipsEstimate, "MAX_PROGRAM_SIZE")
     }
 
     @Test
-    fun `the product arithmetic admits what it should`() {
-        RegexSafety.compileRegex("(a{50}){50}")   // 2 500
-        RegexSafety.compileRegex("(a{64}){64}")   // 8 192 — exactly at the cap
-        RegexSafety.compileRegex("a{64}")
-        // An unbounded quantifier counts as MAX_REPEAT, so the ReDoS catalog stays LEGAL: on a
-        // non-backtracking engine these are safe, and rejecting them would resurrect the heuristic.
+    fun `the estimate is charged against the corpus's real shapes`() {
+        // Pinned so the next person can see the margin rather than trust it. `estimate` is the
+        // pre-compile guard's number; `actual` is `Pattern.programSize()` measured on the jar.
+        // The estimate is APPROXIMATE and may sit either side of the actual — that is why the
+        // measured gate exists and why the estimate's ceiling is two orders of magnitude away.
+        data class Case(val what: String, val pattern: String, val actual: Int)
+        val corpus = listOf(
+            Case(
+                "#885 first-last-initial name shape",
+                "^\\s{0,8}[\\p{L}][\\p{L}'-]{0,20}(\\s{1,4}[\\p{L}][\\p{L}'-]{0,20}){0,3}\\s{1,4}[A-Z]\\.?\\s{0,8}\$",
+                240,
+            ),
+            Case(
+                "payout store-name shape",
+                "^.{1,60} \\((\\d{2,6}(-\\d{1,6})?|[A-Z][A-Za-z .'&-]+)\\)\$",
+                157,
+            ),
+            Case(
+                "store pair shape",
+                "^[A-Z][\\w .'&-]{1,48} - [A-Z][\\w .'&-]{1,48}\$",
+                199,
+            ),
+        )
+        for (c in corpus) {
+            val estimate = RegexSafety.estimateInstructions(c.pattern)
+            assertTrue(
+                "${c.what}: estimate $estimate must clear MAX_ESTIMATED_INSTRUCTIONS=" +
+                    "${RegexSafety.MAX_ESTIMATED_INSTRUCTIONS} by a wide margin — round 3's " +
+                    "product-of-all-bounds formula scored this shape 109 363 200 and would have " +
+                    "rejected a ${c.actual}-instruction pattern",
+                estimate < RegexSafety.MAX_ESTIMATED_INSTRUCTIONS / 100,
+            )
+            // And it really compiles to what the KDoc says it does.
+            RegexSafety.compileRegex(c.pattern)
+        }
+    }
+
+    @Test
+    fun `a single counted repeat bound over MAX_REPEAT is rejected`() {
+        assertRejected("a{201}", "MAX_REPEAT")
+        assertRejected("a{0,201}", "MAX_REPEAT")
+        assertRejected("a{201,}", "MAX_REPEAT")
+    }
+
+    @Test
+    fun `a leading-zero bound is rejected rather than silently becoming literal text`() {
+        // RE2's counted-repeat grammar refuses leading zeros, so RE2J reads `a{0201}` as the
+        // LITERAL TEXT "a{0201}" — the author's intent and the engine's reading diverge with no
+        // error anywhere. Refusing the ambiguity is the only reading that cannot surprise someone.
+        assertRejected("a{0201}", "leading")
+        assertRejected("a{1,020}", "leading")
+        RegexSafety.compileRegex("a{0,20}") // a genuine zero minimum is fine
+    }
+
+    @Test
+    fun `quoting is rejected outright`() {
+        // \Q...\E is opaque to every load-time guard: the quoted `[` below opened a phantom
+        // character class in round 3's scan and hid the repeats entirely (1 002 003 instructions).
+        // And translating inside a quoted region is wrong anyway — `\Q\d\E` means the literal
+        // text `\d`, which the class translation would turn into the literal text `\p{Nd}`.
+        assertRejected("\\Q\\d\\E", "quoting")
+        assertRejected("\\Q[\\E(a{1000}){1000}", "quoting")
+        assertRejected("abc\\Qx\\E", "quoting")
+    }
+
+    @Test
+    fun `the catastrophic family stays legal - the caps bound the COMPILER, not the matcher`() {
+        // An unbounded quantifier is a loop over one copy of its body, so it multiplies nothing.
+        // On a non-backtracking engine these are safe (RegexReDoSTest measures them), and
+        // rejecting them would resurrect the #418 heuristic under a new name.
         for (p in listOf("(a+)+\$", "(a*)*", "(.*)+", "(a|aa)+\$", "(a?)*b", "(.*a){20}", "(\\d+\\s*)+")) {
             RegexSafety.compileRegex(p)
         }
+        RegexSafety.compileRegex("(a{50}){50}")
+        RegexSafety.compileRegex("a{200}")
+    }
+
+    @Test
+    fun `a scoped flag group is accepted`() {
+        // `(?i:...)` is valid RE2 syntax and an ordinary group; round 3 rejected it as unsupported.
+        val scoped = RegexSafety.compileRegex("(?i:abc)")
+        assertTrue(scoped.containsMatchIn("ABC"))
+        assertTrue(RegexSafety.compileRegex("x(?i:abc)y").containsMatchIn("xABCy"))
+        // The standalone form still works too.
+        assertTrue(RegexSafety.compileRegex("(?i)abc").containsMatchIn("ABC"))
     }
 
     @Test
@@ -213,10 +314,12 @@ class RegexSafetyTest {
     @Test
     fun `a match that overflows the stack fails closed instead of killing the thread`() {
         // A StackOverflowError is an Error: it escapes every `catch (e: Exception)` downstream and
-        // would take the classification coroutine with it (#909/#430). The guard is asserted
-        // through the seam rather than through a pattern that has to actually overflow a real
-        // stack — see BoundedRegex.failClosed for why the catch is kept despite not being
-        // reproducible on the host.
+        // would take the classification coroutine with it (#909/#430). Round 2 said this could not
+        // be reproduced; the round-3 review DID reproduce it — `((a?){200}){40}` against "" 
+        // overflows inside RE2J's `Machine.add` on a 256 KiB thread stack. So the catch is load-
+        // bearing, not merely defensive. Asserted through the seam rather than through a pattern
+        // that has to actually overflow a real stack, because that reproduction is stack-size
+        // dependent and would be a flaky test.
         assertEquals(false, BoundedRegex.failClosed(false) { throw StackOverflowError() })
         assertNull(BoundedRegex.failClosed<String?>(null) { throw StackOverflowError() })
         assertEquals("ok", BoundedRegex.failClosed("nope") { "ok" })
@@ -241,19 +344,46 @@ class RegexSafetyTest {
     fun `the translation table`() {
         assertEquals("\\p{Nd}", RegexSafety.prepare("\\d"))
         assertEquals("\\P{Nd}", RegexSafety.prepare("\\D"))
-        assertEquals("[\\s\\p{Z}]", RegexSafety.prepare("\\s"))
-        assertEquals("[^\\s\\p{Z}]", RegexSafety.prepare("\\S"))
-        assertEquals("[\\p{L}\\p{N}_]", RegexSafety.prepare("\\w"))
-        assertEquals("[^\\p{L}\\p{N}_]", RegexSafety.prepare("\\W"))
+        assertEquals("[\\s\\p{Z}\\x{0B}\\x{85}]", RegexSafety.prepare("\\s"))
+        assertEquals("[^\\s\\p{Z}\\x{0B}\\x{85}]", RegexSafety.prepare("\\S"))
+        assertEquals("[\\p{L}\\p{M}\\p{N}\\p{Pc}]", RegexSafety.prepare("\\w"))
+        assertEquals("[^\\p{L}\\p{M}\\p{N}\\p{Pc}]", RegexSafety.prepare("\\W"))
     }
 
     @Test
     fun `inside a character class the un-bracketed forms are emitted`() {
         assertEquals("[\\p{Nd}.]", RegexSafety.prepare("[\\d.]"))
-        assertEquals("[\\s\\p{Z}:]", RegexSafety.prepare("[\\s:]"))
-        assertEquals("[\\p{L}\\p{N}_-]", RegexSafety.prepare("[\\w-]"))
+        assertEquals("[\\s\\p{Z}\\x{0B}\\x{85}:]", RegexSafety.prepare("[\\s:]"))
+        assertEquals("[\\p{L}\\p{M}\\p{N}\\p{Pc}-]", RegexSafety.prepare("[\\w-]"))
         assertEquals("[^\\p{Nd}]", RegexSafety.prepare("[^\\d]"))
         assertEquals("[\\P{Nd}x]", RegexSafety.prepare("[\\Dx]"))
+    }
+
+    @Test
+    fun `a leading closing bracket is a class MEMBER, not the terminator`() {
+        // `[]\s]` is "a `]`, or whitespace". Round 3's scan ended the class at that first `]` and
+        // emitted `[][\s\p{Z}]]`, which stopped matching a space and started matching a space
+        // FOLLOWED BY `]` — a silent change of meaning that compiled cleanly, so no exception
+        // handling could have caught it (finding 5).
+        assertEquals("[]\\s\\p{Z}\\x{0B}\\x{85}]", RegexSafety.prepare("[]\\s]"))
+        val cls = RegexSafety.compileRegex("[]\\s]")
+        assertTrue("must still match a bare space", cls.matches(" "))
+        assertTrue("must still match a bare ]", cls.matches("]"))
+        assertTrue("must NOT match space-then-bracket", !cls.matches(" ]"))
+        // The negated form has the same rule: `[^]x]` is "not `]` and not `x`".
+        assertEquals("[^]x]", RegexSafety.prepare("[^]x]"))
+    }
+
+    @Test
+    fun `a POSIX class inside a character class is opaque`() {
+        // `[[:alpha:]\s]`'s inner `]` closes the POSIX name, not the enclosing class. Round 3 read
+        // it as the terminator and emitted `[[:alpha:][\s\p{Z}]]`, which stopped matching `a` and
+        // started matching `a]`.
+        assertEquals("[[:alpha:]\\s\\p{Z}\\x{0B}\\x{85}]", RegexSafety.prepare("[[:alpha:]\\s]"))
+        val cls = RegexSafety.compileRegex("[[:alpha:]\\s]")
+        assertTrue("must still match a letter", cls.matches("a"))
+        assertTrue("must still match whitespace", cls.matches(" "))
+        assertTrue("must NOT match letter-then-bracket", !cls.matches("a]"))
     }
 
     @Test
@@ -295,6 +425,10 @@ class RegexSafetyTest {
         assertTrue("the fielded double-space render (#885)", name.containsMatchIn("Brandy  S."))
         assertTrue("a NON-BREAKING space must still be a separator", name.containsMatchIn("Brandy\u00a0S."))
         assertTrue("a THIN space too", name.containsMatchIn("Brandy\u2009S."))
+        // Round 4: VT and NEL are in Android's `\s` but not in `\p{Z}`, so the round-2 translation
+        // silently dropped them. Added explicitly (finding 4).
+        assertTrue("NEL (U+0085) is whitespace to Android", name.containsMatchIn("Brandy\u0085S."))
+        assertTrue("VT (U+000B) is whitespace to Android", name.containsMatchIn("Brandy\u000bS."))
         assertTrue("a merchant line must not match", !name.containsMatchIn("SPROUTS FARMERS MARKET #118"))
 
         // (2) Uber's two `Going to ...` notification rules discriminate on `\d`. Left ASCII, an
@@ -327,6 +461,36 @@ class RegexSafetyTest {
         assertNull(
             "a figure with a non-ASCII digit must read as NOTHING, not as 16.70",
             TransformRegistry.apply("parseGlyphCurrency", "This dash so far\$16.\u0667\u0660"),
+        )
+    }
+
+    @Test
+    fun `a word-class shape accepts a decomposed name and a connector`() {
+        // The shipped merchant shape at dropoff.json5 uses `\w`. Android's `\w` includes combining
+        // marks and connector punctuation; `[\p{L}\p{N}_]` (round 2) did not, so "Cafe" + U+0301
+        // stopped matching on the device — a rule silently narrowing where the host could not see
+        // it (finding 4).
+        val pair = RegexSafety.compileRegex("^[A-Z][\\w .'&-]{1,48} - [A-Z][\\w .'&-]{1,48}\$")
+        assertTrue("a decomposed accent must match", pair.containsMatchIn("Cafe\u0301 - Market"))
+        assertTrue("the plain form still matches", pair.containsMatchIn("Cafe - Market"))
+        val word = RegexSafety.compileRegex("^\\w+\$")
+        assertTrue("connector punctuation is a word char to Android", word.matches("a\u203fb"))
+        assertTrue("underscore still is", word.matches("a_b"))
+        assertTrue("a hyphen still is not", !word.matches("a-b"))
+    }
+
+    @Test
+    fun `the translation is an APPROXIMATION - the known residuals are pinned`() {
+        // Stated, not claimed away: RE2J 1.8 and ART's ICU ship different Unicode table versions,
+        // so exact parity is unreachable. These assertions exist so the residuals are visible and
+        // a future RE2J bump that closes one of them is noticed rather than silently absorbed.
+        val digit = RegexSafety.compileRegex("^\\d\$")
+        assertTrue("ASCII digits, obviously", digit.matches("5"))
+        assertTrue("Arabic-Indic digits — the case that motivated the translation", digit.matches("\u0661"))
+        assertTrue(
+            "RESIDUAL: U+1E951 ADLAM DIGIT ONE is a decimal digit to Android and not to RE2J 1.8. " +
+                "If this starts passing, RE2J's tables caught up — update the residual list.",
+            !digit.matches("\ud83a\udd51"),
         )
     }
 

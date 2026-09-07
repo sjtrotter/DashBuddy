@@ -10,7 +10,8 @@ import org.junit.Test
 import java.io.File
 
 /**
- * Every regex the shipped rulesets declare compiles, and compiles **fast** (#1053 round 2).
+ * Every regex the shipped rulesets declare compiles, compiles **fast**, and produces a program well
+ * under the measured ceiling (#1053).
  *
  * `AllMatchersSuite` already proves the rules *load*; this states the other half of the load-time
  * bound explicitly, and states it over the CANONICAL generated assets rather than over a
@@ -20,13 +21,13 @@ import java.io.File
  * The reason it is worth its own file: RE2J's linear-time guarantee is about *matching*. Compiling
  * is where a counted repeat is expanded by copying the sub-program, RE2J 1.8 has no program-size
  * ceiling of its own, and rule load happens **on the device, once per rule**. `(a{1000}){1000}` is
- * fifteen characters and 1 002 002 instructions. [RegexSafety.MAX_REPEAT] and
- * [RegexSafety.MAX_REPEAT_PRODUCT] are the caps that bound it; this is the assertion that the caps
- * do not bound the corpus.
+ * fifteen characters and 1 002 002 instructions. [RegexSafety.MAX_PROGRAM_SIZE] — measured on the
+ * compiled program, not predicted from the pattern text — is the bound that stops that; this is the
+ * assertion that the bound does not stop the corpus.
  *
- * It also prints the corpus's largest counted repeat against [RegexSafety.MAX_REPEAT] on failure,
- * because that margin is genuinely tight (the payout store-name shape declares `{1,60}` against a
- * cap of 200) and an author who trips it deserves to be told the number rather than left guessing.
+ * It **prints the corpus maximum on every run** (measured `programSize()`, and the largest counted
+ * repeat against [RegexSafety.MAX_REPEAT]) so the margin is a number in the build log rather than a
+ * claim in a comment, and an author who trips a cap is told what the number was.
  */
 class RuleCorpusCompileBudgetTest {
 
@@ -157,6 +158,37 @@ class RuleCorpusCompileBudgetTest {
     }
 
     @Test
+    fun `every declared rule regex compiles to a program under MAX_PROGRAM_SIZE`() {
+        // THE bound (#1053 round 4). Round 3 tried to predict program size from the pattern text
+        // and the review defeated that three ways; the compiled program is now simply asked.
+        var largest = 0
+        var where = "(none)"
+        val over = mutableListOf<String>()
+        for ((file, pattern) in declaredPatterns()) {
+            val size = try {
+                RuleCompiler.compileRegex(pattern).programSize()
+            } catch (e: RuleCompileException) {
+                over += "$file: <$pattern> — rejected at load: ${e.message}"
+                continue
+            }
+            if (size > largest) {
+                largest = size
+                where = "$file: <$pattern>"
+            }
+            if (size > RegexSafety.MAX_PROGRAM_SIZE) over += "$file: <$pattern> — $size instructions"
+        }
+        assertTrue(
+            "rule regex(es) exceed MAX_PROGRAM_SIZE=${RegexSafety.MAX_PROGRAM_SIZE} or no longer " +
+                "load:\n" + over.joinToString("\n"),
+            over.isEmpty(),
+        )
+        println(
+            "[#1053] corpus largest measured programSize = $largest " +
+                "(MAX_PROGRAM_SIZE=${RegexSafety.MAX_PROGRAM_SIZE}) at $where",
+        )
+    }
+
+    @Test
     fun `the corpus's largest counted repeat is stated, and sits under MAX_REPEAT`() {
         var largest = 0
         var where = "(none)"
@@ -171,7 +203,7 @@ class RuleCorpusCompileBudgetTest {
         assertTrue(
             "the corpus's largest counted repeat is $largest ($where), at or over " +
                 "MAX_REPEAT=${RegexSafety.MAX_REPEAT}. Raise the constant deliberately — read its " +
-                "KDoc first, the product arithmetic is what actually bounds the program size.",
+                "KDoc first; MAX_PROGRAM_SIZE, measured after the compile, is the real bound.",
             largest <= RegexSafety.MAX_REPEAT,
         )
         // Stated, not silently passed: this margin is 60 vs 200 today.

@@ -24,7 +24,8 @@ import java.io.File
  *     entry points, `Pattern.compile(…)` and `.toPattern()`. The JDK/ICU engine is exactly what the
  *     seam exists to keep out (and it is the engine whose host/device divergence bit #909).
  *  2. **Every `Regex(…)` / `.toRegex()` / `Regex.fromLiteral(…)` construction takes a STRING
- *     LITERAL.** That is the
+ *     LITERAL** — with no `${'$'}` interpolation and no concatenation, because `Regex("${'$'}pattern")`
+ *     opens with a quote and still puts a runtime value into the engine (round 4).** That is the
  *     structural line between an *app-authored constant* — a pattern this repo wrote, reviewed, and
  *     can reason about, matching against text it already trusts to be small — and a *rule-authored*
  *     one, which arrives as a value from JSON (today from assets; tomorrow, #192/#640, from a CDN)
@@ -157,11 +158,83 @@ class RuleRegexEngineGuardTest {
         for (m in KOTLIN_MATCHER.findAll(code)) {
             val after = code.drop(m.range.last + 1).trimStart()
             val line = lineOf(code, m.range.first)
-            if (after.startsWith("\"")) literal++ else dynamic += line
+            if (isConstantArgument(after)) literal++ else dynamic += line
         }
         val jur = JAVA_UTIL_REGEX.findAll(code).map { lineOf(code, it.range.first) }.toList()
         val jdk = JDK_ROUTE.findAll(code).map { "${lineOf(code, it.range.first)}: ${it.value.trim()}" }.toList()
         return Scanned(file.name, literal, dynamic, jur, jdk)
+    }
+
+    /**
+     * Is the argument text starting at [after] a genuine compile-time constant?
+     *
+     * An opening quote is NOT enough (#1053 round 4): `Regex("$pattern")` starts with one and
+     * interpolates a variable straight into the engine — exactly the escape this guard exists to
+     * catch, passing it while keeping the ledger count unchanged. So the literal must also carry no
+     * `${'$'}` interpolation and must not be concatenated onto anything.
+     *
+     * Deliberately simple, in the `TimberTagGuardTest` doctrine: it reads the literal up to its
+     * closing quote and then requires the next non-space character to CLOSE the call (`)` or `,`).
+     * A `+` after the literal is a concatenation and fails, which is stricter than strictly
+     * necessary and is the right direction for a security ratchet.
+     */
+    private fun isConstantArgument(after: String): Boolean {
+        if (after.startsWith("\"\"\"")) {
+            val end = after.indexOf("\"\"\"", 3)
+            if (end < 0) return false
+            if (interpolates(after.substring(3, end))) return false
+            return closesCall(after.drop(end + 3))
+        }
+        if (!after.startsWith("\"")) return false
+        var i = 1
+        val body = StringBuilder()
+        while (i < after.length && after[i] != '"') {
+            if (after[i] == '\\') {
+                i += 2
+                continue
+            }
+            body.append(after[i])
+            i++
+        }
+        if (i >= after.length) return false
+        if (interpolates(body.toString())) return false
+        return closesCall(after.drop(i + 1))
+    }
+
+    /**
+     * A `${'$'}` is interpolation only when a name or `{` follows it. `"\\d+)${'$'}"` ends with a
+     * literal dollar — an anchor, the most ordinary thing a regex can contain — and must not be
+     * mistaken for one.
+     */
+    private fun interpolates(body: String): Boolean {
+        var i = 0
+        while (i < body.length - 1) {
+            if (body[i] == '$' && (body[i + 1] == '{' || body[i + 1].isLetter() || body[i + 1] == '_')) {
+                return true
+            }
+            i++
+        }
+        return false
+    }
+
+    /**
+     * After the literal the call must end — or continue with `+ SOME_CONSTANT`.
+     *
+     * Concatenating a literal onto a `const val` is how the shared shapes are composed
+     * (`Regex("\\x24" + CurrencyShape.FIGURE_CORE)` is the #1029 currency SSOT), and that is
+     * app-authored by construction: a `const` cannot hold a value from rule JSON. A concatenation
+     * with anything NOT in constant case is rejected, which is the case that matters.
+     */
+    private fun closesCall(rest: String): Boolean {
+        val t = rest.trimStart()
+        if (t.startsWith(")") || t.startsWith(",")) return true
+        if (!t.startsWith("+")) return false
+        val operand = t.drop(1).trimStart().takeWhile { it.isLetterOrDigit() || it == '_' || it == '.' }
+        if (operand.isEmpty()) return false
+        val last = operand.substringAfterLast('.')
+        val isConstantCase = last.isNotEmpty() && last.all { it.isUpperCase() || it.isDigit() || it == '_' }
+        if (!isConstantCase) return false
+        return closesCall(t.drop(1).trimStart().drop(operand.length))
     }
 
     /** 1-based line number of [index] in [code] (comment-stripped, so it is an approximation). */

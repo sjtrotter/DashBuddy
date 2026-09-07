@@ -85,6 +85,9 @@ class RegexBudgetPropertyTest {
 
     @Test
     fun `property - every accepted generated pattern bounds its match`() = runTest {
+        // Counted so the property cannot pass vacuously: a run that measured nothing is a broken
+        // generator, not a green property.
+        val accepted = java.util.concurrent.atomic.AtomicInteger()
         val piece = Arb.element(0, 1) // 0 = unit, 1 = group
         checkAll(
             PropSeeds.samples(200),
@@ -94,14 +97,30 @@ class RegexBudgetPropertyTest {
         ) { shape, u, g, anchor ->
             val body = shape.joinToString("") { if (it == 0) u else g }
             val pat = body + anchor
+            // A rejection is a FAILURE, not a skip (#1053 round 4). The generator's grammar is
+            // entirely inside the accepted language — small atoms, one level of grouping, bounds of
+            // 2 — so the load-time guards must accept every draw. Silently skipping rejections let
+            // the property pass vacuously if a guard ever over-rejected, which is precisely the
+            // regression the guards are most likely to introduce.
             val bounded = try {
                 RuleCompiler.compileRegex(pat)
             } catch (e: RuleCompileException) {
-                return@checkAll // an unparseable draw (e.g. a bare `{2,}` head) — nothing to bound
+                throw AssertionError(
+                    "generated pattern <$pat> was REJECTED at load, but the generator only emits " +
+                        "patterns inside the accepted language — a load-time guard is " +
+                        "over-rejecting: ${e.message}",
+                    e,
+                )
             }
+            accepted.incrementAndGet()
             val ms = matchMillis(bounded, pumpingInput())
             assertTrue("accepted pattern <$pat> took ${ms}ms, over the ${BUDGET_MS}ms bound", ms < BUDGET_MS)
         }
+        assertTrue(
+            "the property measured ${accepted.get()} patterns — a run that measures nothing is a " +
+                "broken generator, not a passing property",
+            accepted.get() >= 100,
+        )
     }
 }
 

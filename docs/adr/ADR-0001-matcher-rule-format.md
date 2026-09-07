@@ -369,19 +369,22 @@ with `all`/`any`/`not` at the node level. Every predicate object carries exactly
 > atomic groups. Everything the rulesets use is supported — character classes, `\d\s\w\S`, `\b`,
 > `\p{L}`, lazy quantifiers, `(?:…)`, numbered capture groups, anchors.
 >
-> `\d`, `\D`, `\s`, `\S`, `\w` and `\W` are **translated to Unicode-aware RE2 classes at compile**
-> (`\d` → `\p{Nd}`, `\s` → `[\s\p{Z}]`, …), so they keep the meaning Android's ICU-backed engine
-> always gave them — write them as you always have. Two things still differ from the JDK engine:
-> `$` is end-of-**text** (it does not match before a trailing newline), and `\b` is ASCII-only
-> (there is no Unicode form to translate it to). `\S`/`\W` **inside** a character class are
-> rejected: a negated union is not a class member.
+> `\d`, `\D`, `\s`, `\S`, `\w` and `\W` are **translated at compile toward Android's Unicode
+> classes** (`\d` → `\p{Nd}`, `\s` → `[\s\p{Z}\x{0B}\x{85}]`, `\w` → `[\p{L}\p{M}\p{N}\p{Pc}]`, …),
+> so they keep roughly the meaning Android's ICU-backed engine always gave them — write them as you
+> always have. An **approximation, not parity**: RE2J and ART's ICU ship different Unicode table
+> versions, and the residual differences are listed in ADR-0010. `$` is end-of-**text** (it does not
+> match before a trailing newline), `\b` is ASCII-only (no Unicode form to translate it to), and case
+> folding is *simple* where ICU's is *full*. `\S`/`\W` **inside** a character class are rejected: a
+> negated union is not a class member.
 >
 > Patterns are case-**insensitive** and bounded at LOAD — 200 chars (`MAX_REGEX_LENGTH`, #418), no
-> single repeat over `MAX_REPEAT` = 64, the product of NESTED repeats at most
-> `MAX_REPEAT_PRODUCT` = 4 096, at most `MAX_GROUP_DEPTH` = 16 nested groups. The repeat caps exist
-> because a linear-time *match* says nothing about *compile* cost and RE2J has no program-size
-> ceiling: `(a{1000}){1000}` is fifteen characters and a million instructions. Anything over-long,
-> over-sized, too deep, or unsupported fails the rule LOAD loudly.
+> single repeat bound over `MAX_REPEAT` = 200, at most `MAX_GROUP_DEPTH` = 16 nested groups, no
+> `\Q…\E` quoting, no leading-zero repeat bounds (`a{0201}`, which RE2 reads as literal text), and
+> — the real bound — the **compiled program** at most `MAX_PROGRAM_SIZE` = 20 000 instructions,
+> measured. That last one exists because a linear-time *match* says nothing about *compile* cost and
+> RE2J has no program-size ceiling: `(a{1000}){1000}` is fifteen characters and a million
+> instructions. Anything over-long, over-sized, too deep, or unsupported fails the rule LOAD loudly.
 
 | Predicate                                | Meaning                                                                  | Kotlin equivalent                   |
 |------------------------------------------|--------------------------------------------------------------------------|-------------------------------------|

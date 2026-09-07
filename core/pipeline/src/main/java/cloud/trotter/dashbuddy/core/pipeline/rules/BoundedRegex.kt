@@ -27,9 +27,10 @@ import com.google.re2j.Pattern as Re2Pattern
  *  - there is no catastrophic pattern to reject: `(a+)+$` against 64 `a`s and a `!` is a
  *    microsecond match, not a hang, which is why [RegexSafety] no longer carries a ReDoS heuristic;
  *  - the bound is a property of the engine rather than a promise about a timer, so it holds on ART
- *    as well as on the host — and every host unit test of a rule pattern is now a faithful device
- *    test (one instrumented spot-check pins that for provenance), once [RegexSafety] has restored
- *    the Unicode class semantics ART's ICU engine gave `\d`/`\s`/`\w` before the move;
+ *    as well as on the host — one engine on both, modulo the Unicode TABLE versions RE2J 1.8 and
+ *    ART's ICU each ship (see [RegexSafety] for the residual list), so a host regex test is a
+ *    faithful device test for structure and for everything but those edges; one instrumented
+ *    spot-check pins the bound on ART for provenance;
  *  - the price is RE2 *syntax*: no lookaround, no backreferences. Rule authors get a language whose
  *    worst case is known, which is the language an untrusted CDN rule source (#192/#640) needs.
  *
@@ -38,11 +39,13 @@ import com.google.re2j.Pattern as Re2Pattern
  * Linear *match* time says nothing about *compile* cost, and RE2J 1.8 has no program-size ceiling —
  * `(a{1000}){1000}` is fifteen characters and 1 002 002 instructions. So bounded ingestion grew a
  * second half at the door ([RegexSafety]): the pattern-length cap
- * ([RuleCompiler.MAX_REGEX_LENGTH]) is joined by [RegexSafety.MAX_REPEAT] /
- * [RegexSafety.MAX_REPEAT_PRODUCT] / [RegexSafety.MAX_GROUP_DEPTH], and an over-long, over-sized,
- * too-deep or unparseable pattern is a loud [RuleCompileException] at load. The same seam also
- * translates the Perl classes to Unicode-aware RE2 classes, so a rule means on ART what it meant
- * before this engine change.
+ * ([RuleCompiler.MAX_REGEX_LENGTH]) is joined by [RegexSafety.MAX_REPEAT] and
+ * [RegexSafety.MAX_GROUP_DEPTH], a coarse pre-compile estimate, and — the actual bound —
+ * [RegexSafety.MAX_PROGRAM_SIZE] **measured** on the compiled program with
+ * `com.google.re2j.Pattern.programSize()`. An over-long, over-sized, too-deep or unparseable
+ * pattern is a loud [RuleCompileException] at load. The same seam also translates the Perl classes
+ * toward ART's Unicode classes, so a rule means roughly on the device what it meant before this
+ * engine change (an approximation, with the residual differences listed there).
  *
  * The one runtime guard kept from #590 is the [failClosed] `StackOverflowError` catch — see its
  * KDoc for why a non-backtracking engine still gets one.
@@ -97,6 +100,13 @@ class BoundedRegex internal constructor(private val pattern: Re2Pattern) {
      */
     fun groupCount(): Int = pattern.groupCount()
 
+    /**
+     * Instructions in the compiled RE2J program — the quantity [RegexSafety.MAX_PROGRAM_SIZE]
+     * bounds, exposed so a test can state the corpus's real margin instead of asserting a
+     * prediction of it.
+     */
+    fun programSize(): Int = pattern.programSize()
+
     /** The raw pattern string, for logging/debugging. */
     override fun toString(): String = pattern.pattern()
 
@@ -114,13 +124,13 @@ class BoundedRegex internal constructor(private val pattern: Re2Pattern) {
          * (`SideEffectEngine` catching `Exception` while an `Error` killed the drain worker) and
          * the #430 one (an unsupervised pipeline crash silencing all sensing).
          *
-         * The honest state of the evidence, so the next reader can weigh it: the round-2 reviewer
-         * reported a ≤ 200-character pattern that overflows during a match, and it could NOT be
-         * reproduced here — 99-deep nesting (the deepest that fits the length cap) compiles and
-         * matches at a 256 KB stack. So this is a **defence, not a fix for a demonstrated crash**.
-         * It costs one `try` on a path that is already microseconds, and the alternative — being
-         * wrong about it on a device — costs the log. [RegexSafety.MAX_GROUP_DEPTH] bounds the
-         * same risk at load, from the other side.
+         * The evidence, corrected: round 2 recorded that a match-time overflow could not be
+         * reproduced. Round 3's review **did** reproduce one — `((a?){200}){40}` matched against
+         * the empty string overflows inside RE2J's own `Machine.add` on a 256 KiB thread stack. So
+         * this catch is load-bearing, not merely precautionary, and the round-2 note that said
+         * otherwise was wrong. [RegexSafety.MAX_GROUP_DEPTH] bounds the same risk at load, from the
+         * other side; the reproduction is stack-size dependent, so it is asserted through this seam
+         * rather than as a pattern that must actually overflow.
          *
          * The match fails closed: no-match (`false`/`null`), so the frame simply does not recognize
          * (→ UNKNOWN → scrubbed) rather than crashing the thread, and one WARN fires — a defended
