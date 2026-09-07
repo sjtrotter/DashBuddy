@@ -217,1416 +217,395 @@ sibling surface, left for a future extraction.
 ## Architecture: Recognition Pipeline + State Machine
 
 The core architectural challenge is understanding a third-party app's UI without an API. The
-solution is a multi-stage pipeline:
+solution is a multi-stage pipeline. Each subsection below is the
+**summary an agent needs every session** — the invariants and where they live; the full receipt-level
+narrative (every rule with its issue/PR history and rationale) lives in `docs/architecture/0N-*.md`, one
+file per subsection, and is maintained under the same every-PR context-update rule as this file:
 
 ### 1. Sensor Pipelines (`core/pipeline/`)
 
-`AccessibilityListener` / `AccessibilitySource` capture raw Android `AccessibilityEvent`s;
-`AccessibilityNodeMapper` normalizes window content into an immutable `UiNode` tree (defined in
-`:domain`). Per-event-type sub-pipelines (`ContentChangedPipeline` — debounced,
-`StateChangedPipeline`, `WindowsChangedPipeline`, plus click handling in `AccessibilityPipeline`)
-and a parallel `NotificationPipeline` (`NotificationListener` → `NotificationFilter` →
-`NotificationMapper`) emit `PipelineEvent`s. `AccessibilityPipeline.output()` drops in stages:
-a fail-closed **rulesets-not-loaded** gate (#432), then **sensitive**/**noise** (the shared content
-gate, #399), then **disabled-platform** (defense-in-depth), then **UNKNOWN** (captured to disk for
-triage, never forwarded to the state machine). Snapshots are attributed to the window's *real*
-package (not the event's), so our own overlay is dropped (#4 / PR #334). Frame admission is
-`FrameGate` (identity dedup + content-hash rolling suppression of UNKNOWN frames, #360); envelope
-assembly is the shared `CaptureWriter` (#361), which also applies **rule-declared capture
-redaction** (#598): a recognized rule's `redact` block masks customer name/address/gate-code node
-text in the serialized envelope only, so recognized captures are PII-hashed-at-edge on disk. The
-mask is `[redacted:<4hex>]` (#623) — the first 4 hex of the sha256 of the stripped/trimmed (and,
-for a customer-NAME entry flagged `normalize: customerName`, canonical-key-**normalized**, #733)
-customer token, so two customers redact distinctly (per-customer replay fidelity) without
-persisting raw PII; fail-closed to plain `[redacted]`. The mask token derives by the SAME canonical
-form as the parse's `customerNameHash` chain (`normalizeCustomerName` before `sha256`,
-`CustomerNameKey` = first token + second-token initial), so a customer's mask/hash is stable across
-the name FORMS a surface renders ("Brandy S" vs "Brandy Smith"). Two bounded-secret defenses
-compose with the hash mask: `plainMask` (#795) — a redact entry opts into a hash-less plain
-`[redacted]` when the value's ALPHABET is bounded (a 4-digit PIN on the four dropoff surfaces whose
-id-less digit-shape entries can catch a keypad echo — `dropoff_pin_entry`/`_handoff`/`_pre_arrival`/
-`_pre_arrival_completion`, #889 F1; a subpremise/unit number #986/#934; a length-bounded customer
-note #920), since 4 hex over a small space is
-brute-recoverable; compile-rejects `plainMask`+`normalize` together — and the rule-INDEPENDENT
-**short-token floor** (#889), which degrades any sub-4-char token's suffix to plain `[redacted]`
-(the floor bounds LENGTH where `plainMask` bounds alphabet). `normalize: customerName` entries are
-EXEMPT from the floor: their hex must stay equal to the first 4 hex of the `customerNameHash` the
-parse already persists (#623/#733). The subpremise family (`Apt <n>` fused or `Apt/Suite: <n>`
-label-split) is ratcheted by a **structural scan** over both platforms' generated assets — any
-redact entry whose own predicate/keepPrefix strings name `Apt` or a `subpremise_line` id
-(`address_subpremise_line`/`bottom_sheet_subpremise_line`) must declare `plainMask` (#986/#934) — but a scan can only ratchet entries that EXIST, so the VALUE
-spelling stayed open until #1039 anchored the split form's value on its `Apt/Suite` **label
-sibling** (`hasPrecedingSiblingText`, BOTH label spellings enumerated — the predicate is an exact
-un-trimmed equality — whole-node `plainMask`). That entry and the fused `Apt/Suite` one are
-declared **blanket** (every screen rule in `dropoff.json5` plus `navigation_generic`, #993's
-combined-frame doctrine) and sit **ahead of every generic shape entry**, because `maskNode` is
-first-match-wins and a digit-leading value (`101 B`) would otherwise be claimed and HASHED by the
-id-less street shape; a derived parity test reads the rule list out of the source file.
-(`camera_capture`'s `bottom_instruction` is deliberately excluded: it masks a whole fused name+apt
-line, unbounded alphabet, so the hash form is correct there.) Coverage spans the recognized
-offer/pickup/dropoff/chat/nav/camera **screen** surfaces AND **notification** envelopes (#620 —
-chat title/body, order-ready customer name via a per-field notif `redact`; store names kept).
-Hard-won enumeration rules baked into the ruleset (receipts in #885/#886/#992–#995/#985): a
-recognized rule that forgets to redact has NO backstop (`ID_MARKERS` is UNKNOWN-only by design),
-which is why #992's `pickup_wait_survey` and its recurrence #1031 (`pickup_issue_menu`, whose four
-`For <customer> • <store>` sub-flow siblings all carried one) are fixed by copying the sibling
-entry verbatim so the mask hex stays equal across the sub-flow; the shared id-less **name shape**
-separates its tokens with `\s{1,4}`, never a literal space (#885 — a double-space render silently
-missed; the shape string is byte-SSOT with `SnapshotRedactor.FIRST_LAST_INITIAL_PATTERN`, so every
-doordash/uber copy moves together); the embedded Google-Nav **maneuver cluster** is masked on the
-dropoff-phase nav rules AND `navigation_generic`, while `pickup_navigation`'s MERCHANT address
-stays raw by design (#886); id-less address/venue blocks anchor via sibling predicates
-(`hasPrecedingSiblingText` #860, `hasFollowingSiblingTextMatchesRegex` #886) and a phase-ambiguous
-slot over-masks toward privacy (#985's timeline order-detail sheet,
-`doordash.screen.timeline_task_detail`, is anchored on its own chrome — `Copy address` text AND
-`Close sheet` contentDescription, BOTH required — and masks the merchant render too; store NAMES
-stay raw); a receipt-scan camera is NOT in the blocked document-image family — recognize-and-redact
-like the #463 ID-CHECK screens (dev ruling, #995); the **combined-frame class** means a redact only
-protects the frames its OWN rule wins, so a banner that can inflate over another rule's frame
-(`arriving_at_title`) is declared by EVERY rule in `dropoff.json5` plus `navigation_generic`, pinned
-by a parity test (#993); and a name entry enumerates every conjugation a surface renders —
-`timeline`'s fourth is `Return <name> to <store>` (#994, whole-remainder keepPrefix, so the store
-tail masks too while the #623 mask↔hash invariant survives because `customerNameKey` discards the
-tail) — with `timeline`'s redact/parse prefix lists diverging only **by documented exclusion** (a
-guard test fails on any undocumented divergence in either direction; `"Return "` is listed against
-#998, which owns the return-task design question). **Recognize-only is NOT state-inert** — ruling a
-previously-UNKNOWN surface makes its frames reach the state machine and moves
-`FrameGate.lastIdentity`; what "no `state` block" buys is *lifecycle neutrality*, asserted
-end-to-end by `FlowlessRecognitionNeutralityTest`. Candidate text markers are vetted against the
-corpus before joining the runtime set — chrome-ambiguous prefixes ("Return ", "Focus on ",
-"Heading to ") are REJECTED because `CaptureBackstopCorpusTest` goes red on a clean corpus,
-reasoning recorded in the `CustomerTextMarkers` KDoc; the rule redact is the primary control (#806). Intake-side prefix lists (`SnapshotRedactor.NAME_PREFIXES`,
-`PII_ID_SUFFIXES`) are deliberately ASYMMETRIC with the runtime markers — an over-scrub at intake
-costs triage text, a runtime false positive scrubs a live envelope — **but that asymmetry has a
-floor (#1064): an intake over-scrub that eats a rule's own recognition ANCHOR costs the fixture,
-not triage text.** `"Return "` was the receipt (added unconditionally by #994, it masked DoorDash's
-`"Return to dash"` button — a `hasText` anchor on four rules — so the 09-05 intake's `on_dash_map`
-fixtures re-classified and were set aside), so a chrome-ambiguous intake prefix now carries a
-predicate over its tail (`SnapshotRedactor.GATED_NAME_PREFIXES`; `"Return "`'s tests the segment
-ahead of the conjugation's own `" to "` against `FIRST_LAST_INITIAL_PATTERN`, the same byte-SSOT
-the rule side shares) and `SnapshotRedactor.customerLeadIn` is the ONE owner of "is this a customer
-lead-in with a raw tail", shared by the scrubber and the committed-corpus guard. That guard
-checks name shape + `ID_MARKERS` ids + lead-in prefixes, with hand-written fixture pseudonyms
-exempted by the byte-exact `CorpusDecoys` enumeration rather than by loosening the guard; a
-per-folder assertion that a fixture carries a raw pseudonym is pinned to the hand-authored files
-BY VALUE, never applied folder-wide, or the folder becomes CLOSED to device captures (which arrive
-already edge-masked) — the #995 `pickup_receipt_scan` case, fixed by #1064. Sensitive
-rules prefer **view-id anchors** (locale-immune, #938) — e.g. `sensitive.dasher_direct`'s
-`dxdr_nav_host_fragment` arm closes DasherDirect's text-free pre-render skeleton at the door (#924).
-#1059 blocks three more of the dasher's OWN surfaces on the same id-first pattern, all fielded
-2026-08-27/28 reaching UNKNOWN capture: the embedded **Persona selfie / ID-verification** flow
-(`sensitive.selfie_verification` — `persona_container` / `personaComposeView` /
-`pi2_back_stack_screen_runner`; the camera steps are almost text-free, so the ids are the whole
-defence), the **Red Card wallet** screen (`sensitive.red_card` — `virtual_red_card_image` +
-the activate/request buttons; its headline "Your Red Card" is deliberately NOT an anchor, since
-ordinary shopping-order pickup copy says "pay with your Red Card"), and the **passport** variant of
-the ID-scan camera (`id_type_selector` joined `sensitive.id_verification`, whose anchors were all
-driver's-licence specific). `SensitiveSurfaceBlockTest` pins the stronger bar the SENSITIVE golden
-arm does not — claimed BY THE RULE, `sensitive.known`, and dropped at the content gate before
-`CaptureWriter`.
-A rules-independent customer-PII **marker backstop** (`CustomerTextMarkers`, #624/#632/#666/#806 —
-distinct from `SensitiveTextMarkers`, which drops the dasher's banking screens) scrubs a node
-(screen tree) or whole field (notification, incl. `actionLabels` #666) that ships a customer-PII
-marker — on the **recognized** path (a rule forgot to redact) AND, since #806, on the **UNKNOWN
-screen / notification / click** envelopes too (fail toward privacy) — before the envelope hits
-disk. The marker SSOT is cross-platform DATA ("Deliver to "/"Pickup for "/"Message from " for
-DoorDash, "Leave the order at "/"Meet at door for " for Uber pushes, #585), with a documented
-residual for shapes a prefix scan can't own (a name-at-start body, store-ambiguous prefixes like
-Uber's "Going to ") where the rule-declared `redact` is the primary control. The compiler rejects
-branch-level `redact` and skips a file with duplicate rule ids (#624); the multi-file loader skips a
-later file that re-declares an id an earlier file already claimed (#633, fail-closed — hardens the
-#192/#639 multi-file + CDN path). Field-enumeration SSOTs keep a new model field from silently
-missing a scrub site: `RawNotificationData.textFields()` (#666) enumerates the 5 flat notif text
-fields (title/text/bigText/tickerText/subText) for
-`toFullString`/`contentHash`/`CompiledNotifRedact`/`CustomerTextMarkers`; its screen-node edition is
-`UiNodeTextField` + `UiNode.scrubbableStrings()`/`mapScrubbableStrings()`/`allScrubbableText()`
-(#835 — `stateDescription` is captured on SDK ≥ R and serialized as `"state"`), iterated by
-`CompiledRedact.maskNode`, `CustomerTextMarkers`, `SensitiveTextMarkers.findMarker(tree)`, and the
-corpus `SnapshotSecurityScanner`/`SnapshotRedactor`. Recognition is deliberately untouched by #835:
-`UiNode.allText` (what rules match on) still excludes `stateDescription` — widening a scrub layer
-must never be able to move a classification. **Two #910 additions close the SPLIT-NODE class**
-(marker and PII in different nodes — a `user_name_label` reading `"Delivery for"` beside a BARE
-`user_name`): (1) a **click envelope inherits the SCREEN rule's `redact`** —
-`Observation.Click.screenRuleId` (stamped from the classifier's per-platform screen-context cache)
-drives the same `redactFor` lookup, applied to recognized AND UNKNOWN clicks, envelope-only (the
-dedup `contentHash` stays on the original node), fail-OPEN; (2) `CustomerTextMarkers.ID_MARKERS` —
-an enumerated, cross-platform-DATA list of view-id suffixes whose node VALUE is customer PII
-(`customer_name`/`user_name`/`address_line_1`/`address_line_2`, + `arriving_at_title` #993 and
-#1058's `address_subpremise_line`/`dasher_instruction_content_{collapsed,expanded}`), `hasIdSuffix` semantics, scrubbed
-on the **UNKNOWN screen + click envelopes only** (a recognized frame keeps its rule's deliberate
-decisions — #886 leaves `pickup_navigation`'s MERCHANT address raw — so an id scan there would
-fight the ruleset; scrubbing the dasher's own `user_name` greeting on an UNKNOWN frame is the
-accepted fail-toward-privacy cost). UNKNOWN frames and UNKNOWN clicks remain the documented
-debug-only exception (behind the release `NoOpCaptureBus` #346 + the `SensitiveTextMarkers` drop
-backstop + the #806 scrub + the #910 id scan); the residual (a name-at-start body, an id-less
-address/gate-code line with no customer lead-in) persists on UNKNOWN frames until the surface is
-recognized (#806 direction 1). `PipelineV2.events` is a HOT `shareIn` stream — one upstream pass
-feeds all collectors, so side effects (captures, dedup state) can never double-run (#361). The
-merged upstream is supervised — a crash logs + counts a restart and resubscribes with backoff
-instead of silencing all sensing (#430) — and `PipelineStats` counts every gate decision, mapping
-failure, and restart (periodic summary log line). **Every build identifies itself (PR #1066):**
-`app/build.gradle.kts` computes `versionName = "<base>+<8-hex git sha>[.dirty]"` at configuration
-time (fail-safe to `nogit`; `versionCode` stays a hand-bumped constant because Android refuses a
-lower one on install), and that string rides `BuildConfig.GIT_SHA`/`BUILD_TIME_MS`, one INFO
-startup line (`DashBuddy <version> starting (built <ISO-8601>)`, tag `App`), and the **head of the
-periodic `PipelineStats` summary** as `app=<versionName>` — injected through the same
-`@Named("appVersionName")` seam `ReplayMetadataProviderImpl` uses, so `:core:pipeline` never sees
-`:app`'s `BuildConfig`. A field-data pull reads the build off any log line instead of inferring it
-from which lines are absent.
+Full reference: [`docs/architecture/01-sensor-pipelines.md`](docs/architecture/01-sensor-pipelines.md).
 
-**The whole recognition + text-scrub layer assumes an ENGLISH device (#938).** Rule anchors and
-BOTH text-marker SSOTs (`SensitiveTextMarkers.KEYWORDS`, `CustomerTextMarkers.MARKERS`) are literal
-English strings, so on a non-`en` device recognition drops toward zero (survivable — everything
-falls to UNKNOWN, and release binds `NoOpCaptureBus`) **but the Pledge layers thin**: the
-sensitive-screen backstop, the UNKNOWN-capture PII scrub, and the shareable-log scrub all weaken.
-`CustomerTextMarkers.ID_MARKERS` (#910) is the one **locale-immune** defence — view ids don't
-localize — and is the pattern any future translation work should prefer. #938 makes the boundary
-*loud, not fixed*: `RecognitionLocale` (`:domain`, pure) decides, and the `:app`
-`LocaleBoundaryNotifier` (bound to the `:domain` `LocaleBoundaryReporter` contract that
-`AccessibilityListener.onServiceConnected` calls — recognition's own go-live edge, fail-OPEN)
-emits one WARN per sensor start (ISO-639 code only, principle 7) plus a **once-per-install**
-dasher-visible notice on its own `app_notice_channel`, remembered by the `app_state` DataStore flag
-`locale_boundary_notice_shown`. **Translating anchors/markers is deliberately NOT done** — it needs
-a non-English corpus, and until that exists a non-`en` device is a documented degraded mode, not a
-supported one. (Distinct from #428, which bounds the app's OWN copy/TTS to en/es/fr — a different
-assumption; the #938 notice copy itself IS translated into `values-es` since a Spanish dasher is
-exactly its audience.)
+`AccessibilityListener`/`AccessibilitySource` capture `AccessibilityEvent`s; `AccessibilityNodeMapper`
+normalizes a window into an immutable `UiNode` tree (`:domain`). Per-event-type sub-pipelines
+(`ContentChangedPipeline` debounced, `StateChangedPipeline`, `WindowsChangedPipeline`, clicks) and the
+parallel `NotificationPipeline` emit `PipelineEvent`s. `AccessibilityPipeline.output()` gates in order:
+**rulesets-not-loaded** (fail-closed, #432) → **sensitive/noise** (#399) → **disabled platform** →
+**UNKNOWN** (captured to disk for triage, never forwarded to the state machine). Snapshots are attributed
+to the window's *real* package, so our own overlay is dropped. `FrameGate` admits frames (identity dedup +
+UNKNOWN hash suppression, #360); `CaptureWriter` assembles envelopes (#361) and applies the matched
+rule's **`redact`** block (#598) — **envelope-only**: recognition, parse and dedup run on the original
+tree, and a click's `contentHash` stays on the original node. `PipelineV2.events` is a HOT `shareIn` stream (side effects never
+double-run); the upstream is supervised with restart backoff (#430); `PipelineStats` counts every gate
+decision and prints a periodic INFO summary whose head carries `app=<versionName>` (`<base>+<git sha>`,
+PR #1066 — read a pull's build from the logs, never infer it).
 
-**Recognition has a liveness signal (#937)** — the fourth member of the #909 silent-death family
-(effect engine #914, bubble #916, odometer #917; the offer voice joined as the fifth in #991, §4).
-Two pieces, both fail-OPEN and both inert to frame processing. (1) **Version stamping:**
-`PlatformAppVersions` resolves the OBSERVED app's `versionName` (`CachingPlatformAppVersions` — one
-`PackageManager` lookup per package per process, negative results cached too, `catch (Throwable)`;
-the `PackageManager` call is a lambda injected at the `PipelineModule` DI edge so the caching logic
-is a plain unit test). `ObservationClassifier` stamps it onto every observation's
-`ReplayMetadata.platformAppVersion` — classification is the one point that always runs AND knows the
-package, since the capture stage is skipped wholesale on a disabled bus — from where it rides into
-the capture envelope for free. Additive + nullable, and `Json.encodeDefaults` is false, so an
-unstamped envelope is byte-identical to a pre-#937 one: the committed corpus and the parse golden
-carry no such key and no test may require it. The cache is deliberately NOT invalidated on a package
-update (a process restart follows one in practice; a stale diagnostic stamp is a nuisance, never a
-correctness problem). The resolved `package@version` pairs also ride the periodic `PipelineStats`
-INFO summary — platform-app facts, PII-free. (2) **UNKNOWN-rate alarm:** `RecognitionHealth` (pure,
-per-platform rolling window of the last `WINDOW_SIZE`=50 **admitted** screen frames —
-post-`FrameGate`, so a dasher parked on one unruled screen contributes a couple of samples, not a
-thousand) trips when the window is FULL and ≥`UNKNOWN_RATIO_THRESHOLD`=0.80 of it classified
-UNKNOWN. Field-derived: a healthy dash measured near 16 % UNKNOWN on that same stream, so the
-threshold sits 5× clear of the noise while a real anchor break drives the ratio toward 1.0.
-`RecognitionHealthMonitor` owns the edges — package→platform via the registry (an `Unknown` package
-is ignored; no platform literal anywhere), one WARN + one `RecognitionHealthReporter` call per
-platform per **process** (per-*dash* would need `:core:state`, which depends on `:core:pipeline` and
-not the reverse; recovery deliberately does not re-arm). The `:domain` reporter contract is #938's
-inversion reused: the `:app` `RecognitionHealthNotifier` posts on the shared `app_notice_channel`,
-whose id + copy live in one owner (`AppNoticeChannel`, ids 102 locale / 103 recognition / 105 TTS
-health — 104 is the separate `weekly_plan_channel`; `AppNoticeChannel.postNotice` owns the
-ensure+PendingIntent+Builder posting shape all three notifiers call).
+**Redaction invariants (Pledge — a recognized rule that forgets to redact has NO backstop):**
+- Mask is `[redacted:<4hex>]` = first 4 hex of sha256 of the stripped/trimmed token (#623); a
+  customer-NAME entry flagged `normalize: customerName` hashes the canonical key (#733) so the mask hex
+  equals the parse's `customerNameHash` prefix across name FORMS ("Brandy S"/"Brandy Smith"). Fail-closed to
+  plain `[redacted]`.
+- `plainMask` (#795) opts a bounded-ALPHABET value (4-digit PIN, subpremise/unit number, length-bounded
+  note) into hash-less `[redacted]`; the rule-independent **short-token floor** (#889) does the same for
+  any sub-4-char token (`normalize: customerName` entries exempt). `plainMask`+`normalize` together is a
+  compile reject. A structural scan over both platforms' assets forces `plainMask` on every subpremise
+  entry (#986/#934); the split `Apt/Suite: <n>` form anchors on its label sibling (#1039).
+- `maskNode` is **first-match-wins**: blanket/plain entries sit AHEAD of generic shape entries, or a
+  digit-leading value gets claimed and hashed by the street shape.
+- **Combined-frame class (#993):** a redact protects only frames its OWN rule wins, so a banner that can
+  inflate over another rule's frame (`arriving_at_title`) is declared by EVERY rule in `dropoff.json5`
+  plus `navigation_generic` (parity test). The Google-Nav maneuver cluster is masked on dropoff-phase nav
+  rules + `navigation_generic`; `pickup_navigation`'s MERCHANT address stays raw by design (#886), while a phase-ambiguous slot
+  over-masks toward privacy — `timeline_task_detail` (#985) anchors on `Copy address` text AND
+  `Close sheet` contentDescription, BOTH required, and masks the merchant render too (store names raw).
+- The id-less **name shape** joins tokens with `\s{1,4}` (never a literal space, #885) and is byte-SSOT
+  with `SnapshotRedactor.FIRST_LAST_INITIAL_PATTERN`. A sub-flow sibling copies the entry verbatim so
+  the hex stays equal (#992/#1031). A name entry enumerates every conjugation a surface renders;
+  `timeline`'s redact/parse prefix lists diverge only by documented exclusion (guard test, #994/#998).
+- Coverage spans screen surfaces AND notification envelopes (#620). A receipt-scan camera is
+  recognize-and-redact, not blocked (#995). Sensitive rules prefer **view-id anchors** (locale-immune,
+  #938/#924/#1059); `SensitiveSurfaceBlockTest` pins claimed-by-rule + `sensitive.known` + dropped at
+  the content gate.
+- **Recognize-only is NOT state-inert** (it moves `FrameGate.lastIdentity`); "no `state` block" buys
+  lifecycle neutrality, asserted by `FlowlessRecognitionNeutralityTest`.
 
-**#1036 adds the alarm's other half: matched-but-parsed-nothing.** #937 measures rules that stopped
-MATCHING; DoorDash 8.93.7 removed the view ids every money parse anchored on while the text
-`require` anchors kept matching, so recognition looked healthy for weeks as every parse died, and
-the frozen corpus structurally cannot see that (#1029, re-anchored in §2). `Ruleset.matchFirst`
-reports a `:domain` `ParseShortfall` for every branch that MATCHED while its parse yielded nothing
-usable, on **two** triggers: every **evidence** field unresolved (total rot), or any
-**shape-required** field null while others parsed (partial rot —
-`ParsedFieldsFactory.REQUIRED_FIELDS_BY_SHAPE`). "Unresolved" is judged per field by the
-`ParseFieldKind` the parse compiler emits in the same dispatch that builds the extractor
-(`CompiledBranch.parseEvidenceFields`): `CONSTANT` (a literal, a `presence` check, an
-`else`-bearing `conditionalEnum`, any `fallback`-bearing extraction) is excluded entirely — it can
-neither evidence rot nor MASK a dead extraction beside it — `NULLABLE` counts when null, and
-`COLLECTION` (`each`/`findAll`) counts when the list is **empty**, which is what a plain null check
-missed on exactly the money surfaces (`payLineItems`, `orders`, `tasks`). Measured pre-validate (a
-`DropParsed` validator is a declared decision, not rot) and reported even when a `Skip` validator
-discards the branch — the case where a lower-priority text rule claims the frame and the rot leaves
-no other trace. The classifier only CARRIES the shortfalls (on `Observation.Screen`/`Notification`);
-both pipelines count them **post-admission**, beside the #937 sample, so debounced duplicates and
-disabled platforms never enter the census. `PipelineStats.onParseShortfall(shortfall)` owns both
-grains: a per-rule count rendered as `parseShortfall{<ruleId>=n,…}` on the periodic summary (loudest
-8, `+k more`, rule ids and counts only, P7) and one WARN per rule per process under the
-`ParseHealth` tag. Keyed by rule id ONLY (P8), and inert. Deliberately **no** dasher-visible notice:
-escalation is a later decision. A rule whose one evidence field is legitimately optional trips
-benignly (`dash_along_the_way`, `idle_map`, `set_dash_end_time` in the committed corpus), which is
-why the WARN is a once-per-process breadcrumb rather than an alarm; the same corpus shows the real
-finds (`delivery_summary_expanded`/`_collapsed`, `waiting_for_offer`, `timeline`).
+**Backstops (rules-independent, cross-platform DATA):** `SensitiveTextMarkers` drops the dasher's
+banking screens; `CustomerTextMarkers` (#624/#806) scrubs a node/field carrying a customer-PII marker on
+recognized AND UNKNOWN screen/notification/click envelopes, plus `ID_MARKERS` (view-id suffixes whose
+VALUE is PII, `hasIdSuffix`, #910/#993/#1058) on UNKNOWN screen + click envelopes only (a recognized
+frame keeps its rule's deliberate decisions). A click envelope inherits the SCREEN rule's redact
+(`Observation.Click.screenRuleId`, #910). Candidate text markers are vetted against the corpus
+(`CaptureBackstopCorpusTest`); chrome-ambiguous prefixes are rejected and the rule redact is the primary
+control. Intake prefixes (`SnapshotRedactor.NAME_PREFIXES`) are deliberately asymmetric with the runtime
+markers, with a floor (#1064): a chrome-ambiguous intake prefix carries a tail predicate
+(`GATED_NAME_PREFIXES`), `SnapshotRedactor.customerLeadIn` is the one owner, hand-written fixture
+pseudonyms are exempted by the byte-exact `CorpusDecoys` list, and a raw-pseudonym assertion is pinned
+to files BY VALUE, never folder-wide. Field-enumeration SSOTs keep a new model field from missing a
+scrub site: `RawNotificationData.textFields()` (#666 — the 5 flat text fields; `actionLabels` is
+deliberately outside it and scrubbed separately) and `UiNodeTextField` +
+`UiNode.scrubbableStrings()` (#835; `stateDescription` is scrubbed but `UiNode.allText` — what rules
+match on — still excludes it: widening a scrub layer must never move a classification). Rules skip a
+file with duplicate ids and a later file re-declaring an id (#624/#633). Release binds `NoOpCaptureBus`
+(#346); UNKNOWN captures are the documented debug-only exception.
+
+**English-device assumption (#938):** anchors and both marker SSOTs are English literals; on a non-`en`
+device recognition falls to UNKNOWN and the Pledge layers thin. `ID_MARKERS` is the one locale-immune
+defence. `RecognitionLocale` (`:domain`) + `LocaleBoundaryNotifier` (`:app`) make it loud: one WARN per
+sensor start + a once-per-install notice (`app_state` flag `locale_boundary_notice_shown`). Translating
+anchors is deliberately NOT done until a non-English corpus exists.
+
+**Liveness (#937/#1036, the #909 silent-death family) — every piece fail-OPEN and inert to frame
+processing; a diagnostic failure must never become a recognition gate:** `PlatformAppVersions` stamps the observed
+app's `versionName` onto `ReplayMetadata.platformAppVersion` (additive, nullable, no test may require
+it); `RecognitionHealth` trips one WARN + notice per platform per process when a full 50-frame admitted
+window is ≥ 0.80 UNKNOWN. `Ruleset.matchFirst` reports a `ParseShortfall` when a matched branch parsed
+nothing usable — every evidence field unresolved, or a shape-REQUIRED field null — judged per field by
+`ParseFieldKind` (`CONSTANT` excluded, `NULLABLE` null, `COLLECTION` empty), measured pre-validate and
+even when a `Skip` validator discards the branch; counted post-admission in `PipelineStats` (per-rule
+`parseShortfall{…}` + one WARN per rule per process, tag `ParseHealth`, rule ids only). Notices share
+`AppNoticeChannel` (ids 102 locale / 103 recognition / 105 TTS; 104 is `weekly_plan_channel`).
 
 ### 2. JSON Rule Engine (`core/pipeline/.../rules/` + generated `assets/rules/`)
 
-Recognition is **data, not code**. The rule SOURCE is per-platform **JSON5** under `matchers/rules/`
-(spec in ADR-0001, editor schema `docs/rules.schema.json`), owned by the included `matchers` Gradle
-build (#635/#192; ADR-0009) — see the `matchers/` bullet under Module Structure for the flat-file vs
-surface-directory layout and the merge. Sub-files reference `docs/rules.fragment.schema.json` (a
-`required`-free fragment schema whose `screens`/`clicks`/`notifications` `$ref` the main schema's
-`$defs`, so a partial file shows no false "missing format_version" error); the manifest,
-`uber.json5`, and the merged output keep the strict full schema. Rule ORDER within a file is
-behaviorally inert — every rule has a unique priority within its section, so `matchFirst`'s
-stable-sort tie-break is never exercised — which is what made the doordash split a pure repartition
-(#639: canonicalizing the pre-split flat file vs the post-split directory yields byte-identical
-output once each rule array is sorted by `id`, so `ParseOutputGoldenTest` stayed green with no
-regen). `:core:pipeline:importMatchersRules` imports the canonical output into **generated**
-`assets/rules/*.json` (`build/generated/assets/importMatchersRules/rules/`), which both the APK (AGP
-Variant-API asset merge) and the unit tests (`:app:testDebugUnitTest dependsOn` it;
-`TestRulesetFactory` reads the generated dir) consume — the app loader/tests/runtime are unchanged,
-still ONE file per platform. There are **no committed** `assets/rules/*.json`, so editing a JSON5
-value flows straight into recognition tests with no publish step. The corpus↔rules SHA version pin
-is deferred to N5/#638. The canonical files are compiled by `RuleCompiler` and matched by
-`ObservationClassifier`.
-Rules carry a `priority` and an `overrideable` flag. `matchFirst` evaluates the **non-overrideable
-partition first** (priority-ordered), then the overrideable partition (priority-ordered), so an
-`overrideable: false` classification can never be pre-empted by a lower-priority-number rule from
-any other/later source (#419); priority only orders *within* a partition. The high-confidence
-sensitive block (`sensitive.known`) is priority 0 + `overrideable: false` — structurally first,
-blocking all further processing of banking/identity screens — while the low-confidence
-`sensitive.catchall` net stays `overrideable: true` (priority 999) so specific recognition still
-wins over it. Rules also carry `require` predicates, `bind` blocks, `parse`
-blocks that produce typed fields via `ParsedFieldsFactory`, and an optional `redact` block
-(#598) — node predicates whose matched text is masked in the capture envelope (a screen rule
-that hashes PII via the `sha256` transform MUST declare a non-empty `redact`, enforced at compile;
-the mask keeps a `keepPrefix` marker so recognition on replay is unchanged). An effect's `dedupeKey`
-interpolates `{field}` against the branch's RAW parse plus two DERIVED reserved tokens resolved
-post-factory by the classifier (`DedupeTokens`, the lint's SSOT): `{parsedHash}` = the parse's
-CONTENT identity (#427) and `{presentationHash}` = its PRESENTATION identity (#859,
-`ParsedFields.presentationHash` — for an offer, #830's `presentationKey`, fail-closed to
-`offerHash`), so a surface that live-re-quotes itself fires its effects once per showing rather
-than once per quote. There are no Kotlin matcher classes —
-changing recognition means editing rule JSON plus corpus tests. **Rules cannot declare actuation**
-(#425): the compiler rejects `click`/gesture effect verbs; rules instead expose well-known *target
-bindings* (`acceptButton`, `declineButton`, `expandButton`) that the app-owned `RuleAction`
-registry (`:domain`) consumes — see `docs/design/rule-capability-consent.md`.
+Full reference: [`docs/architecture/02-rule-engine.md`](docs/architecture/02-rule-engine.md).
 
-**Rule-authored regexes run on a linear-time engine (#1053, ADR-0010).** Every rule pattern —
-predicate, parse `find`, redact `match`, `nextSiblingMatchingRegex` — funnels through the ONE
-`RegexSafety.compileRegex` → `BoundedRegex` seam, which now compiles onto **RE2J** (pure Java,
-BSD-3): an NFA simulation that cannot backtrack, so match time is linear in `input × pattern` and
-"accepted ⇒ bounded" is a property of the engine rather than a promise about a timer. It replaces
-two controls that were both unsound. The #418 compile-time ReDoS heuristic rejected the
-nested-unbounded family but could never be complete (`(a|aa)+$`, `(a?)*b`, `(.*a){20}` all passed
-it); the #590 200 ms watchdog could not fire **on Android at all** — `Matcher.reset(CharSequence)`
-stringifies its input and hands the match to native ICU, so the `InterruptibleCharSequence` the
-interrupt depended on was never consulted again, and `java.util.regex` reaches no ICU timeout API.
-The budget held only on the host, i.e. only where it was not needed: the #909 class of defect, one
-layer down. Both are DELETED — the heuristic, the watchdog executor, `InterruptibleCharSequence` and
-`RegexBudgetExceeded` — and `(a+)+$` is now a legal, safe, microsecond pattern. (The
-`StackOverflowError` catch was deleted with them and then RESTORED in round 2: it is retained today
-as `BoundedRegex.evaluating`, which no longer swallows the failure into a default but raises
-`RegexEvaluationFailed` — see below.) **The program size is MEASURED, not estimated.** Linear MATCH time says nothing about COMPILE cost,
-and RE2J 1.8 has no program-size ceiling (the C++ `max_mem` has no equivalent in the port), so
-`(a{1000}){1000}` is 15 chars and 1 002 002 instructions and rule load runs on the DEVICE once per
-rule. Round 2 bounded that with a structural walk over the pattern text and the round-3 review
-defeated the estimate THREE ways — a standalone `(?i)` introduces no atom so the quantifier after it
-applies to the PRECEDING expression (the walk forgot its cost: `x{200}(?i){200}` scored 200, emitted
-40 002); `{0,}` means `*` so its factor is 1, not 0; and a 187-char literal inside nested repeats
-packs **1 548 418 instructions (~88 MiB, ~131 ms)** into 200 chars at a product of exactly 8 192 —
-plus `\Q…\E` quoting, which hid structure from the scan entirely. The lesson is structural: a walk
-over pattern TEXT cannot predict what a compiler EMITS. So `compileRegex` is two gates: (1) a
-**coarse pre-compile guard** — `MAX_REGEX_LENGTH` 200, `MAX_REPEAT` 200 on any single written bound,
-`MAX_GROUP_DEPTH` 16, `\Q…\E` and leading-zero bounds (`a{0201}`, which RE2J reads as LITERAL TEXT)
-rejected, `(?i:…)` scoped flag groups accepted, and a cost estimate capped at
-`MAX_ESTIMATED_INSTRUCTIONS`=200 000 whose ONLY job is to keep the compile from exhausting memory
-(approximate, may under-count, nothing trusts its number); (2) the compile wrapped in
-`catch (Throwable)` so an OOM/SOE is a loud `RuleCompileException` — recovery is BEST-EFFORT
-(building the message can itself fail), it over-classifies unrelated VM errors as bad patterns, and
-the outcome is WHOLE-FILE rejection (`isolable = false`), which is the repo's existing policy for
-resource limits;
-(3) **the bound** — `Pattern.programSize()` ≤ `MAX_PROGRAM_SIZE`=**1 000**. The corpus's largest
-MEASURED program is **240** instructions (the #885 name shape) — a 4× margin, re-measured and
-printed by `RuleCorpusCompileBudgetTest` every run. **Round 5 lowered that from 20 000 for a
-match-time reason, not a memory one:** `^((.?){100}){40}$` is 17 chars, estimates 28 244, compiles to
-16 084 — both gates accepted it — and matching a FIVE-char input overflows RE2J's `Machine.add` on
-256 KiB, 512 KiB AND 1 MiB stacks (ART's coroutine threads are ~1 MiB). **Round 6 lowered it again to
-1 000 and struck the "threshold instruction count" claim:** recursion depth in `Machine.add` grows
-with NULLABLE NESTING, not with instruction count alone — a 20-char `^((((a?)?)?)?){150}$` is 1 954
-instructions and recurses ~45 % deeper than a 1 644-instruction shape that does NOT overflow — so the
-cap bounds EXPOSURE and `RegexEvaluationFailed` is the backstop for whatever remains inside it. **And an evaluation
-failure no longer has a single default** — `BoundedRegex` raises `RegexEvaluationFailed` (pattern
-LENGTH only, one WARN per pattern per process) and each boundary answers it: recognition
-(`Ruleset.matchFirst`) treats the rule as no-match and moves on, parse yields null (#745), and
-**redaction masks the WHOLE node/field** with plain `[redacted]`. That last one is the defect: a
-`false` default read as "no redact entry matched" and shipped the node RAW — fail-closed for a
-positive predicate is fail-OPEN for a redaction selector. The catch is deliberately NOT in
-`PredicateCompiler`, because a redact `find` compiles through the same `compileNodePred` and
-swallowing it there would reproduce the fail-open one layer down; each CONSUMER catches, the
-predicate propagates. A product-of-all-bounds estimate was rejected on
-measurement: it scores that 240-instruction shape at 109 363 200, higher than the 1.5M attack, so no
-ceiling separates them. The class scanner also handles a leading `]` (a MEMBER, not the terminator —
-`[]\s]` was being rewritten into something that matched space-then-bracket) and opaque POSIX
-`[:alpha:]` classes. The `StackOverflowError` catch is kept (`BoundedRegex.evaluating`) and is
-**load-bearing**: round 2 said a match-time overflow
-could not be reproduced and that was wrong — `((a?){200}){40}` against `""` overflows in RE2J's
-`Machine.add` at a 256 KiB stack.
-The price is the pattern **language**: rule regexes are RE2 syntax — no lookaround, no
-backreferences, no possessive/atomic groups — which is exactly the language an untrusted CDN rule
-source (#192/#640) needs, one whose worst case is known. The corpus cost was a single pattern:
-uber's `^Going to (?!\d)` → `^Going to (?:\D|$)` (same language, verified identical over 2 842
-corpus strings; it is a boolean predicate, so the zero-width-vs-consuming difference is
-unobservable). **The Perl classes are TRANSLATED toward ART's Unicode classes at that same seam** (a Pledge fix):
-Android's `java.util.regex` is ICU-backed and ICU's `\d`/`\s`/`\w` are UNICODE (`\d` is `\p{Nd}`,
-`\s` includes `\p{Z}`, `\w` includes combining marks) while RE2's are ASCII — so moving to RE2J
-silently NARROWED every rule on the device while the host stayed green, and two redacts regressed:
-the #885 name shape's `\s{1,4}` stops matching a name rendered with a non-breaking space (the
-customer-name mask never fires), and an Uber `Going to <non-ASCII digits>` address falls from the
-address-masking dropoff rule to the redact-LESS pickup rule, which `CustomerTextMarkers` deliberately
-excludes. So `RegexSafety` emits `\d`→`\p{Nd}`, `\D`→`\P{Nd}`, `\s`→`[\s\p{Z}\x{0B}\x{85}]`,
-`\S`→the negation, `\w`→`[\p{L}\p{M}\p{N}\p{Pc}]`, `\W`→the negation, with join controls `\x{200C}\x{200D}` in `\w` (Android's `\w` has
-`Join_Control`, and the shipped merchant-pair shape was matching ZWJ on device) (escape- and class-aware;
-inside a class the un-bracketed forms, and `\S`/`\W` there are REJECTED — a negated union isn't a
-class member and leaving it ASCII would reopen the gap), authors keep writing `\d`, and the
-byte-SSOT pins are pins on a shape's SOURCE BYTES, not on engine semantics, so they are unchanged as
-written. The length cap is measured on the pattern AS WRITTEN, before translation. **It is an
-APPROXIMATION, not parity** — RE2J 1.8 and ART's ICU ship different Unicode TABLE versions, so
-identical property names disagree at the edges, and the residuals are stated rather than claimed
-away: RE2J's `\p{Nd}` lags ICU (U+1E951 Adlam), its `\p{Z}` still has U+180E, the `\w` form admits
-superscript `²` (deliberate — over-matching `\w` widens a match while under-matching DROPS a redact),
-`\b` cannot be translated at all (ASCII-only, no Unicode form — and naming the ASCII word on ONE
-side is not enough, since the character on the other side decides too: the shipped distance finder
-takes `17 mié` under RE2J and not under ICU), and RE2J's `\p{L}`/`\p{Nd}` LAG Android's Unicode
-tables by a version so an Adlam letter/digit is a letter/digit to ART and not here — which an explicit class COULD
-close one character at a time (`[\p{Nd}\x{1E951}]`) but which we decline to hand-maintain against a
-moving ICU version (#1086), and which can drop the #885 name redact or send an Adlam-digit address to
-the redact-less uber pickup rule, and case folding is SIMPLE where ICU's is FULL (`straße`/`STRASSE`). One consequence
-that looks like a regression and is not: `CurrencyShape`'s `\d` become Unicode so a mixed-script
-`$16.٧٠` now satisfies the money SCAN (its leading `[1-9]` is a literal ASCII range), and #1052's
-code-point rejection in `parseGlyphCurrency` then reads it as NULL — fail-null, never a fabricated
-figure. Because RE2J is pure Java the SAME engine runs on host and ART — one engine on both, modulo those
-Unicode table versions — so a host regex test is a faithful device test for structure and for
-everything but those edges; one instrumented spot-check (`RuleRegexIsLinearTimeTest`) runs the
-headline exploit on ART for provenance, wired into `instrumented-nightly.yml` as
-`:core:pipeline:connectedAndroidTest`. Kotlin
-`MatchResult` no longer escapes the seam — `find` returns a `BoundedMatch` mirroring Kotlin's
-conventions (`groupValues` `""`/`groups` null for a non-participating group) and `groupCount()`
-replaced the compile-time `toPattern()` — and `RuleRegexEngineGuardTest` source-scans the rule
-package (no `java.util.regex` — neither the package name nor `Pattern.compile(…)`/`.toPattern()`;
-every `Regex(…)`/`.toRegex()`/`Regex.fromLiteral(…)` takes a string LITERAL, never a value from rule
-JSON — a literal with no `$` interpolation and no non-constant concatenation, since `Regex("$pat")`
-opens with a quote too; the app-authored constants sit in a frozen count ledger that only burns
-down), and `RuleCorpusCompileBudgetTest` compiles every shipped pattern under a 50 ms load budget and
-under `MAX_PROGRAM_SIZE`, printing both corpus maxima. Known semantic
-deltas, all toward one consistent behaviour and none exercised by the corpus: RE2's `$` is
-end-of-text (it does not match before a final newline — a tightening `CurrencyShape` wants), `\b` is
-ASCII (the layer already assumes an English device), `\p{L}` and `(?i)` follow Unicode simple rules.
+Recognition is **data, not code**. Source is per-platform **JSON5** under `matchers/rules/` (spec
+ADR-0001, schema `docs/rules.schema.json`; sub-files use `docs/rules.fragment.schema.json`), owned by the
+included `matchers` build (ADR-0009). `:core:pipeline:importMatchersRules` canonicalizes/merges it into
+**generated** `assets/rules/<platform>.json` consumed by both the APK and the unit tests
+(`TestRulesetFactory`); there are **no committed** rule assets, so a JSON5 edit flows straight into
+recognition tests. Rule order within a file is inert (unique priorities per section). `RuleCompiler`
+compiles, `ObservationClassifier` matches.
 
-**Two primitives exist for reading an id-less render (#1029), both bounded.** DoorDash 8.93.7
-shipped its money surfaces with NO view ids, so the parse vocabulary needed shape anchors where it
-had only id and position anchors. (1) The **`parseGlyphCurrency` transform** reads an animated
-digit-wheel — a figure rendered as per-glyph id-less `TextView`s beside a label, which `read:
-allText` fuses into one string (`"This dash so far$16.70"`, or `"$3.10This dash"` when the label
-trails). It first **rejects** any non-ASCII digit and any `-`/`−`/`(` (#1052 — a keep-filter
-DELETES what it does not know, so a stripped Arabic-Indic digit or minus sign leaves a remainder
-that still full-matches: an unreadable figure read confidently and wrong), keeps only the
-`$`/digit/`.`/`,` characters, then **full-matches** a settled shape (`$` + 1–4 digits, or a single
-`[1-9],\d{3}` thousands group — #1052 tightened the comma arm, which had admitted six figures
-through a branch the shape's own ceiling caps at four — plus exactly 2 decimals) or returns
-**null** — bounded input (256 chars), fail-closed, and that strictness is the point: ~1 in 5
-fielded reads is mid-animation (`$70103.030`, `$016.603`), and a fabricated figure is strictly
-worse than none. `parseCurrency` is not merely useless on that shape but WRONG — it splits on space
-and takes the first token, so a space-separated wheel reads `$1.00`. (2) The
-**`nextSiblingMatchingRegex(<pattern>)` navigate spec** scans up to `MAX_SIBLING_SCAN`=8 FOLLOWING
-siblings and returns the first whose own text full-matches, so a rule states the SHAPE it expects
-instead of a positional `sibling(N)`. The pattern compiles through `RegexSafety` at rule-LOAD time
-(length cap + fail-loud RE2 parsing, a loud `RuleCompileException`, never a hot-path hang) and
-matches through `BoundedRegex.matches` (the whole-input sibling of `containsMatchIn`, same
-linear-time engine, fail-closed to no-match). Its receipt: 8.93.7 flattened the pay breakdown into id-less siblings
-`'Customer tips', '799', '$7.00'`, where `799` is a DoorDash type CODE older builds render in the
-`pay_line_item_title` slot — so `sibling(1)` + `parseCurrency` reported a **$799.00 tip on a $16.70
-delivery**. No offset is right on both layouts; "the next money-shaped node" is. The spec
-takes an **optional scan cap** (`nextSiblingMatchingRegex(<pattern>, <n>)`, default and ceiling
-`MAX_SIBLING_SCAN`=8; a cap outside 1..8 — or present but unparsable, #1052 — isolates the rule at
-load, and the default applies only when no cap was written), and the three DoorDash money scans
-declare `2`: a CORRECTNESS control, not merely a bound — on a row whose value is simply absent
-(`['Customer tips','799','Peak pay','$1.00']`) an unbounded scan returns the NEXT row's money AS
-this one's, fail-WRONG and invisible to `sumApproxEquals` since `appPay` is null on 8.93.7. The
-sibling walk itself has ONE owner, `UiNode.followingSiblings()`/`precedingSibling()`, resolved by
-REFERENTIAL identity and shared with the #860/#886 mask predicates — `UiNode.equals` ignores
-children, so a flattened row's twin wrappers make a structural `indexOf` start the scan from the
-wrong node; positional `sibling(N)` keeps its old structural semantics. And "a well-formed currency
-figure" is ONE definition, `CurrencyShape` (`:core:pipeline`), from which both `parseGlyphCurrency`
-and the rules' scan patterns derive — byte-pinned by `CurrencyShapePinTest` over the generated
-assets, the `FIRST_LAST_INITIAL_PATTERN` precedent. It is TIGHTER than either hand-written
-predecessor: no leading-zero integer (`$016.70`, one settled digit from the fielded mid-spin
-`$016.603`) and no malformed thousands group (`$1234,567.00`, which the old Kotlin shape folded to
-1234567.0; the old rule-side `^\$[\d,]+\.\d{2}$` also took `$,.00` → 0.0). Neither primitive can
-catch a mid-spin read that is well-FORMED but wrong — that is the settle gate's job (§3).
+- **Partitions:** `matchFirst` evaluates the non-overrideable partition first, then the overrideable
+  one, each priority-ordered (#419). `sensitive.known` is priority 0 + `overrideable: false`;
+  `sensitive.catchall` is priority 999 + overrideable.
+- **Blocks:** `require` predicates, `bind`, `parse` (typed via `ParsedFieldsFactory`), `redact`
+  (#598 — a screen rule using the `sha256` transform MUST declare a non-empty `redact`; branch-level
+  `redact` is rejected). Effect `dedupeKey`s interpolate `{field}` against the branch's RAW parse, plus two DERIVED
+  reserved tokens the classifier resolves post-factory (`DedupeTokens`, the lint's SSOT):
+  `{parsedHash}` (content identity, #427) and `{presentationHash}` (presentation identity, #859 —
+  fail-closed to `offerHash` when `presentationKey` is null). A derived field is never an ordinary
+  `{field}` template.
+- **No actuation from rules (#425):** click/gesture verbs are compile-rejected; rules expose target
+  bindings (`acceptButton`, `declineButton`, `expandButton`) that the app-owned `RuleAction` registry
+  consumes (`docs/design/rule-capability-consent.md`).
+- New rule↔state vocabulary goes through the enumerated, load-validated contract —
+  `ParsedFieldsFactory.REQUIRED_FIELDS_BY_SHAPE` plus `StateMachineContract.EFFECT_INTENTS` /
+  `.REQUIRED_FIELDS_BY_FLOW` — enforced at compile per file (principle 8).
+
+**Rule regexes run on RE2J (#1053, ADR-0010).** Every rule pattern — predicate, parse `find`, redact
+`match`, `nextSiblingMatchingRegex` — compiles through the ONE seam `RegexSafety.compileRegex` →
+`BoundedRegex`, a linear-time NFA (no backtracking), replacing the unsound #418 heuristic and the #590
+watchdog (which could never fire on Android). Pattern language is **RE2 syntax**: no lookaround,
+backreferences, possessive/atomic groups. Bounded ingestion is three gates: (1) a coarse pre-compile
+guard — `MAX_REGEX_LENGTH` 200 (as written), `MAX_REPEAT` 200, `MAX_GROUP_DEPTH` 16, `\Q…\E` and
+leading-zero bounds rejected, `(?i:…)` accepted, cost estimate ≤ 200 000 whose only job is to keep the
+compile from exhausting memory; (2) the compile wrapped in `catch (Throwable)` → loud
+`RuleCompileException`, whole-file rejection; (3) the **MEASURED** bound `Pattern.programSize()` ≤
+`MAX_PROGRAM_SIZE` = **1 000** (corpus max 240, printed by `RuleCorpusCompileBudgetTest`). Never
+estimate a compiled program size from pattern text — measure it. The cap bounds EXPOSURE to match-time
+stack overflow (recursion grows with nullable nesting, not instruction count); the backstop is
+`RegexEvaluationFailed` (raised by `BoundedRegex.evaluating`, one WARN per pattern per process), which
+**each consumer answers**: recognition treats the rule as no-match, parse yields null, **redaction masks
+the WHOLE node/field** with plain `[redacted]` — a `false` default is fail-OPEN for a redact selector.
+The catch is deliberately NOT in `PredicateCompiler`. The Perl classes are TRANSLATED toward ART's
+Unicode classes at the seam (`\d`→`\p{Nd}`, `\s`→`[\s\p{Z}\x{0B}\x{85}]`,
+`\w`→`[\p{L}\p{M}\p{N}\p{Pc}\x{200C}\x{200D}]`, negations likewise; `\S`/`\W` inside a class rejected) —
+an APPROXIMATION, not parity: Unicode-table lag (Adlam), simple vs full case folding, ASCII `\b`,
+listed in #1086. Authors keep writing `\d`; byte-SSOT pins are on source bytes. Guards:
+`RuleRegexEngineGuardTest` (no `java.util.regex` in the rule package; every `Regex(…)` literal-only,
+frozen count ledger), `RuleCorpusCompileBudgetTest` (50 ms load budget + program-size max), instrumented
+`RuleRegexIsLinearTimeTest` (nightly on ART). The one corpus cost: uber's `^Going to (?!\d)` became
+`^Going to (?:\D|$)`.
+
+**Two bounded primitives for id-less renders (#1029, DoorDash 8.93.7 shipped its money surfaces with no
+view ids):** (1) the **`parseGlyphCurrency` transform** reads an animated digit-wheel fused by `read:
+allText` — rejects any non-ASCII digit and any `-`/`−`/`(` (#1052), keeps only `$`/digit/`.`/`,`, then
+full-matches `CurrencyShape` (`$` + a bare `0` or 1–4 digits with NO leading zero, or one
+`[1-9],\d{3}` thousands group, + exactly 2 decimals — `$016.70` is out of shape) or returns
+null (bounded 256 chars, fail-closed — ~1 in 5 fielded reads is mid-animation; `parseCurrency` is WRONG on
+that shape). (2) the **`nextSiblingMatchingRegex(<pattern>[, <cap>])` navigate** scans ≤ `MAX_SIBLING_SCAN`
+= 8 following siblings for the first whose text full-matches (pattern compiled at rule load; cap outside
+1..8 or unparsable isolates the rule); the three DoorDash money scans declare `2` as a CORRECTNESS control
+(an unbounded scan returns the NEXT row's money as this one's). The sibling walk has one owner,
+`UiNode.followingSiblings()`/`precedingSibling()`, by REFERENTIAL identity (`UiNode.equals` ignores
+children). `CurrencyShape` is the ONE definition of a well-formed figure, byte-pinned by
+`CurrencyShapePinTest` over the generated assets. Neither primitive catches a well-FORMED mid-spin read;
+that is the settle gate's job (§3).
 
 ### 3. Multi-Region State Machine (`core/state/`)
 
+Full reference: [`docs/architecture/03-state-machine.md`](docs/architecture/03-state-machine.md).
+
 Observations reduce into `AppState(regions)` (`:domain`): **`FlowRegion`** (R0 — ground-truth screen
-interpretation; the current flow + its provenance, NOT offers), one **`PlatformRegion`** per
-platform (session/task lifecycle + that platform's own offers), and **`CrossPlatformRegion`**
-(derived aggregates). The steppers (`FlowRegionStepper`, `PlatformRegionStepper`,
-`CrossPlatformRegionStepper`) are pure and driven by `obs.timestamp` — never a wall clock — so crash
-recovery can replay observations over the last snapshot. `StateManagerV2` hosts the reduction,
-exposes `StateFlow<AppState>`, and owns crash recovery; `EffectMap` diffs prev/next state into
-`AppEffect`s.
+interpretation, NOT offers), one **`PlatformRegion`** per platform (session/task lifecycle + that
+platform's offers), **`CrossPlatformRegion`** (derived aggregates). The steppers are pure and driven by
+`obs.timestamp` — never a wall clock — so crash recovery replays observations over the last snapshot.
+`StateManagerV2` hosts the reduction and crash recovery; `EffectMap` diffs prev/next into `AppEffect`s.
+No `Platform` branch anywhere (principle 8); per-platform values ride `GraceConfig` through
+`TransitionPolicy`.
 
-**The dash running total is settle-gated (#1029).** A parsed running total moves
-`Session.runningEarnings` only once it has stood **unchallenged on its own surface for a settle
-window** — `PlatformRegion.pendingSessionPay` parks the read with a deadline
-(`GraceConfig.sessionPaySettleMs`, 3 s, per-platform through `TransitionPolicy`) and the commit is the
-stepper's **lazy expiry** on the first observation AT or past it. §2's `parseGlyphCurrency` rejects
-the malformed digit-wheel intermediates, but a spin value that lands well-FORMED ($470.00 during a
-$16.70 dash) is separable from a real figure only by TIME, which means state. **Repetition was
-REJECTED as the discriminator:** the idle dedup hash folds `sessionPay` into `Observation.identity()`,
-so `FrameGate.admit` drops every repeat of a settled wheel and a second agreeing read can never
-arrive — which is also why the park arms a `SESSION_PAY_SETTLE` wake timer
-(`EffectMap.diffSessionPaySettleTimer`, its own `TimeoutType` so the (type, platform) key can't
-cross-cancel the `GRACE_COMMIT`/`MODE_RESUME_COMMIT` graces sharing the region): on an unchanged wheel
-the timer is the ONLY observation that will ever come. The `PlatformRegion.pendingSessionPay` KDoc is
-the canonical statement of the rationale. The rule:
-**(a) a park is owned by (FLOW, PLATFORM)** — `PendingSessionPay.flow` + `FlowRegion.activePlatform`;
-losing either DROPS it, since no other screen carries a running total and the wake timer would
-otherwise commit an unchallengeable figure (the platform half is load-bearing because `stepPlatforms`
-steps only `obs.platform`'s region, so two idle screens on two platforms defeat a flow-only test).
-Ownership is checked on BOTH the prior and the resulting R0 (#1052 — checking only the result is
-blind to a departure this region was never stepped for), a `prevFlow` failure DROPS the park whatever
-the observation is, and the returning frame re-parks with a fresh window. A flow-LESS observation
-(wake timer, click, loopback, flow-less notification) is never a departure frame, so it orders like a
-timer (ownership before expiry) while a flow frame runs the expiry FIRST, letting a park that stood
-its whole window commit on the departure frame. Another platform's screen still drops this platform's
-park — fail-null, accepted. **A park is FROZEN, not killed, while the dash is not `Mode.Online`, and
-its window RESTARTS on the way back (#1052):** a read parks in ANY mode, the lazy expiry SKIPS
-wholesale while non-Online (no commit, no drop), and `applyModeTransition` — the single site that
-moves `mode` — RE-BASES `since`/`deadline` on the transition INTO Online and re-arms the timer, so
-the park stands a full window on a LIVE dash before it may commit. Dropping or refusing the park
-while non-Online both STRAND a legitimate figure, because the #605 resume grace holds `Paused` across
-the pause-sheet flap, the confirmed resume arrives as a wake TIMER with no frame behind it, and
-`FrameGate` never re-admits the identical idle capture. (Hence `diffDeadlineTimer`'s early-wake
-re-arm is guarded on `obs.timestamp < deadline`: a park kept across its own deadline would otherwise
-re-arm at the 1 ms floor and spin for the length of the pause.) **A re-based park is UNCONFIRMED
-(`PendingSessionPay.unconfirmed`) until a fresh readable read on its OWN surface agrees; a null read
-or a bare timer at the deadline DROPS it instead of committing** — otherwise the first observation of
-the re-based window is the fire itself, committing a figure nothing was on screen to contradict. The
-agreeing read clears the flag without extending the deadline; a different value replaces the park.
-**An equal-value read on a DIFFERENT surface RE-PARKS there** (the keep arm requires
-`flow == pend.flow`), since inheriting the old surface leaves the park owned by a screen that had left.
-**(b) BOTH feeds go through the gate** — the on-dash pill (`IdleFields.sessionPay`) and the receipt's
-"This dash so far" (`PostTaskFields.sessionEarnings`), read off the SAME wheel via
-`parseGlyphCurrency`; for the settled re-render to be admittable at all, `PostTaskFields.dedupeHash`
-folds in `sessionEarnings`.
-**(c) every NON-gated writer supersedes older parks** — the PostTask-entry pay accumulation and the
-dash-summary total drop any park whose `since` predates them; `since >= now` keeps the receipt's own
-same-frame park. The dash summary reaches the park by (f), not by this rule: `updateLifecycle` returns
-early on `Flow.SessionEnded` with a live session (to arm the authoritative SESSION_END grace), so its
-`updateSessionFields` arm is unreachable on the fielded path — the summary's `totalEarnings` is
-instead one of the three reads `Observation.sessionPayRead()` recognizes, which is what stops a
-pre-"End Dash" park committing on the summary frame and riding into the #596 close-out sweep's
-`DELIVERY_COMPLETED.sessionEarnings`.
-**(d) comparisons are cent-tolerant** (`accumulatedDeliveryPay + totalPay` is not bit-equal to the
-2-dp figure the wheel renders).
-**(e) a pending's own wake lapses it by IDENTITY; a frame lapses the park at-or-past** — the timer is
-armed for `deadline − obs.timestamp` against a wall clock, so its fire lands ON the deadline
-ordinarily and BEFORE it after a step-back, with no frame coming to retry. **Since #1054 round 4 that is settled by IDENTITY, not arithmetic** — the one rule, in
-`GraceExpiry` (`isWakeFor` / `graceLapsed`, housed outside the oversized stepper): every arm from the
-shared `ModeEffects.diffDeadlineTimer` carries `ObservationPayload.GraceWake(wakeId)` — **a
-per-region GENERATION drawn from `PlatformRegion.wakeSeq` through the one `mintWakeId()` helper, not
-the deadline** (#1054 round 5; a deadline is not unique — a replacement park computed after a clock
-step-back holds the identical `now + settleWindow`, and the superseded wake then committed it after
-zero time in its own window). So **a pending's OWN wake lapses it whenever it arrives** (an NTP step
-between arm and fire changes the stamp, not the fact that the window elapsed) and a fire from a
-REPLACED pending is inert. A new id is minted wherever a pending is created, replaced, re-based or
-has its deadline MOVED — `withWakeIdIfDeadlineMoved` is the one installer for a destructive pending
-and preserves an identity only for the SAME logical pending (same kind AND unchanged deadline; a
-kind change is a replacement, and after a clock rollback a fresh `TASK_RETIRE` really can land on a
-standing `SESSION_END`'s deadline, whose nearly-elapsed timer then committed it after ~10 ms); id `0` is the reserved "legacy, unidentified" value a pre-round-5 snapshot
-decodes to and never matches, so such a pending is lapsed by its timestamp alone. **A FRAME lapses a grace strictly PAST the deadline and the park at-or-past**, so a
-contradicting frame stamped exactly on a grace's deadline still reaches its own cancel arm (a paused
-frame cancels a resume #605, a task frame cancels a misrecognized `SESSION_END` #431; on the resume
-the alternative also MINTED a session whose Online→Paused follow-up left `diffMode` with no edge, a
-dash no `DASH_START` describes). The park needs no such carve-out — rule (f) already makes a
-contradicting read on the expiring frame supersede it. **There is no re-arm logic left at all:**
-rounds 1–3's early-wake re-arm, equality carve-out and its `(type, platform)` narrowing were four
-patches on one substitution of coincidence for identity, and all four are deleted. The arms also
-carry `deadlineMs`, so a tail-REPLAYED arm lands on time instead of a full window late
-(`OFFER_EXPIRY`/`SETTLE_UI` do not yet — #1076), and the pause-safety net joined the shared diff as
-the fourth region timer (see the recovery paragraph).
-**(f) a contradicting read on the expiring frame supersedes the park** it contradicts, rather than
-committing the stale figure and re-parking the fresh one.
-**(g) a `$0.00` read never overwrites a positive total** — the pill renders that placeholder for
-seconds before the figure loads, and a dash total never legitimately returns to zero mid-dash.
-Deliberately NOT a general monotonic guard.
-Pure and platform-agnostic throughout (keyed by the region's own reads, deadlines from
-`obs.timestamp`, no `Platform` branch, no wall clock); split immediate/gated fields —
-`zoneName`/`sessionType` still write on sight; cleared on session start and end; a genuinely changed
-total lands one settle window late by design. **Crash recovery DROPS any restored park**
-(`AppState.recoveryHygiene`): its surface is gone and no restore path re-arms its wake timer,
-so it would sit forever or be committed by whatever frame happens past its deadline — fail-null
-(#745), at a cost of one settle window. It runs at the **LIVE boundary — on the FINAL state after the
-tail fold, never on the snapshot** (#1052), because the tail must replay against the snapshot exactly
-as recorded and scrubbing at the end also discards a park a TAIL frame re-created (its
-`ScheduleTimeout` is a region timer, which the recovery fold SKIPS since #1054 — `reconcileRecoveredTimers`
-is their sole armer after a restore). The drop is
-**CHECKPOINTED**: `restoreState` writes the cleaned state back through `SnapshotStore.checkpoint`
-(unconditional, sharing `maybeSnapshot`'s writer — one encoder) at the restored correlation version,
-where snapshot rows REPLACE by key — in memory alone is not durable, and a SECOND restart with no
-ordinary snapshot in between would replay the park over a since-grown journal tail. Two corrections
-ride on it. **Replay stamps each journal row's own `correlationVersion`**
-(`ObservationJournal.tailAfter` returns `JournalRow(cv, obs)`): `StateMachine.step` numbers its result
-`prev + 1`, which matches the journal only while it is gap-free, and `append` is a fire-and-forget
-queue whose writer LOGS and drops a failed insert — so after a lost row the fold undercounted and the
-checkpoint would make that wrong boundary DURABLE, leaving the next restart to re-consume rows it had
-already applied. **And the checkpoint is retried and fails LOUD** — `checkpoint` returns whether the
-row landed (`write` splits its try: the insert is the durability, the prune is housekeeping),
-`restoreState` retries once and then logs at ERROR under the `StateMachine` tag that the cleaned state
-is not durable rather than letting `SnapshotStore`'s catch-all swallow it. It proceeds either way
-(blocking live observations on a failing DB would trade a bounded, stated risk for total sensing
-loss), **and a failed checkpoint stays PENDING, retried on every live observation until it lands**
-(`StateManagerV2.recoveryCheckpointPending`, cleared on the first successful write, one DEBUG line per
-attempt) — an ERROR alone left the pre-hygiene snapshot standing as the next replay base, and since
-the journal and the snapshot share one database, a journal append that persists is direct evidence
-the checkpoint can land too.
-**Recovery: what is dropped, what is re-based, what is re-armed** (#1054) — the rule being *evidence
-is dropped, a decision in flight is re-armed*. `AppState.recoveryHygiene(nowMs)` (the widened
-`droppingSessionPayParks`, taking the ONE wall-clock read of the recovery path) **drops** the settle
-park and the graced resume; a resume's 8 s window is UN-CONTRADICTED observation, so committing one
-after a restart asserts dead process time was nobody contradicting it — and the commit MINTS a
-session when the region has none and CANCELS `SESSION_PAUSED_SAFETY` through `diffMode`. It **re-bases**
-`pendingDestructive` to serve its REMAINING window live (`remaining = (deadline − base) − (lastSeen −
-base)` where `base = servedFrom ?: windowFrom ?: since` — `windowFrom` is the observation that last set or
-moved the deadline, so a tighten after a clock rollback keeps its window (#1054 round 7), `lastSeen` = `AppState.timestamp`, `since` untouched per
-#732): a restored grace has observed NONE of its window, and dead time is not un-contradicted time —
-the collapsed receipt's expansion (#1033) and the misrecognized summary's contradicting task frame
-can still land, where round 3's re-arm at the stale deadline fired at the 1 ms floor and committed
-first. **`PendingDestructive.servedFrom` is what makes that re-base a FIXED POINT** (round 5): the
-re-base moves the deadline but not `AppState.timestamp`, so without a second anchor a restart before
-any new observation handed the whole elapsed dead time back as fresh window — a 2.5 s grace restored
-twice became 193 500 ms, and a crash loop stretched it without bound. Idempotence is what makes a crash LOOP safe — each restart
-serves the same remaining window — but the hygiene runs exactly **once** per restore (round 6):
-`finishRestore` checkpoints and installs the SAME state. Round 5 ran it twice so the served window
-would start at the live boundary, which made the durable base describe a different deadline from the
-one the process was running, and an observation that was a no-op live then COMMITTED when the next
-restart replayed it. The checkpoint write's own latency is deducted from the window instead —
-milliseconds ordinarily, and a stated cost. **A live deadline MOVE re-anchors the accounting:** `withWakeIdIfDeadlineMoved` clears `servedFrom`
-and stamps `PendingDestructive.windowFrom` with the MOVING observation, so the hygiene reads
-`servedFrom ?: windowFrom ?: since`. Neither of the other two anchors survives a wall-clock rollback:
-a stale `servedFrom` sits in the new deadline's future, and `since` — the historical arm instant #732
-stamps the commit at — can be AHEAD of a tighten that landed behind it, both computing zero remaining
-for a window that was never served.
-`AppState.pendingDeadlineTimers()` then **re-arms** exactly two things: that grace, and the
-**pause-safety net** at the platform's own deadline, AS-IS with dead time included (it is the
-platform's countdown on the platform's clock). That net is state now — `PlatformRegion.pauseSafetyDeadline`,
-stamped by `applyModeTransition` into Paused and cleared on the way out, armed/cancelled by
-`EffectMap.diffPauseSafetyTimer` like the other three region timers — because before round 4 its
-deadline lived ONLY in the engine's in-memory timer map, so a restore into Paused had no timer of any
-kind and a pocketed phone whose countdown ended kept the session live for the next morning's dash to
-RESUME. **A replayed REGION timer is never executed** (round 5): `SideEffectEngine` skips a
-`TimeoutType.REGION_TIMERS` arm or cancel while `recovering == true`, because such an arm is
-scheduled against a replayed frame's timestamp and so fires at the 1 ms floor mid-recovery — logging
-a `Timer Expired` WARN into the shareable log for a pending the hygiene may be about to drop (P7),
-and not merely inertly, since `graceLapsed`'s timestamp arm can still COMMIT. The recovery reconcile
-is their sole authoritative armer, which is also why round 4's cancel-after-the-fact is gone: by the
-time it ran, the coroutine had already fired. A **legacy payload-less `SESSION_PAUSED_SAFETY`** fire
-is honoured when the region has no `pauseSafety` of its own **or when it lands at/after the armed
-one's deadline** (round 6) — a payload-less fire is by construction a pre-round-5 arm, and a
-master-era tail can contain the PAUSE FRAME itself, so the replay may have just reconstructed the
-very net whose countdown produced the fire. Refusing it left a dash master had ended checkpointed as
-still running; one landing strictly BEFORE the armed deadline is still refused. **Two stated
-residuals** (round 7): a legacy fire whose OLD build's clock rolled back between arm and fire lands
-before its reconstructed deadline and is refused, losing that terminal transition — identity cannot
-be recovered across a wall-clock discontinuity, and the exposure is one process lifetime (the journal
-tail is 48 h; every arm from this build's first run carries an id); and "payload-less means
-pre-round-5" is not strictly true, since the rule-driven timer API can emit a payload-less fire of any
-type (no checked-in rule does so for safety — a provenance residual on #1076). `initialize()` awaits the merge collector's SUBSCRIPTION before
-`restoreState`, because `engine.events` is a `replay = 0` `SharedFlow` and an already-elapsed re-arm
-fires at once — emitted with no subscriber it would be dropped silently. Everything goes out on the
-LIVE path (`recovering = false`) before `_state.value` is set, `durationMs` is the bare 1 ms floor
-(`deadlineMs` is the authority), and one counts-only INFO line reports the re-arms
-(`Recovery re-armed N grace timers`, tag `StateMachine`). Known gaps left open, tracked as **#1076**:
-a tail-replayed `OFFER_EXPIRY` / `SETTLE_UI` still fires late, a restored pending offer gets no fresh
-`OFFER_EXPIRY`, and the Offline arm can overwrite a standing `TASK_RETIRE` with `SESSION_END`.
+**Settle gate (#1029/#1052/#1054) — a parsed running total moves `Session.runningEarnings` only after
+standing unchallenged on its own surface for `sessionPaySettleMs` (3 s).** `PlatformRegion.pendingSessionPay`
+parks the read; commit is the stepper's lazy expiry, woken by a `SESSION_PAY_SETTLE` timer (the idle dedup
+hash folds `sessionPay` into `Observation.identity()`, so a repeat can never arrive — repetition was
+REJECTED as the discriminator). Rules: (a) a park is owned by (FLOW, PLATFORM), checked on both prior and
+resulting R0; losing either DROPS it; (b) BOTH wheel feeds are gated (`IdleFields.sessionPay`,
+`PostTaskFields.sessionEarnings` — and `PostTaskFields.dedupeHash` folds in `sessionEarnings` so the
+settled re-render is admittable at all); (c) every non-gated writer supersedes older parks; (d) comparisons are
+cent-tolerant; (e) a pending's OWN wake lapses it by IDENTITY, a frame lapses a grace strictly PAST its
+deadline and a park at-or-past — and ORDER matters: a flow frame runs the expiry FIRST (a park that
+stood its window commits on the departure frame), a flow-LESS observation checks ownership first; (f) a contradicting read on the expiring frame supersedes the park; (g) a
+`$0.00` read never overwrites a positive total. A park is FROZEN while the dash is not `Mode.Online` and
+re-based UNCONFIRMED on the way back (a fresh agreeing read on its own surface is required to commit).
+Crash recovery DROPS any restored park.
 
-**Graces.** Destructive commits are graced through the unified `pendingDestructive` slot and woken
-by `GRACE_COMMIT` timers (#431), including short authoritative windows for the dash summary AND the
-delivery receipt; a separate `pendingModeResume`/`MODE_RESUME_COMMIT` grace debounces a
-screen-implied Paused→Online *resume* so a pause-sheet-over-receipt can't flap `DASH_PAUSED` (#605).
-**The delivery-receipt window is receipt-SHAPE-keyed (#1033 layer 1):** a COLLAPSED receipt
-(`parsedPay == null`) arms `GraceConfig.receiptExpandGraceMs` (8 s, per-platform through
-`TransitionPolicy`) instead of the 2.5 s `authoritativeGraceMs`, because a collapsed receipt states a
-total and nothing else — a completion committed off one is priced by the #691 `OFFER_PAY` estimate,
-and the fielded 2026-08-23 expansion landed 3.9 s later, 1.3 s past the old window. An EXPANDED frame
-keeps 2.5 s and, through the arm's `minOf(existing, new)`, TIGHTENS the widened deadline the moment
-it arrives; a PostTask frame that parses no receipt at all keeps the pre-#1033 timing (fail toward the
-old behaviour). Cost: a receipt that never expands commits ≤ 5.5 s later; the receipt bubble is
-unaffected (it fires on the PostTask frame, not the commit) and the #596 T2 next-offer guard tolerates
-it. **Layer 1 is also the ONLY path that lands an expansion in the STACKED shape** (accept the next
-offer off the receipt, then expand it): layer 2's ownership rule refuses that case outright — see §5.
+**Timer identity (#1054):** every arm from `ModeEffects.diffDeadlineTimer` carries
+`ObservationPayload.GraceWake(wakeId)`, a per-region generation from `PlatformRegion.wakeSeq` via
+`mintWakeId()` (a deadline is not unique); `GraceExpiry.isWakeFor`/`graceLapsed` is the one rule; a fire
+from a replaced pending is inert; id `0` is the legacy unidentified value. There is no re-arm logic.
+Arms carry `deadlineMs` (`OFFER_EXPIRY`/`SETTLE_UI` do not yet — #1076).
 
-**Offers are platform-owned** — `pendingOffers: List<PendingOffer>` on the `PlatformRegion` (#438
-B3, moved off the shared global R0 slot so concurrent platforms don't collide; N≥1 satisfies
-ADR-0007, N>1 waits on #251). The lifecycle (`OfferLifecycle.kt` on the stepper, `OfferEffects.kt`
-on `EffectMap`) runs on THIS platform's own observations: push/replace/enrich on `OfferPresented`,
-click-latch (#594 decline-commit), eval-land by `offerHash`, resolve on leaving offer-presentation.
-**Offer identity is presentation-scoped (#830):** `ParsedFieldsFactory.buildOffer` derives a
-`ParsedOffer.presentationKey = sha256(storeNames|orders.size|orderTypes)` — the STABLE subset —
-alongside the churn-prone `offerHash` (which folds in the ticking pay/distance/time). On a
-live-re-quoting card (Uber re-renders pay/miles/minutes every few seconds), a different-hash frame
-carrying the SAME non-null `presentationKey` as the offer currently on screen is an
-**enrich-as-variant** (update `offerHash`/`offerFields`/targets, CLEAR evaluation → re-eval, but
-KEEP `presentedAt` + all click latches + the speak-once `PendingOffer.firstEvalLandedAt`), NOT a
-replace — so no `OFFER_TIMEOUT("Replaced by new offer")`, no discarded accept latch, and
-`AppEffect.SpeakOffer` fires ONCE per physical presentation while `PostOfferNotification` still
-live-updates every landing. The `OFFER_EXPIRY` re-arm on a variant keeps the deadline anchored on
-the original `presentedAt` (churn can't extend the TTL) and carries the new hash; the stale old-hash
-heads-up is cancelled (`BubbleManager.offerNotificationId` is per-hash). Fail-CLOSED +
-platform-agnostic (P8): a null `presentationKey` degrades to replace-on-any-hash-change — a false
-MERGE is impossible, and there is no `Platform` branch. A genuinely different presentation still
-REPLACES. **Presentation KIND (#881):** a ruleset may parse `offerKind: match|direct` (Uber
-discriminates on the card's own CTA); it rides `ParsedOffer.offerKind` → `PendingOffer.offerKind` (a
-read-through, never a copy) → `OfferPayload.parsedOffer`, is NOT an input to scoring / `offerHash` /
-`presentationKey`, and is null on any platform whose ruleset lacks the concept. Its one consumer is
-the replace path: a DIRECT offer landing over a MATCH one is the platform's EXPECTED
-direct-preempts-match hand-off, so it keeps the same event type + emission edge but logs
-`"Superseded by direct offer"` and suppresses the "(offer replaced)" bubble; every other pair keeps
-the older narration. Kind-keyed, never `Platform`-keyed. **Display vs identity on a stacked card
-(#882):** an Uber `Delivery (N)` card renders the type chip above ONE visible store line, so the
-chip used to win both store reads. The uber rule negates `^Delivery \(\d+\)$` on the **top-level**
-`storeName` list ONLY (`ParsedOffer.displayStoreName`); the `orders[]` list DELIBERATELY still reads
-the chip, keeping `presentationKey` chip-anchored and therefore immune to the card cycling which
-store it shows (mirroring the negation would trade a display bug for a replace-storm; the
-divergence is documented at both sites). Every human-facing read goes through the
-`ParsedOffer.displayStores`/`displayStoreText` SSOT (evaluator `merchantName` → TTS/ledger/store
-resolution, `FlowCardSnapshot.Offer.storeNames`, the fold's eval-less fallback), which prefers ≥2
-real order stores, else the card headline, else the order list — so DoorDash (no top-level
-`storeName` parse) is byte-identical.
+**Recovery (#1052/#1054) — evidence is dropped, a decision in flight is re-armed.** `AppState.recoveryHygiene`
+runs ONCE on the FINAL state after the journal tail fold (never on the snapshot): drops the settle park and
+the graced resume; re-bases `pendingDestructive` to its REMAINING window
+(`base = servedFrom ?: windowFrom ?: since`; `servedFrom` makes the re-base a fixed point across a crash
+loop; a live deadline MOVE re-anchors via `windowFrom`); `pendingDeadlineTimers()` re-arms that grace and
+the **pause-safety net** (`PlatformRegion.pauseSafetyDeadline`, real state since #1054). A replayed
+REGION timer is never executed (`SideEffectEngine` skips `REGION_TIMERS` while `recovering`); the
+reconcile is their sole armer. Replay stamps each journal row's own `correlationVersion`; the cleaned
+state is CHECKPOINTED (`SnapshotStore.checkpoint`, retried once, then ERROR + pending-retry on every
+live observation). `initialize()` awaits the collector's subscription before `restoreState`. A legacy
+payload-less `SESSION_PAUSED_SAFETY` fire is honoured when no armed net exists or it lands at/after
+the armed deadline. Open gaps: #1076 (tail-replayed offers), #1083.
 
-**Accept survives the offer-presentation edge** as an `acceptedAt`-marked accepted-pending-
-consumption entry (this REPLACED the #526 accept stash + `AcceptStash` + `offerBelongsToRegion`,
-all deleted): `OFFER_ACCEPTED` fires at the edge, and the survivor is minted by the task edge
-(`acceptInputsFromPending`) with full economics + pre-created placeholders even across the
-`waiting_for_offer` teardown race — cleared on supersession/revocation/session-end/accept-grace
-lapse. The accept grace is **per-platform** (`GraceConfig.acceptGraceMs` — DoorDash 120s / Uber
-600s, #762 D2), which also added the **phase-less `task:active` flow** (`Flow.TaskActive`, a coarse
-platform's in-job token — a task flow for accept-consumption/mode-Online, but `toTaskPhase()`→null
-so it is inert to task lineage; leaving offer-presentation to it infers a click-less accept only
-from a non-task `returnFlow`, the ambient-screen guard). A per-offer `OFFER_EXPIRY` timer
-(hash-carrying payload, EffectMap-armed, no-ops on an accept-latched offer) resolves an overlay
-offer that vanishes without a frame.
+**Graces.** Destructive commits use the unified `pendingDestructive` + `GRACE_COMMIT` (#431: dash summary,
+delivery receipt, task retire); `pendingModeResume`/`MODE_RESUME_COMMIT` debounces a screen-implied
+Paused→Online resume (#605). The receipt window is SHAPE-keyed (#1033): a COLLAPSED receipt
+(`parsedPay == null`) arms `receiptExpandGraceMs` (8 s); an EXPANDED frame keeps 2.5 s and tightens via
+`minOf`; a PostTask frame that parses NO receipt at all keeps the pre-#1033 timing. Layer 1 is the ONLY path that lands an expansion in the STACKED shape (§5's re-price refuses it).
 
-**Placeholders and store lineage.** An accepted offer pre-creates **symmetric placeholders**: one
-dropoff per order AND one PICKUP per distinct store, each dropoff stamped with the minting accept's
-`Task.mintedByOfferHash` (#997's per-drop↔offer provenance HINT, not an identity: placeholders
-activate blind first-open, so the money side treats the drop's reconciled STORE as authoritative and
-consults the stamp only when no store resolved — see §5). Pickup/dropoff screens resolve onto them
-by hint/customer-hash keeping the offer-owned taskId; a stacked pickup that displaces another emits
-`PICKUP_CONFIRMED`; and a dropoff's store is re-attributed from its pickup lineage
-(`reconcileDropoffStore`, #526/#733/#745) via the **customer-hash join** (normalized,
-cross-surface-stable): the drop's `customerNameHash` joins its pickups — all matches map to ONE
-store → resolve it (exact single-match, unconditional); matches span ≥2 stores → the
-earliest-confirmed store, but ONLY when this is the **sole activated dropoff** carrying that hash
-(≥2 activated drops sharing it → INCONCLUSIVE → fall through, fail-null beats fail-wrong); a
-0-match/inconclusive drop falls back to store-name-token match, never to a store outside its own
-lineage. The former structural single-drop arm was DELETED (#745 — its
-placeholder-count==physical-drops premise desyncs on per-order placeholders + the unparsed-offer
-`dropoffCount=1` fallback). That same desync also left a same-customer multi-order job's leftover
-TBD placeholder outstanding forever, defeating `isJobPhysicallyComplete` so the #596 T2 guard never
-fired and the next offer folded into the finished job (the job-61 class); #749 added a **per-customer
-coverage arm** (`JobCompleteness.kt`, evaluated only when the strict arm fails) that proves
-completion from the pickup side — when pickups map 1:1 to orders at distinct stores their hash set
-IS the job's customer set, so "every customer hash has a finished, arrived drop" ⟺ complete,
-placeholder count irrelevant. The D6 join-miss WARN is edge-gated once per taskId
-(`PlatformRegion.lastJoinMissWarnTaskId`).
+**Offers are platform-owned** (`PlatformRegion.pendingOffers`, #438 B3; `OfferLifecycle.kt`/`OfferEffects.kt`).
+Identity is presentation-scoped (#830): `ParsedOffer.presentationKey = sha256(storeNames|orders.size|orderTypes)`
+beside the churn-prone `offerHash`; a same-key different-hash frame is an **enrich-as-variant** (keep
+`presentedAt`, click latches, speak-once; re-eval; `OFFER_EXPIRY` stays anchored on the original
+`presentedAt`), a null key degrades to replace-on-any-change (a false MERGE is impossible). `offerKind`
+(`match|direct`, #881) is a read-through — never a scoring input, never in `offerHash` or
+`presentationKey`; DIRECT over MATCH logs "Superseded by
+direct offer" and suppresses the replaced bubble. Display store reads go through
+`ParsedOffer.displayStores`/`displayStoreText` (#882; the `orders[]` list deliberately keeps the
+`Delivery (N)` chip so `presentationKey` is immune to store cycling).
 
-**Unassign-via-help** (`Flow.TaskUnassigned` = wire `task:unassigned`, #736) is an **inline
-(ungraced) abandon** of the active task: `abandonActiveTask` marks `Task.unassignedAt` and leaves
-`completedAt` **null**. The `PICKUP_CONFIRMED` close-out sweep's `unassignedAt == null` FILTER is
-the load-bearing defense that stops the seq-71 fabrication, and an explicit `unassignedAt == null`
-filter in `isJobPhysicallyComplete` keeps an abandoned drop from ever reading as delivered —
-whether it carries a null `completedAt` (inline shape) or a grace-stamped one (retro shape) — so
-un-accounted keeps the job OPEN, never a false complete. It retires the abandoned drop's own
-placeholder (by `taskId` for a dropoff-phase abandon — never a hash-join that could over-remove a
-colliding sibling; by customer-hash for a pickup-phase abandon) and closes a single-order job on the
-confirmation frame. Two commit shapes are handled: a **same-frame** abandon (an overdue
-`TASK_RETIRE` lapsing ON the `task:unassigned` frame is dropped, not committed, so the abandon
-supersedes it) and a **cross-frame retro-mark** (a help-flow retire that already committed on a
-prior frame, edge-gated to the ENTRY into `task:unassigned` so a second consecutive frame can't walk
-the mark onto another task; it stamps `unassignedAt` on the most-recently-retired task of the
-still-open job — any phase, #752 — leaving `completedAt` intact and retiring that drop's placeholder
-by `taskId` so a multi-dropoff job can still close). `Job.tasks` is reconciled EVERY step as the
-**non-unassigned** lineage mirror (#752): an unassigned task lives on only in `recentTasks`, never
-as an outstanding placeholder — so the #691 estimate denominator unions `job.tasks` ∪ the job's
-`recentTasks` dropoffs (`OfferPayFallback.owedDropoffs`), letting a quoted-but-unassigned order
-still divide the offer-pay split. It emits ONE `TASK_UNASSIGNED` event (own payload, read-model-inert
-via the projector's liveness `else` arm, per-`taskId`-idempotent, fired for both the inline-abandon
-and the retro-mark shapes) + an "Unassigned: <store>" bubble. A misread self-heals when a genuine
-same-order frame resumes the task (the resume copy sites clear `unassignedAt`) — but ONLY while the
-job stayed OPEN; after a single-order abandon the job closes and a later same-order frame mints a
-NEW jobId the resume lookup can't reach (documented residual).
+**Accept survives the offer-presentation edge** as an `acceptedAt`-marked pending entry; the task edge
+mints the survivor (`acceptInputsFromPending`). The accept grace is per-platform (`GraceConfig.acceptGraceMs`,
+#762 D2), which also added the phase-less `task:active` flow (`Flow.TaskActive`, `toTaskPhase()` → null;
+leaving offer-presentation to it infers a click-less accept ONLY from a non-task `returnFlow`).
+A per-offer `OFFER_EXPIRY` timer resolves an overlay offer that vanishes without a frame and no-ops on
+an accept-latched offer.
+
+**Placeholders and store lineage.** An accepted offer pre-creates symmetric placeholders (one dropoff per
+order + one pickup per distinct store; dropoffs stamped `Task.mintedByOfferHash`, a HINT not an identity,
+#997). Screens resolve onto them by hint/customer-hash; a dropoff's store is re-attributed from pickup
+lineage via the normalized **customer-hash join** (#526/#733/#745: single store → resolve; ≥2 stores →
+earliest-confirmed only when this is the sole activated drop with that hash; else fall back to store-name
+tokens, never outside the lineage; fail-null beats fail-wrong). `JobCompleteness.kt`'s per-customer
+coverage arm (#749) proves completion from the pickup side when the strict arm fails — ONLY when pickups
+map 1:1 to orders at distinct stores (their hash set IS the customer set) and every customer hash has a
+finished, arrived drop.
+
+**Unassign-via-help** (`Flow.TaskUnassigned`, #736/#752) is an inline ungraced abandon: `Task.unassignedAt`
+set, `completedAt` null; the `unassignedAt == null` filters in the `PICKUP_CONFIRMED` close-out sweep and
+`isJobPhysicallyComplete` are load-bearing. The abandoned drop's placeholder is retired by `taskId` for a dropoff-phase abandon (never a
+hash join that could over-remove a sibling), by customer hash for a pickup-phase one; the cross-frame
+retro-mark is edge-gated to the ENTRY into `task:unassigned` and leaves `completedAt` intact;
+`Job.tasks` is reconciled every step as the non-unassigned lineage mirror; one `TASK_UNASSIGNED` event per
+`taskId`; a misread self-heals only while the job stayed open.
 
 ### 4. Side Effect Engine (`app/.../state/effects/`)
 
-`SideEffectEngine` executes `AppEffect`s with `effects_fired` idempotency dedup (recovery-aware),
-runs the evaluation loopback (offer eval → `OfferEvaluationEvent` back into the machine), and owns
-the fail-closed action gates (#417): live `PermissionTierChecker` + the capability consent gate on
-automation-triggered `RuleAction`s (grant store: `RuleCapabilityRepository` over the
-`rule_capability_grants` DataStore; **no auto-grant (#843)** — `reconcile` only publishes the
-enumeration, every capability lands *undecided* until the user opts in via the consent prompt).
-Handlers: `OdometerEffectHandler`, `ScreenShotHandler`, `TipEffectHandler`, `TtsEffectHandler`,
-`UiInteractionHandler` (package-scoped, label-verified `RuleAction` taps — the only path that ever
-clicks a third-party app, #425), `OfferActionReceiver` (notification Accept/Decline actions).
-**Every odometer fix is gated (#1057/#918).** `OdometerRepository` used to add ANY inter-fix
-displacement over 5 m straight into the persisted cumulative total, so one spurious fused fix ~1,457 km
-away added **905.37 mi in 18.4 min** (2026-09-03) — freezing `netProfit −302.73` on a $22.95 delivery
-and leaving every session since 905 mi high — while indoor multipath jitter accrued phantom miles at a
-parked desk, both silently. The pure `:domain` `OdometerFixPolicy` now judges each fix against the last
-**accepted** one (`MIN_DELTA_METERS` 5, `MAX_ACCURACY_METERS` 50, `MAX_SPEED_MPS` 67 ≈ 150 mph,
-`MAX_DELTA_WITHOUT_TIME_METERS` 2 000 when no clock is shared by both fixes — `Coordinates` gained
-nullable `accuracyMeters`/`timestampMs`/`monotonicMs`, which `FusedLocationDataSource` had been dropping
-on the floor) and returns Accept / Reference / Ignore / Reject: **neither an Ignore nor a Reject moves the
-reference**, so a teleport anchors nothing AND slow creep inside the jitter floor still accumulates as
-one later Accept, and a poor-accuracy fix cannot even seed the reference (fail-null). Four properties
-carry the design (round 2, all four Astra-found). **`INVALID_FIX` comes first:** every bound is a
-comparison and every comparison against NaN is false, so a non-finite/out-of-range fix used to fall
-THROUGH into `Accept(NaN)` — one NaN in the cumulative total destroys it permanently — and
-`Coordinates.distanceTo` clamps its haversine intermediate into `[0, 1]` so a near-antipodal pair can
-never produce that NaN in the first place. **Elapsed time is measured on the MONOTONIC clock**
-(`Location.elapsedRealtimeNanos`) wherever both fixes carry one, falling back to wall time only for
-clock-less sources: `Location.time` is settable, and an NTP step-back mid-drive used to reject every fix
-(`NON_MONOTONIC_TIME`, then `IMPLAUSIBLE_SPEED`) for ~110 s of silently lost mileage per correction.
-**An `Ignore` refreshes the reference's TIMING, not its position** (the repository does it, so the
-policy stays a pure function of two fixes): the reference is an accrual anchor, not a last observation,
-and leaving its timestamp stale let a 1,457 km teleport after seven parked hours imply a plausible
-57.8 m/s. And **rejection logging is EPISODE-gated** — poor reception is a condition, not an event, and
-one WARN per rejected fix is 720–1,800 lines an hour that drown the exceptional rejects (principle 7):
-a streak of consecutive rejections WARNs on entry, WARNs again every `STREAK_REMINDER_EVERY` = 100, and
-closes with ONE INFO on recovery, while a rejection whose reason DIFFERS from the streak's opening one
-still WARNs individually. The repository owns only the side effects — every line carrying **numbers and
-the reason enum only** (a latitude/longitude is the dasher's location PII and is never logged, at any
-level) plus ONE bounded DEBUG `Odometer fixes:` summary per 100 judged fixes. **Standing residual:** the gate is
-forward-looking only — the pre-fix +905 mi offset in the persisted total, and delivery row 1801's
-frozen economics, are **not** auto-repaired (frozen economics are immutable by design; a rebase
-mechanism for the cumulative total is an open dev decision on #1057).
-**The evaluator fails CLOSED on a missing input (#936).** A `?: 1.0` distance fallback invented a
-favourable **one-mile trip** — near-zero operating cost, near-zero drive time, an inflated `$/hr` —
-biasing the verdict toward ACCEPT precisely where the input was least trustworthy (the #827 class of
-seam). Distance is now the `0.0` "no distance" sentinel, and an offer that would otherwise be
-*scored* without one returns the existing no-verdict shape instead — `OfferAction.NOTHING` / score 0
-/ `OfferQuality.UNKNOWN`, mirroring the no-scoring-rules return. The three **distance-independent**
-verdicts stay in front of it (shopping opt-out #762 D12, protect-stats, merchant BLOCK). The
-returned economics are the honest subset: real gross pay and the economy's own
-`operatingCostPerMile` (a profile constant the projector freezes as the session cpm — zeroing it
-would make the session's deliveries look cost-free), with every distance-derived figure an explicit
-`0.0` placeholder and `netPayAmount` == gross (no cost deducted ≠ a one-mile cost).
-**`OfferEvaluation.hasDistanceMetrics` is the one predicate consumers branch on** so those
-placeholders are never rendered as measurements — `FlowCardSnapshot.Offer.from` (bubble card +
-heads-up custom views get null → their existing `—` / hidden gauge), `toNotificationSummary`,
-`TtsEffectHandler` (a no-verdict utterance, not "zero dollars an hour"),
-`JobAcceptFlow.acceptInputsFromPending` + `FlowCardMapper`'s #460 co-hero, and
-`RecordFolds.foldOffer` (null frozen estimates, so `AVG(score)`/`AVG(estDollarsPerHour)` aren't
-dragged toward a fabricated 0). The #659 fuel/non-fuel split was already guarded at the fold
-(`distanceMiles > 0.0` → null split → 3-step waterfall), so no NaN can reach a frozen economics
-column and no `PROJECTOR_VERSION` bump was needed (historical evaluations froze the fabricated 1.0
-mile, so a refold reproduces them byte-identically).
-**Dedupe granularity is the rule's to declare (#859).** The durable `effects_fired` row is "at most
-once per 48h"; a rule effect that declares its own `throttleMs` opts OUT of it and into that
-declared window (the engine's wall-clock throttle, keyed by the same `effectKey`) — one declared
-value, one gate. Without that the strictly-stronger row silently subsumed the declaration, making a
-*stable* dedupe key destructive (`offer-ss-{presentationHash}` would capture one offer per store per
-48h). Residual: the throttle map is in-memory, so a process restart re-arms it (at most one extra
-capture). App-emitted keyed effects (bubbles, sessions, `EffectMap` captures) declare nothing and
-keep the 48h idempotency unchanged. Evidence **filenames** are sanitized at the one evidence gate
-(`EvidenceFilename.sanitizePrefix`): a rule's `"Offer - {storeName}"` whose field parsed null saves
-as `Offer`, never the literal token — a fail-safe under, not a replacement for, the
-`ParseOutputGoldenTest` arg-template lint that still flags the un-interpolating rule.
-**The engine is a data-integrity boundary and must never die silently (#909).** `AppEffect.LogEvent`
-is the ONLY writer of `app_events`, so a dead drain worker inside a live process is total silent
-loss: `process()` keeps `trySend`-ing into `Channel(UNLIMITED)` while the app looks healthy. That
-fired on 2026-07-28, when a `Regex` literal valid on the host JVM but **rejected by Android's
-ICU-backed engine** threw an `ExceptionInInitializerError` — an **`Error`** that slipped past the
-worker's per-item `catch (e: Exception)` — and destroyed 91.7% of that evening's data. Three
-standing rules follow: (1) the per-item catch is **`Throwable`**, with only `CancellationException`
-rethrown — the scope is a `SupervisorJob`, so rethrowing a `VirtualMachineError` would surface
-nothing and only trade a loud bounded per-effect failure for unbounded silence; (2) the drain loop
-is **supervised** with a capped linear backoff (`superviseDrainWorker`, the #430 pipeline precedent)
-and every failure logs at ERROR with an honest message (`"Effect failed — isolated, the engine is
-still draining"`) — the scope handler covers only the **detached** coroutines (timers, delayed
-posts); (3) the ICU/JVM regex divergence is **not executable from any unit or Robolectric test**, so
-it is caught by source scan — `IcuRegexGuardTest` (`:app`, the #764 `TimberTagGuardTest` doctrine)
-fails the build on a bare, unescaped `}` in any main-source `Regex(…)`/`.toRegex()` literal. Write
-`\}`, never `}` (reference shape: `Ruleset.TEMPLATE_PATTERN` = `\{(\w+)\}`). Rule-authored
-patterns are a separate path that #1053 closed differently: they do not run on that engine at all
-(§2 — RE2J, not `java.util.regex`).
-**The offer voice is the family's fifth member (#991).** `TtsEffectHandler` built its `TextToSpeech`
-once in `init` and latched `isReady` true forever, so a dropped engine binder lost every utterance
-across three dashes with nothing but a WARN. The engine now comes from a `TtsEngineFactory` seam and
-EVERY way an utterance can be lost — a non-SUCCESS `speak()` return, an async
-`UtteranceProgressListener.onError`, a FAILED `onInit`, and an offer skipped while a rebuild is
-outstanding — escalates through the pure `TtsRecoveryPolicy`: rebuild immediately, then rebuilds
-gated by a linear 30 s-step / 5 min-cap backoff, then (3 consecutive losses **and** ≥2 rebuilds
-attempted **and** ≥60 s of streak — the floor exists because the notice is once-per-process and must
-not be burnt by a burst during one slow recovery) a `TtsHealthNotifier` notice. Notify and rebuild
-compose — telling the dasher is not a reason to skip the rebuild. A `speak()` SUCCESS means only
-QUEUED, so the reset lives on `onDone`; engine identity is generation-checked so a superseded
-engine's late callback can't ready or mis-language its replacement; and the rebuild is detached onto
-the app scope so a wedged TTS binder can never block the drain worker that owns the `app_events`
-writer.
+Full reference: [`docs/architecture/04-side-effect-engine.md`](docs/architecture/04-side-effect-engine.md).
+
+`SideEffectEngine` executes `AppEffect`s with `effects_fired` idempotency (recovery-aware), runs the
+evaluation loopback, and owns the fail-closed action gates (#417): live `PermissionTierChecker` + the
+capability consent gate (`RuleCapabilityRepository`; **no auto-grant, #843**). Handlers:
+`OdometerEffectHandler`, `ScreenShotHandler`, `TipEffectHandler`, `TtsEffectHandler`,
+`UiInteractionHandler` (the only path that ever clicks a third-party app, #425), `OfferActionReceiver`.
+
+- **Every odometer fix is gated (#1057/#918).** The pure `:domain` `OdometerFixPolicy` judges each fix
+  against the last ACCEPTED one (`MIN_DELTA_METERS` 5, `MAX_ACCURACY_METERS` 50, `MAX_SPEED_MPS` 67,
+  `MAX_DELTA_WITHOUT_TIME_METERS` 2 000) → Accept / Reference / Ignore / Reject; neither Ignore nor Reject
+  moves the reference; `INVALID_FIX` (NaN/out-of-range) is checked FIRST; elapsed time uses the monotonic
+  clock where both fixes carry one; an Ignore refreshes the reference's TIMING only; rejection logging is
+  episode-gated (numbers + reason enum only — a lat/long is never logged). The pre-fix +905 mi offset is
+  not auto-repaired (dev decision).
+- **The evaluator fails CLOSED on a missing distance (#936):** no `?: 1.0` fallback; an offer that would
+  be scored without one returns the no-verdict shape (`NOTHING` / score 0 / `UNKNOWN`) after the three
+  distance-independent verdicts (shopping opt-out, protect-stats, merchant BLOCK).
+  The returned economics keep the REAL gross and the economy's real `operatingCostPerMile` (zeroing cpm
+  would make the session's deliveries look cost-free) with `netPayAmount == gross` and every
+  distance-derived figure an explicit `0.0` placeholder; `OfferEvaluation.hasDistanceMetrics` is the one
+  predicate consumers branch on so placeholders are never rendered as measurements, and the offer fold
+  persists the frozen estimates as NULL, not zero.
+- **Dedupe granularity is the rule's to declare (#859):** a rule effect with `throttleMs` opts out of the
+  48 h `effects_fired` row into its own wall-clock window (in-memory; a restart re-arms it). Evidence
+  filenames are sanitized at the one gate (`EvidenceFilename.sanitizePrefix`).
+- **The engine must never die silently (#909):** `AppEffect.LogEvent` is the ONLY writer of `app_events`.
+  The per-item catch is `Throwable` (only `CancellationException` rethrown); the drain loop is supervised
+  with capped backoff; and the ICU/JVM regex divergence (an `ExceptionInInitializerError` destroyed 91.7 %
+  of an evening's data) is caught by source scan — `IcuRegexGuardTest` fails on a bare `}` in any
+  main-source `Regex(…)` literal. **Write `\}`, never `}`.** Rule-authored patterns don't run on that
+  engine at all (§2, RE2J).
+- **The offer voice (#991):** `TtsEffectHandler` builds its engine from a `TtsEngineFactory` seam; every
+  way an utterance can be lost escalates through the pure `TtsRecoveryPolicy` (rebuild → backoff → a
+  once-per-process `TtsHealthNotifier` notice after 3 losses ∧ ≥2 rebuilds ∧ ≥60 s); a `speak()` SUCCESS means only QUEUED, so the
+  streak resets on `onDone`; notify and rebuild COMPOSE (telling the dasher never skips the rebuild);
+  engine identity is generation-checked; the rebuild is detached from the drain worker.
 
 ### 5. Analytics Read-Model (`core/data/.../analytics/`, `core/database/.../analytics/`, #314)
 
-Analytics is a **CQRS read-model** projected from the durable `app_events` log — the event log is the
-source of truth; the read-model tables are a rebuildable cache. **Ordering contract (#732,
-dev-decided Option B — no re-stamp):** `sequenceId` is the authoritative fold/order key; `occurredAt`
-may lag it (sole carrier: `PICKUP_CONFIRMED`, whose `occurredAt` is the grace-armed
-`Task.completedAt`). Consumers order by `sequenceId`; "when did it really happen" reads the payload's
-own domain timestamp. KDoc at `AppEventEntity`; `GracedCommitOrderingInvariantTest` trips any silent
-re-stamp. `AnalyticsProjector` (`:core:data`, started from `DashBuddyApplication`,
-runs every launch off-main + supervised) folds `app_events` → `delivery_records`/`session_records`/
-`offer_records` via the pure `RecordFolds`/`SessionFoldContext` (`:domain`). The fold is
-**exactly-once** — records + a watermark advance in one `db.withTransaction`, record PKs are the
-source `sequenceId` (REPLACE-idempotent) — so the one-time backfill is just the first drain from
-watermark 0, and a `PROJECTOR_VERSION` bump wipes + refolds the whole log (rebuild ≡ backfill).
-Realized inputs come from the log: pay from `DeliveryPayload.dropRealizedPay`/`totalPay` (#528),
-else — when the WHOLE job was receipt-less (a shop order shows no per-delivery receipt; an
-out-of-zone "Dash Along the Way" start shows none at all, #999) — a `PayBasis.OFFER_PAY` ESTIMATE
-from `DeliveryPayload.offerPayShare`, the accepted offer's quote split across the job's owed drops
-at the mint site, consumed by the fold only if no sibling drop already folded a real receipt (#691).
-**A receipt with no itemization still prices its drops (#1029):** `apportion(parsedPay = null, …)`
-returns an EMPTY map even for a SINGLE drop, so DoorDash 8.93.7's id-less receipt left `parsedPay`
-null on every fielded receipt — every drop fell to an `OFFER_PAY` estimate, `payoutStoreForms` never
-minted and the #653 guard was off, silently, because `totalPay` still resolved.
-`ParsedFieldsFactory.buildPostTask` now SYNTHESIZES `ParsedPay`
-from the receipt's own parsed scalars on that layout (empty line items + `totalPay > 0` + a
-non-null `customerTips` — the tips line is exposed only while the breakdown is visible, which keeps
-every COLLAPSED receipt at `parsedPay == null` as `sameTaskCollapsedDowngrade` requires); the
-synthetic tip carries a BLANK type so `injectiveTipMatch` declines and a stacked job even-splits.
-Per-store tip itemization off the flat 8.93.7 row is #1051.
-**The split is store-correspondence-attributed and consolidation-aware (#996/#997 — a pure mint-site
-change; historical rows refold byte-identically). Two mint sites, two policies:** the INLINE
-(PostTask-exit) mint, whose job may still be OPEN, keeps the conservative pooled split over the
-QUOTED owed orders (`OfferPayFallback.shareFor` — attributing earlier could make Σ stamped >
-Σ quoted). The whole policy runs ONCE at the **terminal close**
-(`OfferPayFallback.closeAttribution`), in order: (1) the #996 **eligible-owed shrink** — when the
-close proves the job complete (`isJobPhysicallyComplete`; the #749 per-customer coverage arm IS the
-consolidation proof), every dropoff that **can never mint** (`Task.isNeverActivatedPlaceholder`, the
-complement of `isAccountableDropoff`, from which `JobAcceptReconciliation`'s leftover counter also
-derives) leaves the denominator — "can never mint" is the criterion, not "was never touched", so a
-flicker-activated identity-less placeholder shrinks too.
-Completion unproven keeps the conservative dilution, an **UNASSIGNED** order is never shrunk (the
-`owedDropoffs` doctrine — quoted but maybe unpaid), and an `endSession` bail can never prove
-completeness: the proof reads only MINT-QUALIFIED evidence, since the bail force-stamps
-`completedAt` on an arrived-but-undelivered drop. (2) the #997 **store-correspondence ladder**:
-`Task.mintedByOfferHash` (stamped by `JobAcceptFlow.preCreatedDropoffs` at fresh-mint AND add-on
-absorption; slot identity, so `swapTaskAccumulation` does not move it) is only a HINT — placeholders activate blind first-open — so the authoritative correspondence is the drop's
-reconciled STORE against each accept's own `AcceptedOfferEconomics.storeHints`, matched through
-`StoreKeys.normalizedChain` (the #159 SSOT — no second normalizer, no platform literals). Offers and
-drops form components by normalized store: one offer in a component → its exact quote over its own
-drops (`PER_OFFER_STORE`); N>1 same-store offers → **sub-pool** (`SUB_POOLED_STORE` — which
-same-store quote is which drop is platform-side unknowable); a store-less drop joins its mint
-stamp's component (`STAMP_FALLBACK`); and at a proven-complete close an offer left with NO drop
-because its order **consolidated** onto a sibling's hands its quote to the component whose drops
-carry that customer, evidenced from the pickup side as #749 does (`CONSOLIDATED_CUSTOMER`). A
-cross-store swap auto-corrects (store beats stamp). (3) the **pooled degrade** (`JOB_POOLED`) —
-bit-exactly the old job-wide equal split, and **wholesale**: a single drop placeable on neither
-store nor stamp sends the ENTIRE job here (such a drop might belong to any quote; an unassigned
-order must keep diluting; degrading to null was rejected — "known Σ, unknown split" IS the
-`offerPayShare` semantics). **Σ invariant (structural):** each quote enters at most one component
-and splits only across that component's drops, so Σ stamped ≤ Σ accepted quotes at either mint
-site; a quote the ladder can place on NO drop stays unattributed and is counted
-(`ClosePlan.unattributedOffers`, a one-per-job WARN — the per-drop `eligibleButUnsplit` signal
-structurally cannot see a dropless offer). Every degrade logs one PII-safe DEBUG naming its arm.
-`DeliveryPayload.offerPayAttributedHash`/`offerPayAttribution` ride the log as the RESOLVED
-attribution — the offer a share was actually paid from and which rung resolved it, NOT the raw mint
-stamp (`jobOfferHashes` carries the whole add-on CHAIN on every row, so the log had no per-drop
-join at all). No fold consumer today (the `jobOfferHashes` precedent), for #756's settlement split
-and a per-offer #975. Standing
-residuals: history keeps its wrong-but-flagged `OFFER_PAY` shares until #756 (or a driver
-`DELIVERY_ADJUSTMENT`), and a mid-stack pay-less PostTask exit still rides unattributed (#691
-FIX-1). Miles from `metadata.odometer` partition deltas, time from timestamps. **Economics are FROZEN per
-record, never recomputed** (dev decision): each `delivery_record` stores `netProfit` +
-`frozenCostPerMile` + its frozen `frozenFuelPerMile`/`frozenNonFuelPerMile` split (#659, the 4-step
-true-net waterfall Gross → −Fuel → −Non-fuel → Net; the split rides the SAME frozen
-`OfferEvaluation` — `fuelCostEstimate`/`nonFuelCostEstimate` ÷ `distanceMiles`, invariant
-`fuel+nonfuel ≈ cpm`; null off an `OFFER_FROZEN` basis → the waterfall falls back to 3-step) +
-`costBasis`, computed at projection time against the offer's own frozen
-`OfferEvaluation.operatingCostPerMile` (session granularity — the offer→delivery `jobId` link is
-absent in the log, but cpm is session-uniform), so editing economy settings only affects **future**
-evaluations: a record is an immutable historical fact. Session hydration rehydrates `started` from a
-persisted `session_records.startSource` marker (#659), not a "has a real platform" heuristic. Each
-`delivery_record` also carries `cashTip` (driver-entered cash — the tip vocabulary's driver-attested
-source; kept OUTSIDE `realizedPay`/`netProfit` and added to gross/net only at the read sites, so the
-reconciliation's Σ-attributed stays structurally cash-free, #688) and `originalPayBasis` (the
-payBasis stamped at FIRST fold, never rewritten by a correction — the #691 receipt-evidence
-hydration reads `COALESCE(originalPayBasis, payBasis)` so a re-priced `USER_CORRECTED` row keeps its
-original receipt evidence, #703). The v9→v10 migration is additive-only (five nullable columns —
-delivery +2, offer +2, session +1); v10→v11 likewise (delivery +2 — `cashTip`/`originalPayBasis`;
-`PROJECTOR_VERSION` 3→4 refolds them from the log, populating `originalPayBasis` for all history —
-#703's requirement, not a corrections one — and re-stamps `CURRENT_FALLBACK` rows against today's
-economy). **Store entity resolution (#159, Room v11→v12 additive):** two tables `stores`
-(identity/resolution only — deterministic `storeKey = platform|normalizedChain|runningKey`, D2/F5/F7)
-+ `pickup_records` (per-`PICKUP_CONFIRMED` visits; dwell = `confirmedAt−arrivedAt` derived at read),
-plus `delivery_records.{storeKey,payoutStoreForms,storeKeyPinned}` +
-`offer_records.{storeKey,linkedJobId}`. Recognition is one pure `:domain` resolver core
-(`StoreResolver`/`StoreKeys`, shared with the field-verified shadow `StoreChainProjector` via a `Job`
-adapter); the projector runs it **resolve-from-rows** inside the batch transaction
-(`StoreResolutionRunner`) — a `DELIVERY_COMPLETED` persists the FULL receipt store-form set to
-`payoutStoreForms` (B1/B2) and resolution reads that from the committed rows, so a payout-less
-`DASH_STOP` re-run recomputes the SAME keys. A driver `newStoreName` correction
-sets a sticky `storeKeyPinned` (H1, never re-keyed). Per-store reads group on the resolved key,
-unresolved rows fall back to `normalizedChain(storeName)` (F9); the #315 Patterns surface (store
-report card + dwell percentiles) is the consumer. `PROJECTOR_VERSION` 4→5 refolds all history and
-(F8) the version-bump wipe also clears `stores`/`pickup_records`. **#773 (address running-key
-fallback, `PROJECTOR_VERSION` 6→7):** a chain-bare receipt (no parenthetical code) falls back to an
-address-derived key — `StoreKeys.addressRunningKey` takes the leading pure-ASCII street-number token
-(1–6 digits, fail-null on ranges/suffixes/non-numeric), `@`-prefixed (`@12125`) so provenance is
-self-describing; the ladder is receipt key > address(`@`) key > chain-only with tier-aware monotonic
-upgrades (an address key never downgrades a receipt key), and `normalizeRunningKey` strips a leading
-`@` from receipt-path keys so a payout parenthetical can't masquerade as address-tier.
-**#887 (supersession sweep, `PROJECTOR_VERSION` 8→9):** a monotonic key UPGRADE (address-tier →
-receipt-tier, or chain-only → keyed) re-keys the visit rows but used to LEAVE the superseded `stores`
-identity row behind as a zero-visit phantom. `StoreResolutionRunner` now collects each row's PRIOR
-key wherever a re-stamp actually lands (a downgrade-blocked or H1-pinned row keeps its key, so it
-contributes nothing) and, STRICTLY LAST in the job — after every pickup/delivery/offer stamp is
-committed — deletes each superseded row that `AnalyticsDao.storeKeyReferenceCount` proves is
-referenced by ZERO pickup/delivery/offer rows. The guard **fails toward KEEPING** (deleting a row the
-re-key didn't reach would orphan a *referencing* row, strictly worse than a phantom) and counts a
-merchant-free WARN (P7; keys stay at DEBUG). The sweep also **converges incremental ≡ refold on the
-raw `stores` table**: a from-zero refold that sees the receipt evidence in the same batch never mints
-the intermediate row, while an incremental fold split across a page boundary mints then deletes it.
-**#1000 (pickup-less offer link, `PROJECTOR_VERSION` 9→10):** `StoreResolutionRunner.resolveJob`'s
-`pickups.isEmpty()` short-circuit used to discard the job's **exact** offer↔job link along with the
-missing store anchor — a blown-through pickup (PICKUP_ARRIVED with no PICKUP_CONFIRMED, the
-#615-class fail-null) meant the `DELIVERY_COMPLETED` fold's own carried `offerHashes` never reached
-`offer_records.linkedJobId` though the link was already in the log. The runner now stamps
-`linkedJobId` for the exact-hash rows via a **link-only** DAO update (`linkOfferToJobIfUnlinked` —
-`SET linkedJobId WHERE linkedJobId IS NULL`, never touches `storeKey`, never overwrites an existing
-link, never the unverified temporal nominee — no anchor means no brand-token agreement check to run).
-`storeKey` stays fail-null by design (an offer-form fallback was REJECTED — a divergent
-`normalizedChain` would permanently split the store entity, fail-wrong beats fail-null); the delivery
-row's own `storeKey`/`milesToStore`/dwell sample are likewise correct residuals, not bugs.
+Full reference: [`docs/architecture/05-analytics-read-model.md`](docs/architecture/05-analytics-read-model.md)
+— the receipt-level history of every fold rule, migration and surface below.
 
-**#1030 (early_offline fake $0 report, `PROJECTOR_VERSION` 10→11):** the EARLY_OFFLINE `DASH_STOP`
-branch stamped `totalEarnings = Session.runningEarnings`, a non-nullable `Double = 0.0` whose only
-feeders were the then-dead money parses (#1029), so every summary-less dash wrote a **hard `0.0`**
-that `COALESCE(s.reportedEarnings, d.deliveredPay, 0)` honoured as an authoritative "$0 reported",
-tripping the over-attribution severe flag on a whole week.
-**`RecordFolds.reportedEarningsOf` is the rule's ONE owner:** a `totalEarnings` of `0.0` is a report
-only when the end source is the summary screen; on every other source it is the unfilled default.
-Four layers. (1) The stamp is `runningEarnings.takeIf { it > 0.0 }`. (2) The fold normalizes,
-because history carries the literal `"totalEarnings": 0.0` and a refold would replay the lie —
-hence the bump, which re-stamps all 41 affected rows (the drill-down and CSV read the row raw).
-(3) `ParsedFields.SessionEndedFields.totalEarnings` became **nullable**, dropping the factory's
-`?: 0.0`, since a missed *parse* used to fabricate exactly the `$0` the summary-screen carve-out
-trusts as a measurement (`ModeEffects` now stamps null and states the end without a figure;
-`PlatformRegionStepper` only moves `runningEarnings` on a real parse). (4) Read-side **mirrors** of
-the same source-keyed rule: the DAO's three `reportedEarnings` query families take
-`CASE WHEN s.endSource = 'summary_screen' THEN s.reportedEarnings ELSE NULLIF(s.reportedEarnings, 0) END`
-on **every** arm — gross AND the `unattributed`/`overAttributed` CASEs, since guarding gross alone
-would leave a `0.0` row still flagging `overAttributed = deliveredPay − 0` — and `SessionDetail`
-(the per-dash drill-down) applies it via `SessionRecord.endSource`. A blanket `NULLIF` was rejected:
-it would silently override a genuine parsed `$0` summary with delivered pay. The bubble HUD's two
-`reportedEarnings ?: 0.0` render sites became `EMPTY_VALUE` (#936). Scope:
-`session_records.reportedEarnings` only — attribution metadata, so no frozen economy column moves.
-`NetProfit`
-(`:domain`) is the one shared cost-math SSOT for both the offer estimate and the frozen realized net.
-`AnalyticsRepository` (`:core:data`, **DAO-only — no economy dependency**, so historical net is
-structurally immutable) serves period economics (`SUM(netProfit)` frozen + `unattributedPay`;
-all-pay gross = reported-total authoritative + the unattributed review flag; Monday-week boundaries
-via `PeriodBounds`, midnight-reactive) as Room-invalidation Flows to the home glance and the
-Analytics hub (#315). **Arbitrary review windows (#970, redesign epic #969 stage 1).** Every period aggregate has a second
-overload taking an `AnalyticsWindow` (`:domain` — granularity + half-open span of local **dates**:
-`DAY`/`WEEK`/`MONTH`/`LIFETIME`/`CUSTOM`), so the hub's pager/range picker read any span while the
-rolling four-value `AnalyticsPeriod` stays as it was for the home glance. **One rule set, two
-callers:** `PeriodBounds.of(window, zone)` is the primitive; `PeriodBounds.of(period, now, zone)`
-delegates via `AnalyticsPeriod.toWindow(today)`, so the paths can't disagree about where Monday
-starts. Each repository pair (`periodEconomics`/`decisionEconomics`/`timeEconomics`/`dailyEarnings`/
-`noSessionDeliveries`/`orphanOfferGroups`) shares ONE private `…In(boundsFlow)` core: the enum
-overload feeds it the midnight-re-anchoring `periodBoundariesFlow`, the window overload a fixed
-`flowOf(bounds)` — a paged window must NOT silently become a different span while on screen (the hub
-re-resolves which window is current from `currentLocalDateFlow` one level up). `AnalyticsWindows`
-(pure `:domain`) owns the calendar math: Monday weeks, month stepping, the **previous-equivalent
-window** the recap delta compares against (null for Lifetime — the UI states that rather than
-inventing a comparison), and the `canStepForward` fence. The selection persists in **app prefs** as
-`AnalyticsWindowSelection` — `Relative(granularity, offset)` for pageable granularities (so
-reopening next week still means *this* week), `Custom(start, endInclusive)` for a driver-drawn range
-— decoded fail-closed to the current pay week. **Net per day:** `DailyEarnings.net` rides beside
-`gross` (`sessionGrossRows`/`noSessionDailyRows`: same frozen columns + cash + the session's
-unattributed remainder), so Σ per-day net equals `PeriodEconomics.netProfit` by construction; EMPTY
-axis for a single-day, unbounded, or over-`MAX_DAY_AXIS` (400-day) window.
-**Pay mix + platform split (#973, stage 2).** `AnalyticsDao.payMixTotals` sums `basePay`/`tip`/
-`cashTip` over the population `deliveryTotals` describes (byte-identical `WHERE`);
-`AnalyticsRepository.payMixParts(window|period)` serves `:domain` `PayMixParts`, and pure
-`PayMix.of(gross, parts)` composes it with that window's OWN `PeriodEconomics.grossEarnings` at the
-read site — gross keeps one owner (the repository's `assemble` fold), so the bar always reconciles
-with the headline stating it. `bonuses & other` is the RESIDUE `gross − base − tips − cash`,
-**floored at 0**, with `partsExceedGross`/`grossOverflow` recording an over-cent negative rather
-than absorbing it. `basePay`/`tip` are stamped only on a job's SOLE drop, so partial coverage is
-NORMAL: `deliveriesWithBreakdown`/`deliveries` drive a stated caveat + an "at least N%" tips
-insight, and ZERO coverage renders "not recorded" instead of a 100 %-bonuses lie.
-`platformEconomics(window|period)` runs the by-platform aggregates ONCE through the same `assemble`
-(platforms come from the DATA via `Platform.fromWire`, no fixed list) and
-`periodEconomics(window, platform)` DELEGATES into that grouped fold, so a split row and a filtered
-read can't be assembled two ways. `DailyEarnings.deliveries` (per-session count off the same
-`GROUP BY sessionId` subquery; an orphan row counts as one) drives the tappable day bar.
-**Offers tab (#975, stage 3).** *Decisions* became **Offers**; `AnalyticsTab`'s declaration order IS
-the on-screen order, and the selection is transient ViewModel state — never persisted, never a nav
-argument — so a rename can't strand a stored preference or deep link. (1) `AnalyticsDao.offerOutcomes`
-gained a `withEstimate` counter → `DecisionEconomics.declinedWithEstimate` +
-`hasDeclinedEstimates`/`declinedEstimatesComplete`, so the declined-value card states its population
-and says so when NO decline was priced instead of rendering "$0.00" (§9; `SUM` already skipped a
-#936 no-verdict decline, leaving the Σ honest but silently partial). (2) **Estimate vs reality**
-(`AnalyticsDao.acceptedOfferRealizedRows` → pure `EstimateVsReality.of`): `offer_records`
-**LEFT**-joined to `delivery_records` on `d.jobId = o.linkedJobId`, same session-anchored WHERE +
-`outcomeResolved IS NULL` (#810 B2) as `offerOutcomes`, so the join's row count IS the funnel's
-`accepted`. The join is deliberately **unfiltered beyond that** — it is the DENOMINATOR the surface
-must state — and the inclusion policy lives in the pure factory: drop a null frozen
-`estDollarsPerHour` (#936), an unlinked offer, an offer sharing its `linkedJobId` with another
-accepted offer (a **stack** can't be split per offer — BOTH dropped, fail-null beats fail-wrong
-#745), and a job with null `SUM(netProfit)` or no measured minutes. Both bars are a **mean of
-per-offer rates**, one vote per decision, keeping the est side a straight aggregate of the frozen
-column rather than a second copy of `estNetPay ÷ estTimeMinutes`; realized rate =
-`(Σ netProfit + Σ cashTip) ÷ (Σ realizedMinutes ÷ 60)`. `MIN_CONFIDENT_OFFERS`=5 gates a stated
-thin-data caveat, never a hidden card. (3) **The offers list** (`offersBetween(...)` + a
-byte-identical-WHERE `offerCount`): paged, `OfferFilter`-filtered, ordered
-`decidedAt DESC, eventSequenceId DESC` (the sequence tie-break makes a LIMIT/OFFSET boundary
-deterministic across same-millisecond closes), mapped to typed `:domain`
-`OfferListing`/`OfferOutcome` — the `AppEventType.name` ↔ chip ↔ pill mapping has ONE owner, no
-`"OFFER_DECLINED"` literal anywhere. `AnalyticsRepository` clamps the page to `MAX_OFFER_PAGE`=250
-itself (bounded ingestion is the read's job, not the UI's), and the list feed is its own
-`OffersFeedState` `StateFlow` beside `uiState` (the `pickerMonth` precedent) so a chip tap doesn't
-re-emit every other tile.
-**Home = "Today" (#977, stage 4).** A forward-looking glance over the SAME read-model, **zero** new
-queries: **So far today** is the rolling `TODAY` `periodEconomics` (replacing the old four-window
-`PeriodReview` selector, whose windows live on the #970 pager now); **This week** is
-`periodEconomics(week)` + `previous(week)` + `dailyEarnings(week)`, and `Recap →` writes the hub's
-*persisted* `AnalyticsWindowSelection.Relative(WEEK, 0)` **before** navigating, so the DataStore
-stays the selection's one owner (no nav argument, no Home-local copy). **The plan strip** is the
-pure `:domain` `DayPlanner` over today's weekday row of the LIFETIME `earningsHeatmap`: spent hours
-dim, the best still-available contiguous 2–4 h run is outlined, and its headline rate is
-**coverage-weighted** (`Σ net ÷ Σ coverage`, the heatmap's own division applied to the run) rather
-than a mean of cell rates. A cell qualifies only with a real, positive rate — a masked hour is
-unknown and a `≤ $0` hour is a measured bad hour, so both END the run. **Thin data is the
-load-bearing rule:** the heatmap unions + apportions session spans before it exists, so the dash
-COUNT is structurally unrecoverable read-side; "~5 samples" is therefore honestly measured as
-`DayPlanner.MIN_SAMPLED_HOURS`=5 **rate-bearing hour buckets** on that weekday, stated in hours, and
-below it the card states the count INSTEAD of any rate (§9). Every headline names the weekday it
-quotes; the lifetime-scope + not-a-guarantee qualifier lives in the screen's single
-`How these numbers work` footer (`weekly_plan_provenance`), not per-card copy (#1024 D2).
-Time-derived values follow Reactive-UI rule 2 — state holds the anchors (heatmap + local date), the
-composables derive clock/current-hour from `rememberNow()` through a `derivedStateOf`. Two SSOT
-moves rode along: `RecapModel` became `:domain` `NetDelta` (a feature module can't reach an `:app`
-owner) and `PatternsTab`'s private heat ramp became `:core:designsystem` `AppHeatScale`. Home's
-review rows read the hub's action-FREE `reviewTexts` resolver and render the extracted `ReviewList`
-(the hub keeps `reviewItems` + `NeedsALookCard`'s container), so Home structurally cannot receive a
-per-row action it would have to strip; the action normalises to *navigate* into the hub, which owns
-the assign/attest dialogs.
-**Heatmap toggle + store leaderboard (#979, stage 5; both renders moved to the Playbook in #1024).**
-UI-only over the already-free `storeReportCards()`/`earningsHeatmap()` reads — **zero** new queries,
-under an `ALL TIME` chip + declaring caption so the lifetime scope reads as deliberate rather than
-as ignoring the #970 pager. The Rate/Hours `AppSegmented` toggle runs over the SAME grid
-(`EarningsHeatmapCell.coverageHours` was already computed beside `.dollarsPerHour` and never
-rendered); Hours mode reuses `AppHeatScale.cellColor` UNCHANGED (Principle 5 — no second color path)
-by folding a genuinely-zero coverage cell to `null` first, landing it on the same "no data" swatch a
-masked Rate cell uses, so Hours has no Rate-equivalent "worked, no net" third state and carries its
-own legend/caption, while the best-hour $/hr callout stays Rate-mode only. The leaderboard reuses
-the existing chain/location-key `StoreLocationChip` (there is no city/neighborhood data anywhere in
-the schema); its bar scale (`PatternsModel.maxNet`) and outlier fleet
-(`PatternsModel.isWaitOutlier`) are computed over the FULL list regardless of the active sort
-(`PatternsModel.sortedStores`), so switching sort chips reorders rows without rescaling or
-reflagging them underneath the driver. **Outlier definition (no prior convention to anchor to, so
-documented at the constant):** a store's own `p50DwellMillis` is flagged at `>= 1.5×`
-(`OUTLIER_MULTIPLIER`) the FLEET's median `p50DwellMillis`, computed across every listed store
-carrying a real dwell sample and gated on at least 3 such stores (`MIN_FLEET_SAMPLE_FOR_OUTLIER`,
-§9 thin-data honesty); a store with no wait sample of its own is never flagged. "Recent" reuses the
-DAO's existing `ORDER BY lastSeenAt DESC` rather than a new query.
-**Weekly Plan (#981, stage 6)** — the redesign's NEW surface, and the first thing in this section
-that is **not** a projection of the event log. (1) **The read:** the plan ranks weekday×hour cells by
-**median** realized net $/hr, which `EarningsHeatmap` structurally cannot answer (its cell rate is
-`Σnet ÷ Σcoverage`, a coverage-weighted MEAN with the individual days summed away), so
-`AnalyticsRepository.hourOfWeekSamples()` feeds the **same two lifetime DAO reads** (`sessionSpans`
-+ `deliveryNets`) to the pure `:domain` `HourOfWeekSampler`, which apportions them one calendar step
-earlier — into `(date, hour)` buckets — so a cell's samples ARE its own separate days. No new query,
-no schema change; it inherits the heatmap's union / apportionment / completion-hour rules verbatim
-(Principle 5), and its coverage floor is the heatmap's own `DEFAULT_MIN_COVERAGE_HOURS` expressed as
-a FRACTION (half the range asked about). (2) **The planner** (`WeeklyPlanner`, pure): median ranking,
-`MIN_SAMPLE_DAYS`=3 separate days per cell, adjacency merge (greedy tie-break rate → **longest** →
-earliest day → earliest start; longest-first is what performs the merge — shortest-first would
-render one 4h run as two stapled 2h rows), the ≥2h floor + 4h cap shared with `DayPlanner`, greedy
-fill to an hours or `$`-goal target (`MAX_PLAN_HOURS`=40 bounds the dollars arm), `median × hours`
-projection, and an overall-median-of-every-worked-hour random baseline. Every weekday holding no
-window is returned with a MEASURED reason (`NO_HISTORY`/`THIN_HISTORY`/`NO_CONTIGUOUS_RUN`/
-`NO_POSITIVE_RATE`/`TARGET_ALREADY_MET`/`REMOVED_BY_YOU`), never omitted. Driver edits are
-**replayed**, not applied: the ViewModel holds an ordered `List<PlanEdit>` and the base plan is
-recomputed every emission, so a moved window re-derives its rate at its NEW hours (or prices
-nothing, visibly) and a dropped window's range is banned so the re-fill takes the next-best hours.
-(3) **Storage + the loop:** `SavedWeeklyPlan` is FROZEN at save time (the driver is graded against
-the plan they were shown — the `delivery_records` doctrine applied to a commitment), encoded by the
-fail-closed `WeeklyPlanCodec` into the `weekly_plan` DataStore via `WeeklyPlanRepository` (keep the
-last 2 weeks). `WeeklyPlanWorker` is a **periodic 7-day** WorkManager job whose initial delay is
-computed to the next Sunday 18:00 local by the pure `WeeklyPlanSchedule`, re-anchored on every app
-start (which also corrects the 1h DST drift a 7×24h interval accrues); it grades the finished week
-with the pure `WeeklyPlanGrader` (planned vs actual hours and dollars **inside the planned windows
-only**; money earned outside is reported separately, never folded in) and posts on its **own**
-channel — `weekly_plan_channel`, id 104 — deliberately not `app_notice_channel`, because a recurring
-engagement nudge must be mutable without also muting the Pledge disclosures. Notification copy is
-counts and dollars only (P7). Home's pointer row reads the plan for the week the driver is IN
-(`weekStartOf`, not `planWeekStart` — on a Sunday those differ), and "where the plan came from"
-renders the SAME `HeatmapGrid` with the picked cells outlined.
-**Time tab: the two rates, the typical hour, gap stats (#983, stage 7/7)** — surfaces
-`docs/design/running-hourly-rate.md`, the **semantic SSOT** for hourly rates; all read-side.
-(1) **The gap fold.** `WorkGaps` (pure `:domain`) pairs each completed drop with the **next accepted
-offer in the same dash** and measures the span. Rules, all fail-null: never across dashes or days (a
-session-less "(No session)" row therefore contributes nothing — the ONE window aggregate with no
-null-session fallback, by definition, not oversight); "which accept came next" is a **`sequenceId`**
-question while "how long" is a **timestamp** question (#732); a dash's LAST drop is a **tail, not a
-gap**; a pairing whose accept escapes the dash's own effective end
-(`COALESCE(endedAt, lastEventAt)`, the `sessionTotals`-shared definition) is incoherent and dropped.
-A gap ≥ `LONG_GAP_MILLIS` (2 h) is **counted and stated, never excluded** — the doc names
-break-vs-dry-market as unresolvable on-device, so deleting the time would be a worse lie than
-reporting it unjudged. **Source: the read model, not `app_events`** —
-`delivery_records.completedAt`/`offer_records.decidedAt` ARE those payloads' own domain timestamps
-and each row's PK IS its source event's `sequenceId`, so paging the log would re-decode JSON for
-identical numbers while re-implementing the session-anchored windowing (Principle 5). The accept
-side deliberately KEEPS a resolved orphan (#810 B2) unlike every other offer read: the row is the
-instant the driver stopped waiting, and dropping it would fuse two real gaps into one fabricated
-long one. (2) **The net/hr pair** (`NetPerHourPair`) is the doc's **active** / **scheduled**
-denominators under the driver-facing labels *while working* / *whole shift*: whole-shift = Σ session
-durations (zero estimates); while-working = Σ per-delivery partition deltas **minus the measured
-gaps** (the delta already swallows the dry wait the doc excludes). Both residuals are one-sided and
-documented (a dash's pre-first-offer wait has no preceding completion, so it stays in the
-denominator), so while-working is conservative by construction; the numerator is the window's own
-FROZEN net, shared with the recap hero. A missing denominator yields **null, never `$0.00/hr`**
-(#936 discipline). (3) **"Your typical online hour"** (`HourComposition`) splits the online span
-three ways: *at stops* = Σ pickup dwell (`confirmedAt−arrivedAt`) + Σ **door** dwell
-(`completedAt−arrivedAt`) — "at stops", not "at store", because a doorstep is not a store; *waiting*
-= the gaps (disjoint from dwell by construction — a gap runs completion→accept, a dwell sits inside
-a job); *the rest* = the residual, labelled "driving & other" and NEVER as pure driving, since it
-also holds the pre-first-offer wait, the post-last-drop tail, and every untimed stop. **Coverage is
-a field, not a footnote** (§9): `stopsTimed`/`stops` and `gapCount`/`completionsWithoutGap` ride the
-models, an untimed stop is never estimated from its neighbours (so at-stops is a floor), and the
-card states all three coverage states separately. The waiting leak is priced at the **while-working**
-rate (the whole-shift rate would be circular — it already contains the idleness).
-Plumbing: `deliveryTimeTotals` gained door dwell + its coverage counters, new
-`pickupDwellTotals`/`completionEvents`/`acceptEvents`/`sessionEndBounds` DAO reads landed, and
-`TimeEconomics` gained the dwell/stop fields (+ derived `atStopsMillis`/`stops`/`stopsTimed`).
-`Percentiles.nearestRank` is ONE owner for the #159 dwell p50/p95 and the gap median/p90. **A known
-seam:** the Weekly Plan's `NOT PICKED` rows would want a **per-weekday, lifetime** gap median, but
-these stats are window-scoped — appending one to the other would back a per-weekday claim with an
-all-week number (a §9 violation) — so it is left until a grouped lifetime read exists.
-**The three destinations (#1024 — the declutter arc; pure re-composition, zero read changes bar one
-deletion).** Home = "today", the hub = "the past", the **Playbook** = "the next move".
-`AnalyticsTab` lost `Patterns` (Money · Offers · Time) — a pure deletion, the selection being
-transient ViewModel state on one argument-less route — and `AnalyticsViewModel` dropped the two
-lifetime reads with it, so every source the hub collects is window-anchored. `ui/main/playbook/`
-(`Screen.Playbook`, reached from a Home entry tile) holds four sections over **zero new queries**:
-this week's plan with live progress; **when you earn** (the `HeatmapGrid` + Rate/Hours toggle, saved
-plan's picked cells outlined via `SavedWeeklyPlan.covers`); **where you earn** (the #979
-leaderboard, moved verbatim — the app's ONLY store list); and the locked **Demand around you** row,
-split out of `GrowthRows` so both screens render ONE owner of that copy. `PatternsModel` +
-`HeatmapGrid` + `DisclosureRow` live in `ui/components/` (a shared render whose home is a deleted
-surface is the drift Principle 5 punishes), joined by `NetBar` and `HairlineDivider`;
-`:feature:dashboard` keeps module-internal copies for Home by the honest-deps doctrine.
-**`PlanProgress` (pure `:domain`) is a VIEW of `WeeklyPlanGrade`, not a second grading:** a finished
-grade + the clock (today + hour), adding only the elapsed classification. Its `elapsedPlannedHours`
-counts a window's hours only once they are OVER (hour granularity, matching `HourOfWeekSamples`'
-buckets), so progress is conservative, never flattered — with ONE documented exception: the count is
-WALL-CLOCK, so a DST-forward day overcounts the schedule side by an hour (characterization-tested;
-correcting it would need a `ZoneId`, i.e. clock-awareness in a pure type, and the worked side is
-immune because the sampler apportions real milliseconds). No clock is in the state: the card reads
-`rememberNow` ONCE per tick and derives BOTH the local date and the hour from that single instant
-through a `derivedStateOf` (Reactive-UI rule 2), ticking once a minute — a flow-supplied date beside
-a ticker-supplied hour would skew across midnight and time-zone changes. A decoded plan with NO
-windows is treated as no plan at the first consumer, and the screen renders nothing until the first
-emission rather than flashing every empty state over real data. Home is four blocks (a `Today` card,
-a `This week` card of hairline rows, one row of four entry tiles — Analytics · Playbook · Ratings ·
-Settings, the settings FAB and Strategy/Economy tiles retired with the gated permission/first-run
-states carrying their own Settings link — and the shared footer); the recap hero is the kept figure,
-the delta, and ONE facts line, gross having moved to the money card's headline and acceptance to the
-Offers funnel. In the Money tab `PayMixSection` sits INSIDE `MoneyWentCard` (one card, two bars,
-headlined `$X came in. $Y went to the car.`; the kept clause is dropped because the hero states it,
-**except on a LOSING window**, where it returns in the bad tone, because `AppStackBar` weights on
-the value so a negative kept segment is a zero-width sliver and the legend note is silent — without
-the clause a window that cost more than it paid would show a green key beside nothing, the #662-F1
-anomaly papered over); the card renders for EVERY window with only the chart half hidden on an empty
-day axis (a Lifetime/single-day window must not lose its rates); and
-`NeedsALookCard`/`RecentDashesCard` keep their content untouched (Home reuses `reviewItems`
-verbatim, so the flags/copy SSOT could not move). `TopStoresCard` was DELETED with its **whole dead
-chain** — `AnalyticsUiState.topStores`, the ViewModel's collection,
-`AnalyticsRepository.perStoreEconomics` (both overloads + core + `chainBucket`),
-`AnalyticsDao.deliveryTotalsByStore`/`storeChainDisplays` + their row types, and the `:domain`
-`StoreEconomics` chain model — two overlapping store models being the drift Principle 5 names.
-`DisclosureRow` gained `HowNumbersWorkFooter`, the shared **one-disclosure-per-screen** row whose
-frozen-cost and estimate lines reuse the exact strings their originating cards ship, plus an opt-in
-projection line for screens that project (the Playbook opts in; a period-scoped review surface
-projects nothing). It renders in **`AnalyticsScreen`, below the tab content** — NOT inside
-`MoneyTab`: the recap hero states frozen net ABOVE the tab switch, so a Money-only footer would
-leave Offers and Time showing that headline with its qualifier nowhere on screen. **Every §9 state
-still states its reason**, in a named place: pay-mix zero coverage / partial coverage /
-parts-exceed-gross inside `PayMixSection`, the fuel-split coverage guard inside the merged card's
-expanded disclosure, the null-denominator em-dash on each rate row, and the no-predecessor line
-(`analytics_hero_delta_none`) on the hero — whose facts-line comparison clause requires a
-**non-EMPTY** predecessor (`NetDelta.isEmpty`), since an unworked previous week arrives as a real
-zero-filled `PeriodEconomics` and `vs $0.00 the window before` would read as a measurement of a
-worked week. The design system gained a first-class **three-way legend note**
-(`AppSegment.noteHidden` + the pure `legendNote`, unit-tested in `:core:designsystem`): a stated
-figure, a `null` falling back to the computed PERCENTAGE, and an explicit "say nothing here" for a
-figure another surface owns (the Money card's kept segment — the `""` sentinel it shipped with first
-was one `isNullOrBlank()` tidy-up away from silently rendering a share).
-**The "(No session)" bucket (#660 piece 1):** `delivery_records` rows whose source event carried NO
-`sessionId` were already counted in net (`deliveryTotals`'s own-`completedAt` fallback, #655) but
-invisible to gross (`grossAndUnattributed`/`sessionGrossRows` iterate `session_records` only) — a seam
-that could let displayed net exceed gross. Fixed by folding the same null-session population
-(`AnalyticsDao.noSessionTotals`/`noSessionTotalsByPlatform`/`noSessionDailyRows`) into
-`PeriodEconomics.grossEarnings` and the per-day chart (bucketed on the delivery's own `completedAt`
-day, there being no session start to anchor on), and surfacing it as its own
-`noSessionPay`/`noSessionDeliveries` review signal (Money tab callout). **Piece 2: categorize an orphan into its real dash.** The correction
-event `DELIVERY_SESSION_ASSIGN` (`DeliverySessionAssignPayload{targetEventSequenceId, newSessionId
-(null⇒unassign/undo), note}`, folded by `CorrectionFolds.foldDeliverySessionAssign` — #761 split the
-correction folds out; `RecordFolds.foldEvent` stays the dispatcher) is written by
-`CorrectionRepository.assignDeliverySession` from the tappable Money-tab callout (orphan list +
-±48h/same-platform/ended-only session picker, `NoSessionAssignDialogs.kt`) and the drill-down undo.
-The projector's `applySessionAssign` re-attributes **attribution ONLY** — `sessionId` + the additive
-marker `delivery_records.sessionAssigned` via `row.copy`, every frozen economy column byte-identical
-(never re-prices) — behind FIVE fail-closed guards (movable rows only = null-session OR
-already-assigned; real ENDED target session, load-bearing for hydration determinism; platform
-coherence; cash-bearing-unassign block; missing row), each a counted ids-only-WARN skip. The session
-`deliveries` counter rides a **relative** `bumpSessionDeliveries` ±1 (refold-stable). No
-`PROJECTOR_VERSION` bump — a new event type can't exist in folded history. Period totals are **read-side only** — they never re-enter the pure state machine (the
-dead `CrossPlatformRegion.PeriodTotals` fields were deleted). The free-tier **CSV export** (#319) is a second
-read-side consumer: `AnalyticsRepository.buildCsvExport` reads raw `deliveriesBetween`/`sessionsBetween`
-rows (row-level, bucketing-free — the driver's own records dumped, not session-anchored periods) and the
-pure `CsvExporter` (`:core:data`, RFC-4180 + machine `Csv`/`IrsMileage` primitives in `:domain`) formats
-deliveries/sessions/summary CSVs; the SAF directory-write edge is a `:app` ViewModel (Settings → Data &
-Privacy → Export Data). Merchant/store names are exported (driver-owned); customer/address hashes are
-excluded; no network. **Driver corrections (#650/#688 phase A)** are append-only events written by
-`CorrectionRepository` from the per-dash drill-down (`SessionDetailScreen`): `MANUAL_DELIVERY` (a
-driver-entered missed drop → `MANUAL`-basis row) and `DELIVERY_ADJUSTMENT` — one **Adjust delivery**
-dialog (store/pay/tip/cash-tip/miles/note) writing a single all-optional-fields event. The
-orchestrator applies each non-null field by-PK: `payBasis` flips to `USER_CORRECTED` **iff pay
-changes**, so a store/tip/cash edit never drops an "est. offer pay" disclosure; a MANUAL row stays
-MANUAL; net recomputes only when pay/miles change, against the row's OWN frozen cpm;
-`originalPayBasis` is preserved via `row.copy`; `newCompletedAt` is banned outright. Legacy
-`PAY_ADJUSTMENT` stays readable for history but new UI never writes it. The projector folds
-corrections non-destructively (the original event/row is never deleted) and rebuild-faithfully. **Per-leg mileage (#688 phase B, Room
-v12→v13 additive, `PROJECTOR_VERSION` 5→6):** the fold consumes the lifecycle `metadata.odometer`
-stamps (PICKUP_ARRIVED closes a to-store leg; DELIVERY_ARRIVED closes a to-dropoff leg keyed by the
-drop's own taskId, re-arrivals accumulate; PICKUP_CONFIRMED/DELIVERY_CONFIRMED/DELIVERY_COMPLETED
-advance the anchor; null-odometer anchors don't advance, so miles roll forward; per-leg floor at 0)
-into `delivery_records.{milesToStore,milesToDropoff}`. A drop's `milesToStore` claims one store leg
-of its job (exact store-form match, else FIFO; claim-once — a shared-store sibling gets null, no
-fabricated split), and `realizedMiles` becomes the leg SUM only when `milesToDropoff != null`, so
-per-drop net redistributes within a stack while session/period/IRS/CSV mileage totals stay
-odometer-span-anchored. Pending legs describe not-yet-completed drops, so the accumulator persists
-as `session_records.legStateJson` (`LegState`/`LegStateCodec` in `:domain`, fail-closed decode →
-legacy delta, `MAX_PENDING` 32 bounded) — that persistence is what keeps incremental ≡ from-zero
-refold across the projector's 500-event page boundaries. A driver `newMiles` edit wins `realizedMiles`/net (log-order precedence);
-the machine leg columns are provenance and are never rewritten, so leg-sum ≠ realizedMiles IS the
-visible edit trail. CSV gains `miles_to_store`/`miles_to_dropoff`. Related: #653/#655/#703.
-**Orphan-offer resolution (#810 B2, Room v14→v15 additive `offer_records.outcomeResolved`,
-`PROJECTOR_VERSION` 7→8):** an accepted offer whose job produced no matching delivery (surfaced by
-the `JOB_ACCEPT_MISMATCH` tripwire) is resolved in two tiers, both write-only to the nullable
-`outcomeResolved` column — the original `outcome` is never rewritten (the #688 edit-trail pattern).
-**Tier 1 (projector, automatic):** folding a `JOB_ACCEPT_MISMATCH` emits an `OfferReconcileFold` the
-orchestrator runs resolve-from-rows in-transaction — the pure `JobAcceptMismatchResolver` joins the
-closing job's delivered-drop store evidence (`delivery_records.storeName` + `payoutStoreForms`,
-normalized via `StoreKeys`) against each accepted offer's parsed store; EXACTLY one store-unaccounted
-offer while all others are accounted → `UNASSIGNED_INFERRED`; any other shape (same-store tie,
-multiple/zero unaccounted, no evidence) is INCONCLUSIVE → Tier 2 (fail-null beats fail-wrong, #745). **Tier 2 (driver attestation):** a Money-tab callout
-(`orphanOfferGroups`) opens `OrphanOfferAttestDialog`; the driver picks the unassigned offer →
-`CorrectionRepository.correctOfferOutcome` appends an `OFFER_OUTCOME_CORRECTION` event →
-`CorrectionFolds.foldOfferOutcomeCorrection` → the orchestrator stamps `UNASSIGNED_ATTESTED` (null ⇒
-undo), rebuild-faithfully. **Read-side exclusion:**
-`AnalyticsDao.offerOutcomes`/`offerScoreOutcomes` gain `outcomeResolved IS NULL`, so a resolved
-orphan no longer inflates `accepted`/`received`; the session-level `session_records.offersAccepted`
-live counter (bubble ModeCard + CSV) is a DIFFERENT fold, left as-is — a documented residual. The
-Tier-1 reconcile reads only delivered rows sequenced BEFORE the mismatch event, and `EffectMap`
-emits `JOB_ACCEPT_MISMATCH` AFTER the closing job's final `DELIVERY_COMPLETED`, so the store
-evidence is complete by construction and the fold is paging-independent (historical logs carrying
-the old mismatch-first order deterministically fall to Tier 2). The only state-machine touch is that
-emission ORDER within one close step — no new events, no reducer change.
+**CQRS:** `app_events` is the source of truth; `delivery_records`/`session_records`/`offer_records`
+(+ `stores`/`pickup_records`) are a rebuildable projection. `AnalyticsProjector` (`:core:data`, every
+launch, supervised) folds via the pure `RecordFolds`/`SessionFoldContext`/`CorrectionFolds` (`:domain`)
+**exactly-once** (records + watermark in one transaction, PK = source `sequenceId`); a `PROJECTOR_VERSION`
+bump wipes + refolds the whole log. **Ordering contract (#732):** `sequenceId` is the fold/order key;
+`occurredAt` may lag it (`PICKUP_CONFIRMED`); "when did it really happen" reads the payload.
 
-**#1033 layer 2 (late-expanded receipt → `DELIVERY_RECEIPT_REPRICE`, Room v15→v16 additive
-`delivery_records.receiptRepricedAt` + `.driverAdjustedAt`, `PROJECTOR_VERSION` UNCHANGED):** layer 1 widens the window; this
-is the other half — when the expansion still lands AFTER the completion was minted off the collapsed
-shape, the itemization is real evidence that arrived late, and the drop is re-priced from it instead
-of being left on the estimate forever. A machine **Tier-1** correction with the same append-only
-posture as the driver ones: the original `DELIVERY_COMPLETED` is never rewritten.
-`EffectMap.diffReceiptReprice` emits ONE `DELIVERY_RECEIPT_REPRICE` per delivered drop of the job
-(a stacked receipt re-prices every sibling), with shares from LITERALLY the same expression the mint
-apportions over — `DropPayApportioner.apportion` across `mintingDropoffTasks(…).describedBy(coverage)`
-(the `Task.isAccountableDropoff` denominator, intersected with the receipt's own `ReceiptCoverage`) —
-so `Σ dropRealizedPay == parsedPay.total` to the cent holds by construction rather than by two copies
-of a rule agreeing; keyed `…:<taskId>:<jobId>:r<repriceRevision>` in `effects_fired`, so a
-distinct DECISION always lands (a content hash collided with itself on an X→Y→X sequence and the
-third emission was dropped). Decided at THREE points: every itemized receipt FRAME (round 4), the job
-close from the receipt `completeActiveJob` is about to clear (round 9), and the terminal teardown
-`endSession` (round 10) — a job whose itemized receipt was already on screen when it closed may never
-render another frame, and its row can still be un-itemized (its first completion was minted on an
-earlier PostTask exit, and the close's re-emission is dropped by the per-taskId completion key); the
-two cached-receipt points share ONE implementation (`decideFromCachedReceipt`). It can fire at all
-only because of TWO markers: `PlatformRegion.lastClosedJobReceipt` (jobId + `receiptSeenAt` +
-`repriceRevision` + `lastDecidedPay`, stamped at the job close and SYNTHESIZED at a terminal
-teardown, cleared by `endSession`) and
-`JobReceiptAnchors` (the job's FIRST `PostTask` entry, plus `exitedPostTask` — the latch saying the
-completion mint has RUN for this job, stamped in the `step` wrapper beside `lastActedFlow` so no
-early return in `stepCore`/`updateLifecycle` can skip the acted-flow edge the emitter mints on).
-The closed-job marker deliberately does NOT model what the completion ROWS hold — it tried
-through two review rounds and both attempts failed toward REFUSING a legitimate correction (mirroring
-the mint's exit edge misses its eligibility/final-shape filtering; one task's first completion cannot
-describe a multi-drop job). The stepper suppresses only its OWN repeated decision
-(`lastDecidedPay`, compared STRUCTURALLY since round 10 — a `hashCode` collided two real receipts),
-so a receipt whose itemization the mint already carried emits a redundant
-"the receipt says X" event that **`AnalyticsProjector.applyReceiptReprice` resolves to a no-op** by
-comparing the row (no rewrite, so no `receiptRepricedAt` churn). "Already priced" is the projector's
-question: the stepper cannot know which completions persisted, the projector can just look.
-**The decision is a pure STEPPER transition, not an effect diff** (`decideReceiptReprice`, in
-`updateSessionFields`' PostTask arm): it must update the marker atomically as it decides, which an
-effect diff cannot do — `EffectMap.diffReceiptReprice` only reports the one-step
-`pendingReceiptReprice` handoff (cleared at the top of the next step, so a snapshot-restored value
-can never re-emit). **Ownership is ONE temporal question — "has any acceptance resolved since this
-receipt appeared?"** (`lastAcceptResolvedAt` vs `receiptSeenAt`, two region facts; the accept anchor
-is stamped at the `OfferLifecycle` accept-latch resolution and survives BOTH the survivor's expiry
-and the mint, since forgetting either is what re-opened the window in review). A receipt carries no
-job identity, so every other test tried in review — the announce anchor (which falls back to
-`recentTasks.lastOrNull()`), an accepted-since flag, a matching total — leaked; a total in particular
-is not identity, and it let a stacked job's $20 receipt redistribute the closed job's drops ($5/$15
-over a real $10/$10). **Stated cost (fail-null, #745): the STACKED shape — accept the next offer while
-this receipt is up, then expand it LATE — is refused and keeps the `OFFER_PAY` estimate; layer 1's 8 s
-window is the path that lands it in time.** **A receipt speaks only for the drops it described when it
-was read (#1073, rounds 13–14):** `ReceiptCoverage` (the receipt's SUBJECT + every accountable drop of
-its job with completion evidence at that frame) is captured beside the cached receipt, and the mint's
-`apportion` denominator, the mint's receipt ATTACH and the re-price's denominator are all intersected
-with it — one owner, so they cannot disagree and Σ `dropRealizedPay` == the receipt total holds by
-construction; an uncovered sibling folds unpriced (fail-null, one WARN at the close) instead of taking
-an older receipt's money. Gating the SHARE alone was not enough: the fold prices any drop carrying a
-receipt at the whole `totalPay` (`RECEIPT_TOTAL`), so an uncovered drop folded $20 while the covered
-one was re-priced at the same $20. But **completion eligibility is NEVER coverage-gated** — a
-delivered, arrived drop always mints, and coverage gates only the attach and the share (round 14
-coupled them and could delete a delivered drop's row forever: the exit refused it while it was still
-active, so the close-out sweep, which scans `recentTasks`, never saw it either). The **subject** is
-one resolver — `receiptSubjectTaskId()`, read by the cache, the "Saved: \$X" announce AND the
-PostTask-exit mint — and it is the ACTIVE dropoff (arrival or not: the field renders deliveries with
-no arrival frame at all — the 06-16 session runs `dropoff_navigation` → `dropoff_pre_arrival` → the
-receipt), else the job's last COMPLETED drop; never a pickup, never a prior job's. **Which drop a PostTask frame completes is
-NOT changed by #1073** — that is master's semantics, made explicit and shared. **Stated residual,
-`#1081`:** a false `post:task` frame while an un-arrived drop is active makes that drop the subject,
-and the exit after it — the same task's navigation, an offer overlay, idle, a dash end, any of them —
-completes it and spends its durable key. Pre-existing on master (whose announce picks the same drop),
-so the coverage layer neither fixes nor worsens it. Three discriminators were tried and each refuted
-by a sequence: arrival evidence (the field delivers with NO arrival frame), a foreign announce id
-(inert for a dash's first job), and refusing an exit that resumes the same task (it swallowed a
-GENUINE receipt followed by a `dropoff_handoff` re-render, and disagreed with the stepper's own lazy
-expiry). The one half #1073 does close is its own: the round-10/11 teardown widening now admits the
-announced anchor only when that anchor carries arrival or completion evidence, so a false frame can
-never re-price its genuinely delivered siblings DOWN (fail-null, #745).
-A cached receipt that names no drop of the job is not evidence about it, so it does not suppress the
-#691 estimate either. A `completedAt` timestamp was tried first as the coverage discriminator and
-rejected in the same series: it is the LATEST retire arm, so the receipt's own anchor could fall
-outside its own receipt. Stated
-cost: after a multi-drop job closes, a re-render of ONE drop's own receipt would be split across every
-covered drop (DoorDash fields one combined end receipt, so the shape is not known to occur). Effect keys are
-`…:<taskId>:<jobId>:r<revision>` off `repriceRevision`, NOT the receipt's content hash: an X→Y→X
-itemization sequence hashed back onto its own first key and the durable `effects_fired` idempotency
-dropped the third emission, freezing the row at Y. `CorrectionFolds.foldDeliveryReceiptReprice` → a `ReceiptRepriceFold` the projector applies
-by **(jobId, taskId)** — the state machine never sees sequence ids — setting `realizedPay`/`tip`/
-`basePay` (itemization only on the receipt's sole drop, via the new shared `soleDropOfReceipt` SSOT
-`DeliveryFolds` now also reads), flipping `payBasis` → `DROP_SHARE`, recomputing `netProfit` against
-the row's OWN frozen cpm, preserving `originalPayBasis`, and stamping `receiptRepricedAt`. Two
-fail-closed guards: a missing target row is a counted skip (the mid-stack shape where the mint is
-still pending — that mint carries the itemization itself), and a DRIVER-owned row is never
-overwritten — `MANUAL`/`USER_CORRECTED`, **or** the new `delivery_records.driverAdjustedAt` (v16,
-stamped by any monetary `DELIVERY_ADJUSTMENT`/`PAY_ADJUSTMENT`). That column is load-bearing because a
-TIP-ONLY edit deliberately leaves `payBasis` intact (#688 VET F1), so the basis test alone let a later
-re-price overwrite the driver's own tip. **Log-order rule:** a LATER driver `DELIVERY_ADJUSTMENT` wins
-the pay (the driver is the higher authority on their own money) while the `receiptRepricedAt` trail
-survives; an EARLIER one is never superseded. Read side: the drill-down shows "re-priced from the receipt" wherever
-`receiptRepricedAt != null` (the never-silent #689/#691 disclosure family). Named residual:
-`payoutStoreForms` is NOT back-stamped by a re-price, so a job whose only receipt arrived late keeps
-its pre-existing #159 store keys.
+**Economics are FROZEN per record, never recomputed** (dev decision): `netProfit`, `frozenCostPerMile` and
+the fuel/non-fuel split (#659) are computed at projection time against the offer's own frozen
+`OfferEvaluation` cpm; `NetProfit` (`:domain`) is the one cost-math SSOT; `AnalyticsRepository` is
+**DAO-only** (no economy dependency). `cashTip` stays outside `realizedPay`/`netProfit` and is added to gross/net only at the read
+sites, so the reconciliation's Σ-attributed stays cash-free (#688);
+`originalPayBasis` is stamped at first fold and never rewritten (#703).
+
+**Pay basis ladder:** real pay from `DeliveryPayload.dropRealizedPay`/`totalPay` (#528); a receipt with
+no itemization still prices its drops because `buildPostTask` SYNTHESIZES `ParsedPay` from the receipt's
+scalars on the flat 8.93.7 layout (#1029; a COLLAPSED receipt stays `parsedPay == null`); else a
+`PayBasis.OFFER_PAY` ESTIMATE from `offerPayShare` (#691), consumed only if no sibling drop already
+folded a real receipt. Two mint sites, two policies: the INLINE (PostTask-exit) mint keeps the
+conservative pooled split over the QUOTED owed orders (`OfferPayFallback.shareFor`); the whole
+attribution ladder runs ONCE at the terminal close (`OfferPayFallback.closeAttribution`, #996/#997):
+eligible-owed shrink (proven-complete jobs drop never-mintable placeholders; UNASSIGNED never shrunk;
+an `endSession` bail can never prove completeness — it force-stamps `completedAt`) →
+store ladder (`PER_OFFER_STORE` / `SUB_POOLED_STORE` / `STAMP_FALLBACK` / `CONSOLIDATED_CUSTOMER`,
+matched through `StoreKeys.normalizedChain`) → wholesale `JOB_POOLED` degrade. Σ stamped ≤ Σ quotes is
+structural. **A receipt speaks only for the drops it described when read (#1073):** `ReceiptCoverage` is
+captured with the cached receipt and intersects the mint apportion, the attach and the re-price
+denominator (one owner); completion eligibility is NEVER coverage-gated. Subject = the ACTIVE dropoff,
+else the job's last completed drop (`receiptSubjectTaskId()`); residual #1081.
+
+**Late-expanded receipt re-price (#1033 layer 2):** `EffectMap.diffReceiptReprice` emits one
+`DELIVERY_RECEIPT_REPRICE` per delivered drop of the job, decided as a pure STEPPER transition
+(`decideReceiptReprice`, at every itemized receipt frame, at the job close, and at `endSession`), keyed
+`…:<taskId>:<jobId>:r<repriceRevision>`. Ownership is ONE temporal question — has any acceptance
+resolved since this receipt appeared (`lastAcceptResolvedAt` vs `receiptSeenAt`) — so the STACKED
+late-expand shape is refused (fail-null, #745). Stepper state: `lastDecidedPay` is compared STRUCTURALLY (a hash collided), the one-step
+`pendingReceiptReprice` handoff is cleared at the top of the next step (a restored value can never
+re-emit), and `lastAcceptResolvedAt` survives both the survivor's expiry and the mint. The projector
+applies by (jobId, taskId) — itemization only on the receipt's sole drop (`soleDropOfReceipt`),
+`payBasis` → `DROP_SHARE`, net against the row's own frozen cpm, a missing row is a counted skip —
+no-ops when the row already matches, never overwrites a DRIVER-owned row
+(`MANUAL`/`USER_CORRECTED`/`driverAdjustedAt`, Room v16); a later driver adjustment wins the pay while
+`receiptRepricedAt` survives, and the drill-down discloses "re-priced from the receipt" whenever it is set.
+
+**#1030 — `RecordFolds.reportedEarningsOf` is the rule's one owner:** a `totalEarnings` of `0.0` is a
+report only when the end source is the summary screen; the stamp is `takeIf { > 0.0 }`, the fold
+normalizes, `SessionEndedFields.totalEarnings` is nullable, and the DAO mirrors the source-keyed rule on
+every `reportedEarnings` arm (a blanket `NULLIF` was rejected).
+
+**Store entity resolution (#159, #773, #887, #1000):** pure `StoreResolver`/`StoreKeys`; deterministic
+`storeKey = platform|normalizedChain|runningKey`; resolve-from-rows inside the batch transaction;
+receipt key > address (`@`-prefixed street number) key > chain-only, monotonic upgrades only; a driver
+correction pins (`storeKeyPinned`); superseded zero-reference identity rows are swept STRICTLY LAST
+(fails toward keeping); a pickup-less job still stamps the exact offer link (`linkOfferToJobIfUnlinked`).
+Per-store reads group on the resolved key.
+
+**Corrections are append-only events**, folded non-destructively and rebuild-faithfully:
+`MANUAL_DELIVERY`, `DELIVERY_ADJUSTMENT` (a machine row's `payBasis` → `USER_CORRECTED` iff pay changes,
+a MANUAL row stays MANUAL; net recomputes only when pay/miles change, against the row's OWN frozen cpm;
+`newCompletedAt` banned; new UI never writes legacy `PAY_ADJUSTMENT`), `DELIVERY_SESSION_ASSIGN`
+(attribution ONLY — `sessionId` + `sessionAssigned`, no re-pricing — behind five fail-closed guards:
+row exists, row is null-session or already-assigned, target is a real ENDED session, platform
+coherence, no cash-bearing unassign; the session `deliveries` counter moves by a relative ±1; #660),
+and `OFFER_OUTCOME_CORRECTION` / Tier-1 `JobAcceptMismatchResolver` writing `outcomeResolved` (#810 B2:
+Tier 1 resolves only when EXACTLY one accepted offer is store-unaccounted and all others accounted —
+anything else is INCONCLUSIVE → driver attestation; `EffectMap` emits `JOB_ACCEPT_MISMATCH` AFTER the
+closing job's final `DELIVERY_COMPLETED` because the reconcile reads only earlier rows). The outcome,
+funnel and list reads exclude a resolved orphan; `WorkGaps` deliberately KEEPS it (the accept is the
+instant waiting ended). **Per-leg mileage (#688 B):** lifecycle odometer stamps fold into
+`milesToStore`/`milesToDropoff` with claim-once store legs; `realizedMiles` becomes the leg SUM only when
+`milesToDropoff != null` while session/period/IRS/CSV totals stay odometer-span-anchored; a driver
+`newMiles` edit wins `realizedMiles`/net but the machine leg columns are never rewritten (provenance);
+`session_records.legStateJson` keeps incremental ≡ refold. The **"(No session)" bucket** counts in gross and per-day (#660 piece 1).
+
+**Read surfaces (the Analytics HUB's sources are all window-anchored — the Playbook's heatmap,
+leaderboard and plan are deliberately LIFETIME under a declaring badge; one assembly path each):** `AnalyticsWindow` +
+`PeriodBounds.of(window|period)` (#970; Monday weeks, fixed bounds for a paged window, selection persisted
+as `AnalyticsWindowSelection`); pay mix + platform split through the same `assemble` (#973;
+`bonuses & other` is the floored residue, zero coverage renders "not recorded"); Offers tab (#975;
+`AnalyticsTab` order is declaration order, selection transient; estimate-vs-reality keeps the DAO's
+unfiltered accepted-offer LEFT JOIN as the stated denominator, applies its exclusions in the pure factory —
+null estimate, unlinked offer, a stack, missing realized net/minutes — and renders both bars as a MEAN of
+per-offer rates; `MAX_OFFER_PAGE` 250); Home = "Today" (#977; `DayPlanner` over the lifetime
+heatmap, `MIN_SAMPLED_HOURS` 5, `Recap →` writes the persisted selection before navigating); heatmap
+Rate/Hours toggle + store leaderboard (#979, outlier ≥ 1.5× fleet median p50 dwell, ≥3 stores); **Weekly
+Plan (#981)** — `HourOfWeekSampler` (per-day (date, hour) samples off the heatmap's two lifetime reads) + `WeeklyPlanner`
+(median ranking with `MIN_SAMPLE_DAYS` 3 separate days per cell, ≥2 h/≤4 h runs, edits REPLAYED, every
+weekday reported with a measured reason), `SavedWeeklyPlan` FROZEN at
+save in the `weekly_plan` DataStore (a user artifact, deliberately NOT a Room table), `WeeklyPlanWorker`
+grades Sunday 18:00 on its own channel 104 — planned vs actual INSIDE the planned windows only, money
+outside reported separately, never folded in; Time tab (#983; `WorkGaps` pairs a completion with the next
+accept in the same dash — never across dashes or days, an accept past the dash's effective end is
+dropped, a dash's last drop is a tail not a gap, a gap ≥ 2 h is counted and STATED never excluded;
+`sequenceId` for "which", timestamps for "how long"; while-working vs
+whole-shift net/hr, null never `$0.00/hr`; `HourComposition` states coverage as a field); the **three
+destinations (#1024)**: Home = today, the hub (Money · Offers · Time) = the past, the Playbook = the next
+move, with `HowNumbersWorkFooter` as the one disclosure per screen and `PlanProgress` a VIEW of
+`WeeklyPlanGrade`. Every §9 thin-data state states its reason in a named place. The free-tier **CSV
+export** (#319) is a row-level read (merchant names exported, customer/address hashes excluded).
 
 ## Development Principles
 
@@ -1770,7 +749,7 @@ Every new feature or refactor holds to these — they are forefront design input
    offer slots, lifecycle-edge anchors, learned rate models — is either ruleset data validated at
    load or state keyed by `Platform`, never a global tuned to whichever platform we field-test
    most. New rule↔state vocabulary goes through the enumerated, load-validated contract
-   (`StateMachineContract` — `REQUIRED_FIELDS_BY_SHAPE`, plus #762's `EFFECT_INTENTS`
+   (`ParsedFieldsFactory.REQUIRED_FIELDS_BY_SHAPE`, plus `StateMachineContract`'s #762 `EFFECT_INTENTS`
    (effect-bearing notification intent → its required parse fields) and `REQUIRED_FIELDS_BY_FLOW`
    (deliberately empty today — every `task:*` flow has a legitimate parse-less rule), both enforced
    at compile by `RuleCompiler` as *declaration* checks, fail-loud per file; unknown intents stay
@@ -1982,6 +961,10 @@ branch" button, or the workstation agent's `gh pr merge … --delete-branch`).
 2. **CLAUDE.md** — re-check the sections the change touches (architecture, modules, workflows,
    commands, labels, principles); if the PR makes any statement in this file stale, fix it
    **in the same PR**.
+3. **`docs/architecture/`** — the five per-layer reference files hold the receipt-level detail the
+   §1–§5 summaries point at. A PR that changes an invariant, adds a rule, or retires one records it
+   there (the summary here only if it goes stale). Keep this file's summaries SHORT — the context
+   budget is why the detail moved (trim v3, 2026-09-07).
 
 A PR that skips these is incomplete — future agents inherit their entire context from these
 two places.
