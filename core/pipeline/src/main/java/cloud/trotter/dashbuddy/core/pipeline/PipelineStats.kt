@@ -338,18 +338,24 @@ class PipelineStats @Inject constructor(
      * [MAX_RENDERED_RULE_ID] chars, with a `+k more` tail so the omission is stated rather than
      * silent. Ties break on the id so the render is deterministic.
      */
-    private fun parseShortfallSuffix(): String = shortfallSuffix("parseShortfall", parseShortfallByRule)
+    private fun parseShortfallSuffix(): String = shortfallSuffix("parseShortfall", parseShortfallByRule) { it }
 
     /** `" bindShortfall{doordash.screen.delivery_summary_collapsed#expandButton=12,…}"` (#1093) — same
      *  bound, same clamp, same ordering as the parse suffix; rendered `<ruleId>#<bind>` (`#` cannot
      *  occur in either name, so the render is unambiguous). */
     private fun bindShortfallSuffix(): String =
-        shortfallSuffix("bindShortfall", bindShortfallByKey.mapKeys { (k, _) -> "${k.first}#${k.second}" })
+        shortfallSuffix("bindShortfall", bindShortfallByKey) { (rule, bind) -> "${escapeKey(rule)}#${escapeKey(bind)}" }
 
-    private fun shortfallSuffix(label: String, byKey: Map<String, AtomicLong>): String {
+    /** `#` is the pair separator in the render; a `#` INSIDE a component is escaped so two distinct
+     *  pairs can never read as one (review round 3 — rule ids and bind names are not validated
+     *  against it). */
+    private fun escapeKey(component: String): String = component.replace("%", "%25").replace("#", "%23")
+
+    /** Entries stay keyed by K through sorting and truncation; [render] is display only. */
+    private fun <K> shortfallSuffix(label: String, byKey: Map<K, AtomicLong>, render: (K) -> String): String {
         if (byKey.isEmpty()) return ""
         val entries = byKey.entries
-            .map { it.key to it.value.get() }
+            .map { render(it.key) to it.value.get() }
             .sortedWith(compareByDescending<Pair<String, Long>> { it.second }.thenBy { it.first })
         val shown = entries.take(PARSE_SHORTFALL_RENDER_LIMIT)
         val omitted = entries.size - shown.size

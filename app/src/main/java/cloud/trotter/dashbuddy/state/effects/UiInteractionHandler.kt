@@ -143,7 +143,8 @@ class UiInteractionHandler @Inject constructor(
         // walking each candidate's subtree twice (collectLabels is bounded but
         // not free).
         var geometryRejected = 0
-        val labeledCandidates = candidates.mapNotNull { candidate ->
+        val verifiedIndices = HashSet<Int>()
+        val labeledCandidates = candidates.withIndex().mapNotNull { (index, candidate) ->
             val labels = collectLabels(candidate.node)
             // #1093: a bounds-derived candidate — exact rect or overlap — needs the bind's own
             // subtree labels among its live ones; that, not geometry, separates the slid receipt
@@ -153,12 +154,28 @@ class UiInteractionHandler @Inject constructor(
                 val identified = if (ref.labelHintHashes.isEmpty()) !candidate.relaxed else ref.agreesWithLabels(labels)
                 if (!identified) { geometryRejected++; return@mapNotNull null }
             }
-            if (expectation.matchesLabels(labels)) candidate to labels else null
+            if (!expectation.matchesLabels(labels)) return@mapNotNull null
+            verifiedIndices.add(index)
+            candidate to labels
         }
         if (labeledCandidates.isEmpty()) {
             Timber.tag("Effects").w(
                 "%d candidate(s) for %s but NONE passed verification (label %s; %d bounds-derived candidate(s) did not carry the bind's labels) — refusing to click",
                 candidates.size, description, expectation.labelPattern, geometryRejected,
+            )
+            return false
+        }
+        // #1093 (review round 3): a VERIFIED bounds-derived candidate nested inside another
+        // VERIFIED one — a clickable wrapper at the captured rect with the row inside it — is
+        // undecidable: the wrapper inherits the row's labels, and whichever overlaps more is not
+        // evidence of which one is the control. Abort to manual rather than guess. An UNVERIFIED
+        // descendant says nothing about its parent (a stray clickable child that carries only
+        // one of the labels must not evict the row it sits in).
+        val nested = labeledCandidates.firstOrNull { (c, _) -> c.ancestors.any { it in verifiedIndices } }
+        if (nested != null) {
+            Timber.tag("Effects").w(
+                "Nested verified candidates for %s (a bounds-derived control inside another that also carries the bind's labels) — aborting to manual (#1093)",
+                description,
             )
             return false
         }
@@ -243,6 +260,8 @@ class UiInteractionHandler @Inject constructor(
         val inActiveWindow: Boolean,
         val boundsDerived: Boolean = false,
         val relaxed: Boolean = false,
+        /** Indices (into the candidate list) of bounds-derived candidates this one sits INSIDE. */
+        val ancestors: List<Int> = emptyList(),
     )
 
     /**
@@ -281,10 +300,13 @@ class UiInteractionHandler @Inject constructor(
         val degenerate = b.right <= b.left || b.bottom <= b.top
         if (candidates.isEmpty() && !degenerate) {
             for (root in roots) {
-                val found = mutableListOf<Pair<AccessibilityNodeInfo, Boolean>>()
-                findNodeByBounds(root, ref.boundsInScreen, ref.classNameHint, found)
+                val found = mutableListOf<BoundsHit>()
+                findNodeByBounds(root, ref.boundsInScreen, ref.classNameHint, found, ArrayList())
                 val inActive = activeRoot != null && root == activeRoot
-                for ((node, relaxed) in found) candidates.add(Candidate(node, inActive, boundsDerived = true, relaxed = relaxed))
+                val base = candidates.size
+                for (hit in found) candidates.add(
+                    Candidate(hit.node, inActive, boundsDerived = true, relaxed = hit.relaxed, ancestors = hit.ancestors.map { it + base }),
+                )
             }
         }
         return candidates
@@ -316,42 +338,48 @@ class UiInteractionHandler @Inject constructor(
      * Walk the accessibility tree looking for a node at the given bounds,
      * optionally matching className. Used when the node has no ID or text.
      */
+    /** A bounds-walk hit: [ancestors] are the indices (into the SAME `out` list) of hits this one is inside. */
+    private data class BoundsHit(val node: AccessibilityNodeInfo, val relaxed: Boolean, val ancestors: List<Int>)
+
     /**
-     * Strategy 3 (#1093 shape). Returns true when this subtree yielded any candidate.
-     *  - an EXACT class+rect match that is CLICKABLE is a candidate and owns its subtree;
+     * Strategy 3 (#1093 shape — review rounds 2 and 3). Every hit is bounds-derived and must still
+     * carry the bind's label hints; the walk itself decides NOTHING about identity:
+     *  - an EXACT class+rect match that is CLICKABLE is a hit, and the walk STILL descends — a
+     *    clickable wrapper at the captured rect with the real row inside it must expose both, so
+     *    the verification stage can see the nesting and abort (pruning here handed the tap to
+     *    the wrapper);
      *  - an exact match that is NOT clickable is skipped and descended — `clickNodeStrict` climbs
-     *    from its target to the nearest clickable ANCESTOR, so ranking a non-clickable wrapper
-     *    above its clickable child would tap something outside the row;
+     *    from its target to the nearest clickable ANCESTOR, so ranking a shell above its clickable
+     *    child would tap something outside the row;
      *  - a clickable same-class node overlapping the rect by >= [RELAXED_BOUNDS_IOU] is a RELAXED
-     *    candidate, descended into, and SUPERSEDED (dropped) when its own subtree yields a
-     *    candidate — a clickable wrapper inherits its child's labels and can out-overlap it after
-     *    a slide, so the innermost identified control wins, never the shell around it.
-     * Every candidate here is bounds-derived and must still carry the bind's label hints.
+     *    hit, descended into. Nothing is dropped here: a descendant hit that later FAILS
+     *    verification must not evict the row it sits in, and one that PASSES makes the pair
+     *    undecidable — both are the verification stage's call, which is why each hit records the
+     *    hits it is nested inside.
      */
     private fun findNodeByBounds(
         node: AccessibilityNodeInfo,
         targetBounds: BoundingBox,
         className: String?,
-        out: MutableList<Pair<AccessibilityNodeInfo, Boolean>>,
-    ): Boolean {
+        out: MutableList<BoundsHit>,
+        path: ArrayList<Int>,
+    ) {
         val liveBounds = Rect()
         node.getBoundsInScreen(liveBounds)
         val live = liveBounds.toBoundingBox()
         val classOk = className == null || node.className?.toString() == className
-        if (classOk && live == targetBounds && node.isClickable) {
-            out.add(node to false)
-            return true // an exact clickable match owns its subtree
+        val hit = classOk && node.isClickable && (
+            live == targetBounds || ClickCandidateRanker.boundsIoU(live, targetBounds) >= RELAXED_BOUNDS_IOU
+        )
+        if (hit) {
+            out.add(BoundsHit(node, relaxed = live != targetBounds, ancestors = path.toList()))
+            path.add(out.size - 1)
         }
-        val relaxed = classOk && node.isClickable && live != targetBounds &&
-            ClickCandidateRanker.boundsIoU(live, targetBounds) >= RELAXED_BOUNDS_IOU
-        val myIndex = if (relaxed) { out.add(node to true); out.size - 1 } else -1
-        var below = false
         for (i in 0 until node.childCount) {
             val child = node.getChild(i) ?: continue
-            if (findNodeByBounds(child, targetBounds, className, out)) below = true
+            findNodeByBounds(child, targetBounds, className, out, path)
         }
-        if (relaxed && below) out.removeAt(myIndex) // superseded by an identified descendant
-        return relaxed || below
+        if (hit) path.removeAt(path.size - 1)
     }
 }
 

@@ -72,7 +72,11 @@ class ActuationBindingResolutionTest {
      * OR a clickable node overlapping the ref by at least [UiInteractionHandler.RELAXED_BOUNDS_IOU]
      * — the only strategy that can re-find an id-less, text-less container.
      */
-    private data class Cand(val node: UiNode, val boundsDerived: Boolean = false, val relaxed: Boolean = false)
+    private data class Cand(
+        val node: UiNode, val boundsDerived: Boolean = false, val relaxed: Boolean = false,
+        /** Indices (into the returned list) of bounds-derived candidates this one is nested inside. */
+        val ancestors: List<Int> = emptyList(),
+    )
 
     private fun findCandidates(tree: UiNode, ref: NodeRef): List<Cand> {
         ref.viewIdSuffix?.takeIf { it.isNotEmpty() }?.let { id ->
@@ -86,21 +90,21 @@ class ActuationBindingResolutionTest {
         val b = ref.boundsInScreen
         if (b.right <= b.left || b.bottom <= b.top) return emptyList() // degenerate rect: walk skipped
         val out = mutableListOf<Cand>()
-        // Production-faithful walk (`findNodeByBounds`, #1093): an EXACT class+rect CLICKABLE match
-        // is added and owns its subtree; an exact non-clickable match is skipped and descended; a
-        // relaxed (clickable, same-class, IoU >= threshold) match is added, descended into, and
-        // DROPPED when its subtree yields a candidate. The pruning is part of the contract under test.
-        fun walk(node: UiNode): Boolean {
+        // Production-faithful walk (`findNodeByBounds`, #1093 rounds 2–3): a CLICKABLE same-class node
+        // at the exact rect OR overlapping it by >= the threshold is a hit; the walk ALWAYS descends
+        // (a wrapper at the captured rect must expose the row inside it) and drops nothing — each hit
+        // records the hits it is nested inside, and verification decides.
+        val path = ArrayList<Int>()
+        fun walk(node: UiNode) {
             val classOk = ref.classNameHint == null || node.className == ref.classNameHint
             val live = node.boundsInScreen
-            if (classOk && live == ref.boundsInScreen && node.isClickable) { out += Cand(node, boundsDerived = true); return true }
-            val relaxed = classOk && node.isClickable && live != ref.boundsInScreen &&
-                ClickCandidateRanker.boundsIoU(live, ref.boundsInScreen) >= UiInteractionHandler.RELAXED_BOUNDS_IOU
-            val myIndex = if (relaxed) { out += Cand(node, boundsDerived = true, relaxed = true); out.size - 1 } else -1
-            var below = false
-            for (c in node.children) if (walk(c)) below = true
-            if (relaxed && below) out.removeAt(myIndex)
-            return relaxed || below
+            val hit = classOk && node.isClickable && (
+                live == ref.boundsInScreen ||
+                    ClickCandidateRanker.boundsIoU(live, ref.boundsInScreen) >= UiInteractionHandler.RELAXED_BOUNDS_IOU
+                )
+            if (hit) { out += Cand(node, boundsDerived = true, relaxed = live != ref.boundsInScreen, ancestors = path.toList()); path.add(out.size - 1) }
+            node.children.forEach(::walk)
+            if (hit) path.removeAt(path.size - 1)
         }
         walk(tree)
         return out
@@ -112,15 +116,20 @@ class ActuationBindingResolutionTest {
      */
     private fun resolve(tree: UiNode, ref: NodeRef, expectation: TargetExpectation): Resolution {
         val candidates = findCandidates(tree, ref)
-        val verified = candidates.filter { c ->
+        val verifiedIdx = candidates.withIndex().filter { (_, c) ->
             val labels = collectLabels(c.node)
             // #1093: a bounds-derived candidate must carry the bind's own subtree labels (a
             // hint-less ref admits an exact match only) — the handler's gate, mirrored.
             val identified = !c.boundsDerived ||
                 (if (ref.labelHintHashes.isEmpty()) !c.relaxed else ref.agreesWithLabels(labels))
             identified && expectation.matchesLabels(labels)
-        }.map { it.node }
+        }.map { it.index }.toSet()
+        val verified = verifiedIdx.sorted().map { candidates[it].node }
         if (verified.isEmpty()) return Resolution(0, ClickCandidateRanker.Tier.UNRESOLVED, null, decisive = false)
+        // Nested VERIFIED candidates are undecidable → the handler aborts to manual (round 3).
+        if (verifiedIdx.any { i -> candidates[i].ancestors.any { it in verifiedIdx } }) {
+            return Resolution(verified.size, ClickCandidateRanker.Tier.UNRESOLVED, null, decisive = false)
+        }
 
         val facts = verified.map { node ->
             ClickCandidateRanker.CandidateFacts(
@@ -450,12 +459,13 @@ class ActuationBindingResolutionTest {
     }
 
     /**
-     * Round-2 finding 1b: a CLICKABLE wrapper around the row inherits the row's labels and, after a
-     * 40 px slide, out-overlaps it (0.56 vs 0.52). The wrapper is superseded by the identified
-     * control inside it — the row wins, decisively.
+     * Round-2 finding 1b / round-3 finding 1: a CLICKABLE wrapper around the row inherits the row's
+     * labels and, after a 40 px slide, out-overlaps it (0.56 vs 0.52). Both verify, and nothing says
+     * which is the control — the pair is undecidable and the tap ABORTS to manual (a max-overlap
+     * pick would have chosen the wrapper; supersession would have guessed the row).
      */
     @Test
-    fun `a clickable wrapper that out-overlaps the slid row is superseded by the row inside it`() {
+    fun `a clickable wrapper that out-overlaps the slid row makes the pair undecidable — abort`() {
         val (tree, ref) = settledReceipt()
         val row = rowOf(tree)
         val b = row.boundsInScreen
@@ -468,7 +478,53 @@ class ActuationBindingResolutionTest {
         val synthetic = node(bounds = BoundingBox(0, 0, 1080, 2400), children = listOf(wrapper)).restoreParents()
 
         val cands = findCandidates(synthetic, ref)
-        assertEquals("the wrapper is dropped, only the row remains", listOf(movedRow), cands.map { it.node })
+        assertEquals("both are hits, the row nested in the wrapper", listOf(wrapper, movedRow), cands.map { it.node })
+        assertEquals(listOf(0), cands[1].ancestors)
+        val r = resolve(synthetic, ref, RuleAction.EXPAND_EARNINGS.verification)
+        assertEquals(2, r.verifiedCount)
+        assertFalse("nested verified candidates abort", r.decisive)
+    }
+
+    /**
+     * Round-3 finding 1: a clickable wrapper at EXACTLY the captured rect with the row inside it. The
+     * old walk pruned at the exact match and tapped the wrapper; now both are exposed, both verify,
+     * and the tap aborts.
+     */
+    @Test
+    fun `an exact clickable wrapper around the row is not tapped — nested verified candidates abort`() {
+        val (tree, ref) = settledReceipt()
+        val row = rowOf(tree)
+        val b = row.boundsInScreen
+        val innerRow = node(clickable = true, bounds = b.copy(top = b.top + 10), children = listOf(
+            node(text = "This offer", cls = "android.widget.TextView", bounds = b),
+            node(desc = "Expand", bounds = b),
+        ))
+        val wrapper = node(clickable = true, bounds = b, children = listOf(innerRow))
+        val synthetic = node(bounds = BoundingBox(0, 0, 1080, 2400), children = listOf(wrapper)).restoreParents()
+
+        assertEquals(listOf(wrapper, innerRow), findCandidates(synthetic, ref).map { it.node })
+        assertFalse(resolve(synthetic, ref, RuleAction.EXPAND_EARNINGS.verification).decisive)
+    }
+
+    /**
+     * Round-3 finding 2: a stray clickable child that carries only ONE of the labels overlaps the
+     * slid row. It fails verification and must NOT evict the row it sits in — the row wins.
+     */
+    @Test
+    fun `an unverified clickable descendant does not evict the row it sits in`() {
+        val (tree, ref) = settledReceipt()
+        val row = rowOf(tree)
+        val b = row.boundsInScreen
+        val strayChild = node(clickable = true, bounds = b.copy(top = b.top + 2, bottom = b.bottom + 2), children = listOf(
+            node(desc = "Expand", bounds = b),
+        ))
+        val movedRow = node(clickable = true, bounds = b.copy(top = b.top + 1, bottom = b.bottom + 1), children = listOf(
+            node(text = "This offer", cls = "android.widget.TextView", bounds = b),
+            strayChild,
+        ))
+        val synthetic = node(bounds = BoundingBox(0, 0, 1080, 2400), children = listOf(movedRow)).restoreParents()
+
+        assertEquals(listOf(movedRow, strayChild), findCandidates(synthetic, ref).map { it.node })
         val r = resolve(synthetic, ref, RuleAction.EXPAND_EARNINGS.verification)
         assertTrue(r.decisive)
         assertTrue(r.resolved === movedRow)

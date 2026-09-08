@@ -259,12 +259,17 @@ pre-#1093 ref admits an exact clickable match only. Without this a row captured 
 mid-animation, or a control sitting at the exact captured rect, would take a label-free tap. (2) A
 zero-area ref rect skips the walk (no evidence → manual). (3) `ClickCandidateRanker` requires a
 UNIQUE best overlap — a wrapper and its child at the same IoU are a tie, and a tie aborts (#734).
-(4) The walk skips an exact NON-clickable match and descends (the strict click climbs to the nearest
-clickable ANCESTOR, so ranking a shell above its clickable child would tap outside the row), and a
-relaxed candidate whose own subtree yields a candidate is SUPERSEDED by it (a clickable wrapper
-inherits its child's labels and can out-overlap it after a slide). (5) The `bindShortfall` census is
-keyed structurally by (rule, bind) — a dotted string merged `(a.b, c)` with `(a, b.c)` — and rendered
-`rule#bind`. The sha256 helper moved to `:domain` (`domain.util.sha256OrNull`) so `NodeRef` can hash
+(4) The walk decides NOTHING about identity: every clickable same-class node at the rect or
+overlapping it is a hit, an exact NON-clickable match is skipped and descended (the strict click
+climbs to the nearest clickable ANCESTOR, so ranking a shell above its clickable child would tap
+outside the row), the walk ALWAYS descends (pruning at an exact clickable wrapper handed the tap to
+the wrapper), and each hit records the hits it is nested inside; verification then rules — an
+UNVERIFIED descendant says nothing about its parent (a stray child with one label must not evict the
+row), and two VERIFIED candidates nested in each other (a clickable wrapper inheriting the row's
+labels) are undecidable and ABORT to manual (round 4; a max-overlap pick chose the wrapper,
+supersession guessed the row). (5) The `bindShortfall` census is keyed structurally by (rule, bind) —
+a dotted string merged `(a.b, c)` with `(a, b.c)` — and rendered `rule#bind` with `#`/`%` escaped in
+each component so the render cannot merge two pairs either. The sha256 helper moved to `:domain` (`domain.util.sha256OrNull`) so `NodeRef` can hash
 without a second digest site; `:core:pipeline`'s `sha256OrNull` delegates to it. The
 rule's id-less arm requires the chevron's `Expand` contentDescription too, since `find` visits
 ancestors first and an id-less clickable ancestor containing `This offer` (the 07-17 frames) would

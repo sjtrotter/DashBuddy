@@ -237,6 +237,17 @@ class PipelineStatsTest {
         }
     }
 
+    /** Round-3 finding 3: the RENDER must not merge two pairs either — components are escaped. */
+    @Test
+    fun `the bind summary renders two pairs that would collide as a joined string separately`() {
+        val stats = PipelineStats()
+        repeat(7) { stats.onParseShortfall(ParseShortfall("doordash.screen.receipt#a", unresolvedOptionalBindings = listOf("b"))) }
+        repeat(2) { stats.onParseShortfall(ParseShortfall("doordash.screen.receipt", unresolvedOptionalBindings = listOf("a#b"))) }
+        val suffix = stats.summary().substringAfter("bindShortfall{").substringBefore("}")
+        assertTrue(suffix, suffix.contains("doordash.screen.receipt%23a#b=7"))
+        assertTrue(suffix, suffix.contains("doordash.screen.receipt#a%23b=2"))
+    }
+
     @Test
     fun `a shortfall carrying both halves feeds both censuses`() {
         val stats = PipelineStats()
