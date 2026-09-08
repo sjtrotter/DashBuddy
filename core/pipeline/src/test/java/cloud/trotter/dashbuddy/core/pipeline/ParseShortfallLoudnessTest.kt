@@ -100,7 +100,7 @@ class ParseShortfallLoudnessTest {
         "require": { "allTextContains": "Dash summary" },
         "bind": { "expandButton": { "find": { "hasIdExact": "expandable_view" }, "optional": true } },
         "parse": { "fields": {
-            "totalPay": { "find": { "textContains": "Total" }, "read": "text" }
+            "totalPay": { "find": { "hasTextContaining": "Total" }, "read": "text" }
         } }
     }"""
 
@@ -120,7 +120,7 @@ class ParseShortfallLoudnessTest {
 
     @Test
     fun `an optional bind that resolves reports nothing`() {
-        val rule = deadOptionalBindRule.replace(""""hasIdExact": "expandable_view"""", """"textContains": "Dash summary"""")
+        val rule = deadOptionalBindRule.replace(""""hasIdExact": "expandable_view"""", """"hasTextContaining": "Dash summary"""")
         assertTrue(shortfallsFor(rule).isEmpty())
     }
 
