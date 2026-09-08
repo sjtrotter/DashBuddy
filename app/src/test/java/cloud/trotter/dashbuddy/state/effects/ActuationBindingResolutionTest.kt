@@ -265,6 +265,7 @@ class ActuationBindingResolutionTest {
     fun `expand earnings binds the id-less 'This offer' row on the 8_93_7+ receipt and re-finds it by bounds`() {
         val action = RuleAction.EXPAND_EARNINGS
         var idLessFrames = 0
+        var decisiveFrames = 0
         for ((filename, node, _) in TestResourceLoader.loadSnapshots("snapshots/delivery_summary_collapsed")) {
             val ref = matchTargets(node)[action.targetBindName] ?: continue
             if (!ref.viewIdSuffix.isNullOrEmpty()) continue
@@ -282,6 +283,19 @@ class ActuationBindingResolutionTest {
             val diag = findCandidates(node, ref).joinToString(" | ") {
                 "${it.className?.substringAfterLast('.')} ${it.boundsInScreen} click=${it.isClickable} id=${it.viewIdResourceName}"
             }
+            val b = ref.boundsInScreen
+            val degenerate = b.right <= b.left || b.bottom <= b.top
+            if (degenerate) {
+                // A mid-inflation frame whose pay row is a zero-area rect (the 07-17 corpus frame:
+                // the row sits at y=4500 with zero height) carries no bounds evidence, so a tie
+                // between the row and its same-rect wrapper is UNRESOLVED and the handler aborts
+                // to manual — the same per-frame availability cost the id-arm test above accepts.
+                // What it must never do is decisively pick the WRONG node.
+                if (r.decisive) assertFalse("$filename: a decisive pick on a degenerate rect must not be the stats section",
+                    subtreeHasText(r.resolved!!, "Total online time"))
+                continue
+            }
+            decisiveFrames++
             assertTrue(
                 "$filename: the bounds walk must resolve decisively (got tier ${r.tier}, ${r.verifiedCount} verified; " +
                     "ref=${ref.classNameHint} ${ref.boundsInScreen} text=${ref.text}; candidates: [$diag])",
@@ -292,5 +306,6 @@ class ActuationBindingResolutionTest {
             assertFalse(subtreeHasText(r.resolved, "Total online time"))
         }
         assertTrue("expected the two 09-07 field frames (at least) to bind through the id-less arm, got $idLessFrames", idLessFrames >= 2)
+        assertTrue("expected the two 09-07 field frames (at least) to resolve decisively by bounds, got $decisiveFrames", decisiveFrames >= 2)
     }
 }

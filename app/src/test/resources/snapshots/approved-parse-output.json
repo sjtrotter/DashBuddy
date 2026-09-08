@@ -1060,6 +1060,38 @@
             "totalPay": 16.7
         }
     },
+    "delivery_summary_collapsed/2026-09-07_08-20-05-311__doordash__accessibility.window__delivery_summary_collapsed__0ec166.json": {
+        "ruleId": "doordash.screen.delivery_summary_collapsed",
+        "intent": "delivery_summary_collapsed",
+        "shape": "post_task",
+        "fields": {
+            "appPay": null,
+            "customerTips": null,
+            "expandButtonId": null,
+            "isExpanded": false,
+            "offersAccepted": null,
+            "offersTotal": null,
+            "parsedPay": null,
+            "sessionEarnings": null,
+            "totalPay": 40.57
+        }
+    },
+    "delivery_summary_collapsed/2026-09-07_08-20-05-366__doordash__accessibility.window__delivery_summary_collapsed__8c8c83.json": {
+        "ruleId": "doordash.screen.delivery_summary_collapsed",
+        "intent": "delivery_summary_collapsed",
+        "shape": "post_task",
+        "fields": {
+            "appPay": null,
+            "customerTips": null,
+            "expandButtonId": null,
+            "isExpanded": false,
+            "offersAccepted": null,
+            "offersTotal": null,
+            "parsedPay": null,
+            "sessionEarnings": 40.57,
+            "totalPay": 40.57
+        }
+    },
     "delivery_summary_collapsed/20260128_163015_182_DELIVERY_SUMMARY_COLLAPSED.json": {
         "ruleId": "doordash.screen.delivery_summary_collapsed",
         "intent": "delivery_summary_collapsed",
@@ -1362,6 +1394,22 @@
             "parsedPay": "ParsedPay(appPayComponents=[ParsedPayItem(type=Platform pay, amount=9.7)], customerTips=[ParsedPayItem(type=, amount=7.0)])",
             "sessionEarnings": 16.7,
             "totalPay": 16.7
+        }
+    },
+    "delivery_summary_expanded/2026-09-07_08-20-08-176__doordash__accessibility.window__delivery_summary_expanded__825231.json": {
+        "ruleId": "doordash.screen.delivery_summary_expanded",
+        "intent": "delivery_summary_expanded",
+        "shape": "post_task",
+        "fields": {
+            "appPay": null,
+            "customerTips": 26.37,
+            "expandButtonId": null,
+            "isExpanded": true,
+            "offersAccepted": null,
+            "offersTotal": null,
+            "parsedPay": "ParsedPay(appPayComponents=[ParsedPayItem(type=Platform pay, amount=14.2)], customerTips=[ParsedPayItem(type=, amount=26.37)])",
+            "sessionEarnings": 40.57,
+            "totalPay": 40.57
         }
     },
     "delivery_summary_expanded/20260128_163017_537_DELIVERY_SUMMARY_EXPANDED.json": {
