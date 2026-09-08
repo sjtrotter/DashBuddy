@@ -142,19 +142,23 @@ class UiInteractionHandler @Inject constructor(
         // the ranker below wants them too (for WARN diagnostics), so this avoids
         // walking each candidate's subtree twice (collectLabels is bounded but
         // not free).
-        var relaxedRejected = 0
+        var geometryRejected = 0
         val labeledCandidates = candidates.mapNotNull { candidate ->
             val labels = collectLabels(candidate.node)
-            // #1093: a relaxed (overlap-only) candidate needs TEXT agreement with what the rule
-            // bound — the only evidence that separates the slid receipt row from a different
-            // control that now sits where the row was captured.
-            if (candidate.relaxed && !ref.agreesWithLabels(labels)) { relaxedRejected++; return@mapNotNull null }
+            // #1093: a bounds-derived candidate — exact rect or overlap — needs the bind's own
+            // subtree labels among its live ones; that, not geometry, separates the slid receipt
+            // row from whatever control now sits where the row was captured. A hint-less ref
+            // (pre-#1093 snapshot) keeps the legacy exact-only behaviour.
+            if (candidate.boundsDerived) {
+                val identified = if (ref.labelHintHashes.isEmpty()) !candidate.relaxed else ref.agreesWithLabels(labels)
+                if (!identified) { geometryRejected++; return@mapNotNull null }
+            }
             if (expectation.matchesLabels(labels)) candidate to labels else null
         }
         if (labeledCandidates.isEmpty()) {
             Timber.tag("Effects").w(
-                "%d candidate(s) for %s but NONE passed label verification (%s; %d relaxed candidate(s) disagreed with the bind's labels) — refusing to click",
-                candidates.size, description, expectation.labelPattern, relaxedRejected,
+                "%d candidate(s) for %s but NONE passed verification (label %s; %d bounds-derived candidate(s) did not carry the bind's labels) — refusing to click",
+                candidates.size, description, expectation.labelPattern, geometryRejected,
             )
             return false
         }
@@ -228,11 +232,16 @@ class UiInteractionHandler @Inject constructor(
      * window's root — the flag the active-window scoping in [performVerifiedClick]
      * (#788) reads.
      */
-    /** [relaxed]: found by the bounds walk on OVERLAP rather than an exact rect (#1093) — must
-     *  additionally agree with the ref's [NodeRef.labelHints] to survive verification. */
+    /**
+     * [boundsDerived]: found by the bounds walk (strategy 3), exact rect or not — geometry is not
+     * identity, so such a candidate must carry EVERY one of the ref's [NodeRef.labelHintHashes]
+     * among its live labels to survive verification (#1093). [relaxed]: the overlap-only flavour
+     * of that walk; a ref with NO hints (a pre-#1093 snapshot) admits an exact match only.
+     */
     private data class Candidate(
         val node: AccessibilityNodeInfo,
         val inActiveWindow: Boolean,
+        val boundsDerived: Boolean = false,
         val relaxed: Boolean = false,
     )
 
@@ -275,7 +284,7 @@ class UiInteractionHandler @Inject constructor(
                 val found = mutableListOf<Pair<AccessibilityNodeInfo, Boolean>>()
                 findNodeByBounds(root, ref.boundsInScreen, ref.classNameHint, found)
                 val inActive = activeRoot != null && root == activeRoot
-                for ((node, relaxed) in found) candidates.add(Candidate(node, inActive, relaxed))
+                for ((node, relaxed) in found) candidates.add(Candidate(node, inActive, boundsDerived = true, relaxed = relaxed))
             }
         }
         return candidates
@@ -307,35 +316,42 @@ class UiInteractionHandler @Inject constructor(
      * Walk the accessibility tree looking for a node at the given bounds,
      * optionally matching className. Used when the node has no ID or text.
      */
+    /**
+     * Strategy 3 (#1093 shape). Returns true when this subtree yielded any candidate.
+     *  - an EXACT class+rect match that is CLICKABLE is a candidate and owns its subtree;
+     *  - an exact match that is NOT clickable is skipped and descended — `clickNodeStrict` climbs
+     *    from its target to the nearest clickable ANCESTOR, so ranking a non-clickable wrapper
+     *    above its clickable child would tap something outside the row;
+     *  - a clickable same-class node overlapping the rect by >= [RELAXED_BOUNDS_IOU] is a RELAXED
+     *    candidate, descended into, and SUPERSEDED (dropped) when its own subtree yields a
+     *    candidate — a clickable wrapper inherits its child's labels and can out-overlap it after
+     *    a slide, so the innermost identified control wins, never the shell around it.
+     * Every candidate here is bounds-derived and must still carry the bind's label hints.
+     */
     private fun findNodeByBounds(
         node: AccessibilityNodeInfo,
         targetBounds: BoundingBox,
         className: String?,
         out: MutableList<Pair<AccessibilityNodeInfo, Boolean>>,
-    ) {
+    ): Boolean {
         val liveBounds = Rect()
         node.getBoundsInScreen(liveBounds)
         val live = liveBounds.toBoundingBox()
         val classOk = className == null || node.className?.toString() == className
-        if (classOk && live == targetBounds) {
+        if (classOk && live == targetBounds && node.isClickable) {
             out.add(node to false)
-            return // an exact match owns its subtree
+            return true // an exact clickable match owns its subtree
         }
-        // #1093: an id-less, text-less container (DoorDash 8.93.7+ renders the receipt's expand
-        // row that way) is re-findable ONLY here, and its ref was captured while the sheet may
-        // still have been sliding while the tap lands after the settle delay — so a CLICKABLE
-        // node of the right class that mostly overlaps the ref is a candidate too. Descent
-        // continues past it (a clickable wrapper must not hide the tighter child); the ranker's
-        // max-overlap pick + the #734 tie-abort remain the fail-closed disambiguation.
-        if (classOk && node.isClickable &&
+        val relaxed = classOk && node.isClickable && live != targetBounds &&
             ClickCandidateRanker.boundsIoU(live, targetBounds) >= RELAXED_BOUNDS_IOU
-        ) {
-            out.add(node to true)
-        }
+        val myIndex = if (relaxed) { out.add(node to true); out.size - 1 } else -1
+        var below = false
         for (i in 0 until node.childCount) {
             val child = node.getChild(i) ?: continue
-            findNodeByBounds(child, targetBounds, className, out)
+            if (findNodeByBounds(child, targetBounds, className, out)) below = true
         }
+        if (relaxed && below) out.removeAt(myIndex) // superseded by an identified descendant
+        return relaxed || below
     }
 }
 

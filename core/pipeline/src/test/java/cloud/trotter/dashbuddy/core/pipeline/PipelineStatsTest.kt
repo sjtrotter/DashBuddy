@@ -216,8 +216,25 @@ class PipelineStatsTest {
         assertEquals(2L, stats.bindShortfallCount(rule, "expandButton"))
         assertEquals(0L, stats.bindShortfallCount(rule, "acceptButton"))
         val summary = stats.summary()
-        assertTrue(summary, summary.contains("bindShortfall{doordash.screen.delivery_summary_collapsed.expandButton=2}"))
+        assertTrue(summary, summary.contains("bindShortfall{doordash.screen.delivery_summary_collapsed#expandButton=2}"))
         assertFalse("no parse trigger fired, so the parse census stays silent", summary.contains("parseShortfall{"))
+    }
+
+    /** Review finding: a dotted string key merged `(a.b, c)` with `(a, b.c)`; the key is structural now. */
+    @Test
+    fun `distinct rule-and-bind pairs that would collide as a dotted string are counted and WARNed apart`() {
+        val recorder = Recorder()
+        Timber.plant(recorder)
+        try {
+            val stats = PipelineStats()
+            stats.onParseShortfall(ParseShortfall("doordash.screen.receipt", unresolvedOptionalBindings = listOf("a.b")))
+            stats.onParseShortfall(ParseShortfall("doordash.screen.receipt.a", unresolvedOptionalBindings = listOf("b")))
+            assertEquals(1L, stats.bindShortfallCount("doordash.screen.receipt", "a.b"))
+            assertEquals(1L, stats.bindShortfallCount("doordash.screen.receipt.a", "b"))
+            assertEquals(2, recorder.messages.count { it.contains("optional bind") })
+        } finally {
+            Timber.uproot(recorder)
+        }
     }
 
     @Test

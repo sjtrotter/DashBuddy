@@ -72,30 +72,35 @@ class ActuationBindingResolutionTest {
      * OR a clickable node overlapping the ref by at least [UiInteractionHandler.RELAXED_BOUNDS_IOU]
      * — the only strategy that can re-find an id-less, text-less container.
      */
-    private data class Cand(val node: UiNode, val relaxed: Boolean)
+    private data class Cand(val node: UiNode, val boundsDerived: Boolean = false, val relaxed: Boolean = false)
 
     private fun findCandidates(tree: UiNode, ref: NodeRef): List<Cand> {
         ref.viewIdSuffix?.takeIf { it.isNotEmpty() }?.let { id ->
             val byId = tree.findNodes { it.viewIdResourceName == id }
-            if (byId.isNotEmpty()) return byId.map { Cand(it, relaxed = false) }
+            if (byId.isNotEmpty()) return byId.map { Cand(it) }
         }
         ref.text?.takeIf { it.isNotEmpty() }?.let { txt ->
             val byText = tree.findNodes { (it.text?.contains(txt, ignoreCase = true) == true) }
-            if (byText.isNotEmpty()) return byText.map { Cand(it, relaxed = false) }
+            if (byText.isNotEmpty()) return byText.map { Cand(it) }
         }
         val b = ref.boundsInScreen
         if (b.right <= b.left || b.bottom <= b.top) return emptyList() // degenerate rect: walk skipped
         val out = mutableListOf<Cand>()
-        // Production-faithful walk (`findNodeByBounds`): an EXACT class+bounds match is added and
-        // its subtree is NOT descended; a relaxed (clickable, same-class, IoU >= threshold) match
-        // is added and the walk continues into it. The pruning is part of the contract under test.
-        fun walk(node: UiNode) {
+        // Production-faithful walk (`findNodeByBounds`, #1093): an EXACT class+rect CLICKABLE match
+        // is added and owns its subtree; an exact non-clickable match is skipped and descended; a
+        // relaxed (clickable, same-class, IoU >= threshold) match is added, descended into, and
+        // DROPPED when its subtree yields a candidate. The pruning is part of the contract under test.
+        fun walk(node: UiNode): Boolean {
             val classOk = ref.classNameHint == null || node.className == ref.classNameHint
-            if (classOk && node.boundsInScreen == ref.boundsInScreen) { out += Cand(node, relaxed = false); return }
-            if (classOk && node.isClickable &&
-                ClickCandidateRanker.boundsIoU(node.boundsInScreen, ref.boundsInScreen) >= UiInteractionHandler.RELAXED_BOUNDS_IOU
-            ) out += Cand(node, relaxed = true)
-            node.children.forEach(::walk)
+            val live = node.boundsInScreen
+            if (classOk && live == ref.boundsInScreen && node.isClickable) { out += Cand(node, boundsDerived = true); return true }
+            val relaxed = classOk && node.isClickable && live != ref.boundsInScreen &&
+                ClickCandidateRanker.boundsIoU(live, ref.boundsInScreen) >= UiInteractionHandler.RELAXED_BOUNDS_IOU
+            val myIndex = if (relaxed) { out += Cand(node, boundsDerived = true, relaxed = true); out.size - 1 } else -1
+            var below = false
+            for (c in node.children) if (walk(c)) below = true
+            if (relaxed && below) out.removeAt(myIndex)
+            return relaxed || below
         }
         walk(tree)
         return out
@@ -109,8 +114,11 @@ class ActuationBindingResolutionTest {
         val candidates = findCandidates(tree, ref)
         val verified = candidates.filter { c ->
             val labels = collectLabels(c.node)
-            // #1093: an overlap-only candidate must agree with the bind's own subtree labels.
-            (!c.relaxed || ref.agreesWithLabels(labels)) && expectation.matchesLabels(labels)
+            // #1093: a bounds-derived candidate must carry the bind's own subtree labels (a
+            // hint-less ref admits an exact match only) — the handler's gate, mirrored.
+            val identified = !c.boundsDerived ||
+                (if (ref.labelHintHashes.isEmpty()) !c.relaxed else ref.agreesWithLabels(labels))
+            identified && expectation.matchesLabels(labels)
         }.map { it.node }
         if (verified.isEmpty()) return Resolution(0, ClickCandidateRanker.Tier.UNRESOLVED, null, decisive = false)
 
@@ -288,6 +296,7 @@ class ActuationBindingResolutionTest {
         val action = RuleAction.EXPAND_EARNINGS
         var idLessFrames = 0
         var decisiveFrames = 0
+        val idLessFiles = mutableListOf<String>()
         for ((filename, node, _) in TestResourceLoader.loadSnapshots("snapshots/delivery_summary_collapsed")) {
             val ref = matchTargets(node)[action.targetBindName] ?: continue
             if (!ref.viewIdSuffix.isNullOrEmpty()) continue
@@ -305,8 +314,9 @@ class ActuationBindingResolutionTest {
             val diag = findCandidates(node, ref).joinToString(" | ") {
                 "${it.node.className?.substringAfterLast('.')} ${it.node.boundsInScreen} click=${it.node.isClickable} relaxed=${it.relaxed}"
             }
-            assertTrue("$filename: the ref must carry the row's subtree labels as hints, got ${ref.labelHints}",
-                ref.labelHints.any { NodeRef.labelKey(it) == "this offer" })
+            assertEquals("$filename: the ref carries the row's letter-bearing subtree labels as HASHES (no amount, no plaintext)",
+                listOf(NodeRef.hintHash("This offer"), NodeRef.hintHash("Expand")), ref.labelHintHashes)
+            idLessFiles += filename
             val b = ref.boundsInScreen
             val degenerate = b.right <= b.left || b.bottom <= b.top
             if (degenerate) {
@@ -329,8 +339,17 @@ class ActuationBindingResolutionTest {
                 expected.boundsInScreen, r.resolved!!.boundsInScreen)
             assertFalse(subtreeHasText(r.resolved, "Total online time"))
         }
-        assertTrue("expected the two 09-07 field frames (at least) to bind through the id-less arm, got $idLessFrames", idLessFrames >= 2)
-        assertTrue("expected the two 09-07 field frames (at least) to resolve decisively by bounds, got $decisiveFrames", decisiveFrames >= 2)
+        // Pinned BY NAME (review round 2): a `>= 2` floor would let one of the three regress silently.
+        assertEquals(
+            listOf(
+                "2026-08-23_17-35-17-361__doordash__accessibility.window__delivery_summary_collapsed__c65d43.json",
+                "2026-09-07_08-20-05-311__doordash__accessibility.window__delivery_summary_collapsed__0ec166.json",
+                "2026-09-07_08-20-05-366__doordash__accessibility.window__delivery_summary_collapsed__8c8c83.json",
+            ),
+            idLessFiles.sorted(),
+        )
+        assertEquals("all three id-less frames resolve decisively by bounds", 3, decisiveFrames)
+        assertEquals(3, idLessFrames)
     }
 
     /**
@@ -358,5 +377,128 @@ class ActuationBindingResolutionTest {
             assertEquals("$filename: nothing may survive verification", 0, r.verifiedCount)
         }
         assertTrue("expected at least one frame to exercise the shifted-ref sequence, got $checked", checked >= 1)
+    }
+
+    // =========================================================================
+    // #1093 round 2/3 — identity, not geometry
+    // =========================================================================
+
+    /** The settled 09-07 tree + its bound ref, the fixture the synthetic sequences below start from. */
+    private fun settledReceipt(): Pair<UiNode, NodeRef> {
+        val (_, node, _) = TestResourceLoader.loadSnapshots("snapshots/delivery_summary_collapsed")
+            .single { it.first.contains("8c8c83") }
+        val ref = matchTargets(node)[RuleAction.EXPAND_EARNINGS.targetBindName]!!
+        return node to ref
+    }
+
+    private fun rowOf(tree: UiNode): UiNode = tree.findNodes {
+        it.isClickable && it.viewIdResourceName.isNullOrBlank() && subtreeHasText(it, "This offer")
+    }.single()
+
+    private fun node(
+        text: String? = null, desc: String? = null, cls: String = "android.view.View",
+        clickable: Boolean = false, bounds: BoundingBox, children: List<UiNode> = emptyList(),
+    ) = UiNode(text = text, contentDescription = desc, className = cls, isClickable = clickable,
+        boundsInScreen = bounds, children = children.toMutableList())
+
+    /**
+     * Round-2 finding 2: the row captured mid-inflation at EXACTLY the rect where "Continue
+     * dashing" sits once settled. An exact geometric match is not identity — it must fail the
+     * hint check and abort, never click the button.
+     */
+    @Test
+    fun `an exact-rect match on a different control is rejected — geometry is not identity`() {
+        val (tree, ref) = settledReceipt()
+        val button = tree.findNodes { it.isClickable && subtreeHasText(it, "Continue dashing") }
+            .minByOrNull { (it.boundsInScreen.right - it.boundsInScreen.left).toLong() * (it.boundsInScreen.bottom - it.boundsInScreen.top) }!!
+        val shifted = ref.copy(boundsInScreen = button.boundsInScreen)
+
+        val cands = findCandidates(tree, shifted)
+        assertTrue("the button is an exact bounds-derived candidate", cands.any { it.node === button && it.boundsDerived && !it.relaxed })
+        val r = resolve(tree, shifted, RuleAction.EXPAND_EARNINGS.verification)
+        assertFalse(r.decisive)
+        assertEquals(0, r.verifiedCount)
+    }
+
+    /**
+     * Round-2 finding 1a: ONE shared label is not identity. A clickable control one pixel off the
+     * row that carries the same AMOUNT but not the row's words must be rejected — amounts are
+     * never hints, and every hint must be present.
+     */
+    @Test
+    fun `a stranger sharing only the amount is rejected — numeric labels are not hints and all hints are required`() {
+        val (tree, ref) = settledReceipt()
+        val row = rowOf(tree)
+        val b = row.boundsInScreen
+        val stranger = node(clickable = true, bounds = b.copy(top = b.top + 1, bottom = b.bottom + 1), children = listOf(
+            node(text = "This dash so far", cls = "android.widget.TextView", bounds = b),
+            node(text = "$40.57", cls = "android.widget.TextView", bounds = b),
+        ))
+        val synthetic = node(bounds = BoundingBox(0, 0, 1080, 2400), children = listOf(stranger)).restoreParents()
+
+        val r = resolve(synthetic, ref, RuleAction.EXPAND_EARNINGS.verification)
+        assertEquals("the stranger is found by overlap but must not survive", 1, findCandidates(synthetic, ref).size)
+        assertFalse(r.decisive)
+        assertEquals(0, r.verifiedCount)
+
+        // And the partial case: the words but only one of them.
+        val halfRow = node(clickable = true, bounds = b.copy(top = b.top + 1, bottom = b.bottom + 1), children = listOf(
+            node(text = "This offer", cls = "android.widget.TextView", bounds = b),
+        ))
+        val synthetic2 = node(bounds = BoundingBox(0, 0, 1080, 2400), children = listOf(halfRow)).restoreParents()
+        assertEquals(0, resolve(synthetic2, ref, RuleAction.EXPAND_EARNINGS.verification).verifiedCount)
+    }
+
+    /**
+     * Round-2 finding 1b: a CLICKABLE wrapper around the row inherits the row's labels and, after a
+     * 40 px slide, out-overlaps it (0.56 vs 0.52). The wrapper is superseded by the identified
+     * control inside it — the row wins, decisively.
+     */
+    @Test
+    fun `a clickable wrapper that out-overlaps the slid row is superseded by the row inside it`() {
+        val (tree, ref) = settledReceipt()
+        val row = rowOf(tree)
+        val b = row.boundsInScreen
+        val movedRow = node(clickable = true, bounds = b.copy(top = b.top + 40, bottom = b.bottom + 40), children = listOf(
+            node(text = "This offer", cls = "android.widget.TextView", bounds = b),
+            node(desc = "Expand", bounds = b),
+            node(text = "$40.57", cls = "android.widget.TextView", bounds = b),
+        ))
+        val wrapper = node(clickable = true, bounds = b.copy(top = b.top + 30, bottom = b.bottom + 30), children = listOf(movedRow))
+        val synthetic = node(bounds = BoundingBox(0, 0, 1080, 2400), children = listOf(wrapper)).restoreParents()
+
+        val cands = findCandidates(synthetic, ref)
+        assertEquals("the wrapper is dropped, only the row remains", listOf(movedRow), cands.map { it.node })
+        val r = resolve(synthetic, ref, RuleAction.EXPAND_EARNINGS.verification)
+        assertTrue(r.decisive)
+        assertTrue(r.resolved === movedRow)
+    }
+
+    /** An exact-rect match that is NOT clickable is a wrapper, not a target: skipped, descended. */
+    @Test
+    fun `an exact non-clickable match is skipped in favour of the clickable control inside it`() {
+        val (tree, ref) = settledReceipt()
+        val row = rowOf(tree)
+        val b = row.boundsInScreen
+        val inner = node(clickable = true, bounds = b.copy(top = b.top + 2, bottom = b.bottom + 2), children = listOf(
+            node(text = "This offer", cls = "android.widget.TextView", bounds = b),
+            node(desc = "Expand", bounds = b),
+        ))
+        val shell = node(clickable = false, bounds = b, children = listOf(inner))
+        val synthetic = node(bounds = BoundingBox(0, 0, 1080, 2400), children = listOf(shell)).restoreParents()
+
+        assertEquals(listOf(inner), findCandidates(synthetic, ref).map { it.node })
+        assertTrue(resolve(synthetic, ref, RuleAction.EXPAND_EARNINGS.verification).resolved === inner)
+    }
+
+    /** A pre-#1093 ref (no hints) keeps the legacy behaviour: an exact clickable match, nothing looser. */
+    @Test
+    fun `a hint-less ref admits an exact match only`() {
+        val (tree, ref) = settledReceipt()
+        val legacy = ref.copy(labelHintHashes = emptyList())
+        assertTrue(resolve(tree, legacy, RuleAction.EXPAND_EARNINGS.verification).decisive)
+        val b = legacy.boundsInScreen
+        val slid = legacy.copy(boundsInScreen = b.copy(top = b.top + 40, bottom = b.bottom + 40))
+        assertEquals(0, resolve(tree, slid, RuleAction.EXPAND_EARNINGS.verification).verifiedCount)
     }
 }

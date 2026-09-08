@@ -309,7 +309,9 @@ the 8.95.6 `earnings_pill` carousel on `waiting_for_offer` — is listed in the 
 `EXPAND_EARNINGS` tap was simply never emitted, for weeks, with no trace; it rides the same
 `ParseShortfall` (`unresolvedOptionalBindings`) into its OWN census (`bindShortfall{<rule>.<bind>=n}`, one
 WARN per rule+bind per process) and never moves the parse count. The #1063 first-frame offer card
-(Decline not yet rendered) is an expected, bounded tripper. Notices share
+(Decline not yet rendered) is an expected, bounded tripper. The tap side of #1093: a bounds-derived
+click candidate must carry the bind's hashed subtree labels (`NodeRef.labelHintHashes`, all of them,
+letter-bearing only) — geometry is never identity for a label-free action; details in the reference. Notices share
 `AppNoticeChannel` (ids 102 locale / 103 recognition / 105 TTS; 104 is `weekly_plan_channel`).
 
 ### 2. JSON Rule Engine (`core/pipeline/.../rules/` + generated `assets/rules/`)

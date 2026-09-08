@@ -248,14 +248,24 @@ id-less arm (a clickable `hasNoId` row whose subtree says `This offer`), and
 `UiInteractionHandler.findNodeByBounds` (the only strategy that can re-find an id-less, text-less
 container) accepts a clickable same-class node overlapping the ref by ≥ `RELAXED_BOUNDS_IOU` (0.5,
 sharing `ClickCandidateRanker.boundsIoU`) beside the exact match, descending past it so a wrapper
-cannot hide the tighter child. Three guards came out of the adversarial round: (1) an overlap-only
-("relaxed") candidate must ALSO share a label with the bind's own subtree — `NodeRef.labelHints`
-(the bound node's first 6 `allText` entries, ≤ 40 chars, stamped by `Ruleset.buildNodeRef`;
-`NodeRef.labelKey` is the one normalization) checked at fire time against the candidate's
-`collectLabels` — because the ref is captured while the sheet may still be sliding, and a row
-captured 400 px low would otherwise hand a label-free tap to "Continue dashing"; (2) a zero-area ref
-rect skips the walk entirely (no evidence → manual); (3) `ClickCandidateRanker` requires a UNIQUE
-best overlap — a wrapper and its child at the same IoU are a tie, and a tie aborts (#734). The
+cannot hide the tighter child. **Geometry is not identity** — the guards that came out of three
+adversarial rounds: (1) EVERY bounds-derived candidate (exact rect or overlap) must carry the bind's
+own subtree labels — `NodeRef.labelHintHashes` (sha256s of the bound node's letter-bearing
+`allText` entries, ≤ 6, normalized by the one `NodeRef.hintKeyOrNull`; amounts and counts are never
+hints because they repeat across a surface; HASHES because the ref rides `DeferredAction` into the
+journal and snapshots and a subtree label can be anything the platform renders) and ALL of them must
+appear among the candidate's live `collectLabels` (one shared label is not identity); a hint-less
+pre-#1093 ref admits an exact clickable match only. Without this a row captured 400 px low
+mid-animation, or a control sitting at the exact captured rect, would take a label-free tap. (2) A
+zero-area ref rect skips the walk (no evidence → manual). (3) `ClickCandidateRanker` requires a
+UNIQUE best overlap — a wrapper and its child at the same IoU are a tie, and a tie aborts (#734).
+(4) The walk skips an exact NON-clickable match and descends (the strict click climbs to the nearest
+clickable ANCESTOR, so ranking a shell above its clickable child would tap outside the row), and a
+relaxed candidate whose own subtree yields a candidate is SUPERSEDED by it (a clickable wrapper
+inherits its child's labels and can out-overlap it after a slide). (5) The `bindShortfall` census is
+keyed structurally by (rule, bind) — a dotted string merged `(a.b, c)` with `(a, b.c)` — and rendered
+`rule#bind`. The sha256 helper moved to `:domain` (`domain.util.sha256OrNull`) so `NodeRef` can hash
+without a second digest site; `:core:pipeline`'s `sha256OrNull` delegates to it. The
 rule's id-less arm requires the chevron's `Expand` contentDescription too, since `find` visits
 ancestors first and an id-less clickable ancestor containing `This offer` (the 07-17 frames) would
 otherwise be bound ahead of the still-present id-bearing pay node (`ActuationBindingResolutionTest`
