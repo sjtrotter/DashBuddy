@@ -267,7 +267,9 @@ the wrapper), and each hit records the hits it is nested inside; verification th
 UNVERIFIED descendant says nothing about its parent (a stray child with one label must not evict the
 row), and two VERIFIED candidates nested in each other (a clickable wrapper inheriting the row's
 labels) are undecidable and ABORT to manual (round 4; a max-overlap pick chose the wrapper,
-supersession guessed the row). (5) The `bindShortfall` census is keyed structurally by (rule, bind) —
+supersession guessed the row) — checked AFTER the #788 active-window scoping, among the retained
+candidates only, so a nested pair in a background window cannot abort an unambiguous foreground tap
+(round 5; `UiInteractionHandlerTieTest` runs the two-root sequence through the real handler). (5) The `bindShortfall` census is keyed structurally by (rule, bind) —
 a dotted string merged `(a.b, c)` with `(a, b.c)` — and rendered `rule#bind` with `#`/`%` escaped in
 each component so the render cannot merge two pairs either. The sha256 helper moved to `:domain` (`domain.util.sha256OrNull`) so `NodeRef` can hash
 without a second digest site; `:core:pipeline`'s `sha256OrNull` delegates to it. The

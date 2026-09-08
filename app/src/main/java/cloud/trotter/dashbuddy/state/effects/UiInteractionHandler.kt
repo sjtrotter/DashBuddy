@@ -143,8 +143,7 @@ class UiInteractionHandler @Inject constructor(
         // walking each candidate's subtree twice (collectLabels is bounded but
         // not free).
         var geometryRejected = 0
-        val verifiedIndices = HashSet<Int>()
-        val labeledCandidates = candidates.withIndex().mapNotNull { (index, candidate) ->
+        val labeledCandidates = candidates.mapNotNull { candidate ->
             val labels = collectLabels(candidate.node)
             // #1093: a bounds-derived candidate — exact rect or overlap — needs the bind's own
             // subtree labels among its live ones; that, not geometry, separates the slid receipt
@@ -155,7 +154,6 @@ class UiInteractionHandler @Inject constructor(
                 if (!identified) { geometryRejected++; return@mapNotNull null }
             }
             if (!expectation.matchesLabels(labels)) return@mapNotNull null
-            verifiedIndices.add(index)
             candidate to labels
         }
         if (labeledCandidates.isEmpty()) {
@@ -165,21 +163,6 @@ class UiInteractionHandler @Inject constructor(
             )
             return false
         }
-        // #1093 (review round 3): a VERIFIED bounds-derived candidate nested inside another
-        // VERIFIED one — a clickable wrapper at the captured rect with the row inside it — is
-        // undecidable: the wrapper inherits the row's labels, and whichever overlaps more is not
-        // evidence of which one is the control. Abort to manual rather than guess. An UNVERIFIED
-        // descendant says nothing about its parent (a stray clickable child that carries only
-        // one of the labels must not evict the row it sits in).
-        val nested = labeledCandidates.firstOrNull { (c, _) -> c.ancestors.any { it in verifiedIndices } }
-        if (nested != null) {
-            Timber.tag("Effects").w(
-                "Nested verified candidates for %s (a bounds-derived control inside another that also carries the bind's labels) — aborting to manual (#1093)",
-                description,
-            )
-            return false
-        }
-
         // #788: scope to the active window. A verified twin in a lower window (the
         // offer popup's "Decline" behind the confirm sheet) would otherwise tie
         // with the real target and abort the tap. If the active window contributed
@@ -199,6 +182,24 @@ class UiInteractionHandler @Inject constructor(
             activeWindowCandidates
         } else {
             labeledCandidates
+        }
+
+        // #1093 (review rounds 3–4): a VERIFIED bounds-derived candidate nested inside another
+        // VERIFIED one — a clickable wrapper at the captured rect with the row inside it — is
+        // undecidable: the wrapper inherits the row's labels, and whichever overlaps more is not
+        // evidence of which one is the control. Abort to manual rather than guess. An UNVERIFIED
+        // descendant says nothing about its parent (a stray clickable child that carries only
+        // one of the labels must not evict the row it sits in). Checked AFTER the #788 window
+        // scoping, among the RETAINED candidates only: a nested pair in a background window must
+        // not abort an unambiguous tap in the active one (round 4).
+        val retainedIndices = scopedCandidates.map { candidates.indexOf(it.first) }.toHashSet()
+        val nested = scopedCandidates.firstOrNull { (c, _) -> c.ancestors.any { it in retainedIndices } }
+        if (nested != null) {
+            Timber.tag("Effects").w(
+                "Nested verified candidates for %s (a bounds-derived control inside another that also carries the bind's labels) — aborting to manual (#1093)",
+                description,
+            )
+            return false
         }
 
         // Disambiguate (#600): rank the label-verified survivors by evidence —
