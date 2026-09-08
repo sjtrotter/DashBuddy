@@ -79,6 +79,38 @@ class ClickCandidateRankerTest {
         assertEquals(ClickCandidateRanker.Tier.BOUNDS_OVERLAP, result.tier)
     }
 
+    /** #1093: a SHARED best overlap is a tie, not a decision — the handler aborts to manual. */
+    @Test
+    fun `an equal positive best overlap between two candidates is UNRESOLVED, never a first-index pick`() {
+        val ref = NodeRef(
+            viewIdSuffix = null,
+            text = null,
+            classNameHint = "android.view.View",
+            boundsInScreen = BoundingBox(0, 0, 100, 100),
+            pathFingerprint = "fp",
+        )
+        // A clickable wrapper (0,0,100,150) and its child (0,20,100,120) both overlap the ref at 2/3.
+        val wrapper = facts(text = null, bounds = BoundingBox(0, 0, 100, 150))
+        val child = facts(text = null, bounds = BoundingBox(0, 20, 100, 120))
+
+        val result = ClickCandidateRanker.rank(ref, listOf(wrapper, child))
+
+        assertEquals(ClickCandidateRanker.Tier.UNRESOLVED, result.tier)
+    }
+
+    @Test
+    fun `a strictly larger overlap still wins decisively beside a tied pair below it`() {
+        val ref = NodeRef(null, null, "android.view.View", BoundingBox(0, 0, 100, 100), "fp")
+        val exact = facts(text = null, bounds = BoundingBox(0, 0, 100, 100))
+        val a = facts(text = null, bounds = BoundingBox(0, 0, 100, 150))
+        val b = facts(text = null, bounds = BoundingBox(0, 20, 100, 120))
+
+        val result = ClickCandidateRanker.rank(ref, listOf(a, exact, b))
+
+        assertEquals(1, result.index)
+        assertEquals(ClickCandidateRanker.Tier.BOUNDS_OVERLAP, result.tier)
+    }
+
     @Test
     fun `degenerate tie with no overlap and no text match flags UNRESOLVED and picks first`() {
         val ref = NodeRef(

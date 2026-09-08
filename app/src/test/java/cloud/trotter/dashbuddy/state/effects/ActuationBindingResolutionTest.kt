@@ -72,24 +72,33 @@ class ActuationBindingResolutionTest {
      * OR a clickable node overlapping the ref by at least [UiInteractionHandler.RELAXED_BOUNDS_IOU]
      * — the only strategy that can re-find an id-less, text-less container.
      */
-    private fun findCandidates(tree: UiNode, ref: NodeRef): List<UiNode> {
+    private data class Cand(val node: UiNode, val relaxed: Boolean)
+
+    private fun findCandidates(tree: UiNode, ref: NodeRef): List<Cand> {
         ref.viewIdSuffix?.takeIf { it.isNotEmpty() }?.let { id ->
             val byId = tree.findNodes { it.viewIdResourceName == id }
-            if (byId.isNotEmpty()) return byId
+            if (byId.isNotEmpty()) return byId.map { Cand(it, relaxed = false) }
         }
         ref.text?.takeIf { it.isNotEmpty() }?.let { txt ->
             val byText = tree.findNodes { (it.text?.contains(txt, ignoreCase = true) == true) }
-            if (byText.isNotEmpty()) return byText
+            if (byText.isNotEmpty()) return byText.map { Cand(it, relaxed = false) }
         }
-        return tree.findNodes { node ->
+        val b = ref.boundsInScreen
+        if (b.right <= b.left || b.bottom <= b.top) return emptyList() // degenerate rect: walk skipped
+        val out = mutableListOf<Cand>()
+        // Production-faithful walk (`findNodeByBounds`): an EXACT class+bounds match is added and
+        // its subtree is NOT descended; a relaxed (clickable, same-class, IoU >= threshold) match
+        // is added and the walk continues into it. The pruning is part of the contract under test.
+        fun walk(node: UiNode) {
             val classOk = ref.classNameHint == null || node.className == ref.classNameHint
-            classOk && (
-                node.boundsInScreen == ref.boundsInScreen ||
-                    (node.isClickable &&
-                        ClickCandidateRanker.boundsIoU(node.boundsInScreen, ref.boundsInScreen) >=
-                        UiInteractionHandler.RELAXED_BOUNDS_IOU)
-                )
+            if (classOk && node.boundsInScreen == ref.boundsInScreen) { out += Cand(node, relaxed = false); return }
+            if (classOk && node.isClickable &&
+                ClickCandidateRanker.boundsIoU(node.boundsInScreen, ref.boundsInScreen) >= UiInteractionHandler.RELAXED_BOUNDS_IOU
+            ) out += Cand(node, relaxed = true)
+            node.children.forEach(::walk)
         }
+        walk(tree)
+        return out
     }
 
     /**
@@ -98,7 +107,11 @@ class ActuationBindingResolutionTest {
      */
     private fun resolve(tree: UiNode, ref: NodeRef, expectation: TargetExpectation): Resolution {
         val candidates = findCandidates(tree, ref)
-        val verified = candidates.filter { expectation.matchesLabels(collectLabels(it)) }
+        val verified = candidates.filter { c ->
+            val labels = collectLabels(c.node)
+            // #1093: an overlap-only candidate must agree with the bind's own subtree labels.
+            (!c.relaxed || ref.agreesWithLabels(labels)) && expectation.matchesLabels(labels)
+        }.map { it.node }
         if (verified.isEmpty()) return Resolution(0, ClickCandidateRanker.Tier.UNRESOLVED, null, decisive = false)
 
         val facts = verified.map { node ->
@@ -209,7 +222,16 @@ class ActuationBindingResolutionTest {
         var decisiveFrames = 0
         for ((filename, node, _) in TestResourceLoader.loadSnapshots("snapshots/delivery_summary_collapsed")) {
             val ref = matchTargets(node)[action.targetBindName] ?: continue // optional bind
-            if (ref.viewIdSuffix.isNullOrEmpty()) continue // the 8.93.7+ id-less arm — its own test below
+            if (ref.viewIdSuffix.isNullOrEmpty()) {
+                // #1093: the id-less arm may bind ONLY where no id-bearing pay expandable exists —
+                // `find` visits ancestors first, so a looser second arm would STEAL the target
+                // from its id-bearing descendant on the 07-17 frames (review finding 3).
+                val stolenFrom = node.findNodes {
+                    it.viewIdResourceName?.endsWith("expandable_view") == true && !subtreeHasText(it, "Total online time")
+                }
+                assertTrue("$filename: the id-less arm bound ahead of an id-bearing pay node ${stolenFrom.map { it.boundsInScreen }}", stolenFrom.isEmpty())
+                continue // covered by the id-less test below
+            }
             withTarget++
 
             // The independently-computed expected target: the sole expandable_view whose
@@ -281,8 +303,10 @@ class ActuationBindingResolutionTest {
 
             val r = resolve(node, ref, action.verification)
             val diag = findCandidates(node, ref).joinToString(" | ") {
-                "${it.className?.substringAfterLast('.')} ${it.boundsInScreen} click=${it.isClickable} id=${it.viewIdResourceName}"
+                "${it.node.className?.substringAfterLast('.')} ${it.node.boundsInScreen} click=${it.node.isClickable} relaxed=${it.relaxed}"
             }
+            assertTrue("$filename: the ref must carry the row's subtree labels as hints, got ${ref.labelHints}",
+                ref.labelHints.any { NodeRef.labelKey(it) == "this offer" })
             val b = ref.boundsInScreen
             val degenerate = b.right <= b.left || b.bottom <= b.top
             if (degenerate) {
@@ -307,5 +331,32 @@ class ActuationBindingResolutionTest {
         }
         assertTrue("expected the two 09-07 field frames (at least) to bind through the id-less arm, got $idLessFrames", idLessFrames >= 2)
         assertTrue("expected the two 09-07 field frames (at least) to resolve decisively by bounds, got $decisiveFrames", decisiveFrames >= 2)
+    }
+
+    /**
+     * #1093 review finding 1: the ref is captured while the sheet may still be sliding and the tap
+     * lands after the settle delay. Capture the pay row 400 px LOW (mid-animation) and fire against
+     * the settled tree: the only overlapping clickable View is "Continue dashing" (IoU ≈ 0.77). It is
+     * a relaxed candidate whose labels share nothing with the bind's hints, so it must be REJECTED
+     * and the tap must abort — never a decisive click on a different control.
+     */
+    @Test
+    fun `a relaxed candidate that is a different control is rejected by the bind's label hints`() {
+        val action = RuleAction.EXPAND_EARNINGS
+        var checked = 0
+        for ((filename, node, _) in TestResourceLoader.loadSnapshots("snapshots/delivery_summary_collapsed")) {
+            val ref = matchTargets(node)[action.targetBindName] ?: continue
+            if (!ref.viewIdSuffix.isNullOrEmpty()) continue
+            val b = ref.boundsInScreen
+            if (b.bottom <= b.top) continue
+            val shifted = ref.copy(boundsInScreen = b.copy(top = b.top + 400, bottom = b.bottom + 400))
+            val cands = findCandidates(node, shifted)
+            if (cands.none { it.relaxed && subtreeHasText(it.node, "Continue dashing") }) continue // geometry differs on this frame
+            checked++
+            val r = resolve(node, shifted, action.verification)
+            assertFalse("$filename: a shifted ref must not decisively click a different control", r.decisive)
+            assertEquals("$filename: nothing may survive verification", 0, r.verifiedCount)
+        }
+        assertTrue("expected at least one frame to exercise the shifted-ref sequence, got $checked", checked >= 1)
     }
 }

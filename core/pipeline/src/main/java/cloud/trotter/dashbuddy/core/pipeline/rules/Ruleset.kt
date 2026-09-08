@@ -392,6 +392,11 @@ class Ruleset<TInput>(rules: List<CompiledRule<TInput>>) {
             classNameHint = node.className,
             boundsInScreen = node.boundsInScreen,
             pathFingerprint = pathParts.joinToString("/"),
+            labelHints = node.allText.asSequence()
+                .filter { it.isNotBlank() }
+                .map { it.take(NodeRef.MAX_LABEL_HINT_LENGTH) }
+                .take(NodeRef.MAX_LABEL_HINTS)
+                .toList(),
         )
     }
 }

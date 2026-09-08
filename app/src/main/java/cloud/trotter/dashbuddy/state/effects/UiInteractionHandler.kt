@@ -142,14 +142,19 @@ class UiInteractionHandler @Inject constructor(
         // the ranker below wants them too (for WARN diagnostics), so this avoids
         // walking each candidate's subtree twice (collectLabels is bounded but
         // not free).
+        var relaxedRejected = 0
         val labeledCandidates = candidates.mapNotNull { candidate ->
             val labels = collectLabels(candidate.node)
+            // #1093: a relaxed (overlap-only) candidate needs TEXT agreement with what the rule
+            // bound — the only evidence that separates the slid receipt row from a different
+            // control that now sits where the row was captured.
+            if (candidate.relaxed && !ref.agreesWithLabels(labels)) { relaxedRejected++; return@mapNotNull null }
             if (expectation.matchesLabels(labels)) candidate to labels else null
         }
         if (labeledCandidates.isEmpty()) {
             Timber.tag("Effects").w(
-                "%d candidate(s) for %s but NONE passed label verification (%s) — refusing to click",
-                candidates.size, description, expectation.labelPattern,
+                "%d candidate(s) for %s but NONE passed label verification (%s; %d relaxed candidate(s) disagreed with the bind's labels) — refusing to click",
+                candidates.size, description, expectation.labelPattern, relaxedRejected,
             )
             return false
         }
@@ -223,7 +228,13 @@ class UiInteractionHandler @Inject constructor(
      * window's root — the flag the active-window scoping in [performVerifiedClick]
      * (#788) reads.
      */
-    private data class Candidate(val node: AccessibilityNodeInfo, val inActiveWindow: Boolean)
+    /** [relaxed]: found by the bounds walk on OVERLAP rather than an exact rect (#1093) — must
+     *  additionally agree with the ref's [NodeRef.labelHints] to survive verification. */
+    private data class Candidate(
+        val node: AccessibilityNodeInfo,
+        val inActiveWindow: Boolean,
+        val relaxed: Boolean = false,
+    )
 
     /**
      * Search the scoped roots, strongest strategy first (so a weak bounds
@@ -254,12 +265,17 @@ class UiInteractionHandler @Inject constructor(
         if (candidates.isEmpty() && !targetText.isNullOrEmpty()) {
             for (root in roots) addFrom(root, root.findAccessibilityNodeInfosByText(targetText))
         }
-        // Strategy 3: walk each tree matching by bounds + className
-        if (candidates.isEmpty()) {
+        // Strategy 3: walk each tree matching by bounds + className. A zero-area ref rect (a
+        // row captured mid-inflation at zero height) carries no bounds evidence at all, so the
+        // walk is skipped and the tap fails closed to manual (#1093).
+        val b = ref.boundsInScreen
+        val degenerate = b.right <= b.left || b.bottom <= b.top
+        if (candidates.isEmpty() && !degenerate) {
             for (root in roots) {
-                val found = mutableListOf<AccessibilityNodeInfo>()
+                val found = mutableListOf<Pair<AccessibilityNodeInfo, Boolean>>()
                 findNodeByBounds(root, ref.boundsInScreen, ref.classNameHint, found)
-                addFrom(root, found)
+                val inActive = activeRoot != null && root == activeRoot
+                for ((node, relaxed) in found) candidates.add(Candidate(node, inActive, relaxed))
             }
         }
         return candidates
@@ -295,14 +311,14 @@ class UiInteractionHandler @Inject constructor(
         node: AccessibilityNodeInfo,
         targetBounds: BoundingBox,
         className: String?,
-        out: MutableList<AccessibilityNodeInfo>,
+        out: MutableList<Pair<AccessibilityNodeInfo, Boolean>>,
     ) {
         val liveBounds = Rect()
         node.getBoundsInScreen(liveBounds)
         val live = liveBounds.toBoundingBox()
         val classOk = className == null || node.className?.toString() == className
         if (classOk && live == targetBounds) {
-            out.add(node)
+            out.add(node to false)
             return // an exact match owns its subtree
         }
         // #1093: an id-less, text-less container (DoorDash 8.93.7+ renders the receipt's expand
@@ -314,7 +330,7 @@ class UiInteractionHandler @Inject constructor(
         if (classOk && node.isClickable &&
             ClickCandidateRanker.boundsIoU(live, targetBounds) >= RELAXED_BOUNDS_IOU
         ) {
-            out.add(node)
+            out.add(node to true)
         }
         for (i in 0 until node.childCount) {
             val child = node.getChild(i) ?: continue

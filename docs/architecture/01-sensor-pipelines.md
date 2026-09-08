@@ -248,7 +248,18 @@ id-less arm (a clickable `hasNoId` row whose subtree says `This offer`), and
 `UiInteractionHandler.findNodeByBounds` (the only strategy that can re-find an id-less, text-less
 container) accepts a clickable same-class node overlapping the ref by ≥ `RELAXED_BOUNDS_IOU` (0.5,
 sharing `ClickCandidateRanker.boundsIoU`) beside the exact match, descending past it so a wrapper
-cannot hide the tighter child; the ranker's max-overlap pick and the #734 tie-abort stay the
-fail-closed disambiguation. Re-anchoring changed the bind's content-pinned capability key (#422), so
+cannot hide the tighter child. Three guards came out of the adversarial round: (1) an overlap-only
+("relaxed") candidate must ALSO share a label with the bind's own subtree — `NodeRef.labelHints`
+(the bound node's first 6 `allText` entries, ≤ 40 chars, stamped by `Ruleset.buildNodeRef`;
+`NodeRef.labelKey` is the one normalization) checked at fire time against the candidate's
+`collectLabels` — because the ref is captured while the sheet may still be sliding, and a row
+captured 400 px low would otherwise hand a label-free tap to "Continue dashing"; (2) a zero-area ref
+rect skips the walk entirely (no evidence → manual); (3) `ClickCandidateRanker` requires a UNIQUE
+best overlap — a wrapper and its child at the same IoU are a tie, and a tie aborts (#734). The
+rule's id-less arm requires the chevron's `Expand` contentDescription too, since `find` visits
+ancestors first and an id-less clickable ancestor containing `This offer` (the 07-17 frames) would
+otherwise be bound ahead of the still-present id-bearing pay node (`ActuationBindingResolutionTest`
+pins that the id-less arm never steals an id-bearing target, mirrors the walk's pruning exactly, and
+replays the shifted-ref sequence). Re-anchoring changed the bind's content-pinned capability key (#422), so
 consent is re-asked; the same corpus shows the real
 finds (`delivery_summary_expanded`/`_collapsed`, `waiting_for_offer`, `timeline`).

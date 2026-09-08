@@ -98,11 +98,14 @@ object ClickCandidateRanker {
                     // unbroken tie falls through as unresolved evidence.
                     var bestIndex = -1
                     var bestIoU = 0.0
+                    var bestCount = 0
                     for ((i, c) in tied) {
                         val overlap = boundsIoU(ref.boundsInScreen, c.bounds)
-                        if (overlap > bestIoU) { bestIoU = overlap; bestIndex = i }
+                        if (overlap > bestIoU) { bestIoU = overlap; bestIndex = i; bestCount = 1 }
+                        else if (overlap == bestIoU && overlap > 0.0) bestCount++
                     }
-                    if (bestIoU > 0.0) return Ranked(bestIndex, Tier.EXACT_TEXT)
+                    // #1093: a SHARED best overlap is not a decision (a wrapper and its child can tie).
+                    if (bestIoU > 0.0 && bestCount == 1) return Ranked(bestIndex, Tier.EXACT_TEXT)
                     return Ranked(tied.first().index, Tier.UNRESOLVED)
                 }
             }
@@ -110,14 +113,20 @@ object ClickCandidateRanker {
 
         var bestIndex = 0
         var bestIoU = 0.0
+        var bestCount = 0
         for (i in candidates.indices) {
             val overlap = boundsIoU(ref.boundsInScreen, candidates[i].bounds)
             if (overlap > bestIoU) {
                 bestIoU = overlap
                 bestIndex = i
+                bestCount = 1
+            } else if (overlap == bestIoU && overlap > 0.0) {
+                bestCount++
             }
         }
-        if (bestIoU > 0.0) return Ranked(bestIndex, Tier.BOUNDS_OVERLAP)
+        // #1093: a UNIQUE maximum is required — two candidates at the same positive overlap (a
+        // clickable wrapper and its child straddling the ref) are a tie, and a tie aborts to manual.
+        if (bestIoU > 0.0 && bestCount == 1) return Ranked(bestIndex, Tier.BOUNDS_OVERLAP)
 
         return Ranked(0, Tier.UNRESOLVED)
     }
