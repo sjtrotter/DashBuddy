@@ -98,11 +98,14 @@ object ClickCandidateRanker {
                     // unbroken tie falls through as unresolved evidence.
                     var bestIndex = -1
                     var bestIoU = 0.0
+                    var bestCount = 0
                     for ((i, c) in tied) {
                         val overlap = boundsIoU(ref.boundsInScreen, c.bounds)
-                        if (overlap > bestIoU) { bestIoU = overlap; bestIndex = i }
+                        if (overlap > bestIoU) { bestIoU = overlap; bestIndex = i; bestCount = 1 }
+                        else if (overlap == bestIoU && overlap > 0.0) bestCount++
                     }
-                    if (bestIoU > 0.0) return Ranked(bestIndex, Tier.EXACT_TEXT)
+                    // #1093: a SHARED best overlap is not a decision (a wrapper and its child can tie).
+                    if (bestIoU > 0.0 && bestCount == 1) return Ranked(bestIndex, Tier.EXACT_TEXT)
                     return Ranked(tied.first().index, Tier.UNRESOLVED)
                 }
             }
@@ -110,20 +113,30 @@ object ClickCandidateRanker {
 
         var bestIndex = 0
         var bestIoU = 0.0
+        var bestCount = 0
         for (i in candidates.indices) {
             val overlap = boundsIoU(ref.boundsInScreen, candidates[i].bounds)
             if (overlap > bestIoU) {
                 bestIoU = overlap
                 bestIndex = i
+                bestCount = 1
+            } else if (overlap == bestIoU && overlap > 0.0) {
+                bestCount++
             }
         }
-        if (bestIoU > 0.0) return Ranked(bestIndex, Tier.BOUNDS_OVERLAP)
+        // #1093: a UNIQUE maximum is required — two candidates at the same positive overlap (a
+        // clickable wrapper and its child straddling the ref) are a tie, and a tie aborts to manual.
+        if (bestIoU > 0.0 && bestCount == 1) return Ranked(bestIndex, Tier.BOUNDS_OVERLAP)
 
         return Ranked(0, Tier.UNRESOLVED)
     }
 
-    /** Intersection-over-Union of two [BoundingBox]es; 0.0 when they don't overlap at all. */
-    private fun boundsIoU(a: BoundingBox, b: BoundingBox): Double {
+    /**
+     * Intersection-over-Union of two [BoundingBox]es; 0.0 when they don't overlap at all. The ONE
+     * overlap definition — [UiInteractionHandler]'s bounds-walk candidate search (#1093) uses it
+     * too, so "close enough to be the same control" is decided the same way at both stages.
+     */
+    internal fun boundsIoU(a: BoundingBox, b: BoundingBox): Double {
         val ix1 = maxOf(a.left, b.left)
         val iy1 = maxOf(a.top, b.top)
         val ix2 = minOf(a.right, b.right)

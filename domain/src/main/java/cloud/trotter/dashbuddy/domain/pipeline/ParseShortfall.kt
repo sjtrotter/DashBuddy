@@ -17,6 +17,13 @@ package cloud.trotter.dashbuddy.domain.pipeline
  *    null while other fields still parsed. PARTIAL rot — which is what the 8.93.7 receipt
  *    looked like one release before it became total.
  *
+ * A third trigger joined in #1093, one block over from the parse: [unresolvedOptionalBindings]
+ * — a `bind` target the rule declares `optional` that resolved NO node on a frame the rule
+ * matched. The receipt's `expandButton` anchored on `expandable_view`, 8.93.7 removed the id,
+ * and because the bind was optional the EXPAND_EARNINGS tap was simply never emitted — no
+ * WARN, no count, for weeks. An optional bind that never resolves is indistinguishable from a
+ * healthy one without this. Reported by BIND NAME (ours), never by node content (P7).
+ *
  * Diagnostic ONLY. Nothing reads it to decide anything: the observation carrying it is built
  * exactly as it would be without it, and the state machine never sees it.
  */
@@ -27,7 +34,12 @@ data class ParseShortfall(
     val allNullFieldCount: Int = 0,
     /** Shape-required fields that resolved null; empty when the shape declares none or all resolved. */
     val nullRequiredFields: List<String> = emptyList(),
+    /** Optional `bind` targets that resolved no node on this matched frame (#1093); sorted, by name. */
+    val unresolvedOptionalBindings: List<String> = emptyList(),
 ) {
-    /** True when neither trigger fired — the parse is healthy and nothing should be reported. */
-    val isEmpty: Boolean get() = allNullFieldCount == 0 && nullRequiredFields.isEmpty()
+    /** Either PARSE trigger fired (the #1036 pair) — the census/WARN keyed by rule id. */
+    val hasParseTrigger: Boolean get() = allNullFieldCount > 0 || nullRequiredFields.isNotEmpty()
+
+    /** True when no trigger fired — parse and binds are healthy and nothing should be reported. */
+    val isEmpty: Boolean get() = !hasParseTrigger && unresolvedOptionalBindings.isEmpty()
 }

@@ -92,6 +92,13 @@ class PipelineStats @Inject constructor(
     /** Rule ids already WARNed about this process — the once-per-rule edge gate (#1036). */
     private val parseShortfallWarned = ConcurrentHashMap.newKeySet<String>()
 
+    /** #1093 — optional `bind` targets a matched rule failed to resolve, keyed (ruleId, bind) —
+     *  STRUCTURALLY, since a dotted string would merge `(a.b, c)` with `(a, b.c)`. */
+    private val bindShortfallByKey = ConcurrentHashMap<Pair<String, String>, AtomicLong>()
+
+    /** Keys that already WARNed this process (one WARN per rule+bind, like the parse WARN). */
+    private val bindShortfallWarned = ConcurrentHashMap.newKeySet<Pair<String, String>>()
+
     val droppedSensitiveCount: Long get() = droppedSensitive.get()
     val droppedNoiseCount: Long get() = droppedNoise.get()
     val droppedDisabledPlatformCount: Long get() = droppedDisabledPlatform.get()
@@ -198,6 +205,21 @@ class PipelineStats @Inject constructor(
      * No frame text of any kind, so the shareable INFO+ export is safe by construction.
      */
     fun onParseShortfall(shortfall: ParseShortfall): Long {
+        // #1093 — the bind half rides the same shortfall but is its OWN census + WARN, keyed by
+        // rule AND bind name: it must never move the #1036 parse count (a rule whose parse is
+        // healthy and whose optional bind died is a different rot), and a rule with two optional
+        // binds must say which one. Bind names are ours; no node content (P7).
+        for (bind in shortfall.unresolvedOptionalBindings) {
+            val key = shortfall.ruleId to bind
+            bindShortfallByKey.computeIfAbsent(key) { AtomicLong() }.incrementAndGet()
+            if (bindShortfallWarned.add(key)) {
+                Timber.tag(PARSE_HEALTH_TAG).w(
+                    "Rule %s matched but its optional bind '%s' resolved no node — target anchor rot? (#1093)",
+                    shortfall.ruleId, bind,
+                )
+            }
+        }
+        if (!shortfall.hasParseTrigger) return parseShortfallCount(shortfall.ruleId)
         val count = parseShortfallByRule.computeIfAbsent(shortfall.ruleId) { AtomicLong() }
             .incrementAndGet()
         if (parseShortfallWarned.add(shortfall.ruleId)) {
@@ -212,6 +234,10 @@ class PipelineStats @Inject constructor(
 
     /** This rule's running parse-shortfall count for the process (#1036); 0 if it never tripped. */
     fun parseShortfallCount(ruleId: String): Long = parseShortfallByRule[ruleId]?.get() ?: 0L
+
+    /** This rule+bind's running unresolved-optional-bind count (#1093); 0 if it never tripped. */
+    fun bindShortfallCount(ruleId: String, bind: String): Long =
+        bindShortfallByKey[ruleId to bind]?.get() ?: 0L
 
     /**
      * The human half of the #1036 WARN: which of the two triggers fired, in the vocabulary the
@@ -270,7 +296,8 @@ class PipelineStats @Inject constructor(
             " notifListenerDisconnects=${notifListenerDisconnects.get()}" +
             " restarts=${restarts.get()}" +
             platformAppVersionsSuffix() +
-            parseShortfallSuffix()
+            parseShortfallSuffix() +
+            bindShortfallSuffix()
 
     /**
      * `"app=0.230.0+ab12cd34 "`, or empty when no version was injected (PR #1066).
@@ -311,16 +338,30 @@ class PipelineStats @Inject constructor(
      * [MAX_RENDERED_RULE_ID] chars, with a `+k more` tail so the omission is stated rather than
      * silent. Ties break on the id so the render is deterministic.
      */
-    private fun parseShortfallSuffix(): String {
-        if (parseShortfallByRule.isEmpty()) return ""
-        val entries = parseShortfallByRule.entries
-            .map { it.key to it.value.get() }
+    private fun parseShortfallSuffix(): String = shortfallSuffix("parseShortfall", parseShortfallByRule) { it }
+
+    /** `" bindShortfall{doordash.screen.delivery_summary_collapsed#expandButton=12,…}"` (#1093) — same
+     *  bound, same clamp, same ordering as the parse suffix; rendered `<ruleId>#<bind>` (`#` cannot
+     *  occur in either name, so the render is unambiguous). */
+    private fun bindShortfallSuffix(): String =
+        shortfallSuffix("bindShortfall", bindShortfallByKey) { (rule, bind) -> "${escapeKey(rule)}#${escapeKey(bind)}" }
+
+    /** `#` is the pair separator in the render; a `#` INSIDE a component is escaped so two distinct
+     *  pairs can never read as one (review round 3 — rule ids and bind names are not validated
+     *  against it). */
+    private fun escapeKey(component: String): String = component.replace("%", "%25").replace("#", "%23")
+
+    /** Entries stay keyed by K through sorting and truncation; [render] is display only. */
+    private fun <K> shortfallSuffix(label: String, byKey: Map<K, AtomicLong>, render: (K) -> String): String {
+        if (byKey.isEmpty()) return ""
+        val entries = byKey.entries
+            .map { render(it.key) to it.value.get() }
             .sortedWith(compareByDescending<Pair<String, Long>> { it.second }.thenBy { it.first })
         val shown = entries.take(PARSE_SHORTFALL_RENDER_LIMIT)
         val omitted = entries.size - shown.size
         val body = shown.joinToString(",") { (id, n) -> "${clampRuleId(id)}=$n" }
         val tail = if (omitted > 0) ",+$omitted more" else ""
-        return " parseShortfall{$body$tail}"
+        return " $label{$body$tail}"
     }
 
     /** Keep one pathological rule id from owning the summary line (#1036 review R4). */

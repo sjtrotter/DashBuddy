@@ -201,6 +201,85 @@ class PipelineStatsTest {
 
     private fun allNull(ruleId: String) = ParseShortfall(ruleId, allNullFieldCount = 2)
 
+    // ── #1093: an optional bind that resolved nothing is its OWN census + WARN ──
+
+    @Test
+    fun `an unresolved optional bind counts per rule-and-bind and never moves the parse count`() {
+        val stats = PipelineStats()
+        val rule = "doordash.screen.delivery_summary_collapsed"
+        val bindOnly = ParseShortfall(rule, unresolvedOptionalBindings = listOf("expandButton"))
+
+        assertEquals("a bind-only shortfall returns the (untouched) parse count", 0L, stats.onParseShortfall(bindOnly))
+        stats.onParseShortfall(bindOnly)
+
+        assertEquals(0L, stats.parseShortfallCount(rule))
+        assertEquals(2L, stats.bindShortfallCount(rule, "expandButton"))
+        assertEquals(0L, stats.bindShortfallCount(rule, "acceptButton"))
+        val summary = stats.summary()
+        assertTrue(summary, summary.contains("bindShortfall{doordash.screen.delivery_summary_collapsed#expandButton=2}"))
+        assertFalse("no parse trigger fired, so the parse census stays silent", summary.contains("parseShortfall{"))
+    }
+
+    /** Review finding: a dotted string key merged `(a.b, c)` with `(a, b.c)`; the key is structural now. */
+    @Test
+    fun `distinct rule-and-bind pairs that would collide as a dotted string are counted and WARNed apart`() {
+        val recorder = Recorder()
+        Timber.plant(recorder)
+        try {
+            val stats = PipelineStats()
+            stats.onParseShortfall(ParseShortfall("doordash.screen.receipt", unresolvedOptionalBindings = listOf("a.b")))
+            stats.onParseShortfall(ParseShortfall("doordash.screen.receipt.a", unresolvedOptionalBindings = listOf("b")))
+            assertEquals(1L, stats.bindShortfallCount("doordash.screen.receipt", "a.b"))
+            assertEquals(1L, stats.bindShortfallCount("doordash.screen.receipt.a", "b"))
+            assertEquals(2, recorder.messages.count { it.contains("optional bind") })
+        } finally {
+            Timber.uproot(recorder)
+        }
+    }
+
+    /** Round-3 finding 3: the RENDER must not merge two pairs either — components are escaped. */
+    @Test
+    fun `the bind summary renders two pairs that would collide as a joined string separately`() {
+        val stats = PipelineStats()
+        repeat(7) { stats.onParseShortfall(ParseShortfall("doordash.screen.receipt#a", unresolvedOptionalBindings = listOf("b"))) }
+        repeat(2) { stats.onParseShortfall(ParseShortfall("doordash.screen.receipt", unresolvedOptionalBindings = listOf("a#b"))) }
+        val suffix = stats.summary().substringAfter("bindShortfall{").substringBefore("}")
+        assertTrue(suffix, suffix.contains("doordash.screen.receipt%23a#b=7"))
+        assertTrue(suffix, suffix.contains("doordash.screen.receipt#a%23b=2"))
+    }
+
+    @Test
+    fun `a shortfall carrying both halves feeds both censuses`() {
+        val stats = PipelineStats()
+        val rule = "doordash.screen.offer_popup"
+        stats.onParseShortfall(
+            ParseShortfall(rule, nullRequiredFields = listOf("payAmount"), unresolvedOptionalBindings = listOf("declineButton")),
+        )
+        assertEquals(1L, stats.parseShortfallCount(rule))
+        assertEquals(1L, stats.bindShortfallCount(rule, "declineButton"))
+    }
+
+    @Test
+    fun `the bind WARN is edge-gated per rule-and-bind and names the bind, never a node`() {
+        val recorder = Recorder()
+        Timber.plant(recorder)
+        try {
+            val stats = PipelineStats()
+            val rule = "doordash.screen.delivery_summary_collapsed"
+            repeat(3) { stats.onParseShortfall(ParseShortfall(rule, unresolvedOptionalBindings = listOf("expandButton"))) }
+            stats.onParseShortfall(ParseShortfall(rule, unresolvedOptionalBindings = listOf("expandButton", "shareButton")))
+
+            val warns = recorder.messages.filter { it.contains("optional bind") }
+            assertEquals("one line per rule+bind, not per frame", 2, warns.size)
+            assertTrue(warns[0].contains("bind 'expandButton'"))
+            assertTrue(warns[1].contains("bind 'shareButton'"))
+            assertTrue("no parse-shortfall WARN for a bind-only shortfall", recorder.messages.none { it.contains("parse shortfall") })
+            assertEquals(4L, stats.bindShortfallCount(rule, "expandButton"))
+        } finally {
+            Timber.uproot(recorder)
+        }
+    }
+
     private class Recorder : Timber.Tree() {
         val messages = mutableListOf<String>()
         override fun log(priority: Int, tag: String?, message: String, t: Throwable?) {

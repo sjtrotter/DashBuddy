@@ -210,4 +210,113 @@ class UiInteractionHandlerTieTest {
         verify(a, never()).performAction(eq(AccessibilityNodeInfo.ACTION_CLICK))
         verify(b, never()).performAction(eq(AccessibilityNodeInfo.ACTION_CLICK))
     }
+
+    // =========================================================================
+    // #1093 — bounds-derived candidates (strategy 3), nesting, and window scoping
+    // =========================================================================
+
+    /** A mocked live node with a real subtree: the bounds walk and `collectLabels` both traverse it. */
+    private fun view(
+        cls: String = "android.view.View", clickable: Boolean = false, bounds: Rect,
+        text: String? = null, desc: String? = null, children: List<AccessibilityNodeInfo> = emptyList(),
+    ): AccessibilityNodeInfo {
+        val node = mock<AccessibilityNodeInfo>()
+        whenever(node.className).thenReturn(cls)
+        whenever(node.text).thenReturn(text)
+        whenever(node.contentDescription).thenReturn(desc)
+        whenever(node.isClickable).thenReturn(clickable)
+        whenever(node.childCount).thenReturn(children.size)
+        children.forEachIndexed { i, c -> whenever(node.getChild(eq(i))).thenReturn(c) }
+        whenever(node.parent).thenReturn(null)
+        whenever(node.getBoundsInScreen(any())).thenAnswer { (it.arguments[0] as Rect).set(bounds) }
+        whenever(node.performAction(eq(AccessibilityNodeInfo.ACTION_CLICK))).thenReturn(true)
+        return node
+    }
+
+    /** A window root that finds nothing by id/text (an id-less, text-less ref), so only the bounds walk applies. */
+    private fun windowRoot(vararg children: AccessibilityNodeInfo): AccessibilityNodeInfo {
+        val root = view(cls = "android.widget.FrameLayout", bounds = Rect(0, 0, 1080, 2400), children = children.toList())
+        whenever(root.packageName).thenReturn(pkg)
+        return root
+    }
+
+    private val rowRect = Rect(36, 1774, 1044, 1900)
+
+    /** The 8.93.7+ receipt's expand row: id-less clickable View with 'This offer' + an 'Expand' chevron. */
+    private fun payRow(top: Int = 1774) = view(
+        clickable = true, bounds = Rect(36, top, 1044, top + 126), children = listOf(
+            view(cls = "android.widget.TextView", bounds = Rect(72, top + 40, 241, top + 87), text = "This offer"),
+            view(bounds = Rect(250, top + 45, 286, top + 81), desc = "Expand"),
+        ),
+    )
+
+    private val expandRef = NodeRef(
+        viewIdSuffix = null, text = null, classNameHint = "android.view.View",
+        boundsInScreen = BoundingBox(36, 1774, 1044, 1900), pathFingerprint = "",
+        labelHintHashes = listOfNotNull(NodeRef.hintHash("This offer"), NodeRef.hintHash("Expand")),
+    )
+
+    private suspend fun expand(handler: UiInteractionHandler) = handler.performVerifiedClick(
+        ref = expandRef, expectedPackage = pkg,
+        expectation = RuleAction.EXPAND_EARNINGS.verification, description = "expand earnings",
+    )
+
+    @Test
+    fun `an id-less row is re-found by the bounds walk and clicked`() = runTest {
+        val row = payRow()
+        val active = windowRoot(row)
+        assertTrue(expand(handler(listOf(active), active)))
+        verify(row, times(1)).performAction(eq(AccessibilityNodeInfo.ACTION_CLICK))
+    }
+
+    /** Round-3 finding 1: a clickable wrapper at the captured rect with the row inside — undecidable, abort. */
+    @Test
+    fun `nested verified candidates in the active window abort with no click`() = runTest {
+        val inner = payRow(top = 1784)
+        val wrapper = view(clickable = true, bounds = rowRect, children = listOf(inner))
+        val active = windowRoot(wrapper)
+        assertFalse(expand(handler(listOf(active), active)))
+        verify(wrapper, never()).performAction(eq(AccessibilityNodeInfo.ACTION_CLICK))
+        verify(inner, never()).performAction(eq(AccessibilityNodeInfo.ACTION_CLICK))
+    }
+
+    /**
+     * Round-4 finding: the nested pair sits in a BACKGROUND window while the active window holds the
+     * unambiguous row. The #788 scoping drops the background candidates first, so the nested check
+     * must not see them — the active row is clicked.
+     */
+    @Test
+    fun `a nested pair in a background window does not abort the unambiguous active-window tap`() = runTest {
+        val activeRow = payRow()
+        val active = windowRoot(activeRow)
+        val bgInner = payRow(top = 1784)
+        val bgWrapper = view(clickable = true, bounds = rowRect, children = listOf(bgInner))
+        val background = windowRoot(bgWrapper)
+
+        assertTrue(expand(handler(listOf(active, background), active)))
+        verify(activeRow, times(1)).performAction(eq(AccessibilityNodeInfo.ACTION_CLICK))
+        verify(bgWrapper, never()).performAction(eq(AccessibilityNodeInfo.ACTION_CLICK))
+        verify(bgInner, never()).performAction(eq(AccessibilityNodeInfo.ACTION_CLICK))
+    }
+
+    /** No active-window candidate at all: the background row is kept (#788 fallback) and clicked. */
+    @Test
+    fun `with no active-window candidate the background row is still the target`() = runTest {
+        val active = windowRoot()
+        val bgRow = payRow()
+        val background = windowRoot(bgRow)
+        assertTrue(expand(handler(listOf(active, background), active)))
+        verify(bgRow, times(1)).performAction(eq(AccessibilityNodeInfo.ACTION_CLICK))
+    }
+
+    /** Geometry is not identity: a control at the exact rect without the bind's labels is refused. */
+    @Test
+    fun `an exact-rect stranger without the bind's labels is not clicked`() = runTest {
+        val stranger = view(clickable = true, bounds = rowRect, children = listOf(
+            view(cls = "android.widget.TextView", bounds = rowRect, text = "Continue dashing"),
+        ))
+        val active = windowRoot(stranger)
+        assertFalse(expand(handler(listOf(active), active)))
+        verify(stranger, never()).performAction(eq(AccessibilityNodeInfo.ACTION_CLICK))
+    }
 }

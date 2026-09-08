@@ -235,5 +235,48 @@ benignly (`dash_along_the_way`, `idle_map`, `set_dash_end_time` in the committed
 (09-06/09-07 pulls, DoorDash 8.95.6) also `waiting_for_offer` — its `earnings_pill` is a CAROUSEL that
 alternates the dash total with a `Weekly goal` render, on which `sessionPay` is correctly null — and
 `pickup_shopping` on a pre-render frame), which is
-why the WARN is a once-per-process breadcrumb rather than an alarm; the same corpus shows the real
+why the WARN is a once-per-process breadcrumb rather than an alarm; **#1093 added the bind half**:
+`Ruleset.shortfallOf` also lists every OPTIONAL `bind` target that resolved null on the matched
+branch (`ParseShortfall.unresolvedOptionalBindings`, sorted bind names — a mandatory miss already
+skipped the rule), and `PipelineStats.onParseShortfall` counts those under their own
+`bindShortfall{<ruleId>.<bind>=n}` suffix with one WARN per rule+bind per process, leaving the parse
+count untouched (`ParseShortfall.hasParseTrigger` is the split). The receipt is the receipt: DoorDash
+8.93.7 removed `expandable_view`, `delivery_summary_collapsed`'s optional `expandButton` resolved
+nothing, and `EffectMap.diffExpandAction` — which emits only on a bound target — went silent for
+weeks with no line of any kind (the dev noticed the manual tap). The rule now carries a second,
+id-less arm (a clickable `hasNoId` row whose subtree says `This offer`), and
+`UiInteractionHandler.findNodeByBounds` (the only strategy that can re-find an id-less, text-less
+container) accepts a clickable same-class node overlapping the ref by ≥ `RELAXED_BOUNDS_IOU` (0.5,
+sharing `ClickCandidateRanker.boundsIoU`) beside the exact match, descending past it so a wrapper
+cannot hide the tighter child. **Geometry is not identity** — the guards that came out of three
+adversarial rounds: (1) EVERY bounds-derived candidate (exact rect or overlap) must carry the bind's
+own subtree labels — `NodeRef.labelHintHashes` (sha256s of the bound node's letter-bearing
+`allText` entries, ≤ 6, normalized by the one `NodeRef.hintKeyOrNull`; amounts and counts are never
+hints because they repeat across a surface; HASHES because the ref rides `DeferredAction` into the
+journal and snapshots and a subtree label can be anything the platform renders) and ALL of them must
+appear among the candidate's live `collectLabels` (one shared label is not identity); a hint-less
+pre-#1093 ref admits an exact clickable match only. Without this a row captured 400 px low
+mid-animation, or a control sitting at the exact captured rect, would take a label-free tap. (2) A
+zero-area ref rect skips the walk (no evidence → manual). (3) `ClickCandidateRanker` requires a
+UNIQUE best overlap — a wrapper and its child at the same IoU are a tie, and a tie aborts (#734).
+(4) The walk decides NOTHING about identity: every clickable same-class node at the rect or
+overlapping it is a hit, an exact NON-clickable match is skipped and descended (the strict click
+climbs to the nearest clickable ANCESTOR, so ranking a shell above its clickable child would tap
+outside the row), the walk ALWAYS descends (pruning at an exact clickable wrapper handed the tap to
+the wrapper), and each hit records the hits it is nested inside; verification then rules — an
+UNVERIFIED descendant says nothing about its parent (a stray child with one label must not evict the
+row), and two VERIFIED candidates nested in each other (a clickable wrapper inheriting the row's
+labels) are undecidable and ABORT to manual (round 4; a max-overlap pick chose the wrapper,
+supersession guessed the row) — checked AFTER the #788 active-window scoping, among the retained
+candidates only, so a nested pair in a background window cannot abort an unambiguous foreground tap
+(round 5; `UiInteractionHandlerTieTest` runs the two-root sequence through the real handler). (5) The `bindShortfall` census is keyed structurally by (rule, bind) —
+a dotted string merged `(a.b, c)` with `(a, b.c)` — and rendered `rule#bind` with `#`/`%` escaped in
+each component so the render cannot merge two pairs either. The sha256 helper moved to `:domain` (`domain.util.sha256OrNull`) so `NodeRef` can hash
+without a second digest site; `:core:pipeline`'s `sha256OrNull` delegates to it. The
+rule's id-less arm requires the chevron's `Expand` contentDescription too, since `find` visits
+ancestors first and an id-less clickable ancestor containing `This offer` (the 07-17 frames) would
+otherwise be bound ahead of the still-present id-bearing pay node (`ActuationBindingResolutionTest`
+pins that the id-less arm never steals an id-bearing target, mirrors the walk's pruning exactly, and
+replays the shifted-ref sequence). Re-anchoring changed the bind's content-pinned capability key (#422), so
+consent is re-asked; the same corpus shows the real
 finds (`delivery_summary_expanded`/`_collapsed`, `waiting_for_offer`, `timeline`).
