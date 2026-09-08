@@ -63,6 +63,9 @@ class UiInteractionHandler @Inject constructor(
 ) {
 
     companion object {
+        /** #1093 — a clickable same-class node overlapping the ref this much is a bounds-walk candidate. */
+        internal const val RELAXED_BOUNDS_IOU = 0.5
+
         /** Max subtree depth scanned when collecting a candidate's labels. */
         private const val LABEL_SCAN_DEPTH = 3
 
@@ -296,11 +299,22 @@ class UiInteractionHandler @Inject constructor(
     ) {
         val liveBounds = Rect()
         node.getBoundsInScreen(liveBounds)
-        val matches = liveBounds.toBoundingBox() == targetBounds
-            && (className == null || node.className?.toString() == className)
-        if (matches) {
+        val live = liveBounds.toBoundingBox()
+        val classOk = className == null || node.className?.toString() == className
+        if (classOk && live == targetBounds) {
             out.add(node)
-            return // no need to check children of a match
+            return // an exact match owns its subtree
+        }
+        // #1093: an id-less, text-less container (DoorDash 8.93.7+ renders the receipt's expand
+        // row that way) is re-findable ONLY here, and its ref was captured while the sheet may
+        // still have been sliding while the tap lands after the settle delay — so a CLICKABLE
+        // node of the right class that mostly overlaps the ref is a candidate too. Descent
+        // continues past it (a clickable wrapper must not hide the tighter child); the ranker's
+        // max-overlap pick + the #734 tie-abort remain the fail-closed disambiguation.
+        if (classOk && node.isClickable &&
+            ClickCandidateRanker.boundsIoU(live, targetBounds) >= RELAXED_BOUNDS_IOU
+        ) {
+            out.add(node)
         }
         for (i in 0 until node.childCount) {
             val child = node.getChild(i) ?: continue

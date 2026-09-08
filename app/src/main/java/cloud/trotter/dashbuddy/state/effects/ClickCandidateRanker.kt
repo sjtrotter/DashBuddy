@@ -122,8 +122,12 @@ object ClickCandidateRanker {
         return Ranked(0, Tier.UNRESOLVED)
     }
 
-    /** Intersection-over-Union of two [BoundingBox]es; 0.0 when they don't overlap at all. */
-    private fun boundsIoU(a: BoundingBox, b: BoundingBox): Double {
+    /**
+     * Intersection-over-Union of two [BoundingBox]es; 0.0 when they don't overlap at all. The ONE
+     * overlap definition — [UiInteractionHandler]'s bounds-walk candidate search (#1093) uses it
+     * too, so "close enough to be the same control" is decided the same way at both stages.
+     */
+    internal fun boundsIoU(a: BoundingBox, b: BoundingBox): Double {
         val ix1 = maxOf(a.left, b.left)
         val iy1 = maxOf(a.top, b.top)
         val ix2 = minOf(a.right, b.right)

@@ -2100,16 +2100,45 @@
         // selects exactly the pay node. Only the pay expandable_view is clickable in the
         // field; clickNodeStrict taps it directly. A residual fire-time tie (shared id) now
         // aborts to manual (#425 fail-closed).
+        // #1093: DoorDash 8.93.7+ ships the receipt with NO view ids (the #1029 class), so the
+        // id arm resolves nothing and — the bind being optional — the EXPAND_EARNINGS tap was
+        // silently never emitted for weeks (dev field report 2026-09-08). Second arm: the
+        // id-LESS clickable row whose subtree carries 'This offer' (TextView + an 'Expand'
+        // chevron + the total), still negated on the stats row. `hasNoId` keeps the two arms
+        // disjoint so the old fixtures bind exactly as before through the id arm. At fire time
+        // the handler re-finds an id-less, text-less container by class + bounds (strategy 3).
         "expandButton": {
           "find": {
-            "all": [
+            "any": [
               {
-                "hasIdSuffix": "expandable_view"
+                "all": [
+                  {
+                    "hasIdSuffix": "expandable_view"
+                  },
+                  {
+                    "not": {
+                      "hasAnyText": "Total online time"
+                    }
+                  }
+                ]
               },
               {
-                "not": {
-                  "hasAnyText": "Total online time"
-                }
+                "all": [
+                  {
+                    "isClickable": true
+                  },
+                  {
+                    "hasNoId": true
+                  },
+                  {
+                    "hasAnyText": "This offer"
+                  },
+                  {
+                    "not": {
+                      "hasAnyText": "Total online time"
+                    }
+                  }
+                ]
               }
             ]
           },

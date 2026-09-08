@@ -160,7 +160,10 @@ class Ruleset<TInput>(rules: List<CompiledRule<TInput>>) {
                 // parsed nothing, and was then skipped by its own validator is exactly the case
                 // where a lower-priority text rule claims the frame and the rot leaves no trace
                 // at all — so it must be counted even though this branch returns no result.
-                onParseShortfall?.let { sink -> shortfallOf(rule.id, branch, rawFields)?.let(sink) }
+                // #1093: an OPTIONAL bind that resolved nothing rides the same sink — the target
+                // anchor can rot exactly like a parse anchor, and an optional bind is the one
+                // place a rot leaves no trace at all (a mandatory one skips the rule).
+                onParseShortfall?.let { sink -> shortfallOf(rule.id, branch, rawFields, allBindings)?.let(sink) }
 
                 // Phase 5: Validate
                 var branchSkip = false
@@ -242,16 +245,21 @@ class Ruleset<TInput>(rules: List<CompiledRule<TInput>>) {
         ruleId: String,
         branch: CompiledBranch<TInput>,
         rawFields: Map<String, Any?>,
+        bindings: Bindings,
     ): ParseShortfall? {
         val evidence = branch.parseEvidenceFields
         val allNull = evidence.isNotEmpty() &&
             evidence.all { (name, kind) -> kind.isUnresolved(rawFields[name]) }
         val nullRequired = branch.requiredParseFields.filter { rawFields[it] == null }
-        if (!allNull && nullRequired.isEmpty()) return null
+        // Only an OPTIONAL bind can be present-and-null here: a mandatory miss already skipped
+        // the rule in resolveBindings (#1093).
+        val unresolvedBinds = bindings.filterValues { it == null }.keys.sorted()
+        if (!allNull && nullRequired.isEmpty() && unresolvedBinds.isEmpty()) return null
         return ParseShortfall(
             ruleId = ruleId,
             allNullFieldCount = if (allNull) evidence.size else 0,
             nullRequiredFields = nullRequired,
+            unresolvedOptionalBindings = unresolvedBinds,
         )
     }
 

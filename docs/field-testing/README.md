@@ -78,6 +78,24 @@ card's **mechanical** half, #577 (re-confirmed, 24/24, ~0.55 s — with a new po
 that entry's Bug #1), the #457 path, and #554 ShadowProjector (2/2). The #462/#460 dropoff item
 was found **broken-in-part** (raw PII in capture envelopes) and moved to that entry's Bug #7.)_
 
+- **🆕 NEW — #1093 — the post-delivery receipt expands ITSELF again (the auto-tap is back), and
+  it asks your consent first.** The tap had been silently dead since DoorDash 8.93.7 removed the
+  `expandable_view` id the bind anchored on; the rule now also binds the id-less `This offer` row,
+  the handler re-finds it by class + bounds, and an optional bind that stops resolving is loud.
+  **On-dash:** (1) the FIRST time DashBuddy comes to the foreground on this build, the consent prompt
+  must list the receipt-expand automation again (its key changed with the re-anchor) — tap **Allow**
+  (Settings → Data & Privacy → Automation & Consent shows it afterwards); with quick-declines still off,
+  that is the ONLY automation you need to allow. (2) On the next delivery, the receipt sheet should
+  open its pay breakdown on its own about a second after it appears, WITHOUT you touching it.
+  **Desk, after the pull:** `grep -c "attempting verified click (expand_earnings" app.log` ≥ 1 per
+  delivery and no `Could not find any live node` / `NONE passed label verification` / aborted-tie WARN
+  for `expand_earnings`; every delivery row `payBasis = DROP_SHARE` with a tip; `bindShortfall{` on the
+  `PipelineStats` summaries must NOT name `delivery_summary_collapsed.expandButton` (a
+  `…offer_popup.declineButton` entry from #1063's first frames is expected and benign); and
+  the collapsed→expanded interval is now ~`expandSettleMs`, not the 2.5–3 s of a human tap. If the
+  prompt never appears, or it shows the capability as already decided, that is a finding.
+  - Confirmed: 0/2
+
 - **🆕 NEW — #1054 — a grace that lapses while nothing is on screen still commits, and survives a
   restart.** Both older grace timers (`GRACE_COMMIT` for a dash end / task retire,
   `MODE_RESUME_COMMIT` for a resume out of Paused) are armed for exactly `deadline − now` but their
@@ -2695,8 +2713,9 @@ summary post-delivery is not working (the auto click). I am having to click it m
      re-anchored the money reads on text; `UiInteractionHandler`'s label verification would then need a
      label for a node that has none of its own (only descendant text) — check `clickNodeStrict`'s
      candidate ranking (#600) handles a text-less clickable container.
-   - **Status:** Open — dev to confirm and file (needs the rule re-anchor + a fixture from the 09-07
-     collapsed capture + a liveness signal for optional target binds).
+   - **Status:** Confirmed by the dev the same day → **#1093** (rule re-anchor on the id-less
+     `This offer` row + the handler's relaxed bounds re-find + the optional-bind liveness signal +
+     the three 09-07 receipt frames as fixtures). Checklist item added.
 
 ### Meta / architecture
 

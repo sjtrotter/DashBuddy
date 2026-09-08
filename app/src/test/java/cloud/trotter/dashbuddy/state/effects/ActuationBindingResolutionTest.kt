@@ -8,7 +8,9 @@ import cloud.trotter.dashbuddy.domain.pipeline.NodeRef
 import cloud.trotter.dashbuddy.test.util.TestResourceLoader
 import cloud.trotter.dashbuddy.test.util.TestRulesetFactory
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -64,7 +66,12 @@ class ActuationBindingResolutionTest {
         return labels
     }
 
-    /** Mirror of `UiInteractionHandler.findCandidates` (viewId → text) over a UiNode tree. */
+    /**
+     * Mirror of `UiInteractionHandler.findCandidates` (viewId → text → bounds walk) over a UiNode
+     * tree. Strategy 3 mirrors `findNodeByBounds` (#1093): same class, and EITHER the exact bounds
+     * OR a clickable node overlapping the ref by at least [UiInteractionHandler.RELAXED_BOUNDS_IOU]
+     * — the only strategy that can re-find an id-less, text-less container.
+     */
     private fun findCandidates(tree: UiNode, ref: NodeRef): List<UiNode> {
         ref.viewIdSuffix?.takeIf { it.isNotEmpty() }?.let { id ->
             val byId = tree.findNodes { it.viewIdResourceName == id }
@@ -74,7 +81,15 @@ class ActuationBindingResolutionTest {
             val byText = tree.findNodes { (it.text?.contains(txt, ignoreCase = true) == true) }
             if (byText.isNotEmpty()) return byText
         }
-        return emptyList()
+        return tree.findNodes { node ->
+            val classOk = ref.classNameHint == null || node.className == ref.classNameHint
+            classOk && (
+                node.boundsInScreen == ref.boundsInScreen ||
+                    (node.isClickable &&
+                        ClickCandidateRanker.boundsIoU(node.boundsInScreen, ref.boundsInScreen) >=
+                        UiInteractionHandler.RELAXED_BOUNDS_IOU)
+                )
+        }
     }
 
     /**
@@ -194,6 +209,7 @@ class ActuationBindingResolutionTest {
         var decisiveFrames = 0
         for ((filename, node, _) in TestResourceLoader.loadSnapshots("snapshots/delivery_summary_collapsed")) {
             val ref = matchTargets(node)[action.targetBindName] ?: continue // optional bind
+            if (ref.viewIdSuffix.isNullOrEmpty()) continue // the 8.93.7+ id-less arm — its own test below
             withTarget++
 
             // The independently-computed expected target: the sole expandable_view whose
@@ -235,5 +251,39 @@ class ActuationBindingResolutionTest {
         }
         assertTrue("expected the collapsed-summary corpus to bind expandButton on some frames", withTarget >= 5)
         assertTrue("expected the pay expandable to resolve decisively on non-degenerate frames", decisiveFrames >= 4)
+    }
+
+    /**
+     * #1093 — DoorDash 8.93.7+ renders the collapsed receipt with NO view ids, so the id arm binds
+     * nothing and the tap was silently never emitted (dev field report 2026-09-08). The second
+     * arm binds the id-less CLICKABLE row whose subtree carries 'This offer'; at fire time the
+     * handler can only re-find it by class + bounds (strategy 3), which must resolve it DECISIVELY
+     * — a single verified candidate, or a bounds-ranked winner — and never the stats row or a
+     * wrapper. Pinned on the 09-07 field frames (a mid-spin and a settled one).
+     */
+    @Test
+    fun `expand earnings binds the id-less 'This offer' row on the 8_93_7+ receipt and re-finds it by bounds`() {
+        val action = RuleAction.EXPAND_EARNINGS
+        var idLessFrames = 0
+        for ((filename, node, _) in TestResourceLoader.loadSnapshots("snapshots/delivery_summary_collapsed")) {
+            val ref = matchTargets(node)[action.targetBindName] ?: continue
+            if (!ref.viewIdSuffix.isNullOrEmpty()) continue
+            idLessFrames++
+
+            val expected = node.findNodes {
+                it.isClickable && it.viewIdResourceName.isNullOrBlank() &&
+                    subtreeHasText(it, "This offer") && !subtreeHasText(it, "Total online time")
+            }.singleOrNull()
+            assertNotNull("$filename: exactly one id-less clickable 'This offer' row must exist", expected)
+            assertEquals("$filename: the bind must select that row", expected!!.boundsInScreen, ref.boundsInScreen)
+            assertNull("$filename: the row has no text of its own — the ref must carry none", ref.text)
+
+            val r = resolve(node, ref, action.verification)
+            assertTrue("$filename: the bounds walk must resolve decisively (got tier ${r.tier}, ${r.verifiedCount} verified)", r.decisive)
+            assertEquals("$filename: and resolve THE row, not a wrapper or the stats section",
+                expected.boundsInScreen, r.resolved!!.boundsInScreen)
+            assertFalse(subtreeHasText(r.resolved, "Total online time"))
+        }
+        assertTrue("expected the two 09-07 field frames (at least) to bind through the id-less arm, got $idLessFrames", idLessFrames >= 2)
     }
 }

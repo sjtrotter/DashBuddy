@@ -235,5 +235,20 @@ benignly (`dash_along_the_way`, `idle_map`, `set_dash_end_time` in the committed
 (09-06/09-07 pulls, DoorDash 8.95.6) also `waiting_for_offer` — its `earnings_pill` is a CAROUSEL that
 alternates the dash total with a `Weekly goal` render, on which `sessionPay` is correctly null — and
 `pickup_shopping` on a pre-render frame), which is
-why the WARN is a once-per-process breadcrumb rather than an alarm; the same corpus shows the real
+why the WARN is a once-per-process breadcrumb rather than an alarm; **#1093 added the bind half**:
+`Ruleset.shortfallOf` also lists every OPTIONAL `bind` target that resolved null on the matched
+branch (`ParseShortfall.unresolvedOptionalBindings`, sorted bind names — a mandatory miss already
+skipped the rule), and `PipelineStats.onParseShortfall` counts those under their own
+`bindShortfall{<ruleId>.<bind>=n}` suffix with one WARN per rule+bind per process, leaving the parse
+count untouched (`ParseShortfall.hasParseTrigger` is the split). The receipt is the receipt: DoorDash
+8.93.7 removed `expandable_view`, `delivery_summary_collapsed`'s optional `expandButton` resolved
+nothing, and `EffectMap.diffExpandAction` — which emits only on a bound target — went silent for
+weeks with no line of any kind (the dev noticed the manual tap). The rule now carries a second,
+id-less arm (a clickable `hasNoId` row whose subtree says `This offer`), and
+`UiInteractionHandler.findNodeByBounds` (the only strategy that can re-find an id-less, text-less
+container) accepts a clickable same-class node overlapping the ref by ≥ `RELAXED_BOUNDS_IOU` (0.5,
+sharing `ClickCandidateRanker.boundsIoU`) beside the exact match, descending past it so a wrapper
+cannot hide the tighter child; the ranker's max-overlap pick and the #734 tie-abort stay the
+fail-closed disambiguation. Re-anchoring changed the bind's content-pinned capability key (#422), so
+consent is re-asked; the same corpus shows the real
 finds (`delivery_summary_expanded`/`_collapsed`, `waiting_for_offer`, `timeline`).

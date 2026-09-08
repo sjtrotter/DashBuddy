@@ -13,6 +13,7 @@ import cloud.trotter.dashbuddy.domain.pipeline.ParseShortfall
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonArray
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.mockito.kotlin.doReturn
@@ -89,6 +90,46 @@ class ParseShortfallLoudnessTest {
             }
         }
     }"""
+
+    // ── #1093: an OPTIONAL bind that resolves nothing is the third trigger ──
+
+    /** The receipt's shape after 8.93.7: the parse still reads, the id the bind anchors on is gone. */
+    private val deadOptionalBindRule = """{
+        "id": "doordash.screen.delivery_summary_collapsed",
+        "priority": 10,
+        "require": { "allTextContains": "Dash summary" },
+        "bind": { "expandButton": { "find": { "hasIdExact": "expandable_view" }, "optional": true } },
+        "parse": { "fields": {
+            "totalPay": { "find": { "textContains": "Total" }, "read": "text" }
+        } }
+    }"""
+
+    @Test
+    fun `an optional bind that resolves no node is reported by bind name while the parse stays healthy`() {
+        val shortfalls = shortfallsFor(deadOptionalBindRule)
+
+        assertEquals(1, shortfalls.size)
+        val s = shortfalls.single()
+        assertEquals("doordash.screen.delivery_summary_collapsed", s.ruleId)
+        assertEquals(listOf("expandButton"), s.unresolvedOptionalBindings)
+        assertEquals("the parse resolved, so the #1036 half must not fire", 0, s.allNullFieldCount)
+        assertTrue(s.nullRequiredFields.isEmpty())
+        assertFalse(s.hasParseTrigger)
+        assertFalse(s.isEmpty)
+    }
+
+    @Test
+    fun `an optional bind that resolves reports nothing`() {
+        val rule = deadOptionalBindRule.replace(""""hasIdExact": "expandable_view"""", """"textContains": "Dash summary"""")
+        assertTrue(shortfallsFor(rule).isEmpty())
+    }
+
+    @Test
+    fun `a dead optional bind does not change recognition`() {
+        val obs = classifier(screens = screenRuleset(deadOptionalBindRule)).classify(screenEvent())
+        assertEquals("doordash.screen.delivery_summary_collapsed", obs.ruleId)
+        assertTrue("no target is exposed for a bind that resolved nothing", obs.targets.isEmpty())
+    }
 
     // ── The total-rot trigger ───────────────────────────────────────────
 
