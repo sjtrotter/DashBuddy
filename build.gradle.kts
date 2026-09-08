@@ -33,6 +33,15 @@ subprojects {
         // whole module fits deterministically; version-independent, so CI (JDK 21) gets
         // the same headroom.
         maxHeapSize = "2g"
+        // #1093: print the assertion MESSAGE of a failing test, not just its class + line — the
+        // PR CI log was the only test runner available (host memory-starved) and it showed
+        // `AssertionError at …Test.kt:282` and nothing else, which is undebuggable at a distance.
+        testLogging {
+            events("failed")
+            exceptionFormat = org.gradle.api.tasks.testing.logging.TestExceptionFormat.FULL
+            showCauses = true
+            showStackTraces = false
+        }
         if (JavaVersion.current() >= JavaVersion.VERSION_24) {
             jvmArgs("--enable-native-access=ALL-UNNAMED", "--sun-misc-unsafe-memory-access=allow")
         }

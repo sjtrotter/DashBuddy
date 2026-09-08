@@ -279,7 +279,14 @@ class ActuationBindingResolutionTest {
             assertNull("$filename: the row has no text of its own — the ref must carry none", ref.text)
 
             val r = resolve(node, ref, action.verification)
-            assertTrue("$filename: the bounds walk must resolve decisively (got tier ${r.tier}, ${r.verifiedCount} verified)", r.decisive)
+            val diag = findCandidates(node, ref).joinToString(" | ") {
+                "${it.className?.substringAfterLast('.')} ${it.boundsInScreen} click=${it.isClickable} id=${it.viewIdResourceName}"
+            }
+            assertTrue(
+                "$filename: the bounds walk must resolve decisively (got tier ${r.tier}, ${r.verifiedCount} verified; " +
+                    "ref=${ref.classNameHint} ${ref.boundsInScreen} text=${ref.text}; candidates: [$diag])",
+                r.decisive,
+            )
             assertEquals("$filename: and resolve THE row, not a wrapper or the stats section",
                 expected.boundsInScreen, r.resolved!!.boundsInScreen)
             assertFalse(subtreeHasText(r.resolved, "Total online time"))
