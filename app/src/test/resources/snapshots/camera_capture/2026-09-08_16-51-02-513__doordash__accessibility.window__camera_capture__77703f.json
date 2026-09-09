@@ -1,8 +1,8 @@
 {
-    "captureId": "74212a3e-fc38-4131-99b8-379b3abf906f",
+    "captureId": "6ef9cc09-11dc-423c-9569-fd78227ee3d8",
     "pipelineId": "accessibility.window",
     "schemaId": "uinode.v1",
-    "timestamp": 1787098028546,
+    "timestamp": 1788904262510,
     "platform": "doordash",
     "ruleId": "doordash.screen.camera_capture",
     "classificationName": "camera_capture",
@@ -19,9 +19,9 @@
             "notification": 1
         },
         "stateMachineApiVersion": "1.0",
-        "appVersion": "0.230.0",
+        "appVersion": "0.230.0+8028691a",
         "deviceFingerprint": "google/panther/panther:17/CP2A.260705.006/15641320:user/release-keys",
-        "platformAppVersion": "8.93.7"
+        "platformAppVersion": "8.96.8"
     },
     "payload": {
         "class": "android.widget.FrameLayout",
