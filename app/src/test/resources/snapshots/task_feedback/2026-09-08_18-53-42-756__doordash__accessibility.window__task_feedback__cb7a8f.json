@@ -1,11 +1,11 @@
 {
-    "captureId": "fdb0d5e5-b327-42f2-9a03-3c163df45853",
+    "captureId": "9dd16e2d-e058-4e0a-b1a0-6b9c3926a192",
     "pipelineId": "accessibility.window",
     "schemaId": "uinode.v1",
-    "timestamp": 1786656016466,
+    "timestamp": 1788911622754,
     "platform": "doordash",
-    "ruleId": "doordash.screen.pickup_qr_confirm",
-    "classificationName": "pickup_qr_confirm",
+    "ruleId": "doordash.screen.task_feedback",
+    "classificationName": "task_feedback",
     "metadata": {
         "engineVersion": 1,
         "rulesetFormatVersion": 2,
@@ -19,9 +19,9 @@
             "notification": 1
         },
         "stateMachineApiVersion": "1.0",
-        "appVersion": "0.230.0",
+        "appVersion": "0.230.0+8028691a",
         "deviceFingerprint": "google/panther/panther:17/CP2A.260705.006/15641320:user/release-keys",
-        "platformAppVersion": "8.93.7"
+        "platformAppVersion": "8.96.8"
     },
     "payload": {
         "class": "android.widget.FrameLayout",
@@ -38,9 +38,9 @@
                 "isEnabled": true,
                 "bounds": {
                     "left": 0,
-                    "top": 2400,
+                    "top": 0,
                     "right": 1080,
-                    "bottom": 4747
+                    "bottom": 2347
                 },
                 "children": [
                     {
@@ -48,9 +48,9 @@
                         "isEnabled": true,
                         "bounds": {
                             "left": 0,
-                            "top": 2536,
+                            "top": 136,
                             "right": 1080,
-                            "bottom": 4747
+                            "bottom": 2347
                         },
                         "children": [
                             {
@@ -59,9 +59,9 @@
                                 "isEnabled": true,
                                 "bounds": {
                                     "left": 0,
-                                    "top": 2536,
+                                    "top": 136,
                                     "right": 1080,
-                                    "bottom": 4747
+                                    "bottom": 2347
                                 },
                                 "children": [
                                     {
@@ -70,9 +70,9 @@
                                         "isEnabled": true,
                                         "bounds": {
                                             "left": 0,
-                                            "top": 2536,
+                                            "top": 136,
                                             "right": 1080,
-                                            "bottom": 4747
+                                            "bottom": 2347
                                         },
                                         "children": [
                                             {
@@ -81,9 +81,9 @@
                                                 "isEnabled": true,
                                                 "bounds": {
                                                     "left": 0,
-                                                    "top": 2536,
+                                                    "top": 136,
                                                     "right": 1080,
-                                                    "bottom": 4747
+                                                    "bottom": 2347
                                                 },
                                                 "children": [
                                                     {
@@ -93,9 +93,9 @@
                                                         "isEnabled": true,
                                                         "bounds": {
                                                             "left": 0,
-                                                            "top": 2536,
+                                                            "top": 136,
                                                             "right": 1080,
-                                                            "bottom": 4747
+                                                            "bottom": 2347
                                                         }
                                                     },
                                                     {
@@ -105,9 +105,9 @@
                                                         "isEnabled": true,
                                                         "bounds": {
                                                             "left": 0,
-                                                            "top": 4046,
+                                                            "top": 1944,
                                                             "right": 1080,
-                                                            "bottom": 4747
+                                                            "bottom": 2347
                                                         },
                                                         "children": [
                                                             {
@@ -116,9 +116,9 @@
                                                                 "isEnabled": true,
                                                                 "bounds": {
                                                                     "left": 0,
-                                                                    "top": 4046,
+                                                                    "top": 1944,
                                                                     "right": 1080,
-                                                                    "bottom": 4082
+                                                                    "bottom": 1980
                                                                 },
                                                                 "children": [
                                                                     {
@@ -127,9 +127,9 @@
                                                                         "isEnabled": true,
                                                                         "bounds": {
                                                                             "left": 0,
-                                                                            "top": 4046,
+                                                                            "top": 1944,
                                                                             "right": 1080,
-                                                                            "bottom": 4082
+                                                                            "bottom": 1980
                                                                         },
                                                                         "children": [
                                                                             {
@@ -138,9 +138,9 @@
                                                                                 "isEnabled": true,
                                                                                 "bounds": {
                                                                                     "left": 0,
-                                                                                    "top": 4064,
+                                                                                    "top": 1962,
                                                                                     "right": 1080,
-                                                                                    "bottom": 4073
+                                                                                    "bottom": 1971
                                                                                 }
                                                                             }
                                                                         ]
@@ -153,9 +153,9 @@
                                                                 "isEnabled": true,
                                                                 "bounds": {
                                                                     "left": 0,
-                                                                    "top": 4154,
+                                                                    "top": 1980,
                                                                     "right": 1080,
-                                                                    "bottom": 4711
+                                                                    "bottom": 2311
                                                                 },
                                                                 "children": [
                                                                     {
@@ -164,9 +164,9 @@
                                                                         "isEnabled": true,
                                                                         "bounds": {
                                                                             "left": 0,
-                                                                            "top": 4154,
+                                                                            "top": 1980,
                                                                             "right": 1080,
-                                                                            "bottom": 4711
+                                                                            "bottom": 2311
                                                                         },
                                                                         "children": [
                                                                             {
@@ -175,9 +175,9 @@
                                                                                 "isEnabled": true,
                                                                                 "bounds": {
                                                                                     "left": 0,
-                                                                                    "top": 4154,
+                                                                                    "top": 1980,
                                                                                     "right": 1080,
-                                                                                    "bottom": 4443
+                                                                                    "bottom": 2311
                                                                                 },
                                                                                 "children": [
                                                                                     {
@@ -186,97 +186,111 @@
                                                                                         "isEnabled": true,
                                                                                         "bounds": {
                                                                                             "left": 0,
-                                                                                            "top": 4154,
+                                                                                            "top": 1980,
                                                                                             "right": 1080,
-                                                                                            "bottom": 4443
+                                                                                            "bottom": 2311
                                                                                         },
                                                                                         "children": [
                                                                                             {
-                                                                                                "class": "android.view.ViewGroup",
+                                                                                                "class": "androidx.compose.ui.platform.ComposeView",
                                                                                                 "isEnabled": true,
                                                                                                 "bounds": {
                                                                                                     "left": 0,
-                                                                                                    "top": 4154,
+                                                                                                    "top": 1980,
                                                                                                     "right": 1080,
-                                                                                                    "bottom": 4443
+                                                                                                    "bottom": 2311
                                                                                                 },
                                                                                                 "children": [
                                                                                                     {
-                                                                                                        "id": "com.doordash.driverapp:id/epoxyRecyclerView",
-                                                                                                        "class": "androidx.recyclerview.widget.RecyclerView",
+                                                                                                        "class": "android.view.View",
                                                                                                         "isEnabled": true,
                                                                                                         "bounds": {
                                                                                                             "left": 0,
-                                                                                                            "top": 4154,
+                                                                                                            "top": 1980,
                                                                                                             "right": 1080,
-                                                                                                            "bottom": 4443
+                                                                                                            "bottom": 2311
                                                                                                         },
                                                                                                         "children": [
                                                                                                             {
-                                                                                                                "class": "android.view.ViewGroup",
+                                                                                                                "class": "android.view.View",
                                                                                                                 "isEnabled": true,
                                                                                                                 "bounds": {
                                                                                                                     "left": 0,
-                                                                                                                    "top": 4154,
+                                                                                                                    "top": 1980,
                                                                                                                     "right": 1080,
-                                                                                                                    "bottom": 4313
+                                                                                                                    "bottom": 2311
                                                                                                                 },
                                                                                                                 "children": [
+                                                                                                                    {
+                                                                                                                        "text": "How was this task?",
+                                                                                                                        "class": "android.widget.TextView",
+                                                                                                                        "isEnabled": true,
+                                                                                                                        "bounds": {
+                                                                                                                            "left": 36,
+                                                                                                                            "top": 2016,
+                                                                                                                            "right": 1044,
+                                                                                                                            "bottom": 2078
+                                                                                                                        }
+                                                                                                                    },
                                                                                                                     {
                                                                                                                         "class": "android.view.View",
                                                                                                                         "isEnabled": true,
                                                                                                                         "bounds": {
-                                                                                                                            "left": 0,
-                                                                                                                            "top": 4154,
-                                                                                                                            "right": 1080,
-                                                                                                                            "bottom": 4313
+                                                                                                                            "left": 36,
+                                                                                                                            "top": 2150,
+                                                                                                                            "right": 1044,
+                                                                                                                            "bottom": 2275
                                                                                                                         },
                                                                                                                         "children": [
                                                                                                                             {
-                                                                                                                                "text": "Confirm that the code was scanned successfully",
-                                                                                                                                "class": "android.widget.TextView",
+                                                                                                                                "state": "Not selected",
+                                                                                                                                "class": "android.view.View",
+                                                                                                                                "isClickable": true,
                                                                                                                                 "isEnabled": true,
                                                                                                                                 "bounds": {
-                                                                                                                                    "left": 27,
-                                                                                                                                    "top": 4181,
-                                                                                                                                    "right": 1053,
-                                                                                                                                    "bottom": 4313
-                                                                                                                                }
-                                                                                                                            }
-                                                                                                                        ]
-                                                                                                                    }
-                                                                                                                ]
-                                                                                                            },
-                                                                                                            {
-                                                                                                                "class": "android.view.ViewGroup",
-                                                                                                                "isEnabled": true,
-                                                                                                                "bounds": {
-                                                                                                                    "left": 0,
-                                                                                                                    "top": 4313,
-                                                                                                                    "right": 1080,
-                                                                                                                    "bottom": 4443
-                                                                                                                },
-                                                                                                                "children": [
-                                                                                                                    {
-                                                                                                                        "class": "android.view.View",
-                                                                                                                        "isEnabled": true,
-                                                                                                                        "bounds": {
-                                                                                                                            "left": 0,
-                                                                                                                            "top": 4313,
-                                                                                                                            "right": 1080,
-                                                                                                                            "bottom": 4443
-                                                                                                                        },
-                                                                                                                        "children": [
+                                                                                                                                    "left": 397,
+                                                                                                                                    "top": 2150,
+                                                                                                                                    "right": 522,
+                                                                                                                                    "bottom": 2275
+                                                                                                                                },
+                                                                                                                                "children": [
+                                                                                                                                    {
+                                                                                                                                        "desc": "Thumbs Down",
+                                                                                                                                        "class": "android.view.View",
+                                                                                                                                        "isEnabled": true,
+                                                                                                                                        "bounds": {
+                                                                                                                                            "left": 433,
+                                                                                                                                            "top": 2186,
+                                                                                                                                            "right": 486,
+                                                                                                                                            "bottom": 2239
+                                                                                                                                        }
+                                                                                                                                    }
+                                                                                                                                ]
+                                                                                                                            },
                                                                                                                             {
-                                                                                                                                "text": "Please confirm with the store associate that the QR code was accepted as payment",
-                                                                                                                                "class": "android.widget.TextView",
+                                                                                                                                "state": "Not selected",
+                                                                                                                                "class": "android.view.View",
+                                                                                                                                "isClickable": true,
                                                                                                                                 "isEnabled": true,
                                                                                                                                 "bounds": {
-                                                                                                                                    "left": 27,
-                                                                                                                                    "top": 4340,
-                                                                                                                                    "right": 1053,
-                                                                                                                                    "bottom": 4443
-                                                                                                                                }
+                                                                                                                                    "left": 558,
+                                                                                                                                    "top": 2150,
+                                                                                                                                    "right": 683,
+                                                                                                                                    "bottom": 2275
+                                                                                                                                },
+                                                                                                                                "children": [
+                                                                                                                                    {
+                                                                                                                                        "desc": "Thumbs Up",
+                                                                                                                                        "class": "android.view.View",
+                                                                                                                                        "isEnabled": true,
+                                                                                                                                        "bounds": {
+                                                                                                                                            "left": 594,
+                                                                                                                                            "top": 2186,
+                                                                                                                                            "right": 647,
+                                                                                                                                            "bottom": 2239
+                                                                                                                                        }
+                                                                                                                                    }
+                                                                                                                                ]
                                                                                                                             }
                                                                                                                         ]
                                                                                                                     }
@@ -293,17 +307,6 @@
                                                                         ]
                                                                     }
                                                                 ]
-                                                            },
-                                                            {
-                                                                "id": "com.doordash.driverapp:id/prism_sheet_header_divider",
-                                                                "class": "android.view.View",
-                                                                "isEnabled": true,
-                                                                "bounds": {
-                                                                    "left": 0,
-                                                                    "top": 4154,
-                                                                    "right": 1080,
-                                                                    "bottom": 4163
-                                                                }
                                                             }
                                                         ]
                                                     },
@@ -313,9 +316,9 @@
                                                         "isEnabled": true,
                                                         "bounds": {
                                                             "left": 0,
-                                                            "top": 4439,
+                                                            "top": 2343,
                                                             "right": 1080,
-                                                            "bottom": 4443
+                                                            "bottom": 2347
                                                         }
                                                     },
                                                     {
@@ -324,71 +327,30 @@
                                                         "isEnabled": true,
                                                         "bounds": {
                                                             "left": 0,
-                                                            "top": 4443,
+                                                            "top": 2347,
                                                             "right": 1080,
-                                                            "bottom": 4747
+                                                            "bottom": 2347
                                                         },
                                                         "children": [
                                                             {
-                                                                "id": "com.doordash.driverapp:id/prism_sheet_actions_container",
-                                                                "class": "android.widget.LinearLayout",
+                                                                "class": "androidx.compose.ui.platform.ComposeView",
                                                                 "isEnabled": true,
                                                                 "bounds": {
                                                                     "left": 0,
-                                                                    "top": 4443,
+                                                                    "top": 2347,
                                                                     "right": 1080,
-                                                                    "bottom": 4747
+                                                                    "bottom": 2347
                                                                 },
                                                                 "children": [
                                                                     {
-                                                                        "class": "android.widget.Button",
-                                                                        "isClickable": true,
+                                                                        "class": "android.view.View",
                                                                         "isEnabled": true,
                                                                         "bounds": {
-                                                                            "left": 36,
-                                                                            "top": 4479,
-                                                                            "right": 1044,
-                                                                            "bottom": 4586
-                                                                        },
-                                                                        "children": [
-                                                                            {
-                                                                                "text": "Confirm",
-                                                                                "id": "com.doordash.driverapp:id/textView_prism_button_title",
-                                                                                "class": "android.widget.TextView",
-                                                                                "isEnabled": true,
-                                                                                "bounds": {
-                                                                                    "left": 456,
-                                                                                    "top": 4500,
-                                                                                    "right": 624,
-                                                                                    "bottom": 4566
-                                                                                }
-                                                                            }
-                                                                        ]
-                                                                    },
-                                                                    {
-                                                                        "class": "android.widget.Button",
-                                                                        "isClickable": true,
-                                                                        "isEnabled": true,
-                                                                        "bounds": {
-                                                                            "left": 36,
-                                                                            "top": 4604,
-                                                                            "right": 1044,
-                                                                            "bottom": 4711
-                                                                        },
-                                                                        "children": [
-                                                                            {
-                                                                                "text": "Scan code again",
-                                                                                "id": "com.doordash.driverapp:id/textView_prism_button_title",
-                                                                                "class": "android.widget.TextView",
-                                                                                "isEnabled": true,
-                                                                                "bounds": {
-                                                                                    "left": 375,
-                                                                                    "top": 4625,
-                                                                                    "right": 705,
-                                                                                    "bottom": 4691
-                                                                                }
-                                                                            }
-                                                                        ]
+                                                                            "left": 0,
+                                                                            "top": 2347,
+                                                                            "right": 0,
+                                                                            "bottom": 2347
+                                                                        }
                                                                     }
                                                                 ]
                                                             }
@@ -410,9 +372,9 @@
                 "isEnabled": true,
                 "bounds": {
                     "left": 0,
-                    "top": 4747,
+                    "top": 2347,
                     "right": 1080,
-                    "bottom": 4800
+                    "bottom": 2400
                 }
             }
         ]

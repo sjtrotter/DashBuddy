@@ -1,8 +1,8 @@
 {
-    "captureId": "6c0060e6-01be-4016-ab2d-a74d699eba25",
+    "captureId": "ad911caa-df04-4674-a830-69e263a9119e",
     "pipelineId": "accessibility.window",
     "schemaId": "uinode.v1",
-    "timestamp": 1786653882271,
+    "timestamp": 1788900846765,
     "platform": "doordash",
     "ruleId": "doordash.screen.dash_navigate_to_zone_loading",
     "classificationName": "dash_navigate_to_zone_loading",
@@ -19,9 +19,9 @@
             "notification": 1
         },
         "stateMachineApiVersion": "1.0",
-        "appVersion": "0.230.0",
+        "appVersion": "0.230.0+8028691a",
         "deviceFingerprint": "google/panther/panther:17/CP2A.260705.006/15641320:user/release-keys",
-        "platformAppVersion": "8.93.7"
+        "platformAppVersion": "8.96.8"
     },
     "payload": {
         "class": "android.widget.FrameLayout",
@@ -37,9 +37,9 @@
                 "class": "android.widget.LinearLayout",
                 "isEnabled": true,
                 "bounds": {
-                    "left": -45,
+                    "left": -21,
                     "top": 0,
-                    "right": 1034,
+                    "right": 1058,
                     "bottom": 2347
                 },
                 "children": [
@@ -69,9 +69,9 @@
                                         "class": "android.widget.FrameLayout",
                                         "isEnabled": true,
                                         "bounds": {
-                                            "left": 0,
+                                            "left": -21,
                                             "top": 136,
-                                            "right": 1080,
+                                            "right": 1058,
                                             "bottom": 2347
                                         },
                                         "children": [
@@ -80,9 +80,9 @@
                                                 "class": "android.view.ViewGroup",
                                                 "isEnabled": true,
                                                 "bounds": {
-                                                    "left": 0,
+                                                    "left": -21,
                                                     "top": 136,
-                                                    "right": 1080,
+                                                    "right": 1058,
                                                     "bottom": 2347
                                                 },
                                                 "children": [
@@ -91,9 +91,9 @@
                                                         "class": "android.widget.LinearLayout",
                                                         "isEnabled": true,
                                                         "bounds": {
-                                                            "left": -45,
+                                                            "left": -21,
                                                             "top": 136,
-                                                            "right": 1034,
+                                                            "right": 1058,
                                                             "bottom": 278
                                                         },
                                                         "children": [
@@ -114,9 +114,9 @@
                                                                         "isClickable": true,
                                                                         "isEnabled": true,
                                                                         "bounds": {
-                                                                            "left": 0,
+                                                                            "left": -21,
                                                                             "top": 144,
-                                                                            "right": 125,
+                                                                            "right": 103,
                                                                             "bottom": 269
                                                                         }
                                                                     },
@@ -136,9 +136,9 @@
                                                                         "class": "android.widget.TextView",
                                                                         "isEnabled": true,
                                                                         "bounds": {
-                                                                            "left": 131,
+                                                                            "left": 133,
                                                                             "top": 213,
-                                                                            "right": 512,
+                                                                            "right": 514,
                                                                             "bottom": 251
                                                                         }
                                                                     },

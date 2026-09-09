@@ -1,8 +1,8 @@
 {
-    "captureId": "e93aae08-296e-4ae8-b559-72d97b77166a",
+    "captureId": "c6ea104d-69e8-415c-a177-1d6cefb08bdc",
     "pipelineId": "accessibility.window",
     "schemaId": "uinode.v1",
-    "timestamp": 1786629972313,
+    "timestamp": 1788900248064,
     "platform": "doordash",
     "ruleId": "doordash.screen.app_startup",
     "classificationName": "app_startup",
@@ -19,9 +19,9 @@
             "notification": 1
         },
         "stateMachineApiVersion": "1.0",
-        "appVersion": "0.230.0",
+        "appVersion": "0.230.0+8028691a",
         "deviceFingerprint": "google/panther/panther:17/CP2A.260705.006/15641320:user/release-keys",
-        "platformAppVersion": "8.93.7"
+        "platformAppVersion": "8.96.8"
     },
     "payload": {
         "class": "android.widget.FrameLayout",
