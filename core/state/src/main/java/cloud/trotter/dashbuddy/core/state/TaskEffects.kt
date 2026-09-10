@@ -186,9 +186,14 @@ internal fun EffectMap.diffTask(
             // hashes AND the units-ratio sample); fall back to next's, then null when truly gone.
             val sweepJob = prev.activeJob?.takeIf { it.jobId == prevTask.jobId }
                 ?: next.activeJob?.takeIf { it.jobId == prevTask.jobId }
+            // #1078 round 5: the sweep CONFIRMS predecessor pickups, so it takes the predecessor id
+            // — on an end-A/mint-B step A's own pickup was being emitted under B, and because both
+            // share the same per-task `effects_fired` key the wrong attribution is the one that
+            // lands. The dropoff's navigation event right after is a NEW-task edge and keeps the
+            // live id.
             addAll(
                 pickupConfirmSweepEffects(
-                    sessionId, next, prevTask.jobId, obs,
+                    predecessorSessionId, next, prevTask.jobId, obs,
                     jobOfferHashes = sweepJob?.parentOfferHashes ?: emptyList(),
                     ratioJob = sweepJob,
                 ),

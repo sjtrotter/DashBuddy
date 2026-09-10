@@ -246,8 +246,22 @@ it. So the region's `activeTask` must also be an ARRIVED, un-unassigned DROPOFF.
 from the rejected rule 2 below: there arrival was a SUBSTITUTE for a standing retire; here it is an
 extra condition on rule 1 — a watched retire AND evidence the dasher reached the doorstep.
 
-The tighten branch keeps an already-absorbed value (`existing.absorbedRetireSince ?: absorbed`),
-exactly as it keeps `since`.
+**The retire's DEADLINE is absorbed too, as a FLOOR** (round 5, `absorbedRetireDeadline`). Absorbing
+moved the evidence into another slot but was shortening the window it stood in: a summary arriving
+1 s into a 10 s retire replaced a deadline 10 s out with one 2.5 s out, so the honored completion
+committed EARLIER than the retire's own expiry would have — and a contradicting `task:unassigned`
+frame that master's retire would still have been standing for arrived after the commit and could no
+longer disown it. Both arm sites and the summary's tighten branch therefore take
+`maxOf(candidate, absorbedRetireDeadline ?: candidate)`: a dash end may be DELAYED to the retire's
+window, never pulled ahead of it. `withWakeIdIfDeadlineMoved` mints a fresh wake when the deadline
+moves, so the timer follows; the `DASH_STOP` payload's `endedAt` is `since` and is unaffected. On the
+fielded 09-08 timing (summary 8.4 s into the retire) the summary's own deadline is already the later
+one and nothing changes. Recovery is deliberately NOT re-floored: `recoveryHygiene` re-bases
+`deadline` onto the REMAINING window and this is a pre-crash absolute instant that would stretch it —
+the field is carried on the restored pending so a later tighten still honors it.
+
+The tighten branch keeps an already-absorbed value, and its two halves move TOGETHER — a `since` from
+one retire beside a `deadline` from another would be a floor belonging to neither.
 
 **A "rule 2" was designed, reviewed and REJECTED** (round 2): absorbing at the AUTHORITATIVE summary
 whenever an ARRIVED, un-unassigned dropoff was still active would have covered the retire-less 09-05
@@ -286,10 +300,19 @@ ONE pure function, `exitMintCandidate` (the acted `PostTask` → non-`PostTask` 
 identity / #736 unassigned firewalls — the emitter has no eligibility logic of its own left), and the
 stepper's `stampPostTaskExit` calls that SAME function on the same acted-flow edge (`actedFlowEdge`)
 and records the taskId in `JobReceiptAnchors.exitMintedTaskIds` (`:domain`, additive, defaults to
-empty). `mintedAtPostTaskExit(taskId)` is a set lookup, read by the close-out sweep's arm (b) and by
-the #1095 tripwire's evidence. One stated caveat: a rule-driven `TASK_COMPLETED` trigger override
-replaces the mint at the emitter and the stepper cannot see it, so an overridden exit is still
-recorded — failing toward not double-emitting, and no checked-in ruleset declares one.
+empty). `mintedAtPostTaskExit(taskId)` is a set lookup — and since round 5 it is read **only** as evidence
+for the #1095 tripwire and its floor, never as a mint gate. Round 3 also used it to skip the close-out
+sweep's arm (b); that is fail-toward-LOSS under a crash, because `StateManagerV2` snapshots before the
+exit's effect is durably written, so a restored region can claim a completion that never reached
+`app_events` and the skip would suppress the retry master permits — a permanently missing row, the
+exact class #1078 exists to fix. A duplicate RAW emission is the lesser evil: master already does it
+on this path and the engine's per-task `effects_fired` key (`log:DELIVERY_COMPLETED:<taskId>`)
+collapses the two into ONE durable row, which is what the tests assert. As tripwire evidence the same
+record fails toward QUIET — being wrong can at most stop a WARN. Two accepted over-reports, both in
+that quiet direction: a rule-driven `TASK_COMPLETED` trigger override replaces the mint at the emitter
+and the stepper cannot see it (no checked-in ruleset declares one), and a PostTask exit straight into
+`task:unassigned` records the id while the emitter, reading `unassignedAt` on the post-step task,
+mints nothing.
 
 **One session-attribution rule for a closing job**, `closingSession(prev, next)` (round 3, corrected
 in round 4): `next` when the session SURVIVES the step — a #1029 settle park can commit on the very
@@ -300,7 +323,16 @@ close-out sweep's id AND `sessionEarnings`, `diffReceiptReprice`, `diffJobClose`
 PREDECESSOR-task edges (`DELIVERY_CONFIRMED` on the retiring task, `TASK_UNASSIGNED` + its bubble)
 read it. `diffTask`'s NEW-task edges (`PICKUP_NAV_STARTED`, arrivals, nav starts, their bubbles) keep
 the live next-first read: on a step that ends dash A and mints dash B, B's own first pickup belongs
-to B.
+to B. The pickup→dropoff edge splits BOTH ways in one place (round 5): the `pickupConfirmSweepEffects`
+call confirms PREDECESSOR pickups and takes the predecessor id, while the `DELIVERY_NAV_STARTED`
+beside it is a new-task edge and keeps the live one — and because the confirm's per-task
+`effects_fired` key is shared, the wrong attribution is the one that would have landed.
+
+**Two accepted fail-null residuals**, both leaving master's own failure direction in place rather
+than guessing: a genuine delivery whose ARRIVAL frame was never captured is not absorbable (the #615
+gate), and a retire restored from a pre-#596 snapshot with a null `armedFromFlow` is not absorbable
+(unprovenanced evidence is not evidence). Each ends as an unhonored teardown — no row, exactly as
+before #1078 — and each is now LOUD through the #1095 tripwire instead of silent. Tracked as #1101.
 
 `endSession` then honors it: `completedTask = activeTask.completedInline(honoredAt)` (the one
 spelling of the retire copy, `JobCompleteness.kt`) instead of the unqualified

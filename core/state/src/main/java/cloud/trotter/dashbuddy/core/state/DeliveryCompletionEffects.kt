@@ -318,16 +318,15 @@ internal fun EffectMap.diffDeliveryCompletion(
             // SAME discriminator masks the completeness proof's evidence above (#996 amendment B)
             // and the #1095 tripwire's.
             if (!mintQualified(p, retirePending, task)) continue
-            // #1078 round 3: arm (b) admits a task that is still ACTIVE because a retire is
-            // committing for it — but the PostTask-exit block may ALREADY have minted that same
-            // task's completion on an earlier step and left it active (its `completedAt` is stamped
-            // only by the commit). Arm (a) — already completed before this step — cannot be that
-            // shape, so the guard is scoped to arm (b) alone: a task genuinely completed earlier is
-            // untouched. See [mintedAtPostTaskExit] for the re-entry sequence this closes
-            // (receipt → back to the same dropoff screen → idle → dash end).
-            val admittedOnlyByRetire =
-                p.recentTasks.none { it.taskId == task.taskId && it.completedAt != null }
-            if (admittedOnlyByRetire && p.mintedAtPostTaskExit(task.taskId)) continue
+            // #1078 round 5: there is deliberately NO "already minted at a PostTask exit" skip here.
+            // Round 3 added one and round 5 withdrew it: `StateManagerV2` snapshots BEFORE the exit's
+            // effect is durably written, so a restore can carry an `exitMintedTaskIds` entry for a
+            // completion that never reached `app_events` — and the skip would then suppress the very
+            // retry master permits, turning a crash into a permanently missing row. A duplicate RAW
+            // emission is the lesser evil and is already master's behaviour on this path: the
+            // engine's per-task `effects_fired` key (`log:DELIVERY_COMPLETED:<taskId>`) dedups it
+            // live, so what actually reaches the log is one row either way. The record survives only
+            // as EVIDENCE for the #1095 tripwire, where being wrong can at most silence a WARN.
             // amdt #3: attach the receipt's pay ONLY when the receipt was announced for THIS
             // task (mirror the PostTask path's per-task pinning). A receipt-less completion
             // naturally gets null pay (#528's job), never a normal receipted delivery's pay.
@@ -543,33 +542,41 @@ internal fun exitMintCandidate(
 }
 
 /**
- * Was THIS task's `DELIVERY_COMPLETED` already minted at a PostTask exit? (#1078, round 4 shape)
+ * Was THIS task's `DELIVERY_COMPLETED` already emitted by a PostTask exit? (#1078)
  *
- * The PostTask-exit block mints the drop the receipt was about and leaves it ACTIVE — its
- * `completedAt` is stamped only later, when the retire grace commits. So on any subsequent step
- * neither `recentTasks` nor the CURRENT pending's provenance can say the mint already happened: the
- * receipt's own `TASK_RETIRE` may have been cancelled by a returning task frame and replaced by a
- * fresh, absorbable one, and then a dash end honors that fresh retire and the close-out sweep emits
- * a SECOND raw `DELIVERY_COMPLETED` for the same task. Live, the engine's per-task `effects_fired`
- * key hides it; a replay — and any consumer counting raw effects — double-counts.
+ * **Evidence for the #1095 tripwire, and NOTHING else — never a mint gate.** Round 3 also used it to
+ * skip the close-out sweep's arm (b); round 5 withdrew that, because the failure directions are not
+ * symmetric:
+ *
+ * - As a MINT GATE it fails toward LOSS. `StateManagerV2` snapshots before the exit's effect is
+ *   durably written, so a restored region can claim a completion that never reached `app_events`,
+ *   and the skip suppresses the retry master would have made — a permanently missing row, which is
+ *   the exact class #1078 exists to fix. Emitting twice costs nothing that matters: the engine's
+ *   per-task `effects_fired` key dedups it live, and master already double-emits on this path.
+ * - As TRIPWIRE EVIDENCE it fails toward QUIET. A wrong "already minted" can only stop a
+ *   `JOB_ACCEPT_MISMATCH` WARN from firing; it can never delete a delivery or fabricate one.
+ *
+ * Why the record exists at all: the exit block mints the drop the receipt was about and leaves it
+ * ACTIVE (its `completedAt` is stamped only when the retire commits), so on a later step neither
+ * `recentTasks` nor the current pending's provenance can say the mint happened — and the tripwire's
+ * masked evidence read a perfectly normal receipted delivery (dash ended before the receipt's retire
+ * expired) as a LOST drop and raised a false 1-of-0 alarm.
  *
  * Round 3 DERIVED the answer from `jobReceiptAnchors.exitedPostTask` and `lastAnnouncedPostTaskTaskId`
- * and that was wrong three ways, each a real sequence:
- *  - **stacked job (silent LOSS):** D1's exit latches the job-wide flag, then D2's receipt overwrites
- *    the announce id — so the derivation claimed D2 was already minted before D2 ever exited, and
- *    D2's completion was skipped at the close;
- *  - **identity-less task:** its exit was REFUSED by the #498 firewall, yet the derivation said minted;
- *  - **a `ParsedFields.None` PostTask** that never set an announce id: the derivation said NOT minted,
- *    so the double emission it exists to prevent survived.
+ * and that was wrong three ways, each a real sequence: in a stacked job D1's exit latches the
+ * job-wide flag while D2's receipt moves the announce id, so D2 read as already-minted before it
+ * ever exited; an identity-less task whose exit the #498 firewall REFUSED read as minted; and a
+ * `ParsedFields.None` PostTask that set no announce id read as not-minted. So the record is per-task
+ * and written from the emitter's own eligibility ([exitMintCandidate]) by
+ * `PlatformRegionStepper.stampPostTaskExit`, on the same acted-flow edge (`actedFlowEdge`) the
+ * emitter diffs. `JobReceiptAnchors` is cleared with its job and by `endSession`/`completeActiveJob`
+ * only AFTER the step that reads it; a pre-round-4 snapshot decodes to the empty set.
  *
- * So the record is now PER-TASK and written from the emitter's own eligibility
- * ([exitMintCandidate]), by `PlatformRegionStepper.stampPostTaskExit` on the same acted-flow edge
- * (`actedFlowEdge`) the emitter diffs. `JobReceiptAnchors` is cleared with its job and by
- * `endSession`/`completeActiveJob` only AFTER the step that reads it, so the pre-step region a diff
- * is judged against still carries it; a pre-round-4 snapshot decodes to the empty set.
- *
- * Read as a companion to [mintQualified], never a replacement: it answers "already emitted", not
- * "is a real completion".
+ * **Two accepted over-reports, both fail-QUIET.** A rule-driven `TASK_COMPLETED` trigger override
+ * replaces the mint at the emitter and the stepper cannot see it (no checked-in ruleset declares
+ * one). And a PostTask exit straight into `task:unassigned` records the id while the emitter —
+ * reading `unassignedAt` on the POST-step task — mints nothing. Both leave the record claiming a
+ * mint that did not happen, which at most quiets a WARN.
  */
 internal fun PlatformRegion.mintedAtPostTaskExit(taskId: String): Boolean =
     jobReceiptAnchors?.exitMintedTaskIds?.contains(taskId) == true

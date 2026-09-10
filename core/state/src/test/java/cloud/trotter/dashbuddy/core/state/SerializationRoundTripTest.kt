@@ -197,17 +197,23 @@ class SerializationRoundTripTest {
             deadline = 3_500L,
             authoritative = true,
             absorbedRetireSince = 900L,
+            absorbedRetireDeadline = 10_900L,
             wakeId = 7L,
             windowFrom = 1_000L,
         )
         val decoded = StateJson.decodeFromString<PendingDestructive>(StateJson.encodeToString(honored))
         assertEquals(honored, decoded)
         assertEquals(900L, decoded.absorbedRetireSince)
+        assertEquals(
+            "round 5: the absorbed retire's WINDOW rides with it — it is a floor on this deadline",
+            10_900L, decoded.absorbedRetireDeadline,
+        )
 
         val legacy = StateJson.decodeFromString<PendingDestructive>(
             """{"kind":"SESSION_END","since":1000,"deadline":3500,"authoritative":true}""",
         )
         assertEquals(null, legacy.absorbedRetireSince)
+        assertEquals("a pre-round-5 snapshot carries no floor", null, legacy.absorbedRetireDeadline)
         assertEquals(DestructiveKind.SESSION_END, legacy.kind)
     }
 

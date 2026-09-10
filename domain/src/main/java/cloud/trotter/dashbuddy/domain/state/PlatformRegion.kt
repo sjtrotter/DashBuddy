@@ -708,6 +708,28 @@ data class PendingDestructive(
      */
     val absorbedRetireSince: Long? = null,
     /**
+     * The `deadline` of the `TASK_RETIRE` this `SESSION_END` absorbed (#1078 round 5) — a FLOOR on
+     * this pending's own deadline, so absorbing a retire can never make its commit land EARLIER than
+     * the retire's own would have.
+     *
+     * Without it a summary arriving inside the retire's 10 s window replaced a deadline 10 s out
+     * with one 2.5 s out and committed the honored completion early — and a contradicting
+     * `task:unassigned` frame that master's retire would still have seen (it was inside the original
+     * window) arrived after the commit and could no longer disown it. The absorbed evidence has to
+     * carry the window it was standing in, not just the instant it armed.
+     *
+     * Applied at ARM and TIGHTEN time only: both sites take `maxOf(candidate, this)`. It is NOT
+     * re-applied after crash recovery — `recoveryHygiene` re-bases `deadline` onto the REMAINING
+     * window and this value is a pre-crash absolute instant that would stretch it; the field is kept
+     * on the restored pending so a later tighten still honors the floor, and the re-base itself is
+     * deliberately left alone.
+     *
+     * Only meaningful on [DestructiveKind.SESSION_END] and only beside a non-null
+     * [absorbedRetireSince]; null = nothing absorbed, or a pre-round-5 snapshot (no floor, which is
+     * the pre-#1078 timing).
+     */
+    val absorbedRetireDeadline: Long? = null,
+    /**
      * Which arm of this pending's wake timer belongs to it (#1054 round 5) — see
      * [PlatformRegion.wakeSeq].
      *

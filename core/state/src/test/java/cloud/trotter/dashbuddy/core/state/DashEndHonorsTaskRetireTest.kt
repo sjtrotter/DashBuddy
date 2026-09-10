@@ -177,6 +177,15 @@ class DashEndHonorsTaskRetireTest {
         effects.filter { it.event.type == AppEventType.DELIVERY_COMPLETED }
             .map { it.event.payload as DeliveryPayload }
 
+    /**
+     * The DISTINCT durable `effects_fired` keys of the completions in [effects] — what actually
+     * reaches `app_events`. A raw re-emission under the same key is ONE row, which is why round 5
+     * asserts on this rather than on the raw count (see [mintedAtPostTaskExit]).
+     */
+    private fun completionKeys(effects: List<AppEffect.LogEvent>): Set<String> =
+        effects.filter { it.event.type == AppEventType.DELIVERY_COMPLETED }
+            .mapTo(mutableSetOf()) { it.effectKey }
+
     private fun mismatches(effects: List<AppEffect.LogEvent>): List<AppEffect.LogEvent> =
         effects.filter { it.event.type == AppEventType.JOB_ACCEPT_MISMATCH }
 
@@ -347,11 +356,15 @@ class DashEndHonorsTaskRetireTest {
         val afterCommit = step(afterSummary, Flow.SessionEnded, wake)
         val teardownEffects = completions(afterSummary, afterCommit, wake)
 
+        // #1078 round 5: the invariant is ONE DURABLE ROW, not one raw emission. The record is
+        // deliberately NOT a mint gate — a crash between the snapshot and the effect write would
+        // turn such a skip into a permanently missing row — so the teardown may re-emit, and the
+        // engine's per-task `effects_fired` key collapses the two into a single durable write.
         assertEquals(
-            "exactly ONE raw DELIVERY_COMPLETED across the whole sequence — the exit mint",
-            1, deliveries(exitEffects).size + deliveries(teardownEffects).size,
+            "exactly ONE distinct durable key across the whole sequence — the exit mint",
+            1, completionKeys(exitEffects + teardownEffects).size,
         )
-        assertEquals("…and it is the exit's", 1, deliveries(exitEffects).size)
+        assertEquals("…and the exit is where it came from", 1, deliveries(exitEffects).size)
     }
 
     // =========================================================================
@@ -607,11 +620,18 @@ class DashEndHonorsTaskRetireTest {
         val afterCommit = step(afterSummary, Flow.SessionEnded, wake)
         val teardownEffects = completions(afterSummary, afterCommit, wake)
 
+        // #1078 round 5: the invariant is ONE DURABLE ROW, not one raw emission. The record is
+        // deliberately NOT a mint gate — a crash between the snapshot and the effect write would
+        // turn such a skip into a permanently missing row — so the teardown may re-emit, and the
+        // engine's per-task `effects_fired` key collapses the two into a single durable write.
         assertEquals(
-            "exactly ONE raw DELIVERY_COMPLETED across the WHOLE sequence — the exit's",
-            1, deliveries(exitEffects).size + deliveries(teardownEffects).size,
+            "exactly ONE distinct durable key for this task across the whole sequence",
+            1, completionKeys(exitEffects + teardownEffects).size,
         )
-        assertEquals("the teardown adds none", 0, deliveries(teardownEffects).size)
+        assertEquals(
+            "…and the tripwire stays silent — the delivery WAS recorded",
+            0, mismatches(exitEffects).size + mismatches(teardownEffects).size,
+        )
     }
 
     @Test
@@ -886,9 +906,17 @@ class DashEndHonorsTaskRetireTest {
         val wake = graceWake(afterSummary.pendingDestructive!!)
         val afterCommit = step(afterSummary, Flow.SessionEnded, wake)
         val teardownEffects = completions(afterSummary, afterCommit, wake)
+        // #1078 round 5: the invariant is ONE DURABLE ROW, not one raw emission. The record is
+        // deliberately NOT a mint gate — a crash between the snapshot and the effect write would
+        // turn such a skip into a permanently missing row — so the teardown may re-emit, and the
+        // engine's per-task `effects_fired` key collapses the two into a single durable write.
         assertEquals(
-            "exactly ONE raw completion across the whole sequence",
-            1, deliveries(exitEffects).size + deliveries(teardownEffects).size,
+            "exactly ONE distinct durable key across the whole sequence",
+            1, completionKeys(exitEffects + teardownEffects).size,
+        )
+        assertEquals(
+            "…and no false lost-drop alarm",
+            0, mismatches(exitEffects).size + mismatches(teardownEffects).size,
         )
     }
 
@@ -942,5 +970,160 @@ class DashEndHonorsTaskRetireTest {
             "dash-A",
             effects.single { it.event.type == AppEventType.DELIVERY_COMPLETED }.event.sessionId,
         )
+    }
+
+
+    // =========================================================================
+    // 14 — round 5: absorbing a retire never pulls its commit FORWARD
+    // =========================================================================
+
+    @Test
+    fun `a summary INSIDE the retire window keeps the retire's deadline, so a later unassign can still disown`() {
+        // The whole point of the floor. Absorbing moved the evidence into another slot but shortened
+        // its window from 10 s to 2.5 s, so a `task:unassigned` frame that master's retire would
+        // still have been standing for arrived after the commit and could no longer disown it — the
+        // honored completion was already minted for an order the platform then said was abandoned.
+        val onDrop = onDropoff()
+        val afterIdle = step(onDrop, Flow.TaskDropoffArrived, screen(Flow.Idle, idleAt))
+        val retire = afterIdle.pendingDestructive!!
+        assertEquals("the retire's own window is 10 s", idleAt + 10_000L, retire.deadline)
+
+        // The summary lands 1 s in — its own window would expire at idleAt + 3 500.
+        val afterSummary = step(afterIdle, Flow.Idle, summaryFrame(idleAt + 1_000L))
+        val end = afterSummary.pendingDestructive!!
+        assertEquals(DestructiveKind.SESSION_END, end.kind)
+        assertEquals(idleAt, end.absorbedRetireSince)
+        assertEquals("the absorbed window rides along", retire.deadline, end.absorbedRetireDeadline)
+        assertEquals(
+            "the end may be DELAYED to the retire's deadline, never pulled ahead of it",
+            idleAt + 10_000L, end.deadline,
+        )
+        assertNotEquals("…so it is NOT the summary's own 2.5 s window", idleAt + 3_500L, end.deadline)
+
+        // A contradicting abandon at t + 5 000 — inside the ORIGINAL retire window.
+        val abandon = screen(Flow.TaskUnassigned, idleAt + 5_000L, modeHint = Mode.Online)
+        val afterAbandon = step(afterSummary, Flow.SessionEnded, abandon)
+        assertNull(
+            "the abandon still reaches the evidence and disowns it",
+            afterAbandon.pendingDestructive?.absorbedRetireSince,
+        )
+        // The frame carries the shipped rule's `modeHint = online`, so the mode arm flips back Online,
+        // `updateTaskLifecycle` is reached and `abandonActiveTask` moves the drop into `recentTasks`
+        // marked — which is the fuller, more honest outcome than the disown's own stamp alone.
+        val abandoned = (afterAbandon.recentTasks + listOfNotNull(afterAbandon.activeTask))
+            .single { it.taskId == "d1" }
+        assertEquals("…and the task carries the abandon", idleAt + 5_000L, abandoned.unassignedAt)
+
+        val pending = afterAbandon.pendingDestructive!!
+        val afterCommit = step(afterAbandon, Flow.SessionEnded, graceWake(pending))
+        assertEquals(
+            "nothing is minted for the abandoned order",
+            0, deliveries(completions(afterAbandon, afterCommit, graceWake(pending))).size,
+        )
+    }
+
+    @Test
+    fun `the fielded 09-08 timing keeps the summary's own deadline (the floor is already past)`() {
+        // The retire armed at 17:43:43.859 (deadline 53.859); the summary landed 8.4 s later, so its
+        // own 2.5 s window closes at 54.765 — LATER than the retire's. The floor changes nothing,
+        // and the shipped fix commits exactly when it did in the field.
+        val onDrop = onDropoff()
+        val afterIdle = step(onDrop, Flow.TaskDropoffArrived, screen(Flow.Idle, idleAt))
+        val afterSummary = step(afterIdle, Flow.Idle, summaryFrame(summaryAt))
+        val end = afterSummary.pendingDestructive!!
+        assertEquals("the summary's own window is the later one", summaryDeadline, end.deadline)
+        assertTrue(
+            "…precisely because it is past the absorbed retire's",
+            end.absorbedRetireDeadline!! < summaryDeadline,
+        )
+        val wake = graceWake(end)
+        val afterCommit = step(afterSummary, Flow.SessionEnded, wake)
+        assertEquals("and the delivery is still recorded", 1, deliveries(completions(afterSummary, afterCommit, wake)).size)
+    }
+
+    @Test
+    fun `an offline-armed end that absorbed a retire never tightens below the retire's deadline`() {
+        // The tighten branch's own floor: the offline arm absorbed the retire (so the end already
+        // carries the 10 s window), and the summary's `minOf` would otherwise pull it back to 2.5 s.
+        val onDrop = onDropoff()
+        val afterIdle = step(onDrop, Flow.TaskDropoffArrived, screen(Flow.Idle, idleAt))
+        val retire = afterIdle.pendingDestructive!!
+
+        val afterOffline = step(afterIdle, Flow.Idle, screen(Flow.Idle, idleAt + 500L, modeHint = Mode.Offline))
+        val offlineEnd = afterOffline.pendingDestructive!!
+        assertEquals(retire.since, offlineEnd.absorbedRetireSince)
+        assertEquals(retire.deadline, offlineEnd.absorbedRetireDeadline)
+
+        val afterSummary = step(afterOffline, Flow.Idle, summaryFrame(idleAt + 1_000L))
+        val end = afterSummary.pendingDestructive!!
+        assertTrue("the tighten cannot drop below the absorbed retire's window", end.deadline >= retire.deadline)
+        assertEquals(retire.since, end.absorbedRetireSince)
+        assertEquals(retire.deadline, end.absorbedRetireDeadline)
+    }
+
+    // =========================================================================
+    // 15 — round 5: the edge PICKUP_CONFIRMED belongs to the predecessor's dash
+    // =========================================================================
+
+    @Test
+    fun `on an end-A-mint-B step the pickup sweep confirms under A while the new nav starts under B`() {
+        // The sweep CONFIRMS predecessor pickups, so it is a predecessor edge; the dropoff's
+        // navigation event on the same edge is a new-task edge. They can belong to different dashes
+        // on one step, and because the confirm's per-task `effects_fired` key is shared, the wrong
+        // attribution is the one that lands.
+        val pickup = Task(
+            taskId = "p1", jobId = "J1", phase = TaskPhase.PICKUP,
+            storeName = "Test Merchant", startedAt = 90_000L, arrivedAt = 95_000L,
+        )
+        val sessionA = Session("dash-A", startedAt = 10_000L, runningEarnings = 21.0)
+        val onPickup = PlatformRegion(
+            platform = platform,
+            mode = Mode.Online,
+            session = sessionA,
+            activeJob = job(pickup).copy(tasks = listOf(pickup)),
+            activeTask = pickup,
+            lastActedFlow = Flow.TaskPickupArrived,
+        )
+        val dropFrame = screen(
+            Flow.TaskDropoffNavigation, 100_000L,
+            parsed = ParsedFields.TaskFields(
+                storeName = "Test Merchant",
+                phase = TaskPhase.DROPOFF,
+                subFlow = TaskSubFlow.NAVIGATION,
+                customerNameHash = "cust-1",
+            ),
+        )
+        val afterDrop = step(onPickup, Flow.TaskPickupArrived, dropFrame)
+        val effects = effectMap.diff(
+            state(onPickup, Flow.TaskPickupArrived), state(afterDrop, Flow.TaskDropoffNavigation),
+            dropFrame,
+        ).filterIsInstance<AppEffect.LogEvent>()
+
+        // The in-session shape first: both ids are A, and the sweep fired at all.
+        val confirmed = effects.filter { it.event.type == AppEventType.PICKUP_CONFIRMED }
+        assertEquals("the displaced pickup is confirmed", 1, confirmed.size)
+        assertEquals("dash-A", confirmed.single().event.sessionId)
+        effects.filter { it.event.type == AppEventType.DELIVERY_NAV_STARTED }.forEach {
+            assertEquals("dash-A", it.event.sessionId)
+        }
+
+        // Now the same edge on a step that ALSO ends A and mints B: the sweep must stay with A.
+        val sessionB = Session("dash-B", startedAt = 100_000L)
+        val nextWithB = afterDrop.copy(session = sessionB)
+        val split = effectMap.diff(
+            state(onPickup, Flow.TaskPickupArrived), state(nextWithB, Flow.TaskDropoffNavigation),
+            dropFrame,
+        ).filterIsInstance<AppEffect.LogEvent>()
+        assertEquals(
+            "A's own pickup is confirmed under A, never under the dash that just started",
+            "dash-A",
+            split.single { it.event.type == AppEventType.PICKUP_CONFIRMED }.event.sessionId,
+        )
+        split.filter { it.event.type == AppEventType.DELIVERY_NAV_STARTED }.forEach {
+            assertEquals(
+                "…while the new leg's navigation belongs to the live session",
+                "dash-B", it.event.sessionId,
+            )
+        }
     }
 }

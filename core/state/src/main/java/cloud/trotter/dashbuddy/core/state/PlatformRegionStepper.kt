@@ -529,14 +529,19 @@ class PlatformRegionStepper @Inject constructor() {
                     // and the eventual teardown force-stamped an unqualified completion. Absorb the
                     // retire's `since` so `endSession` can honor it, through the SAME predicate the
                     // summary arm reads ([absorbableRetireSince]).
-                    val absorbed = region.absorbableRetireSince()
+                    val absorbed = region.absorbableRetire()
+                    // Round 5: absorbing a retire never PULLS its commit forward. The end may be
+                    // delayed to the retire's own deadline, so a contradicting `task:unassigned`
+                    // frame the retire would still have seen can still disown it.
+                    val candidate = obs.timestamp + policy.gracePeriodMs(region.platform)
                     val (withId, wakeId) = region.mintWakeId()
                     region = withId.copy(
                         pendingDestructive = PendingDestructive(
                             kind = DestructiveKind.SESSION_END,
                             since = obs.timestamp,
-                            deadline = obs.timestamp + policy.gracePeriodMs(region.platform),
-                            absorbedRetireSince = absorbed,
+                            deadline = maxOf(candidate, absorbed?.deadline ?: candidate),
+                            absorbedRetireSince = absorbed?.since,
+                            absorbedRetireDeadline = absorbed?.deadline,
                             wakeId = wakeId,
                             windowFrom = obs.timestamp,
                         ),
@@ -724,10 +729,13 @@ class PlatformRegionStepper @Inject constructor() {
     }
 
     /**
-     * #1078 — **the retire evidence a `SESSION_END` may absorb from the pending it is arming over**,
-     * or null. The ONE spelling, read by BOTH arm sites (the authoritative summary arm and the
-     * Online→Offline mode arm) so the two can never disagree about what a teardown is allowed to
-     * honor.
+     * #1078 — **the retire a `SESSION_END` may absorb the evidence of**, or null. Round 5 returns
+     * the whole pending rather than its `since`, because BOTH halves are evidence: the instant it
+     * armed ([PendingDestructive.absorbedRetireSince]) and the window it was standing in
+     * ([PendingDestructive.absorbedRetireDeadline]).
+     *
+     * The ONE spelling, read by BOTH arm sites (the authoritative summary arm and the Online→Offline
+     * mode arm) so the two can never disagree about what a teardown is allowed to honor.
      *
      * A `TASK_RETIRE` is absorbable only when its PROVENANCE says the task it retires was actually
      * finished. That is exactly `armedFromFlow` (#596), and two values are excluded:
@@ -764,7 +772,7 @@ class PlatformRegionStepper @Inject constructor() {
      * path the sensor never captured — and for a misrecognized summary. Fail-null beats fail-wrong:
      * the machine records only what it watched finish.
      */
-    private fun PlatformRegion.absorbableRetireSince(): Long? {
+    private fun PlatformRegion.absorbableRetire(): PendingDestructive? {
         val drop = activeTask ?: return null
         if (drop.phase != TaskPhase.DROPOFF || drop.arrivedAt == null || drop.unassignedAt != null) {
             return null
@@ -772,7 +780,6 @@ class PlatformRegionStepper @Inject constructor() {
         return pendingDestructive
             ?.takeIf { it.kind == DestructiveKind.TASK_RETIRE }
             ?.takeIf { it.armedFromFlow != null && it.armedFromFlow !in UNABSORBABLE_RETIRE_FLOWS }
-            ?.since
     }
 
     /**
@@ -808,27 +815,39 @@ class PlatformRegionStepper @Inject constructor() {
             // to the idle map) was silently discarded, and the eventual `endSession` force-stamped a
             // completion the amdt-#5 T3 guard then refused to mint. Absorb instead of discarding —
             // through the ONE predicate both arm sites read ([absorbableRetireSince]).
-            val absorbed: Long? = r.absorbableRetireSince()
+            val absorbed = r.absorbableRetire()
             val pend = if (existing?.kind == DestructiveKind.SESSION_END) {
                 // Offline-grace already armed (idle/offline before summary) —
                 // tighten to the short window, keep the original `since` (the
                 // earliest destructive signal is the honest end time).
+                //
+                // An already-absorbed retire wins, and its two halves move TOGETHER (round 5) — a
+                // `since` from one retire beside a `deadline` from another would be a floor that
+                // belongs to neither.
+                val keptAbsorbedSince = existing.absorbedRetireSince ?: absorbed?.since
+                val keptAbsorbedDeadline = if (existing.absorbedRetireSince != null) {
+                    existing.absorbedRetireDeadline
+                } else {
+                    absorbed?.deadline
+                }
+                // The tighten may shorten the window — but never below the absorbed retire's own.
+                val tightened = minOf(existing.deadline, newDeadline)
                 existing.copy(
-                    deadline = minOf(existing.deadline, newDeadline),
+                    deadline = maxOf(tightened, keptAbsorbedDeadline ?: tightened),
                     authoritative = true,
                     endFields = endFields ?: existing.endFields,
-                    // An already-absorbed retire wins: the earliest destructive evidence is the
-                    // honest one, exactly as `since` is kept above.
-                    absorbedRetireSince = existing.absorbedRetireSince ?: absorbed,
+                    absorbedRetireSince = keptAbsorbedSince,
+                    absorbedRetireDeadline = keptAbsorbedDeadline,
                 )
             } else {
                 PendingDestructive(
                     kind = DestructiveKind.SESSION_END,
                     since = obs.timestamp,
-                    deadline = newDeadline,
+                    deadline = maxOf(newDeadline, absorbed?.deadline ?: newDeadline),
                     authoritative = true,
                     endFields = endFields,
-                    absorbedRetireSince = absorbed,
+                    absorbedRetireSince = absorbed?.since,
+                    absorbedRetireDeadline = absorbed?.deadline,
                 )
             }
             // #1054 round 5: a MOVED deadline is a new pending as far as its timer is concerned —
