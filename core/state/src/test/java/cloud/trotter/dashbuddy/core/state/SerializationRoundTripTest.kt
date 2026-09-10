@@ -13,6 +13,7 @@ import cloud.trotter.dashbuddy.domain.state.DestructiveKind
 import cloud.trotter.dashbuddy.domain.state.Flow
 import cloud.trotter.dashbuddy.domain.state.FlowRegion
 import cloud.trotter.dashbuddy.domain.state.Job
+import cloud.trotter.dashbuddy.domain.state.JobReceiptAnchors
 import cloud.trotter.dashbuddy.domain.state.Mode
 import cloud.trotter.dashbuddy.domain.state.ParsedFields
 import cloud.trotter.dashbuddy.domain.state.PendingDestructive
@@ -208,6 +209,28 @@ class SerializationRoundTripTest {
         )
         assertEquals(null, legacy.absorbedRetireSince)
         assertEquals(DestructiveKind.SESSION_END, legacy.kind)
+    }
+
+    @Test
+    fun `exitMintedTaskIds round-trips, and a pre-round-4 anchors JSON decodes to the empty set`() {
+        // #1078 round 4: the per-task exit-mint record is durable state the teardown mint and the
+        // #810 tripwire read, so it has to survive a snapshot — and a snapshot written before it
+        // existed must decode to the empty set, which is the pre-#1078 answer everywhere it is read.
+        val anchors = JobReceiptAnchors(
+            jobId = "J1",
+            firstEnteredAt = 10_000L,
+            exitedPostTask = true,
+            exitMintedTaskIds = setOf("d1", "d2"),
+        )
+        val decoded = StateJson.decodeFromString<JobReceiptAnchors>(StateJson.encodeToString(anchors))
+        assertEquals(anchors, decoded)
+        assertEquals(setOf("d1", "d2"), decoded.exitMintedTaskIds)
+
+        val legacy = StateJson.decodeFromString<JobReceiptAnchors>(
+            """{"jobId":"J1","firstEnteredAt":10000,"exitedPostTask":true}""",
+        )
+        assertTrue("a pre-round-4 snapshot decodes to no recorded mints", legacy.exitMintedTaskIds.isEmpty())
+        assertTrue(legacy.exitedPostTask)
     }
 
     @Test

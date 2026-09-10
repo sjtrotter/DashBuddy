@@ -42,13 +42,21 @@ internal fun EffectMap.diffTask(
     // #342), and that closure must still emit DELIVERY_CONFIRMED (#345).
     // #438 B5: the acted-flow reads that drove the (now cross-platform-arbitrated) odometer
     // Pause/Resume were removed here — the task edges below emit only log events + bubbles.
-    // #1078 round 3: the ONE close-step attribution rule ([closingSession]). It matters for the
-    // TASK_UNASSIGNED edge below: a teardown that DISOWNS an absorbed retire marks the task
-    // `unassignedAt`, and the shipped `task:unassigned` rule carries `modeHint = online`, so the
-    // mode arm mints session B on the very step that ended session A — a next-first read booked the
-    // abandon (and its bubble) to B. Identical to the old expression for every live task edge, where
-    // the session survives the step.
-    val sessionId = closingSession(prev, next)?.sessionId
+    // #1078 round 4: ONE step can end session A and mint session B (the lazy expiry commits A's
+    // absorbed `SESSION_END`, then the mode arm starts B on B's own first frame), and the two kinds
+    // of edge below belong to DIFFERENT dashes on that step:
+    //
+    //  - a PREDECESSOR-task edge closes work that happened in A — the retiring dropoff's
+    //    `DELIVERY_CONFIRMED`, and the `TASK_UNASSIGNED` a disowned teardown marks (the shipped
+    //    `task:unassigned` rule carries `modeHint = online`, which is exactly what mints B). Those
+    //    read the ONE close-step attribution rule, [closingSession].
+    //  - a NEW-task edge is B's first pickup: nav starts, arrivals and their bubbles describe work
+    //    beginning in the session that was just minted, so they keep the live next-first read.
+    //    Round 3 routed everything through `closingSession` and booked B's own pickup to A.
+    //
+    // On every ordinary step (the session survives) the two expressions are identical.
+    val predecessorSessionId = closingSession(prev, next)?.sessionId
+    val sessionId = next.session?.sessionId ?: prev.session?.sessionId
 
     return buildList {
         val prevTask = prev.activeTask
@@ -81,7 +89,7 @@ internal fun EffectMap.diffTask(
                 )?.parentOfferHashes ?: emptyList()
             add(
                 logEffect(
-                    sessionId, AppEventType.TASK_UNASSIGNED, obs.timestamp,
+                    predecessorSessionId, AppEventType.TASK_UNASSIGNED, obs.timestamp,
                     taskUnassignedPayload(abandonedTask, jobOfferHashes, obs.timestamp),
                     effectKeyOverride = "log:${AppEventType.TASK_UNASSIGNED}:${abandonedTask.taskId}",
                 ),
@@ -91,7 +99,7 @@ internal fun EffectMap.diffTask(
                     "Unassigned: ${abandonedTask.storeName ?: UNKNOWN_STORE}",
                     ChatPersona.Navigator,
                     dedupeScope = abandonedTask.taskId,
-                    sessionId = sessionId,
+                    sessionId = predecessorSessionId,
                 ),
             )
         }
@@ -154,7 +162,12 @@ internal fun EffectMap.diffTask(
                     task = prevTask,
                     phaseStartedAt = prevTask.startedAt,
                 )
-                add(logEffect(sessionId, AppEventType.DELIVERY_CONFIRMED, obs.timestamp, deliveryConfirmed))
+                add(
+                    logEffect(
+                        predecessorSessionId, AppEventType.DELIVERY_CONFIRMED, obs.timestamp,
+                        deliveryConfirmed,
+                    ),
+                )
             }
         }
 

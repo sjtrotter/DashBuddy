@@ -422,6 +422,21 @@ data class JobReceiptAnchors(
      * finds no row and counts a skip.
      */
     val exitedPostTask: Boolean = false,
+    /**
+     * The task ids whose `DELIVERY_COMPLETED` was ALREADY minted by a PostTask exit of this job
+     * (#1078 round 4) — the durable, PER-TASK record the teardown mint and the #810 tripwire read.
+     *
+     * [exitedPostTask] is job-wide, so it cannot answer "was THIS drop's completion already
+     * emitted": in a stacked job D1's exit latches the flag and D2's receipt then overwrites the
+     * announce id, and a derivation from those two would claim D2 was minted before D2 ever exited —
+     * silently dropping D2's row. This set is written by the stepper from the SAME eligibility
+     * function the emitter mints on (`exitMintCandidate`), so the record cannot drift from the
+     * emission.
+     *
+     * Additive and defaulted: a snapshot written before round 4 decodes to the empty set, which is
+     * the pre-#1078 answer everywhere it is read.
+     */
+    val exitMintedTaskIds: Set<String> = emptySet(),
 )
 
 /**

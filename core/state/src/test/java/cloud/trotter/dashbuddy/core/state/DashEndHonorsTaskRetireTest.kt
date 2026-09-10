@@ -14,6 +14,7 @@ import cloud.trotter.dashbuddy.domain.state.DestructiveKind
 import cloud.trotter.dashbuddy.domain.state.Flow
 import cloud.trotter.dashbuddy.domain.state.FlowRegion
 import cloud.trotter.dashbuddy.domain.state.Job
+import cloud.trotter.dashbuddy.domain.state.JobReceiptAnchors
 import cloud.trotter.dashbuddy.domain.state.Mode
 import cloud.trotter.dashbuddy.domain.state.ParsedFields
 import cloud.trotter.dashbuddy.domain.state.PendingDestructive
@@ -718,36 +719,228 @@ class DashEndHonorsTaskRetireTest {
     // =========================================================================
 
     @Test
-    fun `an in-session close publishes the running total the same observation settled`() {
-        // Round 2's unconditional prev-first was a regression here: a #1029 settle park can commit on
-        // the very observation that closes a job, so the surviving session's `next` value is the one
-        // this step decided. `closingSession` reads `next` whenever the session survives.
-        val onDrop = onDropoff()
-        val parked = onDrop.copy(
+    fun `an in-session close publishes the running total the SAME observation settled`() {
+        // Round 2's unconditional prev-first was a regression here, and the test has to be arranged
+        // so that it CANNOT pass under prev-first: both deadlines lapse on ONE observation while the
+        // session survives, so `prev` still holds \$0.00 and only `next` holds the settled \$21.00.
+        // (Round 3's first attempt settled the park on an EARLIER frame, by which point prev and
+        // next agreed — prev-first passed it too.)
+        val drop = drop()
+        val armed = PlatformRegion(
+            platform = platform,
+            mode = Mode.Online,
             session = session.copy(runningEarnings = 0.0),
+            activeJob = job(drop),
+            activeTask = drop,
+            lastActedFlow = Flow.Idle,
+            // A retire armed by the idle frame that also parked the read.
+            pendingDestructive = PendingDestructive(
+                kind = DestructiveKind.TASK_RETIRE,
+                since = idleAt,
+                deadline = idleAt + 10_000L,
+                armedFromFlow = Flow.Idle,
+                wakeId = 11L,
+            ),
             pendingSessionPay = PendingSessionPay(
                 value = 21.0, flow = Flow.Idle, deadline = idleAt + 3_000L,
-                since = idleAt, wakeId = 99L,
+                since = idleAt, wakeId = 12L,
             ),
         )
-        // An idle frame past the settle deadline: it commits the park AND arms the retire.
-        val settleFrame = screen(Flow.Idle, idleAt + 4_000L)
-        val afterSettle = stepper.step(
-            parked, flowRegion(Flow.Idle), flowRegion(Flow.Idle), settleFrame, policy,
-        )
+        assertEquals("the fixture starts with a stale total", 0.0, armed.session!!.runningEarnings, 0.0001)
+
+        // ONE idle frame, past BOTH deadlines: the destructive expiry retires the drop and closes the
+        // job (T1), and the settle park commits — on the same observation, with the session alive.
+        val oneFrame = screen(Flow.Idle, idleAt + 11_000L)
+        val after = step(armed, Flow.Idle, oneFrame)
+        assertEquals("the session survives the step", "dash-A", after.session?.sessionId)
+        assertEquals("…and the park settled on THIS frame", 21.0, after.session!!.runningEarnings, 0.0001)
+        assertNull("…which is also the frame that closed the job", after.activeJob)
+
+        val row = deliveries(completions(armed, after, oneFrame)).single()
         assertEquals(
-            "the park settled on this very frame",
-            21.0, afterSettle.session!!.runningEarnings, 0.0001,
+            "the completion carries the total this step settled, not the stale pre-settle figure " +
+                "(prev-first would publish \$0.00)",
+            21.0, row.sessionEarningsAtCompletion!!, 0.0001,
+        )
+    }
+
+    @Test
+    fun `closingSession falls back to the newly minted session when nothing was live before the step`() {
+        // The first captured frame of a dash can be a task screen (offer/accept never captured): the
+        // session and the task mint on ONE frame. There is no closing session to attribute to, so the
+        // task edge must carry the NEW session — never null (round 3 follow-up at the session tier).
+        val prev = PlatformRegion(Platform.DoorDash)
+        val next = PlatformRegion(Platform.DoorDash, session = Session("dash-B", startedAt = 1L))
+        assertEquals("dash-B", closingSession(prev, next)?.sessionId)
+        // …and the two rules it sits beside are unchanged.
+        val a = Session("dash-A", startedAt = 1L)
+        assertEquals("survives → next", "dash-A", closingSession(PlatformRegion(Platform.DoorDash, session = a), PlatformRegion(Platform.DoorDash, session = a))?.sessionId)
+        assertEquals("ends → prev", "dash-A", closingSession(PlatformRegion(Platform.DoorDash, session = a), PlatformRegion(Platform.DoorDash))?.sessionId)
+    }
+
+    // =========================================================================
+    // 11 — round 4: absorption also needs the #615 arrival
+    // =========================================================================
+
+    @Test
+    fun `an Idle-armed retire on an UN-ARRIVED dropoff is not absorbable`() {
+        // Provenance says the dasher LEFT the task; it does not say the order was delivered. The
+        // retire's own T1 close already demands arrival (`isJobPhysicallyComplete`), and absorption
+        // was walking past it — minting a DELIVERY_COMPLETED with a null arrival and a #691 estimate
+        // riding it for a drop the dasher was still navigating to.
+        val navigating = drop(arrived = null)
+        val onDrop = onDropoff(navigating).copy(lastActedFlow = Flow.TaskDropoffNavigation)
+
+        val afterIdle = step(onDrop, Flow.TaskDropoffNavigation, screen(Flow.Idle, idleAt))
+        val retire = afterIdle.pendingDestructive!!
+        assertEquals("the retire itself arms exactly as before", DestructiveKind.TASK_RETIRE, retire.kind)
+        assertEquals(Flow.Idle, retire.armedFromFlow)
+
+        val afterSummary = step(afterIdle, Flow.Idle, summaryFrame(summaryAt))
+        assertNull(
+            "a watched retire is necessary but NOT sufficient — the doorstep evidence is missing",
+            afterSummary.pendingDestructive?.absorbedRetireSince,
         )
 
-        // Now close the job in-session (a T1 retire commit), and read the completion's total.
-        val afterSummary = step(afterSettle, Flow.Idle, summaryFrame(idleAt + 5_000L))
         val wake = graceWake(afterSummary.pendingDestructive!!)
         val afterCommit = step(afterSummary, Flow.SessionEnded, wake)
-        val row = deliveries(completions(afterSummary, afterCommit, wake)).single()
+        val rows = deliveries(completions(afterSummary, afterCommit, wake))
+        assertEquals("nothing is minted for a drop never arrived at", 0, rows.size)
+    }
+
+    @Test
+    fun `an ARRIVED dropoff under an Idle-armed retire still absorbs (the gate is additive)`() {
+        // The guard rail on the guard rail: adding the arrival condition must not break rule 1's own
+        // shape, which is the whole 09-08 fix.
+        val onDrop = onDropoff()
+        val afterIdle = step(onDrop, Flow.TaskDropoffArrived, screen(Flow.Idle, idleAt))
+        val afterSummary = step(afterIdle, Flow.Idle, summaryFrame(summaryAt))
+        assertEquals(idleAt, afterSummary.pendingDestructive?.absorbedRetireSince)
+    }
+
+    // =========================================================================
+    // 12 — round 4: the exit-mint record is PER TASK
+    // =========================================================================
+
+    /** A region whose PostTask exit has just been recorded for [taskId], as the stepper writes it. */
+    private fun afterExitOf(taskId: String, task: Task, receiptAt: Long): PlatformRegion {
+        val onReceipt = PlatformRegion(
+            platform = platform,
+            mode = Mode.Online,
+            session = session,
+            activeJob = job(task),
+            activeTask = task,
+            lastActedFlow = Flow.PostTask,
+            lastAnnouncedPostTaskTaskId = taskId,
+            lastPostTaskFields = ParsedFields.PostTaskFields(totalPay = 21.0, isExpanded = true),
+            jobReceiptAnchors = JobReceiptAnchors(jobId = "J1", firstEnteredAt = receiptAt),
+        )
+        return step(onReceipt, Flow.PostTask, screen(Flow.Idle, receiptAt + 1_000L))
+    }
+
+    @Test
+    fun `a SECOND drop is never claimed by the FIRST drop's exit (the stacked silent loss)`() {
+        // Round 3 derived "already minted" from the job-wide `exitedPostTask` flag AND
+        // `lastAnnouncedPostTaskTaskId`. In a stacked job D1's exit latches the flag and D2's receipt
+        // then MOVES the announce id — so the derivation claimed D2 was minted before D2 ever
+        // exited, and D2's completion was skipped at the close. A silent loss, the same class #1078
+        // is about. The record is per-task now.
+        val afterD1Exit = afterExitOf("d1", drop(), 100_000L)
+        assertTrue("D1's exit is recorded", afterD1Exit.mintedAtPostTaskExit("d1"))
+
+        // D2's receipt lands and moves the announce id — the exact overwrite that fooled round 3.
+        val withD2Announce = afterD1Exit.copy(lastAnnouncedPostTaskTaskId = "d2")
+        assertTrue("D1's record survives the overwrite", withD2Announce.mintedAtPostTaskExit("d1"))
+        assertFalse(
+            "D2 never exited, so nothing was minted for it — round 3 said TRUE here and lost the row",
+            withD2Announce.mintedAtPostTaskExit("d2"),
+        )
+    }
+
+    @Test
+    fun `a PostTask frame that parsed NOTHING still records its exit mint`() {
+        // The mirror failure: a `ParsedFields.None` PostTask never sets an announce id, so round 3's
+        // derivation answered NOT-minted and the double emission it exists to prevent survived. The
+        // subject resolver names the ACTIVE dropoff regardless of what the frame parsed.
+        val onReceipt = PlatformRegion(
+            platform = platform,
+            mode = Mode.Online,
+            session = session,
+            activeJob = job(drop()),
+            activeTask = drop(),
+            lastActedFlow = Flow.PostTask,
+            jobReceiptAnchors = JobReceiptAnchors(jobId = "J1", firstEnteredAt = 100_000L),
+        )
+        assertNull("no announce id was ever set", onReceipt.lastAnnouncedPostTaskTaskId)
+
+        val exitFrame = screen(Flow.Idle, 101_000L)
+        val afterExit = step(onReceipt, Flow.PostTask, exitFrame)
+        val exitEffects = effectMap.diff(
+            state(onReceipt, Flow.PostTask), state(afterExit, Flow.Idle), exitFrame,
+        ).filterIsInstance<AppEffect.LogEvent>()
+        assertEquals("the exit mints", 1, deliveries(exitEffects).size)
+        assertTrue("…and it is recorded", afterExit.mintedAtPostTaskExit("d1"))
+
+        // Now the #1078 teardown path over a fresh, absorbable Idle retire.
+        val afterSummary = step(afterExit, Flow.Idle, summaryFrame(102_000L))
+        val wake = graceWake(afterSummary.pendingDestructive!!)
+        val afterCommit = step(afterSummary, Flow.SessionEnded, wake)
+        val teardownEffects = completions(afterSummary, afterCommit, wake)
         assertEquals(
-            "the completion carries the SETTLED total, not a stale pre-settle figure",
-            21.0, row.sessionEarningsAtCompletion!!, 0.0001,
+            "exactly ONE raw completion across the whole sequence",
+            1, deliveries(exitEffects).size + deliveries(teardownEffects).size,
+        )
+    }
+
+    // =========================================================================
+    // 13 — round 4: a NEW-task edge belongs to the session it started in
+    // =========================================================================
+
+    @Test
+    fun `session B's first pickup is attributed to B, not to the dash that ended on the same step`() {
+        // Round 3 routed every `diffTask` edge through `closingSession`, which books work that BEGINS
+        // in the new dash to the old one. The probe: A's absorbed summary pending is still standing
+        // when B's first pickup-navigation frame lands past the deadline — the lazy expiry ends A
+        // and the mode arm mints B and its pickup on that one step.
+        val onDrop = onDropoff()
+        val afterIdle = step(onDrop, Flow.TaskDropoffArrived, screen(Flow.Idle, idleAt))
+        val afterSummary = step(afterIdle, Flow.Idle, summaryFrame(summaryAt))
+        assertEquals(idleAt, afterSummary.pendingDestructive?.absorbedRetireSince)
+
+        val pickupFrame = screen(
+            Flow.TaskPickupNavigation, summaryDeadline + 5_000L,
+            parsed = ParsedFields.TaskFields(
+                storeName = "Next Merchant",
+                phase = TaskPhase.PICKUP,
+                subFlow = TaskSubFlow.NAVIGATION,
+            ),
+        )
+        val afterPickup = step(afterSummary, Flow.SessionEnded, pickupFrame)
+        val newSessionId = afterPickup.session?.sessionId
+        assertNotNull("a fresh dash started on this step", newSessionId)
+        assertNotEquals("…and it is not the one that ended", "dash-A", newSessionId)
+
+        val effects = effectMap.diff(
+            state(afterSummary, Flow.SessionEnded), state(afterPickup, Flow.TaskPickupNavigation),
+            pickupFrame,
+        ).filterIsInstance<AppEffect.LogEvent>()
+
+        val navStarted = effects.single { it.event.type == AppEventType.PICKUP_NAV_STARTED }
+        assertEquals(
+            "B's own pickup belongs to B — a NEW-task edge is not a close-step emitter",
+            newSessionId, navStarted.event.sessionId,
+        )
+        val confirmed = effects.filter { it.event.type == AppEventType.DELIVERY_CONFIRMED }
+        confirmed.forEach {
+            assertEquals(
+                "…while the retiring predecessor's confirmation stays with the dash it happened in",
+                "dash-A", it.event.sessionId,
+            )
+        }
+        assertEquals(
+            "and A's honored delivery is still A's",
+            "dash-A",
+            effects.single { it.event.type == AppEventType.DELIVERY_COMPLETED }.event.sessionId,
         )
     }
 }

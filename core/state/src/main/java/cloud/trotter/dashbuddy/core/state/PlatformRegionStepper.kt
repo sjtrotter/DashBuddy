@@ -153,8 +153,26 @@ class PlatformRegionStepper @Inject constructor() {
         val (prev, next) = actedFlowEdge(region, prevFlow, obs)
         if (prev != Flow.PostTask || next == Flow.PostTask) return region
         val anchors = region.jobReceiptAnchors ?: return region
-        return if (anchors.exitedPostTask) region
-        else region.copy(jobReceiptAnchors = anchors.copy(exitedPostTask = true))
+        // #1078 round 4: record WHICH task this exit mints, not merely that an exit happened. The
+        // job-wide `exitedPostTask` flag cannot answer a per-drop question — in a stacked job D1's
+        // exit latches it and D2's receipt then moves the announce id — so the per-task set is
+        // written from [exitMintCandidate], the emitter's OWN eligibility, on the SAME acted-flow
+        // edge (`actedFlowEdge`) the emitter diffs. One decision, two readers.
+        //
+        // The pre-step region is passed for both sides: the emitter's `next` only resolves the
+        // subject id to the freshest copy of the task, and the TASK ID is all this records.
+        // Deliberately NOT short-circuited on `anchors.exitedPostTask` any more — a second drop's
+        // exit must still add ITS id to the set.
+        val mintedId = exitMintCandidate(region, region, prev, next)?.taskId
+        val updated = anchors.copy(
+            exitedPostTask = true,
+            exitMintedTaskIds = if (mintedId != null) {
+                anchors.exitMintedTaskIds + mintedId
+            } else {
+                anchors.exitMintedTaskIds
+            },
+        )
+        return if (updated == anchors) region else region.copy(jobReceiptAnchors = updated)
     }
 
     private fun stepCore(
@@ -511,7 +529,7 @@ class PlatformRegionStepper @Inject constructor() {
                     // and the eventual teardown force-stamped an unqualified completion. Absorb the
                     // retire's `since` so `endSession` can honor it, through the SAME predicate the
                     // summary arm reads ([absorbableRetireSince]).
-                    val absorbed = region.pendingDestructive.absorbableRetireSince()
+                    val absorbed = region.absorbableRetireSince()
                     val (withId, wakeId) = region.mintWakeId()
                     region = withId.copy(
                         pendingDestructive = PendingDestructive(
@@ -679,34 +697,6 @@ class PlatformRegionStepper @Inject constructor() {
     // =========================================================================
 
     /**
-     * #1078 — **the retire evidence a `SESSION_END` may absorb from the pending it is arming over**,
-     * or null. The ONE spelling, read by BOTH arm sites (the authoritative summary arm and the
-     * Online→Offline mode arm) so the two can never disagree about what a teardown is allowed to
-     * honor.
-     *
-     * A `TASK_RETIRE` is absorbable only when its PROVENANCE says the task it retires was actually
-     * finished. That is exactly `armedFromFlow` (#596), and two values are excluded:
-     *
-     * - **[Flow.OfferPresented]** — the dasher stepped off the task to deliberate on a mid-route
-     *   add-on offer. That drop is NOT delivered, which is why `retireActiveTask` already refuses to
-     *   close the job on such a retire; letting a dash end honor it would mint a completion (and an
-     *   offer-pay share) for undelivered work — the exact fabrication #1078 exists to prevent, in the
-     *   opposite direction.
-     * - **[Flow.PostTask]** — a receipt-armed retire's completion is ALREADY minted, by the
-     *   PostTask-exit block on the very frame that left the receipt. Honoring it again at the
-     *   teardown emits a SECOND raw `DELIVERY_COMPLETED` for the same task: live, the engine's
-     *   `effects_fired` per-task key hides it; in a replay (and in any consumer counting raw
-     *   effects) it is a double-count.
-     * - **`armedFromFlow == null`** — a pre-#596 snapshot's retire, or one whose provenance was never
-     *   recorded. Unprovenanced evidence is not evidence: fail-null (#745).
-     *
-     * **Rule 2 was considered and REJECTED** (round 2): absorbing at the AUTHORITATIVE summary
-     * whenever an ARRIVED dropoff was still active would have covered the retire-less 09-05 shape,
-     * but it fabricates a completion for an arrived drop that was cancelled or unassigned through a
-     * path the sensor never captured — and for a misrecognized summary. Fail-null beats fail-wrong:
-     * the machine records only what it watched finish.
-     */
-    /**
      * #1078 round 3 — **disown an absorbed retire**: the two inseparable halves that turn an honored
      * teardown back into a refused one when the platform says the order was abandoned.
      *
@@ -733,10 +723,57 @@ class PlatformRegionStepper @Inject constructor() {
         )
     }
 
-    private fun PendingDestructive?.absorbableRetireSince(): Long? = this
-        ?.takeIf { it.kind == DestructiveKind.TASK_RETIRE }
-        ?.takeIf { it.armedFromFlow != null && it.armedFromFlow !in UNABSORBABLE_RETIRE_FLOWS }
-        ?.since
+    /**
+     * #1078 — **the retire evidence a `SESSION_END` may absorb from the pending it is arming over**,
+     * or null. The ONE spelling, read by BOTH arm sites (the authoritative summary arm and the
+     * Online→Offline mode arm) so the two can never disagree about what a teardown is allowed to
+     * honor.
+     *
+     * A `TASK_RETIRE` is absorbable only when its PROVENANCE says the task it retires was actually
+     * finished. That is exactly `armedFromFlow` (#596), and two values are excluded:
+     *
+     * - **[Flow.OfferPresented]** — the dasher stepped off the task to deliberate on a mid-route
+     *   add-on offer. That drop is NOT delivered, which is why `retireActiveTask` already refuses to
+     *   close the job on such a retire; letting a dash end honor it would mint a completion (and an
+     *   offer-pay share) for undelivered work — the exact fabrication #1078 exists to prevent, in the
+     *   opposite direction.
+     * - **[Flow.PostTask]** — a receipt-armed retire's completion is ALREADY minted, by the
+     *   PostTask-exit block on the very frame that left the receipt. Honoring it again at the
+     *   teardown emits a SECOND raw `DELIVERY_COMPLETED` for the same task: live, the engine's
+     *   `effects_fired` per-task key hides it; in a replay (and in any consumer counting raw
+     *   effects) it is a double-count.
+     * - **`armedFromFlow == null`** — a pre-#596 snapshot's retire, or one whose provenance was never
+     *   recorded. Unprovenanced evidence is not evidence: fail-null (#745).
+     *
+     * **The #615 ARRIVAL gate applies too** (round 4). Provenance says the dasher LEFT the task; it
+     * does not say the order was delivered. The retire's own T1 job close already demands arrival —
+     * `isJobPhysicallyComplete` counts only a dropoff with `arrivedAt != null` — and absorption was
+     * walking straight past it: an Idle-armed retire on a drop the dasher was still NAVIGATING to
+     * (identity-bearing, `arrivedAt == null`) was honored at the summary, minting a
+     * `DELIVERY_COMPLETED` with a null arrival and a #691 offer-pay estimate riding it. So the
+     * active task must be an ARRIVED, un-unassigned DROPOFF.
+     *
+     * This is the arrival gate from the REJECTED rule 2, and the difference is the whole point:
+     * there it was a SUBSTITUTE for a standing retire (arrival ALONE authorizing a completion, which
+     * fabricates one for a drop cancelled through an uncaptured path); here it is an ADDITIONAL
+     * condition on rule 1. A watched retire AND evidence the dasher reached the doorstep.
+     *
+     * **Rule 2 was considered and REJECTED** (round 2): absorbing at the AUTHORITATIVE summary
+     * whenever an ARRIVED dropoff was still active would have covered the retire-less 09-05 shape,
+     * but it fabricates a completion for an arrived drop that was cancelled or unassigned through a
+     * path the sensor never captured — and for a misrecognized summary. Fail-null beats fail-wrong:
+     * the machine records only what it watched finish.
+     */
+    private fun PlatformRegion.absorbableRetireSince(): Long? {
+        val drop = activeTask ?: return null
+        if (drop.phase != TaskPhase.DROPOFF || drop.arrivedAt == null || drop.unassignedAt != null) {
+            return null
+        }
+        return pendingDestructive
+            ?.takeIf { it.kind == DestructiveKind.TASK_RETIRE }
+            ?.takeIf { it.armedFromFlow != null && it.armedFromFlow !in UNABSORBABLE_RETIRE_FLOWS }
+            ?.since
+    }
 
     /**
      * Update session/job/task based on flow transitions.
@@ -771,7 +808,7 @@ class PlatformRegionStepper @Inject constructor() {
             // to the idle map) was silently discarded, and the eventual `endSession` force-stamped a
             // completion the amdt-#5 T3 guard then refused to mint. Absorb instead of discarding —
             // through the ONE predicate both arm sites read ([absorbableRetireSince]).
-            val absorbed: Long? = existing.absorbableRetireSince()
+            val absorbed: Long? = r.absorbableRetireSince()
             val pend = if (existing?.kind == DestructiveKind.SESSION_END) {
                 // Offline-grace already armed (idle/offline before summary) —
                 // tighten to the short window, keep the original `since` (the

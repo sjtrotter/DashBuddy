@@ -509,8 +509,17 @@ class EffectMap @Inject constructor(
  *   mint a fresh session B in the mode arm — the next dash's first Online frame — and a next-first
  *   read books A's delivery, its running total, and any teardown-marked unassign to B.
  *
+ * - **Nothing was live before this step** (`prev.session == null`, `next.session` minted on it).
+ *   There is no closing session to attribute to — read `next`, exactly as the pre-round-3 next-first
+ *   expression did. The fielded shape: the first captured frame of a dash is a task screen (the
+ *   offer/accept never captured), so the session AND the task mint on one frame; the task edge must
+ *   still carry that new session, not null.
+ *
  * Returns the whole [Session] rather than an id so a caller can read `runningEarnings` from the same
  * decision that named the id; a caller wanting only the id takes `?.sessionId`.
  */
-internal fun closingSession(prev: PlatformRegion, next: PlatformRegion): Session? =
-    if (next.session?.sessionId == prev.session?.sessionId) next.session else prev.session
+internal fun closingSession(prev: PlatformRegion, next: PlatformRegion): Session? = when {
+    next.session?.sessionId == prev.session?.sessionId -> next.session
+    prev.session != null -> prev.session
+    else -> next.session
+}
