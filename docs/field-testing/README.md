@@ -78,7 +78,7 @@ card's **mechanical** half, #577 (re-confirmed, 24/24, ~0.55 s — with a new po
 that entry's Bug #1), the #457 path, and #554 ShadowProjector (2/2). The #462/#460 dropoff item
 was found **broken-in-part** (raw PII in capture envelopes) and moved to that entry's Bug #7.)_
 
-- **🆕 NEW — #1078 + #1095 (PR #NNNN) — a dash you end while standing at the last doorstep must
+- **🆕 NEW — #1078 + #1095 (PR #1100) — a dash you end while standing at the last doorstep must
   still record that drop.** Two fielded sightings (09-05 session 409 −$9.95; 09-08 session 440
   −$21.00): the dash-summary grace REPLACED the live 10 s task-retire grace 1.6 s before its own
   deadline, the teardown's force-stamp was refused by the T3 guard, and nothing WARNed (#1095 was the
