@@ -1398,15 +1398,27 @@ class PlatformRegionStepper @Inject constructor() {
             ).pendingReceiptReprice
         }
         // #1078: two shapes of teardown completion, and the destructive pending says which.
-        //  - HONORED: this `SESSION_END` absorbed a PROVENANCED live `TASK_RETIRE` — the task is
-        //    retired at THAT instant, exactly as the retire's own expiry would have done, through the
-        //    one spelling of the retire copy ([completedInline]). [retirePendingForMint] then admits
-        //    it, so the completion mints.
-        //  - FORCE-STAMPED (the pre-#1078 shape, unchanged): no absorbed evidence — a bail on an
-        //    undelivered task. `completedAt` is stamped at the teardown clock so the job's shape stays
+        //  - HONORED: this `SESSION_END` absorbed a PROVENANCED live `TASK_RETIRE` **and the retire
+        //    has MATURED** — the task is retired at THAT instant, exactly as the retire's own expiry
+        //    would have done, through the one spelling of the retire copy ([completedInline]).
+        //  - FORCE-STAMPED (the pre-#1078 shape, unchanged): no absorbed evidence, or evidence that
+        //    has not matured. `completedAt` is stamped at the teardown clock so the job's shape stays
         //    readable, and the amdt-#5 T3 guard deliberately refuses to mint a row for it.
-        val honoredAt = region.pendingDestructive
-            ?.takeIf { it.kind == DestructiveKind.SESSION_END }?.absorbedRetireSince
+        //
+        // Round 6 — the MATURITY gate. The absorbed retire's deadline floors the pending's own
+        // deadline, but not every teardown arrives through that deadline: the mode arm's
+        // `IdleFields(startingSession = true)` shortcut calls `endSession` on the spot, bypassing the
+        // floor entirely, and the honored completion committed for a retire that still had seconds to
+        // run — seconds in which a `task:unassigned` frame could still have disowned it. A dash
+        // ending early is confirmation that the DASH ended; it says nothing about whether the retire
+        // matured. So honor only from the absorbed deadline onward, and force-stamp before it.
+        //
+        // Nothing else needs clearing: the completion's STAMP is the emitter's discriminator (see
+        // [PendingDestructive.absorbedRetireSince] and `mintQualified`), so a force-stamp here is
+        // automatically refused a row.
+        val pend = region.pendingDestructive?.takeIf { it.kind == DestructiveKind.SESSION_END }
+        val matured = observedAt >= (pend?.absorbedRetireDeadline ?: Long.MIN_VALUE)
+        val honoredAt = pend?.absorbedRetireSince?.takeIf { matured }
         val completedTask = region.activeTask?.let {
             if (honoredAt != null) it.completedInline(honoredAt) else it.copy(completedAt = timestamp)
         }

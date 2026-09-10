@@ -703,6 +703,14 @@ data class PendingDestructive(
      * abandon (`task:unassigned`) landing on the commit frame CLEARS this, so the teardown falls
      * back to the force-stamp the T3 guard refuses.
      *
+     * **The honored completion is stamped at EXACTLY this instant, and that stamp is how the emitter
+     * recognizes it** (round 6). `mintQualified`'s arm (b) requires `task.completedAt ==
+     * absorbedRetireSince` for a `SESSION_END` pending — the honored teardown is the only writer that
+     * stamps a completion here (a force-stamp carries the teardown clock, an inline retire its own
+     * `since`), so the emitter reads the stepper's ACTUAL decision off the task copy it is judging
+     * rather than re-deriving it. Every refusal in the stepper — an immature deadline, a disown, a
+     * lazy-expiry refusal — therefore turns the mint off with no second predicate to keep in sync.
+     *
      * Only meaningful on [DestructiveKind.SESSION_END]; null = nothing absorbed (the pre-#1078
      * teardown). A `TASK_RETIRE` never carries it.
      */
@@ -718,11 +726,15 @@ data class PendingDestructive(
      * window) arrived after the commit and could no longer disown it. The absorbed evidence has to
      * carry the window it was standing in, not just the instant it armed.
      *
-     * Applied at ARM and TIGHTEN time only: both sites take `maxOf(candidate, this)`. It is NOT
-     * re-applied after crash recovery — `recoveryHygiene` re-bases `deadline` onto the REMAINING
-     * window and this value is a pre-crash absolute instant that would stretch it; the field is kept
-     * on the restored pending so a later tighten still honors the floor, and the re-base itself is
-     * deliberately left alone.
+     * Applied at ARM and TIGHTEN time: both sites take `maxOf(candidate, this)`. It also gates the
+     * HONOR itself (round 6) — `endSession` honors the absorbed retire only once the observation
+     * reaches this instant; an earlier end (the `startingSession` shortcut, say) is confirmation that
+     * the DASH ended, not that the retire matured, so it force-stamps exactly as an un-absorbed end
+     * does.
+     *
+     * `recoveryHygiene` SHIFTS it by the same delta it applies to `deadline` (round 6): it is a
+     * boundary in the same clock, so a re-base that moved one has to move the other, or the restored
+     * floor sits in the past and the next tighten walks straight through it.
      *
      * Only meaningful on [DestructiveKind.SESSION_END] and only beside a non-null
      * [absorbedRetireSince]; null = nothing absorbed, or a pre-round-5 snapshot (no floor, which is

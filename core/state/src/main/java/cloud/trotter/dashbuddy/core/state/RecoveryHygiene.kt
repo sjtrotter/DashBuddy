@@ -127,10 +127,24 @@ fun AppState.recoveryHygiene(nowMs: Long): AppState {
                 val base = pend.servedFrom ?: pend.windowFrom ?: pend.since
                 val observed = (lastSeen - base).coerceAtLeast(0L)
                 val remaining = (pend.deadline - base - observed).coerceAtLeast(0L)
+                val rebasedDeadline = nowMs + remaining
+                // #1078 round 6: the absorbed retire's deadline is a FLOOR on this pending's own
+                // (see [PendingDestructive.absorbedRetireDeadline]), so it lives in the SAME clock
+                // and has to move with it. Left at its stale pre-crash wall value it is already in
+                // the past after any real downtime, and a summary RE-RENDER after the restore then
+                // tightens straight through it — committing the honored completion earlier than the
+                // retire's window, which is exactly what the floor exists to prevent. Shifted by the
+                // delta the re-base applied, so the REMAINING distance between the two is preserved
+                // (round 5's KDoc said "not re-applied"; that was the gap).
+                //
+                // `absorbedRetireSince` is deliberately NOT shifted: it is a historical domain
+                // instant (#732 stamps the honored completion at it), not a window boundary.
+                val shift = rebasedDeadline - pend.deadline
                 val (withId, wakeId) = scrubbed.mintWakeId()
                 withId.copy(
                     pendingDestructive = pend.copy(
-                        deadline = nowMs + remaining,
+                        deadline = rebasedDeadline,
+                        absorbedRetireDeadline = pend.absorbedRetireDeadline?.plus(shift),
                         servedFrom = nowMs,
                         wakeId = wakeId,
                     ),

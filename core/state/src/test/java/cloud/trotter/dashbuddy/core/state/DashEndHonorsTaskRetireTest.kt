@@ -1126,4 +1126,109 @@ class DashEndHonorsTaskRetireTest {
             )
         }
     }
+
+
+    // =========================================================================
+    // 16 — round 6: the honor is MATURITY-gated, and the emitter reads the stamp
+    // =========================================================================
+
+    /** The #279-B dash-start shortcut: it calls `endSession` on the spot, bypassing the deadline. */
+    private fun startingSessionFrame(at: Long) = screen(
+        Flow.Idle, at,
+        parsed = ParsedFields.IdleFields(startingSession = true),
+        modeHint = Mode.Offline,
+    )
+
+    @Test
+    fun `a dash-start shortcut BEFORE the absorbed retire matures force-stamps and mints nothing`() {
+        // The floor gates the pending's DEADLINE, but the `startingSession` shortcut does not arrive
+        // through that deadline — it ends the session on the spot. A dash ending early is
+        // confirmation that the DASH ended; it says nothing about whether the retire matured, and
+        // the retire still had 8 s in which a `task:unassigned` frame could have disowned it.
+        val onDrop = onDropoff()
+        val afterIdle = step(onDrop, Flow.TaskDropoffArrived, screen(Flow.Idle, idleAt))
+        val afterSummary = step(afterIdle, Flow.Idle, summaryFrame(idleAt + 1_000L))
+        val end = afterSummary.pendingDestructive!!
+        assertEquals("the floor is the retire's own deadline", idleAt + 10_000L, end.deadline)
+        assertEquals(idleAt + 10_000L, end.absorbedRetireDeadline)
+
+        // 8 s before the absorbed retire would have matured.
+        val shortcut = startingSessionFrame(idleAt + 2_000L)
+        val afterShortcut = step(afterSummary, Flow.Idle, shortcut)
+
+        assertNull("the old dash really did end", afterShortcut.session)
+        val stamped = afterShortcut.recentTasks.single { it.taskId == "d1" }
+        assertEquals(
+            "the drop is FORCE-stamped at the teardown clock, not honored at the retire instant",
+            end.since, stamped.completedAt,
+        )
+        assertNotEquals("…so it does not carry the honored stamp", idleAt, stamped.completedAt)
+        assertEquals(
+            "and the emitter refuses it BY CONSTRUCTION — the stamp does not match",
+            0, deliveries(completions(afterSummary, afterShortcut, shortcut)).size,
+        )
+    }
+
+    @Test
+    fun `a dash-start shortcut AFTER the absorbed retire matures honors it and mints once`() {
+        val onDrop = onDropoff()
+        val afterIdle = step(onDrop, Flow.TaskDropoffArrived, screen(Flow.Idle, idleAt))
+        val afterSummary = step(afterIdle, Flow.Idle, summaryFrame(idleAt + 1_000L))
+
+        // 1 s PAST the absorbed retire's deadline — it matured, so the evidence stands.
+        val shortcut = startingSessionFrame(idleAt + 11_000L)
+        val afterShortcut = step(afterSummary, Flow.Idle, shortcut)
+
+        assertNull(afterShortcut.session)
+        assertEquals(
+            "honored at the absorbed retire instant",
+            idleAt, afterShortcut.recentTasks.single { it.taskId == "d1" }.completedAt,
+        )
+        val rows = deliveries(completions(afterSummary, afterShortcut, shortcut))
+        assertEquals("exactly one completion", 1, rows.size)
+        assertEquals("d1", rows.single().taskId)
+    }
+
+    @Test
+    fun `an unassign inside the un-matured window is harmless — nothing was minted to contradict`() {
+        // The other half of the maturity argument: because the early shortcut minted nothing, a
+        // `task:unassigned` arriving later cannot be contradicting a row that already exists.
+        val onDrop = onDropoff()
+        val afterIdle = step(onDrop, Flow.TaskDropoffArrived, screen(Flow.Idle, idleAt))
+        val afterSummary = step(afterIdle, Flow.Idle, summaryFrame(idleAt + 1_000L))
+        val shortcut = startingSessionFrame(idleAt + 2_000L)
+        val afterShortcut = step(afterSummary, Flow.Idle, shortcut)
+        assertEquals(0, deliveries(completions(afterSummary, afterShortcut, shortcut)).size)
+
+        val abandon = screen(Flow.TaskUnassigned, idleAt + 5_000L, modeHint = Mode.Online)
+        val afterAbandon = step(afterShortcut, Flow.Idle, abandon)
+        assertEquals(
+            "still nothing minted for the drop",
+            0, deliveries(completions(afterShortcut, afterAbandon, abandon)).size,
+        )
+    }
+
+    @Test
+    fun `a disowned teardown's force-stamp is refused by the stamp rule, not by a second predicate`() {
+        // The stamp rule's real payoff: the stepper's refusal is the ONLY thing the emitter reads.
+        // Here the disown clears the absorbed value, `endSession` force-stamps, and `mintQualified`
+        // sees a `completedAt` that is not the honored instant — no separate gate to keep in sync.
+        val onDrop = onDropoff()
+        val afterIdle = step(onDrop, Flow.TaskDropoffArrived, screen(Flow.Idle, idleAt))
+        val afterSummary = step(afterIdle, Flow.Idle, summaryFrame(summaryAt))
+        assertEquals(idleAt, afterSummary.pendingDestructive?.absorbedRetireSince)
+
+        val abandon = screen(Flow.TaskUnassigned, summaryDeadline + 1L, modeHint = Mode.Online)
+        val afterCommit = step(afterSummary, Flow.SessionEnded, abandon)
+        val abandoned = (afterCommit.recentTasks + listOfNotNull(afterCommit.activeTask))
+            .single { it.taskId == "d1" }
+        assertNotEquals(
+            "the disowned teardown force-stamps — never the honored instant",
+            idleAt, abandoned.completedAt,
+        )
+        assertEquals(
+            "so the mint is off",
+            0, deliveries(completions(afterSummary, afterCommit, abandon)).size,
+        )
+    }
 }

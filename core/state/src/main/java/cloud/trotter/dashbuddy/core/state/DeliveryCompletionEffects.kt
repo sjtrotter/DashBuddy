@@ -455,10 +455,34 @@ private fun warnIfUnsplit(job: Job, taskId: String, result: OfferPayFallback.Res
  * defect in embryo — a completion minted from the STILL-ACTIVE task (its `completedAt` is stamped
  * only when the retire grace commits) is invisible to a naive `recentTasks + completedAt != null`
  * scan, so the re-price found an empty denominator and silently emitted nothing.
+ *
+ * **Round 6 — for a `SESSION_END` pending, arm (b) reads the STEPPER'S ACTUAL DECISION off the
+ * task.** A teardown has two outcomes and only one of them is a delivery, but "did it honor?" was
+ * being re-derived here from the pending alone (`retirePendingForMint`), which is a second predicate
+ * that has to be kept in sync with every refusal the stepper makes — the maturity gate, the
+ * `task:unassigned` disown, a lazy-expiry refusal. It fell out of sync at the mode arm's
+ * `startingSession` shortcut, which calls `endSession` ahead of the absorbed deadline: the stepper
+ * force-stamped, and the sweep minted anyway.
+ *
+ * So the discriminator is the STAMP. `endSession` writes `completedAt = absorbedRetireSince` when
+ * and only when it honors ([PendingDestructive.absorbedRetireSince]); a force-stamp carries the
+ * teardown clock and an inline retire its own `since`, so no other writer can land on that value.
+ * Requiring the match makes the emitter agree with the stepper BY CONSTRUCTION — a refusal anywhere
+ * in the stepper turns the mint off with nothing else to update. It reads [task], which every caller
+ * passes from the NEXT region (the post-step copy that carries the stamp).
+ *
+ * A `TASK_RETIRE` pending is unaffected: its arm (b) is the ordinary inline retire, judged as before.
  */
-internal fun mintQualified(p: PlatformRegion, retirePending: Boolean, task: Task): Boolean =
-    p.recentTasks.any { it.taskId == task.taskId && it.completedAt != null } ||
-        (retirePending && p.activeTask?.taskId == task.taskId)
+internal fun mintQualified(p: PlatformRegion, retirePending: Boolean, task: Task): Boolean {
+    if (p.recentTasks.any { it.taskId == task.taskId && it.completedAt != null }) return true
+    if (!retirePending || p.activeTask?.taskId != task.taskId) return false
+    val pend = p.pendingDestructive ?: return false
+    // Round 6: a teardown's completion counts ONLY when it carries the honored stamp.
+    if (pend.kind == DestructiveKind.SESSION_END) {
+        return pend.absorbedRetireSince != null && task.completedAt == pend.absorbedRetireSince
+    }
+    return true
+}
 
 /**
  * The ONE owner of "does this region carry destructive RETIRE evidence for its active task?" — the
@@ -643,6 +667,15 @@ private fun EffectMap.receiptSuppressesEstimate(region: PlatformRegion, job: Job
  * `internal` and receiver-less since #1073 round 14: `decideReceiptReprice` builds its denominator
  * from THIS function plus one explicit widening arm, so "the same denominator the mint uses" is
  * literally the same expression rather than a second copy that has to be kept in step.
+ *
+ * **Deliberately NOT routed through [mintQualified]'s round-6 stamp rule.** That rule reads the
+ * honored `completedAt` off a POST-step task copy, and one of this function's two callers —
+ * `decideReceiptReprice`, invoked from inside `endSession` — passes the PRE-teardown region for both
+ * `p` and `next`, where the drop is still active and unstamped. Applying the stamp rule there would
+ * empty the denominator of the very drop the teardown is about to mint and silently withhold the
+ * correction (the #1033 R2 defect, exactly). The distinction is what each answers: this is a
+ * DENOMINATOR for apportionment, where including a drop that is about to mint is the safe direction,
+ * while [mintQualified] gates an EMISSION, where being wrong writes or loses a row.
  */
 internal fun mintingDropoffTasks(
     p: PlatformRegion,

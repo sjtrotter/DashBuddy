@@ -256,9 +256,32 @@ longer disown it. Both arm sites and the summary's tighten branch therefore take
 window, never pulled ahead of it. `withWakeIdIfDeadlineMoved` mints a fresh wake when the deadline
 moves, so the timer follows; the `DASH_STOP` payload's `endedAt` is `since` and is unaffected. On the
 fielded 09-08 timing (summary 8.4 s into the retire) the summary's own deadline is already the later
-one and nothing changes. Recovery is deliberately NOT re-floored: `recoveryHygiene` re-bases
-`deadline` onto the REMAINING window and this is a pre-crash absolute instant that would stretch it —
-the field is carried on the restored pending so a later tighten still honors it.
+one and nothing changes. `recoveryHygiene` SHIFTS the floor by the same delta it applies to
+`deadline` (round 6): it is a boundary in the same clock, so a re-base that moved one has to move the
+other. Left at its stale pre-crash wall value it sits in the past after any real downtime, and a
+summary RE-RENDER after the restore tightens straight through it. `absorbedRetireSince` is
+deliberately not shifted — it is a historical domain instant (#732 stamps the honored completion at
+it), not a window boundary.
+
+**The honor itself is MATURITY-gated, and the emitter agrees with it BY CONSTRUCTION** (round 6). The
+floor gates the pending's DEADLINE, but not every teardown arrives through that deadline: the mode
+arm's `IdleFields(startingSession = true)` shortcut (#279-B) calls `endSession` on the spot, so a
+retire with seconds still to run — seconds in which a `task:unassigned` frame could have disowned it —
+was honored anyway. A dash ending early is confirmation that the DASH ended, not that the retire
+matured, so `endSession` honors only from `absorbedRetireDeadline` onward and force-stamps before it.
+
+Nothing else needs clearing, because the **completion's STAMP is the discriminator**. `endSession`
+writes `completedAt = absorbedRetireSince` when and only when it honors; a force-stamp carries the
+teardown clock and an inline retire its own `since`, so no other writer lands on that value.
+`mintQualified`'s arm (b) therefore requires `task.completedAt == p.pendingDestructive.absorbedRetireSince`
+for a `SESSION_END` pending — reading the stepper's ACTUAL decision off the post-step task copy
+instead of re-deriving it from the pending. Every refusal in the stepper (immature deadline, disown,
+lazy-expiry refusal) turns the mint off with no second predicate to keep in sync; that second
+predicate is exactly what had fallen out of step at the shortcut. `mintingDropoffTasks` is
+deliberately NOT routed through the stamp rule: one of its callers (`decideReceiptReprice`, from
+inside `endSession`) passes the PRE-teardown region, where the drop is still unstamped, and it is a
+DENOMINATOR for apportionment — over-including a drop that is about to mint is the safe direction,
+where `mintQualified` gates an EMISSION.
 
 The tighten branch keeps an already-absorbed value, and its two halves move TOGETHER — a `since` from
 one retire beside a `deadline` from another would be a floor belonging to neither.
