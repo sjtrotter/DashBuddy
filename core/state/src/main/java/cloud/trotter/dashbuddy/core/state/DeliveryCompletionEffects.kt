@@ -51,61 +51,11 @@ internal fun EffectMap.diffDeliveryCompletion(
             addAll(taskCompletedOverride)
         } else {
             val sessionId = next.session?.sessionId ?: p.session?.sessionId
-            // WHICH task this exit completes is the SAME question as "which drop is this receipt
-            // about" (#1073 round 15), so it has the same one owner: [receiptSubjectTaskId], read on
-            // the PRE-step region — the delivered task is still ACTIVE there while its retire grace
-            // runs (#431 pt 2), and already in `recentTasks` when it retired on this very step. The
-            // resolver is job-scoped (#518: a PRIOR job's stale drop can never be the fallback — the
-            // cross-job leak, db seq 117/100) and names the ACTIVE dropoff first, arrival or not — the
-            // field renders deliveries with no arrival frame. A false `post:task` frame while an
-            // un-arrived drop is active can therefore still complete it on this exit: pre-existing,
-            // tracked as #1081 (three discriminators tried and refuted in #1075 rounds 14–16).
-            //
-            // #596 amdt 2 survives as its own guard: when there is genuinely nothing being completed
-            // on this exit — job already closed by T1 on a prior step, no active task, no retire
-            // pending — the resolver's unscoped arm must NOT grab a stale `recentTask` and re-fire a
-            // completion the close-out block already minted.
-            val allowUnscopedFallback =
-                !(p.activeJob == null && p.activeTask == null &&
-                    p.pendingDestructive?.kind != DestructiveKind.TASK_RETIRE)
-            val subjectTaskId = p.receiptSubjectTaskId()
-                ?.takeIf { p.activeJob != null || allowUnscopedFallback }
-            val completedTask = subjectTaskId?.let { id ->
-                next.activeTask?.takeIf { it.taskId == id }
-                    ?: next.recentTasks.lastOrNull { it.taskId == id }
-            }
-            // #564: a delivery completes a DROPOFF, never a PICKUP. A mid-stack add-on offer
-            // can grace-retire an in-flight PICKUP task and a transient/misrecognized
-            // delivery-summary frame then drives this PostTask-exit — fabricating a $0,
-            // customer-less "completion" of a store that was never delivered (06-21 seq98:
-            // Smoky Mo's pickup …32 completed at the moment the Burger King add-on was
-            // accepted). Only a task that actually reached the dropoff phase may complete.
-            // #653 firewall parity: mirror the #596 close-out path's #498 identity firewall
-            // (below, `customerNameHash == null && customerAddressHash == null`) here too —
-            // an identity-less phantom drop must not mint a full-receipt completion from the
-            // PostTask-exit path either, or it would land the whole receipt on a phantom while
-            // its siblings' apportioned shares already sum to it (the read-model double-count,
-            // #653/#630). An identity-BEARING single drop is the normal path, unaffected.
-            val identityLess = completedTask != null &&
-                completedTask.customerNameHash == null &&
-                completedTask.customerAddressHash == null
-            // #736 belt: the `recentTasks.lastOrNull { jobId }` fallback above can select a drop the
-            // dasher UNASSIGNED (a null-completedAt abandon that the close-out sweep already filters) —
-            // it must never be the PostTask-exit mint target either, or it fabricates a
-            // DELIVERY_COMPLETED for a never-delivered order. Mirrors the close-out's `unassignedAt`
-            // firewall (below) at this second mint site.
-            val unassigned = completedTask?.unassignedAt != null
-            // WHICH drop a PostTask frame completes is NOT this PR's subject (#1073 round 17). A
-            // false `post:task` frame while an un-arrived drop is active can still complete that drop
-            // — on ANY exit: the same task's navigation returning, an offer overlay, idle, or a dash
-            // end. That is PRE-EXISTING on master, and #1073 does not change it: it is tracked as
-            // **#1081**. Three discriminators were tried across rounds 14–16 and each was refuted by
-            // a concrete sequence — arrival evidence (the field delivers with NO arrival frame:
-            // 06-16 runs nav → pre-arrival → receipt), a foreign announce id (inert for the first
-            // job of a dash), and refusing an exit that resumes the same task (which swallows a
-            // GENUINE receipt followed by a `dropoff_handoff` re-render, losing the delivery
-            // entirely, and reads a different pre-step region than the stepper's own lazy expiry).
-            //
+            // #1078 round 4: WHICH task this exit mints is [exitMintCandidate]'s answer, and this
+            // block has no eligibility logic of its own left — the stepper records the very same
+            // decision into `JobReceiptAnchors.exitMintedTaskIds`, so the durable record can never
+            // drift from what was actually emitted.
+            val completedTask = exitMintCandidate(p, next, actedPrevFlow, actedNextFlow)
             // COMPLETION and RECEIPT are two questions (#1073 round 15). Round 14 coupled them —
             // this exit refused to complete a drop the cached receipt did not describe — and that
             // could delete a delivered drop's row forever: T1's receipt is cached with coverage
@@ -120,9 +70,7 @@ internal fun EffectMap.diffDeliveryCompletion(
             val coveredTaskIds = p.lastPostTaskCoverage?.taskIds
             val describedByReceipt =
                 completedTask != null && coveredTaskIds?.contains(completedTask.taskId) == true
-            if (completedTask != null && completedTask.phase == TaskPhase.DROPOFF &&
-                !identityLess && !unassigned
-            ) {
+            if (completedTask != null) {
                 val retireSince = p.pendingDestructive
                     ?.takeIf { it.kind == DestructiveKind.TASK_RETIRE }?.since
                 // #630 R2: gate the receipt split on the job's FINAL shape (the SAME predicate
@@ -256,7 +204,12 @@ internal fun EffectMap.diffDeliveryCompletion(
     // skipped; if it never rendered, this is the only emission.
     val closedJob = p.activeJob
     if (closedJob != null && next.activeJob?.jobId != closedJob.jobId) {
-        val sessionId = next.session?.sessionId ?: p.session?.sessionId
+        // #1078 round 3: through the ONE close-step attribution rule ([closingSession]) — `next` while
+        // the session survives (so an in-session close publishes the total THIS observation settled),
+        // `prev` when it ends or changes (so a same-step end-A + mint-B books A's delivery to A).
+        // Round 2's unconditional prev-first got the first half wrong.
+        val jobSession = closingSession(p, next)
+        val sessionId = jobSession?.sessionId
         // #526 D5 sweep: a job that closed WITHOUT ever reaching a dropoff (a pickup-only
         // close — no pickup→dropoff edge ever fired to confirm the pickups) still owes
         // PICKUP_CONFIRMED for each arrived pickup. A job that DID reach a dropoff already
@@ -278,7 +231,10 @@ internal fun EffectMap.diffDeliveryCompletion(
                 ),
             )
         }
-        val retirePending = p.pendingDestructive?.kind == DestructiveKind.TASK_RETIRE
+        // #1078: through the ONE owner — a `SESSION_END` that absorbed a retire carries the same
+        // evidence a live `TASK_RETIRE` does, and the #996 amendment-B mask below plus
+        // `mintingDropoffTasks` inherit it through this single variable.
+        val retirePending = p.retirePendingForMint()
         // #691/#996/#997: the whole offer-pay attribution for this close, computed ONCE (the drops
         // all share one job shape — running the ladder per completion would also let the two mint
         // instants disagree). Receipt suppression is evaluated FIRST so a receipted close never pays
@@ -355,11 +311,22 @@ internal fun EffectMap.diffDeliveryCompletion(
             // amdt #2 exclusivity: the PostTask-exit block already minted this one.
             if (task.taskId in emittedThisStep) continue
             // amdt #5: qualify ONLY (a) a task already completed BEFORE this step, or (b) the
-            // active task just retired under a TASK_RETIRE grace. This excludes exactly
-            // endSession's force-stamp of an active, UNDELIVERED task (T3 false-completion
-            // guard) — that task carries no TASK_RETIRE pending, so neither arm matches. The SAME
-            // discriminator masks the completeness proof's evidence above (#996 amendment B).
+            // active task just retired under retire evidence ([retirePendingForMint] — a live
+            // TASK_RETIRE, or since #1078 a SESSION_END that ABSORBED one). This excludes exactly
+            // endSession's force-stamp of an active, UNDELIVERED task (T3 false-completion guard):
+            // an end with nothing absorbed carries no retire evidence, so neither arm matches. The
+            // SAME discriminator masks the completeness proof's evidence above (#996 amendment B)
+            // and the #1095 tripwire's.
             if (!mintQualified(p, retirePending, task)) continue
+            // #1078 round 5: there is deliberately NO "already minted at a PostTask exit" skip here.
+            // Round 3 added one and round 5 withdrew it: `StateManagerV2` snapshots BEFORE the exit's
+            // effect is durably written, so a restore can carry an `exitMintedTaskIds` entry for a
+            // completion that never reached `app_events` — and the skip would then suppress the very
+            // retry master permits, turning a crash into a permanently missing row. A duplicate RAW
+            // emission is the lesser evil and is already master's behaviour on this path: the
+            // engine's per-task `effects_fired` key (`log:DELIVERY_COMPLETED:<taskId>`) dedups it
+            // live, so what actually reaches the log is one row either way. The record survives only
+            // as EVIDENCE for the #1095 tripwire, where being wrong can at most silence a WARN.
             // amdt #3: attach the receipt's pay ONLY when the receipt was announced for THIS
             // task (mirror the PostTask path's per-task pinning). A receipt-less completion
             // naturally gets null pay (#528's job), never a normal receipted delivery's pay.
@@ -394,7 +361,9 @@ internal fun EffectMap.diffDeliveryCompletion(
                 jobId = closedJob.jobId,
                 completedAt = completedAt,
                 postTaskFields = postTaskFields,
-                sessionEarnings = next.session?.runningEarnings ?: p.session?.runningEarnings,
+                // #1078 round 3: read off the SAME decision that named the sessionId above, so an
+                // event can never carry one dash's id and another's running total.
+                sessionEarnings = jobSession?.runningEarnings,
                 dropRealizedPay = dropShares[task.taskId],
                 offerPay = offerResult,
                 jobOfferHashes = closedJob.parentOfferHashes,
@@ -475,7 +444,8 @@ private fun warnIfUnsplit(job: Job, taskId: String, result: OfferPayFallback.Res
 /**
  * The amdt-#5 mint qualification, hoisted so the close-out loop AND the #996 completeness proof read
  * ONE definition of "this completion is real" (#997 amendment B): a task already completed BEFORE
- * this step, or the active task just retired under a `TASK_RETIRE` grace. It excludes exactly
+ * this step, or the active task just retired under retire evidence ([retirePendingForMint] — a live
+ * `TASK_RETIRE`, or since #1078 a `SESSION_END` that absorbed one). It excludes exactly
  * `endSession`'s force-stamp of an active, UNDELIVERED task at a bail — which, for a drop that had
  * already ARRIVED, would otherwise satisfy the #749 coverage arm and FORGE a completeness proof for
  * an abandoned job.
@@ -485,10 +455,155 @@ private fun warnIfUnsplit(job: Job, taskId: String, result: OfferPayFallback.Res
  * defect in embryo — a completion minted from the STILL-ACTIVE task (its `completedAt` is stamped
  * only when the retire grace commits) is invisible to a naive `recentTasks + completedAt != null`
  * scan, so the re-price found an empty denominator and silently emitted nothing.
+ *
+ * **Round 6 — for a `SESSION_END` pending, arm (b) reads the STEPPER'S ACTUAL DECISION off the
+ * task.** A teardown has two outcomes and only one of them is a delivery, but "did it honor?" was
+ * being re-derived here from the pending alone (`retirePendingForMint`), which is a second predicate
+ * that has to be kept in sync with every refusal the stepper makes — the maturity gate, the
+ * `task:unassigned` disown, a lazy-expiry refusal. It fell out of sync at the mode arm's
+ * `startingSession` shortcut, which calls `endSession` ahead of the absorbed deadline: the stepper
+ * force-stamped, and the sweep minted anyway.
+ *
+ * So the discriminator is the STAMP. `endSession` writes `completedAt = absorbedRetireSince` when
+ * and only when it honors ([PendingDestructive.absorbedRetireSince]); a force-stamp carries the
+ * teardown clock and an inline retire its own `since`, so no other writer can land on that value.
+ * Requiring the match makes the emitter agree with the stepper BY CONSTRUCTION — a refusal anywhere
+ * in the stepper turns the mint off with nothing else to update. It reads [task], which every caller
+ * passes from the NEXT region (the post-step copy that carries the stamp).
+ *
+ * A `TASK_RETIRE` pending is unaffected: its arm (b) is the ordinary inline retire, judged as before.
  */
-internal fun mintQualified(p: PlatformRegion, retirePending: Boolean, task: Task): Boolean =
-    p.recentTasks.any { it.taskId == task.taskId && it.completedAt != null } ||
-        (retirePending && p.activeTask?.taskId == task.taskId)
+internal fun mintQualified(p: PlatformRegion, retirePending: Boolean, task: Task): Boolean {
+    if (p.recentTasks.any { it.taskId == task.taskId && it.completedAt != null }) return true
+    if (!retirePending || p.activeTask?.taskId != task.taskId) return false
+    val pend = p.pendingDestructive ?: return false
+    // Round 6: a teardown's completion counts ONLY when it carries the honored stamp.
+    if (pend.kind == DestructiveKind.SESSION_END) {
+        return pend.absorbedRetireSince != null && task.completedAt == pend.absorbedRetireSince
+    }
+    return true
+}
+
+/**
+ * The ONE owner of "does this region carry destructive RETIRE evidence for its active task?" — the
+ * `retirePending` argument every [mintQualified] caller passes (#1078).
+ *
+ * Two shapes answer yes, and they are the same fact:
+ * - a live `TASK_RETIRE` grace (the pre-#1078 spelling), and
+ * - a `SESSION_END` that ABSORBED one. See [PendingDestructive.absorbedRetireSince]: the destructive
+ *   slot holds one pending, so an end arming over a retire used to DISCARD the evidence, and the
+ *   teardown's force-stamp was then refused by the amdt-#5 T3 guard — $21.00 of fielded delivery
+ *   with no row and no warning (2026-09-08, build 8028691a). Only a PROVENANCED retire is
+ *   absorbable (`PlatformRegionStepper.absorbableRetireSince`).
+ *
+ * The T3 guard itself is untouched: a `SESSION_END` with NO absorbed value still answers false, so a
+ * bail on an undelivered task mints nothing, exactly as before.
+ */
+internal fun PlatformRegion.retirePendingForMint(): Boolean =
+    pendingDestructive?.let {
+        it.kind == DestructiveKind.TASK_RETIRE ||
+            (it.kind == DestructiveKind.SESSION_END && it.absorbedRetireSince != null)
+    } == true
+
+/**
+ * **The task a PostTask exit would mint a `DELIVERY_COMPLETED` for**, or null (#1078 round 4) — the
+ * ONE definition of that eligibility, so the emitter and the stepper's durable record cannot drift.
+ *
+ * Everything the exit block used to decide inline lives here:
+ *
+ * - **The edge.** Only THIS region's own acted `PostTask` → non-`PostTask` transition (#438 item 5).
+ * - **The subject.** WHICH task an exit completes is the same question as "which drop is this
+ *   receipt about" (#1073 round 15), so it has the same owner: [receiptSubjectTaskId], read on the
+ *   PRE-step region — the delivered task is still ACTIVE there while its retire grace runs (#431
+ *   pt 2), and already in `recentTasks` when it retired on this very step. Job-scoped (#518: a PRIOR
+ *   job's stale drop can never be the fallback — the cross-job leak, db seq 117/100), naming the
+ *   ACTIVE dropoff first, arrival or not, because the field renders deliveries with no arrival frame.
+ * - **#596 amdt 2.** When there is genuinely nothing to complete — job already closed by T1 on a
+ *   prior step, no active task, no retire pending — the resolver's unscoped arm must NOT grab a
+ *   stale `recentTask` and re-fire a completion the close-out block already minted.
+ * - **#564 phase firewall.** A delivery completes a DROPOFF, never a PICKUP. A mid-stack add-on
+ *   offer can grace-retire an in-flight PICKUP and a misrecognized summary frame then drives this
+ *   exit — fabricating a \$0, customer-less "completion" of a store never delivered (06-21 seq98).
+ * - **#653/#498 identity firewall.** An identity-less phantom drop must not mint a full-receipt
+ *   completion here either, or it lands the whole receipt on a phantom while its siblings'
+ *   apportioned shares already sum to it (the read-model double-count, #653/#630).
+ * - **#736 unassigned belt.** The `recentTasks` fallback can select a drop the dasher UNASSIGNED; it
+ *   must never be a mint target, or it fabricates a completion for a never-delivered order.
+ *
+ * [p] is the PRE-step region (every predicate above reads it); [next] only resolves the subject id
+ * to the freshest copy of the task, which is why the stepper — which has one region — passes the
+ * same region twice and still gets the same TASK ID.
+ *
+ * **Residual, unchanged and pre-existing (#1081):** a false `post:task` frame while an un-arrived
+ * drop is active can still complete that drop, on any exit. Three discriminators were tried across
+ * #1075 rounds 14–16 and each was refuted by a concrete sequence.
+ *
+ * **One caveat the stepper cannot see:** a rule-driven `TASK_COMPLETED` trigger override
+ * (`triggerOverrideEffects`) replaces this mint at the emitter. The stepper has no observation-level
+ * view of that, so an overridden exit is still recorded as minted — which fails toward NOT
+ * double-emitting, the same direction as every other guard here. No checked-in ruleset declares one.
+ */
+internal fun exitMintCandidate(
+    p: PlatformRegion,
+    next: PlatformRegion,
+    actedPrevFlow: Flow?,
+    actedNextFlow: Flow?,
+): Task? {
+    if (actedPrevFlow != Flow.PostTask || actedNextFlow == Flow.PostTask) return null
+    val allowUnscopedFallback =
+        !(p.activeJob == null && p.activeTask == null &&
+            p.pendingDestructive?.kind != DestructiveKind.TASK_RETIRE)
+    val subjectTaskId = p.receiptSubjectTaskId()
+        ?.takeIf { p.activeJob != null || allowUnscopedFallback }
+        ?: return null
+    val task = next.activeTask?.takeIf { it.taskId == subjectTaskId }
+        ?: next.recentTasks.lastOrNull { it.taskId == subjectTaskId }
+        ?: return null
+    if (task.phase != TaskPhase.DROPOFF) return null
+    if (task.customerNameHash == null && task.customerAddressHash == null) return null
+    if (task.unassignedAt != null) return null
+    return task
+}
+
+/**
+ * Was THIS task's `DELIVERY_COMPLETED` already emitted by a PostTask exit? (#1078)
+ *
+ * **Evidence for the #1095 tripwire, and NOTHING else — never a mint gate.** Round 3 also used it to
+ * skip the close-out sweep's arm (b); round 5 withdrew that, because the failure directions are not
+ * symmetric:
+ *
+ * - As a MINT GATE it fails toward LOSS. `StateManagerV2` snapshots before the exit's effect is
+ *   durably written, so a restored region can claim a completion that never reached `app_events`,
+ *   and the skip suppresses the retry master would have made — a permanently missing row, which is
+ *   the exact class #1078 exists to fix. Emitting twice costs nothing that matters: the engine's
+ *   per-task `effects_fired` key dedups it live, and master already double-emits on this path.
+ * - As TRIPWIRE EVIDENCE it fails toward QUIET. A wrong "already minted" can only stop a
+ *   `JOB_ACCEPT_MISMATCH` WARN from firing; it can never delete a delivery or fabricate one.
+ *
+ * Why the record exists at all: the exit block mints the drop the receipt was about and leaves it
+ * ACTIVE (its `completedAt` is stamped only when the retire commits), so on a later step neither
+ * `recentTasks` nor the current pending's provenance can say the mint happened — and the tripwire's
+ * masked evidence read a perfectly normal receipted delivery (dash ended before the receipt's retire
+ * expired) as a LOST drop and raised a false 1-of-0 alarm.
+ *
+ * Round 3 DERIVED the answer from `jobReceiptAnchors.exitedPostTask` and `lastAnnouncedPostTaskTaskId`
+ * and that was wrong three ways, each a real sequence: in a stacked job D1's exit latches the
+ * job-wide flag while D2's receipt moves the announce id, so D2 read as already-minted before it
+ * ever exited; an identity-less task whose exit the #498 firewall REFUSED read as minted; and a
+ * `ParsedFields.None` PostTask that set no announce id read as not-minted. So the record is per-task
+ * and written from the emitter's own eligibility ([exitMintCandidate]) by
+ * `PlatformRegionStepper.stampPostTaskExit`, on the same acted-flow edge (`actedFlowEdge`) the
+ * emitter diffs. `JobReceiptAnchors` is cleared with its job and by `endSession`/`completeActiveJob`
+ * only AFTER the step that reads it; a pre-round-4 snapshot decodes to the empty set.
+ *
+ * **Two accepted over-reports, both fail-QUIET.** A rule-driven `TASK_COMPLETED` trigger override
+ * replaces the mint at the emitter and the stepper cannot see it (no checked-in ruleset declares
+ * one). And a PostTask exit straight into `task:unassigned` records the id while the emitter —
+ * reading `unassignedAt` on the POST-step task — mints nothing. Both leave the record claiming a
+ * mint that did not happen, which at most quiets a WARN.
+ */
+internal fun PlatformRegion.mintedAtPostTaskExit(taskId: String): Boolean =
+    jobReceiptAnchors?.exitMintedTaskIds?.contains(taskId) == true
 
 /**
  * #691 receipt-evidence verdict: does [job] show a PAY-BEARING post-task receipt attributable to
@@ -552,6 +667,15 @@ private fun EffectMap.receiptSuppressesEstimate(region: PlatformRegion, job: Job
  * `internal` and receiver-less since #1073 round 14: `decideReceiptReprice` builds its denominator
  * from THIS function plus one explicit widening arm, so "the same denominator the mint uses" is
  * literally the same expression rather than a second copy that has to be kept in step.
+ *
+ * **Deliberately NOT routed through [mintQualified]'s round-6 stamp rule.** That rule reads the
+ * honored `completedAt` off a POST-step task copy, and one of this function's two callers —
+ * `decideReceiptReprice`, invoked from inside `endSession` — passes the PRE-teardown region for both
+ * `p` and `next`, where the drop is still active and unstamped. Applying the stamp rule there would
+ * empty the denominator of the very drop the teardown is about to mint and silently withhold the
+ * correction (the #1033 R2 defect, exactly). The distinction is what each answers: this is a
+ * DENOMINATOR for apportionment, where including a drop that is about to mint is the safe direction,
+ * while [mintQualified] gates an EMISSION, where being wrong writes or loses a row.
  */
 internal fun mintingDropoffTasks(
     p: PlatformRegion,

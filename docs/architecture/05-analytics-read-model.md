@@ -477,7 +477,11 @@ Tier-1 reconcile reads only delivered rows sequenced BEFORE the mismatch event, 
 emits `JOB_ACCEPT_MISMATCH` AFTER the closing job's final `DELIVERY_COMPLETED`, so the store
 evidence is complete by construction and the fold is paging-independent (historical logs carrying
 the old mismatch-first order deterministically fall to Tier 2). The only state-machine touch is that
-emission ORDER within one close step — no new events, no reducer change.
+emission ORDER within one close step — no new events, no reducer change. **#1095 widened the
+tripwire's SCOPE** (see §3): every close edge is in scope now — including the `endSession` teardown —
+attributed to the job's own session, reading mint-qualified evidence, with the single-accept floor
+lifted from 2 to 1 on a session-end close. Tier 1/Tier 2 resolution below is unchanged; there are
+simply more mismatch events reaching it, and each names the session the job actually lived in.
 
 **#1033 layer 2 (late-expanded receipt → `DELIVERY_RECEIPT_REPRICE`, Room v15→v16 additive
 `delivery_records.receiptRepricedAt` + `.driverAdjustedAt`, `PROJECTOR_VERSION` UNCHANGED):** layer 1 widens the window; this

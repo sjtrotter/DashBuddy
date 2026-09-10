@@ -422,6 +422,21 @@ data class JobReceiptAnchors(
      * finds no row and counts a skip.
      */
     val exitedPostTask: Boolean = false,
+    /**
+     * The task ids whose `DELIVERY_COMPLETED` was ALREADY minted by a PostTask exit of this job
+     * (#1078 round 4) — the durable, PER-TASK record the teardown mint and the #810 tripwire read.
+     *
+     * [exitedPostTask] is job-wide, so it cannot answer "was THIS drop's completion already
+     * emitted": in a stacked job D1's exit latches the flag and D2's receipt then overwrites the
+     * announce id, and a derivation from those two would claim D2 was minted before D2 ever exited —
+     * silently dropping D2's row. This set is written by the stepper from the SAME eligibility
+     * function the emitter mints on (`exitMintCandidate`), so the record cannot drift from the
+     * emission.
+     *
+     * Additive and defaulted: a snapshot written before round 4 decodes to the empty set, which is
+     * the pre-#1078 answer everywhere it is read.
+     */
+    val exitMintedTaskIds: Set<String> = emptySet(),
 )
 
 /**
@@ -674,6 +689,58 @@ data class PendingDestructive(
      * grace timeout, not the summary itself.
      */
     val endFields: ParsedFields.SessionEndedFields? = null,
+    /**
+     * The [since] of a `TASK_RETIRE` this `SESSION_END` ABSORBED when it armed over it (#1078).
+     *
+     * A single-slot pending must not discard destructive evidence already standing: `endSession`
+     * honors it as a real completion (the task is retired at this instant, exactly as the retire's
+     * own expiry would have) instead of the unqualified force-stamp the T3 guard refuses.
+     *
+     * **Only a PROVENANCED retire is absorbable** — see `PlatformRegionStepper`'s
+     * `absorbableRetireSince`, the one predicate both arm sites read: an [armedFromFlow] of
+     * `OfferPresented` retires an UNDELIVERED drop, a `PostTask` one's completion is already minted
+     * on the receipt's exit frame, and a null provenance is not evidence at all. An authoritative
+     * abandon (`task:unassigned`) landing on the commit frame CLEARS this, so the teardown falls
+     * back to the force-stamp the T3 guard refuses.
+     *
+     * **The honored completion is stamped at EXACTLY this instant, and that stamp is how the emitter
+     * recognizes it** (round 6). `mintQualified`'s arm (b) requires `task.completedAt ==
+     * absorbedRetireSince` for a `SESSION_END` pending — the honored teardown is the only writer that
+     * stamps a completion here (a force-stamp carries the teardown clock, an inline retire its own
+     * `since`), so the emitter reads the stepper's ACTUAL decision off the task copy it is judging
+     * rather than re-deriving it. Every refusal in the stepper — an immature deadline, a disown, a
+     * lazy-expiry refusal — therefore turns the mint off with no second predicate to keep in sync.
+     *
+     * Only meaningful on [DestructiveKind.SESSION_END]; null = nothing absorbed (the pre-#1078
+     * teardown). A `TASK_RETIRE` never carries it.
+     */
+    val absorbedRetireSince: Long? = null,
+    /**
+     * The `deadline` of the `TASK_RETIRE` this `SESSION_END` absorbed (#1078 round 5) — a FLOOR on
+     * this pending's own deadline, so absorbing a retire can never make its commit land EARLIER than
+     * the retire's own would have.
+     *
+     * Without it a summary arriving inside the retire's 10 s window replaced a deadline 10 s out
+     * with one 2.5 s out and committed the honored completion early — and a contradicting
+     * `task:unassigned` frame that master's retire would still have seen (it was inside the original
+     * window) arrived after the commit and could no longer disown it. The absorbed evidence has to
+     * carry the window it was standing in, not just the instant it armed.
+     *
+     * Applied at ARM and TIGHTEN time: both sites take `maxOf(candidate, this)`. It also gates the
+     * HONOR itself (round 6) — `endSession` honors the absorbed retire only once the observation
+     * reaches this instant; an earlier end (the `startingSession` shortcut, say) is confirmation that
+     * the DASH ended, not that the retire matured, so it force-stamps exactly as an un-absorbed end
+     * does.
+     *
+     * `recoveryHygiene` SHIFTS it by the same delta it applies to `deadline` (round 6): it is a
+     * boundary in the same clock, so a re-base that moved one has to move the other, or the restored
+     * floor sits in the past and the next tighten walks straight through it.
+     *
+     * Only meaningful on [DestructiveKind.SESSION_END] and only beside a non-null
+     * [absorbedRetireSince]; null = nothing absorbed, or a pre-round-5 snapshot (no floor, which is
+     * the pre-#1078 timing).
+     */
+    val absorbedRetireDeadline: Long? = null,
     /**
      * Which arm of this pending's wake timer belongs to it (#1054 round 5) — see
      * [PlatformRegion.wakeSeq].

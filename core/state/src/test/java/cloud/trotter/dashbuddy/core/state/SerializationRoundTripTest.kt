@@ -13,6 +13,7 @@ import cloud.trotter.dashbuddy.domain.state.DestructiveKind
 import cloud.trotter.dashbuddy.domain.state.Flow
 import cloud.trotter.dashbuddy.domain.state.FlowRegion
 import cloud.trotter.dashbuddy.domain.state.Job
+import cloud.trotter.dashbuddy.domain.state.JobReceiptAnchors
 import cloud.trotter.dashbuddy.domain.state.Mode
 import cloud.trotter.dashbuddy.domain.state.ParsedFields
 import cloud.trotter.dashbuddy.domain.state.PendingDestructive
@@ -183,6 +184,59 @@ class SerializationRoundTripTest {
         assertEquals(7L, state.correlationVersion)
         assertEquals(Flow.Idle, state.regions.flow.flow) // defaulted, NOT null
         assertTrue(state.regions.platforms.isEmpty())
+    }
+
+    @Test
+    fun `a SESSION_END carrying an absorbed retire round-trips, and a pre-1078 pending decodes to null`() {
+        // #1078: `absorbedRetireSince` is additive, nullable and defaulted, so it must survive a
+        // snapshot round-trip AND a snapshot written before it existed must decode to null (the
+        // pre-#1078 teardown), never fail the restore.
+        val honored = PendingDestructive(
+            kind = DestructiveKind.SESSION_END,
+            since = 1_000L,
+            deadline = 3_500L,
+            authoritative = true,
+            absorbedRetireSince = 900L,
+            absorbedRetireDeadline = 10_900L,
+            wakeId = 7L,
+            windowFrom = 1_000L,
+        )
+        val decoded = StateJson.decodeFromString<PendingDestructive>(StateJson.encodeToString(honored))
+        assertEquals(honored, decoded)
+        assertEquals(900L, decoded.absorbedRetireSince)
+        assertEquals(
+            "round 5: the absorbed retire's WINDOW rides with it — it is a floor on this deadline",
+            10_900L, decoded.absorbedRetireDeadline,
+        )
+
+        val legacy = StateJson.decodeFromString<PendingDestructive>(
+            """{"kind":"SESSION_END","since":1000,"deadline":3500,"authoritative":true}""",
+        )
+        assertEquals(null, legacy.absorbedRetireSince)
+        assertEquals("a pre-round-5 snapshot carries no floor", null, legacy.absorbedRetireDeadline)
+        assertEquals(DestructiveKind.SESSION_END, legacy.kind)
+    }
+
+    @Test
+    fun `exitMintedTaskIds round-trips, and a pre-round-4 anchors JSON decodes to the empty set`() {
+        // #1078 round 4: the per-task exit-mint record is durable state the teardown mint and the
+        // #810 tripwire read, so it has to survive a snapshot — and a snapshot written before it
+        // existed must decode to the empty set, which is the pre-#1078 answer everywhere it is read.
+        val anchors = JobReceiptAnchors(
+            jobId = "J1",
+            firstEnteredAt = 10_000L,
+            exitedPostTask = true,
+            exitMintedTaskIds = setOf("d1", "d2"),
+        )
+        val decoded = StateJson.decodeFromString<JobReceiptAnchors>(StateJson.encodeToString(anchors))
+        assertEquals(anchors, decoded)
+        assertEquals(setOf("d1", "d2"), decoded.exitMintedTaskIds)
+
+        val legacy = StateJson.decodeFromString<JobReceiptAnchors>(
+            """{"jobId":"J1","firstEnteredAt":10000,"exitedPostTask":true}""",
+        )
+        assertTrue("a pre-round-4 snapshot decodes to no recorded mints", legacy.exitMintedTaskIds.isEmpty())
+        assertTrue(legacy.exitedPostTask)
     }
 
     @Test

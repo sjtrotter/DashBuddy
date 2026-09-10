@@ -42,6 +42,20 @@ internal fun EffectMap.diffTask(
     // #342), and that closure must still emit DELIVERY_CONFIRMED (#345).
     // #438 B5: the acted-flow reads that drove the (now cross-platform-arbitrated) odometer
     // Pause/Resume were removed here — the task edges below emit only log events + bubbles.
+    // #1078 round 4: ONE step can end session A and mint session B (the lazy expiry commits A's
+    // absorbed `SESSION_END`, then the mode arm starts B on B's own first frame), and the two kinds
+    // of edge below belong to DIFFERENT dashes on that step:
+    //
+    //  - a PREDECESSOR-task edge closes work that happened in A — the retiring dropoff's
+    //    `DELIVERY_CONFIRMED`, and the `TASK_UNASSIGNED` a disowned teardown marks (the shipped
+    //    `task:unassigned` rule carries `modeHint = online`, which is exactly what mints B). Those
+    //    read the ONE close-step attribution rule, [closingSession].
+    //  - a NEW-task edge is B's first pickup: nav starts, arrivals and their bubbles describe work
+    //    beginning in the session that was just minted, so they keep the live next-first read.
+    //    Round 3 routed everything through `closingSession` and booked B's own pickup to A.
+    //
+    // On every ordinary step (the session survives) the two expressions are identical.
+    val predecessorSessionId = closingSession(prev, next)?.sessionId
     val sessionId = next.session?.sessionId ?: prev.session?.sessionId
 
     return buildList {
@@ -75,7 +89,7 @@ internal fun EffectMap.diffTask(
                 )?.parentOfferHashes ?: emptyList()
             add(
                 logEffect(
-                    sessionId, AppEventType.TASK_UNASSIGNED, obs.timestamp,
+                    predecessorSessionId, AppEventType.TASK_UNASSIGNED, obs.timestamp,
                     taskUnassignedPayload(abandonedTask, jobOfferHashes, obs.timestamp),
                     effectKeyOverride = "log:${AppEventType.TASK_UNASSIGNED}:${abandonedTask.taskId}",
                 ),
@@ -85,7 +99,7 @@ internal fun EffectMap.diffTask(
                     "Unassigned: ${abandonedTask.storeName ?: UNKNOWN_STORE}",
                     ChatPersona.Navigator,
                     dedupeScope = abandonedTask.taskId,
-                    sessionId = sessionId,
+                    sessionId = predecessorSessionId,
                 ),
             )
         }
@@ -148,7 +162,12 @@ internal fun EffectMap.diffTask(
                     task = prevTask,
                     phaseStartedAt = prevTask.startedAt,
                 )
-                add(logEffect(sessionId, AppEventType.DELIVERY_CONFIRMED, obs.timestamp, deliveryConfirmed))
+                add(
+                    logEffect(
+                        predecessorSessionId, AppEventType.DELIVERY_CONFIRMED, obs.timestamp,
+                        deliveryConfirmed,
+                    ),
+                )
             }
         }
 
@@ -167,9 +186,14 @@ internal fun EffectMap.diffTask(
             // hashes AND the units-ratio sample); fall back to next's, then null when truly gone.
             val sweepJob = prev.activeJob?.takeIf { it.jobId == prevTask.jobId }
                 ?: next.activeJob?.takeIf { it.jobId == prevTask.jobId }
+            // #1078 round 5: the sweep CONFIRMS predecessor pickups, so it takes the predecessor id
+            // — on an end-A/mint-B step A's own pickup was being emitted under B, and because both
+            // share the same per-task `effects_fired` key the wrong attribution is the one that
+            // lands. The dropoff's navigation event right after is a NEW-task edge and keeps the
+            // live id.
             addAll(
                 pickupConfirmSweepEffects(
-                    sessionId, next, prevTask.jobId, obs,
+                    predecessorSessionId, next, prevTask.jobId, obs,
                     jobOfferHashes = sweepJob?.parentOfferHashes ?: emptyList(),
                     ratioJob = sweepJob,
                 ),
