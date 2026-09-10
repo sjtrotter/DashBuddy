@@ -42,7 +42,13 @@ internal fun EffectMap.diffTask(
     // #342), and that closure must still emit DELIVERY_CONFIRMED (#345).
     // #438 B5: the acted-flow reads that drove the (now cross-platform-arbitrated) odometer
     // Pause/Resume were removed here — the task edges below emit only log events + bubbles.
-    val sessionId = next.session?.sessionId ?: prev.session?.sessionId
+    // #1078 round 3: the ONE close-step attribution rule ([closingSession]). It matters for the
+    // TASK_UNASSIGNED edge below: a teardown that DISOWNS an absorbed retire marks the task
+    // `unassignedAt`, and the shipped `task:unassigned` rule carries `modeHint = online`, so the
+    // mode arm mints session B on the very step that ended session A — a next-first read booked the
+    // abandon (and its bubble) to B. Identical to the old expression for every live task edge, where
+    // the session survives the step.
+    val sessionId = closingSession(prev, next)?.sessionId
 
     return buildList {
         val prevTask = prev.activeTask

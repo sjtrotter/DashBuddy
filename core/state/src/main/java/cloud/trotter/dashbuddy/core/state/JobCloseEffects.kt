@@ -44,7 +44,10 @@ import timber.log.Timber
  * "the dash ended over a drop the dasher stood at, and nothing was ever minted for it". The three
  * shapes it deliberately still ignores: a coarse `task:active` job that never rendered a dropoff at
  * all (no arrived drop → floor 2), a pickup-only teardown (same), and a receipt-backed delivery with
- * no arrival frame (its completion IS qualified → floor 2).
+ * no arrival frame (its completion IS qualified → floor 2). Round 3 widens "qualified" to include
+ * a completion the PostTask-exit block already minted ([mintedAtPostTaskExit]) — without it, a
+ * normal receipted delivery whose dash ended before the receipt's retire expired read as a lost
+ * drop and raised a false 1-of-0 alarm.
  *
  * `next.recentTasks` is the delivered/unassigned source (a T1 retire completes the drop INTO
  * `recentTasks` before `completeActiveJob`; a T2 close+mint commits it before the fresh mint; the
@@ -60,23 +63,32 @@ internal fun EffectMap.diffJobClose(
     // No close this step (same job survives, or an add-on `existing.copy` kept the jobId).
     if (next.activeJob?.jobId == closingJob.jobId) return emptyList()
 
-    // #1095: the job's OWN session — prev first, because that is where the closing job lived. This
-    // is what the v1 identity guard was really protecting; with the attribution fixed, the guard's
-    // only remaining effect was to blind the tripwire to the teardown class.
-    val sessionId = prev.session?.sessionId ?: next.session?.sessionId
+    // #1095: the job's OWN session, through the ONE close-step attribution rule ([closingSession]).
+    // That is what the v1 identity guard was really protecting; with the attribution fixed, the
+    // guard's only remaining effect was to blind the tripwire to the teardown class.
+    val sessionId = closingSession(prev, next)?.sessionId
     val sessionEnded = prev.session != null &&
         next.session?.sessionId != prev.session?.sessionId
 
     // #1078/#1095: the same mint-qualified view the close-out sweep and the #996 completeness proof
     // read — an unqualified force-stamp is not a delivery.
+    //
+    // Round 3 adds the second way a completion can be REAL: the PostTask-exit block already minted
+    // it ([mintedAtPostTaskExit]). Without that term a perfectly normal receipted delivery — arrived
+    // drop, receipt, then the dash ended before the receipt's retire expired — read as "nothing
+    // minted", and the lifted floor fired a false 1-of-0 alarm on it.
     val retirePending = prev.retirePendingForMint()
     val evidence = next.recentTasks.map { t ->
-        if (mintQualified(prev, retirePending, t)) t else t.copy(completedAt = null)
+        val real = mintQualified(prev, retirePending, t) || prev.mintedAtPostTaskExit(t.taskId)
+        if (real) t else t.copy(completedAt = null)
     }
 
     // #1095 round 2: the lifted floor names the LOST-DROP shape, not every session end. Both legs
     // are lifecycle evidence — a completed drop in the qualified view (something was minted) and an
     // ARRIVED drop anywhere in the job's lineage (the dasher physically stood at a doorstep).
+    //
+    // Round 3: `nothingMinted` is derived from the SAME masked `evidence` list the detector reads,
+    // never re-spelled, so the floor and the accounting can never disagree about what was minted.
     val nothingMinted = evidence.none {
         it.jobId == closingJob.jobId && it.phase == TaskPhase.DROPOFF && it.completedAt != null
     }

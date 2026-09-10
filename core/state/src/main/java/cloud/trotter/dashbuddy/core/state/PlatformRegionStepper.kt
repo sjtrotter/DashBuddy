@@ -200,9 +200,13 @@ class PlatformRegionStepper @Inject constructor() {
                 // loop's own `unassignedAt` skip (#736/#752), `isJobPhysicallyComplete`'s exclusion,
                 // and `detectAcceptMismatch` counting the order as ACCOUNTED — which is the honest
                 // answer, because it was abandoned, not stranded. It is also the truthful mark: the
-                // frame IS the platform stating the dasher unassigned this order. (No
-                // `TASK_UNASSIGNED` event fires here, exactly as it did not pre-#1078: `endSession`
-                // clears `activeTask` before `abandonActiveTask` could reach it.)
+                // frame IS the platform stating the dasher unassigned this order — and `TaskEffects`
+                // detects that marker and emits the proper `TASK_UNASSIGNED`, attributed through
+                // [closingSession] to the session that just ended (round 3; the round-2 note here
+                // claiming no event fires was wrong).
+                //
+                // The same disown runs on an IN-WINDOW unassign frame — see [disownAbsorbedRetire],
+                // the one owner of both halves.
                 //
                 // Every other kind and provenance commits normally.
                 val unassignFrame = (obs as? Observation.FlowObservation)?.flow == Flow.TaskUnassigned
@@ -213,10 +217,7 @@ class PlatformRegionStepper @Inject constructor() {
                     current.copy(pendingDestructive = null)
                 } else if (disownedByUnassign) {
                     commitDestructive(
-                        current.copy(
-                            pendingDestructive = pend.copy(absorbedRetireSince = null),
-                            activeTask = current.activeTask?.copy(unassignedAt = obs.timestamp),
-                        ),
+                        disownAbsorbedRetire(current, obs.timestamp),
                         pend.kind, pend.since, obs.timestamp,
                     )
                 } else {
@@ -705,6 +706,33 @@ class PlatformRegionStepper @Inject constructor() {
      * path the sensor never captured — and for a misrecognized summary. Fail-null beats fail-wrong:
      * the machine records only what it watched finish.
      */
+    /**
+     * #1078 round 3 — **disown an absorbed retire**: the two inseparable halves that turn an honored
+     * teardown back into a refused one when the platform says the order was abandoned.
+     *
+     *  1. `absorbedRetireSince` is cleared on the `SESSION_END`, so `endSession` force-stamps
+     *     instead of honoring — the shape the amdt-#5 T3 guard exists to refuse; and
+     *  2. the active task is marked `unassignedAt` at [at].
+     *
+     * Half 2 is what makes the refusal BITE: `EffectMap` judges the mint against the PRE-step
+     * region, whose pending still carries the absorbed value, so clearing it alone is invisible to
+     * [retirePendingForMint] and the close-out sweep would mint anyway. The marker is answered by
+     * firewalls that already exist (the close-out `unassignedAt` skip, `isJobPhysicallyComplete`,
+     * `detectAcceptMismatch` counting the order as accounted) and it is the truthful record — which
+     * is also why `TaskEffects` can emit the proper `TASK_UNASSIGNED` off it.
+     *
+     * ONE owner, because the abandon can arrive at either moment: ON the commit frame (the
+     * lazy-expiry branch) or INSIDE the grace window (before the `Mode.Offline` early return, where
+     * `abandonActiveTask` is unreachable).
+     */
+    private fun disownAbsorbedRetire(region: PlatformRegion, at: Long): PlatformRegion {
+        val pend = region.pendingDestructive ?: return region
+        return region.copy(
+            pendingDestructive = pend.copy(absorbedRetireSince = null),
+            activeTask = region.activeTask?.copy(unassignedAt = at),
+        )
+    }
+
     private fun PendingDestructive?.absorbableRetireSince(): Long? = this
         ?.takeIf { it.kind == DestructiveKind.TASK_RETIRE }
         ?.takeIf { it.armedFromFlow != null && it.armedFromFlow !in UNABSORBABLE_RETIRE_FLOWS }
@@ -775,6 +803,18 @@ class PlatformRegionStepper @Inject constructor() {
             // this call site's braces).
             val tightened = existing?.takeIf { it.kind == DestructiveKind.SESSION_END }
             return r.withWakeIdIfDeadlineMoved(tightened, pend, obs)
+        }
+        // #1078 round 3: an unassign INSIDE the window disowns too. The lazy-expiry branch only sees
+        // an unassign frame that lands at or past the deadline; one arriving EARLIER falls straight
+        // through to the `Mode.Offline` early return below — the summary implied Offline, so
+        // `updateTaskLifecycle` (where `abandonActiveTask` lives) is never reached, the absorbed
+        // value survives untouched, and the eventual wake fabricates the completion for an order the
+        // platform said was abandoned. Same two halves, same owner.
+        if (obs.flow == Flow.TaskUnassigned &&
+            r.pendingDestructive?.kind == DestructiveKind.SESSION_END &&
+            r.pendingDestructive?.absorbedRetireSince != null
+        ) {
+            r = disownAbsorbedRetire(r, obs.timestamp)
         }
         if (r.mode == Mode.Offline) {
             // Clear the idle anchor and any TASK_RETIRE pending, but PRESERVE a

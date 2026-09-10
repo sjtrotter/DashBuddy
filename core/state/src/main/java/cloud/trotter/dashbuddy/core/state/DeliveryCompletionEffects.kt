@@ -256,12 +256,12 @@ internal fun EffectMap.diffDeliveryCompletion(
     // skipped; if it never rendered, this is the only emission.
     val closedJob = p.activeJob
     if (closedJob != null && next.activeJob?.jobId != closedJob.jobId) {
-        // #1078 round 2: PREV first for a CLOSED job — the closing job lived in the prev session, and
-        // one step can both commit a stale absorbed `SESSION_END` (session A → null) and mint a fresh
-        // session B in the mode arm (the next dash's first Online frame). Reading `next` first put
-        // session A's honored delivery, and its running total, into session B. In-session closes are
-        // unaffected: there `p.session === next.session`.
-        val sessionId = p.session?.sessionId ?: next.session?.sessionId
+        // #1078 round 3: through the ONE close-step attribution rule ([closingSession]) — `next` while
+        // the session survives (so an in-session close publishes the total THIS observation settled),
+        // `prev` when it ends or changes (so a same-step end-A + mint-B books A's delivery to A).
+        // Round 2's unconditional prev-first got the first half wrong.
+        val jobSession = closingSession(p, next)
+        val sessionId = jobSession?.sessionId
         // #526 D5 sweep: a job that closed WITHOUT ever reaching a dropoff (a pickup-only
         // close — no pickup→dropoff edge ever fired to confirm the pickups) still owes
         // PICKUP_CONFIRMED for each arrived pickup. A job that DID reach a dropoff already
@@ -370,6 +370,16 @@ internal fun EffectMap.diffDeliveryCompletion(
             // SAME discriminator masks the completeness proof's evidence above (#996 amendment B)
             // and the #1095 tripwire's.
             if (!mintQualified(p, retirePending, task)) continue
+            // #1078 round 3: arm (b) admits a task that is still ACTIVE because a retire is
+            // committing for it — but the PostTask-exit block may ALREADY have minted that same
+            // task's completion on an earlier step and left it active (its `completedAt` is stamped
+            // only by the commit). Arm (a) — already completed before this step — cannot be that
+            // shape, so the guard is scoped to arm (b) alone: a task genuinely completed earlier is
+            // untouched. See [mintedAtPostTaskExit] for the re-entry sequence this closes
+            // (receipt → back to the same dropoff screen → idle → dash end).
+            val admittedOnlyByRetire =
+                p.recentTasks.none { it.taskId == task.taskId && it.completedAt != null }
+            if (admittedOnlyByRetire && p.mintedAtPostTaskExit(task.taskId)) continue
             // amdt #3: attach the receipt's pay ONLY when the receipt was announced for THIS
             // task (mirror the PostTask path's per-task pinning). A receipt-less completion
             // naturally gets null pay (#528's job), never a normal receipted delivery's pay.
@@ -404,9 +414,9 @@ internal fun EffectMap.diffDeliveryCompletion(
                 jobId = closedJob.jobId,
                 completedAt = completedAt,
                 postTaskFields = postTaskFields,
-                // #1078 round 2: prev-first, for the same reason the sessionId above is — a closed
-                // job's running total belongs to the dash it was earned in.
-                sessionEarnings = p.session?.runningEarnings ?: next.session?.runningEarnings,
+                // #1078 round 3: read off the SAME decision that named the sessionId above, so an
+                // event can never carry one dash's id and another's running total.
+                sessionEarnings = jobSession?.runningEarnings,
                 dropRealizedPay = dropShares[task.taskId],
                 offerPay = offerResult,
                 jobOfferHashes = closedJob.parentOfferHashes,
@@ -523,6 +533,31 @@ internal fun PlatformRegion.retirePendingForMint(): Boolean =
         it.kind == DestructiveKind.TASK_RETIRE ||
             (it.kind == DestructiveKind.SESSION_END && it.absorbedRetireSince != null)
     } == true
+
+/**
+ * Was THIS task's `DELIVERY_COMPLETED` already minted at a PostTask exit? (#1078 round 3)
+ *
+ * The PostTask-exit block mints the drop the receipt was about and leaves it ACTIVE — its
+ * `completedAt` is stamped only later, when the retire grace commits. So on any subsequent step
+ * neither `recentTasks` nor the CURRENT pending's provenance can say the mint already happened: the
+ * receipt's own `TASK_RETIRE` may have been cancelled by a returning task frame and replaced by a
+ * fresh, absorbable one, and then a dash end honors that fresh retire and the close-out sweep emits
+ * a SECOND raw `DELIVERY_COMPLETED` for the same task. Live, the engine's per-task `effects_fired`
+ * key hides it; a replay — and any consumer counting raw effects — double-counts.
+ *
+ * These two anchors ARE the durable record of that exit, and they are replay-safe:
+ * `JobReceiptAnchors.exitedPostTask` is latched by `stampPostTaskExit` ahead of every early return
+ * in `stepCore`, and `lastAnnouncedPostTaskTaskId` names the drop the receipt was announced for.
+ * Both are cleared by `endSession`/`completeActiveJob` only AFTER the step that reads them, so the
+ * pre-step region a diff is judged against still carries them.
+ *
+ * Read as a companion to [mintQualified], never a replacement: it answers "already emitted", not
+ * "is a real completion". The `armedFromFlow` denylist in
+ * `PlatformRegionStepper.absorbableRetireSince` refuses the simple shape (a receipt retire absorbed
+ * directly); this catches the re-entry shape that denylist structurally cannot see.
+ */
+internal fun PlatformRegion.mintedAtPostTaskExit(taskId: String): Boolean =
+    jobReceiptAnchors?.exitedPostTask == true && lastAnnouncedPostTaskTaskId == taskId
 
 /**
  * #691 receipt-evidence verdict: does [job] show a PAY-BEARING post-task receipt attributable to

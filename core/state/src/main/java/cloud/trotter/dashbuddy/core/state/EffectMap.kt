@@ -38,6 +38,7 @@ import cloud.trotter.dashbuddy.domain.state.PickupActivity
 import cloud.trotter.dashbuddy.domain.state.PendingOffer
 import cloud.trotter.dashbuddy.domain.state.Platform
 import cloud.trotter.dashbuddy.domain.state.PlatformRegion
+import cloud.trotter.dashbuddy.domain.state.Session
 import cloud.trotter.dashbuddy.domain.state.Task
 import cloud.trotter.dashbuddy.domain.state.TaskPhase
 import cloud.trotter.dashbuddy.domain.state.TaskSubFlow
@@ -490,3 +491,26 @@ class EffectMap @Inject constructor(
         description = description,
     )
 }
+
+/**
+ * **The session a CLOSING job's events belong to** (#1078 round 3) — the one rule every emitter that
+ * names a session on a close step reads, so they cannot disagree about which dash the work was done
+ * in.
+ *
+ * Two cases, and each needs the opposite region:
+ *
+ * - **The session SURVIVES the step** (same id, or both null). Read `next`: it carries the values
+ *   THIS observation committed, and one of them is money — a #1029 settle park commits on the very
+ *   observation that closes a job, moving `runningEarnings` from a stale figure to the settled one.
+ *   Round 2's unconditional prev-first was a regression exactly here: an in-session close published
+ *   the pre-settle total.
+ * - **The session ENDS or CHANGES on this step.** Read `prev`: the closing job lived in the session
+ *   that is going away. One frame can commit a stale absorbed `SESSION_END` (session A → null) and
+ *   mint a fresh session B in the mode arm — the next dash's first Online frame — and a next-first
+ *   read books A's delivery, its running total, and any teardown-marked unassign to B.
+ *
+ * Returns the whole [Session] rather than an id so a caller can read `runningEarnings` from the same
+ * decision that named the id; a caller wanting only the id takes `?.sessionId`.
+ */
+internal fun closingSession(prev: PlatformRegion, next: PlatformRegion): Session? =
+    if (next.session?.sessionId == prev.session?.sessionId) next.session else prev.session
