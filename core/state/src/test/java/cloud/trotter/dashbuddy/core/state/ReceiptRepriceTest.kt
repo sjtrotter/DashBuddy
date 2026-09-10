@@ -915,18 +915,61 @@ class ReceiptRepriceTest {
     }
 
     @Test
-    fun `round 10 — a task the BAIL force-completed is never re-priced`() {
-        // The drop never reached a PostTask exit, so the mint never ran for it and there is no row to
-        // correct. `endSession` force-stamps its `completedAt` as pure teardown bookkeeping (the
-        // amdt-#5 T3 guard keeps the close-out sweep off it too) — the re-price must agree.
-        //
-        // #1073 re-shaped the FIXTURE (not the rule). It used to drive `PostTask → SessionEnded`,
-        // but that frame IS a PostTask exit: `EffectMap.diffDeliveryCompletion` mints the completion
-        // on exactly that acted-flow edge, so the sequence never meant "the mint never ran" — the
-        // anchor merely failed to record the exit, which was bug #2 of #1073. What the widening gate
-        // actually defends is stated directly here: an itemized receipt on file, the drop still
-        // active and undelivered, and `exitedPostTask` FALSE.
+    fun `round 10 → #1078 — an ARRIVED drop the teardown HONORS is a delivery, so it mints and its re-price is redundant`() {
+        // Pre-#1078 this test asserted the opposite ("the bail's own force-completion is not a
+        // delivery"): the dash ended straight from `task:dropoff:arrived`, `endSession` force-stamped
+        // the drop, and the amdt-#5 T3 guard kept both the mint and the re-price off it. #1078 rule 2
+        // changes the PREMISE for exactly this shape — the platform does not let a dasher end a dash
+        // with an active order, so an ARRIVED dropoff still active at the AUTHORITATIVE summary is a
+        // delivery the machine has not retired yet (the 09-05 sighting on #1078). The summary absorbs
+        // it, `endSession` honors it, the close-out sweep mints it WITH the receipt's itemization
+        // (announced for t1, covered), and the teardown's re-price for the same drop is redundant with
+        // that mint — the projector's documented no-op. The un-arrived shape keeps the old guarantee:
+        // see the test right below.
         val region = liveDropoffRegion().copy(
+            lastAnnouncedPostTaskTaskId = "t1",
+            lastPostTaskFields = expanded(),
+            lastPostTaskCoverage = ReceiptCoverage(setOf("t1")),
+            jobReceiptAnchors = JobReceiptAnchors(
+                jobId = "J1", firstEnteredAt = 10_000L, exitedPostTask = false,
+            ),
+        )
+        val fold = Fold(region).step(sessionEndedObs(11_000L))
+        assertFalse(
+            "the dash ends from the task flow — no PostTask exit",
+            fold.region.jobReceiptAnchors!!.exitedPostTask,
+        )
+        assertEquals(
+            "rule 2: the authoritative summary absorbed the ARRIVED drop at its own instant",
+            11_000L,
+            fold.region.pendingDestructive!!.absorbedRetireSince,
+        )
+        fold.step(graceCommit(fold.region.pendingDestructive!!.deadline + 1))
+
+        assertNull(fold.region.session)
+        val delivered = fold.region.recentTasks.single { it.taskId == "t1" }
+        assertEquals("honored at the absorbed instant, never the teardown clock", 11_000L, delivered.completedAt)
+        assertEquals(
+            "the honored drop MINTS its completion",
+            1,
+            fold.events.count { it.type == AppEventType.DELIVERY_COMPLETED },
+        )
+        assertEquals("…and the teardown's re-price for the same drop is one, redundant with the mint", 1, fold.reprices().size)
+        assertEquals("t1", (fold.reprices().single().payload as DeliveryReceiptRepricePayload).taskId)
+    }
+
+    @Test
+    fun `round 10 — a task the BAIL force-completed is never re-priced (un-arrived — the T3 guard is untouched by #1078)`() {
+        // The drop never reached a PostTask exit AND was never ARRIVED at, so the mint never ran for it
+        // and there is no row to correct. `endSession` force-stamps its `completedAt` as pure teardown
+        // bookkeeping (the amdt-#5 T3 guard keeps the close-out sweep off it too) — the re-price must
+        // agree. #1078 rule 2 is arrival-gated, so nothing is absorbed here.
+        //
+        // #1073 re-shaped the FIXTURE (not the rule): an itemized receipt on file, the drop still
+        // active and undelivered, and `exitedPostTask` FALSE.
+        val base = liveDropoffRegion()
+        val region = base.copy(
+            activeTask = base.activeTask!!.copy(arrivedAt = null),
             lastAnnouncedPostTaskTaskId = "t1",
             lastPostTaskFields = expanded(),
             // Coverage DOES include the anchor — the latch is the only thing refusing here.
@@ -936,17 +979,19 @@ class ReceiptRepriceTest {
             ),
         )
         val fold = Fold(region).step(sessionEndedObs(11_000L))
-        assertFalse(
-            "the dash ends from the task flow — no PostTask exit, so no mint",
-            fold.region.jobReceiptAnchors!!.exitedPostTask,
+        assertNull(
+            "nothing absorbed — an un-arrived drop is not evidence of a delivery",
+            fold.region.pendingDestructive!!.absorbedRetireSince,
         )
         fold.step(graceCommit(fold.region.pendingDestructive!!.deadline + 1))
 
         assertNull(fold.region.session)
-        assertTrue(
-            "the bail's own force-completion is not a delivery",
-            fold.reprices().isEmpty(),
+        assertEquals(
+            "the bail's own force-completion is not a delivery: no mint",
+            0,
+            fold.events.count { it.type == AppEventType.DELIVERY_COMPLETED },
         )
+        assertTrue("…and never re-priced", fold.reprices().isEmpty())
     }
 
     @Test

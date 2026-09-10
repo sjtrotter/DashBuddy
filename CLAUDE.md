@@ -433,7 +433,7 @@ the armed deadline. Open gaps: #1076 (tail-replayed offers), #1083.
 delivery receipt, task retire); `pendingModeResume`/`MODE_RESUME_COMMIT` debounces a screen-implied
 Paused→Online resume (#605). The receipt window is SHAPE-keyed (#1033): a COLLAPSED receipt
 (`parsedPay == null`) arms `receiptExpandGraceMs` (8 s); an EXPANDED frame keeps 2.5 s and tightens via
-`minOf`; a PostTask frame that parses NO receipt at all keeps the pre-#1033 timing. Layer 1 is the ONLY path that lands an expansion in the STACKED shape (§5's re-price refuses it).
+`minOf`; a PostTask frame that parses NO receipt at all keeps the pre-#1033 timing. Layer 1 is the ONLY path that lands an expansion in the STACKED shape (§5's re-price refuses it). A `SESSION_END` that arms over a live `TASK_RETIRE` — or, at the authoritative summary, over an ARRIVED dropoff — ABSORBS it (`absorbedRetireSince`) and `endSession` honors it as a completion (#1078); the #810 tripwire covers every close edge, attributed to the job's own session, single-accept floor lifted on a session end (#1095).
 
 **Offers are platform-owned** (`PlatformRegion.pendingOffers`, #438 B3; `OfferLifecycle.kt`/`OfferEffects.kt`).
 Identity is presentation-scoped (#830): `ParsedOffer.presentationKey = sha256(storeNames|orders.size|orderTypes)`

@@ -278,7 +278,10 @@ internal fun EffectMap.diffDeliveryCompletion(
                 ),
             )
         }
-        val retirePending = p.pendingDestructive?.kind == DestructiveKind.TASK_RETIRE
+        // #1078: through the ONE owner — a `SESSION_END` that absorbed a retire carries the same
+        // evidence a live `TASK_RETIRE` does, and the #996 amendment-B mask below plus
+        // `mintingDropoffTasks` inherit it through this single variable.
+        val retirePending = p.retirePendingForMint()
         // #691/#996/#997: the whole offer-pay attribution for this close, computed ONCE (the drops
         // all share one job shape — running the ladder per completion would also let the two mint
         // instants disagree). Receipt suppression is evaluated FIRST so a receipted close never pays
@@ -355,10 +358,12 @@ internal fun EffectMap.diffDeliveryCompletion(
             // amdt #2 exclusivity: the PostTask-exit block already minted this one.
             if (task.taskId in emittedThisStep) continue
             // amdt #5: qualify ONLY (a) a task already completed BEFORE this step, or (b) the
-            // active task just retired under a TASK_RETIRE grace. This excludes exactly
-            // endSession's force-stamp of an active, UNDELIVERED task (T3 false-completion
-            // guard) — that task carries no TASK_RETIRE pending, so neither arm matches. The SAME
-            // discriminator masks the completeness proof's evidence above (#996 amendment B).
+            // active task just retired under retire evidence ([retirePendingForMint] — a live
+            // TASK_RETIRE, or since #1078 a SESSION_END that ABSORBED one). This excludes exactly
+            // endSession's force-stamp of an active, UNDELIVERED task (T3 false-completion guard):
+            // an end with nothing absorbed carries no retire evidence, so neither arm matches. The
+            // SAME discriminator masks the completeness proof's evidence above (#996 amendment B)
+            // and the #1095 tripwire's.
             if (!mintQualified(p, retirePending, task)) continue
             // amdt #3: attach the receipt's pay ONLY when the receipt was announced for THIS
             // task (mirror the PostTask path's per-task pinning). A receipt-less completion
@@ -475,7 +480,8 @@ private fun warnIfUnsplit(job: Job, taskId: String, result: OfferPayFallback.Res
 /**
  * The amdt-#5 mint qualification, hoisted so the close-out loop AND the #996 completeness proof read
  * ONE definition of "this completion is real" (#997 amendment B): a task already completed BEFORE
- * this step, or the active task just retired under a `TASK_RETIRE` grace. It excludes exactly
+ * this step, or the active task just retired under retire evidence ([retirePendingForMint] — a live
+ * `TASK_RETIRE`, or since #1078 a `SESSION_END` that absorbed one). It excludes exactly
  * `endSession`'s force-stamp of an active, UNDELIVERED task at a bail — which, for a drop that had
  * already ARRIVED, would otherwise satisfy the #749 coverage arm and FORGE a completeness proof for
  * an abandoned job.
@@ -489,6 +495,27 @@ private fun warnIfUnsplit(job: Job, taskId: String, result: OfferPayFallback.Res
 internal fun mintQualified(p: PlatformRegion, retirePending: Boolean, task: Task): Boolean =
     p.recentTasks.any { it.taskId == task.taskId && it.completedAt != null } ||
         (retirePending && p.activeTask?.taskId == task.taskId)
+
+/**
+ * The ONE owner of "does this region carry destructive RETIRE evidence for its active task?" — the
+ * `retirePending` argument every [mintQualified] caller passes (#1078).
+ *
+ * Two shapes answer yes, and they are the same fact:
+ * - a live `TASK_RETIRE` grace (the pre-#1078 spelling), and
+ * - a `SESSION_END` that ABSORBED one — either a retire it armed over, or (at the authoritative
+ *   summary) an ARRIVED dropoff still active. See [PendingDestructive.absorbedRetireSince]: the
+ *   destructive slot holds one pending, so an end arming over a retire used to DISCARD the
+ *   evidence, and the teardown's force-stamp was then refused by the amdt-#5 T3 guard — $21.00 of
+ *   fielded delivery with no row and no warning (2026-09-08, build 8028691a).
+ *
+ * The T3 guard itself is untouched: a `SESSION_END` with NO absorbed value still answers false, so a
+ * bail on an un-arrived / undelivered task mints nothing, exactly as before.
+ */
+internal fun PlatformRegion.retirePendingForMint(): Boolean =
+    pendingDestructive?.let {
+        it.kind == DestructiveKind.TASK_RETIRE ||
+            (it.kind == DestructiveKind.SESSION_END && it.absorbedRetireSince != null)
+    } == true
 
 /**
  * #691 receipt-evidence verdict: does [job] show a PAY-BEARING post-task receipt attributable to

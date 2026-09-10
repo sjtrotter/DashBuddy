@@ -462,12 +462,21 @@ class PlatformRegionStepper @Inject constructor() {
                 if (region.session != null &&
                     region.pendingDestructive?.kind != DestructiveKind.SESSION_END
                 ) {
+                    // #1078: this arm used to OVERWRITE a standing `TASK_RETIRE` with `SESSION_END`
+                    // (the loss documented as a #1076 gap) — the retire's evidence simply vanished
+                    // and the eventual teardown force-stamped an unqualified completion. Absorb the
+                    // retire's `since` so `endSession` can honor it. Rule 1 ONLY here: an offline
+                    // flash is not authoritative, so there is no arrived-dropoff inference (rule 2
+                    // lives on the summary arm alone).
+                    val absorbed = region.pendingDestructive
+                        ?.takeIf { it.kind == DestructiveKind.TASK_RETIRE }?.since
                     val (withId, wakeId) = region.mintWakeId()
                     region = withId.copy(
                         pendingDestructive = PendingDestructive(
                             kind = DestructiveKind.SESSION_END,
                             since = obs.timestamp,
                             deadline = obs.timestamp + policy.gracePeriodMs(region.platform),
+                            absorbedRetireSince = absorbed,
                             wakeId = wakeId,
                             windowFrom = obs.timestamp,
                         ),
@@ -628,6 +637,33 @@ class PlatformRegionStepper @Inject constructor() {
     // =========================================================================
 
     /**
+     * #1078 rule 2 — the AUTHORITATIVE summary's own timestamp when the region still holds an
+     * ARRIVED, un-unassigned dropoff, else null.
+     *
+     * The platform does not let a dasher end a dash with an active order: by the time the dash
+     * summary renders, every accepted order is either delivered or unassigned. So a dropoff task
+     * that is still `activeTask` here, with `arrivedAt` set, is a delivery the machine simply has
+     * not retired yet — the retire's own arm never fired because no idle/offer frame was captured
+     * between the last dropoff frame and the summary (the 09-05 sighting on #1078).
+     *
+     * The ARRIVAL gate (#615) is the whole discrimination: a blown-through pickup or a dropoff the
+     * dasher never arrived at stays on the T3 side, where `endSession`'s force-stamp is refused by
+     * [mintQualified] exactly as before. Deliberately NOT applied on the non-authoritative offline
+     * arm — an offline flash is not evidence that the dash ended.
+     */
+    private fun authoritativeArrivedDropSince(
+        r: PlatformRegion,
+        obs: Observation.FlowObservation,
+    ): Long? {
+        val active = r.activeTask ?: return null
+        return obs.timestamp.takeIf {
+            active.phase == TaskPhase.DROPOFF &&
+                active.arrivedAt != null &&
+                active.unassignedAt == null
+        }
+    }
+
+    /**
      * Update session/job/task based on flow transitions.
      */
     private fun updateLifecycle(
@@ -655,6 +691,19 @@ class PlatformRegionStepper @Inject constructor() {
             val endFields = obs.parsed as? ParsedFields.SessionEndedFields
             val newDeadline = obs.timestamp + policy.authoritativeGraceMs(r.platform)
             val existing = r.pendingDestructive
+            // #1078: the destructive slot holds ONE pending, and this arm used to REPLACE whatever
+            // stood in it — so a `TASK_RETIRE` armed seconds earlier (the dropoff screen giving way
+            // to the idle map) was silently discarded, and the eventual `endSession` force-stamped a
+            // completion the amdt-#5 T3 guard then refused to mint. Absorb instead of discarding.
+            //
+            // Rule 1: a live retire's own `since` is the honest retire instant.
+            // Rule 2: the platform does not let a dasher end a dash with an active order, so an
+            // ARRIVED dropoff still active at this AUTHORITATIVE summary is a delivery the machine
+            // has not retired yet (the 09-05 sighting on #1078) — the arrival gate (#615) is what
+            // keeps a blown-through pickup / an un-arrived dropoff on the T3 side.
+            val absorbed: Long? =
+                existing?.takeIf { it.kind == DestructiveKind.TASK_RETIRE }?.since
+                    ?: authoritativeArrivedDropSince(r, obs)
             val pend = if (existing?.kind == DestructiveKind.SESSION_END) {
                 // Offline-grace already armed (idle/offline before summary) —
                 // tighten to the short window, keep the original `since` (the
@@ -663,6 +712,9 @@ class PlatformRegionStepper @Inject constructor() {
                     deadline = minOf(existing.deadline, newDeadline),
                     authoritative = true,
                     endFields = endFields ?: existing.endFields,
+                    // An already-absorbed retire wins: the earliest destructive evidence is the
+                    // honest one, exactly as `since` is kept above.
+                    absorbedRetireSince = existing.absorbedRetireSince ?: absorbed,
                 )
             } else {
                 PendingDestructive(
@@ -671,6 +723,7 @@ class PlatformRegionStepper @Inject constructor() {
                     deadline = newDeadline,
                     authoritative = true,
                     endFields = endFields,
+                    absorbedRetireSince = absorbed,
                 )
             }
             // #1054 round 5: a MOVED deadline is a new pending as far as its timer is concerned —
@@ -1208,7 +1261,19 @@ class PlatformRegionStepper @Inject constructor() {
                 mintRanForJob = region.jobReceiptAnchors?.exitedPostTask == true,
             ).pendingReceiptReprice
         }
-        val completedTask = region.activeTask?.copy(completedAt = timestamp)
+        // #1078: two shapes of teardown completion, and the destructive pending says which.
+        //  - HONORED: this `SESSION_END` absorbed a live `TASK_RETIRE` (or, at the authoritative
+        //    summary, an ARRIVED dropoff still active) — the task is retired at THAT instant, exactly
+        //    as the retire's own expiry would have done, through the one spelling of the retire copy
+        //    ([completedInline]). [retirePendingForMint] then admits it, so the completion mints.
+        //  - FORCE-STAMPED (the pre-#1078 shape, unchanged): no absorbed evidence — a bail on an
+        //    undelivered task. `completedAt` is stamped at the teardown clock so the job's shape stays
+        //    readable, and the amdt-#5 T3 guard deliberately refuses to mint a row for it.
+        val honoredAt = region.pendingDestructive
+            ?.takeIf { it.kind == DestructiveKind.SESSION_END }?.absorbedRetireSince
+        val completedTask = region.activeTask?.let {
+            if (honoredAt != null) it.completedInline(honoredAt) else it.copy(completedAt = timestamp)
+        }
         val recentTasks = if (completedTask != null) {
             (region.recentTasks + completedTask).takeLast(MAX_RECENT_TASKS)
         } else region.recentTasks

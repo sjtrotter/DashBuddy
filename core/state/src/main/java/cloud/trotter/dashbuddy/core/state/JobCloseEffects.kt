@@ -12,20 +12,37 @@ import timber.log.Timber
  *
  * The "mark" the effect diffs is the durable [PlatformRegion.activeJob] transition itself: a job
  * closes when its `jobId` leaves the active slot — cleared to null (T1 retire / PostTask-exit /
- * #736 abandon step-3) OR replaced by a fresh `jobId` (T2 close+mint). ALL of those in-scope close
- * paths route through `PlatformRegionStepper.completeActiveJob`. [endSession] ALSO clears
- * `activeJob`; it is kept out of scope (v1 — an offline-mid-job dash is its own class) by requiring the
- * session to SURVIVE the step with the SAME id, not merely be present — one frame can commit a
- * stale-grace end (session A) AND mint a fresh session B in the same step (see the guard).
+ * #736 abandon step-3 / the `endSession` teardown) OR replaced by a fresh `jobId` (T2 close+mint).
+ *
+ * **#1095 — EVERY close edge is in scope.** v1 additionally required the SESSION to survive the step
+ * with the same id, which put the `endSession` teardown (and the same-step stale-end + fresh-mint
+ * shape) out of scope entirely. That guard existed for one reason: ATTRIBUTION. A step that commits a
+ * stale end (session A) and mints session B in the same breath would have logged A's job against B.
+ * So the guard is replaced by the fix it was standing in for — the event and the WARN are attributed
+ * to the job's OWN session, `prev.session?.sessionId ?: next.session?.sessionId`, prev first because
+ * the closing job lived in the prev session. A dash that ends on top of a stranded accept is exactly
+ * the money-losing shape the tripwire exists to make visible (#1078: $21.00, silent, 2026-09-08).
+ *
+ * **Evidence is MINT-QUALIFIED, not raw.** `endSession` force-stamps `completedAt` on whatever task
+ * was active at a bail, which would read as a delivered drop and silence the very close the tripwire
+ * now covers. So `next.recentTasks` is masked through the same amdt-#5 discriminator the mint and the
+ * #996 completeness proof use ([mintQualified] + the one owner [retirePendingForMint]): an
+ * unqualified force-stamp is reverted to unfinished, because a completion with no row is not a
+ * delivery. An HONORED teardown (#1078 — the end absorbed a real retire) qualifies and is therefore
+ * correctly accounted, so it stays silent.
  *
  * Detection is the pure `:domain` [detectAcceptMismatch]; this only decides the close edge, then logs
  * ONE `JOB_ACCEPT_MISMATCH` (keyed per `jobId`, so at-most-once — a job closes single-shot) + one
  * edge-gated WARN. NO state mutation, NO re-attribution — a tripwire only.
  *
+ * **The single-accept floor is lifted on a session end (#1095).** In-session, a lone accept closing
+ * drop-less is the early-offline / coarse-platform class and stays below the detector's `minAccepts`
+ * floor of 2. On a session-end close it is the lost-money shape itself, so the floor drops to 1.
+ *
  * `next.recentTasks` is the delivered/unassigned source (a T1 retire completes the drop INTO
- * `recentTasks` before `completeActiveJob`; a T2 close+mint commits it before the fresh mint), unioned
- * inside the detector with the closing job's own `tasks` mirror (where a leftover TBD placeholder
- * lives).
+ * `recentTasks` before `completeActiveJob`; a T2 close+mint commits it before the fresh mint; the
+ * teardown appends the force-stamped or honored task before clearing the slot), unioned inside the
+ * detector with the closing job's own `tasks` mirror (where a leftover TBD placeholder lives).
  */
 internal fun EffectMap.diffJobClose(
     prev: PlatformRegion,
@@ -35,18 +52,27 @@ internal fun EffectMap.diffJobClose(
     val closingJob = prev.activeJob ?: return emptyList()
     // No close this step (same job survives, or an add-on `existing.copy` kept the jobId).
     if (next.activeJob?.jobId == closingJob.jobId) return emptyList()
-    // endSession is out of scope (v1). Guard on session IDENTITY, not mere presence: a single frame
-    // can both commit a stale-grace `endSession` (session A → null, job → null) AND mint a FRESH
-    // session B in the mode arm (app killed mid-job while the offline grace pended; the next dash's
-    // first Online frame commits the stale end + starts the new dash in one step). That step shows
-    // `next.session != null` (session B) yet the job died with session A — a presence check would
-    // fire the tripwire for the out-of-scope offline-mid-job class, mis-attributed to the new session.
-    // The job only truly *closed within its own session* when that session survives the step.
-    if (next.session == null || next.session?.sessionId != prev.session?.sessionId) return emptyList()
 
-    val payload = detectAcceptMismatch(closingJob, next.recentTasks) ?: return emptyList()
+    // #1095: the job's OWN session — prev first, because that is where the closing job lived. This
+    // is what the v1 identity guard was really protecting; with the attribution fixed, the guard's
+    // only remaining effect was to blind the tripwire to the teardown class.
+    val sessionId = prev.session?.sessionId ?: next.session?.sessionId
+    val sessionEnded = prev.session != null &&
+        next.session?.sessionId != prev.session?.sessionId
 
-    val sessionId = next.session?.sessionId
+    // #1078/#1095: the same mint-qualified view the close-out sweep and the #996 completeness proof
+    // read — an unqualified force-stamp is not a delivery.
+    val retirePending = prev.retirePendingForMint()
+    val evidence = next.recentTasks.map { t ->
+        if (mintQualified(prev, retirePending, t)) t else t.copy(completedAt = null)
+    }
+
+    val payload = detectAcceptMismatch(
+        closingJob,
+        evidence,
+        minAccepts = if (sessionEnded) 1 else 2,
+    ) ?: return emptyList()
+
     return buildList {
         // WARN (P7): counts + jobId + hash PREFIXES only — no store/customer/raw text. Stable tag,
         // matching the #691/#699 D6 join-miss precedent (the state module logs under "StateMachine").

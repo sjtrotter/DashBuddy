@@ -215,8 +215,9 @@ class EffectMap @Inject constructor(
             // sweep) extracted to DeliveryCompletionEffects.kt as one unit — both blocks share the
             // emittedThisStep dual-mint-exclusivity set (amdt #2), so they moved together.
             addAll(diffDeliveryCompletion(p, next, actedPrevFlow, actedNextFlow, obs))
-            // #810 B1: the job-close accept-reconciliation tripwire — diffs the activeJob close
-            // (any in-scope close routes through completeActiveJob; endSession is excluded inside).
+            // #810 B1: the job-close accept-reconciliation tripwire — diffs the activeJob close.
+            // #1095: EVERY close edge is in scope now, `endSession`'s teardown included, attributed
+            // to the job's own session (see [diffJobClose]).
             // Emitted AFTER diffDeliveryCompletion (#810 B2 review F1) so the JOB_ACCEPT_MISMATCH
             // event sequences AFTER the closing job's final DELIVERY_COMPLETED (the #596 close-out
             // sweep mints that drop on this SAME close step). This makes the B2 Tier-1 store-evidence

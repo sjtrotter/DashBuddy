@@ -675,6 +675,19 @@ data class PendingDestructive(
      */
     val endFields: ParsedFields.SessionEndedFields? = null,
     /**
+     * The [since] of a `TASK_RETIRE` this `SESSION_END` ABSORBED when it armed over it (#1078) —
+     * or, for an authoritative summary arriving with an ARRIVED dropoff active, the summary's own
+     * timestamp.
+     *
+     * A single-slot pending must not discard destructive evidence already standing: `endSession`
+     * honors it as a real completion (the task is retired at this instant, exactly as the retire's
+     * own expiry would have) instead of the unqualified force-stamp the T3 guard refuses.
+     *
+     * Only meaningful on [DestructiveKind.SESSION_END]; null = nothing absorbed (the pre-#1078
+     * teardown). A `TASK_RETIRE` never carries it.
+     */
+    val absorbedRetireSince: Long? = null,
+    /**
      * Which arm of this pending's wake timer belongs to it (#1054 round 5) — see
      * [PlatformRegion.wakeSeq].
      *

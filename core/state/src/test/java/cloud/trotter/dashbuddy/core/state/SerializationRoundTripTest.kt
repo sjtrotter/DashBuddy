@@ -186,6 +186,31 @@ class SerializationRoundTripTest {
     }
 
     @Test
+    fun `a SESSION_END carrying an absorbed retire round-trips, and a pre-1078 pending decodes to null`() {
+        // #1078: `absorbedRetireSince` is additive, nullable and defaulted, so it must survive a
+        // snapshot round-trip AND a snapshot written before it existed must decode to null (the
+        // pre-#1078 teardown), never fail the restore.
+        val honored = PendingDestructive(
+            kind = DestructiveKind.SESSION_END,
+            since = 1_000L,
+            deadline = 3_500L,
+            authoritative = true,
+            absorbedRetireSince = 900L,
+            wakeId = 7L,
+            windowFrom = 1_000L,
+        )
+        val decoded = StateJson.decodeFromString<PendingDestructive>(StateJson.encodeToString(honored))
+        assertEquals(honored, decoded)
+        assertEquals(900L, decoded.absorbedRetireSince)
+
+        val legacy = StateJson.decodeFromString<PendingDestructive>(
+            """{"kind":"SESSION_END","since":1000,"deadline":3500,"authoritative":true}""",
+        )
+        assertEquals(null, legacy.absorbedRetireSince)
+        assertEquals(DestructiveKind.SESSION_END, legacy.kind)
+    }
+
+    @Test
     fun `corrupted parsed json throws so callers can be loud`() {
         val result = runCatching {
             StateJson.decodeFromString<ParsedFields>("""{"definitely":"not-a-parsed-fields"}""")
