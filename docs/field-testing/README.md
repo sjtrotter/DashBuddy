@@ -83,13 +83,17 @@ was found **broken-in-part** (raw PII in capture envelopes) and moved to that en
   −$21.00): the dash-summary grace REPLACED the live 10 s task-retire grace 1.6 s before its own
   deadline, the teardown's force-stamp was refused by the T3 guard, and nothing WARNed (#1095 was the
   second silencer). The `SESSION_END` now ABSORBS the retire and `endSession` honors it, and the #810
-  tripwire covers the teardown close. **On-dash (deliberate, twice — keep both timings):** complete a
-  delivery and tap **End Dash** within ~10 s of the drop-off photo; on another dash, wait ≥ 30 s after
-  the photo before ending. **Desk:** exactly ONE `DELIVERY_COMPLETED` per delivered drop on both dashes,
-  and `Σ realizedPay == reportedEarnings` on both; a `DELIVERY_CONFIRMED` sequenced at the SAME
-  timestamp as `DASH_STOP` with no `DELIVERY_COMPLETED` after it is the bug recurring. A
-  `JOB_ACCEPT_MISMATCH` row is expected ONLY if a drop was genuinely stranded (e.g. the dash ended
-  mid-route with the order un-arrived) — one on an otherwise-reconciling dash is a finding, not noise.
+  tripwire covers the teardown close. **Scope, deliberately narrow (round 2):** only a retire the app
+  actually watched arm counts — an idle/offer frame after the drop. Ending the dash straight off the
+  drop-off screen with NO intervening idle frame (the 09-05 shape) still records nothing, BY DESIGN
+  (an arrival-only rule was rejected as fail-wrong) — it should now produce a `JOB_ACCEPT_MISMATCH`
+  instead of silence. **On-dash (deliberate, twice — keep both timings):** complete a delivery and tap
+  **End Dash** within ~10 s of the drop-off photo; on another dash, wait ≥ 30 s after the photo before
+  ending. **Desk:** exactly ONE `DELIVERY_COMPLETED` per delivered drop on both dashes, and
+  `Σ realizedPay == reportedEarnings` on both; a `DELIVERY_CONFIRMED` sequenced at the SAME timestamp
+  as `DASH_STOP` with no `DELIVERY_COMPLETED` after it is the bug recurring. A `JOB_ACCEPT_MISMATCH`
+  row is expected ONLY if a drop was genuinely stranded (the un-watched-retire shape above, or a dash
+  ended mid-route) — one on an otherwise-reconciling dash is a finding, not noise.
   - Confirmed: 0/2
 
 - **🆕 NEW — #1096 — the 8.96.8 receipt's FIRST beat (no `This offer` row yet, new "Send thanks to the

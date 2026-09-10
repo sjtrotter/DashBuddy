@@ -3,6 +3,7 @@ package cloud.trotter.dashbuddy.core.state
 import cloud.trotter.dashbuddy.domain.model.event.AppEventType
 import cloud.trotter.dashbuddy.domain.pipeline.Observation
 import cloud.trotter.dashbuddy.domain.state.PlatformRegion
+import cloud.trotter.dashbuddy.domain.state.TaskPhase
 import cloud.trotter.dashbuddy.domain.state.detectAcceptMismatch
 import timber.log.Timber
 
@@ -35,9 +36,15 @@ import timber.log.Timber
  * ONE `JOB_ACCEPT_MISMATCH` (keyed per `jobId`, so at-most-once — a job closes single-shot) + one
  * edge-gated WARN. NO state mutation, NO re-attribution — a tripwire only.
  *
- * **The single-accept floor is lifted on a session end (#1095).** In-session, a lone accept closing
- * drop-less is the early-offline / coarse-platform class and stays below the detector's `minAccepts`
- * floor of 2. On a session-end close it is the lost-money shape itself, so the floor drops to 1.
+ * **The single-accept floor is lifted only on the LOST-DROP shape (#1095, round 2).** A lone accept
+ * closing drop-less is ordinarily the early-offline / coarse-platform class and stays below the
+ * detector's `minAccepts` floor of 2. The floor drops to 1 for exactly one shape, named in lifecycle
+ * evidence and nothing else (principle 8 — no platform literal): the session ENDED, the job's
+ * qualified evidence holds NO completed dropoff, and the job DID reach an ARRIVED dropoff. That is
+ * "the dash ended over a drop the dasher stood at, and nothing was ever minted for it". The three
+ * shapes it deliberately still ignores: a coarse `task:active` job that never rendered a dropoff at
+ * all (no arrived drop → floor 2), a pickup-only teardown (same), and a receipt-backed delivery with
+ * no arrival frame (its completion IS qualified → floor 2).
  *
  * `next.recentTasks` is the delivered/unassigned source (a T1 retire completes the drop INTO
  * `recentTasks` before `completeActiveJob`; a T2 close+mint commits it before the fresh mint; the
@@ -67,10 +74,21 @@ internal fun EffectMap.diffJobClose(
         if (mintQualified(prev, retirePending, t)) t else t.copy(completedAt = null)
     }
 
+    // #1095 round 2: the lifted floor names the LOST-DROP shape, not every session end. Both legs
+    // are lifecycle evidence — a completed drop in the qualified view (something was minted) and an
+    // ARRIVED drop anywhere in the job's lineage (the dasher physically stood at a doorstep).
+    val nothingMinted = evidence.none {
+        it.jobId == closingJob.jobId && it.phase == TaskPhase.DROPOFF && it.completedAt != null
+    }
+    val reachedADoorstep = (evidence + closingJob.tasks).any {
+        it.jobId == closingJob.jobId && it.phase == TaskPhase.DROPOFF && it.arrivedAt != null
+    }
+    val lostDropShape = sessionEnded && nothingMinted && reachedADoorstep
+
     val payload = detectAcceptMismatch(
         closingJob,
         evidence,
-        minAccepts = if (sessionEnded) 1 else 2,
+        minAccepts = if (lostDropShape) 1 else 2,
     ) ?: return emptyList()
 
     return buildList {

@@ -25,6 +25,11 @@ import org.junit.Test
  * (the job's OWN session, prev first) and drops the exclusion: a dash that ends on top of a stranded
  * accept is the money-losing shape the tripwire exists for (#1078). The evidence it reads is
  * mint-qualified, so `endSession`'s force-stamp cannot silence its own close.
+ *
+ * Round 2 SCOPES the lifted single-accept floor to the lost-drop shape — session ended ∧ no
+ * qualified completed dropoff ∧ an ARRIVED dropoff in the job's lineage. The three negatives below
+ * (a coarse dropoff-less job, a pickup-only teardown, a receipt-backed no-arrival delivery) are the
+ * neighbours that must stay at the floor of 2.
  */
 class JobCloseEffectsTest {
 
@@ -160,7 +165,7 @@ class JobCloseEffectsTest {
         val sessionA = Session("dash-A", startedAt = 50L)
         val active = Task(
             taskId = "d1", jobId = "J1", phase = TaskPhase.DROPOFF,
-            customerNameHash = "c1", startedAt = 100L,
+            customerNameHash = "c1", startedAt = 100L, arrivedAt = 4500L,
         )
         val prev = PlatformRegion(
             Platform.DoorDash, session = sessionA, activeJob = singleAcceptJob("J1"),
@@ -172,8 +177,8 @@ class JobCloseEffectsTest {
         )
         val next = PlatformRegion(
             Platform.DoorDash, session = null, activeJob = null, activeTask = null,
-            // The teardown's force-stamp, arrival and all.
-            recentTasks = listOf(active.copy(arrivedAt = 4500L, completedAt = 5000L)),
+            // The teardown's force-stamp, on a drop the dasher had ARRIVED at.
+            recentTasks = listOf(active.copy(completedAt = 5000L)),
         )
         val effects = effectMap.diffJobClose(prev, next, obs())
         val m = mismatches(effects)
@@ -206,6 +211,76 @@ class JobCloseEffectsTest {
         )
         assertEquals(
             "an honored teardown accounts its drop — no tripwire",
+            0, mismatches(effectMap.diffJobClose(prev, next, obs())).size,
+        )
+    }
+
+    // =========================================================================
+    // #1095 round 2 — the lifted floor names ONE shape; these three neighbours keep the floor of 2
+    // =========================================================================
+
+    @Test
+    fun `a teardown of a job that never rendered a dropoff stays silent (no arrived drop)`() {
+        // The coarse `task:active` lifecycle class: one accept, a job, and no dropoff task ever.
+        // Named in lifecycle evidence, not by platform (principle 8).
+        val sessionA = Session("dash-A", startedAt = 50L)
+        val prev = PlatformRegion(
+            Platform.DoorDash, session = sessionA, activeJob = singleAcceptJob("J1"),
+            activeTask = Task(taskId = "t1", jobId = "J1", phase = TaskPhase.PICKUP, startedAt = 100L),
+        )
+        val next = PlatformRegion(
+            Platform.DoorDash, session = null, activeJob = null, activeTask = null,
+            recentTasks = listOf(
+                Task(taskId = "t1", jobId = "J1", phase = TaskPhase.PICKUP, startedAt = 100L, completedAt = 5000L),
+            ),
+        )
+        assertEquals(
+            "no dropoff ever existed — the floor stays at 2",
+            0, mismatches(effectMap.diffJobClose(prev, next, obs())).size,
+        )
+    }
+
+    @Test
+    fun `a pickup-only teardown stays silent (an arrived PICKUP is not an arrived drop)`() {
+        val sessionA = Session("dash-A", startedAt = 50L)
+        val pickup = Task(
+            taskId = "p1", jobId = "J1", phase = TaskPhase.PICKUP,
+            startedAt = 100L, arrivedAt = 300L,
+        )
+        val prev = PlatformRegion(
+            Platform.DoorDash, session = sessionA, activeJob = singleAcceptJob("J1"),
+            activeTask = pickup,
+        )
+        val next = PlatformRegion(
+            Platform.DoorDash, session = null, activeJob = null, activeTask = null,
+            recentTasks = listOf(pickup.copy(completedAt = 5000L)),
+        )
+        assertEquals(
+            "the dasher never reached a doorstep — the floor stays at 2",
+            0, mismatches(effectMap.diffJobClose(prev, next, obs())).size,
+        )
+    }
+
+    @Test
+    fun `a receipt-backed delivery with no arrival frame stays silent (its completion is qualified)`() {
+        // The field renders deliveries with NO arrival frame at all (#1073 round 16). Such a drop
+        // completes for real — the completion is mint-QUALIFIED — so nothing was lost and the floor
+        // stays at 2. (It also has no arrived drop, so both legs refuse independently.)
+        val sessionA = Session("dash-A", startedAt = 50L)
+        val delivered = Task(
+            taskId = "d1", jobId = "J1", phase = TaskPhase.DROPOFF,
+            customerNameHash = "c1", startedAt = 100L, completedAt = 4000L,
+        )
+        val prev = PlatformRegion(
+            Platform.DoorDash, session = sessionA, activeJob = singleAcceptJob("J1"),
+            recentTasks = listOf(delivered),
+        )
+        val next = PlatformRegion(
+            Platform.DoorDash, session = null, activeJob = null, activeTask = null,
+            recentTasks = listOf(delivered),
+        )
+        assertEquals(
+            "a real completion was minted — nothing is lost, the floor stays at 2",
             0, mismatches(effectMap.diffJobClose(prev, next, obs())).size,
         )
     }

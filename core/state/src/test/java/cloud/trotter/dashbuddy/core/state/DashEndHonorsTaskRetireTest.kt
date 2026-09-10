@@ -49,9 +49,13 @@ import org.junit.Test
  * still force-stamps and still mints nothing (test 3), which is what keeps a blown-through pickup or
  * an un-arrived dropoff out of the money.
  *
- * Rule 2 covers the shape with no idle frame at all: the platform does not let a dasher end a dash
- * with an active order, so an ARRIVED dropoff still active at the AUTHORITATIVE summary is a
- * delivery the machine simply has not retired yet (the 09-05 sighting on #1078).
+ * **Only a PROVENANCED retire is absorbable** (round 2). `armedFromFlow` (#596) has to say the task
+ * it retires actually finished: an `OfferPresented` retire is the dasher stepping off to deliberate
+ * on an add-on (undelivered), a `PostTask` one's completion is already minted on the receipt's exit
+ * frame (honoring it again double-mints), and a null provenance is not evidence. An arrival-only
+ * "rule 2" — absorb at the summary whenever an ARRIVED drop is still active — was designed and
+ * REJECTED: it fabricates a completion for a drop cancelled through an uncaptured path, or for a
+ * misrecognized summary. Fail-null beats fail-wrong (#745).
  *
  * #1095 rides along: the #810 tripwire now sees the teardown close, attributed to the job's own
  * session, reading mint-qualified evidence, with the single-accept floor lifted on a session end.
@@ -145,6 +149,13 @@ class DashEndHonorsTaskRetireTest {
         modeHint = modeHint,
     )
 
+    private fun offerFrame(at: Long) = screen(Flow.OfferPresented, at)
+
+    private fun receiptFrame(at: Long) = screen(
+        Flow.PostTask, at,
+        parsed = ParsedFields.PostTaskFields(totalPay = 21.0, isExpanded = true),
+    )
+
     /** This pending's OWN wake — identity is the generation, never the deadline (#1054). */
     private fun graceWake(pend: PendingDestructive, at: Long = pend.deadline) = Observation.Timeout(
         timestamp = at,
@@ -233,26 +244,142 @@ class DashEndHonorsTaskRetireTest {
     }
 
     // =========================================================================
-    // 2 — rule 2: no idle frame at all
+    // 2 — the REJECTED rule 2: an arrived drop with no retire absorbs NOTHING
     // =========================================================================
 
     @Test
-    fun `an ARRIVED dropoff active at the authoritative summary is absorbed on its own`() {
+    fun `an ARRIVED dropoff at the summary with NO retire standing absorbs nothing and mints nothing`() {
+        // Round 2 rejected absorbing on arrival alone. The reasoning that tempted it — the platform
+        // does not let a dasher end a dash with an active order — is not evidence the machine
+        // WATCHED: the same shape is produced by a drop cancelled or unassigned through a path the
+        // sensor never captured, and by a misrecognized summary. So this stays on the T3 side and is
+        // made loud by the #1095 tripwire instead of quietly priced.
         val onDrop = onDropoff()
         val afterSummary = step(onDrop, Flow.TaskDropoffArrived, summaryFrame(summaryAt))
         val end = afterSummary.pendingDestructive!!
         assertEquals(DestructiveKind.SESSION_END, end.kind)
-        assertEquals(
-            "with no retire to absorb, the summary's OWN timestamp is the retire instant",
-            summaryAt, end.absorbedRetireSince,
+        assertNull(
+            "arrival alone is not a retire — nothing is absorbed (rule 2 REJECTED)",
+            end.absorbedRetireSince,
         )
 
         val wake = graceWake(end)
         val afterCommit = step(afterSummary, Flow.SessionEnded, wake)
-        assertEquals(summaryAt, afterCommit.recentTasks.single { it.taskId == "d1" }.completedAt)
+        assertEquals(
+            "the teardown force-stamps at its own clock",
+            end.since, afterCommit.recentTasks.single { it.taskId == "d1" }.completedAt,
+        )
         val effects = completions(afterSummary, afterCommit, wake)
-        assertEquals("the delivery is recorded", 1, deliveries(effects).size)
-        assertEquals(0, mismatches(effects).size)
+        assertEquals("and the T3 guard refuses the mint", 0, deliveries(effects).size)
+
+        // #1095 round 2: THIS is the lost-drop shape the lifted floor names — session ended, no
+        // qualified completion, and a drop the dasher actually stood at. Loud instead of silent.
+        val tripwires = mismatches(effects)
+        assertEquals("the loss is LOUD instead (#1095)", 1, tripwires.size)
+        val payload = tripwires.single().event.payload as JobAcceptMismatchPayload
+        assertEquals("the single-accept floor is lifted for this shape", 1, payload.acceptedCount)
+        assertEquals("nothing was accounted", 0, payload.accountedCount)
+        assertEquals(
+            "attributed to the session that ended, never to a later one",
+            "dash-A", tripwires.single().event.sessionId,
+        )
+    }
+
+    // =========================================================================
+    // 2b — provenance: which retires a teardown may honor
+    // =========================================================================
+
+    @Test
+    fun `an OfferPresented-armed retire is NOT absorbable — an add-on deliberation is not a delivery`() {
+        // The dasher left the drop for a mid-route add-on offer. That drop is undelivered — the same
+        // reason `retireActiveTask` refuses to close the job on this provenance.
+        val onDrop = onDropoff()
+        val afterOffer = step(onDrop, Flow.TaskDropoffArrived, offerFrame(idleAt))
+        val retire = afterOffer.pendingDestructive!!
+        assertEquals(DestructiveKind.TASK_RETIRE, retire.kind)
+        assertEquals(Flow.OfferPresented, retire.armedFromFlow)
+
+        val afterOffline = step(afterOffer, Flow.OfferPresented, screen(Flow.Idle, idleAt + 1_000L, modeHint = Mode.Offline))
+        val end = afterOffline.pendingDestructive!!
+        assertEquals(DestructiveKind.SESSION_END, end.kind)
+        assertNull(
+            "an offer-deliberation retire authorizes no completion",
+            end.absorbedRetireSince,
+        )
+
+        val wake = graceWake(end)
+        val afterCommit = step(afterOffline, Flow.Idle, wake)
+        assertEquals(
+            "nothing is minted for a drop the dasher never finished",
+            0, deliveries(completions(afterOffline, afterCommit, wake)).size,
+        )
+    }
+
+    @Test
+    fun `a PostTask-armed retire is NOT absorbable — its completion is already minted on the exit`() {
+        // The receipt arms its own TASK_RETIRE. The PostTask-EXIT frame mints the completion; if the
+        // teardown honored the same retire it would emit a SECOND raw DELIVERY_COMPLETED for one
+        // task — invisible live behind the per-task `effects_fired` key, a double-count in replay.
+        // Counted across the WHOLE sequence, exactly one completion may exist.
+        val onDrop = onDropoff()
+        val receipt = receiptFrame(idleAt)
+        val afterReceipt = step(onDrop, Flow.TaskDropoffArrived, receipt)
+        val retire = afterReceipt.pendingDestructive!!
+        assertEquals(DestructiveKind.TASK_RETIRE, retire.kind)
+        assertEquals(Flow.PostTask, retire.armedFromFlow)
+
+        // The summary is the PostTask EXIT — the mint fires on this very step.
+        val summary = summaryFrame(idleAt + 1_000L)
+        val afterSummary = step(afterReceipt, Flow.PostTask, summary)
+        val end = afterSummary.pendingDestructive!!
+        assertEquals(DestructiveKind.SESSION_END, end.kind)
+        assertNull(
+            "a receipt-armed retire is not absorbable — its completion is already minted",
+            end.absorbedRetireSince,
+        )
+        val exitEffects = effectMap.diff(
+            state(afterReceipt, Flow.PostTask), state(afterSummary, Flow.SessionEnded), summary,
+        ).filterIsInstance<AppEffect.LogEvent>()
+
+        val wake = graceWake(end)
+        val afterCommit = step(afterSummary, Flow.SessionEnded, wake)
+        val teardownEffects = completions(afterSummary, afterCommit, wake)
+
+        assertEquals(
+            "exactly ONE raw DELIVERY_COMPLETED across the whole sequence — the exit mint",
+            1, deliveries(exitEffects).size + deliveries(teardownEffects).size,
+        )
+        assertEquals("…and it is the exit's", 1, deliveries(exitEffects).size)
+    }
+
+    // =========================================================================
+    // 2c — an authoritative abandon disowns an absorbed retire
+    // =========================================================================
+
+    @Test
+    fun `a task-unassigned frame on the commit clears the absorbed retire and nothing mints`() {
+        val onDrop = onDropoff()
+        val afterIdle = step(onDrop, Flow.TaskDropoffArrived, screen(Flow.Idle, idleAt))
+        val afterSummary = step(afterIdle, Flow.Idle, summaryFrame(summaryAt))
+        assertEquals(idleAt, afterSummary.pendingDestructive?.absorbedRetireSince)
+
+        // The abandon lands 1 ms past the deadline — the frame that commits the end. No modeHint:
+        // `task:unassigned` is mode-AMBIGUOUS by `TransitionPolicy.resolveMode`, which keeps this
+        // test on the rule under examination (the expiry branch's disown) rather than on the mode
+        // arm's own new-dash mint.
+        val abandon = screen(Flow.TaskUnassigned, summaryDeadline + 1L)
+        val afterCommit = step(afterSummary, Flow.SessionEnded, abandon)
+
+        assertNull("the dash still ends — that part was never in doubt", afterCommit.session)
+        assertEquals(
+            "the drop is marked ABANDONED, which is what makes the T3 refusal bite",
+            summaryDeadline + 1L,
+            afterCommit.recentTasks.single { it.taskId == "d1" }.unassignedAt,
+        )
+        assertEquals(
+            "the authoritative abandon wins: nothing is minted for the order it abandoned",
+            0, deliveries(completions(afterSummary, afterCommit, abandon)).size,
+        )
     }
 
     // =========================================================================
@@ -260,7 +387,7 @@ class DashEndHonorsTaskRetireTest {
     // =========================================================================
 
     @Test
-    fun `an un-arrived dropoff at the summary absorbs nothing, mints nothing and trips the tripwire`() {
+    fun `an un-arrived dropoff at the summary absorbs nothing and mints nothing`() {
         val navigating = drop(arrived = null)
         val onDrop = onDropoff(navigating).copy(lastActedFlow = Flow.TaskDropoffNavigation)
 
@@ -284,14 +411,11 @@ class DashEndHonorsTaskRetireTest {
             "the amdt-#5 T3 guard still refuses an unqualified force-stamp",
             0, deliveries(effects).size,
         )
-        val tripwires = mismatches(effects)
-        assertEquals("#1095: the stranded accept is loud now, not silent", 1, tripwires.size)
-        val payload = tripwires.single().event.payload as JobAcceptMismatchPayload
-        assertEquals("the single-accept floor is lifted on a session end", 1, payload.acceptedCount)
-        assertEquals("nothing was accounted", 0, payload.accountedCount)
         assertEquals(
-            "attributed to the session that ended, never to a later one",
-            "dash-A", tripwires.single().event.sessionId,
+            "#1095 round 2: the lifted floor names the drop the dasher STOOD at. This one was never " +
+                "arrived — an early-offline bail mid-route, which is the class the 2-floor exists " +
+                "for. The ARRIVED variant is loud; see the rule-2 test above.",
+            0, mismatches(effects).size,
         )
     }
 
@@ -327,13 +451,13 @@ class DashEndHonorsTaskRetireTest {
     }
 
     @Test
-    fun `an offline flash with NO retire standing absorbs nothing (rule 2 is summary-only)`() {
+    fun `an offline flash with NO retire standing absorbs nothing`() {
         val onDrop = onDropoff()
         val offline = screen(Flow.Idle, idleAt, modeHint = Mode.Offline)
         val end = step(onDrop, Flow.TaskDropoffArrived, offline).pendingDestructive!!
         assertEquals(DestructiveKind.SESSION_END, end.kind)
         assertNull(
-            "an offline flash is not evidence a dash ended — an ARRIVED drop is not absorbed here",
+            "there is no retire to absorb, and an arrived drop is never absorbed on its own",
             end.absorbedRetireSince,
         )
     }
@@ -365,34 +489,8 @@ class DashEndHonorsTaskRetireTest {
     }
 
     // =========================================================================
-    // 6 — the tighten branch gains rule 2's value
+    // 6 — the tighten branch keeps what it already absorbed
     // =========================================================================
-
-    @Test
-    fun `an offline-armed end tightened by the summary picks up the arrived drop`() {
-        val onDrop = onDropoff()
-        // An offline flash first: a SESSION_END with nothing absorbed (no retire stood).
-        val afterOffline = step(onDrop, Flow.TaskDropoffArrived, screen(Flow.Idle, idleAt, modeHint = Mode.Offline))
-        assertNull(afterOffline.pendingDestructive?.absorbedRetireSince)
-
-        // Then the summary tightens it — and rule 2 now applies, because THIS signal is authoritative.
-        val afterSummary = step(afterOffline, Flow.Idle, summaryFrame(summaryAt))
-        val end = afterSummary.pendingDestructive!!
-        assertEquals(DestructiveKind.SESSION_END, end.kind)
-        assertTrue(end.authoritative)
-        assertEquals("the tighten keeps the earliest destructive `since`", idleAt, end.since)
-        assertEquals("…and gains the absorbed value the tighten frame supplies", summaryAt, end.absorbedRetireSince)
-        assertEquals(
-            "the deadline is the `minOf` of the two windows — here the offline arm's, which " +
-                "already expires before the summary's would",
-            minOf(idleAt + 10_000L, summaryDeadline), end.deadline,
-        )
-
-        val wake = graceWake(end)
-        val afterCommit = step(afterSummary, Flow.SessionEnded, wake)
-        assertEquals(summaryAt, afterCommit.recentTasks.single { it.taskId == "d1" }.completedAt)
-        assertEquals(1, deliveries(completions(afterSummary, afterCommit, wake)).size)
-    }
 
     @Test
     fun `an already-absorbed value survives a later tighten`() {
@@ -407,5 +505,52 @@ class DashEndHonorsTaskRetireTest {
             "the earliest absorbed retire is the honest one, exactly as `since` is",
             idleAt, again.pendingDestructive?.absorbedRetireSince,
         )
+    }
+
+    // =========================================================================
+    // 7 — the closed job's completion belongs to the session it was earned in
+    // =========================================================================
+
+    @Test
+    fun `a same-step end-A-plus-mint-B attributes the honored delivery to session A`() {
+        // The fielded shape behind round 2's finding 4: the app is killed / goes offline mid-job with
+        // a retire standing, the offline arm absorbs it, and the NEXT dash's first Online frame lands
+        // past the deadline. On that one step the lazy expiry ends session A (honoring the retire and
+        // minting the delivery) and the mode arm then mints session B — so a `next`-first read put
+        // A's delivery, and A's running total, into B.
+        val onDrop = onDropoff()
+        val afterIdle = step(onDrop, Flow.TaskDropoffArrived, screen(Flow.Idle, idleAt))
+        val afterOffline = step(afterIdle, Flow.Idle, screen(Flow.Idle, idleAt + 1_000L, modeHint = Mode.Offline))
+        val end = afterOffline.pendingDestructive!!
+        assertEquals(idleAt, end.absorbedRetireSince)
+
+        // One frame, past the deadline, implying Online: ends A and starts B.
+        val nextDashFrame = screen(Flow.Idle, end.deadline + 1_000L, modeHint = Mode.Online)
+        val afterNextDash = step(afterOffline, Flow.Idle, nextDashFrame)
+
+        assertEquals("session B was minted on the same step", true, afterNextDash.session != null)
+        assertNotEquals("…and it is NOT session A", "dash-A", afterNextDash.session?.sessionId)
+
+        val effects = effectMap.diff(
+            state(afterOffline, Flow.Idle), state(afterNextDash, Flow.Idle), nextDashFrame,
+        ).filterIsInstance<AppEffect.LogEvent>()
+
+        val completed = effects.single { it.event.type == AppEventType.DELIVERY_COMPLETED }
+        assertEquals(
+            "the honored delivery is attributed to the dash it was earned in",
+            "dash-A", completed.event.sessionId,
+        )
+        assertEquals(
+            "…and so is its running total",
+            21.0, (completed.event.payload as DeliveryPayload).sessionEarningsAtCompletion!!, 0.0001,
+        )
+        assertEquals(
+            "B still starts on this step",
+            1, effects.count { it.event.type == AppEventType.DASH_START },
+        )
+        // NOT asserted here: the `DASH_STOP` on this step is attributed to the freshly minted
+        // session B, because `ModeEffects` reads the NEXT region's session. That is a separate
+        // emitter and a pre-existing behaviour, untouched by #1078 — recorded rather than silently
+        // changed. The MONEY (the delivery and its running total) is what this fix moves.
     }
 }

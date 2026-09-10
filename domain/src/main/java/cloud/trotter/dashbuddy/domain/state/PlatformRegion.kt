@@ -675,13 +675,18 @@ data class PendingDestructive(
      */
     val endFields: ParsedFields.SessionEndedFields? = null,
     /**
-     * The [since] of a `TASK_RETIRE` this `SESSION_END` ABSORBED when it armed over it (#1078) —
-     * or, for an authoritative summary arriving with an ARRIVED dropoff active, the summary's own
-     * timestamp.
+     * The [since] of a `TASK_RETIRE` this `SESSION_END` ABSORBED when it armed over it (#1078).
      *
      * A single-slot pending must not discard destructive evidence already standing: `endSession`
      * honors it as a real completion (the task is retired at this instant, exactly as the retire's
      * own expiry would have) instead of the unqualified force-stamp the T3 guard refuses.
+     *
+     * **Only a PROVENANCED retire is absorbable** — see `PlatformRegionStepper`'s
+     * `absorbableRetireSince`, the one predicate both arm sites read: an [armedFromFlow] of
+     * `OfferPresented` retires an UNDELIVERED drop, a `PostTask` one's completion is already minted
+     * on the receipt's exit frame, and a null provenance is not evidence at all. An authoritative
+     * abandon (`task:unassigned`) landing on the commit frame CLEARS this, so the teardown falls
+     * back to the force-stamp the T3 guard refuses.
      *
      * Only meaningful on [DestructiveKind.SESSION_END]; null = nothing absorbed (the pre-#1078
      * teardown). A `TASK_RETIRE` never carries it.

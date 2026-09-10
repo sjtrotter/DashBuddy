@@ -256,7 +256,12 @@ internal fun EffectMap.diffDeliveryCompletion(
     // skipped; if it never rendered, this is the only emission.
     val closedJob = p.activeJob
     if (closedJob != null && next.activeJob?.jobId != closedJob.jobId) {
-        val sessionId = next.session?.sessionId ?: p.session?.sessionId
+        // #1078 round 2: PREV first for a CLOSED job — the closing job lived in the prev session, and
+        // one step can both commit a stale absorbed `SESSION_END` (session A → null) and mint a fresh
+        // session B in the mode arm (the next dash's first Online frame). Reading `next` first put
+        // session A's honored delivery, and its running total, into session B. In-session closes are
+        // unaffected: there `p.session === next.session`.
+        val sessionId = p.session?.sessionId ?: next.session?.sessionId
         // #526 D5 sweep: a job that closed WITHOUT ever reaching a dropoff (a pickup-only
         // close — no pickup→dropoff edge ever fired to confirm the pickups) still owes
         // PICKUP_CONFIRMED for each arrived pickup. A job that DID reach a dropoff already
@@ -399,7 +404,9 @@ internal fun EffectMap.diffDeliveryCompletion(
                 jobId = closedJob.jobId,
                 completedAt = completedAt,
                 postTaskFields = postTaskFields,
-                sessionEarnings = next.session?.runningEarnings ?: p.session?.runningEarnings,
+                // #1078 round 2: prev-first, for the same reason the sessionId above is — a closed
+                // job's running total belongs to the dash it was earned in.
+                sessionEarnings = p.session?.runningEarnings ?: next.session?.runningEarnings,
                 dropRealizedPay = dropShares[task.taskId],
                 offerPay = offerResult,
                 jobOfferHashes = closedJob.parentOfferHashes,
@@ -502,14 +509,14 @@ internal fun mintQualified(p: PlatformRegion, retirePending: Boolean, task: Task
  *
  * Two shapes answer yes, and they are the same fact:
  * - a live `TASK_RETIRE` grace (the pre-#1078 spelling), and
- * - a `SESSION_END` that ABSORBED one — either a retire it armed over, or (at the authoritative
- *   summary) an ARRIVED dropoff still active. See [PendingDestructive.absorbedRetireSince]: the
- *   destructive slot holds one pending, so an end arming over a retire used to DISCARD the
- *   evidence, and the teardown's force-stamp was then refused by the amdt-#5 T3 guard — $21.00 of
- *   fielded delivery with no row and no warning (2026-09-08, build 8028691a).
+ * - a `SESSION_END` that ABSORBED one. See [PendingDestructive.absorbedRetireSince]: the destructive
+ *   slot holds one pending, so an end arming over a retire used to DISCARD the evidence, and the
+ *   teardown's force-stamp was then refused by the amdt-#5 T3 guard — $21.00 of fielded delivery
+ *   with no row and no warning (2026-09-08, build 8028691a). Only a PROVENANCED retire is
+ *   absorbable (`PlatformRegionStepper.absorbableRetireSince`).
  *
  * The T3 guard itself is untouched: a `SESSION_END` with NO absorbed value still answers false, so a
- * bail on an un-arrived / undelivered task mints nothing, exactly as before.
+ * bail on an undelivered task mints nothing, exactly as before.
  */
 internal fun PlatformRegion.retirePendingForMint(): Boolean =
     pendingDestructive?.let {

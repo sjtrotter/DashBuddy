@@ -439,7 +439,11 @@ internal fun EffectMap.diffReceiptReprice(
     val decided = next.pendingReceiptReprice ?: return emptyList()
     if (decided == p.pendingReceiptReprice) return emptyList()
 
-    val sessionId = next.session?.sessionId ?: p.session?.sessionId
+    // #1078 round 2: PREV first. The teardown handoff (`endSession`'s decision, carried out of the
+    // step that cleared the session) is a correction to rows that belong to the dash that just
+    // ENDED — and one step can end session A and mint session B. In-session decisions are
+    // unaffected: there `p.session === next.session`.
+    val sessionId = p.session?.sessionId ?: next.session?.sessionId
     val effects = decided.shares.map { (taskId, share) ->
         logEffect(
             sessionId,
