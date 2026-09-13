@@ -58,7 +58,7 @@ class PlatformRegionStepper @Inject constructor() {
 
         /**
          * #1078 — the `TASK_RETIRE` provenances ([PendingDestructive.armedFromFlow], #596) a dash end
-         * may NOT absorb as evidence of a finished delivery. See [absorbableRetireSince]:
+         * may NOT absorb as evidence of a finished delivery. See [absorbableRetire]:
          * `OfferPresented` retires an UNDELIVERED drop (the dasher stepped off to deliberate on an
          * add-on), and a `PostTask` retire's completion is already minted on the receipt's exit
          * frame. A null provenance is refused separately — unprovenanced evidence is not evidence.
@@ -528,7 +528,7 @@ class PlatformRegionStepper @Inject constructor() {
                     // (the loss documented as a #1076 gap) — the retire's evidence simply vanished
                     // and the eventual teardown force-stamped an unqualified completion. Absorb the
                     // retire's `since` so `endSession` can honor it, through the SAME predicate the
-                    // summary arm reads ([absorbableRetireSince]).
+                    // summary arm reads ([absorbableRetire]).
                     val absorbed = region.absorbableRetire()
                     // Round 5: absorbing a retire never PULLS its commit forward. The end may be
                     // delayed to the retire's own deadline, so a contradicting `task:unassigned`
@@ -814,7 +814,7 @@ class PlatformRegionStepper @Inject constructor() {
             // stood in it — so a `TASK_RETIRE` armed seconds earlier (the dropoff screen giving way
             // to the idle map) was silently discarded, and the eventual `endSession` force-stamped a
             // completion the amdt-#5 T3 guard then refused to mint. Absorb instead of discarding —
-            // through the ONE predicate both arm sites read ([absorbableRetireSince]).
+            // through the ONE predicate both arm sites read ([absorbableRetire]).
             val absorbed = r.absorbableRetire()
             val pend = if (existing?.kind == DestructiveKind.SESSION_END) {
                 // Offline-grace already armed (idle/offline before summary) —

@@ -696,20 +696,20 @@ data class PendingDestructive(
      * honors it as a real completion (the task is retired at this instant, exactly as the retire's
      * own expiry would have) instead of the unqualified force-stamp the T3 guard refuses.
      *
-     * **Only a PROVENANCED retire is absorbable** — see `PlatformRegionStepper`'s
-     * `absorbableRetireSince`, the one predicate both arm sites read: an [armedFromFlow] of
+     * **Only a PROVENANCED retire over an ARRIVED dropoff is absorbable** — see
+     * `PlatformRegionStepper`'s `absorbableRetire`, the one predicate both arm sites read: an [armedFromFlow] of
      * `OfferPresented` retires an UNDELIVERED drop, a `PostTask` one's completion is already minted
      * on the receipt's exit frame, and a null provenance is not evidence at all. An authoritative
      * abandon (`task:unassigned`) landing on the commit frame CLEARS this, so the teardown falls
      * back to the force-stamp the T3 guard refuses.
      *
-     * **The honored completion is stamped at EXACTLY this instant, and that stamp is how the emitter
-     * recognizes it** (round 6). `mintQualified`'s arm (b) requires `task.completedAt ==
-     * absorbedRetireSince` for a `SESSION_END` pending — the honored teardown is the only writer that
-     * stamps a completion here (a force-stamp carries the teardown clock, an inline retire its own
-     * `since`), so the emitter reads the stepper's ACTUAL decision off the task copy it is judging
-     * rather than re-deriving it. Every refusal in the stepper — an immature deadline, a disown, a
-     * lazy-expiry refusal — therefore turns the mint off with no second predicate to keep in sync.
+     * **The honored completion is stamped at EXACTLY this instant and MARKED** (`Task.honoredRetireAt`,
+     * rounds 6–7). The mark — never the stamp's value — is how `mintQualified` recognizes it: a
+     * summary sharing the idle frame's timestamp makes `since == absorbedRetireSince`, so an immature
+     * teardown's force-stamp (`completedAt = since`) is numerically identical to an honored one. The
+     * emitter therefore reads the stepper's ACTUAL decision off the task copy it is judging rather than
+     * re-deriving it, and every refusal in the stepper — an immature deadline, a disown, a lazy-expiry
+     * refusal — turns the mint off with no second predicate to keep in sync.
      *
      * Only meaningful on [DestructiveKind.SESSION_END]; null = nothing absorbed (the pre-#1078
      * teardown). A `TASK_RETIRE` never carries it.

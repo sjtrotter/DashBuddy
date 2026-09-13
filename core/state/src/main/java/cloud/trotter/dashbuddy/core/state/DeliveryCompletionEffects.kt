@@ -456,7 +456,7 @@ private fun warnIfUnsplit(job: Job, taskId: String, result: OfferPayFallback.Res
  * only when the retire grace commits) is invisible to a naive `recentTasks + completedAt != null`
  * scan, so the re-price found an empty denominator and silently emitted nothing.
  *
- * **Round 6 — for a `SESSION_END` pending, arm (b) reads the STEPPER'S ACTUAL DECISION off the
+ * **Rounds 6–7 — for a `SESSION_END` pending, arm (b) reads the STEPPER'S ACTUAL DECISION off the
  * task.** A teardown has two outcomes and only one of them is a delivery, but "did it honor?" was
  * being re-derived here from the pending alone (`retirePendingForMint`), which is a second predicate
  * that has to be kept in sync with every refusal the stepper makes — the maturity gate, the
@@ -464,12 +464,15 @@ private fun warnIfUnsplit(job: Job, taskId: String, result: OfferPayFallback.Res
  * `startingSession` shortcut, which calls `endSession` ahead of the absorbed deadline: the stepper
  * force-stamped, and the sweep minted anyway.
  *
- * So the discriminator is the STAMP. `endSession` writes `completedAt = absorbedRetireSince` when
- * and only when it honors ([PendingDestructive.absorbedRetireSince]); a force-stamp carries the
- * teardown clock and an inline retire its own `since`, so no other writer can land on that value.
- * Requiring the match makes the emitter agree with the stepper BY CONSTRUCTION — a refusal anywhere
- * in the stepper turns the mint off with nothing else to update. It reads [task], which every caller
- * passes from the NEXT region (the post-step copy that carries the stamp).
+ * So the discriminator is the stepper's own MARK, [Task.honoredRetireAt], written by `endSession`'s
+ * honored branch and by nothing else. Round 6 first tried the stamp's VALUE (`completedAt ==
+ * absorbedRetireSince`) and that was wrong: a summary sharing the idle frame's timestamp makes
+ * `pend.since == absorbedRetireSince`, so the immature teardown's force-stamp (`completedAt =
+ * pend.since`) is numerically identical to an honored one and was minted — a timestamp is not
+ * provenance. Requiring the mark makes the emitter agree with the stepper BY CONSTRUCTION — a refusal
+ * anywhere in the stepper leaves the task unmarked and the mint off, with nothing else to update. It
+ * reads [task], which every caller passes from the NEXT region (the post-step copy that carries the
+ * mark).
  *
  * A `TASK_RETIRE` pending is unaffected: its arm (b) is the ordinary inline retire, judged as before.
  */
@@ -494,8 +497,8 @@ internal fun mintQualified(p: PlatformRegion, retirePending: Boolean, task: Task
  * - a `SESSION_END` that ABSORBED one. See [PendingDestructive.absorbedRetireSince]: the destructive
  *   slot holds one pending, so an end arming over a retire used to DISCARD the evidence, and the
  *   teardown's force-stamp was then refused by the amdt-#5 T3 guard — $21.00 of fielded delivery
- *   with no row and no warning (2026-09-08, build 8028691a). Only a PROVENANCED retire is
- *   absorbable (`PlatformRegionStepper.absorbableRetireSince`).
+ *   with no row and no warning (2026-09-08, build 8028691a). Only a PROVENANCED retire over an
+ *   ARRIVED dropoff is absorbable (`PlatformRegionStepper.absorbableRetire`).
  *
  * The T3 guard itself is untouched: a `SESSION_END` with NO absorbed value still answers false, so a
  * bail on an undelivered task mints nothing, exactly as before.
@@ -669,12 +672,12 @@ private fun EffectMap.receiptSuppressesEstimate(region: PlatformRegion, job: Job
  * from THIS function plus one explicit widening arm, so "the same denominator the mint uses" is
  * literally the same expression rather than a second copy that has to be kept in step.
  *
- * **Deliberately NOT routed through [mintQualified]'s round-6 stamp rule.** That rule reads the
- * honored `completedAt` off a POST-step task copy, and one of this function's two callers —
+ * **Deliberately NOT routed through [mintQualified]'s honor-mark rule (rounds 6–7).** That rule reads
+ * [Task.honoredRetireAt] off a POST-step task copy, and one of this function's two callers —
  * `decideReceiptReprice`, invoked from inside `endSession` — passes the PRE-teardown region for both
- * `p` and `next`, where the drop is still active and unstamped. Applying the stamp rule there would
- * empty the denominator of the very drop the teardown is about to mint and silently withhold the
- * correction (the #1033 R2 defect, exactly). The distinction is what each answers: this is a
+ * `p` and `next`, where the drop is still active and not yet marked. Applying the mark rule there
+ * would empty the denominator of the very drop the teardown is about to mint and silently withhold
+ * the correction (the #1033 R2 defect, exactly). The distinction is what each answers: this is a
  * DENOMINATOR for apportionment, where including a drop that is about to mint is the safe direction,
  * while [mintQualified] gates an EMISSION, where being wrong writes or loses a row.
  */
