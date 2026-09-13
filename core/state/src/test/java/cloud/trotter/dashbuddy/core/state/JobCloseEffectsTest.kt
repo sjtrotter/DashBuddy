@@ -207,7 +207,10 @@ class JobCloseEffectsTest {
         )
         val next = PlatformRegion(
             Platform.DoorDash, session = null, activeJob = null, activeTask = null,
-            recentTasks = listOf(active.copy(completedAt = 4600L)),
+            // Round 7: the honored copy carries the stepper's MARK. A hand-built `completedAt` that
+            // merely equals `absorbedRetireSince` is exactly the coincidence the mark replaced —
+            // `endSession`'s force-stamp can produce that value too.
+            recentTasks = listOf(active.copy(completedAt = 4600L, honoredRetireAt = 4600L)),
         )
         assertEquals(
             "an honored teardown accounts its drop — no tripwire",

@@ -1162,9 +1162,9 @@ class DashEndHonorsTaskRetireTest {
             "the drop is FORCE-stamped at the teardown clock, not honored at the retire instant",
             end.since, stamped.completedAt,
         )
-        assertNotEquals("…so it does not carry the honored stamp", idleAt, stamped.completedAt)
+        assertNull("…and it carries no honor mark", stamped.honoredRetireAt)
         assertEquals(
-            "and the emitter refuses it BY CONSTRUCTION — the stamp does not match",
+            "and the emitter refuses it BY CONSTRUCTION — the stepper never marked it honored",
             0, deliveries(completions(afterSummary, afterShortcut, shortcut)).size,
         )
     }
@@ -1180,10 +1180,9 @@ class DashEndHonorsTaskRetireTest {
         val afterShortcut = step(afterSummary, Flow.Idle, shortcut)
 
         assertNull(afterShortcut.session)
-        assertEquals(
-            "honored at the absorbed retire instant",
-            idleAt, afterShortcut.recentTasks.single { it.taskId == "d1" }.completedAt,
-        )
+        val honored = afterShortcut.recentTasks.single { it.taskId == "d1" }
+        assertEquals("honored at the absorbed retire instant", idleAt, honored.completedAt)
+        assertEquals("…and the stepper SAYS so", idleAt, honored.honoredRetireAt)
         val rows = deliveries(completions(afterSummary, afterShortcut, shortcut))
         assertEquals("exactly one completion", 1, rows.size)
         assertEquals("d1", rows.single().taskId)
@@ -1209,10 +1208,10 @@ class DashEndHonorsTaskRetireTest {
     }
 
     @Test
-    fun `a disowned teardown's force-stamp is refused by the stamp rule, not by a second predicate`() {
-        // The stamp rule's real payoff: the stepper's refusal is the ONLY thing the emitter reads.
-        // Here the disown clears the absorbed value, `endSession` force-stamps, and `mintQualified`
-        // sees a `completedAt` that is not the honored instant — no separate gate to keep in sync.
+    fun `a disowned teardown's force-stamp is refused by the honor mark, not by a second predicate`() {
+        // The mark's real payoff: the stepper's refusal is the ONLY thing the emitter reads. Here the
+        // disown clears the absorbed value, `endSession` force-stamps, and the task carries no
+        // `honoredRetireAt` — no separate gate to keep in sync.
         val onDrop = onDropoff()
         val afterIdle = step(onDrop, Flow.TaskDropoffArrived, screen(Flow.Idle, idleAt))
         val afterSummary = step(afterIdle, Flow.Idle, summaryFrame(summaryAt))
@@ -1222,13 +1221,42 @@ class DashEndHonorsTaskRetireTest {
         val afterCommit = step(afterSummary, Flow.SessionEnded, abandon)
         val abandoned = (afterCommit.recentTasks + listOfNotNull(afterCommit.activeTask))
             .single { it.taskId == "d1" }
-        assertNotEquals(
-            "the disowned teardown force-stamps — never the honored instant",
-            idleAt, abandoned.completedAt,
+        assertNull(
+            "the disowned teardown force-stamps — it is never MARKED honored",
+            abandoned.honoredRetireAt,
         )
         assertEquals(
             "so the mint is off",
             0, deliveries(completions(afterSummary, afterCommit, abandon)).size,
+        )
+    }
+
+    @Test
+    fun `a summary sharing the idle frame's timestamp cannot fabricate an honored completion`() {
+        // Round 7 regression (adversarial round 6). The summary lands on the SAME instant as the idle
+        // frame that armed the retire, so `pend.since` == `absorbedRetireSince` == [idleAt]. An
+        // immature `startingSession` teardown then FORCE-stamps `completedAt = pend.since` — a value
+        // numerically identical to the honored instant. Round 6 read provenance off that value and
+        // minted a $21 row the stepper had deliberately refused; a clock rollback produces the same
+        // collision. The explicit mark is the fix: same timestamps, no mark, no row.
+        val onDrop = onDropoff()
+        val afterIdle = step(onDrop, Flow.TaskDropoffArrived, screen(Flow.Idle, idleAt))
+        val afterSummary = step(afterIdle, Flow.Idle, summaryFrame(idleAt))
+        val end = afterSummary.pendingDestructive!!
+        assertEquals("the collision this test exists for", end.since, end.absorbedRetireSince)
+
+        val shortcut = startingSessionFrame(idleAt + 2_000L)
+        val afterShortcut = step(afterSummary, Flow.Idle, shortcut)
+
+        val stamped = afterShortcut.recentTasks.single { it.taskId == "d1" }
+        assertEquals(
+            "the force-stamp is numerically indistinguishable from an honored one",
+            end.absorbedRetireSince, stamped.completedAt,
+        )
+        assertNull("but it carries no honor mark", stamped.honoredRetireAt)
+        assertEquals(
+            "so nothing is minted — a timestamp is not provenance",
+            0, deliveries(completions(afterSummary, afterShortcut, shortcut)).size,
         )
     }
 }

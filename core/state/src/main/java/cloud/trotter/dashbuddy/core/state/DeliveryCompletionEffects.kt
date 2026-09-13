@@ -477,10 +477,11 @@ internal fun mintQualified(p: PlatformRegion, retirePending: Boolean, task: Task
     if (p.recentTasks.any { it.taskId == task.taskId && it.completedAt != null }) return true
     if (!retirePending || p.activeTask?.taskId != task.taskId) return false
     val pend = p.pendingDestructive ?: return false
-    // Round 6: a teardown's completion counts ONLY when it carries the honored stamp.
-    if (pend.kind == DestructiveKind.SESSION_END) {
-        return pend.absorbedRetireSince != null && task.completedAt == pend.absorbedRetireSince
-    }
+    // Round 7: a teardown's completion counts ONLY when the stepper MARKED it honored. Round 6 read
+    // the mark off `completedAt`'s VALUE (== `absorbedRetireSince`), which an equal-timestamped
+    // summary — or a clock rollback — let the immature teardown's force-stamp satisfy, fabricating a
+    // row the stepper had refused. A timestamp is not provenance; [Task.honoredRetireAt] is.
+    if (pend.kind == DestructiveKind.SESSION_END) return task.honoredRetireAt != null
     return true
 }
 

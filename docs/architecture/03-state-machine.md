@@ -270,12 +270,17 @@ retire with seconds still to run — seconds in which a `task:unassigned` frame 
 was honored anyway. A dash ending early is confirmation that the DASH ended, not that the retire
 matured, so `endSession` honors only from `absorbedRetireDeadline` onward and force-stamps before it.
 
-Nothing else needs clearing, because the **completion's STAMP is the discriminator**. `endSession`
-writes `completedAt = absorbedRetireSince` when and only when it honors; a force-stamp carries the
-teardown clock and an inline retire its own `since`, so no other writer lands on that value.
-`mintQualified`'s arm (b) therefore requires `task.completedAt == p.pendingDestructive.absorbedRetireSince`
-for a `SESSION_END` pending — reading the stepper's ACTUAL decision off the post-step task copy
-instead of re-deriving it from the pending. Every refusal in the stepper (immature deadline, disown,
+Nothing else needs clearing, because the **stepper MARKS the honored completion** and the emitter
+reads that mark. Round 6 tried to use the stamp's VALUE as provenance — `completedAt ==
+absorbedRetireSince`, on the reasoning that no other writer lands there. It was wrong: when the
+summary frame carries the SAME timestamp as the idle frame that armed the retire, `pend.since ==
+absorbedRetireSince`, and the immature teardown's force-stamp (`completedAt = pend.since`) is
+numerically identical to an honored one — the guard accepted it and minted a $21 row the stepper had
+just refused. A clock rollback collides the same way. **A timestamp is not provenance** (the #1093
+lesson again, where geometry was not identity). So `endSession`'s honored branch sets
+`Task.honoredRetireAt` (`:domain`, additive nullable, legacy → null = refuse) and `mintQualified`'s
+arm (b) for a `SESSION_END` pending requires `task.honoredRetireAt != null` — the stepper's ACTUAL
+decision, stated once and read, never re-derived. Every refusal in the stepper (immature deadline, disown,
 lazy-expiry refusal) turns the mint off with no second predicate to keep in sync; that second
 predicate is exactly what had fallen out of step at the shortcut. `mintingDropoffTasks` is
 deliberately NOT routed through the stamp rule: one of its callers (`decideReceiptReprice`, from

@@ -1413,14 +1413,23 @@ class PlatformRegionStepper @Inject constructor() {
         // ending early is confirmation that the DASH ended; it says nothing about whether the retire
         // matured. So honor only from the absorbed deadline onward, and force-stamp before it.
         //
-        // Nothing else needs clearing: the completion's STAMP is the emitter's discriminator (see
-        // [PendingDestructive.absorbedRetireSince] and `mintQualified`), so a force-stamp here is
-        // automatically refused a row.
+        // Nothing else needs clearing: the honored branch below MARKS the task
+        // ([Task.honoredRetireAt]) and that mark is the emitter's discriminator (`mintQualified`), so
+        // a force-stamp here is automatically refused a row.
         val pend = region.pendingDestructive?.takeIf { it.kind == DestructiveKind.SESSION_END }
         val matured = observedAt >= (pend?.absorbedRetireDeadline ?: Long.MIN_VALUE)
         val honoredAt = pend?.absorbedRetireSince?.takeIf { matured }
         val completedTask = region.activeTask?.let {
-            if (honoredAt != null) it.completedInline(honoredAt) else it.copy(completedAt = timestamp)
+            if (honoredAt != null) {
+                // Round 7: STATE the honor on the task (`Task.honoredRetireAt`) instead of leaving the
+                // emitter to infer it from `completedAt`'s value. `pend.since` and
+                // `absorbedRetireSince` can be the SAME instant (a summary frame sharing the idle
+                // frame's timestamp, or a clock rollback), and then the force-stamp below is
+                // indistinguishable from an honored one.
+                it.completedInline(honoredAt).copy(honoredRetireAt = honoredAt)
+            } else {
+                it.copy(completedAt = timestamp)
+            }
         }
         val recentTasks = if (completedTask != null) {
             (region.recentTasks + completedTask).takeLast(MAX_RECENT_TASKS)

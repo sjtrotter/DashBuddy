@@ -218,6 +218,27 @@ class SerializationRoundTripTest {
     }
 
     @Test
+    fun `honoredRetireAt round-trips, and a pre-round-7 task JSON decodes to null`() {
+        // #1078 round 7: the honor mark is the emitter's provenance signal, so it has to survive a
+        // snapshot — and a task written before it existed must decode to null, which is the refusing
+        // answer (a pre-round-7 teardown stamp was never honored).
+        val honored = Task(
+            taskId = "d1", jobId = "J1", phase = TaskPhase.DROPOFF,
+            startedAt = 1_000L, arrivedAt = 2_000L, completedAt = 3_000L,
+            honoredRetireAt = 3_000L,
+        )
+        val decoded = StateJson.decodeFromString<Task>(StateJson.encodeToString(honored))
+        assertEquals(honored, decoded)
+        assertEquals(3_000L, decoded.honoredRetireAt)
+
+        val legacy = StateJson.decodeFromString<Task>(
+            """{"taskId":"d1","jobId":"J1","phase":"DROPOFF","startedAt":1000,"completedAt":3000}""",
+        )
+        assertEquals("a pre-round-7 snapshot carries no honor mark", null, legacy.honoredRetireAt)
+        assertEquals(3_000L, legacy.completedAt)
+    }
+
+    @Test
     fun `exitMintedTaskIds round-trips, and a pre-round-4 anchors JSON decodes to the empty set`() {
         // #1078 round 4: the per-task exit-mint record is durable state the teardown mint and the
         // #810 tripwire read, so it has to survive a snapshot — and a snapshot written before it
