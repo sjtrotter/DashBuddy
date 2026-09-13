@@ -19,9 +19,15 @@ import cloud.trotter.dashbuddy.domain.model.event.payload.JobAcceptMismatchPaylo
  * it is replay-deterministic.
  *
  * **Accounting** (design point 1):
- * - `nAccepts` = [Job.acceptedOffers]`.size`. Guarded to `>= 2`: a single-accept job that closes
- *   drop-less is the existing early-offline / coarse-platform class (an Uber `task:active` job that
- *   never rendered a drop), NOT this invisible-unassign signal — so it never trips the tripwire.
+ * - `nAccepts` = [Job.acceptedOffers]`.size`, floored at [minAccepts]. The default `2` is the
+ *   original guard: a single-accept job that closes drop-less IN-SESSION is the existing
+ *   early-offline / coarse-platform class (an Uber `task:active` job that never rendered a drop),
+ *   NOT this invisible-unassign signal — so it never trips the tripwire.
+ *   **#1095 lifts the floor to 1 on a SESSION-END close**, where the same shape means something
+ *   else entirely: a single accepted, pay-bearing offer with zero accounted drops at a dash end is
+ *   the lost-money shape (#1078 — a fielded $21.00 delivery that minted no row and warned about
+ *   nothing). The caller decides which question it is asking; the 2-floor stays for in-session
+ *   closes.
  * - `accounted` = distinct delivered dropoffs (`completedAt != null && arrivedAt != null &&
  *   unassignedAt == null`, deduped by `taskId`) + distinct unassign-marked orders
  *   (`unassignedAt != null`, deduped by customer identity so a pickup+dropoff leg of the SAME
@@ -46,10 +52,16 @@ import cloud.trotter.dashbuddy.domain.model.event.payload.JobAcceptMismatchPaylo
  * and fails toward ONE spurious review callout, never a mutation. The desk playbook should treat a lone
  * mismatch WARN on an otherwise-reconciling stack as this residual, not a new bug.
  */
-fun detectAcceptMismatch(job: Job, recentTasks: List<Task>): JobAcceptMismatchPayload? {
+fun detectAcceptMismatch(
+    job: Job,
+    recentTasks: List<Task>,
+    minAccepts: Int = 2,
+): JobAcceptMismatchPayload? {
     val nAccepts = job.acceptedOffers.size
-    // A single-accept drop-less close is the early-offline / coarse-platform class, not this signal.
-    if (nAccepts < 2) return null
+    // Below the floor the shape is not this signal. In-session (the default 2) a single-accept
+    // drop-less close is the early-offline / coarse-platform class; at a session end (#1095) one
+    // accept with nothing accounted IS the signal, so the caller passes 1.
+    if (nAccepts < minAccepts) return null
 
     // recentTasks FIRST so a finished drop's fresh copy wins the dedup over the stale Job.tasks mirror.
     val jobTasks = (recentTasks + job.tasks)

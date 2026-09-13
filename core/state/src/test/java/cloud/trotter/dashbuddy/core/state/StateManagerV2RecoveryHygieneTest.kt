@@ -15,6 +15,8 @@ import cloud.trotter.dashbuddy.domain.state.Flow
 import cloud.trotter.dashbuddy.domain.state.FlowRegion
 import cloud.trotter.dashbuddy.domain.state.Mode
 import cloud.trotter.dashbuddy.domain.state.ParsedFields
+import cloud.trotter.dashbuddy.domain.state.DestructiveKind
+import cloud.trotter.dashbuddy.domain.state.PendingDestructive
 import cloud.trotter.dashbuddy.domain.state.PendingSessionPay
 import cloud.trotter.dashbuddy.domain.state.Platform
 import cloud.trotter.dashbuddy.domain.state.PlatformRegion
@@ -573,6 +575,103 @@ class StateManagerV2RecoveryHygieneTest {
             16.70,
             region?.session?.runningEarnings ?: Double.NaN,
             0.0001,
+        )
+    }
+
+    // =========================================================================
+    // #1078 — the re-based destructive grace keeps what it absorbed
+    // =========================================================================
+
+    @Test
+    fun `a re-based destructive grace keeps its absorbed retire (pure hygiene)`() {
+        // `recoveryHygiene` re-bases a live destructive grace onto its REMAINING window; it must
+        // carry the absorbed evidence across, or a crash mid-grace would turn an honored teardown
+        // back into the T3 force-stamp the guard refuses — the #1078 loss, recreated by a restart.
+        val pend = PendingDestructive(
+            kind = DestructiveKind.SESSION_END,
+            since = 100_000L,
+            deadline = 102_500L,
+            authoritative = true,
+            absorbedRetireSince = 99_000L,
+            wakeId = 3L,
+            windowFrom = 100_000L,
+        )
+        val restored = AppState(
+            regions = Regions(
+                flow = FlowRegion(flow = Flow.SessionEnded, activePlatform = Platform.DoorDash),
+                platforms = mapOf(
+                    Platform.DoorDash to PlatformRegion(
+                        platform = Platform.DoorDash,
+                        mode = Mode.Online,
+                        session = Session("dash-A", startedAt = 10_000L),
+                        pendingDestructive = pend,
+                    ),
+                ),
+            ),
+            timestamp = 101_000L,
+        )
+
+        val cleaned = restored.recoveryHygiene(nowMs = 500_000L)
+        val rebased = cleaned.regions.platforms.getValue(Platform.DoorDash).pendingDestructive!!
+
+        assertEquals(
+            "the absorbed retire survives the re-base (#1078)",
+            99_000L, rebased.absorbedRetireSince,
+        )
+        assertEquals("…serving only the window it had left", 501_500L, rebased.deadline)
+        assertEquals(500_000L, rebased.servedFrom)
+    }
+
+
+    @Test
+    fun `the re-based grace carries its absorbed retire deadline forward by the same delta`() {
+        // #1078 round 6: `absorbedRetireDeadline` is a FLOOR on the pending's own deadline, so it
+        // lives in the same clock. Left at its stale pre-crash wall value it is already in the past
+        // after any real downtime, and a summary RE-RENDER after the restore tightens straight
+        // through it — committing the honored completion earlier than the retire's window, which is
+        // the whole thing the floor exists to prevent.
+        val pend = PendingDestructive(
+            kind = DestructiveKind.SESSION_END,
+            since = 201_000L,
+            deadline = 210_000L,
+            authoritative = true,
+            absorbedRetireSince = 200_000L,
+            absorbedRetireDeadline = 210_000L,
+            wakeId = 3L,
+            windowFrom = 201_000L,
+        )
+        val restored = AppState(
+            regions = Regions(
+                flow = FlowRegion(flow = Flow.SessionEnded, activePlatform = Platform.DoorDash),
+                platforms = mapOf(
+                    Platform.DoorDash to PlatformRegion(
+                        platform = Platform.DoorDash,
+                        mode = Mode.Online,
+                        session = Session("dash-A", startedAt = 10_000L),
+                        pendingDestructive = pend,
+                    ),
+                ),
+            ),
+            timestamp = 202_000L,
+        )
+
+        val cleaned = restored.recoveryHygiene(nowMs = 500_000L)
+        val rebased = cleaned.regions.platforms.getValue(Platform.DoorDash).pendingDestructive!!
+
+        // 210 000 − 201 000 = 9 000 ms of window, 1 000 ms of it observed → 8 000 ms remaining.
+        assertEquals("the grace serves only the window it had left", 508_000L, rebased.deadline)
+        assertEquals(
+            "the absorbed floor moved by the SAME delta, so the distance between them is preserved",
+            pend.absorbedRetireDeadline!! + (rebased.deadline - pend.deadline),
+            rebased.absorbedRetireDeadline,
+        )
+        assertEquals(
+            "…and it is still a FLOOR, not something in the past",
+            rebased.deadline, rebased.absorbedRetireDeadline,
+        )
+        assertEquals(
+            "`absorbedRetireSince` is a historical domain instant and is NOT shifted (#732)",
+            200_000L, rebased.absorbedRetireSince,
         )
     }
 }

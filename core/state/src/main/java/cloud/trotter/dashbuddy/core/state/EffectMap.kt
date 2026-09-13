@@ -38,6 +38,7 @@ import cloud.trotter.dashbuddy.domain.state.PickupActivity
 import cloud.trotter.dashbuddy.domain.state.PendingOffer
 import cloud.trotter.dashbuddy.domain.state.Platform
 import cloud.trotter.dashbuddy.domain.state.PlatformRegion
+import cloud.trotter.dashbuddy.domain.state.Session
 import cloud.trotter.dashbuddy.domain.state.Task
 import cloud.trotter.dashbuddy.domain.state.TaskPhase
 import cloud.trotter.dashbuddy.domain.state.TaskSubFlow
@@ -215,8 +216,9 @@ class EffectMap @Inject constructor(
             // sweep) extracted to DeliveryCompletionEffects.kt as one unit — both blocks share the
             // emittedThisStep dual-mint-exclusivity set (amdt #2), so they moved together.
             addAll(diffDeliveryCompletion(p, next, actedPrevFlow, actedNextFlow, obs))
-            // #810 B1: the job-close accept-reconciliation tripwire — diffs the activeJob close
-            // (any in-scope close routes through completeActiveJob; endSession is excluded inside).
+            // #810 B1: the job-close accept-reconciliation tripwire — diffs the activeJob close.
+            // #1095: EVERY close edge is in scope now, `endSession`'s teardown included, attributed
+            // to the job's own session (see [diffJobClose]).
             // Emitted AFTER diffDeliveryCompletion (#810 B2 review F1) so the JOB_ACCEPT_MISMATCH
             // event sequences AFTER the closing job's final DELIVERY_COMPLETED (the #596 close-out
             // sweep mints that drop on this SAME close step). This makes the B2 Tier-1 store-evidence
@@ -488,4 +490,36 @@ class EffectMap @Inject constructor(
         returnFlow = offer.returnFlow,
         description = description,
     )
+}
+
+/**
+ * **The session a CLOSING job's events belong to** (#1078 round 3) — the one rule every emitter that
+ * names a session on a close step reads, so they cannot disagree about which dash the work was done
+ * in.
+ *
+ * Two cases, and each needs the opposite region:
+ *
+ * - **The session SURVIVES the step** (same id, or both null). Read `next`: it carries the values
+ *   THIS observation committed, and one of them is money — a #1029 settle park commits on the very
+ *   observation that closes a job, moving `runningEarnings` from a stale figure to the settled one.
+ *   Round 2's unconditional prev-first was a regression exactly here: an in-session close published
+ *   the pre-settle total.
+ * - **The session ENDS or CHANGES on this step.** Read `prev`: the closing job lived in the session
+ *   that is going away. One frame can commit a stale absorbed `SESSION_END` (session A → null) and
+ *   mint a fresh session B in the mode arm — the next dash's first Online frame — and a next-first
+ *   read books A's delivery, its running total, and any teardown-marked unassign to B.
+ *
+ * - **Nothing was live before this step** (`prev.session == null`, `next.session` minted on it).
+ *   There is no closing session to attribute to — read `next`, exactly as the pre-round-3 next-first
+ *   expression did. The fielded shape: the first captured frame of a dash is a task screen (the
+ *   offer/accept never captured), so the session AND the task mint on one frame; the task edge must
+ *   still carry that new session, not null.
+ *
+ * Returns the whole [Session] rather than an id so a caller can read `runningEarnings` from the same
+ * decision that named the id; a caller wanting only the id takes `?.sessionId`.
+ */
+internal fun closingSession(prev: PlatformRegion, next: PlatformRegion): Session? = when {
+    next.session?.sessionId == prev.session?.sessionId -> next.session
+    prev.session != null -> prev.session
+    else -> next.session
 }

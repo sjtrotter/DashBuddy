@@ -1198,6 +1198,18 @@ class ReceiptRepriceTest {
         assertTrue(fold.region.jobReceiptAnchors!!.exitedPostTask)
 
         fold.step(graceCommit(13_501L))
+        // #1078 round 2: the count is taken across the WHOLE sequence, not just up to the exit. The
+        // receipt armed this drop's `TASK_RETIRE`, and if a dash end could ABSORB a `PostTask`-armed
+        // retire the teardown would honor it and emit a SECOND raw `DELIVERY_COMPLETED` for t1 —
+        // hidden live by the engine's per-task `effects_fired` key, a double-count in any replay.
+        // `absorbableRetireSince` refuses that provenance, and this is where it is pinned.
+        assertEquals(
+            "exactly ONE DELIVERY_COMPLETED for t1 across exit + teardown",
+            1,
+            fold.events.count {
+                it.type == AppEventType.DELIVERY_COMPLETED && (it.payload as DeliveryPayload).taskId == "t1"
+            },
+        )
         val repriced = fold.reprices()
         assertEquals(1, repriced.size)
         assertEquals(

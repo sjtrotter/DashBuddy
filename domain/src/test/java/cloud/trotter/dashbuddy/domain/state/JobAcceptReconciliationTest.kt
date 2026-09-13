@@ -180,4 +180,29 @@ class JobAcceptReconciliationTest {
         assertEquals(listOf("c1"), m.deliveredCustomerHashes)
         assertEquals(1, m.leftoverTbdPlaceholders)
     }
+
+    @Test
+    fun `minAccepts 1 admits a single-accept drop-less close (the session-end floor, #1095)`() {
+        // #1078/#1095: at a dash end, one accepted pay-bearing offer with nothing accounted IS the
+        // lost-money shape. The caller — `diffJobClose` on a session-end close — asks with the floor
+        // at 1; every other caller keeps the default 2 and this same job stays silent.
+        val job = job(listOf("a"), tasks = emptyList())
+        assertNull("the default floor of 2 is unchanged", detectAcceptMismatch(job, emptyList()))
+
+        val m = detectAcceptMismatch(job, emptyList(), minAccepts = 1)
+        assertNotNull("at the lifted floor the stranded accept is visible", m)
+        assertEquals(1, m!!.acceptedCount)
+        assertEquals(0, m.accountedCount)
+        assertEquals(listOf("a"), m.acceptedOfferHashes)
+    }
+
+    @Test
+    fun `minAccepts 1 still stays silent when the single accept IS accounted`() {
+        // The floor only decides what is worth LOOKING at; `nAccepts <= accounted` still governs.
+        val job = job(listOf("a"), tasks = emptyList())
+        assertNull(
+            "one accept, one delivered drop — nothing stranded",
+            detectAcceptMismatch(job, listOf(deliveredDrop("d1", "c1")), minAccepts = 1),
+        )
+    }
 }

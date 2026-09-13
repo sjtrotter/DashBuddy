@@ -54,6 +54,23 @@ data class Task(
      * unchanged (no migration).
      */
     val unassignedAt: Long? = null,
+    /**
+     * Set ONLY by `PlatformRegionStepper.endSession`'s HONORED branch (#1078 round 7): this teardown
+     * absorbed a matured `TASK_RETIRE` and retired the task as a real completion, at this instant.
+     *
+     * It exists because a TIMESTAMP IS NOT PROVENANCE. Round 6 had `mintQualified` recognize an
+     * honored completion by comparing `completedAt` against the pending's `absorbedRetireSince`; when
+     * the summary frame carries the SAME timestamp as the idle frame that armed the retire, the
+     * teardown's FORCE-stamp (`completedAt = pend.since`) collides with that value and the guard
+     * accepts a completion the stepper deliberately refused to honor — a fabricated $21 row from an
+     * immature teardown. A clock rollback produces the same collision. So the stepper states the
+     * decision explicitly and the emitter reads the statement, never re-derives it.
+     *
+     * Null on every other path — an inline retire, an ordinary completion, and above all the
+     * teardown's force-stamp, which is exactly what the amdt-#5 T3 guard must keep refusing.
+     * `@Serializable` default-null ⇒ old snapshots/journals decode unchanged (no migration).
+     */
+    val honoredRetireAt: Long? = null,
     val recovered: Boolean = false,
     /**
      * The `offerHash` of the accepted offer that **created this slot** (#997) — a weak provenance

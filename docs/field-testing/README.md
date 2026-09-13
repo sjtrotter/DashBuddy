@@ -78,17 +78,24 @@ card's **mechanical** half, #577 (re-confirmed, 24/24, ~0.55 s — with a new po
 that entry's Bug #1), the #457 path, and #554 ShadowProjector (2/2). The #462/#460 dropoff item
 was found **broken-in-part** (raw PII in capture envelopes) and moved to that entry's Bug #7.)_
 
-- **🆕 ELEVATED — #1078 — a dash you end while standing at the last doorstep must still record that
-  drop.** Second sighting 09-08 (desk 09-09): ending the dash ~8 s after the drop-off photo let the
-  dash-summary grace REPLACE the live 10 s task-retire grace, and the drop's completion was never minted
-  ($21.00 lost, silent — see that entry's Bug 1; #1095 is why nothing WARNed). **On-dash (deliberate, twice):**
-  on the next dash, complete a delivery and tap **End Dash** within ~10 s of the drop-off photo; on another,
-  wait ≥ 30 s after the photo before ending. **Desk:** `SELECT eventType, sequenceId, occurredAt FROM
-  app_events` around each `DASH_STOP` — a `DELIVERY_CONFIRMED` sequenced at the SAME timestamp as
-  `DASH_STOP` with no `DELIVERY_COMPLETED` after it is the bug reproducing; `Σ realizedPay` must equal
-  `reportedEarnings` on both dashes. The ≥ 30 s one must record correctly (it is a race, not a
-  determinism). Until #1078 ships this is a REPRO item, not a validation — record what happened either way.
-  - Confirmed: 0/2 (sightings so far: 09-05 session 409 −$9.95; 09-08 session 440 −$21.00)
+- **🆕 NEW — #1078 + #1095 (PR #1100) — a dash you end while standing at the last doorstep must
+  still record that drop.** Two fielded sightings (09-05 session 409 −$9.95; 09-08 session 440
+  −$21.00): the dash-summary grace REPLACED the live 10 s task-retire grace 1.6 s before its own
+  deadline, the teardown's force-stamp was refused by the T3 guard, and nothing WARNed (#1095 was the
+  second silencer). The `SESSION_END` now ABSORBS the retire and `endSession` honors it, and the #810
+  tripwire covers the teardown close. **Scope, deliberately narrow:** the app must have WATCHED both
+  halves — a retire it saw arm (an idle/offer frame after the drop) AND an arrival on that drop.
+  Ending the dash straight off the drop-off screen with no intervening idle frame (the 09-05 shape),
+  or on a drop whose arrival frame was never captured, still records nothing, BY DESIGN (an
+  arrival-only rule was rejected as fail-wrong; residuals tracked as #1101) — each should now produce
+  a `JOB_ACCEPT_MISMATCH` instead of silence. **On-dash (deliberate, twice — keep both timings):** complete a delivery and tap
+  **End Dash** within ~10 s of the drop-off photo; on another dash, wait ≥ 30 s after the photo before
+  ending. **Desk:** exactly ONE `DELIVERY_COMPLETED` per delivered drop on both dashes, and
+  `Σ realizedPay == reportedEarnings` on both; a `DELIVERY_CONFIRMED` sequenced at the SAME timestamp
+  as `DASH_STOP` with no `DELIVERY_COMPLETED` after it is the bug recurring. A `JOB_ACCEPT_MISMATCH`
+  row is expected ONLY if a drop was genuinely stranded (the un-watched-retire shape above, or a dash
+  ended mid-route) — one on an otherwise-reconciling dash is a finding, not noise.
+  - Confirmed: 0/2
 
 - **🆕 NEW — #1096 — the 8.96.8 receipt's FIRST beat (no `This offer` row yet, new "Send thanks to the
   customer for the tip!" chrome) falls to UNKNOWN.** Benign on 09-08 (the recognized frame landed 656 ms

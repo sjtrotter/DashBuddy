@@ -3,7 +3,6 @@ package cloud.trotter.dashbuddy.core.state
 import cloud.trotter.dashbuddy.domain.model.event.AppEventType
 import cloud.trotter.dashbuddy.domain.model.event.payload.DeliveryReceiptRepricePayload
 import cloud.trotter.dashbuddy.domain.pipeline.Observation
-import cloud.trotter.dashbuddy.domain.state.DestructiveKind
 import cloud.trotter.dashbuddy.domain.state.DropPayApportioner
 import cloud.trotter.dashbuddy.domain.state.Flow
 import cloud.trotter.dashbuddy.domain.state.FlowRegion
@@ -350,7 +349,11 @@ internal fun PlatformRegionStepper.decideReceiptReprice(
     // and because the anchor must survive the denominator the refusal also withholds the correction
     // from its covered siblings (#1084) — and what it buys is that no delivered sibling is ever
     // re-priced for a drop the machine has no evidence was delivered.
-    val retirePending = region.pendingDestructive?.kind == DestructiveKind.TASK_RETIRE
+    // #1078: the SAME question [mintingDropoffTasks] is asked everywhere else, so it goes through
+    // the ONE owner. A `SESSION_END` that ABSORBED a retire is minting that drop's completion on this
+    // very step (this is called from `endSession`), so the drop belongs in the denominator the
+    // apportionment divides — an un-absorbed (T3) end still answers false and is unchanged.
+    val retirePending = region.retirePendingForMint()
     val widened = region.activeTask?.takeIf {
         mintRanForJob && it.taskId == anchor && it.jobId == mark.jobId && it.isAccountableDropoff &&
             (it.arrivedAt != null || it.completedAt != null)
@@ -436,7 +439,11 @@ internal fun EffectMap.diffReceiptReprice(
     val decided = next.pendingReceiptReprice ?: return emptyList()
     if (decided == p.pendingReceiptReprice) return emptyList()
 
-    val sessionId = next.session?.sessionId ?: p.session?.sessionId
+    // #1078 round 3: the ONE close-step attribution rule ([closingSession]). A teardown handoff
+    // (`endSession`'s decision, carried out of the step that cleared the session) corrects rows
+    // belonging to the dash that just ENDED — and one step can end session A and mint session B. An
+    // in-session decision reads `next`, which is where this step's committed values live.
+    val sessionId = closingSession(p, next)?.sessionId
     val effects = decided.shares.map { (taskId, share) ->
         logEffect(
             sessionId,
