@@ -1049,9 +1049,9 @@ and broke `./gradlew :app:build` on master. The `build-and-test` job now runs
 (`LocaleAllowlistGuardTest`, the `TimberTagGuardTest`/`IcuRegexGuardTest` doctrine)
 enforces the dev's locale allowlist — translate into `en` (default)/`es`/`fr` only,
 language-level, never a regional variant (`es-rUS`) — so the orphaned-translation class
-can't recreate itself silently. `values-es` is intentionally incomplete (~84/393 keys)
-until the translation-completion work lands; that completeness gate is deferred, not
-forgotten.
+can't recreate itself silently. `values-es` is intentionally incomplete (`:app` 78 of 614
+keys; `:feature:setup` 16 of 41) until the translation-completion work lands; that
+completeness gate is deferred, not forgotten.
 
 ## Session Orientation
 
