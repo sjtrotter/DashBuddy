@@ -16,7 +16,6 @@ import cloud.trotter.dashbuddy.domain.pipeline.Observation
 import cloud.trotter.dashbuddy.domain.pipeline.RequestedEffect
 import cloud.trotter.dashbuddy.domain.pipeline.TimeoutType
 import cloud.trotter.dashbuddy.domain.pipeline.TransitionTrigger
-import cloud.trotter.dashbuddy.domain.settings.GraceConfig
 import cloud.trotter.dashbuddy.domain.state.AcceptedOfferEconomics
 import cloud.trotter.dashbuddy.domain.state.AppState
 import cloud.trotter.dashbuddy.domain.state.activeSessionId
@@ -1840,12 +1839,7 @@ class EffectMapTest {
         val scheduled = effects.filterIsInstance<AppEffect.ScheduleTimeout>()
             .filter { it.type == cloud.trotter.dashbuddy.domain.pipeline.TimeoutType.SETTLE_UI }
         assertEquals(1, scheduled.size)
-        // #1102: the ruleId above makes this a DoorDash observation, and DoorDash's code default
-        // waits out the prism-sheet slide (900 ms) rather than the 500 ms cross-platform default.
-        assertEquals(
-            GraceConfig.codeDefault(Platform.DoorDash).expandSettleMs,
-            scheduled[0].durationMs,
-        )
+        assertEquals(EffectMap.EXPAND_SETTLE_MS, scheduled[0].durationMs)
         val deferred = scheduled[0].payload as ObservationPayload.DeferredAction
         assertEquals(RuleAction.EXPAND_EARNINGS.wire, deferred.action)
         assertEquals("com.example:id/btn", deferred.target.viewIdSuffix)

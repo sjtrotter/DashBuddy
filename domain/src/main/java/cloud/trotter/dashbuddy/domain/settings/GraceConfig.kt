@@ -28,20 +28,7 @@ data class GraceConfig(
     val pauseResumeGraceMs: Long = PAUSE_RESUME_GRACE_MS,
     /** Safety buffer added to a reported pause countdown before the offline timeout. */
     val pauseTimeoutBufferMs: Long = PAUSE_TIMEOUT_BUFFER_MS,
-    /**
-     * Settle delay before a deferred app-owned tap (`EXPAND_EARNINGS`, `CONFIRM_DECLINE`) — the
-     * wait that lets the surface finish animating before the bound `NodeRef` is re-resolved.
-     *
-     * Per-platform because the animation is (#1102): DoorDash's prism sheet slides up over a
-     * MEASURED ~590–640 ms (09-13/09-15 pulls), so the 500 ms default re-resolved against bounds
-     * frozen mid-slide (`top` 4435/4395/4263/2224/1982 against a settled 1774–1890 on 1080×2400)
-     * and the bounds walk found nothing — 5/11 then 2/18 taps lost, silently, because
-     * `FrameGate`'s identity dedup suppresses the settled re-render so the bind never refreshes.
-     * DoorDash therefore waits [DOORDASH_EXPAND_SETTLE_MS]; #1033's 8 s collapsed-receipt window
-     * makes the extra 400 ms free. The value is shared with the confirm-decline defer by
-     * deliberate choice: the confirm dialog animates on the same prism machinery, and 400 ms out
-     * of an offer countdown measured in tens of seconds costs the quick-decline nothing.
-     */
+    /** Settle delay before the EXPAND_EARNINGS tap (waits on the dialog animation). */
     val expandSettleMs: Long = EXPAND_SETTLE_MS,
     /**
      * How long an accepted-pending-consumption offer stays consumable by the task-edge mint
@@ -90,15 +77,6 @@ data class GraceConfig(
         const val PAUSE_RESUME_GRACE_MS = 8_000L
         const val PAUSE_TIMEOUT_BUFFER_MS = 1_000L
         const val EXPAND_SETTLE_MS = 500L
-
-        /**
-         * DoorDash's settle delay (#1102) — see [GraceConfig.expandSettleMs]. 900 ms clears the
-         * measured ~590–640 ms prism-sheet slide with margin; the timing fix composes with the
-         * label-based fallback in `UiInteractionHandler` (strategy 4), which makes the tap
-         * independent of the slide even when a frame is captured early.
-         */
-        const val DOORDASH_EXPAND_SETTLE_MS = 900L
-
         const val SESSION_PAY_SETTLE_MS = 3_000L
 
         /**
@@ -130,14 +108,12 @@ data class GraceConfig(
         /**
          * Per-platform **code defaults** (before any user override), keyed by [Platform] (Principle
          * 8 — data keyed by platform, never `== Platform.X` in logic). A platform absent here uses
-         * [DEFAULT]; the current divergences are Uber's wider [acceptGraceMs] (#762 D2) and
-         * DoorDash's longer [expandSettleMs] (#1102). A future
+         * [DEFAULT]; the only current divergence is Uber's wider [acceptGraceMs]. A future
          * per-platform grace editor's DataStore override still wins over this in
          * [GraceConfigProvider.forPlatform].
          */
         private val CODE_DEFAULTS: Map<Platform, GraceConfig> = mapOf(
             Platform.Uber to GraceConfig(acceptGraceMs = UBER_ACCEPT_GRACE_MS),
-            Platform.DoorDash to GraceConfig(expandSettleMs = DOORDASH_EXPAND_SETTLE_MS),
         )
 
         /** The code default for [platform] — its [CODE_DEFAULTS] entry, else [DEFAULT]. */

@@ -175,7 +175,7 @@ class PerPlatformGraceConfigTest {
         assertEquals(300_000L + GraceConfig.PAUSE_TIMEOUT_BUFFER_MS, pauseTimeoutDuration(Platform.Uber))
     }
 
-    private fun expandSettleDuration(platform: Platform, map: EffectMap = effectMap): Long {
+    private fun expandSettleDuration(platform: Platform): Long {
         val obs = Observation.Screen(
             timestamp = 1_000L, captureId = null,
             ruleId = "${platform.wire}.screen.delivery_summary_collapsed",
@@ -188,7 +188,7 @@ class PerPlatformGraceConfigTest {
                 ),
             ),
         )
-        val timeout = map.diff(AppState(), AppState(), obs)
+        val timeout = effectMap.diff(AppState(), AppState(), obs)
             .filterIsInstance<AppEffect.ScheduleTimeout>()
             .single { it.type == TimeoutType.SETTLE_UI }
         return timeout.durationMs
@@ -198,42 +198,5 @@ class PerPlatformGraceConfigTest {
     fun `expand-settle delay keys per platform`() {
         assertEquals(900L, expandSettleDuration(Platform.DoorDash))
         assertEquals(GraceConfig.EXPAND_SETTLE_MS, expandSettleDuration(Platform.Uber))
-    }
-
-    // =========================================================================
-    // #1102 — the settle delay is per-platform in the CODE DEFAULTS too
-    // =========================================================================
-
-    /**
-     * #1102: DoorDash's prism sheet slides for a measured ~590–640 ms, so the 500 ms default
-     * re-resolved the expand bind against bounds frozen mid-slide (5/11 then 2/18 taps lost).
-     * The divergence lives in [GraceConfig.codeDefault] — data keyed by platform (Principle 8),
-     * not a branch — so it applies with NO user override present, which is the fielded state.
-     */
-    @Test
-    fun `the DoorDash code default waits out the sheet slide while Uber keeps the default`() {
-        assertEquals(
-            GraceConfig.DOORDASH_EXPAND_SETTLE_MS,
-            GraceConfig.codeDefault(Platform.DoorDash).expandSettleMs,
-        )
-        assertEquals(900L, GraceConfig.codeDefault(Platform.DoorDash).expandSettleMs)
-        assertEquals(GraceConfig.EXPAND_SETTLE_MS, GraceConfig.codeDefault(Platform.Uber).expandSettleMs)
-        // The entry must not disturb any other DoorDash timing (the wholesale-replacement trap
-        // documented on `GraceConfigProvider.forPlatform`).
-        assertEquals(GraceConfig.DEFAULT.gracePeriodMs, GraceConfig.codeDefault(Platform.DoorDash).gracePeriodMs)
-        assertEquals(GraceConfig.DEFAULT.authoritativeGraceMs, GraceConfig.codeDefault(Platform.DoorDash).authoritativeGraceMs)
-        assertEquals(GraceConfig.DEFAULT_ACCEPT_GRACE_MS, GraceConfig.codeDefault(Platform.DoorDash).acceptGraceMs)
-        assertEquals(GraceConfig.RECEIPT_EXPAND_GRACE_MS, GraceConfig.codeDefault(Platform.DoorDash).receiptExpandGraceMs)
-    }
-
-    /**
-     * The same value seen through `EffectMap` with NO overrides at all — the deferred
-     * EXPAND_EARNINGS timeout a collapsed receipt schedules is the one the device will wait.
-     */
-    @Test
-    fun `EffectMap schedules the per-platform settle delay with no overrides`() {
-        val defaults = EffectMap(GraceConfigProvider.Defaults)
-        assertEquals(900L, expandSettleDuration(Platform.DoorDash, defaults))
-        assertEquals(GraceConfig.EXPAND_SETTLE_MS, expandSettleDuration(Platform.Uber, defaults))
     }
 }

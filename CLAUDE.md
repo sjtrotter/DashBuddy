@@ -500,6 +500,10 @@ capability consent gate (`RuleCapabilityRepository`; **no auto-grant, #843**). H
   distance-derived figure an explicit `0.0` placeholder; `OfferEvaluation.hasDistanceMetrics` is the one
   predicate consumers branch on so placeholders are never rendered as measurements, and the offer fold
   persists the frozen estimates as NULL, not zero.
+- **A tap that never landed is not a fire (#1102):** the 1 000 ms action throttle is stamped before a
+  `PerformRuleAction` and RESTORED when the handler resolves nothing, so a re-armed tap from a later
+  admitted frame (the settled receipt sheet) is judged against the last tap that actually landed. Raising
+  the settle delay cannot fix a mid-slide-frozen bind; a label-only re-find was reviewed and withdrawn.
 - **Dedupe granularity is the rule's to declare (#859):** a rule effect with `throttleMs` opts out of the
   48 h `effects_fired` row into its own wall-clock window (in-memory; a restart re-arms it). Evidence
   filenames are sanitized at the one gate (`EvidenceFilename.sanitizePrefix`).

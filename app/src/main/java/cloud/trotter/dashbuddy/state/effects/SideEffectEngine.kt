@@ -378,6 +378,9 @@ class SideEffectEngine @Inject constructor(
                     Timber.tag("Effects").i("Skipped %s — quick declines off (dasher confirms manually)", effect.action.wire)
                     return
                 }
+                // #1102: remember what the throttle held BEFORE this attempt. A tap that never
+                // lands must not start (or extend) the window — see the restore below.
+                val priorStamp = actionLastFiredAt[throttleKey]
                 stampThrottle(throttleKey, now)
                 Timber.tag("Effects").i("Performing %s on %s", effect.action.wire, effect.platform.wire)
                 // #602: performVerifiedClick is suspend because it bounded-retries a
@@ -397,11 +400,22 @@ class SideEffectEngine @Inject constructor(
                     description = "${effect.action.wire} on ${effect.platform.wire} [${effect.sourceRuleId}]",
                     allowRetry = effect.trigger == ActionTrigger.USER,
                 )
-                // #618 F3: the retry can stretch stamp→dispatch to ~1.5s, which would
-                // let a queued duplicate fire ~100ms after a late-landing tap. Re-stamp
-                // at completion so the 1000ms spacing anchors to the actual dispatch.
-                stampThrottle(throttleKey, System.currentTimeMillis())
-                if (!clicked) {
+                if (clicked) {
+                    // #618 F3: the retry can stretch stamp→dispatch to ~1.5s, which would
+                    // let a queued duplicate fire ~100ms after a late-landing tap. Re-stamp
+                    // at completion so the 1000ms spacing anchors to the actual dispatch.
+                    stampThrottle(throttleKey, System.currentTimeMillis())
+                } else {
+                    // #1102: a tap that did NOT land is not a fire. The fielded receipt failures
+                    // were all the same shape — the bind's bounds were captured while the sheet
+                    // was still sliding, the settled re-render was admitted ~600 ms later and
+                    // re-armed a fresh SETTLE_UI with live bounds, and THAT retry was swallowed
+                    // here as "within 1000ms of the last fire" (7 of 7 across the 09-13 and 09-15
+                    // pulls). Restore the throttle to what it held before this attempt, so the
+                    // re-armed tap is judged against the last tap that actually landed. Nothing
+                    // widens: every retry is still a full re-resolve behind the same package,
+                    // label and consent gates, and only a newly ADMITTED frame can arm one.
+                    if (priorStamp == null) actionLastFiredAt.remove(throttleKey) else actionLastFiredAt[throttleKey] = priorStamp
                     Timber.tag("Effects").w(
                         "%s did not fire — target failed resolution/verification (fail closed, user acts manually)",
                         effect.action.wire,

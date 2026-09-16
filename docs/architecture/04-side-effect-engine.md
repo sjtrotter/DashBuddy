@@ -113,31 +113,22 @@ QUEUED, so the reset lives on `onDone`; engine identity is generation-checked so
 engine's late callback can't ready or mis-language its replacement; and the rebuild is detached onto
 the app scope so a wedged TTS binder can never block the drain worker that owns the `app_events`
 writer.
-**The deferred tap must not depend on an animation finishing (#1102).** `EXPAND_EARNINGS` is
-emitted as a `ScheduleTimeout(SETTLE_UI)` carrying the bind's `NodeRef`, and the tap re-resolves
-that ref when the timeout fires — so the ref has to still describe something live. It did not: the
-09-13 and 09-15 pulls show DoorDash's prism receipt sheet still SLIDING when the frame that reaches
-the state machine is captured, freezing `expandButton` at `top` 4435 / 4395 / 4263 / 2224 / 1982
-against a settled 1774–1890 on a 1080×2400 screen. `GraceConfig.EXPAND_SETTLE_MS` (500 ms) is
-shorter than the measured ~590–640 ms slide, and `FrameGate`'s identity dedup suppresses the settled
-re-render (identical parse), so the bind is never refreshed. The bounds walk then needs IoU ≥ 0.5
-against a 126 px row (≈ 63 px of tolerance) and finds nothing: **5 of 11, then 2 of 18 expand taps
-were lost**, each as a bare `Could not find any live node` — never a label rejection, which is the
-tell that the failure was geometric, not an identity problem. One fix ships now, as data; the second was built, reviewed and WITHDRAWN:
-1. **Timing, as data.** `expandSettleMs` is per-platform already (#438 item 6), so DoorDash's code
-   default becomes `DOORDASH_EXPAND_SETTLE_MS` = 900 ms in `GraceConfig.CODE_DEFAULTS` — data keyed
-   by `Platform`, no branch (Principle 8), and no other platform moves. #1033's 8 s collapsed-receipt
-   window makes the extra 400 ms free (the completion still commits well inside the gap before the
-   next offer). The confirm-decline defer (`diffConfirmDeclineAction`) deliberately SHARES the value:
-   the dialog rides the same prism machinery, and 400 ms out of an offer countdown measured in tens
-   of seconds costs the quick-decline nothing — one value, one thing to reason about. 900 ms clears
-   the measured ~640 ms slide with margin, so the fielded class is covered by timing alone.
-2. **A bounds-free re-resolve (label-hash walk when the bounds walk finds nothing) — WITHDRAWN.**
-   Built in PR #1112 and pulled before merge: the independent review showed a clickable PARENT card
-   containing a non-clickable receipt row would satisfy `agreesWithLabels` by containment and be
-   tapped with nothing for the nested-abort to see; a node-budget or depth cut-off could leave exactly
-   one (wrong) survivor that then read as unique; child fetches were not budgeted before the IPC; and
-   label collection crossed the package boundary. Tracked on #1102 as the constraints for any future
-   attempt: an EXACT label fingerprint (no supersets), a partial scan aborts the whole resolution,
-   every `getChild` counted against a budget, and package scope carried through label collection.
-   Until then a stale-bounds miss stays what it is today — fail-closed, the dasher taps.
+**A tap that never landed is not a fire (#1102).** `EXPAND_EARNINGS` is emitted as a
+`ScheduleTimeout(SETTLE_UI)` carrying the bind's `NodeRef`, and the tap re-resolves that ref when the
+timeout fires. The 09-13 and 09-15 pulls show DoorDash's prism receipt sheet still SLIDING when the
+frame that reaches the state machine is captured, freezing `expandButton` at `top` 4435 / 4395 / 4263 /
+2224 / 1982 against a settled 1774–1890 on a 1080×2400 screen — so that first tap re-resolves against a
+rect nothing overlaps and fails closed (`Could not find any live node`, never a label rejection). What
+the trail ALSO shows, on all 7 failures: the settled re-render was admitted ~600 ms later, re-armed a
+fresh `SETTLE_UI` with live bounds, and that retry was swallowed by the engine's 1 000 ms action
+throttle as "within 1000ms of the last fire" — the failed attempt had stamped the window. The fix is at
+the throttle: the stamp is taken before the click (#618 F3's queued-duplicate guard) but RESTORED to its
+prior value when `performVerifiedClick` returns false, so a re-armed tap is judged against the last tap
+that actually LANDED. Nothing widens — every retry is a full re-resolve behind the same package, label
+and consent gates, and only a newly ADMITTED frame can arm one. Two roads not taken, both reviewed:
+raising `expandSettleMs` (500 → 900 ms) cannot repair a ref whose bounds were frozen mid-slide — the tap
+fails whenever it fires — and only widens the confirm-decline vs `OFFER_EXPIRY` window; and a
+label-hash re-find when the bounds walk comes back empty was built and WITHDRAWN (a clickable parent
+containing a non-clickable row satisfies label CONTAINMENT; a budget cut-off could leave one wrong
+survivor; unbudgeted child fetches; label collection crossing the package boundary — the constraints
+are on #1102).
