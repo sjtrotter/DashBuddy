@@ -60,7 +60,23 @@ agreeing read clears the flag without extending the deadline; a different value 
 **(b) BOTH feeds go through the gate** — the on-dash pill (`IdleFields.sessionPay`) and the receipt's
 "This dash so far" (`PostTaskFields.sessionEarnings`), read off the SAME wheel via
 `parseGlyphCurrency`; for the settled re-render to be admittable at all, `PostTaskFields.dedupeHash`
-folds in `sessionEarnings`.
+folds in `sessionEarnings`. **And the receipt feed carries one admission test the pill does not**
+(#1103): a receipt's running total is evidence about THIS dash only while this session OWNS the job
+the receipt describes — `PlatformRegion.activeJob` non-null (the job is open, its retire grace
+running) or `lastClosedJobReceipt` non-null (the job closed ON this receipt, the #1033 late-expansion
+window). Both are cleared by `endSession`, which is what makes it a SESSION-ownership test. Fielded
+2026-09-10 (session 483): a dash ended on its last delivery's `delivery_summary_collapsed`, the
+dasher started a NEW dash 8 s later, and that PREVIOUS dash's receipt was still the frame on screen
+14 ms after `DASH_START`. Rule (a) sees nothing wrong — the carried-over frame really IS `PostTask`
+on DoorDash — so the $40.14 parked, stood its 3 s unchallenged, committed into the new session's
+`runningEarnings`, and the `early_offline` `DASH_STOP` reported $40.14 of earnings for a 2-minute,
+0-delivery dash (`ModeEffects`' `prevSession.runningEarnings.takeIf { > 0 }`). The job/task lifecycle
+was inert throughout, which is why nothing else caught it. The test lives at the ONE owner,
+`PlatformRegionStepper.ownsReceiptJob()`, read through `Observation.sessionPayRead(region)` so the
+gate and the expiry's contradiction check can never disagree about what counts as this session's
+running total; a refused read is DROPPED (fail-null, #745) and logged once per frame at DEBUG under
+the `StateMachine` tag — ids and platform only, no money — because the fielded failure left no trace
+anywhere. The pill is deliberately exempt: it renders the live dash's own total and describes no job.
 **(c) every NON-gated writer supersedes older parks** — the PostTask-entry pay accumulation and the
 dash-summary total drop any park whose `since` predates them; `since >= now` keeps the receipt's own
 same-frame park. The dash summary reaches the park by (f), not by this rule: `updateLifecycle` returns

@@ -122,6 +122,11 @@ was found **broken-in-part** (raw PII in capture envelopes) and moved to that en
   `Delivery - <amt>.png` / `DeliveryBreakdown - <amt>.png` screenshot pair timestamped inside the new
   dash, and confirm no `DELIVERY_RECEIPT_REPRICE` is attributed to the new session.
   - Issue: #1103. Confirmed: 0/2
+    - **fix landed (PR #1111, #1103):** the receipt's wheel is admitted to the settle gate only
+      while this session owns the receipt's job (`activeJob` live, or `lastClosedJobReceipt` set —
+      both cleared by `endSession`). A refused read prints `settle gate: receipt running-total read
+      refused` at DEBUG under the `StateMachine` tag; on the repro above that line IS the fix firing,
+      so grep for it alongside the NULL `reportedEarnings`.
     - desk 09-15: no-regression — all three `early_offline` sessions report NULL and exactly one `SESSION_PAY_SETTLE` fired in three days (inside its own session). The causing shape (a receipt sheet up at `DASH_START`) did not recur, so this is a clean negative, not a repro.
 
 - **🆕 NEW — a decline you confirm fast must still be recorded as a decline, not a timeout.** Five of

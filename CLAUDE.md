@@ -402,7 +402,11 @@ hash folds `sessionPay` into `Observation.identity()`, so a repeat can never arr
 REJECTED as the discriminator). Rules: (a) a park is owned by (FLOW, PLATFORM), checked on both prior and
 resulting R0; losing either DROPS it; (b) BOTH wheel feeds are gated (`IdleFields.sessionPay`,
 `PostTaskFields.sessionEarnings` — and `PostTaskFields.dedupeHash` folds in `sessionEarnings` so the
-settled re-render is admittable at all); (c) every non-gated writer supersedes older parks; (d) comparisons are
+settled re-render is admittable at all), and the RECEIPT feed is admitted only while this session
+OWNS the receipt's job (`activeJob` live, or `lastClosedJobReceipt` set — both cleared by
+`endSession`), one owner `ownsReceiptJob()` shared by the gate and the expiry's contradiction check:
+#1103 had the previous dash's receipt, still on screen 14 ms after `DASH_START`, park its $40.14 and
+commit it into a 0-delivery dash; (c) every non-gated writer supersedes older parks; (d) comparisons are
 cent-tolerant; (e) a pending's OWN wake lapses it by IDENTITY, a frame lapses a grace strictly PAST its
 deadline and a park at-or-past — and ORDER matters: a flow frame runs the expiry FIRST (a park that
 stood its window commits on the departure frame), a flow-LESS observation checks ownership first; (f) a contradicting read on the expiring frame supersedes the park; (g) a

@@ -8,6 +8,7 @@ import cloud.trotter.dashbuddy.domain.settings.GraceConfig
 import cloud.trotter.dashbuddy.domain.state.AppState
 import cloud.trotter.dashbuddy.domain.state.Flow
 import cloud.trotter.dashbuddy.domain.state.FlowRegion
+import cloud.trotter.dashbuddy.domain.state.Job
 import cloud.trotter.dashbuddy.domain.state.Mode
 import cloud.trotter.dashbuddy.domain.state.ParsedFields
 import cloud.trotter.dashbuddy.domain.state.PendingSessionPay
@@ -188,6 +189,24 @@ class SessionPayParkOwnershipTest {
 
     private val AppState.doorDash: PlatformRegion?
         get() = regions.platforms[Platform.DoorDash]
+
+    /**
+     * Give the DoorDash region an open job, so a [receipt] frame is one this session OWNS (#1103).
+     * The receipt's "This dash so far" is admitted to the settle gate only under such a session —
+     * `SessionPaySettleGateTest` pins that rule; here the job is fixture, present so these ownership
+     * cases keep testing (flow, platform) ownership rather than accidentally testing #1103's.
+     */
+    private fun AppState.withOpenJob(): AppState {
+        val dd = requireNotNull(doorDash) { "the fixture must have a DoorDash region" }
+        val job = Job(
+            jobId = "job-1",
+            offerStoreHint = emptyList(),
+            parentOfferHash = null,
+            startedAt = t0 - settle,
+        )
+        val withJob = dd.copy(activeJob = job)
+        return copy(regions = regions.copy(platforms = regions.platforms + (Platform.DoorDash to withJob)))
+    }
 
     /** A live DoorDash dash with $16.70 committed and a $470.00 mid-spin read parked at [t0]. */
     private fun parkedState(): AppState {
@@ -624,7 +643,7 @@ class SessionPayParkOwnershipTest {
         // against R0 (Idle) and drops it, and FrameGate never re-admits the identical pill frame:
         // a genuine figure stranded for the rest of the dash. The read now RE-PARKS where it was
         // actually read.
-        var state = committedState().step(pausedIdle(t0 + 500L))
+        var state = committedState().withOpenJob().step(pausedIdle(t0 + 500L))
         assertEquals(Mode.Paused, state.doorDash?.mode)
 
         state = state.step(receipt(t0 + 1_000L, sessionEarnings = 25.20))
