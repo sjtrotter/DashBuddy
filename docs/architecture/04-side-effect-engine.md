@@ -114,3 +114,25 @@ QUEUED, so the reset lives on `onDone`; engine identity is generation-checked so
 engine's late callback can't ready or mis-language its replacement; and the rebuild is detached onto
 the app scope so a wedged TTS binder can never block the drain worker that owns the `app_events`
 writer.
+**A tap that never landed is not a fire (#1102).** `EXPAND_EARNINGS` is emitted as a
+`ScheduleTimeout(SETTLE_UI)` carrying the bind's `NodeRef`, and the tap re-resolves that ref when the
+timeout fires. The 09-13 and 09-15 pulls show DoorDash's prism receipt sheet still SLIDING when the
+frame that reaches the state machine is captured, freezing `expandButton` at `top` 4435 / 4395 / 4263 /
+2224 / 1982 against a settled 1774–1890 on a 1080×2400 screen — so that first tap re-resolves against a
+rect nothing overlaps and fails closed (`Could not find any live node`, never a label rejection). What
+the trail ALSO shows, on all 7 failures: the settled re-render was admitted ~600 ms later, re-armed a
+fresh `SETTLE_UI` with live bounds, and that retry was swallowed by the engine's 1 000 ms action
+throttle as "within 1000ms of the last fire" — the failed attempt had stamped the window. The fix is at
+the throttle: the stamp is taken before the click (#618 F3's queued-duplicate guard) but RESTORED to its
+prior value when `performVerifiedClick` returns false — for AUTOMATION taps only. A USER tap keeps its
+completion stamp even when it failed: its #602 bounded retry can spend ~1.5 s, and rolling the window
+back would let a queued duplicate start another retry that could land on a REPLACEMENT offer's button
+(`PerformRuleAction` carries no offer identity). For the automated path nothing widens — every retry is
+a full re-resolve behind the same package, label and consent gates, and only a newly ADMITTED frame can
+arm one. Two roads not taken, both reviewed:
+raising `expandSettleMs` (500 → 900 ms) cannot repair a ref whose bounds were frozen mid-slide — the tap
+fails whenever it fires — and only widens the confirm-decline vs `OFFER_EXPIRY` window; and a
+label-hash re-find when the bounds walk comes back empty was built and WITHDRAWN (a clickable parent
+containing a non-clickable row satisfies label CONTAINMENT; a budget cut-off could leave one wrong
+survivor; unbudgeted child fetches; label collection crossing the package boundary — the constraints
+are on #1102).

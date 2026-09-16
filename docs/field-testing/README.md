@@ -78,6 +78,18 @@ card's **mechanical** half, #577 (re-confirmed, 24/24, ~0.55 s — with a new po
 that entry's Bug #1), the #457 path, and #554 ShadowProjector (2/2). The #462/#460 dropoff item
 was found **broken-in-part** (raw PII in capture envelopes) and moved to that entry's Bug #7.)_
 
+- **🆕 NEW — the receipt must expand ITSELF on every delivery (#1102 — PR #1112).** The auto-tap landed
+  only 6 of 11 (09-13) and 16 of 18 (09-15) times: the sheet was still sliding when the frame that bound
+  `expandButton` was captured, the first tap found nothing, and the RETRY armed by the settled frame
+  ~600 ms later was swallowed by the 1 s action throttle. A failed tap no longer starts that window.
+  **On-dash:** after each delivery, leave the receipt alone for a few seconds — it should expand on its
+  own EVERY time (if you find yourself tapping `This offer`, it did not). **Desk:** a `Could not find any
+  live node for: expand_earnings` WARN may still appear on a mid-slide frame, but it must now be followed
+  within ~1 s by `Performing expand_earnings` → `Single verified candidate … clicking it`, NOT by
+  `Throttled action`; every delivery row `payBasis = DROP_SHARE`. Requires the receipt-expand capability
+  to still be ALLOWED in the consent prompt.
+  - Issue: #1102. Confirmed: 0/2
+
 - **🆕 NEW — a return order must record its return pay (#998).** Fielded 09-14: an alcohol delivery
   refused at the door became a return order; DoorDash priced the return leg separately (`Return pay
   $10.93`, its own receipt 10 min later) and the row kept only the original base pay. **On-dash:** if a

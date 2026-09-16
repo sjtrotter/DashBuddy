@@ -269,6 +269,9 @@ class SideEffectEngineTest {
     @Test
     fun `PerformRuleAction is throttled per action and platform`() = runTest {
         val engine = buildEngine(StandardTestDispatcher(testScheduler))
+        // #1102: the throttle window starts on a tap that LANDED — stub the handler to land it.
+        whenever(uiInteractionHandler.performVerifiedClick(any(), any(), any(), any(), any()))
+            .thenReturn(true)
 
         engine.process(acceptActionEffect())
         runCurrent()
@@ -277,6 +280,56 @@ class SideEffectEngineTest {
 
         // Second fire inside RULE_ACTION_THROTTLE_MS is swallowed — an
         // app-owned bound on automated taps (#425).
+        verify(uiInteractionHandler, times(1)).performVerifiedClick(any(), any(), any(), any(), any())
+    }
+
+    @Test
+    fun `a tap that failed resolution does not start the throttle window — the re-armed retry fires (#1102)`() = runTest {
+        // The fielded receipt shape: the first SETTLE_UI re-resolves a bind whose bounds were frozen
+        // mid-slide and finds nothing; the settled frame is admitted ~600 ms later and re-arms a
+        // fresh tap. Before #1102 that retry was throttled as "within 1000ms of the last fire".
+        val engine = buildEngine(StandardTestDispatcher(testScheduler))
+        whenever(uiInteractionHandler.performVerifiedClick(any(), any(), any(), any(), any()))
+            .thenReturn(false, true)
+
+        engine.process(acceptActionEffect())
+        runCurrent()
+        engine.process(acceptActionEffect())
+        runCurrent()
+
+        verify(uiInteractionHandler, times(2)).performVerifiedClick(any(), any(), any(), any(), any())
+    }
+
+    @Test
+    fun `a USER tap that failed keeps its throttle stamp — a queued duplicate cannot restart the retry (#1102 review)`() = runTest {
+        // The #602 bounded retry can spend ~1.5 s on a USER tap; if a failure rolled the window
+        // back, a queued duplicate would immediately begin another retry that could land on a
+        // REPLACEMENT offer's button. The rollback is AUTOMATION-only.
+        val engine = buildEngine(StandardTestDispatcher(testScheduler))
+        whenever(uiInteractionHandler.performVerifiedClick(any(), any(), any(), any(), any()))
+            .thenReturn(false)
+
+        engine.process(acceptActionEffect().copy(trigger = ActionTrigger.USER))
+        runCurrent()
+        engine.process(acceptActionEffect().copy(trigger = ActionTrigger.USER))
+        runCurrent()
+
+        verify(uiInteractionHandler, times(1)).performVerifiedClick(any(), any(), any(), any(), any())
+    }
+
+    @Test
+    fun `a tap that LANDED still throttles the next one (#1102 widens nothing)`() = runTest {
+        val engine = buildEngine(StandardTestDispatcher(testScheduler))
+        whenever(uiInteractionHandler.performVerifiedClick(any(), any(), any(), any(), any()))
+            .thenReturn(true)
+
+        engine.process(acceptActionEffect())
+        runCurrent()
+        engine.process(acceptActionEffect())
+        runCurrent()
+        engine.process(acceptActionEffect())
+        runCurrent()
+
         verify(uiInteractionHandler, times(1)).performVerifiedClick(any(), any(), any(), any(), any())
     }
 
