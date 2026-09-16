@@ -273,7 +273,7 @@ class StateManagerV2RecoveryHygieneTest {
         val manager = newManager(
             tail = listOf(tailRow(cv = 8L, timestamp = t0 + 2_000L, sessionPay = 470.00)),
             dispatcher = dispatcher,
-            snapshot = parkedState(cv = 7L, pending = null),
+            snapshot = parkedState(cv = 7L, pending = null, activeJob = openJob),
         )
 
         manager.initialize()
