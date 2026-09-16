@@ -78,17 +78,17 @@ card's **mechanical** half, #577 (re-confirmed, 24/24, ~0.55 s — with a new po
 that entry's Bug #1), the #457 path, and #554 ShadowProjector (2/2). The #462/#460 dropoff item
 was found **broken-in-part** (raw PII in capture envelopes) and moved to that entry's Bug #7.)_
 
-- **🆕 NEW — the receipt must expand ITSELF on every delivery (#1102).** The auto-tap landed only
-  6 of 11 (09-13) and 16 of 18 (09-15) times: the sheet was still sliding up when the frame that
-  bound `expandButton` was captured, so the tap re-resolved against a rect 400–2 600 px off and gave
-  up. DoorDash's settle delay is now 900 ms (past the measured ~590–640 ms slide) and, when the rect
-  is stale anyway, the handler re-finds the row by the bind's own hashed labels. **On-dash:** after
-  each delivery, leave the receipt alone for a few seconds — it should expand on its own EVERY time
-  (if you find yourself tapping `This offer` to open the breakdown, it did not). **Desk:** zero
-  `Could not find any live node for: expand earnings`; `bindShortfall{…#expandButton}` absent; the
-  DEBUG `resolved by labels (#1102)` lines are the fallback doing its job (fine, and worth counting);
-  a `label-resolved candidate(s) … refusing to click` WARN means two rows carried the same labels —
-  note the delivery. Requires the receipt-expand capability to still be ALLOWED in the consent prompt.
+- **🆕 NEW — the receipt must expand ITSELF on every delivery (#1102, timing half — PR #1112).** The
+  auto-tap landed only 6 of 11 (09-13) and 16 of 18 (09-15) times: the sheet was still sliding up when
+  the frame that bound `expandButton` was captured, so the tap re-resolved against a rect 400–2 600 px
+  off and gave up. DoorDash's settle delay is now 900 ms (past the measured ~590–640 ms slide). The
+  label-based re-find was built and WITHDRAWN before merge (review: a clickable parent card could win by
+  containment) — the constraints are on #1102. **On-dash:** after each delivery, leave the receipt
+  alone for a few seconds — it should expand on its own EVERY time (if you find yourself tapping
+  `This offer` to open the breakdown, it did not). **Desk:** zero `Could not find any live node for:
+  expand_earnings` (one or two on a sheet that took > 900 ms to settle would be the residual, and the
+  bind's `top` in that WARN tells you); `bindShortfall{…#expandButton}` absent. Requires the
+  receipt-expand capability to still be ALLOWED in the consent prompt.
   - Issue: #1102. Confirmed: 0/2
 
 - **🆕 NEW — a return order must record its return pay (#998).** Fielded 09-14: an alcohol delivery

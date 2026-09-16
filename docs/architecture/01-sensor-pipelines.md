@@ -245,8 +245,8 @@ count untouched (`ParseShortfall.hasParseTrigger` is the split). The receipt is 
 nothing, and `EffectMap.diffExpandAction` — which emits only on a bound target — went silent for
 weeks with no line of any kind (the dev noticed the manual tap). The rule now carries a second,
 id-less arm (a clickable `hasNoId` row whose subtree says `This offer`), and
-`UiInteractionHandler.findNodeByBounds` (the first strategy that can re-find an id-less, text-less
-container — #1102 added a second, `findNodeByLabels`) accepts a clickable same-class node overlapping the ref by ≥ `RELAXED_BOUNDS_IOU` (0.5,
+`UiInteractionHandler.findNodeByBounds` (the only strategy that can re-find an id-less, text-less
+container) accepts a clickable same-class node overlapping the ref by ≥ `RELAXED_BOUNDS_IOU` (0.5,
 sharing `ClickCandidateRanker.boundsIoU`) beside the exact match, descending past it so a wrapper
 cannot hide the tighter child. **Geometry is not identity** — the guards that came out of three
 adversarial rounds: (1) EVERY bounds-derived candidate (exact rect or overlap) must carry the bind's
@@ -269,11 +269,7 @@ row), and two VERIFIED candidates nested in each other (a clickable wrapper inhe
 labels) are undecidable and ABORT to manual (round 4; a max-overlap pick chose the wrapper,
 supersession guessed the row) — checked AFTER the #788 active-window scoping, among the retained
 candidates only, so a nested pair in a background window cannot abort an unambiguous foreground tap
-(round 5; `UiInteractionHandlerTieTest` runs the two-root sequence through the real handler).
-**#1102 turned that evidence around:** the same hints that VERIFY a candidate can also FIND one when
-the pinned rect describes nothing live (a sheet still sliding when the frame was captured), so a
-label walk is tried LAST — see `04-side-effect-engine.md`; nothing about what counts as identity
-moved, only what the handler is willing to look at. (5) The `bindShortfall` census is keyed structurally by (rule, bind) —
+(round 5; `UiInteractionHandlerTieTest` runs the two-root sequence through the real handler). (5) The `bindShortfall` census is keyed structurally by (rule, bind) —
 a dotted string merged `(a.b, c)` with `(a, b.c)` — and rendered `rule#bind` with `#`/`%` escaped in
 each component so the render cannot merge two pairs either. The sha256 helper moved to `:domain` (`domain.util.sha256OrNull`) so `NodeRef` can hash
 without a second digest site; `:core:pipeline`'s `sha256OrNull` delegates to it. The

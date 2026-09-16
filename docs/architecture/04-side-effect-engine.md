@@ -123,38 +123,21 @@ shorter than the measured ~590–640 ms slide, and `FrameGate`'s identity dedup 
 re-render (identical parse), so the bind is never refreshed. The bounds walk then needs IoU ≥ 0.5
 against a 126 px row (≈ 63 px of tolerance) and finds nothing: **5 of 11, then 2 of 18 expand taps
 were lost**, each as a bare `Could not find any live node` — never a label rejection, which is the
-tell that the failure was geometric, not an identity problem. Two fixes compose, and both are
-bounded:
+tell that the failure was geometric, not an identity problem. One fix ships now, as data; the second was built, reviewed and WITHDRAWN:
 1. **Timing, as data.** `expandSettleMs` is per-platform already (#438 item 6), so DoorDash's code
    default becomes `DOORDASH_EXPAND_SETTLE_MS` = 900 ms in `GraceConfig.CODE_DEFAULTS` — data keyed
    by `Platform`, no branch (Principle 8), and no other platform moves. #1033's 8 s collapsed-receipt
    window makes the extra 400 ms free (the completion still commits well inside the gap before the
    next offer). The confirm-decline defer (`diffConfirmDeclineAction`) deliberately SHARES the value:
    the dialog rides the same prism machinery, and 400 ms out of an offer countdown measured in tens
-   of seconds costs the quick-decline nothing — one value, one thing to reason about.
-2. **A bounds-free re-resolve.** `UiInteractionHandler` gains **strategy 4**
-   (`findNodeByLabels`), tried ONLY when id, text and the bounds walk have all come back empty and
-   the ref carries label hints: the scoped roots are walked for CLICKABLE, `classNameHint`-matching
-   nodes whose live `collectLabels` satisfy `NodeRef.agreesWithLabels` — the SAME predicate #1093
-   verifies with, not a second copy, so widening the SEARCH cannot widen what counts as IDENTITY. A
-   candidate found this way is then verified exactly like a bounds-derived one
-   (`Candidate.needsLabelIdentity` is the shared gate), the #788 active-window scoping runs first,
-   and the nested-abort still applies.
-**What keeps strategy 4 fail-closed.** (a) **>1 label-resolved survivor ABORTS to manual** — the
-ranker's remaining tier is overlap against `ref.boundsInScreen`, and strategy 4 only ran *because*
-that rect no longer describes the target, so letting it break the tie would be precisely the
-geometry-as-identity mistake #1093 closed; two receipt rows that each carry the bind's full labels
-are genuinely ambiguous and the dasher expands the receipt themselves. (b) The walk is **bounded** —
-`LABEL_WALK_NODES` 4 000 / `LABEL_WALK_DEPTH` 60, mirroring `:core:pipeline`'s `TreeBudget` (its
-`internal` visibility is why the numbers are restated rather than imported); every `getChild(i)` is a
-binder IPC and this runs on the effect drain worker, which must never stall (#909). Exhausting the
-budget is one WARN with counts only. (c) A subtree whose `packageName` is not the expected platform
-package is **never descended into**. (d) A hint-less ref (a pre-#1093 snapshot) has nothing to search
-by, so the walk does not run at all and the tap fails closed. A ZERO-AREA ref rect, which fails the
-BOUNDS walk closed (#1093 guard 2), deliberately does not block this one — that guard said geometry
-carried no evidence, and strategy 4 uses none; the identity bar (every hint, unique survivor) is
-untouched. (e) Like the bounds walk, a hit is
-still DESCENDED into, so a clickable wrapper inheriting its child's labels is exposed to the
-nested-abort instead of silently claiming the tap. One DEBUG line reports the resolution
-(`Bounds stale by N px … resolved by labels`) — numbers only (P7); a run of them in a desk pull is
-the fallback carrying taps the settle delay alone would still have missed.
+   of seconds costs the quick-decline nothing — one value, one thing to reason about. 900 ms clears
+   the measured ~640 ms slide with margin, so the fielded class is covered by timing alone.
+2. **A bounds-free re-resolve (label-hash walk when the bounds walk finds nothing) — WITHDRAWN.**
+   Built in PR #1112 and pulled before merge: the independent review showed a clickable PARENT card
+   containing a non-clickable receipt row would satisfy `agreesWithLabels` by containment and be
+   tapped with nothing for the nested-abort to see; a node-budget or depth cut-off could leave exactly
+   one (wrong) survivor that then read as unique; child fetches were not budgeted before the IPC; and
+   label collection crossed the package boundary. Tracked on #1102 as the constraints for any future
+   attempt: an EXACT label fingerprint (no supersets), a partial scan aborts the whole resolution,
+   every `getChild` counted against a budget, and package scope carried through label collection.
+   Until then a stale-bounds miss stays what it is today — fail-closed, the dasher taps.
