@@ -246,7 +246,8 @@ PR #1066 — read a pull's build from the logs, never infer it).
   equals the parse's `customerNameHash` prefix across name FORMS ("Brandy S"/"Brandy Smith"). Fail-closed to
   plain `[redacted]`.
 - `plainMask` (#795) opts a bounded-ALPHABET value (4-digit PIN, subpremise/unit number, length-bounded
-  note) into hash-less `[redacted]`; the rule-independent **short-token floor** (#889) does the same for
+  note) into hash-less `[redacted]` — #987 gives the flat-string NOTIFICATION whole-field mask the same
+  flag (rejected beside a capture `match`); the rule-independent **short-token floor** (#889) does the same for
   any sub-4-char token (`normalize: customerName` entries exempt). `plainMask`+`normalize` together is a
   compile reject. A structural scan over both platforms' assets forces `plainMask` on every subpremise
   entry (#986/#934); the split `Apt/Suite: <n>` form anchors on its label sibling (#1039).
@@ -262,8 +263,10 @@ PR #1066 — read a pull's build from the logs, never infer it).
   with `SnapshotRedactor.FIRST_LAST_INITIAL_PATTERN`. A sub-flow sibling copies the entry verbatim so
   the hex stays equal (#992/#1031). A name entry enumerates every conjugation a surface renders;
   `timeline`'s redact/parse prefix lists diverge only by documented exclusion (guard test, #994/#998).
-- Coverage spans screen surfaces AND notification envelopes (#620). A receipt-scan camera is
-  recognize-and-redact, not blocked (#995). Sensitive rules prefer **view-id anchors** (locale-immune,
+- Coverage spans screen surfaces AND notification envelopes (#620; #987 masks the earnings-deposit
+  push — the dasher's own FIGURE and the #599 Crimson clause — to `Your Dasher earnings for [redacted]`).
+  A receipt-scan camera is recognize-and-redact, not blocked (#995); so is 8.97.8's "Drop off steps"
+  wrapper, whose `description_text_view` instruction body plain-masks whole (#1107, `ID_MARKERS` too). Sensitive rules prefer **view-id anchors** (locale-immune,
   #938/#924/#1059); `SensitiveSurfaceBlockTest` pins claimed-by-rule + `sensitive.known` + dropped at
   the content gate.
 - **Recognize-only is NOT state-inert** (it moves `FrameGate.lastIdentity`); "no `state` block" buys
@@ -329,6 +332,9 @@ compiles, `ObservationClassifier` matches.
 - **Partitions:** `matchFirst` evaluates the non-overrideable partition first, then the overrideable
   one, each priority-ordered (#419). `sensitive.known` is priority 0 + `overrideable: false`;
   `sensitive.catchall` is priority 999 + overrideable.
+- **Click screen gate:** `screenIs` names the screen target(s) a click branch may match on — a string
+  OR (since #1104) a non-empty ARRAY, compiled to `Set<String>?`; empty/non-string forms are loud
+  compile rejects. The array exists because a tap can be classified BEFORE its own screen is admitted.
 - **Blocks:** `require` predicates, `bind`, `parse` (typed via `ParsedFieldsFactory`), `redact`
   (#598 — a screen rule using the `sha256` transform MUST declare a non-empty `redact`; branch-level
   `redact` is rejected). Effect `dedupeKey`s interpolate `{field}` against the branch's RAW parse, plus two DERIVED

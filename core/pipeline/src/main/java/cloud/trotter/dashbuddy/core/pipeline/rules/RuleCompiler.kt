@@ -437,6 +437,19 @@ object RuleCompiler {
                         "({ \"keepPrefix\": [...] } or { \"match\": <regex>, \"maskGroup\": <int> })",
                 )
             val matchPattern = specObj["match"]?.jsonPrimitive?.content
+            // #987: `plainMask` is the flat-string twin of the screen redact's #795 flag — it
+            // suppresses the <4hex> distinctness suffix for a field whose masked remainder has a
+            // SMALL plaintext space (the earnings-deposit clause, where the only variable is the
+            // dasher's own banking amount). It is meaningless on the regex-capture form (the
+            // group mask has its own fail-closed path and no keepPrefix), so declaring both is a
+            // loud reject rather than a silently ignored flag — the #795 posture.
+            val plainMask = compilePlainMask(specObj["plainMask"], "notification redact: field '$fieldName'")
+            if (plainMask && matchPattern != null) {
+                throw RuleCompileException(
+                    "notification redact: field '$fieldName' declares BOTH 'plainMask' and " +
+                        "'match' — 'plainMask' shapes the whole-field mask only. Drop one.",
+                )
+            }
             val masker: NotifFieldMask = if (matchPattern != null) {
                 val regex = compileRegex(matchPattern)
                 val group = specObj["maskGroup"]?.jsonPrimitive?.intOrNull ?: 1
@@ -455,7 +468,7 @@ object RuleCompiler {
             } else {
                 val keepPrefix = specObj["keepPrefix"]?.jsonArray?.map { it.jsonPrimitive.content }
                     ?: emptyList()
-                NotifFieldMask.Whole(keepPrefix)
+                NotifFieldMask.Whole(keepPrefix, plainMask)
             }
             field to masker
         }
@@ -496,7 +509,7 @@ object RuleCompiler {
             // secret (a PIN keypad node) redacts to plain `[redacted]`, not a reversible hash.
             // It is mutually exclusive with `normalize` (both shape the hash; a plain mask has
             // no hash to shape) — fail loud rather than silently ignore one.
-            val plainMask = obj["plainMask"]?.jsonPrimitive?.booleanOrNull ?: false
+            val plainMask = compilePlainMask(obj["plainMask"], "redact entry")
             if (plainMask && normalize != null) {
                 throw RuleCompileException(
                     "redact entry: `plainMask` and `normalize` are mutually exclusive — a plain " +
@@ -752,7 +765,7 @@ object RuleCompiler {
         } ?: emptyMap()
 
         // --- Click-specific: screenIs ---
-        val screenIs = obj["screenIs"]?.jsonPrimitive?.content
+        val screenIs = compileScreenIs(obj["screenIs"], ruleId)
 
         return CompiledBranch(
             predicate = predicate,
@@ -770,6 +783,64 @@ object RuleCompiler {
             screenIs = screenIs,
             transitionOverrides = transitionOverrides,
         )
+    }
+
+    /**
+     * Compile a click branch's `screenIs` constraint (#1104). Accepts EITHER a single string or a
+     * non-empty array of strings, and yields the set of screen targets the branch will match on
+     * (`null` = unconstrained). `Ruleset.matchFirst` then asks `screenTarget in branch.screenIs`.
+     *
+     * Why an array at all: DoorDash's confirm-decline tap is dispatched 24–229 ms BEFORE the
+     * confirm sheet's own frame is admitted, so the classifier still holds the PREVIOUS screen as
+     * that platform's target and the single-valued constraint dropped the fielded decline to
+     * UNKNOWN (#1104). The widening is per rule, enumerated, and stays a real gate.
+     *
+     * Fail LOUD on anything else — an empty array (which would read as "constrained" while
+     * matching nothing, silently disabling the rule), a non-string member, or a non-string
+     * non-array value. Rule JSON is untrusted input on the #192 CDN path; a malformed constraint
+     * must reject the FILE, never degrade to "unconstrained" (that would turn a screen-scoped
+     * actuation target into a global one).
+     */
+    /**
+     * `plainMask` is a privacy switch: absent means false, but a PRESENT non-boolean (`1`, `"true"`,
+     * `null`) must not quietly read as false — that would re-enable the hashed suffix over a small
+     * plaintext space, the exact inversion oracle the flag exists to remove (#987 review). The
+     * runtime loader performs no JSON-Schema validation, so the compiler is the only gate.
+     */
+    private fun compilePlainMask(element: JsonElement?, where: String): Boolean {
+        if (element == null) return false
+        val prim = element as? JsonPrimitive
+        val value = prim?.takeIf { !it.isString }?.booleanOrNull
+        return value ?: throw RuleCompileException(
+            "$where: 'plainMask' must be a JSON boolean (true/false); got '$element'",
+        )
+    }
+
+    private fun compileScreenIs(element: JsonElement?, ruleId: String?): Set<String>? {
+        if (element == null) return null
+        val id = ruleId ?: "?"
+        fun target(e: JsonElement): String {
+            val prim = e as? JsonPrimitive
+            if (prim == null || !prim.isString) {
+                throw RuleCompileException(
+                    "Rule '$id': every 'screenIs' entry must be a screen-target STRING; got '$e'",
+                )
+            }
+            return prim.content
+        }
+        return when (element) {
+            is JsonArray -> {
+                if (element.isEmpty()) {
+                    throw RuleCompileException(
+                        "Rule '$id': 'screenIs' is an EMPTY array — a constraint that matches no " +
+                            "screen silently disables the rule. Name the target(s), or omit " +
+                            "'screenIs' to leave the branch unconstrained.",
+                    )
+                }
+                element.map { target(it) }.toSet()
+            }
+            else -> setOf(target(element))
+        }
     }
 
     /**

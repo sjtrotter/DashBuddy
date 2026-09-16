@@ -1168,6 +1168,41 @@ class RuleCompilerTest {
         assertEquals("whole field masked when the capture regex misses", "[redacted]", masked.text)
     }
 
+    @Test
+    fun `notification plainMask drops the 4hex suffix, keeps the prefix (#987)`() {
+        // #987: the masked remainder of the deposit push is a FIXED clause whose only variable is
+        // the dasher's own banking amount, so the distinctness suffix would be an inversion
+        // oracle. `plainMask` is the flat-string twin of the screen redact's #795 flag.
+        val ruleJson = """[{
+            "id": "doordash.notification.earnings_deposit",
+            "priority": 26,
+            "require": { "anyFieldContains": "have been deposited" },
+            "redact": { "text": { "keepPrefix": ["Your Dasher earnings for "], "plainMask": true } }
+        }]"""
+        val rule = RuleCompiler.compileRules<RawNotificationData>(
+            Json.parseToJsonElement(ruleJson).jsonArray, RuleContext.NOTIFICATION,
+        ).single()
+        val masked = rule.notifRedact.apply(
+            raw(text = "Your Dasher earnings for \$41.07 have been deposited to your DoorDash Crimson account."),
+        )
+        assertEquals("Your Dasher earnings for [redacted]", masked.text)
+    }
+
+    @Test(expected = RuleCompileException::class)
+    fun `notification redact rejects plainMask beside a capture match (#987)`() {
+        // `plainMask` shapes the WHOLE-field mask; on the regex-capture form it would be a
+        // silently ignored flag. Fail loud, the #795 posture.
+        val ruleJson = """[{
+            "id": "doordash.notification.bad_plain",
+            "priority": 12,
+            "require": { "channelIdContains": "chat" },
+            "redact": { "text": { "match": "(foo)", "maskGroup": 1, "plainMask": true } }
+        }]"""
+        RuleCompiler.compileRules<RawNotificationData>(
+            Json.parseToJsonElement(ruleJson).jsonArray, RuleContext.NOTIFICATION,
+        )
+    }
+
     @Test(expected = RuleCompileException::class)
     fun `notification redact rejects an out-of-range maskGroup (F3)`() {
         // Pattern has 2 capturing groups; maskGroup 5 would throw
@@ -1197,6 +1232,74 @@ class RuleCompilerTest {
         RuleCompiler.compileRules<UiNode>(
             Json.parseToJsonElement(ruleJson).jsonArray, RuleContext.CLICK,
         )
+    }
+
+    // =========================================================================
+    // screenIs (#1104)
+    // =========================================================================
+
+    private fun clickRule(screenIs: String): CompiledRule<UiNode> {
+        val ruleJson = """[{
+            "id": "doordash.click.decline_offer",
+            "priority": 20,
+            "screenIs": $screenIs,
+            "intent": "decline_offer",
+            "require": { "hasAnyText": "Decline offer" }
+        }]"""
+        return RuleCompiler.compileRules<UiNode>(
+            Json.parseToJsonElement(ruleJson).jsonArray, RuleContext.CLICK,
+        ).single()
+    }
+
+    @Test
+    fun `screenIs compiles a single string into a one-element set (#1104)`() {
+        assertEquals(
+            setOf("offer_popup_confirm_decline"),
+            clickRule("\"offer_popup_confirm_decline\"").branches.single().screenIs,
+        )
+    }
+
+    @Test
+    fun `screenIs compiles an array into the set of accepted targets (#1104)`() {
+        // The fielded #1104 declaration: the confirm tap can be classified while the platform's
+        // cached target is still the offer card, so the rule names both.
+        assertEquals(
+            setOf("offer_popup_confirm_decline", "offer_popup"),
+            clickRule("""["offer_popup_confirm_decline", "offer_popup"]""").branches.single().screenIs,
+        )
+    }
+
+    @Test
+    fun `an absent screenIs leaves the branch unconstrained (#1104)`() {
+        val ruleJson = """[{
+            "id": "doordash.click.take_photo",
+            "priority": 35,
+            "intent": "take_photo",
+            "require": { "hasIdSuffix": "capture_button" }
+        }]"""
+        val rule = RuleCompiler.compileRules<UiNode>(
+            Json.parseToJsonElement(ruleJson).jsonArray, RuleContext.CLICK,
+        ).single()
+        assertNull("no screenIs ⇒ null ⇒ unconstrained", rule.branches.single().screenIs)
+    }
+
+    @Test(expected = RuleCompileException::class)
+    fun `an EMPTY screenIs array is rejected (#1104)`() {
+        // A constraint that matches no screen would silently disable the rule — reject the file
+        // rather than compile a branch that can never fire.
+        clickRule("[]")
+    }
+
+    @Test(expected = RuleCompileException::class)
+    fun `a non-string screenIs member is rejected (#1104)`() {
+        clickRule("""["offer_popup", 7]""")
+    }
+
+    @Test(expected = RuleCompileException::class)
+    fun `a non-string non-array screenIs is rejected (#1104)`() {
+        // Untrusted rule JSON (#192): a malformed constraint must never degrade to
+        // "unconstrained", which would turn a screen-scoped actuation target into a global one.
+        clickRule("7")
     }
 
     // =========================================================================
@@ -1456,5 +1559,61 @@ class RuleCompilerTest {
         """.trimIndent()
         val compiled = RuleCompiler.compileRules<UiNode>(parseJson(rule).jsonArray, RuleContext.SCREEN)
         assertFalse("top-level redact must compile onto the rule", compiled.single().redact.isEmpty())
+    }
+
+    // =========================================================================
+    // plainMask must be a real boolean (#987 review)
+    // =========================================================================
+
+    private fun notifRuleWithPlainMask(value: String) {
+        val ruleJson = """[{
+            "id": "doordash.notification.earnings_deposit",
+            "priority": 26,
+            "intent": "earnings_deposit",
+            "require": { "anyFieldContains": "have been deposited" },
+            "redact": { "text": { "keepPrefix": ["Your Dasher earnings for "], "plainMask": $value } }
+        }]"""
+        RuleCompiler.compileRules<RawNotificationData>(
+            Json.parseToJsonElement(ruleJson).jsonArray, RuleContext.NOTIFICATION,
+        )
+    }
+
+    private fun screenRuleWithPlainMask(value: String) {
+        val ruleJson = """[{
+            "id": "doordash.screen.x",
+            "priority": 500,
+            "intent": "x",
+            "require": { "exists": { "hasIdSuffix": "host" } },
+            "redact": [ { "find": { "hasIdSuffix": "note" }, "plainMask": $value } ]
+        }]"""
+        RuleCompiler.compileRules<UiNode>(
+            Json.parseToJsonElement(ruleJson).jsonArray, RuleContext.SCREEN,
+        )
+    }
+
+    @Test
+    fun `plainMask true and false compile at both redact sites`() {
+        notifRuleWithPlainMask("true"); notifRuleWithPlainMask("false")
+        screenRuleWithPlainMask("true"); screenRuleWithPlainMask("false")
+    }
+
+    @Test(expected = RuleCompileException::class)
+    fun `a numeric plainMask is rejected on a notification redact — a silent false re-enables the hash oracle`() {
+        notifRuleWithPlainMask("1")
+    }
+
+    @Test(expected = RuleCompileException::class)
+    fun `a string plainMask is rejected on a notification redact`() {
+        notifRuleWithPlainMask("\"true\"")
+    }
+
+    @Test(expected = RuleCompileException::class)
+    fun `a null plainMask is rejected on a notification redact`() {
+        notifRuleWithPlainMask("null")
+    }
+
+    @Test(expected = RuleCompileException::class)
+    fun `a string plainMask is rejected on a screen redact entry too`() {
+        screenRuleWithPlainMask("\"true\"")
     }
 }

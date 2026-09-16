@@ -66,6 +66,24 @@ class FlowlessRecognitionNeutralityTest {
         )
     }
 
+    /**
+     * #1107 — the fourth recognize-only surface, same reason again: DoorDash 8.97.8's "Drop off
+     * steps" wrapper shipped the customer's free-text instruction (with a gate code in it) to
+     * UNKNOWN captures, and the only control for a leaking surface is a rule that recognizes it
+     * and declares a `redact`. The rule declares no `state` deliberately — the wrapper hosts the
+     * photo / signature / handoff steps that `dropoff_photo` and `dropoff_handoff` already own on
+     * the `drop_off_workflow_host_fragment` surface, so whether it should ALSO assert
+     * `task:dropoff:arrived` is a lifecycle question a privacy fix must not answer by accident.
+     * This is what pins that it did not.
+     */
+    @Test
+    fun `the drop-off steps frames recognize, carry no flow, and leave PlatformRegion untouched (#1107)`() {
+        assertFlowlessAndNeutral(
+            "snapshots/dropoff_step_instructions",
+            "doordash.screen.dropoff_step_instructions",
+        )
+    }
+
     private fun assertFlowlessAndNeutral(corpus: String, expectedRuleId: String) {
         val frames = SessionReplay.loadSession(corpus)
         assertTrue("the $corpus corpus must not be empty", frames.isNotEmpty())

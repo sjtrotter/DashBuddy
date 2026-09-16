@@ -11,6 +11,7 @@ import cloud.trotter.dashbuddy.test.util.TestRulesetFactory
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.jsonArray
+import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import org.junit.Assert.assertEquals
@@ -841,6 +842,11 @@ class CaptureRedactionCorpusTest {
             // whole redact block is shape-anchored (the `timeline_task_detail` case again), so
             // this guard is the only structural check that its fixtures carry no real customer.
             "dropoff_workflow_sheet",
+            // #1107 adds the 8.97.8 "Drop off steps" wrapper. Its leak is an id-BEARING node
+            // (`description_text_view`), which is check (2)'s job — the id is now in
+            // `CustomerTextMarkers.ID_MARKERS`, so a future intake that forgets to redact the
+            // instruction body fails HERE rather than committing green.
+            "dropoff_step_instructions",
         )
         val leaks = mutableListOf<String>()
         val decoysSeen = mutableSetOf<String>()
@@ -2791,6 +2797,223 @@ class CaptureRedactionCorpusTest {
             "a unit number must not carry a brute-forceable distinctness hex",
             MASK_HEX.containsMatchIn(value),
         )
+    }
+
+    /**
+     * #1107 — DoorDash 8.97.8's "Drop off steps" wrapper, over its COMMITTED fixtures plus a
+     * synthetic instruction body.
+     *
+     * The leak is a single id-bearing node: `description_text_view` holds the customer's own
+     * free-text delivery instruction (the fielded 09-13 frames carried a gate code in it) while
+     * every sibling — `title_text_view`, `step_title`, `step_description`, the prism button
+     * titles — is DoorDash's own vocabulary and is deliberately kept raw so a replayed envelope
+     * still recognizes. The committed fixtures are hand-redacted at intake, so the body text
+     * below is WRITTEN HERE: a fixture already masked to `[redacted]` cannot prove the production
+     * redact fires, and this is the half that does.
+     *
+     * Teeth: delete the `description_text_view` entry and (c)/(d) go red; drop its `plainMask`
+     * and (e) goes red (a 'Gate code is #1234' body clears the #889 length floor, so it WOULD
+     * carry a brute-forceable 4-hex suffix); break the rule's require and (a) goes red.
+     */
+    @Test
+    fun `dropoff_step_instructions masks the customer instruction body, keeps the step chrome (#1107)`() {
+        val rule = TestRulesetFactory.screenRuleset.ruleById("doordash.screen.dropoff_step_instructions")
+        org.junit.Assert.assertNotNull("the #1107 rule must exist", rule)
+        assertFalse("dropoff_step_instructions must declare a redact block", rule!!.redact.isEmpty())
+
+        val snapshots = TestResourceLoader.loadSnapshots("snapshots/dropoff_step_instructions")
+        assertTrue("the #1107 fixtures must be committed", snapshots.isNotEmpty())
+        for ((filename, node, _) in snapshots) {
+            // (a) The rule must actually WIN the frame — otherwise everything below tests a
+            // block that never runs in production.
+            assertEquals(
+                "$filename must classify as the new rule",
+                "dropoff_step_instructions",
+                TestRulesetFactory.screenRuleset.matchFirst(node)?.intent,
+            )
+            // (b) Chrome — the require anchors MUST survive or replay recognition breaks.
+            val masked = serialize(rule.redact.apply(node))
+            assertTrue("$filename: the nav-title anchor is kept", masked.contains("Drop off steps"))
+        }
+
+        /** The fielded node shape: the instruction body under its `description_text_view` id. */
+        fun stepCard(instruction: String) = UiNode(
+            viewIdResourceName = "com.doordash.driverapp:id/icon_text_view_group_container",
+            children = listOf(
+                UiNode(
+                    viewIdResourceName = "com.doordash.driverapp:id/title_text_view",
+                    text = "Leave it at the door",
+                ),
+                UiNode(
+                    viewIdResourceName = "com.doordash.driverapp:id/description_text_view",
+                    text = instruction,
+                ),
+            ),
+        ).restoreParents()
+
+        // (c)/(d)/(e) — a gate-code-shaped instruction (invented here, never a fielded value).
+        val body = "Gate code is #1234, second building on the left, leave by the blue door"
+        val card = rule.redact.apply(stepCard(body))
+        val bodyMasked = card.children[1].text!!
+        assertEquals(
+            "the whole instruction body plain-masks — customer-AUTHORED text with no internal " +
+                "structure to anchor a partial mask on (#803/#920), and a short note that IS the " +
+                "secret must not carry an invertible 4-hex suffix (#795/#889)",
+            CompiledRedact.REDACTED,
+            bodyMasked,
+        )
+        assertFalse("the gate code must not persist", serialize(card).contains("1234"))
+        assertFalse(
+            "the instruction body must not carry a distinctness hex",
+            MASK_HEX.containsMatchIn(bodyMasked),
+        )
+        assertEquals(
+            "DoorDash's own handoff vocabulary is chrome, not customer text — kept raw",
+            "Leave it at the door",
+            card.children[0].text,
+        )
+    }
+
+    /**
+     * #1107 round 3 — the COMBINED-FRAME class (#993): the wrapper can inflate under another surface,
+     * and a redact protects only the frames its OWN rule wins. Two placements are pinned: a tree that
+     * also satisfies `dash_summary` (priority 150) is won by the LIFECYCLE rule, which must therefore
+     * carry the wrapper's whole belt (instruction body + both subpremise forms); a tree that also
+     * satisfies the flowless `side_nav_drawer` (200) is won by the wrapper itself (160). The
+     * combined trees are built from COMMITTED fixtures of each surface plus invented values.
+     */
+    @Test
+    fun `a wrapper combined with the dash summary is won by dash_summary and still masked (#1107)`() {
+        val summary = TestResourceLoader.loadSnapshots("snapshots/dash_summary").first().second
+        val wrapper = TestResourceLoader.loadSnapshots("snapshots/dropoff_step_instructions").first().second
+        val combined = combine(summary, wrapperWith(wrapper, "Gate code is #1234, blue door", "Apt/Suite 4021"))
+        val result = TestRulesetFactory.screenRuleset.matchFirst(combined)
+        assertEquals("the lifecycle rule wins the combined frame", "dash_summary", result?.intent)
+        val rule = TestRulesetFactory.screenRuleset.ruleById(result!!.ruleId)!!
+        val masked = serialize(rule.redact.apply(combined))
+        assertFalse("the instruction body is masked by the winner's belt", masked.contains("Gate code"))
+        assertFalse("the fused subpremise is masked by the winner's belt", masked.contains("4021"))
+        assertTrue("the summary's own chrome survives", masked.contains("Dash summary"))
+    }
+
+    @Test
+    fun `a wrapper combined with the side-nav drawer is won by the wrapper and masked (#1107)`() {
+        val drawer = TestResourceLoader.loadSnapshots("snapshots/side_nav_drawer").first().second
+        val wrapper = TestResourceLoader.loadSnapshots("snapshots/dropoff_step_instructions").first().second
+        val combined = combine(drawer, wrapperWith(wrapper, "Gate code is #1234, blue door", null))
+        val result = TestRulesetFactory.screenRuleset.matchFirst(combined)
+        assertEquals("the wrapper out-ranks the flowless drawer", "dropoff_step_instructions", result?.intent)
+        val rule = TestRulesetFactory.screenRuleset.ruleById(result!!.ruleId)!!
+        assertFalse(serialize(rule.redact.apply(combined)).contains("Gate code"))
+    }
+
+    /** Two fixture roots under one synthetic window root. */
+    private fun combine(a: UiNode, b: UiNode): UiNode = UiNode(children = listOf(a, b)).restoreParents()
+
+    /**
+     * The committed wrapper fixture with its (already `[redacted]`) instruction body replaced by an
+     * INVENTED value, plus an optional invented fused-subpremise node beside it.
+     */
+    private fun wrapperWith(fixture: UiNode, instruction: String, subpremise: String?): UiNode {
+        fun rewrite(n: UiNode): UiNode {
+            val kids = n.children.map { rewrite(it) }.toMutableList()
+            if (n.viewIdResourceName?.endsWith("description_text_view") == true) {
+                return n.copy(text = instruction, children = kids)
+            }
+            if (subpremise != null && kids.any { it.viewIdResourceName?.endsWith("description_text_view") == true }) {
+                kids.add(UiNode(text = subpremise))
+            }
+            return n.copy(children = kids)
+        }
+        return rewrite(fixture).restoreParents()
+    }
+
+    /**
+     * #1107 parity (the #1039 doctrine, one entry over): the 8.97.8 "Drop off steps" wrapper's
+     * customer-instruction body can inflate under ANY dropoff-phase surface, and a redact protects
+     * only the frames its OWN rule wins — so every dropoff-section rule, `navigation_generic` and
+     * `dash_summary` must mask `description_text_view` whole-node and plain. A new dropoff surface
+     * that forgets it fails here, not in the field.
+     */
+    @Test
+    fun `every dropoff-section rule (plus navigation_generic and dash_summary) masks the instruction body plain (#1107)`() {
+        val missing = mutableListOf<String>()
+        for (ruleId in subpremiseParityRuleIds() + "doordash.screen.dash_summary") {
+            val entries = ruleJson(ruleId)["redact"] as? kotlinx.serialization.json.JsonArray
+            val ok = entries?.any { element ->
+                val entry = element.jsonObject
+                val ids = mutableListOf<String>()
+                collectStringsUnder(entry, "hasIdSuffix", ids)
+                "description_text_view" in ids &&
+                    entry["plainMask"]?.jsonPrimitive?.booleanOrNull == true
+            } == true
+            if (!ok) missing += ruleId
+        }
+        assertTrue("rules missing the #1107 instruction-body plainMask entry: $missing", missing.isEmpty())
+    }
+
+    /**
+     * #1107 — the rules-INDEPENDENT half. The rule redact above covers the RECOGNIZED path; an
+     * UNKNOWN render of this wrapper (a step variant the require misses, a future page reusing
+     * the id) is reached only by the #910 id scan, so the id must be in that SSOT too.
+     */
+    @Test
+    fun `the instruction-body id is covered on the UNKNOWN path by the runtime id SSOT (#1107)`() {
+        assertTrue(
+            "CustomerTextMarkers.ID_MARKERS must carry 'description_text_view'; found " +
+                "${CustomerTextMarkers.ID_MARKERS}",
+            "description_text_view" in CustomerTextMarkers.ID_MARKERS,
+        )
+    }
+
+    /**
+     * #987 (dev ruling 2026-09-09) — the earnings-deposit push must ship neither the dasher's own
+     * banking FIGURE nor the Crimson account clause, on any of the fields DoorDash repeats it
+     * across. The amount below is invented; the clause is DoorDash's fixed wording.
+     *
+     * The mask FORM is asserted too, and it is the point: `plainMask` (#987) suppresses the
+     * `<4hex>` distinctness suffix, because the masked remainder is a fixed clause whose only
+     * variable is the amount — 4 hex chars over a bounded money space is an inversion oracle, not
+     * the 16 bits of an already-one-way hash the suffix was designed for (#795/#889).
+     */
+    @Test
+    fun `production earnings_deposit masks the figure and the Crimson clause (#987)`() {
+        val rule = TestRulesetFactory.notificationRuleset
+            .ruleById("doordash.notification.earnings_deposit")!!
+        assertFalse("earnings_deposit must carry a notif redact block", rule.notifRedact.isEmpty())
+
+        val clause = "Your Dasher earnings for \$41.07 have been deposited to your DoorDash Crimson account."
+        val masked = rule.notifRedact.apply(
+            notif(
+                title = "Dasher",
+                text = clause,
+                bigText = clause,
+                tickerText = clause,
+                channelId = "dasher-notification-messages",
+            ),
+        )
+        for ((label, masked1) in listOf(
+            "text" to masked.text,
+            "bigText" to masked.bigText,
+            "tickerText" to masked.tickerText,
+        )) {
+            val value = requireNotNull(masked1) { "$label must survive as a masked value" }
+            assertEquals(
+                "$label keeps DoorDash's lead-in and plain-masks the rest",
+                "Your Dasher earnings for [redacted]",
+                value,
+            )
+            assertFalse("$label: no money figure survives", value.contains('$'))
+            assertFalse("$label: the account clause is gone", value.contains("Crimson"))
+            assertFalse(
+                "$label: no distinctness hex — the remainder's only variable is the amount",
+                MASK_HEX.containsMatchIn(value),
+            )
+        }
+        // The title is declared too, even though the fielded one is the bare chrome word: a
+        // per-field mask is inert on a benign field, and a re-render that moves the figure into
+        // the headline must not be a new leak. Accepted collateral, the #1039 trade.
+        assertEquals("the title masks whole (no prefix to keep)", CompiledRedact.REDACTED, masked.title)
     }
 
     /**

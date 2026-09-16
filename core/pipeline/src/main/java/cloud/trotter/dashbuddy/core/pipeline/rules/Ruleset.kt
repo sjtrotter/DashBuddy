@@ -97,7 +97,8 @@ class Ruleset<TInput>(rules: List<CompiledRule<TInput>>) {
      * @param input The input to match against (UiNode tree, clicked node, or notification).
      * @param platformWire When non-null, only rules whose ID starts with this prefix are evaluated.
      * @param screenTarget When non-null, rules with a `screenIs` constraint only match
-     *   if it equals this value. Used for click rules.
+     *   if it is one of the targets that constraint enumerates (#1104 made it a set). Used for
+     *   click rules; a null target matches no constrained branch.
      * @param onParseShortfall Diagnostic sink for #1036: called for every branch that MATCHED
      *   while its declared parse yielded nothing — the winning branch, and any branch a `Skip`
      *   validator discarded on the way to it. Never consulted for a classification decision;
@@ -131,7 +132,9 @@ class Ruleset<TInput>(rules: List<CompiledRule<TInput>>) {
 
             for (branch in rule.branches) {
                 // Screen constraint filter (click rules)
-                if (branch.screenIs != null && branch.screenIs != screenTarget) continue
+                // #1104: `screenIs` is a SET of accepted targets (one entry is the common case).
+                // A null constraint is unconstrained; a null screenTarget satisfies nothing.
+                if (branch.screenIs != null && screenTarget !in branch.screenIs) continue
 
                 // Phase 1b: Resolve branch-level bindings
                 val branchBindings = resolveBindings(input, branch.bindings) ?: continue

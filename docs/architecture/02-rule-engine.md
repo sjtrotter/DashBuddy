@@ -34,7 +34,20 @@ any other/later source (#419); priority only orders *within* a partition. The hi
 sensitive block (`sensitive.known`) is priority 0 + `overrideable: false` — structurally first,
 blocking all further processing of banking/identity screens — while the low-confidence
 `sensitive.catchall` net stays `overrideable: true` (priority 999) so specific recognition still
-wins over it. Rules also carry `require` predicates, `bind` blocks, `parse`
+wins over it. A CLICK rule may also carry `screenIs`, the screen-context gate: the branch matches only when the
+observing platform's LAST ADMITTED screen target is the value it names — or, since #1104, one of the
+values its **array** form enumerates (`CompiledBranch.screenIs: Set<String>?`; the compiler accepts a
+bare string or a non-empty array of strings and fails LOUD on an empty array, a non-string member, or
+a non-string non-array value — untrusted rule JSON must never degrade a screen-scoped actuation
+target to an unconstrained one). The array exists because the click and window sub-pipelines are
+independent: DoorDash's confirm-decline tap is dispatched 24–229 ms BEFORE the confirm sheet's own
+frame is admitted, so the classifier still held `offer_popup` as the target, the fielded decline fell
+to UNKNOWN, and the offer expired with no decline recorded (#1104, fielded 09-10 and 09-12). The
+widening is declared per rule and is only safe where the clicked NODE is unambiguous on every target
+listed — here the exact label `Decline offer` (#734), which only the confirm sheet renders, while the
+card's own bare `Decline` is claimed by `initial_decline` on its `secondary_action_button_dash_plus`
+id. It closes the FIELDED shape only; the general click-vs-window ordering race stays open on #1104.
+Rules also carry `require` predicates, `bind` blocks, `parse`
 blocks that produce typed fields via `ParsedFieldsFactory`, and an optional `redact` block
 (#598) — node predicates whose matched text is masked in the capture envelope (a screen rule
 that hashes PII via the `sha256` transform MUST declare a non-empty `redact`, enforced at compile;

@@ -2781,6 +2781,18 @@
         "shape": null,
         "fields": {}
     },
+    "dropoff_step_instructions/2026-09-13_11-57-01-419__doordash__accessibility.window__dropoff_step_instructions__b25762.json": {
+        "ruleId": "doordash.screen.dropoff_step_instructions",
+        "intent": "dropoff_step_instructions",
+        "shape": null,
+        "fields": {}
+    },
+    "dropoff_step_instructions/2026-09-14_13-10-56-108__doordash__accessibility.window__dropoff_step_instructions__4f5ce4.json": {
+        "ruleId": "doordash.screen.dropoff_step_instructions",
+        "intent": "dropoff_step_instructions",
+        "shape": null,
+        "fields": {}
+    },
     "dropoff_workflow_sheet/2026-08-30_16-30-48-851__doordash__accessibility.window__UNKNOWN__1c7706.json": {
         "ruleId": "doordash.screen.dropoff_workflow_sheet",
         "intent": "dropoff_workflow_sheet",

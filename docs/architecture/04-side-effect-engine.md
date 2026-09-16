@@ -17,6 +17,7 @@ enumeration, every capability lands *undecided* until the user opts in via the c
 Handlers: `OdometerEffectHandler`, `ScreenShotHandler`, `TipEffectHandler`, `TtsEffectHandler`,
 `UiInteractionHandler` (package-scoped, label-verified `RuleAction` taps — the only path that ever
 clicks a third-party app, #425), `OfferActionReceiver` (notification Accept/Decline actions).
+
 **Every odometer fix is gated (#1057/#918).** `OdometerRepository` used to add ANY inter-fix
 displacement over 5 m straight into the persisted cumulative total, so one spurious fused fix ~1,457 km
 away added **905.37 mi in 18.4 min** (2026-09-03) — freezing `netProfit −302.73` on a $22.95 delivery

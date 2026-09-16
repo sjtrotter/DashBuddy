@@ -174,6 +174,19 @@ object CustomerTextMarkers {
         // #986 already paid for once.
         "dasher_instruction_content_collapsed",
         "dasher_instruction_content_expanded",
+        // #1107 (fielded 2026-09-13, three envelopes): DoorDash 8.97.8's "Drop off steps"
+        // wrapper renders the customer's free-text delivery instruction in a
+        // `description_text_view` node — the fielded value carried a gate code — and nothing
+        // recognized the surface, so it persisted verbatim. `doordash.screen.dropoff_step_instructions`
+        // is the primary (recognized-path) control; this is the rules-INDEPENDENT half, so an
+        // UNKNOWN render of that wrapper — or any future page reusing the id — is scrubbed with
+        // no rule at all. ACCEPTED OVER-SCRUB: the id is GENERIC DoorDash chrome vocabulary and
+        // legitimately carries app text elsewhere (the Dasher Rewards board's "Raise to 50%",
+        // the GoPuff pickup-steps blurb, an unassign confirmation's "Required"). This scan runs
+        // on UNKNOWN screen/click envelopes ONLY, so the cost is a line of triage text on an
+        // unrecognized frame — the same fail-toward-privacy trade `arriving_at_title` already
+        // documents for a pickup-leg merchant line — and no recognized frame's kept text moves.
+        "description_text_view",
     )
 
     /** Substring that classifies a node's text as already-redacted (VET V1). */

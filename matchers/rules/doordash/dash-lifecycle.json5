@@ -998,6 +998,38 @@
       "comment": "#1032 — the dash-end earnings summary sheet, the SOLE source of session_records.reportedEarnings. DoorDash 8.93.7 re-rendered the sheet with every text node id-LESS under bottomsheet_content_container, so the old id anchors ('textView_prism_button_title' on Done, 'header_pay', the 'name'/'value' stat pairs) all evaporated and the surface fell to UNKNOWN — recognized once in the 15 days to 08-24, and with FrameGate suppressing repeat UNKNOWN frames there was no envelope to diagnose it with. The require is now TEXT-anchored with two arms: the original id arm (kept verbatim so the 15 corpus incumbents match on exactly the anchor they always did) OR a text-only arm requiring the sheet's own `bottomsheet_content_container` (a locale-immune structural anchor — a session:ended state bound to four bare English strings alone is the over-match risk this arm carries) plus 'Done' plus BOTH stat labels. 'Dash summary' alone would also match the NEW 'This dash so far' mid-dash sheet family, so the Done+labels conjunction is load-bearing, and the rule-level `reject` names that sheet's own two strings outright: a false session:ended fired MID-dash ends a live dash and forges a session boundary in an append-only log, so it is guarded twice (belt-and-suspenders on top of the conjunction, the dash_navigate_to_zone_loading precedent). The label conjuncts use `hasText` (exact, case-insensitive), never `hasTextContaining`: all 16 corpus fixtures render the labels exactly, and a substring scan could bind a help blurb that merely mentions 'Offers accepted'. Parses are label->value `siblingOf` reads on the SAME exact labels — verified across all 16 fixtures, the first-in-DFS exact-label node IS the id-bearing one and its sibling(1) is the value the old `hasIdSuffix: name` arm resolved, so the id arm was strictly subsumed and was dropped rather than kept as a second copy of one lookup. `totalEarnings` keeps three arms, tightest first: the `header_pay` id (the pre-March layout), `siblingOf('Dash summary')` (8.93.7, where the money IS the header's next sibling), then `textAfterLabel('Dash summary')` — DFS-text adjacency, which is what the March-through-July layout needs (it wraps every TextView in its own LinearLayout, so the money is the header's COUSIN and no structural sibling read reaches it). That third arm REPLACED a positional `^\\$[\\d,]+\\.\\d{2}$` first-match-in-document-order read, which was fail-WRONG on the sole reportedEarnings source: on a partial/scrolled render where the header read missed, it would have resolved the weekly-goal figure ($21.45 on the 8.93.7 specimen) as the dash total, and RecordFolds.reportedEarningsOf keeps any summary-screen value unconditionally. The label anchor is fail-NULL instead, because the goal figure is preceded in DFS text order by its own 'Weekly goal' label — so a total-less render yields 'Weekly goal', which parseCurrency rejects. `weeklyEarnings` stays id-only (and therefore null on 8.93.7) BY DESIGN: this sheet renders 'Weekly goal', whose figure is week-to-date BEFORE this dash, so binding it would trip the rule's own `fieldsLe totalEarnings <= weeklyEarnings` validate and drop the whole parse. Last deliberate removal: the three `fallback: 0`s are GONE (#936/#1030 — SessionEndedFields is nullable, and a fabricated 0 duration/offer count is exactly the shape the money side reads as a measurement).",
       "id": "doordash.screen.dash_summary",
       "priority": 150,
+      "redact": [
+        {
+          "comment": "#1107 combined-frame belt (the #993 precedent): the 8.97.8 'Drop off steps' wrapper can inflate under this sheet on a dash ended straight off a doorstep, and a combined tree that satisfies BOTH rules is won by THIS rule (priority 150 precedes the wrapper's own recognize-only rule at 160, deliberately — a lifecycle classification must never lose to a redact-only rule; the wrapper in turn sits AHEAD of the flowless overlay rules such as side_nav_drawer at 200, which carry no redact). A redact protects only the frames its OWN rule wins, so everything the wrapper would have masked is masked here too: the customer-instruction body whole-node `plainMask`, and the #1039 fused + label-sibling subpremise pair. Inert on every ordinary summary render (no such nodes).",
+          "find": {
+            "hasIdSuffix": "description_text_view"
+          },
+          "plainMask": true
+        },
+        {
+          "find": {
+            "hasTextStartsWith": "Apt/Suite"
+          },
+          "keepPrefix": [
+            "Apt/Suite: ",
+            "Apt/Suite "
+          ],
+          "plainMask": true
+        },
+        {
+          "find": {
+            "any": [
+              {
+                "hasPrecedingSiblingText": "Apt/Suite"
+              },
+              {
+                "hasPrecedingSiblingText": "Apt/Suite:"
+              }
+            ]
+          },
+          "plainMask": true
+        }
+      ],
       "reject": [
         {
           "exists": {
