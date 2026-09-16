@@ -1560,4 +1560,60 @@ class RuleCompilerTest {
         val compiled = RuleCompiler.compileRules<UiNode>(parseJson(rule).jsonArray, RuleContext.SCREEN)
         assertFalse("top-level redact must compile onto the rule", compiled.single().redact.isEmpty())
     }
+
+    // =========================================================================
+    // plainMask must be a real boolean (#987 review)
+    // =========================================================================
+
+    private fun notifRuleWithPlainMask(value: String) {
+        val ruleJson = """[{
+            "id": "doordash.notification.earnings_deposit",
+            "priority": 26,
+            "intent": "earnings_deposit",
+            "require": { "anyFieldContains": "have been deposited" },
+            "redact": { "text": { "keepPrefix": ["Your Dasher earnings for "], "plainMask": $value } }
+        }]"""
+        RuleCompiler.compileRules<RawNotificationData>(
+            Json.parseToJsonElement(ruleJson).jsonArray, RuleContext.NOTIFICATION,
+        )
+    }
+
+    private fun screenRuleWithPlainMask(value: String) {
+        val ruleJson = """[{
+            "id": "doordash.screen.x",
+            "priority": 500,
+            "intent": "x",
+            "require": { "hasIdSuffix": "host" },
+            "redact": [ { "find": { "hasIdSuffix": "note" }, "plainMask": $value } ]
+        }]"""
+        RuleCompiler.compileRules<UiNode>(
+            Json.parseToJsonElement(ruleJson).jsonArray, RuleContext.SCREEN,
+        )
+    }
+
+    @Test
+    fun `plainMask true and false compile at both redact sites`() {
+        notifRuleWithPlainMask("true"); notifRuleWithPlainMask("false")
+        screenRuleWithPlainMask("true"); screenRuleWithPlainMask("false")
+    }
+
+    @Test(expected = RuleCompileException::class)
+    fun `a numeric plainMask is rejected on a notification redact — a silent false re-enables the hash oracle`() {
+        notifRuleWithPlainMask("1")
+    }
+
+    @Test(expected = RuleCompileException::class)
+    fun `a string plainMask is rejected on a notification redact`() {
+        notifRuleWithPlainMask("\"true\"")
+    }
+
+    @Test(expected = RuleCompileException::class)
+    fun `a null plainMask is rejected on a notification redact`() {
+        notifRuleWithPlainMask("null")
+    }
+
+    @Test(expected = RuleCompileException::class)
+    fun `a string plainMask is rejected on a screen redact entry too`() {
+        screenRuleWithPlainMask("\"true\"")
+    }
 }

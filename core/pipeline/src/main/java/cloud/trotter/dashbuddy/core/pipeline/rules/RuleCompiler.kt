@@ -443,7 +443,7 @@ object RuleCompiler {
             // dasher's own banking amount). It is meaningless on the regex-capture form (the
             // group mask has its own fail-closed path and no keepPrefix), so declaring both is a
             // loud reject rather than a silently ignored flag — the #795 posture.
-            val plainMask = specObj["plainMask"]?.jsonPrimitive?.booleanOrNull ?: false
+            val plainMask = compilePlainMask(specObj["plainMask"], "notification redact: field '$fieldName'")
             if (plainMask && matchPattern != null) {
                 throw RuleCompileException(
                     "notification redact: field '$fieldName' declares BOTH 'plainMask' and " +
@@ -509,7 +509,7 @@ object RuleCompiler {
             // secret (a PIN keypad node) redacts to plain `[redacted]`, not a reversible hash.
             // It is mutually exclusive with `normalize` (both shape the hash; a plain mask has
             // no hash to shape) — fail loud rather than silently ignore one.
-            val plainMask = obj["plainMask"]?.jsonPrimitive?.booleanOrNull ?: false
+            val plainMask = compilePlainMask(obj["plainMask"], "redact entry")
             if (plainMask && normalize != null) {
                 throw RuleCompileException(
                     "redact entry: `plainMask` and `normalize` are mutually exclusive — a plain " +
@@ -801,6 +801,21 @@ object RuleCompiler {
      * must reject the FILE, never degrade to "unconstrained" (that would turn a screen-scoped
      * actuation target into a global one).
      */
+    /**
+     * `plainMask` is a privacy switch: absent means false, but a PRESENT non-boolean (`1`, `"true"`,
+     * `null`) must not quietly read as false — that would re-enable the hashed suffix over a small
+     * plaintext space, the exact inversion oracle the flag exists to remove (#987 review). The
+     * runtime loader performs no JSON-Schema validation, so the compiler is the only gate.
+     */
+    private fun compilePlainMask(element: JsonElement?, where: String): Boolean {
+        if (element == null) return false
+        val prim = element as? JsonPrimitive
+        val value = prim?.takeIf { !it.isString }?.booleanOrNull
+        return value ?: throw RuleCompileException(
+            "$where: 'plainMask' must be a JSON boolean (true/false); got '$element'",
+        )
+    }
+
     private fun compileScreenIs(element: JsonElement?, ruleId: String?): Set<String>? {
         if (element == null) return null
         val id = ruleId ?: "?"

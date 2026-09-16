@@ -506,10 +506,6 @@ capability consent gate (`RuleCapabilityRepository`; **no auto-grant, #843**). H
   distance-derived figure an explicit `0.0` placeholder; `OfferEvaluation.hasDistanceMetrics` is the one
   predicate consumers branch on so placeholders are never rendered as measurements, and the offer fold
   persists the frozen estimates as NULL, not zero.
-- **A deferred tap arms on the screen's ENTRY edge (#1097):** the confirm-decline sheet is admitted
-  twice per decline, so `EffectMap.diffConfirmDeclineAction` emits only when the PREVIOUS
-  `FlowRegion.sourceRuleId` was not already this rule. `diffExpandAction` needs no such gate — its
-  `isExpanded == false` condition is one by construction.
 - **Dedupe granularity is the rule's to declare (#859):** a rule effect with `throttleMs` opts out of the
   48 h `effects_fired` row into its own wall-clock window (in-memory; a restart re-arms it). Evidence
   filenames are sanitized at the one gate (`EvidenceFilename.sanitizePrefix`).

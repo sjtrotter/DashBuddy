@@ -273,6 +273,12 @@
           ],
           "plainMask": true
         },
+        "subText": {
+          "keepPrefix": [
+            "Your Dasher earnings for "
+          ],
+          "plainMask": true
+        },
         "title": {
           "keepPrefix": [
             "Your Dasher earnings for "
