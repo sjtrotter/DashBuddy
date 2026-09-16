@@ -2928,6 +2928,30 @@ class CaptureRedactionCorpusTest {
     }
 
     /**
+     * #1107 parity (the #1039 doctrine, one entry over): the 8.97.8 "Drop off steps" wrapper's
+     * customer-instruction body can inflate under ANY dropoff-phase surface, and a redact protects
+     * only the frames its OWN rule wins — so every dropoff-section rule, `navigation_generic` and
+     * `dash_summary` must mask `description_text_view` whole-node and plain. A new dropoff surface
+     * that forgets it fails here, not in the field.
+     */
+    @Test
+    fun `every dropoff-section rule (plus navigation_generic and dash_summary) masks the instruction body plain (#1107)`() {
+        val missing = mutableListOf<String>()
+        for (ruleId in subpremiseParityRuleIds() + "doordash.screen.dash_summary") {
+            val entries = ruleJson(ruleId)["redact"] as? kotlinx.serialization.json.JsonArray
+            val ok = entries?.any { element ->
+                val entry = element.jsonObject
+                val ids = mutableListOf<String>()
+                collectStringsUnder(entry, "hasIdSuffix", ids)
+                "description_text_view" in ids &&
+                    entry["plainMask"]?.jsonPrimitive?.booleanOrNull == true
+            } == true
+            if (!ok) missing += ruleId
+        }
+        assertTrue("rules missing the #1107 instruction-body plainMask entry: $missing", missing.isEmpty())
+    }
+
+    /**
      * #1107 — the rules-INDEPENDENT half. The rule redact above covers the RECOGNIZED path; an
      * UNKNOWN render of this wrapper (a step variant the require misses, a future page reusing
      * the id) is reached only by the #910 id scan, so the id must be in that SSOT too.
