@@ -123,9 +123,12 @@ the trail ALSO shows, on all 7 failures: the settled re-render was admitted ~600
 fresh `SETTLE_UI` with live bounds, and that retry was swallowed by the engine's 1 000 ms action
 throttle as "within 1000ms of the last fire" — the failed attempt had stamped the window. The fix is at
 the throttle: the stamp is taken before the click (#618 F3's queued-duplicate guard) but RESTORED to its
-prior value when `performVerifiedClick` returns false, so a re-armed tap is judged against the last tap
-that actually LANDED. Nothing widens — every retry is a full re-resolve behind the same package, label
-and consent gates, and only a newly ADMITTED frame can arm one. Two roads not taken, both reviewed:
+prior value when `performVerifiedClick` returns false — for AUTOMATION taps only. A USER tap keeps its
+completion stamp even when it failed: its #602 bounded retry can spend ~1.5 s, and rolling the window
+back would let a queued duplicate start another retry that could land on a REPLACEMENT offer's button
+(`PerformRuleAction` carries no offer identity). For the automated path nothing widens — every retry is
+a full re-resolve behind the same package, label and consent gates, and only a newly ADMITTED frame can
+arm one. Two roads not taken, both reviewed:
 raising `expandSettleMs` (500 → 900 ms) cannot repair a ref whose bounds were frozen mid-slide — the tap
 fails whenever it fires — and only widens the confirm-decline vs `OFFER_EXPIRY` window; and a
 label-hash re-find when the bounds walk comes back empty was built and WITHDRAWN (a clickable parent

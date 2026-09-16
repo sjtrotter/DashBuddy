@@ -400,10 +400,14 @@ class SideEffectEngine @Inject constructor(
                     description = "${effect.action.wire} on ${effect.platform.wire} [${effect.sourceRuleId}]",
                     allowRetry = effect.trigger == ActionTrigger.USER,
                 )
-                if (clicked) {
+                if (clicked || effect.trigger == ActionTrigger.USER) {
                     // #618 F3: the retry can stretch stamp→dispatch to ~1.5s, which would
                     // let a queued duplicate fire ~100ms after a late-landing tap. Re-stamp
                     // at completion so the 1000ms spacing anchors to the actual dispatch.
+                    // A USER tap keeps this stamp even when it FAILED (#1102 review): its
+                    // bounded #602 retry can exhaust ~1.5 s, and rolling the window back would
+                    // let a queued duplicate start another retry that could land on a
+                    // REPLACEMENT offer's button — PerformRuleAction carries no offer identity.
                     stampThrottle(throttleKey, System.currentTimeMillis())
                 } else {
                     // #1102: a tap that did NOT land is not a fire. The fielded receipt failures
@@ -412,9 +416,10 @@ class SideEffectEngine @Inject constructor(
                     // re-armed a fresh SETTLE_UI with live bounds, and THAT retry was swallowed
                     // here as "within 1000ms of the last fire" (7 of 7 across the 09-13 and 09-15
                     // pulls). Restore the throttle to what it held before this attempt, so the
-                    // re-armed tap is judged against the last tap that actually landed. Nothing
-                    // widens: every retry is still a full re-resolve behind the same package,
-                    // label and consent gates, and only a newly ADMITTED frame can arm one.
+                    // re-armed tap is judged against the last tap that actually landed. Scoped to
+                    // AUTOMATION taps (a deferred SETTLE_UI action, armed only by a newly ADMITTED
+                    // frame, no in-handler retry): nothing widens — every retry is still a full
+                    // re-resolve behind the same package, label and consent gates.
                     if (priorStamp == null) actionLastFiredAt.remove(throttleKey) else actionLastFiredAt[throttleKey] = priorStamp
                     Timber.tag("Effects").w(
                         "%s did not fire — target failed resolution/verification (fail closed, user acts manually)",

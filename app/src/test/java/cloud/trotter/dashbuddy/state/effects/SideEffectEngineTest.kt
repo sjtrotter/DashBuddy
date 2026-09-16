@@ -301,6 +301,23 @@ class SideEffectEngineTest {
     }
 
     @Test
+    fun `a USER tap that failed keeps its throttle stamp — a queued duplicate cannot restart the retry (#1102 review)`() = runTest {
+        // The #602 bounded retry can spend ~1.5 s on a USER tap; if a failure rolled the window
+        // back, a queued duplicate would immediately begin another retry that could land on a
+        // REPLACEMENT offer's button. The rollback is AUTOMATION-only.
+        val engine = buildEngine(StandardTestDispatcher(testScheduler))
+        wheneverBlocking { uiInteractionHandler.performVerifiedClick(any(), any(), any(), any(), any()) }
+            .thenReturn(false)
+
+        engine.process(acceptActionEffect().copy(trigger = ActionTrigger.USER))
+        runCurrent()
+        engine.process(acceptActionEffect().copy(trigger = ActionTrigger.USER))
+        runCurrent()
+
+        verify(uiInteractionHandler, times(1)).performVerifiedClick(any(), any(), any(), any(), any())
+    }
+
+    @Test
     fun `a tap that LANDED still throttles the next one (#1102 widens nothing)`() = runTest {
         val engine = buildEngine(StandardTestDispatcher(testScheduler))
         wheneverBlocking { uiInteractionHandler.performVerifiedClick(any(), any(), any(), any(), any()) }
