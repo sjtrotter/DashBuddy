@@ -76,19 +76,9 @@ data class DeliveryRecordEntity(
     val basePay: Double?,
     /** Raw metadata.odometer reading — the next drop's delta anchor. */
     val odometerAtCompletion: Double?,
-    /**
-     * This drop's realized miles: the per-LEG sum (`milesToStore + milesToDropoff`) where the legs
-     * were measured (#688 phase B), else this drop's share of the span `odo(this) − odo(prev
-     * completion | DASH_START)` — apportioned equally across the job's drops when a span-basis fold
-     * swallowed a sibling's pending leg (#1108), so one job never mixes the two bases.
-     */
+    /** Partition delta: odo(this) − odo(prev completion | DASH_START). */
     val realizedMiles: Double?,
-    /**
-     * Partition delta: `(completedAt − prev anchor time) / 60_000`, the anchor being the previous
-     * completion (or DASH_START). NULL when this drop's `completedAt` predates that anchor (#1108 —
-     * a stacked job's same-instant siblings, emitted out of completion order): fail-null, never the
-     * negative the fielded rows carried and never a fabricated 0.
-     */
+    /** Partition delta: (completedAt − prev anchor time) / 60_000. */
     val realizedMinutes: Double?,
 
     // ── Frozen economics (immutable historical fact — never re-costed on economy edit) ──

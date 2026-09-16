@@ -796,7 +796,15 @@ class SessionPaySettleGateTest {
         // this frame refusable: the new session owns no job at all.
         val freshDash = region(activeJob = null, closedJobReceipt = null)
 
-        val onCarriedOverReceipt = step(freshDash, receiptScreen(t0, sessionEarnings = 40.14))
+        // The fielded frame carried BOTH feeds: the wheel ($40.14, the previous dash's total) and the
+        // receipt's own `This offer` total ($24.39) — the review's second finding: refusing the wheel
+        // while still accumulating the total would seed the new dash with $24.39 instead.
+        val onCarriedOverReceipt = step(freshDash, receiptScreen(t0, sessionEarnings = 40.14, totalPay = 24.39))
+        assertEquals(
+            "the receipt's total is subject to the same ownership test — nothing accumulates",
+            0.0, onCarriedOverReceipt.session!!.accumulatedDeliveryPay, 0.0001,
+        )
+        assertEarnings(0.0, onCarriedOverReceipt, "the total did not become the running figure either")
         assertNull(
             "a receipt this session owns no job for is not a reading of this session's total",
             onCarriedOverReceipt.pendingSessionPay,
@@ -812,6 +820,14 @@ class SessionPaySettleGateTest {
         // The DASH_STOP half is already pinned by EffectMapPayloadTest's #1030 case: an
         // early_offline stop stamps `runningEarnings.takeIf { it > 0.0 }`, so a 0.0 total here is a
         // NULL `totalEarnings` in the payload — never a reported $40.14.
+    }
+
+    @Test
+    fun `an owned receipt still accumulates its total (#1103 review — the gate widens nothing)`() {
+        val openJob = region(activeJob = liveJob)
+        val onReceipt = step(openJob, receiptScreen(t0, sessionEarnings = null, totalPay = 24.39))
+        assertEquals(24.39, onReceipt.session!!.accumulatedDeliveryPay, 0.0001)
+        assertEarnings(24.39, onReceipt, "an owned receipt's total is this dash's money")
     }
 
     @Test

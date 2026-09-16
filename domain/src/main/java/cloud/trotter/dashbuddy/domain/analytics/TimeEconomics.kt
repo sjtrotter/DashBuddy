@@ -18,11 +18,8 @@ import kotlin.math.roundToLong
  * (deadhead) therefore grows on leg-measured rows by the arrival→completion dwell/drift AND by any
  * legs retired at a legacy-basis completion (the #688 review Fix 1 one-sided guard: Σ per-drop miles ≤
  * the session span, undershoot expected, never over). [deliveryMinutes] is unchanged (still the full
- * inter-drop time delta), with one #1108 carve-out: a drop whose `completedAt` predates the session's
- * monotonic partition anchor — the same-instant siblings of a stacked job, emitted out of completion
- * order — contributes NOTHING rather than a negative, so this Σ can undershoot by one such drop.
- * Both remainders ([unattributedMillis] / [unattributedMiles]) stay honestly "not attributed to any
- * delivery" — never a re-estimate.
+ * inter-drop time delta). Both remainders ([unattributedMillis] / [unattributedMiles]) stay honestly
+ * "not attributed to any delivery" — never a re-estimate.
  *
  * **Deadline coverage is explicit** (Principle 5/6 honesty): [deliveriesWithDeadline] is only the
  * deliveries that carried a captured deadline; [onTimeDeliveries] and [onTimeRate] cover ONLY that
@@ -47,7 +44,7 @@ data class TimeEconomics(
     val deliveryMinutes: Double?,
     /** Session odometer miles for the period (Σ per-session odometer delta). */
     val miles: Double,
-    /** Σ per-delivery realized miles (leg sums / apportioned span shares); null when nothing measured. */
+    /** Σ per-delivery realized miles (partition deltas); null when nothing measured. */
     val deliveryMiles: Double?,
     /** Deliveries that carried a captured deadline — the on-time denominator. */
     val deliveriesWithDeadline: Int,

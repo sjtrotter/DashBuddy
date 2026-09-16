@@ -93,13 +93,6 @@ was found **broken-in-part** (raw PII in capture envelopes) and moved to that en
   second drop-off card appears without an arrival frame (09-13 session 499: 24.32 mi of legs on an
   18.70 mi span, and a −7.1 min row).
   - Issue: #1108. Confirmed: 0/2
-    - **fix landed (PR for #1103/#1108, `PROJECTOR_VERSION` 12 — history refolds on first launch):**
-      a job's drops now share ONE mileage basis (a span-basis drop retires its job's pending dropoff
-      legs and splits the span equally with them), and the minutes anchor is monotonic. So: no
-      negative `realizedMinutes` anywhere; the out-of-order sibling of such a stack holds
-      `realizedMinutes` NULL (not 0, not negative) with one `fold: realizedMinutes null:` DEBUG line
-      naming its ids in `app.log`; every sequentially-completing drop keeps exactly the partition
-      minutes it had before.
 
 - **🆕 NEW — unassigning at the store must not record a pickup (#301).** **On-dash (deliberate):** if you
   ever have to unassign at a store, take the `Help → I have an issue → Unassign order` path. **Desk:**
@@ -129,7 +122,7 @@ was found **broken-in-part** (raw PII in capture envelopes) and moved to that en
   `Delivery - <amt>.png` / `DeliveryBreakdown - <amt>.png` screenshot pair timestamped inside the new
   dash, and confirm no `DELIVERY_RECEIPT_REPRICE` is attributed to the new session.
   - Issue: #1103. Confirmed: 0/2
-    - **fix landed (PR for #1103/#1108):** the receipt's wheel is admitted to the settle gate only
+    - **fix landed (PR #1111, #1103):** the receipt's wheel is admitted to the settle gate only
       while this session owns the receipt's job (`activeJob` live, or `lastClosedJobReceipt` set —
       both cleared by `endSession`). A refused read prints `settle gate: receipt running-total read
       refused` at DEBUG under the `StateMachine` tag; on the repro above that line IS the fix firing,

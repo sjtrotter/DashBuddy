@@ -237,8 +237,7 @@ data class PlatformSessionTotalsRow(
 /**
  * Time-tab delivery aggregates for a period (#315 H4) — session-anchored (#655), same WHERE shape as
  * [DeliveryTotalsRow]. [deliveryMinutes]/[deliveryMiles] are Σ per-delivery realized **partition
- * deltas** (the miles half refined to per-leg sums / apportioned span shares by #688 B and #1108;
- * a drop that folded NULL minutes contributes none — nullable and left un-`COALESCE`d: SQL `SUM` of an empty set is NULL — the "nothing
+ * deltas** (nullable and left un-`COALESCE`d: SQL `SUM` of an empty set is NULL — the "nothing
  * measured" signal, never a fabricated 0 miles/minutes). [withDeadline]/[onTime] cover ONLY
  * deadline-carrying rows (a delivery with no captured deadline is excluded from both, never counted
  * as late). [avgDeadlineMarginMillis] = `AVG(deadlineMillis − completedAt)` over deadline-carrying

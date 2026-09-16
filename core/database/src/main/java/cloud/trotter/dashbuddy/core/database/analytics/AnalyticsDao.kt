@@ -1005,20 +1005,6 @@ interface AnalyticsDao {
     suspend fun lastDeliveryInSession(id: String): DeliveryRecordEntity?
 
     /**
-     * The session's LATEST completion time — the `prevDropAt` half of that anchor, rehydrated
-     * separately since #1108 because the anchor is MONOTONIC and [lastDeliveryInSession] is ordered
-     * by `eventSequenceId`, which is the fold order and NOT completion order (§5's ordering
-     * contract). A stacked job's close-out sweep emits the later-completed drop first, so the
-     * last-folded row's `completedAt` can be EARLIER than a sibling's: restoring it would walk the
-     * anchor backwards across a batch boundary and make incremental folding disagree with a
-     * from-zero refold (the #703 determinism class). `MAX` is order-free and reproduces exactly what
-     * the in-memory fold holds. Same `sessionAssigned = 0` filter and the same reasoning as above.
-     * NULL when the session has folded no machine delivery yet ⇒ the fold falls back to `startedAt`.
-     */
-    @Query("SELECT MAX(completedAt) FROM delivery_records WHERE sessionId = :id AND sessionAssigned = 0")
-    suspend fun maxCompletedAtInSession(id: String): Long?
-
-    /**
      * One delivery row by its source-event PK — the target of a driver PAY_ADJUSTMENT re-price (#650).
      * The projector reads it inside the batch transaction (after the batch's own delivery upserts) to
      * rewrite realizedPay + recompute net against the row's own frozen cost basis; null ⇒ the target

@@ -14,19 +14,7 @@ import cloud.trotter.dashbuddy.domain.state.Platform
  * Miles/minutes are **partition** anchors: [prevDropOdometer]/[prevDropAt] mark the previous
  * `DELIVERY_COMPLETED` in this session (or the DASH_START odometer/time for the first drop), so each
  * drop's realized miles/minutes are the gap since that anchor and Σ over the session equals the
- * session odometer/time delta with nothing double-counted. That partition IS the quantity the read
- * model is built on — `TimeEconomics.deliveryMinutes`, `NetPerHourPair.whileWorking` and
- * `EstimateVsReality`'s realized rate all assume a drop claims the whole span since the last one —
- * so it is deliberate, not incidental (#688 phase B refines the MILES half to per-LEG miles where
- * the legs were measured; #1108 apportions a span across a job's drops so the two bases cannot
- * overlap).
- *
- * **[prevDropAt] is MONOTONIC (#1108).** Completions fold in `sequenceId` order, which is NOT
- * completion order: a stacked job's drops complete at one instant and the close-out sweep emits the
- * later-completed one first, which used to drag the anchor forward past a sibling's `completedAt`
- * and give that sibling a NEGATIVE partition. The anchor therefore never moves backwards, and a row
- * whose `completedAt` still predates it folds NULL minutes rather than a negative or a fabricated
- * zero — see `DeliveryFolds.foldDeliveryCompleted`.
+ * session odometer/time delta with nothing double-counted.
  *
  * [lastEvaluatedCostPerMile] is the session-uniform operating cost-per-mile the offers were
  * evaluated against — the frozen-economy basis for every delivery in the session (see [RecordFolds]).
@@ -63,11 +51,7 @@ data class SessionFoldContext(
     val receiptedJobIds: Set<String> = emptySet(),
     /** Partition anchor: odometer at the previous completion; null ⇒ fall back to [startOdometer]. */
     val prevDropOdometer: Double? = null,
-    /**
-     * Partition anchor: time at the previous completion; null ⇒ fall back to [startedAt]. **Never
-     * assigned backwards** (#1108) — it advances to `max(prevDropAt, completedAt)`, so an
-     * out-of-order emission cannot put the anchor in a later-folded row's future.
-     */
+    /** Partition anchor: time at the previous completion; null ⇒ fall back to [startedAt]. */
     val prevDropAt: Long? = null,
     /**
      * The operating cost-per-mile of the most recent closing offer with an evaluation, in this

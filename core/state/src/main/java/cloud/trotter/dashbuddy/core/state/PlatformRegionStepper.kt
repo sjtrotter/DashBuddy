@@ -903,7 +903,16 @@ class PlatformRegionStepper @Inject constructor() {
                 )
             }
             val postFields = obs.parsed as? ParsedFields.PostTaskFields
-            if (postFields != null && postFields.totalPay > 0) {
+            // #1103 (review): the receipt's TOTAL is subject to the same ownership test as its wheel
+            // read — a previous dash's receipt still on screen when a new dash starts must not seed
+            // the new dash's accumulated pay either. Owned = this session's job is open, or just
+            // closed on this receipt; a fresh dash has neither marker.
+            if (postFields != null && postFields.totalPay > 0 && !r.ownsReceiptJob()) {
+                Timber.tag("StateMachine").d(
+                    "receipt total %.2f refused — no job owned by this session (#1103)", postFields.totalPay,
+                )
+            }
+            if (postFields != null && postFields.totalPay > 0 && r.ownsReceiptJob()) {
                 r.session?.let { session ->
                     val accumulated = session.accumulatedDeliveryPay + postFields.totalPay
                     val best = maxOf(session.runningEarnings, accumulated)
