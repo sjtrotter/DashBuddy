@@ -113,3 +113,48 @@ QUEUED, so the reset lives on `onDone`; engine identity is generation-checked so
 engine's late callback can't ready or mis-language its replacement; and the rebuild is detached onto
 the app scope so a wedged TTS binder can never block the drain worker that owns the `app_events`
 writer.
+**The deferred tap must not depend on an animation finishing (#1102).** `EXPAND_EARNINGS` is
+emitted as a `ScheduleTimeout(SETTLE_UI)` carrying the bind's `NodeRef`, and the tap re-resolves
+that ref when the timeout fires — so the ref has to still describe something live. It did not: the
+09-13 and 09-15 pulls show DoorDash's prism receipt sheet still SLIDING when the frame that reaches
+the state machine is captured, freezing `expandButton` at `top` 4435 / 4395 / 4263 / 2224 / 1982
+against a settled 1774–1890 on a 1080×2400 screen. `GraceConfig.EXPAND_SETTLE_MS` (500 ms) is
+shorter than the measured ~590–640 ms slide, and `FrameGate`'s identity dedup suppresses the settled
+re-render (identical parse), so the bind is never refreshed. The bounds walk then needs IoU ≥ 0.5
+against a 126 px row (≈ 63 px of tolerance) and finds nothing: **5 of 11, then 2 of 18 expand taps
+were lost**, each as a bare `Could not find any live node` — never a label rejection, which is the
+tell that the failure was geometric, not an identity problem. Two fixes compose, and both are
+bounded:
+1. **Timing, as data.** `expandSettleMs` is per-platform already (#438 item 6), so DoorDash's code
+   default becomes `DOORDASH_EXPAND_SETTLE_MS` = 900 ms in `GraceConfig.CODE_DEFAULTS` — data keyed
+   by `Platform`, no branch (Principle 8), and no other platform moves. #1033's 8 s collapsed-receipt
+   window makes the extra 400 ms free (the completion still commits well inside the gap before the
+   next offer). The confirm-decline defer (`diffConfirmDeclineAction`) deliberately SHARES the value:
+   the dialog rides the same prism machinery, and 400 ms out of an offer countdown measured in tens
+   of seconds costs the quick-decline nothing — one value, one thing to reason about.
+2. **A bounds-free re-resolve.** `UiInteractionHandler` gains **strategy 4**
+   (`findNodeByLabels`), tried ONLY when id, text and the bounds walk have all come back empty and
+   the ref carries label hints: the scoped roots are walked for CLICKABLE, `classNameHint`-matching
+   nodes whose live `collectLabels` satisfy `NodeRef.agreesWithLabels` — the SAME predicate #1093
+   verifies with, not a second copy, so widening the SEARCH cannot widen what counts as IDENTITY. A
+   candidate found this way is then verified exactly like a bounds-derived one
+   (`Candidate.needsLabelIdentity` is the shared gate), the #788 active-window scoping runs first,
+   and the nested-abort still applies.
+**What keeps strategy 4 fail-closed.** (a) **>1 label-resolved survivor ABORTS to manual** — the
+ranker's remaining tier is overlap against `ref.boundsInScreen`, and strategy 4 only ran *because*
+that rect no longer describes the target, so letting it break the tie would be precisely the
+geometry-as-identity mistake #1093 closed; two receipt rows that each carry the bind's full labels
+are genuinely ambiguous and the dasher expands the receipt themselves. (b) The walk is **bounded** —
+`LABEL_WALK_NODES` 4 000 / `LABEL_WALK_DEPTH` 60, mirroring `:core:pipeline`'s `TreeBudget` (its
+`internal` visibility is why the numbers are restated rather than imported); every `getChild(i)` is a
+binder IPC and this runs on the effect drain worker, which must never stall (#909). Exhausting the
+budget is one WARN with counts only. (c) A subtree whose `packageName` is not the expected platform
+package is **never descended into**. (d) A hint-less ref (a pre-#1093 snapshot) has nothing to search
+by, so the walk does not run at all and the tap fails closed. A ZERO-AREA ref rect, which fails the
+BOUNDS walk closed (#1093 guard 2), deliberately does not block this one — that guard said geometry
+carried no evidence, and strategy 4 uses none; the identity bar (every hint, unique survivor) is
+untouched. (e) Like the bounds walk, a hit is
+still DESCENDED into, so a clickable wrapper inheriting its child's labels is exposed to the
+nested-abort instead of silently claiming the tap. One DEBUG line reports the resolution
+(`Bounds stale by N px … resolved by labels`) — numbers only (P7); a run of them in a desk pull is
+the fallback carrying taps the settle delay alone would still have missed.

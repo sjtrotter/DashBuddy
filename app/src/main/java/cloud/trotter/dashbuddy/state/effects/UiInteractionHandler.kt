@@ -12,6 +12,7 @@ import kotlinx.coroutines.delay
 import timber.log.Timber
 import javax.inject.Inject
 import javax.inject.Singleton
+import kotlin.math.abs
 
 /**
  * Executes app-owned `RuleAction` taps on the platform app (#425).
@@ -26,7 +27,15 @@ import javax.inject.Singleton
  *    the action's [TargetExpectation] (e.g. DECLINE_OFFER only taps a node
  *    labeled "Decline"). Platform buttons usually label via a child TextView,
  *    so collection walks a bounded subtree.
- * 3. **Active-window scoping** (#788) — the tap target normally lives in the
+ * 3. **Label-based re-resolution** (#1102) — when neither id, text, nor the
+ *    bounds walk finds anything, a ref that carries label hints is re-found by
+ *    those hints alone: the scoped roots are walked for CLICKABLE, class-matching
+ *    nodes whose live subtree labels carry EVERY hint. Bounds frozen mid-animation
+ *    (a prism sheet still sliding up) are then not fatal — but labels FINDING a
+ *    node is not labels VERIFYING it, so such a candidate goes through the exact
+ *    same [NodeRef.agreesWithLabels] check as a bounds-derived one, and >1 survivor
+ *    aborts to manual (stale geometry must not break that tie).
+ * 4. **Active-window scoping** (#788) — the tap target normally lives in the
  *    active (topmost) window: the confirm sheet, the earnings summary. A twin
  *    node sharing the same view id can survive underneath it in a *lower*
  *    window (the offer popup's bare "Decline" behind the confirm sheet's
@@ -38,7 +47,7 @@ import javax.inject.Singleton
  *    field pre-#770, made explicit. When the active window contributes none
  *    (e.g. the dasher's bubble holds focus and the target is in a background
  *    platform window) we keep them all and let the ranker decide.
- * 4. **Evidence-ranked disambiguation** (#600) — when more than one live node
+ * 5. **Evidence-ranked disambiguation** (#600) — when more than one live node
  *    survives label verification *and active-window scoping*, [ClickCandidateRanker]
  *    picks the strongest match (exact stored text, then max bounds overlap)
  *    instead of a since-abandoned exact-bounds `==` comparison that broke under an
@@ -47,7 +56,7 @@ import javax.inject.Singleton
  *    **aborted to manual** (#734) — clicking the first-in-tree candidate is
  *    luck, not verification. The abort is reserved for genuine SAME-window
  *    ambiguity: two distinct verified candidates within the active window.
- * 5. **Strict click** — self-or-ancestor only. The old clickable-*sibling*
+ * 6. **Strict click** — self-or-ancestor only. The old clickable-*sibling*
  *    fallback is deliberately absent here: the verified node's sibling can be
  *    the opposite button (Accept sits beside Decline in the offer footer).
  *
@@ -71,6 +80,16 @@ class UiInteractionHandler @Inject constructor(
 
         /** Max nodes visited per label scan — bounded ingestion of third-party UI. */
         private const val LABEL_SCAN_NODES = 24
+
+        /**
+         * #1102 — budget for the label walk (strategy 4), which visits the whole scoped tree
+         * rather than a candidate's subtree. Mirrors the recognition pipeline's own tree budget
+         * (`AccessibilityNodeMapper`'s `TreeBudget`: 4 000 nodes / depth 60, internal to
+         * `:core:pipeline` so the numbers are restated, not imported): every `getChild(i)` is a
+         * binder IPC, and this walk runs on the effect drain worker (#909 — it must not stall).
+         */
+        private const val LABEL_WALK_NODES = 4_000
+        private const val LABEL_WALK_DEPTH = 60
     }
 
     /**
@@ -129,7 +148,7 @@ class UiInteractionHandler @Inject constructor(
         // package — it was package-filtered out of `roots`, so it matches nothing
         // and scoping no-ops (we fall through to all windows, as before).
         val activeRoot = accessibilitySource.getLiveNativeRoot()
-        val candidates = findCandidates(roots, activeRoot, ref)
+        val candidates = findCandidates(roots, activeRoot, ref, expectedPackage)
         if (candidates.isEmpty()) {
             Timber.tag("Effects").w(
                 "Could not find any live node for: %s (id=%s, text=%s, bounds=%s)",
@@ -149,7 +168,11 @@ class UiInteractionHandler @Inject constructor(
             // subtree labels among its live ones; that, not geometry, separates the slid receipt
             // row from whatever control now sits where the row was captured. A hint-less ref
             // (pre-#1093 snapshot) keeps the legacy exact-only behaviour.
-            if (candidate.boundsDerived) {
+            // #1102: a LABEL-derived candidate (strategy 4) runs the SAME check — one function, one
+            // definition of "carries the bind's labels". It passes by construction, which is the
+            // point: finding and verifying stay the same predicate, so widening the search can
+            // never widen what counts as identity.
+            if (candidate.needsLabelIdentity) {
                 val identified = if (ref.labelHintHashes.isEmpty()) !candidate.relaxed else ref.agreesWithLabels(labels)
                 if (!identified) { geometryRejected++; return@mapNotNull null }
             }
@@ -158,7 +181,7 @@ class UiInteractionHandler @Inject constructor(
         }
         if (labeledCandidates.isEmpty()) {
             Timber.tag("Effects").w(
-                "%d candidate(s) for %s but NONE passed verification (label %s; %d bounds-derived candidate(s) did not carry the bind's labels) — refusing to click",
+                "%d candidate(s) for %s but NONE passed verification (label %s; %d re-resolved candidate(s) did not carry the bind's labels) — refusing to click",
                 candidates.size, description, expectation.labelPattern, geometryRejected,
             )
             return false
@@ -196,8 +219,21 @@ class UiInteractionHandler @Inject constructor(
         val nested = scopedCandidates.firstOrNull { (c, _) -> c.ancestors.any { it in retainedIndices } }
         if (nested != null) {
             Timber.tag("Effects").w(
-                "Nested verified candidates for %s (a bounds-derived control inside another that also carries the bind's labels) — aborting to manual (#1093)",
+                "Nested verified candidates for %s (a re-resolved control inside another that also carries the bind's labels) — aborting to manual (#1093)",
                 description,
+            )
+            return false
+        }
+
+        // #1102: a LABEL-derived survivor set of more than one is ambiguous, full stop. The ranker's
+        // remaining tier is bounds overlap against `ref.boundsInScreen` — and strategy 4 only ran
+        // BECAUSE that rect no longer describes the target, so letting a stale rect pick between two
+        // rows that each carry the bind's full labels would be exactly the geometry-as-identity
+        // mistake #1093 closed. Abort to manual (the dasher expands the receipt themselves).
+        if (scopedCandidates.size > 1 && scopedCandidates.any { it.first.labelDerived }) {
+            Timber.tag("Effects").w(
+                "%d label-resolved candidate(s) for %s and no geometry to separate them — refusing to click (#1102)",
+                scopedCandidates.size, description,
             )
             return false
         }
@@ -242,6 +278,13 @@ class UiInteractionHandler @Inject constructor(
                 description, ranked.tier, verified.size,
             )
         }
+        // #1102: numbers only — how far the pinned rect had slid when the labels found the target.
+        // A run of these in a desk pull is the fallback carrying taps the settle delay still missed.
+        scopedCandidates[ranked.index].first.takeIf { it.labelDerived }?.let { resolved ->
+            Timber.tag("Effects").d(
+                "Bounds stale by %d px for %s — resolved by labels (#1102)", resolved.staleByPx, description,
+            )
+        }
         return AccNodeUtils.clickNodeStrict(target)
     }
 
@@ -255,15 +298,31 @@ class UiInteractionHandler @Inject constructor(
      * identity, so such a candidate must carry EVERY one of the ref's [NodeRef.labelHintHashes]
      * among its live labels to survive verification (#1093). [relaxed]: the overlap-only flavour
      * of that walk; a ref with NO hints (a pre-#1093 snapshot) admits an exact match only.
+     *
+     * [labelDerived]: found by the label walk (strategy 4, #1102) — the bind's rect was captured
+     * mid-animation and matches nothing live, so the hints did the FINDING as well as the
+     * verifying. [staleByPx] records how far off that rect was, for one DEBUG line; it is
+     * diagnostics and never an input to any decision.
      */
     private data class Candidate(
         val node: AccessibilityNodeInfo,
         val inActiveWindow: Boolean,
         val boundsDerived: Boolean = false,
         val relaxed: Boolean = false,
-        /** Indices (into the candidate list) of bounds-derived candidates this one sits INSIDE. */
+        /** Indices (into the candidate list) of walk-derived candidates this one sits INSIDE. */
         val ancestors: List<Int> = emptyList(),
-    )
+        /** #1102: found by the label walk (strategy 4) — bounds were stale, labels found it. */
+        val labelDerived: Boolean = false,
+        /** #1102 diagnostics only: |live top − ref top|, how far the pinned rect had slid. */
+        val staleByPx: Int = 0,
+    ) {
+        /**
+         * True when the search that produced this candidate is NOT identity on its own — a
+         * geometry hit (#1093) or a label hit (#1102). Both re-verify through the one
+         * [NodeRef.agreesWithLabels] predicate before they may be clicked.
+         */
+        val needsLabelIdentity: Boolean get() = boundsDerived || labelDerived
+    }
 
     /**
      * Search the scoped roots, strongest strategy first (so a weak bounds
@@ -278,6 +337,7 @@ class UiInteractionHandler @Inject constructor(
         roots: List<AccessibilityNodeInfo>,
         activeRoot: AccessibilityNodeInfo?,
         ref: NodeRef,
+        expectedPackage: String,
     ): List<Candidate> {
         val candidates = mutableListOf<Candidate>()
         fun addFrom(root: AccessibilityNodeInfo, nodes: List<AccessibilityNodeInfo>) {
@@ -310,7 +370,47 @@ class UiInteractionHandler @Inject constructor(
                 )
             }
         }
+        // Strategy 4 (#1102): bounds are stale — find the node by the bind's own label hints.
+        // Last, and only when everything else came back empty: this is the weakest SEARCH (it
+        // scans a whole scoped tree), even though its candidates carry the strongest identity
+        // evidence the ref has. A hint-less ref (pre-#1093 snapshot) has nothing to search by and
+        // falls through to the caller's fail-closed empty-candidate arm.
+        if (candidates.isEmpty() && ref.labelHintHashes.isNotEmpty()) {
+            val budget = WalkBudget(LABEL_WALK_NODES)
+            for (root in roots) {
+                val found = mutableListOf<LabelHit>()
+                findNodeByLabels(root, ref, expectedPackage, found, ArrayList(), budget, depth = 0)
+                val inActive = activeRoot != null && root == activeRoot
+                val base = candidates.size
+                for (hit in found) candidates.add(
+                    Candidate(
+                        hit.node, inActive, labelDerived = true, staleByPx = hit.staleByPx,
+                        ancestors = hit.ancestors.map { it + base },
+                    ),
+                )
+            }
+            if (budget.exhausted) {
+                Timber.tag("Effects").w(
+                    "Label walk hit its %d-node budget — the scan was partial (%d candidate(s))",
+                    LABEL_WALK_NODES, candidates.size,
+                )
+            }
+        }
         return candidates
+    }
+
+    /** Node budget for the label walk, spent across every scoped root of one resolve (#1102). */
+    private class WalkBudget(private val maxNodes: Int) {
+        private var visited = 0
+        var exhausted = false
+            private set
+
+        /** True while a node may still be visited; flips [exhausted] once the budget is spent. */
+        fun admit(): Boolean {
+            if (visited >= maxNodes) { exhausted = true; return false }
+            visited++
+            return true
+        }
     }
 
     /**
@@ -379,6 +479,65 @@ class UiInteractionHandler @Inject constructor(
         for (i in 0 until node.childCount) {
             val child = node.getChild(i) ?: continue
             findNodeByBounds(child, targetBounds, className, out, path)
+        }
+        if (hit) path.removeAt(path.size - 1)
+    }
+
+    /** A label-walk hit: [staleByPx] is diagnostics; [ancestors] index the SAME `out` list. */
+    private data class LabelHit(val node: AccessibilityNodeInfo, val staleByPx: Int, val ancestors: List<Int>)
+
+    /**
+     * Strategy 4 (#1102) — the bounds-free re-resolve. The fielded failure it answers: DoorDash's
+     * receipt sheet is still sliding up when the frame that reaches the state machine is captured,
+     * so `expandButton` pins a rect 400–2 600 px below where the row settles; `FrameGate`'s identity
+     * dedup then suppresses the settled re-render (same parse), so the bind is never refreshed and
+     * the tap re-resolves against a rect nothing occupies. The walk therefore ignores geometry
+     * entirely and asks the one question the animation cannot change: does this clickable node
+     * carry EVERY label the bind carried?
+     *
+     * Bounded and fail-closed:
+     *  - `:core:pipeline`'s tree budget mirrored ([LABEL_WALK_NODES] / [LABEL_WALK_DEPTH]) — a
+     *    pathological tree can neither stall the drain worker nor storm binder with `getChild`;
+     *  - a subtree whose `packageName` is not the expected platform package is never descended into
+     *    (an embedded WebView/other-app surface is out of scope by construction);
+     *  - [NodeRef.classNameHint], when the bind captured one, still has to match;
+     *  - like the bounds walk, a hit is DESCENDED into, so a clickable wrapper carrying its child's
+     *    labels is exposed to the caller's nested-abort rather than silently claiming the tap;
+     *  - more than one survivor aborts the tap (the caller) — a stale rect may not break that tie.
+     *
+     * A ZERO-AREA ref rect, which fails the bounds walk closed (#1093), deliberately does NOT block
+     * this walk: that skip said geometry carried no evidence, and here geometry carries none by
+     * construction. The identity bar is unchanged — every hint, on a unique survivor.
+     */
+    private fun findNodeByLabels(
+        node: AccessibilityNodeInfo,
+        ref: NodeRef,
+        expectedPackage: String,
+        out: MutableList<LabelHit>,
+        path: ArrayList<Int>,
+        budget: WalkBudget,
+        depth: Int,
+    ) {
+        if (depth > LABEL_WALK_DEPTH || !budget.admit()) return
+        val nodePackage = node.packageName?.toString()
+        if (nodePackage != null && nodePackage != expectedPackage) return
+        val classOk = ref.classNameHint == null || node.className?.toString() == ref.classNameHint
+        val hit = classOk && node.isClickable && ref.agreesWithLabels(collectLabels(node))
+        if (hit) {
+            val liveBounds = Rect()
+            node.getBoundsInScreen(liveBounds)
+            out.add(
+                LabelHit(
+                    node = node,
+                    staleByPx = abs(liveBounds.top - ref.boundsInScreen.top),
+                    ancestors = path.toList(),
+                ),
+            )
+            path.add(out.size - 1)
+        }
+        for (i in 0 until node.childCount) {
+            val child = node.getChild(i) ?: continue
+            findNodeByLabels(child, ref, expectedPackage, out, path, budget, depth + 1)
         }
         if (hit) path.removeAt(path.size - 1)
     }

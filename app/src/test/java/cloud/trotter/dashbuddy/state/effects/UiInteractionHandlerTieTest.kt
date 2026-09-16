@@ -256,10 +256,19 @@ class UiInteractionHandlerTieTest {
         labelHintHashes = listOfNotNull(NodeRef.hintHash("This offer"), NodeRef.hintHash("Expand")),
     )
 
-    private suspend fun expand(handler: UiInteractionHandler) = handler.performVerifiedClick(
-        ref = expandRef, expectedPackage = pkg,
-        expectation = RuleAction.EXPAND_EARNINGS.verification, description = "expand earnings",
-    )
+    private suspend fun expand(handler: UiInteractionHandler, ref: NodeRef = expandRef) =
+        handler.performVerifiedClick(
+            ref = ref, expectedPackage = pkg,
+            expectation = RuleAction.EXPAND_EARNINGS.verification, description = "expand earnings",
+        )
+
+    /**
+     * #1102 — the fielded ref: DoorDash's prism sheet was still sliding when the frame that
+     * reached the state machine was captured, so `expandButton` pinned the row 2 563 px below
+     * where it settles (`top` 4435 against a settled 1774–1890 on 1080×2400). Nothing overlaps
+     * that rect, so strategies 1–3 come back empty and only the label walk can find the row.
+     */
+    private val slidRef = expandRef.copy(boundsInScreen = BoundingBox(36, 4435, 1044, 4561))
 
     @Test
     fun `an id-less row is re-found by the bounds walk and clicked`() = runTest {
@@ -318,5 +327,103 @@ class UiInteractionHandlerTieTest {
         val active = windowRoot(stranger)
         assertFalse(expand(handler(listOf(active), active)))
         verify(stranger, never()).performAction(eq(AccessibilityNodeInfo.ACTION_CLICK))
+    }
+
+    // =========================================================================
+    // #1102 — strategy 4: bounds captured mid-slide, target re-found by labels
+    // =========================================================================
+
+    /** (a) The fielded shape: ref bounds 2 563 px stale, the live row carries the bind's labels. */
+    @Test
+    fun `a row whose pinned bounds slid away is re-found by its labels and clicked`() = runTest {
+        val row = payRow(top = 1872)
+        val active = windowRoot(row)
+        assertTrue(
+            "the settled row carries every label hint — the stale rect must not lose the tap",
+            expand(handler(listOf(active), active), slidRef),
+        )
+        verify(row, times(1)).performAction(eq(AccessibilityNodeInfo.ACTION_CLICK))
+    }
+
+    /**
+     * (b) Two rows in the same window carrying the SAME labels: the ref rect is stale by
+     * definition here, so it is not evidence of which one is the target. Abort to manual —
+     * letting the ranker's bounds tier pick would be geometry-as-identity again (#1093).
+     */
+    @Test
+    fun `two label-matching rows abort the label-resolved tap`() = runTest {
+        val first = payRow(top = 1500)
+        val second = payRow(top = 1872)
+        val active = windowRoot(first, second)
+        assertFalse(expand(handler(listOf(active), active), slidRef))
+        verify(first, never()).performAction(eq(AccessibilityNodeInfo.ACTION_CLICK))
+        verify(second, never()).performAction(eq(AccessibilityNodeInfo.ACTION_CLICK))
+    }
+
+    /** (c) A clickable row whose labels differ is not a candidate at all — fail closed, no click. */
+    @Test
+    fun `a row without the bind's labels is never label-resolved`() = runTest {
+        val stranger = view(
+            clickable = true, bounds = Rect(36, 1872, 1044, 1998),
+            children = listOf(
+                view(cls = "android.widget.TextView", bounds = Rect(72, 1912, 400, 1959), text = "Continue dashing"),
+            ),
+        )
+        val active = windowRoot(stranger)
+        assertFalse(expand(handler(listOf(active), active), slidRef))
+        verify(stranger, never()).performAction(eq(AccessibilityNodeInfo.ACTION_CLICK))
+    }
+
+    /**
+     * (d) Ordering: the label walk is the LAST resort. With a row at the pinned rect, the bounds
+     * walk resolves it — and the second, far-away row that carries the same labels (which the
+     * label walk WOULD have collected, aborting the tap as ambiguous) is never reached.
+     */
+    @Test
+    fun `the label walk does not run when the bounds walk already found a candidate`() = runTest {
+        val atPinnedRect = payRow(top = 1774)
+        val elsewhere = payRow(top = 600)
+        val active = windowRoot(atPinnedRect, elsewhere)
+        assertTrue(expand(handler(listOf(active), active)))
+        verify(atPinnedRect, times(1)).performAction(eq(AccessibilityNodeInfo.ACTION_CLICK))
+        verify(elsewhere, never()).performAction(eq(AccessibilityNodeInfo.ACTION_CLICK))
+    }
+
+    /**
+     * A label-resolved candidate is still LABEL-VERIFIED by the same predicate, and the
+     * nested-abort still applies to it: a clickable wrapper that inherits the row's labels is
+     * undecidable (#1093 round 3), whichever search found the pair.
+     */
+    @Test
+    fun `a label-resolved nested pair still aborts`() = runTest {
+        val inner = payRow(top = 1882)
+        val wrapper = view(clickable = true, bounds = Rect(36, 1872, 1044, 2010), children = listOf(inner))
+        val active = windowRoot(wrapper)
+        assertFalse(expand(handler(listOf(active), active), slidRef))
+        verify(wrapper, never()).performAction(eq(AccessibilityNodeInfo.ACTION_CLICK))
+        verify(inner, never()).performAction(eq(AccessibilityNodeInfo.ACTION_CLICK))
+    }
+
+    /**
+     * A zero-area ref rect fails the BOUNDS walk closed (#1093 guard 2: no geometry, no evidence).
+     * The label walk uses no geometry at all, so it still resolves — the identity bar is unchanged.
+     */
+    @Test
+    fun `a zero-area ref rect is still label-resolved`() = runTest {
+        val row = payRow(top = 1872)
+        val active = windowRoot(row)
+        val degenerate = expandRef.copy(boundsInScreen = BoundingBox(36, 1774, 36, 1774))
+        assertTrue(expand(handler(listOf(active), active), degenerate))
+        verify(row, times(1)).performAction(eq(AccessibilityNodeInfo.ACTION_CLICK))
+    }
+
+    /** A hint-less ref (a pre-#1093 snapshot) has nothing to search by — the walk never runs. */
+    @Test
+    fun `a ref with no label hints is not label-resolved`() = runTest {
+        val row = payRow(top = 1872)
+        val active = windowRoot(row)
+        val hintless = slidRef.copy(labelHintHashes = emptyList())
+        assertFalse(expand(handler(listOf(active), active), hintless))
+        verify(row, never()).performAction(eq(AccessibilityNodeInfo.ACTION_CLICK))
     }
 }

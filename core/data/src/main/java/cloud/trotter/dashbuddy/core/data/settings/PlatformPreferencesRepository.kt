@@ -55,7 +55,8 @@ class PlatformPreferencesRepository @Inject constructor(
      * settings-UI writer exists yet, so this materializes to an empty map today —
      * every platform resolves to its per-platform code default
      * ([GraceConfig.codeDefault]: [GraceConfig.DEFAULT] for most, Uber's wider
-     * `acceptGraceMs` per #762 D2). When a dev-settings editor lands it swaps
+     * `acceptGraceMs` per #762 D2, DoorDash's longer `expandSettleMs` per #1102).
+     * When a dev-settings editor lands it swaps
      * this for a DataStore-backed flow; the read seam is already in place.
      * CONSTRAINT: that swap MUST use `stateIn(scope, SharingStarted.Eagerly, …)`
      * like [enabledPackages] above — the consumer is a synchronous `.value` read
