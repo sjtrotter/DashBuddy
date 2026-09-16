@@ -1583,7 +1583,7 @@ class RuleCompilerTest {
             "id": "doordash.screen.x",
             "priority": 500,
             "intent": "x",
-            "require": { "hasIdSuffix": "host" },
+            "require": { "exists": { "hasIdSuffix": "host" } },
             "redact": [ { "find": { "hasIdSuffix": "note" }, "plainMask": $value } ]
         }]"""
         RuleCompiler.compileRules<UiNode>(
