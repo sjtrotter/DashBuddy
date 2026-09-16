@@ -135,8 +135,11 @@
       "required": ["require"],
       "properties": {
         "screenIs": {
-          "type": "string",
-          "description": "Only match when the active screen target equals this value."
+          "oneOf": [
+            { "type": "string" },
+            { "type": "array", "items": { "type": "string" }, "minItems": 1 }
+          ],
+          "description": "Only match when the platform's last admitted screen target is this value — or, given an array, one of these values (#1104). Omit to leave the branch unconstrained. An EMPTY array is a compile error: a constraint that matches no screen would silently disable the rule. Use the array form when a tap can legitimately be dispatched before the screen it belongs to is admitted (the DoorDash confirm-decline sheet: the tap lands 24-229 ms ahead of its own frame, so the classifier still holds the previous target) — and only when the clicked NODE is unambiguous on every target listed, since the screen constraint is doing less work."
         },
         "intent": {
           "type": "string",
@@ -212,8 +215,11 @@
           "default": true
         },
         "screenIs": {
-          "type": "string",
-          "description": "Only match when the active screen target equals this value."
+          "oneOf": [
+            { "type": "string" },
+            { "type": "array", "items": { "type": "string" }, "minItems": 1 }
+          ],
+          "description": "Only match when the platform's last admitted screen target is this value — or, given an array, one of these values (#1104). Omit to leave the branch unconstrained. An EMPTY array is a compile error: a constraint that matches no screen would silently disable the rule. Use the array form when a tap can legitimately be dispatched before the screen it belongs to is admitted (the DoorDash confirm-decline sheet: the tap lands 24-229 ms ahead of its own frame, so the classifier still holds the previous target) — and only when the clicked NODE is unambiguous on every target listed, since the screen constraint is doing less work."
         },
         "intent": {
           "type": "string",
@@ -387,12 +393,16 @@
 
     "notifRedactField": {
       "type": "object",
-      "description": "A per-field notification mask: whole-field ('keepPrefix') OR regex-capture ('match' + 'maskGroup').",
+      "description": "A per-field notification mask: whole-field ('keepPrefix' [+ 'plainMask']) OR regex-capture ('match' + 'maskGroup').",
       "properties": {
         "keepPrefix": {
           "type": "array",
           "description": "Whole-field mask: preserve a leading marker (e.g. 'Message from ') and mask the rest. Omit to mask the whole field.",
           "items": { "type": "string" }
+        },
+        "plainMask": {
+          "type": "boolean",
+          "description": "Optional (#987), the flat-string twin of the screen redact's #795 flag: mask to the plain '[redacted]' constant with NO '<4hex>' distinctness suffix (any 'keepPrefix' is still honored). Set it when the MASKED REMAINDER has a small plaintext space, so the 4 hex chars would be an inversion oracle rather than the 16 bits of an already-one-way hash they are over a customer name — e.g. the earnings-deposit push, a fixed clause whose only variable is the dasher's own banking amount. Mutually exclusive with 'match' (a compile error): it shapes the whole-field mask only."
         },
         "match": {
           "type": "string",

@@ -438,9 +438,13 @@
       }
     },
     {
+      "comment": "#1104 (fielded 2026-09-10 and again 09-12): the confirm tap RACES its own sheet. The click sub-pipeline and the window sub-pipeline are independent, and the dasher's tap on 'Decline offer' is dispatched 24-229 ms BEFORE the confirm sheet's frame is admitted — so the classifier still holds `offer_popup` as DoorDash's last screen target, the single-valued `screenIs` rejected the branch, the click fell to UNKNOWN, and the offer sat presented until it expired (the decline was never recorded as a decline). Widening the constraint to BOTH targets is safe because the NODE is unambiguous: this rule anchors on the exact label 'Decline offer' (#734), which only the confirm sheet's button renders — the offer card's own control is a bare 'Decline' claimed by `initial_decline` on its `secondary_action_button_dash_plus` id, so the two cannot collide on either target. The constraint stays a real gate: both accepted targets are enumerated, and the tap is still rejected on every other screen. This closes the FIELDED shape only; the general click-vs-window ordering race stays open on #1104.",
       "id": "doordash.click.decline_offer",
       "priority": 20,
-      "screenIs": "offer_popup_confirm_decline",
+      "screenIs": [
+        "offer_popup_confirm_decline",
+        "offer_popup"
+      ],
       "intent": "decline_offer",
       "state": {
         "modeHint": "online"

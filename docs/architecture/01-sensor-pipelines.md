@@ -34,7 +34,12 @@ compose with the hash mask: `plainMask` (#795) — a redact entry opts into a ha
 id-less digit-shape entries can catch a keypad echo — `dropoff_pin_entry`/`_handoff`/`_pre_arrival`/
 `_pre_arrival_completion`, #889 F1; a subpremise/unit number #986/#934; a length-bounded customer
 note #920), since 4 hex over a small space is
-brute-recoverable; compile-rejects `plainMask`+`normalize` together — and the rule-INDEPENDENT
+brute-recoverable; compile-rejects `plainMask`+`normalize` together; **#987 gives the flat-string
+notification path the same flag** (`NotifFieldMask.Whole.plainMask`, compile-rejected beside a
+capture `match`, which has no keepPrefix and its own fail-closed path) for the earnings-deposit
+push, whose masked remainder is a FIXED clause with the dasher's own banking amount as its only
+variable — 4 hex over a bounded money space is an inversion oracle, and a deposit is nobody's join
+key — and the rule-INDEPENDENT
 **short-token floor** (#889), which degrades any sub-4-char token's suffix to plain `[redacted]`
 (the floor bounds LENGTH where `plainMask` bounds alphabet). `normalize: customerName` entries are
 EXEMPT from the floor: their hex must stay equal to the first 4 hex of the `customerNameHash` the
@@ -52,7 +57,12 @@ id-less street shape; a derived parity test reads the rule list out of the sourc
 (`camera_capture`'s `bottom_instruction` is deliberately excluded: it masks a whole fused name+apt
 line, unbounded alphabet, so the hash form is correct there.) Coverage spans the recognized
 offer/pickup/dropoff/chat/nav/camera **screen** surfaces AND **notification** envelopes (#620 —
-chat title/body, order-ready customer name via a per-field notif `redact`; store names kept).
+chat title/body, order-ready customer name via a per-field notif `redact`; store names kept; #987
+adds the earnings-deposit push, whose `text`/`bigText`/`tickerText`/`title` all mask to
+`Your Dasher earnings for [redacted]` — the FIGURE is the dasher's own banking amount and the
+account clause is the #599 Crimson marker text, so both go, while the arrival itself stays a
+recognized lifecycle signal. The `crimson_balance` BALANCE push remains a priority-0 sensitive
+BLOCK; this rule only ever sees the deposit shape).
 Hard-won enumeration rules baked into the ruleset (receipts in #885/#886/#992–#995/#985): a
 recognized rule that forgets to redact has NO backstop (`ID_MARKERS` is UNKNOWN-only by design),
 which is why #992's `pickup_wait_survey` and its recurrence #1031 (`pickup_issue_menu`, whose four
@@ -79,7 +89,16 @@ guard test fails on any undocumented divergence in either direction; `"Return "`
 #998, which owns the return-task design question). **Recognize-only is NOT state-inert** — ruling a
 previously-UNKNOWN surface makes its frames reach the state machine and moves
 `FrameGate.lastIdentity`; what "no `state` block" buys is *lifecycle neutrality*, asserted
-end-to-end by `FlowlessRecognitionNeutralityTest`. Candidate text markers are vetted against the
+end-to-end by `FlowlessRecognitionNeutralityTest` (four surfaces now: `pickup_receipt_scan` #995,
+`timeline_task_detail` #985, `dropoff_workflow_sheet` #1058, and **#1107's
+`dropoff_step_instructions`** — DoorDash 8.97.8's "Drop off steps" WRAPPER activity, whose
+`description_text_view` shipped a customer gate code raw to UNKNOWN capture. The rule anchors on
+the activity's own `drop_off_step_instructions_activity_host_fragment` id plus the nav title, sits
+at priority 144 BEHIND every other rule in the section so it can never pre-empt a lifecycle
+classification, and plain-masks the instruction body whole — customer-AUTHORED text, the #803/#920
+class, unbounded alphabet but bounded length. Residual, the combined-frame class inverted: a future
+rule that OUTRANKS it on a `description_text_view`-bearing frame would need the entry itself, and
+only the UNKNOWN path is structurally covered). Candidate text markers are vetted against the
 corpus before joining the runtime set — chrome-ambiguous prefixes ("Return ", "Focus on ",
 "Heading to ") are REJECTED because `CaptureBackstopCorpusTest` goes red on a clean corpus,
 reasoning recorded in the `CustomerTextMarkers` KDoc; the rule redact is the primary control (#806). Intake-side prefix lists (`SnapshotRedactor.NAME_PREFIXES`,
@@ -139,7 +158,10 @@ drives the same `redactFor` lookup, applied to recognized AND UNKNOWN clicks, en
 dedup `contentHash` stays on the original node), fail-OPEN; (2) `CustomerTextMarkers.ID_MARKERS` —
 an enumerated, cross-platform-DATA list of view-id suffixes whose node VALUE is customer PII
 (`customer_name`/`user_name`/`address_line_1`/`address_line_2`, + `arriving_at_title` #993 and
-#1058's `address_subpremise_line`/`dasher_instruction_content_{collapsed,expanded}`), `hasIdSuffix` semantics, scrubbed
+#1058's `address_subpremise_line`/`dasher_instruction_content_{collapsed,expanded}`, and #1107's
+`description_text_view` — the 8.97.8 "Drop off steps" wrapper's instruction body, a GENERIC id that
+carries app chrome on other surfaces, so listing it is a deliberate UNKNOWN-path over-scrub),
+`hasIdSuffix` semantics, scrubbed
 on the **UNKNOWN screen + click envelopes only** (a recognized frame keeps its rule's deliberate
 decisions — #886 leaves `pickup_navigation`'s MERCHANT address raw — so an id scan there would
 fight the ruleset; scrubbing the dasher's own `user_name` greeting on an UNKNOWN frame is the

@@ -118,7 +118,19 @@ data class CompiledBranch<TInput>(
     val intent: String? = null,
     val flow: Flow? = null,
     val modeHint: Mode? = null,
-    val screenIs: String? = null,
+    /**
+     * Click-rule screen constraint: the branch matches only when the platform's last admitted
+     * screen target is IN this set. `null` is unconstrained; the compiler rejects an empty array,
+     * so a non-null value always names at least one target.
+     *
+     * A SET, not a single value, since #1104: the confirm-decline tap is dispatched 24–229 ms
+     * BEFORE the confirm sheet's own frame is admitted, so the classifier still holds the
+     * PREVIOUS screen (`offer_popup`) as the platform's target and a single-valued constraint
+     * dropped the fielded decline to UNKNOWN — the offer then expired. Widening is the rule
+     * author's call, declared per rule, and it stays a genuine gate: every target the branch
+     * accepts is enumerated, so the constraint is never "any screen" by accident.
+     */
+    val screenIs: Set<String>? = null,
     val transitionOverrides: Map<String, List<CompiledEffect>> = emptyMap(),
 )
 
@@ -150,8 +162,20 @@ data class CompiledRule<TInput>(
  * on [RawNotificationData]) rather than a node predicate.
  */
 sealed interface NotifFieldMask {
-    /** Mask the whole field value, preserving an optional leading [keepPrefix]. */
-    data class Whole(val keepPrefix: List<String> = emptyList()) : NotifFieldMask
+    /**
+     * Mask the whole field value, preserving an optional leading [keepPrefix].
+     *
+     * [plainMask] is the flat-string twin of [CompiledRedactEntry.plainMask] (#795), added for
+     * #987: the earnings-deposit push is a FIXED clause whose only variable is the dasher's own
+     * banking amount, so the `<4hex>` distinctness suffix would be an inversion oracle over that
+     * amount (a few candidates per bucket), not the 16 bits of an already-one-way customer hash
+     * the suffix was designed for. When set, the masked portion is the plain
+     * [CompiledRedact.REDACTED] constant (the keepPrefix is still honored) and no hash is taken.
+     */
+    data class Whole(
+        val keepPrefix: List<String> = emptyList(),
+        val plainMask: Boolean = false,
+    ) : NotifFieldMask
 
     /**
      * Mask only the [group] capture of [regex] within the field, keeping the
@@ -191,7 +215,8 @@ data class CompiledNotifRedact(
         return try {
             when (val m = fields[field]) {
                 null -> value
-                is NotifFieldMask.Whole -> CompiledRedact.mask(value, m.keepPrefix)
+                is NotifFieldMask.Whole ->
+                    CompiledRedact.mask(value, m.keepPrefix, plainMask = m.plainMask)
                 is NotifFieldMask.RegexGroup -> maskGroup(value, m.regex, m.group)
             }
         } catch (e: RegexEvaluationFailed) {

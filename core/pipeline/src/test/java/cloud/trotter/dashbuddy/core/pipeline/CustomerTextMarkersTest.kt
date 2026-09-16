@@ -317,6 +317,42 @@ class CustomerTextMarkersTest {
     }
 
     @Test
+    fun `the id scan owns the 8-97-8 drop-off-steps instruction body (#1107)`() {
+        // FIELDED 2026-09-13: DoorDash's "Drop off steps" wrapper renders the customer's own
+        // free-text instruction — a gate code, on the frames that fielded — in a
+        // `description_text_view` node with NO lead-in and no name shape, so neither text scan
+        // can reach it. `doordash.screen.dropoff_step_instructions` is the primary control; this
+        // is the rules-independent half, which is what covers an UNKNOWN render of the surface.
+        val tree = UiNode(
+            children = listOf(
+                dd("title_text_view", "Leave it at the door"),
+                dd("description_text_view", "Gate code is #1234, second building on the left"),
+                dd("textView_navBar_title", "Drop off steps"),
+            ),
+        )
+        assertEquals("description_text_view", CustomerTextMarkers.firstUnredactedIdMarker(tree))
+
+        val scrubbed = CustomerTextMarkers.scrubUnknown(tree)
+        assertEquals("DoorDash's handoff vocabulary is chrome", "Leave it at the door", scrubbed.children[0].text)
+        assertEquals("the instruction body goes whole", "[redacted]", scrubbed.children[1].text)
+        assertEquals("the nav title is chrome", "Drop off steps", scrubbed.children[2].text)
+        assertNull(CustomerTextMarkers.firstUnredactedIdMarker(scrubbed))
+    }
+
+    @Test
+    fun `the id scan over-scrubs a chrome description_text_view - the accepted UNKNOWN-only cost (#1107)`() {
+        // `description_text_view` is GENERIC DoorDash id vocabulary: it carries app copy on the
+        // Dasher Rewards board and the GoPuff pickup-steps blurb. On an UNKNOWN frame the scan
+        // cannot tell those from a customer instruction, so it masks them too — losing triage
+        // text, leaking nothing. Pinned so it is a DECISION rather than a surprise; the
+        // RECOGNIZED path is untouched, so no rule's keep-raw decision is affected.
+        assertEquals(
+            "description_text_view",
+            CustomerTextMarkers.unredactedIdMarker(dd("description_text_view", "Raise to 50%")),
+        )
+    }
+
+    @Test
     fun `a clean tree yields no id marker`() {
         val tree = UiNode(
             children = listOf(dd("merchant_name", "Pei Wei"), UiNode(text = "Continue")),

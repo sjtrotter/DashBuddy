@@ -113,6 +113,48 @@ class ClickClassifierTest {
         assertEquals("decline_offer", result.intent())
     }
 
+    /**
+     * #1104 — the FIELDED shape, from 2026-09-10 10:07:18.192 (and again 09-12): the dasher taps
+     * the confirm sheet's button, but the tap is classified 24-229 ms BEFORE the sheet's own frame
+     * is admitted, so the platform's cached screen target is still `offer_popup` and the
+     * single-valued `screenIs` dropped the click to UNKNOWN — the offer then expired with no
+     * decline recorded. The clicked node is an id-LESS Button whose only text lives on a
+     * `textView_prism_button_title` child ("Decline offer"), which is why the widening is safe:
+     * the offer card's own control is a bare "Decline" on an id-bearing button claimed by
+     * `initial_decline`.
+     */
+    private fun fieldedConfirmDeclineButton() = UiNode(
+        className = "android.widget.Button",
+        isClickable = true,
+        children = listOf(
+            UiNode(
+                viewIdResourceName = "com.doordash.driverapp:id/textView_prism_button_title",
+                className = "android.widget.TextView",
+                text = "Decline offer",
+            ),
+        ),
+    )
+
+    @Test
+    fun `the confirm tap classifies while the screen context still says offer_popup (#1104)`() {
+        val result = classifyClick(fieldedConfirmDeclineButton(), "offer_popup")
+        assertEquals("decline_offer", result.intent())
+    }
+
+    @Test
+    fun `the same confirm tap still classifies once the sheet IS admitted (#1104)`() {
+        val result = classifyClick(fieldedConfirmDeclineButton(), "offer_popup_confirm_decline")
+        assertEquals("decline_offer", result.intent())
+    }
+
+    @Test
+    fun `the confirm tap stays Unknown on a screen the rule does not name (#1104)`() {
+        // The widening is per-target and enumerated — it is not "any screen". A "Decline offer"
+        // label tapped while the board is idle must never be read as a committed decline.
+        val result = classifyClick(fieldedConfirmDeclineButton(), "waiting_for_offer")
+        assertEquals("unknown", result.intent())
+    }
+
     // =========================================================================
     // ArrivedAtStore
     // =========================================================================

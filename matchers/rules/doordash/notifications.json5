@@ -240,6 +240,7 @@
       ]
     },
     {
+      "comment": "#987 (dev ruling 2026-09-09, the open half of #599): the deposit push is RECOGNIZED — the arrival is a real, useful lifecycle signal and its intent carries no money — but every text field it arrives with is pledge-blocked content. The fielded body is one fixed clause, 'Your Dasher earnings for $NN.NN have been deposited to your DoorDash Crimson account.', repeated verbatim across `text`, `bigText` and `tickerText` (the fielded `title` is the bare chrome word 'Dasher'), and it carries BOTH halves of the block: the FIGURE is the dasher's own banking amount, and the account clause is the #599 Crimson/DasherDirect marker text. So the whole body is masked with a keepPrefix of DoorDash's own lead-in, leaving 'Your Dasher earnings for [redacted]' — enough to replay/triage the envelope, nothing of the deposit itself.\n`plainMask` is load-bearing here and NOT decoration: the masked remainder is a FIXED clause whose only variable is the amount, so a <4hex> distinctness suffix would be an inversion oracle over a bounded money space (the #795/#889 argument, applied to a flat notification field), and distinctness buys nothing anyway — a deposit is nobody's join key. ALL FOUR text fields are declared, `title` included, even though the fielded title carries no figure: a per-field mask is inert on a field that is absent or already benign, and the cost of declaring it (the word 'Dasher' lost on a debug envelope, the same accepted collateral #1039 documents for the 'Apt/Suite' label) is nothing against DoorDash re-rendering the amount into the headline — the enumeration debt #986 already paid for once. `subText` is not declared: it has never arrived on this channel, and unlike the four above it is the one field with no fielded shape to reason about. The `crimson_balance` BALANCE push stays a separate, higher-priority sensitive BLOCK (priority 0): this rule only ever sees the deposit shape.",
       "id": "doordash.notification.earnings_deposit",
       "priority": 26,
       "intent": "earnings_deposit",
@@ -252,6 +253,32 @@
             "anyFieldContains": "have been deposited"
           }
         ]
+      },
+      "redact": {
+        "text": {
+          "keepPrefix": [
+            "Your Dasher earnings for "
+          ],
+          "plainMask": true
+        },
+        "bigText": {
+          "keepPrefix": [
+            "Your Dasher earnings for "
+          ],
+          "plainMask": true
+        },
+        "tickerText": {
+          "keepPrefix": [
+            "Your Dasher earnings for "
+          ],
+          "plainMask": true
+        },
+        "title": {
+          "keepPrefix": [
+            "Your Dasher earnings for "
+          ],
+          "plainMask": true
+        }
       },
       "effects": [
         {

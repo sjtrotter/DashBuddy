@@ -2898,6 +2898,72 @@
           }
         ]
       }
+    },
+    {
+      "comment": "#1107 — DoorDash 8.97.8's 'Drop off steps' WRAPPER activity, fielded 2026-09-13 (three envelopes, 11:57:01/02/15) and again 2026-09-14 in its signature variant. The step list lives in its own host fragment (`drop_off_step_instructions_activity_host_fragment`) under the nav title 'Drop off steps', and the step card renders the customer's free-text delivery instruction in `description_text_view` beside DoorDash's own `title_text_view` handoff vocabulary ('Leave it at the door'). Nothing recognized the surface, so the instruction — which on the fielded frames carried a gate code — persisted verbatim to UNKNOWN capture. Per #806 the primary control for a leaking surface is a RECOGNIZING rule with a `redact`, which is all this rule is; the rules-independent half is `CustomerTextMarkers.ID_MARKERS`, which now carries the id so a future page reusing it is covered on the UNKNOWN path too.\nRECOGNIZE-ONLY, deliberately: no `state` block, so it contributes no flow and no modeHint. That is NOT state-inert (#995) — a previously-UNKNOWN frame now reaches the state machine and moves `FrameGate.lastIdentity`; what it buys is lifecycle NEUTRALITY, asserted end-to-end by `FlowlessRecognitionNeutralityTest`. Whether the steps wrapper SHOULD carry `task:dropoff:arrived` (it hosts the photo/signature/handoff steps `dropoff_photo` and `dropoff_handoff` already own on the `drop_off_workflow_host_fragment` surface) is a separate design question a privacy fix must not answer by accident.\nAnchors: the activity's own host-fragment id — a view-id anchor is locale-immune (#938/#924/#1059), and it is the primary — paired with the nav title matched ON its `textView_navBar_title` node (English, the #938 boundary applies as it does to every text anchor in this file). Priority 144 sits BEHIND every other rule in this section (max 143, `dropoff_workflow_sheet`), so it can only claim a frame nothing else recognized — the same posture as that rule, and for the same reason: recognizing a surface for a redact must never pre-empt a lifecycle-bearing classification. RESIDUAL (the #993 combined-frame class inverted): if some future rule outranks this one on a frame carrying `description_text_view`, that rule's own redact would have to declare the id; nothing structurally forces it today, and the ID_MARKERS entry covers only the UNKNOWN path.",
+      "id": "doordash.screen.dropoff_step_instructions",
+      "priority": 144,
+      "redact": [
+        {
+          "comment": "#993 belt (the FIX 3 precedent): this dropoff-phase surface can win a frame that STILL carries DoorDash's nav arrival banner — `dropoff_navigation`'s own reject (Continue / Complete Delivery / Mark as delivered / complete_delivery_steps_button) hands the arrival-MOMENT frame to whichever arrived-phase rule matches, and nav_arriving rejects bottom-sheet frames, so neither of the two rules that already masked `arriving_at_title` covers it. The node is id-BEARING, so the id-less name/address entries elsewhere in this block structurally cannot reach it (`hasNoId` conjunct). Whole token, no normalize — it is a customer ADDRESS on every dropoff-phase surface (see dropoff_navigation for the full reasoning). Inert on any frame without the node; `DropoffBannerRedactParityTest` pins that EVERY rule in this file carries it, so a new dropoff surface cannot forget.",
+          "find": {
+            "hasIdSuffix": "arriving_at_title"
+          }
+        },
+        {
+          "comment": "#1039 belt (the #993 combined-frame precedent): the FUSED subpremise line — `Apt/Suite <n>` or `Apt/Suite: <n>` in ONE id-less node, the render the committed `dropoff_pre_arrival` fixtures carry. Declared on EVERY rule in this file (plus `navigation_generic`) rather than only on the surfaces that fielded it, because a redact protects only the frames its OWN rule wins. Entry is `dropoff_photo`'s #986 entry verbatim — see it for the full reasoning: the token after the label strip is a bounded ~10^4 unit number, so a 4-hex distinctness suffix is brute-recoverable (`plainMask`), while the label itself is app vocabulary and is kept for replay context. Inert on any frame without the line; the #1039 parity test in `CaptureRedactionCorpusTest` pins that every rule declares it, so a new dropoff surface cannot forget.",
+          "find": {
+            "hasTextStartsWith": "Apt/Suite"
+          },
+          "keepPrefix": [
+            "Apt/Suite: ",
+            "Apt/Suite "
+          ],
+          "plainMask": true
+        },
+        {
+          "comment": "#1039 belt: the LABEL-anchored half of the subpremise mask — an `Apt/Suite` label node followed by its value, whatever spelling that value carries (`Unit 4202` shipped raw 2026-08-14). Both label spellings are enumerated because `hasPrecedingSiblingText` is an exact, un-trimmed equality; whole-node `plainMask` because a unit number is a bounded ~10^4 alphabet. Ordered ahead of every generic shape entry in this block: `maskNode` is first-match-wins. See `dropoff_handoff` for the full reasoning. Inert without the label; pinned by the #1039 parity test.",
+          "find": {
+            "any": [
+              {
+                "hasPrecedingSiblingText": "Apt/Suite"
+              },
+              {
+                "hasPrecedingSiblingText": "Apt/Suite:"
+              }
+            ]
+          },
+          "plainMask": true
+        },
+        {
+          "comment": "#1107, THE FIELDED LEAK: the step card's `description_text_view` is the customer's own free-text delivery instruction — the fielded 09-13 frames rendered a gate code and cross-street directions in it. The #803/#920 class ('Customer Notes' precedent): customer-AUTHORED text that can carry a gate code, a unit, a floor, a name or a phone number, with no internal structure to anchor a partial mask on, so the WHOLE node goes. `plainMask` follows #920/#985/#1058: a note's ALPHABET is unbounded but its LENGTH is not, so a short note that IS the secret ('Gate code 4412') clears the #889 length floor while its plaintext space stays far below the suffix's 65 536 buckets — and unlike a customer name a note is nobody's join key, so the distinctness buys nothing to trade against that. DoorDash's own handoff vocabulary beside it (`title_text_view` = 'Leave it at the door', `step_title`, `step_description`) is app text, not customer text, and is deliberately kept raw so a replayed envelope still recognizes. ACCEPTED COLLATERAL: `description_text_view` is a GENERIC DoorDash id that carries chrome on other surfaces (dasher_rewards, pickup_steps) — on THIS rule's frames it is the instruction body, and masking it whole is fail-toward-privacy either way.",
+          "find": {
+            "hasIdSuffix": "description_text_view"
+          },
+          "plainMask": true
+        }
+      ],
+      "require": {
+        "all": [
+          {
+            "exists": {
+              "hasIdSuffix": "drop_off_step_instructions_activity_host_fragment"
+            }
+          },
+          {
+            "exists": {
+              "all": [
+                {
+                  "hasIdSuffix": "textView_navBar_title"
+                },
+                {
+                  "hasText": "Drop off steps"
+                }
+              ]
+            }
+          }
+        ]
+      }
     }
   ],
   "clicks": [

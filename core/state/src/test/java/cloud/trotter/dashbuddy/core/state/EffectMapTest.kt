@@ -1920,6 +1920,54 @@ class EffectMapTest {
         )
     }
 
+    // =========================================================================
+    // #1097 — one CONFIRM_DECLINE per decline: the emission is EDGE-gated
+    // =========================================================================
+
+    /** The confirm rule's own id — R0 provenance is what the #1097 gate reads. */
+    private val confirmRuleId = "doordash.screen.offer_popup_confirm_decline"
+
+    /** [offerPresentedState] with R0 sourced from [ruleId] (what the stepper writes). */
+    private fun offerPresentedStateFrom(ruleId: String?): AppState {
+        val base = offerPresentedState()
+        return base.copy(
+            regions = base.regions.copy(flow = base.regions.flow.copy(sourceRuleId = ruleId)),
+        )
+    }
+
+    /** Fold ONE confirm frame and count the deferred SETTLE_UI arms it schedules. */
+    private fun confirmDeclineArms(prev: AppState): Int =
+        effectMap.diff(prev, offerPresentedState(), confirmDeclineObs())
+            .filterIsInstance<AppEffect.ScheduleTimeout>()
+            .count { it.payload is ObservationPayload.DeferredAction }
+
+    @Test
+    fun `a re-admitted confirm sheet schedules NO second CONFIRM_DECLINE (#1097)`() {
+        // The sheet is admitted twice per decline (it inflates, then re-renders after the tap),
+        // and the un-gated diff armed a SETTLE_UI for each — two CONFIRM_DECLINE intents for one
+        // decline, the second aimed at a sheet the dasher had already dismissed. Frame 1 is the
+        // ENTRY (R0 came from some other screen); frame 2 arrives with R0 already sourced from
+        // this rule, which is exactly the state the stepper leaves after frame 1.
+        val entry = confirmDeclineArms(offerPresentedStateFrom("doordash.screen.offer_popup"))
+        assertEquals("the entry frame arms once", 1, entry)
+        val readmission = confirmDeclineArms(offerPresentedStateFrom(confirmRuleId))
+        assertEquals("the re-admission arms nothing", 0, readmission)
+    }
+
+    @Test
+    fun `a confirm sheet after a DIFFERENT screen arms again (#1097)`() {
+        // The gate is an edge, not a latch: going back to the offer card and re-opening the sheet
+        // is a NEW decision and must re-arm. A flow-LESS observation in between (the tap itself)
+        // does not move `sourceRuleId`, which is why the re-admission above stays suppressed.
+        assertEquals(1, confirmDeclineArms(offerPresentedStateFrom("doordash.screen.offer_popup")))
+        assertEquals(1, confirmDeclineArms(offerPresentedStateFrom("uber.screen.offer")))
+        assertEquals(
+            "no prior provenance at all is still an entry",
+            1,
+            confirmDeclineArms(offerPresentedStateFrom(null)),
+        )
+    }
+
     @Test
     fun `SETTLE_UI routes a deferred CONFIRM_DECLINE to an AUTOMATION PerformRuleAction (#577)`() {
         val timeoutObs = Observation.Timeout(

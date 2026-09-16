@@ -106,7 +106,7 @@ class EffectMap @Inject constructor(
     fun diff(prev: AppState, next: AppState, obs: Observation): List<AppEffect> = buildList {
         addAll(diffRuleEffects(obs))
         addAll(diffExpandAction(obs))
-        addAll(diffConfirmDeclineAction(obs, next))
+        addAll(diffConfirmDeclineAction(obs, prev, next))
         addAll(diffSettleUiTimeout(obs))
         // #438 B3: a HUD accept/decline resolves by the tap's OWN carried (platform, offerHash)
         // against that platform's owned offers — no global-flow precondition (vet M4).
@@ -327,11 +327,39 @@ class EffectMap @Inject constructor(
      * offer context match. The fire is label-verified ("decline") + package-scoped; a missing/garbage
      * target fails closed (the dasher confirms manually). The bind exists only on the
      * confirm-decline rule, so `targets[...]` is the screen gate; `pendingOffer` confirms a live offer.
+     *
+     * #1097 — EDGE-gated, not per-frame. The sheet is admitted TWICE per decline (once when it
+     * inflates, once after the tap lands: the two frames differ enough to clear `FrameGate`'s
+     * identity dedup but are the same screen), so the un-gated diff scheduled two SETTLE_UI
+     * timers and fired two CONFIRM_DECLINE intents for one decline — the second onto a sheet the
+     * dasher had already dismissed. The gate is the R0 provenance the stepper already keeps:
+     * emit only on the ENTRY into this screen, i.e. when the previous state's `FlowRegion` was
+     * not already sourced from THIS rule. `sourceRuleId` is written by [FlowRegionStepper] from
+     * the observation's own rule id and only moves on a flow-BEARING frame, so the click between
+     * the two admissions (flow-less) cannot re-open the gate, while any real screen change
+     * in between does — a second sheet after the dasher went back to the offer card re-arms
+     * normally. No new state, nothing platform-specific: the rule id IS the screen identity.
+     *
+     * [diffExpandAction] deliberately keeps no such gate — it has a natural one. Its emission is
+     * conditioned on the receipt's own parsed `isExpanded == false`, so the post-tap frame closes
+     * it by construction; the confirm sheet looks identical before and after its tap, which is
+     * exactly why it needed an explicit edge.
      */
-    private fun diffConfirmDeclineAction(obs: Observation, next: AppState): List<AppEffect> {
+    private fun diffConfirmDeclineAction(
+        obs: Observation,
+        prev: AppState,
+        next: AppState,
+    ): List<AppEffect> {
         val flowObs = obs as? Observation.Screen ?: return emptyList()
         val action = RuleAction.CONFIRM_DECLINE
         val target = flowObs.targets[action.targetBindName] ?: return emptyList()
+        // #1097: the ENTRY edge only — a re-admission of the same screen is not a new decision.
+        // `ruleId` is nullable on the observation, so the comparison is made only for a frame that
+        // HAS provenance; a null id can never equal a null `sourceRuleId` into a false suppress
+        // (unreachable today — a rule-less frame carries no bind targets and returned above — but
+        // "both unknown" must never read as "same screen").
+        val ruleId = flowObs.ruleId
+        if (ruleId != null && prev.regions.flow.sourceRuleId == ruleId) return emptyList()
         // #438 B3 (vet M3): a live offer is now the OBSERVING platform's own presented offer, not the
         // shared global R0 slot — re-keyed off `pendingOffers`, or auto-confirm silently dies.
         val hasLiveOffer = next.regions.platforms[flowObs.platform]?.presentedOffer() != null

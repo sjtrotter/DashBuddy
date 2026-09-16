@@ -17,6 +17,20 @@ enumeration, every capability lands *undecided* until the user opts in via the c
 Handlers: `OdometerEffectHandler`, `ScreenShotHandler`, `TipEffectHandler`, `TtsEffectHandler`,
 `UiInteractionHandler` (package-scoped, label-verified `RuleAction` taps — the only path that ever
 clicks a third-party app, #425), `OfferActionReceiver` (notification Accept/Decline actions).
+
+**An app-owned deferred tap is armed on the screen's ENTRY edge, not per admitted frame (#1097).**
+`EffectMap.diffConfirmDeclineAction` arms a `SETTLE_UI` timer carrying the `CONFIRM_DECLINE`
+`DeferredAction` whenever the confirm sheet is admitted with a bound target and a live presented
+offer — and DoorDash's sheet is admitted TWICE per decline (it inflates, then re-renders after the
+tap; the two frames differ enough to clear `FrameGate`'s identity dedup but are the same screen), so
+one decline fired two intents, the second aimed at a sheet the dasher had already dismissed. The gate
+is the R0 provenance the stepper already keeps: emit only when the PREVIOUS state's
+`FlowRegion.sourceRuleId` is not already this rule. No new state, no platform literal — the rule id
+IS the screen identity — and because `sourceRuleId` only moves on a flow-BEARING frame, the
+(flow-less) tap between the two admissions cannot re-open the gate while a real screen change does.
+`diffExpandAction` deliberately keeps NO such gate: its emission is conditioned on the receipt's own
+parsed `isExpanded == false`, so the post-tap frame closes it by construction — the confirm sheet
+looks identical before and after its tap, which is exactly why it needed an explicit edge.
 **Every odometer fix is gated (#1057/#918).** `OdometerRepository` used to add ANY inter-fix
 displacement over 5 m straight into the persisted cumulative total, so one spurious fused fix ~1,457 km
 away added **905.37 mi in 18.4 min** (2026-09-03) — freezing `netProfit −302.73` on a $22.95 delivery
