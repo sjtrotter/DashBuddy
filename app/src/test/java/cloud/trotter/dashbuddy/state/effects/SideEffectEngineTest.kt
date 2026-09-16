@@ -270,7 +270,7 @@ class SideEffectEngineTest {
     fun `PerformRuleAction is throttled per action and platform`() = runTest {
         val engine = buildEngine(StandardTestDispatcher(testScheduler))
         // #1102: the throttle window starts on a tap that LANDED — stub the handler to land it.
-        wheneverBlocking { uiInteractionHandler.performVerifiedClick(any(), any(), any(), any(), any()) }
+        whenever(uiInteractionHandler.performVerifiedClick(any(), any(), any(), any(), any()))
             .thenReturn(true)
 
         engine.process(acceptActionEffect())
@@ -289,7 +289,7 @@ class SideEffectEngineTest {
         // mid-slide and finds nothing; the settled frame is admitted ~600 ms later and re-arms a
         // fresh tap. Before #1102 that retry was throttled as "within 1000ms of the last fire".
         val engine = buildEngine(StandardTestDispatcher(testScheduler))
-        wheneverBlocking { uiInteractionHandler.performVerifiedClick(any(), any(), any(), any(), any()) }
+        whenever(uiInteractionHandler.performVerifiedClick(any(), any(), any(), any(), any()))
             .thenReturn(false, true)
 
         engine.process(acceptActionEffect())
@@ -306,7 +306,7 @@ class SideEffectEngineTest {
         // back, a queued duplicate would immediately begin another retry that could land on a
         // REPLACEMENT offer's button. The rollback is AUTOMATION-only.
         val engine = buildEngine(StandardTestDispatcher(testScheduler))
-        wheneverBlocking { uiInteractionHandler.performVerifiedClick(any(), any(), any(), any(), any()) }
+        whenever(uiInteractionHandler.performVerifiedClick(any(), any(), any(), any(), any()))
             .thenReturn(false)
 
         engine.process(acceptActionEffect().copy(trigger = ActionTrigger.USER))
@@ -320,7 +320,7 @@ class SideEffectEngineTest {
     @Test
     fun `a tap that LANDED still throttles the next one (#1102 widens nothing)`() = runTest {
         val engine = buildEngine(StandardTestDispatcher(testScheduler))
-        wheneverBlocking { uiInteractionHandler.performVerifiedClick(any(), any(), any(), any(), any()) }
+        whenever(uiInteractionHandler.performVerifiedClick(any(), any(), any(), any(), any()))
             .thenReturn(true)
 
         engine.process(acceptActionEffect())
