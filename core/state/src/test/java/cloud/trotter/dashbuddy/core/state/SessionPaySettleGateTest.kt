@@ -507,7 +507,8 @@ class SessionPaySettleGateTest {
     fun `the PostTask pay accumulation supersedes a park older than itself`() {
         // #1029 S3(a): the accumulation writes runningEarnings directly. A park made before it
         // describes staler evidence and must not expire over the top of it afterwards.
-        val start = region(runningEarnings = 16.70, accumulatedDeliveryPay = 16.70)
+        // #1103: the receipt's total is admitted only for a job this session owns — give it one.
+        val start = region(runningEarnings = 16.70, accumulatedDeliveryPay = 16.70, activeJob = liveJob)
         val parked = feed(start, t0 to 17.00)
         assertPark(parked, 17.00, t0, t0 + settle)
 

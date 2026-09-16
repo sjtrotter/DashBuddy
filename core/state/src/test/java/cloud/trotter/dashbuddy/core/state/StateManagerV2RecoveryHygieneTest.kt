@@ -12,6 +12,7 @@ import cloud.trotter.dashbuddy.domain.pipeline.TimeoutType
 import cloud.trotter.dashbuddy.domain.settings.GraceConfig
 import cloud.trotter.dashbuddy.domain.state.AppState
 import cloud.trotter.dashbuddy.domain.state.Flow
+import cloud.trotter.dashbuddy.domain.state.Job
 import cloud.trotter.dashbuddy.domain.state.FlowRegion
 import cloud.trotter.dashbuddy.domain.state.Mode
 import cloud.trotter.dashbuddy.domain.state.ParsedFields
@@ -103,9 +104,14 @@ class StateManagerV2RecoveryHygieneTest {
      * dropped by the stepper's own ownership rule on the first replayed observation, which would
      * make the tail cases prove nothing about the hygiene's placement.
      */
+    private val openJob = Job(jobId = "job-1", offerStoreHint = emptyList(), parentOfferHash = null, startedAt = 200L)
+
     private fun parkedState(
         cv: Long,
         pending: PendingSessionPay? = PendingSessionPay(470.00, t0, t0 + settle, Flow.Idle),
+        // #1103: a receipt's total accumulates only for a job this session owns; the receipt
+        // fixtures pass a live job so the replay exercises the fold, not the ownership refusal.
+        activeJob: Job? = null,
     ) = AppState(
         regions = Regions(
             flow = FlowRegion(
@@ -119,6 +125,7 @@ class StateManagerV2RecoveryHygieneTest {
                     platform = Platform.DoorDash,
                     mode = Mode.Online,
                     session = Session("s1", startedAt = 100L, runningEarnings = 16.70),
+                    activeJob = activeJob,
                     lastActedFlow = Flow.Idle,
                     lastObservedAt = t0,
                     pendingSessionPay = pending,
@@ -392,7 +399,7 @@ class StateManagerV2RecoveryHygieneTest {
                 tailRow(cv = 9L, timestamp = t0 + 2_000L),
             ),
         )
-        val snapshotDao = FakeSnapshotDao(snapshotOf(parkedState(cv = 5L, pending = null)))
+        val snapshotDao = FakeSnapshotDao(snapshotOf(parkedState(cv = 5L, pending = null, activeJob = openJob)))
 
         val first = newManagerOn(journalDao, snapshotDao, dispatcher)
         first.initialize()
