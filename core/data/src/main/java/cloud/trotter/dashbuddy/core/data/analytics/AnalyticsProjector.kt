@@ -194,6 +194,10 @@ class AnalyticsProjector @Inject constructor(
             val outcome = RecordFolds.foldEvent(ev, ctxIn, currentCpm)
 
             if (outcome.skip != null) skips++
+            // #1108: a fold decision that leaves no other trace (a row folding NULL minutes because
+            // its completedAt predates the session's partition anchor). PII-safe by construction —
+            // the fold composes it from ids only — and read by nothing but this line.
+            outcome.note?.let { Timber.tag(TAG).d("fold: %s (seq %d)", it, ev.sequenceId) }
             outcome.delivery?.let { deliveries += it }
             outcome.offer?.let { offers += it }
             outcome.pickup?.let { pickups += it }
@@ -796,7 +800,9 @@ class AnalyticsProjector @Inject constructor(
             deliveredJobIds = analyticsDao.deliveredJobIdsInSession(sessionId).toSet(),
             receiptedJobIds = analyticsDao.receiptedJobIdsInSession(sessionId).toSet(),
             prevDropOdometer = lastDelivery?.odometerAtCompletion,
-            prevDropAt = lastDelivery?.completedAt,
+            // #1108: the MAX, not the last-folded row's — the anchor is monotonic and the fold order
+            // is not completion order. See `AnalyticsDao.maxCompletedAtInSession`.
+            prevDropAt = analyticsDao.maxCompletedAtInSession(sessionId),
             lastEvaluatedCostPerMile = analyticsDao.lastOfferCostPerMileInSession(sessionId),
             lastEvaluatedFuelPerMile = analyticsDao.lastOfferFuelPerMileInSession(sessionId),
             lastEvaluatedNonFuelPerMile = analyticsDao.lastOfferNonFuelPerMileInSession(sessionId),
@@ -1092,7 +1098,25 @@ class AnalyticsProjector @Inject constructor(
          * (`reportedEarnings` is attribution metadata, never an input to `netProfit`/`frozenCostPerMile`),
          * and a summary-screen row folds byte-identically. Precedented side effect (as v2 onward): the
          * refold re-stamps `CURRENT_FALLBACK` rows against today's economy.
+         * v12 (#1108): two FOLD-RULE changes in `DeliveryFolds.foldDeliveryCompleted`, both of which
+         * can only heal history by refolding it (the events are correct; the arithmetic over them was
+         * not). (1) The TIME partition keeps its meaning — Σ over a dash's drops is the dasher's
+         * working time, which the Time tab is built on — but its anchor is now MONOTONIC and a row
+         * whose `completedAt` predates it folds NULL minutes instead of a negative. `sequenceId` is
+         * the fold order and not completion order (§5's ordering contract): a stacked job's drops
+         * complete at one instant and the close-out sweep emits the later-completed one first, which
+         * dragged the anchor into the earlier-completed sibling's future (lifetime, the only three
+         * negative-minute rows are each the first drop of a 2-drop job). (2) All drops of one job now
+         * share ONE mileage basis: a span-basis fold apportions its span across itself and the sibling
+         * drops whose pending to-dropoff legs it swallowed, so a job can no longer hold both a span
+         * row and a leg-sum row over the same driving (fielded job …500: 8.82 mi span + 6.00 mi leg
+         * sum = 14.82 mi claimed for 8.82 mi driven). **Scope: `delivery_records.realizedMinutes` /
+         * `realizedMiles` (and the `netProfit` computed against the new miles) on the affected shapes
+         * only** — a sequentially-completing job folds byte-identically on both counts; what moves is
+         * the out-of-order sibling (negative → NULL minutes) and the mixed-basis stack's miles.
+         * Precedented side effect (as v2 onward): the refold re-stamps `CURRENT_FALLBACK` rows against
+         * today's economy.
          */
-        private const val PROJECTOR_VERSION = 11
+        private const val PROJECTOR_VERSION = 12
     }
 }

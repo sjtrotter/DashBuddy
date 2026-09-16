@@ -214,6 +214,18 @@ data class PlatformRegion(
      * accumulation, the dash-summary total) SUPERSEDES any park older than itself, so a stale park
      * can never expire over fresher evidence.
      *
+     * **A park is born only under a session that OWNS the receipt's job** (#1103). The receipt feed
+     * carries one extra admission test the pill does not need: the read is evidence about THIS dash
+     * only while [activeJob] is live (the receipt's job is still open, its retire grace running) or
+     * [lastClosedJobReceipt] is set (the job closed on this very receipt). Both die with the dash in
+     * `endSession`, so a previous dash's receipt still sitting on screen when the next `DASH_START`
+     * lands — fielded 2026-09-10, 14 ms after the start, $40.14 committed into a 0-delivery dash —
+     * has nothing the new session can own, and its read is DROPPED instead of parked. Ownership by
+     * (flow, platform) cannot see that: the carried-over frame really IS `PostTask` on DoorDash. The
+     * pill is exempt by construction — it renders the live dash's own total and describes no job.
+     * `PlatformRegionStepper.ownsReceiptJob` is the one implementation, consulted by the gate and by
+     * the expiry's contradiction check alike.
+     *
      * Cost: a genuinely-changed total lands one settle window late, which for a figure the dasher is
      * glancing at is the right trade against showing them a number that never existed.
      *
@@ -244,6 +256,11 @@ data class PlatformRegion(
      * stepper therefore clears this the moment any other job is active
      * (`clearClosedJobReceiptOnNewJob`), and the emitter independently refuses to fire while any job
      * is live.
+     *
+     * **Second consumer since #1103:** together with [activeJob] this marker answers "does this
+     * session own the job a receipt on screen describes", which is what admits the receipt's
+     * "This dash so far" wheel to the settle gate. So the clear-at-`endSession` below is load-bearing
+     * for the running total as well as for the re-price — see [pendingSessionPay].
      *
      * Derived wholly from the region's own records at the close, so it is replay-stable; cleared by
      * `endSession` (a dash's receipt must not survive into the next one). Fail-null by construction:

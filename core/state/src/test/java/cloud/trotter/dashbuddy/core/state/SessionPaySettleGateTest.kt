@@ -5,8 +5,10 @@ import cloud.trotter.dashbuddy.domain.pipeline.Observation
 import cloud.trotter.dashbuddy.domain.pipeline.ObservationPayload
 import cloud.trotter.dashbuddy.domain.pipeline.TimeoutType
 import cloud.trotter.dashbuddy.domain.settings.GraceConfig
+import cloud.trotter.dashbuddy.domain.state.ClosedJobReceipt
 import cloud.trotter.dashbuddy.domain.state.Flow
 import cloud.trotter.dashbuddy.domain.state.FlowRegion
+import cloud.trotter.dashbuddy.domain.state.Job
 import cloud.trotter.dashbuddy.domain.state.Mode
 import cloud.trotter.dashbuddy.domain.state.ParsedFields
 import cloud.trotter.dashbuddy.domain.state.PendingSessionPay
@@ -134,10 +136,26 @@ class SessionPaySettleGateTest {
         payload = armedFor?.let { ObservationPayload.GraceWake(it) },
     )
 
+    /**
+     * The job a receipt on screen would be describing. #1103: a receipt's running total is admitted
+     * to the gate ONLY while this session owns that job, so every receipt fixture states which of
+     * the two owning shapes it is in — [activeJob] (the job is still open, its retire grace running)
+     * or [closedJobReceipt] (the job closed ON this receipt). A region with NEITHER is the fielded
+     * carry-over frame, and its receipt reads nothing.
+     */
+    private val liveJob = Job(
+        jobId = "job-1",
+        offerStoreHint = emptyList(),
+        parentOfferHash = null,
+        startedAt = 200L,
+    )
+
     private fun region(
         runningEarnings: Double = 0.0,
         accumulatedDeliveryPay: Double = 0.0,
         pending: PendingSessionPay? = null,
+        activeJob: Job? = null,
+        closedJobReceipt: ClosedJobReceipt? = null,
     ) = PlatformRegion(
         platform = Platform.DoorDash,
         mode = Mode.Online,
@@ -147,8 +165,10 @@ class SessionPaySettleGateTest {
             runningEarnings = runningEarnings,
             accumulatedDeliveryPay = accumulatedDeliveryPay,
         ),
+        activeJob = activeJob,
         lastObservedAt = 500L,
         pendingSessionPay = pending,
+        lastClosedJobReceipt = closedJobReceipt,
     )
 
     /**
@@ -457,7 +477,10 @@ class SessionPaySettleGateTest {
         // pill uses, so it has the same well-formed-mid-spin failure. This PR's own golden had
         // approved a pre-roll $17.75 for a receipt whose expanded capture one second later read
         // $35.47.
-        val result = step(region(runningEarnings = 16.70), receiptScreen(t0, sessionEarnings = 470.00))
+        val result = step(
+            region(runningEarnings = 16.70, activeJob = liveJob),
+            receiptScreen(t0, sessionEarnings = 470.00),
+        )
         assertEarnings(16.70, result, "the receipt's wheel does not bypass the gate")
         assertPark(result, 470.00, t0, t0 + settle, flow = Flow.PostTask)
 
@@ -467,7 +490,7 @@ class SessionPaySettleGateTest {
 
     @Test
     fun `a receipt read REPLACES a stale idle park rather than being blocked by it`() {
-        val parked = feed(region(runningEarnings = 16.70), t0 to 470.00)
+        val parked = feed(region(runningEarnings = 16.70, activeJob = liveJob), t0 to 470.00)
         val result = step(parked, receiptScreen(t0 + 100L, sessionEarnings = 25.20))
         assertEarnings(16.70, result)
         assertPark(result, 25.20, t0 + 100L, t0 + 100L + settle, flow = Flow.PostTask)
@@ -500,7 +523,7 @@ class SessionPaySettleGateTest {
     fun `the receipt's OWN park, made on the same frame, survives the accumulation`() {
         // The `since >= now` half of the supersession rule: updateSessionFields parks the
         // receipt's wheel read microseconds before the accumulation block runs on that same frame.
-        val start = region(runningEarnings = 16.70, accumulatedDeliveryPay = 16.70)
+        val start = region(runningEarnings = 16.70, accumulatedDeliveryPay = 16.70, activeJob = liveJob)
         val receipt = step(start, receiptScreen(t0, sessionEarnings = 25.20, totalPay = 8.50))
         assertEarnings(25.20, receipt)
         assertPark(receipt, 25.20, t0, t0 + settle, flow = Flow.PostTask)
@@ -696,7 +719,7 @@ class SessionPaySettleGateTest {
         // and round 3's equal-value arm then kept a park that went on describing a surface which
         // had left the screen — dropped on the first ownership check after the resume, with no
         // admitted frame left to re-park it. The read now parks HERE, with its own window.
-        val parked = feed(region(runningEarnings = 16.70), t0 to 25.20)
+        val parked = feed(region(runningEarnings = 16.70, activeJob = liveJob), t0 to 25.20)
         assertPark(parked, 25.20, t0, t0 + settle, flow = Flow.Idle)
 
         val paused = step(parked, pausedScreen(t0 + 500L))
@@ -754,5 +777,89 @@ class SessionPaySettleGateTest {
 
         assertEquals("a session must have been minted", 9_000L, started.session?.startedAt)
         assertNull(started.pendingSessionPay)
+    }
+
+    // =========================================================================
+    // #1103 — a receipt's running total is evidence only under the session that
+    //          owns the job the receipt describes
+    // =========================================================================
+
+    @Test
+    fun `a previous dash's receipt, still on screen, gives the NEW dash nothing (#1103)`() {
+        // Fielded 2026-09-10, session 483. The dash ended on its last delivery's
+        // `delivery_summary_collapsed`; the dasher started a new dash 8 s later and that PREVIOUS
+        // receipt was still the frame on screen 14 ms after DASH_START. Ownership by (flow,
+        // platform) sees nothing wrong — the carried-over frame really IS PostTask on DoorDash — so
+        // the $40.14 parked, stood its 3 s unchallenged and committed into a dash with no
+        // deliveries, which the early_offline DASH_STOP then reported as the dash's earnings.
+        // `endSession` cleared BOTH ownership markers with the previous dash, which is what makes
+        // this frame refusable: the new session owns no job at all.
+        val freshDash = region(activeJob = null, closedJobReceipt = null)
+
+        val onCarriedOverReceipt = step(freshDash, receiptScreen(t0, sessionEarnings = 40.14))
+        assertNull(
+            "a receipt this session owns no job for is not a reading of this session's total",
+            onCarriedOverReceipt.pendingSessionPay,
+        )
+
+        // And the wake that would have landed it: there is nothing to land.
+        val later = step(onCarriedOverReceipt, timeout(t0 + settle + 1L))
+        assertEarnings(
+            0.0,
+            later,
+            "the new dash has earned nothing, and nothing may invent the previous dash's total",
+        )
+        // The DASH_STOP half is already pinned by EffectMapPayloadTest's #1030 case: an
+        // early_offline stop stamps `runningEarnings.takeIf { it > 0.0 }`, so a 0.0 total here is a
+        // NULL `totalEarnings` in the payload — never a reported $40.14.
+    }
+
+    @Test
+    fun `the ordinary receipt — the job is still open — parks and commits exactly as before (#1103)`() {
+        val result = step(
+            region(runningEarnings = 16.70, activeJob = liveJob),
+            receiptScreen(t0, sessionEarnings = 25.20),
+        )
+        assertPark(result, 25.20, t0, t0 + settle, flow = Flow.PostTask)
+
+        val committed = step(result, timeout(t0 + settle + 1L))
+        assertEarnings(25.20, committed, "an owned receipt's wheel settles like any other read")
+    }
+
+    @Test
+    fun `a receipt frame on the step after its job closed still parks (#1103)`() {
+        // The second owning shape: `completeActiveJob` cleared `activeJob` and stamped
+        // `lastClosedJobReceipt` on the way out, and the receipt is still on screen — which is the
+        // whole #1033 late-expansion window. That marker is what keeps this frame admissible.
+        val justClosed = region(
+            runningEarnings = 16.70,
+            activeJob = null,
+            closedJobReceipt = ClosedJobReceipt(jobId = "job-1", receiptSeenAt = t0 - 2_000L),
+        )
+
+        val result = step(justClosed, receiptScreen(t0, sessionEarnings = 25.20))
+        assertPark(result, 25.20, t0, t0 + settle, flow = Flow.PostTask)
+
+        val committed = step(result, timeout(t0 + settle + 1L))
+        assertEarnings(25.20, committed)
+    }
+
+    @Test
+    fun `a refused receipt read is not a contradiction either, and never becomes the value (#1103)`() {
+        // The gate and the expiry's contradiction check read ONE definition
+        // (`Observation.sessionPayRead(region)`), so a frame that is not a reading of this session's
+        // total is not a reading of it at the moment of commit either. This dash's OWN pill read,
+        // which stood its whole window, still commits on the departure frame (rule e); what must
+        // never happen is the carried-over $40.14 either superseding it or landing itself.
+        val parked = feed(region(runningEarnings = 16.70, activeJob = null), t0 to 25.20)
+        assertPark(parked, 25.20, t0, t0 + settle, flow = Flow.Idle)
+
+        val onCarriedOverReceipt = step(parked, receiptScreen(t0 + settle + 1L, sessionEarnings = 40.14))
+        assertEarnings(
+            25.20,
+            onCarriedOverReceipt,
+            "this dash's own unchallenged read lands; the previous dash's figure is not evidence",
+        )
+        assertNull("and nothing of the refused read is left parked", onCarriedOverReceipt.pendingSessionPay)
     }
 }

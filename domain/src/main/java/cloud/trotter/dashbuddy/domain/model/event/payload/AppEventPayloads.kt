@@ -311,8 +311,8 @@ data class ManualDeliveryPayload(
  * (a [newCashTip]/[newTip]-only edit touches neither basis nor net).
  *
  * There is deliberately **no `newCompletedAt`** (#688 VET F2): editing the latest row's completedAt
- * would make restart-incremental folding disagree with a from-zero refold (restart hydration reads
- * `prevDropAt` from the corrected row while live context uses the payload's), reintroducing the
+ * would make restart-incremental folding disagree with a from-zero refold (restart hydration resolves
+ * `prevDropAt` from the corrected rows while live context uses the payload's), reintroducing the
  * determinism class #703 closes. Re-adding it later requires correction-immune anchor hydration
  * (the projector must resolve `prevDropAt` from an origin the correction can't move).
  */

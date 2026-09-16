@@ -150,6 +150,24 @@ class AnalyticsDaoProjectorSupportTest {
     }
 
     @Test
+    fun `maxCompletedAtInSession is order-free, so an out-of-order stack rehydrates the true anchor (#1108)`() {
+        runBlocking {
+            // The fielded shape: a stacked job's close-out sweep emits the LATER-completed drop
+            // first, so the highest eventSequenceId holds the EARLIER completedAt. `prevDropAt` is
+            // monotonic in the fold, so hydration must read the MAX — reading the last-folded row
+            // would walk the anchor backwards across a batch boundary and make incremental folding
+            // disagree with a from-zero refold (the #703 determinism class).
+            dao.upsertDelivery(delivery(1, "A", "J1", odo = 9.0, completedAt = 3_000))
+            dao.upsertDelivery(delivery(2, "A", "J1", odo = 9.0, completedAt = 2_000))
+
+            assertEquals(2L, dao.lastDeliveryInSession("A")!!.eventSequenceId)
+            assertEquals(2_000L, dao.lastDeliveryInSession("A")!!.completedAt)
+            assertEquals(3_000L, dao.maxCompletedAtInSession("A"))
+            assertNull("no machine delivery yet ⇒ the fold falls back to startedAt", dao.maxCompletedAtInSession("Z"))
+        }
+    }
+
+    @Test
     fun `deliveredJobIdsInSession returns the distinct set and lastOfferCostPerMile prefers the newest`() = runBlocking {
         dao.upsertDelivery(delivery(1, "A", "J1"))
         dao.upsertDelivery(delivery(2, "A", "J1")) // dup job

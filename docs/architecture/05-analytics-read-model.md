@@ -456,6 +456,57 @@ legacy delta, `MAX_PENDING` 32 bounded) — that persistence is what keeps incre
 refold across the projector's 500-event page boundaries. A driver `newMiles` edit wins `realizedMiles`/net (log-order precedence);
 the machine leg columns are provenance and are never rewritten, so leg-sum ≠ realizedMiles IS the
 visible edit trail. CSV gains `miles_to_store`/`miles_to_dropoff`. Related: #653/#655/#703.
+
+**One mileage basis per job, and a monotonic minutes anchor (#1108, `PROJECTOR_VERSION` 11→12, no
+schema move).** Fielded 2026-09-13, session 499, job …500 — two drops from one accept, one store. DoorDash
+went straight from drop 1's dropoff confirm to drop 2's, so drop 2 never stamped a
+`DELIVERY_ARRIVED` and had no to-dropoff leg; it folded on the SPAN basis and took the whole
+`prevDropOdometer → completion` delta, 8.82 mi, which physically CONTAINS drop 1's 6.00 mi
+to-dropoff leg. Drop 1 then folded that leg again on the leg-sum basis: Σ 14.82 mi claimed for 8.82
+mi driven, each row's frozen `netProfit` charged against its own figure, and Σ over the session
+(24.32 mi) past the session odometer span (18.70 mi). **Fix: a span-basis fold RETIRES the pending
+to-dropoff legs its span swallowed and APPORTIONS its span equally across itself and the retired
+siblings OF ITS OWN JOB, reserving each share in `LegState.spanApportionedMiles` for that sibling's
+own fold to read** — so a job's drops are all leg-sum or all span, never both, and Σ per job ≤ the
+job's span by construction
+(strictly less when a reserved sibling is unassigned and never folds — the same one-sided
+under-attribution #688 Fix 1 chose). An equal split is deliberate over "the sibling keeps its
+measured leg and the span row takes the residue": that residue IS the mixed basis, and one drop's
+measured leg says nothing about the other's share of a jointly-driven route. **The retire is
+SESSION-WIDE and only the reservation is job-scoped** — the same asymmetry Fix 1 already applies to
+store legs: the span is a session-level delta, so a cross-job leg closed inside it is equally
+double-countable and goes too, but it gets no share of *this* job's driving and its drop falls back
+to its own (post-completion) span delta. `LegState.dropoffLegJobIds` carries the scope the bare
+`taskId → miles` map could not; both new maps are default-empty, so an in-flight session's persisted
+`legStateJson` decodes unchanged, and a taskId absent from `dropoffLegJobIds` reads as "this job's"
+(conservative, matching `closedAtOdometer`'s null rule). Nothing is retired when the span itself is
+unmeasurable (no odometer).
+
+The same job exposed the TIME half, and there the defect is the ANCHOR, not the quantity.
+`realizedMinutes` is the gap since the previous completion (`SessionFoldContext.prevDropAt`, falling
+back to `startedAt`), and that **partition semantics is deliberate and kept**: Σ over a dash's drops
+is the dasher's working time, which `TimeEconomics.deliveryMinutes`, `NetPerHourPair.whileWorking`
+and `EstimateVsReality`'s realized rate are all built on. What broke is that the anchor was assigned
+from whichever completion folded last, and `sequenceId` is the fold order, NOT completion order:
+a stacked job's drops both emit `DELIVERY_COMPLETED` at ONE instant and the close-out sweep emits the
+later-completed one first, so the anchor moved to 17:37:18 and drop 1 — which really finished at
+17:30:11 — folded `completedAt − anchor` = **−7.12 minutes** for a drop that took 10.9. Lifetime, the
+only three negative-minute rows in the database are each the first drop of a 2-drop job.
+
+**Fix, in two parts.** (1) `prevDropAt` is **MONOTONIC** — advanced as
+`max(prevDropAt, completedAt)`, never assigned backwards — so one out-of-order emission cannot hand
+the NEXT drop an anchor in its future and cascade down the dash; hydration reads it as
+`AnalyticsDao.maxCompletedAtInSession` rather than off the last-folded row, or a batch boundary would
+walk the anchor backwards and make incremental folding disagree with a from-zero refold (the #703
+determinism class). (2) A row whose own `completedAt` still predates the anchor — the same-instant
+siblings themselves, or a clock artefact — folds **NULL** minutes. Not a negative, which reaches a
+rate; and not a floored 0, which is a *measurement* of zero working time and would drag every mean
+that reads it. Null is the read model's own vocabulary for "not measured" (#975 excludes an offer
+with no realized minutes from the estimate-vs-reality sample; #983's rates are null rather than
+`$0.00/hr`), so the cost is one drop's minutes missing from the dash's Σ — fail-null (#745). Because
+`:domain` has no logger, the fold hands the orchestrator a PII-safe `FoldOutcome.note` (ids only) that
+`AnalyticsProjector` prints at DEBUG, so the null is never silent. A sequentially-completing job's
+minutes fold byte-identically.
 **Orphan-offer resolution (#810 B2, Room v14→v15 additive `offer_records.outcomeResolved`,
 `PROJECTOR_VERSION` 7→8):** an accepted offer whose job produced no matching delivery (surfaced by
 the `JOB_ACCEPT_MISMATCH` tripwire) is resolved in two tiers, both write-only to the nullable

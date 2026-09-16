@@ -108,13 +108,43 @@ internal object DeliveryFolds {
         val basePay = if (soleDrop) receipt.totalBasePay else null
 
         // Partition deltas. Anchor = the previous completion (or DASH_START) in the same session.
-        // Floor the per-row delta at 0 like the session-level SUM (MAX(…,0)): a mid-session odometer
-        // reset yields a NEGATIVE delta, which would otherwise INFLATE this row's netProfit
+        // Floor the per-row MILES delta at 0 like the session-level SUM (MAX(…,0)): a mid-session
+        // odometer reset yields a NEGATIVE delta, which would otherwise INFLATE this row's netProfit
         // (pay − negativeMiles × cpm). The next drop re-anchors off this (lower) reading naturally.
         val prevOdo = ctx?.prevDropOdometer ?: ctx?.startOdometer
-        val legacyRealizedMiles = if (odo != null && prevOdo != null) (odo - prevOdo).coerceAtLeast(0.0) else null
+        val spanRealizedMiles = if (odo != null && prevOdo != null) (odo - prevOdo).coerceAtLeast(0.0) else null
+
+        // #1108 — the TIME partition, with the fold-order defect removed and the QUANTITY kept.
+        //
+        // A drop's realized minutes are the gap since the previous completion, which is deliberate:
+        // Σ over a dash's drops is the dasher's working time, and `TimeEconomics.deliveryMinutes`,
+        // `NetPerHourPair.whileWorking` and `EstimateVsReality`'s realized rate are all built on
+        // that. What was wrong is the ANCHOR's monotonicity. Completions fold in `sequenceId` order,
+        // which is not completion order (§5's ordering contract): both drops of the fielded job …500
+        // emitted their `DELIVERY_COMPLETED` at ONE instant and the close-out sweep emitted the
+        // LATER-completed drop first, so the anchor moved to 17:37:18 and the earlier-completed
+        // sibling — which really finished at 17:30:11 — folded `(completedAt − anchor)` = −7.12 min
+        // for a drop that took 10.9. Lifetime, the only three negative-minute rows in the database
+        // are each the first drop of a 2-drop job.
+        //
+        // Two rules, together:
+        //  1. the anchor NEVER moves backwards (`prevDropAt = max(prevDropAt, completedAt)` below),
+        //     so one out-of-order emission cannot hand the NEXT job's drop an anchor in its future
+        //     and cascade the defect down the dash;
+        //  2. a row whose own `completedAt` still predates the anchor (the same-instant siblings
+        //     themselves, or a clock artefact) folds NULL minutes. Not a negative — which reaches a
+        //     rate — and not a floored 0, which is a MEASUREMENT of zero working time and would drag
+        //     every mean that reads it. Null is the read model's own vocabulary for "not measured":
+        //     #975 excludes an offer with no realized minutes from the estimate-vs-reality sample
+        //     and #983's rates are null rather than `$0.00/hr`. Fail-null (#745): the sibling's
+        //     minutes are simply not attributable, and Σ for the dash undercounts by that drop.
         val prevAt = ctx?.prevDropAt ?: ctx?.startedAt
-        val realizedMinutes = if (prevAt != null) (completedAt - prevAt) / 60_000.0 else null
+        val minutesInverted = prevAt != null && completedAt < prevAt
+        val realizedMinutes = when {
+            prevAt == null -> null
+            minutesInverted -> null
+            else -> (completedAt - prevAt) / 60_000.0
+        }
 
         // #688 phase B: consume this drop's per-leg mileage from the session leg accumulator.
         //  - milesToDropoff = this drop's own taskId entry (unambiguous).
@@ -129,7 +159,11 @@ internal object DeliveryFolds {
         //    lone-leg stamp on an untouched row) and RETIRES the session's already-closed store legs
         //    below (session-wide — the legacy span is a session-level delta, re-verify widening).
         val legState = ctx?.legState ?: LegState()
-        val milesToDropoff = legState.pendingDropoffLegs[p.taskId]
+        // #1108: a share RESERVED for this drop by a sibling's span-basis fold owns its mileage —
+        // the job is on the span basis, and a job's drops never sit on two bases. Any leg this drop
+        // has since closed is ignored (and dropped below): the reserving span already contains it.
+        val reservedSpanMiles = legState.spanApportionedMiles[p.taskId]
+        val milesToDropoff = if (reservedSpanMiles == null) legState.pendingDropoffLegs[p.taskId] else null
         val storeLegs = legState.pendingStoreLegs
         val claimIdx = if (milesToDropoff != null) {
             val exact = if (p.storeName != null) {
@@ -146,11 +180,50 @@ internal object DeliveryFolds {
         }
         val milesToStore = claimIdx.takeIf { it >= 0 }?.let { storeLegs[it].miles }
 
+        // #1108 — ONE mileage basis per job. A span-basis fold takes the whole
+        // `prevDropOdometer → completion` delta, which physically CONTAINS the to-dropoff legs of
+        // this job's siblings that have already arrived but not yet completed. Leaving those legs
+        // pending let the sibling claim one again on the leg-sum basis, and the two bases then
+        // double-counted the shared driving: fielded job …500, drop 2 (no `DELIVERY_ARRIVED` — the
+        // platform went straight from drop 1's confirm to drop 2's) folded the whole 8.82 mi span
+        // and drop 1 then folded 6.00 mi of leg sum out of the same 8.82.
+        //
+        // So the span is APPORTIONED: an equal share to this drop and to each sibling whose pending
+        // leg it swallowed, whose legs are retired here and whose shares are reserved in
+        // [LegState.spanApportionedMiles] for their own folds to read. Σ per job ≤ the job's span by
+        // construction (strictly less if a reserved sibling is unassigned and never folds — the
+        // sanctioned under-attribution direction). An equal split is deliberately chosen over
+        // "sibling keeps its measured leg, the span row takes the residue": that residue shape is
+        // exactly the mixed basis this fix exists to remove, and a measured leg for one drop is not
+        // evidence about the other drop's share of a jointly-driven route.
+        //
+        // The RETIRE is session-wide and the RESERVATION is job-scoped, which is not an inconsistency:
+        // it is #688 review Fix 1's rule for store legs, extended to dropoff legs. The span is a
+        // SESSION-level delta (previous completion → this one, regardless of job), so a CROSS-JOB
+        // pending leg closed inside it is equally double-countable and is retired too — what it does
+        // NOT get is a share of THIS job's mileage, because that would attribute one job's driving to
+        // another job's row. Such a drop falls back to its own span delta, which after this completion
+        // is exactly the driving since: honest, and one-sided in the same direction as Fix 1's own
+        // trade (an unknown closure order retires, accepting per-row under-attribution over a
+        // double-count). Nothing is retired when the span itself is unmeasurable (no odometer): the
+        // siblings keep their legs and the pre-#1108 behaviour stands.
+        val spanBasis = milesToDropoff == null && reservedSpanMiles == null && spanRealizedMiles != null
+        val retiredSiblings: List<String> =
+            if (spanBasis) legState.pendingDropoffLegs.keys.filterNot { it == p.taskId } else emptyList()
+        val swallowedSiblings: List<String> = retiredSiblings.filter { legState.dropoffLegInJob(it, p.jobId) }
+        val spanShareMiles: Double? = spanRealizedMiles?.let { it / (1 + swallowedSiblings.size) }
+        val spanReservations: Map<String, Double> =
+            if (spanShareMiles != null) swallowedSiblings.associateWith { spanShareMiles } else emptyMap()
+
         // realizedMiles becomes the leg SUM only when the final (to-dropoff) leg is known; a lone store
-        // leg understates (the legacy delta already contains it), so partial leg data never replaces the
+        // leg understates (the span delta already contains it), so partial leg data never replaces the
         // total — the `milesToDropoff != null` gate (§2). Invariant: realizedMiles == (milesToStore ?: 0)
         // + milesToDropoff iff milesToDropoff != null.
-        val realizedMiles = if (milesToDropoff != null) (milesToStore ?: 0.0) + milesToDropoff else legacyRealizedMiles
+        val realizedMiles = when {
+            milesToDropoff != null -> (milesToStore ?: 0.0) + milesToDropoff
+            reservedSpanMiles != null -> reservedSpanMiles
+            else -> spanShareMiles
+        }
 
         // Frozen economy — immutable historical fact.
         val (frozenCpm, costBasis) = when {
@@ -220,7 +293,10 @@ internal object DeliveryFolds {
             // folds its miles into the next drop instead of resetting the partition; the time anchor
             // always advances (time is always known).
             prevDropOdometer = odo ?: ctx.prevDropOdometer,
-            prevDropAt = completedAt,
+            // #1108: MONOTONIC. `sequenceId` is the fold order and `completedAt` is not monotonic in
+            // it, so taking this completion raw let one out-of-order emission poison every later
+            // drop's partition. The anchor is the LATEST completion seen, never the last folded.
+            prevDropAt = maxOf(ctx.prevDropAt ?: 0L, completedAt),
             lastEventAt = maxOf(ctx.lastEventAt, e.occurredAt),
             lastOdometer = odo ?: ctx.lastOdometer,
             // #688: consume the claimed store leg + this drop's dropoff leg, then advance the leg
@@ -246,11 +322,14 @@ internal object DeliveryFolds {
                     // Leg-sum row that found no store leg to claim: leave the queue untouched.
                     else -> storeLegs
                 },
-                pendingDropoffLegs = if (milesToDropoff != null) {
-                    legState.pendingDropoffLegs - p.taskId
-                } else {
-                    legState.pendingDropoffLegs
-                },
+                // #1108: this drop's own leg goes (consumed as `milesToDropoff`, or ignored because a
+                // reservation owned its mileage — either way the drop is done and its leg must never
+                // outlive it), and so do the sibling legs this span swallowed, whose shares are
+                // reserved below. `dropoffLegJobIds` mirrors the leg map key-for-key.
+                pendingDropoffLegs = legState.pendingDropoffLegs - p.taskId - retiredSiblings.toSet(),
+                dropoffLegJobIds = legState.dropoffLegJobIds - p.taskId - retiredSiblings.toSet(),
+                // This drop's reservation is consumed; the siblings' are written for their own folds.
+                spanApportionedMiles = (legState.spanApportionedMiles - p.taskId) + spanReservations,
             ),
         )
         // #159: every DELIVERY_COMPLETED re-triggers store resolution for its job (job-scoped). The
@@ -261,7 +340,20 @@ internal object DeliveryFolds {
             jobId = p.jobId,
             offerHashes = p.jobOfferHashes,
         )
-        return FoldOutcome(context = newCtx, delivery = delivery, resolution = resolution)
+        return FoldOutcome(
+            context = newCtx,
+            delivery = delivery,
+            resolution = resolution,
+            // #1108: the orchestrator logs this at DEBUG — `:domain` is a pure JVM module with no
+            // logger, and a null-minutes row is otherwise indistinguishable from a legitimately
+            // unmeasured one. Ids only (P7): no money, no store, no customer.
+            note = if (minutesInverted) {
+                "realizedMinutes null: completedAt precedes the session partition anchor " +
+                    "(job=${p.jobId}, task=${p.taskId})"
+            } else {
+                null
+            },
+        )
     }
 
     /**

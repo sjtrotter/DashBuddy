@@ -25,6 +25,7 @@ import cloud.trotter.dashbuddy.domain.state.SessionType
 import cloud.trotter.dashbuddy.domain.state.Task
 import cloud.trotter.dashbuddy.domain.state.TaskPhase
 import cloud.trotter.dashbuddy.domain.state.TaskSubFlow
+import timber.log.Timber
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -347,7 +348,7 @@ class PlatformRegionStepper @Inject constructor() {
                     // it: a late timer and a fresh idle frame can collide, and committing the stale
                     // park first and then re-parking the fresh read for another whole window shows
                     // the dasher a figure that the same frame already disproved.
-                    val read = obs.sessionPayRead()
+                    val read = obs.sessionPayRead(current)
                     current = when {
                         read != null && !centsEqual(read, pend.value) ->
                             current.copy(pendingSessionPay = null)
@@ -987,8 +988,9 @@ class PlatformRegionStepper @Inject constructor() {
                 if (postTaskTaskId == null) {
                     // #1073: no nameable SUBJECT — no dropoff active and none completed — so this
                     // receipt describes nobody in this region and refreshes NOTHING. Fail-null
-                    // (#745); silent, because the reducer is log-free and the absent announce is
-                    // itself the observable (no "Saved: \$X" bubble fires).
+                    // (#745); silent, because the absent announce is itself the observable (no
+                    // "Saved: \$X" bubble fires) — unlike #1103's refusal below, which leaves no
+                    // observable at all and therefore carries the one DEBUG line in this reducer.
                 } else if (!sameTaskCollapsedDowngrade) {
                     // #1033 round 13: ONE owner writes the receipt, the drops it describes, and the
                     // task it was announced for — see [cacheReceipt] / [ReceiptCoverage].
@@ -1010,15 +1012,31 @@ class PlatformRegionStepper @Inject constructor() {
                     )
                 }
                 r.session?.let { session ->
-                    val earnings = parsed.sessionEarnings
+                    // #1029: the receipt's "This dash so far" is the SAME digit-wheel the on-dash
+                    // pill renders — `dropoff.json5` reads it through `parseGlyphCurrency` on both
+                    // summary rules — so it takes the SAME settle gate. Exempting it would leave
+                    // the identical well-formed-mid-spin hole open on the surface that closes a
+                    // delivery (the PR's own golden had approved a pre-roll $17.75 against a
+                    // $35.47 dash one second later).
+                    //
+                    // #1103: and it is read through the ONE ownership question — [ownsReceiptJob]
+                    // — so a receipt left on screen from the PREVIOUS dash can never park under
+                    // this one. The read is taken from `sessionPayRead`, which is also what the
+                    // expiry's contradiction check consults, so the two can never disagree about
+                    // what counts as this session's running total.
+                    val earnings = obs.sessionPayRead(r)
                     if (earnings != null) {
-                        // #1029: the receipt's "This dash so far" is the SAME digit-wheel the
-                        // on-dash pill renders — `dropoff.json5` reads it through
-                        // `parseGlyphCurrency` on both summary rules — so it takes the SAME settle
-                        // gate. Exempting it would leave the identical well-formed-mid-spin hole
-                        // open on the surface that closes a delivery (the PR's own golden had
-                        // approved a pre-roll $17.75 against a $35.47 dash one second later).
                         r = settleSessionPay(r, session, earnings, obs.timestamp, flow, policy)
+                    } else if (parsed.sessionEarnings != null) {
+                        // The refusal is otherwise INVISIBLE — #1103 cost a dash's reported
+                        // earnings and left no trace anywhere in the log. Ids and the platform
+                        // only (P7): no money, no store, no customer.
+                        Timber.tag("StateMachine").d(
+                            "settle gate: receipt running-total read refused — " +
+                                "no job owned by this session (platform=%s, session=%s)",
+                            r.platform.name,
+                            session.sessionId,
+                        )
                     }
                 }
             }
@@ -1033,7 +1051,7 @@ class PlatformRegionStepper @Inject constructor() {
                         // UNREACHABLE on the fielded path — `updateLifecycle` returns early on
                         // `Flow.SessionEnded` with a live session, to arm the authoritative
                         // SESSION_END grace — so what actually closes the case there is
-                        // `Observation.sessionPayRead()` treating the summary's total as a
+                        // `Observation.sessionPayRead(region)` treating the summary's total as a
                         // contradicting read at expiry time. The call stays here because this is
                         // still the honest place for the invariant if that early return ever moves:
                         // "no direct writer leaves an older park alive" is stated at every writer,
@@ -1174,13 +1192,51 @@ class PlatformRegionStepper @Inject constructor() {
      * parked before "End Dash" would COMMIT on the summary frame and ride into the #596 close-out
      * sweep's `DELIVERY_COMPLETED.sessionEarnings` and the HUD latch.
      */
-    private fun Observation.sessionPayRead(): Double? =
+    private fun Observation.sessionPayRead(region: PlatformRegion): Double? =
         when (val parsed = (this as? Observation.FlowObservation)?.parsed) {
             is ParsedFields.IdleFields -> parsed.sessionPay
-            is ParsedFields.PostTaskFields -> parsed.sessionEarnings
+            // #1103: the receipt's wheel is evidence about THIS dash only while this dash owns the
+            // job the receipt describes — see [ownsReceiptJob]. A refused read is not a reading of
+            // this session's total at all, so it must not contradict a park either; the gate and
+            // the contradiction check share this one definition by construction.
+            is ParsedFields.PostTaskFields ->
+                parsed.sessionEarnings?.takeIf { region.ownsReceiptJob() }
             is ParsedFields.SessionEndedFields -> parsed.totalEarnings
             else -> null
         }
+
+    /**
+     * Does this region own the job a post-delivery receipt on screen would be describing (#1103)?
+     *
+     * Fielded 2026-09-10 (session 483): a dash ended on the `delivery_summary_collapsed` receipt of
+     * its last delivery, the dasher started a NEW dash 8 s later, and the PREVIOUS dash's receipt
+     * was still the frame on screen 14 ms after `DASH_START`. Its "This dash so far" wheel — $40.14
+     * — parked under the settle gate (a park is owned by (flow, platform), which that frame
+     * satisfies: PostTask on DoorDash), stood its 3 s unchallenged, and committed into the NEW
+     * session's [Session.runningEarnings]; the `early_offline` stop then reported $40.14 of earnings
+     * for a 2-minute dash with zero deliveries. Nothing in the job/task lifecycle ever moved — the
+     * frame was pure carry-over.
+     *
+     * So the rule: **a receipt's running-total read is evidence only while this session owns the job
+     * the receipt describes.** Two owning shapes, and no third:
+     *  - [PlatformRegion.activeJob] non-null — the job is still open (its `TASK_RETIRE` grace is
+     *    running), which is the ordinary receipt frame; or
+     *  - [PlatformRegion.lastClosedJobReceipt] non-null — the job closed ON this receipt and the
+     *    receipt is still on screen (`completeActiveJob` stamps that marker), which is the
+     *    late-expansion / re-render window (#1033).
+     *
+     * Both are cleared by `endSession`, which is what makes the test a SESSION-ownership test rather
+     * than a "was there ever a receipt" test: a fresh dash starts with neither, so the previous
+     * dash's frame carries nothing this region can attribute to itself. The on-dash earnings pill
+     * ([ParsedFields.IdleFields.sessionPay]) is deliberately NOT gated — it renders the live dash's
+     * own total by construction and has no job to own.
+     *
+     * Fail-null (#745): a refused read is DROPPED, never parked and never committed. The cost is a
+     * receipt frame whose job the region somehow lost, which leaves the committed figure standing
+     * until the pill states it again — against inventing a previous dash's earnings into this one.
+     */
+    private fun PlatformRegion.ownsReceiptJob(): Boolean =
+        activeJob != null || lastClosedJobReceipt != null
 
     /**
      * Drop a parked running-total read that is OLDER than a direct write of

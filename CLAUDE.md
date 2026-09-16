@@ -402,7 +402,11 @@ hash folds `sessionPay` into `Observation.identity()`, so a repeat can never arr
 REJECTED as the discriminator). Rules: (a) a park is owned by (FLOW, PLATFORM), checked on both prior and
 resulting R0; losing either DROPS it; (b) BOTH wheel feeds are gated (`IdleFields.sessionPay`,
 `PostTaskFields.sessionEarnings` — and `PostTaskFields.dedupeHash` folds in `sessionEarnings` so the
-settled re-render is admittable at all); (c) every non-gated writer supersedes older parks; (d) comparisons are
+settled re-render is admittable at all), and the RECEIPT feed is admitted only while this session
+OWNS the receipt's job (`activeJob` live, or `lastClosedJobReceipt` set — both cleared by
+`endSession`), one owner `ownsReceiptJob()` shared by the gate and the expiry's contradiction check:
+#1103 had the previous dash's receipt, still on screen 14 ms after `DASH_START`, park its $40.14 and
+commit it into a 0-delivery dash; (c) every non-gated writer supersedes older parks; (d) comparisons are
 cent-tolerant; (e) a pending's OWN wake lapses it by IDENTITY, a frame lapses a grace strictly PAST its
 deadline and a park at-or-past — and ORDER matters: a flow frame runs the expiry FIRST (a park that
 stood its window commits on the departure frame), a flow-LESS observation checks ownership first; (f) a contradicting read on the expiring frame supersedes the park; (g) a
@@ -586,7 +590,15 @@ closing job's final `DELIVERY_COMPLETED` because the reconcile reads only earlie
 funnel and list reads exclude a resolved orphan; `WorkGaps` deliberately KEEPS it (the accept is the
 instant waiting ended). **Per-leg mileage (#688 B):** lifecycle odometer stamps fold into
 `milesToStore`/`milesToDropoff` with claim-once store legs; `realizedMiles` becomes the leg SUM only when
-`milesToDropoff != null` while session/period/IRS/CSV totals stay odometer-span-anchored; a driver
+`milesToDropoff != null` while session/period/IRS/CSV totals stay odometer-span-anchored; **one basis
+per JOB (#1108):** a span-basis fold retires the pending dropoff legs its span swallowed (session-wide,
+as #688 Fix 1 does for store legs) and apportions its span equally across itself and the retired
+siblings of its OWN job (`LegState.spanApportionedMiles`), so a stacked job can never hold a span row
+and a leg-sum row over the same driving (Σ per job ≤ the job's span). **The minutes partition keeps its
+meaning, its ANCHOR is monotonic (#1108)** — `prevDropAt` advances as `max(prevDropAt, completedAt)`
+(hydrated as `MAX(completedAt)`, since `sequenceId` is the fold order and not completion order), and a
+drop whose `completedAt` still predates it — a stacked job's same-instant sibling, emitted
+later-completed-first — folds NULL minutes, never the negative it used to and never a measured 0; a driver
 `newMiles` edit wins `realizedMiles`/net but the machine leg columns are never rewritten (provenance);
 `session_records.legStateJson` keeps incremental ≡ refold. The **"(No session)" bucket** counts in gross and per-day (#660 piece 1).
 

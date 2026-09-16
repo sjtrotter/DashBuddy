@@ -123,7 +123,19 @@ data class DeliveryFold(
     val cashTip: Double?,
     val basePay: Double?,
     val odometerAtCompletion: Double?,
+    /**
+     * Per-LEG sum ([milesToStore] + [milesToDropoff]) on a leg-measured row (#688 phase B), else this
+     * drop's share of the odometer SPAN since the previous completion — split equally across the
+     * job's drops when the span swallowed a sibling's pending leg (#1108). One job, one basis.
+     */
     val realizedMiles: Double?,
+    /**
+     * Partition delta since the previous completion (or DASH_START) in minutes — the quantity the
+     * Time tab's working-time reads are built on. NULL when `completedAt` predates that anchor
+     * (#1108): the anchor is MONOTONIC, and a stacked job's drops complete at one instant and fold
+     * in the close-out sweep's order, so the earlier-completed sibling has no attributable partition
+     * at all. Fail-null (#745) — never the negative it used to fold, never a measured 0.
+     */
     val realizedMinutes: Double?,
     val frozenCostPerMile: Double?,
     /** Fuel component of [frozenCostPerMile] (per-mile), frozen from the offer basis; null off it (#659). */
@@ -239,6 +251,15 @@ data class FoldOutcome(
     val offer: OfferFold? = null,
     val freshSession: Boolean = false,
     val skip: String? = null,
+    /**
+     * A PII-safe diagnostic about a fold that DID happen (#1108) — the orchestrator logs it at DEBUG
+     * and nothing else reads it, so it can never change what was folded. Distinct from [skip], which
+     * says the event produced no record at all. `:domain` is a pure JVM module with no logger, so a
+     * decision the fold makes silently (a row folding NULL minutes because its `completedAt` predates
+     * the session's partition anchor) would otherwise leave no trace. Ids only — never money, store
+     * or customer text.
+     */
+    val note: String? = null,
     /**
      * A driver PAY_ADJUSTMENT decision (#650): the pure fold decides WHICH row to re-price and to
      * what, but cannot read the target `delivery_record` (it is not the session accumulator) — the

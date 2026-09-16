@@ -44,7 +44,7 @@ internal object LegFolds {
         val ctx = resolveContext(context, sid, e.occurredAt)
         val odo = event.metadata?.odometer
         val p = e.payload as? DeliveryPayload
-        val withLeg = if (p != null) ctx.addDropoffLeg(p.taskId, odo) else ctx
+        val withLeg = if (p != null) ctx.addDropoffLeg(p.taskId, p.jobId, odo) else ctx
         return FoldOutcome(context = withLeg.advance(e.occurredAt, odo))
     }
 
@@ -85,8 +85,15 @@ internal object LegFolds {
         val cleaned = when (p.phase) {
             TaskPhase.PICKUP ->
                 ls.copy(pendingStoreLegs = ls.pendingStoreLegs.filterNot { it.pickupTaskId == p.taskId })
+            // #1108: the reserved span share goes with the leg — an abandoned drop's miles are
+            // session-level only, so its reservation is simply lost (Σ per job < span, the
+            // sanctioned under-attribution direction).
             TaskPhase.DROPOFF ->
-                ls.copy(pendingDropoffLegs = ls.pendingDropoffLegs - p.taskId)
+                ls.copy(
+                    pendingDropoffLegs = ls.pendingDropoffLegs - p.taskId,
+                    dropoffLegJobIds = ls.dropoffLegJobIds - p.taskId,
+                    spanApportionedMiles = ls.spanApportionedMiles - p.taskId,
+                )
         }
         return FoldOutcome(context = ctx.copy(legState = cleaned).advance(e.occurredAt, odo))
     }
@@ -147,9 +154,11 @@ internal fun SessionFoldContext.closeStoreLeg(
 
 /**
  * Close a to-dropoff leg, accumulating onto the drop's own [taskId] (a re-arrival adds to the same
- * entry). Bounded at [LegState.MAX_PENDING] with drop-oldest by insertion order.
+ * entry). Bounded at [LegState.MAX_PENDING] with drop-oldest by insertion order. [jobId] is recorded
+ * alongside (#1108) so a span-basis completion can tell a SIBLING drop's pending leg — which its
+ * span already contains — from an unrelated job's.
  */
-internal fun SessionFoldContext.addDropoffLeg(taskId: String, odo: Double?): SessionFoldContext {
+internal fun SessionFoldContext.addDropoffLeg(taskId: String, jobId: String, odo: Double?): SessionFoldContext {
     val (miles, ls) = legState.closeLeg(odo)
     if (miles == null) return copy(legState = ls)
     val existing = ls.pendingDropoffLegs[taskId]
@@ -164,5 +173,7 @@ internal fun SessionFoldContext.addDropoffLeg(taskId: String, odo: Double?): Ses
             added.entries.toList().takeLast(LegState.MAX_PENDING).associate { it.key to it.value }
         }
     }
-    return copy(legState = ls.copy(pendingDropoffLegs = merged))
+    // The scope map mirrors the leg map exactly — same keys, dropped by the same cap.
+    val scoped = (ls.dropoffLegJobIds + (taskId to jobId)).filterKeys { it in merged }
+    return copy(legState = ls.copy(pendingDropoffLegs = merged, dropoffLegJobIds = scoped))
 }
