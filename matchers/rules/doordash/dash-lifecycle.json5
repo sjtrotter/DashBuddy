@@ -1000,9 +1000,32 @@
       "priority": 150,
       "redact": [
         {
-          "comment": "#1107 combined-frame belt (the #993 precedent): the 8.97.8 'Drop off steps' wrapper can inflate under this sheet on a dash ended straight off a doorstep, and a combined tree that satisfies BOTH rules is won by THIS rule (priority 150 precedes the wrapper's own recognize-only rule at 990, deliberately — a lifecycle classification must never lose to a redact-only rule). A redact protects only the frames its OWN rule wins, so the wrapper's customer-instruction body is masked here too, whole-node `plainMask` exactly as `dropoff_step_instructions` declares it. Inert on every ordinary summary render (no such node).",
+          "comment": "#1107 combined-frame belt (the #993 precedent): the 8.97.8 'Drop off steps' wrapper can inflate under this sheet on a dash ended straight off a doorstep, and a combined tree that satisfies BOTH rules is won by THIS rule (priority 150 precedes the wrapper's own recognize-only rule at 160, deliberately — a lifecycle classification must never lose to a redact-only rule; the wrapper in turn sits AHEAD of the flowless overlay rules such as side_nav_drawer at 200, which carry no redact). A redact protects only the frames its OWN rule wins, so everything the wrapper would have masked is masked here too: the customer-instruction body whole-node `plainMask`, and the #1039 fused + label-sibling subpremise pair. Inert on every ordinary summary render (no such nodes).",
           "find": {
             "hasIdSuffix": "description_text_view"
+          },
+          "plainMask": true
+        },
+        {
+          "find": {
+            "hasTextStartsWith": "Apt/Suite"
+          },
+          "keepPrefix": [
+            "Apt/Suite: ",
+            "Apt/Suite "
+          ],
+          "plainMask": true
+        },
+        {
+          "find": {
+            "any": [
+              {
+                "hasPrecedingSiblingText": "Apt/Suite"
+              },
+              {
+                "hasPrecedingSiblingText": "Apt/Suite:"
+              }
+            ]
           },
           "plainMask": true
         }

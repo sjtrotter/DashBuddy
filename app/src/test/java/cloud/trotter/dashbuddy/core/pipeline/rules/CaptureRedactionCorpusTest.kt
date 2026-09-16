@@ -2874,6 +2874,60 @@ class CaptureRedactionCorpusTest {
     }
 
     /**
+     * #1107 round 3 — the COMBINED-FRAME class (#993): the wrapper can inflate under another surface,
+     * and a redact protects only the frames its OWN rule wins. Two placements are pinned: a tree that
+     * also satisfies `dash_summary` (priority 150) is won by the LIFECYCLE rule, which must therefore
+     * carry the wrapper's whole belt (instruction body + both subpremise forms); a tree that also
+     * satisfies the flowless `side_nav_drawer` (200) is won by the wrapper itself (160). The
+     * combined trees are built from COMMITTED fixtures of each surface plus invented values.
+     */
+    @Test
+    fun `a wrapper combined with the dash summary is won by dash_summary and still masked (#1107)`() {
+        val summary = TestResourceLoader.loadSnapshots("snapshots/dash_summary").first().second
+        val wrapper = TestResourceLoader.loadSnapshots("snapshots/dropoff_step_instructions").first().second
+        val combined = combine(summary, wrapperWith(wrapper, "Gate code is #1234, blue door", "Apt/Suite 4021"))
+        val result = TestRulesetFactory.screenRuleset.matchFirst(combined)
+        assertEquals("the lifecycle rule wins the combined frame", "dash_summary", result?.intent)
+        val rule = TestRulesetFactory.screenRuleset.ruleById(result!!.ruleId)!!
+        val masked = serialize(rule.redact.apply(combined))
+        assertFalse("the instruction body is masked by the winner's belt", masked.contains("Gate code"))
+        assertFalse("the fused subpremise is masked by the winner's belt", masked.contains("4021"))
+        assertTrue("the summary's own chrome survives", masked.contains("Dash summary"))
+    }
+
+    @Test
+    fun `a wrapper combined with the side-nav drawer is won by the wrapper and masked (#1107)`() {
+        val drawer = TestResourceLoader.loadSnapshots("snapshots/side_nav_drawer").first().second
+        val wrapper = TestResourceLoader.loadSnapshots("snapshots/dropoff_step_instructions").first().second
+        val combined = combine(drawer, wrapperWith(wrapper, "Gate code is #1234, blue door", null))
+        val result = TestRulesetFactory.screenRuleset.matchFirst(combined)
+        assertEquals("the wrapper out-ranks the flowless drawer", "dropoff_step_instructions", result?.intent)
+        val rule = TestRulesetFactory.screenRuleset.ruleById(result!!.ruleId)!!
+        assertFalse(serialize(rule.redact.apply(combined)).contains("Gate code"))
+    }
+
+    /** Two fixture roots under one synthetic window root. */
+    private fun combine(a: UiNode, b: UiNode): UiNode = UiNode(children = listOf(a, b)).restoreParents()
+
+    /**
+     * The committed wrapper fixture with its (already `[redacted]`) instruction body replaced by an
+     * INVENTED value, plus an optional invented fused-subpremise node beside it.
+     */
+    private fun wrapperWith(fixture: UiNode, instruction: String, subpremise: String?): UiNode {
+        fun rewrite(n: UiNode): UiNode {
+            val kids = n.children.map { rewrite(it) }.toMutableList()
+            if (n.viewIdResourceName?.endsWith("description_text_view") == true) {
+                return n.copy(text = instruction, children = kids)
+            }
+            if (subpremise != null && kids.any { it.viewIdResourceName?.endsWith("description_text_view") == true }) {
+                kids.add(UiNode(text = subpremise))
+            }
+            return n.copy(children = kids)
+        }
+        return rewrite(fixture).restoreParents()
+    }
+
+    /**
      * #1107 — the rules-INDEPENDENT half. The rule redact above covers the RECOGNIZED path; an
      * UNKNOWN render of this wrapper (a step variant the require misses, a future page reusing
      * the id) is reached only by the #910 id scan, so the id must be in that SSOT too.
