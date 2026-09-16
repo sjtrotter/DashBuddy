@@ -53,7 +53,6 @@ import org.mockito.kotlin.eq
 import org.mockito.kotlin.inOrder
 import org.mockito.kotlin.mock
 import org.mockito.kotlin.never
-import org.mockito.kotlin.stub
 import org.mockito.kotlin.times
 import org.mockito.kotlin.verify
 import org.mockito.kotlin.verifyBlocking
@@ -271,9 +270,8 @@ class SideEffectEngineTest {
     fun `PerformRuleAction is throttled per action and platform`() = runTest {
         val engine = buildEngine(StandardTestDispatcher(testScheduler))
         // #1102: the throttle window starts on a tap that LANDED — stub the handler to land it.
-        uiInteractionHandler.stub {
-            onBlocking { performVerifiedClick(any(), any(), any(), any(), any()) } doReturn true
-        }
+        wheneverBlocking { uiInteractionHandler.performVerifiedClick(any(), any(), any(), any(), any()) }
+            .thenReturn(true)
 
         engine.process(acceptActionEffect())
         runCurrent()
@@ -291,9 +289,8 @@ class SideEffectEngineTest {
         // mid-slide and finds nothing; the settled frame is admitted ~600 ms later and re-arms a
         // fresh tap. Before #1102 that retry was throttled as "within 1000ms of the last fire".
         val engine = buildEngine(StandardTestDispatcher(testScheduler))
-        uiInteractionHandler.stub {
-            onBlocking { performVerifiedClick(any(), any(), any(), any(), any()) } doReturn false doReturn true
-        }
+        wheneverBlocking { uiInteractionHandler.performVerifiedClick(any(), any(), any(), any(), any()) }
+            .thenReturn(false, true)
 
         engine.process(acceptActionEffect())
         runCurrent()
@@ -306,9 +303,8 @@ class SideEffectEngineTest {
     @Test
     fun `a tap that LANDED still throttles the next one (#1102 widens nothing)`() = runTest {
         val engine = buildEngine(StandardTestDispatcher(testScheduler))
-        uiInteractionHandler.stub {
-            onBlocking { performVerifiedClick(any(), any(), any(), any(), any()) } doReturn true
-        }
+        wheneverBlocking { uiInteractionHandler.performVerifiedClick(any(), any(), any(), any(), any()) }
+            .thenReturn(true)
 
         engine.process(acceptActionEffect())
         runCurrent()
