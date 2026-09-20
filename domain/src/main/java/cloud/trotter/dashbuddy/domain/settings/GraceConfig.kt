@@ -80,6 +80,12 @@ data class GraceConfig(
      * leaves within seconds; a cancelled sheet leaves when the countdown ends. Per-platform data.
      */
     val declineSheetWindowMs: Long = DECLINE_SHEET_WINDOW_MS,
+    /**
+     * #1104: how close to the card's own countdown end an exit must land to be read as the
+     * countdown running out (an EXPIRY) rather than a decline — covers the frame debounce between
+     * the last countdown read and the actual zero.
+     */
+    val countdownExpirySlackMs: Long = COUNTDOWN_EXPIRY_SLACK_MS,
 ) {
     companion object {
         const val DEFAULT_GRACE_MS = 10_000L
@@ -98,6 +104,9 @@ data class GraceConfig(
 
         /** #1104: 15 s — the fielded sheet→exit spread is 2–9 s; a cancelled sheet's countdown is longer. */
         const val DECLINE_SHEET_WINDOW_MS = 15_000L
+
+        /** #1104: 3 s — the offer-card frame debounce is ~3 s, so a countdown read can lag by that much. */
+        const val COUNTDOWN_EXPIRY_SLACK_MS = 3_000L
 
         /**
          * Default accept-consumption grace (DoorDash and any platform without an override): a fine-

@@ -457,7 +457,12 @@ presented offer (LATEST sighting), preserved across enrich-as-variant, never a c
 always wins, and an OBSERVED tap outranks every inference). The sheet counts only when the exit lands
 within `GraceConfig.declineSheetWindowMs` (15 s; the seven fielded 8.97.8 declines exited 2–9 s after
 the sheet) — the card re-renders for one frame after a real decline AND after a cancel, so a card frame
-is not a cancel signal; a cancelled sheet whose countdown later ends is outside the window → timeout.
+is not a cancel signal; a cancelled sheet whose countdown later ends is outside the window → timeout —
+and, since the window alone cannot separate a LATE cancel from a real decline, the card's own countdown is
+now parsed on both DoorDash card generations (`initialCountdownSeconds`: the legacy button's end text, the
+Compose footer's `m:ss` clock via `parseClockSeconds`) into `PendingOffer.countdownExpiresAt` (refreshed
+per frame, hash-neutral): an exit at/after that instant minus `countdownExpirySlackMs` (3 s) is an EXPIRY
+however recent the sheet, and the `OFFER_EXPIRY` safety timer never converts to a decline on its own.
 The same change generalizes `destinationImpliesAccept`: a click-less accept is inferred ONLY when the
 offer's `returnFlow` was not a task flow (a job appearing where there was none) — a mid-job add-on's
 returnFlow is job A's pickup surface, whose re-render after a declined add-on used to mint a phantom

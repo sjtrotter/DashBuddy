@@ -185,6 +185,15 @@
           "parse": {
             "as": "offer",
             "fields": {
+              "initialCountdownSeconds": {
+                // #1104: the Accept button's end text is the remaining countdown ("31") — transition
+                // evidence for the outcome resolver (an exit at the countdown's end is an expiry).
+                "find": {
+                  "hasIdSuffix": "textView_prism_button_end_text_2"
+                },
+                "read": "text",
+                "transform": "toInt"
+              },
               "payAmount": {
                 "coalesce": [
                   {
@@ -536,6 +545,16 @@
                 },
                 "read": "text",
                 "transform": "parseTotalMinutes"
+              },
+              "initialCountdownSeconds": {
+                // #1104: the `0:16` clock beside Accept — the remaining countdown at this frame.
+                // Scoped to the Accept footer's subtree.
+                "from": "acceptButton",
+                "find": {
+                  "hasTextMatchesRegex": "^\\d{1,2}:\\d{2}$"
+                },
+                "read": "text",
+                "transform": "parseClockSeconds"
               },
               "orders": {
                 // A merchant leg is identified by EXCLUSION, never by its address (Astra r3): every

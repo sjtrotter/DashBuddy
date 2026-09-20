@@ -469,7 +469,9 @@ by a platform screen name in Kotlin. `PendingOffer.declineSheetSeenAt` records t
 `EffectMap.resolveOfferOutcome` reads it AFTER every accept arm (the latch, and the post-step survivor —
 which also fixes the click-less accept logging `OFFER_TIMEOUT` while the job minted), only within the
 platform's `GraceConfig.declineSheetWindowMs` of the LAST sighting (a cancelled sheet whose countdown later
-ends is a timeout; the card re-renders after both, so a card frame is not a cancel signal), and names
+ends is a timeout; the card re-renders after both, so a card frame is not a cancel signal; an exit that
+coincides with the card's own parsed countdown end, or arrives via the `OFFER_EXPIRY` timer, is an expiry
+whatever was seen), and names
 inferred outcomes in the event `description`. The click-less accept itself is narrowed to a NON-task
 `returnFlow` for every task destination (a mid-job add-on's decline used to be read as its accept when the
 original pickup surface re-rendered). Recovery drops the sighting; the journal persists `offerSurface`.

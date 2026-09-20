@@ -123,6 +123,7 @@ private fun PlatformRegionStepper.pushOrReplaceOffer(
                     offerFields = offerFields,
                     targets = obs.targets.ifEmpty { presented.targets },
                     sourceRuleId = obs.ruleId ?: presented.sourceRuleId,
+                    countdownExpiresAt = countdownExpiresAt(obs, offerFields) ?: presented.countdownExpiresAt,
                 ) else it
             }
 
@@ -146,6 +147,7 @@ private fun PlatformRegionStepper.pushOrReplaceOffer(
                     targets = obs.targets.ifEmpty { presented.targets },
                     sourceRuleId = obs.ruleId ?: presented.sourceRuleId,
                     evaluation = null,
+                    countdownExpiresAt = countdownExpiresAt(obs, offerFields) ?: presented.countdownExpiresAt,
                 ) else it
             }
 
@@ -169,6 +171,7 @@ private fun PlatformRegionStepper.pushOrReplaceOffer(
                 returnFlow = presented?.returnFlow ?: (region.lastActedFlow ?: Flow.Idle),
                 targets = obs.targets,
                 sourceRuleId = obs.ruleId,
+                countdownExpiresAt = countdownExpiresAt(obs, offerFields),
             )
             listOf(fresh)
         }
@@ -236,6 +239,10 @@ private fun isSamePresentation(
     val incomingKey = incoming.parsedOffer.presentationKey ?: return false
     return presentedKey == incomingKey
 }
+
+/** #1104: when this frame's countdown reaches zero — null when the frame carries no countdown. */
+private fun countdownExpiresAt(obs: Observation, offerFields: ParsedFields.OfferFields): Long? =
+    offerFields.parsedOffer.initialCountdownSeconds?.takeIf { it >= 0 }?.let { obs.timestamp + it * 1000L }
 
 /**
  * Does leaving offer-presentation TO [destination] imply this offer was click-lessly ACCEPTED?

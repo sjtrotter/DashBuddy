@@ -94,8 +94,9 @@ street line, a city/ST/ZIP and a customer note raw — now #1116.)_
   job, so count accepted ENTRIES, not jobs) and DECLINED for every sheet-declined offer; the
   `app_events.eventPayload.description` on those rows reads `… inferred from the task surface …` /
   `… inferred from the confirm sheet …`; the untouched offer is the only TIMEOUT; no ACCEPTED row
-  without an accepted entry. Known fail-null: a click-less ADD-ON accept is not inferable (logs
-  TIMEOUT; pay lands via the receipt) — note it, don't fight it.
+  without an accepted entry. Known fail-null (note, don't fight): a click-less ADD-ON accept is not
+  inferable (logs TIMEOUT; pay lands via the receipt); a decline whose exit lands > 15 s after the sheet,
+  at the card's countdown end, or only via the expiry timer logs TIMEOUT.
   - Confirmed: 0/2
 - **🆕 NEW — the 8.97.8 COMPOSE offer card must be recognized again (#1114).** DoorDash rolled a
   Compose offer card server-side on 09-18 (same app build): every offer on 09-18/19 fell to UNKNOWN or

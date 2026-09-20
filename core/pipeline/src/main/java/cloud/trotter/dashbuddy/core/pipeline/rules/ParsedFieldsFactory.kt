@@ -387,6 +387,10 @@ object ParsedFieldsFactory {
                 dueByTimeText = deliveryTimeText,
                 dueByTimeMillis = f.long("deliveryTime"),
                 timeToCompleteMinutes = timeToCompleteMinutes,
+                // #1104: the card's REMAINING countdown at this frame (seconds) — transition evidence
+                // for the outcome resolver (an exit at the countdown's end is an expiry, whatever
+                // else was seen). Never folded into offerHash/presentationKey: it ticks every frame.
+                initialCountdownSeconds = f.int("initialCountdownSeconds"),
                 orders = orders,
                 // #881: the presentation kind, from the rule's own wire vocabulary. Fail-NULL on an
                 // absent OR unrecognized value (a wrong kind is worse than no kind) — and, unlike

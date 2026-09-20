@@ -24,6 +24,16 @@ import java.util.Calendar
  */
 class TransformRegistryTest {
 
+    // #1104 — the offer card's `m:ss` countdown as whole seconds.
+    @Test
+    fun `parseClockSeconds reads a m-ss clock as seconds and nothing else`() {
+        assertEquals(16, TransformRegistry.apply("parseClockSeconds", "0:16"))
+        assertEquals(65, TransformRegistry.apply("parseClockSeconds", "1:05"))
+        assertNull(TransformRegistry.apply("parseClockSeconds", "31"))
+        assertNull(TransformRegistry.apply("parseClockSeconds", "45 min"))
+        assertNull(TransformRegistry.apply("parseClockSeconds", null))
+    }
+
     // #1114 — the 8.97.8 Compose offer card's route summary feeds `timeToCompleteMinutes` in
     // MINUTES; `parseMinutes` would read the trailing `10` of an hour-long estimate.
     @Test

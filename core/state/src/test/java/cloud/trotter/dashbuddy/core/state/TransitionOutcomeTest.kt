@@ -51,13 +51,13 @@ class TransitionOutcomeTest {
         itemCount = 1, isItemCountEstimated = false, badges = emptySet(),
     )
 
-    private fun offerObs(t: Long, hash: String, store: String = "H-E-B", key: String? = null) = Observation.Screen(
+    private fun offerObs(t: Long, hash: String, store: String = "H-E-B", key: String? = null, countdown: Int? = null) = Observation.Screen(
         timestamp = t, captureId = null, ruleId = "doordash.screen.offer_popup",
         metadata = ReplayMetadata.EMPTY, flow = Flow.OfferPresented, modeHint = Mode.Online,
         parsed = ParsedFields.OfferFields(
             parsedOffer = ParsedOffer(
                 offerHash = hash, presentationKey = key, payAmount = 14.75, distanceMiles = 8.5,
-                timeToCompleteMinutes = 45L, orders = listOf(order(store)),
+                timeToCompleteMinutes = 45L, orders = listOf(order(store)), initialCountdownSeconds = countdown,
             ),
         ),
     )
@@ -123,10 +123,44 @@ class TransitionOutcomeTest {
     }
 
     @Test
-    fun `sheet observed then OFFER_EXPIRY fires inside the window resolves as a decline`() {
+    fun `the OFFER_EXPIRY safety timer never converts a sheet sighting into a decline`() {
+        // The timer fires only when NO frame arrived; running out is what it means (Astra r2).
         val d = drive(region(), offerObs(1_000L, "o1"), sheetObs(118_000L))
         val (_, effects) = resolve(d, expiry(121_000L, "o1"))
+        val out = effects.outcome()!!
+        assertEquals(AppEventType.OFFER_TIMEOUT, out.outcome)
+        assertNull(out.description)
+    }
+
+    @Test
+    fun `a LATE cancel — sheet, cancel, countdown runs out inside the window — is a TIMEOUT (countdown evidence)`() {
+        // Astra r2: offer with a 40 s countdown → sheet at 35 s → card at 36 s (countdown 5 s) → idle
+        // at 41 s. The exit coincides with the countdown's end, so the sheet does not make it a decline.
+        val d = drive(
+            region(),
+            offerObs(1_000L, "o1", countdown = 40),
+            sheetObs(35_000L),
+            offerObs(36_000L, "o1", countdown = 5),
+        )
+        assertEquals(41_000L, d.region.presentedOffer()?.countdownExpiresAt)
+        val (_, effects) = resolve(d, idleObs(41_000L))
+        val out = effects.outcome()!!
+        assertEquals(AppEventType.OFFER_TIMEOUT, out.outcome)
+        assertNull(out.description)
+    }
+
+    @Test
+    fun `a real decline with a live countdown — exit well before the countdown ends — is a DECLINE`() {
+        val d = drive(region(), offerObs(1_000L, "o1", countdown = 40), sheetObs(3_000L), offerObs(4_600L, "o1", countdown = 36))
+        assertEquals(40_600L, d.region.presentedOffer()?.countdownExpiresAt)
+        val (_, effects) = resolve(d, idleObs(6_000L))
         assertEquals(AppEventType.OFFER_DECLINED, effects.outcome()!!.outcome)
+    }
+
+    @Test
+    fun `a card frame without a countdown keeps the last known countdown end`() {
+        val d = drive(region(), offerObs(1_000L, "o1", countdown = 40), offerObs(4_000L, "o1"))
+        assertEquals(41_000L, d.region.presentedOffer()?.countdownExpiresAt)
     }
 
     @Test

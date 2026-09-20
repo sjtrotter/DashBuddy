@@ -448,11 +448,20 @@ class EffectMap @Inject constructor(
         return AppEventType.OFFER_TIMEOUT
     }
 
-    /** #1104: the sheet was seen and this exit lands inside the platform's decline window. */
+    /**
+     * #1104: the sheet was seen, this exit lands inside the platform's decline window, and nothing
+     * says the offer simply RAN OUT: an exit at/after the card's own countdown end (`countdownExpiresAt`
+     * minus the slack) is an expiry however recent the sheet — the evidence that separates a real
+     * decline from a cancelled sheet whose offer then expired (Astra r2) — and the `OFFER_EXPIRY`
+     * safety timer (fires only when NO frame arrived) never converts to a decline on its own.
+     */
     internal fun declineInferredFromSheet(offer: PendingOffer, obs: Observation): Boolean {
         val seen = offer.declineSheetSeenAt ?: return false
-        val window = graceConfig.forPlatform(offer.platform).declineSheetWindowMs
-        return obs.timestamp - seen in 0..window
+        if (obs is Observation.Timeout) return false
+        val grace = graceConfig.forPlatform(offer.platform)
+        if (obs.timestamp - seen !in 0..grace.declineSheetWindowMs) return false
+        val ranOut = offer.countdownExpiresAt?.let { obs.timestamp >= it - grace.countdownExpirySlackMs } == true
+        return !ranOut
     }
 
     /**
