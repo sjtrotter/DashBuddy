@@ -83,7 +83,11 @@ ghost-offer shape a structurally present holder could render; a synthetic blank-
 it. It is not a `RuleAction` target, so `offerBody` enumerates no capability. `side_nav_drawer`
 REJECTS the card's signature (ComposeView + `Decline` + route shape + currency — deliberately without
 `Accept`, so a partial card stops qualifying as a drawer and stays UNKNOWN), and the accept /
-initial_decline click rules carry an id-less clickable-`Accept`/`Decline` arm. Partial inflation frames
+initial_decline / decline_offer click rules carry label-only arms (exact `Accept` / `Decline` / `Decline offer` or
+`Decline & pause store` in the clicked node's subtree, scoped by `screenIs`) — the Compose click SOURCE
+shape is unobserved, so no clickable/no-id assumption is made; the confirm sheet's `confirmDeclineButton`
+binds the Compose `Decline offer` View directly and deliberately NOT the Gold `Decline & pause store`
+variant (it pauses the store — a side effect quick-decline consent never covered). Partial inflation frames
 (no Accept / no disclaimer / no merchant row) stay UNKNOWN by design (two negatives committed). Residuals
 on #1114: badges resolve at OFFER level, an address without a leading house number fails the guard, and — the field finding that matters most — Compose taps produced NO click envelopes, so an
 accept is inferred from the pickup-phase exit (`destinationImpliesAccept`) and a decline resolves as

@@ -12,13 +12,37 @@
       },
       "bind": {
         "confirmDeclineButton": {
+          // #1114: the 8.97.8 sheet keeps its View chrome (prism_sheet, the "sure you want to
+          // decline" copy) but its buttons are now id-less Compose Views — a clickable View whose
+          // subtree is `Decline offer` + the countdown; the second arm binds that directly. The
+          // Gold variant `Decline & pause store` (fielded 09-18 17:18) is DELIBERATELY excluded
+          // from this AUTOMATION target: it also pauses the store for the dasher, a side effect
+          // quick-decline consent never covered. A tap on it is still RECORDED as a decline by
+          // the `decline_offer` click rule. (A changed definition ⇒ a new capability key.)
           "find": {
-            "all": [
+            "any": [
               {
-                "hasIdSuffix": "textView_prism_button_title"
+                "all": [
+                  {
+                    "hasIdSuffix": "textView_prism_button_title"
+                  },
+                  {
+                    "hasText": "Decline offer"
+                  }
+                ]
               },
               {
-                "hasText": "Decline offer"
+                "all": [
+                  {
+                    "isClickable": true
+                  },
+                  {
+                    "hasNoId": true
+                  },
+                  {
+                    "hasAnyText": "Decline offer"
+                  }
+                ]
               }
             ]
           },
@@ -738,8 +762,11 @@
         "modeHint": "online"
       },
       // #1114: the 8.97.8 Compose card's Accept is an id-less clickable View whose subtree is
-      // `Accept` + the countdown; the top-right `Decline` control's subtree is its label alone (the
-      // `not` exclusions are belt-and-braces against a future re-nesting). Compose taps
+      // `Accept` + the countdown. Compose taps produced NO click envelopes in the 09-18/19 field
+      // data, so the SOURCE node a Compose click would carry is unobserved — the arm asserts only
+      // the label (exact `Accept` in the clicked node's subtree, and no `Decline`, so a root-sized
+      // source never reads as an accept) and leans on `screenIs` for scope. A tap that never
+      // arrives is covered by the click-less accept inference on the pickup-phase exit. Compose taps
       // produced no click envelopes in the 09-18/19 field data at all; the arm is here so a tap that
       // DOES arrive is classified, and the accept is otherwise inferred from the pickup-phase exit.
       "require": {
@@ -749,12 +776,6 @@
           },
           {
             "all": [
-              {
-                "isClickable": true
-              },
-              {
-                "hasNoId": true
-              },
               {
                 "hasAnyText": "Accept"
               },
@@ -776,6 +797,10 @@
       "state": {
         "modeHint": "online"
       },
+      // #1114: Compose arm — exact `Decline` in the clicked node's subtree and no `Accept`
+      // (`hasAnyText` is whole-token equality, so the confirm sheet's `Decline offer` never
+      // matches this rule). Compose taps produced NO click envelopes in the 09-18/19 field data,
+      // so the SOURCE node shape is unobserved: no clickable/no-id assumption, `screenIs` scopes.
       "require": {
         "any": [
           {
@@ -783,12 +808,6 @@
           },
           {
             "all": [
-              {
-                "isClickable": true
-              },
-              {
-                "hasNoId": true
-              },
               {
                 "hasAnyText": "Decline"
               },
@@ -814,8 +833,19 @@
       "state": {
         "modeHint": "online"
       },
+      // #1114: the 8.97.8 confirm sheet renders TWO commit labels — `Decline offer` and, for Gold
+      // dashers, `Decline & pause store` (fielded 09-18 17:18). Both commit the decline; both are
+      // recorded as one. The pause variant is recorded here but never auto-tapped (see the
+      // confirmDeclineButton bind).
       "require": {
-        "hasAnyText": "Decline offer"
+        "any": [
+          {
+            "hasAnyText": "Decline offer"
+          },
+          {
+            "hasAnyText": "Decline & pause store"
+          }
+        ]
       }
     }
   ]
