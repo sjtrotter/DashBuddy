@@ -126,6 +126,39 @@
     {
       "id": "doordash.screen.side_nav_drawer",
       "priority": 200,
+      // #1114: the 8.97.8 Compose offer card renders INSIDE the same hierarchy as the side-nav
+      // Compose tree (side_nav_content_container + the ratings/promos/preferences labels are
+      // present on every frame), so 23 live offers in the 09-18/19 pull were claimed as drawer
+      // chrome. Reject the card's own signature — ComposeView + exact `Decline` + the route-summary
+      // shape + a standalone currency figure (NOT `Accept`, so a partially inflated card also stops
+      // qualifying as a drawer and stays UNKNOWN rather than being misfiled). This only removes the
+      // drawer candidate; offer_popup (priority 20) decides whether the frame is an offer.
+      "reject": [
+        {
+          "all": [
+            {
+              "exists": {
+                "hasClassName": "androidx.compose.ui.platform.ComposeView"
+              }
+            },
+            {
+              "exists": {
+                "hasText": "Decline"
+              }
+            },
+            {
+              "exists": {
+                "hasTextMatchesRegex": "^\\d+ stops? \\(\\d+(?:\\.\\d+)? (?:mi|ft)\\) • "
+              }
+            },
+            {
+              "exists": {
+                "hasTextMatchesRegex": "^\\$\\d+(?:,\\d{3})*\\.\\d{2}$"
+              }
+            }
+          ]
+        }
+      ],
       "require": {
         "all": [
           {

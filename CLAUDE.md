@@ -342,6 +342,11 @@ compiles, `ObservationClassifier` matches.
   `{parsedHash}` (content identity, #427) and `{presentationHash}` (presentation identity, #859 —
   fail-closed to `offerHash` when `presentationKey` is null). A derived field is never an ordinary
   `{field}` template.
+- **8.97.8 Compose offer card (#1114):** `offer_popup` is a two-branch rule — branch 0 the legacy View
+  card verbatim, branch 1 the id-less Compose card anchored on its own chrome (route-summary shape,
+  currency figure, disclaimer, merchant-holder + address sibling); `side_nav_drawer` rejects that
+  signature; `parseTotalMinutes` feeds `timeToCompleteMinutes` (an estimate, never a deadline). Compose
+  taps produced no click envelopes in the field — accept is inferred from the pickup-phase exit.
 - **No actuation from rules (#425):** click/gesture verbs are compile-rejected; rules expose target
   bindings (`acceptButton`, `declineButton`, `expandButton`) that the app-owned `RuleAction` registry
   consumes (`docs/design/rule-capability-consent.md`).

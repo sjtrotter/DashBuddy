@@ -39,282 +39,564 @@
         "flow": "offer:presented",
         "modeHint": "online"
       },
-      "bind": {
-        "acceptButton": {
-          "find": {
-            "hasIdSuffix": "accept_button"
-          },
-          "optional": true
-        },
-        "declineButton": {
-          "find": {
-            "hasIdSuffix": "secondary_action_button_dash_plus"
-          },
-          "optional": true
-        }
-      },
-      "require": {
-        "all": [
-          {
-            // #1063: the card's two footer buttons — "Decline" and "Accept"/"Add to route" —
-            // have anchored this rule since the ruleset's first commit (a18b3b19, inherited
-            // verbatim from the pre-#89 Kotlin OfferMatcher): they were the offer popup's most
-            // distinguishing chrome, and the pair separated it from every other surface that
-            // merely renders the word "Accept". Six real offers in the 09-05 pull fell to
-            // UNKNOWN because DoorDash inflates the decline control a beat AFTER the rest of
-            // the card: the collar-animation frame carries the full store leg, pay, distance,
-            // deadline and a live `accept_button`, but no "Decline" node anywhere in the tree
-            // (2026-08-28 15:31:47.105, 2026-09-02 18:32:40 / 18:34:22, 2026-09-03 14:28:32,
-            // 2026-09-05 07:45:52 / 07:46:53). Three of those never produced a settled sibling
-            // at all — one was ACCEPTED from a card the app had never presented — so the offer
-            // was invisible for the whole animation window.
-            // Admitting the frame is safe because Decline was never load-bearing on its own:
-            // `accept_button` is ALREADY a required conjunct below (via the accept_button /
-            // accept_decline_footer_container arm), so "Decline OR accept_button" only relaxes
-            // the redundant half of the pair while every other guard stands unchanged — the
-            // Accept/"Add to route" text, the footer-id anchor, and the #595 store-leg guard
-            // (the two Decline-bearing, store-leg-LESS half-renders in the same pull stay
-            // UNKNOWN on that guard, as intended). The post-accept teardown frame cannot leak
-            // in either: `offer_accepting` claims it precisely because the Accept affordance is
-            // GONE, which this rule still demands. And the early frame is a #830 VARIANT, not a
-            // replace — it parses the identical store list, pay, distance and deadline as its
-            // settled sibling, so presentationKey AND offerHash match byte-for-byte
-            // (`OfferCardPreDeclineTest`); the card enriches in place instead of timing out.
-            // Residual, pre-existing and filed as #1069: presentationKey is store-anchored, so
-            // two consecutive offers at ONE store are the same presentation identity — the
-            // second enriches the first instead of replacing it. Already true between two
-            // settled frames; this change only adds one more frame shape that can carry it.
-            "exists": {
-              "any": [
-                {
-                  "hasText": "Decline"
-                },
-                {
-                  "hasIdSuffix": "accept_button"
-                }
-              ]
+      "branches": [
+        {
+          "comment": "Branch 0 — the LEGACY View-based card (prism sheet + accept_decline_footer_container; every fielded frame 2026-01 → 2026-09-17). The pre-#1114 rule body moved VERBATIM into a branch so the 8.97.8 Compose card (branch 1) sits beside it under one rule id: same priority, same offer:presented state, byte-identical accept binding definition (so its capability key — and the dasher's consent — is unchanged).",
+          "bind": {
+            "acceptButton": {
+              "find": {
+                "hasIdSuffix": "accept_button"
+              },
+              "optional": true
+            },
+            "declineButton": {
+              "find": {
+                "hasIdSuffix": "secondary_action_button_dash_plus"
+              },
+              "optional": true
             }
           },
-          {
-            "exists": {
-              "any": [
-                {
-                  "hasText": "Accept"
-                },
-                {
-                  "hasText": "Add to route"
-                }
-              ]
-            }
-          },
-          {
-            "exists": {
-              "any": [
-                {
-                  "hasIdSuffix": "accept_button"
-                },
-                {
-                  "hasIdSuffix": "accept_decline_footer_container"
-                }
-              ]
-            }
-          },
-          {
-            "exists": {
-              "all": [
-                {
-                  "hasIdSuffix": "display_name"
-                },
-                {
-                  "hasTextMatchesRegex": "\\S"
-                },
-                {
-                  "not": {
-                    "hasText": "Customer dropoff"
-                  }
-                },
-                {
-                  "not": {
-                    "hasText": "Business handoff"
-                  }
-                }
-              ]
-            }
-          }
-        ]
-      },
-      "parse": {
-        "as": "offer",
-        "fields": {
-          "payAmount": {
-            "coalesce": [
+          "require": {
+            "all": [
               {
-                "find": {
-                  "all": [
+                // #1063: the card's two footer buttons — "Decline" and "Accept"/"Add to route" —
+                // have anchored this rule since the ruleset's first commit (a18b3b19, inherited
+                // verbatim from the pre-#89 Kotlin OfferMatcher): they were the offer popup's most
+                // distinguishing chrome, and the pair separated it from every other surface that
+                // merely renders the word "Accept". Six real offers in the 09-05 pull fell to
+                // UNKNOWN because DoorDash inflates the decline control a beat AFTER the rest of
+                // the card: the collar-animation frame carries the full store leg, pay, distance,
+                // deadline and a live `accept_button`, but no "Decline" node anywhere in the tree
+                // (2026-08-28 15:31:47.105, 2026-09-02 18:32:40 / 18:34:22, 2026-09-03 14:28:32,
+                // 2026-09-05 07:45:52 / 07:46:53). Three of those never produced a settled sibling
+                // at all — one was ACCEPTED from a card the app had never presented — so the offer
+                // was invisible for the whole animation window.
+                // Admitting the frame is safe because Decline was never load-bearing on its own:
+                // `accept_button` is ALREADY a required conjunct below (via the accept_button /
+                // accept_decline_footer_container arm), so "Decline OR accept_button" only relaxes
+                // the redundant half of the pair while every other guard stands unchanged — the
+                // Accept/"Add to route" text, the footer-id anchor, and the #595 store-leg guard
+                // (the two Decline-bearing, store-leg-LESS half-renders in the same pull stay
+                // UNKNOWN on that guard, as intended). The post-accept teardown frame cannot leak
+                // in either: `offer_accepting` claims it precisely because the Accept affordance is
+                // GONE, which this rule still demands. And the early frame is a #830 VARIANT, not a
+                // replace — it parses the identical store list, pay, distance and deadline as its
+                // settled sibling, so presentationKey AND offerHash match byte-for-byte
+                // (`OfferCardPreDeclineTest`); the card enriches in place instead of timing out.
+                // Residual, pre-existing and filed as #1069: presentationKey is store-anchored, so
+                // two consecutive offers at ONE store are the same presentation identity — the
+                // second enriches the first instead of replacing it. Already true between two
+                // settled frames; this change only adds one more frame shape that can carry it.
+                "exists": {
+                  "any": [
                     {
-                      "hasIdSuffix": "text_field"
+                      "hasText": "Decline"
                     },
                     {
-                      "hasTextContaining": "$"
+                      "hasIdSuffix": "accept_button"
                     }
                   ]
-                },
-                "read": "text",
-                "transform": "parseCurrency"
+                }
               },
               {
-                "find": {
-                  "hasTextContaining": "$"
-                },
-                "read": "text",
-                "transform": "parseCurrency"
+                "exists": {
+                  "any": [
+                    {
+                      "hasText": "Accept"
+                    },
+                    {
+                      "hasText": "Add to route"
+                    }
+                  ]
+                }
+              },
+              {
+                "exists": {
+                  "any": [
+                    {
+                      "hasIdSuffix": "accept_button"
+                    },
+                    {
+                      "hasIdSuffix": "accept_decline_footer_container"
+                    }
+                  ]
+                }
+              },
+              {
+                "exists": {
+                  "all": [
+                    {
+                      "hasIdSuffix": "display_name"
+                    },
+                    {
+                      "hasTextMatchesRegex": "\\S"
+                    },
+                    {
+                      "not": {
+                        "hasText": "Customer dropoff"
+                      }
+                    },
+                    {
+                      "not": {
+                        "hasText": "Business handoff"
+                      }
+                    }
+                  ]
+                }
               }
             ]
           },
-          "distance": {
-            "find": {
-              "hasTextMatchesRegex": "\\d[\\d.]*\\s*(mi|ft)"
-            },
-            "read": "text",
-            "transform": "parseDistance"
-          },
-          "deliveryTimeText": {
-            "find": {
-              "hasTextStartsWith": "Deliver by"
-            },
-            "read": "text",
-            "transform": {
-              "stripPrefix": "Deliver by "
-            }
-          },
-          "deliveryTime": {
-            "find": {
-              "hasTextStartsWith": "Deliver by"
-            },
-            "read": "text",
-            "transform": "parseDeadline"
-          },
-          "orders": {
-            "each": {
-              "all": [
-                {
-                  "hasIdSuffix": "display_name"
-                },
-                {
-                  "not": {
-                    "hasText": "Customer dropoff"
-                  }
-                },
-                {
-                  "not": {
-                    "hasText": "Business handoff"
-                  }
-                }
-              ]
-            },
-            "scope": "ancestor(2)",
-            "extract": {
-              "storeName": {
-                "find": {
-                  "hasIdSuffix": "display_name"
-                },
-                "read": "text"
-              },
-              "orderType": {
-                "conditionalEnum": [
+          "parse": {
+            "as": "offer",
+            "fields": {
+              "payAmount": {
+                "coalesce": [
                   {
-                    "if": {
-                      "exists": {
-                        "all": [
-                          {
-                            "hasIdSuffix": "work_unit_type"
-                          },
-                          {
-                            "hasTextContaining": "Shop for items"
-                          }
-                        ]
-                      }
+                    "find": {
+                      "all": [
+                        {
+                          "hasIdSuffix": "text_field"
+                        },
+                        {
+                          "hasTextContaining": "$"
+                        }
+                      ]
                     },
-                    "then": "SHOP_FOR_ITEMS"
+                    "read": "text",
+                    "transform": "parseCurrency"
                   },
                   {
-                    "else": "PICKUP"
+                    "find": {
+                      "hasTextContaining": "$"
+                    },
+                    "read": "text",
+                    "transform": "parseCurrency"
                   }
                 ]
               },
-              "itemCount": {
+              "distance": {
                 "find": {
-                  "hasIdSuffix": "display_name_secondary"
+                  "hasTextMatchesRegex": "\\d[\\d.]*\\s*(mi|ft)"
                 },
                 "read": "text",
-                "transform": "parseItemCount"
+                "transform": "parseDistance"
               },
-              "itemCountUnit": {
-                // #823 Phase 1: denomination of the count above — "UNITS" for a units-only
-                // "(64 units)" render, "ITEMS" otherwise. Read from the SAME node as itemCount so
-                // the pair can never disagree about which token was read; the evaluator uses it to
-                // convert a units count to an items-equivalent for the #556 shop-time estimate only.
+              "deliveryTimeText": {
                 "find": {
-                  "hasIdSuffix": "display_name_secondary"
+                  "hasTextStartsWith": "Deliver by"
                 },
                 "read": "text",
-                "transform": "parseItemCountUnit"
+                "transform": {
+                  "stripPrefix": "Deliver by "
+                }
               },
-              "isRedCard": {
-                "presence": {
-                  "exists": {
-                    "all": [
+              "deliveryTime": {
+                "find": {
+                  "hasTextStartsWith": "Deliver by"
+                },
+                "read": "text",
+                "transform": "parseDeadline"
+              },
+              "orders": {
+                "each": {
+                  "all": [
+                    {
+                      "hasIdSuffix": "display_name"
+                    },
+                    {
+                      "not": {
+                        "hasText": "Customer dropoff"
+                      }
+                    },
+                    {
+                      "not": {
+                        "hasText": "Business handoff"
+                      }
+                    }
+                  ]
+                },
+                "scope": "ancestor(2)",
+                "extract": {
+                  "storeName": {
+                    "find": {
+                      "hasIdSuffix": "display_name"
+                    },
+                    "read": "text"
+                  },
+                  "orderType": {
+                    "conditionalEnum": [
                       {
-                        "hasIdSuffix": "tag"
+                        "if": {
+                          "exists": {
+                            "all": [
+                              {
+                                "hasIdSuffix": "work_unit_type"
+                              },
+                              {
+                                "hasTextContaining": "Shop for items"
+                              }
+                            ]
+                          }
+                        },
+                        "then": "SHOP_FOR_ITEMS"
                       },
                       {
-                        "hasTextContaining": "Red Card"
+                        "else": "PICKUP"
                       }
                     ]
-                  }
-                }
-              },
-              "isLargeOrder": {
-                "presence": {
-                  "exists": {
-                    "hasTextContaining": "Large Order"
-                  }
-                }
-              },
-              "hasAlcohol": {
-                "presence": {
-                  "exists": {
-                    "hasTextContaining": "alcohol"
+                  },
+                  "itemCount": {
+                    "find": {
+                      "hasIdSuffix": "display_name_secondary"
+                    },
+                    "read": "text",
+                    "transform": "parseItemCount"
+                  },
+                  "itemCountUnit": {
+                    // #823 Phase 1: denomination of the count above — "UNITS" for a units-only
+                    // "(64 units)" render, "ITEMS" otherwise. Read from the SAME node as itemCount so
+                    // the pair can never disagree about which token was read; the evaluator uses it to
+                    // convert a units count to an items-equivalent for the #556 shop-time estimate only.
+                    "find": {
+                      "hasIdSuffix": "display_name_secondary"
+                    },
+                    "read": "text",
+                    "transform": "parseItemCountUnit"
+                  },
+                  "isRedCard": {
+                    "presence": {
+                      "exists": {
+                        "all": [
+                          {
+                            "hasIdSuffix": "tag"
+                          },
+                          {
+                            "hasTextContaining": "Red Card"
+                          }
+                        ]
+                      }
+                    }
+                  },
+                  "isLargeOrder": {
+                    "presence": {
+                      "exists": {
+                        "hasTextContaining": "Large Order"
+                      }
+                    }
+                  },
+                  "hasAlcohol": {
+                    "presence": {
+                      "exists": {
+                        "hasTextContaining": "alcohol"
+                      }
+                    }
                   }
                 }
               }
             }
-          }
-        }
-      },
-      "validate": [
-        {
-          "assert": "fieldNotNull",
-          "field": "payAmount",
-          "onFail": "skip"
-        }
-      ],
-      "effects": [
-        {
-          "screenshot": {
-            "prefix": "Offer - {payAmount}",
-            "category": "offer"
           },
-          "dedupeKey": "offer-ss-{parsedHash}",
-          "throttleMs": 60000
+          "validate": [
+            {
+              "assert": "fieldNotNull",
+              "field": "payAmount",
+              "onFail": "skip"
+            }
+          ],
+          "effects": [
+            {
+              "screenshot": {
+                "prefix": "Offer - {payAmount}",
+                "category": "offer"
+              },
+              "dedupeKey": "offer-ss-{parsedHash}",
+              "throttleMs": 60000
+            },
+            {
+              "log": {
+                "type": "OFFER_RECEIVED",
+                "payload": "pay={payAmount} dist={distance}"
+              },
+              "dedupeKey": "offer-log-{parsedHash}",
+              "throttleMs": 60000
+            }
+          ]
         },
         {
-          "log": {
-            "type": "OFFER_RECEIVED",
-            "payload": "pay={payAmount} dist={distance}"
+          "comment": "Branch 1 — #1114: the 8.97.8 COMPOSE offer card, rolled out server-side between 2026-09-17 13:44 (last legacy frame) and 2026-09-18 14:46 (first Compose frame) on the SAME DoorDash build. The tree is id-less: a ComposeView under main_fragment, the card body in a ScrollView (pay `$14.75`, `incl. tips`, one route summary `2 stops (8.5 mi) • 45 min`, per-store rows = a ViewFactoryHolder wrapping the merchant name immediately FOLLOWED by an address sibling `7330 N Loop 1604 W, San Antonio, 78249 TX`, an optional clickable `Shop for 6 items (~7 min)` row after a shop store's address, a `Customer dropoff` holder, the `Guaranteed earnings for completing the offer.` disclaimer, and a clickable footer View whose subtree is `Accept` + the countdown). `Decline` is a clickable View top-right. Every legacy anchor (accept_button, accept_decline_footer_container, display_name, work_unit_type, display_name_secondary, text_field, `Deliver by`) is absent, so 09-18/19 produced ZERO OFFER_* events across two dashing days while 36 offer frames fell to UNKNOWN or were claimed by side_nav_drawer (the side-nav Compose tree coexists with the card in the same hierarchy — chrome.json5's drawer rule now REJECTS this shape). Anchors are the card's own chrome only (no merchant names — #574 doctrine): ComposeView + exact `Decline` + exact `Accept` + the route-summary SHAPE + a standalone currency figure + the disclaimer prefix + at least one merchant holder followed by an address-shaped sibling. Partial inflation frames (no Accept / no disclaimer / no merchant row — the #1063 class) fail this branch and stay UNKNOWN by design; the two-branch structure keeps the legacy card byte-identical. Known residuals filed on #1114: (a) `orderType`/badges are resolved at OFFER level (a shop row anywhere marks every store SHOP_FOR_ITEMS — a mixed shop+restaurant stack over-counts shop handling); (b) the merchant guard is structural (a holder with a blank name would pass — fail-null beats fail-wrong only while a real render always carries the name, which every fielded frame does); (c) Compose taps produced NO click envelopes in the field (accept is inferred from the pickup-phase exit — `destinationImpliesAccept`; a decline resolves as OFFER_TIMEOUT, the #1104 class); (d) an address that does not start with a house number fails the guard → UNKNOWN; (e) no `Deliver by` on this card — `timeToCompleteMinutes` carries the platform's route ESTIMATE, never a deadline.",
+          "bind": {
+            "acceptButton": {
+              "find": {
+                "all": [
+                  {
+                    "isClickable": true
+                  },
+                  {
+                    "hasNoId": true
+                  },
+                  {
+                    "hasAnyText": "Accept"
+                  },
+                  {
+                    "not": {
+                      "hasAnyText": "Decline"
+                    }
+                  }
+                ]
+              },
+              "optional": true
+            },
+            "declineButton": {
+              "find": {
+                "all": [
+                  {
+                    "isClickable": true
+                  },
+                  {
+                    "hasNoId": true
+                  },
+                  {
+                    "hasAnyText": "Decline"
+                  }
+                ]
+              },
+              "optional": true
+            },
+            "offerBody": {
+              "find": {
+                "all": [
+                  {
+                    "hasClassNameEndsWith": "ScrollView"
+                  },
+                  {
+                    "hasAnyText": "Accept"
+                  }
+                ]
+              },
+              "optional": true
+            }
           },
-          "dedupeKey": "offer-log-{parsedHash}",
-          "throttleMs": 60000
+          "require": {
+            "all": [
+              {
+                "exists": {
+                  "hasClassName": "androidx.compose.ui.platform.ComposeView"
+                }
+              },
+              {
+                "exists": {
+                  "hasText": "Decline"
+                }
+              },
+              {
+                "exists": {
+                  "hasText": "Accept"
+                }
+              },
+              {
+                "exists": {
+                  "hasTextMatchesRegex": "^\\d+ stops? \\(\\d+(?:\\.\\d+)? (?:mi|ft)\\) • (?:\\d+ hr(?: \\d+ min)?|\\d+ min)$"
+                }
+              },
+              {
+                "exists": {
+                  "hasTextMatchesRegex": "^\\$\\d+(?:,\\d{3})*\\.\\d{2}$"
+                }
+              },
+              {
+                "exists": {
+                  "hasTextStartsWith": "Guaranteed earnings for completing the offer."
+                }
+              },
+              {
+                "exists": {
+                  "all": [
+                    {
+                      "hasClassName": "androidx.compose.ui.viewinterop.ViewFactoryHolder"
+                    },
+                    {
+                      "hasChildren": true
+                    },
+                    {
+                      "hasFollowingSiblingTextMatchesRegex": "^\\d+\\s+\\S.*,\\s+\\d{5}(?:-\\d{4})?\\s+[A-Z]{2}$"
+                    },
+                    {
+                      "not": {
+                        "hasAnyText": "Customer dropoff"
+                      }
+                    },
+                    {
+                      "not": {
+                        "hasAnyText": "Business handoff"
+                      }
+                    }
+                  ]
+                }
+              }
+            ]
+          },
+          "parse": {
+            "as": "offer",
+            "fields": {
+              "payAmount": {
+                "coalesce": [
+                  {
+                    "find": {
+                      "all": [
+                        {
+                          "hasTextMatchesRegex": "^\\$\\d+(?:,\\d{3})*\\.\\d{2}$"
+                        },
+                        {
+                          "hasFollowingSiblingTextMatchesRegex": "^incl\\. tips$"
+                        }
+                      ]
+                    },
+                    "read": "text",
+                    "transform": "parseCurrency"
+                  },
+                  {
+                    "from": "offerBody",
+                    "find": {
+                      "hasTextMatchesRegex": "^\\$\\d+(?:,\\d{3})*\\.\\d{2}$"
+                    },
+                    "read": "text",
+                    "transform": "parseCurrency"
+                  }
+                ]
+              },
+              "distance": {
+                "find": {
+                  "hasTextMatchesRegex": "^\\d+ stops? \\(\\d+(?:\\.\\d+)? (?:mi|ft)\\) • "
+                },
+                "read": "text",
+                "transform": "parseDistance"
+              },
+              "timeToCompleteMinutes": {
+                "find": {
+                  "hasTextMatchesRegex": "^\\d+ stops? \\(\\d+(?:\\.\\d+)? (?:mi|ft)\\) • "
+                },
+                "read": "text",
+                "transform": "parseTotalMinutes"
+              },
+              "orders": {
+                "each": {
+                  "all": [
+                    {
+                      "hasClassName": "androidx.compose.ui.viewinterop.ViewFactoryHolder"
+                    },
+                    {
+                      "hasChildren": true
+                    },
+                    {
+                      "hasFollowingSiblingTextMatchesRegex": "^\\d+\\s+\\S.*,\\s+\\d{5}(?:-\\d{4})?\\s+[A-Z]{2}$"
+                    },
+                    {
+                      "not": {
+                        "hasAnyText": "Customer dropoff"
+                      }
+                    },
+                    {
+                      "not": {
+                        "hasAnyText": "Business handoff"
+                      }
+                    }
+                  ]
+                },
+                "extract": {
+                  "storeName": {
+                    "find": {
+                      "hasTextMatchesRegex": "\\S"
+                    },
+                    "read": "text"
+                  },
+                  "orderType": {
+                    "from": "offerBody",
+                    "conditionalEnum": [
+                      {
+                        "if": {
+                          "exists": {
+                            "hasTextStartsWith": "Shop for "
+                          }
+                        },
+                        "then": "SHOP_FOR_ITEMS"
+                      },
+                      {
+                        "else": "PICKUP"
+                      }
+                    ]
+                  },
+                  "itemCount": {
+                    "find": {
+                      "hasClassName": "androidx.compose.ui.viewinterop.ViewFactoryHolder"
+                    },
+                    "navigate": "sibling(2)",
+                    "read": "allText",
+                    "transform": {
+                      "regex": {
+                        "pattern": "^Shop for (\\d+) items?\\b",
+                        "group": 1,
+                        "then": "toInt"
+                      }
+                    }
+                  },
+                  "itemCountUnit": "ITEMS",
+                  "isRedCard": {
+                    "from": "offerBody",
+                    "presence": {
+                      "exists": {
+                        "hasText": "Red Card"
+                      }
+                    }
+                  },
+                  "isLargeOrder": {
+                    "from": "offerBody",
+                    "presence": {
+                      "exists": {
+                        "hasTextContaining": "Large Order"
+                      }
+                    }
+                  },
+                  "hasAlcohol": {
+                    "from": "offerBody",
+                    "presence": {
+                      "exists": {
+                        "hasTextContaining": "alcohol"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "validate": [
+            {
+              "assert": "fieldNotNull",
+              "field": "payAmount",
+              "onFail": "skip"
+            },
+            {
+              "assert": "fieldNotNull",
+              "field": "distance",
+              "onFail": "skip"
+            }
+          ],
+          "effects": [
+            {
+              "screenshot": {
+                "prefix": "Offer - {payAmount}",
+                "category": "offer"
+              },
+              "dedupeKey": "offer-ss-{parsedHash}",
+              "throttleMs": 60000
+            },
+            {
+              "log": {
+                "type": "OFFER_RECEIVED",
+                "payload": "pay={payAmount} dist={distance}"
+              },
+              "dedupeKey": "offer-log-{parsedHash}",
+              "throttleMs": 60000
+            }
+          ]
         }
       ]
     },
@@ -421,8 +703,35 @@
       "state": {
         "modeHint": "online"
       },
+      // #1114: the 8.97.8 Compose card's Accept is an id-less clickable View whose subtree is
+      // `Accept` + the countdown (no `Decline` — that is the top-right control's own subtree, which
+      // ALSO contains the whole card body in the fielded trees, hence the exclusion). Compose taps
+      // produced no click envelopes in the 09-18/19 field data at all; the arm is here so a tap that
+      // DOES arrive is classified, and the accept is otherwise inferred from the pickup-phase exit.
       "require": {
-        "hasIdSuffix": "accept_button"
+        "any": [
+          {
+            "hasIdSuffix": "accept_button"
+          },
+          {
+            "all": [
+              {
+                "isClickable": true
+              },
+              {
+                "hasNoId": true
+              },
+              {
+                "hasAnyText": "Accept"
+              },
+              {
+                "not": {
+                  "hasAnyText": "Decline"
+                }
+              }
+            ]
+          }
+        ]
       }
     },
     {
@@ -434,7 +743,29 @@
         "modeHint": "online"
       },
       "require": {
-        "hasIdSuffix": "secondary_action_button_dash_plus"
+        "any": [
+          {
+            "hasIdSuffix": "secondary_action_button_dash_plus"
+          },
+          {
+            "all": [
+              {
+                "isClickable": true
+              },
+              {
+                "hasNoId": true
+              },
+              {
+                "hasAnyText": "Decline"
+              },
+              {
+                "not": {
+                  "hasAnyText": "Accept"
+                }
+              }
+            ]
+          }
+        ]
       }
     },
     {

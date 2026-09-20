@@ -78,6 +78,19 @@ card's **mechanical** half, #577 (re-confirmed, 24/24, ~0.55 s — with a new po
 that entry's Bug #1), the #457 path, and #554 ShadowProjector (2/2). The #462/#460 dropoff item
 was found **broken-in-part** (raw PII in capture envelopes) and moved to that entry's Bug #7.)_
 
+- **🆕 NEW — the 8.97.8 COMPOSE offer card must be recognized again (#1114).** DoorDash rolled a
+  Compose offer card server-side on 09-18 (same app build): every offer on 09-18/19 fell to UNKNOWN or
+  was misfiled as `side_nav_drawer`, and `app_events` recorded ZERO offers for two dashing days.
+  **On-dash:** every offer card must light the bubble/TTS with pay, miles, store and a verdict as before;
+  a shop offer must read the `Shop for N items` count; a 2-store offer must list both stores. Watch whether
+  an ACCEPT still mints the job (the accept is INFERRED from the pickup screen now — Compose taps produced
+  no click envelopes in the field) and whether a DECLINE is recorded as declined or as a timeout (expected:
+  timeout, the #1104 class — note it, don't fight it). The consent prompt will show a NEW accept capability
+  for the Compose binding — Allow it if you want the heads-up Accept button to work. **Desk:** `OFFER_RECEIVED`
+  rows resume; `UNKNOWN/` holds only PARTIAL cards (no Accept / no disclaimer); no `side_nav_drawer` capture
+  contains `Decline` + a route summary; `parseShortfall{doordash.screen.offer_popup…}` stays at the #1063
+  baseline; `orders[].storeName` non-empty on every offer row.
+  - Confirmed: 0/2
 - **🆕 NEW — the receipt must expand ITSELF on every delivery (#1102 — PR #1112).** The auto-tap landed
   only 6 of 11 (09-13) and 16 of 18 (09-15) times: the sheet was still sliding when the frame that bound
   `expandButton` was captured, the first tap found nothing, and the RETRY armed by the settled frame

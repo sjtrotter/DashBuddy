@@ -24,6 +24,18 @@ import java.util.Calendar
  */
 class TransformRegistryTest {
 
+    // #1114 — the 8.97.8 Compose offer card's route summary feeds `timeToCompleteMinutes` in
+    // MINUTES; `parseMinutes` would read the trailing `10` of an hour-long estimate.
+    @Test
+    fun `parseTotalMinutes sums hours and minutes of the Compose route summary`() {
+        assertEquals(45, TransformRegistry.apply("parseTotalMinutes", "2 stops (8.5 mi) • 45 min"))
+        assertEquals(70, TransformRegistry.apply("parseTotalMinutes", "3 stops (12.1 mi) • 1 hr 10 min"))
+        assertEquals(120, TransformRegistry.apply("parseTotalMinutes", "2 stops (30.0 mi) • 2 hr"))
+        assertEquals(7, TransformRegistry.apply("parseTotalMinutes", "Shop for 6 items (~7 min)"))
+        assertNull(TransformRegistry.apply("parseTotalMinutes", "2 stops (8.5 mi)"))
+        assertNull(TransformRegistry.apply("parseTotalMinutes", null))
+    }
+
     private val hour = 3_600_000L
     private val day = 24L * hour
     private val threshold = TransformRegistry.ROLLOVER_THRESHOLD_MS  // 12h

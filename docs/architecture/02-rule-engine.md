@@ -47,6 +47,38 @@ widening is declared per rule and is only safe where the clicked NODE is unambig
 listed — here the exact label `Decline offer` (#734), which only the confirm sheet renders, while the
 card's own bare `Decline` is claimed by `initial_decline` on its `secondary_action_button_dash_plus`
 id. It closes the FIELDED shape only; the general click-vs-window ordering race stays open on #1104.
+
+**The 8.97.8 Compose offer card (#1114, fielded 2026-09-18).** DoorDash replaced the View-based offer
+card server-side, on the same app build, with an id-less Compose tree: `ComposeView` → `ScrollView`
+holding a standalone currency figure, `incl. tips`, ONE route summary of the shape
+`2 stops (8.5 mi) • 45 min`, per-store rows rendered as a `ViewFactoryHolder` wrapping the merchant name
+immediately FOLLOWED by an address-shaped sibling, an optional clickable `Shop for N items (…)` row after
+a shop store, a `Customer dropoff` holder, the `Guaranteed earnings for completing the offer.` disclaimer,
+and a clickable footer View whose subtree is `Accept` + the countdown; `Decline` is a clickable View
+top-right whose mapped subtree contains the whole body. Every legacy anchor (`accept_button`,
+`accept_decline_footer_container`, `display_name`, `work_unit_type`, `display_name_secondary`,
+`text_field`, `Deliver by`) is gone, so 36 offer frames across two dashing days fell to UNKNOWN or were
+claimed by `side_nav_drawer` (the side-nav Compose tree coexists with the card in one hierarchy) and
+`app_events` recorded no offer at all. `doordash.screen.offer_popup` is now a TWO-BRANCH rule: branch 0
+is the legacy body moved verbatim (byte-identical accept binding, so its capability key and consent are
+unchanged); branch 1 anchors on the card's own chrome only — ComposeView + exact `Decline` + exact
+`Accept` + the route-summary SHAPE + a standalone currency figure + the disclaimer prefix + at least one
+merchant holder followed by an address-shaped sibling — parses pay (the figure whose next sibling is
+`incl. tips`, else the first currency figure inside the body), `distance` and `timeToCompleteMinutes`
+from the route summary (a route ESTIMATE, never a deadline; the new `parseTotalMinutes` transform sums
+`N hr N min` into minutes, where `parseMinutes` would read only the trailing minutes), and `orders` per
+merchant holder (`storeName` from the holder, the item count from `sibling(2)`'s `Shop for N items`
+row). The helper binding `offerBody` (the body ScrollView) scopes the OFFER-level `orderType`/badge
+presence checks; it is not a `RuleAction` target, so it enumerates no capability. `side_nav_drawer`
+REJECTS the card's signature (ComposeView + `Decline` + route shape + currency — deliberately without
+`Accept`, so a partial card stops qualifying as a drawer and stays UNKNOWN), and the accept /
+initial_decline click rules carry an id-less clickable-`Accept`/`Decline` arm. Partial inflation frames
+(no Accept / no disclaimer / no merchant row) stay UNKNOWN by design (two negatives committed). Residuals
+on #1114: `orderType`/badges resolve at OFFER level (a mixed shop+restaurant stack over-marks), the
+merchant guard is structural (a blank name would pass), an address without a leading house number fails
+the guard, and — the field finding that matters most — Compose taps produced NO click envelopes, so an
+accept is inferred from the pickup-phase exit (`destinationImpliesAccept`) and a decline resolves as
+`OFFER_TIMEOUT`.
 Rules also carry `require` predicates, `bind` blocks, `parse`
 blocks that produce typed fields via `ParsedFieldsFactory`, and an optional `redact` block
 (#598) — node predicates whose matched text is masked in the capture envelope (a screen rule
