@@ -3608,7 +3608,7 @@
         "intent": "offer_popup",
         "shape": "offer",
         "fields": {
-            "parsedOffer": "ParsedOffer(offerHash=7957706e1cdc35ce91b0846a2a3c4458d6a4ce91019f14a44f4dd6ac23b8c338, presentationKey=3c78966a67b31a00e38d4a5e8cc2ed7f6371abbce30889107dfbeff133c16e7c, itemCount=0, itemCountIsUnits=false, payAmount=8.06, payTextRaw=null, distanceMiles=4.2, distanceTextRaw=null, dueByTimeText=null, dueByTimeMillis=null, timeToCompleteMinutes=26, badges=[], initialCountdownSeconds=null, orders=[ParsedOrder(orderIndex=0, orderType=PICKUP, storeName=H-E-B, itemCount=2, isItemCountEstimated=false, badges=[], countUnit=ITEMS)], offerKind=null, displayStoreName=null, rawExtractedTexts=null)"
+            "parsedOffer": "ParsedOffer(offerHash=7957706e1cdc35ce91b0846a2a3c4458d6a4ce91019f14a44f4dd6ac23b8c338, presentationKey=e30e80e84b1550584e202a15979bde87437e99e902fbee378a82cddab175700e, itemCount=2, itemCountIsUnits=false, payAmount=8.06, payTextRaw=null, distanceMiles=4.2, distanceTextRaw=null, dueByTimeText=null, dueByTimeMillis=null, timeToCompleteMinutes=26, badges=[], initialCountdownSeconds=null, orders=[ParsedOrder(orderIndex=0, orderType=SHOP_FOR_ITEMS, storeName=H-E-B, itemCount=2, isItemCountEstimated=false, badges=[], countUnit=ITEMS)], offerKind=null, displayStoreName=null, rawExtractedTexts=null)"
         }
     },
     "offer_popup/2026-09-19_09-45-38-229__doordash__accessibility.window__offer_popup__822a68.json": {
@@ -3632,7 +3632,7 @@
         "intent": "offer_popup",
         "shape": "offer",
         "fields": {
-            "parsedOffer": "ParsedOffer(offerHash=97e79f332fdaada9cabc3a8e889fc2738f77f85e9f4bd99f6d0c6d8251357eb4, presentationKey=3c78966a67b31a00e38d4a5e8cc2ed7f6371abbce30889107dfbeff133c16e7c, itemCount=0, itemCountIsUnits=false, payAmount=14.75, payTextRaw=null, distanceMiles=8.5, distanceTextRaw=null, dueByTimeText=null, dueByTimeMillis=null, timeToCompleteMinutes=45, badges=[], initialCountdownSeconds=null, orders=[ParsedOrder(orderIndex=0, orderType=PICKUP, storeName=H-E-B, itemCount=6, isItemCountEstimated=false, badges=[], countUnit=ITEMS)], offerKind=null, displayStoreName=null, rawExtractedTexts=null)"
+            "parsedOffer": "ParsedOffer(offerHash=97e79f332fdaada9cabc3a8e889fc2738f77f85e9f4bd99f6d0c6d8251357eb4, presentationKey=e30e80e84b1550584e202a15979bde87437e99e902fbee378a82cddab175700e, itemCount=6, itemCountIsUnits=false, payAmount=14.75, payTextRaw=null, distanceMiles=8.5, distanceTextRaw=null, dueByTimeText=null, dueByTimeMillis=null, timeToCompleteMinutes=45, badges=[], initialCountdownSeconds=null, orders=[ParsedOrder(orderIndex=0, orderType=SHOP_FOR_ITEMS, storeName=H-E-B, itemCount=6, isItemCountEstimated=false, badges=[], countUnit=ITEMS)], offerKind=null, displayStoreName=null, rawExtractedTexts=null)"
         }
     },
     "offer_popup/20260128_163448_533_OFFER_POPUP.json": {

@@ -33,6 +33,7 @@ object ValidateRegistry {
         "fieldsGe" to ::validateFieldsGe,
         "fieldNotNull" to ::validateFieldNotNull,
         "fieldEquals" to ::validateFieldEquals,
+        "collectionNonBlank" to ::validateCollectionNonBlank,
     )
 
     fun validate(name: String, args: JsonObject, parsed: Map<String, Any?>): ValidateOutcome {
@@ -112,6 +113,24 @@ object ValidateRegistry {
         val fieldName = args["field"]!!.jsonPrimitive.content
         return if (parsed[fieldName] != null) ValidateOutcome.Pass
         else ValidateOutcome.Skip
+    }
+
+    /**
+     * Assert that a collection field is NON-EMPTY and every item carries a non-blank string under
+     * [subField] (#1114): `{ "assert": "collectionNonBlank", "field": "orders", "subField": "storeName" }`.
+     * `fieldNotNull` accepts an empty list and a list of blank names — exactly the #595/#1063 ghost-offer
+     * shape (a structurally present store row whose merchant text is missing) that an id-less card can
+     * render, so the store-leg guard needs a PARSE-level assertion, not only a structural one.
+     */
+    private fun validateCollectionNonBlank(args: JsonObject, parsed: Map<String, Any?>): ValidateOutcome {
+        val fieldName = args["field"]!!.jsonPrimitive.content
+        val subField = args["subField"]!!.jsonPrimitive.content
+        val items = parsed[fieldName] as? List<*> ?: return ValidateOutcome.Skip
+        if (items.isEmpty()) return ValidateOutcome.Skip
+        val allNamed = items.all { item ->
+            ((item as? Map<*, *>)?.get(subField) as? String)?.isNotBlank() == true
+        }
+        return if (allNamed) ValidateOutcome.Pass else ValidateOutcome.Skip
     }
 
     /**

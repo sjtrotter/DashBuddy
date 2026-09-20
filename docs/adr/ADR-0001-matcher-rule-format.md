@@ -927,6 +927,7 @@ transform: [{ replace: { pattern: "est. ", replacement: "" } }, "trim"]
 | `sumApproxEquals` | `{ fields: ["f1","f2"], target: "f3", tolerance: 0.02 }`           | `abs(sum(fields) - target) <= tolerance`              |
 | `fieldNotNull`    | `{ field: "fieldName" }`                                           | Parsed field is not null                              |
 | `fieldEquals`     | `{ field: "fieldName", value: <string, number, or boolean> }`      | Parsed field equals the given literal value           |
+| `collectionNonBlank` | `{ field: "orders", subField: "storeName" }`                    | Collection is non-empty AND every item's `subField` is a non-blank string (#1114) |
 
 ### Registry implementation sketch
 

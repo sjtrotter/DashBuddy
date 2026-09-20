@@ -322,7 +322,7 @@
           ]
         },
         {
-          "comment": "Branch 1 — #1114: the 8.97.8 COMPOSE offer card, rolled out server-side between 2026-09-17 13:44 (last legacy frame) and 2026-09-18 14:46 (first Compose frame) on the SAME DoorDash build. The tree is id-less: a ComposeView under main_fragment, the card body in a ScrollView (pay `$14.75`, `incl. tips`, one route summary `2 stops (8.5 mi) • 45 min`, per-store rows = a ViewFactoryHolder wrapping the merchant name immediately FOLLOWED by an address sibling `7330 N Loop 1604 W, San Antonio, 78249 TX`, an optional clickable `Shop for 6 items (~7 min)` row after a shop store's address, a `Customer dropoff` holder, the `Guaranteed earnings for completing the offer.` disclaimer, and a clickable footer View whose subtree is `Accept` + the countdown). `Decline` is a clickable View top-right (its subtree is the label alone). Every legacy anchor (accept_button, accept_decline_footer_container, display_name, work_unit_type, display_name_secondary, text_field, `Deliver by`) is absent, so 09-18/19 produced ZERO OFFER_* events across two dashing days while 36 offer frames fell to UNKNOWN or were claimed by side_nav_drawer (the side-nav Compose tree coexists with the card in the same hierarchy — chrome.json5's drawer rule now REJECTS this shape). Anchors are the card's own chrome only (no merchant names — #574 doctrine): ComposeView + exact `Decline` + exact `Accept` + the route-summary SHAPE + a standalone currency figure + the disclaimer prefix + at least one merchant holder followed by an address-shaped sibling. Partial inflation frames (no Accept / no disclaimer / no merchant row — the #1063 class) fail this branch and stay UNKNOWN by design; the two-branch structure keeps the legacy card byte-identical. Known residuals filed on #1114: (a) `orderType`/badges are resolved at OFFER level (a shop row anywhere marks every store SHOP_FOR_ITEMS — a mixed shop+restaurant stack over-counts shop handling); (b) the merchant guard is structural (a holder with a blank name would pass — fail-null beats fail-wrong only while a real render always carries the name, which every fielded frame does); (c) Compose taps produced NO click envelopes in the field (accept is inferred from the pickup-phase exit — `destinationImpliesAccept`; a decline resolves as OFFER_TIMEOUT, the #1104 class); (d) an address that does not start with a house number fails the guard → UNKNOWN; (e) no `Deliver by` on this card — `timeToCompleteMinutes` carries the platform's route ESTIMATE, never a deadline.",
+          "comment": "Branch 1 — #1114: the 8.97.8 COMPOSE offer card, rolled out server-side between 2026-09-17 13:44 (last legacy frame) and 2026-09-18 14:46 (first Compose frame) on the SAME DoorDash build. The tree is id-less: a ComposeView under main_fragment, the card body in a ScrollView (pay `$14.75`, `incl. tips`, one route summary `2 stops (8.5 mi) • 45 min`, per-store rows = a ViewFactoryHolder wrapping the merchant name immediately FOLLOWED by an address sibling `7330 N Loop 1604 W, San Antonio, 78249 TX`, an optional clickable `Shop for 6 items (~7 min)` row after a shop store's address, a `Customer dropoff` holder, the `Guaranteed earnings for completing the offer.` disclaimer, and a clickable footer View whose subtree is `Accept` + the countdown). `Decline` is a clickable View top-right (its subtree is the label alone). Every legacy anchor (accept_button, accept_decline_footer_container, display_name, work_unit_type, display_name_secondary, text_field, `Deliver by`) is absent, so 09-18/19 produced ZERO OFFER_* events across two dashing days while 36 offer frames fell to UNKNOWN or were claimed by side_nav_drawer (the side-nav Compose tree coexists with the card in the same hierarchy — chrome.json5's drawer rule now REJECTS this shape). Anchors are the card's own chrome only (no merchant names — #574 doctrine): ComposeView + exact `Decline` + exact `Accept` + the route-summary SHAPE + a standalone currency figure + the disclaimer prefix + at least one merchant holder followed by an address-shaped sibling. Partial inflation frames (no Accept / no disclaimer / no merchant row — the #1063 class) fail this branch and stay UNKNOWN by design; the two-branch structure keeps the legacy card byte-identical. Known residuals filed on #1114: (a) BADGES (Red Card / alcohol / large order) are resolved at OFFER level — `orderType` and the item count are per store via the holder's sibling(2) shop row; (b) the structural merchant guard is backed by the `collectionNonBlank` validator, so a holder with a blank name skips the branch (→ UNKNOWN) instead of minting a nameless offer; (c) Compose taps produced NO click envelopes in the field (accept is inferred from the pickup-phase exit — `destinationImpliesAccept`; a decline resolves as OFFER_TIMEOUT, the #1104 class); (d) an address that does not start with a house number fails the guard → UNKNOWN; (e) no `Deliver by` on this card — `timeToCompleteMinutes` carries the platform's route ESTIMATE, never a deadline.",
           "bind": {
             "acceptButton": {
               "find": {
@@ -365,7 +365,9 @@
               // The card body ScrollView (pay, route summary, store rows, `Customer dropoff`,
               // disclaimer). The Accept footer is a SIBLING of this ScrollView, not a child, so
               // the anchor is the dropoff holder every fielded card renders inside the body.
-              // Not a RuleAction target → enumerates no capability; scopes the offer-level parse.
+              // Not a RuleAction target → enumerates no capability. MANDATORY: every economic read
+              // below is scoped to it, so a frame with no body never parses (fail-closed) and a
+              // background figure/store outside the card can never become this offer's economics.
               "find": {
                 "all": [
                   {
@@ -375,8 +377,7 @@
                     "hasAnyText": "Customer dropoff"
                   }
                 ]
-              },
-              "optional": true
+              }
             }
           },
           "require": {
@@ -444,6 +445,7 @@
               "payAmount": {
                 "coalesce": [
                   {
+                    "from": "offerBody",
                     "find": {
                       "all": [
                         {
@@ -468,6 +470,7 @@
                 ]
               },
               "distance": {
+                "from": "offerBody",
                 "find": {
                   "hasTextMatchesRegex": "^\\d+ stops? \\(\\d+(?:\\.\\d+)? (?:mi|ft)\\) • "
                 },
@@ -475,6 +478,7 @@
                 "transform": "parseDistance"
               },
               "timeToCompleteMinutes": {
+                "from": "offerBody",
                 "find": {
                   "hasTextMatchesRegex": "^\\d+ stops? \\(\\d+(?:\\.\\d+)? (?:mi|ft)\\) • "
                 },
@@ -482,6 +486,7 @@
                 "transform": "parseTotalMinutes"
               },
               "orders": {
+                "from": "offerBody",
                 "each": {
                   "all": [
                     {
@@ -513,18 +518,35 @@
                     "read": "text"
                   },
                   "orderType": {
-                    "from": "offerBody",
-                    "conditionalEnum": [
+                    // PER STORE: the shop row (`Shop for N items …`) is the clickable View two
+                    // siblings after this merchant's holder (holder → address → shop row); a
+                    // pickup merchant's sibling(2) is the NEXT holder, whose text never starts
+                    // with `Shop for`, so the regex arm yields null and the literal wins. Verified
+                    // on the fielded mixed stack (Smoothie King PICKUP + Target SHOP_FOR_ITEMS).
+                    "coalesce": [
                       {
-                        "if": {
-                          "exists": {
-                            "hasTextStartsWith": "Shop for "
-                          }
+                        "find": {
+                          "hasClassName": "androidx.compose.ui.viewinterop.ViewFactoryHolder"
                         },
-                        "then": "SHOP_FOR_ITEMS"
+                        "navigate": "sibling(2)",
+                        "read": "allText",
+                        "transform": [
+                          {
+                            "regex": {
+                              "pattern": "^(Shop for) \\d+ items?\\b",
+                              "group": 1
+                            }
+                          },
+                          {
+                            "replace": {
+                              "pattern": "Shop for",
+                              "replacement": "SHOP_FOR_ITEMS"
+                            }
+                          }
+                        ]
                       },
                       {
-                        "else": "PICKUP"
+                        "literal": "PICKUP"
                       }
                     ]
                   },
@@ -580,6 +602,14 @@
             {
               "assert": "fieldNotNull",
               "field": "distance",
+              "onFail": "skip"
+            },
+            {
+              // #595/#1063 at the PARSE level: a structurally present merchant holder with a blank
+              // name must not mint an offer (fieldNotNull accepts an empty list / blank names).
+              "assert": "collectionNonBlank",
+              "field": "orders",
+              "subField": "storeName",
               "onFail": "skip"
             }
           ],

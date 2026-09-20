@@ -1088,7 +1088,8 @@
             "fieldsLe",
             "fieldsGe",
             "fieldNotNull",
-            "fieldEquals"
+            "fieldEquals",
+            "collectionNonBlank"
           ]
         },
         "onFail": {
@@ -1108,7 +1109,11 @@
         },
         "field": {
           "type": "string",
-          "description": "Field name to check (fieldsLe, fieldsGe, fieldNotNull, fieldEquals)."
+          "description": "Field name to check (fieldsLe, fieldsGe, fieldNotNull, fieldEquals, collectionNonBlank)."
+        },
+        "subField": {
+          "type": "string",
+          "description": "collectionNonBlank: the per-item key that must be a non-blank string on EVERY item of the (non-empty) collection field."
         },
         "le": {
           "type": "string",
