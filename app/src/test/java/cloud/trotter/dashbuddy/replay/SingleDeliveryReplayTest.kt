@@ -70,13 +70,21 @@ class SingleDeliveryReplayTest {
     }
 
     @Test
-    fun `without the injected click the offer resolves to OFFER_TIMEOUT (the click is load-bearing)`() {
-        // Screen-only: the job still forms (screen-flow transition), but with no click recording the
-        // accept intent the outcome is OFFER_TIMEOUT — which is exactly what the injection fixes.
+    fun `without the injected click the offer STILL resolves to OFFER_ACCEPTED on transition evidence (#1104)`() {
+        // Screen-only: the job forms from the pickup screen (the click-less accept). Before #1104 this
+        // replay pinned an inconsistency — the job minted while the offer row said OFFER_TIMEOUT —
+        // because the resolver read only click latches. On the 8.97.8 Compose card no click can ever
+        // arrive (a Compose control emits no TYPE_VIEW_CLICKED for a human tap), so the outcome now
+        // rests on the transition: the hash newly present on the minted job → OFFER_ACCEPTED, with the
+        // inference named in the row. The injected click (full-chain test above) still yields the
+        // same OFFER_ACCEPTED, only without the "inferred" description.
         val steps = SessionReplay.reduce(session)
         val c = counts(steps)
-        assertEquals("screen-only offer times out", 1, c[AppEventType.OFFER_TIMEOUT] ?: 0)
-        assertEquals("screen-only never logs OFFER_ACCEPTED", 0, c[AppEventType.OFFER_ACCEPTED] ?: 0)
+        assertEquals("screen-only offer is an inferred accept, not a timeout", 0, c[AppEventType.OFFER_TIMEOUT] ?: 0)
+        assertEquals("screen-only logs exactly one OFFER_ACCEPTED", 1, c[AppEventType.OFFER_ACCEPTED] ?: 0)
+        val accepted = steps.flatMap { it.events }.single { it.type == AppEventType.OFFER_ACCEPTED }
+        val description = (accepted.payload as? cloud.trotter.dashbuddy.domain.model.event.payload.OfferPayload)?.description
+        assertTrue("the row names the inference: $description", description?.contains("inferred from the task surface") == true)
         // The job/dropoff STRUCTURE is identical either way (clicks don't build the dropoff chain).
         assertEquals("dropoff structure is click-independent", 1, distinctDropoffTaskIds(steps).size)
     }
