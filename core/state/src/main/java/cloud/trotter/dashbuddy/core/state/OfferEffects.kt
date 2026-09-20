@@ -140,7 +140,9 @@ internal fun EffectMap.diffOfferLifecycle(
             if (eval != null && prevOffer.evaluation != null) {
                 add(
                     AppEffect.PostOfferNotification(
-                        eval, offerCardOf(nextOffer, eval), nextOffer.offerHash, nextOffer.platform, sessionId = sessionId,
+                        refreshOnly = true,
+                        evaluation = eval, offer = offerCardOf(nextOffer, eval), offerHash = nextOffer.offerHash,
+                        platform = nextOffer.platform, sessionId = sessionId,
                     )
                 )
             }

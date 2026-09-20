@@ -555,6 +555,7 @@ class SideEffectEngine @Inject constructor(
                     delay(OFFER_NOTIFICATION_DELAY_MS)
                     bubbleManager.postOfferNotification(
                         effect.offer, effect.evaluation, effect.platform, effect.sessionId,
+                        refreshOnly = effect.refreshOnly,
                     )
                 }
                 job.invokeOnCompletion { pendingOfferNotifications.remove(hashKey, job) }

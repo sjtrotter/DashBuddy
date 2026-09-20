@@ -207,6 +207,7 @@ class TransitionOutcomeTest {
         assertEquals(81_000L, next.presentedOffer()?.countdownExpiresAt)
         val post = effects.filterIsInstance<AppEffect.PostOfferNotification>().single()
         assertEquals(81_000L, post.offer.expiresAt)
+        assertTrue("a moved deadline is a refresh-only post", post.refreshOnly)
         assertTrue("speak-once holds", effects.none { it is AppEffect.SpeakOffer })
         assertTrue("no chat card for a deadline refresh", effects.none { it is AppEffect.UpdateBubble })
     }

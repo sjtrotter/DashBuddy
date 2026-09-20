@@ -374,14 +374,24 @@ class BubbleManager @Inject constructor(
         platform: Platform,
         /** The offer's own originating session (#867); null falls back to [activeSessionId]. */
         sessionId: String? = null,
+        /**
+         * #1104: a countdown-anchor REFRESH of an already-surfaced offer — update the existing
+         * notification in place (same per-offer id, `setOnlyAlertOnce`: no re-alert) and write NO
+         * chat summary (a second "offer posted" row per moved deadline is not a milestone).
+         */
+        refreshOnly: Boolean = false,
     ) {
         val summary = evaluation.toNotificationSummary()
         val persona = evaluation.notificationPersona()
-        // #551 P7: the offer summary ends with the merchant name (raw third-party UI text), so
-        // INFO carries a PII-safe milestone and the raw summary stays on the DEBUG firehose.
-        Timber.tag("Chat").i("offer posted [%s] (%d chars)", persona.logLabel, summary.length)
-        Timber.tag("Chat").d("[%s]: %s", persona.displayName, summary)
-        scope.launch { chatRepository.saveMessage(sessionId ?: activeSessionId.value, summary.toString(), persona) }
+        if (refreshOnly) {
+            Timber.tag("Chat").d("offer heads-up refreshed [%s] (countdown anchors)", persona.logLabel)
+        } else {
+            // #551 P7: the offer summary ends with the merchant name (raw third-party UI text), so
+            // INFO carries a PII-safe milestone and the raw summary stays on the DEBUG firehose.
+            Timber.tag("Chat").i("offer posted [%s] (%d chars)", persona.logLabel, summary.length)
+            Timber.tag("Chat").d("[%s]: %s", persona.displayName, summary)
+            scope.launch { chatRepository.saveMessage(sessionId ?: activeSessionId.value, summary.toString(), persona) }
+        }
         showOfferHeadsUp(offer, summary, persona, platform)
     }
 
@@ -407,6 +417,9 @@ class BubbleManager @Inject constructor(
             .setContentIntent(contentIntent)
             .setCategory(Notification.CATEGORY_RECOMMENDATION)
             .setPriority(NotificationCompat.PRIORITY_MAX)
+            // #1104: the FIRST post alerts; an in-place update (a moved countdown anchor re-posts
+            // under the same per-offer id every few seconds on a re-rendering card) never re-alerts.
+            .setOnlyAlertOnce(true)
             .setAutoCancel(true)
             .setTimeoutAfter(OFFER_HEADS_UP_TIMEOUT_MS)
             .setStyle(NotificationCompat.DecoratedCustomViewStyle())
