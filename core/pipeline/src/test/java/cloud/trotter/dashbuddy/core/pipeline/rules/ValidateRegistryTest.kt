@@ -18,6 +18,27 @@ class ValidateRegistryTest {
 
     private fun args(json: String) = Json.parseToJsonElement(json).jsonObject
 
+    // ── collectionNonBlank (#1114) ───────────────────────────────────────────
+
+    @Test
+    fun `collectionNonBlank passes when every item carries a non-blank subField`() {
+        val parsed = mapOf("orders" to listOf(mapOf("storeName" to "H-E-B"), mapOf("storeName" to "Target")))
+        assertEquals(
+            ValidateOutcome.Pass,
+            ValidateRegistry.validate("collectionNonBlank", args("""{"field":"orders","subField":"storeName"}"""), parsed),
+        )
+    }
+
+    @Test
+    fun `collectionNonBlank skips on an empty, missing, blank-named or nameless collection`() {
+        val a = args("""{"field":"orders","subField":"storeName"}""")
+        assertEquals(ValidateOutcome.Skip, ValidateRegistry.validate("collectionNonBlank", a, mapOf("orders" to emptyList<Any>())))
+        assertEquals(ValidateOutcome.Skip, ValidateRegistry.validate("collectionNonBlank", a, emptyMap()))
+        assertEquals(ValidateOutcome.Skip, ValidateRegistry.validate("collectionNonBlank", a, mapOf("orders" to listOf(mapOf("storeName" to "H-E-B"), mapOf("storeName" to "  ")))))
+        assertEquals(ValidateOutcome.Skip, ValidateRegistry.validate("collectionNonBlank", a, mapOf("orders" to listOf(mapOf("storeName" to null)))))
+        assertEquals(ValidateOutcome.Skip, ValidateRegistry.validate("collectionNonBlank", a, mapOf("orders" to "not a list")))
+    }
+
     // ── Dispatch / name validation ──────────────────────────────────────────
 
     @Test

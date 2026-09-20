@@ -51,6 +51,11 @@
           },
           {
             "channelIdEquals": "dasher-notification-channel-new-order-v2"
+          },
+          {
+            // #1114: the 8.97.8 Compose rollout (09-18) also moved the offer push to a new
+            // channel — 16 `New Delivery!` / `New Order: Go to <store>` pushes fell UNKNOWN.
+            "channelIdEquals": "dasher-notification-channel-nexus-new-offer-no-sound-haptics"
           }
         ]
       },
