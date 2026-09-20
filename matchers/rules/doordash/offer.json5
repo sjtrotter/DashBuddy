@@ -34,6 +34,13 @@
               {
                 "all": [
                   {
+                    // Pinned to the Compose button's class: the LEGACY sheet's id-less
+                    // `android.widget.Button` ancestor would otherwise satisfy this arm too and,
+                    // being earlier in preorder, displace the label node the legacy arm binds
+                    // (ActuationBindingResolutionTest pins one verified target per fixture).
+                    "hasClassName": "android.view.View"
+                  },
+                  {
                     "isClickable": true
                   },
                   {
