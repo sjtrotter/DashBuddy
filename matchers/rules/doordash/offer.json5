@@ -447,8 +447,8 @@
               },
               {
                 // The dropoff holder (`Customer dropoff` on one drop, `Multiple dropoffs (N stops)`
-                // on a stack — 34/34 complete fielded cards). Load-bearing for the `orders` walk:
-                // it is what marks the route CONTAINER holder as not-a-merchant.
+                // on a stack — 34/34 complete fielded cards): a card without a destination row is
+                // not a complete offer.
                 "exists": {
                   "any": [
                     {
@@ -534,9 +534,10 @@
               },
               "orders": {
                 // A merchant leg is identified by EXCLUSION, never by its address (Astra r3): every
-                // ViewFactoryHolder inside the body that is not the route CONTAINER (whose subtree
-                // holds the dropoff holder — the require below demands one, so the container is
-                // always excluded), the dropoff holder itself, a handoff holder, or the disclaimer.
+                // ViewFactoryHolder inside the body that is not the route-summary holder (a sibling
+                // of the store rows, excluded by its text shape), the dropoff holder, a handoff
+                // holder, or the disclaimer holder — the four non-merchant holders every fielded
+                // body renders.
                 // An address that carries no ZIP, or none at all, therefore keeps its leg (the
                 // address is never an economic input) and a blank NAME fails the whole card via
                 // `collectionNonBlank` — a stack can no longer lose a leg silently.
@@ -564,6 +565,13 @@
                     {
                       "not": {
                         "hasAnyTextStartsWith": "Guaranteed earnings"
+                      }
+                    },
+                    {
+                      // The route-summary holder (`2 stops (8.5 mi) • 45 min`) is a SIBLING of the
+                      // store rows, not their container — excluded by the shape of its text.
+                      "not": {
+                        "hasAnyTextMatchesRegex": "^\\d+ stops? \\(\\d+(?:\\.\\d+)? (?:mi|ft)\\) • "
                       }
                     }
                   ]

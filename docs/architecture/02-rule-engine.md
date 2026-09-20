@@ -79,8 +79,9 @@ shop row for a shop merchant (`holder → address → Shop for N items …`) and
 merchant, so a regex on that node's `allText` yields `SHOP_FOR_ITEMS` or falls to the `literal`
 `PICKUP` — verified on the fielded mixed stack (Smoothie King PICKUP + Target SHOP_FOR_ITEMS, fixture
 `…073fcb`); only the badges (Red Card / alcohol / large order) resolve at offer level. Merchant legs are identified by
-EXCLUSION (every holder in the body that is not the route container — marked by the dropoff holder the
-require demands — the dropoff/handoff holder, or the disclaimer; the address is never a key, so a no-ZIP
+EXCLUSION (every holder in the body that is not the route-summary holder — a SIBLING of the store rows,
+excluded by its text shape through the new `hasAnyTextMatchesRegex` predicate — the dropoff/handoff holder, or
+the disclaimer; the address is never a key, so a no-ZIP
 address keeps its leg) and judged by CONTENT: the branch
 carries the new `collectionNonBlank` validator (`orders` non-empty AND every `storeName` non-blank,
 `onFail: skip`) — `fieldNotNull` accepts an empty list and blank names, exactly the #595/#1063 nameless

@@ -193,6 +193,15 @@ internal object PredicateCompiler {
                 ;{ node -> node.allText.any { it.startsWith(s, ignoreCase = true) } }
             }
 
+            // #1114: the subtree-scoped REGEX form — matches when any text node anywhere in this
+            // subtree contains a match. Same bounded RE2 seam as every other rule pattern. Lets an
+            // id-less container be excluded by the SHAPE of the text it carries (the Compose card's
+            // route-summary holder: `2 stops (8.5 mi) • 45 min`) where no literal prefix exists.
+            "hasAnyTextMatchesRegex" -> {
+                val regex = compileRegex(primOf(value, key).content)
+                ;{ node -> node.allText.any { str -> regex.containsMatchIn(str) } }
+            }
+
             "hasDesc" -> {
                 val s = primOf(value, key).content
                 ;{ node -> node.contentDescription?.equals(s, ignoreCase = true) == true }

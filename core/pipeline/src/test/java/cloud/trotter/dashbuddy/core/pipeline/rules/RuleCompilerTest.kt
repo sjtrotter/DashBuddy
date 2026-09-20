@@ -89,6 +89,14 @@ class RuleCompilerTest {
         assertFalse(pred(tree()))
     }
 
+    @Test
+    fun `hasAnyTextMatchesRegex matches a regex on any descendant text`() {
+        val pred = RuleCompiler.compileNodePred(json("hasAnyTextMatchesRegex" to "^\\d+ stops? \\("))
+        assertTrue(pred(tree(node(text = "2 stops (8.5 mi) • 45 min"))))
+        assertFalse(pred(tree(node(text = "H-E-B"), node(text = "Customer dropoff"))))
+        assertFalse(pred(tree()))
+    }
+
     // compileNodePred — ID predicates
     // =========================================================================
 

@@ -1427,6 +1427,10 @@
           "properties": { "hasTextStartsWith": { "type": "string", "description": "Text starts with prefix (case-insensitive)." } }
         },
         {
+          "required": ["hasAnyTextMatchesRegex"],
+          "properties": { "hasAnyTextMatchesRegex": { "type": "string", "description": "Any text node in this subtree contains a match of the regex (bounded, RE2 syntax) (#1114)." } }
+        },
+        {
           "required": ["hasAnyTextStartsWith"],
           "properties": { "hasAnyTextStartsWith": { "type": "string", "description": "Any text node in this subtree (self or descendant text/contentDescription) starts with prefix (case-insensitive) (#1114)." } }
         },

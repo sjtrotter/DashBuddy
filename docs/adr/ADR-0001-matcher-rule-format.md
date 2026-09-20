@@ -402,6 +402,7 @@ with `all`/`any`/`not` at the node level. Every predicate object carries exactly
 | `{ hasTextCaseSensitive: "s" }`          | `text` exactly equals `s`                                                | `== "s"`                            |
 | `{ hasTextContaining: "s" }`             | `text` contains `s` (case-insensitive)                                   | `.contains("s", ignoreCase=true)`   |
 | `{ hasTextStartsWith: "s" }`             | `text` starts with `s` (case-insensitive)                                | `.startsWith("s", ignoreCase=true)` |
+| `{ hasAnyTextMatchesRegex: "p" }`       | ANY text node in the subtree contains a match of `p` (bounded RE2, same seam as `hasTextMatchesRegex`) (#1114) | `allText.any { BoundedRegex(p).containsMatchIn(it) }` |
 | `{ hasAnyTextStartsWith: "s" }`          | ANY text node in the subtree (self + descendants' text/contentDescription) starts with `s` (case-insensitive) — the prefix form of `hasAnyText` (#1114) | `allText.any { it.startsWith("s", ignoreCase=true) }` |
 | `{ hasTextMatchesRegex: "p" }`           | `text` matches regex pattern `p` (bounded — max 200 chars, #418)         | `BoundedRegex(p).containsMatchIn(text)` |
 | `{ hasPrecedingSiblingText: "s" }`       | The node's IMMEDIATELY PRECEDING sibling's `text` equals `s` (case-insensitive) — the label→value predicate for id-less `<label><value>` pairs (#860); resolved by referential identity, so a structural twin can't shift the index | `node.parent.children[idx-1].text.equals(s, ignoreCase=true)` |
