@@ -117,7 +117,14 @@ fun AppState.recoveryHygiene(nowMs: Long): AppState {
     return copy(
         regions = regions.copy(
             platforms = regions.platforms.mapValues { (_, region) ->
-                val scrubbed = region.copy(pendingSessionPay = null, pendingModeResume = null)
+                // #1104: the confirm-sheet sighting is EVIDENCE with a time window measured on the
+                // live clock; across a crash the gap is unobserved (evidence is dropped, only a
+                // decision in flight is re-armed), so a restored offer never inherits it.
+                val scrubbed = region.copy(
+                    pendingSessionPay = null,
+                    pendingModeResume = null,
+                    pendingOffers = region.pendingOffers.map { it.copy(declineSheetSeenAt = null) },
+                )
                 val pend = scrubbed.pendingDestructive ?: return@mapValues scrubbed
                 // The window is measured from the restore anchor once one exists, else from the
                 // observation that last MOVED the deadline, else from the arm. `since` is never an

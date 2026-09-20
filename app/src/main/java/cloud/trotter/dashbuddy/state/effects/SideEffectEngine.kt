@@ -88,7 +88,15 @@ class SideEffectEngine @Inject constructor(
 
     // Offer notifications waiting out their post delay, keyed by offerHash so
     // an offer-resolved CancelOfferNotification can abort the post (#436).
-    private val pendingOfferNotifications = ConcurrentHashMap<String, Job>()
+    private val pendingOfferNotifications = ConcurrentHashMap<String, PendingOfferPost>()
+
+    /**
+     * #1104: a delayed offer post still in its settle window. `fresh` = it owes the FIRST post's
+     * obligations (the chat summary + the one alert); a refresh-only post that supersedes a pending
+     * fresh one inherits them, or a deadline moving inside the 750 ms window would cancel the fresh
+     * post and the offer would surface with no summary at all (Astra #1104 r6).
+     */
+    private class PendingOfferPost(val job: Job, val fresh: Boolean)
 
     companion object {
         /** Default throttle between repeated firings of the same action. */
@@ -550,22 +558,27 @@ class SideEffectEngine @Inject constructor(
                 // window cancels the post instead of surfacing an actionable
                 // Accept/Decline for an offer that's already gone (#436).
                 val hashKey = effect.offerHash ?: "no-hash"
-                pendingOfferNotifications[hashKey]?.cancel()
+                val superseded = pendingOfferNotifications[hashKey]
+                superseded?.job?.cancel()
+                // #1104: a refresh that coalesces a still-pending FRESH post takes over its obligations.
+                val fresh = !effect.refreshOnly || (superseded?.fresh == true)
                 val job = engineScope.launch(start = CoroutineStart.LAZY) {
                     delay(OFFER_NOTIFICATION_DELAY_MS)
                     bubbleManager.postOfferNotification(
                         effect.offer, effect.evaluation, effect.platform, effect.sessionId,
+                        refreshOnly = !fresh,
                     )
                 }
-                job.invokeOnCompletion { pendingOfferNotifications.remove(hashKey, job) }
-                pendingOfferNotifications[hashKey] = job
+                val pending = PendingOfferPost(job, fresh)
+                job.invokeOnCompletion { pendingOfferNotifications.remove(hashKey, pending) }
+                pendingOfferNotifications[hashKey] = pending
                 job.start()
             }
 
             is AppEffect.CancelOfferNotification -> {
                 // Abort a still-pending (delayed) post — untracking is via the job's self-removing
                 // completion handler.
-                pendingOfferNotifications[effect.offerHash ?: "no-hash"]?.cancel()
+                pendingOfferNotifications[effect.offerHash ?: "no-hash"]?.job?.cancel()
                 // #457: the offer heads-up is now a SEPARATE notification (its own id), not the
                 // self-replacing bubble — so if it already posted, dismiss it explicitly when the
                 // offer resolves (accept/decline/timeout) so an Accept/Decline banner can't outlive

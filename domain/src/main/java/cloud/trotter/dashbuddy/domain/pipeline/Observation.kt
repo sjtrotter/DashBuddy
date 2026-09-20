@@ -62,6 +62,12 @@ sealed interface Observation : cloud.trotter.dashbuddy.domain.model.state.StateE
         override val targets: Map<String, NodeRef> = emptyMap(),
         override val transitionOverrides: Map<TransitionTrigger, List<RequestedEffect>> = emptyMap(),
         /**
+         * The rule-declared offer surface this frame renders (#1104/#1114, `state.offerSurface`) —
+         * `DECLINE_CONFIRM` for the confirm-decline sheet; null when the rule declares nothing
+         * (the card, or a non-offer surface). Recognition-layer DATA the offer lifecycle reads.
+         */
+        val offerSurface: cloud.trotter.dashbuddy.domain.state.OfferSurface? = null,
+        /**
          * Rules that matched this frame while their declared parse yielded nothing (#1036) —
          * the winning rule, plus any branch that matched-then-`Skip`ped on the way to it.
          *

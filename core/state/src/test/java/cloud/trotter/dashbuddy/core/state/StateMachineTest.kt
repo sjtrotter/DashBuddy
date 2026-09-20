@@ -962,7 +962,11 @@ class StateMachineTest {
         state = machine.step(state, screenObs(flow = Flow.OfferPresented, parsed = offerFields("Chipotle", "hash-A"))).newState
         state = machine.step(state, screenObs(flow = Flow.TaskPickupNavigation, parsed = taskFields())).newState
         // Add-on offer (different hash) accepted mid-pickup → append its own dropoff placeholder.
+        // #1104: a mid-job add-on's accept is proven by its CLICK (the legacy card emits one) — the
+        // pickup surface re-rendering after it is no longer read as the accept on its own, because
+        // the same re-render follows a declined add-on.
         state = machine.step(state, screenObs(flow = Flow.OfferPresented, parsed = offerFields("Wendy's", "hash-B"))).newState
+        state = machine.step(state, clickObs(intent = cloud.trotter.dashbuddy.domain.state.OfferIntent.ACCEPT, ruleId = "doordash.click.accept_offer")).newState
         state = machine.step(state, screenObs(flow = Flow.TaskPickupNavigation, parsed = taskFields(storeName = "Wendy's"))).newState
 
         val job = state.regions.platforms[Platform.DoorDash]!!.activeJob!!

@@ -5,10 +5,15 @@
     {
       "id": "doordash.screen.offer_popup_confirm_decline",
       "priority": 19,
+      // #1104/#1114: `offerSurface: decline_confirm` — this FRAME is the decline evidence on the
+      // 8.97.8 Compose card (its buttons emit no click event for a human tap): the lifecycle marks
+      // the presented offer's `declineSheetSeenAt`, and an offer that then leaves presentation
+      // without an accept resolves OFFER_DECLINED instead of OFFER_TIMEOUT.
       "comment": "#577 quick-decline: bind the confirm dialog's 'Decline offer' button. Its label is on a child text node (textView_prism_button_title, not itself clickable) — clickNodeStrict walks up to the clickable ancestor. #734: anchor the EXACT label 'Decline offer' (was 'decline' substring). The offer popup behind the confirm sheet carries its own bare 'Decline' button under the SAME textView_prism_button_title id; a substring match let both survive the app-owned label check, so the actuation ranker saw a 2-candidate tie and clicked the first-in-tree node (luck, not verification). The exact 'Decline offer' anchor is unique to the confirm sheet's button (every corpus frame renders it verbatim), so the bound target — and thus the ranker's EXACT_TEXT tier — resolves the single correct node; a genuine tie now aborts to manual (#425 fail-closed). The app-owned CONFIRM_DECLINE tap fires (AUTOMATION) only when the dasher enabled quick-declines.",
       "state": {
         "flow": "offer:presented",
-        "modeHint": "online"
+        "modeHint": "online",
+        "offerSurface": "decline_confirm"
       },
       "bind": {
         "confirmDeclineButton": {
@@ -180,6 +185,15 @@
           "parse": {
             "as": "offer",
             "fields": {
+              "initialCountdownSeconds": {
+                // #1104: the Accept button's end text is the remaining countdown ("31") — transition
+                // evidence for the outcome resolver (an exit at the countdown's end is an expiry).
+                "find": {
+                  "hasIdSuffix": "textView_prism_button_end_text_2"
+                },
+                "read": "text",
+                "transform": "toInt"
+              },
               "payAmount": {
                 "coalesce": [
                   {
@@ -531,6 +545,16 @@
                 },
                 "read": "text",
                 "transform": "parseTotalMinutes"
+              },
+              "initialCountdownSeconds": {
+                // #1104: the `0:16` clock beside Accept — the remaining countdown at this frame.
+                // Scoped to the Accept footer's subtree.
+                "from": "acceptButton",
+                "find": {
+                  "hasTextMatchesRegex": "^\\d{1,2}:\\d{2}$"
+                },
+                "read": "text",
+                "transform": "parseClockSeconds"
               },
               "orders": {
                 // A merchant leg is identified by EXCLUSION, never by its address (Astra r3): every

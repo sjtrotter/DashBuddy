@@ -456,6 +456,27 @@ nulls at runtime, where the effect guard's null-checks remain the second layer).
 
 ---
 
+## Amendment 2026-09-20 — `state.offerSurface` (#1104/#1114): transition evidence for offer outcomes
+
+DoorDash 8.97.8's Compose offer card and confirm-decline sheet emit **no `TYPE_VIEW_CLICKED` for a human
+tap** (verified against the shipped Compose source — only accessibility-initiated clicks send it), so the
+click rules that resolved ACCEPT/DECLINE can never fire there. Outcomes therefore rest on **transitions**:
+an accept is the presentation leaving to a phased task surface (already `destinationImpliesAccept`), and a
+decline is the confirm sheet having been observed over the offer before it left without an accept. The
+sheet is identified by a new load-validated `state` key, `offerSurface: card | decline_confirm`
+(`OfferSurface`, `StateMachineContract.SUPPORTED_OFFER_SURFACES`), carried on `Observation.Screen` — never
+by a platform screen name in Kotlin. `PendingOffer.declineSheetSeenAt` records the first sighting;
+`EffectMap.resolveOfferOutcome` reads it AFTER every accept arm (the latch, and the post-step survivor —
+which also fixes the click-less accept logging `OFFER_TIMEOUT` while the job minted), only within the
+platform's `GraceConfig.declineSheetWindowMs` of the LAST sighting (a cancelled sheet whose countdown later
+ends is a timeout; the card re-renders after both, so a card frame is not a cancel signal; an exit that
+coincides with the card's own parsed countdown end, or arrives via the `OFFER_EXPIRY` timer, is an expiry
+whatever was seen), and names
+inferred outcomes in the event `description`. The click-less accept itself is narrowed to a NON-task
+`returnFlow` for every task destination (a mid-job add-on's decline used to be read as its accept when the
+original pickup surface re-rendered). Recovery drops the sighting; the journal persists `offerSurface`.
+Fail-null: no sheet, no click → timeout, as before.
+
 ## Amendment 2026-07-15 — the phase-less active-job flow (`task:active`) — and why there is no `TRANSIT` phase
 
 A platform whose in-job surface is **coarse** — Uber's `on_job_view`, a single screen shown for the

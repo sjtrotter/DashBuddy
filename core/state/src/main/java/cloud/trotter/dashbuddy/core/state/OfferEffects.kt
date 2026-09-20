@@ -1,5 +1,6 @@
 package cloud.trotter.dashbuddy.core.state
 
+import cloud.trotter.dashbuddy.domain.evaluation.OfferEvaluation
 import cloud.trotter.dashbuddy.domain.model.cards.FlowCardSnapshot
 import cloud.trotter.dashbuddy.domain.model.chat.ChatPersona
 import cloud.trotter.dashbuddy.domain.model.event.AppEventType
@@ -84,7 +85,7 @@ internal fun EffectMap.diffOfferLifecycle(
     if (prevOffer != null && nextOffer != null && prevOffer.offerHash != nextOffer.offerHash) {
         val replaced = !samePresentation(prevOffer, nextOffer)
         if (replaced) {
-            val outcome = resolveOfferOutcome(obs, prevOffer)
+            val outcome = resolveOfferOutcome(obs, prevOffer, prev, next)
             // #881: a DIRECT offer landing over a MATCH display is the platform doing exactly what
             // it says it does — the match was never assigned to this dasher, and the direct offer
             // takes the presentation slot. It is an EXPECTED supersession, not the anomalous
@@ -96,8 +97,9 @@ internal fun EffectMap.diffOfferLifecycle(
             // and a null kind on either side leaves the pre-#881 behaviour untouched.
             val directOverMatch = prevOffer.offerKind == OfferKind.MATCH &&
                 nextOffer.offerKind == OfferKind.DIRECT
-            val description =
-                if (directOverMatch) "Superseded by direct offer" else "Replaced by new offer"
+            val note = inferredOutcomeNote(prevOffer, outcome, obs)
+            val description = (if (directOverMatch) "Superseded by direct offer" else "Replaced by new offer") +
+                (note?.let { "; $it" } ?: "")
             add(logEffect(sessionId, outcome, obs.timestamp, offerPayload(prevOffer, outcome, obs.timestamp, description)))
             // #601: surface the replaced offer's disposition, suffixed so it reads as the OLD offer's.
             if (!directOverMatch) {
@@ -123,20 +125,35 @@ internal fun EffectMap.diffOfferLifecycle(
     // the eval-land STEP, where the presented hash is stable (the #830 enrich-as-variant step CLEARS
     // the evaluation, so `landedEval` is null there — the eval lands on a LATER loopback step whose
     // hash matches), so the same-hash condition still holds for every landing, variant or not.
+    // #1104: a SAME-hash refresh whose countdown end MOVED — either direction, any amount — re-arms
+    // the OFFER_EXPIRY timer for the new end and, when the evaluation already landed, re-posts the
+    // heads-up notification with the fresh expiry anchors (no re-speak, no chat card). Re-arming on
+    // every change is the only stateless way to keep the timer honest: the effect diff never learns
+    // which deadline was actually armed, so a slack-tolerant compare against the PREVIOUS frame let
+    // small per-frame drifts accumulate past the armed end and fire the stale timer on a live offer
+    // (Astra r4). The (type, platform) timer key makes each arm a supersede.
+    if (prevOffer != null && nextOffer != null && prevOffer.offerHash == nextOffer.offerHash) {
+        val newEnd = nextOffer.countdownExpiresAt
+        if (newEnd != null && newEnd != prevOffer.countdownExpiresAt) {
+            addAll(armOfferExpiry(nextOffer, platform, obs))
+            val eval = nextOffer.evaluation
+            if (eval != null && prevOffer.evaluation != null) {
+                add(
+                    AppEffect.PostOfferNotification(
+                        refreshOnly = true,
+                        evaluation = eval, offer = offerCardOf(nextOffer, eval), offerHash = nextOffer.offerHash,
+                        platform = nextOffer.platform, sessionId = sessionId,
+                    )
+                )
+            }
+        }
+    }
+
     val landedEval = nextOffer?.evaluation
     if (prevOffer != null && nextOffer != null && landedEval != null &&
         prevOffer.offerHash == nextOffer.offerHash && prevOffer.evaluation == null
     ) {
-        val parsedOffer = nextOffer.offerFields.parsedOffer
-        val expiresAt = parsedOffer.initialCountdownSeconds?.let { nextOffer.presentedAt + it * 1000L }
-        val offerCard = FlowCardSnapshot.Offer.from(
-            parsedOffer = parsedOffer,
-            evaluation = landedEval,
-            offerHash = nextOffer.offerHash,
-            phaseStartedAt = nextOffer.presentedAt,
-            expiresAt = expiresAt,
-            countdownSeconds = parsedOffer.initialCountdownSeconds,
-        )
+        val offerCard = offerCardOf(nextOffer, landedEval)
         // The heads-up notification live-updates on EVERY landing (a re-quoted card should show the
         // fresh numbers — a feature). The spoken read fires ONCE per physical presentation (#830):
         // only when the PREVIOUS state had no eval-landed marker, so a churning offer that
@@ -154,9 +171,11 @@ internal fun EffectMap.diffOfferLifecycle(
     // OFFER_ACCEPTED fires HERE off resolveOfferOutcome's accept-latch read; the later survivor
     // consumption is invisible to this presented-offer diff.
     if (prevOffer != null && nextOffer == null) {
-        val outcome = resolveOfferOutcome(obs, prevOffer)
+        val outcome = resolveOfferOutcome(obs, prevOffer, prev, next)
         // #594: latch forced DECLINED but the last literal click was ACCEPT → the "Review offer"→
-        // Accept race after the decline already committed.
+        // Accept race after the decline already committed. #1104/#1114: an outcome that rests on
+        // TRANSITION evidence (no click envelope) says so in the row — the ledger must be able to
+        // tell an observed tap from an inferred one.
         val raceDescription = if (
             outcome == AppEventType.OFFER_DECLINED &&
             prevOffer.declineCommittedAt != null &&
@@ -164,7 +183,7 @@ internal fun EffectMap.diffOfferLifecycle(
         ) {
             "Accept clicked after decline was already committed — decline stands (#594)"
         } else {
-            null
+            inferredOutcomeNote(prevOffer, outcome, obs)
         }
         add(AppEffect.CancelOfferNotification(prevOffer.offerHash))
         add(logEffect(sessionId, outcome, obs.timestamp, offerPayload(prevOffer, outcome, obs.timestamp, raceDescription)))
@@ -205,17 +224,20 @@ internal fun EffectMap.diffOfferLifecycle(
 
 /**
  * Arm the [TimeoutType.OFFER_EXPIRY] safety timer for a presented offer (vet H1) — the
- * GRACE_COMMIT mechanism (an effect, never a reducer arm). Deadline `presentedAt +
- * countdown*1000`, else a 120s de-facto TTL (no rule parses a countdown today, so this can never
- * fire early). The payload carries the offerHash so the fire resolves BY hash (vet M5).
+ * GRACE_COMMIT mechanism (an effect, never a reducer arm). Deadline = the card's own countdown end
+ * ([PendingOffer.countdownExpiresAt] — `frame timestamp + remaining seconds`, refreshed per frame,
+ * #1104), else `presentedAt + 120s` de-facto TTL. NEVER `presentedAt + countdown`: the countdown is
+ * the REMAINING time at the frame that read it, so on a platform that re-renders the card (DoorDash
+ * 8.97.8 every ~3 s) that formula fires the timer a millisecond after any refreshed frame and
+ * times out a live offer (Astra #1104 r3). The payload carries the offerHash so the fire resolves
+ * BY hash (vet M5).
  */
 private fun EffectMap.armOfferExpiry(
     offer: PendingOffer,
     platform: Platform,
     obs: Observation,
 ): List<AppEffect> {
-    val countdown = offer.offerFields.parsedOffer.initialCountdownSeconds
-    val deadline = offer.presentedAt + (countdown?.times(1000L) ?: EffectMap.OFFER_EXPIRY_DEFAULT_MS)
+    val deadline = offer.countdownExpiresAt ?: (offer.presentedAt + EffectMap.OFFER_EXPIRY_DEFAULT_MS)
     return listOf(
         AppEffect.ScheduleTimeout(
             durationMs = (deadline - obs.timestamp).coerceAtLeast(1L),
@@ -223,6 +245,23 @@ private fun EffectMap.armOfferExpiry(
             platform = platform,
             payload = ObservationPayload.OfferExpiry(offer.offerHash),
         ),
+    )
+}
+
+/**
+ * The heads-up / bubble offer snapshot for [offer] (#578 — ONE builder so the two can't drift).
+ * #1104: the countdown anchors are the offer's own frame-anchored expiry and the bar's total is the
+ * presentation→expiry span — never presentedAt + a REFRESHED remaining count.
+ */
+private fun offerCardOf(offer: PendingOffer, evaluation: OfferEvaluation): FlowCardSnapshot.Offer {
+    val expiresAt = offer.countdownExpiresAt
+    return FlowCardSnapshot.Offer.from(
+        parsedOffer = offer.offerFields.parsedOffer,
+        evaluation = evaluation,
+        offerHash = offer.offerHash,
+        phaseStartedAt = offer.presentedAt,
+        expiresAt = expiresAt,
+        countdownSeconds = expiresAt?.let { ((it - offer.presentedAt) / 1000L).toInt() },
     )
 }
 

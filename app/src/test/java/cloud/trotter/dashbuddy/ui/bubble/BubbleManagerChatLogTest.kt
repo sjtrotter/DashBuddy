@@ -39,6 +39,38 @@ class BubbleManagerChatLogTest {
     }
 
     @Test
+    fun `a refresh-only offer post writes no chat summary and no INFO milestone (#1104)`() {
+        val context = RuntimeEnvironment.getApplication()
+        val notificationManager: NotificationManager = mock()
+        val chatRepository: ChatRepository = mock()
+        val stateManager: StateManagerV2 = mock()
+        whenever(stateManager.state).thenReturn(MutableStateFlow(AppState()))
+        val manager = BubbleManager(context, notificationManager, chatRepository, dagger.Lazy<StateManagerV2> { stateManager })
+        val evaluation = cloud.trotter.dashbuddy.domain.evaluation.OfferEvaluation(
+            action = cloud.trotter.dashbuddy.domain.evaluation.OfferAction.ACCEPT, score = 74.0,
+            qualityLevel = cloud.trotter.dashbuddy.domain.evaluation.OfferQuality.GOOD, payAmount = 14.75,
+            fuelCostEstimate = 0.5, netPayAmount = 12.0, distanceMiles = 8.5, dollarsPerMile = 1.4,
+            dollarsPerHour = 22.0, estimatedTimeMinutes = 33.0, itemCount = 1.0, merchantName = "H-E-B",
+        )
+        val offer = cloud.trotter.dashbuddy.domain.model.cards.FlowCardSnapshot.Offer.from(
+            parsedOffer = cloud.trotter.dashbuddy.domain.model.offer.ParsedOffer(offerHash = "h1", payAmount = 14.75, distanceMiles = 8.5),
+            evaluation = evaluation, offerHash = "h1", phaseStartedAt = 1_000L, expiresAt = 41_000L, countdownSeconds = 40,
+        )
+        val tree = RecordingTree()
+        Timber.plant(tree)
+        try {
+            manager.postOfferNotification(offer, evaluation, cloud.trotter.dashbuddy.domain.state.Platform.DoorDash, "sess-1", refreshOnly = true)
+        } finally {
+            Timber.uproot(tree)
+        }
+        org.mockito.kotlin.verifyNoInteractions(chatRepository)
+        check(tree.records.none { it.priority == Log.INFO && it.tag == "Chat" && it.message.contains("offer posted") }) {
+            "a refresh must not log an 'offer posted' milestone: ${tree.records}"
+        }
+        org.mockito.kotlin.verify(notificationManager).notify(org.mockito.kotlin.any(), org.mockito.kotlin.any())
+    }
+
+    @Test
     fun `chat INFO milestones log persona kind, never the raw merchant or customer name`() {
         val manager = buildManager()
         val tree = RecordingTree()

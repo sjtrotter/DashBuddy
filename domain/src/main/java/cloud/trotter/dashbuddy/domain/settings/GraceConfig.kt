@@ -70,6 +70,22 @@ data class GraceConfig(
      * [CODE_DEFAULTS] override today.
      */
     val receiptExpandGraceMs: Long = RECEIPT_EXPAND_GRACE_MS,
+    /**
+     * #1104: how long after the platform's confirm-decline sheet was last observed an offer's exit
+     * from presentation (without an accept) still counts as a DECLINE rather than a timeout. The
+     * sheet is transition evidence, not a commit — the dasher may cancel back to the card and let the
+     * offer expire — and the card ALWAYS re-renders for one frame after a real decline too (7/7
+     * fielded declines on 8.97.8: sheet → card 1.6–2.0 s → idle 2–9 s after the sheet), so "card seen
+     * after the sheet" cannot mean "cancelled". The window is what separates the two: a real decline
+     * leaves within seconds; a cancelled sheet leaves when the countdown ends. Per-platform data.
+     */
+    val declineSheetWindowMs: Long = DECLINE_SHEET_WINDOW_MS,
+    /**
+     * #1104: how close to the card's own countdown end an exit must land to be read as the
+     * countdown running out (an EXPIRY) rather than a decline — covers the frame debounce between
+     * the last countdown read and the actual zero.
+     */
+    val countdownExpirySlackMs: Long = COUNTDOWN_EXPIRY_SLACK_MS,
 ) {
     companion object {
         const val DEFAULT_GRACE_MS = 10_000L
@@ -85,6 +101,12 @@ data class GraceConfig(
          * while still committing the delivery well inside the gap before the next offer.
          */
         const val RECEIPT_EXPAND_GRACE_MS = 8_000L
+
+        /** #1104: 15 s — the fielded sheet→exit spread is 2–9 s; a cancelled sheet's countdown is longer. */
+        const val DECLINE_SHEET_WINDOW_MS = 15_000L
+
+        /** #1104: 3 s — the offer-card frame debounce is ~3 s, so a countdown read can lag by that much. */
+        const val COUNTDOWN_EXPIRY_SLACK_MS = 3_000L
 
         /**
          * Default accept-consumption grace (DoorDash and any platform without an override): a fine-

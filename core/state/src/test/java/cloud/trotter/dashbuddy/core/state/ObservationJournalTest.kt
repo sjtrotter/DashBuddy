@@ -245,6 +245,23 @@ class ObservationJournalTest {
     }
 
     @Test
+    fun `a Screen's offerSurface survives the round-trip (#1104)`() = runTest {
+        val dao = FakeObservationDao()
+        val journal = ObservationJournal(dao)
+        journal.start(CoroutineScope(SupervisorJob() + StandardTestDispatcher(testScheduler)), StandardTestDispatcher(testScheduler))
+        val obs = Observation.Screen(
+            timestamp = 7L, captureId = null, ruleId = "doordash.screen.offer_popup_confirm_decline",
+            metadata = ReplayMetadata.EMPTY, flow = Flow.OfferPresented, modeHint = Mode.Online,
+            parsed = ParsedFields.None,
+            offerSurface = cloud.trotter.dashbuddy.domain.state.OfferSurface.DECLINE_CONFIRM,
+        )
+        journal.append(obs, state(7))
+        advanceUntilIdle()
+        val replayed = journal.tailAfter(0).single().observation as Observation.Screen
+        assertEquals(cloud.trotter.dashbuddy.domain.state.OfferSurface.DECLINE_CONFIRM, replayed.offerSurface)
+    }
+
+    @Test
     fun `flow observations round-trip their parsed fields`() = runTest {
         val dao = FakeObservationDao()
         val journal = ObservationJournal(dao)

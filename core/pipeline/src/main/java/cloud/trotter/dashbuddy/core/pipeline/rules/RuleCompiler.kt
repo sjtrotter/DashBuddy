@@ -6,6 +6,7 @@ import cloud.trotter.dashbuddy.domain.model.notification.RawNotificationData
 import cloud.trotter.dashbuddy.domain.pipeline.StateMachineContract
 import cloud.trotter.dashbuddy.domain.state.Flow
 import cloud.trotter.dashbuddy.domain.state.Mode
+import cloud.trotter.dashbuddy.domain.state.OfferSurface
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
@@ -395,10 +396,11 @@ object RuleCompiler {
                 // #293 item 5: unknown branch keys are a typed reject naming them.
                 validateKnownKeys(branchObj, knownBranchKeys(context), scope = "branch", ruleId = id)
                 compileBranch(branchObj, context, ruleState.flow, ruleState.modeHint, ruleId = id,
-                    ruleParseBlock = ruleParseObj, ruleParseAs = ruleParseAs, ruleBindObj = ruleBindObj)
+                    ruleParseBlock = ruleParseObj, ruleParseAs = ruleParseAs, ruleBindObj = ruleBindObj,
+                    ruleOfferSurface = ruleState.offerSurface)
             }
         } else {
-            listOf(compileBranch(obj, context, ruleState.flow, ruleState.modeHint, ruleId = id))
+            listOf(compileBranch(obj, context, ruleState.flow, ruleState.modeHint, ruleId = id, ruleOfferSurface = ruleState.offerSurface))
         }
 
         // #419: bound the total effect count across all branches (own effects +
@@ -654,6 +656,7 @@ object RuleCompiler {
         ruleParseBlock: JsonObject? = null,
         ruleParseAs: String? = null,
         ruleBindObj: JsonObject? = null,
+        ruleOfferSurface: OfferSurface? = null,
     ): CompiledBranch<TInput> {
         val targetName = ruleId?.let { deriveTargetFromId(it) }
             ?: throw RuleCompileException("Branch has no rule id to derive target from")
@@ -780,6 +783,7 @@ object RuleCompiler {
             intent = intent,
             flow = branchState.flow ?: ruleFlow,
             modeHint = branchState.modeHint ?: ruleModeHint,
+            offerSurface = branchState.offerSurface ?: ruleOfferSurface,
             screenIs = screenIs,
             transitionOverrides = transitionOverrides,
         )
@@ -919,6 +923,7 @@ object RuleCompiler {
     data class ParsedStateBlock(
         val flow: Flow? = null,
         val modeHint: Mode? = null,
+        val offerSurface: OfferSurface? = null,
     )
 
     fun parseStateBlock(stateObj: JsonObject?, ruleId: String): ParsedStateBlock {
@@ -936,8 +941,14 @@ object RuleCompiler {
             Mode.fromWire(it)
                 ?: throw RuleCompileException("Rule '$ruleId': unknown mode value '$it'")
         }
+        // #1104/#1114: which offer surface the rule renders — load-validated vocabulary
+        // (StateMachineContract.SUPPORTED_OFFER_SURFACES), never a platform screen name in Kotlin.
+        val offerSurface = stateObj["offerSurface"]?.jsonPrimitive?.content?.let {
+            OfferSurface.fromWire(it)
+                ?: throw RuleCompileException("Rule '$ruleId': unknown offerSurface value '$it'")
+        }
 
-        return ParsedStateBlock(flow, modeHint)
+        return ParsedStateBlock(flow, modeHint, offerSurface)
     }
 
     // ==========================================================================

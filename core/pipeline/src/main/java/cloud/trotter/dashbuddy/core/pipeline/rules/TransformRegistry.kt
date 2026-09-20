@@ -108,6 +108,7 @@ object TransformRegistry {
             "parseHrMin" -> parseHrMin(value)
             "parseMinutes" -> parseMinutes(value)
             "parseTotalMinutes" -> parseTotalMinutes(value)
+            "parseClockSeconds" -> parseClockSeconds(value)
             "parseLeadingInt" -> parseLeadingInt(value)
             "parsePercent" -> parsePercent(value)
             "sha256" -> sha256OrNull(value)
@@ -239,7 +240,7 @@ object TransformRegistry {
     private val knownPlainTransforms = setOf(
         "parseCurrency", "parseGlyphCurrency",
         "parseDistance", "parseItemCount", "parseItemCountUnit", "parseDeadline",
-        "parseTime", "parseDuration", "parseHrMin", "parseMinutes", "parseTotalMinutes", "parseLeadingInt",
+        "parseTime", "parseDuration", "parseHrMin", "parseMinutes", "parseTotalMinutes", "parseClockSeconds", "parseLeadingInt",
         "parsePercent", "sha256", "normalizeCustomerName", "trim", "lower", "upper",
         "toDouble", "toInt", "stripDeadlinePrefix",
     )
@@ -584,6 +585,16 @@ object TransformRegistry {
      * pattern — the #1053 regex ledger only burns down); null when neither unit is present.
      */
     private fun parseTotalMinutes(text: String): Int? = parseHrMin(text)?.let { (it / 60_000L).toInt() }
+
+    /**
+     * A `m:ss` clock (`0:16`, `1:05`) as whole SECONDS (#1104) — the offer card's remaining countdown.
+     * Derived from [parseDuration] (no new regex; the #1053 ledger only burns down); null when the
+     * text is not a clock.
+     */
+    private fun parseClockSeconds(text: String): Int? {
+        if (!text.trim().contains(':')) return null
+        return parseDuration(text)?.let { (it / 1000L).toInt() }
+    }
 
     /**
      * Parses leading integer: "4 items" -> 4, "12" -> 12.

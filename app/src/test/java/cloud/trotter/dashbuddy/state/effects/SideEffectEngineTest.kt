@@ -653,7 +653,38 @@ class SideEffectEngineTest {
         advanceTimeBy(SideEffectEngine.OFFER_NOTIFICATION_DELAY_MS + 100)
         runCurrent()
 
-        verify(bubbleManager, never()).postOfferNotification(any(), any(), any(), anyOrNull())
+        verify(bubbleManager, never()).postOfferNotification(any(), any(), any(), anyOrNull(), any())
+    }
+
+    @Test
+    fun `a refresh inside the settle window inherits the pending FRESH post's obligations (#1104)`() = runTest {
+        // Evaluation lands (fresh post pending), the deadline moves 200 ms later (refresh-only).
+        // The coalesced post must still be the FIRST post — summary + alert — not a silent refresh.
+        val engine = buildEngine(StandardTestDispatcher(testScheduler))
+        engine.process(AppEffect.PostOfferNotification(testEvaluation(), testOfferCard(), offerHash = "hash-9", platform = Platform.DoorDash))
+        runCurrent()
+        advanceTimeBy(200)
+        engine.process(AppEffect.PostOfferNotification(testEvaluation(), testOfferCard(), offerHash = "hash-9", platform = Platform.DoorDash, refreshOnly = true))
+        runCurrent()
+        advanceTimeBy(SideEffectEngine.OFFER_NOTIFICATION_DELAY_MS + 100)
+        runCurrent()
+        verify(bubbleManager, times(1)).postOfferNotification(any(), any(), any(), anyOrNull(), eq(false))
+        verify(bubbleManager, never()).postOfferNotification(any(), any(), any(), anyOrNull(), eq(true))
+    }
+
+    @Test
+    fun `a refresh after the fresh post landed stays a silent refresh (#1104)`() = runTest {
+        val engine = buildEngine(StandardTestDispatcher(testScheduler))
+        engine.process(AppEffect.PostOfferNotification(testEvaluation(), testOfferCard(), offerHash = "hash-9", platform = Platform.DoorDash))
+        runCurrent()
+        advanceTimeBy(SideEffectEngine.OFFER_NOTIFICATION_DELAY_MS + 100)
+        runCurrent()
+        engine.process(AppEffect.PostOfferNotification(testEvaluation(), testOfferCard(), offerHash = "hash-9", platform = Platform.DoorDash, refreshOnly = true))
+        runCurrent()
+        advanceTimeBy(SideEffectEngine.OFFER_NOTIFICATION_DELAY_MS + 100)
+        runCurrent()
+        verify(bubbleManager, times(1)).postOfferNotification(any(), any(), any(), anyOrNull(), eq(false))
+        verify(bubbleManager, times(1)).postOfferNotification(any(), any(), any(), anyOrNull(), eq(true))
     }
 
     @Test
@@ -665,7 +696,7 @@ class SideEffectEngineTest {
         advanceTimeBy(SideEffectEngine.OFFER_NOTIFICATION_DELAY_MS + 100)
         runCurrent()
 
-        verify(bubbleManager, times(1)).postOfferNotification(any(), any(), any(), anyOrNull())
+        verify(bubbleManager, times(1)).postOfferNotification(any(), any(), any(), anyOrNull(), any())
     }
 
     @Test
@@ -677,7 +708,7 @@ class SideEffectEngineTest {
         runCurrent()
         advanceTimeBy(SideEffectEngine.OFFER_NOTIFICATION_DELAY_MS + 100)
         runCurrent()
-        verify(bubbleManager, times(1)).postOfferNotification(any(), any(), any(), anyOrNull())
+        verify(bubbleManager, times(1)).postOfferNotification(any(), any(), any(), anyOrNull(), any())
 
         engine.process(AppEffect.CancelOfferNotification(offerHash = "hash-9"))
         runCurrent()

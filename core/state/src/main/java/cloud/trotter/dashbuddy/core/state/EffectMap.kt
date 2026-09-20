@@ -397,7 +397,12 @@ class EffectMap @Inject constructor(
     // HELPERS
     // =========================================================================
 
-    internal fun resolveOfferOutcome(obs: Observation, prevOffer: PendingOffer? = null): AppEventType {
+    internal fun resolveOfferOutcome(
+        obs: Observation,
+        prevOffer: PendingOffer? = null,
+        prev: PlatformRegion? = null,
+        next: PlatformRegion? = null,
+    ): AppEventType {
         // 0. Decline-commit latch (#594): a DECLINE-intent click already committed this offer's
         //    decline server-side. That decision is final — a later "Review offer"→Accept click
         //    cannot un-decline it — so the latch wins over lastClickIntent AND the direct-click
@@ -410,15 +415,75 @@ class EffectMap @Inject constructor(
         if (prevOffer != null && prevOffer.isAcceptLatched()) return AppEventType.OFFER_ACCEPTED
         if (prevOffer?.lastClickIntent == OfferIntent.DECLINE) return AppEventType.OFFER_DECLINED
         // 2. Direct click observation — covers the edge case where click and
-        //    flow change arrive in the same observation
-        val clickFields = when (obs) {
-            is Observation.Click -> obs.parsed as? ParsedFields.ClickFields
-            else -> null
+        //    flow change arrive in the same observation. An OBSERVED tap outranks every inference
+        //    below (Astra #1104 r1 F4).
+        val clickIntent = (obs as? Observation.Click)?.let { it.parsed as? ParsedFields.ClickFields }?.intent
+        when (clickIntent) {
+            OfferIntent.ACCEPT -> return AppEventType.OFFER_ACCEPTED
+            OfferIntent.DECLINE -> return AppEventType.OFFER_DECLINED
+            else -> Unit
         }
-        return when (clickFields?.intent) {
-            OfferIntent.ACCEPT -> AppEventType.OFFER_ACCEPTED
-            OfferIntent.DECLINE -> AppEventType.OFFER_DECLINED
-            else -> AppEventType.OFFER_TIMEOUT
+        // 3. TRANSITION evidence (#1104/#1114) — the only evidence a Compose card can leave, since
+        //    its controls emit no click event for a human tap:
+        //    * the stepper armed an accepted SURVIVOR for this very offer on this step (the
+        //      click-less accept: an offer presented over a NON-task flow left to a task surface —
+        //      OfferLifecycle.destinationImpliesAccept) → ACCEPTED. Before this arm the job minted
+        //      but the offer row said TIMEOUT. The survivor is usually CONSUMED into the job on the
+        //      very same step (the task frame both arms it and mints), so the evidence is either a
+        //      surviving accepted entry OR this hash newly present on the region's active job
+        //      (absent from the pre-step job — a same-hash re-presentation over an older accept of
+        //      that hash can never re-fire it).
+        //    * the platform's confirm-decline sheet was observed over the offer, no accept followed,
+        //      and the exit lands within `GraceConfig.declineSheetWindowMs` of the LAST sighting →
+        //      DECLINED. The window is what separates a real decline (exit within seconds) from a
+        //      cancelled sheet whose offer later expires (the card re-renders after BOTH, so a card
+        //      frame is not a cancel signal — 7/7 fielded declines). Outside the window: timeout.
+        if (prevOffer != null && next != null) {
+            val survivor = next.pendingOffers.any { it.offerHash == prevOffer.offerHash && it.acceptedAt != null }
+            val consumedNow = next.activeJob?.acceptedOffers?.any { it.offerHash == prevOffer.offerHash } == true &&
+                prev?.activeJob?.acceptedOffers?.any { it.offerHash == prevOffer.offerHash } != true
+            if (survivor || consumedNow) return AppEventType.OFFER_ACCEPTED
+        }
+        if (prevOffer != null && declineInferredFromSheet(prevOffer, obs)) return AppEventType.OFFER_DECLINED
+        return AppEventType.OFFER_TIMEOUT
+    }
+
+    /**
+     * #1104: the sheet was seen, this exit lands inside the platform's decline window, and nothing
+     * says the offer simply RAN OUT: an exit at/after the card's own countdown end (`countdownExpiresAt`
+     * minus the slack) is an expiry however recent the sheet — the evidence that separates a real
+     * decline from a cancelled sheet whose offer then expired (Astra r2) — and the `OFFER_EXPIRY`
+     * safety timer (fires only when NO frame arrived) never converts to a decline on its own.
+     */
+    internal fun declineInferredFromSheet(offer: PendingOffer, obs: Observation): Boolean {
+        val seen = offer.declineSheetSeenAt ?: return false
+        if (obs is Observation.Timeout) return false
+        // Without a read countdown there is no way to tell "declined" from "ran out inside the
+        // window" — fail null (Astra r3): the sheet alone never makes a decline.
+        val expiresAt = offer.countdownExpiresAt ?: return false
+        val grace = graceConfig.forPlatform(offer.platform)
+        if (obs.timestamp - seen !in 0..grace.declineSheetWindowMs) return false
+        return obs.timestamp < expiresAt - grace.countdownExpirySlackMs
+    }
+
+    /**
+     * #1104: the human-readable evidence behind an INFERRED outcome (null for an observed tap) —
+     * one owner for the removal AND the replacement resolution paths (Astra r1 F5).
+     */
+    internal fun inferredOutcomeNote(offer: PendingOffer, outcome: AppEventType, obs: Observation): String? {
+        val clickIntent = (obs as? Observation.Click)?.let { it.parsed as? ParsedFields.ClickFields }?.intent
+        return when {
+            outcome == AppEventType.OFFER_DECLINED &&
+                offer.declineCommittedAt == null &&
+                offer.lastClickIntent != OfferIntent.DECLINE &&
+                clickIntent != OfferIntent.DECLINE &&
+                declineInferredFromSheet(offer, obs) ->
+                "Decline inferred from the confirm sheet — no click envelope (#1104)"
+            outcome == AppEventType.OFFER_ACCEPTED &&
+                !offer.isAcceptLatched() &&
+                clickIntent != OfferIntent.ACCEPT ->
+                "Accept inferred from the task surface — no click envelope (#1104)"
+            else -> null
         }
     }
 

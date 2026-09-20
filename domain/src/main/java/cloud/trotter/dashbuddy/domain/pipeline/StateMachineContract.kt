@@ -22,6 +22,8 @@ object StateMachineContract {
 
     val SUPPORTED_FLOWS: Set<String> = Flow.entries.map { it.wire }.toSet()
     val SUPPORTED_MODES: Set<String> = Mode.entries.map { it.wire }.toSet()
+    /** `state.offerSurface` vocabulary (#1104/#1114) — see [cloud.trotter.dashbuddy.domain.state.OfferSurface]. */
+    val SUPPORTED_OFFER_SURFACES: Set<String> = cloud.trotter.dashbuddy.domain.state.OfferSurface.entries.map { it.wire }.toSet()
     val SUPPORTED_VERBS: Set<String> = EffectVerb.entries.map { it.wire }.toSet()
     val SUPPORTED_TRIGGERS: Set<String> = TransitionTrigger.entries.map { it.wire }.toSet()
 

@@ -316,6 +316,11 @@
       "properties": {
         "flow": { "$ref": "#/$defs/flowEnum" },
         "modeHint": { "$ref": "#/$defs/modeEnum" },
+        "offerSurface": {
+          "type": "string",
+          "enum": ["card", "decline_confirm"],
+          "description": "Which surface of an OFFER presentation this screen renders (#1104/#1114). `decline_confirm` marks the presented offer's declineSheetSeenAt; an offer that then leaves presentation without an accept resolves OFFER_DECLINED (a Compose control emits no click event for a human tap). Vocabulary: StateMachineContract.SUPPORTED_OFFER_SURFACES."
+        },
         "mode": {
           "$ref": "#/$defs/modeEnum",
           "description": "v1 compat alias for 'modeHint'."

@@ -9,6 +9,7 @@ import cloud.trotter.dashbuddy.domain.pipeline.TimeoutType
 import cloud.trotter.dashbuddy.domain.state.AppState
 import cloud.trotter.dashbuddy.domain.state.Flow
 import cloud.trotter.dashbuddy.domain.state.Mode
+import cloud.trotter.dashbuddy.domain.state.OfferSurface
 import cloud.trotter.dashbuddy.domain.state.ParsedFields
 import cloud.trotter.dashbuddy.domain.state.Platform
 import kotlinx.coroutines.CancellationException
@@ -37,6 +38,10 @@ internal data class InternalObsPayload(
     // targets the owning region (an identity-less UiInput Unknown-skips at StateMachine.kt:75).
     // Additive: old journal rows without this key decode with a null default.
     val offerHash: String? = null,
+    // #1104: a Screen's rule-declared offer surface (`decline_confirm`) is transition EVIDENCE the
+    // lifecycle reads; a replay that dropped it would resolve the same offer differently from the
+    // live run (DECLINED live, TIMEOUT replayed — a second contradictory closing row). Additive.
+    val offerSurface: String? = null,
 )
 
 /**
@@ -122,6 +127,7 @@ class ObservationJournal @Inject constructor(
     }
 
     private fun internalPayloadOf(obs: Observation): InternalObsPayload? = when (obs) {
+        is Observation.Screen -> obs.offerSurface?.let { InternalObsPayload(offerSurface = it.wire) }
         is Observation.Timeout ->
             if (obs.targetPlatform != null || obs.payload != null) {
                 InternalObsPayload(targetPlatform = obs.targetPlatform?.wire, payload = obs.payload)
@@ -162,6 +168,7 @@ class ObservationJournal @Inject constructor(
                 modeHint = modeHint?.let { runCatching { enumValueOf<Mode>(it) }.getOrNull() },
                 parsed = deserializeParsed(parsedJson),
                 target = ruleId?.substringAfterLast('.'),
+                offerSurface = payload?.offerSurface?.let(OfferSurface::fromWire),
             )
 
             "accessibility.click" -> Observation.Click(

@@ -446,6 +446,35 @@ resolution, `FlowCardSnapshot.Offer.storeNames`, the fold's eval-less fallback),
 real order stores, else the card headline, else the order list — so DoorDash (no top-level
 `storeName` parse) is byte-identical.
 
+**Outcomes on transition evidence (#1104/#1114).** A Compose control emits no click event for a human
+tap, so on the 8.97.8 card no ACCEPT/DECLINE click can arrive. `EffectMap.resolveOfferOutcome(obs, prev,
+next)` therefore reads, after the click latches: (a) an accepted SURVIVOR for the same hash in the
+post-step region (the click-less accept — presentation left to a phased task surface) → `OFFER_ACCEPTED`
+(before this the job minted while the offer row said TIMEOUT); (b) `PendingOffer.declineSheetSeenAt` →
+`OFFER_DECLINED` — set once by `OfferLifecycle` when a screen whose rule declares
+`state.offerSurface: decline_confirm` (`OfferSurface`, load-validated vocabulary) is observed over the
+presented offer (LATEST sighting), preserved across enrich-as-variant, never a commit on its own (an accept
+always wins, and an OBSERVED tap outranks every inference). The sheet counts only when the exit lands
+within `GraceConfig.declineSheetWindowMs` (15 s; the seven fielded 8.97.8 declines exited 2–9 s after
+the sheet) — the card re-renders for one frame after a real decline AND after a cancel, so a card frame
+is not a cancel signal; a cancelled sheet whose countdown later ends is outside the window → timeout —
+and, since the window alone cannot separate a LATE cancel from a real decline, the card's own countdown is
+now parsed on both DoorDash card generations (`initialCountdownSeconds`: the legacy button's end text, the
+Compose footer's `m:ss` clock via `parseClockSeconds`) into `PendingOffer.countdownExpiresAt` (refreshed
+per frame, hash-neutral): the countdown is REQUIRED evidence — with none read the sheet alone never makes a
+decline (fail-null) — an exit at/after that instant minus `countdownExpirySlackMs` (3 s) is an EXPIRY
+however recent the sheet, and the `OFFER_EXPIRY` safety timer never converts to a decline on its own. The
+same anchor now drives the `OFFER_EXPIRY` arm and the HUD's expiry bar: the pre-#1104 `presentedAt +
+countdown` formula assumed a countdown read once, and on a card that re-renders every ~3 s it would have
+armed the timer a millisecond after any refreshed frame and timed out a live offer (Astra r3).
+The same change generalizes `destinationImpliesAccept`: a click-less accept is inferred ONLY when the
+offer's `returnFlow` was not a task flow (a job appearing where there was none) — a mid-job add-on's
+returnFlow is job A's pickup surface, whose re-render after a declined add-on used to mint a phantom
+survivor; a click-less add-on accept is not inferable and fails null. `recoveryHygiene` drops the
+sighting (evidence, not a decision in flight); the journal persists `offerSurface` so replay resolves
+the same outcome as the live run. Inferred outcomes carry a `description` naming the evidence on both
+the removal and the replacement paths. No sheet and no click → timeout, as before.
+
 **Accept survives the offer-presentation edge** as an `acceptedAt`-marked accepted-pending-
 consumption entry (this REPLACED the #526 accept stash + `AcceptStash` + `offerBelongsToRegion`,
 all deleted): `OFFER_ACCEPTED` fires at the edge, and the survivor is minted by the task edge

@@ -6,6 +6,7 @@ import cloud.trotter.dashbuddy.domain.pipeline.TimeoutType
 import cloud.trotter.dashbuddy.domain.state.Flow
 import cloud.trotter.dashbuddy.domain.state.OfferIntent
 import cloud.trotter.dashbuddy.domain.state.ParsedFields
+import cloud.trotter.dashbuddy.domain.state.OfferSurface
 import cloud.trotter.dashbuddy.domain.state.PendingOffer
 import cloud.trotter.dashbuddy.domain.state.PlatformRegion
 import timber.log.Timber
@@ -96,6 +97,21 @@ private fun PlatformRegionStepper.pushOrReplaceOffer(
     val presented = region.presentedOffer()
 
     val newOffers = when {
+        // #1104/#1114: the platform's confirm-decline sheet rendered over the presented offer. A
+        // Compose control emits no click event for a human tap, so this FRAME is the only evidence
+        // a decline is under way. Record the first sighting on the presented offer; the outcome
+        // resolver reads it when the offer leaves presentation without an accept, within the
+        // platform's `declineSheetWindowMs` of the LAST sighting (a re-opened sheet re-arms the
+        // window). Not a commit — `View offer details` → Accept still wins (the accept latch /
+        // task-surface exit outrank it in EffectMap.resolveOfferOutcome). Rule-declared
+        // (`state.offerSurface`), P8-clean.
+        (obs as? Observation.Screen)?.offerSurface == OfferSurface.DECLINE_CONFIRM -> {
+            if (presented == null) return region
+            region.pendingOffers.map {
+                if (it === presented) presented.copy(declineSheetSeenAt = obs.timestamp) else it
+            }
+        }
+
         // No offer data → keep the list as-is.
         offerFields == null || newHash == null -> return region
 
@@ -107,6 +123,7 @@ private fun PlatformRegionStepper.pushOrReplaceOffer(
                     offerFields = offerFields,
                     targets = obs.targets.ifEmpty { presented.targets },
                     sourceRuleId = obs.ruleId ?: presented.sourceRuleId,
+                    countdownExpiresAt = countdownExpiresAt(obs, offerFields) ?: presented.countdownExpiresAt,
                 ) else it
             }
 
@@ -130,6 +147,7 @@ private fun PlatformRegionStepper.pushOrReplaceOffer(
                     targets = obs.targets.ifEmpty { presented.targets },
                     sourceRuleId = obs.ruleId ?: presented.sourceRuleId,
                     evaluation = null,
+                    countdownExpiresAt = countdownExpiresAt(obs, offerFields) ?: presented.countdownExpiresAt,
                 ) else it
             }
 
@@ -153,6 +171,7 @@ private fun PlatformRegionStepper.pushOrReplaceOffer(
                 returnFlow = presented?.returnFlow ?: (region.lastActedFlow ?: Flow.Idle),
                 targets = obs.targets,
                 sourceRuleId = obs.ruleId,
+                countdownExpiresAt = countdownExpiresAt(obs, offerFields),
             )
             listOf(fresh)
         }
@@ -221,6 +240,10 @@ private fun isSamePresentation(
     return presentedKey == incomingKey
 }
 
+/** #1104: when this frame's countdown reaches zero — null when the frame carries no countdown. */
+private fun countdownExpiresAt(obs: Observation, offerFields: ParsedFields.OfferFields): Long? =
+    offerFields.parsedOffer.initialCountdownSeconds?.takeIf { it >= 0 }?.let { obs.timestamp + it * 1000L }
+
 /**
  * Does leaving offer-presentation TO [destination] imply this offer was click-lessly ACCEPTED?
  *
@@ -239,7 +262,15 @@ private fun isSamePresentation(
  */
 private fun destinationImpliesAccept(destination: Flow?, offer: PendingOffer): Boolean {
     if (destination?.isTaskFlow() != true) return false
-    return destination != Flow.TaskActive || !offer.returnFlow.isTaskFlow()
+    // #1104 (Astra r1 F2): the non-task-returnFlow guard now covers PHASED destinations too. A
+    // mid-job ADD-ON offer's returnFlow IS a task flow (pickup navigation for job A); when the dasher
+    // declines it — through the confirm sheet, with no click event on 8.97.8 — the very next frame
+    // is job A's pickup surface re-rendering, which an unconditional phased rule read as the add-on's
+    // acceptance: a phantom survivor, phantom economics on job A, and (since this PR promotes the
+    // transition into an event) a phantom OFFER_ACCEPTED. "A job appearing where there was none" is
+    // the only click-less accept the transition can prove; a click-less add-on accept is NOT
+    // inferable from screens alone and fails NULL (its pay still lands through the receipt).
+    return !offer.returnFlow.isTaskFlow()
 }
 
 /**

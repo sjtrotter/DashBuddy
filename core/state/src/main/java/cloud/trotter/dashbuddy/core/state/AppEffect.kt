@@ -235,6 +235,13 @@ sealed class AppEffect {
          * provenance rather than re-deriving it from the last-recognized-frame active session.
          */
         val sessionId: String? = null,
+        /**
+         * #1104: true when this post only REFRESHES an already-surfaced offer's countdown anchors
+         * (the card's deadline moved on a same-hash re-render) — the handler updates the existing
+         * notification silently and writes NO chat summary; a fresh post (false) alerts once and
+         * logs the summary as before. LAST so positional constructions stay valid.
+         */
+        val refreshOnly: Boolean = false,
     ) : AppEffect()
 
     /**
