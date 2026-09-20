@@ -1,5 +1,6 @@
 package cloud.trotter.dashbuddy.core.state
 
+import cloud.trotter.dashbuddy.domain.evaluation.OfferEvaluation
 import cloud.trotter.dashbuddy.domain.model.cards.FlowCardSnapshot
 import cloud.trotter.dashbuddy.domain.model.chat.ChatPersona
 import cloud.trotter.dashbuddy.domain.model.event.AppEventType
@@ -124,16 +125,25 @@ internal fun EffectMap.diffOfferLifecycle(
     // the eval-land STEP, where the presented hash is stable (the #830 enrich-as-variant step CLEARS
     // the evaluation, so `landedEval` is null there — the eval lands on a LATER loopback step whose
     // hash matches), so the same-hash condition still holds for every landing, variant or not.
-    // #1104: a SAME-hash refresh whose countdown end moved LATER than the armed anchor by more than
-    // the slack (a platform extending an offer) re-arms the OFFER_EXPIRY timer — otherwise the stale
-    // timer would fire at the old end and time out a live offer. Per-frame jitter inside the slack
-    // never re-arms (the (type, platform) timer key makes each arm a supersede).
+    // #1104: a SAME-hash refresh whose countdown end MOVED — either direction, any amount — re-arms
+    // the OFFER_EXPIRY timer for the new end and, when the evaluation already landed, re-posts the
+    // heads-up notification with the fresh expiry anchors (no re-speak, no chat card). Re-arming on
+    // every change is the only stateless way to keep the timer honest: the effect diff never learns
+    // which deadline was actually armed, so a slack-tolerant compare against the PREVIOUS frame let
+    // small per-frame drifts accumulate past the armed end and fire the stale timer on a live offer
+    // (Astra r4). The (type, platform) timer key makes each arm a supersede.
     if (prevOffer != null && nextOffer != null && prevOffer.offerHash == nextOffer.offerHash) {
         val newEnd = nextOffer.countdownExpiresAt
-        val oldEnd = prevOffer.countdownExpiresAt
-        val slack = graceConfig.forPlatform(platform).countdownExpirySlackMs
-        if (newEnd != null && (oldEnd == null || newEnd > oldEnd + slack)) {
+        if (newEnd != null && newEnd != prevOffer.countdownExpiresAt) {
             addAll(armOfferExpiry(nextOffer, platform, obs))
+            val eval = nextOffer.evaluation
+            if (eval != null && prevOffer.evaluation != null) {
+                add(
+                    AppEffect.PostOfferNotification(
+                        eval, offerCardOf(nextOffer, eval), nextOffer.offerHash, nextOffer.platform, sessionId = sessionId,
+                    )
+                )
+            }
         }
     }
 
@@ -141,18 +151,7 @@ internal fun EffectMap.diffOfferLifecycle(
     if (prevOffer != null && nextOffer != null && landedEval != null &&
         prevOffer.offerHash == nextOffer.offerHash && prevOffer.evaluation == null
     ) {
-        val parsedOffer = nextOffer.offerFields.parsedOffer
-        // #1104: the countdown anchors are the offer's own (frame-anchored) expiry, and the bar's
-        // total is the presentation→expiry span — never presentedAt + a REFRESHED remaining count.
-        val expiresAt = nextOffer.countdownExpiresAt
-        val offerCard = FlowCardSnapshot.Offer.from(
-            parsedOffer = parsedOffer,
-            evaluation = landedEval,
-            offerHash = nextOffer.offerHash,
-            phaseStartedAt = nextOffer.presentedAt,
-            expiresAt = expiresAt,
-            countdownSeconds = expiresAt?.let { ((it - nextOffer.presentedAt) / 1000L).toInt() },
-        )
+        val offerCard = offerCardOf(nextOffer, landedEval)
         // The heads-up notification live-updates on EVERY landing (a re-quoted card should show the
         // fresh numbers — a feature). The spoken read fires ONCE per physical presentation (#830):
         // only when the PREVIOUS state had no eval-landed marker, so a churning offer that
@@ -244,6 +243,23 @@ private fun EffectMap.armOfferExpiry(
             platform = platform,
             payload = ObservationPayload.OfferExpiry(offer.offerHash),
         ),
+    )
+}
+
+/**
+ * The heads-up / bubble offer snapshot for [offer] (#578 — ONE builder so the two can't drift).
+ * #1104: the countdown anchors are the offer's own frame-anchored expiry and the bar's total is the
+ * presentation→expiry span — never presentedAt + a REFRESHED remaining count.
+ */
+private fun offerCardOf(offer: PendingOffer, evaluation: OfferEvaluation): FlowCardSnapshot.Offer {
+    val expiresAt = offer.countdownExpiresAt
+    return FlowCardSnapshot.Offer.from(
+        parsedOffer = offer.offerFields.parsedOffer,
+        evaluation = evaluation,
+        offerHash = offer.offerHash,
+        phaseStartedAt = offer.presentedAt,
+        expiresAt = expiresAt,
+        countdownSeconds = expiresAt?.let { ((it - offer.presentedAt) / 1000L).toInt() },
     )
 }
 

@@ -164,15 +164,51 @@ class TransitionOutcomeTest {
         assertEquals(41_000L, d.region.presentedOffer()?.countdownExpiresAt)
     }
 
+    private fun List<AppEffect>.expiryArm(): AppEffect.ScheduleTimeout? =
+        filterIsInstance<AppEffect.ScheduleTimeout>().singleOrNull { it.type == cloud.trotter.dashbuddy.domain.pipeline.TimeoutType.OFFER_EXPIRY }
+
     @Test
-    fun `a same-hash refresh that EXTENDS the countdown re-arms the expiry timer while jitter inside the slack does not`() {
-        val d = drive(region(), offerObs(1_000L, "o1", countdown = 40)) // expiry 41 s
-        val (_, jitter) = resolve(d, offerObs(4_000L, "o1", countdown = 38)) // 42 s: +1 s, inside the 3 s slack
-        assertTrue("no re-arm on jitter", jitter.filterIsInstance<AppEffect.ScheduleTimeout>().none { it.type == cloud.trotter.dashbuddy.domain.pipeline.TimeoutType.OFFER_EXPIRY })
-        val (next, extended) = resolve(d, offerObs(4_000L, "o1", countdown = 60)) // 64 s: extended
-        assertEquals(64_000L, next.presentedOffer()?.countdownExpiresAt)
-        val arm = extended.filterIsInstance<AppEffect.ScheduleTimeout>().single { it.type == cloud.trotter.dashbuddy.domain.pipeline.TimeoutType.OFFER_EXPIRY }
-        assertEquals(60_000L, arm.durationMs)
+    fun `every same-hash countdown move re-arms the expiry timer for the NEW end (drift, extension, shortening)`() {
+        // Astra r4: 1 s→40, 4 s→40, 7 s→40 (deadline 41→44→47 s by 3 s steps), 37 s→10 (47 s). A
+        // slack-tolerant compare against the previous frame never re-armed and the stale 41 s timer
+        // fired with 6 s left. Now each move re-arms; an unchanged deadline does not.
+        var d = drive(region(), offerObs(1_000L, "o1", countdown = 40))
+        val (r4, e4) = resolve(d, offerObs(4_000L, "o1", countdown = 40))
+        assertEquals(44_000L, r4.presentedOffer()?.countdownExpiresAt); assertEquals(40_000L, e4.expiryArm()?.durationMs)
+        d = Driven(r4, d.prevFlow)
+        val (r7, e7) = resolve(d, offerObs(7_000L, "o1", countdown = 40))
+        assertEquals(47_000L, r7.presentedOffer()?.countdownExpiresAt); assertEquals(40_000L, e7.expiryArm()?.durationMs)
+        d = Driven(r7, d.prevFlow)
+        val (r37, e37) = resolve(d, offerObs(37_000L, "o1", countdown = 10))
+        assertEquals("unchanged end", 47_000L, r37.presentedOffer()?.countdownExpiresAt); assertNull("no re-arm when the end did not move", e37.expiryArm())
+        d = Driven(r37, d.prevFlow)
+        val (r40, e40) = resolve(d, offerObs(40_000L, "o1", countdown = 2)) // SHORTENED to 42 s
+        assertEquals(42_000L, r40.presentedOffer()?.countdownExpiresAt); assertEquals(2_000L, e40.expiryArm()?.durationMs)
+        assertTrue("no outcome — the offer is live", e40.outcome() == null)
+    }
+
+    @Test
+    fun `a same-hash countdown move after the evaluation landed re-posts the heads-up with the new expiry, without re-speaking`() {
+        // Astra r4 P2: the notification snapshot froze the first deadline.
+        val start = drive(region(), offerObs(1_000L, "o1", countdown = 40))
+        val landed = start.region.copy(pendingOffers = start.region.pendingOffers.map {
+            it.copy(
+                evaluation = cloud.trotter.dashbuddy.domain.evaluation.OfferEvaluation(
+                    action = cloud.trotter.dashbuddy.domain.evaluation.OfferAction.ACCEPT, score = 74.0,
+                    qualityLevel = cloud.trotter.dashbuddy.domain.evaluation.OfferQuality.GOOD, payAmount = 14.75,
+                    fuelCostEstimate = 0.5, netPayAmount = 12.0, distanceMiles = 8.5, dollarsPerMile = 1.4,
+                    dollarsPerHour = 22.0, estimatedTimeMinutes = 33.0, itemCount = 1.0, merchantName = "H-E-B",
+                ),
+                firstEvalLandedAt = 1_500L,
+            )
+        })
+        val d = Driven(landed, start.prevFlow)
+        val (next, effects) = resolve(d, offerObs(21_000L, "o1", countdown = 60)) // → 81 s
+        assertEquals(81_000L, next.presentedOffer()?.countdownExpiresAt)
+        val post = effects.filterIsInstance<AppEffect.PostOfferNotification>().single()
+        assertEquals(81_000L, post.offer.expiresAt)
+        assertTrue("speak-once holds", effects.none { it is AppEffect.SpeakOffer })
+        assertTrue("no chat card for a deadline refresh", effects.none { it is AppEffect.UpdateBubble })
     }
 
     @Test
