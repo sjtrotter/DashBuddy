@@ -69,15 +69,23 @@ from the route summary (a route ESTIMATE, never a deadline; the new `parseTotalM
 `N hr N min` into minutes, where `parseMinutes` would read only the trailing minutes), and `orders` per
 merchant holder (`storeName` from the holder, the item count from `sibling(2)`'s `Shop for N items`
 row). The helper binding `offerBody` (the body ScrollView, anchored on its `Customer dropoff` holder — the
-Accept footer is the ScrollView's SIBLING) scopes the OFFER-level `orderType`/badge
-presence checks; it is not a `RuleAction` target, so it enumerates no capability. `side_nav_drawer`
+Accept footer is the ScrollView's SIBLING) is **mandatory** and every economic read is scoped to it
+(`from: offerBody` on both pay arms, the route summary and the `orders` walk), so a frame with no body
+never parses and a background figure or store row outside the card can never become this offer's
+economics (Astra round 1, PR #1115). `orderType` is PER STORE: the merchant holder's `sibling(2)` is the
+shop row for a shop merchant (`holder → address → Shop for N items …`) and the NEXT holder for a pickup
+merchant, so a regex on that node's `allText` yields `SHOP_FOR_ITEMS` or falls to the `literal`
+`PICKUP` — verified on the fielded mixed stack (Smoothie King PICKUP + Target SHOP_FOR_ITEMS, fixture
+`…073fcb`); only the badges (Red Card / alcohol / large order) resolve at offer level. The branch also
+carries the new `collectionNonBlank` validator (`orders` non-empty AND every `storeName` non-blank,
+`onFail: skip`) — `fieldNotNull` accepts an empty list and blank names, exactly the #595/#1063 nameless
+ghost-offer shape a structurally present holder could render; a synthetic blank-merchant negative pins
+it. It is not a `RuleAction` target, so `offerBody` enumerates no capability. `side_nav_drawer`
 REJECTS the card's signature (ComposeView + `Decline` + route shape + currency — deliberately without
 `Accept`, so a partial card stops qualifying as a drawer and stays UNKNOWN), and the accept /
 initial_decline click rules carry an id-less clickable-`Accept`/`Decline` arm. Partial inflation frames
 (no Accept / no disclaimer / no merchant row) stay UNKNOWN by design (two negatives committed). Residuals
-on #1114: `orderType`/badges resolve at OFFER level (a mixed shop+restaurant stack over-marks), the
-merchant guard is structural (a blank name would pass), an address without a leading house number fails
-the guard, and — the field finding that matters most — Compose taps produced NO click envelopes, so an
+on #1114: badges resolve at OFFER level, an address without a leading house number fails the guard, and — the field finding that matters most — Compose taps produced NO click envelopes, so an
 accept is inferred from the pickup-phase exit (`destinationImpliesAccept`) and a decline resolves as
 `OFFER_TIMEOUT`.
 Rules also carry `require` predicates, `bind` blocks, `parse`
