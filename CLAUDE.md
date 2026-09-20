@@ -465,8 +465,10 @@ direct offer" and suppresses the replaced bubble. Display store reads go through
 `resolveOfferOutcome(obs, prev, next)` also reads an accepted survivor in the post-step region (click-less
 accept → `OFFER_ACCEPTED`, not TIMEOUT) and `PendingOffer.declineSheetSeenAt` (set by a screen whose rule
 declares `state.offerSurface: decline_confirm` → `OFFER_DECLINED`, only within `declineSheetWindowMs`
-(15 s) of the LAST sighting, never when the exit coincides with the card's own countdown end
-(`countdownExpiresAt`, parsed on both card generations) or arrives via the `OFFER_EXPIRY` timer); every accept arm and every
+(15 s) of the LAST sighting, only with a read countdown, never when the exit coincides with the card's own
+countdown end (`countdownExpiresAt`, parsed on both card generations — also the ONE anchor for the
+`OFFER_EXPIRY` arm and the HUD bar; `presentedAt + countdown` fired early on a refreshing card) or arrives
+via the `OFFER_EXPIRY` timer); every accept arm and every
 observed tap outranks the sheet; a click-less accept is inferred only over a NON-task `returnFlow` (a
 click-less add-on accept fails null); recovery drops the sighting; the journal persists `offerSurface`;
 inferred outcomes are named in the event description.

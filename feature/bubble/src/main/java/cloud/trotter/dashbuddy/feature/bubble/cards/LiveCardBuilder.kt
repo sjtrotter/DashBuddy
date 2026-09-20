@@ -49,9 +49,13 @@ object LiveCardBuilder {
                     evaluation = pending.evaluation,
                     offerHash = pending.offerHash,
                     phaseStartedAt = pending.presentedAt,
-                    // Live card derives the countdown anchors so the expiry bar can tick.
-                    expiresAt = offer.initialCountdownSeconds?.let { pending.presentedAt + it * 1000L },
-                    countdownSeconds = offer.initialCountdownSeconds,
+                    // Live card derives the countdown anchors so the expiry bar can tick — from the
+                    // offer's frame-anchored expiry (#1104: the parsed countdown is the REMAINING
+                    // time at the frame that read it and refreshes on every re-render, so
+                    // presentedAt + countdown would jump the deadline backwards each frame); the
+                    // bar's total is the presentation→expiry span.
+                    expiresAt = pending.countdownExpiresAt,
+                    countdownSeconds = pending.countdownExpiresAt?.let { ((it - pending.presentedAt) / 1000L).toInt() },
                     outcome = null,
                 )
             }

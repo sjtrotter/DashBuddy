@@ -124,19 +124,34 @@ internal fun EffectMap.diffOfferLifecycle(
     // the eval-land STEP, where the presented hash is stable (the #830 enrich-as-variant step CLEARS
     // the evaluation, so `landedEval` is null there — the eval lands on a LATER loopback step whose
     // hash matches), so the same-hash condition still holds for every landing, variant or not.
+    // #1104: a SAME-hash refresh whose countdown end moved LATER than the armed anchor by more than
+    // the slack (a platform extending an offer) re-arms the OFFER_EXPIRY timer — otherwise the stale
+    // timer would fire at the old end and time out a live offer. Per-frame jitter inside the slack
+    // never re-arms (the (type, platform) timer key makes each arm a supersede).
+    if (prevOffer != null && nextOffer != null && prevOffer.offerHash == nextOffer.offerHash) {
+        val newEnd = nextOffer.countdownExpiresAt
+        val oldEnd = prevOffer.countdownExpiresAt
+        val slack = graceConfig.forPlatform(platform).countdownExpirySlackMs
+        if (newEnd != null && (oldEnd == null || newEnd > oldEnd + slack)) {
+            addAll(armOfferExpiry(nextOffer, platform, obs))
+        }
+    }
+
     val landedEval = nextOffer?.evaluation
     if (prevOffer != null && nextOffer != null && landedEval != null &&
         prevOffer.offerHash == nextOffer.offerHash && prevOffer.evaluation == null
     ) {
         val parsedOffer = nextOffer.offerFields.parsedOffer
-        val expiresAt = parsedOffer.initialCountdownSeconds?.let { nextOffer.presentedAt + it * 1000L }
+        // #1104: the countdown anchors are the offer's own (frame-anchored) expiry, and the bar's
+        // total is the presentation→expiry span — never presentedAt + a REFRESHED remaining count.
+        val expiresAt = nextOffer.countdownExpiresAt
         val offerCard = FlowCardSnapshot.Offer.from(
             parsedOffer = parsedOffer,
             evaluation = landedEval,
             offerHash = nextOffer.offerHash,
             phaseStartedAt = nextOffer.presentedAt,
             expiresAt = expiresAt,
-            countdownSeconds = parsedOffer.initialCountdownSeconds,
+            countdownSeconds = expiresAt?.let { ((it - nextOffer.presentedAt) / 1000L).toInt() },
         )
         // The heads-up notification live-updates on EVERY landing (a re-quoted card should show the
         // fresh numbers — a feature). The spoken read fires ONCE per physical presentation (#830):
@@ -208,17 +223,20 @@ internal fun EffectMap.diffOfferLifecycle(
 
 /**
  * Arm the [TimeoutType.OFFER_EXPIRY] safety timer for a presented offer (vet H1) — the
- * GRACE_COMMIT mechanism (an effect, never a reducer arm). Deadline `presentedAt +
- * countdown*1000`, else a 120s de-facto TTL (no rule parses a countdown today, so this can never
- * fire early). The payload carries the offerHash so the fire resolves BY hash (vet M5).
+ * GRACE_COMMIT mechanism (an effect, never a reducer arm). Deadline = the card's own countdown end
+ * ([PendingOffer.countdownExpiresAt] — `frame timestamp + remaining seconds`, refreshed per frame,
+ * #1104), else `presentedAt + 120s` de-facto TTL. NEVER `presentedAt + countdown`: the countdown is
+ * the REMAINING time at the frame that read it, so on a platform that re-renders the card (DoorDash
+ * 8.97.8 every ~3 s) that formula fires the timer a millisecond after any refreshed frame and
+ * times out a live offer (Astra #1104 r3). The payload carries the offerHash so the fire resolves
+ * BY hash (vet M5).
  */
 private fun EffectMap.armOfferExpiry(
     offer: PendingOffer,
     platform: Platform,
     obs: Observation,
 ): List<AppEffect> {
-    val countdown = offer.offerFields.parsedOffer.initialCountdownSeconds
-    val deadline = offer.presentedAt + (countdown?.times(1000L) ?: EffectMap.OFFER_EXPIRY_DEFAULT_MS)
+    val deadline = offer.countdownExpiresAt ?: (offer.presentedAt + EffectMap.OFFER_EXPIRY_DEFAULT_MS)
     return listOf(
         AppEffect.ScheduleTimeout(
             durationMs = (deadline - obs.timestamp).coerceAtLeast(1L),

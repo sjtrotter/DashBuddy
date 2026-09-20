@@ -461,8 +461,12 @@ is not a cancel signal; a cancelled sheet whose countdown later ends is outside 
 and, since the window alone cannot separate a LATE cancel from a real decline, the card's own countdown is
 now parsed on both DoorDash card generations (`initialCountdownSeconds`: the legacy button's end text, the
 Compose footer's `m:ss` clock via `parseClockSeconds`) into `PendingOffer.countdownExpiresAt` (refreshed
-per frame, hash-neutral): an exit at/after that instant minus `countdownExpirySlackMs` (3 s) is an EXPIRY
-however recent the sheet, and the `OFFER_EXPIRY` safety timer never converts to a decline on its own.
+per frame, hash-neutral): the countdown is REQUIRED evidence — with none read the sheet alone never makes a
+decline (fail-null) — an exit at/after that instant minus `countdownExpirySlackMs` (3 s) is an EXPIRY
+however recent the sheet, and the `OFFER_EXPIRY` safety timer never converts to a decline on its own. The
+same anchor now drives the `OFFER_EXPIRY` arm and the HUD's expiry bar: the pre-#1104 `presentedAt +
+countdown` formula assumed a countdown read once, and on a card that re-renders every ~3 s it would have
+armed the timer a millisecond after any refreshed frame and timed out a live offer (Astra r3).
 The same change generalizes `destinationImpliesAccept`: a click-less accept is inferred ONLY when the
 offer's `returnFlow` was not a task flow (a job appearing where there was none) — a mid-job add-on's
 returnFlow is job A's pickup surface, whose re-render after a declined add-on used to mint a phantom

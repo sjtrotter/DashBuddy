@@ -458,10 +458,12 @@ class EffectMap @Inject constructor(
     internal fun declineInferredFromSheet(offer: PendingOffer, obs: Observation): Boolean {
         val seen = offer.declineSheetSeenAt ?: return false
         if (obs is Observation.Timeout) return false
+        // Without a read countdown there is no way to tell "declined" from "ran out inside the
+        // window" — fail null (Astra r3): the sheet alone never makes a decline.
+        val expiresAt = offer.countdownExpiresAt ?: return false
         val grace = graceConfig.forPlatform(offer.platform)
         if (obs.timestamp - seen !in 0..grace.declineSheetWindowMs) return false
-        val ranOut = offer.countdownExpiresAt?.let { obs.timestamp >= it - grace.countdownExpirySlackMs } == true
-        return !ranOut
+        return obs.timestamp < expiresAt - grace.countdownExpirySlackMs
     }
 
     /**

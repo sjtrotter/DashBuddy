@@ -51,7 +51,8 @@ class TransitionOutcomeTest {
         itemCount = 1, isItemCountEstimated = false, badges = emptySet(),
     )
 
-    private fun offerObs(t: Long, hash: String, store: String = "H-E-B", key: String? = null, countdown: Int? = null) = Observation.Screen(
+    /** Every card frame carries its remaining countdown by default (8/8 fielded Compose cards do). */
+    private fun offerObs(t: Long, hash: String, store: String = "H-E-B", key: String? = null, countdown: Int? = 60) = Observation.Screen(
         timestamp = t, captureId = null, ruleId = "doordash.screen.offer_popup",
         metadata = ReplayMetadata.EMPTY, flow = Flow.OfferPresented, modeHint = Mode.Online,
         parsed = ParsedFields.OfferFields(
@@ -159,8 +160,42 @@ class TransitionOutcomeTest {
 
     @Test
     fun `a card frame without a countdown keeps the last known countdown end`() {
-        val d = drive(region(), offerObs(1_000L, "o1", countdown = 40), offerObs(4_000L, "o1"))
+        val d = drive(region(), offerObs(1_000L, "o1", countdown = 40), offerObs(4_000L, "o1", countdown = null))
         assertEquals(41_000L, d.region.presentedOffer()?.countdownExpiresAt)
+    }
+
+    @Test
+    fun `a same-hash refresh that EXTENDS the countdown re-arms the expiry timer while jitter inside the slack does not`() {
+        val d = drive(region(), offerObs(1_000L, "o1", countdown = 40)) // expiry 41 s
+        val (_, jitter) = resolve(d, offerObs(4_000L, "o1", countdown = 38)) // 42 s: +1 s, inside the 3 s slack
+        assertTrue("no re-arm on jitter", jitter.filterIsInstance<AppEffect.ScheduleTimeout>().none { it.type == cloud.trotter.dashbuddy.domain.pipeline.TimeoutType.OFFER_EXPIRY })
+        val (next, extended) = resolve(d, offerObs(4_000L, "o1", countdown = 60)) // 64 s: extended
+        assertEquals(64_000L, next.presentedOffer()?.countdownExpiresAt)
+        val arm = extended.filterIsInstance<AppEffect.ScheduleTimeout>().single { it.type == cloud.trotter.dashbuddy.domain.pipeline.TimeoutType.OFFER_EXPIRY }
+        assertEquals(60_000L, arm.durationMs)
+    }
+
+    @Test
+    fun `with NO countdown ever read the sheet alone never makes a decline (fail-null)`() {
+        // Astra r3: a card whose clock was never parsed cannot separate "declined" from "ran out".
+        val d = drive(region(), offerObs(1_000L, "o1", countdown = null), sheetObs(3_000L))
+        val (_, effects) = resolve(d, idleObs(5_000L))
+        val out = effects.outcome()!!
+        assertEquals(AppEventType.OFFER_TIMEOUT, out.outcome)
+        assertNull(out.description)
+    }
+
+    @Test
+    fun `a refreshed countdown on a same-presentation variant keeps the expiry anchored on the frame that read it`() {
+        // Astra r3 P1: offer at 1 s reading 0:40; variant at 21 s reading 0:20 → expiry stays 41 s.
+        // The OLD formula (presentedAt + countdown) would have armed the timer for 21 s + 1 ms and
+        // timed out a live offer.
+        val d = drive(region(), offerObs(1_000L, "o1", key = "k", countdown = 40))
+        val (next, effects) = resolve(d, offerObs(21_000L, "o1-variant", key = "k", countdown = 20))
+        assertEquals(41_000L, next.presentedOffer()?.countdownExpiresAt)
+        val arm = effects.filterIsInstance<AppEffect.ScheduleTimeout>().single { it.type == cloud.trotter.dashbuddy.domain.pipeline.TimeoutType.OFFER_EXPIRY }
+        assertEquals("re-armed for the true expiry (41 s − 21 s)", 20_000L, arm.durationMs)
+        assertTrue("no outcome — the offer is live", effects.outcome() == null)
     }
 
     @Test
