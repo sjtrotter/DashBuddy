@@ -353,7 +353,7 @@
           ]
         },
         {
-          "comment": "Branch 1 — #1114: the 8.97.8 COMPOSE offer card, rolled out server-side between 2026-09-17 13:44 (last legacy frame) and 2026-09-18 14:46 (first Compose frame) on the SAME DoorDash build. The tree is id-less: a ComposeView under main_fragment, the card body in a ScrollView (pay `$14.75`, `incl. tips`, one route summary `2 stops (8.5 mi) • 45 min`, per-store rows = a ViewFactoryHolder wrapping the merchant name immediately FOLLOWED by an address sibling `7330 N Loop 1604 W, San Antonio, 78249 TX`, an optional clickable `Shop for 6 items (~7 min)` row after a shop store's address, a `Customer dropoff` holder, the `Guaranteed earnings for completing the offer.` disclaimer, and a clickable footer View whose subtree is `Accept` + the countdown). `Decline` is a clickable View top-right (its subtree is the label alone). Every legacy anchor (accept_button, accept_decline_footer_container, display_name, work_unit_type, display_name_secondary, text_field, `Deliver by`) is absent, so 09-18/19 produced ZERO OFFER_* events across two dashing days while 36 offer frames fell to UNKNOWN or were claimed by side_nav_drawer (the side-nav Compose tree coexists with the card in the same hierarchy — chrome.json5's drawer rule now REJECTS this shape). Anchors are the card's own chrome only (no merchant names — #574 doctrine): ComposeView + exact `Decline` + exact `Accept` + the route-summary SHAPE + a standalone currency figure + the disclaimer prefix + at least one merchant holder followed by an address-shaped sibling. Partial inflation frames (no Accept / no disclaimer / no merchant row — the #1063 class) fail this branch and stay UNKNOWN by design; the two-branch structure keeps the legacy card byte-identical. Known residuals filed on #1114: (a) BADGES (Red Card / alcohol / large order) are resolved at OFFER level — `orderType` and the item count are per store via the holder's sibling(2) shop row; (b) the structural merchant guard is backed by the `collectionNonBlank` validator, so a holder with a blank name skips the branch (→ UNKNOWN) instead of minting a nameless offer; (c) Compose taps produced NO click envelopes in the field (accept is inferred from the pickup-phase exit — `destinationImpliesAccept`; a decline resolves as OFFER_TIMEOUT, the #1104 class); (d) a merchant address that carries no 5-digit ZIP fails the structural guard → UNKNOWN; (e) no `Deliver by` on this card — `timeToCompleteMinutes` carries the platform's route ESTIMATE, never a deadline.",
+          "comment": "Branch 1 — #1114: the 8.97.8 COMPOSE offer card, rolled out server-side between 2026-09-17 13:44 (last legacy frame) and 2026-09-18 14:46 (first Compose frame) on the SAME DoorDash build. The tree is id-less: a ComposeView under main_fragment, the card body in a ScrollView (pay `$14.75`, `incl. tips`, one route summary `2 stops (8.5 mi) • 45 min`, per-store rows = a ViewFactoryHolder wrapping the merchant name immediately FOLLOWED by an address sibling `7330 N Loop 1604 W, San Antonio, 78249 TX`, an optional clickable `Shop for 6 items (~7 min)` row after a shop store's address, a `Customer dropoff` holder, the `Guaranteed earnings for completing the offer.` disclaimer, and a clickable footer View whose subtree is `Accept` + the countdown). `Decline` is a clickable View top-right (its subtree is the label alone). Every legacy anchor (accept_button, accept_decline_footer_container, display_name, work_unit_type, display_name_secondary, text_field, `Deliver by`) is absent, so 09-18/19 produced ZERO OFFER_* events across two dashing days while 36 offer frames fell to UNKNOWN or were claimed by side_nav_drawer (the side-nav Compose tree coexists with the card in the same hierarchy — chrome.json5's drawer rule now REJECTS this shape). Anchors are the card's own chrome only (no merchant names — #574 doctrine): ComposeView + exact `Decline` + exact `Accept` + the route-summary SHAPE + a standalone currency figure + the disclaimer prefix + at least one merchant holder followed by an address-shaped sibling. Partial inflation frames (no Accept / no disclaimer / no merchant row — the #1063 class) fail this branch and stay UNKNOWN by design; the two-branch structure keeps the legacy card byte-identical. Known residuals filed on #1114: (a) BADGES (Red Card / alcohol / large order) are resolved at OFFER level — `orderType` and the item count are per store via the holder's sibling(2) shop row; (b) the structural merchant guard is backed by the `collectionNonBlank` validator, so a holder with a blank name skips the branch (→ UNKNOWN) instead of minting a nameless offer; (c) Compose taps produced NO click envelopes in the field (accept is inferred from the pickup-phase exit — `destinationImpliesAccept`; a decline resolves as OFFER_TIMEOUT, the #1104 class); (d) a card whose EVERY merchant address lacks a 5-digit ZIP fails the recognition anchor → UNKNOWN (a stack with one such address keeps both legs); (e) no `Deliver by` on this card — `timeToCompleteMinutes` carries the platform's route ESTIMATE, never a deadline.",
           "bind": {
             "acceptButton": {
               "find": {
@@ -446,6 +446,23 @@
                 }
               },
               {
+                // The dropoff holder (`Customer dropoff` on one drop, `Multiple dropoffs (N stops)`
+                // on a stack — 34/34 complete fielded cards). Load-bearing for the `orders` walk:
+                // it is what marks the route CONTAINER holder as not-a-merchant.
+                "exists": {
+                  "any": [
+                    {
+                      "hasText": "Customer dropoff"
+                    },
+                    {
+                      "hasTextStartsWith": "Multiple dropoffs"
+                    }
+                  ]
+                }
+              },
+              {
+                // Recognition anchor only: at least one merchant holder followed by a ZIP-bearing
+                // address sibling (every fielded card). The `orders` walk does NOT key on it.
                 "exists": {
                   "all": [
                     {
@@ -516,14 +533,18 @@
                 "transform": "parseTotalMinutes"
               },
               "orders": {
+                // A merchant leg is identified by EXCLUSION, never by its address (Astra r3): every
+                // ViewFactoryHolder inside the body that is not the route CONTAINER (whose subtree
+                // holds the dropoff holder — the require below demands one, so the container is
+                // always excluded), the dropoff holder itself, a handoff holder, or the disclaimer.
+                // An address that carries no ZIP, or none at all, therefore keeps its leg (the
+                // address is never an economic input) and a blank NAME fails the whole card via
+                // `collectionNonBlank` — a stack can no longer lose a leg silently.
                 "from": "offerBody",
                 "each": {
                   "all": [
                     {
                       "hasClassName": "androidx.compose.ui.viewinterop.ViewFactoryHolder"
-                    },
-                    {
-                      "hasFollowingSiblingTextMatchesRegex": "\\b\\d{5}(?:-\\d{4})?\\b"
                     },
                     {
                       "not": {
@@ -532,7 +553,17 @@
                     },
                     {
                       "not": {
+                        "hasAnyTextStartsWith": "Multiple dropoffs"
+                      }
+                    },
+                    {
+                      "not": {
                         "hasAnyText": "Business handoff"
+                      }
+                    },
+                    {
+                      "not": {
+                        "hasAnyTextStartsWith": "Guaranteed earnings"
                       }
                     }
                   ]

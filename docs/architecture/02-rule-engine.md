@@ -78,9 +78,10 @@ economics (Astra round 1, PR #1115). `orderType` is PER STORE: the merchant hold
 shop row for a shop merchant (`holder → address → Shop for N items …`) and the NEXT holder for a pickup
 merchant, so a regex on that node's `allText` yields `SHOP_FOR_ITEMS` or falls to the `literal`
 `PICKUP` — verified on the fielded mixed stack (Smoothie King PICKUP + Target SHOP_FOR_ITEMS, fixture
-`…073fcb`); only the badges (Red Card / alcohol / large order) resolve at offer level. Merchant rows are admitted by
-STRUCTURE (a holder followed by any ZIP-bearing text sibling — no `hasChildren`, no house-number
-assumption) and judged by CONTENT: the branch
+`…073fcb`); only the badges (Red Card / alcohol / large order) resolve at offer level. Merchant legs are identified by
+EXCLUSION (every holder in the body that is not the route container — marked by the dropoff holder the
+require demands — the dropoff/handoff holder, or the disclaimer; the address is never a key, so a no-ZIP
+address keeps its leg) and judged by CONTENT: the branch
 carries the new `collectionNonBlank` validator (`orders` non-empty AND every `storeName` non-blank,
 `onFail: skip`) — `fieldNotNull` accepts an empty list and blank names, exactly the #595/#1063 nameless
 ghost-offer shape a structurally present holder could render; a synthetic blank-merchant negative pins
@@ -94,7 +95,7 @@ binds the Compose `Decline offer` View directly and deliberately NOT the Gold `D
 variant (it pauses the store — a side effect quick-decline consent never covered). Partial inflation frames
 (no Accept / no disclaimer / no merchant row) stay UNKNOWN by design (two negatives committed). The same rollout moved the offer PUSH to a new channel
 (`dasher-notification-channel-nexus-new-offer-no-sound-haptics`), added to `new_order`. Residuals
-on #1114: badges resolve at OFFER level, a merchant address with no 5-digit ZIP fails the guard, and — the field finding that matters most — Compose taps produced NO click envelopes, so an
+on #1114: badges resolve at OFFER level, a card whose every merchant address lacks a ZIP fails the recognition anchor, and — the field finding that matters most — Compose taps produced NO click envelopes, so an
 accept is inferred from the pickup-phase exit (`destinationImpliesAccept`) and a decline resolves as
 `OFFER_TIMEOUT`.
 Rules also carry `require` predicates, `bind` blocks, `parse`
