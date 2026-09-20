@@ -3635,6 +3635,14 @@
             "parsedOffer": "ParsedOffer(offerHash=97e79f332fdaada9cabc3a8e889fc2738f77f85e9f4bd99f6d0c6d8251357eb4, presentationKey=e30e80e84b1550584e202a15979bde87437e99e902fbee378a82cddab175700e, itemCount=6, itemCountIsUnits=false, payAmount=14.75, payTextRaw=null, distanceMiles=8.5, distanceTextRaw=null, dueByTimeText=null, dueByTimeMillis=null, timeToCompleteMinutes=45, badges=[], initialCountdownSeconds=null, orders=[ParsedOrder(orderIndex=0, orderType=SHOP_FOR_ITEMS, storeName=H-E-B, itemCount=6, isItemCountEstimated=false, badges=[], countUnit=ITEMS)], offerKind=null, displayStoreName=null, rawExtractedTexts=null)"
         }
     },
+    "offer_popup/2026-09-19_20-38-23-394__doordash__accessibility.window__offer_popup__073fcb.json": {
+        "ruleId": "doordash.screen.offer_popup",
+        "intent": "offer_popup",
+        "shape": "offer",
+        "fields": {
+            "parsedOffer": "ParsedOffer(offerHash=4c4851d381d17fa79cad9670439e503981728ebd49402e733dde5282a9540fd0, presentationKey=0df8ca34544265be7e4eb07231f84f5325d8507c40a7aabbc9ced69beb46a691, itemCount=4, itemCountIsUnits=false, payAmount=17.6, payTextRaw=null, distanceMiles=8.2, distanceTextRaw=null, dueByTimeText=null, dueByTimeMillis=null, timeToCompleteMinutes=57, badges=[], initialCountdownSeconds=null, orders=[ParsedOrder(orderIndex=0, orderType=PICKUP, storeName=Smoothie King, itemCount=1, isItemCountEstimated=true, badges=[RED_CARD], countUnit=ITEMS), ParsedOrder(orderIndex=1, orderType=SHOP_FOR_ITEMS, storeName=Target, itemCount=4, isItemCountEstimated=false, badges=[RED_CARD], countUnit=ITEMS)], offerKind=null, displayStoreName=null, rawExtractedTexts=null)"
+        }
+    },
     "offer_popup/20260128_163448_533_OFFER_POPUP.json": {
         "ruleId": "doordash.screen.offer_popup",
         "intent": "offer_popup",
