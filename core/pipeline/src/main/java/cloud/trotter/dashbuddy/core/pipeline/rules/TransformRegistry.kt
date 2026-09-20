@@ -580,19 +580,10 @@ object TransformRegistry {
      * Total MINUTES of an "N hr N min" / "N hr" / "N min" span (#1114) — the 8.97.8 Compose offer
      * card's route summary `2 stops (8.5 mi) • 1 hr 10 min` feeds `timeToCompleteMinutes`, whose
      * consumers read minutes, not the millis [parseHrMin] yields; [parseMinutes] would read the
-     * trailing `10` of an hour-long estimate as ten minutes. Null when neither unit is present.
+     * trailing `10` of an hour-long estimate as ten minutes. Derived from [parseHrMin] (one shared
+     * pattern — the #1053 regex ledger only burns down); null when neither unit is present.
      */
-    private fun parseTotalMinutes(text: String): Int? {
-        val pattern = Regex("(\\d+)\\s*(hr|min)\\b")
-        var total = 0
-        var found = false
-        for (match in pattern.findAll(text)) {
-            found = true
-            val value = match.groupValues[1].toIntOrNull() ?: 0
-            total += if (match.groupValues[2] == "hr") value * 60 else value
-        }
-        return if (found) total else null
-    }
+    private fun parseTotalMinutes(text: String): Int? = parseHrMin(text)?.let { (it / 60_000L).toInt() }
 
     /**
      * Parses leading integer: "4 items" -> 4, "12" -> 12.

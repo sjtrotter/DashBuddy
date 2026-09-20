@@ -55,7 +55,7 @@ holding a standalone currency figure, `incl. tips`, ONE route summary of the sha
 immediately FOLLOWED by an address-shaped sibling, an optional clickable `Shop for N items (…)` row after
 a shop store, a `Customer dropoff` holder, the `Guaranteed earnings for completing the offer.` disclaimer,
 and a clickable footer View whose subtree is `Accept` + the countdown; `Decline` is a clickable View
-top-right whose mapped subtree contains the whole body. Every legacy anchor (`accept_button`,
+top-right whose subtree is its label alone. Every legacy anchor (`accept_button`,
 `accept_decline_footer_container`, `display_name`, `work_unit_type`, `display_name_secondary`,
 `text_field`, `Deliver by`) is gone, so 36 offer frames across two dashing days fell to UNKNOWN or were
 claimed by `side_nav_drawer` (the side-nav Compose tree coexists with the card in one hierarchy) and
@@ -68,7 +68,8 @@ merchant holder followed by an address-shaped sibling — parses pay (the figure
 from the route summary (a route ESTIMATE, never a deadline; the new `parseTotalMinutes` transform sums
 `N hr N min` into minutes, where `parseMinutes` would read only the trailing minutes), and `orders` per
 merchant holder (`storeName` from the holder, the item count from `sibling(2)`'s `Shop for N items`
-row). The helper binding `offerBody` (the body ScrollView) scopes the OFFER-level `orderType`/badge
+row). The helper binding `offerBody` (the body ScrollView, anchored on its `Customer dropoff` holder — the
+Accept footer is the ScrollView's SIBLING) scopes the OFFER-level `orderType`/badge
 presence checks; it is not a `RuleAction` target, so it enumerates no capability. `side_nav_drawer`
 REJECTS the card's signature (ComposeView + `Decline` + route shape + currency — deliberately without
 `Accept`, so a partial card stops qualifying as a drawer and stays UNKNOWN), and the accept /

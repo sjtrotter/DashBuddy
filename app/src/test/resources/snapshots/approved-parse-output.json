@@ -3603,6 +3603,38 @@
             "parsedOffer": "ParsedOffer(offerHash=c43837ce64c22cad3a9c44d31a2474544c06690717c0e0135334c8e4f49537e0, presentationKey=a67e561688c9ddcb480ab88fc44488254bc69ced4676c724e828772e6ec28671, itemCount=0, itemCountIsUnits=false, payAmount=8.3, payTextRaw=null, distanceMiles=3.8, distanceTextRaw=null, dueByTimeText=3:49 PM, dueByTimeMillis=1780328940000, timeToCompleteMinutes=null, badges=[], initialCountdownSeconds=null, orders=[ParsedOrder(orderIndex=0, orderType=PICKUP, storeName=McDonald's, itemCount=1, isItemCountEstimated=true, badges=[], countUnit=ITEMS)], offerKind=null, displayStoreName=null, rawExtractedTexts=null)"
         }
     },
+    "offer_popup/2026-09-19_08-51-20-419__doordash__accessibility.window__offer_popup__87e2e3.json": {
+        "ruleId": "doordash.screen.offer_popup",
+        "intent": "offer_popup",
+        "shape": "offer",
+        "fields": {
+            "parsedOffer": "ParsedOffer(offerHash=7957706e1cdc35ce91b0846a2a3c4458d6a4ce91019f14a44f4dd6ac23b8c338, presentationKey=3c78966a67b31a00e38d4a5e8cc2ed7f6371abbce30889107dfbeff133c16e7c, itemCount=0, itemCountIsUnits=false, payAmount=8.06, payTextRaw=null, distanceMiles=4.2, distanceTextRaw=null, dueByTimeText=null, dueByTimeMillis=null, timeToCompleteMinutes=26, badges=[], initialCountdownSeconds=null, orders=[ParsedOrder(orderIndex=0, orderType=PICKUP, storeName=H-E-B, itemCount=2, isItemCountEstimated=false, badges=[], countUnit=ITEMS)], offerKind=null, displayStoreName=null, rawExtractedTexts=null)"
+        }
+    },
+    "offer_popup/2026-09-19_09-45-38-229__doordash__accessibility.window__offer_popup__822a68.json": {
+        "ruleId": "doordash.screen.offer_popup",
+        "intent": "offer_popup",
+        "shape": "offer",
+        "fields": {
+            "parsedOffer": "ParsedOffer(offerHash=6edcce21bd8b070056742019ce67f66b5d51c1b3de5993a7eb0d51963af4cf8e, presentationKey=a67e561688c9ddcb480ab88fc44488254bc69ced4676c724e828772e6ec28671, itemCount=0, itemCountIsUnits=false, payAmount=6.35, payTextRaw=null, distanceMiles=2.8, distanceTextRaw=null, dueByTimeText=null, dueByTimeMillis=null, timeToCompleteMinutes=10, badges=[], initialCountdownSeconds=null, orders=[ParsedOrder(orderIndex=0, orderType=PICKUP, storeName=McDonald's, itemCount=1, isItemCountEstimated=true, badges=[], countUnit=ITEMS)], offerKind=null, displayStoreName=null, rawExtractedTexts=null)"
+        }
+    },
+    "offer_popup/2026-09-19_09-45-41-384__doordash__accessibility.window__offer_popup__995bbe.json": {
+        "ruleId": "doordash.screen.offer_popup",
+        "intent": "offer_popup",
+        "shape": "offer",
+        "fields": {
+            "parsedOffer": "ParsedOffer(offerHash=6edcce21bd8b070056742019ce67f66b5d51c1b3de5993a7eb0d51963af4cf8e, presentationKey=a67e561688c9ddcb480ab88fc44488254bc69ced4676c724e828772e6ec28671, itemCount=0, itemCountIsUnits=false, payAmount=6.35, payTextRaw=null, distanceMiles=2.8, distanceTextRaw=null, dueByTimeText=null, dueByTimeMillis=null, timeToCompleteMinutes=10, badges=[], initialCountdownSeconds=null, orders=[ParsedOrder(orderIndex=0, orderType=PICKUP, storeName=McDonald's, itemCount=1, isItemCountEstimated=true, badges=[], countUnit=ITEMS)], offerKind=null, displayStoreName=null, rawExtractedTexts=null)"
+        }
+    },
+    "offer_popup/2026-09-19_11-42-11-094__doordash__accessibility.window__offer_popup__b7abab.json": {
+        "ruleId": "doordash.screen.offer_popup",
+        "intent": "offer_popup",
+        "shape": "offer",
+        "fields": {
+            "parsedOffer": "ParsedOffer(offerHash=97e79f332fdaada9cabc3a8e889fc2738f77f85e9f4bd99f6d0c6d8251357eb4, presentationKey=3c78966a67b31a00e38d4a5e8cc2ed7f6371abbce30889107dfbeff133c16e7c, itemCount=0, itemCountIsUnits=false, payAmount=14.75, payTextRaw=null, distanceMiles=8.5, distanceTextRaw=null, dueByTimeText=null, dueByTimeMillis=null, timeToCompleteMinutes=45, badges=[], initialCountdownSeconds=null, orders=[ParsedOrder(orderIndex=0, orderType=PICKUP, storeName=H-E-B, itemCount=6, isItemCountEstimated=false, badges=[], countUnit=ITEMS)], offerKind=null, displayStoreName=null, rawExtractedTexts=null)"
+        }
+    },
     "offer_popup/20260128_163448_533_OFFER_POPUP.json": {
         "ruleId": "doordash.screen.offer_popup",
         "intent": "offer_popup",
