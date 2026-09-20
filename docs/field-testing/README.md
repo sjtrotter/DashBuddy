@@ -84,7 +84,7 @@ the #985 timeline order-detail item there **broken**: the rule claims the first 
 but the sheet's fully-inflated SECOND frame drops `Copy address`, falls to UNKNOWN and shipped a
 street line, a city/ST/ZIP and a customer note raw — now #1116.)_
 
-- **🆕 NEW — offer outcomes on TRANSITION evidence (#1104 — PR TBD).** Compose controls emit no click
+- **🆕 NEW — offer outcomes on TRANSITION evidence (#1104 — PR #1118).** Compose controls emit no click
   event for a human tap, so on the 8.97.8 card an accept is now logged `OFFER_ACCEPTED` from the pickup
   screen appearing (before: the job minted but the offer row said TIMEOUT) and a decline is logged
   `OFFER_DECLINED` when the "are you sure you want to decline" sheet was seen and the offer then left
