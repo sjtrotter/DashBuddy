@@ -464,7 +464,10 @@ direct offer" and suppresses the replaced bubble. Display store reads go through
 **Outcomes on transition evidence (#1104/#1114):** Compose controls emit no click event for a human tap, so
 `resolveOfferOutcome(obs, prev, next)` also reads an accepted survivor in the post-step region (click-less
 accept → `OFFER_ACCEPTED`, not TIMEOUT) and `PendingOffer.declineSheetSeenAt` (set by a screen whose rule
-declares `state.offerSurface: decline_confirm` → `OFFER_DECLINED`); every accept arm outranks the sheet;
+declares `state.offerSurface: decline_confirm` → `OFFER_DECLINED`, only within `declineSheetWindowMs`
+(15 s) of the LAST sighting — the card re-renders after a real decline too); every accept arm and every
+observed tap outranks the sheet; a click-less accept is inferred only over a NON-task `returnFlow` (a
+click-less add-on accept fails null); recovery drops the sighting; the journal persists `offerSurface`;
 inferred outcomes are named in the event description.
 
 **Accept survives the offer-presentation edge** as an `acceptedAt`-marked pending entry; the task edge

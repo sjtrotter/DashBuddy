@@ -123,10 +123,98 @@ class TransitionOutcomeTest {
     }
 
     @Test
-    fun `sheet observed then OFFER_EXPIRY fires resolves as a decline, not a timeout`() {
-        val d = drive(region(), offerObs(1_000L, "o1"), sheetObs(3_000L))
-        val (_, effects) = resolve(d, expiry(130_000L, "o1"))
+    fun `sheet observed then OFFER_EXPIRY fires inside the window resolves as a decline`() {
+        val d = drive(region(), offerObs(1_000L, "o1"), sheetObs(118_000L))
+        val (_, effects) = resolve(d, expiry(121_000L, "o1"))
         assertEquals(AppEventType.OFFER_DECLINED, effects.outcome()!!.outcome)
+    }
+
+    @Test
+    fun `a cancelled sheet whose offer later expires stays a TIMEOUT (outside the decline window)`() {
+        // Astra r1 F3: sheet → cancel back to the card → the card re-renders (as it ALSO does after
+        // a real decline, so a card frame is not a cancel signal) → the countdown ends 40 s later.
+        val d = drive(region(), offerObs(1_000L, "o1"), sheetObs(3_000L), offerObs(4_500L, "o1"))
+        assertEquals("the card frame keeps the sighting", 3_000L, d.region.presentedOffer()?.declineSheetSeenAt)
+        val (_, effects) = resolve(d, idleObs(43_000L))
+        val out = effects.outcome()!!
+        assertEquals(AppEventType.OFFER_TIMEOUT, out.outcome)
+        assertNull(out.description)
+    }
+
+    @Test
+    fun `a re-opened sheet re-arms the window from its latest sighting`() {
+        val d = drive(region(), offerObs(1_000L, "o1"), sheetObs(3_000L), offerObs(4_500L, "o1"), sheetObs(30_000L))
+        assertEquals(30_000L, d.region.presentedOffer()?.declineSheetSeenAt)
+        val (_, effects) = resolve(d, idleObs(36_000L))
+        assertEquals(AppEventType.OFFER_DECLINED, effects.outcome()!!.outcome)
+    }
+
+    @Test
+    fun `a mid-job ADD-ON declined through the sheet is not an accept when the original pickup re-renders`() {
+        // Astra r1 F2: job A active (pickup navigation), add-on B presented over it, sheet, then job
+        // A's pickup surface re-renders. Before #1104 the phased-destination rule inferred B's accept.
+        val d = drive(
+            region(),
+            offerObs(1_000L, "a", store = "Store A"),
+            pickupNavObs(4_000L, "Store A"),          // A minted
+            offerObs(10_000L, "b", store = "Store B"), // add-on over a task flow
+            sheetObs(12_000L),
+        )
+        assertEquals(1, d.region.activeJob?.acceptedOffers?.size)
+        val (next, effects) = resolve(d, pickupNavObs(14_000L, "Store A"))
+        val out = effects.outcome()!!
+        assertEquals(AppEventType.OFFER_DECLINED, out.outcome)
+        assertTrue(out.description!!.contains("inferred from the confirm sheet"))
+        assertEquals("no phantom add-on economics", 1, next.activeJob?.acceptedOffers?.size)
+        assertNull("no phantom survivor", next.pendingOffers.firstOrNull { it.offerHash == "b" })
+    }
+
+    @Test
+    fun `a mid-job ADD-ON that leaves with no sheet stays a TIMEOUT and mints nothing (fail-null)`() {
+        val d = drive(
+            region(),
+            offerObs(1_000L, "a", store = "Store A"),
+            pickupNavObs(4_000L, "Store A"),
+            offerObs(10_000L, "b", store = "Store B"),
+        )
+        val (next, effects) = resolve(d, pickupNavObs(14_000L, "Store A"))
+        assertEquals(AppEventType.OFFER_TIMEOUT, effects.outcome()!!.outcome)
+        assertEquals(1, next.activeJob?.acceptedOffers?.size)
+    }
+
+    @Test
+    fun `a direct ACCEPT click observation outranks the sheet`() {
+        // Astra r1 F4: an observed tap always beats an inference.
+        val d = drive(region(), offerObs(1_000L, "o1"), sheetObs(3_000L))
+        val click = Observation.Click(
+            timestamp = 5_000L, captureId = null, ruleId = "doordash.click.accept_offer",
+            metadata = ReplayMetadata.EMPTY, flow = Flow.Idle, modeHint = Mode.Online,
+            parsed = ParsedFields.ClickFields(intent = cloud.trotter.dashbuddy.domain.state.OfferIntent.ACCEPT),
+        )
+        val outcome = effectMap.resolveOfferOutcome(click, d.region.presentedOffer(), d.region, d.region)
+        assertEquals(AppEventType.OFFER_ACCEPTED, outcome)
+        assertNull("an observed tap is not described as inferred", effectMap.inferredOutcomeNote(d.region.presentedOffer()!!, outcome, click))
+    }
+
+    @Test
+    fun `a REPLACEMENT after the sheet keeps the inference in the description`() {
+        // Astra r1 F5: A → sheet → a different offer B replaces A.
+        val d = drive(region(), offerObs(1_000L, "a", store = "Store A"), sheetObs(3_000L))
+        val (_, effects) = resolve(d, offerObs(6_000L, "b", store = "Store B"))
+        val outs = effects.filterIsInstance<AppEffect.LogEvent>().mapNotNull { it.event.payload as? OfferPayload }
+        val replaced = outs.single { it.offerHash == "a" }
+        assertEquals(AppEventType.OFFER_DECLINED, replaced.outcome)
+        assertTrue(replaced.description!!.startsWith("Replaced by new offer; Decline inferred from the confirm sheet"))
+    }
+
+    @Test
+    fun `recovery hygiene drops the sheet sighting (evidence, not a decision in flight)`() {
+        val d = drive(region(), offerObs(1_000L, "o1"), sheetObs(3_000L))
+        val state = cloud.trotter.dashbuddy.domain.state.AppState(
+            regions = cloud.trotter.dashbuddy.domain.state.Regions(platforms = mapOf(Platform.DoorDash to d.region)),
+            timestamp = 3_000L,
+        ).recoveryHygiene(nowMs = 50_000L)
+        assertNull(state.regions.platforms[Platform.DoorDash]!!.presentedOffer()!!.declineSheetSeenAt)
     }
 
     @Test
@@ -158,17 +246,17 @@ class TransitionOutcomeTest {
     }
 
     @Test
-    fun `the sheet marker survives an enrich-as-variant re-render and is set once`() {
+    fun `the sheet marker survives an enrich-as-variant re-render and tracks the LATEST sighting`() {
         val d = drive(
             region(),
             offerObs(1_000L, "o1", key = "k"),
             sheetObs(3_000L),
-            offerObs(3_500L, "o1-variant", key = "k"), // same presentation, churned hash
-            sheetObs(4_000L),                           // a second sighting must not move the mark
+            offerObs(3_500L, "o1-variant", key = "k"), // same presentation, churned hash — keeps the mark
         )
-        val presented = d.region.presentedOffer()
-        assertEquals("o1-variant", presented?.offerHash)
-        assertEquals(3_000L, presented?.declineSheetSeenAt)
+        assertEquals("o1-variant", d.region.presentedOffer()?.offerHash)
+        assertEquals(3_000L, d.region.presentedOffer()?.declineSheetSeenAt)
+        val again = drive(region(), offerObs(1_000L, "o1"), sheetObs(3_000L), sheetObs(4_000L))
+        assertEquals("a re-opened sheet re-arms the window", 4_000L, again.region.presentedOffer()?.declineSheetSeenAt)
     }
 
     @Test

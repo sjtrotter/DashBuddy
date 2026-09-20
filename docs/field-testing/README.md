@@ -89,10 +89,13 @@ street line, a city/ST/ZIP and a customer note raw — now #1116.)_
   screen appearing (before: the job minted but the offer row said TIMEOUT) and a decline is logged
   `OFFER_DECLINED` when the "are you sure you want to decline" sheet was seen and the offer then left
   without an accept. **On-dash:** nothing to do differently — accept some, decline some (through the
-  sheet), let one time out untouched. **Desk:** `offer_records.outcome` shows ACCEPTED for every minted
-  job and DECLINED for every sheet-declined offer; the `description` on those rows reads
-  `… inferred from the task surface …` / `… inferred from the confirm sheet …`; the untouched offer is the
-  only TIMEOUT; `OFFER_ACCEPTED` count == jobs minted; no ACCEPTED row without a job.
+  sheet), let one time out untouched. **Desk:** `offer_records.outcome` is ACCEPTED for every offer that
+  became a job's accepted entry (`delivery_records`/job `acceptedOffers` — add-ons append to an existing
+  job, so count accepted ENTRIES, not jobs) and DECLINED for every sheet-declined offer; the
+  `app_events.eventPayload.description` on those rows reads `… inferred from the task surface …` /
+  `… inferred from the confirm sheet …`; the untouched offer is the only TIMEOUT; no ACCEPTED row
+  without an accepted entry. Known fail-null: a click-less ADD-ON accept is not inferable (logs
+  TIMEOUT; pay lands via the receipt) — note it, don't fight it.
   - Confirmed: 0/2
 - **🆕 NEW — the 8.97.8 COMPOSE offer card must be recognized again (#1114).** DoorDash rolled a
   Compose offer card server-side on 09-18 (same app build): every offer on 09-18/19 fell to UNKNOWN or

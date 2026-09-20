@@ -467,8 +467,13 @@ sheet is identified by a new load-validated `state` key, `offerSurface: card | d
 (`OfferSurface`, `StateMachineContract.SUPPORTED_OFFER_SURFACES`), carried on `Observation.Screen` — never
 by a platform screen name in Kotlin. `PendingOffer.declineSheetSeenAt` records the first sighting;
 `EffectMap.resolveOfferOutcome` reads it AFTER every accept arm (the latch, and the post-step survivor —
-which also fixes the click-less accept logging `OFFER_TIMEOUT` while the job minted) and names inferred
-outcomes in the event `description`. Fail-null: no sheet, no click → timeout, as before.
+which also fixes the click-less accept logging `OFFER_TIMEOUT` while the job minted), only within the
+platform's `GraceConfig.declineSheetWindowMs` of the LAST sighting (a cancelled sheet whose countdown later
+ends is a timeout; the card re-renders after both, so a card frame is not a cancel signal), and names
+inferred outcomes in the event `description`. The click-less accept itself is narrowed to a NON-task
+`returnFlow` for every task destination (a mid-job add-on's decline used to be read as its accept when the
+original pickup surface re-rendered). Recovery drops the sighting; the journal persists `offerSurface`.
+Fail-null: no sheet, no click → timeout, as before.
 
 ## Amendment 2026-07-15 — the phase-less active-job flow (`task:active`) — and why there is no `TRANSIT` phase
 

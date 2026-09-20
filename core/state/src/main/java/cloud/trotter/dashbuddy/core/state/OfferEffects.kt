@@ -96,8 +96,9 @@ internal fun EffectMap.diffOfferLifecycle(
             // and a null kind on either side leaves the pre-#881 behaviour untouched.
             val directOverMatch = prevOffer.offerKind == OfferKind.MATCH &&
                 nextOffer.offerKind == OfferKind.DIRECT
-            val description =
-                if (directOverMatch) "Superseded by direct offer" else "Replaced by new offer"
+            val note = inferredOutcomeNote(prevOffer, outcome, obs)
+            val description = (if (directOverMatch) "Superseded by direct offer" else "Replaced by new offer") +
+                (note?.let { "; $it" } ?: "")
             add(logEffect(sessionId, outcome, obs.timestamp, offerPayload(prevOffer, outcome, obs.timestamp, description)))
             // #601: surface the replaced offer's disposition, suffixed so it reads as the OLD offer's.
             if (!directOverMatch) {
@@ -159,19 +160,14 @@ internal fun EffectMap.diffOfferLifecycle(
         // Accept race after the decline already committed. #1104/#1114: an outcome that rests on
         // TRANSITION evidence (no click envelope) says so in the row — the ledger must be able to
         // tell an observed tap from an inferred one.
-        val raceDescription = when {
+        val raceDescription = if (
             outcome == AppEventType.OFFER_DECLINED &&
-                prevOffer.declineCommittedAt != null &&
-                prevOffer.lastClickIntent == OfferIntent.ACCEPT ->
-                "Accept clicked after decline was already committed — decline stands (#594)"
-            outcome == AppEventType.OFFER_DECLINED &&
-                prevOffer.declineCommittedAt == null &&
-                prevOffer.lastClickIntent != OfferIntent.DECLINE &&
-                prevOffer.declineSheetSeenAt != null ->
-                "Decline inferred from the confirm sheet — no click envelope (#1104)"
-            outcome == AppEventType.OFFER_ACCEPTED && !prevOffer.isAcceptLatched() ->
-                "Accept inferred from the task surface — no click envelope (#1104)"
-            else -> null
+            prevOffer.declineCommittedAt != null &&
+            prevOffer.lastClickIntent == OfferIntent.ACCEPT
+        ) {
+            "Accept clicked after decline was already committed — decline stands (#594)"
+        } else {
+            inferredOutcomeNote(prevOffer, outcome, obs)
         }
         add(AppEffect.CancelOfferNotification(prevOffer.offerHash))
         add(logEffect(sessionId, outcome, obs.timestamp, offerPayload(prevOffer, outcome, obs.timestamp, raceDescription)))

@@ -453,8 +453,18 @@ post-step region (the click-less accept — presentation left to a phased task s
 (before this the job minted while the offer row said TIMEOUT); (b) `PendingOffer.declineSheetSeenAt` →
 `OFFER_DECLINED` — set once by `OfferLifecycle` when a screen whose rule declares
 `state.offerSurface: decline_confirm` (`OfferSurface`, load-validated vocabulary) is observed over the
-presented offer, preserved across enrich-as-variant, never a commit on its own (an accept always wins).
-Inferred outcomes carry a `description` naming the evidence. No sheet and no click → timeout, as before.
+presented offer (LATEST sighting), preserved across enrich-as-variant, never a commit on its own (an accept
+always wins, and an OBSERVED tap outranks every inference). The sheet counts only when the exit lands
+within `GraceConfig.declineSheetWindowMs` (15 s; the seven fielded 8.97.8 declines exited 2–9 s after
+the sheet) — the card re-renders for one frame after a real decline AND after a cancel, so a card frame
+is not a cancel signal; a cancelled sheet whose countdown later ends is outside the window → timeout.
+The same change generalizes `destinationImpliesAccept`: a click-less accept is inferred ONLY when the
+offer's `returnFlow` was not a task flow (a job appearing where there was none) — a mid-job add-on's
+returnFlow is job A's pickup surface, whose re-render after a declined add-on used to mint a phantom
+survivor; a click-less add-on accept is not inferable and fails null. `recoveryHygiene` drops the
+sighting (evidence, not a decision in flight); the journal persists `offerSurface` so replay resolves
+the same outcome as the live run. Inferred outcomes carry a `description` naming the evidence on both
+the removal and the replacement paths. No sheet and no click → timeout, as before.
 
 **Accept survives the offer-presentation edge** as an `acceptedAt`-marked accepted-pending-
 consumption entry (this REPLACED the #526 accept stash + `AcceptStash` + `offerBelongsToRegion`,
