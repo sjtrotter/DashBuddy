@@ -84,6 +84,16 @@ the #985 timeline order-detail item there **broken**: the rule claims the first 
 but the sheet's fully-inflated SECOND frame drops `Copy address`, falls to UNKNOWN and shipped a
 street line, a city/ST/ZIP and a customer note raw — now #1116.)_
 
+- **🆕 NEW — offer outcomes on TRANSITION evidence (#1104 — PR TBD).** Compose controls emit no click
+  event for a human tap, so on the 8.97.8 card an accept is now logged `OFFER_ACCEPTED` from the pickup
+  screen appearing (before: the job minted but the offer row said TIMEOUT) and a decline is logged
+  `OFFER_DECLINED` when the "are you sure you want to decline" sheet was seen and the offer then left
+  without an accept. **On-dash:** nothing to do differently — accept some, decline some (through the
+  sheet), let one time out untouched. **Desk:** `offer_records.outcome` shows ACCEPTED for every minted
+  job and DECLINED for every sheet-declined offer; the `description` on those rows reads
+  `… inferred from the task surface …` / `… inferred from the confirm sheet …`; the untouched offer is the
+  only TIMEOUT; `OFFER_ACCEPTED` count == jobs minted; no ACCEPTED row without a job.
+  - Confirmed: 0/2
 - **🆕 NEW — the 8.97.8 COMPOSE offer card must be recognized again (#1114).** DoorDash rolled a
   Compose offer card server-side on 09-18 (same app build): every offer on 09-18/19 fell to UNKNOWN or
   was misfiled as `side_nav_drawer`, and `app_events` recorded ZERO offers for two dashing days.

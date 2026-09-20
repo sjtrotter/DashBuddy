@@ -397,7 +397,12 @@ class EffectMap @Inject constructor(
     // HELPERS
     // =========================================================================
 
-    internal fun resolveOfferOutcome(obs: Observation, prevOffer: PendingOffer? = null): AppEventType {
+    internal fun resolveOfferOutcome(
+        obs: Observation,
+        prevOffer: PendingOffer? = null,
+        prev: PlatformRegion? = null,
+        next: PlatformRegion? = null,
+    ): AppEventType {
         // 0. Decline-commit latch (#594): a DECLINE-intent click already committed this offer's
         //    decline server-side. That decision is final — a later "Review offer"→Accept click
         //    cannot un-decline it — so the latch wins over lastClickIntent AND the direct-click
@@ -409,6 +414,26 @@ class EffectMap @Inject constructor(
         //    accept-stash arming also uses); DECLINE stays explicit here.
         if (prevOffer != null && prevOffer.isAcceptLatched()) return AppEventType.OFFER_ACCEPTED
         if (prevOffer?.lastClickIntent == OfferIntent.DECLINE) return AppEventType.OFFER_DECLINED
+        // 1b. TRANSITION evidence (#1104/#1114) — the only evidence a Compose card can leave, since
+        //    its controls emit no click event for a human tap:
+        //    * the stepper armed an accepted SURVIVOR for this very offer on this step (the
+        //      click-less accept: presentation left to a phased task surface —
+        //      OfferLifecycle.destinationImpliesAccept) → ACCEPTED. Before this arm the job minted
+        //      but the offer row said TIMEOUT.
+        //    * the platform's confirm-decline sheet was observed over the offer and no accept
+        //      followed → DECLINED. Ordered AFTER the accept arms: a dasher who opened the sheet,
+        //      went back and accepted is an accept.
+        //    The survivor is usually CONSUMED into the job on the very same step (the task frame
+        //    both arms it and mints), so the evidence is either a surviving accepted entry OR this
+        //    hash newly present on the region's active job (absent from the pre-step job — so a
+        //    same-hash re-presentation over an older accept of that hash can never re-fire it).
+        if (prevOffer != null && next != null) {
+            val survivor = next.pendingOffers.any { it.offerHash == prevOffer.offerHash && it.acceptedAt != null }
+            val consumedNow = next.activeJob?.acceptedOffers?.any { it.offerHash == prevOffer.offerHash } == true &&
+                prev?.activeJob?.acceptedOffers?.any { it.offerHash == prevOffer.offerHash } != true
+            if (survivor || consumedNow) return AppEventType.OFFER_ACCEPTED
+        }
+        if (prevOffer?.declineSheetSeenAt != null) return AppEventType.OFFER_DECLINED
         // 2. Direct click observation — covers the edge case where click and
         //    flow change arrive in the same observation
         val clickFields = when (obs) {

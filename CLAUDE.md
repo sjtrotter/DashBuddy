@@ -461,6 +461,12 @@ direct offer" and suppresses the replaced bubble. Display store reads go through
 `ParsedOffer.displayStores`/`displayStoreText` (#882; the `orders[]` list deliberately keeps the
 `Delivery (N)` chip so `presentationKey` is immune to store cycling).
 
+**Outcomes on transition evidence (#1104/#1114):** Compose controls emit no click event for a human tap, so
+`resolveOfferOutcome(obs, prev, next)` also reads an accepted survivor in the post-step region (click-less
+accept → `OFFER_ACCEPTED`, not TIMEOUT) and `PendingOffer.declineSheetSeenAt` (set by a screen whose rule
+declares `state.offerSurface: decline_confirm` → `OFFER_DECLINED`); every accept arm outranks the sheet;
+inferred outcomes are named in the event description.
+
 **Accept survives the offer-presentation edge** as an `acceptedAt`-marked pending entry; the task edge
 mints the survivor (`acceptInputsFromPending`). The accept grace is per-platform (`GraceConfig.acceptGraceMs`,
 #762 D2), which also added the phase-less `task:active` flow (`Flow.TaskActive`, `toTaskPhase()` → null;

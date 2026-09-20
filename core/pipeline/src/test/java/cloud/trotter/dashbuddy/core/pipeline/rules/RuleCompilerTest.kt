@@ -74,6 +74,24 @@ class RuleCompilerTest {
     private fun parseJson(s: String) = Json.parseToJsonElement(s)
 
     // =========================================================================
+    // parseStateBlock — offerSurface (#1104/#1114)
+
+    @Test
+    fun `parseStateBlock reads offerSurface and rejects an unknown value`() {
+        val ok = RuleCompiler.parseStateBlock(
+            json("flow" to "offer:presented", "modeHint" to "online", "offerSurface" to "decline_confirm"), "r",
+        )
+        assertEquals(cloud.trotter.dashbuddy.domain.state.OfferSurface.DECLINE_CONFIRM, ok.offerSurface)
+        assertNull(RuleCompiler.parseStateBlock(json("flow" to "offer:presented"), "r").offerSurface)
+        var thrown: RuleCompileException? = null
+        try {
+            RuleCompiler.parseStateBlock(json("offerSurface" to "decline_sheet"), "r")
+        } catch (e: RuleCompileException) {
+            thrown = e
+        }
+        assertTrue("unknown offerSurface must fail rule load", thrown?.message?.contains("offerSurface") == true)
+    }
+
     // compileNodePred — hasAnyTextStartsWith (#1114)
 
     @Test

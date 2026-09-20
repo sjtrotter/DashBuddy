@@ -446,6 +446,16 @@ resolution, `FlowCardSnapshot.Offer.storeNames`, the fold's eval-less fallback),
 real order stores, else the card headline, else the order list — so DoorDash (no top-level
 `storeName` parse) is byte-identical.
 
+**Outcomes on transition evidence (#1104/#1114).** A Compose control emits no click event for a human
+tap, so on the 8.97.8 card no ACCEPT/DECLINE click can arrive. `EffectMap.resolveOfferOutcome(obs, prev,
+next)` therefore reads, after the click latches: (a) an accepted SURVIVOR for the same hash in the
+post-step region (the click-less accept — presentation left to a phased task surface) → `OFFER_ACCEPTED`
+(before this the job minted while the offer row said TIMEOUT); (b) `PendingOffer.declineSheetSeenAt` →
+`OFFER_DECLINED` — set once by `OfferLifecycle` when a screen whose rule declares
+`state.offerSurface: decline_confirm` (`OfferSurface`, load-validated vocabulary) is observed over the
+presented offer, preserved across enrich-as-variant, never a commit on its own (an accept always wins).
+Inferred outcomes carry a `description` naming the evidence. No sheet and no click → timeout, as before.
+
 **Accept survives the offer-presentation edge** as an `acceptedAt`-marked accepted-pending-
 consumption entry (this REPLACED the #526 accept stash + `AcceptStash` + `offerBelongsToRegion`,
 all deleted): `OFFER_ACCEPTED` fires at the edge, and the survivor is minted by the task edge

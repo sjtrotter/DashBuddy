@@ -118,6 +118,7 @@ data class CompiledBranch<TInput>(
     val intent: String? = null,
     val flow: Flow? = null,
     val modeHint: Mode? = null,
+    val offerSurface: cloud.trotter.dashbuddy.domain.state.OfferSurface? = null,
     /**
      * Click-rule screen constraint: the branch matches only when the platform's last admitted
      * screen target is IN this set. `null` is unconstrained; the compiler rejects an empty array,
@@ -487,6 +488,7 @@ data class RuleMatchResult(
     val shape: String? = null,
     val flow: Flow? = null,
     val modeHint: Mode? = null,
+    val offerSurface: cloud.trotter.dashbuddy.domain.state.OfferSurface? = null,
     val fields: Map<String, Any?> = emptyMap(),
     val effects: List<RequestedEffect> = emptyList(),
     val targets: Map<String, cloud.trotter.dashbuddy.domain.pipeline.NodeRef> = emptyMap(),

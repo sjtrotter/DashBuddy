@@ -6,6 +6,7 @@ import cloud.trotter.dashbuddy.domain.pipeline.TimeoutType
 import cloud.trotter.dashbuddy.domain.state.Flow
 import cloud.trotter.dashbuddy.domain.state.OfferIntent
 import cloud.trotter.dashbuddy.domain.state.ParsedFields
+import cloud.trotter.dashbuddy.domain.state.OfferSurface
 import cloud.trotter.dashbuddy.domain.state.PendingOffer
 import cloud.trotter.dashbuddy.domain.state.PlatformRegion
 import timber.log.Timber
@@ -96,6 +97,19 @@ private fun PlatformRegionStepper.pushOrReplaceOffer(
     val presented = region.presentedOffer()
 
     val newOffers = when {
+        // #1104/#1114: the platform's confirm-decline sheet rendered over the presented offer. A
+        // Compose control emits no click event for a human tap, so this FRAME is the only evidence
+        // a decline is under way. Record the first sighting on the presented offer; the outcome
+        // resolver reads it when the offer leaves presentation without an accept. Not a commit —
+        // `View offer details` → Accept still wins (the accept latch / task-surface exit outrank
+        // it in EffectMap.resolveOfferOutcome). Rule-declared (`state.offerSurface`), P8-clean.
+        (obs as? Observation.Screen)?.offerSurface == OfferSurface.DECLINE_CONFIRM -> {
+            if (presented == null || presented.declineSheetSeenAt != null) return region
+            region.pendingOffers.map {
+                if (it === presented) presented.copy(declineSheetSeenAt = obs.timestamp) else it
+            }
+        }
+
         // No offer data → keep the list as-is.
         offerFields == null || newHash == null -> return region
 
