@@ -2843,8 +2843,8 @@ independent preliminary review of the same pull: `~/codex/dashbuddy/2026-09-20-p
    ```
    16:08:33.349  UNKNOWN              → desc 'Close sheet', text '[redacted]'             (name only)
    16:08:33.509  timeline_task_detail → 'Deliver to [redacted:d03b]', 'Copy address'      ← rule fires, masked
-   16:08:33.734  UNKNOWN              → '9001 Wurzbach Rd', 'San Antonio, TX 78240',
-                                         '"1505. Second floor. …"', 'Hand it to customer' ← RAW to disk
+   16:08:33.734  UNKNOWN              → a raw street line, a raw City/ST/ZIP line,
+                                         a raw customer note (unit number + directions), 'Hand it to customer' ← RAW to disk
    ```
 
    Evidence file `UNKNOWN/2026-09-18_16-08-33-734__doordash__accessibility.window__UNKNOWN__f06a47.json`
