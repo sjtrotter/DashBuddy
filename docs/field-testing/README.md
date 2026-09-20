@@ -82,7 +82,8 @@ was found **broken-in-part** (raw PII in capture envelopes) and moved to that en
   Compose offer card server-side on 09-18 (same app build): every offer on 09-18/19 fell to UNKNOWN or
   was misfiled as `side_nav_drawer`, and `app_events` recorded ZERO offers for two dashing days.
   **On-dash:** every offer card must light the bubble/TTS with pay, miles, store and a verdict as before;
-  a shop offer must read the `Shop for N items` count; a 2-store offer must list both stores. Watch whether
+  a shop offer must read the `Shop for N items` count; a 2-store offer must list both stores (incl. the
+  4-stop `Multiple dropoffs (2 stops)` shape); the `New Delivery!` push must log `NEW_ORDER` again (new channel). Watch whether
   an ACCEPT still mints the job (the accept is INFERRED from the pickup screen now — Compose taps produced
   no click envelopes in the field) and whether a DECLINE is recorded as declined or as a timeout (expected:
   timeout, the #1104 class — note it, don't fight it). The consent prompt will show a NEW accept capability

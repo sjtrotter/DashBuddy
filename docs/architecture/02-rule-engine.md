@@ -68,15 +68,19 @@ merchant holder followed by an address-shaped sibling — parses pay (the figure
 from the route summary (a route ESTIMATE, never a deadline; the new `parseTotalMinutes` transform sums
 `N hr N min` into minutes, where `parseMinutes` would read only the trailing minutes), and `orders` per
 merchant holder (`storeName` from the holder, the item count from `sibling(2)`'s `Shop for N items`
-row). The helper binding `offerBody` (the body ScrollView, anchored on its `Customer dropoff` holder — the
-Accept footer is the ScrollView's SIBLING) is **mandatory** and every economic read is scoped to it
+row). The helper binding `offerBody` (the body ScrollView, anchored on the disclaimer PREFIX through the new
+`hasAnyTextStartsWith` predicate — the subtree form of `hasAnyText` — because the dropoff holder reads
+`Customer dropoff` on a single drop but `Multiple dropoffs (2 stops)` on a stack, and the Accept footer is
+the ScrollView's SIBLING, not a child) is **mandatory** and every economic read is scoped to it
 (`from: offerBody` on both pay arms, the route summary and the `orders` walk), so a frame with no body
 never parses and a background figure or store row outside the card can never become this offer's
 economics (Astra round 1, PR #1115). `orderType` is PER STORE: the merchant holder's `sibling(2)` is the
 shop row for a shop merchant (`holder → address → Shop for N items …`) and the NEXT holder for a pickup
 merchant, so a regex on that node's `allText` yields `SHOP_FOR_ITEMS` or falls to the `literal`
 `PICKUP` — verified on the fielded mixed stack (Smoothie King PICKUP + Target SHOP_FOR_ITEMS, fixture
-`…073fcb`); only the badges (Red Card / alcohol / large order) resolve at offer level. The branch also
+`…073fcb`); only the badges (Red Card / alcohol / large order) resolve at offer level. Merchant rows are admitted by
+STRUCTURE (a holder followed by any ZIP-bearing text sibling — no `hasChildren`, no house-number
+assumption) and judged by CONTENT: the branch
 carries the new `collectionNonBlank` validator (`orders` non-empty AND every `storeName` non-blank,
 `onFail: skip`) — `fieldNotNull` accepts an empty list and blank names, exactly the #595/#1063 nameless
 ghost-offer shape a structurally present holder could render; a synthetic blank-merchant negative pins
@@ -88,8 +92,9 @@ initial_decline / decline_offer click rules carry label-only arms (exact `Accept
 shape is unobserved, so no clickable/no-id assumption is made; the confirm sheet's `confirmDeclineButton`
 binds the Compose `Decline offer` View directly and deliberately NOT the Gold `Decline & pause store`
 variant (it pauses the store — a side effect quick-decline consent never covered). Partial inflation frames
-(no Accept / no disclaimer / no merchant row) stay UNKNOWN by design (two negatives committed). Residuals
-on #1114: badges resolve at OFFER level, an address without a leading house number fails the guard, and — the field finding that matters most — Compose taps produced NO click envelopes, so an
+(no Accept / no disclaimer / no merchant row) stay UNKNOWN by design (two negatives committed). The same rollout moved the offer PUSH to a new channel
+(`dasher-notification-channel-nexus-new-offer-no-sound-haptics`), added to `new_order`. Residuals
+on #1114: badges resolve at OFFER level, a merchant address with no 5-digit ZIP fails the guard, and — the field finding that matters most — Compose taps produced NO click envelopes, so an
 accept is inferred from the pickup-phase exit (`destinationImpliesAccept`) and a decline resolves as
 `OFFER_TIMEOUT`.
 Rules also carry `require` predicates, `bind` blocks, `parse`
