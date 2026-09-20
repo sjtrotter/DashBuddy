@@ -74,6 +74,21 @@ class RuleCompilerTest {
     private fun parseJson(s: String) = Json.parseToJsonElement(s)
 
     // =========================================================================
+    // compileNodePred — hasAnyTextStartsWith (#1114)
+
+    @Test
+    fun `hasAnyTextStartsWith matches a prefix on any descendant text and is case-insensitive`() {
+        val pred = RuleCompiler.compileNodePred(json("hasAnyTextStartsWith" to "Guaranteed earnings for completing the offer."))
+        val body = tree(
+            node(text = "\$14.75"),
+            node(text = "guaranteed EARNINGS for completing the offer. Items may be added before checkout."),
+        )
+        assertTrue(pred(body))
+        val other = tree(node(text = "\$14.75"), node(text = "Earnings for completing the offer."))
+        assertFalse(pred(other))
+        assertFalse(pred(tree()))
+    }
+
     // compileNodePred — ID predicates
     // =========================================================================
 

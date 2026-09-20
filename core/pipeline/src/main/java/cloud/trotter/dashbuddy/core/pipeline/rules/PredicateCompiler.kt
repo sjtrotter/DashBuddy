@@ -183,6 +183,16 @@ internal object PredicateCompiler {
                 ;{ node -> node.allText.any { it.equals(s, ignoreCase = true) } }
             }
 
+            // #1114: the subtree-scoped PREFIX form of `hasAnyText` — matches when any text node
+            // anywhere in this subtree starts with the value (case-insensitive). Needed to anchor an
+            // id-less Compose container on a disclaimer that renders in more than one full form
+            // (`Guaranteed earnings for completing the offer.` ± ` Items may be added before
+            // checkout.`) without enumerating every variant as an exact `hasAnyText`.
+            "hasAnyTextStartsWith" -> {
+                val s = primOf(value, key).content
+                ;{ node -> node.allText.any { it.startsWith(s, ignoreCase = true) } }
+            }
+
             "hasDesc" -> {
                 val s = primOf(value, key).content
                 ;{ node -> node.contentDescription?.equals(s, ignoreCase = true) == true }

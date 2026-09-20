@@ -1427,6 +1427,10 @@
           "properties": { "hasTextStartsWith": { "type": "string", "description": "Text starts with prefix (case-insensitive)." } }
         },
         {
+          "required": ["hasAnyTextStartsWith"],
+          "properties": { "hasAnyTextStartsWith": { "type": "string", "description": "Any text node in this subtree (self or descendant text/contentDescription) starts with prefix (case-insensitive) (#1114)." } }
+        },
+        {
           "required": ["hasTextMatchesRegex"],
           "properties": { "hasTextMatchesRegex": { "type": "string", "description": "Text matches regex (case-insensitive, max 200 chars). RE2 syntax (no lookaround, no backreferences): rule patterns run on a non-backtracking engine, so match time is linear by construction (#1053). Bounds: max 200 chars, no single repeat over 200, at most 16 nested groups, and the COMPILED program at most 1000 instructions (measured after compiling; the corpus maximum is 240 — the bound is about match-time stack depth, which grows with nullable nesting rather than size alone). No \\Q quoting, no leading-zero repeat bounds. \\d/\\s/\\w are translated at compile toward Android's Unicode classes (an approximation with stated residuals); \\b stays ASCII.", "maxLength": 200 } }
         },
