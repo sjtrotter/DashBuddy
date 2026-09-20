@@ -3603,6 +3603,14 @@
             "parsedOffer": "ParsedOffer(offerHash=c43837ce64c22cad3a9c44d31a2474544c06690717c0e0135334c8e4f49537e0, presentationKey=a67e561688c9ddcb480ab88fc44488254bc69ced4676c724e828772e6ec28671, itemCount=0, itemCountIsUnits=false, payAmount=8.3, payTextRaw=null, distanceMiles=3.8, distanceTextRaw=null, dueByTimeText=3:49 PM, dueByTimeMillis=1780328940000, timeToCompleteMinutes=null, badges=[], initialCountdownSeconds=null, orders=[ParsedOrder(orderIndex=0, orderType=PICKUP, storeName=McDonald's, itemCount=1, isItemCountEstimated=true, badges=[], countUnit=ITEMS)], offerKind=null, displayStoreName=null, rawExtractedTexts=null)"
         }
     },
+    "offer_popup/2026-09-18_18-15-06-664__doordash__accessibility.window__offer_popup__b9a745.json": {
+        "ruleId": "doordash.screen.offer_popup",
+        "intent": "offer_popup",
+        "shape": "offer",
+        "fields": {
+            "parsedOffer": "ParsedOffer(offerHash=307310df34c14297dafda5b9f2deaea70a574398ef5a5e7d33573193ef092106, presentationKey=cd17c25a8d730dba2dec8931ac65214e8416ce4e96b337954b1e00365cfacf8e, itemCount=8, itemCountIsUnits=false, payAmount=11.75, payTextRaw=null, distanceMiles=3.9, distanceTextRaw=null, dueByTimeText=null, dueByTimeMillis=null, timeToCompleteMinutes=41, badges=[], initialCountdownSeconds=null, orders=[ParsedOrder(orderIndex=0, orderType=PICKUP, storeName=Sonic Drive-In, itemCount=1, isItemCountEstimated=true, badges=[RED_CARD], countUnit=ITEMS), ParsedOrder(orderIndex=1, orderType=SHOP_FOR_ITEMS, storeName=Family Dollar, itemCount=8, isItemCountEstimated=false, badges=[RED_CARD], countUnit=ITEMS)], offerKind=null, displayStoreName=null, rawExtractedTexts=null)"
+        }
+    },
     "offer_popup/2026-09-19_08-51-20-419__doordash__accessibility.window__offer_popup__87e2e3.json": {
         "ruleId": "doordash.screen.offer_popup",
         "intent": "offer_popup",
@@ -3641,6 +3649,14 @@
         "shape": "offer",
         "fields": {
             "parsedOffer": "ParsedOffer(offerHash=4c4851d381d17fa79cad9670439e503981728ebd49402e733dde5282a9540fd0, presentationKey=0df8ca34544265be7e4eb07231f84f5325d8507c40a7aabbc9ced69beb46a691, itemCount=4, itemCountIsUnits=false, payAmount=17.6, payTextRaw=null, distanceMiles=8.2, distanceTextRaw=null, dueByTimeText=null, dueByTimeMillis=null, timeToCompleteMinutes=57, badges=[], initialCountdownSeconds=null, orders=[ParsedOrder(orderIndex=0, orderType=PICKUP, storeName=Smoothie King, itemCount=1, isItemCountEstimated=true, badges=[RED_CARD], countUnit=ITEMS), ParsedOrder(orderIndex=1, orderType=SHOP_FOR_ITEMS, storeName=Target, itemCount=4, isItemCountEstimated=false, badges=[RED_CARD], countUnit=ITEMS)], offerKind=null, displayStoreName=null, rawExtractedTexts=null)"
+        }
+    },
+    "offer_popup/2026-09-19_20-39-03-514__doordash__accessibility.window__offer_popup__858fcf.json": {
+        "ruleId": "doordash.screen.offer_popup",
+        "intent": "offer_popup",
+        "shape": "offer",
+        "fields": {
+            "parsedOffer": "ParsedOffer(offerHash=8a67bc750192f3a9325624ab686b3eb0122970c84c4ab970961c8d600b944498, presentationKey=8f2919f6cf8cd54688b9b87f377f4f601590824ebac4f2ff8f067517e49177d1, itemCount=0, itemCountIsUnits=false, payAmount=16.3, payTextRaw=null, distanceMiles=7.7, distanceTextRaw=null, dueByTimeText=null, dueByTimeMillis=null, timeToCompleteMinutes=41, badges=[], initialCountdownSeconds=null, orders=[ParsedOrder(orderIndex=0, orderType=PICKUP, storeName=San Antonio Burger co, itemCount=1, isItemCountEstimated=true, badges=[], countUnit=ITEMS), ParsedOrder(orderIndex=1, orderType=PICKUP, storeName=KFC, itemCount=1, isItemCountEstimated=true, badges=[], countUnit=ITEMS)], offerKind=null, displayStoreName=null, rawExtractedTexts=null)"
         }
     },
     "offer_popup/20260128_163448_533_OFFER_POPUP.json": {
