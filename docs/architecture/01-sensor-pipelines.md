@@ -112,10 +112,18 @@ anchor was cut from: a header-less render (no `Deliver to`, no `Continue`), its 
 Call/Message row scrolled off, and an `Apt/Suite`-only partial — all fell UNKNOWN and shipped the
 street, city/ST/ZIP, unit, the quoted note (a gate code) and the name raw. The anchor is now the
 host fragment plus ANY stable sheet row (either prism CTA title on its own `textView_prism_button_title`
-node, or the id-less `Apt/Suite` label); recognize-only at priority 143 with the same rejects, so
-the wider anchor cannot move a lifecycle classification — it can only apply the existing redact
-block to a frame that would otherwise ship whole (fail-toward-privacy; `NegativeCorpusStaysUnknownTest`
-guards over-match). Candidate text markers are vetted against the
+node, the id-less `Apt/Suite` row in any spelling, or the Call/Message pair); recognize-only at
+priority 143 with the same rejects, so the wider anchor moves no lifecycle classification — what it
+DOES move is `FrameGate.lastIdentity`, capture routing (the frame files under the rule, not UNKNOWN)
+and, with that, the `ID_MARKERS` backstop, which is UNKNOWN-only: so the review added
+`dropoff_pre_arrival`'s id-anchored entries to the sheet's block as a belt (an id-bearing render
+this rule wins keeps every deliberate decision), and ordered pre-arrival's fused `Apt ` plain entry
+AHEAD of the new name shape (`Apt B` is `<word> <capital>` too — a 26-value alphabet must not hash)
+and made its quoted-note entry `plainMask` like the sheet's. No committed negative carries the host
+id, so `NegativeCorpusStaysUnknownTest` guards future negatives only. Residuals, documented on the
+rule: a handoff-option-only render (variable vocabulary) still has no anchor; the `Apt/Suite`-only
+partial is recognized on the device but its envelope loses the label to the #1039 fused entry's
+collateral and replays UNKNOWN (intake nuisance, not a leak). Candidate text markers are vetted against the
 corpus before joining the runtime set — chrome-ambiguous prefixes ("Return ", "Focus on ",
 "Heading to ") are REJECTED because `CaptureBackstopCorpusTest` goes red on a clean corpus,
 reasoning recorded in the `CustomerTextMarkers` KDoc; the rule redact is the primary control (#806). Intake-side prefix lists (`SnapshotRedactor.NAME_PREFIXES`,
