@@ -98,7 +98,24 @@ at priority 144 BEHIND every other rule in the section so it can never pre-empt 
 classification, and plain-masks the instruction body whole — customer-AUTHORED text, the #803/#920
 class, unbounded alphabet but bounded length. Residual, the combined-frame class inverted: a future
 rule that OUTRANKS it on a `description_text_view`-bearing frame would need the entry itself, and
-only the UNKNOWN path is structurally covered). Candidate text markers are vetted against the
+only the UNKNOWN path is structurally covered). **The 8.98.5 drop-off sheet (#1122/#1123, fielded
+2026-09-20) is the #1116 class twice over.** (a) `dropoff_pre_arrival` (priority 73) out-ranks
+`dropoff_workflow_sheet` (143) on the sheet's header-BEARING render, and its customer-name mask was
+anchored only on the id-bearing `user_name` node — 8.98.5 also renders the name as an id-LESS
+first-name + last-initial node in the bottom bar, and one of 14 envelopes shipped it raw while every
+other slot masked. The sheet's id-less name entry is now copied VERBATIM into `dropoff_pre_arrival`
+(the #992/#1031 sibling doctrine — same bytes, same 4 hex; `normalize: customerName`, `hasNoId`),
+ordered after the #1039 subpremise entries and pinned by the FIX 1c SSOT list plus a mask-parity
+proof (`DropoffSheetRedactionParityTest`, ALL-CAPS names included — the shape already matched them).
+(b) The sheet renders in more shapes than the 08-30 pair the original `Continue` AND `Directions`
+anchor was cut from: a header-less render (no `Deliver to`, no `Continue`), its twin with the
+Call/Message row scrolled off, and an `Apt/Suite`-only partial — all fell UNKNOWN and shipped the
+street, city/ST/ZIP, unit, the quoted note (a gate code) and the name raw. The anchor is now the
+host fragment plus ANY stable sheet row (either prism CTA title on its own `textView_prism_button_title`
+node, or the id-less `Apt/Suite` label); recognize-only at priority 143 with the same rejects, so
+the wider anchor cannot move a lifecycle classification — it can only apply the existing redact
+block to a frame that would otherwise ship whole (fail-toward-privacy; `NegativeCorpusStaysUnknownTest`
+guards over-match). Candidate text markers are vetted against the
 corpus before joining the runtime set — chrome-ambiguous prefixes ("Return ", "Focus on ",
 "Heading to ") are REJECTED because `CaptureBackstopCorpusTest` goes red on a clean corpus,
 reasoning recorded in the `CustomerTextMarkers` KDoc; the rule redact is the primary control (#806). Intake-side prefix lists (`SnapshotRedactor.NAME_PREFIXES`,

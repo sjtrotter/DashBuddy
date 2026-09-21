@@ -91,6 +91,23 @@ earnings-deposit mask (both envelopes plain-masked across all four flat fields) 
 **#1033 layer-2** item there **broken**: its first-ever *applied* re-price split a single-drop
 receipt across a stacked job's two drops and destroyed $28.51, now #1120.)_
 
+- **🆕 NEW — the 8.98.5 drop-off sheet masks on EVERY render (#1122 + #1123).** The 09-20 pull
+  shipped two Pledge leaks from the same sheet: a raw customer name in the bottom bar of a
+  `dropoff_pre_arrival` envelope (the id-less node the rule's id-anchored entry never saw — #1123),
+  and three header-less / partial renders of the workflow sheet that fell UNKNOWN with the whole
+  address block, the quoted note and the name raw (#1122). Nothing changes on the phone: the sheet
+  rule still declares no flow, so an ordinary "leave it at the door" drop-off must narrate, bubble
+  and complete exactly as before. **Desk, after the pull:**
+  1. `grep -rl 'drop_off_workflow_host_fragment' captures/**/UNKNOWN/` must return only the known
+     text-free loading skeletons — any hit with a co-present text node is a render the widened anchor
+     still misses (attach the frame's node SHAPES to #1122, never the values).
+  2. Every `dropoff_pre_arrival` AND `dropoff_workflow_sheet` envelope: the bottom-bar name slot
+     (the id-less `TextView` between the `Settings` and `Safety` icons) reads `[redacted:<4hex>]`,
+     and the SAME customer carries the same 4 hex on both rules' envelopes.
+  3. On the header-less sheet envelopes (no `Deliver to`, no `Continue`): a hashed street line, PLAIN
+     `[redacted]` for city/ST/ZIP, the unit and the quoted note; `Call`/`Message`/`Directions`/
+     `Leave it at the door` kept raw.
+  - Confirmed: 0/2
 - **🆕 NEW — offer outcomes on TRANSITION evidence (#1104 — PR #1118).** Compose controls emit no click
   event for a human tap, so on the 8.97.8 card an accept is now logged `OFFER_ACCEPTED` from the pickup
   screen appearing (before: the job minted but the offer row said TIMEOUT) and a decline is logged

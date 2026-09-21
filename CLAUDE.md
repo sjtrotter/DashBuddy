@@ -261,7 +261,9 @@ PR #1066 — read a pull's build from the logs, never infer it).
   `Close sheet` contentDescription, BOTH required, and masks the merchant render too (store names raw).
 - The id-less **name shape** joins tokens with `\s{1,4}` (never a literal space, #885) and is byte-SSOT
   with `SnapshotRedactor.FIRST_LAST_INITIAL_PATTERN`. A sub-flow sibling copies the entry verbatim so
-  the hex stays equal (#992/#1031). A name entry enumerates every conjugation a surface renders;
+  the hex stays equal (#992/#1031; #1123 — `dropoff_pre_arrival` OUT-RANKS the id-less workflow sheet
+  on its header-bearing render, so it carries the sheet's name entry too, and the sheet's anchor is ANY
+  stable row under the host fragment, #1122). A name entry enumerates every conjugation a surface renders;
   `timeline`'s redact/parse prefix lists diverge only by documented exclusion (guard test, #994/#998).
 - Coverage spans screen surfaces AND notification envelopes (#620; #987 masks the earnings-deposit
   push — the dasher's own FIGURE and the #599 Crimson clause — to `Your Dasher earnings for [redacted]`).
