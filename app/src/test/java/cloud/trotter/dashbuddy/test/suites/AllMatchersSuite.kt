@@ -17,6 +17,7 @@ import cloud.trotter.dashbuddy.core.pipeline.rules.DeliverySummaryReanchorTest
 import cloud.trotter.dashbuddy.core.pipeline.rules.ClickRulesetTest
 import cloud.trotter.dashbuddy.core.pipeline.rules.DefaultRulesIntegrationTest
 import cloud.trotter.dashbuddy.core.pipeline.rules.DropoffBannerRedactParityTest
+import cloud.trotter.dashbuddy.core.pipeline.rules.DropoffSheetRedactionParityTest
 import cloud.trotter.dashbuddy.core.pipeline.rules.GoPuffRecognitionTest
 import cloud.trotter.dashbuddy.core.pipeline.rules.NotificationRulesetTest
 import cloud.trotter.dashbuddy.core.pipeline.rules.ParseOutputGoldenTest
@@ -79,6 +80,9 @@ import org.junit.runners.Suite
  *   the frames that rule wins, and the arrival CTA hands the banner-bearing frame around),
  *   each one actually masks a real banner node, and the id is in the runtime
  *   `CustomerTextMarkers.ID_MARKERS` SSOT so the UNKNOWN path is covered too.
+ * - [DropoffSheetRedactionParityTest] — #1122/#1123: the 8.98.5 drop-off sheet — mask parity of the
+ *   id-less bottom-bar name across `dropoff_pre_arrival` and `dropoff_workflow_sheet`, every fielded
+ *   render shape claimed and masked at the right grade, the anchor matrix, and the four 09-20 fixtures.
  * - [SensitiveSurfaceBlockTest] — #1059: the dasher's OWN Persona selfie/ID-verification flow, the
  *   Red Card wallet screen and the passport variant of the ID-scan camera are claimed by the
  *   priority-0 `doordash.screen.sensitive.known` rule (not merely by the toxic scanner, which is all
@@ -182,6 +186,7 @@ import org.junit.runners.Suite
     CaptureRedactionCorpusTest::class,
     CaptureBackstopCorpusTest::class,
     DropoffBannerRedactParityTest::class,
+    DropoffSheetRedactionParityTest::class,
     SensitiveMarkerAssetCoverageTest::class,
     SensitiveSurfaceBlockTest::class,
     PickupNoCustomerIdentityTest::class,

@@ -1121,14 +1121,14 @@
           "plainMask": true
         },
         {
-          "comment": "#1122 review (Astra r2): a NUMERIC Building Name value (`Bldg 7`-class, or a bare number) is a bounded alphabet, so it plain-masks AHEAD of the hash entry below; an alphabetic complex name keeps the #860 distinctness hash. The shape is the file's bare-code pattern verbatim (no new regex). Generic-shape entry, so it sits AFTER the #1039 subpremise entries (the ordering guard).",
+          "comment": "#1122 review (Astra r2/r3): a Building Name value that carries ANY digit (`Bldg 7`, `Tower 2`, a bare `4202`, a 5-digit value, a value with trailing whitespace) is treated as a bounded designator and plain-masks AHEAD of the hash entry below; only an all-letter complex name keeps the #860 distinctness hash. `\\d` is a contains-match (the file's `hasTextMatchesRegex` entries are find-semantics, as the city/ST/ZIP `\\d{5}` entry relies on), so no anchor, no length cap, no whitespace edge — r3 showed a bounded `^…$` shape missed `12345`, `4202 ` and `Bldg 7`. Over-plaining a digit-bearing complex name loses distinctness, never privacy. Generic-shape entry, so it sits AFTER the #1039 subpremise entries (the ordering guard).",
           "find": {
             "all": [
               {
                 "hasPrecedingSiblingText": "Building Name"
               },
               {
-                "hasTextMatchesRegex": "^#?\\s?\\d{1,4}[A-Za-z]?$"
+                "hasTextMatchesRegex": "\\d"
               }
             ]
           },
@@ -3034,14 +3034,14 @@
           "plainMask": true
         },
         {
-          "comment": "#1122 review (Astra r2): a NUMERIC Building Name value (`Bldg 7`-class, or a bare number) is a bounded alphabet, so it plain-masks AHEAD of the hash entry below; an alphabetic complex name keeps the #860 distinctness hash. The shape is the file's bare-code pattern verbatim (no new regex). Generic-shape entry, so it sits AFTER the #1039 subpremise entries (the ordering guard).",
+          "comment": "#1122 review (Astra r2/r3): a Building Name value that carries ANY digit (`Bldg 7`, `Tower 2`, a bare `4202`, a 5-digit value, a value with trailing whitespace) is treated as a bounded designator and plain-masks AHEAD of the hash entry below; only an all-letter complex name keeps the #860 distinctness hash. `\\d` is a contains-match (the file's `hasTextMatchesRegex` entries are find-semantics, as the city/ST/ZIP `\\d{5}` entry relies on), so no anchor, no length cap, no whitespace edge — r3 showed a bounded `^…$` shape missed `12345`, `4202 ` and `Bldg 7`. Over-plaining a digit-bearing complex name loses distinctness, never privacy. Generic-shape entry, so it sits AFTER the #1039 subpremise entries (the ordering guard).",
           "find": {
             "all": [
               {
                 "hasPrecedingSiblingText": "Building Name"
               },
               {
-                "hasTextMatchesRegex": "^#?\\s?\\d{1,4}[A-Za-z]?$"
+                "hasTextMatchesRegex": "\\d"
               }
             ]
           },

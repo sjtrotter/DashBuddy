@@ -278,9 +278,11 @@ class DropoffSheetRedactionParityTest {
             fun valueAfterLabel(value: String): String =
                 rule.redact.apply(UiNode(className = "android.view.View", children = listOf(tv("Building Name"), tv(value))).restoreParents()).children[1].text!!
             assertTrue("${rule.id}: an alphabetic complex name hash-masks", WHOLE_MASK_HEX.matches(valueAfterLabel("Maple Court Apartments")))
-            for (v in listOf("4202", "#7", "12B")) {
-                assertEquals("${rule.id}: numeric '$v' plain-masks", "[redacted]", valueAfterLabel(v))
+            // r3: the guard is "carries a digit" — no anchor, no length cap, no whitespace edge.
+            for (v in listOf("4202", "#7", "12B", "12345", "4202 ", " 4202", "Bldg 7", "Tower 2", "Building 12 at Maple Court")) {
+                assertEquals("${rule.id}: digit-bearing '$v' plain-masks", "[redacted]", valueAfterLabel(v))
             }
+            assertTrue("${rule.id}: an all-letter name with an apostrophe hash-masks", WHOLE_MASK_HEX.matches(valueAfterLabel("O'Neil Towers")))
             val idLine2 = UiNode(className = "android.view.View", children = listOf(tv("Sampleville, TX 75001", id = "com.doordash.driverapp:id/address_line_2"))).restoreParents()
             assertEquals("${rule.id}: address_line_2 plain-masks", "[redacted]", rule.redact.apply(idLine2).children[0].text)
         }
