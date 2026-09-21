@@ -91,13 +91,15 @@ earnings-deposit mask (both envelopes plain-masked across all four flat fields) 
 **#1033 layer-2** item there **broken**: its first-ever *applied* re-price split a single-drop
 receipt across a stacked job's two drops and destroyed $28.51, now #1120.)_
 
-- **🆕 NEW — the 8.98.5 drop-off sheet masks on EVERY render (#1122 + #1123).** The 09-20 pull
+- **🆕 NEW — the 8.98.5 drop-off sheet masks on every render that keeps a stable row (#1122 + #1123).** The 09-20 pull
   shipped two Pledge leaks from the same sheet: a raw customer name in the bottom bar of a
   `dropoff_pre_arrival` envelope (the id-less node the rule's id-anchored entry never saw — #1123),
   and three header-less / partial renders of the workflow sheet that fell UNKNOWN with the whole
   address block, the quoted note and the name raw (#1122). Nothing changes on the phone: the sheet
   rule still declares no flow, so an ordinary "leave it at the door" drop-off must narrate, bubble
-  and complete exactly as before. **Desk, after the pull:**
+  and complete exactly as before. Anchors: either prism CTA, any `Apt/Suite` spelling, the
+  Call/Message pair, or `Leave it at the door` / `Hand it to recipient` — a render with NONE of
+  those still ships raw (extend the vocabulary from the capture's node shape). **Desk, after the pull:**
   1. `grep -rl 'drop_off_workflow_host_fragment' captures/**/UNKNOWN/` must return only the known
      text-free loading skeletons — any hit with a co-present text node is a render the widened anchor
      still misses (attach the frame's node SHAPES to #1122, never the values).

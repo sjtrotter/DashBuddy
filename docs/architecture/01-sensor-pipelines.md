@@ -119,9 +119,14 @@ and, with that, the `ID_MARKERS` backstop, which is UNKNOWN-only: so the review 
 `dropoff_pre_arrival`'s id-anchored entries to the sheet's block as a belt (an id-bearing render
 this rule wins keeps every deliberate decision), and ordered pre-arrival's fused `Apt ` plain entry
 AHEAD of the new name shape (`Apt B` is `<word> <capital>` too — a 26-value alphabet must not hash)
-and made its quoted-note entry `plainMask` like the sheet's. No committed negative carries the host
-id, so `NegativeCorpusStaysUnknownTest` guards future negatives only. Residuals, documented on the
-rule: a handoff-option-only render (variable vocabulary) still has no anchor; the `Apt/Suite`-only
+and made its quoted-note entry `plainMask` like the sheet's; round 2 plain-masked `address_line_2`
+(city/ST/ZIP, a bounded alphabet) and a NUMERIC Building Name value (a bare-code-shaped plain entry
+ahead of the #860 distinctness hash, which an alphabetic complex name keeps) on both rules, and
+added the corpus-attested handoff options (`Leave it at the door`, `Hand it to recipient`, id-less)
+as a fourth anchor arm. The other dropoff rules carrying the hash-grade `address_line_2` / Building
+Name entries are a follow-up (#1126). No committed negative carries the host id, so
+`NegativeCorpusStaysUnknownTest` guards future negatives only. Residuals, documented on the rule: a
+render whose only stable line is a handoff option outside that vocabulary; the `Apt/Suite`-only
 partial is recognized on the device but its envelope loses the label to the #1039 fused entry's
 collateral and replays UNKNOWN (intake nuisance, not a leak). Candidate text markers are vetted against the
 corpus before joining the runtime set — chrome-ambiguous prefixes ("Return ", "Focus on ",

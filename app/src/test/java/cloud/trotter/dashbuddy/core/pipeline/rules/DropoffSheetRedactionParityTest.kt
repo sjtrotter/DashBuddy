@@ -29,8 +29,11 @@ import java.io.File
  *    old `require` (Continue AND Directions) missed it and the frame fell UNKNOWN with the street,
  *    city/ST/ZIP, unit, the quoted note (a gate code) and the ALL-CAPS customer name raw — as did its
  *    twin with the Call/Message row scrolled off, and a partial render carrying only the `Apt/Suite`
- *    row. Fix: the anchor is the host fragment plus ANY stable sheet row (either prism CTA title, or
- *    the id-less `Apt/Suite` label); the redact block is unchanged.
+ *    row. Fix: the anchor is the host fragment plus ANY stable sheet row (either prism CTA title, the
+ *    id-less `Apt/Suite` row in any spelling, the Call/Message pair, or a corpus-attested handoff
+ *    option); the sheet's block gains pre-arrival's id-anchored entries as a belt (a recognized frame
+ *    has no `ID_MARKERS` backstop), and on BOTH rules `address_line_2` and a numeric Building Name
+ *    value plain-mask, the fused `Apt ` entry precedes the name shape, and the quoted note plain-masks.
  *
  * Every VALUE below is invented — the fielded name/address/code are not reproduced. The corpus-level
  * regex SSOT pin (byte-identical to `SnapshotRedactor.FIRST_LAST_INITIAL_PATTERN`) lives in
@@ -190,8 +193,12 @@ class DropoffSheetRedactionParityTest {
         val directions = tv("Directions", id = "com.doordash.driverapp:id/textView_prism_button_title")
         val cont = tv("Continue", id = "com.doordash.driverapp:id/textView_prism_button_title")
         // Chrome-only rows under the host with NO stable sheet row: not claimed.
-        assertEquals("UNKNOWN", intentOf(render(tv("Leave it at the door"), tv("Hand it to me"))))
-        assertEquals("UNKNOWN", intentOf(render(tv("Call"), tv("Leave it at the door"))))
+        assertEquals("UNKNOWN", intentOf(render(tv("Hand it to me"), tv("Meet at the door"))))
+        assertEquals("UNKNOWN", intentOf(render(tv("Call"), tv("Hand it to me"))))
+        // The corpus-attested handoff options ARE anchors (r2); an id-bearing one is not.
+        assertEquals("dropoff_workflow_sheet", intentOf(render(tv("Leave it at the door"))))
+        assertEquals("dropoff_workflow_sheet", intentOf(render(tv("Hand it to recipient"))))
+        assertEquals("UNKNOWN", intentOf(render(tv("Leave it at the door", id = "com.doordash.driverapp:id/handoff_option"))))
         // The label must be the id-LESS split-row label, not an id-bearing chrome node.
         assertEquals("UNKNOWN", intentOf(render(tv("Apt/Suite", id = "com.doordash.driverapp:id/some_label"), tv("4202"))))
         // Each fielded render shape is claimed: 15:09:33.393 (Directions), 15:09:33.614 (Directions, Call/Message
@@ -244,6 +251,42 @@ class DropoffSheetRedactionParityTest {
     }
 
     @Test
+    fun `a handoff-option-only render is claimed and masked, and its envelope replays as the sheet (r2)`() {
+        for (option in listOf("Leave it at the door", "Hand it to recipient")) {
+            val tree = UiNode(
+                className = "android.widget.FrameLayout",
+                viewIdResourceName = "com.doordash.driverapp:id/drop_off_workflow_host_fragment",
+                children = listOf(
+                    UiNode(
+                        className = "android.view.View",
+                        children = listOf(tv(option), tv("123 Sample St"), tv("Sampleville, TX 75001"), tv("\"4417\""), tv("JANE Q")),
+                    ),
+                ),
+            ).restoreParents()
+            assertEquals("'$option' alone anchors the sheet", "dropoff_workflow_sheet", intentOf(tree))
+            val masked = sheet.redact.apply(tree)
+            val json = serialize(masked)
+            for (raw in listOf("Sample St", "75001", "4417", "JANE")) assertFalse("'$raw' must not persist", json.contains(raw))
+            assertTrue("the handoff option is platform vocabulary and stays raw", json.contains(option))
+            assertEquals("the redacted envelope still classifies as the sheet", "dropoff_workflow_sheet", intentOf(masked))
+        }
+    }
+
+    @Test
+    fun `Building Name keeps the #860 distinctness hash for a complex name and plain-masks a numeric value, on both rules (r2)`() {
+        for (rule in listOf(preArrival, sheet)) {
+            fun valueAfterLabel(value: String): String =
+                rule.redact.apply(UiNode(className = "android.view.View", children = listOf(tv("Building Name"), tv(value))).restoreParents()).children[1].text!!
+            assertTrue("${rule.id}: an alphabetic complex name hash-masks", WHOLE_MASK_HEX.matches(valueAfterLabel("Maple Court Apartments")))
+            for (v in listOf("4202", "#7", "12B")) {
+                assertEquals("${rule.id}: numeric '$v' plain-masks", "[redacted]", valueAfterLabel(v))
+            }
+            val idLine2 = UiNode(className = "android.view.View", children = listOf(tv("Sampleville, TX 75001", id = "com.doordash.driverapp:id/address_line_2"))).restoreParents()
+            assertEquals("${rule.id}: address_line_2 plain-masks", "[redacted]", rule.redact.apply(idLine2).children[0].text)
+        }
+    }
+
+    @Test
     fun `an id-BEARING address block reaching the sheet rule still masks — a recognized frame has no ID_MARKERS backstop (r1)`() {
         // Synthetic: the widened anchor (Directions alone) claims a frame whose block kept its view ids.
         fun idTv(text: String, id: String) = tv(text, id = "com.doordash.driverapp:id/$id")
@@ -259,6 +302,8 @@ class DropoffSheetRedactionParityTest {
                         idTv("Sampleville, TX 75001", "address_line_2"),
                         idTv("4202", "address_subpremise_line"),
                         idTv("Gate 4417", "dasher_instruction_content_collapsed"),
+                        tv("Building Name"),
+                        tv("4202"),
                         tv("Directions", id = "com.doordash.driverapp:id/textView_prism_button_title"),
                     ),
                 ),
@@ -272,8 +317,11 @@ class DropoffSheetRedactionParityTest {
         }
         val body = masked.children[0].children
         assertTrue("user_name hash-masks with the customerName family", WHOLE_MASK_HEX.matches(body[0].text!!))
+        assertTrue("address_line_1 hash-masks (a street is a join key)", WHOLE_MASK_HEX.matches(body[1].text!!))
+        assertEquals("address_line_2 plain-masks — city/ST/ZIP is a bounded alphabet (r2)", "[redacted]", body[2].text)
         assertEquals("subpremise plain-masks", "[redacted]", body[3].text)
         assertEquals("instruction body plain-masks", "[redacted]", body[4].text)
+        assertEquals("a NUMERIC Building Name value plain-masks (r2)", "[redacted]", body[6].text)
         assertEquals("the user_name mask equals the id-less bottom-bar mask for the same customer",
             body[0].text, preArrival.redact.apply(bottomBar("Jane Q").restoreParents()).children[1].text)
     }

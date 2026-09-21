@@ -240,7 +240,7 @@ double-run); the upstream is supervised with restart backoff (#430); `PipelineSt
 decision and prints a periodic INFO summary whose head carries `app=<versionName>` (`<base>+<git sha>`,
 PR #1066 — read a pull's build from the logs, never infer it).
 
-**Redaction invariants (Pledge — a recognized rule that forgets to redact has NO backstop):**
+**Redaction invariants (Pledge — for an id-less, prefix-less slot a recognized rule that forgets to redact has NO backstop; `CustomerTextMarkers` still scrubs lead-in prefixes on recognized frames, `ID_MARKERS` runs on UNKNOWN only):**
 - Mask is `[redacted:<4hex>]` = first 4 hex of sha256 of the stripped/trimmed token (#623); a
   customer-NAME entry flagged `normalize: customerName` hashes the canonical key (#733) so the mask hex
   equals the parse's `customerNameHash` prefix across name FORMS ("Brandy S"/"Brandy Smith"). Fail-closed to
