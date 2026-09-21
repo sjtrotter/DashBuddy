@@ -1115,6 +1115,20 @@
           "plainMask": true
         },
         {
+          "comment": "#1123: the id-less first-name + last-initial customer name in the bottom bar — `dropoff_workflow_sheet`'s entry copied VERBATIM (the #992/#1031 sibling doctrine: same bytes, same 4 hex). This rule out-ranks the workflow sheet (73 < 143) on the header-bearing render of the SAME sheet, so it must carry the same mask: fielded 2026-09-20 12:35 (8.98.5), one of 14 envelopes rendered the name node and shipped it raw while every other slot masked. `normalize: customerName` keeps the hex equal to the parse's `customerNameHash`; `hasNoId` keeps it off id-bearing chrome. Ordered AFTER the #1039 subpremise entries (first-match-wins, the #1039 ordering guard) and, like the sheet's copy, directly ahead of the id-less street shape. Pinned by the FIX 1c SSOT list in `CaptureRedactionCorpusTest` and the mask-parity proof in `DropoffSheetRedactionParityTest`.",
+          "find": {
+            "all": [
+              {
+                "hasTextMatchesRegex": "^\\s{0,8}[\\p{L}][\\p{L}'-]{0,20}(\\s{1,4}[\\p{L}][\\p{L}'-]{0,20}){0,3}\\s{1,4}[A-Z]\\.?\\s{0,8}$"
+              },
+              {
+                "hasNoId": true
+              }
+            ]
+          },
+          "normalize": "customerName"
+        },
+        {
           "find": {
             "all": [
               {
@@ -3048,28 +3062,57 @@
             }
           },
           {
-            "exists": {
-              "all": [
-                {
-                  "hasIdSuffix": "textView_prism_button_title"
-                },
-                {
-                  "hasText": "Continue"
+            // #1122: the 8.98.5 sheet renders in MORE shapes than the 08-30 pair the original anchor
+            // (`Continue` AND `Directions`) was cut from. Fielded 2026-09-20: a header-less render with
+            // Call/Message + the address block + `Directions` but NO `Continue` (15:09:33.393); its twin
+            // 221 ms later with the Call/Message row scrolled off too (15:09:33.614); and a partial
+            // render carrying nothing but the `Apt/Suite` row (15:27:58). All three fell UNKNOWN and
+            // shipped the street, city/ST/ZIP, unit, the quoted note (a gate code) and the customer's
+            // ALL-CAPS name raw — the exact class this rule exists to redact. So the anchor is now ANY
+            // of the sheet's stable rows under the host fragment: either prism CTA title, or the
+            // `Apt/Suite` label of the split subpremise row. Recognize-only + priority 143 (behind
+            // every id-bearing dropoff rule, `Copy address`/`drop_off_recycler_view` rejected) means a
+            // wider anchor cannot move a lifecycle classification; it can only apply this redact to a
+            // frame that would otherwise ship whole. Fail-toward-privacy. Corpus guards:
+            // `NegativeCorpusStaysUnknownTest` (over-match) + `DropoffSheetRedactionParityTest`.
+            "any": [
+              {
+                "exists": {
+                  "all": [
+                    {
+                      "hasIdSuffix": "textView_prism_button_title"
+                    },
+                    {
+                      "hasText": "Directions"
+                    }
+                  ]
                 }
-              ]
-            }
-          },
-          {
-            "exists": {
-              "all": [
-                {
-                  "hasIdSuffix": "textView_prism_button_title"
-                },
-                {
-                  "hasText": "Directions"
+              },
+              {
+                "exists": {
+                  "all": [
+                    {
+                      "hasIdSuffix": "textView_prism_button_title"
+                    },
+                    {
+                      "hasText": "Continue"
+                    }
+                  ]
                 }
-              ]
-            }
+              },
+              {
+                "exists": {
+                  "all": [
+                    {
+                      "hasText": "Apt/Suite"
+                    },
+                    {
+                      "hasNoId": true
+                    }
+                  ]
+                }
+              }
+            ]
           }
         ]
       }

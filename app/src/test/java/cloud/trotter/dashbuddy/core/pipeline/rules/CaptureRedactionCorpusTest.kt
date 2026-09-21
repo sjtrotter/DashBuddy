@@ -738,7 +738,13 @@ class CaptureRedactionCorpusTest {
         //                          evaded it; ASCII-only → accented names evaded it);
         //  - pickup_wait_survey    priority 88, so it beats the scan rule on the transition
         //                          frame where survey anchors and scan nodes coexist.
+        //  - dropoff_pre_arrival   #1123: it OUT-RANKS `dropoff_workflow_sheet` (73 < 143) on the
+        //                          header-bearing render of the 8.98.5 sheet, whose id-LESS bottom-bar
+        //                          name node its id-anchored `user_name` entry never saw (one raw name
+        //                          shipped 2026-09-20). The sheet's entry, copied verbatim — see
+        //                          `DropoffSheetRedactionParityTest` for the mask-parity proof.
         for (id in listOf(
+            "doordash.screen.dropoff_pre_arrival",
             "doordash.screen.dropoff_navigation",
             "doordash.screen.dropoff_handoff",
             "doordash.screen.dropoff_pin_entry",
@@ -2725,8 +2731,11 @@ class CaptureRedactionCorpusTest {
         org.junit.Assert.assertNotNull("the #1058 rule must exist", rule)
         assertFalse("dropoff_workflow_sheet must declare a redact block", rule!!.redact.isEmpty())
 
+        // The 08-30 pair only: the 09-20 renders (#1122 — header-less, no `Continue`) are covered by
+        // `DropoffSheetRedactionParityTest`, and this loop's `Continue` anchor assertion is theirs to fail.
         val snapshots = TestResourceLoader.loadSnapshots("snapshots/dropoff_workflow_sheet")
-        assertEquals("both fielded envelopes must be committed", 2, snapshots.size)
+            .filter { it.first.contains("2026-08-30") }
+        assertEquals("both 08-30 fielded envelopes must be committed", 2, snapshots.size)
 
         for ((filename, node, _) in snapshots) {
             // The rule must actually WIN the frame — otherwise everything below tests a block

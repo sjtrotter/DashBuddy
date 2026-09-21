@@ -2454,6 +2454,27 @@
             "subFlow": "NAVIGATION"
         }
     },
+    "dropoff_pre_arrival/2026-09-20_12-35-05-218__doordash__accessibility.window__dropoff_pre_arrival__8cc2d1.json": {
+        "ruleId": "doordash.screen.dropoff_pre_arrival",
+        "intent": "dropoff_pre_arrival",
+        "shape": "task",
+        "fields": {
+            "arrivalConfirmed": false,
+            "customerAddressHash": null,
+            "customerNameHash": "d65b2f831b3ef588d31aaa14bd2eacb21ebc0ad4af73ea3955da5ce3316300f6",
+            "deadline": {
+                "text": "12:46 PM",
+                "time": 1780317960000
+            },
+            "itemsRemaining": null,
+            "itemsShopped": null,
+            "phase": "DROPOFF",
+            "redCardTotal": null,
+            "storeAddress": null,
+            "storeName": null,
+            "subFlow": "NAVIGATION"
+        }
+    },
     "dropoff_pre_arrival/20260128_180652_578_DROPOFF_DETAILS_PRE_ARRIVAL.json": {
         "ruleId": "doordash.screen.dropoff_pre_arrival",
         "intent": "dropoff_pre_arrival",
@@ -2800,6 +2821,24 @@
         "fields": {}
     },
     "dropoff_workflow_sheet/2026-08-30_16-30-48-867__doordash__accessibility.window__UNKNOWN__52eccf.json": {
+        "ruleId": "doordash.screen.dropoff_workflow_sheet",
+        "intent": "dropoff_workflow_sheet",
+        "shape": null,
+        "fields": {}
+    },
+    "dropoff_workflow_sheet/2026-09-20_15-09-33-393__doordash__accessibility.window__dropoff_workflow_sheet__510649.json": {
+        "ruleId": "doordash.screen.dropoff_workflow_sheet",
+        "intent": "dropoff_workflow_sheet",
+        "shape": null,
+        "fields": {}
+    },
+    "dropoff_workflow_sheet/2026-09-20_15-09-33-614__doordash__accessibility.window__dropoff_workflow_sheet__9775b7.json": {
+        "ruleId": "doordash.screen.dropoff_workflow_sheet",
+        "intent": "dropoff_workflow_sheet",
+        "shape": null,
+        "fields": {}
+    },
+    "dropoff_workflow_sheet/2026-09-20_15-27-58-025__doordash__accessibility.window__dropoff_workflow_sheet__97d592.json": {
         "ruleId": "doordash.screen.dropoff_workflow_sheet",
         "intent": "dropoff_workflow_sheet",
         "shape": null,
