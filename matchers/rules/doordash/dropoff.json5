@@ -1054,9 +1054,11 @@
           }
         },
         {
+          "comment": "#1122 review (Astra r2): `plainMask` — the city/ST/ZIP line is a bounded alphabet (the ZIP alone is 10^5 against 65 536 buckets), the same grade the id-less city line already gets; distinctness lives on the name and street entries.",
           "find": {
             "hasIdSuffix": "address_line_2"
-          }
+          },
+          "plainMask": true
         },
         {
           "comment": "#934: plainMask — the id-anchored member of the #895/#892 family, and the original one the issue was filed on. Fielded 2026-08-01 on three `dropoff_pre_arrival` envelopes as 'Apt/Suite: [redacted:<4hex>]' (real fielded hex withheld — it is the brute-recoverable token this entry removes). Note this SAME rule fielded the plain form ('Apt [redacted]', 08-02) from its fused `Apt ` entry below — one surface, two spellings, and only one of them was covered, which is exactly why this is a family fix and not a one-entry fix. The masked token after the label strip is a bare unit number: bounded ~10^4, above the #889 length floor at 4 digits, brute-recoverable from the 4-hex suffix. Distinctness is redundant (`user_name`/`address_line_*` on this same surface keep per-customer hashes) and a unit number joins nothing. Capture-only — the node is never parsed, so the goldens are unchanged.",
@@ -1068,12 +1070,6 @@
             "Apt/Suite "
           ],
           "plainMask": true
-        },
-        {
-          "comment": "#860: the address block's 'Building Name' VALUE — an apartment-complex or building label (free-form proper-noun text, sometimes a bare building number) is customer-locating PII, and it was the ONE labeled field in this block shipping raw: street/city/zip fall to the id-less numeric shapes below, 'Entry code'/'Apt/Suite' values to the `^#?\\s?\\d{1,4}[A-Za-z]?$` entry, the instruction body to the dasher_instruction_* ids — but a building name has no id, no digits, and no stable text shape, so nothing named it. Anchored on the LABEL sibling (app chrome, not customer data), which is the only tight handle; the label node itself is NOT redacted (a label is vocabulary, not PII). Hash-mask family (no plainMask): a building name is a large, unbounded space, so the <4hex> distinctness suffix is not brute-recoverable and it buys per-complex replay fidelity. No `normalize` — that canonicalizer is the customer-NAME key and would degrade an address-class token's mask distinctness.",
-          "find": {
-            "hasPrecedingSiblingText": "Building Name"
-          }
         },
         {
           "comment": "#1058 review (Astra xhigh) \u2014 `plainMask`, the #920/#985 posture. The node is the customer's own delivery-instruction body, and its ALPHABET is unbounded but its LENGTH is not: a SHORT instruction that IS the secret (\"Hand it to me: 4417\") masks whole to `[redacted:<4hex>]`, and enumerating `Hand it to me: 0000`\u2026`9999` against those 65 536 buckets recovers the code \u2014 the #889 F1 bounded-secret argument, arriving through length rather than through alphabet. The distinctness the hash buys is worth nothing here to trade against that: unlike a customer NAME (which `normalize: customerName` turns into a cross-surface join key) an instruction body joins nothing and is never parsed. Pre-existing on this rule; #1058's fourth `require` arm is what EXPOSED it, by making the alcohol render \u2014 whose instruction body carried a door code \u2014 a recognized frame this entry actually fires on. Both states of the field carry the same declaration, and `plainMask` is legal here precisely because there is no `normalize` (the compiler rejects the pair).",
@@ -1115,6 +1111,50 @@
           "plainMask": true
         },
         {
+          "comment": "#1122 review (Astra r1): ORDERED AHEAD of the id-less name shape — a fused `Apt B` node (no label sibling) is `<letter-word> <capital>`, i.e. the name shape too, and first-match-wins would hash a 26-value alphabet. The sheet keeps the same order. #895 (+ the 07-29 F4 field finding): plainMask. The fused 'Apt <n>' unit number is a bounded ~10^4 alphabet over the 4-char length floor, so a 4-hex distinctness suffix is brute-recoverable (the #892/#795 oracle argument); distinctness is redundant here — the same surface's name/street entries keep per-customer hashes. The split label/value form plains via the id-less digit-shape entry when its VALUE is bare digits, and via the `Apt/Suite` label-sibling entry ABOVE when it is not (#1039 — that entry is ordered ahead of every generic shape entry deliberately, since `maskNode` is first-match-wins).",
+          "find": {
+            "hasTextStartsWith": "Apt "
+          },
+          "keepPrefix": [
+            "Apt "
+          ],
+          "plainMask": true
+        },
+        {
+          "comment": "#1122 review (Astra r2/r3): a Building Name value that carries ANY digit (`Bldg 7`, `Tower 2`, a bare `4202`, a 5-digit value, a value with trailing whitespace) is treated as a bounded designator and plain-masks AHEAD of the hash entry below; only an all-letter complex name keeps the #860 distinctness hash. `\\d` is a contains-match (the file's `hasTextMatchesRegex` entries are find-semantics, as the city/ST/ZIP `\\d{5}` entry relies on), so no anchor, no length cap, no whitespace edge — r3 showed a bounded `^…$` shape missed `12345`, `4202 ` and `Bldg 7`. Over-plaining a digit-bearing complex name loses distinctness, never privacy. Generic-shape entry, so it sits AFTER the #1039 subpremise entries (the ordering guard).",
+          "find": {
+            "all": [
+              {
+                "hasPrecedingSiblingText": "Building Name"
+              },
+              {
+                "hasTextMatchesRegex": "\\d"
+              }
+            ]
+          },
+          "plainMask": true
+        },
+        {
+          "comment": "#1122 review (Astra r2): ORDERED after the #1039 subpremise entries and after the numeric Building Name plain entry (a bounded value must not hash). #860: the address block's 'Building Name' VALUE — an apartment-complex or building label (free-form proper-noun text, sometimes a bare building number) is customer-locating PII, and it was the ONE labeled field in this block shipping raw: street/city/zip fall to the id-less numeric shapes below, 'Entry code'/'Apt/Suite' values to the `^#?\\s?\\d{1,4}[A-Za-z]?$` entry, the instruction body to the dasher_instruction_* ids — but a building name has no id, no digits, and no stable text shape, so nothing named it. Anchored on the LABEL sibling (app chrome, not customer data), which is the only tight handle; the label node itself is NOT redacted (a label is vocabulary, not PII). Hash-mask family (no plainMask): a building name is a large, unbounded space, so the <4hex> distinctness suffix is not brute-recoverable and it buys per-complex replay fidelity. No `normalize` — that canonicalizer is the customer-NAME key and would degrade an address-class token's mask distinctness.",
+          "find": {
+            "hasPrecedingSiblingText": "Building Name"
+          }
+        },
+        {
+          "comment": "#1123: the id-less first-name + last-initial customer name in the bottom bar — `dropoff_workflow_sheet`'s entry copied VERBATIM (the #992/#1031 sibling doctrine: same bytes, same 4 hex). This rule out-ranks the workflow sheet (73 < 143) on the header-bearing render of the SAME sheet, so it must carry the same mask: fielded 2026-09-20 12:35 (8.98.5), one of 14 envelopes rendered the name node and shipped it raw while every other slot masked. `normalize: customerName` keeps the hex equal to the parse's `customerNameHash`; `hasNoId` keeps it off id-bearing chrome. Ordered AFTER the #1039 subpremise entries (first-match-wins, the #1039 ordering guard) and, like the sheet's copy, directly ahead of the id-less street shape. Pinned by the FIX 1c SSOT list in `CaptureRedactionCorpusTest` and the mask-parity proof in `DropoffSheetRedactionParityTest`.",
+          "find": {
+            "all": [
+              {
+                "hasTextMatchesRegex": "^\\s{0,8}[\\p{L}][\\p{L}'-]{0,20}(\\s{1,4}[\\p{L}][\\p{L}'-]{0,20}){0,3}\\s{1,4}[A-Z]\\.?\\s{0,8}$"
+              },
+              {
+                "hasNoId": true
+              }
+            ]
+          },
+          "normalize": "customerName"
+        },
+        {
           "find": {
             "all": [
               {
@@ -1147,19 +1187,10 @@
           "plainMask": true
         },
         {
-          "comment": "#895 (+ the 07-29 F4 field finding): plainMask. The fused 'Apt <n>' unit number is a bounded ~10^4 alphabet over the 4-char length floor, so a 4-hex distinctness suffix is brute-recoverable (the #892/#795 oracle argument); distinctness is redundant here — the same surface's name/street entries keep per-customer hashes. The split label/value form plains via the id-less digit-shape entry when its VALUE is bare digits, and via the `Apt/Suite` label-sibling entry ABOVE when it is not (#1039 — that entry is ordered ahead of every generic shape entry deliberately, since `maskNode` is first-match-wins).",
-          "find": {
-            "hasTextStartsWith": "Apt "
-          },
-          "keepPrefix": [
-            "Apt "
-          ],
-          "plainMask": true
-        },
-        {
           "find": {
             "hasTextStartsWith": "\""
-          }
+          },
+          "plainMask": true
         },
         {
           "comment": "#889 F1: plainMask. This id-less digit shape matches an Apt/Suite/entry-code VALUE AND the PIN keypad's digit echoes — the FIELDED #889 envelope was a dropoff_pin_entry frame carrying a single-glyph keypad echo, and pin_entry (priority 63) WINS over dropoff_pin_keypad (priority 109), whose own digit entry already declares plainMask. The #889 engine length floor plains 1-3 char tokens, but a COMPLETED 4-digit PIN clears it while spanning only 10^4 values against the 65 536 4-hex buckets (~85% injective), so the distinctness suffix would be brute-recoverable. plainMask drops it — the same #795 posture as the sibling keypad rule. The floor bounds LENGTH, this declaration bounds ALPHABET; they compose. Capture-only: these nodes are never parsed, goldens unchanged.",
@@ -2923,6 +2954,51 @@
           }
         },
         {
+          "find": {
+            "hasIdSuffix": "user_name"
+          },
+          "normalize": "customerName",
+          "comment": "#1122 belt (review finding): a RECOGNIZED frame loses the `ID_MARKERS` backstop and keeps only its rule's deliberate decisions — and with the anchor now any stable row under the host fragment, an id-BEARING render of this block (the `drop_off_recycler_view` reject is the one guard) could reach this rule. `dropoff_pre_arrival`'s id-anchored entry, copied as declared (normalize/plainMask preserved); inert on the fielded id-less renders. Original rationale: "
+        },
+        {
+          "find": {
+            "hasIdSuffix": "address_line_1"
+          },
+          "comment": "#1122 belt (review finding): a RECOGNIZED frame loses the `ID_MARKERS` backstop and keeps only its rule's deliberate decisions — and with the anchor now any stable row under the host fragment, an id-BEARING render of this block (the `drop_off_recycler_view` reject is the one guard) could reach this rule. `dropoff_pre_arrival`'s id-anchored entry, copied as declared (normalize/plainMask preserved); inert on the fielded id-less renders. Original rationale: "
+        },
+        {
+          "find": {
+            "hasIdSuffix": "address_line_2"
+          },
+          "plainMask": true,
+          "comment": "#1122 review (Astra r2): `plainMask` — the city/ST/ZIP line is a bounded alphabet (the ZIP alone is 10^5 against 65 536 buckets), the same grade the id-less city line already gets; distinctness lives on the name and street entries. #1122 belt (review finding): a RECOGNIZED frame loses the `ID_MARKERS` backstop and keeps only its rule's deliberate decisions — and with the anchor now any stable row under the host fragment, an id-BEARING render of this block (the `drop_off_recycler_view` reject is the one guard) could reach this rule. `dropoff_pre_arrival`'s id-anchored entry, copied as declared (normalize/plainMask preserved); inert on the fielded id-less renders. Original rationale: "
+        },
+        {
+          "comment": "#1122 belt (review finding): a RECOGNIZED frame loses the `ID_MARKERS` backstop and keeps only its rule's deliberate decisions — and with the anchor now any stable row under the host fragment, an id-BEARING render of this block (the `drop_off_recycler_view` reject is the one guard) could reach this rule. `dropoff_pre_arrival`'s id-anchored entry, copied as declared (normalize/plainMask preserved); inert on the fielded id-less renders. Original rationale: #934: plainMask — the id-anchored member of the #895/#892 family, and the original one the issue was filed on. Fielded 2026-08-01 on three `dropoff_pre_arrival` envelopes as 'Apt/Suite: [redacted:<4hex>]' (real fielded h",
+          "find": {
+            "hasIdSuffix": "address_subpremise_line"
+          },
+          "keepPrefix": [
+            "Apt/Suite: ",
+            "Apt/Suite "
+          ],
+          "plainMask": true
+        },
+        {
+          "comment": "#1122 belt (review finding): a RECOGNIZED frame loses the `ID_MARKERS` backstop and keeps only its rule's deliberate decisions — and with the anchor now any stable row under the host fragment, an id-BEARING render of this block (the `drop_off_recycler_view` reject is the one guard) could reach this rule. `dropoff_pre_arrival`'s id-anchored entry, copied as declared (normalize/plainMask preserved); inert on the fielded id-less renders. Original rationale: #1058 review (Astra xhigh) — `plainMask`, the #920/#985 posture. The node is the customer's own delivery-instruction body, and its ALPHABET is unbounded but its LENGTH is not: a SHORT instruction that IS the secret (\\\"Han",
+          "find": {
+            "hasIdSuffix": "dasher_instruction_content_collapsed"
+          },
+          "plainMask": true
+        },
+        {
+          "comment": "#1122 belt (review finding): a RECOGNIZED frame loses the `ID_MARKERS` backstop and keeps only its rule's deliberate decisions — and with the anchor now any stable row under the host fragment, an id-BEARING render of this block (the `drop_off_recycler_view` reject is the one guard) could reach this rule. `dropoff_pre_arrival`'s id-anchored entry, copied as declared (normalize/plainMask preserved); inert on the fielded id-less renders. Original rationale: #1058 review: `plainMask`, for the reason spelled out on the collapsed twin directly above — same customer text, same bounded-length secret, same #920/#985 posture. Enumerating only the state that happened to field is th",
+          "find": {
+            "hasIdSuffix": "dasher_instruction_content_expanded"
+          },
+          "plainMask": true
+        },
+        {
           "comment": "#1039 belt (the #993 combined-frame precedent): the FUSED subpremise line — `Apt/Suite <n>` or `Apt/Suite: <n>` in ONE id-less node, the render the committed `dropoff_pre_arrival` fixtures carry. Declared on EVERY rule in this file (plus `navigation_generic`) rather than only on the surfaces that fielded it, because a redact protects only the frames its OWN rule wins and the rules most likely to claim an address-block frame OUT-RANK the fielded pair (`delivery_summary_collapsed` 31, `dropoff_navigation` 61, `dropoff_photo` 62, `dropoff_geofence_warning` 84). Entry is `dropoff_photo`'s #986 entry verbatim — see it for the full reasoning: the token after the label strip is a bounded ~10^4 unit number, so a 4-hex distinctness suffix is brute-recoverable (`plainMask`), while the label itself is app vocabulary and is kept for replay context. ACCEPTED COLLATERAL: the split row's BARE `Apt/Suite` LABEL node is itself an exact prefix match here, and no keepPrefix can be kept from it, so it masks whole to plain `[redacted]` — two words of app chrome lost on a debug envelope, the same fail-toward-privacy trade `DropoffBannerRedactParityTest` already documents for the `Arriving at` label. It cannot break the label-sibling entry below: redact predicates are evaluated against the ORIGINAL tree, the mask lands on a copy. Inert on any frame without the line; the #1039 parity test in `CaptureRedactionCorpusTest` pins that every rule declares it, so a new dropoff surface cannot forget.",
           "find": {
             "hasTextStartsWith": "Apt/Suite"
@@ -2956,6 +3032,26 @@
             "Apt "
           ],
           "plainMask": true
+        },
+        {
+          "comment": "#1122 review (Astra r2/r3): a Building Name value that carries ANY digit (`Bldg 7`, `Tower 2`, a bare `4202`, a 5-digit value, a value with trailing whitespace) is treated as a bounded designator and plain-masks AHEAD of the hash entry below; only an all-letter complex name keeps the #860 distinctness hash. `\\d` is a contains-match (the file's `hasTextMatchesRegex` entries are find-semantics, as the city/ST/ZIP `\\d{5}` entry relies on), so no anchor, no length cap, no whitespace edge — r3 showed a bounded `^…$` shape missed `12345`, `4202 ` and `Bldg 7`. Over-plaining a digit-bearing complex name loses distinctness, never privacy. Generic-shape entry, so it sits AFTER the #1039 subpremise entries (the ordering guard).",
+          "find": {
+            "all": [
+              {
+                "hasPrecedingSiblingText": "Building Name"
+              },
+              {
+                "hasTextMatchesRegex": "\\d"
+              }
+            ]
+          },
+          "plainMask": true
+        },
+        {
+          "comment": "#1122 review (Astra r2): ORDERED after the #1039 subpremise entries and after the numeric Building Name plain entry (a bounded value must not hash). #1122 belt (review finding): a RECOGNIZED frame loses the `ID_MARKERS` backstop and keeps only its rule's deliberate decisions — and with the anchor now any stable row under the host fragment, an id-BEARING render of this block (the `drop_off_recycler_view` reject is the one guard) could reach this rule. `dropoff_pre_arrival`'s id-anchored entry, copied as declared (normalize/plainMask preserved); inert on the fielded id-less renders. Original rationale: #860: the address block's 'Building Name' VALUE — an apartment-complex or building label (free-form proper-noun text, sometimes a bare building number) is customer-locating PII, and it was the ONE labeled field in this b",
+          "find": {
+            "hasPrecedingSiblingText": "Building Name"
+          }
         },
         {
           "comment": "The id-less first-name + last-initial customer name. FIELDED on this sheet (the 08-30 pair's second envelope renders a bare name node in the toolbar row while the first does not), and there is nothing to say whose name it is from the tree alone — so it masks, the #985 phase-ambiguous-slot posture. The pattern is byte-identical to `SnapshotRedactor.FIRST_LAST_INITIAL_PATTERN` (the #885/#362 SSOT — `\\s{1,4}` between tokens, never a literal space, because a double-space render evaded the older copy) and is pinned by `CaptureRedactionCorpusTest`. `normalize: customerName` keeps this mask's 4 hex equal to the `customerNameHash` the parse of a sibling surface persists for the same customer (#623/#733), which is also why it is NOT `plainMask` — the canonical-key hash is the join, and a name's alphabet is unbounded. `hasNoId` keeps it off id-bearing chrome.",
@@ -3048,28 +3144,105 @@
             }
           },
           {
-            "exists": {
-              "all": [
-                {
-                  "hasIdSuffix": "textView_prism_button_title"
-                },
-                {
-                  "hasText": "Continue"
+            // #1122: the 8.98.5 sheet renders in MORE shapes than the 08-30 pair the original anchor
+            // (`Continue` AND `Directions`) was cut from. Fielded 2026-09-20: a header-less render with
+            // Call/Message + the address block + `Directions` but NO `Continue` (15:09:33.393); its twin
+            // 221 ms later with the Call/Message row scrolled off too (15:09:33.614); and a partial
+            // render carrying nothing but the `Apt/Suite` row (15:27:58). All three fell UNKNOWN and
+            // shipped the street, city/ST/ZIP, unit, the quoted note (a gate code) and the customer's
+            // ALL-CAPS name raw — the exact class this rule exists to redact. So the anchor is now ANY
+            // of the sheet's stable rows under the host fragment: either prism CTA title, the
+            // `Apt/Suite` row, or the Call/Message pair. Recognize-only + priority 143 (behind
+            // every id-bearing dropoff rule, `Copy address`/`drop_off_recycler_view` rejected) means a
+            // wider anchor cannot move a lifecycle classification; it can only apply this redact to a
+            // frame that would otherwise ship whole. Fail-toward-privacy. Corpus guards:
+            // `NegativeCorpusStaysUnknownTest` (over-match; no committed negative carries the host id
+            // today, so the guard is against FUTURE negatives) + `DropoffSheetRedactionParityTest`.
+            // KNOWN RESIDUALS (review r1/r2): (1) a render whose only stable line is a handoff option
+            // NOT in the enumerated vocabulary still ships raw — extend the list from a capture; (2) the
+            // `Apt/Suite`-only partial is RECOGNIZED on the original tree but its saved envelope loses
+            // that label to the #1039 fused entry's documented collateral (`[redacted]`), so the
+            // capture replays UNKNOWN — an intake nuisance (hand-restore the label when committing
+            // the fixture), never a leak.
+            "any": [
+              {
+                "exists": {
+                  "all": [
+                    {
+                      "hasIdSuffix": "textView_prism_button_title"
+                    },
+                    {
+                      "hasText": "Directions"
+                    }
+                  ]
                 }
-              ]
-            }
-          },
-          {
-            "exists": {
-              "all": [
-                {
-                  "hasIdSuffix": "textView_prism_button_title"
-                },
-                {
-                  "hasText": "Directions"
+              },
+              {
+                "exists": {
+                  "all": [
+                    {
+                      "hasIdSuffix": "textView_prism_button_title"
+                    },
+                    {
+                      "hasText": "Continue"
+                    }
+                  ]
                 }
-              ]
-            }
+              },
+              {
+                // `hasTextStartsWith`, not `hasText`: this family has fielded the bare label, the
+                // colon label (`Apt/Suite:`) and the fused row (`Apt/Suite 4B`) — one arm covers all.
+                "exists": {
+                  "all": [
+                    {
+                      "hasTextStartsWith": "Apt/Suite"
+                    },
+                    {
+                      "hasNoId": true
+                    }
+                  ]
+                }
+              },
+              {
+                // The handoff option (Astra r2): the corpus-attested vocabulary only — `Leave it at the
+                // door` (three sheet fixtures) and `Hand it to recipient` (pre-arrival's own anchor).
+                // A render with the address block and nothing else stable but this line otherwise ships
+                // whole; a new option spelling extends this list, never a looser predicate.
+                "exists": {
+                  "all": [
+                    {
+                      "any": [
+                        {
+                          "hasText": "Leave it at the door"
+                        },
+                        {
+                          "hasText": "Hand it to recipient"
+                        }
+                      ]
+                    },
+                    {
+                      "hasNoId": true
+                    }
+                  ]
+                }
+              },
+              {
+                // The Call/Message row (both id-less TextViews on every fielded render): the render
+                // with no unit row and both CTAs scrolled off would otherwise still ship whole.
+                "all": [
+                  {
+                    "exists": {
+                      "hasText": "Call"
+                    }
+                  },
+                  {
+                    "exists": {
+                      "hasText": "Message"
+                    }
+                  }
+                ]
+              }
+            ]
           }
         ]
       }

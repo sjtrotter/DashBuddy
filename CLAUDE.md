@@ -240,7 +240,7 @@ double-run); the upstream is supervised with restart backoff (#430); `PipelineSt
 decision and prints a periodic INFO summary whose head carries `app=<versionName>` (`<base>+<git sha>`,
 PR #1066 — read a pull's build from the logs, never infer it).
 
-**Redaction invariants (Pledge — a recognized rule that forgets to redact has NO backstop):**
+**Redaction invariants (Pledge — for an id-less, prefix-less slot a recognized rule that forgets to redact has NO backstop; `CustomerTextMarkers` still scrubs lead-in prefixes on recognized frames, `ID_MARKERS` runs on UNKNOWN only):**
 - Mask is `[redacted:<4hex>]` = first 4 hex of sha256 of the stripped/trimmed token (#623); a
   customer-NAME entry flagged `normalize: customerName` hashes the canonical key (#733) so the mask hex
   equals the parse's `customerNameHash` prefix across name FORMS ("Brandy S"/"Brandy Smith"). Fail-closed to
@@ -261,7 +261,9 @@ PR #1066 — read a pull's build from the logs, never infer it).
   `Close sheet` contentDescription, BOTH required, and masks the merchant render too (store names raw).
 - The id-less **name shape** joins tokens with `\s{1,4}` (never a literal space, #885) and is byte-SSOT
   with `SnapshotRedactor.FIRST_LAST_INITIAL_PATTERN`. A sub-flow sibling copies the entry verbatim so
-  the hex stays equal (#992/#1031). A name entry enumerates every conjugation a surface renders;
+  the hex stays equal (#992/#1031; #1123 — `dropoff_pre_arrival` OUT-RANKS the id-less workflow sheet
+  on its header-bearing render, so it carries the sheet's name entry too, and the sheet's anchor is ANY
+  stable row under the host fragment, #1122). A name entry enumerates every conjugation a surface renders;
   `timeline`'s redact/parse prefix lists diverge only by documented exclusion (guard test, #994/#998).
 - Coverage spans screen surfaces AND notification envelopes (#620; #987 masks the earnings-deposit
   push — the dasher's own FIGURE and the #599 Crimson clause — to `Your Dasher earnings for [redacted]`).

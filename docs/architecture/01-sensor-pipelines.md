@@ -98,7 +98,37 @@ at priority 144 BEHIND every other rule in the section so it can never pre-empt 
 classification, and plain-masks the instruction body whole — customer-AUTHORED text, the #803/#920
 class, unbounded alphabet but bounded length. Residual, the combined-frame class inverted: a future
 rule that OUTRANKS it on a `description_text_view`-bearing frame would need the entry itself, and
-only the UNKNOWN path is structurally covered). Candidate text markers are vetted against the
+only the UNKNOWN path is structurally covered). **The 8.98.5 drop-off sheet (#1122/#1123, fielded
+2026-09-20) is the #1116 class twice over.** (a) `dropoff_pre_arrival` (priority 73) out-ranks
+`dropoff_workflow_sheet` (143) on the sheet's header-BEARING render, and its customer-name mask was
+anchored only on the id-bearing `user_name` node — 8.98.5 also renders the name as an id-LESS
+first-name + last-initial node in the bottom bar, and one of 14 envelopes shipped it raw while every
+other slot masked. The sheet's id-less name entry is now copied VERBATIM into `dropoff_pre_arrival`
+(the #992/#1031 sibling doctrine — same bytes, same 4 hex; `normalize: customerName`, `hasNoId`),
+ordered after the #1039 subpremise entries and pinned by the FIX 1c SSOT list plus a mask-parity
+proof (`DropoffSheetRedactionParityTest`, ALL-CAPS names included — the shape already matched them).
+(b) The sheet renders in more shapes than the 08-30 pair the original `Continue` AND `Directions`
+anchor was cut from: a header-less render (no `Deliver to`, no `Continue`), its twin with the
+Call/Message row scrolled off, and an `Apt/Suite`-only partial — all fell UNKNOWN and shipped the
+street, city/ST/ZIP, unit, the quoted note (a gate code) and the name raw. The anchor is now the
+host fragment plus ANY stable sheet row (either prism CTA title on its own `textView_prism_button_title`
+node, the id-less `Apt/Suite` row in any spelling, or the Call/Message pair); recognize-only at
+priority 143 with the same rejects, so the wider anchor moves no lifecycle classification — what it
+DOES move is `FrameGate.lastIdentity`, capture routing (the frame files under the rule, not UNKNOWN)
+and, with that, the `ID_MARKERS` backstop, which is UNKNOWN-only: so the review added
+`dropoff_pre_arrival`'s id-anchored entries to the sheet's block as a belt (an id-bearing render
+this rule wins keeps every deliberate decision), and ordered pre-arrival's fused `Apt ` plain entry
+AHEAD of the new name shape (`Apt B` is `<word> <capital>` too — a 26-value alphabet must not hash)
+and made its quoted-note entry `plainMask` like the sheet's; round 2 plain-masked `address_line_2`
+(city/ST/ZIP, a bounded alphabet) and a NUMERIC Building Name value (a bare-code-shaped plain entry
+ahead of the #860 distinctness hash, which an alphabetic complex name keeps) on both rules, and
+added the corpus-attested handoff options (`Leave it at the door`, `Hand it to recipient`, id-less)
+as a fourth anchor arm. The other dropoff rules carrying the hash-grade `address_line_2` / Building
+Name entries are a follow-up (#1126). No committed negative carries the host id, so
+`NegativeCorpusStaysUnknownTest` guards future negatives only. Residuals, documented on the rule: a
+render whose only stable line is a handoff option outside that vocabulary; the `Apt/Suite`-only
+partial is recognized on the device but its envelope loses the label to the #1039 fused entry's
+collateral and replays UNKNOWN (intake nuisance, not a leak). Candidate text markers are vetted against the
 corpus before joining the runtime set — chrome-ambiguous prefixes ("Return ", "Focus on ",
 "Heading to ") are REJECTED because `CaptureBackstopCorpusTest` goes red on a clean corpus,
 reasoning recorded in the `CustomerTextMarkers` KDoc; the rule redact is the primary control (#806). Intake-side prefix lists (`SnapshotRedactor.NAME_PREFIXES`,
