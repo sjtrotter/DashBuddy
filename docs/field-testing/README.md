@@ -95,6 +95,10 @@ _(The 2026-09-21→24 entry below **validated and retired** the **#1114** Compos
 67 cards → 67 `OFFER_RECEIVED` on both DoorDash 8.98.5 and 8.99.20, zero parse nulls, both decline binds at 0
 shortfall; the one lost card was the #1069 presentationKey merge, a separate defect.)_
 
+_(The 2026-09-26 entry below **validated and retired** the **#1118** transition-outcomes item at 2/2 — two
+clean runs (10/10 + 5/5 accepts inferred from the task surface, 44/44 + 12/12 declines from the confirm sheet, zero
+over-inference); the remaining accept losses are #1119 and the merged card is #1069.)_
+
 - **🆕 NEW — the 8.98.5 drop-off sheet masks on every render that keeps a stable row (#1122 + #1123).** The 09-20 pull
   shipped two Pledge leaks from the same sheet: a raw customer name in the bottom bar of a
   `dropoff_pre_arrival` envelope (the id-less node the rule's id-anchored entry never saw — #1123),
@@ -119,36 +123,12 @@ shortfall; the one lost card was the #1069 presentationKey merge, a separate def
       purged). 9 other UNKNOWN host-fragment hits are text-free skeletons. The recognized `dropoff_workflow_sheet`
       envelope (09-23 11:38:20) masks everything incl. a hashed bottom-bar slot; no `dropoff_pre_arrival` rendered the
       bottom bar. The phone is on `1b596f74` now, so the next pull is the first that can measure this.
-- **🆕 NEW — offer outcomes on TRANSITION evidence (#1104 — PR #1118).** Compose controls emit no click
-  event for a human tap, so on the 8.97.8 card an accept is now logged `OFFER_ACCEPTED` from the pickup
-  screen appearing (before: the job minted but the offer row said TIMEOUT) and a decline is logged
-  `OFFER_DECLINED` when the "are you sure you want to decline" sheet was seen and the offer then left
-  without an accept. **On-dash:** nothing to do differently — accept some, decline some (through the
-  sheet), let one time out untouched. **Desk:** `offer_records.outcome` is ACCEPTED for every offer that
-  became a job's accepted entry (`delivery_records`/job `acceptedOffers` — add-ons append to an existing
-  job, so count accepted ENTRIES, not jobs) and DECLINED for every sheet-declined offer; the
-  `app_events.eventPayload.description` on those rows reads `… inferred from the task surface …` /
-  `… inferred from the confirm sheet …`; the untouched offer is the only TIMEOUT; no ACCEPTED row
-  without an accepted entry. Known fail-null (note, don't fight): a click-less ADD-ON accept is not
-  inferable (logs TIMEOUT; pay lands via the receipt); a decline whose exit lands > 15 s after the sheet,
-  at the card's countdown end, or only via the expiry timer logs TIMEOUT.
-  **Known gap, found on the 09-20 dash (#1119):** an accept whose leave edge is a transient
-  `waiting_for_offer` frame never reaches the transition #1118 reads at all — it still logs TIMEOUT
-  and still mints an offer-less job (four of ten accepts took that path). So a TIMEOUT that has a
-  JOB behind it is #1119, not a #1118 regression; only a TIMEOUT with no job is this item failing.
-  - Confirmed: 0/2
-    - desk 09-21: UNEXERCISED — the 09-20 dash ran `aab8d960`, which predates #1118, so all 22
-      offers logged `OFFER_TIMEOUT` against a ground truth of 10 accepts + 12 declines (baseline).
-      The phone was re-installed on `71bacc8c` afterwards, so the next pull is the first that can
-      measure this.
-    - desk 09-26 (first run, `71bacc8c`; DoorDash 8.98.5 → 8.99.20): **CONFIRMED for what it covers — 1/2.** 10/10
-      `OFFER_ACCEPTED` rows are "Accept inferred from the task surface" and each has a job behind it (no
-      over-inference); 44/44 `OFFER_DECLINED` are "Decline inferred from the confirm sheet", all inside the 15 s window
-      (max 11.4 s); the one untouched offer (74695b74) is a genuine `OFFER_EXPIRY` timeout. Residuals: 8/18 accepts
-      still TIMEOUT with a job behind them (#1119; 2 of them via the `OFFER_EXPIRY` timer beating the pickup frame);
-      3 declines TIMEOUT because a flow-less screen held the exit past 15 s (2 on the Dash Control `on_dash_map`
-      screen at 16.7 / 22.5 s, 1 on `navigation_generic`'s flow-less branch at 20.8 s — comment on #1104); 1 decline
-      merged into the next H-E-B offer by a presentationKey collision (#1069).
+    - desk 09-27 (first run of PR #1125, `1b596f74`, DoorDash 8.99.20): CLEAN, not a confirmation. Check 1 passes (4
+      UNKNOWN host-fragment hits, all text-free loading skeletons 0.3–0.6 s before a recognized `dropoff_pre_arrival`).
+      Checks 2–3 UNEXERCISED: on all 14 `dropoff_pre_arrival` + 2 `dropoff_handoff` envelopes the bottom-bar slot
+      between Settings and Safety is an empty View (no name rendered); 0 `dropoff_workflow_sheet` frames, no
+      header-less render. Every pre-arrival grades correctly (same hex per customer across frames). No
+      `Apt/Suite`-only UNKNOWN; 0 `Building Name`. Still 0/2.
 - **🆕 WATCH — the mid-job ADD-ON offer card is not recognized on 8.98.5+ (#1121).** Its money is a delta
   (`+$10.50`) and its route line is a delta (`+1 stop (1.5 mi) • +1 min`), so `offer_popup` misses it and it
   lands in `side_nav_drawer`: no `OFFER_RECEIVED`, no verdict, no bubble, no voice. **On-dash:** if an add-on
@@ -156,6 +136,7 @@ shortfall; the one lost card was the #1069 presentationKey merge, a separate def
   `offer_popup`, `side_nav_drawer` or UNKNOWN capture is a sighting — record its folder.
   - Issue: #1121. Confirmed: 0/2 (a watch item — it retires when the rule ships and is validated)
     - desk 09-26: UNEXERCISED — no `+$` / `+N stop` text anywhere in the pull (8.98.5 or 8.99.20).
+    - desk 09-27: UNEXERCISED — 0 `+$` / `+N stop` text anywhere in the pull.
 
 - **🆕 NEW — the 8.97.8 "Drop off steps" wrapper masks the customer's instruction body (#1107 — PR
   #1110).** The wrapper page 8.97.8 routes leave-at-door through shipped a gate code, cross streets
@@ -175,6 +156,8 @@ shortfall; the one lost card was the #1069 presentationKey merge, a separate def
       neither half was touched. Worth checking whether 8.98.5 still routes leave-at-door through it.
     - desk 09-26: UNEXERCISED — no `dropoff_step_instructions` folder and no "Drop off steps" /
       `description_text_view` node anywhere in the pull, on 8.98.5 or 8.99.20. The wrapper may be gone on these builds.
+    - desk 09-27: UNEXERCISED — no `dropoff_step_instructions` folder, 0 `description_text_view` / "Drop off steps"
+      anywhere (8.99.20, a whole dash).
 
 - **🆕 NEW — a return order must record its return pay (#998).** Fielded 09-14: an alcohol delivery
   refused at the door became a return order; DoorDash priced the return leg separately (`Return pay
@@ -189,6 +172,7 @@ shortfall; the one lost card was the #1069 presentationKey merge, a separate def
     - desk 09-26: NOT EXERCISED — the "Can't hand order to customer" page (with its "Return the order to merchant"
       step) rendered twice (09-23 09:21 on 8.98.5; 09-24 16:22 on 8.99.20 — the latter leaks the name, #1127), but
       both drops completed normally and no return happened.
+    - desk 09-27: NOT EXERCISED — no refused or returned delivery; Σ realizedPay = reportedEarnings to the cent.
 
 - **🆕 NEW — a stacked job's two drops must not be charged the same miles twice (#1108).** **Desk:** per
   session, `Σ realizedMiles` must be ≤ `lastOdometer − startOdometer`; and no
@@ -205,6 +189,8 @@ shortfall; the one lost card was the #1069 presentationKey merge, a separate def
       causing shape did not recur. (That job DID lose $28.51 — to #1120, a different mechanism.)
     - desk 09-26: CLEAN, still not a confirmation — `Σ realizedMiles ≤ span` on every session (largest gap 2.44 mi,
       session 707), zero negative `realizedMinutes`, and no stacked job in the window.
+    - desk 09-27: CLEAN, still not a confirmation — Σ realizedMiles 75.83 ≤ span 75.85 mi, zero negative
+      `realizedMinutes`, no stacked job.
 
 - **🆕 NEW — unassigning at the store must not record a pickup (#301).** **On-dash (deliberate):** if you
   ever have to unassign at a store, take the `Help → I have an issue → Unassign order` path. **Desk:**
@@ -223,6 +209,7 @@ shortfall; the one lost card was the #1069 presentationKey merge, a separate def
       `GRACE_COMMIT`, with zero `TASK_UNASSIGNED`; offer d58fc055 left unlinked. The 8.99.20 "What do you want to do
       next?" sheet (`Unassign with no pay` / `Order not found in system`) is UNKNOWN and leaks a name (#1128).
       Comment on #301.
+    - desk 09-27: NOT EXERCISED — 0 `TASK_UNASSIGNED`, 7 `PICKUP_CONFIRMED` = 7 real jobs, no support removal.
 
 - **🆕 NEW — the offer card's Decline target must stay bound on 8.97.8.** **On-dash:** when the heads-up
   notification's **Decline** button does nothing (you have to decline in the DoorDash card yourself),
@@ -254,6 +241,10 @@ shortfall; the one lost card was the #1069 presentationKey merge, a separate def
       clicking it", 0 "No 'declineButton' target bound", no `offer_popup` bindShortfall. The confirm half is still
       UNMEASURED: 49 × "Denied confirm_decline … (fail closed)" — the capability is still un-granted (and the
       `1b596f74` reinstall reset the store again). 0/2.
+    - desk 09-27: BIND half holds (3rd pull) — 6 × "Single verified candidate for decline_offer … clicking it" for 6
+      HUD declines, 0 "No 'declineButton' target bound", no bindShortfall at all. Confirm half still UNMEASURED:
+      14 × "Denied confirm_decline … (fail closed)" — the capability was not re-Allowed after the `1b596f74`
+      reinstall. 0/2.
 
 - **🆕 NEW — a dash you start while the last dash's receipt is still on screen must not inherit its
   money.** Fielded twice on 09-10/09-11: the previous dash's `delivery_summary_collapsed` sheet was
@@ -283,6 +274,9 @@ shortfall; the one lost card was the #1069 presentationKey merge, a separate def
     - desk 09-26: UNEXERCISED, clean negative (3rd) — 0 "receipt running-total read refused"; all three zero-drop
       sessions (718, 732, 736) report NULL; the 3 `SESSION_PAY_SETTLE` fires were each inside their own session;
       back-to-back starts 707→714 (38 s) and 746→750 (20 s) each carry only their own total.
+    - desk 09-27: UNEXERCISED, clean negative (4th) — 0 "receipt running-total read refused"; the dash started 10:43
+      from `waiting_for_offer` (no receipt on screen); 5 `SESSION_PAY_SETTLE` fires all inside session 754;
+      reportedEarnings = the dash's own $209.22.
 
 - **🆕 NEW — a decline you confirm fast must still be recorded as a decline, not a timeout.** Five of
   the 09-10/09-11 pull's seven `OFFER_TIMEOUT`s were real declines: the dasher's tap on the confirm
@@ -343,6 +337,8 @@ shortfall; the one lost card was the #1069 presentationKey merge, a separate def
       with the DoorDash 8.99.20 update) replayed 3 obs with no live grace, so "Recovery re-armed" is correctly
       absent and the session continued. Baseline healthy: 8 summary ends at 2.501–2.513 s, 3 early-offline ends at
       10.002–10.004 s.
+    - desk 09-27 (8th pull): NOT EXERCISED — one process; startup replayed 1 obs with no session (no "Recovery
+      re-armed", correct). Summary end at 2.501 s.
 
 - **🆕 NEW — #1054 — a pause survives a relaunch: the HUD stays PAUSED, and the dash still ends on
   its own when the countdown runs out.** Two behaviours that used to be broken in opposite
@@ -376,6 +372,7 @@ shortfall; the one lost card was the #1069 presentationKey merge, a separate def
     - desk 09-26: NOT EXERCISED — two `DASH_PAUSED` (09-23 11:40:39, the pause-after-delivery on the last drop, dash
       ended on the summary 17 s later; 09-24 16:24:49, resumed, `MODE_RESUME_COMMIT` fired 16:25:35.946). No restart
       mid-pause, no `SESSION_PAUSED_SAFETY`.
+    - desk 09-27: NOT EXERCISED — 0 `DASH_PAUSED` / `MODE_RESUME_COMMIT` / `SESSION_PAUSED_SAFETY`.
 
 - **🆕 NEW — #1063 — an offer is recognized from its FIRST frame, before the Decline
   button inflates.** DoorDash lands the offer card in two beats: the collar animation drops the
@@ -409,6 +406,10 @@ shortfall; the one lost card was the #1069 presentationKey merge, a separate def
       offer"/"Superseded"; `accept_decline_footer_container` in 0 UNKNOWN frames; all 30 offer-shaped UNKNOWN
       frames are Accept-less half-renders. One adjacent defect of a DIFFERENT class: two distinct offers merged by
       presentationKey (#1069). Dev-eyes half still open.
+    - desk 09-27: DESK HALF CLEAN a 4th time — 20 cards → 20 Rule LOG receipts → 20 screenshots → 20 chat cards; 0
+      "Replaced by new offer"/"Superseded"; `accept_decline_footer_container` in 0 UNKNOWN frames; the 14
+      offer-shaped UNKNOWN frames are Accept-less half-renders. The one card without its own row/voice is the #1069
+      merge, a different class. Dev-eyes half still open.
 
 - **🆕 NEW — #1059 — the Persona verification flow, the Red Card wallet and the passport
   scanner are now blocked at the matcher layer.** Three of the dasher's OWN surfaces were
@@ -445,6 +446,10 @@ shortfall; the one lost card was the #1069 presentationKey merge, a separate def
     - desk 09-26: NOT EXERCISED (the id grep is 0 tree-wide). Adjacent positive: `sensitive.id_verification` dropped
       39 frames across the two alcohol drops (09-21 12:53, 09-23 09:22); no scanner frame reached disk. Over-match
       check passes (Red-Card shop orders, 0 `sensitive.red_card`).
+    - desk 09-27: NOT EXERCISED — the four ids are 0 tree-wide; none of the three arms fired. Pre-existing arms:
+      `dasher_direct` ×74 (incl. a mid-dash visit at 14:05:41), catchall ×6, `crimson_balance` ×1; 0
+      `sensitive.red_card` over 141 `pickup_shopping` + 51 `shopping_item` H-E-B frames (over-match passes a 7th
+      time).
 
 - **🆕 NEW — #1058 — the two dropoff sheets that were shipping addresses and door codes to
   UNKNOWN captures are now recognized and redacted.** Leak A is the ALCOHOL variant of the drop-off
@@ -485,6 +490,8 @@ shortfall; the one lost card was the #1069 presentationKey merge, a separate def
     - desk 09-26: PARTIAL — the alcohol pre-arrival card (`alcohol_dropoff_ic_scan`) is claimed as
       `dropoff_pre_arrival` 4× with no raw PII (09-21 12:39/12:52, 09-23 09:04/09:19). The workflow sheet was
       recognized and masked once, but its header-less frame leaked again (#1122; fix not on the phone).
+    - desk 09-27: NOT EXERCISED for either leak surface — 0 `alcohol_dropoff_ic_scan`, 0 `dropoff_workflow_sheet`.
+      Adjacent positive holds: 14 `dropoff_pre_arrival` envelopes grade correctly.
 
 - **🆕 NEW — #1034 — a negative dollar reads `-$12`, never `$-12`.** `Formats.money`/`money0`/
   `money3` put the sign before the `$` now, so this shows up anywhere a figure can go negative.
@@ -2856,6 +2863,161 @@ Accept and Decline registered on DoorDash — and moved to that session's entry 
   - Confirmed: 0/2.
 
 ---
+
+## 2026-09-26 (desk analysis of the 09-27 pull — #1118 retires at 2/2; money to the cent; a decline merged into an ACCEPT; a receipt skipped on the ordinary photo path; the dasher's own Crimson transfer in the DEBUG log)
+
+**Date:** 2026-09-26 · **Platform(s) tested:** DoorDash (app **8.99.20** on every envelope) · **Branch
+under test:** `master` at `1b596f74` (build `0.230.0+1b596f74`, read off the logs per PR #1066) — the
+**first field run of PR #1125** (#1122/#1123 drop-off sheet redactions) and the second of PR #1118. ·
+**Field conditions:** one long dash — session **754** 10:43:27 → 18:09:06 (`summary_screen`, $209.22
+reported, 7 drops, 75.85 mi span). **20 offer cards: 7 accepts (DoorDash's own `Offers accepted 7 out
+of 20`), 12 declines, 1 untouched** — our ledger says 19 received / 5 accepted / 12 declined / 2
+timeouts, and the two gaps are Bugs 2 and 3. No pause, no force-stop, no unassign, no return order,
+no stacked job, no support removal. One process (startup 10:38:43), `restarts=0`, `mappingFailures=0`,
+`notifListenerDisconnects=0`, **zero ERROR lines**, 35 WARN, no `RecognitionHealth` /
+`LocaleBoundary` / `TtsHealth` notice. 529 capture envelopes; log coverage continuous 09-26 10:38 →
+09-27 11:07 (4 rotations + `app.log`). Pull dir `~/dashbuddy/logs/2026/09/27`, device purged after
+verification; one raw-PII envelope purged from the pull (pseudonymized copy at
+`~/dashbuddy/fixtures-pending/2026-09-27/`), and one DEBUG log line holding the dasher's own Crimson
+transfer purged from this pull AND the previous one (Bug 4). Desk report:
+`~/dashbuddy/logs/2026/09/27/DESK-ANALYSIS.md`. **Money:** $209.22 reported = $209.22 recorded (6
+drops `DROP_SHARE`, 1 `OFFER_PAY`), to the cent.
+
+### Bugs
+
+1. **#1116 recurred a third time — now a per-dash leak on 8.99.20.** `timeline_task_detail` claimed
+   the sheet's first frame at 13:13:34.215; its second frame (no `Copy address`) fell UNKNOWN 249 ms
+   later with the street line, city/ST/ZIP and a **bare 3-digit TextView** (*hypothesis:* unit or gate
+   code) raw; the `Deliver to ` backstop scrubbed only the name (WARN 13:13:34.443). Shape: `Close
+   sheet` (desc) + `[redacted]` + `<N> <Street> Rd` + `<City>, TX <ZIP>` + `Leave it at my door` +
+   `<NNN>`. Raw file purged; comment on #1116. The anchor needs the `Close sheet`-only render.
+
+2. **#1069 fielded again — this time a DECLINE merged into an ACCEPT.** Offer `321c4cf0` ($10.86,
+   H-E-B) was HUD-declined (`OfferActionReceiver: decline_offer` 14:05:54.546, tap 14:05:55.502, the
+   confirm sheet at 14:05:56.063); every frame after it was flow-less (`side_nav_drawer` 14:05:58.8,
+   `ratings` 14:05:59.741, `side_nav_drawer` 14:06:10.870), so it stayed pending. The next card
+   `c78f7cdb` ($25.50, 14:06:11.876) merged into it as a variant — same `presentationKey` `e30e80e8…`,
+   shared by **14 of this dash's 19 offers**. Ledger: `OFFER_RECEIVED 321c4cf0` (seq 3295) →
+   `OFFER_ACCEPTED c78f7cdb` (seq 3296, `presentedAt` = the FIRST card's 14:05:51.433, dt 55.1 s). The
+   $10.86 decline is gone, the accepted row carries a presentation time it never had, and the $25.50
+   card was not spoken (19 TTS for 20 cards). Money unaffected (job …-764 priced from its receipt).
+   *Hypothesis to check in the fix:* a variant that inherits the first card's `declineSheetSeenAt`
+   would judge a click-less decline of the SECOND card against the first card's sighting.
+
+3. **#1119 — 2 of 7 accepts died, both the HYBRID `waiting_for_offer` shape, no money lost.** The leave
+   edge was the "Looking for offers" header over an already-painted pickup card (`user_name_label
+   'Delivery for'` / `user_name '[redacted:…]'` / `Arrived at store` or `Directions`): `c24998f7`
+   ($51.64) → job …-755 at +12.2 s (countdown 43 s — nowhere near expiry; `waiting_for_offer/
+   2026-09-26_11-05-58-816…64940a`), `72a7769c` ($24.63) → …-773 at +40.2 s (`…17-11-31-387…84e8c3`).
+   Both rescued by their receipts (`DROP_SHARE`). No `OFFER_EXPIRY` fired this dash, so the
+   expiry-beats-pickup sub-shape from 09-24 did not recur. Comment on #1119.
+
+4. **The dasher's own Crimson transfer amount sat in the DEBUG firehose (#1131, new).**
+   `ObservationClassifier.kt:317` logs `UNKNOWN notification — $rawText` at DEBUG **before** the
+   sensitive gate runs; at 18:10:12.612 DoorDash Crimson's "Transfer complete … $<amount> has been
+   transferred out of your DoorDash Crimson account" push was logged whole, and four ms later the gate
+   correctly dropped the capture (`Capture scrubbed: … 'Cr7'`). `shareable.log` is clean — the INFO+
+   sink never saw it — but `app.log` is stored on device and pulled on every import, and the Pledge
+   says the dasher's banking is never stored. The previous pull's logs held four more of the same
+   class; all purged by hand. Adjacent noise: the same line fires ~1 Hz on the empty ongoing-dash
+   notification (10 435 empty lines this dash, 26 894 the previous pull). Dev ruling on #1131.
+
+5. **A receipt skipped on the ORDINARY photo path — the 09-24 receipt-less shape is not path-specific.**
+   Drop …-758 (offer `6ddac9fe`, $31.44) completed through `dropoff_photo` 12:51:59 → `take_photo` →
+   `dropoff_photo` 12:52:08 → `side_nav_drawer` 12:52:10 → `waiting_for_offer` 12:52:11, and **no
+   `delivery_summary_*` frame and no `This dash so far` sheet ever appeared**; the next offer card
+   arrived at 12:52:19; the idle wheel at 12:52:11 still read the pre-drop total. `DELIVERY_COMPLETED`
+   came from the `GRACE_COMMIT` at 12:52:21.5 and the money survived only because the accept WAS
+   recorded (`OFFER_PAY` $31.44; DoorDash's next counter read $107.63 = 51.64 + 31.44 + 24.55
+   confirms it). This **contradicts the 09-21→24 entry's hypothesis** that the receipt is skipped on
+   the geofence / `Mark as delivered` path: both of those paths DID show their receipt this dash
+   (16:27 …-767 after a geofence override; 17:10 …-770 after `Mark as delivered`). *New hypothesis,
+   one sample:* DoorDash skips the receipt when the next offer is imminent. Either way, a receipt-less
+   drop behind an unlinked accept loses its money (the 09-24 $17.85 shape) — comment on #1119.
+
+### Field UX context
+
+- **The Dash Control dwell recorded as a decline this time.** One along-the-way decline landed on
+  `on_dash_map` again and resolved at 9.8 s after the sheet — inside the 15 s window — so the
+  characterization in the previous entry holds: it is a race against the window, not a broken path.
+- **The confirm-decline capability is still un-granted:** 14 × `Denied confirm_decline … (fail
+  closed)`; `expand_earnings` IS granted (6 receipts → 6 auto-expanded). The dev has not re-Allowed
+  confirm-decline since the 09-26 reinstall.
+- **The dev's weekly-earnings question (asked 09-27 while dashing):** DoorDash's app shows $601.02
+  for the week; this Monday-week's nine dash summaries in `session_records` sum to **$575.57** and
+  `Σ delivery_records.realizedPay` to **$557.72** — the $17.85 gap is the 09-24 lost drop (job …-740,
+  `payBasis NONE`), and the remainder of DoorDash's figure is presumably the 09-27 dash in progress
+  (not pulled). The "reported as bonuses & other" impression is the `PayMix` residue by construction:
+  `bonuses & other = gross − Σ basePay − Σ tip`, and `basePay`/`tip` are stamped only on a sole drop
+  with an itemized receipt, so every `OFFER_PAY` row (707's two drops $45.50, …-758's $31.44) and every
+  collapsed-receipt row lands in that bucket whole. A design pass on making GROSS the hero of the
+  historical record was launched at the dev's request (`~/dashbuddy/design/2026-09-27-gross-hero/`).
+
+### Verification (desk)
+
+- **#1118 / #1104 transition outcomes — CONFIRMED 2/2, RETIRED (moved here).** 5/5 `OFFER_ACCEPTED`
+  are task-surface inferences, each with a job (no over-inference); 12/12 `OFFER_DECLINED` are
+  confirm-sheet inferences, sheet→exit 1.75–11.37 s; 0 lost declines, 0 genuine timeouts, 0 accept /
+  decline click envelopes. Residuals belong to #1119 (Bug 3) and #1069 (Bug 2). Two clean runs:
+  09-21→24 (10/10 accepts, 44/44 declines) and 09-26 (5/5, 12/12).
+- **#1122 + #1123 (first run of PR #1125) — CLEAN, not a confirmation:** check 1 passes (4 UNKNOWN
+  `drop_off_workflow_host_fragment` hits, all text-free loading skeletons 0.3–0.6 s before a recognized
+  `dropoff_pre_arrival`); checks 2–3 UNEXERCISED — on all 14 `dropoff_pre_arrival` + 2
+  `dropoff_handoff` envelopes the bottom-bar slot between `Settings` and `Safety` is an empty View
+  (no name rendered), and there were 0 `dropoff_workflow_sheet` frames and no header-less render.
+  Every pre-arrival grades correctly (hashed `Deliver to` + street, plain city / unit / note, the same
+  hex per customer across frames). No `Apt/Suite`-only UNKNOWN, 0 `Building Name`.
+- **#1102 (retired) — re-observed clean:** 6 receipts → 6 expanded; one `Could not find any live node`
+  followed 0.8 s later by a successful tap (the throttle restore's second field sighting); 2 benign
+  `Throttled` after a success.
+- **#1120 / #1033 L2 — not exercised, no damage:** 6 `DELIVERY_RECEIPT_REPRICE`, all single-drop
+  no-ops, `receiptRepricedAt` NULL everywhere, no stacked job.
+- **#1103 — clean negative (4th):** 0 `receipt running-total read refused`; the dash started from
+  `waiting_for_offer` with no receipt on screen; 5 `SESSION_PAY_SETTLE` fires all inside 754.
+- **#1108 — clean, not a confirmation:** `Σ realizedMiles` 75.83 ≤ span 75.85 mi, zero negative
+  `realizedMinutes`, no stacked job.
+- **Decline target bound — bind half holds a third time** (6 × `Single verified candidate for
+  decline_offer` for 6 HUD declines, 0 `No 'declineButton' target bound`, no bindShortfall at all);
+  confirm half unmeasured (un-granted).
+- **#1063 — desk half clean a 4th time** (20 cards → 20 `Rule LOG` → 20 screenshots → 20 chat cards; 0
+  `Replaced by new offer` / `Superseded`; the 14 offer-shaped UNKNOWN frames are Accept-less
+  half-renders; the one card without its own row/voice is Bug 2, a different class).
+- **Unexercised:** #1121 (0 `+$` / `+N stop`), #1107 (0 `description_text_view` / "Drop off steps"),
+  #998 (no refused or returned delivery), #301 (0 `TASK_UNASSIGNED`, 7 `PICKUP_CONFIRMED` = 7 real
+  jobs), #1054 ×2 (one process, startup replayed 1 obs with no session; 0 `DASH_PAUSED`; summary end
+  at 2.501 s), #1059 (the four ids 0 tree-wide; `sensitive.red_card` 0 over 141 `pickup_shopping` +
+  51 `shopping_item` H-E-B frames — over-match passes a 7th time; `dasher_direct` dropped 74 incl. a
+  mid-dash visit at 14:05:41), #1058 (0 `alcohol_dropoff_ic_scan`, 0 `dropoff_workflow_sheet`).
+- **Censuses.** WARN by tag (35): `Effects` — 14 confirm-decline denials, `GRACE_COMMIT` by design, the
+  expand-tap lines above; `Pipeline` — `Capture backstop` hits (`Deliver to ` on the Bug 1 frame) and
+  `Capture scrubbed` (`Cr7` ×1, DasherDirect); `Odometer` 0 rejections. parseShortfall all benign
+  baseline, no bindShortfall. PII sweep over all 529 envelopes: 79 `Stephen T` (the dasher's own
+  first + last-initial, allowed), merchant addresses on `offer_popup` (raw by design, #886),
+  `Customer Notes: [redacted…]` ×2 masked, all 11 `customer_message` pushes `Message from
+  [redacted:<4hex>]`, `earnings_deposit` masked (#987 holds); banking sweep over `captures/` 0.
+  UNKNOWN families (53 window / 58 click / 1 notification): 14 offer half-renders (#595), the id-less
+  `This dash so far / Total online time / Offers accepted N out of M / Continue dashing` sheet (4 +
+  inside the receipt captures), the task-less Dash Control sheet (`Pause orders` / `Earnings` / `End
+  dash` / `Go to home screen`), a 200 ms pickup-card pre-render at store arrival (3, name scrubbed by
+  the `user_name` backstop), `Couldn't add substitution` / weight-mismatch shopping dialogs, and Bug 1.
+
+### Open questions
+
+- **#1131** — move the DEBUG line behind the sensitive gate, or log a marker-scrubbed preview? (And
+  gate the ~1 Hz empty line on non-blank text.)
+- **The `This dash so far` sheet** carries DoorDash's own running `Offers accepted N out of M` counter.
+  Recognizing it (recognize-only, `parseGlyphCurrency` for the wheel — 8 of 19 reads were mid-spin)
+  would give an in-dash accept oracle for reconciling #1119 / #1069 misses per receipt. Hypothesis.
+- **Receipt-less completions** — three sightings on three different paths now (Bug 5). Is the trigger
+  the next offer's arrival? Worth watching whether the `This dash so far` sheet appears instead.
+- **Rule candidates without PII:** the task-less Dash Control sheet, the pickup pre-render (needs the
+  `user_name` redact), the two shopping dialogs.
+
+### Meta
+
+- The one Pledge-class finding this dash was in the LOG, not a capture (Bug 4) — the desk PII sweep
+  now greps the DEBUG firehose for the banking markers too, not just `captures/` and `shareable.log`.
+- DoorDash 8.99.20 for a whole dash: recognition steady (53 window UNKNOWN of 529 envelopes).
 
 ## 2026-09-21 → 2026-09-24 (desk analysis of the 09-26 pull — #1118 records every decline and every accept it can see; eight accepts still died, one with $17.85; two H-E-B offers merged into one; support-chat removals leave phantom pickups; two new 8.99.20 name leaks)
 
