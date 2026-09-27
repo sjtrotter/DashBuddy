@@ -1,11 +1,11 @@
 {
-    "captureId": "26259f92-4ce8-41bc-b4e2-e473d0871a70",
+    "captureId": "bd107c38-bb41-4f15-9cff-eedb1f786b6e",
     "pipelineId": "accessibility.window",
     "schemaId": "uinode.v1",
-    "timestamp": 1790287139684,
+    "timestamp": 1790442734401,
     "platform": "doordash",
-    "ruleId": "doordash.screen.pickup_barcode_scan_failed",
-    "classificationName": "pickup_barcode_scan_failed",
+    "ruleId": "doordash.screen.shopping_pay_adjustment",
+    "classificationName": "shopping_pay_adjustment",
     "metadata": {
         "engineVersion": 1,
         "rulesetFormatVersion": 2,
@@ -19,8 +19,8 @@
             "notification": 1
         },
         "stateMachineApiVersion": "1.0",
-        "appVersion": "0.230.0+71bacc8c",
-        "deviceFingerprint": "google/panther/panther:17/CP2A.260705.006/15641320:user/release-keys",
+        "appVersion": "0.230.0+1b596f74",
+        "deviceFingerprint": "google/panther/panther:17/CP3A.260905.009/16091614:user/release-keys",
         "platformAppVersion": "8.99.20"
     },
     "payload": {
@@ -28,9 +28,9 @@
         "isEnabled": true,
         "bounds": {
             "left": 0,
-            "top": 2400,
+            "top": 0,
             "right": 1080,
-            "bottom": 4800
+            "bottom": 2400
         },
         "children": [
             {
@@ -38,9 +38,9 @@
                 "isEnabled": true,
                 "bounds": {
                     "left": 0,
-                    "top": 2400,
+                    "top": 0,
                     "right": 1080,
-                    "bottom": 4747
+                    "bottom": 2347
                 },
                 "children": [
                     {
@@ -48,9 +48,9 @@
                         "isEnabled": true,
                         "bounds": {
                             "left": 0,
-                            "top": 2536,
+                            "top": 136,
                             "right": 1080,
-                            "bottom": 4747
+                            "bottom": 2347
                         },
                         "children": [
                             {
@@ -59,9 +59,9 @@
                                 "isEnabled": true,
                                 "bounds": {
                                     "left": 0,
-                                    "top": 2536,
+                                    "top": 136,
                                     "right": 1080,
-                                    "bottom": 4747
+                                    "bottom": 2347
                                 },
                                 "children": [
                                     {
@@ -70,9 +70,9 @@
                                         "isEnabled": true,
                                         "bounds": {
                                             "left": 0,
-                                            "top": 2536,
+                                            "top": 136,
                                             "right": 1080,
-                                            "bottom": 4747
+                                            "bottom": 2347
                                         },
                                         "children": [
                                             {
@@ -81,9 +81,9 @@
                                                 "isEnabled": true,
                                                 "bounds": {
                                                     "left": 0,
-                                                    "top": 2536,
+                                                    "top": 136,
                                                     "right": 1080,
-                                                    "bottom": 4747
+                                                    "bottom": 2347
                                                 },
                                                 "children": [
                                                     {
@@ -93,9 +93,9 @@
                                                         "isEnabled": true,
                                                         "bounds": {
                                                             "left": 0,
-                                                            "top": 2536,
+                                                            "top": 136,
                                                             "right": 1080,
-                                                            "bottom": 4747
+                                                            "bottom": 2347
                                                         }
                                                     },
                                                     {
@@ -105,9 +105,9 @@
                                                         "isEnabled": true,
                                                         "bounds": {
                                                             "left": 0,
-                                                            "top": 4052,
+                                                            "top": 1852,
                                                             "right": 1080,
-                                                            "bottom": 4747
+                                                            "bottom": 2347
                                                         },
                                                         "children": [
                                                             {
@@ -116,21 +116,47 @@
                                                                 "isEnabled": true,
                                                                 "bounds": {
                                                                     "left": 0,
-                                                                    "top": 4052,
+                                                                    "top": 1852,
                                                                     "right": 1080,
-                                                                    "bottom": 4052
-                                                                }
+                                                                    "bottom": 1888
+                                                                },
+                                                                "children": [
+                                                                    {
+                                                                        "id": "com.doordash.driverapp:id/handle_overlay",
+                                                                        "class": "android.widget.FrameLayout",
+                                                                        "isEnabled": true,
+                                                                        "bounds": {
+                                                                            "left": 0,
+                                                                            "top": 1852,
+                                                                            "right": 1080,
+                                                                            "bottom": 1888
+                                                                        },
+                                                                        "children": [
+                                                                            {
+                                                                                "id": "com.doordash.driverapp:id/handle_overlay_image",
+                                                                                "class": "android.widget.ImageView",
+                                                                                "isEnabled": true,
+                                                                                "bounds": {
+                                                                                    "left": 0,
+                                                                                    "top": 1870,
+                                                                                    "right": 1080,
+                                                                                    "bottom": 1879
+                                                                                }
+                                                                            }
+                                                                        ]
+                                                                    }
+                                                                ]
                                                             },
                                                             {
-                                                                "text": "Scan Failed",
+                                                                "text": "35 items have been added",
                                                                 "id": "com.doordash.driverapp:id/prism_sheet_title",
                                                                 "class": "android.widget.TextView",
                                                                 "isEnabled": true,
                                                                 "bounds": {
                                                                     "left": 36,
-                                                                    "top": 4088,
+                                                                    "top": 1924,
                                                                     "right": 1044,
-                                                                    "bottom": 4172
+                                                                    "bottom": 2008
                                                                 }
                                                             },
                                                             {
@@ -139,9 +165,9 @@
                                                                 "isEnabled": true,
                                                                 "bounds": {
                                                                     "left": 0,
-                                                                    "top": 4208,
+                                                                    "top": 2044,
                                                                     "right": 1080,
-                                                                    "bottom": 4711
+                                                                    "bottom": 2311
                                                                 },
                                                                 "children": [
                                                                     {
@@ -150,9 +176,9 @@
                                                                         "isEnabled": true,
                                                                         "bounds": {
                                                                             "left": 0,
-                                                                            "top": 4208,
+                                                                            "top": 2044,
                                                                             "right": 1080,
-                                                                            "bottom": 4711
+                                                                            "bottom": 2311
                                                                         },
                                                                         "children": [
                                                                             {
@@ -161,21 +187,21 @@
                                                                                 "isEnabled": true,
                                                                                 "bounds": {
                                                                                     "left": 0,
-                                                                                    "top": 4208,
+                                                                                    "top": 2044,
                                                                                     "right": 1080,
-                                                                                    "bottom": 4568
+                                                                                    "bottom": 2168
                                                                                 },
                                                                                 "children": [
                                                                                     {
-                                                                                        "text": "You can’t buy items with barcodes that are not recognized in our database.\n\nHowever, if the barcode is damaged, you can try scanning the item again or scan one with a better barcode.",
+                                                                                        "text": "We have adjusted your pay for this order.\nYou can see your pay when the order is delivered.",
                                                                                         "id": "com.doordash.driverapp:id/prism_sheet_message",
                                                                                         "class": "android.widget.TextView",
                                                                                         "isEnabled": true,
                                                                                         "bounds": {
                                                                                             "left": 36,
-                                                                                            "top": 4208,
+                                                                                            "top": 2044,
                                                                                             "right": 1044,
-                                                                                            "bottom": 4568
+                                                                                            "bottom": 2168
                                                                                         }
                                                                                     }
                                                                                 ]
@@ -190,9 +216,9 @@
                                                                 "isEnabled": true,
                                                                 "bounds": {
                                                                     "left": 0,
-                                                                    "top": 4208,
+                                                                    "top": 2044,
                                                                     "right": 1080,
-                                                                    "bottom": 4217
+                                                                    "bottom": 2053
                                                                 }
                                                             }
                                                         ]
@@ -203,9 +229,9 @@
                                                         "isEnabled": true,
                                                         "bounds": {
                                                             "left": 0,
-                                                            "top": 4564,
+                                                            "top": 2164,
                                                             "right": 1080,
-                                                            "bottom": 4568
+                                                            "bottom": 2168
                                                         }
                                                     },
                                                     {
@@ -214,9 +240,9 @@
                                                         "isEnabled": true,
                                                         "bounds": {
                                                             "left": 0,
-                                                            "top": 4568,
+                                                            "top": 2168,
                                                             "right": 1080,
-                                                            "bottom": 4747
+                                                            "bottom": 2347
                                                         },
                                                         "children": [
                                                             {
@@ -225,9 +251,9 @@
                                                                 "isEnabled": true,
                                                                 "bounds": {
                                                                     "left": 0,
-                                                                    "top": 4568,
+                                                                    "top": 2168,
                                                                     "right": 1080,
-                                                                    "bottom": 4747
+                                                                    "bottom": 2347
                                                                 },
                                                                 "children": [
                                                                     {
@@ -236,21 +262,21 @@
                                                                         "isEnabled": true,
                                                                         "bounds": {
                                                                             "left": 36,
-                                                                            "top": 4604,
+                                                                            "top": 2204,
                                                                             "right": 1044,
-                                                                            "bottom": 4711
+                                                                            "bottom": 2311
                                                                         },
                                                                         "children": [
                                                                             {
-                                                                                "text": "Scan Again",
+                                                                                "text": "Got it",
                                                                                 "id": "com.doordash.driverapp:id/textView_prism_button_title",
                                                                                 "class": "android.widget.TextView",
                                                                                 "isEnabled": true,
                                                                                 "bounds": {
-                                                                                    "left": 426,
-                                                                                    "top": 4625,
-                                                                                    "right": 654,
-                                                                                    "bottom": 4691
+                                                                                    "left": 482,
+                                                                                    "top": 2225,
+                                                                                    "right": 599,
+                                                                                    "bottom": 2291
                                                                                 }
                                                                             }
                                                                         ]
@@ -275,9 +301,9 @@
                 "isEnabled": true,
                 "bounds": {
                     "left": 0,
-                    "top": 4747,
+                    "top": 2347,
                     "right": 1080,
-                    "bottom": 4800
+                    "bottom": 2400
                 }
             }
         ]

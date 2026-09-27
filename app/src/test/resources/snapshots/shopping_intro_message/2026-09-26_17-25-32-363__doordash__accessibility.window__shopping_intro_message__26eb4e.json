@@ -1,11 +1,11 @@
 {
-    "captureId": "faebd4be-5d40-4207-9994-b6b8299bbd77",
+    "captureId": "8c5e1636-371f-4d8b-8cbc-84126cf2274f",
     "pipelineId": "accessibility.window",
     "schemaId": "uinode.v1",
-    "timestamp": 1790124552586,
+    "timestamp": 1790461532350,
     "platform": "doordash",
-    "ruleId": "doordash.screen.dropoff_continue_to_complete",
-    "classificationName": "dropoff_continue_to_complete",
+    "ruleId": "doordash.screen.shopping_intro_message",
+    "classificationName": "shopping_intro_message",
     "metadata": {
         "engineVersion": 1,
         "rulesetFormatVersion": 2,
@@ -19,18 +19,18 @@
             "notification": 1
         },
         "stateMachineApiVersion": "1.0",
-        "appVersion": "0.230.0+71bacc8c",
-        "deviceFingerprint": "google/panther/panther:17/CP2A.260705.006/15641320:user/release-keys",
-        "platformAppVersion": "8.98.5"
+        "appVersion": "0.230.0+1b596f74",
+        "deviceFingerprint": "google/panther/panther:17/CP3A.260905.009/16091614:user/release-keys",
+        "platformAppVersion": "8.99.20"
     },
     "payload": {
         "class": "android.widget.FrameLayout",
         "isEnabled": true,
         "bounds": {
             "left": 0,
-            "top": 2400,
+            "top": 0,
             "right": 1080,
-            "bottom": 4800
+            "bottom": 2400
         },
         "children": [
             {
@@ -105,58 +105,32 @@
                                                         "isEnabled": true,
                                                         "bounds": {
                                                             "left": 0,
-                                                            "top": 4252,
+                                                            "top": 4378,
                                                             "right": 1080,
                                                             "bottom": 4747
                                                         },
                                                         "children": [
+                                                            {
+                                                                "text": "Introduction texts can help boost your ratings!",
+                                                                "id": "com.doordash.driverapp:id/prism_sheet_title",
+                                                                "class": "android.widget.TextView",
+                                                                "isEnabled": true,
+                                                                "bounds": {
+                                                                    "left": 0,
+                                                                    "top": 4378,
+                                                                    "right": 0,
+                                                                    "bottom": 4378
+                                                                }
+                                                            },
                                                             {
                                                                 "id": "com.doordash.driverapp:id/prism_sheet_collar_view",
                                                                 "class": "android.widget.FrameLayout",
                                                                 "isEnabled": true,
                                                                 "bounds": {
                                                                     "left": 0,
-                                                                    "top": 4252,
+                                                                    "top": 4378,
                                                                     "right": 1080,
-                                                                    "bottom": 4288
-                                                                },
-                                                                "children": [
-                                                                    {
-                                                                        "id": "com.doordash.driverapp:id/handle_overlay",
-                                                                        "class": "android.widget.FrameLayout",
-                                                                        "isEnabled": true,
-                                                                        "bounds": {
-                                                                            "left": 0,
-                                                                            "top": 4252,
-                                                                            "right": 1080,
-                                                                            "bottom": 4288
-                                                                        },
-                                                                        "children": [
-                                                                            {
-                                                                                "id": "com.doordash.driverapp:id/handle_overlay_image",
-                                                                                "class": "android.widget.ImageView",
-                                                                                "isEnabled": true,
-                                                                                "bounds": {
-                                                                                    "left": 0,
-                                                                                    "top": 4270,
-                                                                                    "right": 1080,
-                                                                                    "bottom": 4279
-                                                                                }
-                                                                            }
-                                                                        ]
-                                                                    }
-                                                                ]
-                                                            },
-                                                            {
-                                                                "text": "Continue to complete delivery",
-                                                                "id": "com.doordash.driverapp:id/prism_sheet_title",
-                                                                "class": "android.widget.TextView",
-                                                                "isEnabled": true,
-                                                                "bounds": {
-                                                                    "left": 36,
-                                                                    "top": 4324,
-                                                                    "right": 1044,
-                                                                    "bottom": 4408
+                                                                    "bottom": 4414
                                                                 }
                                                             },
                                                             {
@@ -165,7 +139,7 @@
                                                                 "isEnabled": true,
                                                                 "bounds": {
                                                                     "left": 0,
-                                                                    "top": 4444,
+                                                                    "top": 4486,
                                                                     "right": 1080,
                                                                     "bottom": 4711
                                                                 },
@@ -176,7 +150,7 @@
                                                                         "isEnabled": true,
                                                                         "bounds": {
                                                                             "left": 0,
-                                                                            "top": 4444,
+                                                                            "top": 4486,
                                                                             "right": 1080,
                                                                             "bottom": 4711
                                                                         },
@@ -187,44 +161,45 @@
                                                                                 "isEnabled": true,
                                                                                 "bounds": {
                                                                                     "left": 0,
-                                                                                    "top": 4444,
+                                                                                    "top": 4486,
                                                                                     "right": 1080,
-                                                                                    "bottom": 4568
+                                                                                    "bottom": 4711
                                                                                 },
                                                                                 "children": [
-                                                                                    {
-                                                                                        "text": "Thanks for letting us know. Continue to complete the delivery as per the customer's instructions.",
-                                                                                        "id": "com.doordash.driverapp:id/prism_sheet_message",
-                                                                                        "class": "android.widget.TextView",
-                                                                                        "isEnabled": true,
-                                                                                        "bounds": {
-                                                                                            "left": 36,
-                                                                                            "top": 4444,
-                                                                                            "right": 1044,
-                                                                                            "bottom": 4568
-                                                                                        }
-                                                                                    },
                                                                                     {
                                                                                         "id": "com.doordash.driverapp:id/bottomsheet_content_container",
                                                                                         "class": "android.widget.FrameLayout",
                                                                                         "isEnabled": true,
                                                                                         "bounds": {
                                                                                             "left": 0,
-                                                                                            "top": 4568,
+                                                                                            "top": 4486,
                                                                                             "right": 1080,
-                                                                                            "bottom": 4568
+                                                                                            "bottom": 4711
                                                                                         },
                                                                                         "children": [
                                                                                             {
-                                                                                                "id": "com.doordash.driverapp:id/container",
                                                                                                 "class": "android.view.ViewGroup",
                                                                                                 "isEnabled": true,
                                                                                                 "bounds": {
                                                                                                     "left": 0,
-                                                                                                    "top": 4568,
+                                                                                                    "top": 4486,
                                                                                                     "right": 1080,
-                                                                                                    "bottom": 4568
-                                                                                                }
+                                                                                                    "bottom": 4711
+                                                                                                },
+                                                                                                "children": [
+                                                                                                    {
+                                                                                                        "text": "Hi, I'm Stephen. I just got to the store, excited to get started on your order.\n\nFeel free to message me with any questions or special requests while I shop.\n\nI’ll also help you find substitutes if anything's unavailable.",
+                                                                                                        "id": "com.doordash.driverapp:id/textView_message",
+                                                                                                        "class": "android.widget.TextView",
+                                                                                                        "isEnabled": true,
+                                                                                                        "bounds": {
+                                                                                                            "left": 36,
+                                                                                                            "top": 4522,
+                                                                                                            "right": 1044,
+                                                                                                            "bottom": 4675
+                                                                                                        }
+                                                                                                    }
+                                                                                                ]
                                                                                             }
                                                                                         ]
                                                                                     }
@@ -240,9 +215,9 @@
                                                                 "isEnabled": true,
                                                                 "bounds": {
                                                                     "left": 0,
-                                                                    "top": 4444,
+                                                                    "top": 4486,
                                                                     "right": 1080,
-                                                                    "bottom": 4453
+                                                                    "bottom": 4495
                                                                 }
                                                             }
                                                         ]
@@ -253,9 +228,9 @@
                                                         "isEnabled": true,
                                                         "bounds": {
                                                             "left": 0,
-                                                            "top": 4564,
+                                                            "top": 4743,
                                                             "right": 1080,
-                                                            "bottom": 4568
+                                                            "bottom": 4747
                                                         }
                                                     },
                                                     {
@@ -264,7 +239,7 @@
                                                         "isEnabled": true,
                                                         "bounds": {
                                                             "left": 0,
-                                                            "top": 4568,
+                                                            "top": 4747,
                                                             "right": 1080,
                                                             "bottom": 4747
                                                         },
@@ -275,8 +250,8 @@
                                                                 "isEnabled": true,
                                                                 "bounds": {
                                                                     "left": 0,
-                                                                    "top": 4568,
-                                                                    "right": 1080,
+                                                                    "top": 4747,
+                                                                    "right": 0,
                                                                     "bottom": 4747
                                                                 },
                                                                 "children": [
@@ -285,22 +260,47 @@
                                                                         "isClickable": true,
                                                                         "isEnabled": true,
                                                                         "bounds": {
-                                                                            "left": 36,
-                                                                            "top": 4604,
-                                                                            "right": 1044,
-                                                                            "bottom": 4711
+                                                                            "left": 0,
+                                                                            "top": 4747,
+                                                                            "right": 0,
+                                                                            "bottom": 4747
                                                                         },
                                                                         "children": [
                                                                             {
-                                                                                "text": "Continue to delivery steps",
+                                                                                "text": "Don't send",
                                                                                 "id": "com.doordash.driverapp:id/textView_prism_button_title",
                                                                                 "class": "android.widget.TextView",
                                                                                 "isEnabled": true,
                                                                                 "bounds": {
-                                                                                    "left": 272,
-                                                                                    "top": 4625,
-                                                                                    "right": 808,
-                                                                                    "bottom": 4691
+                                                                                    "left": 0,
+                                                                                    "top": 4747,
+                                                                                    "right": 0,
+                                                                                    "bottom": 4747
+                                                                                }
+                                                                            }
+                                                                        ]
+                                                                    },
+                                                                    {
+                                                                        "class": "android.widget.Button",
+                                                                        "isClickable": true,
+                                                                        "isEnabled": true,
+                                                                        "bounds": {
+                                                                            "left": 0,
+                                                                            "top": 4747,
+                                                                            "right": 0,
+                                                                            "bottom": 4747
+                                                                        },
+                                                                        "children": [
+                                                                            {
+                                                                                "text": "Send this intro",
+                                                                                "id": "com.doordash.driverapp:id/textView_prism_button_title",
+                                                                                "class": "android.widget.TextView",
+                                                                                "isEnabled": true,
+                                                                                "bounds": {
+                                                                                    "left": 0,
+                                                                                    "top": 4747,
+                                                                                    "right": 0,
+                                                                                    "bottom": 4747
                                                                                 }
                                                                             }
                                                                         ]
@@ -325,9 +325,9 @@
                 "isEnabled": true,
                 "bounds": {
                     "left": 0,
-                    "top": 4747,
+                    "top": 2347,
                     "right": 1080,
-                    "bottom": 4800
+                    "bottom": 2400
                 }
             }
         ]
