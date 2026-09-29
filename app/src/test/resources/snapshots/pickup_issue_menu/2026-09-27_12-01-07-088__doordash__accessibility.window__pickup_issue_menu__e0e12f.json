@@ -1,8 +1,8 @@
 {
-    "captureId": "608dd9de-c074-453f-9760-72f49d7f970b",
+    "captureId": "d5b2eac9-ec35-478b-bd42-00e16f8b187c",
     "pipelineId": "accessibility.window",
     "schemaId": "uinode.v1",
-    "timestamp": 1790194060582,
+    "timestamp": 1790528467070,
     "platform": "doordash",
     "ruleId": "doordash.screen.pickup_issue_menu",
     "classificationName": "pickup_issue_menu",
@@ -19,8 +19,8 @@
             "notification": 1
         },
         "stateMachineApiVersion": "1.0",
-        "appVersion": "0.230.0+71bacc8c",
-        "deviceFingerprint": "google/panther/panther:17/CP2A.260705.006/15641320:user/release-keys",
+        "appVersion": "0.230.0+1b596f74",
+        "deviceFingerprint": "google/panther/panther:17/CP3A.260905.009/16091614:user/release-keys",
         "platformAppVersion": "8.99.20"
     },
     "payload": {

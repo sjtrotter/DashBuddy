@@ -1,8 +1,8 @@
 {
-    "captureId": "599820c8-abd5-4791-a44d-21ec8660e6e8",
+    "captureId": "8a23febe-4bda-43e4-8c1c-1f3087e94f98",
     "pipelineId": "accessibility.window",
     "schemaId": "uinode.v1",
-    "timestamp": 1790445007345,
+    "timestamp": 1790616992201,
     "platform": "doordash",
     "ruleId": "doordash.screen.nav_arriving",
     "classificationName": "nav_arriving",
@@ -358,7 +358,7 @@
                                                                                                                         },
                                                                                                                         "children": [
                                                                                                                             {
-                                                                                                                                "text": "25",
+                                                                                                                                "text": "30",
                                                                                                                                 "id": "com.doordash.driverapp:id/postedSpeedMutcd",
                                                                                                                                 "class": "android.widget.TextView",
                                                                                                                                 "isEnabled": true,
@@ -593,8 +593,52 @@
                                                                                                         ]
                                                                                                     }
                                                                                                 ]
+                                                                                            },
+                                                                                            {
+                                                                                                "id": "com.doordash.driverapp:id/emptyLeftContainer",
+                                                                                                "class": "android.widget.FrameLayout",
+                                                                                                "isEnabled": true,
+                                                                                                "bounds": {
+                                                                                                    "left": 18,
+                                                                                                    "top": 1309,
+                                                                                                    "right": 18,
+                                                                                                    "bottom": 1309
+                                                                                                }
+                                                                                            },
+                                                                                            {
+                                                                                                "id": "com.doordash.driverapp:id/emptyRightContainer",
+                                                                                                "class": "android.widget.FrameLayout",
+                                                                                                "isEnabled": true,
+                                                                                                "bounds": {
+                                                                                                    "left": 1062,
+                                                                                                    "top": 1334,
+                                                                                                    "right": 1062,
+                                                                                                    "bottom": 1334
+                                                                                                }
+                                                                                            },
+                                                                                            {
+                                                                                                "id": "com.doordash.driverapp:id/roadNameLayout",
+                                                                                                "class": "android.widget.FrameLayout",
+                                                                                                "isEnabled": true,
+                                                                                                "bounds": {
+                                                                                                    "left": 367,
+                                                                                                    "top": 1976,
+                                                                                                    "right": 713,
+                                                                                                    "bottom": 2083
+                                                                                                }
                                                                                             }
                                                                                         ]
+                                                                                    },
+                                                                                    {
+                                                                                        "id": "com.doordash.driverapp:id/infoPanelLayout",
+                                                                                        "class": "android.widget.FrameLayout",
+                                                                                        "isEnabled": true,
+                                                                                        "bounds": {
+                                                                                            "left": 0,
+                                                                                            "top": 2116,
+                                                                                            "right": 1080,
+                                                                                            "bottom": 2347
+                                                                                        }
                                                                                     }
                                                                                 ]
                                                                             }
