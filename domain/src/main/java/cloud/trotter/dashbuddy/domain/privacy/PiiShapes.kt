@@ -244,6 +244,17 @@ object PiiShapes {
 
     val FIRST_LAST_INITIAL = Regex(FIRST_LAST_INITIAL_PATTERN, RegexOption.IGNORE_CASE)
 
+    /**
+     * The FULLY case-sensitive id-path variant (#1160 review SS3): a CAPITALIZED first token (lookahead
+     * `\p{Lu}`) and an uppercase initial, compiled WITHOUT `IGNORE_CASE`. A test-tag id's camel/snake
+     * segments read as words, and `tab B` / `option A` there are chrome, not a name; `Adam S` is a name.
+     */
+    const val FIRST_LAST_INITIAL_CAPITALIZED =
+        "(?<![\\p{L}])(?=\\p{Lu})" + FIRST_LAST_INITIAL_TOKENS + "\\p{Lu}\\.?" + "(?![\\p{L}])"
+
+    /** [FIRST_LAST_INITIAL_CAPITALIZED], case-sensitive — the id-path name matcher. */
+    val FIRST_LAST_INITIAL_CAPITALIZED_REGEX = Regex(FIRST_LAST_INITIAL_CAPITALIZED)
+
     /** [FIRST_LAST_INITIAL_EMBEDDED], compiled `IGNORE_CASE` (the initial stays case-sensitive). */
     val FIRST_LAST_INITIAL_EMBEDDED_REGEX = Regex(FIRST_LAST_INITIAL_EMBEDDED, RegexOption.IGNORE_CASE)
 

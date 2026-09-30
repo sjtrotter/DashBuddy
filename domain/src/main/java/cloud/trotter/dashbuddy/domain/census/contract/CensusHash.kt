@@ -56,32 +56,24 @@ object CensusHash {
      * filter step, the grammar and the hash run on this, so the JVM (whose regex `\s` excludes NBSP) and
      * ART/ICU (whose `\s` includes `\p{Z}`) take the same decision and produce the same hash.
      *
-     * A FIXED POINT (review OO1): `canonical(canonical(x)) == canonical(x)`. Stripping FORMAT before NFKC
-     * lets a combining mark behind a zero-width joiner compose in the ONE NFKC pass (`A\u200D\u030Adam`
-     * → `Ådam`); the pass is re-applied until stable, bounded at [MAX_PASSES] — [canonicalOrNull] reports a
-     * value that does not converge so the builder can withhold it.
+     * A FIXED POINT (reviews OO1, SS8): a pass is applied at most [MAX_PASSES] times; the value is
+     * canonical when a pass leaves it unchanged (pass k+1 == pass k for some k < [MAX_PASSES]). Stripping
+     * FORMAT before NFKC lets a combining mark hidden behind a zero-width joiner compose in the first pass
+     * (`A\u200D\u030Adam` → `Ådam`). A value that has not reached a fixed point within [MAX_PASSES] passes
+     * has NO canonical form: `null` — the builder withholds it and `isStaticId` treats it as not static.
      */
-    fun canonical(text: String): String = canonicalOrNull(text) ?: repeatPass(text, MAX_PASSES)
-
-    /** [canonical], or null when the pass does not reach a fixed point within [MAX_PASSES]. */
-    fun canonicalOrNull(text: String): String? {
+    fun canonical(text: String): String? {
         var current = canonicalPass(text)
         repeat(MAX_PASSES - 1) {
             val next = canonicalPass(current)
             if (next == current) return current
             current = next
         }
-        return if (canonicalPass(current) == current) current else null
+        return null
     }
 
-    /** Passes applied before a value is declared non-convergent. */
+    /** The most canonicalization passes [canonical] applies. */
     const val MAX_PASSES: Int = 3
-
-    private fun repeatPass(text: String, times: Int): String {
-        var s = text
-        repeat(times) { s = canonicalPass(s) }
-        return s
-    }
 
     /** One canonicalization pass (glyph fold + whitespace collapse + trim). */
     internal fun canonicalPass(text: String): String {
@@ -103,8 +95,8 @@ object CensusHash {
         return sb.toString()
     }
 
-    /** The census hash of [text]'s [canonical] form, or null — for callers holding RAW text. */
-    fun of(text: String): String? = ofCanonical(canonical(text))
+    /** The census hash of [text]'s [canonical] form, or null (no canonical form, or digest failure). */
+    fun of(text: String): String? = canonical(text)?.let { ofCanonical(it) }
 
     /**
      * The census hash of an ALREADY-canonical value, WITHOUT re-canonicalizing (review OO1): the builder
@@ -121,7 +113,7 @@ object CensusHash {
     }
 
     /** Test seam over raw text (kept for the digest-failure tests). */
-    internal fun of(text: String, digest: (String) -> String?): String? = ofCanonical(canonical(text), digest)
+    internal fun of(text: String, digest: (String) -> String?): String? = canonical(text)?.let { ofCanonical(it, digest) }
 
     /** True when [h] has the wire shape of a census hash: exactly [HEX_LENGTH] lowercase hex. */
     fun isWellFormed(h: String): Boolean = WireStrings.isLowerHex(h, HEX_LENGTH)

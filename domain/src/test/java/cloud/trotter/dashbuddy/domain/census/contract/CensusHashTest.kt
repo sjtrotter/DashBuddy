@@ -46,7 +46,7 @@ class CensusHashTest {
     fun `the canonical value collapses every census whitespace to one ASCII space (review EE2)`() {
         assertEquals("Pickup & delivery", CensusHash.canonical("  Pickup\u00A0&\u2009\u2009delivery\n"))
         assertEquals("José R", CensusHash.canonical("José\u00A0R"))
-        assertEquals(CensusHash.canonical("a b"), CensusHash.canonical(CensusHash.canonical("a \t b")))
+        assertEquals(CensusHash.canonical("a b"), CensusHash.canonical(CensusHash.canonical("a \t b")!!))
         assertEquals(CensusHash.of("Pickup & delivery"), CensusHash.of("Pickup\u00A0&\u00A0delivery"))
         assertEquals("", CensusHash.canonical(" \u00A0 "))
     }
@@ -59,15 +59,14 @@ class CensusHashTest {
         val inputs = KindClassifierVectors.VECTORS.map { it.input } + listOf(
             "A\u200D\u030Adam", "Deli\u200Bver to Sam", "\uFF24eliver", " \u030Aa", "a\u2013b", "\uFB01nance",
         )
-        inputs.forEach { x -> assertEquals(x, CensusHash.canonical(x), CensusHash.canonical(CensusHash.canonical(x))) }
+        inputs.forEach { x -> assertEquals(x, CensusHash.canonical(x), CensusHash.canonical(CensusHash.canonical(x)!!)) }
         // Seeded property: canonical(canonical(x)) == canonical(x) over random strings from a hostile pool.
         val rnd = kotlin.random.Random(0x1160_0007L)
         val pool = "aAz \u00A0\u200B\u200C\u200D\uFEFF\u0301\u030A\u0327\u2010\u2212\uFF21\uFB01\u1E9E\u00DF\u03A3\u2028\t\u180E"
         repeat(3000) {
             val x = buildString { repeat(rnd.nextInt(0, 16)) { append(pool[rnd.nextInt(pool.length)]) } }
-            val c = CensusHash.canonical(x)
+            val c = CensusHash.canonical(x) ?: return@repeat // non-convergent: no canonical form (withheld)
             assertEquals(x, c, CensusHash.canonical(c))
-            assertEquals(x, c, CensusHash.canonicalOrNull(x))
         }
     }
 
