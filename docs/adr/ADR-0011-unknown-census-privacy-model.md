@@ -90,7 +90,7 @@ emitted only together with its hash.
 
 | Precedence | `kind` | Rule |
 |---|---|---|
-| 1 | `withheld` | a WITHHOLDING filter step in §2 (steps 1–5, 7, 8) caught the field — a CONSTANT, so a caught PII slot reveals nothing, not even its word count. Step 6 is NOT a withholding step: it only refuses the HASH, and the token keeps its `digits`/`mixed` kind |
+| 1 | `withheld` | a WITHHOLDING filter step in §2 (steps 1–5, 7, 8) caught the field, OR `sha256OrNull` returned null for a `words:N` survivor (emit `{kind: withheld}` with no `h`) — a CONSTANT, so a caught PII slot reveals nothing, not even its word count. Step 6 is NOT a withholding step: it only refuses the HASH, and the token keeps its `digits`/`mixed` kind |
 | 2 | `digits` | every non-whitespace character is a Unicode decimal digit (`Character.isDigit`) |
 | 3 | `words:N` | split on whitespace runs; DROP any run that contains no letter and no digit (`&`, `→`, `-`, emoji-only — so `Pickup & delivery` is `words:2`); strip LEADING and TRAILING punctuation (Unicode general category P*) from each remaining run (interior apostrophes and hyphens are kept, so `O'Brien` and `Drop-off` are one run each); every remaining run must contain at least one Unicode letter and no digit; N = the run count, `words:8+` when N > 8 |
 | 4 | `mixed` | everything else — money (`$45.66`), clock times, unit numbers, gate codes, order ids, plates, symbols, emoji |
@@ -124,19 +124,21 @@ SSOTs the redact side uses, in this order, and **any hit withholds the hash**:
    caught — the corpus has both shapes and they are vectors (`[redacted…]`, `[address]`, `[email]`, `[phone]`, `[card]`,
    `[note]`, …) → `withheld`; a mask must never be hashed (`[address]` would otherwise strip to
    `words:1`), and the predicate is what §7(e) asserts against;
-6. `shapeKind` is not `words:N` — **only `words:N` tokens are ever hashed**. This step SHORT-CIRCUITS:
-   a `digits`/`mixed` token is emitted with that kind and no hash and steps 7–8 do not run on it (there
-   is nothing left to protect); steps 7–8 run only on `words:N` survivors. The `kind`
+6. `shapeKind` is not `words:N` — **only `words:N` tokens are ever hashed**. This step disables the
+   hash and CONTINUES: steps 7–8 still run on a `digits`/`mixed` token, and any withholding match there
+   overrides the emitted kind to `withheld` (an id-less `Apt 12` is `mixed` by shape but the `APT`
+   pattern withholds it — a required vector). A `digits`/`mixed` token that no later step catches is
+   emitted with that kind and no hash. The `kind`
    grammar is the digit backstop: any run containing a digit makes the token `digits` or `mixed`, never `words:N`, so gate codes, PINs, unit numbers and phone fragments emit `kind` only by construction
    (a future grammar change that lets a digit into `words:N` must re-add an explicit digit rule);
 7. `PiiShapes.FIRST_LAST_INITIAL_PATTERN` (the id-less name shape, byte-SSOT with the redact side —
    the existing match mode, `matches` with `IGNORE_CASE`, is preserved);
 8. any other promoted `PiiShapes` pattern — each keeps the match mode `SnapshotRedactor` uses today
-   (`BARE_STREET` whole-value, the others substring), pinned by the byte-SSOT tests. Because only
-   `words:N` tokens reach this step, the digit-bearing shapes (street number, ZIP, apartment, PIN,
-   phone, card) cannot fire here and are covered by step 6; the letter-only shapes (quoted note,
-   city/state, email's local part) are the ones this step exists for. The list stays the one
-   `PiiShapes` owner — no census-specific subset is hand-maintained.
+   (`BARE_STREET` whole-value, the others substring), pinned by the byte-SSOT tests. It runs on every
+   token that reached it (step 6 does not terminate), so the digit-bearing shapes (street number, ZIP,
+   apartment, PIN, phone, card) withhold a `digits`/`mixed` token and the letter-only shapes (quoted
+   note, city/state, email's local part) withhold a `words:N` one. The list stays the one `PiiShapes`
+   owner — no census-specific subset is hand-maintained.
 
 **What the builder consumes.** `SkeletonBuilder` takes the RAW admitted `UiNode` tree plus the
 window title. #1146's publisher sits on the UNKNOWN SCREEN BRANCH of `AccessibilityPipeline.output()`
@@ -312,8 +314,9 @@ recompute safely and which must not change type. The fingerprint is a full sha25
 id is null — so a null id and an empty id differ) + `0x00` + the spliced child count as ASCII decimal
 + `0x00`, then the children in order. Transparent wrappers are removed first (wrapper-to-forest
 normalization): a wrapper's children are spliced into its parent, an EMPTY wrapper contributes
-nothing (the parent's count drops), and when the ROOT itself is a wrapper the forest hangs under a
-synthetic root with class `""`, null id and the spliced count. The contract module publishes vectors
+nothing (the parent's count drops), and the normalized forest ALWAYS hangs under one synthetic root
+(class `""`, null id, the spliced count) — whether or not the original root was a wrapper — so
+`fingerprint(A) == fingerprint(W(A))` holds; that equality is a required vector. The contract module publishes vectors
 for: null vs empty id, an empty wrapper, a multi-child wrapper, a wrapper root, and the two nesting
 cases below. It keeps ONE
 structural rule of `stableHash` deliberately: an **anonymous wrapper** (no id AND a class in
