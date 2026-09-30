@@ -758,9 +758,10 @@ Every new feature or refactor holds to these — they are forefront design input
      pre-#843 auto-granted keys on upgrade (denials preserved) so the prompt re-collects consent.
      **Wide event receipt is a separate FEATURE consent (#1151)**, never a capability grant: one
      value (`EventReceiptPreferences`, `:domain` → DataStore in `:core:data`), opt-in (UNDECIDED =
-     filtered), a durable decline, prompted by `EventReceiptConsentSheet` after the permission chain,
-     recorded on the Automation & Consent screen; enforced only by `AccessibilityListener`. A debug
-     build that is DECLINED blocks the Dashboard (`DebugEventReceiptBlock`).
+     filtered), a durable decline, prompted after the permission chain through the Dashboard's ONE front door
+     (`FrontDoorHost` — never two consent sheets at once), recorded on the Automation & Consent
+     screen; enforced only by `AccessibilityListener`. A debug build that is DECLINED blocks the
+     whole shell (`DebugEventReceiptShell` replaces the NavHost).
    When a change touches recognition, capture, network, or effects, state its security/privacy
    posture in the PR — what's trusted, what's gated, what's scrubbed.
 7. **Semantic, PII-safe logging.** Log levels carry *meaning*, not volume convenience, and the log is

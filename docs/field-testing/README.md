@@ -103,15 +103,18 @@ over-inference); the remaining accept losses are #1119 and the merged card is #1
   receives window-change notices from other apps (what the #1148/#1152 overlay path needs) ONLY
   after you allow it; debug builds no longer widen it silently. **How to tell it works:**
   1. After a fresh install, the sheet "Let DashBuddy notice windows from other apps" appears ONCE,
-     after the accessibility/notification permission sheets (not before). "Not now" brings it back on
-     the next app open; Allow / Don't allow never re-prompt.
+     after the accessibility/notification permission sheets and AFTER the automation-consent sheet
+     (never two sheets at once). "Not now" holds through rotation and navigating around the app, and
+     brings it back only after the app leaves the foreground and returns; Allow / Don't allow never
+     re-prompt.
   2. On Allow: exactly one `Event receipt: wide=true` INFO line (tag `Pipeline`), and
      `WINDOWS_CHANGED (coalesced …)` DEBUG lines begin in `app.log`. Before the decision, or after a
      decline, the line reads `wide=false` and no `WINDOWS_CHANGED` lines appear.
-  3. Debug build, Don't allow: the Dashboard is replaced by the "Wide event receipt is off" notice —
-     **Exit** closes the app; **Open Data & Privacy** lands on Automation & Consent, where turning
-     "Notice windows from other apps" on restores the Dashboard (and logs `wide=true`) without a
-     restart.
+  3. Debug build, Don't allow: EVERY screen is replaced by the "Wide event receipt is off" notice
+     (a bubble deep link or the Sunday plan notification must land on it too; the bubble itself keeps
+     running) — **Exit** closes the app; **Open Automation & Consent** shows that screen inside the
+     notice, where turning "Notice windows from other apps" on restores the app (and logs
+     `wide=true`) without a restart.
   4. Turning the switch off in Settings logs `wide=false` and the `WINDOWS_CHANGED` lines stop.
   - Issue: #1151. Confirmed: 0/2
 
