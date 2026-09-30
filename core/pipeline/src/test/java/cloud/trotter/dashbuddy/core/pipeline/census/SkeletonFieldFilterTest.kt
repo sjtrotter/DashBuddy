@@ -280,4 +280,43 @@ class SkeletonFieldFilterTest : SkeletonBuilderTestBase() {
         )!!.root.text
         assertEquals(setOf("desc"), out.keys)
     }
+
+    @Test
+    fun `AK1 - a uid is judged on its canonical form`() {
+        fun uid(value: String) = SkeletonBuilder.build(
+            UiNode(className = "android.widget.Button", uniqueId = value, text = "Continue"),
+            null, meta, platform, day,
+        )!!.root.text.getValue("uid")
+        assertEquals(TextSlot.WITHHELD, uid("chip\uFF3FRiley\uFF3FS"))
+        assertEquals(TextSlot.WITHHELD, uid("chip\u200BRiley\u200BS"))
+    }
+
+    @Test
+    fun `AK2 - a uid PII hit seeds its duplicates across fields and nodes`() {
+        val out = SkeletonBuilder.build(
+            UiNode(className = "android.widget.LinearLayout", children = listOf(
+                UiNode(className = "android.widget.Button", uniqueId = "chip_Riley_S", text = "chip_Riley_S"),
+                UiNode(className = "android.widget.TextView", text = "chip_Riley_S"),
+            )),
+            null, meta, platform, day,
+        )!!.root.children
+        assertEquals(TextSlot.WITHHELD, out[0].text.getValue("uid"))
+        assertEquals(TextSlot.WITHHELD, out[0].text.getValue("text"))
+        assertEquals(TextSlot.WITHHELD, out[1].text.getValue("text"))
+    }
+
+    @Test
+    fun `AK3 - an over-cap uid never reaches the id predicates`() {
+        var calls = 0
+        val filter = FrameFilter(
+            judge = SkeletonBuilder::withholdingStep,
+            idShapedPii = { calls++; IdPathJudgement.namePartCarriesPii(it) },
+        )
+        val root = filter.emit(filter.scan(UiNode(className = "android.widget.Button", uniqueId = "x_".repeat(2048), text = "Continue")))
+        assertEquals(TextSlot.WITHHELD, root.text.getValue("uid"))
+        assertEquals(0, calls)
+        // A short uid does reach them.
+        filter.scan(UiNode(className = "android.widget.Button", uniqueId = "offerAcceptCta"))
+        assertEquals(1, calls)
+    }
 }

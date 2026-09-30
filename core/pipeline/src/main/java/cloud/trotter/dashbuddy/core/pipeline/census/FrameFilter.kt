@@ -53,6 +53,8 @@ internal class FrameFilter(
     private val frameLevel: Boolean = true,
     /** The canonical fold; a seam so a test can count folds (review AB8). */
     private val canonicalize: (String) -> String? = CensusHash::canonical,
+    /** The id-path PII judgement for id-shaped values; a seam so a test can count calls (review AK3). */
+    private val idShapedPii: (String) -> Boolean = IdPathJudgement::namePartCarriesPii,
 ) {
     /**
      * A cached verdict. Wrapped (review DD2): a bare `FilterStep?` map stores the common "passed"
@@ -159,9 +161,6 @@ internal class FrameFilter(
     fun field(value: String?, idClass: IdClass, idShaped: Boolean = false): Field? {
         if (value.isNullOrBlank()) return null
         val trimmed = value.trim()
-        // AJ1: an id-shaped value (the `uid` test tag) is judged by the ID path FIRST — `chip_Riley_S` or
-        // `deliver_to_Sam` passes every whitespace-dependent text predicate — then continues as text.
-        if (idShaped && IdPathJudgement.namePartCarriesPii(trimmed)) return Field(trimmed, null, idWithholds = true)
         // Reviews AB8, OO1, AH4, AH7: the ONE pass-1 rule (`SkeletonBuilder.canonicalFormOf`, over the frame's
         // memoized fold). A value provably over the cap, or with no fixed point, is withheld with a NULL
         // canonical and seeds nothing (a duplicate of an over-cap value is itself over-length).
@@ -170,6 +169,15 @@ internal class FrameFilter(
         // AJ2: a value that canonicalizes to NOTHING (FORMAT-only, e.g. a lone ZWSP) is dropped — never a
         // phantom `mixed` slot that splits the text map on nothing visible.
         if (canonical.isEmpty()) return null
+        // AJ1 + AK1–AK3: an id-shaped value (the `uid` test tag) is judged by the ID path on its BOUNDED
+        // CANONICAL form — after the over-cap pre-check (AK3: an over-cap tag never builds suffix strings)
+        // and after the fold (AK1: `chip＿Riley＿S` with fullwidth low lines, or a zero-width char at a
+        // camel boundary, must not slip past on the raw form). A hit seeds the frame-wide EXACT set like a
+        // value-judging step (AK2 — the same string as the node's text, or elsewhere, is withheld too).
+        if (idShaped && canonical.length <= SkeletonBuilder.MAX_TOKEN_LENGTH && idShapedPii(canonical)) {
+            if (!PiiShapes.containsMask(canonical)) caught += canonical
+            return Field(trimmed, canonical, idWithholds = true)
+        }
         val step = valueStep(trimmed, canonical)
         if (step != null && step != FilterStep.LENGTH_CAP && !PiiShapes.containsMask(canonical)) caught += canonical
         return Field(trimmed, canonical, idWithholds = idClass != IdClass.NONE)
