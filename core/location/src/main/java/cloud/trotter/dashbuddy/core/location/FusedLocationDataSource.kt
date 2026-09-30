@@ -5,7 +5,9 @@ import android.content.Context
 import android.location.Address
 import android.location.Geocoder
 import android.location.Location
+import android.os.Build
 import android.os.Looper
+import cloud.trotter.dashbuddy.domain.di.IoDispatcher
 import cloud.trotter.dashbuddy.domain.model.location.Coordinates
 import cloud.trotter.dashbuddy.domain.model.location.UserLocation
 import com.google.android.gms.location.LocationCallback
@@ -14,10 +16,13 @@ import com.google.android.gms.location.LocationResult
 import com.google.android.gms.location.LocationServices
 import com.google.android.gms.location.Priority
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.tasks.await
 import timber.log.Timber
 import java.util.Locale
@@ -31,7 +36,9 @@ import kotlin.coroutines.resume
  */
 @Singleton
 class FusedLocationDataSource @Inject constructor(
-    @param:ApplicationContext private val context: Context
+    @param:ApplicationContext private val context: Context,
+    // #1163 review: the ONE owner of "which dispatcher runs blocking IO" (DispatchersModule), never a literal.
+    @param:IoDispatcher private val ioDispatcher: CoroutineDispatcher,
 ) : LocationDataSource {
 
     private val fusedClient = LocationServices.getFusedLocationProviderClient(context)
@@ -84,22 +91,31 @@ class FusedLocationDataSource @Inject constructor(
         return try {
             val geocoder = Geocoder(context, Locale.getDefault())
 
-            // Modern API 33+ async geocoder lookup
-            val address = suspendCancellableCoroutine { continuation ->
-                geocoder.getFromLocation(
-                    coords.latitude,
-                    coords.longitude,
-                    1,
-                    object : Geocoder.GeocodeListener {
-                        override fun onGeocode(addresses: MutableList<Address>) {
-                            continuation.resume(addresses.firstOrNull())
-                        }
+            // #1162: `Geocoder.GeocodeListener` is API 33 while minSdk is 30 — below 33 the anonymous listener
+            // class fails to LOAD (`NoClassDefFoundError`, an Error the `Exception` catch below never saw), so
+            // the deprecated synchronous lookup is the only path there; it blocks on network, hence IO.
+            val address = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                // The API-33+ listener lookup (the pre-#1162 body, unchanged; inline so lint sees the SDK check).
+                suspendCancellableCoroutine { continuation ->
+                    geocoder.getFromLocation(
+                        coords.latitude,
+                        coords.longitude,
+                        1,
+                        object : Geocoder.GeocodeListener {
+                            override fun onGeocode(addresses: MutableList<Address>) {
+                                continuation.resume(addresses.firstOrNull())
+                            }
 
-                        override fun onError(errorMessage: String?) {
-                            Timber.w("Geocoder listener error: $errorMessage")
-                            continuation.resume(null)
-                        }
-                    })
+                            override fun onError(errorMessage: String?) {
+                                Timber.w("Geocoder listener error: $errorMessage")
+                                continuation.resume(null)
+                            }
+                        })
+                }
+            } else {
+                @Suppress("DEPRECATION")
+                val legacy = withContext(ioDispatcher) { geocoder.getFromLocation(coords.latitude, coords.longitude, 1) }
+                legacy?.firstOrNull()
             }
 
             userLocation.copy(
@@ -107,6 +123,9 @@ class FusedLocationDataSource @Inject constructor(
                 stateName = address?.adminArea,
                 zipCode = address?.postalCode
             )
+        } catch (e: CancellationException) {
+            // #1163 review (Astra): a cancelled caller must see its cancellation, not raw coordinates.
+            throw e
         } catch (e: Exception) {
             Timber.e(e, "Geocoder enrichment failed. Returning raw coordinates.")
             // Still returns the userLocation containing latitude/longitude!

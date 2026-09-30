@@ -192,7 +192,7 @@ private fun convert(
         className = node.className?.toString()?.capText(),
         isClickable = clickable,
         isEnabled = node.isEnabled,
-        isChecked = node.checked,
+        isChecked = node.checkedTriState(),
         // #1149 review J2: the advertised click action (the half of the live `takesClick()`).
         hasClickAction = hasClick, // P6: the one live definition (NodeClick.kt)
         // #1149 review L3: an embedded node of ANOTHER package than the window root (bind-time parity with
@@ -237,3 +237,13 @@ private fun AccessibilityNodeInfo.roleDescriptionOrNull(): String? =
     } catch (e: Exception) {
         null
     }
+
+/**
+ * #1161: `getChecked()` (the tri-state 0/1/2) is API 36 (`BAKLAVA`) while minSdk is 30. Below 36 only the
+ * boolean `isChecked` exists, so the PARTIAL (2) state cannot be observed there — the value is whatever the
+ * platform reports as the boolean (the documented pre-36 limitation). Unguarded, this read threw `NoSuchMethodError` on every node below 36.
+ * (`isChecked` is deprecated on 36 in favour of `getChecked` — it is the ONLY read that exists below 36.)
+ */
+@Suppress("DEPRECATION")
+private fun AccessibilityNodeInfo.checkedTriState(): Int =
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.BAKLAVA) checked else if (isChecked) 1 else 0

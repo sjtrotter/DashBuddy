@@ -89,6 +89,8 @@ text field** (it lives on
 single named exception to "enumerate the enum", and `SkeletonCorpusTest` names it. `deviceFingerprint`
 is dropped from skeleton metadata.
 
+> **Device-API residual (#1163):** `isChecked` is the platform tri-state only on API 36+ (`getChecked`); below 36 the mapper can observe only the boolean, so a PARTIAL control reads `1` there and `2` on 36 — the same UNKNOWN screen fingerprints differently across OS versions when it carries a partially-checked control. #1146 (the publisher) decides whether the fingerprint folds `2 → 1`; until then this is a known cohort-split source, not a privacy change.
+
 **No bounds leave the phone in v1.** A `wrap_content` text node's width is a function of its rendered
 text, a content-sized container mirrors its child's rectangle exactly (the corpus has textless
 `LinearLayout`s with precisely their redacted child's bounds), and raw pixels encode screen size and

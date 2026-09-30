@@ -1075,7 +1075,9 @@ design-goal review above is the *author* walking their own diff, and self-review
 author's blind spots. So after it, and before
 `gh pr merge`, spawn a **separate** reviewer to attack the diff — reuse the existing skills, don't
 build parallel machinery: run `/code-review` (already multi-agent/adversarial) and, for anything
-touching untrusted input or the Pledges, `/security-review`. The adversary works three axes it must
+touching untrusted input or the Pledges, `/security-review`; and beside them an independent
+**codex Astra** read-only pass on the exported, PII-swept diff (`-m gpt-6-astra`, xhigh — dev
+standing rule since 2026-09-04, reaffirmed 2026-09-30), adjudicated at fable. The adversary works three axes it must
 **not** take the author's framing on:
 
 1. **Correctness** — bugs, edge cases, reuse/simplification (`/code-review`'s default).
@@ -1096,6 +1098,18 @@ class) — never downgraded to a lower tier. An adversary weaker than the author
 the Subagent Model Policy applied to review. Record the outcome in a `### Adversarial review` block
 in the PR description; fix findings in-PR or file + link them. A PR merges only once the adversarial
 pass is clean or its findings are triaged.
+
+**Review-loop convergence (2026-09-30 audit of PRs #1149 (15 rounds) and #1160 (17 rounds)).**
+Both loops were productive for their first ~5 rounds (real Pledge defects) and then oscillated:
+on #1160 four rule decisions were each re-decided 4–10 times because every re-run reviewer finds
+something in the previous round's fix, and ~225 of ~228 findings were accepted. Rules, from
+round 3 on: (a) scope each reviewer to the DELTA since the last adjudicated head, not the whole
+PR; (b) fix in-PR only a correctness/Pledge defect with a concrete failing input, or a trivial
+wording fix — everything else is filed and linked; (c) a finding that REVERSES an earlier
+accepted fix, or grows the PR's scope (a new build task, a new generated resource, a new
+subsystem), is escalated to the developer, never applied by the coordinator; (d) a round whose
+codex verdict is MERGE / MERGE WITH FIXES and whose `/code-review` has no CONFIRMED defect is
+the last round. The adjudicator's job is to reject, not to relay.
 
 **Docs-only / non-code PRs can skip CI.** The `pr-check.yml` workflow skips the
 `build-and-test` job when the **PR description (body)** contains the literal
@@ -1123,7 +1137,13 @@ enforces the dev's locale allowlist — translate into `en` (default)/`es`/`fr` 
 language-level, never a regional variant (`es-rUS`) — so the orphaned-translation class
 can't recreate itself silently. `values-es` is intentionally incomplete (~84/393 keys)
 until the translation-completion work lands; that completeness gate is deferred, not
-forgotten.
+forgotten. **Vital lint gates `NewApi` across every module (#1162):** vital lint evaluates FATAL
+issues only and `NewApi` is ERROR by default, so two real minSdk-30 crash classes shipped unseen
+(`AccessibilityNodeInfo#getChecked`, API 36 — #1161, recognition dead below Android 16 — and
+`Geocoder.GeocodeListener`, API 33). The root `lint.xml` promotes `NewApi` to fatal (lint discovers
+it for every module — a DSL `fatal +=` in `:app` never reached the library modules' analysis) and
+`:app`'s `lint { checkDependencies = true }` folds the library modules into the ONE existing
+`lintVitalRelease` run — which also means a local `:app:build`/`assembleRelease` pays the multi-module vital pass (accepted). Only the `NewApi` id is promoted; `InlinedApi` is benign by construction. Guard a new API call with `Build.VERSION.SDK_INT >= …`; never suppress it.
 
 ## Session Orientation
 
@@ -1186,17 +1206,24 @@ Rules, in precedence order:
    verdicts — name the phase when spawning one. The deliverable of this phase is a plan
    bounded enough to hand down: named files, the expected change shape, acceptance criteria,
    and what the tests/review must prove.
-3. **The default subagent tier for everything else is opus — set `model` explicitly at
-   every spawn.** Do NOT omit the model to "inherit the parent": when the session itself
-   runs fable, omission silently burns the scarce tier on work opus handles. (This
-   deliberately replaces the old "prefer the exact same model" guidance.)
-4. **Delegating BELOW opus is allowed only for building well-bounded implementations from
-   an already-vetted plan**, and only when confident the smaller model can execute: named
-   files, an explicit expected change shape, and cheap verification (existing tests and/or
-   the fable PR check will catch a failure inexpensively — boundedness is what makes
-   verification cheap, which is what makes the delegation actually save anything). Sonnet
-   is the bounded-build workhorse; haiku only for trivially mechanical scans. Never hand a
-   lower tier open-ended research, design, root-cause analysis, or judgment work —
+3. **The default BUILDER for everything else is the codex CLI (`gpt-6-astra`), not a Claude
+   subagent — dev decision 2026-09-30, after the third usage-limit collapse (06-25, 08-09,
+   09-30).** Fable writes the bounded spec to a scratchpad file (named files, exact change
+   shape, done criteria, which suites must go green), `timeout N codex exec -m gpt-6-astra
+   -s workspace-write -c 'model_reasoning_effort="high"' … - < spec.md` builds it in the
+   working tree, and the session commits, runs the suites and reviews. Codex spend is off
+   the Claude budget entirely. A Claude subagent (opus — set `model` explicitly, never
+   omit-to-inherit) is the FALLBACK builder only when codex cannot do the job: it needs
+   network/`gh`, needs gradle inside its loop, or the files carry real PII (codex never
+   sees PII). Codex has no network and no repo memory, so the spec must be self-contained;
+   discovery-heavy prompts hang it.
+4. **Delegating to any lower tier — codex or sonnet — is allowed only for building
+   well-bounded implementations from an already-vetted plan**, and only when confident the
+   builder can execute: named files, an explicit expected change shape, and cheap
+   verification (existing tests and/or the fable PR check will catch a failure
+   inexpensively — boundedness is what makes verification cheap, which is what makes the
+   delegation actually save anything). Haiku only for trivially mechanical scans. Never hand
+   a lower tier open-ended research, design, root-cause analysis, or judgment work —
    boundedness is the control that limits hallucinations and expansive errors. If the plan
    isn't bounded enough to delegate, that is a phase-2 gap: sharpen the plan at fable, don't
    promote the builder.
