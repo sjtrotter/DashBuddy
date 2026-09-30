@@ -154,6 +154,12 @@ class SkeletonCorpusTest {
         SkeletonBuilder.build(UiNode(className = "android.widget.TextView", text = value), null, META, Platform.DoorDash, DAY)
             ?.root?.text?.get("text")
 
+    /**
+     * `CensusHash.canonical` (review SS8: nullable — no fixed point). A value with no canonical form is
+     * withheld by the builder, so for the mirrors it falls back to its trimmed form (never seeded).
+     */
+    private fun canon(value: String): String = CensusHash.canonical(value) ?: value.trim()
+
     private fun walkNodes(node: UiNode, visit: (UiNode) -> Unit) {
         visit(node)
         node.children.forEach { walkNodes(it, visit) }
@@ -275,7 +281,7 @@ class SkeletonCorpusTest {
             val kind = CustomerTextMarkers.idMarkerFor(n.viewIdResourceName)?.kind
             n.scrubbableStrings().forEach { (field, v) ->
                 if (v.isNullOrBlank()) return@forEach
-                val c = CensusHash.canonical(v)
+                val c = canon(v)
                 if (PiiShapes.containsMask(c)) return@forEach
                 val raw = v.trim()
                 if (valueJudged(c) || (raw.length <= 40 && valueJudged(raw))) seededExact += c
@@ -284,7 +290,7 @@ class SkeletonCorpusTest {
             }
             if (kind == CustomerTextMarkers.IdentityKind.NAME) {
                 val source = if (!n.text.isNullOrBlank()) n.text else n.contentDescription?.takeIf { it.isNotBlank() }
-                source?.let { CensusHash.canonical(it) }?.takeIf { !PiiShapes.containsMask(it) }
+                source?.let { canon(it) }?.takeIf { !PiiShapes.containsMask(it) }
                     ?.let { nameRuns += letterRuns(it, minLetters = 2) }
             }
         }
@@ -295,7 +301,7 @@ class SkeletonCorpusTest {
                 if (v.isNullOrBlank()) return@forEach
                 if (a.text[field.wire] == TextSlot.WITHHELD && b.text[field.wire] != TextSlot.WITHHELD) {
                     flips++
-                    val c = CensusHash.canonical(v)
+                    val c = canon(v)
                     if (c !in seededExact && letterRuns(c).none { it in nameRuns }) {
                         unexplained += "$path: ${field.wire} flipped by the frame rule"
                     }
@@ -333,7 +339,7 @@ class SkeletonCorpusTest {
             className = "android.widget.LinearLayout",
             viewIdResourceName = "com.doordash.driverapp:id/contact_row",
             children = listOf(
-                UiNode(className = "android.widget.ImageView", viewIdResourceName = "com.doordash.driverapp:id/user_name", contentDescription = "Morgan"),
+                UiNode(className = "android.widget.ImageView", viewIdResourceName = "com.doordash.driverapp:id/customer_name", contentDescription = "Morgan"),
                 UiNode(className = "android.widget.TextView", text = "Morgan, 2 items"),
                 UiNode(className = "android.widget.TextView", text = "Continue"),
             ),
@@ -353,7 +359,7 @@ class SkeletonCorpusTest {
     ).map { (name, tree) -> name to tree.restoreParents() }
 
     @Test
-    fun `the frame-level rule flips no chrome slot to withheld (reviews OO2, QQ1)`() {
+    fun `frame-level flips are explained by the seeding rule (reviews OO2, QQ1, SS5)`() {
         val unexplained = mutableListOf<String>()
         var committedFlips = 0
         var substitutedFlips = 0
@@ -390,6 +396,55 @@ class SkeletonCorpusTest {
         // one is marker-led), so the floor is pinned on the hand-written shapes: AA1 (3) + desc-only
         // name (1) + the ADDRESS and EXACT exact duplicates (2).
         assertEquals("hand-written frame-rule flips", 6, handFlips)
+    }
+
+    /**
+     * Review SS5: the flip guard proves SELF-CONSISTENCY (every flip matches the seeding rule), not chrome
+     * RECALL — a NAME run that over-withholds is "explained" by construction. So chrome recall is pinned
+     * explicitly: these slots, classes and ids must survive beside the identity values that once
+     * suppressed them (the LL1 address words, the SS1 merchant under `user_name`, the NN3 TalkBack desc).
+     */
+    @Test
+    fun `chrome recall - named chrome slots, classes and ids are not suppressed by identity seeding (review SS5)`() {
+        fun build(vararg nodes: UiNode): List<UiSkeletonNodeDto> = SkeletonBuilder.build(
+            UiNode(className = "android.widget.LinearLayout", viewIdResourceName = "com.doordash.driverapp:id/sheet", children = nodes.toList())
+                .restoreParents(),
+            null, META, Platform.DoorDash, DAY,
+        )!!.root.children
+        fun text(n: UiSkeletonNodeDto) = n.text.getValue("text")
+        fun hashed(value: String, slot: TextSlot) =
+            assertTrue("'$value' must hash (chrome recall)", slot.h != null && slot.kind.startsWith("words:"))
+
+        val address = build(
+            UiNode(className = "android.widget.TextView", viewIdResourceName = "com.doordash.driverapp:id/address_line_1", text = "Bay View Commons"),
+            UiNode(className = "android.widget.TextView", text = "View details"),
+            UiNode(className = "android.widget.ImageView", viewIdResourceName = "com.doordash.driverapp:id/roadNameLayout"),
+        )
+        hashed("View details", text(address[1]))
+        assertEquals("com.doordash.driverapp:id/roadNameLayout", address[2].id)
+        assertEquals("android.widget.ImageView", address[2].className)
+
+        val merchant = build(
+            UiNode(className = "android.widget.TextView", viewIdResourceName = "com.doordash.driverapp:id/user_name", text = "Jack in the Box"),
+            UiNode(className = "android.widget.TextView", text = "Head to the store"),
+            UiNode(className = "android.widget.TextView", text = "Sign in"),
+            UiNode(className = "android.widget.TextView", text = "Total"),
+        )
+        hashed("Head to the store", text(merchant[1]))
+        hashed("Sign in", text(merchant[2]))
+        hashed("Total", text(merchant[3]))
+        merchant.forEach { assertEquals("android.widget.TextView", it.className) }
+
+        val talkback = build(
+            UiNode(className = "android.widget.TextView", viewIdResourceName = "com.doordash.driverapp:id/customer_name", text = "Adam", contentDescription = "Customer name Adam"),
+            UiNode(className = "android.widget.TextView", text = "Customer"),
+            UiNode(className = "android.widget.TextView", text = "Name"),
+            UiNode(className = "android.widget.TextView", viewIdResourceName = "com.doordash.driverapp:id/customer_name_label", text = "Customer name"),
+        )
+        hashed("Customer", text(talkback[1]))
+        hashed("Name", text(talkback[2]))
+        assertEquals("com.doordash.driverapp:id/customer_name", talkback[0].id)
+        assertEquals("com.doordash.driverapp:id/customer_name_label", talkback[3].id)
     }
 
     @Test
@@ -480,7 +535,7 @@ class SkeletonCorpusTest {
                 kind == CustomerTextMarkers.IdentityKind.EXACT
             n.scrubbableStrings().forEach { (field, v) ->
                 if (v.isNullOrBlank()) return@forEach
-                val canonical = CensusHash.canonical(v)
+                val canonical = canon(v)
                 val seeds = identity && !PiiShapes.containsMask(canonical) &&
                     (field == UiNodeTextField.TEXT || field == UiNodeTextField.CONTENT_DESCRIPTION)
                 when {
@@ -492,7 +547,7 @@ class SkeletonCorpusTest {
             // when the text is non-blank, otherwise from its CONTENT_DESCRIPTION.
             if (kind == CustomerTextMarkers.IdentityKind.NAME) {
                 val source = if (!n.text.isNullOrBlank()) n.text else n.contentDescription?.takeIf { it.isNotBlank() }
-                source?.let { CensusHash.canonical(it) }?.takeIf { !PiiShapes.containsMask(it) }
+                source?.let { canon(it) }?.takeIf { !PiiShapes.containsMask(it) }
                     ?.let { idRuns += letterRuns(it, minLetters = 2) }
             }
         }
@@ -503,7 +558,7 @@ class SkeletonCorpusTest {
             n.scrubbableStrings().forEach { (_, v) ->
                 if (v.isNullOrBlank()) return@forEach
                 val raw = v.trim()
-                val canonical = CensusHash.canonical(v)
+                val canonical = canon(v)
                 if (valueJudged(canonical) || (raw.length <= 40 && valueJudged(raw))) judgedKeys += canonical
             }
         }
@@ -520,7 +575,7 @@ class SkeletonCorpusTest {
                 // document-wide by the intake yet hashed by the census. Exempt exactly that case: the
                 // value survives redaction in isolation, and such a field is its ONLY cause (review DD1:
                 // no seeding identity-id occurrence and no value-judging step anywhere in the frame).
-                val trimmed = CensusHash.canonical(value)
+                val trimmed = canon(value)
                 if (redactedInIsolation(o.viewIdResourceName, field.wire, value) == value &&
                     trimmed in propagatedNotSeeded && trimmed !in idSeeded && trimmed !in judgedKeys &&
                     letterRuns(trimmed).none { it in idRuns }
@@ -739,7 +794,7 @@ class SkeletonCorpusTest {
         checkAll(PropSeeds.samples(500), PropSeeds.config(SEED), valueArb) { value ->
             // Steps 7/8 judge the raw trimmed value AND the canonical form (reviews EE2, FF1).
             // Review HH5: the raw form counts only within the cap — the builder's raw pass is bounded (GG2).
-            val forms = setOfNotNull(value.trim().takeIf { it.length <= 40 }, CensusHash.canonical(value))
+            val forms = setOfNotNull(value.trim().takeIf { it.length <= 40 }, canon(value))
             // A sensitive fragment ("Visa ••••…") refuses the whole one-node frame — nothing to check.
             val slot = slotOf(value) ?: return@checkAll
             if (forms.any { form -> shapes.any { it.containsMatchIn(form) } }) {
