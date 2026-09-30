@@ -50,7 +50,9 @@ The DoorDash ICA §15.4 prohibits reverse-engineering of the platform; DashBuddy
 do that and our written material must not suggest otherwise. See `LEGAL.md` for the
 good-faith ICA interpretation that governs scope decisions.
 
-Cross-references: matchers infra RFC #192; aggregation RFC #193; academic federation RFC #194.
+Cross-references: matchers infra RFC #192; aggregation RFC #193; academic federation RFC #194;
+UNKNOWN-screen census epic #1138 (privacy model ADR-0011 — hash-only skeletons, k-anonymous vocabulary,
+trusted installs; server #1157).
 (Monetization pricing is recorded in pillar 1 above; the cloud-data-platform RFC #141 was closed
 2026-07-12 with its un-built cloud half folded into the pillar epics.)
 
