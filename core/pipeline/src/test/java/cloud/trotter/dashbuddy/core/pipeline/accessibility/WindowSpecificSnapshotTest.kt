@@ -772,4 +772,28 @@ class WindowSpecificSnapshotTest {
         assertTrue(collect(h, Kind.STATE).isEmpty())
         h.skipped(ForegroundSkipReason.SCAN_BUDGET)
     }
+
+    @Test
+    fun `DD6 - an unreadable APPLICATION window above the active DoorDash - not a barrier - the DoorDash frame`() = bothKinds { kind ->
+        val dd = node(ddPkg, "dd", windowId = 3)
+        val h = harness(
+            activeRoot = dd,
+            windows = listOf(window(3, 5, dd, active = true), window(8, 9, null), uberOverlay(9, 7, node(uberPkg, "uber-offer"))),
+        )
+
+        assertEquals(listOf("dd"), collect(h, kind, windowId = 3).map { it.tree.text })
+        assertEquals(0L, h.stats.foregroundSkipCount(ForegroundSkipReason.FRONT_UNREADABLE))
+    }
+
+    @Test
+    fun `DD6 - an unreadable LARGE system window above the active DoorDash - refused (a possible overlay)`() = bothKinds { kind ->
+        val dd = node(ddPkg, "dd", windowId = 3)
+        val h = harness(
+            activeRoot = dd,
+            windows = listOf(window(3, 5, dd, active = true), window(12, 12, null, windowType = system, bounds = OverlayGeometry.FULL_SCREEN)),
+        )
+
+        assertTrue(collect(h, kind, windowId = 3).isEmpty())
+        h.skipped(ForegroundSkipReason.FRONT_UNREADABLE)
+    }
 }

@@ -218,7 +218,16 @@ class AccessibilitySource @Inject constructor(
     /** [foregroundWindow]'s verdict: the window in front, or why none is read (#1148 review H3). */
     sealed interface Foreground {
         data class Found(val located: LocatedWindow) : Foreground
-        data class Refused(val reason: ForegroundSkipReason) : Foreground
+        /**
+         * [possibleOverlay] (PR #1155 review DD6): the refusal is an unreadable window that may be a
+         * platform offer overlay — a LARGE `TYPE_SYSTEM` window whose owner cannot be read, or a
+         * selected overlay whose root vanished. Only such a refusal may drop a frame on the EVENT
+         * path; an unreadable APPLICATION window cannot be an offer overlay.
+         */
+        data class Refused(
+            val reason: ForegroundSkipReason,
+            val possibleOverlay: Boolean = false,
+        ) : Foreground
     }
 
     /**
@@ -299,7 +308,8 @@ class AccessibilitySource @Inject constructor(
                     // PR #1155 review BB1: a LARGE system window whose owner cannot be read may be an
                     // offer overlay — readable-top-or-refuse, exactly like an unreadable application
                     // window. Never read the window beneath it.
-                    OverlayProbe.Unreadable -> verdict = Foreground.Refused(ForegroundSkipReason.FRONT_UNREADABLE)
+                    OverlayProbe.Unreadable ->
+                        verdict = Foreground.Refused(ForegroundSkipReason.FRONT_UNREADABLE, possibleOverlay = true)
                     is OverlayProbe.Candidate -> {
                         // PR #1155 review BB6: a DISABLED overlay platform's overlay is not a candidate
                         // — the dasher chose to ignore that platform; read what is beneath it.
@@ -366,11 +376,11 @@ class AccessibilitySource @Inject constructor(
         val root = probe.root ?: run {
             if (!budget.take()) return Foreground.Refused(ForegroundSkipReason.SCAN_BUDGET)
             w.root
-        } ?: return Foreground.Refused(ForegroundSkipReason.FRONT_UNREADABLE)
+        } ?: return Foreground.Refused(ForegroundSkipReason.FRONT_UNREADABLE, possibleOverlay = true)
         val live = root.packageName?.toString()
         if (live != probe.packageName) {
             stats.onOverlayRejected(OverlayRejectReason.PACKAGE_CHANGED)
-            if (live == null) return Foreground.Refused(ForegroundSkipReason.FRONT_UNREADABLE)
+            if (live == null) return Foreground.Refused(ForegroundSkipReason.FRONT_UNREADABLE, possibleOverlay = true)
             val corrected = if (live in Platform.overlayPackages) {
                 WindowVerdictCache.Verdict.CANDIDATE
             } else {
@@ -439,8 +449,11 @@ class AccessibilitySource @Inject constructor(
      * not emit it, or it interleaves with the activity the event path reads.
      *
      * CC4: EVERY window type above the active one, by layer — an application window (not ours, not
-     * PiP) above the overlay means the overlay is not frontmost (→ None). CC5/CC7: a walk out of root
-     * fetches, or an unreadable window on top, refuses the frame.
+     * PiP) above the overlay means the overlay is not frontmost (→ None). CC5: a walk out of root
+     * fetches refuses the frame. DD6 (narrowing CC7): only an unreadable window that may BE an
+     * overlay — a LARGE `TYPE_SYSTEM` window, [Foreground.Refused.possibleOverlay] — refuses; an
+     * unreadable APPLICATION window (our bubble tearing down, a platform popup, a foreign panel) cannot
+     * be an offer overlay → None: the active enabled root stays the ground truth (#1148).
      */
     internal fun overlayFront(
         windows: List<AccessibilityWindowInfo>,
@@ -449,11 +462,12 @@ class AccessibilitySource @Inject constructor(
     ): OverlayScan {
         return when (val front = frontAbove(windows, active, isEnabled)) {
             is Foreground.Found -> if (front.located.isOverlay) OverlayScan.Overlay(front.located) else OverlayScan.None
-            is Foreground.Refused -> when (front.reason) {
-                // CC7: an unreadable window above the active one refuses the frame — the same as
-                // the bubble path. Reading the active root beneath would interleave the covered
-                // window with the overlay across its animate-in / tear-down (root-null) frames.
-                ForegroundSkipReason.SCAN_BUDGET, ForegroundSkipReason.FRONT_UNREADABLE -> OverlayScan.Refused(front.reason)
+            is Foreground.Refused -> when {
+                front.reason == ForegroundSkipReason.SCAN_BUDGET -> OverlayScan.Refused(front.reason)
+                // CC7/DD6: a possible overlay we cannot verify refuses (reading the covered window
+                // beneath would interleave it with the overlay across its animate-in / tear-down
+                // frames); any other unreadable window is not a barrier on this path.
+                front.reason == ForegroundSkipReason.FRONT_UNREADABLE && front.possibleOverlay -> OverlayScan.Refused(front.reason)
                 else -> OverlayScan.None
             }
         }
