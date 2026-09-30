@@ -160,9 +160,20 @@ class RuleCapabilityEnumerationTest {
     fun `matching a rule exposes its resolved bindings as named targets`() {
         val rules = compile(declineTargetRule())
         val ruleset = Ruleset(rules)
-        val tree = UiNode(children = listOf(UiNode(text = "Decline"))).restoreParents()
+        // #1149 R1: a target is only exposed when it has an action owner (here the button itself).
+        val tree = UiNode(children = listOf(UiNode(text = "Decline", isClickable = true))).restoreParents()
         val result = ruleset.matchFirst(tree, platformWire = "doordash")
         val target = result?.targets?.get("declineButton")
         assertEquals("Decline", target?.text)
+    }
+
+    /** #1149 review R1: a bind with NO action owner is refused — no target is exposed. */
+    @Test
+    fun `a bind with no action owner exposes no target`() {
+        val ruleset = Ruleset(compile(declineTargetRule()))
+        val tree = UiNode(children = listOf(UiNode(text = "Decline"))).restoreParents()
+        val result = ruleset.matchFirst(tree, platformWire = "doordash")
+        assertEquals("the rule still matches", true, result != null)
+        assertEquals(null, result!!.targets["declineButton"])
     }
 }

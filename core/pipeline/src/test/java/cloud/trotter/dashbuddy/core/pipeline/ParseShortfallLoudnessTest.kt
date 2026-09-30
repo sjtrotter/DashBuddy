@@ -62,7 +62,8 @@ class ParseShortfallLoudnessTest {
     private fun summaryTree(): UiNode {
         val tree = UiNode(
             text = null,
-            children = mutableListOf(UiNode(text = "Dash summary"), UiNode(text = "Total: \$42.00")),
+            // #1149 R1: a tap target must have an action owner — the bound summary row takes a click.
+            children = mutableListOf(UiNode(text = "Dash summary", isClickable = true), UiNode(text = "Total: \$42.00")),
         )
         tree.restoreParents()
         return tree
