@@ -837,7 +837,7 @@
     <string name="playbook_heatmap_plan_outline_caption">Outlined cells are the hours this week\'s plan picked.</string>
     <!-- #1151 — debug builds only: shown instead of the Dashboard while wide event receipt is declined. -->
     <string name="debug_event_receipt_block_title">Wide event receipt is off</string>
-    <string name="debug_event_receipt_block_body">This debug build needs wide event receipt to capture offer overlays, so its accessibility service has been turned off. Allow it again in %1$s; you will then be asked to turn the service back on.</string>
+    <string name="debug_event_receipt_block_body">This debug build needs wide event receipt. While it is off, DashBuddy\'s accessibility service is not enabled. Allow it again under %1$s, then turn the service on when asked.</string>
     <string name="debug_event_receipt_block_open_settings">Open Automation &amp; Consent</string>
     <string name="debug_event_receipt_block_exit">Exit</string>
     <string name="debug_event_receipt_loading_notice">Still reading the screen-events setting. If this does not clear, exit and reopen the app.</string>

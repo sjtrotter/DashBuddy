@@ -7,8 +7,8 @@ import cloud.trotter.dashbuddy.domain.settings.EventReceiptConsent
 
 /**
  * #1151 — the ONE resolution of the wide-event-receipt disclosure (the Play prominent-disclosure
- * shape #1138 M3 reuses): the Dashboard prompt, the Settings switch's helper text and the debug
- * block all render this, and the screen it names is the one `event_receipt_settings_path` string.
+ * shape #1138 M3 reuses): the permission chain's first step (`ScreenEventsCard` in `:app`), the
+ * Settings switch row's helper text and the debug block all render this, and the screen it names is the one `event_receipt_settings_path` string.
  */
 @Composable
 fun eventReceiptDisclosure(): String =
@@ -26,12 +26,14 @@ fun eventReceiptSettingsPath(): String = stringResource(R.string.event_receipt_s
 @Composable
 fun eventReceiptSettingsHelper(sdkInt: Int = Build.VERSION.SDK_INT): String {
     // RR1: the switch row tells the same truth as the chain's step — disclosure + requirement note.
-    val disclosure = eventReceiptDisclosure() + "\n\n" + eventReceiptRequirementNote()
-    return if (EventReceiptConsent.isWideReceiptReliable(sdkInt)) {
-        disclosure
+    // TT7a: the Android 11 caveat qualifies the DISCLOSURE (what allowing does), so it attaches
+    // before the note, never after "Change this any time…".
+    val disclosure = if (EventReceiptConsent.isWideReceiptReliable(sdkInt)) {
+        eventReceiptDisclosure()
     } else {
-        disclosure + " " + stringResource(R.string.event_receipt_android11_caveat)
+        eventReceiptDisclosure() + " " + stringResource(R.string.event_receipt_android11_caveat)
     }
+    return disclosure + "\n\n" + eventReceiptRequirementNote()
 }
 
 /**
