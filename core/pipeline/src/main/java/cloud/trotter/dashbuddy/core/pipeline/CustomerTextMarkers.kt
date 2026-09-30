@@ -3,7 +3,6 @@ package cloud.trotter.dashbuddy.core.pipeline
 import cloud.trotter.dashbuddy.core.pipeline.rules.CompiledRedact
 import cloud.trotter.dashbuddy.domain.model.accessibility.UiNode
 import cloud.trotter.dashbuddy.domain.model.notification.RawNotificationData
-import cloud.trotter.dashbuddy.domain.privacy.PiiShapes
 
 /**
  * App-owned, rules-independent backstop for the CUSTOMER-PII redaction pledge
@@ -219,16 +218,18 @@ object CustomerTextMarkers {
         // but a generic id other surfaces use for a sheet title such as "Pick up order") and last-message
         // preview (`tvLastMessage` — ALWAYS the customer's own text, never chrome). EXACT for the census:
         // withheld on their own field and seeding their exact value, never runs. Runtime UNKNOWN scrub:
-        // `tvLastMessage` ALWAYS; `tvTitle` only WHEN_NAME_LIKE, so a chat header "Riley" is masked while a
-        // sheet title "Pick up order" survives for debug triage (the corpus intake masks both anyway).
-        IdMarker("tvTitle", IdentityKind.EXACT, RuntimeScrub.WHEN_NAME_LIKE),
+        // ALWAYS for both (review ZZ1 — fail closed; no value-shape gate can tell "李明", "محمد" or "de la
+        // Cruz" from chrome). ACCEPTED RECALL COST (ADR-0011 residual 11): an UNKNOWN sheet title under
+        // `tvTitle` ("Pick up order") loses that line in the X-Ray; the census skeleton keeps the id and
+        // structure.
+        IdMarker("tvTitle", IdentityKind.EXACT),
         IdMarker("tvLastMessage", IdentityKind.EXACT),
     )
 
     /**
-     * One [ID_MARKER_TABLE] row. [runtimeScrub] (#1160 reviews SS9, TT1) says when the runtime UNKNOWN
-     * scrub covers the suffix: [RuntimeScrub.ALWAYS] (the [ID_MARKERS] projection), [RuntimeScrub.NEVER]
-     * (census-only), or [RuntimeScrub.WHEN_NAME_LIKE] (only when the node's value reads as a name).
+     * One [ID_MARKER_TABLE] row. [runtimeScrub] (#1160 reviews SS9, TT1, ZZ1) says whether the runtime UNKNOWN
+     * scrub covers the suffix: [RuntimeScrub.ALWAYS] (the [ID_MARKERS] projection) or [RuntimeScrub.NEVER]
+     * (census-only). There is no value-dependent mode (ZZ1): the runtime path fails closed on the id alone.
      */
     data class IdMarker(
         val suffix: String,
@@ -236,25 +237,11 @@ object CustomerTextMarkers {
         val runtimeScrub: RuntimeScrub = RuntimeScrub.ALWAYS,
     )
 
-    /** When the runtime UNKNOWN id scrub applies to an [IdMarker] (#1160 review TT1). */
+    /** Whether the runtime UNKNOWN id scrub applies to an [IdMarker] (#1160 reviews TT1, ZZ1). */
     enum class RuntimeScrub {
         ALWAYS,
         NEVER,
-
-        /**
-         * Only when a value of the node is name-like ([isNameLike]): a generic id (`tvTitle`) that holds a
-         * customer's name on one surface and chrome ("Pick up order") on another.
-         */
-        WHEN_NAME_LIKE,
     }
-
-    /**
-     * Name-like for the runtime `WHEN_NAME_LIKE` scrub — the ONE predicate `PiiShapes.isPersonName` in its
-     * RUNTIME_SCRUB mode, which also accepts all-caps names ("RILEY S") (#1160 reviews TT1, WW2, XX1, YY1). Accepted residual (WW5): title-case two-word chrome ("Pick Up", "Order
-     * Details") also reads as a name and is scrubbed in debug triage — privacy first, so a full "Riley
-     * Smith" header never persists.
-     */
-    fun isNameLike(value: String?): Boolean = PiiShapes.isPersonName(value, PiiShapes.NameMode.RUNTIME_SCRUB)
 
     /** What an [IdMarker]'s node value IS (#1160 review LL1). */
     enum class IdentityKind {
@@ -269,15 +256,15 @@ object CustomerTextMarkers {
 
         /**
          * A value that may be PII or chrome (a chat header is a name, a sheet title is "Pick up order"):
-         * withheld on its own field and seeding its EXACT value only — no runs (#1160 review PP6). For the
-         * id/class check it adds a whole-value run only for the two-token name shape ("Riley S").
+         * withheld on its own field and seeding its EXACT value only — no letter runs (#1160 review PP6). For
+         * the id check it adds its whole value as one run (ZZ3 — "Search" nulls `search_bar` on its frame).
          */
         EXACT,
 
         /**
-         * A value that is a person OR a merchant, never chrome (`user_name`, #1160 review XX3): EXACT-seeded
-         * for text, and for the id/class check a whole-value run whenever it reads as a person's name
-         * (`PiiShapes.isPersonName`, a single token included — "Riley" protects `chipRiley`).
+         * A value that is a person OR a merchant, never chrome (`user_name`, #1160 reviews XX3, ZZ3):
+         * EXACT-seeded for text, and for the id check its whole value as one run (a single token included —
+         * "Riley" protects `chipRiley`).
          */
         PERSON_OR_MERCHANT,
     }
@@ -333,26 +320,20 @@ object CustomerTextMarkers {
     // --- Node-id path, UNKNOWN envelopes only (#910) --------------------------
 
     /**
-     * The runtime-scrub marker suffix [id] ends with, given the node's [values], or null — the
-     * UNKNOWN-envelope scan's predicate (#1160 reviews SS9, TT1): an ALWAYS row matches on the id alone, a
-     * NEVER row never, a WHEN_NAME_LIKE row only when a value is name-like. The census filter (ADR-0011 §2
-     * step 1) calls [idMarkerFor] over the whole table.
+     * The runtime-scrub marker suffix [id] ends with, or null — the UNKNOWN-envelope scan's predicate
+     * (#1160 reviews SS9, TT1, ZZ1): an ALWAYS row matches on the id alone, a NEVER row never. The census
+     * filter (ADR-0011 §2 step 1) calls [idMarkerFor] over the whole table.
      */
-    fun idMarkerSuffix(id: String?, values: List<String?> = emptyList()): String? =
-        idMarkerSuffix(id, values, ID_MARKER_TABLE)
+    fun idMarkerSuffix(id: String?): String? = idMarkerSuffix(id, ID_MARKER_TABLE)
 
     /**
      * Test seam over an explicit [table] (review UU4): the runtime mode is applied BEFORE the first match,
      * so a census-only row ordered ahead of an overlapping runtime row can never switch the scrub off.
      */
-    internal fun idMarkerSuffix(id: String?, values: List<String?>, table: List<IdMarker>): String? {
+    internal fun idMarkerSuffix(id: String?, table: List<IdMarker>): String? {
         if (id.isNullOrEmpty()) return null
         return table.firstOrNull { row ->
-            id.endsWith(row.suffix, ignoreCase = true) && when (row.runtimeScrub) {
-                RuntimeScrub.ALWAYS -> true
-                RuntimeScrub.NEVER -> false
-                RuntimeScrub.WHEN_NAME_LIKE -> values.any { isNameLike(it) }
-            }
+            row.runtimeScrub == RuntimeScrub.ALWAYS && id.endsWith(row.suffix, ignoreCase = true)
         }?.suffix
     }
 
@@ -373,9 +354,7 @@ object CustomerTextMarkers {
      * re-scrubs a mask.
      */
     fun unredactedIdMarker(node: UiNode): String? {
-        // Review XX6: WHEN_NAME_LIKE judges the RENDERED value only (text / content description) — a #1147
-        // role "Heading" must not make a chrome title name-like.
-        val marker = idMarkerSuffix(node.viewIdResourceName, listOf(node.text, node.contentDescription)) ?: return null
+        val marker = idMarkerSuffix(node.viewIdResourceName) ?: return null
         // #835: every serialized string field counts as "still carrying raw" — a
         // customer-PII node whose only remaining value is its `stateDescription`
         // must still be scrubbed. (XX7: one pass over the fields.)

@@ -372,7 +372,7 @@ class CustomerTextMarkersTest {
     }
 
     @Test
-    fun `ID_MARKERS is the pinned suffix list - EE1 unchanged, NN2 deliberately added order_cx_name`() {
+    fun `ID_MARKERS is the pinned suffix list - EE1 unchanged, NN2 TT1 ZZ1 deliberately added`() {
         assertEquals(
             listOf(
                 "customer_name", "user_name", "address_line_1", "address_line_2", "arriving_at_title",
@@ -381,6 +381,9 @@ class CustomerTextMarkersTest {
                 // #1160 review NN2 — deliberately ADDED: the GoPuff per-order customer name, promoted
                 // from the intake list so the runtime UNKNOWN scrub covers it too.
                 "order_cx_name",
+                // #1160 review ZZ1 — deliberately ADDED: the chat header, ALWAYS (fail closed; a value-shape
+                // gate missed non-Latin and particle names).
+                "tvTitle",
                 // #1160 review TT1 — deliberately ADDED: the chat last-message preview is always customer text.
                 "tvLastMessage",
             ),
@@ -413,28 +416,16 @@ class CustomerTextMarkersTest {
     }
 
     @Test
-    fun `tvTitle scrubs at runtime only when name-like, tvLastMessage always (reviews SS9, TT1)`() {
-        assertEquals(
-            CustomerTextMarkers.RuntimeScrub.WHEN_NAME_LIKE,
-            CustomerTextMarkers.ID_MARKER_TABLE.single { it.suffix == "tvTitle" }.runtimeScrub,
-        )
-        val chrome = UiNode(viewIdResourceName = "com.x:id/tvTitle", text = "Pick up order")
-        assertEquals("Pick up order", CustomerTextMarkers.scrubUnknown(chrome).text)
-        val name = UiNode(viewIdResourceName = "com.x:id/tvTitle", text = "Riley S")
-        assertEquals("[redacted]", CustomerTextMarkers.scrubUnknown(name).text)
+    fun `tvTitle and tvLastMessage always scrub at runtime (reviews SS9, TT1, ZZ1)`() {
+        CustomerTextMarkers.ID_MARKER_TABLE.forEach {
+            assertEquals(it.suffix, CustomerTextMarkers.RuntimeScrub.ALWAYS, it.runtimeScrub)
+        }
+        listOf("Riley", "李明", "محمد", "de la Cruz", "RILEY S", "Pick up order").forEach {
+            val node = UiNode(viewIdResourceName = "com.x:id/tvTitle", text = it)
+            assertEquals(it, "[redacted]", CustomerTextMarkers.scrubUnknown(node).text)
+        }
         val message = UiNode(viewIdResourceName = "com.x:id/tvLastMessage", text = "My gate code is 2468")
         assertEquals("[redacted]", CustomerTextMarkers.scrubUnknown(message).text)
-        // The RUNTIME gate (review YY1) also accepts all-caps names and initials — "RILEY S" is a header.
-        listOf("Riley", "Riley S", "Riley S.", "O'Brien", "Mary-Jo K", "Mary Jo", "Mary Jo S", "RILEY S", "RILEY").forEach {
-            assertTrue(it, CustomerTextMarkers.isNameLike(it))
-        }
-        // …while the SEEDING/id mode keeps the not-all-caps rule (review XX4).
-        listOf("RILEY S", "TAB B", "PRIMARY BUTTON A").forEach {
-            assertTrue(it, !PiiShapes.isPersonName(it, PiiShapes.NameMode.SEEDING_AND_IDS))
-        }
-        listOf("Pick up order", "Order details", "riley", "Riley's order x", "R2", "").forEach {
-            assertTrue(it, !CustomerTextMarkers.isNameLike(it))
-        }
     }
 
     @Test
@@ -449,14 +440,7 @@ class CustomerTextMarkersTest {
             CustomerTextMarkers.IdMarker("name", CustomerTextMarkers.IdentityKind.EXACT, CustomerTextMarkers.RuntimeScrub.NEVER),
             CustomerTextMarkers.IdMarker("customer_name", CustomerTextMarkers.IdentityKind.NAME),
         )
-        assertEquals("customer_name", CustomerTextMarkers.idMarkerSuffix("com.x:id/customer_name", emptyList(), table))
-        assertNull(CustomerTextMarkers.idMarkerSuffix("com.x:id/pane_name", emptyList(), table))
-    }
-
-    @Test
-    fun `WHEN_NAME_LIKE judges the rendered value only, never a role (review XX6)`() {
-        val chrome = UiNode(viewIdResourceName = "com.x:id/tvTitle", text = "Pick up order", roleDescription = "Heading")
-        assertEquals("Pick up order", CustomerTextMarkers.scrubUnknown(chrome).text)
-        assertNull(CustomerTextMarkers.unredactedIdMarker(chrome))
+        assertEquals("customer_name", CustomerTextMarkers.idMarkerSuffix("com.x:id/customer_name", table))
+        assertNull(CustomerTextMarkers.idMarkerSuffix("com.x:id/pane_name", table))
     }
 }
