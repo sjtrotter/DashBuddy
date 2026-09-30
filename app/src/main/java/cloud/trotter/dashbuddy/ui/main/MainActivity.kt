@@ -85,7 +85,7 @@ class MainActivity : ComponentActivity() {
                 val eventReceipt by eventReceiptViewModel.uiState.collectAsStateWithLifecycle()
                 // MM3: in DEBUG the shell fails CLOSED until the value is read (release: never).
                 if (eventReceipt.loading) {
-                    DebugEventReceiptLoading()
+                    DebugEventReceiptLoading(onExit = { finishAffinity() })
                     return@DashBuddyTheme
                 }
                 if (eventReceipt.blocked) {

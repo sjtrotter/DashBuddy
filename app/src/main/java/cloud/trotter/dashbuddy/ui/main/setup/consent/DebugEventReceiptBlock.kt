@@ -14,7 +14,10 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableLongStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
@@ -24,6 +27,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import cloud.trotter.dashbuddy.R
+import kotlinx.coroutines.delay
 import cloud.trotter.dashbuddy.feature.settings.CapabilityConsentScreen
 import cloud.trotter.dashbuddy.feature.settings.eventReceiptDisclosure
 import cloud.trotter.dashbuddy.feature.settings.eventReceiptSettingsPath
@@ -50,14 +54,44 @@ fun DebugEventReceiptShell(onExit: () -> Unit) {
 }
 
 /**
- * Review MM3 — the neutral gate a DEBUG build shows while the consent is not read yet: no NavHost,
- * no route consumption, nothing to tap. Resolves to the app or [DebugEventReceiptShell] within the
- * first store read.
+ * Review MM3/NN2 — the neutral gate a DEBUG build shows while the consent is not read yet: no NavHost,
+ * no route consumption. It resolves within the first store read; if it has not after
+ * [LOADING_EXIT_AFTER_MS] it shows a one-line notice and Exit, so it can never be a silent blank.
  */
 @Composable
-fun DebugEventReceiptLoading() {
-    Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {}
+fun DebugEventReceiptLoading(onExit: () -> Unit) {
+    var elapsedMs by remember { mutableLongStateOf(0L) }
+    LaunchedEffect(Unit) {
+        delay(LOADING_EXIT_AFTER_MS)
+        elapsedMs = LOADING_EXIT_AFTER_MS
+    }
+    Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
+        if (loadingGateShowsExit(elapsedMs)) {
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(24.dp),
+                verticalArrangement = Arrangement.Center,
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
+                Text(
+                    text = stringResource(R.string.debug_event_receipt_loading_notice),
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+                Spacer(Modifier.height(16.dp))
+                OutlinedButton(onClick = onExit, modifier = Modifier.fillMaxWidth()) {
+                    Text(stringResource(R.string.debug_event_receipt_block_exit))
+                }
+            }
+        }
+    }
 }
+
+/** NN2 — how long the loading gate stays blank before it offers Exit. */
+const val LOADING_EXIT_AFTER_MS = 3_000L
+
+/** NN2 — the pure rule: the gate offers Exit once it has been up for [LOADING_EXIT_AFTER_MS]. */
+fun loadingGateShowsExit(elapsedMs: Long): Boolean = elapsedMs >= LOADING_EXIT_AFTER_MS
 
 /** The debug block's full-screen notice (see [DebugEventReceiptShell]). */
 @Composable

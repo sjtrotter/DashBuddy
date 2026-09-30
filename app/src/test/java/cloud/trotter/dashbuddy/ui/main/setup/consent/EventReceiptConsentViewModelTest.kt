@@ -75,6 +75,13 @@ class EventReceiptConsentViewModelTest {
     }
 
     @Test
+    fun `the loading gate offers Exit only after the delay`() {
+        assertFalse(loadingGateShowsExit(0L))
+        assertFalse(loadingGateShowsExit(LOADING_EXIT_AFTER_MS - 1))
+        assertTrue(loadingGateShowsExit(LOADING_EXIT_AFTER_MS))
+    }
+
+    @Test
     fun `a known value is never loading`() {
         for (consent in EventReceiptConsent.entries) {
             for (debug in listOf(true, false)) {

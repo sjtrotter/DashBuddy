@@ -840,4 +840,5 @@
     <string name="debug_event_receipt_block_body">This debug build needs wide event receipt to capture offer overlays. Allow it in %1$s to keep using the app.</string>
     <string name="debug_event_receipt_block_open_settings">Open Automation &amp; Consent</string>
     <string name="debug_event_receipt_block_exit">Exit</string>
+    <string name="debug_event_receipt_loading_notice">Still reading the screen-events setting. If this does not clear, exit and reopen the app.</string>
 </resources>
