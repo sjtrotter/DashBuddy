@@ -36,7 +36,9 @@ import cloud.trotter.dashbuddy.feature.settings.eventReceiptSettingsPath
 /**
  * #1151 review LL4 — the shell that replaces EVERY `MainActivity` destination while
  * [EventReceiptConsentUiState.blocked] (`BuildConfig.DEBUG && consent == DECLINED`, the pure
- * [buildEventReceiptConsentState]; a release build can never reach it). Two ways out only: the
+ * [buildEventReceiptConsentState]; a release build can never reach it). It is the backstop a dasher
+ * sees on reopening a declined debug build, whose listener has already disabled the service (QQ3/QQ4).
+ * Two ways out only: the
  * Automation & Consent screen, rendered right here so its switch is reachable (turning it on
  * unblocks the app live), and Exit.
  */
