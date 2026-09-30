@@ -45,10 +45,13 @@ it true by construction) so a violation is a compile error or a failing test, no
 A new versioned schema, `uinode.skeleton.v1` (`UiSkeletonDto` + `SkeletonSchema`, beside
 `UiNodeSchema`, ADR-0003 rules apply). Per node: `class`, `id` (the platform's own resource name —
 chrome by construction WHEN it matches the static resource-name grammar, `ResourceIdGrammar`: an optional
-`<package>:id/` prefix, a name `[A-Za-z_][A-Za-z0-9_-]*` of ≤ 64 characters, no run of 8+ hex digits and
-no run of 4+ decimal digits; a dynamic id — a per-frame UUID in a Compose test tag, three committed frames
-`PRIMARY_BUTTON_<uuid>` — or a space-bearing one is treated as ABSENT for both the wire and the
-fingerprint, never rewritten; the §2 PII-id step still runs on the raw id; amended in #1160), the three flags (`isClickable`/`isEnabled` as booleans, `isChecked` as the
+`<package>:id/` prefix (`[A-Za-z][A-Za-z0-9_.]*`), a name `[A-Za-z_][A-Za-z0-9_.-]*` with at most one
+internal space, ≤ 64 characters, no run of 8+ hex digits and no run of 4+ decimal digits; a dynamic id — a
+per-frame UUID in a Compose test tag, three committed frames `PRIMARY_BUTTON_<uuid>` — is treated as
+ABSENT for both the wire and the fingerprint, never rewritten; the §2 PII-id step still runs on the raw
+id; amended in #1160. `class` likewise travels only when it matches `ClassNameGrammar` — a Java binary
+class name, ≤ 128 characters, the same digit-run rule — else it is absent (null on the wire, `""` in the
+fingerprint), because Compose/Flutter/WebView/custom views can report any string as their class), the three flags (`isClickable`/`isEnabled` as booleans, `isChecked` as the
 `UiNode` tri-state `Int` 0/1/2 — wire types stated so the shared vectors cannot disagree), and
 `children`. Per text field — enumerated from **`UiNodeTextField`**, the #835 scrub contract, never a
 hand-list, so #1147's strings (`paneTitle`, `hintText`, `clickActionLabel`, …) and any entry added
@@ -166,10 +169,16 @@ SSOTs the redact side uses, in this order, and **any hit withholds the hash**:
 would under-withhold: a customer name withheld on the node whose id marks it would be hashed on an
 id-less parent that repeats it. `SkeletonBuilder` therefore runs two passes: pass 1 runs the per-field
 filter over every text field of the frame (tree + window title) and collects the set of trimmed
-canonical values that any withholding step (1, 3, 4, 5, 7, 8 — not the length cap, whose duplicate is
-itself over-length) caught; pass 2 emits the constant `withheld` for every field whose trimmed value is in
-that set, wherever it sits. §7(c) compares the skeleton against FULL-TREE redaction for exactly this
-reason.
+canonical values caught by (a) a VALUE-judging step — 3, 4, 5, 7, 8 (not the length cap, whose duplicate is
+itself over-length) — or (b) step 1 ONLY when the id is in `ID_MARKERS`, the runtime list of ids whose
+VALUE is PII by construction; pass 2 emits the constant `withheld` for every field whose trimmed value is
+in that set, wherever it sits. A `PII_ID_SUFFIXES`-only hit (the intake list, which also covers
+instruction BODIES that may merely contain PII — `step_description`, `instruction_text`, `tvTitle`, whose
+values are often chrome such as "Hand it to me") withholds its OWN field but does not seed the set, so the
+chrome vocabulary the census exists for is not withheld frame-wide (amended in #1160 review round 2).
+§7(c) compares the skeleton against FULL-TREE redaction for this reason, with exactly that one stated
+exemption: a value the intake rewrites document-wide only because an intake-only id carries it
+elsewhere, and which survives redaction in isolation.
 
 **What the builder consumes.** `SkeletonBuilder` takes the RAW admitted `UiNode` tree plus the
 window title. #1146's publisher sits on the UNKNOWN SCREEN BRANCH of `AccessibilityPipeline.output()`

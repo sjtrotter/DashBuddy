@@ -145,7 +145,13 @@ sibling surface, left for a future extraction.
   `formatDuration`/`formatCountdown` — the locale policy, #358/#456/#467; lives here so both the
   UI and the state layer route through one definition; the Compose time helpers
   `rememberNow`/`rememberTimeFormatter` stay in `:core:designsystem`). No Android
-  dependencies. (Repository *implementations* and Hilt bindings live in `:core:data`.)
+  dependencies. (Repository *implementations* and Hilt bindings live in `:core:data`.) Two #1145 packages:
+  `domain.census.contract` — the census wire contract (ADR-0011: skeleton DTOs/schema, `CensusHash`,
+  `CensusFingerprint`, the kind classifier, the id/class grammars, `WireStrings`) — is **Apache-2.0-headed**,
+  depends on nothing but the JDK, kotlinx-serialization and `domain.util.sha256OrNull`, and is bound for
+  extraction to its own build (ADR-0011 open question 1); `domain.privacy.PiiShapes` (app licence) is the
+  promoted customer-PII pattern SSOT that the test-side `SnapshotRedactor` delegates to and the census
+  filter reads.
 - **`:core:pipeline`** — Accessibility pipeline, notification pipeline, JSON rule engine
   (RuleCompiler, Ruleset, JsonRuleInterpreter), observation classifier. Reads third-party UI.
 - **`:core:state`** — Multi-region state machine (StateMachine, FlowRegionStepper,

@@ -592,7 +592,15 @@ resource-name gate `ResourceIdGrammar` (a per-frame-UUID Compose test tag is tre
 wire and in the fingerprint; the PII-id step still reads the raw id); a whole-build `Throwable` catch
 (`Refusal.BUILD_FAILED`, the #909 inertness rule); `Outcome.Built` carrying the measured JSON; and
 `UiNodeStableHashPinTest`, freezing `stableHash` over committed fixtures now that its wrapper predicate is
-shared (`AnonymousWrappers.isAnonymousWrapper`). Nothing calls the builder at runtime yet: the publisher stage,
+shared (`AnonymousWrappers.isAnonymousWrapper`). Review round 2 added: `WireStrings` (class/id must be
+well-formed UTF-16 with no U+0000, checked on the RAW values before the gates — a lone surrogate
+UTF-8-encodes as `?`); `ClassNameGrammar` (a non-static class is absent, like a dynamic id);
+`ResourceIdGrammar` widened (upper-case package segments, `.` and one internal space in the name); the
+frame-level set seeded by step 1 only for `ID_MARKERS` ids, not intake-only `PII_ID_SUFFIXES`; optional
+version stamps truncated rather than refusing the item; per-frame memoization with the per-field path
+private; `SkeletonSchema.measure` and `WireStrings.isLowerHex` as single owners; and
+`PiiShapesIcuGuardTest`, applying the ICU bare-`}` rule to every compiled `PiiShapes` pattern. Nothing
+calls the builder at runtime yet: the publisher stage,
 `CensusSink` and `PipelineStats` counters are #1146 (M1b); upload is M3.
 
 **The whole recognition + text-scrub layer assumes an ENGLISH device (#938).** Rule anchors and
