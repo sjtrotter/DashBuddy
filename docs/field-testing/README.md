@@ -111,6 +111,10 @@ over-inference); the remaining accept losses are #1119 and the merged card is #1
      UNKNOWN capture shows the puck's tree.
   3. No DoorDash toast is ever the frame (no DoorDash `TYPE_SYSTEM` capture);
      `overlayRejected{NOT_OVERLAY_PLATFORM=…}` may rise when the notification shade is pulled down.
+  4. While an Uber offer is up over DoorDash, DoorDash frames PAUSE — expected (the overlay on top is
+     the frame). Watch that no DoorDash transition is missed across it: once the offer is dismissed,
+     DoorDash frames resume and the state catches up. And with Uber DISABLED, an Uber offer must NOT
+     pause DoorDash frames at all.
   - Issue: #1152. Confirmed: 0/2
 
 - **🆕 NEW — the receipt's auto-expand tap re-finds the row by its labels, and every tap lands on the
