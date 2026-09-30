@@ -231,7 +231,10 @@ else a USABLE UNDECIDED. The collector is the ONLY writer of the value (review
 SS1): `set()` only writes the store, on the APPLICATION scope (a closing screen
 can never cancel it half-way), and the collector publishes the decision when the
 store emits; a failed write is logged and reported as `false`, never thrown, the
-value untouched; a successful write restarts a collector that gave up. Enforcement
+value untouched. There is ONE collector for the repository's lifetime: after its
+retries are exhausted it waits for a CONFLATED "read again" poke that every
+successful write sends, so a write that lands mid-exhaustion is still read back
+and two collectors can never exist (review UU1/UU2). Enforcement
 treats `null` as UNDECIDED and applies once per distinct policy OUTPUT (`isWide`),
 so one apply and one INFO line per connect; a failed apply is RETRIED with a
 doubling backoff capped at 30 s until it lands (`ServiceInfoPolicy.retryDelayMs`,
