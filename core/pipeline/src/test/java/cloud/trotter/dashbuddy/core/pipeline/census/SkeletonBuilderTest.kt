@@ -412,4 +412,30 @@ class SkeletonBuilderTest {
         )
         assertEquals(TextSlot.WITHHELD, SkeletonBuilder.build(pii, null, meta, "doordash", "2026-09-30")!!.root.text.getValue("desc"))
     }
+
+    // ---- #1160 review round 3 ----------------------------------------------------------------------
+
+    @Test
+    fun `DD2 - the value filter runs ONCE per distinct trimmed value across both passes`() {
+        val counts = HashMap<String, Int>()
+        val filter = SkeletonBuilder.FrameFilter { v ->
+            counts.merge(v, 1, Int::plus)
+            SkeletonBuilder.withholdingStep(v, nodeId = null)
+        }
+        val tree = UiNode(
+            className = "android.widget.LinearLayout",
+            children = listOf(
+                UiNode(className = "android.widget.TextView", text = "Accept", contentDescription = " Accept "),
+                UiNode(className = "android.widget.TextView", text = "Accept", hintText = "Jane S"),
+                UiNode(className = "android.widget.TextView", text = "Jane S"),
+            ),
+        )
+        val pending = filter.scan(tree)
+        val title = filter.field("Accept", SkeletonBuilder.IdClass.NONE)!!
+        val root = filter.emit(pending)
+        filter.slot(title)
+        assertEquals(words(1, "Accept"), root.children[0].text.getValue("text"))
+        assertEquals(TextSlot.WITHHELD, root.children[2].text.getValue("text"))
+        assertEquals(mapOf("Accept" to 1, "Jane S" to 1), counts)
+    }
 }

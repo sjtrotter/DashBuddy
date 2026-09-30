@@ -167,7 +167,7 @@ object SkeletonBuilder {
 
         // Frame-level duplicate rule (ADR-0011 §2; #1160 reviews AA1, CC3). Pass 1 runs the per-field
         // filter ONCE per field (memoized per frame, review CC5) and seeds the frame's caught set.
-        val frame = FrameFilter()
+        val frame = FrameFilter { withholdingStep(it, nodeId = null) }
         val pending = try {
             frame.scan(tree)
         } catch (_: IllegalArgumentException) {
@@ -216,7 +216,7 @@ object SkeletonBuilder {
         value?.take(UiSkeletonDto.MAX_VERSION_LENGTH)?.takeIf { WireStrings.isWellFormed(it) }
 
     /** How the §2 step-1 id check classified a node's RAW id (review CC3). */
-    private enum class IdClass {
+    internal enum class IdClass {
         /** In `CustomerTextMarkers.ID_MARKERS`: the node's VALUE IS PII by construction. */
         PII_VALUE,
 
@@ -233,10 +233,10 @@ object SkeletonBuilder {
     }
 
     /** One non-blank field after pass 1: its trimmed value, and whether its own id withholds it. */
-    private class Field(val trimmed: String, val idWithholds: Boolean)
+    internal class Field(val trimmed: String, val idWithholds: Boolean)
 
     /** A node after pass 1: its validated class/id, flags, and fields by wire key. */
-    private class Pending(
+    internal class Pending(
         val className: String?,
         val id: String?,
         val node: UiNode,
@@ -247,9 +247,16 @@ object SkeletonBuilder {
     /**
      * The per-frame filter state (review CC5): the value-only steps (2–8) and the value's own slot are
      * computed once per distinct trimmed value; step 1 once per node. [caught] is the frame-level set.
+     * [judge] is the value-only filter (steps 2–8); internal so a test can count its evaluations.
      */
-    private class FrameFilter {
-        private val valueSteps = HashMap<String, FilterStep?>()
+    internal class FrameFilter(private val judge: (String) -> FilterStep?) {
+        /**
+         * A cached verdict. Wrapped (review DD2): a bare `FilterStep?` map stores the common "passed"
+         * result as `null`, which `getOrPut` reads as ABSENT and recomputes on every lookup.
+         */
+        private class Judged(val step: FilterStep?)
+
+        private val valueSteps = HashMap<String, Judged>()
         private val valueSlots = HashMap<String, TextSlot>()
         private val caught = HashSet<String>()
 
@@ -286,12 +293,14 @@ object SkeletonBuilder {
 
         /** Steps 2–8 of [withholdingStep], memoized; a filter failure withholds (fail closed). */
         private fun valueStep(trimmed: String): FilterStep? = valueSteps.getOrPut(trimmed) {
-            try {
-                withholdingStep(trimmed, nodeId = null)
-            } catch (_: Exception) {
-                FilterStep.PII_SHAPE
-            }
-        }
+            Judged(
+                try {
+                    judge(trimmed)
+                } catch (_: Exception) {
+                    FilterStep.PII_SHAPE
+                },
+            )
+        }.step
 
         /** Pass 2 for one field: the constant `withheld`, or the value's own (memoized) slot. */
         fun slot(field: Field): TextSlot {
