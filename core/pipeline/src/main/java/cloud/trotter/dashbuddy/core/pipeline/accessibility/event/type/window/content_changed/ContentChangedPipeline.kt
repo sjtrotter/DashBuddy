@@ -11,7 +11,6 @@ import cloud.trotter.dashbuddy.core.pipeline.accessibility.input.AccEvent
 import cloud.trotter.dashbuddy.core.pipeline.accessibility.input.AccessibilitySource
 import cloud.trotter.dashbuddy.domain.model.accessibility.UiNode
 import cloud.trotter.dashbuddy.domain.settings.PlatformPreferences
-import cloud.trotter.dashbuddy.domain.state.Platform
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.mapNotNull
@@ -22,8 +21,10 @@ import javax.inject.Inject
 /**
  * One coalesced content-change burst (#1148 D3): the accumulator of [coalesceByKey], owning the OR
  * of the `contentChangeTypes` bits the old pipeline logged and discarded. There is ONE burst across
- * all windows (review G2) — except that each platform offer-overlay package gets its OWN burst
- * (#1152 review BB3) — so [windowId] is the LAST event's window of that burst.
+ * all windows (review G2), so [windowId] is the LAST event's window and [packageName] a package seen
+ * in the burst — LOG fields only: the resolver never reads which window fired (#1148 D4; since #1152
+ * review BB5 not even for platform offer overlays — PR #1155 review CC8 reverted a per-platform key
+ * that only mapped the same overlay twice per burst pair).
  */
 data class CoalescedChange(
     /** The last event's window (DRIP log only — the resolver ignores the event's window). */
@@ -82,11 +83,7 @@ class ContentChangedPipeline @Inject constructor(
         .coalesceByKey(
             quietMs = QUIET_MS,
             maxWaitMs = MAX_WAIT_MS,
-            // #1152 review BB3: an offer-overlay platform's events form their own burst (bounded:
-            // overlay platforms are a registry handful), so a DoorDash → overlay → DoorDash sequence
-            // can never fold the overlay's event into a burst that resolves as DoorDash; every other
-            // package stays one burst. `merge` therefore never mixes an overlay event with others.
-            keyOf = { e -> e.packageName?.takeIf { it in Platform.overlayPackages } ?: CONTENT_BURST_KEY },
+            keyOf = { CONTENT_BURST_KEY },
             merge = CoalescedChange::merge,
             leadingEdge = true,
         )
@@ -137,6 +134,6 @@ class ContentChangedPipeline @Inject constructor(
         const val MAX_WAIT_MS = 300L
 
         /** The single coalesce key for content changes (review G2). */
-        private const val CONTENT_BURST_KEY = ""
+        private const val CONTENT_BURST_KEY = 0
     }
 }

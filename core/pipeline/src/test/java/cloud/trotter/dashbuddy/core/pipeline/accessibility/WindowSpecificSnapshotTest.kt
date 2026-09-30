@@ -618,22 +618,6 @@ class WindowSpecificSnapshotTest {
     private fun content(windowId: Int, pkg: String) = event(Kind.CONTENT.type, windowId, pkg)
 
     @Test
-    fun `BB3 - DoorDash, overlay, DoorDash content bursts - the overlay's update is not folded away`() {
-        val dd = node(ddPkg, "dd", windowId = 3)
-        val uber = node(uberPkg, "uber-offer")
-        val h = harness(activeRoot = dd, windows = listOf(window(3, 5, dd, active = true), uberOverlay(9, 9, uber)))
-
-        val frames = collectSequence(
-            h,
-            listOf(0L to content(3, ddPkg), 100L to content(9, uberPkg), 200L to content(3, ddPkg)),
-        ).map { it.tree.text }
-
-        assertTrue("the overlay event forms its own burst and is resolved: $frames", "uber-offer" in frames)
-        // BB5: while the overlay is on top, EVERY burst — DoorDash's included — resolves to it.
-        assertTrue("no DoorDash frame interleaves with the overlay: $frames", frames.all { it == "uber-offer" })
-    }
-
-    @Test
     fun `BB5 - Uber active under its own offer overlay - every frame is the overlay - dismissed, the map resumes`() {
         val map = node(uberPkg, "uber-map", windowId = 3)
         val mapWindow = window(3, 5, map, active = true)
