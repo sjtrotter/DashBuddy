@@ -13,6 +13,8 @@ import org.junit.Test
  * #1147 — the TalkBack-study node fields are ADDITIVE on the wire: every one round-trips, a node
  * that leaves them at their defaults serializes exactly as before (so the committed corpus stays
  * byte-identical), they take part in node equality, and they move NO frame-identity hash.
+ * The corpus-wide half of the additive claim (every committed fixture, not one synthetic node)
+ * lives in `:app`'s `CorpusNodeFieldsAdditiveTest` (review X4).
  */
 class UiNodeNewFieldsRoundTripTest {
 
