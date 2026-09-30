@@ -21,8 +21,8 @@
  */
 package cloud.trotter.dashbuddy.domain.census.contract
 
+import cloud.trotter.dashbuddy.domain.util.sha256OrNull
 import java.io.ByteArrayOutputStream
-import java.security.MessageDigest
 
 /**
  * The census CLUSTER key (ADR-0011 §8): a full sha256 (64 hex) over one canonical byte form of the
@@ -33,14 +33,17 @@ import java.security.MessageDigest
  * hash, which must not change) and it is a different algorithm: here an anonymous wrapper
  * ([AnonymousWrappers]) is SPLICED away — its children join its parent's child sequence in order, an
  * empty wrapper contributes nothing — whereas `stableHash` folds a wrapper's children as a nested
- * group. Only the wrapper class set is shared.
+ * group. Only the wrapper predicate is shared.
  *
  * Canonical form, after wrapper-to-forest normalization and with the normalized forest ALWAYS under
  * one synthetic root (class `""`, null id, the spliced count) — so `fingerprint(A) == fingerprint(W(A))`
- * — pre-order, per node:
- * `"C"` + class UTF-8 (`""` when null) + `0x00` + (`"I"` + id UTF-8 | `"N"` when the id is null)
- * + `0x00` + the spliced child count in ASCII decimal + `0x00`, then the children in order.
- * A null id and an empty id therefore differ.
+ * — pre-order, per node, every STRING LENGTH-PREFIXED (#1160 review AA2 — a delimiter-only form let a
+ * value that mimics the framing collide two different trees):
+ * `"C"` + byteLen(class) ASCII decimal + `0x00` + class UTF-8 (`""` when null)
+ * + (`"N"` when the id is null | `"I"` + byteLen(id) ASCII decimal + `0x00` + id UTF-8)
+ * + the spliced child count ASCII decimal + `0x00`, then the children in order.
+ * The encoding is prefix-free, hence injective over (class-or-empty, id-or-null, structure); a null id
+ * and an empty id differ. A class or id carrying U+0000 is refused upstream ([UiSkeletonNodeDto]).
  */
 object CensusFingerprint {
 
@@ -48,28 +51,25 @@ object CensusFingerprint {
     const val HEX_LENGTH: Int = 64
 
     /** The fingerprint of the tree under [root], or null if the digest failed (fail closed). */
-    fun of(root: UiSkeletonNodeDto): String? = try {
-        MessageDigest.getInstance("SHA-256")
-            .digest(canonicalBytes(root))
-            .joinToString("") { b -> "%02x".format(java.util.Locale.ROOT, b) }
-    } catch (_: Exception) {
-        null
-    }
+    fun of(root: UiSkeletonNodeDto): String? = sha256OrNull(canonicalBytes(root))
 
     /** True when [s] is [HEX_LENGTH] lowercase hex. */
     fun isWellFormed(s: String): Boolean =
         s.length == HEX_LENGTH && s.all { it in '0'..'9' || it in 'a'..'f' }
 
     /** The canonical byte form [of] digests (exposed for the shared vectors and the server). */
-    fun canonicalBytes(root: UiSkeletonNodeDto): ByteArray {
-        val syntheticRoot = Shape(className = "", id = null, children = normalize(root))
+    fun canonicalBytes(root: UiSkeletonNodeDto): ByteArray =
+        canonicalBytes(Shape(className = "", id = null, children = normalize(root)))
+
+    /** The encoder over an already-normalized [Shape] (the synthetic root). Internal for the tests. */
+    internal fun canonicalBytes(syntheticRoot: Shape): ByteArray {
         val out = ByteArrayOutputStream()
         write(syntheticRoot, out)
         return out.toByteArray()
     }
 
     /** A node after wrapper-to-forest normalization: structure only. */
-    private class Shape(val className: String?, val id: String?, val children: List<Shape>)
+    internal class Shape(val className: String?, val id: String?, val children: List<Shape>)
 
     /** Wrapper-to-forest: a wrapper contributes its (normalized) children; anything else is one node. */
     private fun normalize(node: UiSkeletonNodeDto): List<Shape> {
@@ -81,17 +81,23 @@ object CensusFingerprint {
         }
     }
 
+    private fun writeLengthPrefixed(value: String, out: ByteArrayOutputStream) {
+        val bytes = value.toByteArray(Charsets.UTF_8)
+        out.write(bytes.size.toString().toByteArray(Charsets.US_ASCII))
+        out.write(0)
+        out.write(bytes)
+    }
+
     private fun write(node: Shape, out: ByteArrayOutputStream) {
         out.write('C'.code)
-        out.write((node.className ?: "").toByteArray(Charsets.UTF_8))
-        out.write(0)
-        if (node.id == null) {
+        writeLengthPrefixed(node.className ?: "", out)
+        val id = node.id
+        if (id == null) {
             out.write('N'.code)
         } else {
             out.write('I'.code)
-            out.write(node.id.toByteArray(Charsets.UTF_8))
+            writeLengthPrefixed(id, out)
         }
-        out.write(0)
         out.write(node.children.size.toString().toByteArray(Charsets.US_ASCII))
         out.write(0)
         node.children.forEach { write(it, out) }

@@ -73,6 +73,10 @@ data class UiSkeletonNodeDto(
 ) {
     init {
         require(isChecked in 0..2) { "isChecked is the 0/1/2 tri-state" }
+        // A NUL can never ride a class/id (ADR-0011 §8): the fingerprint is length-prefixed and so
+        // unambiguous anyway, but a NUL is never a real resource name and is refused outright.
+        require(className?.contains('\u0000') != true) { "a class name never carries U+0000" }
+        require(id?.contains('\u0000') != true) { "a view id never carries U+0000" }
     }
 }
 

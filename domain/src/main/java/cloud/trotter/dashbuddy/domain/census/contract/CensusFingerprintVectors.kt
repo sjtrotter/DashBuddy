@@ -25,6 +25,7 @@ package cloud.trotter.dashbuddy.domain.census.contract
  * Golden vectors for [CensusFingerprint] (ADR-0011 §8), shared by the client tests and the census
  * server (#1157). The pinned hex values were computed by an INDEPENDENT implementation of the §8 byte
  * form (a short Python script, not this Kotlin), so they check the algorithm, not a snapshot of it.
+ * Regenerated for the length-prefixed encoding (#1160 review AA2).
  *
  * Required cases: null vs empty id, an empty wrapper, a multi-child wrapper, a wrapper root, and the
  * two nesting cases (`A(B(C)) != A(B, C)`; `A(W(C1, C2)) == A(C1, C2)`).
@@ -61,24 +62,24 @@ object CensusFingerprintVectors {
         node(LIST_CLASS, LIST_ID, node(WRAPPER_CLASS, "com.example:id/frame", title, button))
 
     val PINNED: List<Pinned> = listOf(
-        Pinned("single node", title, "93fa814cb93ea9275e8041edd8a4f3b8af20470dc8ef8f6cc1c645dbda712e81"),
-        Pinned("null id", NULL_ID, "0a80cfd6bab01c665402cdd10e621c5fc9f3de0072da2add9b65fbac8dd8e98c"),
-        Pinned("empty id", EMPTY_ID, "81d3c52e650801db0b1fb4967611373ce78cd2ddb4a0d97193b600073c9457d5"),
-        Pinned("flat", FLAT, "e8f54e959044b1ff46b14a8a8cf28e6c32f388f6ee2077968bcfb1477c0436dd"),
-        Pinned("multi-child wrapper", MULTI_CHILD_WRAPPER, "e8f54e959044b1ff46b14a8a8cf28e6c32f388f6ee2077968bcfb1477c0436dd"),
-        Pinned("nested", NESTED, "1bd91b3ce0eed4e8d271a5ffe43b6109bcda74773a78dbc6a7b90fd9464a3760"),
-        Pinned("siblings", SIBLINGS, "4de4beb4c5b67f97312d3ad8fb0ef959cfbcd8e1b1a86af680fa2fdf76027ac5"),
-        Pinned("wrapper root", WRAPPER_ROOT, "93fa814cb93ea9275e8041edd8a4f3b8af20470dc8ef8f6cc1c645dbda712e81"),
-        Pinned("empty wrapper", EMPTY_WRAPPER, "f5965eed6590dab8c5b45baeafdabfa52814c135adcafcda9aa6ddb96693f959"),
+        Pinned("single node", title, "412ea97cebef7fce763ae82bef6aa9b32c14bbfa17d847a4c1d6e49b83a43496"),
+        Pinned("null id", NULL_ID, "b953104254b69ae14bff2b0ebbc5bdabff72faad70068fc7ea49a3b7aad0b340"),
+        Pinned("empty id", EMPTY_ID, "a91614370e3ff0e734b49b46533e149941518e42a7062916f2eb80663bf91517"),
+        Pinned("flat", FLAT, "865c0a09f9ef2510a99b3a1285bc29a22e6b47a8bdcd256d3446c8321a7ed66f"),
+        Pinned("multi-child wrapper", MULTI_CHILD_WRAPPER, "865c0a09f9ef2510a99b3a1285bc29a22e6b47a8bdcd256d3446c8321a7ed66f"),
+        Pinned("nested", NESTED, "e8f5491c07ebf95c25f659b6c65def1eed40cc580dd945ff759ada113d183e71"),
+        Pinned("siblings", SIBLINGS, "a9b4278727edbe586287cb4451f97c228f14c3e3f6ebf57507f8ad4f5e1aacc9"),
+        Pinned("wrapper root", WRAPPER_ROOT, "412ea97cebef7fce763ae82bef6aa9b32c14bbfa17d847a4c1d6e49b83a43496"),
+        Pinned("empty wrapper", EMPTY_WRAPPER, "67185dad87a164435a104b86d05fc30ed43d5687be0df40ea544a63d369663c3"),
         Pinned(
             "wrapper class WITH an id is not transparent",
             WRAPPER_CLASS_WITH_ID,
-            "d55ca17c04310dd67dcf9884ea3fd9aaddd7c26f7388d30789c0828f30fa985c",
+            "6dfe76bcd1329afdabbf3393d94f42798ff591b5a47324a8bea6d9b5a7bda83b",
         ),
         Pinned(
             "UTF-8 id bytes",
             node(TEXT_CLASS, "com.example:id/café"),
-            "741fc9c412e91b9d1d898c3fdf35b867b043220ac8f3a707f915e8c85ac4a65b",
+            "03c247acf1220e3284014331a15827779ffb289e8f9dbc4168296fcdc61c0ef2",
         ),
     )
 
