@@ -5,6 +5,7 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.flow.flow
@@ -256,5 +257,39 @@ class CoalesceByKeyTest {
 
         assertEquals(listOf(0L, 300L, 600L, 900L, 1130L), out.map { it.first })
         assertEquals("sum n == raw events (G4)", 50, out.sumOf { it.second.count })
+    }
+
+    @Test
+    fun `leading edge with a stalled consumer never stalls collection - a hot source loses nothing (H7)`() = runTest {
+        // The production shape: a hot, DROP_OLDEST source (AccessibilitySource's buffer). If a lead
+        // were sent on the collector, a stalled consumer would stop collection and the source
+        // would drop raw events.
+        val source = MutableSharedFlow<Ev>(extraBufferCapacity = 64, onBufferOverflow = BufferOverflow.DROP_OLDEST)
+        val gate = CompletableDeferred<Unit>()
+        val out = mutableListOf<Acc>()
+        val job = launch {
+            source
+                .coalesceByKey(keyOf = { it.key }, merge = ::mergeEv, maxKeys = 1, leadingEdge = true)
+                .collect { gate.await(); out += it }
+        }
+        runCurrent()
+        val baseline = job.activeDescendants()
+
+        val events = 300
+        var peak = 0
+        repeat(events) {
+            advanceTimeBy(400) // past the cooldown: every event would lead
+            assertTrue(source.tryEmit(Ev(key = 1, bits = 1, at = 0)))
+            runCurrent()
+            peak = maxOf(peak, job.activeDescendants() - baseline)
+        }
+
+        assertTrue("live coroutines stay bounded, was $peak", peak <= 4)
+
+        gate.complete(Unit)
+        advanceUntilIdle()
+        job.cancel()
+
+        assertEquals("every raw event is accounted for once the consumer resumes", events, out.sumOf { it.count })
     }
 }

@@ -27,9 +27,12 @@ internal const val COALESCE_MAX_KEYS = 64
  * - After a close the next event opens a new burst, so a continuing flood emits at most every
  *   [maxWaitMs], and the final quiet always yields a trailing emission (the guaranteed trailing
  *   refresh).
- * - Leading edge (opt-in, [leadingEdge], #1148 review F5/G3/G4): a burst that opens on a key
+ * - Leading edge (opt-in, [leadingEdge], #1148 review F5/G3/G4/H7): a burst that opens on a key
  *   with NO emission in the last [maxWaitMs] emits its opening event IMMEDIATELY (an accumulator
- *   of one), so the first frame of a transition after idle carries no quiet/max delay. The
+ *   of one), so the first frame of a transition after idle carries no quiet/max delay. The lead
+ *   is sent by a launched sender that HOLDS an emission permit, never on the collector (H7: a
+ *   collector suspended in `send` stops collection and the hot upstream drops raw events); with
+ *   no free permit (a stalled consumer) there is no lead and the burst simply merges. The
  *   burst's accumulator then restarts EMPTY, so its later quiet/max flush carries only the events
  *   merged after the lead and emits only if there are any — a lone event yields ONE emission, and
  *   the emitted counts always sum to the raw event count. The cooldown is anchored on the key's
@@ -99,14 +102,18 @@ private class KeyedCoalescer<T, K, A : Any>(
 
     suspend fun onEvent(key: K, value: T) {
         var evicted: A? = null
-        var leading: A? = null
         lock.withLock {
             val burst = bursts[key]
             if (burst == null) {
-                if (bursts.size >= maxKeys) evicted = evictOldestLocked()
+                if (bursts.size >= maxKeys) {
+                    evictOldestLocked()?.let { v -> if (!sendWithPermitLocked(v)) evicted = v }
+                }
                 val first = merge(null, value)
-                val opened = if (leadingEdge && key !in recentlyEmitted) {
-                    leading = first
+                // H7: a lead is sent by a launched sender HOLDING an emission permit — never on the
+                // collector, whose suspension would stall collection and let the hot upstream drop
+                // raw events. No permit (a stalled consumer) → no lead: the burst opens with the
+                // event and merges.
+                val opened = if (leadingEdge && key !in recentlyEmitted && sendWithPermitLocked(first)) {
                     markEmittedLocked(key)
                     Burst(acc = null) // G4: the trailing flush carries only post-lead events
                 } else {
@@ -124,8 +131,25 @@ private class KeyedCoalescer<T, K, A : Any>(
                 armQuietLocked(key, burst)
             }
         }
+        // An eviction that found no free permit is sent here, on the collector (backpressure — it
+        // cannot be dropped); with a single-key or few-key stream this path is not reached.
         evicted?.let { scope.send(it) }
-        leading?.let { scope.send(it) }
+    }
+
+    /**
+     * Launches a sender for [value] if an emission permit is free RIGHT NOW (H7), holding the
+     * permit through `send`. Returns false (nothing launched) when none is.
+     */
+    private fun sendWithPermitLocked(value: A): Boolean {
+        if (!permits.tryAcquire()) return false
+        scope.launch {
+            try {
+                scope.send(value)
+            } finally {
+                permits.release()
+            }
+        }
+        return true
     }
 
     private fun armQuietLocked(key: K, burst: Burst) {
