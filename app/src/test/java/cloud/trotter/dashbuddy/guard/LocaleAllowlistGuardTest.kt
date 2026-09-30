@@ -103,7 +103,7 @@ class LocaleAllowlistGuardTest {
     // every main-type source set of every module, feature modules discovered dynamically.
     // =========================================================================
 
-    private val repoRoot: File by lazy { locateRepoRoot() }
+    private val repoRoot: File by lazy { RepoRoot.locate() }
 
     private val modules: List<String> by lazy {
         val layerModules = listOf(
@@ -136,18 +136,6 @@ class LocaleAllowlistGuardTest {
             sourceSets
                 .filter { dir -> excludedSourceSetPrefixes.none { dir.name.startsWith(it) } }
                 .map { dir -> "$module/src/${dir.name}" }
-        }
-    }
-
-    private fun locateRepoRoot(): File {
-        var dir = File(".").absoluteFile.normalize()
-        while (true) {
-            if (File(dir, "settings.gradle.kts").isFile) return dir
-            dir = dir.parentFile
-                ?: error(
-                    "Could not locate repo root (settings.gradle.kts) walking up from " +
-                        File(".").absoluteFile.normalize().path,
-                )
         }
     }
 }

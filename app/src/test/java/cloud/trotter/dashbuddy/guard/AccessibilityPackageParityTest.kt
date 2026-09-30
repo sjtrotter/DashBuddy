@@ -17,7 +17,7 @@ class AccessibilityPackageParityTest {
 
     @Test
     fun `manifest packageNames equals the watched-package registry`() {
-        val xml = File(locateRepoRoot(), "app/src/main/res/xml/accessibility_service_config.xml")
+        val xml = File(RepoRoot.locate(), "app/src/main/res/xml/accessibility_service_config.xml")
         assertTrue("missing ${xml.path}", xml.isFile)
 
         val factory = DocumentBuilderFactory.newInstance().apply { isNamespaceAware = true }
@@ -27,14 +27,6 @@ class AccessibilityPackageParityTest {
 
         val manifest = raw.split(',').map { it.trim() }.filter { it.isNotEmpty() }.toSet()
         assertEquals(Platform.watchedPackages, manifest)
-    }
-
-    private fun locateRepoRoot(): File {
-        var dir = File(".").absoluteFile.normalize()
-        while (true) {
-            if (File(dir, "settings.gradle.kts").isFile && File(dir, "app").isDirectory) return dir
-            dir = dir.parentFile ?: error("Could not locate repo root walking up from ${File(".").absolutePath}")
-        }
     }
 
     private companion object {
