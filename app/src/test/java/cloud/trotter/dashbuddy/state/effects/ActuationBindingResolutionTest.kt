@@ -42,12 +42,12 @@ import org.junit.Test
  *    has no id.
  *  - labels = `NodeRef.hintLabelsOf` — the ONE `:domain` label horizon (#1149 review I2): own
  *    text/contentDescription + the subtree to depth 3 / 24 child slots, stopping at every clickable
- *    descendant (its labels are its own, review I3).
+ *    descendant (its labels are its own, review I3). The bind side is `NodeRef.bindHintsOf` — the
+ *    bound node's action OWNER's region (L2), exactly what production binds.
  *  - decision = `ClickCandidateRanker.rank`, then the handler's tie rule.
  *  - #1149: every candidate is mapped to its action OWNER (nearest clickable self/ancestor, at
- *    most [AccNodeUtils.MAX_OWNER_WALK] steps — a `UiNode` carries no action list, so
- *    "clickable" is `isClickable` here), owner-less candidates are dropped, candidates sharing an
- *    owner are deduped, labels are collected on the owner plus the matched node's own (I8), and
+ *    most [AccNodeUtils.MAX_OWNER_WALK] steps; "clickable" is `UiNode.takesClick`, the production
+ *    predicate — review L6), owner-less candidates are dropped, candidates sharing an owner are deduped, labels are collected on the owner plus the matched node's own (I8), and
  *    semantic twins abort (I5). Legacy `"clickable"`-key fixtures are skipped, never given
  *    invented owners (#1154).
  *  - #1149 strategy 2b (`semantic = true`, the production order): a hinted ref is re-found by
@@ -100,26 +100,31 @@ class ActuationBindingResolutionTest {
             val byText = tree.findNodes { (it.text?.contains(txt, ignoreCase = true) == true) }
             if (byText.isNotEmpty()) return byText.map { Cand(it) }
         }
-        if (semantic && ref.labelHintHashes.isNotEmpty()) {
-            // Mirror of `findNodeBySemantics` (#1149): clickable, class-matching, a COMPLETE label scan
-            // that is the ref's EXACT fingerprint; always descends, records nesting. The corpus trees
-            // (~60 nodes, depth <= 19) sit far inside the production depth/fetch bound, which the
-            // handler tests pin; the mirror asserts it is never approached.
+        if (semantic && ref.hasExactFingerprint) {
+            // Mirror of `findNodeBySemantics` + `decideSemanticOutcome` (#1149 L1) for ONE (active)
+            // window: nodes that `takesClick` (L6 — the production predicate), filtered on the bind's
+            // OWNER class (L2), whose COMPLETE label region is the ref's EXACT fingerprint; always
+            // descends, records nesting. An incomplete candidate region whose visible labels still fit
+            // marks the window incomplete (J4). No hit → fall through to strategy 3; hit(s) in an
+            // incomplete window → abort. The corpus trees (~60 nodes, depth <= 19) sit far inside the
+            // production depth/fetch bound, which the handler tests pin; the mirror asserts it.
             val hits = mutableListOf<Cand>()
             val path = ArrayList<Int>()
+            var incomplete = false
+            val ownerClass = ref.ownerClassHint ?: ref.classNameHint
             fun walk(node: UiNode, depth: Int) {
                 check(depth <= TreeLimits.MAX_TREE_DEPTH) { "corpus tree deeper than the 2b bound" }
-                val classOk = ref.classNameHint == null || node.className == ref.classNameHint
-                // Review I4b: an incomplete candidate makes the window's search incomplete — abort.
-                val hit = classOk && node.isClickable && scanLabels(node).let { (l, complete) ->
-                    if (!complete) throw SemanticIncomplete()
-                    ref.fingerprintMatches(l)
+                val classOk = ownerClass == null || node.className == ownerClass
+                val hit = classOk && node.takesClick && scanLabels(node).let { (l, complete) ->
+                    if (!complete) { if (ref.visibleConsistentWith(l)) incomplete = true; false }
+                    else ref.fingerprintMatches(l)
                 }
                 if (hit) { hits += Cand(node, semantic = true, ancestors = path.toList()); path.add(hits.size - 1) }
                 node.children.forEach { walk(it, depth + 1) }
                 if (hit) path.removeAt(path.size - 1)
             }
             walk(tree, 0)
+            if (hits.isNotEmpty() && incomplete) throw SemanticIncomplete()
             if (hits.isNotEmpty()) return hits
         }
         val b = ref.boundsInScreen
@@ -133,7 +138,7 @@ class ActuationBindingResolutionTest {
         fun walk(node: UiNode) {
             val classOk = ref.classNameHint == null || node.className == ref.classNameHint
             val live = node.boundsInScreen
-            val hit = classOk && node.isClickable && (
+            val hit = classOk && node.takesClick && (
                 live == ref.boundsInScreen ||
                     ClickCandidateRanker.boundsIoU(live, ref.boundsInScreen) >= UiInteractionHandler.RELAXED_BOUNDS_IOU
                 )
@@ -154,7 +159,7 @@ class ActuationBindingResolutionTest {
         var current: UiNode? = node
         var steps = 0
         while (current != null && steps < AccNodeUtils.MAX_OWNER_WALK) {
-            if (current.isClickable) return current
+            if (current.takesClick) return current // L6: the production predicate
             current = current.parent
             steps++
         }
