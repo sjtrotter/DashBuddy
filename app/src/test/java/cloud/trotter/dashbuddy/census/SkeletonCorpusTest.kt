@@ -336,20 +336,28 @@ class SkeletonCorpusTest {
         // text/desc — reviews CC3, EE1). Canonical form, as the builder keys them (review EE2).
         val propagatedNotSeeded = HashSet<String>()
         val idSeeded = HashSet<String>()
+        val nameSeeded = HashSet<String>()
         walkNodes(tree) { n ->
             val id = n.viewIdResourceName
-            val identity = CustomerTextMarkers.idMarkerFor(id)?.valueIsPii == true
+            val kind = CustomerTextMarkers.idMarkerFor(id)?.kind
+            val identity = kind == CustomerTextMarkers.IdentityKind.NAME || kind == CustomerTextMarkers.IdentityKind.ADDRESS
             n.scrubbableStrings().forEach { (field, v) ->
                 if (v.isNullOrBlank()) return@forEach
-                val seeds = identity && (field == UiNodeTextField.TEXT || field == UiNodeTextField.CONTENT_DESCRIPTION)
+                val canonical = CensusHash.canonical(v)
+                val seeds = identity && !PiiShapes.containsMask(canonical) &&
+                    (field == UiNodeTextField.TEXT || field == UiNodeTextField.CONTENT_DESCRIPTION)
                 when {
-                    seeds -> idSeeded += CensusHash.canonical(v)
-                    PiiShapes.hasPiiIdSuffix(id) -> propagatedNotSeeded += CensusHash.canonical(v)
+                    seeds -> {
+                        idSeeded += canonical
+                        // Review LL1: only a NAME contributes letter runs.
+                        if (kind == CustomerTextMarkers.IdentityKind.NAME) nameSeeded += canonical
+                    }
+                    PiiShapes.hasPiiIdSuffix(id) -> propagatedNotSeeded += canonical
                 }
             }
         }
         // Review GG1: an identity value also withholds any field CONTAINING one of its ≥3-letter runs.
-        val idRuns = idSeeded.flatMap { letterRuns(it, minLetters = 2) }.toSet()
+        val idRuns = nameSeeded.flatMap { letterRuns(it, minLetters = 2) }.toSet()
         // Review HH3: every canonical key a value predicate caught ANYWHERE in the frame — on the canonical
         // form, or on the raw trimmed form when that is within the cap (the builder's bounded raw pass).
         val judgedKeys = HashSet<String>()
