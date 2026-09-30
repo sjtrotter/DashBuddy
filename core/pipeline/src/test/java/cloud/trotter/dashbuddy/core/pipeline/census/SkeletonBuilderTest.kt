@@ -876,4 +876,18 @@ class SkeletonBuilderTest {
     fun `PP5 - a supplementary-plane FORMAT char cannot split a marker`() {
         assertEquals(TextSlot.WITHHELD, slot("Deli\uDB40\uDC20ver to Sam"))
     }
+
+    // ---- #1160 review round 8 ----------------------------------------------------------------------
+
+    @Test
+    fun `RR1 - a supplementary FORMAT char beside an SSN still refuses the frame, and the raw pass keeps boundaries`() {
+        assertEquals(
+            Outcome.Refused(Refusal.SENSITIVE_FRAME),
+            SkeletonBuilder.outcome(tree("x\uDB40\uDC20123-45-6789"), null, meta, platform, day),
+        )
+        // The census canonical strips the char (x123 Main St — no `\b` before the house number), but the
+        // bounded RAW pass still sees the boundary, so the STREET shape withholds it.
+        assertEquals(TextSlot.WITHHELD, slot("x\uDB40\uDC20123 Main St"))
+        assertEquals(TextSlot.WITHHELD, slot("x\uDB40\uDC20Jane S is here"))
+    }
 }

@@ -1,6 +1,8 @@
 package cloud.trotter.dashbuddy.core.pipeline
 
+import cloud.trotter.dashbuddy.domain.model.accessibility.UiNode
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.text.Normalizer
 import java.util.Locale
@@ -35,7 +37,7 @@ class SensitiveTextMarkersNormalizePinTest {
     }
 
     @Test
-    fun `normalize matches the reference and strips supplementary FORMAT chars`() {
+    fun `the stripped form matches the code-point reference and strips supplementary FORMAT chars`() {
         assertEquals("deliver to sam", SensitiveTextMarkers.normalize("Deli󠀠ver to Sam"))
         val fixed = listOf(
             "Bank Account", "Bank Account", "Ｂａｎｋ　Ａｃｃｏｕｎｔ",
@@ -54,6 +56,46 @@ class SensitiveTextMarkersNormalizePinTest {
         repeat(2000) {
             val s = buildString { repeat(rnd.nextInt(0, 24)) { append(pool[rnd.nextInt(pool.size)]) } }
             assertEquals(s, referenceNormalize(s), SensitiveTextMarkers.normalize(s))
+        }
+    }
+
+    /** The pre-#1160 normalizer, VERBATIM (per UTF-16 unit) — the oracle for the preserved form (RR1). */
+    private fun legacyNormalize(s: String): String {
+        val nfkc = Normalizer.normalize(s, Normalizer.Form.NFKC)
+        val sb = StringBuilder(nfkc.length)
+        for (ch in nfkc) {
+            when {
+                Character.getType(ch) == Character.FORMAT.toInt() -> {}
+                ch in '\u2010'..'\u2015' || ch == '\u2212' -> sb.append('-')
+                ch == '\u001F' || ch.isWhitespace() -> sb.append(' ')
+                else -> sb.append(ch)
+            }
+        }
+        return sb.toString().lowercase(Locale.ROOT)
+    }
+
+    @Test
+    fun `the boundary-preserving form is byte-for-byte the pre-1160 normalizer (review RR1)`() {
+        val rnd = Random(0x1160_0008L)
+        val pool = listOf(
+            "a", "Z", "0", " ", "\u00A0", "\u200B", "\u200D", "\uFEFF", "\u2011", "\u2212", "\u001F", "\uFF21",
+            "\u0301", "\uDB40\uDC20", "\uD834\uDD73", "\uD83D\uDE97", "-", "1",
+        )
+        val inputs = listOf("x\uDB40\uDC20123-45-6789", "Deli\uDB40\uDC20ver to Sam", "Bank\u200BAccount") +
+            List(2000) { buildString { repeat(rnd.nextInt(0, 24)) { append(pool[rnd.nextInt(pool.size)]) } } }
+        inputs.forEach { assertEquals(it, legacyNormalize(it), SensitiveTextMarkers.normalizePreserving(it)) }
+    }
+
+    @Test
+    fun `a supplementary FORMAT char beside a shape cannot hide it - either form hits (review RR1)`() {
+        listOf(
+            "x\uDB40\uDC20123-45-6789", "123-45-6789\uDB40\uDC20x",
+            "x\uDB40\uDC204111 1111 1111 1111", "4111 1111 1111 1111\uDB40\uDC20x",
+            "Deli\uDB40\uDC20ver to Sam", "Bank\uDB40\uDC20 Account",
+        ).forEach { text ->
+            if (text.contains("Deli")) return@forEach // a customer marker, not a sensitive one
+            assertTrue(text, SensitiveTextMarkers.findMarker(text) != null)
+            assertTrue(text, SensitiveTextMarkers.findMarker(UiNode(text = text)) != null)
         }
     }
 }

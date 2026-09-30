@@ -61,7 +61,27 @@ object TextFold {
     }
 
     /**
-     * The sensitive-marker scan's fold — NFKC first, then FORMAT strip and dash fold, by code point. Its
+     * The sensitive-marker scan's BOUNDARY-PRESERVING fold — exactly the pre-#1160 loop, per UTF-16 unit:
+     * a BMP FORMAT char is stripped, a supplementary-plane one (a surrogate pair — never FORMAT per unit)
+     * is KEPT. Review RR1: stripping it can REMOVE a word boundary a shape pattern relies on
+     * (`x<U+E0020>123-45-6789` → `x123-45-6789` defeats the SSN's `\b`), so the scan runs this form AND
+     * the fully stripped [foldGlyphs] and drops on either hit.
+     */
+    fun foldGlyphsPreservingSupplementary(value: String): String {
+        val nfkc = Normalizer.normalize(value, Normalizer.Form.NFKC)
+        val sb = StringBuilder(nfkc.length)
+        for (ch in nfkc) {
+            when {
+                Character.getType(ch) == Character.FORMAT.toInt() -> {}
+                ch in '\u2010'..'\u2015' || ch == '\u2212' -> sb.append('-')
+                else -> sb.append(ch)
+            }
+        }
+        return sb.toString()
+    }
+
+    /**
+     * The sensitive-marker scan's fully STRIPPED fold — NFKC first, then FORMAT strip and dash fold, by code point. Its
      * behaviour is pinned (`SensitiveTextMarkersNormalizePinTest`): the pre-#1160 loop, deliberately
      * widened by review PP5 to strip supplementary-plane FORMAT chars too; the census uses [foldForCensus].
      */

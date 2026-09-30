@@ -212,18 +212,26 @@ object SensitiveTextMarkers {
      *    (so the scan can use a plain, allocation-light `contains`).
      * Single allocation pass over the NFKC output; NFKC itself is O(n).
      */
-    internal fun normalize(s: String): String {
-        // #1160 review NN5: NFKC + FORMAT strip + dash fold have ONE owner, shared with the census
-        // canonical form; this scan adds its own per-char whitespace → space and the ROOT lowercase.
-        // Pinned (SensitiveTextMarkersNormalizePinTest): the pre-#1160 behaviour, widened only toward
-        // privacy by review PP5 (supplementary-plane FORMAT chars are stripped too).
-        val folded = TextFold.foldGlyphs(s)
+    internal fun normalize(s: String): String = spaceAndLower(TextFold.foldGlyphs(s))
+
+    /**
+     * The BOUNDARY-PRESERVING normal form — byte-for-byte the pre-#1160 normalizer (supplementary-plane
+     * FORMAT chars kept). Review RR1: [findMarker] scans this AND the fully stripped [normalize] and drops
+     * on EITHER hit — stripping a supplementary FORMAT char can erase the `\b` a shape pattern needs, while
+     * keeping it lets a tag char split a keyword; the union covers both (fail toward privacy).
+     */
+    internal fun normalizePreserving(s: String): String = spaceAndLower(TextFold.foldGlyphsPreservingSupplementary(s))
+
+    private fun spaceAndLower(folded: String): String {
         val sb = StringBuilder(folded.length)
         for (ch in folded) {
             if (ch == '\u001F' || ch.isWhitespace()) sb.append(' ') else sb.append(ch)
         }
         return sb.toString().lowercase(Locale.ROOT)
     }
+
+    /** Scan both normal forms; the first hit wins (review RR1). */
+    private fun scanBothForms(text: String): String? = scan(normalizePreserving(text)) ?: scan(normalize(text))
 
     /**
      * The marker name reported for a shaped-value hit. `internal` + factored out (#862) so the
@@ -254,7 +262,7 @@ object SensitiveTextMarkers {
      * that field because rules match on it; this scan must not.
      */
     fun findMarker(tree: UiNode): String? = try {
-        scan(normalize(tree.allScrubbableText().joinToString(" ")))
+        scanBothForms(tree.allScrubbableText().joinToString(" "))
     } catch (_: Throwable) {
         NORMALIZE_FAILED
     }
@@ -264,7 +272,7 @@ object SensitiveTextMarkers {
      * FAIL-CLOSED: a normalization throw returns the toxic sentinel, never null.
      */
     fun findMarker(text: String): String? = try {
-        scan(normalize(text))
+        scanBothForms(text)
     } catch (_: Throwable) {
         NORMALIZE_FAILED
     }
