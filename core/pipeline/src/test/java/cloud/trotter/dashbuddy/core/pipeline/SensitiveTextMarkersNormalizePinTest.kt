@@ -9,29 +9,35 @@ import java.util.Locale
 import kotlin.random.Random
 
 /**
- * #1160 reviews NN5/PP5 — `SensitiveTextMarkers.normalize` delegates NFKC + FORMAT strip + dash fold to the
- * shared `TextFold.foldGlyphs`. Its behaviour is pinned against a REFERENCE implementation: the pre-#1160
- * loop with ONE deliberate change (review PP5) — FORMAT is judged per CODE POINT, so a supplementary-plane
- * FORMAT char (tag chars U+E0020–E007F, U+E0001, U+1D173–1D17A) is stripped instead of surviving as a
- * surrogate pair that splits a marker. That widens detection only (toward privacy).
+ * #1160 reviews NN5/PP5/RR1/UU8 — the sensitive scan's TWO normal forms, each pinned:
+ * - `normalizePreserving` (`TextFold.foldGlyphsPreservingSupplementary`) — byte-for-byte the pre-#1160
+ *   normalizer, against the VERBATIM old loop;
+ * - `normalize` (`TextFold.foldForCensus`) — FORMAT stripped by code point first (tag chars U+E0020–E007F,
+ *   U+E0001, U+1D173–1D17A included), then NFKC, then dashes — against a reference of that order.
+ * `findMarker` drops on a hit in EITHER form, so the change only widens detection (toward privacy).
  */
 class SensitiveTextMarkersNormalizePinTest {
 
-    /** The reference: the pre-#1160 loop, FORMAT judged per code point (review PP5). */
+    /**
+     * The reference for the fully STRIPPED form (reviews PP5, UU8): FORMAT stripped by code point FIRST,
+     * then NFKC, then the dash fold — the census fold — then whitespace → space and ROOT lowercase.
+     */
     private fun referenceNormalize(s: String): String {
-        val nfkc = Normalizer.normalize(s, Normalizer.Form.NFKC)
-        val sb = StringBuilder(nfkc.length)
+        val stripped = StringBuilder(s.length)
         var i = 0
-        while (i < nfkc.length) {
-            val cp = nfkc.codePointAt(i)
-            val n = Character.charCount(cp)
+        while (i < s.length) {
+            val cp = s.codePointAt(i)
+            if (Character.getType(cp) != Character.FORMAT.toInt()) stripped.appendCodePoint(cp)
+            i += Character.charCount(cp)
+        }
+        val nfkc = Normalizer.normalize(stripped, Normalizer.Form.NFKC)
+        val sb = StringBuilder(nfkc.length)
+        for (ch in nfkc) {
             when {
-                Character.getType(cp) == Character.FORMAT.toInt() -> {}
-                cp in 0x2010..0x2015 || cp == 0x2212 -> sb.append('-')
-                n == 1 && (nfkc[i] == '\u001F' || nfkc[i].isWhitespace()) -> sb.append(' ')
-                else -> sb.appendCodePoint(cp)
+                ch in '\u2010'..'\u2015' || ch == '\u2212' -> sb.append('-')
+                ch == '\u001F' || ch.isWhitespace() -> sb.append(' ')
+                else -> sb.append(ch)
             }
-            i += n
         }
         return sb.toString().lowercase(Locale.ROOT)
     }

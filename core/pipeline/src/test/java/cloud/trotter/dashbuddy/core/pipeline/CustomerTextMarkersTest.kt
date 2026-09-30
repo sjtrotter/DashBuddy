@@ -2,8 +2,10 @@ package cloud.trotter.dashbuddy.core.pipeline
 
 import cloud.trotter.dashbuddy.domain.model.accessibility.UiNode
 import cloud.trotter.dashbuddy.domain.model.notification.RawNotificationData
+import cloud.trotter.dashbuddy.domain.privacy.PiiShapes
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
@@ -379,6 +381,8 @@ class CustomerTextMarkersTest {
                 // #1160 review NN2 — deliberately ADDED: the GoPuff per-order customer name, promoted
                 // from the intake list so the runtime UNKNOWN scrub covers it too.
                 "order_cx_name",
+                // #1160 review TT1 — deliberately ADDED: the chat last-message preview is always customer text.
+                "tvLastMessage",
             ),
             CustomerTextMarkers.ID_MARKERS,
         )
@@ -409,12 +413,36 @@ class CustomerTextMarkersTest {
     }
 
     @Test
-    fun `the census-only rows stay out of the runtime scrub (review SS9)`() {
+    fun `tvTitle scrubs at runtime only when name-like, tvLastMessage always (reviews SS9, TT1)`() {
         assertEquals(
-            setOf("tvTitle", "tvLastMessage"),
-            CustomerTextMarkers.ID_MARKER_TABLE.filter { !it.runtimeScrub }.map { it.suffix }.toSet(),
+            CustomerTextMarkers.RuntimeScrub.WHEN_NAME_LIKE,
+            CustomerTextMarkers.ID_MARKER_TABLE.single { it.suffix == "tvTitle" }.runtimeScrub,
         )
-        val title = UiNode(viewIdResourceName = "com.x:id/tvTitle", text = "Pick up order")
-        assertEquals("Pick up order", CustomerTextMarkers.scrubUnknown(title).text)
+        val chrome = UiNode(viewIdResourceName = "com.x:id/tvTitle", text = "Pick up order")
+        assertEquals("Pick up order", CustomerTextMarkers.scrubUnknown(chrome).text)
+        val name = UiNode(viewIdResourceName = "com.x:id/tvTitle", text = "Riley S")
+        assertEquals("[redacted]", CustomerTextMarkers.scrubUnknown(name).text)
+        val message = UiNode(viewIdResourceName = "com.x:id/tvLastMessage", text = "My gate code is 2468")
+        assertEquals("[redacted]", CustomerTextMarkers.scrubUnknown(message).text)
+        listOf("Riley", "Riley S", "O'Brien", "Mary-Jo K").forEach { assertTrue(it, CustomerTextMarkers.isNameLike(it)) }
+        listOf("Pick up order", "Order details", "riley", "Riley's order x", "R2", "").forEach {
+            assertTrue(it, !CustomerTextMarkers.isNameLike(it))
+        }
+    }
+
+    @Test
+    fun `every ID_MARKER_TABLE suffix is in the intake list (review UU3)`() {
+        val missing = CustomerTextMarkers.ID_MARKER_TABLE.map { it.suffix }.toSet() - PiiShapes.PII_ID_SUFFIXES
+        assertEquals(emptySet<String>(), missing)
+    }
+
+    @Test
+    fun `the runtime mode is applied before the first match (review UU4)`() {
+        val table = listOf(
+            CustomerTextMarkers.IdMarker("name", CustomerTextMarkers.IdentityKind.EXACT, CustomerTextMarkers.RuntimeScrub.NEVER),
+            CustomerTextMarkers.IdMarker("customer_name", CustomerTextMarkers.IdentityKind.NAME),
+        )
+        assertEquals("customer_name", CustomerTextMarkers.idMarkerSuffix("com.x:id/customer_name", emptyList(), table))
+        assertNull(CustomerTextMarkers.idMarkerSuffix("com.x:id/pane_name", emptyList(), table))
     }
 }

@@ -212,7 +212,7 @@ object SensitiveTextMarkers {
      *    (so the scan can use a plain, allocation-light `contains`).
      * Single allocation pass over the NFKC output; NFKC itself is O(n).
      */
-    internal fun normalize(s: String): String = spaceAndLower(TextFold.foldGlyphs(s))
+    internal fun normalize(s: String): String = spaceAndLower(TextFold.foldForCensus(s))
 
     /**
      * The BOUNDARY-PRESERVING normal form — byte-for-byte the pre-#1160 normalizer (supplementary-plane
@@ -230,8 +230,25 @@ object SensitiveTextMarkers {
         return sb.toString().lowercase(Locale.ROOT)
     }
 
-    /** Scan both normal forms; the first hit wins (review RR1). */
-    private fun scanBothForms(text: String): String? = scan(normalizePreserving(text)) ?: scan(normalize(text))
+    /**
+     * Scan both normal forms; the first hit wins (review RR1). The fully stripped form can change a MATCH
+     * only when the text carries a supplementary-plane FORMAT char (every keyword and shape is ASCII, so the
+     * BMP-FORMAT / composition-order differences between the two folds cannot), so the second
+     * normalization + scan runs ONLY then (review UU2) — the LogScrubber and CaptureWriter hot paths scan
+     * once.
+     */
+    private fun scanBothForms(text: String): String? =
+        scan(normalizePreserving(text)) ?: if (hasSupplementaryFormat(text)) scan(normalize(text)) else null
+
+    private fun hasSupplementaryFormat(text: String): Boolean {
+        var i = 0
+        while (i < text.length) {
+            val cp = text.codePointAt(i)
+            if (cp >= 0x10000 && Character.getType(cp) == Character.FORMAT.toInt()) return true
+            i += Character.charCount(cp)
+        }
+        return false
+    }
 
     /**
      * The marker name reported for a shaped-value hit. `internal` + factored out (#862) so the

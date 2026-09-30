@@ -145,9 +145,9 @@ object CustomerTextMarkers {
      * `description_text_view`, which this file documents as generic DoorDash chrome); `EXACT` — a value
      * that may be PII or chrome, or an id REUSED for other people (`user_name`, also the merchant's and the
      * dasher's name; `tvTitle`, `tvLastMessage`): seeds its exact value only (#1160 reviews PP6, SS1). The intake list
-     * (`PiiShapes.PII_ID_SUFFIXES`) holds only instruction/content ids (message bodies, maneuver/road
-     * text, instruction bodies) plus this table's suffixes, so the two never disagree on a PII id
-     * (#1160 reviews NN2, PP6). The runtime backstop scrubs on EVERY suffix exactly as
+     * (`PiiShapes.PII_ID_SUFFIXES`) holds EVERY suffix of this table (a guard test pins the subset) plus
+     * other instruction/content ids (message bodies, maneuver/road text, instruction bodies), so the two
+     * never disagree on a PII id (#1160 reviews NN2, PP6, UU3). The runtime backstop scrubs on EVERY suffix exactly as
      * before; only the census's frame-wide duplicate rule reads the kind: a NAME seeds its exact value
      * and its letter runs, an ADDRESS its exact value only (address vocabulary — "Road", "View", "San" —
      * is common English), CONTENT seeds nothing.
@@ -212,22 +212,52 @@ object CustomerTextMarkers {
         // it and the census could hash its frame duplicates. Promoted so the two SSOTs agree on "what is
         // a customer-name id"; the runtime scrub widens by this one suffix (fail toward privacy).
         IdMarker("order_cx_name", IdentityKind.NAME),
-        // #1160 review PP6: the chat list's header (`tvTitle` — the customer's name on a chat row, but a
-        // generic id other surfaces use for a sheet title such as "Pick up order") and last-message
-        // preview (`tvLastMessage` — the customer's own text). EXACT: withheld on their own field and
-        // seeding their EXACT value frame-wide, never runs, so a chrome sheet title cannot suppress chrome
-        // words. CENSUS-only (#1160 review SS9): `runtimeScrub = false`, so the UNKNOWN debug capture keeps
-        // a generic sheet title — the one triage line that names a new surface; the corpus intake still
-        // masks both via `PiiShapes.PII_ID_SUFFIXES`.
-        IdMarker("tvTitle", IdentityKind.EXACT, runtimeScrub = false),
-        IdMarker("tvLastMessage", IdentityKind.EXACT, runtimeScrub = false),
+        // #1160 reviews PP6, SS9, TT1: the chat list's header (`tvTitle` — the customer's name on a chat row,
+        // but a generic id other surfaces use for a sheet title such as "Pick up order") and last-message
+        // preview (`tvLastMessage` — ALWAYS the customer's own text, never chrome). EXACT for the census:
+        // withheld on their own field and seeding their exact value, never runs. Runtime UNKNOWN scrub:
+        // `tvLastMessage` ALWAYS; `tvTitle` only WHEN_NAME_LIKE, so a chat header "Riley" is masked while a
+        // sheet title "Pick up order" survives for debug triage (the corpus intake masks both anyway).
+        IdMarker("tvTitle", IdentityKind.EXACT, RuntimeScrub.WHEN_NAME_LIKE),
+        IdMarker("tvLastMessage", IdentityKind.EXACT),
     )
 
     /**
-     * One [ID_MARKER_TABLE] row. [runtimeScrub] (#1160 review SS9) says whether the runtime UNKNOWN
-     * scrub ([ID_MARKERS]) covers the suffix; a census-only row (a value that may be chrome) sets it false.
+     * One [ID_MARKER_TABLE] row. [runtimeScrub] (#1160 reviews SS9, TT1) says when the runtime UNKNOWN
+     * scrub covers the suffix: [RuntimeScrub.ALWAYS] (the [ID_MARKERS] projection), [RuntimeScrub.NEVER]
+     * (census-only), or [RuntimeScrub.WHEN_NAME_LIKE] (only when the node's value reads as a name).
      */
-    data class IdMarker(val suffix: String, val kind: IdentityKind, val runtimeScrub: Boolean = true)
+    data class IdMarker(
+        val suffix: String,
+        val kind: IdentityKind,
+        val runtimeScrub: RuntimeScrub = RuntimeScrub.ALWAYS,
+    )
+
+    /** When the runtime UNKNOWN id scrub applies to an [IdMarker] (#1160 review TT1). */
+    enum class RuntimeScrub {
+        ALWAYS,
+        NEVER,
+
+        /**
+         * Only when a value of the node is name-like ([isNameLike]): a generic id (`tvTitle`) that holds a
+         * customer's name on one surface and chrome ("Pick up order") on another.
+         */
+        WHEN_NAME_LIKE,
+    }
+
+    /**
+     * Name-like (#1160 review TT1): at most two whitespace tokens, each Capitalized and made only of letters,
+     * apostrophes and hyphens — "Riley", "Riley S", "O'Brien" yes; "Pick up order", "Order details",
+     * "Riley's order" no.
+     */
+    fun isNameLike(value: String?): Boolean {
+        val tokens = value?.trim()?.split(Regex("\\s+"))?.filter { it.isNotEmpty() } ?: return false
+        if (tokens.isEmpty() || tokens.size > 2) return false
+        return tokens.all { token ->
+            Character.isUpperCase(token.codePointAt(0)) &&
+                token.codePoints().allMatch { Character.isLetter(it) || it == '\''.code || it == '\u2019'.code || it == '-'.code }
+        }
+    }
 
     /** What an [IdMarker]'s node value IS (#1160 review LL1). */
     enum class IdentityKind {
@@ -248,10 +278,10 @@ object CustomerTextMarkers {
     }
 
     /**
-     * The runtime-scrub suffix list — the [ID_MARKER_TABLE] rows with `runtimeScrub`, in table order
+     * The ALWAYS runtime-scrub suffix list — the [ID_MARKER_TABLE] rows with [RuntimeScrub.ALWAYS], in table order
      * (pinned). The table is the one owner of "what kind of value an id carries"; this is its projection.
      */
-    val ID_MARKERS: List<String> = ID_MARKER_TABLE.filter { it.runtimeScrub }.map { it.suffix }
+    val ID_MARKERS: List<String> = ID_MARKER_TABLE.filter { it.runtimeScrub == RuntimeScrub.ALWAYS }.map { it.suffix }
 
     /** Substring that classifies a node's text as already-redacted (VET V1). */
     private const val REDACTED_MARK = "[redacted"
@@ -298,11 +328,28 @@ object CustomerTextMarkers {
     // --- Node-id path, UNKNOWN envelopes only (#910) --------------------------
 
     /**
-     * The [ID_MARKERS] (runtime-scrub) entry [id] ends with, or null — the UNKNOWN-envelope scan's
-     * predicate. Census-only rows (`runtimeScrub = false`, #1160 review SS9) never match here; the census
-     * filter (ADR-0011 §2 step 1) calls [idMarkerFor] over the whole table.
+     * The runtime-scrub marker suffix [id] ends with, given the node's [values], or null — the
+     * UNKNOWN-envelope scan's predicate (#1160 reviews SS9, TT1): an ALWAYS row matches on the id alone, a
+     * NEVER row never, a WHEN_NAME_LIKE row only when a value is name-like. The census filter (ADR-0011 §2
+     * step 1) calls [idMarkerFor] over the whole table.
      */
-    fun idMarkerSuffix(id: String?): String? = idMarkerFor(id)?.takeIf { it.runtimeScrub }?.suffix
+    fun idMarkerSuffix(id: String?, values: List<String?> = emptyList()): String? =
+        idMarkerSuffix(id, values, ID_MARKER_TABLE)
+
+    /**
+     * Test seam over an explicit [table] (review UU4): the runtime mode is applied BEFORE the first match,
+     * so a census-only row ordered ahead of an overlapping runtime row can never switch the scrub off.
+     */
+    internal fun idMarkerSuffix(id: String?, values: List<String?>, table: List<IdMarker>): String? {
+        if (id.isNullOrEmpty()) return null
+        return table.firstOrNull { row ->
+            id.endsWith(row.suffix, ignoreCase = true) && when (row.runtimeScrub) {
+                RuntimeScrub.ALWAYS -> true
+                RuntimeScrub.NEVER -> false
+                RuntimeScrub.WHEN_NAME_LIKE -> values.any { isNameLike(it) }
+            }
+        }?.suffix
+    }
 
     /**
      * The [ID_MARKER_TABLE] row [id] ends with (case-insensitive SUFFIX match on the FULL resource id —
@@ -321,7 +368,7 @@ object CustomerTextMarkers {
      * re-scrubs a mask.
      */
     fun unredactedIdMarker(node: UiNode): String? {
-        val marker = idMarkerSuffix(node.viewIdResourceName) ?: return null
+        val marker = idMarkerSuffix(node.viewIdResourceName, node.scrubbableStrings().map { it.second }) ?: return null
         // #835: every serialized string field counts as "still carrying raw" — a
         // customer-PII node whose only remaining value is its `stateDescription`
         // must still be scrubbed.
