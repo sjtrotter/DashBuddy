@@ -138,6 +138,14 @@ data class NodeRef(
         /** #1149 review I2 — the child fetches (bind time: child slots visited) one label scan may spend. */
         const val LABEL_SCAN_NODES = 24
 
+        /**
+         * #1149 review AA1 — the most id/text query matches the executor admits PER ROOT. The result size is
+         * untrusted (each match costs a refresh and up to [LABEL_SCAN_NODES] child fetches in verification);
+         * a query returning MORE than this refuses the whole tap rather than truncating (a truncated list
+         * could hide the real control and leave a wrong survivor).
+         */
+        const val MAX_QUERY_CANDIDATES = 64
+
         /** #1149 — the nodes an action-owner walk inspects: self + (MAX_OWNER_WALK − 1) parents, bind time and fire time (N4). */
         const val MAX_OWNER_WALK = 32
 

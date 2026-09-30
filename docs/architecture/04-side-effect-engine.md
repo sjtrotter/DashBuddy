@@ -231,6 +231,9 @@ never coordinates, so frozen bounds never aimed a tap — they decided WHICH nod
     control with deeper nodes still has a fully determined fingerprint and IS matched. Verifying a label
     EXPECTATION stays lenient: a found label suffices, and since I3 no collected label comes from a nested
     control.
+  - **Id/text admission is bounded (review AA1):** at most `NodeRef.MAX_QUERY_CANDIDATES` (64) matches per root
+    per query; a query returning more REFUSES the tap (WARN, counts only) rather than truncating — which also bounds
+    the per-owner member scans of the verification union.
   - **Strategy 3 shares the predicate (review J7) and is bounded (review R5):** the bounds walk uses
     `takesClick()`, so an action-only Compose control at the exact rect is found, and it applies the
     mapper's `TreeLimits` (depth + fetch budget, nulls counted) — a cut walk takes NO candidates from that root.

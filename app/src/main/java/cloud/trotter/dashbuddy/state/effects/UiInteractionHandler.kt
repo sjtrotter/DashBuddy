@@ -155,6 +155,13 @@ class UiInteractionHandler @Inject constructor(
         // package (e.g. the dasher's bubble holds focus), it was package-filtered out of `roots`, so it
         // matches nothing and scoping no-ops (we fall through to all windows, as before).
         val search = findCandidates(roots, activeRoot, ref, expectedPackage, unreadableWindows)
+        if (search.oversizedQuery > 0) {
+            Timber.tag("Effects").w(
+                "An id/text query for %s returned %d matches (cap %d) — refusing to click (fail closed, #1149)",
+                description, search.oversizedQuery, NodeRef.MAX_QUERY_CANDIDATES,
+            )
+            return false
+        }
         if (search.activeBoundsCut) {
             Timber.tag("Effects").w(
                 "Bounds walk of the active window for %s was cut by the tree budget — aborting to manual (#1149)", description,
@@ -548,6 +555,8 @@ class UiInteractionHandler @Inject constructor(
         val activeBoundsCut: Boolean = false,
         /** T1: non-active windows whose strategy-3 walk was cut by the tree budget. */
         val cutBoundsWindows: Int = 0,
+        /** AA1: an id/text query returned this many matches (> MAX_QUERY_CANDIDATES) — refuse. */
+        val oversizedQuery: Int = 0,
     )
 
     private fun stillAtCapturedGeometry(target: OwnedTarget, ref: NodeRef): Boolean {
@@ -582,15 +591,23 @@ class UiInteractionHandler @Inject constructor(
             val inActive = activeRoot != null && root == activeRoot
             for (node in nodes) candidates.add(Candidate(node, inActive))
         }
-        // Strategy 1: find by view ID
+        // Strategy 1: find by view ID. #1149 review AA1: an over-sized result REFUSES the tap (no truncation).
         val targetId = ref.viewIdSuffix
         if (!targetId.isNullOrEmpty()) {
-            for (root in roots) addFrom(root, root.findAccessibilityNodeInfosByViewId(targetId))
+            for (root in roots) {
+                val found = root.findAccessibilityNodeInfosByViewId(targetId)
+                if (found.size > NodeRef.MAX_QUERY_CANDIDATES) return CandidateSearch(emptyList(), oversizedQuery = found.size)
+                addFrom(root, found)
+            }
         }
-        // Strategy 2: find by text
+        // Strategy 2: find by text (same AA1 bound)
         val targetText = ref.text
         if (candidates.isEmpty() && !targetText.isNullOrEmpty()) {
-            for (root in roots) addFrom(root, root.findAccessibilityNodeInfosByText(targetText))
+            for (root in roots) {
+                val found = root.findAccessibilityNodeInfosByText(targetText)
+                if (found.size > NodeRef.MAX_QUERY_CANDIDATES) return CandidateSearch(emptyList(), oversizedQuery = found.size)
+                addFrom(root, found)
+            }
         }
         // Strategy 2b (#1149): labels are identity, geometry is evidence. A hinted bind is
         // re-found by its EXACT subtree-label fingerprint on the CURRENT screen BEFORE the bounds

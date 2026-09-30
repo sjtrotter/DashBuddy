@@ -364,4 +364,27 @@ class UiInteractionHandlerOwnerTest : UiInteractionHandlerTapTestKit() {
             b.neverClicked()
         }
     }
+
+    /** AA1: an id query returning MORE than MAX_QUERY_CANDIDATES matches refuses the tap — no refresh, no fetch, no dispatch. */
+    @Test
+    fun `an over-sized id query refuses the tap`() = runTest {
+        val titles = List(NodeRef.MAX_QUERY_CANDIDATES + 1) { view(cls = "android.widget.TextView", text = "Decline offer") }
+        val button = view(clickable = true, children = titles)
+        val root = windowRoot(button, byId = titles)
+        assertFalse(confirmDecline(handler(root)))
+        button.neverClicked()
+        verify(button, never()).refresh()
+        titles.forEach { verify(it, never()).refresh() }
+        verify(button, never()).getChild(any())
+    }
+
+    /** AA1: exactly MAX_QUERY_CANDIDATES matches is admitted and proceeds (one owner, deduped). */
+    @Test
+    fun `an id query at the cap proceeds`() = runTest {
+        val titles = List(NodeRef.MAX_QUERY_CANDIDATES) { view(cls = "android.widget.TextView", text = "Decline offer") }
+        val button = view(clickable = true, children = titles)
+        val root = windowRoot(button, byId = titles)
+        assertTrue(confirmDecline(handler(root)))
+        button.clicks(1)
+    }
 }
