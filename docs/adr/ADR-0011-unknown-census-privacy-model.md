@@ -204,9 +204,14 @@ filter over every text field of the frame (tree + window title) and SEEDS:
   header is a customer's name and the preview their text, but the same generic id titles other sheets,
   "Pick up order") — seeds its exact value only, so a duplicated first name is still caught (review
   round 8). A NAME seeds runs from its text, so a TalkBack-style desc "Customer name Adam" beside text "Adam"
-  seeds no `customer`/`name`, while a name rendered only in a desc still propagates. Every PII id the
-  intake knows is in this table, so `PII_ID_SUFFIXES` holds only instruction/content ids (message bodies,
-  maneuver/road text, instruction bodies) plus the table's suffixes (review rounds 6–7);
+  seeds no `customer`/`name`, while a name rendered only in a desc still propagates — and a NAME whose
+  text is a mask or has no canonical form takes its runs from the desc. For the ID / CLASS check only, an
+  EXACT or ADDRESS value also contributes its WHOLE value (case-folded, non-letters removed) as one run,
+  matched against the candidate's camel segments and their contiguous joins: `user_name` "Riley" nulls
+  `chipRiley`, "Jack in the Box" nulls `jackInTheBoxLogo` (a merchant-logo id — accepted), while "10927
+  Culebra Road" never equals a segment join of `roadNameLayout`; text slots never use the whole-value
+  rule. `PII_ID_SUFFIXES` holds EVERY suffix of this table (a guard test pins the subset) plus other
+  instruction/content ids (message bodies, maneuver/road text) (review rounds 6–9);
 - a MASK never seeds anything (`[redacted…]`, `[address]`, …): it is not identity, and its word would
   collide with chrome and with address-block ids.
 

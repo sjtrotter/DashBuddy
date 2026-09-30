@@ -573,9 +573,10 @@ side-effect-free half.
   once by `SkeletonSchema.measure`); `CensusHash` (§3, `sha256("census.v1:" + canonical)` → 16 hex,
   fail-closed to `withheld`, where `CensusHash.canonical` — a fixed point — is the value after the census glyph
   fold `TextFold.foldForCensus` (FORMAT strip by code point, then NFKC, then dash fold; `TextFold` also
-  owns the sensitive scan's two forms — `foldGlyphsPreservingSupplementary`, byte-for-byte the pre-#1160
-  normalizer, and the fully stripped `foldGlyphs`; `SensitiveTextMarkers.findMarker` scans BOTH and drops
-  on either hit, #1160 review RR1), trimmed, with every
+  owns the sensitive scan's boundary-preserving form `foldGlyphsPreservingSupplementary`, byte-for-byte
+  the pre-#1160 normalizer; `SensitiveTextMarkers.findMarker` scans it AND the fully stripped
+  `foldForCensus` form — the second only when the text carries a supplementary FORMAT char — and drops on
+  either hit, #1160 reviews RR1/UU2/UU8), trimmed, with every
   census-whitespace run collapsed to one ASCII space; the builder hashes the judged string via
   `CensusHash.ofCanonical`); `KindClassifier` (§1's two-stage grammar, code-point based);
   `CensusFingerprint` (§8: wrapper-to-forest over a synthetic root, every string LENGTH-PREFIXED so the
@@ -593,10 +594,11 @@ side-effect-free half.
   `SnapshotRedactor` delegates, `PiiShapesParityTest` pins it; `PiiShapesIcuGuardTest` applies the ICU
   bare-`}` rule to every compiled pattern); `CustomerTextMarkers.ID_MARKER_TABLE` is the ONE owner of
   "what kind of value an id carries" — `IdMarker(suffix, kind, runtimeScrub)`, kind NAME / ADDRESS /
-  EXACT / CONTENT — and `ID_MARKERS` is its runtime-scrub projection (the rows with `runtimeScrub`):
-  #1160 added `order_cx_name` to the runtime UNKNOWN scrub, while `tvTitle` / `tvLastMessage` are
-  census-only rows (a generic sheet title stays readable in debug triage; the corpus intake still masks
-  them via `PII_ID_SUFFIXES`).
+  EXACT / CONTENT, runtime scrub ALWAYS / NEVER / WHEN_NAME_LIKE — and `ID_MARKERS` is its ALWAYS
+  projection: #1160 added `order_cx_name` and `tvLastMessage` (always customer text) to the runtime
+  UNKNOWN scrub, while `tvTitle` scrubs only when its value is name-like ("Riley" masked, "Pick up order"
+  kept for debug triage); the corpus intake (`PII_ID_SUFFIXES`) holds every table suffix. The frame-rule
+  off-switch exists only as the test/diagnostic `census.diagnostics.DiagnosticSkeletonBuilder`.
 - *The filter* — `core.pipeline.census.SkeletonBuilder` (typed API: `Platform`, `LocalDate`). A
   `SensitiveTextMarkers` hit on the raw tree or title yields no skeleton (a caller may pass the verdict
   it already computed, bound to that exact tree instance; a mismatched one is ignored); a FAILED marker
