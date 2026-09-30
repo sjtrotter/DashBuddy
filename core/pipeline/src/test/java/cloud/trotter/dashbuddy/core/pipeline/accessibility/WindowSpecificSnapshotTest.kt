@@ -649,4 +649,15 @@ class WindowSpecificSnapshotTest {
         val after = collectSequence(h, listOf(0L to content(3, uberPkg))).map { it.tree.text }
         assertEquals(listOf("uber-map"), after)
     }
+
+    @Test
+    fun `BB9 - the overlay fails to map (tearing down) - the active root is read, not dropped`() = bothKinds { kind ->
+        val dd = node(ddPkg, "dd", windowId = 3)
+        val h = harness(activeRoot = dd, windows = listOf(window(3, 5, dd, active = true), uberOverlay(9, 9, node(uberPkg, "uber-offer"))))
+        doReturn(null).whenever(h.source).getWindowSnapshot(any(), any(), any())
+
+        assertEquals(listOf("dd"), collect(h, kind, windowId = 9, pkg = uberPkg).map { it.tree.text })
+        assertEquals(0L, h.stats.foregroundSkipCount(ForegroundSkipReason.MAP_FAILED))
+        assertEquals(0L, h.stats.overlaySnapshotCount())
+    }
 }
