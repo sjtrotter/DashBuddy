@@ -475,9 +475,11 @@ id's byte length as ASCII decimal + `0x00` + the id UTF-8, or the single byte `"
 so a null id and an empty id differ) + the spliced child count as ASCII decimal + `0x00`, then the
 children in order. class/id must be well-formed UTF-16 with no U+0000 (`WireStrings.isWellFormed` — a
 lone surrogate would otherwise UTF-8-encode as `?` and collide); a violating class or id is refused at
-construction and on decode, and the builder emits it ABSENT (null never enters the byte form, so the
-encoding stays injective) and counts it (`Outcome.Built.malformedIdOrClass`) rather than refusing the
-whole frame — one bad node must not blind a surface (review round 12). The id is a static resource name
+construction and on decode. In the builder the two differ (review rounds 12, 13): a malformed CLASS
+carries no identity semantics, so it is emitted ABSENT (null never enters the byte form, so the encoding
+stays injective) and counted (`Outcome.Built.malformedClass`) — one bad node must not blind a surface;
+a malformed VIEW ID refuses the frame (`INVALID_TREE`), because its identity classification cannot be
+verified (`customer_name` + U+0000 misses every suffix lookup and would ship the name it marks). The id is a static resource name
 OR the one reserved non-grammar value `~` (`ResourceIdGrammar.FRAME_WITHHELD_ID`): a static id the
 builder's FRAME rule withheld (§2) — it keeps the node a non-wrapper, so the tree STRUCTURE never
 depends on the customer on the frame; a grammar-rejected (dynamic) id stays null, since it is rejected

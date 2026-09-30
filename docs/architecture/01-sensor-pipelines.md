@@ -581,11 +581,14 @@ side-effect-free half.
   `CensusHash.ofCanonical`); `KindClassifier` (§1's two-stage grammar, code-point based);
   `CensusFingerprint` (§8: wrapper-to-forest over a synthetic root, every string LENGTH-PREFIXED so the
   encoding is injective, digested through `sha256OrNull(ByteArray)`); and the static gates
-  `ResourceIdGrammar.isStaticShape` / `ClassNameGrammar` (enforced by the DTO at construction and decode)
-  — a dynamic id (a per-frame-UUID Compose test tag) or a non-static class is ABSENT on the wire and in
-  the fingerprint; the builder's `isStaticId` also refuses an id whose name part trips a frame-free
-  customer-PII predicate (`row_Deliver_to_Sam`), and the frame-level containment rule nulls a static id
-  or class carrying an identity run of the same frame (`chip_Adam` beside `customer_name` "Adam"). The golden vectors live with the
+  `ResourceIdGrammar.isStaticShape` / `ClassNameGrammar` (the DTO enforces `ResourceIdGrammar.isWireId` —
+  a static shape or the reserved sentinel `~` — and `ClassNameGrammar` at construction and decode) — a
+  dynamic id (a per-frame-UUID Compose test tag) or a non-static class is ABSENT (null) on the wire and in
+  the fingerprint; `IdPathJudgement.isStaticId` also makes absent an id whose name part trips a
+  frame-free customer-PII predicate (`row_Deliver_to_Sam`); and the frame-level containment rule EMITS
+  the sentinel `~` (`ResourceIdGrammar.FRAME_WITHHELD_ID`) in place of a static id carrying an identity
+  run of the same frame (`chip_Adam` beside `customer_name` "Adam"), so the node keeps its place in the
+  fingerprint's structure, and makes absent a non-wrapper class carrying a customer-name run. The golden vectors live with the
   contract's tests (never in the APK).
 - *Shared vocabulary* — the anonymous-wrapper predicate (`domain.model.accessibility.AnonymousWrappers`,
   owned by the core model and imported by the contract) is the one `UiNode.stableHash`
@@ -630,8 +633,9 @@ side-effect-free half.
   (`row_mc_kenna`), replaces a node's static id with the reserved sentinel `~` (`chipAdam` beside
   `customer_name` "Adam", `search_bar` beside `tvTitle` "Search") so the fingerprint's STRUCTURE never
   depends on the customer; a non-wrapper class carrying a customer-NAME run is absent
-  (`com.x.RileyButton`). A malformed (NUL / lone-surrogate) class or id is emitted absent and counted
-  (`Outcome.Built.malformedIdOrClass`), never a whole-frame refusal. On the id path the PII judgement is stricter-to-trigger: a
+  (`com.x.RileyButton`). A malformed (NUL / lone-surrogate) CLASS is emitted absent and counted
+  (`Outcome.Built.malformedClass`); a malformed VIEW ID refuses the frame (`INVALID_TREE` — its identity
+  classification cannot be verified, #1160 round 13). On the id path the PII judgement is stricter-to-trigger: a
   lead-in withholds only before a Capitalized token and the name shape needs an uppercase-led
   (Capitalized or all-caps) first token and an uppercase initial (`deliver_to_label`, `tabB` travel;
   `chip_RILEY_S` and — the recall cost — `TAB_B` are absent). Each value is
