@@ -689,8 +689,10 @@ class UiInteractionHandler @Inject constructor(
         var incomplete = false
         var stopped = false
         val hits = ArrayList<SemanticHit>()
-        // L2: 2b filters on the bind's OWNER class (its fingerprint is the owner's); a legacy ref falls back.
-        val ownerClass = ref.ownerClassHint ?: ref.classNameHint
+        // L2/N7: 2b filters on the bind's OWNER class (its fingerprint is the owner's). A null
+        // ownerClassHint on a ref that reached 2b (hasExactFingerprint) means the owner HAD no class —
+        // no filter; legacy refs never reach 2b (they are never complete), so there is no fallback.
+        val ownerClass = ref.ownerClassHint
         fun visit(node: AccessibilityNodeInfo, depth: Int): LabelRegion {
             val pre = preCounter++
             val region = LabelRegion()

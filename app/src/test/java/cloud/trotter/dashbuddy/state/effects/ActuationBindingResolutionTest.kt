@@ -111,7 +111,7 @@ class ActuationBindingResolutionTest {
             val hits = mutableListOf<Cand>()
             val path = ArrayList<Int>()
             var incomplete = false
-            val ownerClass = ref.ownerClassHint ?: ref.classNameHint
+            val ownerClass = ref.ownerClassHint // N7: null = the owner had no class → no filter
             fun walk(node: UiNode, depth: Int) {
                 check(depth <= TreeLimits.MAX_TREE_DEPTH) { "corpus tree deeper than the 2b bound" }
                 val classOk = ownerClass == null || node.className == ownerClass

@@ -258,6 +258,7 @@ class UiInteractionHandlerTieTest {
         boundsInScreen = BoundingBox(36, 1774, 1044, 1900), pathFingerprint = "",
         labelHintHashes = listOfNotNull(NodeRef.hintHash("This offer"), NodeRef.hintHash("Expand")),
         labelHintsComplete = true,
+        ownerClassHint = "android.view.View", // the id-less row binds itself: bound node = owner (#1149 L2)
     )
 
     private suspend fun expand(handler: UiInteractionHandler) = handler.performVerifiedClick(

@@ -64,8 +64,9 @@ data class NodeRef(
     val labelHintsComplete: Boolean = false,
     /**
      * #1149 review L2 — the class of the bind's ACTION OWNER (whose region the hints fingerprint). The
-     * 2b walk filters on it; [classNameHint] stays the bound node's class for strategies 1–3. Null on
-     * a legacy ref (2b then falls back to [classNameHint]).
+     * 2b walk filters on it; [classNameHint] stays the bound node's class for strategies 1–3. Null means
+     * the owner had no class (no filter, review N7); a legacy ref (null too) never reaches 2b because it
+     * is never [labelHintsComplete].
      */
     val ownerClassHint: String? = null,
 ) {

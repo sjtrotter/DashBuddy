@@ -253,6 +253,7 @@ class UiInteractionHandlerOwnerTest {
         boundsInScreen = BoundingBox(rowRect.left, rowRect.top, rowRect.right, rowRect.bottom), pathFingerprint = "",
         labelHintHashes = listOfNotNull(NodeRef.hintHash("This offer"), NodeRef.hintHash("Expand")),
         labelHintsComplete = true,
+        ownerClassHint = "android.view.View", // the id-less row binds itself: bound node = owner (#1149 L2)
     )
 
     private suspend fun expand(h: UiInteractionHandler, ref: NodeRef = expandRef) = h.performVerifiedClick(
@@ -841,5 +842,17 @@ class UiInteractionHandlerOwnerTest {
         val background = windowRoot(view())
         assertTrue(expand(handler(listOf(active, background), active)))
         verify(background, never()).getChild(any())
+    }
+
+    /** N7: an owner with NO className binds ownerClassHint = null, which means "no class filter" — 2b still finds it. */
+    @Test
+    fun `an owner without a class name is still found by 2b`() = runTest {
+        val row = payRow(top = 1774 - 400)
+        whenever(row.className).thenReturn(null)
+        val ref = bindRef(row).copy(classNameHint = "android.view.View")
+        assertEquals(null, ref.ownerClassHint)
+        assertTrue(ref.hasExactFingerprint)
+        assertTrue(expand(handler(windowRoot(row)), ref))
+        row.clicks(1)
     }
 }
