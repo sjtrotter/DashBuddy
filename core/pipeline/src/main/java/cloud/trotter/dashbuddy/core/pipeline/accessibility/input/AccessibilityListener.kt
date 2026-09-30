@@ -2,12 +2,20 @@ package cloud.trotter.dashbuddy.core.pipeline.accessibility.input
 
 import android.accessibilityservice.AccessibilityService
 import android.accessibilityservice.AccessibilityServiceInfo
+import android.content.Intent
 import android.view.accessibility.AccessibilityEvent
 import cloud.trotter.dashbuddy.core.pipeline.BuildConfig
 import cloud.trotter.dashbuddy.domain.pipeline.LocaleBoundaryReporter
+import cloud.trotter.dashbuddy.domain.settings.EventReceiptConsent
+import cloud.trotter.dashbuddy.domain.settings.EventReceiptPreferences
 import cloud.trotter.dashbuddy.domain.settings.PlatformPreferences
 import cloud.trotter.dashbuddy.domain.state.Platform
 import dagger.hilt.android.AndroidEntryPoint
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.launch
 import timber.log.Timber
 import javax.inject.Inject
 
@@ -28,7 +36,16 @@ class AccessibilityListener : AccessibilityService() {
     @Inject
     lateinit var localeBoundaryReporter: LocaleBoundaryReporter
 
+    /**
+     * #1151 — the dasher's wide-event-receipt consent (its one owner lives in `:core:data`). The
+     * listener is where it is ENFORCED: [applyEventReceipt] maps it through [ServiceInfoPolicy] onto
+     * `serviceInfo.packageNames`. No other code path widens the package subscription.
+     */
+    @Inject
+    lateinit var eventReceiptPreferences: EventReceiptPreferences
 
+    /** Service-scoped; created in [onServiceConnected], cancelled in [onUnbind] / [onDestroy]. */
+    private var serviceScope: CoroutineScope? = null
 
     override fun onCreate() {
         super.onCreate()
@@ -72,9 +89,35 @@ class AccessibilityListener : AccessibilityService() {
         Timber.d("Accessibility service interrupted")
     }
 
+    override fun onUnbind(intent: Intent?): Boolean {
+        cancelServiceScope()
+        return super.onUnbind(intent)
+    }
+
     override fun onDestroy() {
+        cancelServiceScope()
         super.onDestroy()
         Timber.d("Accessibility service destroyed")
+    }
+
+    private fun cancelServiceScope() {
+        serviceScope?.cancel()
+        serviceScope = null
+    }
+
+    /**
+     * #1151 — apply the consent to the live subscription. `eventTypes` keeps the debug-only
+     * widening to every type (unhandled-type logging); `packageNames` is governed ONLY by the
+     * consent, in every build type. A null [serviceInfo] (service not connected) is a no-op.
+     */
+    private fun applyEventReceipt(consent: EventReceiptConsent) {
+        val info = serviceInfo ?: return
+        if (BuildConfig.DEBUG) {
+            info.eventTypes = AccessibilityServiceInfo.DEFAULT or AccessibilityEvent.TYPES_ALL_MASK
+        }
+        info.packageNames = ServiceInfoPolicy.packageNamesFor(consent, Platform.watchedPackages)
+        serviceInfo = info
+        Timber.tag("Pipeline").i("Event receipt: wide=%s", ServiceInfoPolicy.isWide(consent))
     }
 
     override fun onServiceConnected() {
@@ -82,14 +125,16 @@ class AccessibilityListener : AccessibilityService() {
 
         Timber.d("Accessibility service connected")
 
-        // In debug builds, widen to ALL event types and ALL packages so we can
-        // observe what fires without needing handlers for every type.
-        if (BuildConfig.DEBUG) {
-            serviceInfo = serviceInfo.apply {
-                eventTypes = AccessibilityServiceInfo.DEFAULT or AccessibilityEvent.TYPES_ALL_MASK
-                packageNames = null // all packages — code-level filter still gates the pipeline
-            }
-            Timber.i("Debug: accessibility service widened to typeAllMask, all packages")
+        // #1151: the package subscription follows the dasher's event-receipt consent — applied
+        // now (Main.immediate runs the StateFlow's current value synchronously, before the
+        // source registers) and re-applied on every change (Allow / revoke in Settings). Until
+        // the store is read the value is UNDECIDED, i.e. the filtered footprint (fail-closed).
+        // The debug build no longer clears packageNames unconditionally; only eventTypes widen.
+        cancelServiceScope()
+        val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
+        serviceScope = scope
+        scope.launch {
+            eventReceiptPreferences.consent.collect { consent -> applyEventReceipt(consent) }
         }
 
         // Register with the source
