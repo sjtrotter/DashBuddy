@@ -573,7 +573,9 @@ side-effect-free half.
   once by `SkeletonSchema.measure`); `CensusHash` (§3, `sha256("census.v1:" + canonical)` → 16 hex,
   fail-closed to `withheld`, where `CensusHash.canonical` — a fixed point — is the value after the census glyph
   fold `TextFold.foldForCensus` (FORMAT strip by code point, then NFKC, then dash fold; `TextFold` also
-  owns `foldGlyphs`, the order `SensitiveTextMarkers.normalize` delegates to), trimmed, with every
+  owns the sensitive scan's two forms — `foldGlyphsPreservingSupplementary`, byte-for-byte the pre-#1160
+  normalizer, and the fully stripped `foldGlyphs`; `SensitiveTextMarkers.findMarker` scans BOTH and drops
+  on either hit, #1160 review RR1), trimmed, with every
   census-whitespace run collapsed to one ASCII space; the builder hashes the judged string via
   `CensusHash.ofCanonical`); `KindClassifier` (§1's two-stage grammar, code-point based);
   `CensusFingerprint` (§8: wrapper-to-forest over a synthetic root, every string LENGTH-PREFIXED so the

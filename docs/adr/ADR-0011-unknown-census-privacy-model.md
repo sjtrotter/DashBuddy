@@ -217,9 +217,12 @@ still matches — `chipMcKenna` → `Mc`+`Kenna` → `mckenna` (amended in #1160
 wire and the fingerprint, exactly like a dynamic id — `chipAdam` / `chip_Adam` beside `customer_name`
 "Adam" does not travel, `chipGold` and `chipAdamant` (whole-run equality) do (one owner,
 `FrameFilter.containsIdentityRun`). A CONTENT id and a `PII_ID_SUFFIXES`-only id (the intake list, which
-also covers instruction BODIES — `step_description`, `instruction_text`, `tvTitle`) withhold their OWN
-field but seed nothing, so the chrome vocabulary the census exists for is not withheld frame-wide
-(amended in #1160 review rounds 2–5). §7(c) compares the skeleton against FULL-TREE redaction for this
+also covers instruction BODIES — `step_description`, `instruction_text`) withhold their OWN field but
+seed nothing, so the chrome vocabulary the census exists for is not withheld frame-wide (amended in #1160
+review rounds 2–5). An EXACT id (`tvTitle`, `tvLastMessage`) DOES seed its exact value, so an id-less
+duplicate of a chrome sheet title ("Pick up order") on the same frame is withheld too — duplicate-chrome
+suppression is the accepted trade, because exempting chrome-shaped values would also exempt a bare
+customer name ("Adam") in the same slot (review round 8). §7(c) compares the skeleton against FULL-TREE redaction for this
 reason, with exactly that one stated exemption: a value the intake rewrites document-wide only because a
 non-seeding PII-id field carries it elsewhere, which survives redaction in isolation and has no other
 withholding cause anywhere in the frame.
