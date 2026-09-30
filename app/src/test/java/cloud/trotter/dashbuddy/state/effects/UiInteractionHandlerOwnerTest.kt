@@ -966,21 +966,16 @@ class UiInteractionHandlerOwnerTest {
         verify(foreignLabel, never()).contentDescription
     }
 
-    /**
-     * P5: two identical-fingerprint rows (their amounts are not hints); the stored text is the bound
-     * child's — "$12.50" — and exactly one row carries it among its in-horizon labels: that row is clicked.
-     */
+    /** R8: twins abort unconditionally — even when a stored text appears in exactly one of them. */
     @Test
-    fun `semantic twins are broken by the stored text among the survivors' labels`() = runTest {
+    fun `semantic twins abort even when the stored text is in one of them`() = runTest {
         fun row(top: Int, amount: String) = view(clickable = true, bounds = Rect(36, top, 1044, top + 126), children = listOf(
             view(cls = "android.widget.TextView", text = "This offer"), view(desc = "Expand"),
             view(cls = "android.widget.TextView", text = amount),
         ))
         val a = row(1374, "\$9.00")
         val b = row(1574, "\$12.50")
-        val ref = expandRef.copy(text = "\$12.50")
-        assertTrue(expand(handler(windowRoot(a, b)), ref))
-        b.clicks(1)
-        a.neverClicked()
+        assertFalse(expand(handler(windowRoot(a, b)), expandRef.copy(text = "\$12.50")))
+        a.neverClicked(); b.neverClicked()
     }
 }

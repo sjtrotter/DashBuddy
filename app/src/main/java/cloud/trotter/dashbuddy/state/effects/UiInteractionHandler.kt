@@ -297,27 +297,17 @@ class UiInteractionHandler @Inject constructor(
             return false
         }
 
-        // #1149 review I5: semantic TWINS abort. Two or more 2b survivors left after owner dedupe and
-        // #788 scoping carry the same exact fingerprint; the ranker's overlap tier would pick between
-        // them by the captured rect — the very evidence 2b exists to distrust. Only a decisive stored
-        // `text` that exactly ONE survivor's evidence matches may break the tie. (Survivors from
-        // different background windows — no active-window candidate — abort the same way.)
+        // #1149 review I5 (R8): semantic TWINS abort, unconditionally. Two or more 2b survivors left after
+        // owner dedupe and #788 scoping carry the same exact fingerprint; the ranker's overlap tier would
+        // pick between them by the captured rect — the very evidence 2b exists to distrust — and no
+        // stored-text tie-break exists (the round-5 one was removed: the bound text is part of what makes
+        // them twins). Survivors from different background windows abort the same way.
         if (scopedCandidates.size > 1 && scopedCandidates.any { it.first.semantic }) {
-            val refText = ref.text?.takeIf { it.isNotBlank() }
-            // P5: like with like — ref.text is the BOUND child's text, so it is matched against each
-            // survivor's in-horizon labels (for a 2b hit, evidence IS the owner, whose own text is
-            // usually null; comparing that was a dead branch).
-            val byText = if (refText == null) emptyList() else
-                scopedCandidates.filter { (_, labels) -> labels.any { it.take(50) == refText } }
-            if (byText.size != 1) {
-                Timber.tag("Effects").w(
-                    "%d semantic twins for %s share the bind's fingerprint and no stored text decides — aborting to manual (#1149)",
-                    scopedCandidates.size, description,
-                )
-                return false
-            }
-            Timber.tag("Effects").d("Semantic twins for %s resolved by exact stored text", description)
-            return AccNodeUtils.clickNodeStrict(byText.single().first.owner, expectedPackage)
+            Timber.tag("Effects").w(
+                "%d semantic twins for %s share the bind's fingerprint — aborting to manual (#1149)",
+                scopedCandidates.size, description,
+            )
+            return false
         }
 
         // Disambiguate (#600): rank the label-verified survivors by evidence —
