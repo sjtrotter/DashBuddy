@@ -639,7 +639,7 @@ side-effect-free half.
   `customer_name` "Adam", `search_bar` beside `tvTitle` "Search") so the fingerprint's STRUCTURE never
   depends on the customer; a class carrying a customer-NAME run is absent (`com.x.RileyButton`,
   `androidx.RileyButton`) unless it is a KNOWN framework class (`FrameworkClasses.KNOWN`, exact names: the
-  classpath-generated inventory `census/framework-classes.txt`, diffed by `:app`'s
+  classpath-generated inventory `census/framework-classes.txt.gz` (gzip, #1160 AI2), diffed on its decompressed content by `:app`'s
   `FrameworkClassInventoryTest` — regenerate with `-DupdateFrameworkClasses=true` — ∪ the corpus set). `IdPathJudgement.isStaticId` is
   memoized process-wide in a bounded LRU (512). A malformed (NUL / lone-surrogate) CLASS is emitted absent and counted
   (`Outcome.Built.malformedClass`); a malformed VIEW ID refuses the frame (`INVALID_TREE` — its identity

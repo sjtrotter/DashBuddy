@@ -240,7 +240,7 @@ filter over every text field of the frame (tree + window title) and SEEDS:
   class-guarding kind (NAME: `com.x.RileyButton` beside `customer_name` "Riley" is absent) — never a
   title or merchant word (a `SearchView` class beside `tvTitle` "Search" stays), and never a KNOWN
   framework class — an exact binary name in `FrameworkClasses.KNOWN`: the pinned inventory
-  `core/pipeline/src/main/resources/census/framework-classes.txt` (every public class under
+  `core/pipeline/src/main/resources/census/framework-classes.txt.gz` (gzip, review round 15; every public class under
   `android.view.`/`android.widget.`/`android.webkit.` in the SDK `android.jar` and under `androidx.` /
   `com.google.android.material.` in the artifacts the build resolves — Kotlin facades and the Compose icon
   tables excluded — regenerated from the unit-test classpath and diffed by `FrameworkClassInventoryTest`,

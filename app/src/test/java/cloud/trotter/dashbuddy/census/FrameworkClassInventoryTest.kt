@@ -4,14 +4,16 @@ import cloud.trotter.dashbuddy.core.pipeline.census.FrameworkClasses
 import java.io.DataInputStream
 import java.io.File
 import java.io.InputStream
+import java.util.zip.GZIPInputStream
+import java.util.zip.GZIPOutputStream
 import java.util.zip.ZipFile
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * #1160 review AI1 — the pinned framework-class inventory (`core/pipeline/src/main/resources/census/
- * framework-classes.txt`) never goes stale: it is REGENERATED here from the jars on this unit-test runtime
+ * #1160 reviews AI1, AI2 — the pinned framework-class inventory (`core/pipeline/src/main/resources/census/
+ * framework-classes.txt.gz`, gzip) never goes stale: it is REGENERATED here from the jars on this unit-test runtime
  * classpath — the SDK's (mockable) `android.jar` for `android.view.`/`android.widget.`/`android.webkit.`,
  * and every AndroidX / Material artifact `:app` resolves (appcompat, material, recyclerview, cardview,
  * viewpager, the Compose UI artifacts, …) — and any diff fails. Regenerate deliberately with
@@ -20,7 +22,8 @@ import org.junit.Test
  */
 class FrameworkClassInventoryTest {
 
-    private val resource = File("../core/pipeline/src/main/resources/census/framework-classes.txt")
+    /** GZIP-compressed (review AI2); diffed on its DECOMPRESSED content. */
+    private val resource = File("../core/pipeline/src/main/resources/census/framework-classes.txt.gz")
 
     @Test
     fun `the pinned framework-class inventory matches the classpath`() {
@@ -31,11 +34,12 @@ class FrameworkClassInventoryTest {
         val text = generated.joinToString("\n", postfix = "\n")
         if (System.getProperty("updateFrameworkClasses") == "true") {
             resource.parentFile?.mkdirs()
-            resource.writeText(text)
+            // GZIPOutputStream writes a zero MTIME, so the bytes are deterministic for a given list.
+            GZIPOutputStream(resource.outputStream()).use { it.write(text.toByteArray(Charsets.UTF_8)) }
         }
         assertTrue("missing ${resource.absolutePath} — regenerate with -DupdateFrameworkClasses=true", resource.isFile)
-        val pinned = resource.readLines().filter { it.isNotBlank() }
-        assertEquals("framework-classes.txt is stale — regenerate with -DupdateFrameworkClasses=true", generated.toList(), pinned)
+        val pinned = GZIPInputStream(resource.inputStream()).bufferedReader(Charsets.UTF_8).use { r -> r.readLines().filter { it.isNotBlank() } }
+        assertEquals("framework-classes.txt.gz is stale — regenerate with -DupdateFrameworkClasses=true", generated.toList(), pinned)
         // The runtime reads the same resource.
         assertTrue(generated.all { it in FrameworkClasses.KNOWN })
     }

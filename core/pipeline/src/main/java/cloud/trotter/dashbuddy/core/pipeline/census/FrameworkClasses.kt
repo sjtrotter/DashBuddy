@@ -1,5 +1,8 @@
 package cloud.trotter.dashbuddy.core.pipeline.census
 
+import java.io.InputStream
+import java.util.zip.GZIPInputStream
+
 /**
  * The framework classes the census class check exempts (ADR-0011 §2; #1160 reviews AF2, AG2). Public so the
  * `:app` corpus guard can pin that the committed corpus renders no unlisted framework-prefixed class.
@@ -19,12 +22,21 @@ object FrameworkClasses {
      */
     val KNOWN: Set<String> by lazy { CORPUS + loadInventory() }
 
-    /** The classpath resource holding the generated inventory, one binary name per line (review AI1). */
-    const val INVENTORY_RESOURCE = "/census/framework-classes.txt"
+    /**
+     * The classpath resource holding the generated inventory — one binary name per line, GZIP-compressed
+     * (reviews AI1, AI2: the plain list is ~464 KB of APK for a list read once).
+     */
+    const val INVENTORY_RESOURCE = "/census/framework-classes.txt.gz"
 
-    private fun loadInventory(): Set<String> = try {
-        FrameworkClasses::class.java.getResourceAsStream(INVENTORY_RESOURCE)
-            ?.bufferedReader()?.useLines { lines -> lines.map { it.trim() }.filter { it.isNotEmpty() }.toSet() }
+    private fun loadInventory(): Set<String> = parseInventory(FrameworkClasses::class.java.getResourceAsStream(INVENTORY_RESOURCE))
+
+    /**
+     * The inventory in [gzipped], or EMPTY when it is missing or corrupt — which only shrinks [KNOWN], so the
+     * class check withholds MORE (fail closed). Internal so a test can feed a corrupt stream.
+     */
+    internal fun parseInventory(gzipped: InputStream?): Set<String> = try {
+        gzipped?.let { GZIPInputStream(it) }?.bufferedReader(Charsets.UTF_8)
+            ?.useLines { lines -> lines.map { it.trim() }.filter { it.isNotEmpty() }.toSet() }
             ?: emptySet()
     } catch (_: Exception) {
         emptySet()

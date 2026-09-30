@@ -393,4 +393,16 @@ class SkeletonIdClassGateTest : SkeletonBuilderTestBase() {
         )
         assertTrue(FrameworkClasses.KNOWN.size > FrameworkClasses.CORPUS.size)
     }
+
+    @Test
+    fun `AI2 - a missing or corrupt inventory only shrinks KNOWN (fail closed)`() {
+        assertEquals(emptySet<String>(), FrameworkClasses.parseInventory(null))
+        assertEquals(emptySet<String>(), FrameworkClasses.parseInventory("not gzip".byteInputStream()))
+        val gz = java.io.ByteArrayOutputStream().also { out ->
+            java.util.zip.GZIPOutputStream(out).use { it.write("android.widget.GridLayout\n".toByteArray()) }
+        }.toByteArray()
+        assertEquals(setOf("android.widget.GridLayout"), FrameworkClasses.parseInventory(gz.inputStream()))
+        // The shipped resource loads (compressed) and carries the inventory.
+        assertTrue("android.widget.GridLayout" in FrameworkClasses.KNOWN)
+    }
 }
