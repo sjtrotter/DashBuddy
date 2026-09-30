@@ -191,7 +191,9 @@ one `event_receipt_settings_path` string) rendered by the prompt, the Settings
 switch and the debug block, in the Play prominent-disclosure shape so #1138 M3
 can reuse it. It states the full scope: events of every subscribed type from
 every app; only enabled delivery-app windows are inspected or captured; other
-windows are identified by app name only; nothing from them is stored.
+windows are identified by app name only; nothing from them is stored — except
+that offer screenshots, when separately turned on, capture the whole screen
+whatever app is behind the offer (review MM1).
 
 A DEBUG build treats a declined event receipt as blocking at the SHELL (#1151
 review LL4): `MainActivity` renders `DebugEventReceiptShell` instead of the
@@ -201,9 +203,18 @@ inside the shell (turning the switch on unblocks live), plus Exit. The bubble
 HUD is a separate service and keeps running. A release decline keeps the app
 working with the topology path off.
 
-The consent is ONE nullable `StateFlow` (`null` = not read yet, or unreadable —
-the store read fails closed and logs an ERROR); enforcement treats `null` as
-UNDECIDED, the prompt waits for a value. The on/off → decision rule has one
+The consent is ONE nullable `StateFlow` (`null` = not read yet, or unreadable).
+A failed read emits `null`, logs one ERROR per failure episode and RETRIES with
+bounded backoff (5 × 1 s·attempt, review MM5) so a transient I/O error cannot
+freeze the value; enforcement treats `null` as UNDECIDED (the listener maps it
+BEFORE dedup, so it applies once per distinct effective value, MM8), the prompt
+waits for a value, and a DEBUG shell renders a neutral loading gate — no NavHost,
+no deep-link delivery — until it is known (MM3). A pending deep link is parked
+in `MainShellViewModel`'s `SavedStateHandle` and cleared only after delivery
+(MM4). Both consent ViewModels seed their initial state from the current value
+(MM7). An apply that finds no `serviceInfo` is a WARN and a parked retry on the
+next event (`PendingApply`, MM9). On Android 11 the runtime package filter may
+not clear; the listener WARNs once and the switch carries a caveat (MM2). The on/off → decision rule has one
 owner, `EventReceiptConsent.of(allowed)`. `ServiceInfoPolicy` refuses an EMPTY
 package registry (the framework treats an empty `packageNames` like `null`), and
 a unit test pins the manifest's `android:packageNames` equal to

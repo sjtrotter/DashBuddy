@@ -102,12 +102,13 @@ over-inference); the remaining accept losses are #1119 and the merged card is #1
 - **🆕 NEW — wide event receipt is an opt-in consent (#1151).** The accessibility service now
   receives window-change notices from other apps (what the #1148/#1152 overlay path needs) ONLY
   after you allow it; debug builds no longer widen it silently. **How to tell it works:**
-  1. After a fresh install, the sheet "Let DashBuddy notice windows from other apps" appears ONCE,
-     after the accessibility/notification permission sheets and AFTER the automation-consent sheet
-     (never two sheets at once). "Not now" holds through rotation and navigating around the app, and
-     brings it back only after the app leaves the foreground and returns; Allow / Don't allow never
-     re-prompt.
-  2. On Allow: exactly one `Event receipt: wide=true` INFO line (tag `Pipeline`), and
+  1. After a fresh install, "Let DashBuddy notice windows from other apps" appears ONCE, after the
+     accessibility/notification permission sheets: answering the last automation-consent row slides
+     the SAME sheet over to it (never a second sheet). "Not now" closes the whole sheet, holds through
+     rotation and navigating around the app, and brings it back only after the app leaves the
+     foreground and returns; Allow / Don't allow never re-prompt.
+  2. On Allow: exactly one `Event receipt: wide=true` INFO line (tag `Pipeline`; exactly one
+     `wide=false` at each service connect before that), and
      `WINDOWS_CHANGED (coalesced …)` DEBUG lines begin in `app.log`. Before the decision, or after a
      decline, the line reads `wide=false` and no `WINDOWS_CHANGED` lines appear.
   3. Debug build, Don't allow: EVERY screen is replaced by the "Wide event receipt is off" notice
@@ -116,6 +117,10 @@ over-inference); the remaining accept losses are #1119 and the merged card is #1
      notice, where turning "Notice windows from other apps" on restores the app (and logs
      `wide=true`) without a restart.
   4. Turning the switch off in Settings logs `wide=false` and the `WINDOWS_CHANGED` lines stop.
+  5. The phone is Android 13+ (a Pixel 7): no `may not take effect on Android 11` WARN and no caveat on
+     the switch. (On an Android 11 device both appear — a known limitation, see the sensor reference.)
+  6. Debug build, a bubble deep link that arrives while the notice is up, then a rotation, then
+     Allow: the app opens the linked screen exactly once.
   - Issue: #1151. Confirmed: 0/2
 
 - **🆕 NEW — Uber offers drawn as an overlay are captured, whatever has focus (#1152).** Uber draws its
