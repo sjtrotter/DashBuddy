@@ -12,6 +12,8 @@ import cloud.trotter.dashbuddy.domain.settings.EventReceiptPreferences
 import cloud.trotter.dashbuddy.domain.settings.PlatformPreferences
 import cloud.trotter.dashbuddy.domain.state.Platform
 import dagger.hilt.android.AndroidEntryPoint
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -48,14 +50,6 @@ class AccessibilityListener : AccessibilityService() {
     @Inject
     lateinit var eventReceiptPreferences: EventReceiptPreferences
 
-    /** MM9 — applies the consent, parking it for a retry when `serviceInfo` is unavailable. */
-    private val eventReceiptApplier = PendingApply<EventReceiptConsent>(
-        apply = ::applyEventReceipt,
-        onDeferred = {
-            Timber.tag("Pipeline").w("Event receipt: serviceInfo unavailable — apply deferred to the next event")
-        },
-    )
-
     /** Service-scoped; created in [onServiceConnected], cancelled in [onUnbind] / [onDestroy]. */
     private var serviceScope: CoroutineScope? = null
 
@@ -66,9 +60,6 @@ class AccessibilityListener : AccessibilityService() {
 
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
         if (event == null) return
-
-        // MM9: an apply that found no serviceInfo is retried here (no-op when nothing is pending).
-        eventReceiptApplier.retryPending()
 
         val pkg = event.packageName?.toString()
 
@@ -123,31 +114,43 @@ class AccessibilityListener : AccessibilityService() {
     /**
      * #1151 — apply the consent to the live subscription. `eventTypes` keeps the debug-only
      * widening to every type (unhandled-type logging); `packageNames` is governed ONLY by the
-     * consent, in every build type. Returns false (retry later, MM9) only when [serviceInfo] is null.
+     * consent, in every build type. Never throws (PP3).
      */
-    private fun applyEventReceipt(consent: EventReceiptConsent): Boolean {
-        val info = serviceInfo ?: return false
-        val packageNames = try {
-            ServiceInfoPolicy.packageNamesFor(consent, Platform.watchedPackages)
-        } catch (e: IllegalArgumentException) {
-            // LL9: refuse to apply — the manifest's package list stays in force (fail-closed).
-            Timber.tag("Pipeline").e(e, "Event receipt: refused to apply an empty package list")
-            return true // not retryable: the registry is a compile-time constant
-        }
-        if (BuildConfig.DEBUG) {
-            info.eventTypes = AccessibilityServiceInfo.DEFAULT or AccessibilityEvent.TYPES_ALL_MASK
-        }
-        info.packageNames = packageNames
-        serviceInfo = info
-        Timber.tag("Pipeline").i("Event receipt: wide=%s", ServiceInfoPolicy.isWide(consent))
-        if (ServiceInfoPolicy.shouldWarnUnreliable(consent, Build.VERSION.SDK_INT, unreliableWarned.get())) {
-            if (unreliableWarned.compareAndSet(false, true)) {
-                Timber.tag("Pipeline").w(
-                    "wide event receipt may not take effect on Android 11 (framework filter is additive)",
-                )
+    private fun applyEventReceipt(consent: EventReceiptConsent) {
+        // PP3: an apply can never take sensing down — any failure (a RemoteException rethrown by
+        // getServiceInfo, setServiceInfo on a torn-down connection, the LL9 refusal) is ONE log line
+        // and the manifest's filtered footprint stays in force.
+        try {
+            // PP4: null only without a connection — no event can arrive then, and
+            // onServiceConnected re-applies on reconnect.
+            val info = serviceInfo ?: run {
+                Timber.tag("Pipeline").w("Event receipt: no serviceInfo (not connected) — apply skipped")
+                return
             }
+            val packageNames = try {
+                ServiceInfoPolicy.packageNamesFor(consent, Platform.watchedPackages)
+            } catch (e: IllegalArgumentException) {
+                // LL9: refuse to apply — the manifest's package list stays in force (fail-closed).
+                Timber.tag("Pipeline").e(e, "Event receipt: refused to apply an empty package list")
+                return
+            }
+            if (BuildConfig.DEBUG) {
+                info.eventTypes = AccessibilityServiceInfo.DEFAULT or AccessibilityEvent.TYPES_ALL_MASK
+            }
+            info.packageNames = packageNames
+            serviceInfo = info
+            Timber.tag("Pipeline").i("Event receipt: wide=%s", ServiceInfoPolicy.isWide(consent))
+            if (ServiceInfoPolicy.shouldWarnUnreliable(consent, Build.VERSION.SDK_INT, unreliableWarned.get())) {
+                if (unreliableWarned.compareAndSet(false, true)) {
+                    Timber.tag("Pipeline").w(
+                        "wide event receipt may not take effect on Android 11 (framework filter is additive)",
+                    )
+                }
+            }
+        } catch (t: Throwable) {
+            if (t is CancellationException) throw t
+            Timber.tag("Pipeline").w(t, "Event receipt: apply failed — sensing continues on the manifest footprint")
         }
-        return true
     }
 
     override fun onServiceConnected() {
@@ -161,7 +164,11 @@ class AccessibilityListener : AccessibilityService() {
         // the store is read the value is UNDECIDED, i.e. the filtered footprint (fail-closed).
         // The debug build no longer clears packageNames unconditionally; only eventTypes widen.
         cancelServiceScope()
-        val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
+        // PP3: a handler so nothing thrown in this scope can reach the uncaught-exception path.
+        val handler = CoroutineExceptionHandler { _, t ->
+            Timber.tag("Pipeline").e(t, "Event receipt: consent collector failed — manifest footprint stays")
+        }
+        val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate + handler)
         serviceScope = scope
         scope.launch {
             // null = the store is not read yet (or unreadable) ⇒ UNDECIDED, the filtered footprint.
@@ -170,7 +177,7 @@ class AccessibilityListener : AccessibilityService() {
             eventReceiptPreferences.consent
                 .map { it ?: EventReceiptConsent.UNDECIDED }
                 .distinctUntilChangedBy { ServiceInfoPolicy.isWide(it) }
-                .collect { consent -> eventReceiptApplier.onConsent(consent) }
+                .collect { consent -> applyEventReceipt(consent) }
         }
 
         // Register with the source

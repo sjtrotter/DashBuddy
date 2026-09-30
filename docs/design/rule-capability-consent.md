@@ -223,8 +223,11 @@ and swap it out when the capability rows arrive (OO2). The front door has ONE "N
 state-dependent sentence, so it is true in every state (NN5). A pending deep link is parked
 in `MainShellViewModel`'s `SavedStateHandle` and cleared only after delivery
 (MM4). Both consent ViewModels seed their initial state from the current value
-(MM7). An apply that finds no `serviceInfo` is a WARN and a parked retry on the
-next event (`PendingApply`, MM9). On Android 11 the runtime package filter may
+(MM7). An apply never takes sensing down (PP3): the service
+scope has a `CoroutineExceptionHandler` and the apply catches everything — one
+log line, the manifest's filtered footprint stays. A null `serviceInfo` (no
+connection) is one WARN; `onServiceConnected` re-applies on reconnect (PP4
+removed MM9's per-event retry). On Android 11 the runtime package filter may
 not clear; the listener WARNs once and the switch carries a caveat (MM2). The on/off → decision rule has one
 owner, `EventReceiptConsent.of(allowed)`. `ServiceInfoPolicy` refuses an EMPTY
 package registry (the framework treats an empty `packageNames` like `null`), and
