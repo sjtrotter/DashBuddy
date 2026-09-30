@@ -620,8 +620,10 @@ enum class UiNodeTextField(val wire: String) {
 // ============================================================================
 
 private fun computeStableHash(node: UiNode): Int {
-    // Anonymous wrapper: no ID, generic class — hash through to children only
-    if (node.viewIdResourceName == null && node.className.isAnonymousWrapper()) {
+    // Anonymous wrapper: no ID, generic class — hash through to children only. The predicate is the ONE
+    // shared with the census fingerprint (ADR-0011 §8); this algorithm (fold, never splice) is unchanged,
+    // pinned by UiNodeStableHashPinTest.
+    if (AnonymousWrappers.isAnonymousWrapper(node.className, node.viewIdResourceName)) {
         var result = 0
         for (child in node.children) {
             result = 31 * result + computeStableHash(child)
@@ -636,10 +638,3 @@ private fun computeStableHash(node: UiNode): Int {
     }
     return result
 }
-
-/**
- * The wrapper CLASS SET is shared with the census fingerprint (ADR-0011 §8) through ONE constant,
- * [AnonymousWrappers.WRAPPER_CLASSES]; the algorithm here (fold as a nested group, never splice) is
- * deliberately unchanged.
- */
-private fun String?.isAnonymousWrapper(): Boolean = this != null && this in AnonymousWrappers.WRAPPER_CLASSES
