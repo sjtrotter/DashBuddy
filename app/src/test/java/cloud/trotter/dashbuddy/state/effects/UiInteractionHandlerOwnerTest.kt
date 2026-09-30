@@ -49,6 +49,7 @@ class UiInteractionHandlerOwnerTest {
         whenever(node.text).thenReturn(text)
         whenever(node.contentDescription).thenReturn(desc)
         whenever(node.isClickable).thenReturn(clickable)
+        whenever(node.actions).thenReturn(if (advertisesClick) AccessibilityNodeInfo.ACTION_CLICK else 0) // P6: the bitmask
         whenever(node.actionList).thenReturn(
             if (advertisesClick) listOf(AccessibilityNodeInfo.AccessibilityAction.ACTION_CLICK) else emptyList(),
         )

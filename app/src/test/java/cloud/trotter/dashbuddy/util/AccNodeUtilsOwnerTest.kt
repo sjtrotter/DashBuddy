@@ -26,6 +26,7 @@ class AccNodeUtilsOwnerTest {
     private fun node(clickable: Boolean = false, advertisesClick: Boolean = false, parent: AccessibilityNodeInfo? = null): AccessibilityNodeInfo {
         val n = mock<AccessibilityNodeInfo>()
         whenever(n.isClickable).thenReturn(clickable)
+        whenever(n.actions).thenReturn(if (advertisesClick) AccessibilityNodeInfo.ACTION_CLICK else 0) // P6: the bitmask
         whenever(n.actionList).thenReturn(
             if (advertisesClick) listOf(AccessibilityNodeInfo.AccessibilityAction.ACTION_CLICK) else emptyList(),
         )

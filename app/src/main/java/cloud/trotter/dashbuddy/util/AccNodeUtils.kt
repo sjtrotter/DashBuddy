@@ -1,6 +1,7 @@
 package cloud.trotter.dashbuddy.util
 
 import android.view.accessibility.AccessibilityNodeInfo
+import cloud.trotter.dashbuddy.core.pipeline.accessibility.mapper.takesClick
 import timber.log.Timber
 
 /**
@@ -20,10 +21,10 @@ object AccNodeUtils {
      * [AccessibilityNodeInfo.ACTION_CLICK] in its action list (Compose and custom views often
      * advertise the action without setting the flag — TalkBack's own test). Its bind-time mirror is
      * `UiNode.takesClick` (`isClickable || hasClickAction`, #1149 review J2): the two MUST stay the
-     * same predicate, or bind and fire disagree on which labels a control owns.
+     * same predicate, or bind and fire disagree on which labels a control owns. Delegates to the ONE
+     * live definition, `AccessibilityNodeInfo.takesClick()` in the mapper package (#1149 review P6).
      */
-    fun isActionClickable(node: AccessibilityNodeInfo): Boolean =
-        node.isClickable || node.actionList.orEmpty().any { it.id == AccessibilityNodeInfo.ACTION_CLICK }
+    fun isActionClickable(node: AccessibilityNodeInfo): Boolean = node.takesClick()
 
     /**
      * #1149 — the ACTION OWNER of [node]: the first of self → parent → … that
