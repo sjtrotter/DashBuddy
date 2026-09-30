@@ -266,4 +266,28 @@ class AccessibilitySourceWindowRootsTest {
         }
         assertSame(b, sourceFor(service).getLiveWindowRoots().active)
     }
+
+    @Test
+    fun `HH2 - two windows flagged active - no active root (U2 keep-all), never a trusted rootInActiveWindow`() {
+        val a = mock<AccessibilityNodeInfo> { on { windowId } doReturn 1 }
+        val b = mock<AccessibilityNodeInfo> { on { windowId } doReturn 2 }
+        val wa = mock<AccessibilityWindowInfo> {
+            on { id } doReturn 1
+            on { root } doReturn a
+            on { isActive } doReturn true
+        }
+        val wb = mock<AccessibilityWindowInfo> {
+            on { id } doReturn 2
+            on { root } doReturn b
+            on { isActive } doReturn true
+        }
+        val windowList = listOf(wa, wb)
+        val service = mock<AccessibilityService> {
+            on { rootInActiveWindow } doReturn a
+            on { windows } doReturn windowList
+        }
+
+        val live = sourceFor(service).getLiveWindowRoots()
+        assertNull("an ambiguous active identity yields no active root", live.active)
+    }
 }

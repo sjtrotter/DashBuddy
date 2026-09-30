@@ -123,7 +123,12 @@ class AccessibilitySource @Inject constructor(
         // name different windows (focus moved between the two reads), there is NO active root for this
         // attempt — keep-all scoping, whose unreadable/cut/twin rules fail closed.
         val flagged = flaggedActive
+        // PR #1155 review HH2 — keep #1149 U2's fail-closed rule: TWO or more windows flagged active
+        // (a transition in flight) is an AMBIGUOUS identity → NO active root (keep-all scoping), never
+        // a trusted rootInActiveWindow.
+        val ambiguous = windows.count { it.isActive } >= 2
         val active: AccessibilityNodeInfo? = when {
+            ambiguous -> null
             flagged == null -> rootInActive
             rootInActive != null && rootInActive.windowId != flagged.id -> null
             else -> flaggedActiveRoot ?: rootInActive?.takeIf { it.windowId == flagged.id }
@@ -146,9 +151,9 @@ class AccessibilitySource @Inject constructor(
      * PR #1155 review FF2 — the ONE owner of "which window is active", for taps
      * ([getLiveWindowRoots], #1149 U2) and frames ([cloud.trotter.dashbuddy.core.pipeline.accessibility.event.type.window.snapshotForEvent],
      * the topology path) alike: the single window of [windows] flagged `isActive`, else null (none, or
-     * more than one — a transition in flight). The one fallback, used only when this is null, is
-     * `rootInActiveWindow` (read the active root, with no overlay scan on the frame path) — the
-     * pre-#1152 behaviour, never a refusal.
+     * more than one — a transition in flight). On the FRAME path the one fallback, used only when this
+     * is null, is `rootInActiveWindow` (read the active root, with no overlay scan) — the pre-#1152
+     * behaviour, never a refusal. On the TAP path ≥ 2 flagged means NO active root (HH2, #1149 U2).
      */
     fun activeFromEnumeration(windows: List<AccessibilityWindowInfo>): AccessibilityWindowInfo? =
         windows.filter { it.isActive }.singleOrNull()
