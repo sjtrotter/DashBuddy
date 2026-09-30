@@ -14,14 +14,13 @@ import org.junit.Test
 class MainShellViewModelTest {
 
     @Test
-    fun `blocked, intent, recreation, allow - exactly one navigation`() {
+    fun `parked while blocked, recreation, then delivered - exactly one navigation`() {
         val navigations = mutableListOf<String>()
 
-        // Blocked: the intent's route is parked, nothing navigates.
+        // Blocked: the intent's route is parked; deliver() is not composed, so nothing navigates.
         val before = SavedStateHandle()
         val vm1 = MainShellViewModel(before)
         vm1.offer("analytics")
-        assertFalse(vm1.deliver(navigable = false) { navigations += it })
         assertTrue(navigations.isEmpty())
 
         // Recreation: a new ViewModel restored from the saved state (the intent extra is gone).
@@ -30,8 +29,8 @@ class MainShellViewModelTest {
         assertEquals("analytics", vm2.pendingRoute.value)
 
         // Allow: navigable — delivered once, then cleared; a second pass delivers nothing.
-        assertTrue(vm2.deliver(navigable = true) { navigations += it })
-        assertFalse(vm2.deliver(navigable = true) { navigations += it })
+        assertTrue(vm2.deliver { navigations += it })
+        assertFalse(vm2.deliver { navigations += it })
         assertEquals(listOf("analytics"), navigations)
         assertNull(vm2.pendingRoute.value)
     }
@@ -40,7 +39,7 @@ class MainShellViewModelTest {
     fun `a later offer after a delivery still reaches the flow`() {
         val vm = MainShellViewModel(SavedStateHandle())
         vm.offer("analytics")
-        vm.deliver(navigable = true) {}
+        vm.deliver {}
         vm.offer("analytics")
         assertEquals("analytics", vm.pendingRoute.value)
     }
@@ -49,7 +48,7 @@ class MainShellViewModelTest {
     fun `a failed navigation keeps the route parked`() {
         val vm = MainShellViewModel(SavedStateHandle())
         vm.offer("settings")
-        runCatching { vm.deliver(navigable = true) { error("nav threw") } }
+        runCatching { vm.deliver { error("nav threw") } }
         assertEquals("settings", vm.pendingRoute.value)
     }
 

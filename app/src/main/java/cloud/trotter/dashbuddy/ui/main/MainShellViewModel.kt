@@ -25,12 +25,12 @@ class MainShellViewModel @Inject constructor(
     }
 
     /**
-     * Deliver the parked route through [navigate] iff [navigable]; clears it only after [navigate]
-     * returned. Returns true when a route was delivered. Validation of the route (#693 review F3)
-     * stays in the caller's [navigate].
+     * Deliver the parked route through [navigate]; clears it only after [navigate] returned. Returns
+     * true when a route was delivered. There is no gating flag here (review NN7): the caller is
+     * composed only once the shell is navigable, so composition order is the one gate. Validation
+     * of the route (#693 review F3) stays in the caller's [navigate].
      */
-    fun deliver(navigable: Boolean, navigate: (String) -> Unit): Boolean {
-        if (!navigable) return false
+    fun deliver(navigate: (String) -> Unit): Boolean {
         val route = handle.get<String>(KEY_PENDING_ROUTE) ?: return false
         navigate(route)
         // Set to null, never remove(): remove() detaches the getStateFlow above, so later offers

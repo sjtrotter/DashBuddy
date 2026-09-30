@@ -93,11 +93,12 @@ class MainActivity : ComponentActivity() {
                     return@DashBuddyTheme
                 }
 
-                // Deliver a deep-link route once, then clear it (#693 vehicle action). Composed only
-                // when the shell is navigable, so a route waits behind the debug gate (MM4).
+                // Deliver a deep-link route once, then clear it (#693 vehicle action). This is
+                // composed only AFTER the loading/blocked early returns above — composition order
+                // is the one gate, so a route waits (parked, MM4) behind the debug gate (NN7).
                 val route by shell.pendingRoute.collectAsStateWithLifecycle()
                 LaunchedEffect(route) {
-                    shell.deliver(navigable = eventReceipt.navigable) {
+                    shell.deliver {
                         // #693 review F3: MainActivity is exported (launcher) — a forged extra
                         // carrying a non-route string would crash navigate() with
                         // IllegalArgumentException. Fail closed: navigate only to known routes.
