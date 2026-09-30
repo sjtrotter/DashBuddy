@@ -126,7 +126,11 @@ object KindClassifier {
         return digits[0] - '0'
     }
 
-    private fun isWhitespace(cp: Int): Boolean = Character.isWhitespace(cp) || Character.isSpaceChar(cp)
+    /**
+     * The census whitespace predicate — the ONE definition the grammar's split and
+     * [CensusHash.canonical]'s collapse share (#1160 review EE2).
+     */
+    internal fun isWhitespace(cp: Int): Boolean = Character.isWhitespace(cp) || Character.isSpaceChar(cp)
 
     private fun splitRuns(codePoints: IntArray): List<IntArray> {
         val runs = mutableListOf<IntArray>()

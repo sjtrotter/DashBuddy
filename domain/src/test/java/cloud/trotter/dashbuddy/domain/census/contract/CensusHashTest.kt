@@ -41,4 +41,13 @@ class CensusHashTest {
             assertTrue(it, !CensusHash.isWellFormed(it))
         }
     }
+
+    @Test
+    fun `the canonical value collapses every census whitespace to one ASCII space (review EE2)`() {
+        assertEquals("Pickup & delivery", CensusHash.canonical("  Pickup\u00A0&\u2009\u2009delivery\n"))
+        assertEquals("José R", CensusHash.canonical("José\u00A0R"))
+        assertEquals(CensusHash.canonical("a b"), CensusHash.canonical(CensusHash.canonical("a \t b")))
+        assertEquals(CensusHash.of("Pickup & delivery"), CensusHash.of("Pickup\u00A0&\u00A0delivery"))
+        assertEquals("", CensusHash.canonical(" \u00A0 "))
+    }
 }

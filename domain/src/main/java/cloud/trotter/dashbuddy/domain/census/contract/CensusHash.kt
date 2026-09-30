@@ -24,7 +24,8 @@ package cloud.trotter.dashbuddy.domain.census.contract
 import cloud.trotter.dashbuddy.domain.util.sha256OrNull
 
 /**
- * The census token hash (ADR-0011 §3): `sha256("census.v1:" + trimmed)`, first [HEX_LENGTH] hex.
+ * The census token hash (ADR-0011 §3): `sha256("census.v1:" + canonical)`, first [HEX_LENGTH] hex, where
+ * [canonical] is the trimmed, whitespace-normalized value.
  *
  * Unsalted on purpose — cross-install equality is what the server's k rule counts. The `census.v1:`
  * prefix separates the digest DOMAIN from the parse-side `customerNameHash` and the redact masks
@@ -46,12 +47,37 @@ object CensusHash {
     /** Hex characters kept from the full sha256. */
     const val HEX_LENGTH: Int = 16
 
-    /** The census hash of [text] (trimmed first — the builder hashes the trimmed canonical value), or null. */
+    /**
+     * The CANONICAL value (ADR-0011 §2 "Inputs and predicates", §3; #1160 review EE2): every run of code
+     * points the classifier treats as whitespace (`Character.isWhitespace || isSpaceChar` — NBSP, thin
+     * space, tab, newline…) collapsed to ONE ASCII space, then trimmed. Every filter step, the grammar
+     * and the hash run on this, so the JVM (whose regex `\s` excludes NBSP) and ART/ICU (whose `\s`
+     * includes `\p{Z}`) take the same decision and produce the same hash. Idempotent.
+     */
+    fun canonical(text: String): String {
+        val sb = StringBuilder(text.length)
+        var pendingSpace = false
+        var i = 0
+        while (i < text.length) {
+            val cp = text.codePointAt(i)
+            if (KindClassifier.isWhitespace(cp)) {
+                pendingSpace = true
+            } else {
+                if (pendingSpace && sb.isNotEmpty()) sb.append(' ')
+                pendingSpace = false
+                sb.appendCodePoint(cp)
+            }
+            i += Character.charCount(cp)
+        }
+        return sb.toString()
+    }
+
+    /** The census hash of [text]'s [canonical] form, or null. */
     fun of(text: String): String? = of(text, ::sha256OrNull)
 
     /** Test seam: the same computation over an injected digest, so the null path is provable. */
     internal fun of(text: String, digest: (String) -> String?): String? {
-        val hex = digest(PREFIX + text.trim()) ?: return null
+        val hex = digest(PREFIX + canonical(text)) ?: return null
         if (hex.length < HEX_LENGTH) return null
         return hex.substring(0, HEX_LENGTH)
     }
