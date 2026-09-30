@@ -191,7 +191,17 @@ class UiInteractionHandler @Inject constructor(
         var geometryRejected = 0
         val labeledCandidates = owned.targets.mapNotNull { target ->
             val scan = scanLabels(target.owner, expectedPackage)
-            val labels = scan.labels
+            // #1149 review I8: the MATCHED node's own text/contentDescription always count — the owner
+            // may sit more than LABEL_SCAN_DEPTH levels (or LABEL_SCAN_NODES fetches) above it, and a
+            // viewId/text match that verified pre-#1149 must not fail for that. Consistent with I3:
+            // the evidence node is inside the owner and not itself clickable (else it would BE the
+            // owner). Only the lenient expectation/ranking set grows; the semantic fingerprint below
+            // reads the owner scan alone (for a 2b hit, evidence IS the owner).
+            val evidenceLabels = if (target.evidence == target.owner) emptyList() else listOfNotNull(
+                target.evidence.text?.toString()?.takeIf { it.isNotBlank() },
+                target.evidence.contentDescription?.toString()?.takeIf { it.isNotBlank() },
+            )
+            val labels = scan.labels + evidenceLabels.filterNot { it in scan.labels }
             // #1093: a bounds-derived candidate — exact rect or overlap — needs the bind's own
             // subtree labels among its live ones; that, not geometry, separates the slid receipt
             // row from whatever control now sits where the row was captured. A hint-less ref
@@ -199,7 +209,7 @@ class UiInteractionHandler @Inject constructor(
             // candidate was FOUND by its exact label fingerprint; re-checked here on the owner.
             if (target.boundsDerived || target.semantic) {
                 val identified = when {
-                    target.semantic -> scan.complete && ref.fingerprintMatches(labels)
+                    target.semantic -> scan.complete && ref.fingerprintMatches(scan.labels)
                     ref.labelHintHashes.isEmpty() -> !target.relaxed
                     else -> ref.agreesWithLabels(labels)
                 }

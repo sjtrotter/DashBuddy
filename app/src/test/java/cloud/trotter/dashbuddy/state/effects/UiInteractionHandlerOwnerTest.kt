@@ -190,6 +190,22 @@ class UiInteractionHandlerOwnerTest {
         button.neverClicked()
     }
 
+    /**
+     * Review I8: the matched title sits 5 levels below its button — past the owner scan's depth —
+     * yet the match itself is the evidence: its own label counts, and the tap verifies as before.
+     */
+    @Test
+    fun `a matched title deeper than the owner scan still verifies by its own label`() = runTest {
+        val title = view(cls = "android.widget.TextView", text = "Decline offer")
+        var chain: AccessibilityNodeInfo = title
+        repeat(4) { chain = view(children = listOf(chain)) }
+        val button = view(clickable = true, children = listOf(chain))
+        val root = windowRoot(button, byId = listOf(title))
+
+        assertTrue(confirmDecline(handler(root)))
+        button.clicks(1)
+    }
+
     // ---------------------------------------------------------------- strategy 2b (D2)
 
     private val rowRect = Rect(36, 1774, 1044, 1900)
