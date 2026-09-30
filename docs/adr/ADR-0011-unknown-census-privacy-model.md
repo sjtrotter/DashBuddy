@@ -58,7 +58,11 @@ CASE-SENSITIVE initial runs on the id path, so `option_a`/`tab_b` chrome ids tra
 Those predicates live in `:core:pipeline`, so that judgement is client-side only; a bare name
 with no marker, lead-in or initial (`chip_Adam`, `Adam Smith`) is indistinguishable by shape from chrome
 (`chip_Gold`, `Artwork Image`) — it is absent when an identity id on the same frame carries that name
-(§2 frame-level rule), and travels in the clear otherwise — residual risk 10. `class` likewise travels only when it matches `ClassNameGrammar` — a Java binary
+(§2 frame-level rule), and travels in the clear otherwise — residual risk 10. On the id path the PII
+judgement is deliberately harder to trigger than on text: a marker or lead-in withholds only when the
+token after it is Capitalized (`deliver_to_Sam` is absent, `deliver_to_label` travels), and the name shape
+needs a Capitalized first token and an uppercase initial (`chip_Adam_S` is absent; `tabB`, `optionA`
+travel) — review round 8. `class` likewise travels only when it matches `ClassNameGrammar` — a Java binary
 class name, ≤ 128 characters, the same digit-run rule — else it is absent (null on the wire, `""` in the
 fingerprint), because Compose/Flutter/WebView/custom views can report any string as their class), the three flags (`isClickable`/`isEnabled` as booleans, `isChecked` as the
 `UiNode` tri-state `Int` 0/1/2 — wire types stated so the shared vectors cannot disagree), and
@@ -184,10 +188,8 @@ filter over every text field of the frame (tree + window title) and SEEDS:
   whose duplicate is itself over-length);
 - from step 1, ONLY on an identity id's TEXT / CONTENT_DESCRIPTION (never its
   role/hint/tooltip/click-label/uid/pane), by the id's KIND in `CustomerTextMarkers.ID_MARKER_TABLE`:
-  a **NAME** id (`customer_name`, `order_cx_name`, and `user_name` — which is also reused for the
-  merchant's and the dasher's own name; withholding a store name costs the census nothing, because
-  recognition never anchors on a merchant name, #1160 review round 6) seeds its exact value AND its
-  maximal letter runs of at least 2 letters
+  a **NAME** id — reserved for ids whose value is ONLY ever a person's name (`customer_name`,
+  `order_cx_name`) — seeds its exact value AND its maximal letter runs of at least 2 letters
   (counted in code points, case-folded with the one `CaseFold`: `ẞ` → `ß`, then upper- and lower-case
   ROOT, final sigma to medial) — from its TEXT when the text is non-blank, otherwise from its
   CONTENT_DESCRIPTION (review round 7); an **ADDRESS** id (`address_line_1/2`,
@@ -196,9 +198,12 @@ filter over every text field of the frame (tree + window title) and SEEDS:
   details" or "Road closed" chrome, and camelCase ids like `roadNameLayout`, on every frame with an
   address, while a person's name rarely collides with chrome; a **CONTENT** id (the free-text
   instruction bodies; `description_text_view`, generic DoorDash chrome such as "Raise to 50%") seeds
-  nothing; an **EXACT** id (`tvTitle`, `tvLastMessage` — the chat header is a customer's name and the
-  preview their text, but the same generic id titles other sheets, "Pick up order") seeds its exact value
-  only. A NAME seeds runs from its text, so a TalkBack-style desc "Customer name Adam" beside text "Adam"
+  nothing; an **EXACT** id — a REUSED id (`user_name`, which also carries the merchant's and the
+  dasher's own name: its runs would seed "the"/"in"/"box" from "Jack in the Box" and suppress chrome and
+  `TextView`-class wrappers per store) or a value that may be chrome (`tvTitle`, `tvLastMessage`: the chat
+  header is a customer's name and the preview their text, but the same generic id titles other sheets,
+  "Pick up order") — seeds its exact value only, so a duplicated first name is still caught (review
+  round 8). A NAME seeds runs from its text, so a TalkBack-style desc "Customer name Adam" beside text "Adam"
   seeds no `customer`/`name`, while a name rendered only in a desc still propagates. Every PII id the
   intake knows is in this table, so `PII_ID_SUFFIXES` holds only instruction/content ids (message bodies,
   maneuver/road text, instruction bodies) plus the table's suffixes (review rounds 6–7);
@@ -244,8 +249,9 @@ or tag character inside a marker, or a fullwidth letter, cannot defeat steps 3/4
 chrome word hashes equal to its plain twin (amended in #1160 review rounds 6–7); then every run of code points the classifier treats as whitespace,
 `Character.isWhitespace || isSpaceChar`, collapsed to one ASCII space. The canonical form is a FIXED
 POINT — `canonical(canonical(x)) == canonical(x)`; stripping FORMAT before NFKC lets a combining mark
-hidden behind a zero-width joiner compose in the one pass, the pass is re-applied until stable (bounded at
-3), and a value that does not converge is withheld. The builder HASHES the canonical string it JUDGED
+hidden behind a zero-width joiner compose in the first pass; the pass is applied at most 3 times and the
+value is canonical when a pass leaves it unchanged; otherwise it has NO canonical form (`canonical`
+returns null) and is withheld, and an id without one is not static (review round 8). The builder HASHES the canonical string it JUDGED
 (`CensusHash.ofCanonical`), never a re-canonicalized one (review round 7). Amended in #1160 because the JVM's
 regex `\s` excludes NBSP/thin space while ICU's includes `\p{Z}`, so the decision was engine-dependent) —
 the same bytes `CensusHash` hashes — so a leading space cannot slip a prefix past a `startsWith`. Every

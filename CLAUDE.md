@@ -286,7 +286,9 @@ PR #1066 — read a pull's build from the logs, never infer it).
 **Backstops (rules-independent, cross-platform DATA):** `SensitiveTextMarkers` drops the dasher's
 banking screens; `CustomerTextMarkers` (#624/#806) scrubs a node/field carrying a customer-PII marker on
 recognized AND UNKNOWN screen/notification/click envelopes, plus `ID_MARKERS` (view-id suffixes whose
-VALUE is PII, `hasIdSuffix`, #910/#993/#1058) on UNKNOWN screen + click envelopes only (a recognized
+VALUE is PII, `hasIdSuffix`, #910/#993/#1058) on UNKNOWN screen + click envelopes only — the census kind
+table `ID_MARKER_TABLE` is the one owner of "what kind of value an id carries", and `ID_MARKERS` is its
+runtime-scrub projection (#1160) (a recognized
 frame keeps its rule's deliberate decisions). A click envelope inherits the SCREEN rule's redact
 (`Observation.Click.screenRuleId`, #910). Candidate text markers are vetted against the corpus
 (`CaptureBackstopCorpusTest`); chrome-ambiguous prefixes are rejected and the rule redact is the primary

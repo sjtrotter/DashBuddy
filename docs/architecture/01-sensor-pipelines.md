@@ -591,25 +591,33 @@ side-effect-free half.
   also uses (algorithm unchanged, pinned by `UiNodeStableHashPinTest`); the customer-PII shapes moved
   byte-for-byte from the test-only `SnapshotRedactor` to `domain.privacy.PiiShapes` (app licence;
   `SnapshotRedactor` delegates, `PiiShapesParityTest` pins it; `PiiShapesIcuGuardTest` applies the ICU
-  bare-`}` rule to every compiled pattern); `CustomerTextMarkers.ID_MARKERS` is derived from
-  `ID_MARKER_TABLE` (`IdMarker(suffix, kind)`, kind NAME / ADDRESS / CONTENT; list pinned — the runtime
-  backstop is unchanged).
+  bare-`}` rule to every compiled pattern); `CustomerTextMarkers.ID_MARKER_TABLE` is the ONE owner of
+  "what kind of value an id carries" — `IdMarker(suffix, kind, runtimeScrub)`, kind NAME / ADDRESS /
+  EXACT / CONTENT — and `ID_MARKERS` is its runtime-scrub projection (the rows with `runtimeScrub`):
+  #1160 added `order_cx_name` to the runtime UNKNOWN scrub, while `tvTitle` / `tvLastMessage` are
+  census-only rows (a generic sheet title stays readable in debug triage; the corpus intake still masks
+  them via `PII_ID_SUFFIXES`).
 - *The filter* — `core.pipeline.census.SkeletonBuilder` (typed API: `Platform`, `LocalDate`). A
-  `SensitiveTextMarkers` hit on the raw tree or title yields no skeleton; a FAILED marker scan is
-  `BUILD_FAILED`, not a sensitive frame. Per field: step 1 is the node's own RAW id (`ID_MARKERS` ∪
-  `PII_ID_SUFFIXES`, via `IdClass`); steps 2–8 judge the CANONICAL form (which alone decides the 40-char
-  cap) and, when it differs and is itself within the cap, the RAW trimmed form — either hit withholds;
-  only a `words:1..8` survivor hashes, on the canonical form. The FRAME-LEVEL duplicate rule then
-  withholds (a) any field whose canonical value a value-judging step caught anywhere in the frame, and (b)
-  any field containing a letter run (≥ 2 letters in code points, `CaseFold`-folded) of a NAME identity
-  id's rendered text (`customer_name`, `order_cx_name`, `user_name`; from a desc only runs its text
-  shares); an ADDRESS id (the address lines, `arriving_at_title`,
-  `address_subpremise_line`) seeds its exact value only, because address vocabulary is common English;
-  a CONTENT id (`user_name`, `description_text_view`, the instruction bodies) and a mask seed nothing.
-  The same NAME containment, split also at camelCase boundaries, makes a node's id or class absent
-  (`chipAdam` beside `customer_name` "Adam"), while "Adam's order" is withheld as a text slot.
-  Each value is judged once per frame (memoized). `outcome()` never throws: every failure is
-  `Refusal.BUILD_FAILED` (the #909 inertness rule); refusals are reasons, never text.
+  `SensitiveTextMarkers` hit on the raw tree or title yields no skeleton (a caller may pass the verdict
+  it already computed, bound to that exact tree instance; a mismatched one is ignored); a FAILED marker
+  scan is `BUILD_FAILED`, not a sensitive frame. Per field: step 1 is the node's own RAW id
+  (`ID_MARKER_TABLE` ∪ `PII_ID_SUFFIXES`, via `IdClass`); steps 2–8 judge the CANONICAL form (a fixed point
+  or none — a value with no canonical form is withheld; the canonical form alone decides the 40-char cap)
+  and, when it differs and is itself within the cap, the RAW trimmed form — either hit withholds; only a
+  `words:1..8` survivor hashes, on the judged canonical form. The FRAME-LEVEL duplicate rule then
+  withholds (a) any field whose canonical value is a seeded EXACT value — value-judged anywhere in the
+  frame, or the text/desc of a NAME, ADDRESS or EXACT id — and (b) any field containing a letter run
+  (≥ 2 letters in code points, `CaseFold`-folded) of a NAME id's text (else its desc). NAME run-seeding
+  is reserved for ids whose value is ONLY ever a person's name (`customer_name`, `order_cx_name`); a
+  reused id (`user_name`, also the merchant's and the dasher's name) and a value that may be chrome
+  (`tvTitle`, `tvLastMessage`) are EXACT; the address ids are ADDRESS (exact only — address vocabulary
+  is common English); CONTENT ids (`description_text_view`, the instruction bodies) and masks seed
+  nothing. The same NAME containment, split also at camelCase boundaries (contiguous segments), makes a
+  node's id or class absent (`chipAdam` beside `customer_name` "Adam"). On the id path the PII judgement
+  is stricter-to-trigger: a lead-in withholds only before a Capitalized token and the name shape needs a
+  Capitalized first token and an uppercase initial (`deliver_to_label`, `tabB` travel). Each value is
+  judged once per frame (memoized). `outcome()` never throws: every failure is `Refusal.BUILD_FAILED`
+  (the #909 inertness rule); refusals are reasons, never text.
 - *Tests* — `SkeletonCorpusTest` asserts ADR §7 (a)–(f) over the whole committed corpus (full-tree
   redactor parity with exactly one stated exemption, plus a negative control) and a seeded property.
 
