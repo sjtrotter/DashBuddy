@@ -238,6 +238,12 @@ never coordinates, so frozen bounds never aimed a tap — they decided WHICH nod
     window's bounds walk is cut by `TreeLimits`, a background window's control never becomes the sole survivor.
     **Under keep-all scoping, ANY cut walk aborts (review T1):** with no verified active-window candidate (our
     bubble active) every window decides, so a cut window could hold the intended control past its cut.
+  - **Unreadable windows are cut windows for strategy 3 (review T3):** under keep-all scoping an unreadable
+    application window counts like a `TreeLimits`-cut window (abort); the active window is excluded from that count
+    by its own `isActive` flag (T4), not the root read.
+  - **Label-free by design is not unprovable (review T9):** an action with a null label expectation
+    (`EXPAND_EARNINGS` — "the control carries no text") is never counted as unprovable for lacking a label; the
+    icon-only census (S7) stays for label-verified actions.
   - **The hash key is the WHOLE label (review T2):** `hintKeyOrNull` = the capped, trimmed, ROOT-lowercased full
     label (the 40-char key let "… merchant Alice" and "… merchant Bob" collide); a legacy ref's strategy-3
     containment may miss a long label across the upgrade — accepted, fail closed.

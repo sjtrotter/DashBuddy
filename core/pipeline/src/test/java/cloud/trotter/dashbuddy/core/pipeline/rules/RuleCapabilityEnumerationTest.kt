@@ -202,4 +202,26 @@ class RuleCapabilityEnumerationTest {
         val s = shortfalls.single { "declineButton" in it.unprovableBindings }
         assertEquals("no letter-bearing label", s.unprovableReasons["declineButton"])
     }
+
+    /** #1149 review T9: an action designed label-free (null label expectation — EXPAND_EARNINGS) is NOT counted for having no label. */
+    @Test
+    fun `a label-free-by-design action target is not unprovable for lacking a label`() {
+        val rule = """
+        [{
+          "id": "doordash.screen.receipt_test",
+          "priority": 10,
+          "require": { "exists": { "hasText": "Dash summary" } },
+          "bind": { "expandButton": { "find": { "hasIdSuffix": "icon_button" } } }
+        }]
+        """.trimIndent()
+        val ruleset = Ruleset(compile(rule))
+        val tree = UiNode(children = listOf(
+            UiNode(text = "Dash summary"),
+            UiNode(viewIdResourceName = "com.doordash.driverapp:id/icon_button", isClickable = true),
+        )).restoreParents()
+        val shortfalls = mutableListOf<cloud.trotter.dashbuddy.domain.pipeline.ParseShortfall>()
+        val result = ruleset.matchFirst(tree, platformWire = "doordash", onParseShortfall = { shortfalls += it })
+        assertEquals(true, result?.targets?.containsKey("expandButton"))
+        assertTrue(shortfalls.none { "expandButton" in it.unprovableBindings })
+    }
 }

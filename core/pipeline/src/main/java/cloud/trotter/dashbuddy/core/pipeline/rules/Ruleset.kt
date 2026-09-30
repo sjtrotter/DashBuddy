@@ -222,7 +222,12 @@ class Ruleset<TInput>(rules: List<CompiledRule<TInput>>) {
                         if (ref == null) { refused += name; continue }
                         put(name, ref)
                         when {
-                            ref.labelHintHashes.isEmpty() -> unprovable += name to "no letter-bearing label"
+                            // T9: an action DESIGNED label-free (a null label expectation, e.g. EXPAND_EARNINGS:
+                            // "the control carries no text") is not unprovable for lacking a label — 2b cannot
+                            // apply and that is known; counting it would WARN on every collapsed receipt.
+                            ref.labelHintHashes.isEmpty() -> if (RuleAction.byTargetBindName.getValue(name).verification.labelPattern != null) {
+                                unprovable += name to "no letter-bearing label"
+                            }
                             !ref.labelHintsComplete -> unprovable += name to "incomplete bind-time label scan"
                         }
                     }
