@@ -135,4 +135,43 @@ fails whenever it fires — and only widens the confirm-decline vs `OFFER_EXPIRY
 label-hash re-find when the bounds walk comes back empty was built and WITHDRAWN (a clickable parent
 containing a non-clickable row satisfies label CONTAINMENT; a budget cut-off could leave one wrong
 survivor; unbudgeted child fetches; label collection crossing the package boundary — the constraints
-are on #1102).
+are on #1102). #1149 rebuilt that re-find as strategy 2b under exactly those constraints (next section).
+
+**Tap target re-resolution (#1149).** From the 2026-09-21 TalkBack study
+(`~/dashbuddy/research/talkback-study/ASTRA-REPORT.md`, wins 1 + 2: refresh the actual action owner before
+dispatch; re-resolve a bind semantically before geometry). DashBuddy taps with `performAction(ACTION_CLICK)`,
+never coordinates, so frozen bounds never aimed a tap — they decided WHICH node resolved.
+
+- **Owner first (D1).** `AccNodeUtils.resolveActionOwner` is the one "what does a tap land on" rule: self →
+  parent, at most `MAX_OWNER_WALK` = 32 steps, a cycle guard (`==` on visited nodes), clickable =
+  `isClickable` OR an advertised `ACTION_CLICK`; no owner → no tap. `performVerifiedClick` maps every candidate
+  to its owner BEFORE verification: owner-less (or foreign-package) owners are dropped (WARN, counts only),
+  candidates sharing an owner are deduped (a button's title TextView and the button are one control, not a #734
+  tie; the matched node stays the ranker's text/bounds `evidence`), labels are verified on the OWNER's bounded
+  subtree, and a **compound owner** — ≥ 2 independently clickable, letter-labeled descendants in its bounded
+  subtree (the footer holding Accept AND Decline) — is refused (WARN, counts only); a button whose descendants are
+  only its own TextViews counts 0. The #1093 nested abort, #788 window scoping, #600 ranking and #734 tie abort
+  all operate on owners. `clickNodeStrict(owner)` clicks the owner itself (no climb, no sibling), after
+  `refresh()`: a failed refresh is a `stale node` WARN and no click, and a refreshed node that no longer takes a
+  click is refused.
+- **Labels before geometry (D2, strategy 2b).** Between the text strategy and the bounds walk: a ref with
+  `labelHintHashes` is re-found by walking each root for nodes that take a click, match `classNameHint`, and
+  whose COMPLETE label scan is the ref's **exact** fingerprint (`NodeRef.fingerprintMatches`). Bounds are not an
+  entrance test — they stay ranking evidence (the overlap tier). The bounds walk runs only when 2b finds nothing.
+  The four #1102 review constraints on the withdrawn re-find are the design: (1) EXACT set, never containment —
+  a clickable parent card holding the row plus other text is not a candidate, and a bind-time set that filled
+  `MAX_LABEL_HINTS` is unprovable; (2) a walk cut by its bound (depth 40, 600 child fetches per root) ABORTS the
+  whole resolution (WARN) — never a lone survivor, never a fall-through to the bounds walk; (3) every child fetch
+  is budgeted before the binder call and nulls spend budget (2b's walk and its label scans share the budget; the
+  label and compound scans cap their own); (4) label collection never reads an embedded foreign-package subtree,
+  in discovery AND verification. Nesting is recorded like the bounds walk's, so a clickable wrapper around the
+  row still aborts. The real receipt trees (~60 nodes, depth ≤ 19) sit far inside the bound, and on all three
+  id-less corpus frames 2b finds exactly the row — including from a ref captured 400 px low or on the "Continue
+  dashing" rect (`ActuationBindingResolutionTest`).
+- **Not done (D3).** A geometry-only frame refreshing bindings without re-entering the state machine: NO.
+  `Observation.identity()` is the dedup SSOT and does not change; with 2b a slid control is re-found by labels,
+  so the frozen-bounds problem is fixed where it bites. #1102's throttle semantics and the capability gates
+  (#417/#425) are unchanged — this changes HOW a target is re-found, never WHAT may be tapped.
+- **Residuals.** The strategy-3 bounds walk is still unbudgeted (#1102's pre-existing note) — it now runs only
+  when 2b found nothing and was not cut. A bounded scan sees only its horizon: a compound owner whose second
+  control lies past the label budget reads as a single control (the same horizon label verification has).

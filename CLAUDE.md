@@ -508,7 +508,10 @@ Full reference: [`docs/architecture/04-side-effect-engine.md`](docs/architecture
 evaluation loopback, and owns the fail-closed action gates (#417): live `PermissionTierChecker` + the
 capability consent gate (`RuleCapabilityRepository`; **no auto-grant, #843**). Handlers:
 `OdometerEffectHandler`, `ScreenShotHandler`, `TipEffectHandler`, `TtsEffectHandler`,
-`UiInteractionHandler` (the only path that ever clicks a third-party app, #425), `OfferActionReceiver`.
+`UiInteractionHandler` (the only path that ever clicks a third-party app, #425; #1149: resolves the clickable
+OWNER first — `isClickable` OR advertised `ACTION_CLICK`, bounded walk — verifies and refreshes the owner, and
+re-finds a hinted bind by its subtree labels BEFORE geometry (EXACT fingerprint, a cut scan aborts); a compound
+owner fails closed), `OfferActionReceiver`.
 
 - **Every odometer fix is gated (#1057/#918).** The pure `:domain` `OdometerFixPolicy` judges each fix
   against the last ACCEPTED one (`MIN_DELTA_METERS` 5, `MAX_ACCURACY_METERS` 50, `MAX_SPEED_MPS` 67,
@@ -772,7 +775,7 @@ Every new feature or refactor holds to these — they are forefront design input
    `"Effects"`…), never the catch-all `App`. The tag rule is **enforced by a ratchet guard**
    (#764, `TimberTagGuardTest` in `:app` unit tests): any new bare `Timber.i/w/e/wtf(` (incl. the
    `Timber.Forest.*` form) in a main-type source set fails the build; the frozen allowlist
-   (`app/src/test/resources/timber-tag-guard-allowlist.txt`, 27 files as of #944) is the visible debt list —
+   (`app/src/test/resources/timber-tag-guard-allowlist.txt`, 26 files as of #1149) is the visible debt list —
    tag a file's sites, shrink its entry (counts dropping below the frozen number also fail, so the
    list only burns down). The INFO-must-be-PII-safe rule is **fail-closed and
    tested** (reuse `SensitiveTextMarkers`): a raw merchant/customer string in an INFO+ line is a
