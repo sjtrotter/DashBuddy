@@ -209,16 +209,20 @@ filter over every text field of the frame (tree + window title) and SEEDS:
   "the"/"in"/"box" from "Jack in the Box" and suppress chrome and `TextView`-class wrappers per store) —
   seed their exact value only, so a duplicated first name is still caught (review rounds 8, 10). A NAME seeds runs from its text, so a TalkBack-style desc "Customer name Adam" beside text "Adam"
   seeds no `customer`/`name`, while a name rendered only in a desc still propagates — and a NAME whose
-  text is a mask or has no canonical form takes its runs from the desc. For the ID check only, a
-  WHOLE-value run (case-folded, non-letters removed) is matched against the candidate's camel segments and
-  their contiguous joins, contributed by KIND (review rounds 10, 11 — no name-shape gate: fail closed):
+  text is a mask or has no canonical form takes its runs from the desc. What a kind seeds is owned by
+  the kind table itself (`IdentityKind.seedsExactValue` / `seedsRuns`), which the builder and the test
+  mirrors both read (review round 11). For the ID check only, a WHOLE-value run (case-folded, code-point
+  letters only, ≥ 3 letters) is matched against every contiguous join of the id's camel segments ACROSS
+  separators (`row_mary_jo`, `chip-mary-jo`, `rowMaryJo` beside "Mary Jo"), contributed only by the
+  `idProtect` rows — values a test tag can plausibly embed (review rounds 10, 11 — no name-shape gate:
+  fail closed):
 
-  | Kind | Whole-value run for ids |
+  | Row | Whole-value run for ids |
   |---|---|
-  | NAME | always ("Mary Jo" nulls `chipMaryJo`), beside its letter runs |
-  | PERSON_OR_MERCHANT (`user_name`) | always, a single token included: "Riley" nulls `chipRiley`; "Jack in the Box" nulls `jackInTheBoxLogo` (recall cost), never `boxView` |
-  | EXACT (`tvTitle`, `tvLastMessage`) | always: "Riley Smith" nulls `chipRileySmith`; a one-word chrome title "Search" nulls `search_bar` on its frame (recall cost) |
-  | ADDRESS, CONTENT | none (street vocabulary is common English) |
+  | `customer_name`, `order_cx_name` (NAME) | always ("Mary Jo" nulls `chipMaryJo`), beside its letter runs |
+  | `user_name` (PERSON_OR_MERCHANT) | always, a single token included: "Riley" nulls `chipRiley`; "Jack in the Box" nulls `jackInTheBoxLogo` (recall cost), never `boxView` |
+  | `tvTitle` (EXACT) | always: "Riley Smith" nulls `chipRileySmith`; a one-word chrome title "Search" nulls `search_bar` on its frame (recall cost) |
+  | `tvLastMessage` (EXACT), every ADDRESS and CONTENT row | none — a chat reply "Ok" must not null `ok_button` or move the fingerprint per message; street vocabulary is common English |
 
   Text slots never use the whole-value rule, and CLASS names are never containment-checked (review round
   11): a class is a compiled type name, not frame data — a `SearchView` class beside `tvTitle` "Search"
@@ -277,6 +281,10 @@ value-judging step (3, 4, 5, 7, 8) runs on the canonical form AND — when the r
 and is itself within the 40-character cap — on the raw trimmed value; either hit withholds. The cap
 (step 2) is decided by the CANONICAL form alone, so wide-spaced chrome is not capped on its padding and a
 padded "Deliver  to  Sam" is still caught (and seeds); the raw pass keeps every pattern on bounded input.
+A value PROVABLY over the cap — more than 4 × 40 non-FORMAT, non-whitespace code points, 4 being the
+longest canonical decomposition NFKC can compose into one code point — is capped without folding at all,
+so a multi-kilobyte body never runs the fixed-point fold (review round 11; both premises of the bound are
+checked over every code point by a unit test).
 Classification and hashing use the canonical form, and the frame-wide duplicate set is keyed by it
 (amended in #1160 review round 4 — canonicalization alone can shrink a value below a pattern's minimum:
 `"ab  cd"` is a quoted note raw, `"ab cd"` is not). Step 1 uses the

@@ -606,7 +606,9 @@ side-effect-free half.
   it already computed, bound to that exact tree instance; a mismatched one is ignored); a FAILED marker
   scan is `BUILD_FAILED`, not a sensitive frame. Per field: step 1 is the node's own RAW id
   (`ID_MARKER_TABLE` ∪ `PII_ID_SUFFIXES`, via `IdClass`); steps 2–8 judge the CANONICAL form (a fixed point
-  or none — a value with no canonical form is withheld; the canonical form alone decides the 40-char cap)
+  or none — a value with no canonical form is withheld; the canonical form alone decides the 40-char cap,
+  and a value with more than 4 × 40 non-FORMAT, non-whitespace code points is capped WITHOUT folding —
+  4 is the longest canonical decomposition, checked exhaustively by `SkeletonLengthBoundTest`)
   and, when it differs and is itself within the cap, the RAW trimmed form — either hit withholds; only a
   `words:1..8` survivor hashes, on the judged canonical form. The FRAME-LEVEL duplicate rule then
   withholds (a) any field whose canonical value is a seeded EXACT value — value-judged anywhere in the
@@ -614,8 +616,10 @@ side-effect-free half.
   (≥ 2 letters in code points, `CaseFold`-folded) of a NAME id's text (else its desc). NAME run-seeding
   is reserved for ids whose value is ONLY ever a person's name (`customer_name`, `order_cx_name`); a
   reused id that is a person or a merchant (`user_name`) is PERSON_OR_MERCHANT and a value that may be
-  chrome (`tvTitle`, `tvLastMessage`) is EXACT — both exact-seeded for text; NAME, PERSON_OR_MERCHANT and
-  EXACT also add their WHOLE value (a single token included, no name-shape gate) as an id-only run; the address ids are ADDRESS (exact only — address vocabulary
+  chrome (`tvTitle`, `tvLastMessage`) is EXACT — both exact-seeded for text (what a kind seeds is the kind
+  table's `seedsExactValue` / `seedsRuns`); the `idProtect` rows (`customer_name`, `order_cx_name`,
+  `user_name`, `tvTitle` — not `tvLastMessage`) also add their WHOLE value (≥ 3 code-point letters, a
+  single token included, no name-shape gate) as an id-only run, matched across id separators; the address ids are ADDRESS (exact only — address vocabulary
   is common English); CONTENT ids (`description_text_view`, the instruction bodies) and masks seed
   nothing. The same containment, split also at camelCase boundaries (contiguous segments), makes a
   node's id absent (`chipAdam` beside `customer_name` "Adam", `search_bar` beside `tvTitle` "Search");
