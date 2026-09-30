@@ -1,24 +1,38 @@
 package cloud.trotter.dashbuddy.test.util
 
 import cloud.trotter.dashbuddy.domain.model.accessibility.UiNode
+import cloud.trotter.dashbuddy.domain.model.accessibility.UiNodeTextField
 
 object SnapshotScreenDiagnostics {
 
     /**
-     * The X-Ray's candidate fields — one owner for both the candidate filter and the report
-     * categories. #1147 review W2: an id-less Compose sheet whose ONLY handle is a pane title,
-     * a click-action label, a role or a hint must be visible to the tool the Inbox Workflow tells
-     * authors to read, since each of those now has its own node predicate.
+     * #1147 review Z7 — the scrub-contract string fields the X-Ray deliberately does NOT show: the
+     * ones no node predicate can anchor on (`state` is legacy, reachable only through
+     * `hasStateDescription*`, and was never an X-Ray column; tooltip / error / uid have no predicate
+     * at all). Every OTHER [UiNodeTextField] entry is a category automatically, so the next contract
+     * field a predicate can read shows up here without an edit (the W2 class).
      */
-    internal val CATEGORIES: List<Pair<String, (UiNode) -> String?>> = listOf(
-        "🔤 Text" to { it.text },
-        "🏷️ Desc" to { it.contentDescription },
-        "🆔 IDs " to { it.viewIdResourceName },
-        "🪟 Pane (hasPaneTitle)" to { it.paneTitle },
-        "👆 ClickLabel (hasClickActionLabel)" to { it.clickActionLabel },
-        "🎭 Role (hasRoleDescription)" to { it.roleDescription },
-        "💬 Hint (hasHintText)" to { it.hintText },
+    internal val EXCLUDED_FIELDS: Set<UiNodeTextField> = setOf(
+        UiNodeTextField.STATE_DESCRIPTION,
+        UiNodeTextField.TOOLTIP_TEXT,
+        UiNodeTextField.ERROR_TEXT,
+        UiNodeTextField.UNIQUE_ID,
     )
+
+    /** The header for a field's category: its wire key (the JSON key an author greps the capture for). */
+    internal fun headerFor(field: UiNodeTextField): String = "🔤 ${field.wire}"
+
+    /** The id column (not a scrub-contract string field, so appended explicitly). */
+    internal const val ID_HEADER = "🆔 id"
+
+    /**
+     * The X-Ray's candidate fields — one owner for both the candidate filter and the report
+     * categories, DERIVED from the [UiNodeTextField] SSOT minus [EXCLUDED_FIELDS], plus the id column.
+     */
+    internal val CATEGORIES: List<Pair<String, (UiNode) -> String?>> =
+        UiNodeTextField.entries.filter { it !in EXCLUDED_FIELDS }.map { field ->
+            headerFor(field) to { node: UiNode -> node.scrubbableStrings().first { it.first == field }.second }
+        } + (ID_HEADER to { node: UiNode -> node.viewIdResourceName })
 
     fun printXRay(node: UiNode, breadcrumbs: List<String> = emptyList()) {
         // 1. Breadcrumbs
