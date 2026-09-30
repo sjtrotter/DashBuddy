@@ -319,7 +319,10 @@ data class CompiledRedact(
         val match = try {
             entries.firstOrNull { it.find(node) }
         } catch (e: RegexEvaluationFailed) {
-            return node.mapScrubbableStrings { REDACTED }
+            // #1147: an ABSENT field stays absent — it carries nothing to leak, and writing the mask
+            // into every null scrub-contract field would stamp phantom pane/role/uid/… keys onto the
+            // envelope. Every PRESENT value (empty included) is still masked whole.
+            return node.mapScrubbableStrings { it?.let { REDACTED } }
                 .copy(children = node.children.map { maskNode(it) })
         }
         // #835: mask EVERY serialized string field of the matched node via the

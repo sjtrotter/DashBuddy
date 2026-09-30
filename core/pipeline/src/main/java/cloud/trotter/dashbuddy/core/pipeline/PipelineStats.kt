@@ -187,7 +187,12 @@ class PipelineStats @Inject constructor(
         droppedAwaitingRules.incrementAndGet()
     }
 
-    /** An UNKNOWN capture dropped by the fail-closed text-marker backstop (#432). */
+    /**
+     * A capture dropped whole by the fail-closed dasher-banking text-marker backstop (#432): an
+     * UNKNOWN screen/click, the window title, or — since #1147 retired the "recognized buttons
+     * carry no PII" premise — a RECOGNIZED click whose new string fields carry a marker. The
+     * summary key `unknownScrubbed` is the retained legacy metric name for this counter.
+     */
     fun onScrubbedUnknownCapture() {
         scrubbedUnknownCaptures.incrementAndGet()
     }

@@ -208,6 +208,12 @@ data class NodeRef(
          * 40-char key — it is `labelHintsComplete = false` and never reaches 2b, but its
          * `agreesWithLabels` containment (strategy 3) may miss a long label for the few seconds a
          * deferred action lives across the upgrade (fail closed: no tap).
+         *
+         * #1147 review Z2 — the same upgrade-window class: the owner's labels now include its
+         * `ACTION_CLICK` label, so a ref persisted BEFORE #1147 (journal / deferred action) with
+         * `labelHintsComplete = true` lacks that key, `fingerprintMatches` fails against the same
+         * live control (the live set gains a key) and 2b refuses for the life of that ref. A bind
+         * persisted before #1147 may be unprovable until re-armed by a fresh frame (fail closed).
          */
         fun hintKeyOrNull(label: String): String? {
             val key = UiTextBounds.cap(label).trim().lowercase(java.util.Locale.ROOT)

@@ -36,33 +36,59 @@ class UiNodeScrubbableFieldsTest {
         UiNodeTextField.TEXT -> "TEXT-VALUE"
         UiNodeTextField.CONTENT_DESCRIPTION -> "DESC-VALUE"
         UiNodeTextField.STATE_DESCRIPTION -> "STATE-VALUE"
+        UiNodeTextField.PANE_TITLE -> "PANE-VALUE"
+        UiNodeTextField.ROLE_DESCRIPTION -> "ROLE-VALUE"
+        UiNodeTextField.HINT_TEXT -> "HINT-VALUE"
+        UiNodeTextField.TOOLTIP_TEXT -> "TOOLTIP-VALUE"
+        UiNodeTextField.ERROR_TEXT -> "ERROR-VALUE"
+        UiNodeTextField.CLICK_ACTION_LABEL -> "CLICK-LABEL-VALUE"
+        UiNodeTextField.UNIQUE_ID -> "UID-VALUE"
     }
+
+    /** #1147: every scrub-contract field populated with a distinct value. */
+    private fun fullNode() = UiNode(
+        text = "T",
+        contentDescription = "D",
+        stateDescription = "S",
+        paneTitle = "P",
+        roleDescription = "R",
+        hintText = "H",
+        tooltipText = "TT",
+        errorText = "E",
+        clickActionLabel = "C",
+        uniqueId = "U",
+    )
 
     @Test
     fun `scrubbableStrings enumerates every serialized string field of the node`() {
-        val n = node(text = "T", desc = "D", state = "S")
         assertEquals(
             listOf(
                 UiNodeTextField.TEXT to "T",
                 UiNodeTextField.CONTENT_DESCRIPTION to "D",
                 UiNodeTextField.STATE_DESCRIPTION to "S",
+                UiNodeTextField.PANE_TITLE to "P",
+                UiNodeTextField.ROLE_DESCRIPTION to "R",
+                UiNodeTextField.HINT_TEXT to "H",
+                UiNodeTextField.TOOLTIP_TEXT to "TT",
+                UiNodeTextField.ERROR_TEXT to "E",
+                UiNodeTextField.CLICK_ACTION_LABEL to "C",
+                UiNodeTextField.UNIQUE_ID to "U",
             ),
-            n.scrubbableStrings(),
+            fullNode().scrubbableStrings(),
         )
+        // Exactly one pair per enum entry, in declaration order — no field enumerated twice or skipped.
+        assertEquals(UiNodeTextField.entries.toList(), fullNode().scrubbableStrings().map { it.first })
     }
 
     @Test
     fun `scrubbableStrings reports raw values including nulls`() {
         val n = node(text = "T")
-        assertEquals(listOf("T", null, null), n.scrubbableStrings().map { it.second })
+        assertEquals(listOf("T") + List(UiNodeTextField.entries.size - 1) { null }, n.scrubbableStrings().map { it.second })
     }
 
     @Test
     fun `mapScrubbableStrings rewrites every field and leaves the rest of the node alone`() {
-        val original = UiNode(
-            text = "T",
-            contentDescription = "D",
-            stateDescription = "S",
+        val original = fullNode().copy(
             viewIdResourceName = "com.app:id/thing",
             className = "android.widget.TextView",
             isClickable = true,
@@ -72,7 +98,7 @@ class UiNodeScrubbableFieldsTest {
 
         val masked = original.mapScrubbableStrings { if (it != null) "[x]" else null }
 
-        assertEquals(listOf("[x]", "[x]", "[x]"), masked.scrubbableStrings().map { it.second })
+        assertEquals(List(UiNodeTextField.entries.size) { "[x]" }, masked.scrubbableStrings().map { it.second })
         // Non-string identity fields and the children list are untouched.
         assertEquals(original.viewIdResourceName, masked.viewIdResourceName)
         assertEquals(original.className, masked.className)
@@ -87,7 +113,7 @@ class UiNodeScrubbableFieldsTest {
     fun `mapScrubbableStrings sees nulls so a transform can distinguish absent from empty`() {
         val seen = mutableListOf<String?>()
         node(text = "T", state = "S").mapScrubbableStrings { seen.add(it); it }
-        assertEquals(listOf("T", null, "S"), seen)
+        assertEquals(listOf("T", null, "S") + List(UiNodeTextField.entries.size - 3) { null }, seen)
     }
 
     @Test
@@ -125,6 +151,43 @@ class UiNodeScrubbableFieldsTest {
     }
 
     /**
+     * #1147 review X1: the stream starts with the PRE-#1147 projection, unchanged, whatever the new
+     * fields carry — so a new field can never split an adjacency the sensitive scan relied on.
+     */
+    @Test
+    fun `allScrubbableText starts with the frozen legacy projection and appends the new fields after it`() {
+        val legacyOnly = UiNode(
+            text = "Transfer",
+            children = listOf(node(text = "A", desc = "B", state = "C"), node(text = "\$45.66")),
+        )
+        val widened = UiNode(
+            text = "Transfer",
+            roleDescription = "Button",
+            children = listOf(
+                fullNode().copy(text = "A", contentDescription = "B", stateDescription = "C"),
+                node(text = "\$45.66").copy(paneTitle = "Pane"),
+            ),
+        )
+        val legacyStream = legacyOnly.allScrubbableText()
+        assertEquals(listOf("Transfer", "A", "B", "C", "\$45.66"), legacyStream)
+        val stream = widened.allScrubbableText()
+        assertEquals("the legacy segment is byte-for-byte unchanged", legacyStream, stream.take(legacyStream.size))
+        assertEquals(listOf("Button", "P", "R", "H", "TT", "E", "C", "U", "Pane"), stream.drop(legacyStream.size))
+        assertEquals(
+            listOf(UiNodeTextField.TEXT, UiNodeTextField.CONTENT_DESCRIPTION, UiNodeTextField.STATE_DESCRIPTION),
+            UiNodeTextField.LEGACY_SCAN_ORDER,
+        )
+    }
+
+    /** #1147: the same doctrine for every TalkBack-study string — scrub-visible, recognition-invisible. */
+    @Test
+    fun `allText excludes every new string field while allScrubbableText includes them all`() {
+        val tree = fullNode()
+        assertEquals(listOf("T", "D"), tree.allText)
+        assertEquals(listOf("T", "D", "S", "P", "R", "H", "TT", "E", "C", "U"), tree.allScrubbableText())
+    }
+
+    /**
      * [UiNodeTextField.wire] is the capture-envelope JSON key. Annotation
      * arguments must be compile-time constants, so `UiNodeDto`'s `@SerialName`s
      * cannot reference the enum — this is the tripwire that keeps the two copies
@@ -137,6 +200,13 @@ class UiNodeScrubbableFieldsTest {
             text = dtoSentinel(UiNodeTextField.TEXT),
             contentDescription = dtoSentinel(UiNodeTextField.CONTENT_DESCRIPTION),
             stateDescription = dtoSentinel(UiNodeTextField.STATE_DESCRIPTION),
+            paneTitle = dtoSentinel(UiNodeTextField.PANE_TITLE),
+            roleDescription = dtoSentinel(UiNodeTextField.ROLE_DESCRIPTION),
+            hintText = dtoSentinel(UiNodeTextField.HINT_TEXT),
+            tooltipText = dtoSentinel(UiNodeTextField.TOOLTIP_TEXT),
+            errorText = dtoSentinel(UiNodeTextField.ERROR_TEXT),
+            clickActionLabel = dtoSentinel(UiNodeTextField.CLICK_ACTION_LABEL),
+            uniqueId = dtoSentinel(UiNodeTextField.UNIQUE_ID),
             boundsInScreen = BoundingBoxDto(0, 0, 0, 0),
         )
         val obj = Json.parseToJsonElement(Json.encodeToString(UiNodeDto.serializer(), dto)).jsonObject

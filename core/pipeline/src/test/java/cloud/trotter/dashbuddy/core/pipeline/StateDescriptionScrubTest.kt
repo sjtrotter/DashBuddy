@@ -101,6 +101,14 @@ class StateDescriptionScrubTest {
         UiNodeTextField.TEXT -> UiNode(text = value, viewIdResourceName = id)
         UiNodeTextField.CONTENT_DESCRIPTION -> UiNode(contentDescription = value, viewIdResourceName = id)
         UiNodeTextField.STATE_DESCRIPTION -> UiNode(stateDescription = value, viewIdResourceName = id)
+        // #1147 — the TalkBack-study strings ride every sweep below.
+        UiNodeTextField.PANE_TITLE -> UiNode(paneTitle = value, viewIdResourceName = id)
+        UiNodeTextField.ROLE_DESCRIPTION -> UiNode(roleDescription = value, viewIdResourceName = id)
+        UiNodeTextField.HINT_TEXT -> UiNode(hintText = value, viewIdResourceName = id)
+        UiNodeTextField.TOOLTIP_TEXT -> UiNode(tooltipText = value, viewIdResourceName = id)
+        UiNodeTextField.ERROR_TEXT -> UiNode(errorText = value, viewIdResourceName = id)
+        UiNodeTextField.CLICK_ACTION_LABEL -> UiNode(clickActionLabel = value, viewIdResourceName = id)
+        UiNodeTextField.UNIQUE_ID -> UiNode(uniqueId = value, viewIdResourceName = id)
     }
 
     // =========================================================================
@@ -156,7 +164,16 @@ class StateDescriptionScrubTest {
             text = "PII-IN-TEXT",
             contentDescription = "PII-IN-DESC",
             stateDescription = "PII-IN-STATE",
+            paneTitle = "PII-IN-PANE",
+            roleDescription = "PII-IN-ROLE",
+            hintText = "PII-IN-HINT",
+            tooltipText = "PII-IN-TOOLTIP",
+            errorText = "PII-IN-ERROR",
+            clickActionLabel = "PII-IN-CLICK-LABEL",
+            uniqueId = "PII-IN-UID",
         )
+        // #1147: the node above must populate EVERY field, or the sweep below proves nothing for it.
+        assertTrue(matched.scrubbableStrings().all { it.second != null })
         val masked = addressRedact.apply(matched)
 
         for ((field, value) in masked.scrubbableStrings()) {
@@ -294,6 +311,117 @@ class StateDescriptionScrubTest {
         assertEquals(0L, stats.scrubbedUnknownCaptureCount)
         assertEquals(0L, stats.unknownCustomerScrubCount)
         assertTrue("benign state text survives for triage", capturedEnvelope().contains("Not selected"))
+    }
+
+    // =========================================================================
+    // (d) #1147 — the TalkBack-study fields, end to end through the envelope
+    // =========================================================================
+
+    @Test
+    fun `an UNKNOWN screen whose customer marker rides only the pane title is scrubbed in the envelope`() {
+        busAcceptsOffer()
+        val tree = UiNode(
+            children = listOf(
+                UiNode(text = "Current task"),
+                UiNode(paneTitle = "Deliver to Jane Q. Doe"),
+            ),
+        )
+        writer().captureScreen(obs(null, UNKNOWN_TARGET), screenEvent(tree))
+
+        val json = capturedEnvelope()
+        assertFalse("customer name in the pane title must not persist", json.contains("Jane Q. Doe"))
+        assertTrue("the pane key is masked, not dropped", json.contains(""""pane": "[redacted]"""))
+        assertTrue("the frame still captures for triage", json.contains("Current task"))
+        assertEquals(1L, stats.unknownCustomerScrubCount)
+    }
+
+    @Test
+    fun `an UNKNOWN screen whose sensitive marker rides only a click-action label is never offered`() {
+        val toxic = UiNode(
+            children = listOf(UiNode(text = "Continue", clickActionLabel = "Transfer out", hasClickAction = true)),
+        )
+        writer().captureScreen(obs(null, UNKNOWN_TARGET), screenEvent(toxic))
+
+        verify(captureBus, never()).offer(any(), any(), anyOrNull(), any(), any(), anyOrNull())
+        assertEquals(1L, stats.scrubbedUnknownCaptureCount)
+    }
+
+    @Test
+    fun `a recognized rule's redact masks the pane title and click label of the node it hits`() {
+        busAcceptsOffer()
+        val tree = UiNode(
+            children = listOf(
+                UiNode(
+                    viewIdResourceName = "com.doordash:id/address_line_1",
+                    text = "123 Secret St",
+                    paneTitle = "123 Secret St sheet",
+                    clickActionLabel = "Navigate to 123 Secret St",
+                ),
+                UiNode(text = "Directions"),
+            ),
+        )
+        writer(sourceFor("doordash.screen.dropoff_navigation", addressRedact))
+            .captureScreen(obs("doordash.screen.dropoff_navigation", "dropoff_navigation"), screenEvent(tree))
+
+        val json = capturedEnvelope()
+        assertFalse("the address must not persist in any field", json.contains("Secret St"))
+        assertTrue("non-PII node intact", json.contains("Directions"))
+    }
+
+    @Test
+    fun `a whole-node mask leaves absent fields absent - no phantom keys on the envelope`() {
+        busAcceptsOffer()
+        val tree = UiNode(
+            children = listOf(UiNode(viewIdResourceName = "com.doordash:id/user_name", text = "Jane Q. Doe")),
+        )
+        writer().captureScreen(obs(null, UNKNOWN_TARGET), screenEvent(tree))
+
+        val json = capturedEnvelope()
+        assertFalse(json.contains("Jane Q. Doe"))
+        for (field in UiNodeTextField.entries.filter { it != UiNodeTextField.TEXT }) {
+            assertFalse("absent ${field.wire} must not be stamped with a mask", json.contains("\"${field.wire}\":"))
+        }
+    }
+
+    // --- #1147 review X1: a new field never splits a legacy adjacency --------------
+
+    private fun transferTree() = UiNode(
+        isClickable = true,
+        children = listOf(UiNode(text = "Transfer", roleDescription = "Button"), UiNode(text = "\$45.66")),
+    )
+
+    @Test
+    fun `a role on the Transfer node does not split the Transfer-amount adjacency`() {
+        // The codex reproduction: pre-fix the stream read "Transfer Button $45.66" and the scan missed.
+        assertNotNull(SensitiveTextMarkers.findMarker(UiNode(children = listOf(UiNode(text = "Transfer"), UiNode(text = "\$45.66")))))
+        assertNotNull(SensitiveTextMarkers.findMarker(transferTree()))
+    }
+
+    @Test
+    fun `the Transfer-amount UNKNOWN screen with a role is still dropped`() {
+        writer().captureScreen(obs(null, UNKNOWN_TARGET), screenEvent(UiNode(children = listOf(transferTree()))))
+        verify(captureBus, never()).offer(any(), any(), anyOrNull(), any(), any(), anyOrNull())
+        assertEquals(1L, stats.scrubbedUnknownCaptureCount)
+    }
+
+    @Test
+    fun `the Transfer-amount UNKNOWN click with a role is still dropped`() {
+        writer().captureClick(
+            unknownClickObs(),
+            PipelineEvent.Click(timestamp = 1_000L, node = transferTree(), packageName = "com.doordash.driverapp"),
+            screenTarget = null,
+            screenRuleId = null,
+        )
+        verify(captureBus, never()).offer(any(), any(), anyOrNull(), any(), any(), anyOrNull())
+        assertEquals(1L, stats.scrubbedUnknownCaptureCount)
+    }
+
+    @Test
+    fun `a sensitive marker riding only a new field is still found`() {
+        for (field in UiNodeTextField.entries.filter { it !in UiNodeTextField.LEGACY_SCAN_ORDER }) {
+            val tree = UiNode(children = listOf(UiNode(text = "Continue"), nodeCarrying(field, "Routing Number")))
+            assertNotNull("a marker in $field must be found", SensitiveTextMarkers.findMarker(tree))
+        }
     }
 
     private fun busAcceptsOffer() {

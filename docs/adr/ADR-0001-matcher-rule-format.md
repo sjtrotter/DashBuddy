@@ -419,18 +419,39 @@ with `all`/`any`/`not` at the node level. Every predicate object carries exactly
 | `{ isChecked: true }`                    | node's checked state equals the given boolean                            | `(node.isChecked != 0) == want`     |
 | `{ hasChildren: true }`                  | node has children iff the given boolean (`false` matches childless nodes)| `node.children.isNotEmpty() == want`|
 | `{ isLeaf: true }`                       | node has no children iff the given boolean                               | `node.children.isEmpty() == want`   |
+| `{ hasPaneTitle: "s" }` | `paneTitle` equals `s` (case-insensitive) — the named scope an id-less sheet/dialog carries (#1147) | `.equals("s", ignoreCase=true)` |
+| `{ hasPaneTitleContaining: "s" }` | `paneTitle` contains `s` (case-insensitive) (#1147) | `.contains("s", ignoreCase=true)` |
+| `{ hasRoleDescription: "s" }` | `roleDescription` (the AndroidX role extra, e.g. "Button") equals `s` (case-insensitive) (#1147) | `.equals("s", ignoreCase=true)` |
+| `{ hasClickActionLabel: "s" }` | the label on the node's `ACTION_CLICK` action equals `s` (case-insensitive) (#1147); also a LABEL on both sides of the bind/fire label horizon, so a text-less control bound by it has a provable fingerprint | `.equals("s", ignoreCase=true)` |
+| `{ hasClickActionLabelContaining: "s" }` | the `ACTION_CLICK` label contains `s` (case-insensitive) (#1147) | `.contains("s", ignoreCase=true)` |
+| `{ hasHintText: "s" }` | `hintText` equals `s` (case-insensitive) (#1147) | `.equals("s", ignoreCase=true)` |
+| `{ hasHintTextContaining: "s" }` | `hintText` contains `s` (case-insensitive) (#1147) | `.contains("s", ignoreCase=true)` |
+| `{ isVisibleToUser: true }` | node's `isVisibleToUser` equals the given boolean (#1147) | `node.isVisibleToUser == want` |
+| `{ isSelected: true }` | node's selected state equals the given boolean (#1147) | `node.isSelected == want` |
+| `{ isCheckable: true }` | node's checkable state equals the given boolean (#1147) | `node.isCheckable == want` |
+| `{ isHeading: true }` | node's heading flag equals the given boolean (#1147) | `node.isHeading == want` |
+| `{ hasClickAction: true }` | node advertises `ACTION_CLICK` iff the given boolean — Compose controls often do without `isClickable` (#1149/#1147) | `node.hasClickAction == want` |
 | `{ all: [ nodePred, ... ] }`             | All node predicates must pass                                            | logical AND within a node           |
 | `{ any: [ nodePred, ... ] }`             | At least one node predicate must pass                                    | logical OR within a node            |
 | `{ not: nodePred }`                      | Negate a node predicate                                                  | logical NOT within a node           |
 
-All five boolean predicates (`hasNoId`/`isClickable`/`isEnabled`/`isChecked`/`hasChildren`/
-`isLeaf`) require an explicit JSON boolean value — `{ isClickable }` with no value is invalid
-JSON and rejected at compile time. The value is honored both ways (`false` is a meaningful,
-different assertion from omitting the predicate), never silently coerced to `true`.
+All eleven boolean predicates (`hasNoId`/`isClickable`/`isEnabled`/`isChecked`/`hasChildren`/
+`isLeaf`/`isVisibleToUser`/`isSelected`/`isCheckable`/`isHeading`/`hasClickAction`) require an
+explicit, UNQUOTED JSON boolean value — `{ isClickable }` with no value is invalid JSON, and
+`"true"`, `null` or a number is a compile error (#1147 review X3). The value is honored both ways
+(`false` is a meaningful, different assertion from omitting the predicate), never silently coerced
+to `true`. Likewise every string predicate accepts ONLY a JSON string — `null`, a number or a
+boolean is a compile error, never coerced to `"null"`/`"123"`.
 
-The table covers the **complete** `UiNode` data model surface. Every field exposed by
-`AccessibilityNodeInfo` that DashBuddy captures is addressable via a predicate, so community
-contributors do not need to read the Kotlin source to know what is available.
+The #1147 fields (`paneTitle`, `roleDescription`, `clickActionLabel`, `hintText`, the flags) are
+NOT in `allText`, so the subtree `hasAnyText*` predicates never see them. Their flags default to
+the dominant value on deserialization (`isVisibleToUser` true, the rest false), so a pre-#1147
+fixture is indistinguishable from an observed node — a rule adopting one needs post-#1147 corpus.
+
+The table covers every captured `UiNode` field a rule may anchor on. Captured fields that are
+deliberately NOT addressable — `uniqueId` (execution evidence, unverified), `tooltipText`,
+`errorText`, the live region and the collection row/column indices (reorder-unstable identity) —
+are listed in `docs/architecture/01-sensor-pipelines.md`; naming one is an unknown-key reject.
 
 ---
 

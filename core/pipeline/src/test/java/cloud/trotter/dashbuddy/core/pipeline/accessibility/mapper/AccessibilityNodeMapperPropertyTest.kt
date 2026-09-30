@@ -171,6 +171,12 @@ class AccessibilityNodeMapperPropertyTest {
             n.className?.let {
                 assertTrue("className length ${it.length} exceeds MAX_TEXT_LENGTH", it.length <= TreeBudget.MAX_TEXT_LENGTH)
             }
+            // #1147: every scrub-contract string (pane/role/hint/tooltip/error/clickLabel/uid too).
+            for ((field, value) in n.scrubbableStrings()) {
+                value?.let {
+                    assertTrue("$field length ${it.length} exceeds MAX_TEXT_LENGTH", it.length <= TreeBudget.MAX_TEXT_LENGTH)
+                }
+            }
         }
     }
 

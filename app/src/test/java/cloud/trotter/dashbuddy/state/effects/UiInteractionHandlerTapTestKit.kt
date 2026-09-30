@@ -45,6 +45,7 @@ abstract class UiInteractionHandlerTapTestKit {
         bounds: Rect = Rect(0, 0, 10, 10), text: String? = null, desc: String? = null,
         children: List<AccessibilityNodeInfo> = emptyList(), refreshes: Boolean = true,
         packageName: String = pkg,
+        clickLabel: String? = null, // #1147 W3: the label on the ACTION_CLICK entry (implies advertisesClick)
     ): AccessibilityNodeInfo {
         val node = mock<AccessibilityNodeInfo>()
         whenever(node.packageName).thenReturn(packageName)
@@ -52,9 +53,16 @@ abstract class UiInteractionHandlerTapTestKit {
         whenever(node.text).thenReturn(text)
         whenever(node.contentDescription).thenReturn(desc)
         whenever(node.isClickable).thenReturn(clickable)
-        whenever(node.actions).thenReturn(if (advertisesClick) AccessibilityNodeInfo.ACTION_CLICK else 0) // P6: the bitmask
+        val advertises = advertisesClick || clickLabel != null
+        whenever(node.actions).thenReturn(if (advertises) AccessibilityNodeInfo.ACTION_CLICK else 0) // P6: the bitmask
         whenever(node.actionList).thenReturn(
-            if (advertisesClick) listOf(AccessibilityNodeInfo.AccessibilityAction.ACTION_CLICK) else emptyList(),
+            when {
+                clickLabel != null -> listOf(
+                    AccessibilityNodeInfo.AccessibilityAction(AccessibilityNodeInfo.ACTION_CLICK, clickLabel),
+                )
+                advertises -> listOf(AccessibilityNodeInfo.AccessibilityAction.ACTION_CLICK)
+                else -> emptyList()
+            },
         )
         whenever(node.childCount).thenReturn(children.size)
         whenever(node.getChild(any())).thenAnswer { children.getOrNull(it.getArgument(0)) }

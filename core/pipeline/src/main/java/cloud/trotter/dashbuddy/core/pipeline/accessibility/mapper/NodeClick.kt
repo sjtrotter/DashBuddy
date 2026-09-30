@@ -16,3 +16,20 @@ fun AccessibilityNodeInfo.hasClickAction(): Boolean = (actions and Accessibility
  * its bind-time mirror is `UiNode.takesClick` (`isClickable || hasClickAction`).
  */
 fun AccessibilityNodeInfo.takesClick(): Boolean = isClickable || hasClickAction()
+
+/**
+ * #1147 — the label attached to this node's `ACTION_CLICK` entry, raw (uncapped), or null. THE live
+ * definition for both the mapper (`UiNode.clickActionLabel`, capped there) and the fire-time label
+ * adapters (`ownLabelsOf`), so bind and fire read the same string. `getActionList()` reads the action
+ * list the node was delivered with (no IPC), and is touched ONLY when the bitmask already advertises a
+ * click — the #1149 P6 cost stays off every other node.
+ */
+fun AccessibilityNodeInfo.clickActionLabelOrNull(): String? = clickActionLabelOrNull(hasClickAction())
+
+/**
+ * #1147 review Z6 — the same read for a caller that has ALREADY derived [hasClick] from the bitmask
+ * (the mapper), so `getActions()` is evaluated once per node.
+ */
+fun AccessibilityNodeInfo.clickActionLabelOrNull(hasClick: Boolean): String? =
+    if (!hasClick) null
+    else actionList?.firstOrNull { it.id == AccessibilityNodeInfo.ACTION_CLICK }?.label?.toString()

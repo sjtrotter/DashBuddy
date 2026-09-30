@@ -154,7 +154,8 @@ class RuleCompilerTest {
 
     @Test
     fun `hasNoId matches null or blank viewId`() {
-        val pred = RuleCompiler.compileNodePred(json("hasNoId" to "true"))
+        // #1147 review X3: an unquoted JSON boolean — the quoted "true" this used to pass is now a compile error.
+        val pred = RuleCompiler.compileNodePred(Json.parseToJsonElement("""{"hasNoId": true}"""))
         assertTrue(pred(node(viewId = null)))
         assertTrue(pred(node(viewId = "")))
         assertFalse(pred(node(viewId = "some:id/btn")))

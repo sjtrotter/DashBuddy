@@ -44,8 +44,9 @@ internal object PredicateCompiler {
                 ;{ tree -> tree.findNode(nodePred) == null }
             }
             "allTextContains" -> {
-                val text = (value as? JsonPrimitive)?.content?.lowercase(Locale.ROOT)
-                    ?: throw RuleCompileException("allTextContains requires a string value")
+                // #1147 review Y1: through the shared string-only helper like every other string
+                // predicate — `null`/numbers/booleans used to coerce to "null"/"123"/"true".
+                val text = primOf(value, key).content.lowercase(Locale.ROOT)
                 ;{ tree -> tree.allTextLowerJoined.contains(text) }
             }
             "allTextContainsAll" -> {
@@ -235,6 +236,47 @@ internal object PredicateCompiler {
             "hasChildren" -> { val want = boolFlag(value, key); { node -> node.children.isNotEmpty() == want } }
             "isLeaf" -> { val want = boolFlag(value, key); { node -> node.children.isEmpty() == want } }
 
+            // #1147 (TalkBack study win 3): the richer node semantics — the named scope an id-less
+            // sheet carries (pane title), the ACTION_CLICK label, the published role, the input hint,
+            // and visibility/selection/heading/click-action flags. Exact forms are case-insensitive
+            // like `hasText`; no regex forms (the RE2J surface is unchanged). These fields are NOT in
+            // `allText`, so the subtree `hasAnyText*` predicates never see them — a rule opts in here.
+            // Deliberately NO predicate for uniqueId, tooltip, error, live region or collection
+            // indices (weak or unverified identity).
+            "hasPaneTitle" -> {
+                val s = primOf(value, key).content
+                ;{ node -> node.paneTitle?.equals(s, ignoreCase = true) == true }
+            }
+            "hasPaneTitleContaining" -> {
+                val s = primOf(value, key).content
+                ;{ node -> node.paneTitle?.contains(s, ignoreCase = true) == true }
+            }
+            "hasRoleDescription" -> {
+                val s = primOf(value, key).content
+                ;{ node -> node.roleDescription?.equals(s, ignoreCase = true) == true }
+            }
+            "hasClickActionLabel" -> {
+                val s = primOf(value, key).content
+                ;{ node -> node.clickActionLabel?.equals(s, ignoreCase = true) == true }
+            }
+            "hasClickActionLabelContaining" -> {
+                val s = primOf(value, key).content
+                ;{ node -> node.clickActionLabel?.contains(s, ignoreCase = true) == true }
+            }
+            "hasHintText" -> {
+                val s = primOf(value, key).content
+                ;{ node -> node.hintText?.equals(s, ignoreCase = true) == true }
+            }
+            "hasHintTextContaining" -> {
+                val s = primOf(value, key).content
+                ;{ node -> node.hintText?.contains(s, ignoreCase = true) == true }
+            }
+            "isVisibleToUser" -> { val want = boolFlag(value, key); { node -> node.isVisibleToUser == want } }
+            "isSelected" -> { val want = boolFlag(value, key); { node -> node.isSelected == want } }
+            "isCheckable" -> { val want = boolFlag(value, key); { node -> node.isCheckable == want } }
+            "isHeading" -> { val want = boolFlag(value, key); { node -> node.isHeading == want } }
+            "hasClickAction" -> { val want = boolFlag(value, key); { node -> node.hasClickAction == want } }
+
             "all" -> {
                 val preds = (value as? JsonArray)
                     ?.map { compileNodePred(it, depth + 1) }
@@ -412,16 +454,20 @@ internal object PredicateCompiler {
     // -- #293 robustness helpers, predicate-scoped ------------------------------
 
     /**
-     * The scalar of a single-key predicate, or a typed [RuleCompileException]
+     * The STRING value of a single-key predicate, or a typed [RuleCompileException]
      * (#293 item 3). Replaces the bare `value as JsonPrimitive` casts scattered
      * through the predicate compilers so a mistyped rule (a nested object where a
      * string is expected) fails rule LOAD with a clear message instead of throwing
      * a raw [ClassCastException] out of the compiler.
+     *
+     * #1147 review X3: every caller reads `.content` as a string, and the schema declares these
+     * values as strings — so ONLY a JSON string is accepted. `null`, a number or an unquoted boolean
+     * used to be coerced to `"null"`/`"123"`/`"true"` and silently match text; now it fails loud.
      */
     private fun primOf(value: JsonElement, key: String): JsonPrimitive =
-        value as? JsonPrimitive
+        (value as? JsonPrimitive)?.takeIf { it.isString }
             ?: throw RuleCompileException(
-                "Predicate '$key' requires a scalar value, got: $value",
+                "Predicate '$key' requires a string scalar value, got: $value",
                 isolable = true,
             )
 
@@ -429,10 +475,11 @@ internal object PredicateCompiler {
      * A boolean-flag predicate's declared value (#293 item 2), typed (#293 item 3).
      * `{"isClickable": false}` now matches NON-clickable nodes instead of silently
      * ignoring the value. A non-boolean value is a typed compile error, not a
-     * silent default.
+     * silent default. #1147 review X3: an UNQUOTED JSON boolean only — `"true"` (a string) and
+     * `null` are rejected, matching the schema's declared type.
      */
     private fun boolFlag(value: JsonElement, key: String): Boolean =
-        primOf(value, key).booleanOrNull
+        (value as? JsonPrimitive)?.takeIf { !it.isString }?.booleanOrNull
             ?: throw RuleCompileException(
                 "Predicate '$key' requires a boolean value (true/false), got: $value",
                 isolable = true,

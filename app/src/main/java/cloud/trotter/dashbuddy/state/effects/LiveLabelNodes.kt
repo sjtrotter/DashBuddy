@@ -1,5 +1,6 @@
 package cloud.trotter.dashbuddy.state.effects
 
+import cloud.trotter.dashbuddy.core.pipeline.accessibility.mapper.clickActionLabelOrNull
 import cloud.trotter.dashbuddy.core.pipeline.accessibility.mapper.takesClick
 import android.view.accessibility.AccessibilityNodeInfo
 import cloud.trotter.dashbuddy.domain.pipeline.LabelNode
@@ -24,10 +25,16 @@ internal class LiveLabelNode(private val node: AccessibilityNodeInfo, private va
     }
 }
 
-/** A live node's own non-blank text and contentDescription — the [LabelNode.ownLabels] of both fire-time adapters. */
+/**
+ * A live node's own text, contentDescription and (#1147 review W3) its `ACTION_CLICK` label — the
+ * [LabelNode.ownLabels] of both fire-time adapters, mirroring `UiLabelNode` at bind time so a text-less
+ * Compose control bound by its action label carries a provable fingerprint on both sides. The click
+ * label is read off the node already in hand (no IPC), only when its bitmask advertises a click.
+ */
 internal fun ownLabelsOf(node: AccessibilityNodeInfo): List<String> = listOfNotNull(
     node.text?.toString(),
     node.contentDescription?.toString(),
+    node.clickActionLabelOrNull(),
 ) // raw: LabelHorizon caps then blank-filters (#1149 R2)
 
 /**
