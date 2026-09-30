@@ -453,16 +453,20 @@ internal object PredicateCompiler {
     // -- #293 robustness helpers, predicate-scoped ------------------------------
 
     /**
-     * The scalar of a single-key predicate, or a typed [RuleCompileException]
+     * The STRING value of a single-key predicate, or a typed [RuleCompileException]
      * (#293 item 3). Replaces the bare `value as JsonPrimitive` casts scattered
      * through the predicate compilers so a mistyped rule (a nested object where a
      * string is expected) fails rule LOAD with a clear message instead of throwing
      * a raw [ClassCastException] out of the compiler.
+     *
+     * #1147 review X3: every caller reads `.content` as a string, and the schema declares these
+     * values as strings — so ONLY a JSON string is accepted. `null`, a number or an unquoted boolean
+     * used to be coerced to `"null"`/`"123"`/`"true"` and silently match text; now it fails loud.
      */
     private fun primOf(value: JsonElement, key: String): JsonPrimitive =
-        value as? JsonPrimitive
+        (value as? JsonPrimitive)?.takeIf { it.isString }
             ?: throw RuleCompileException(
-                "Predicate '$key' requires a scalar value, got: $value",
+                "Predicate '$key' requires a string value, got: $value",
                 isolable = true,
             )
 
@@ -470,10 +474,11 @@ internal object PredicateCompiler {
      * A boolean-flag predicate's declared value (#293 item 2), typed (#293 item 3).
      * `{"isClickable": false}` now matches NON-clickable nodes instead of silently
      * ignoring the value. A non-boolean value is a typed compile error, not a
-     * silent default.
+     * silent default. #1147 review X3: an UNQUOTED JSON boolean only — `"true"` (a string) and
+     * `null` are rejected, matching the schema's declared type.
      */
     private fun boolFlag(value: JsonElement, key: String): Boolean =
-        primOf(value, key).booleanOrNull
+        (value as? JsonPrimitive)?.takeIf { !it.isString }?.booleanOrNull
             ?: throw RuleCompileException(
                 "Predicate '$key' requires a boolean value (true/false), got: $value",
                 isolable = true,
