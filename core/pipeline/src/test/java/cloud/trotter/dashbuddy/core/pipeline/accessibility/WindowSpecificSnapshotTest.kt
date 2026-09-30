@@ -660,4 +660,53 @@ class WindowSpecificSnapshotTest {
         assertEquals(0L, h.stats.foregroundSkipCount(ForegroundSkipReason.MAP_FAILED))
         assertEquals(0L, h.stats.overlaySnapshotCount())
     }
+
+    @Test
+    fun `CC4 - an enabled application sheet ABOVE the overlay - the overlay is not frontmost - the active root`() = bothKinds { kind ->
+        val dd = node(ddPkg, "dd", windowId = 3)
+        val h = harness(
+            activeRoot = dd,
+            windows = listOf(
+                window(3, 2, dd, active = true),
+                uberOverlay(9, 5, node(uberPkg, "uber-offer")),
+                window(7, 9, node(ddPkg, "dd-sheet")),
+            ),
+        )
+
+        assertEquals(listOf("dd"), collect(h, kind, windowId = 9, pkg = uberPkg).map { it.tree.text })
+        assertEquals(0L, h.stats.overlaySnapshotCount())
+    }
+
+    @Test
+    fun `CC4 - a foreign application window ABOVE the overlay - never the overlay (event path reads the active root)`() = bothKinds { kind ->
+        val dd = node(ddPkg, "dd", windowId = 3)
+        val h = harness(
+            activeRoot = dd,
+            windows = listOf(
+                window(3, 2, dd, active = true),
+                uberOverlay(9, 5, node(uberPkg, "uber-offer")),
+                window(8, 9, node(launcherPkg, "foreign")),
+            ),
+        )
+
+        assertEquals(listOf("dd"), collect(h, kind, windowId = 9, pkg = uberPkg).map { it.tree.text })
+        assertEquals(0L, h.stats.overlaySnapshotCount())
+    }
+
+    @Test
+    fun `CC4 - bubble active, a foreign application window ABOVE the overlay - refused, another app in front`() = bothKinds { kind ->
+        val bubble = node(ownPkg, "bubble")
+        val h = harness(
+            activeRoot = bubble,
+            windows = listOf(
+                window(1, 20, bubble, active = true),
+                window(8, 9, node(launcherPkg, "foreign")),
+                uberOverlay(9, 5, node(uberPkg, "uber-offer")),
+                window(3, 2, node(ddPkg, "dd")),
+            ),
+        )
+
+        assertTrue(collect(h, kind).isEmpty())
+        h.skipped(ForegroundSkipReason.FRONT_NOT_ENABLED)
+    }
 }

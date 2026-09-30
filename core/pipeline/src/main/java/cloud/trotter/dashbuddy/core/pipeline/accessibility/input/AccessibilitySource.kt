@@ -255,7 +255,28 @@ class AccessibilitySource @Inject constructor(
     }
 
     /** [foregroundWindow] over an ALREADY-enumerated [windows] list (one enumeration per frame). */
-    fun foregroundWindow(windows: List<AccessibilityWindowInfo>, isEnabled: (String?) -> Boolean): Foreground = try {
+    fun foregroundWindow(windows: List<AccessibilityWindowInfo>, isEnabled: (String?) -> Boolean): Foreground =
+        frontOf(windows, isEnabled, windows.size)
+
+    /**
+     * The single window in front among the windows ABOVE [active] (PR #1155 review CC3/CC4): the same
+     * readable-top-or-refuse rule as [foregroundWindow], over every window type, restricted to those
+     * with a strictly greater `layer`. An application window (not ours, not PiP) above an overlay is
+     * the front — the overlay is not frontmost; a LARGE unreadable system window is a barrier.
+     * [total] for the snapshot's WindowContext is the whole enumeration.
+     */
+    internal fun frontAbove(
+        windows: List<AccessibilityWindowInfo>,
+        active: AccessibilityWindowInfo,
+        isEnabled: (String?) -> Boolean,
+    ): Foreground = frontOf(windows.filter { it.id != active.id && it.layer > active.layer }, isEnabled, windows.size)
+
+    /** The ONE readable-top-or-refuse walk behind [foregroundWindow] and [frontAbove]. */
+    private fun frontOf(
+        windows: List<AccessibilityWindowInfo>,
+        isEnabled: (String?) -> Boolean,
+        total: Int,
+    ): Foreground = try {
         val ownPkg = ownPackage()
         val ordered = windows
             .filter {
@@ -279,7 +300,7 @@ class AccessibilitySource @Inject constructor(
                         // PR #1155 review BB6: a DISABLED overlay platform's overlay is not a candidate
                         // — the dasher chose to ignore that platform; read what is beneath it.
                         if (!isEnabled(probe.packageName)) continue
-                        verdict = decideOverlay(w, probe, windows.size)
+                        verdict = decideOverlay(w, probe, total)
                     }
                 }
                 break // the first candidate (or an unverifiable one) decides
@@ -300,7 +321,7 @@ class AccessibilitySource @Inject constructor(
             pkg?.let { packageCache.putPackage(w.id, it, gen) }
             if (ownPkg != null && pkg == ownPkg) continue // our own bubble is never "in front"
             verdict = if (isEnabled(pkg)) {
-                Foreground.Found(LocatedWindow(w, root, windows.size))
+                Foreground.Found(LocatedWindow(w, root, total))
             } else {
                 Foreground.Refused(ForegroundSkipReason.FRONT_NOT_ENABLED)
             }
@@ -342,8 +363,10 @@ class AccessibilitySource @Inject constructor(
      *
      * BB2 — the active identity is RECONCILED, never assumed: the active root's window must be in
      * this enumeration AND be the one (and only) window flagged active; otherwise → null (the ordinary
-     * active-root path decides). BB6 — a DISABLED overlay platform's overlay is skipped. A LARGE
-     * system window above the active one whose owner cannot be read stops the scan → null: never
+     * active-root path decides). The scan is [frontAbove] (CC4): EVERY window type above the active
+     * one, by layer, first decides — the overlay is returned only if it IS that front window. An
+     * application window above it (not ours, not PiP) → null; BB6 — a DISABLED overlay platform's
+     * overlay is skipped; a LARGE system window whose owner cannot be read is a barrier → null: never
      * reach past an unverifiable window to pick an overlay beneath it (the active root, the shipped
      * ground truth, is read). An overlay that IS the active window is not above it (the active-root
      * path reads it). Null on any failure. One enumeration; memoized verdicts (BB7) make the scan
@@ -363,24 +386,13 @@ class AccessibilitySource @Inject constructor(
         val active = windows.firstOrNull { it.id == activeWindowId } ?: return null
         val flagged = windows.filter { it.isActive }
         if (flagged.size != 1 || flagged.single().id != active.id) return null // unverifiable ordering
-        val above = windows
-            .filter { it.type == AccessibilityWindowInfo.TYPE_SYSTEM && it.layer > active.layer }
-            .sortedByDescending { it.layer }
-        if (above.isEmpty()) return null // no metrics read when nothing system-layer is above
-        val area = displayArea()
-        for (w in above) {
-            when (val probe = overlayProbe(w, area)) {
-                OverlayProbe.NotCandidate -> continue
-                OverlayProbe.Unreadable -> return null // unverifiable window on top — stop
-                is OverlayProbe.Candidate -> {
-                    if (!isEnabled(probe.packageName)) continue // BB6
-                    val root = probe.root ?: w.root ?: return null
-                    if (root.packageName?.toString() != probe.packageName) return null
-                    return LocatedWindow(w, root, windows.size, isOverlay = true)
-                }
-            }
+        // CC4: EVERY window type above the active one, by layer — an application window (not ours,
+        // not PiP) above the overlay means the overlay is not frontmost (→ null: the ordinary
+        // active-root rule decides); an unreadable large system window is a barrier (→ null).
+        return when (val front = frontAbove(windows, active, isEnabled)) {
+            is Foreground.Found -> front.located.takeIf { it.isOverlay }
+            is Foreground.Refused -> null
         }
-        return null
     }
 
     /**
