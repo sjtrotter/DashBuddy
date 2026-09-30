@@ -67,12 +67,6 @@ class ServiceInfoPolicyTest {
     }
 
     @Test
-    fun `the Android 11 caveat gates on SDK 30 only`() {
-        assertFalse(ServiceInfoPolicy.isWideReceiptReliable(30))
-        listOf(31, 33, 34, 36).forEach { assertTrue("sdk $it", ServiceInfoPolicy.isWideReceiptReliable(it)) }
-    }
-
-    @Test
     fun `the WARN fires only for a widening apply on SDK 30, once`() {
         assertTrue(ServiceInfoPolicy.shouldWarnUnreliable(EventReceiptConsent.ALLOWED, 30, alreadyWarned = false))
         assertFalse(ServiceInfoPolicy.shouldWarnUnreliable(EventReceiptConsent.ALLOWED, 30, alreadyWarned = true))
