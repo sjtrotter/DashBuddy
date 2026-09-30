@@ -561,54 +561,47 @@ Not in #1148: `notificationTimeout` (stays 100 ms), TalkBack's subtree-only / fo
 (they discard observer evidence), `TYPE_ANNOUNCEMENT`/text events, and any change to `FrameGate`,
 `Observation.identity()`, the classifier or the capture envelope schema.
 
-**Census skeleton (M1a, #1145) — pure, not yet wired.** The UNKNOWN-screen census (Epic #1138) is
-specified by ADR-0011; this layer holds its first, side-effect-free half. The wire contract lives in
-the Apache-2.0-headed package `domain.census.contract`: `UiSkeletonDto` / `UiSkeletonNodeDto` /
-`TextSlot` + `SkeletonSchema` (`uinode.skeleton.v1`, ADR §1 — no plaintext slot, no bounds; a per-node
-`text` map keyed by `UiNodeTextField.wire`, each value `{h?, kind}`, `h` present iff `kind` is
-`words:1..8`; invariants checked at construction AND on decode; 64 KB item cap), `CensusHash` (§3,
-`sha256("census.v1:" + trimmed)` → 16 hex, fail-closed to `withheld`), `KindClassifier` (§1's two-stage
-grammar, code-point based) and `CensusFingerprint` (§8, wrapper-to-forest over a synthetic root, 64 hex),
-each with shared golden vectors (`KindClassifierVectors`, `CensusFingerprintVectors` — the latter
-computed by an independent implementation). The anonymous-wrapper class set is now ONE constant
-(`AnonymousWrappers.WRAPPER_CLASSES`) that `UiNode.stableHash` also reads; `stableHash`'s algorithm and
-type are unchanged. The customer-PII shape vocabulary moved from the test-only `SnapshotRedactor` to
-`domain.privacy.PiiShapes` (app licence) byte-for-byte — `SnapshotRedactor` delegates, pinned by
-`PiiShapesParityTest` — adding the boundary-delimited `FIRST_LAST_INITIAL_EMBEDDED` variant (derived from
-the same `FIRST_LAST_INITIAL_BODY` as the unchanged anchored pattern), `VALUE_SHAPES` with their match
-modes, `containsMask` and `hasPiiIdSuffix`. `core.pipeline.census.SkeletonBuilder` runs the §2 filter
-in ADR order per text field (PII id — `CustomerTextMarkers.hasIdMarkerSuffix`, now the one owner of the
-`ID_MARKERS` suffix comparison, ∪ `PII_ID_SUFFIXES` — then the 40-char cap, customer marker, lead-in,
-mask, the step-6 hash refusal, the embedded name shape, the value shapes); a `SensitiveTextMarkers` hit
-on the raw tree or window title yields no skeleton, and so does an oversize item; refusals are reasons
-(`SkeletonBuilder.Refusal`), never text. `SkeletonCorpusTest` asserts ADR §7 (a)–(f) over the whole
-committed corpus plus a seeded property. Review round 1 (PR #1160) added, each amended into the ADR: the
-FRAME-LEVEL duplicate rule (a value any withholding step caught anywhere in the frame is withheld
-everywhere in it — the intake's replacements are document-wide, so §7(c) now compares against full-tree
-redaction); a case-sensitive INITIAL in the embedded name variant (step 7 = anchored whole-value OR
-embedded, `PiiShapes.hasNameShape`) so "Take a photo" is not a name; a LENGTH-PREFIXED fingerprint byte
-form (injective; a NUL class/id is refused) digested through the one `sha256OrNull(ByteArray)`; the static
-resource-name gate `ResourceIdGrammar` (a per-frame-UUID Compose test tag is treated as an absent id on the
-wire and in the fingerprint; the PII-id step still reads the raw id); a whole-build `Throwable` catch
-(`Refusal.BUILD_FAILED`, the #909 inertness rule); `Outcome.Built` carrying the measured JSON; and
-`UiNodeStableHashPinTest`, freezing `stableHash` over committed fixtures now that its wrapper predicate is
-shared (`AnonymousWrappers.isAnonymousWrapper`). Review round 2 added: `WireStrings` (class/id must be
-well-formed UTF-16 with no U+0000, checked on the RAW values before the gates — a lone surrogate
-UTF-8-encodes as `?`); `ClassNameGrammar` (a non-static class is absent, like a dynamic id);
-`ResourceIdGrammar` widened (upper-case package segments, `.` and one internal space in the name); the
-frame-level set seeded by step 1 only for `ID_MARKERS` ids, not intake-only `PII_ID_SUFFIXES`; optional
-version stamps truncated rather than refusing the item; per-frame memoization with the per-field path
-private; `SkeletonSchema.measure` and `WireStrings.isLowerHex` as single owners; and
-`PiiShapesIcuGuardTest`, applying the ICU bare-`}` rule to every compiled `PiiShapes` pattern. Review
-round 3: `CustomerTextMarkers.ID_MARKERS` is now DERIVED from `ID_MARKER_TABLE` (`IdMarker(suffix,
-valueIsPii)`, list content/order pinned — the runtime backstop is unchanged); the census seeds its
-frame-wide set from step 1 only for IDENTITY ids (`valueIsPii`) and only from their text/desc; every step,
-the grammar and the hash run on `CensusHash.canonical` (trimmed, census whitespace collapsed to one ASCII
-space) so the JVM and ICU regex engines agree; the envelope validates stamps as well-formed and the day as
-a real month/day; the per-frame verdict cache stores a wrapped verdict so a passing value is judged once. Round 4: the value-judging steps run on the raw trimmed value AND the canonical form (either
-withholds), because canonicalization can shrink a value below a pattern's minimum.
-Nothing calls the builder at runtime yet: the publisher stage,
-`CensusSink` and `PipelineStats` counters are #1146 (M1b); upload is M3.
+**Census skeleton (M1a, #1145; hardened over four review rounds of PR #1160) — pure, not yet wired.**
+The UNKNOWN-screen census (Epic #1138) is specified by ADR-0011; this layer holds its first,
+side-effect-free half.
+
+- *Wire contract* — the Apache-2.0-headed package `domain.census.contract`: `UiSkeletonDto` /
+  `UiSkeletonNodeDto` / `TextSlot` + `SkeletonSchema` (`uinode.skeleton.v1`, ADR §1 — no plaintext slot,
+  no bounds; a per-node `text` map keyed by `UiNodeTextField.wire`, each value `{h?, kind}`, `h` present
+  iff `kind` is `words:1..8`; invariants checked at construction AND on decode, incl. well-formed UTF-16
+  without U+0000 for class/id/stamps (`WireStrings`) and a real calendar `day`; 64 KB item cap measured
+  once by `SkeletonSchema.measure`); `CensusHash` (§3, `sha256("census.v1:" + canonical)` → 16 hex,
+  fail-closed to `withheld`, where `CensusHash.canonical` is the trimmed value with every census-whitespace
+  run collapsed to one ASCII space); `KindClassifier` (§1's two-stage grammar, code-point based);
+  `CensusFingerprint` (§8: wrapper-to-forest over a synthetic root, every string LENGTH-PREFIXED so the
+  encoding is injective, digested through `sha256OrNull(ByteArray)`); and the static gates
+  `ResourceIdGrammar` / `ClassNameGrammar` — a dynamic id (a per-frame-UUID Compose test tag) or a
+  non-static class is ABSENT on the wire and in the fingerprint. The golden vectors live with the
+  contract's tests (never in the APK).
+- *Shared vocabulary* — the anonymous-wrapper predicate (`AnonymousWrappers`) is the one `UiNode.stableHash`
+  also uses (algorithm unchanged, pinned by `UiNodeStableHashPinTest`); the customer-PII shapes moved
+  byte-for-byte from the test-only `SnapshotRedactor` to `domain.privacy.PiiShapes` (app licence;
+  `SnapshotRedactor` delegates, `PiiShapesParityTest` pins it; `PiiShapesIcuGuardTest` applies the ICU
+  bare-`}` rule to every compiled pattern); `CustomerTextMarkers.ID_MARKERS` is derived from
+  `ID_MARKER_TABLE` (`IdMarker(suffix, valueIsPii)`, list pinned — the runtime backstop is unchanged).
+- *The filter* — `core.pipeline.census.SkeletonBuilder` (typed API: `Platform`, `LocalDate`). A
+  `SensitiveTextMarkers` hit on the raw tree or title yields no skeleton; a FAILED marker scan is
+  `BUILD_FAILED`, not a sensitive frame. Per field: step 1 is the node's own RAW id (`ID_MARKERS` ∪
+  `PII_ID_SUFFIXES`, via `IdClass`); steps 2–8 judge the CANONICAL form (which alone decides the 40-char
+  cap) and, when it differs and is itself within the cap, the RAW trimmed form — either hit withholds;
+  only a `words:1..8` survivor hashes, on the canonical form. The FRAME-LEVEL duplicate rule then
+  withholds (a) any field whose canonical value a value-judging step caught anywhere in the frame, and (b)
+  any field containing a letter run (≥ 3 letters, case-insensitive) of an IDENTITY id's rendered
+  text/desc (`valueIsPii`: `customer_name`, the address lines, `arriving_at_title`,
+  `address_subpremise_line` — not `user_name`, which also carries merchant/dasher names, and not content
+  ids such as `description_text_view`), so "Adam's order" beside a `customer_name` "Adam" is withheld.
+  Each value is judged once per frame (memoized). `outcome()` never throws: every failure is
+  `Refusal.BUILD_FAILED` (the #909 inertness rule); refusals are reasons, never text.
+- *Tests* — `SkeletonCorpusTest` asserts ADR §7 (a)–(f) over the whole committed corpus (full-tree
+  redactor parity with exactly one stated exemption, plus a negative control) and a seeded property.
+
+Nothing calls the builder at runtime yet: the publisher stage, `CensusSink` and `PipelineStats` counters
+are #1146 (M1b); upload is M3.
 
 **The whole recognition + text-scrub layer assumes an ENGLISH device (#938).** Rule anchors and
 BOTH text-marker SSOTs (`SensitiveTextMarkers.KEYWORDS`, `CustomerTextMarkers.MARKERS`) are literal

@@ -114,7 +114,8 @@ including on a node whose id would withhold it. Money and time are deliberately
 NOT classes of their own: `CurrencyShape` lives in `:core:pipeline` and the contract module may not
 depend on it, and a second currency regex would be exactly the SSOT drift `CurrencyShapePinTest`
 exists to prevent; a money or time slot is anchored by its id/class and siblings when a rule is
-drafted. Shared client/server golden vectors for this table live in the contract module; the server
+drafted. Shared client/server golden vectors for this table live with the contract's tests (published to
+the server as a test-fixtures artifact, never shipped in the APK — amended in #1160); the server
 verifies `kind` where it has text — on trusted envelopes (paired plaintext) and on the vectors — and
 cannot re-classify a community skeleton, which carries no text. A skeleton item is capped at **65 536
 uncompressed UTF-8 bytes of its serialized JSON** (the whole item, metadata included); over the cap
@@ -171,10 +172,15 @@ id-less parent that repeats it. `SkeletonBuilder` therefore runs two passes: pas
 filter over every text field of the frame (tree + window title) and collects the set of trimmed
 canonical values caught by (a) a VALUE-judging step — 3, 4, 5, 7, 8 (not the length cap, whose duplicate is
 itself over-length) — or (b) step 1 ONLY when the id is an IDENTITY id — an `ID_MARKER_TABLE` row flagged
-`valueIsPii` (a customer name or address line: `customer_name`, `user_name`, `address_line_1/2`,
-`arriving_at_title`, `address_subpremise_line`) — and ONLY from that node's TEXT / CONTENT_DESCRIPTION,
-never its role/hint/tooltip/click-label/uid/pane; pass 2 emits the constant `withheld` for every field
-whose canonical value is in that set, wherever it sits. A CONTENT id (an `ID_MARKER_TABLE` row without the
+`valueIsPii` (a customer name or address line: `customer_name`, `address_line_1/2`, `arriving_at_title`,
+`address_subpremise_line`; NOT `user_name`, which the same table documents is reused for the merchant's
+and the dasher's own name) — and ONLY from that node's TEXT / CONTENT_DESCRIPTION, never its
+role/hint/tooltip/click-label/uid/pane. Pass 2 emits the constant `withheld` for every field whose
+canonical value is in that set, wherever it sits; and, for the identity seeds only, by TOKEN CONTAINMENT:
+each identity value contributes its maximal letter runs of at least 3 letters (case-folded), and any
+field containing one of those runs is withheld — so `customer_name` "Adam" withholds an id-less
+"Adam's order" or "Adam, 2 items" (which pass steps 3–8), while "Add a tip" beside it still hashes
+(amended in #1160 review round 4). A CONTENT id (an `ID_MARKER_TABLE` row without the
 flag — the free-text instruction bodies, `description_text_view`, which the same table documents as
 generic DoorDash chrome such as "Raise to 50%" or "Required") and a `PII_ID_SUFFIXES`-only id (the intake
 list, which also covers instruction BODIES — `step_description`, `instruction_text`, `tvTitle`) withhold
@@ -199,10 +205,13 @@ whitespace-normalized (`CensusHash.canonical`: every run of code points the clas
 `Character.isWhitespace || isSpaceChar`, collapsed to one ASCII space; amended in #1160 because the JVM's
 regex `\s` excludes NBSP/thin space while ICU's includes `\p{Z}`, so the decision was engine-dependent) —
 the same bytes `CensusHash` hashes — so a leading space cannot slip a prefix past a `startsWith`. Every
-value-judging step (3, 4, 5, 7, 8) runs on the raw trimmed value AND on the canonical form; either hit
-withholds (the 40-character cap applies to both); classification and hashing use the canonical form, and
-the frame-wide duplicate set is keyed by it (amended in #1160 review round 4 — canonicalization alone can
-shrink a value below a pattern's minimum: `"ab  cd"` is a quoted note raw, `"ab cd"` is not). Step 1 uses the
+value-judging step (3, 4, 5, 7, 8) runs on the canonical form AND — when the raw trimmed value differs
+and is itself within the 40-character cap — on the raw trimmed value; either hit withholds. The cap
+(step 2) is decided by the CANONICAL form alone, so wide-spaced chrome is not capped on its padding and a
+padded "Deliver  to  Sam" is still caught (and seeds); the raw pass keeps every pattern on bounded input.
+Classification and hashing use the canonical form, and the frame-wide duplicate set is keyed by it
+(amended in #1160 review round 4 — canonicalization alone can shrink a value below a pattern's minimum:
+`"ab  cd"` is a quoted note raw, `"ab cd"` is not). Step 1 uses the
 two EXISTING predicates as they are: `ID_MARKERS` is a case-insensitive SUFFIX match on the full
 resource id (`ID_MARKERS.any { id.endsWith(it, ignoreCase = true) }`, today inline in
 `CustomerTextMarkers.unredactedIdMarker`; #1145 extracts it as the shared helper both call),
@@ -377,7 +386,7 @@ construction, on decode, and by the builder (checked on the RAW id, before the r
 normalization): a wrapper's children are spliced into its parent, an EMPTY wrapper contributes
 nothing (the parent's count drops), and the normalized forest ALWAYS hangs under one synthetic root
 (class `""`, null id, the spliced count) — whether or not the original root was a wrapper — so
-`fingerprint(A) == fingerprint(W(A))` holds; that equality is a required vector. The contract module publishes vectors
+`fingerprint(A) == fingerprint(W(A))` holds; that equality is a required vector. The contract's tests hold vectors
 for: null vs empty id, an empty wrapper, a multi-child wrapper, a wrapper root, and the two nesting
 cases below. It keeps ONE
 structural rule of `stableHash` deliberately: an **anonymous wrapper** (no id AND a class in
@@ -529,6 +538,13 @@ must stay green.
    the undetected-PII residual, the same class as risk 1.
 7. **Dictionary attack by the operator on sub-k hashes.** Sub-k hashes are never listed, but the
    operator holds the database. The control is the same as 3, plus the 30-day TTL.
+8. **The raw-form pass re-admits the JVM-vs-ICU regex divergence** (#1160 review round 4). The canonical
+   form closes the `\s` difference (the JVM's excludes NBSP/thin space, ICU's includes `\p{Z}`), but the
+   raw-form pass (§2 "Inputs and predicates") still runs the patterns on un-normalized text, where ICU's
+   `\s`/`\b`/`\w` are wider than the JVM's. Every divergence found so far withholds MORE on ART, so the
+   device withholds a superset of what the corpus tests (JVM) prove hashed: the privacy direction is
+   safe, but fixture-derived RECALL is optimistic. The JVM tests remain the oracle until the builder's
+   vectors run instrumented on ART (a #1146 follow-up).
 
 ## Open questions (dev decisions; the same items appear in #1157's plan §10 under its own numbering — this list is the ADR's reference)
 
