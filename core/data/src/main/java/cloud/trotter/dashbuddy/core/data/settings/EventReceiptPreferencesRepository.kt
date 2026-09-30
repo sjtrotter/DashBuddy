@@ -6,7 +6,8 @@ import cloud.trotter.dashbuddy.domain.settings.EventReceiptConsent
 import cloud.trotter.dashbuddy.domain.settings.EventReceiptPreferences
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Job
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.async
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -39,8 +40,10 @@ import javax.inject.Singleton
  * APPLICATION scope (a closing screen can never cancel it half-way); DataStore's data flow emits
  * after the edit, so a decision reaches every reader within milliseconds through the collector. No
  * optimistic value and no rollback: a value-compared rollback let overlapping or failing writes leave
- * [consent] disagreeing with the store (or restore `null` after a read). A successful write restarts
- * a collector whose retries were exhausted, so the decision is still read back.
+ * [consent] disagreeing with the store (or restore `null` after a read). There is exactly ONE
+ * collector for the repository's lifetime (review UU1/UU2); after its retries are exhausted it waits
+ * for a conflated "read again" poke, which every successful write sends — so the decision is always
+ * read back, including a write that lands while the collector is still in its exhausted `catch`.
  */
 @Singleton
 class EventReceiptPreferencesRepository @Inject constructor(
@@ -51,36 +54,53 @@ class EventReceiptPreferencesRepository @Inject constructor(
     private val _consent = MutableStateFlow<EventReceiptConsent?>(null)
     override val consent: StateFlow<EventReceiptConsent?> = _consent.asStateFlow()
 
-    @Volatile
-    private var reader: Job = startReader()
+    /**
+     * #1151 review UU1/UU2 — "read again" pokes. CONFLATED: a poke sent while the collector is still
+     * inside its exhausted `catch` is buffered and consumed the moment it reaches `receive()`, so a
+     * write that lands during that window triggers exactly one re-read; a poke sent while the
+     * collector is healthy is consumed only after a future exhaustion (one harmless extra
+     * re-subscribe).
+     */
+    private val reread = Channel<Unit>(Channel.CONFLATED)
 
-    private fun startReader(): Job =
+    init {
+        // ONE collector for the repository's lifetime, by construction — it never gives up
+        // permanently: after an exhausted read it waits for a poke from a successful write.
         scope.launch {
-            var failuresInEpisode = 0
-            dataSource.consent
-                .map { decode(it) }
-                .onEach { failuresInEpisode = 0 }
-                .retryWhen { cause, _ ->
-                    failuresInEpisode++
-                    if (failuresInEpisode > MAX_RETRIES) {
-                        false
-                    } else {
-                        Timber.tag("Data").w(
-                            cause,
-                            "event-receipt consent unreadable — retrying (%d/%d)",
-                            failuresInEpisode,
-                            MAX_RETRIES,
-                        )
-                        delay(RETRY_BASE_MS * failuresInEpisode)
-                        true
-                    }
-                }
-                .catch { t ->
-                    Timber.tag("Data").e(t, "event-receipt consent unreadable — retries exhausted")
-                    emit(_consent.value ?: EventReceiptConsent.UNDECIDED)
-                }
-                .collect { _consent.value = it }
+            while (isActive) {
+                readOnce()
+                reread.receive()
+            }
         }
+    }
+
+    /** Reads the store into [consent]; returns only when the retries were exhausted. */
+    private suspend fun readOnce() {
+        var failuresInEpisode = 0
+        dataSource.consent
+            .map { decode(it) }
+            .onEach { failuresInEpisode = 0 }
+            .retryWhen { cause, _ ->
+                failuresInEpisode++
+                if (failuresInEpisode > MAX_RETRIES) {
+                    false
+                } else {
+                    Timber.tag("Data").w(
+                        cause,
+                        "event-receipt consent unreadable — retrying (%d/%d)",
+                        failuresInEpisode,
+                        MAX_RETRIES,
+                    )
+                    delay(RETRY_BASE_MS * failuresInEpisode)
+                    true
+                }
+            }
+            .catch { t ->
+                Timber.tag("Data").e(t, "event-receipt consent unreadable — retries exhausted")
+                emit(_consent.value ?: EventReceiptConsent.UNDECIDED)
+            }
+            .collect { _consent.value = it }
+    }
 
     /**
      * Persist a decision (review NN3/SS1): written on the APPLICATION scope; the collector publishes
@@ -91,7 +111,7 @@ class EventReceiptPreferencesRepository @Inject constructor(
         scope.async {
             try {
                 dataSource.setConsent(consent.name)
-                if (!reader.isActive) reader = startReader() // a collector that gave up re-reads
+                reread.trySend(Unit) // UU1: a collector that gave up re-reads (conflated poke)
                 true
             } catch (e: CancellationException) {
                 throw e
