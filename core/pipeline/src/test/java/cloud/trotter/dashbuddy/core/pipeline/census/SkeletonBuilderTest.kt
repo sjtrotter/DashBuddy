@@ -10,6 +10,8 @@ import cloud.trotter.dashbuddy.domain.census.contract.SkeletonSchema
 import cloud.trotter.dashbuddy.domain.census.contract.TextSlot
 import cloud.trotter.dashbuddy.domain.model.accessibility.UiNode
 import cloud.trotter.dashbuddy.domain.model.accessibility.UiNodeTextField
+import cloud.trotter.dashbuddy.domain.state.Platform
+import java.time.LocalDate
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
@@ -32,10 +34,13 @@ class SkeletonBuilderTest {
     )
 
     /** One field's slot, through the whole builder (the per-field path is private, review CC5). */
+    private val platform = Platform.DoorDash
+    private val day: LocalDate = LocalDate.of(2026, 9, 30)
+
     private fun slot(value: String?, id: String? = null): TextSlot? =
         SkeletonBuilder.build(
             UiNode(className = "android.widget.TextView", viewIdResourceName = id, text = value),
-            null, meta, "doordash", "2026-09-30",
+            null, meta, platform, day,
         )!!.root.text["text"]
     private fun words(n: Int, value: String) = TextSlot(h = CensusHash.of(value), kind = "words:$n")
 
@@ -76,27 +81,27 @@ class SkeletonBuilderTest {
 
     // ---- Step 1: PII id (ID_MARKERS suffix ∪ PII_ID_SUFFIXES exact) --------------------------------
 
+    // Step 1 lives only in the builder's IdClass (review GG4), so it is exercised through `outcome()`.
+
     @Test
     fun `step 1 - an ID_MARKERS suffix withholds, case-insensitively, on the full id`() {
-        assertEquals(FilterStep.PII_ID, SkeletonBuilder.withholdingStep("Accept", "com.doordash.driverapp:id/customer_name"))
-        assertEquals(FilterStep.PII_ID, SkeletonBuilder.withholdingStep("Accept", "com.x:id/ORDER_CUSTOMER_NAME"))
+        assertEquals(TextSlot.WITHHELD, slot("Accept", "com.doordash.driverapp:id/customer_name"))
+        assertEquals(TextSlot.WITHHELD, slot("Accept", "com.x:id/ORDER_CUSTOMER_NAME"))
         assertEquals(TextSlot.WITHHELD, slot("Accept", "com.x:id/description_text_view"))
     }
 
     @Test
     fun `step 1 - a PII_ID_SUFFIXES exact suffix withholds`() {
         // `order_cx_name` and `tvTitle` are PII_ID_SUFFIXES only (not ID_MARKERS) — the union is used.
-        assertEquals(FilterStep.PII_ID_INTAKE, SkeletonBuilder.withholdingStep("Accept", "com.x:id/order_cx_name"))
-        assertEquals(FilterStep.PII_ID_INTAKE, SkeletonBuilder.withholdingStep("Accept", "com.x:id/tvTitle"))
+        assertEquals(TextSlot.WITHHELD, slot("Accept", "com.x:id/order_cx_name"))
         assertEquals(TextSlot.WITHHELD, slot("Accept", "com.x:id/tvTitle"))
     }
 
     @Test
     fun `step 1 - negative - a chrome id hashes`() {
-        assertNull(SkeletonBuilder.withholdingStep("Accept", "com.x:id/accept_button"))
-        // PII_ID_SUFFIXES is EXACT after the last slash, so a longer id ending differently is chrome.
-        assertNull(SkeletonBuilder.withholdingStep("Accept", "com.x:id/tvTitleLabel"))
         assertEquals(words(1, "Accept"), slot("Accept", "com.x:id/accept_button"))
+        // PII_ID_SUFFIXES is EXACT after the last slash, so a longer id ending differently is chrome.
+        assertEquals(words(1, "Accept"), slot("Accept", "com.x:id/tvTitleLabel"))
     }
 
     // ---- Step 2: length cap ------------------------------------------------------------------------
@@ -105,28 +110,28 @@ class SkeletonBuilderTest {
     fun `step 2 - over 40 characters withholds, 40 does not`() {
         val forty = "Aaaa bbbb cccc dddd eeee ffff gggg hhhhh"
         assertEquals(40, forty.length)
-        assertNull(SkeletonBuilder.withholdingStep(forty, null))
-        assertEquals(FilterStep.LENGTH_CAP, SkeletonBuilder.withholdingStep(forty + "h", null))
+        assertNull(SkeletonBuilder.withholdingStep(forty))
+        assertEquals(FilterStep.LENGTH_CAP, SkeletonBuilder.withholdingStep(forty + "h"))
     }
 
     // ---- Step 3: CustomerTextMarkers ---------------------------------------------------------------
 
     @Test
     fun `step 3 - a customer marker withholds`() {
-        assertEquals(FilterStep.CUSTOMER_MARKER, SkeletonBuilder.withholdingStep("Delivery to Morgan", null))
-        assertEquals(FilterStep.CUSTOMER_MARKER, SkeletonBuilder.withholdingStep("Meet at door for Sam", null))
-        assertNull(SkeletonBuilder.withholdingStep("Delivery details", null))
+        assertEquals(FilterStep.CUSTOMER_MARKER, SkeletonBuilder.withholdingStep("Delivery to Morgan"))
+        assertEquals(FilterStep.CUSTOMER_MARKER, SkeletonBuilder.withholdingStep("Meet at door for Sam"))
+        assertNull(SkeletonBuilder.withholdingStep("Delivery details"))
     }
 
     // ---- Step 4: customerLeadIn ------------------------------------------------------------------
 
     @Test
     fun `step 4 - a lead-in with a tail withholds, incl the gated Return prefix`() {
-        assertEquals(FilterStep.LEAD_IN, SkeletonBuilder.withholdingStep("Pickup from Chipotle", null))
-        assertEquals(FilterStep.LEAD_IN, SkeletonBuilder.withholdingStep("Heading to Walmart", null))
-        assertEquals(FilterStep.LEAD_IN, SkeletonBuilder.withholdingStep("Return Riley P to H-E-B", null))
+        assertEquals(FilterStep.LEAD_IN, SkeletonBuilder.withholdingStep("Pickup from Chipotle"))
+        assertEquals(FilterStep.LEAD_IN, SkeletonBuilder.withholdingStep("Heading to Walmart"))
+        assertEquals(FilterStep.LEAD_IN, SkeletonBuilder.withholdingStep("Return Riley P to H-E-B"))
         // The gate's negative: DoorDash's own button is chrome.
-        assertNull(SkeletonBuilder.withholdingStep("Return to dash", null))
+        assertNull(SkeletonBuilder.withholdingStep("Return to dash"))
     }
 
     // ---- Step 5: masks -----------------------------------------------------------------------------
@@ -134,18 +139,18 @@ class SkeletonBuilderTest {
     @Test
     fun `step 5 - any mask anywhere withholds`() {
         listOf("[address]", "Call [phone]", "[redacted]", "[redacted:ab12]", "\"[note]\"", "Hi [name]")
-            .forEach { assertEquals(it, FilterStep.MASK, SkeletonBuilder.withholdingStep(it, null)) }
+            .forEach { assertEquals(it, FilterStep.MASK, SkeletonBuilder.withholdingStep(it)) }
         // Step order: a marker-led masked value is caught at step 3 before step 5 sees it.
-        assertEquals(FilterStep.CUSTOMER_MARKER, SkeletonBuilder.withholdingStep("Verify items for [name]", null))
+        assertEquals(FilterStep.CUSTOMER_MARKER, SkeletonBuilder.withholdingStep("Verify items for [name]"))
         // `[icon]` is DoorDash chrome, not a mask.
-        assertNull(SkeletonBuilder.withholdingStep("[icon] Gold", null))
+        assertNull(SkeletonBuilder.withholdingStep("[icon] Gold"))
     }
 
     // ---- Step 6: only words:N hash (non-withholding; steps 7–8 still run) ----------------------------
 
     @Test
     fun `step 6 - a mixed token continues to step 8 and is withheld there`() {
-        assertEquals(FilterStep.PII_SHAPE, SkeletonBuilder.withholdingStep("Apt 12", null))
+        assertEquals(FilterStep.PII_SHAPE, SkeletonBuilder.withholdingStep("Apt 12"))
         assertEquals(TextSlot(kind = "mixed"), slot("Order #1234"))
     }
 
@@ -153,14 +158,14 @@ class SkeletonBuilderTest {
 
     @Test
     fun `step 7 - an embedded first-name last-initial withholds`() {
-        assertEquals(FilterStep.NAME_SHAPE, SkeletonBuilder.withholdingStep("Jane S is waiting at the door", null))
-        assertEquals(FilterStep.NAME_SHAPE, SkeletonBuilder.withholdingStep("Brandon C", null))
-        assertEquals(FilterStep.NAME_SHAPE, SkeletonBuilder.withholdingStep("Call Jane S. now", null))
+        assertEquals(FilterStep.NAME_SHAPE, SkeletonBuilder.withholdingStep("Jane S is waiting at the door"))
+        assertEquals(FilterStep.NAME_SHAPE, SkeletonBuilder.withholdingStep("Brandon C"))
+        assertEquals(FilterStep.NAME_SHAPE, SkeletonBuilder.withholdingStep("Call Jane S. now"))
         // A lowercase WHOLE-VALUE name is still caught, by the anchored redact-side pattern.
-        assertEquals(FilterStep.NAME_SHAPE, SkeletonBuilder.withholdingStep("jordan t", null))
-        assertEquals(FilterStep.NAME_SHAPE, SkeletonBuilder.withholdingStep("José  R", null))
-        assertNull(SkeletonBuilder.withholdingStep("Hand it to me", null))
-        assertNull(SkeletonBuilder.withholdingStep("Confirm pickup", null))
+        assertEquals(FilterStep.NAME_SHAPE, SkeletonBuilder.withholdingStep("jordan t"))
+        assertEquals(FilterStep.NAME_SHAPE, SkeletonBuilder.withholdingStep("José  R"))
+        assertNull(SkeletonBuilder.withholdingStep("Hand it to me"))
+        assertNull(SkeletonBuilder.withholdingStep("Confirm pickup"))
     }
 
     // ---- Step 8: the other PiiShapes ---------------------------------------------------------------
@@ -178,11 +183,11 @@ class SkeletonBuilderTest {
             "sam@example.com" to "EMAIL",
             "Visa ••••6222" to "CARD",
         ).forEach { (value, shape) ->
-            assertEquals("$value ($shape)", FilterStep.PII_SHAPE, SkeletonBuilder.withholdingStep(value, null))
+            assertEquals("$value ($shape)", FilterStep.PII_SHAPE, SkeletonBuilder.withholdingStep(value))
         }
         // BARE_STREET is WHOLE-VALUE: embedded in a longer value it does not fire.
-        assertNull(SkeletonBuilder.withholdingStep("29 items", null))
-        assertNull(SkeletonBuilder.withholdingStep("Pickup instructions", null))
+        assertNull(SkeletonBuilder.withholdingStep("29 items"))
+        assertNull(SkeletonBuilder.withholdingStep("Pickup instructions"))
     }
 
     // ---- Whole-frame behaviour ---------------------------------------------------------------------
@@ -194,14 +199,14 @@ class SkeletonBuilderTest {
 
     @Test
     fun `a sensitive frame yields no skeleton`() {
-        val out = SkeletonBuilder.outcome(tree("Transfer out", "\$45.66 available"), null, meta, "doordash", "2026-09-30")
+        val out = SkeletonBuilder.outcome(tree("Transfer out", "\$45.66 available"), null, meta, platform, day)
         assertEquals(Outcome.Refused(Refusal.SENSITIVE_FRAME), out)
-        assertNull(SkeletonBuilder.build(tree("Transfer", "\$45.66"), null, meta, "doordash", "2026-09-30"))
+        assertNull(SkeletonBuilder.build(tree("Transfer", "\$45.66"), null, meta, platform, day))
     }
 
     @Test
     fun `a sensitive window title yields no skeleton`() {
-        val out = SkeletonBuilder.outcome(tree("Continue"), "DasherDirect", meta, "doordash", "2026-09-30")
+        val out = SkeletonBuilder.outcome(tree("Continue"), "DasherDirect", meta, platform, day)
         assertEquals(Outcome.Refused(Refusal.SENSITIVE_TITLE), out)
     }
 
@@ -213,19 +218,14 @@ class SkeletonBuilderTest {
                 UiNode(className = "android.widget.TextView", viewIdResourceName = "com.x:id/row_$it", text = "Row")
             },
         ).restoreParents()
-        assertEquals(Outcome.Refused(Refusal.OVERSIZE), SkeletonBuilder.outcome(big, null, meta, "doordash", "2026-09-30"))
+        assertEquals(Outcome.Refused(Refusal.OVERSIZE), SkeletonBuilder.outcome(big, null, meta, platform, day))
     }
 
     @Test
-    fun `malformed envelope inputs are refused, never shipped`() {
-        assertEquals(
-            Outcome.Refused(Refusal.INVALID_ENVELOPE),
-            SkeletonBuilder.outcome(tree("Continue"), null, meta, "doordash", "2026-09-30 12:04"),
-        )
-        assertEquals(
-            Outcome.Refused(Refusal.INVALID_ENVELOPE),
-            SkeletonBuilder.outcome(tree("Continue"), null, meta, "Jane Smith", "2026-09-30"),
-        )
+    fun `the typed API emits the wire forms of platform and day (review GG6)`() {
+        val item = SkeletonBuilder.build(tree("Continue"), null, meta, Platform.Uber, LocalDate.of(2026, 2, 3))!!
+        assertEquals("uber", item.platform)
+        assertEquals("2026-02-03", item.day)
     }
 
     @Test
@@ -242,7 +242,7 @@ class SkeletonBuilderTest {
             isEnabled = true,
             isChecked = 2,
         )
-        val item = SkeletonBuilder.build(UiNode(children = listOf(node)).restoreParents(), "Offer", meta, "doordash", "2026-09-30")
+        val item = SkeletonBuilder.build(UiNode(children = listOf(node)).restoreParents(), "Offer", meta, platform, day)
         assertNotNull(item!!)
         assertEquals(SkeletonSchema.SCHEMA_ID, item.schemaId)
         assertEquals(1, item.hashDomain)
@@ -302,7 +302,7 @@ class SkeletonBuilderTest {
         ).restoreParents()
         // In isolation "Sam" is words:1 and would hash.
         assertEquals(words(1, "Sam"), slot("Sam"))
-        val item = SkeletonBuilder.build(frame, "Sam", meta, "doordash", "2026-09-30")!!
+        val item = SkeletonBuilder.build(frame, "Sam", meta, platform, day)!!
         assertEquals(TextSlot.WITHHELD, item.root.text.getValue("desc"))
         assertEquals(TextSlot.WITHHELD, item.root.children[0].text.getValue("text"))
         assertEquals(TextSlot.WITHHELD, item.root.children[1].text.getValue("text"))
@@ -314,12 +314,12 @@ class SkeletonBuilderTest {
     fun `AA4 - a pathological deep tree is refused, never thrown`() {
         var node = UiNode(className = "android.widget.TextView", text = "Accept")
         repeat(200_000) { node = UiNode(className = "android.widget.ScrollView", viewIdResourceName = "x:id/n", children = listOf(node)) }
-        // Never a throw. Which stage overflows first is JVM-stack dependent: the sensitive-marker scan
-        // fails CLOSED on its own (its throw sentinel reads as a hit → SENSITIVE_FRAME); anything past
-        // it lands in the whole-build catch (BUILD_FAILED). Both are refusals with no skeleton.
-        val out = SkeletonBuilder.outcome(node, null, meta, "doordash", "2026-09-30")
-        assertTrue("$out", out == Outcome.Refused(Refusal.BUILD_FAILED) || out == Outcome.Refused(Refusal.SENSITIVE_FRAME))
-        assertNull(SkeletonBuilder.build(node, null, meta, "doordash", "2026-09-30"))
+        // Never a throw, and never mis-reported as a sensitive frame (review GG3): whichever stage
+        // overflows first — the marker scan (its fail-closed sentinel) or anything after it — the
+        // outcome is BUILD_FAILED.
+        val out = SkeletonBuilder.outcome(node, null, meta, platform, day)
+        assertEquals(Outcome.Refused(Refusal.BUILD_FAILED), out)
+        assertNull(SkeletonBuilder.build(node, null, meta, platform, day))
     }
 
     @Test
@@ -333,13 +333,13 @@ class SkeletonBuilderTest {
             UiNode(className = "android.widget.TextView", viewIdResourceName = "x:id/a\uDC00", text = "Accept"),
         ).forEach { bad ->
             val child = UiNode(className = "android.widget.FrameLayout", viewIdResourceName = "x:id/host", children = listOf(bad))
-            assertEquals(Outcome.Refused(Refusal.INVALID_TREE), SkeletonBuilder.outcome(child, null, meta, "doordash", "2026-09-30"))
+            assertEquals(Outcome.Refused(Refusal.INVALID_TREE), SkeletonBuilder.outcome(child, null, meta, platform, day))
         }
     }
 
     @Test
     fun `AA7 - Built carries the canonical JSON it measured`() {
-        val out = SkeletonBuilder.outcome(tree("Continue"), null, meta, "doordash", "2026-09-30") as Outcome.Built
+        val out = SkeletonBuilder.outcome(tree("Continue"), null, meta, platform, day) as Outcome.Built
         assertEquals(SkeletonSchema.serialize(out.skeleton), out.json)
         assertEquals(out.json.toByteArray(Charsets.UTF_8).size, out.itemBytes)
     }
@@ -351,13 +351,13 @@ class SkeletonBuilderTest {
             viewIdResourceName = "com.doordash.driverapp:id/drop_off_step_instructions_activity_host_fragment",
             children = listOf(UiNode(className = "android.widget.Button", viewIdResourceName = tag, text = "Continue")),
         ).restoreParents()
-        val a = SkeletonBuilder.build(frame("PRIMARY_BUTTON_3f488d4a-0f0b-4fb9-9c86-c4e0253ba22a"), null, meta, "doordash", "2026-09-30")!!
-        val b = SkeletonBuilder.build(frame("PRIMARY_BUTTON_9db4e2af-5a58-4a43-ba63-295126ceddef"), null, meta, "doordash", "2026-09-30")!!
+        val a = SkeletonBuilder.build(frame("PRIMARY_BUTTON_3f488d4a-0f0b-4fb9-9c86-c4e0253ba22a"), null, meta, platform, day)!!
+        val b = SkeletonBuilder.build(frame("PRIMARY_BUTTON_9db4e2af-5a58-4a43-ba63-295126ceddef"), null, meta, platform, day)!!
         assertNull(a.root.children.single().id)
         assertEquals(a.fingerprint, b.fingerprint)
         assertEquals("com.doordash.driverapp:id/drop_off_step_instructions_activity_host_fragment", a.root.id)
         // The §2 PII-id step still sees the RAW id: a dynamic id ending in a PII suffix withholds.
-        assertEquals(FilterStep.PII_ID, SkeletonBuilder.withholdingStep("Sam", "x:id/row_1234_customer_name"))
+        assertEquals(TextSlot.WITHHELD, slot("Sam", "x:id/row_1234_customer_name"))
     }
 
     // ---- #1160 review round 2 ----------------------------------------------------------------------
@@ -369,26 +369,26 @@ class SkeletonBuilderTest {
             viewIdResourceName = "com.x:id/host",
             children = listOf(UiNode(className = cls, text = "Continue")),
         )
-        val dynamic = SkeletonBuilder.build(frame("Composable_3f488d4a"), null, meta, "doordash", "2026-09-30")!!
-        val free = SkeletonBuilder.build(frame("Jane Smith's button"), null, meta, "doordash", "2026-09-30")!!
+        val dynamic = SkeletonBuilder.build(frame("Composable_3f488d4a"), null, meta, platform, day)!!
+        val free = SkeletonBuilder.build(frame("Jane Smith's button"), null, meta, platform, day)!!
         assertNull(dynamic.root.children.single().className)
         assertNull(free.root.children.single().className)
         assertEquals(dynamic.fingerprint, free.fingerprint)
-        val static = SkeletonBuilder.build(frame("androidx.compose.ui.platform.ComposeView"), null, meta, "doordash", "2026-09-30")!!
+        val static = SkeletonBuilder.build(frame("androidx.compose.ui.platform.ComposeView"), null, meta, platform, day)!!
         assertEquals("androidx.compose.ui.platform.ComposeView", static.root.children.single().className)
     }
 
     @Test
     fun `CC2 - an over-long optional stamp is truncated, never a refusal`() {
         val long = meta.copy(platformAppVersion = "9".repeat(90), rulesetReleaseTag = "r".repeat(70))
-        val out = SkeletonBuilder.outcome(tree("Continue"), null, long, "doordash", "2026-09-30")
+        val out = SkeletonBuilder.outcome(tree("Continue"), null, long, platform, day)
         assertTrue("$out", out is Outcome.Built)
         val item = (out as Outcome.Built).skeleton
         assertEquals("9".repeat(64), item.platformAppVersion)
         assertEquals("r".repeat(64), item.rulesetReleaseTag)
         // A truncation that would split a surrogate pair drops the stamp rather than ship malformed text.
         val split = meta.copy(appVersion = "a".repeat(63) + "\uD801\uDC00")
-        assertNull(SkeletonBuilder.build(tree("Continue"), null, split, "doordash", "2026-09-30")!!.appVersion)
+        assertNull(SkeletonBuilder.build(tree("Continue"), null, split, platform, day)!!.appVersion)
     }
 
     @Test
@@ -401,7 +401,7 @@ class SkeletonBuilderTest {
                 UiNode(className = "android.widget.TextView", viewIdResourceName = "com.doordash.driverapp:id/step_description", text = "Hand it to me"),
             ),
         )
-        val item = SkeletonBuilder.build(frame, null, meta, "doordash", "2026-09-30")!!
+        val item = SkeletonBuilder.build(frame, null, meta, platform, day)!!
         assertEquals(words(4, "Hand it to me"), item.root.children[0].text.getValue("text"))
         assertEquals(TextSlot.WITHHELD, item.root.children[1].text.getValue("text"))
         // ...while an ID_MARKERS id (value IS PII) still propagates frame-wide (the AA1 fixture shape).
@@ -410,7 +410,7 @@ class SkeletonBuilderTest {
             contentDescription = "Sam",
             children = listOf(UiNode(className = "android.widget.TextView", viewIdResourceName = "com.doordash.driverapp:id/customer_name", text = "Sam")),
         )
-        assertEquals(TextSlot.WITHHELD, SkeletonBuilder.build(pii, null, meta, "doordash", "2026-09-30")!!.root.text.getValue("desc"))
+        assertEquals(TextSlot.WITHHELD, SkeletonBuilder.build(pii, null, meta, platform, day)!!.root.text.getValue("desc"))
     }
 
     // ---- #1160 review round 3 ----------------------------------------------------------------------
@@ -420,7 +420,7 @@ class SkeletonBuilderTest {
         val counts = HashMap<String, Int>()
         val filter = SkeletonBuilder.FrameFilter { v ->
             counts.merge(v, 1, Int::plus)
-            SkeletonBuilder.withholdingStep(v, nodeId = null)
+            SkeletonBuilder.withholdingStep(v)
         }
         val tree = UiNode(
             className = "android.widget.LinearLayout",
@@ -451,7 +451,7 @@ class SkeletonBuilderTest {
                 UiNode(className = "android.widget.TextView", viewIdResourceName = "com.x:id/description_text_view", text = "Raise to 50%"),
             ),
         )
-        val item = SkeletonBuilder.build(content, null, meta, "doordash", "2026-09-30")!!
+        val item = SkeletonBuilder.build(content, null, meta, platform, day)!!
         assertEquals(words(1, "Required"), item.root.children[0].text.getValue("text"))
         assertEquals(TextSlot(kind = "mixed"), item.root.children[1].text.getValue("text"))
         assertEquals(TextSlot.WITHHELD, item.root.children[2].text.getValue("text"))
@@ -465,7 +465,7 @@ class SkeletonBuilderTest {
                 UiNode(className = "android.widget.Button", text = "Button", contentDescription = "Sam"),
             ),
         )
-        val r = SkeletonBuilder.build(role, null, meta, "doordash", "2026-09-30")!!
+        val r = SkeletonBuilder.build(role, null, meta, platform, day)!!
         // The identity id's own fields are all withheld (step 1)...
         assertEquals(TextSlot.WITHHELD, r.root.children[0].text.getValue("role"))
         // ...but only its TEXT seeds the frame: "Sam" propagates, the role's "Button" does not.
@@ -493,5 +493,57 @@ class SkeletonBuilderTest {
         assertEquals(TextSlot.WITHHELD, slot("Brandon\u00A0C"))
         // Neither: chrome still hashes on its canonical form.
         assertEquals(words(2, "Pickup & delivery"), slot("Pickup  &  delivery"))
+    }
+
+    @Test
+    fun `GG1 - an identity value embedded in an id-less node is withheld by token containment`() {
+        fun frame(vararg others: String) = UiNode(
+            className = "android.widget.LinearLayout",
+            viewIdResourceName = "com.x:id/row",
+            children = listOf(
+                UiNode(className = "android.widget.TextView", viewIdResourceName = "com.doordash.driverapp:id/customer_name", text = "Adam"),
+            ) + others.map { UiNode(className = "android.widget.TextView", text = it) },
+        )
+        val item = SkeletonBuilder.build(frame("Adam's order", "Adam, 2 items", "ADAM", "Add a tip", "Adamant"), null, meta, platform, day)!!
+        val slots = item.root.children.drop(1).map { it.text.getValue("text") }
+        assertEquals(TextSlot.WITHHELD, slots[0])
+        assertEquals(TextSlot.WITHHELD, slots[1])
+        assertEquals(TextSlot.WITHHELD, slots[2])
+        assertEquals(words(3, "Add a tip"), slots[3])
+        // A different run (a longer word) is not the identity token.
+        assertEquals(words(1, "Adamant"), slots[4])
+        // A two-letter identity value seeds no run: "Jo" withholds its exact duplicates only.
+        val jo = SkeletonBuilder.build(
+            UiNode(className = "android.widget.LinearLayout", viewIdResourceName = "com.x:id/row", children = listOf(
+                UiNode(className = "android.widget.TextView", viewIdResourceName = "com.x:id/customer_name", text = "Jo"),
+                UiNode(className = "android.widget.TextView", text = "Jo's pick"),
+                UiNode(className = "android.widget.TextView", text = "Jo"),
+            )),
+            null, meta, platform, day,
+        )!!
+        assertEquals(words(2, "Jo's pick"), jo.root.children[1].text.getValue("text"))
+        assertEquals(TextSlot.WITHHELD, jo.root.children[2].text.getValue("text"))
+    }
+
+    @Test
+    fun `GG2 - the cap is the canonical form's, and the raw pass runs only within the cap`() {
+        // Wide-spaced chrome: raw 46 chars, canonical 17 — hashes (the raw padding is not capped).
+        val wide = "Pickup" + " ".repeat(20) + "&" + " ".repeat(13) + "delivery"
+        assertTrue(wide.length > SkeletonBuilder.MAX_TOKEN_LENGTH)
+        assertEquals(words(2, "Pickup & delivery"), slot(wide))
+        // A padded customer marker: raw over the cap, canonical "Deliver to Sam" — withheld AND seeds.
+        val padded = "Deliver" + " ".repeat(20) + "to" + " ".repeat(20) + "Sam"
+        assertTrue(padded.length > SkeletonBuilder.MAX_TOKEN_LENGTH)
+        val item = SkeletonBuilder.build(
+            UiNode(className = "android.widget.LinearLayout", viewIdResourceName = "com.x:id/row", children = listOf(
+                UiNode(className = "android.widget.TextView", text = padded),
+                UiNode(className = "android.widget.TextView", text = "Deliver to Sam"),
+            )),
+            null, meta, platform, day,
+        )!!
+        assertEquals(TextSlot.WITHHELD, item.root.children[0].text.getValue("text"))
+        assertEquals(TextSlot.WITHHELD, item.root.children[1].text.getValue("text"))
+        // The FF1 reproducer (raw ≤ 40) is still caught on the raw pass.
+        assertEquals(TextSlot.WITHHELD, slot("\"ab  cd\""))
     }
 }

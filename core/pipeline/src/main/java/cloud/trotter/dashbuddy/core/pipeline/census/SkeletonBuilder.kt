@@ -16,6 +16,10 @@ import cloud.trotter.dashbuddy.domain.census.contract.WireStrings
 import cloud.trotter.dashbuddy.domain.model.accessibility.UiNode
 import cloud.trotter.dashbuddy.domain.model.accessibility.UiNodeTextField
 import cloud.trotter.dashbuddy.domain.privacy.PiiShapes
+import cloud.trotter.dashbuddy.domain.state.Platform
+import java.time.LocalDate
+import java.time.format.DateTimeFormatter
+import java.util.Locale
 import kotlin.coroutines.cancellation.CancellationException
 
 /**
@@ -32,11 +36,15 @@ import kotlin.coroutines.cancellation.CancellationException
  * - **The dasher's sensitive frames are never described.** A [SensitiveTextMarkers] hit on the raw
  *   tree or on the window title yields NO skeleton ([Refusal.SENSITIVE_FRAME] / [Refusal.SENSITIVE_TITLE]),
  *   scanned HERE regardless of the capture bus.
- * - **Only chrome-likely tokens are hashed.** Every non-blank text field runs the §2 filter
- *   ([withholdingStep]) in ADR order; any withholding step emits the constant `withheld`; only a
- *   `words:1..8` survivor is hashed ([CensusHash], fail-closed to `withheld`). The FRAME-LEVEL
- *   duplicate rule then withholds any field whose canonical value a withholding step caught anywhere
- *   else in the same frame (a name the id marks on one node is not hashed on its id-less twin).
+ * - **Only chrome-likely tokens are hashed.** A field is withheld by its own node's PII id (step 1,
+ *   [IdClass]) or by a value-judging step ([withholdingStep], steps 2–8), judged on the CANONICAL form
+ *   ([CensusHash.canonical]) and — when the raw trimmed value is itself within the cap — also on the raw
+ *   form; either hit withholds. Only a `words:1..8` survivor is hashed, on its canonical form
+ *   ([CensusHash], fail-closed to `withheld`). The FRAME-LEVEL duplicate rule then withholds (a) any field
+ *   whose canonical value a value-judging step caught anywhere in the frame, and (b) any field that
+ *   CONTAINS a letter run (≥ 3 letters, case-insensitive) of an IDENTITY id's rendered text/desc — so a
+ *   customer name the id marks on one node is not hashed on an id-less node that repeats or embeds it
+ *   ("Adam's order").
  * - **Inert.** [outcome] never throws (only coroutine cancellation escapes): any failure is
  *   [Refusal.BUILD_FAILED].
  * - **Bounded.** The 40-character cap precedes the grammar and every pattern; an item over
@@ -64,7 +72,10 @@ object SkeletonBuilder {
         /** The cluster fingerprint digest failed (fail closed). */
         FINGERPRINT_FAILED,
 
-        /** The envelope inputs failed the contract's validation (e.g. a malformed `day`/`platform`). */
+        /**
+         * The envelope failed the contract's validation. Defensive: with the typed API (review GG6) and
+         * the sanitized stamps nothing reachable produces it today.
+         */
         INVALID_ENVELOPE,
 
         /** A node failed the contract's validation (e.g. a class/id carrying U+0000, ADR §8). */
@@ -86,24 +97,12 @@ object SkeletonBuilder {
     }
 
     /**
-     * The §2 steps that WITHHOLD (emit the constant `withheld`), in ADR order. Step 6 (only
-     * `words:N` may be hashed) is deliberately absent: it refuses the HASH and continues, it does not
-     * withhold.
+     * The VALUE-judging §2 steps that WITHHOLD (emit the constant `withheld`), in ADR order. Step 1 (the
+     * node's own PII id) is not a value judgement and lives only in [IdClass] (review GG4); step 6 (only
+     * `words:N` may be hashed) refuses the HASH and continues, it does not withhold.
      */
     enum class FilterStep(val adrStep: Int) {
-        /**
-         * The node id carries an `ID_MARKERS` suffix — its VALUE is PII by construction. Seeds the
-         * frame-level duplicate rule.
-         */
-        PII_ID(1),
-
-        /**
-         * The node id is in `PII_ID_SUFFIXES` only (exact, after the last `/`) — the intake list, which
-         * also covers instruction bodies. Withholds the field; does NOT seed the frame-level rule (CC3).
-         */
-        PII_ID_INTAKE(1),
-
-        /** The canonical value is longer than [MAX_TOKEN_LENGTH]. */
+        /** The CANONICAL value is longer than [MAX_TOKEN_LENGTH]. */
         LENGTH_CAP(2),
 
         /** `CustomerTextMarkers.unredactedMarker` hits. */
@@ -130,21 +129,21 @@ object SkeletonBuilder {
         tree: UiNode,
         windowTitle: String?,
         meta: ReplayMetadata,
-        platform: String,
-        day: String,
+        platform: Platform,
+        day: LocalDate,
     ): UiSkeletonDto? = (outcome(tree, windowTitle, meta, platform, day) as? Outcome.Built)?.skeleton
 
     /**
-     * Build the skeleton of [tree] (+ [windowTitle]) for [platform] on [day] (`YYYY-MM-DD`), stamping
-     * the five [ReplayMetadata] version fields. Never throws on a well-formed tree; every refusal is a
-     * reason, never text.
+     * Build the skeleton of [tree] (+ [windowTitle]) for [platform] on [day], stamping the five
+     * [ReplayMetadata] version fields. Typed at this API (review GG6); the contract DTO carries the wire
+     * forms (`Platform.wire`, `yyyy-MM-dd`). Never throws; every refusal is a reason, never text.
      */
     fun outcome(
         tree: UiNode,
         windowTitle: String?,
         meta: ReplayMetadata,
-        platform: String,
-        day: String,
+        platform: Platform,
+        day: LocalDate,
     ): Outcome = try {
         buildOutcome(tree, windowTitle, meta, platform, day)
     } catch (e: CancellationException) {
@@ -157,18 +156,20 @@ object SkeletonBuilder {
         tree: UiNode,
         windowTitle: String?,
         meta: ReplayMetadata,
-        platform: String,
-        day: String,
+        platform: Platform,
+        day: LocalDate,
     ): Outcome {
-        // The whole-frame drop runs on the RAW tree and the RAW title, before anything is built.
-        if (SensitiveTextMarkers.findMarker(tree) != null) return Outcome.Refused(Refusal.SENSITIVE_FRAME)
-        if (!windowTitle.isNullOrBlank() && SensitiveTextMarkers.findMarker(windowTitle) != null) {
-            return Outcome.Refused(Refusal.SENSITIVE_TITLE)
+        // The whole-frame drop runs on the RAW tree and the RAW title, before anything is built. A scan
+        // that FAILED (the marker scan's own fail-closed sentinel) is a build failure, not a banking
+        // screen — review GG3: #1146's counters must not report a normalizer defect as a sensitive frame.
+        sensitivity(SensitiveTextMarkers.findMarker(tree), Refusal.SENSITIVE_FRAME)?.let { return Outcome.Refused(it) }
+        if (!windowTitle.isNullOrBlank()) {
+            sensitivity(SensitiveTextMarkers.findMarker(windowTitle), Refusal.SENSITIVE_TITLE)?.let { return Outcome.Refused(it) }
         }
 
         // Frame-level duplicate rule (ADR-0011 §2; #1160 reviews AA1, CC3). Pass 1 runs the per-field
         // filter ONCE per field (memoized per frame, review CC5) and seeds the frame's caught set.
-        val frame = FrameFilter { withholdingStep(it, nodeId = null) }
+        val frame = FrameFilter(::withholdingStep)
         val pending = try {
             frame.scan(tree)
         } catch (_: IllegalArgumentException) {
@@ -189,13 +190,13 @@ object SkeletonBuilder {
                 hashDomain = CensusHash.HASH_DOMAIN,
                 filterRev = FILTER_REV,
                 fingerprint = fingerprint,
-                platform = platform,
+                platform = platform.wire,
                 platformAppVersion = stamp(meta.platformAppVersion),
                 appVersion = stamp(meta.appVersion),
                 rulesetReleaseTag = stamp(meta.rulesetReleaseTag),
                 engineVersion = meta.engineVersion,
                 rulesetFormatVersion = meta.rulesetFormatVersion,
-                day = day,
+                day = DAY_FORMAT.format(day),
                 windowTitle = title?.let { frame.slot(it) },
                 root = root,
             )
@@ -205,6 +206,14 @@ object SkeletonBuilder {
         val measured = SkeletonSchema.measure(item)
         if (measured.bytes > SkeletonSchema.MAX_ITEM_BYTES) return Outcome.Refused(Refusal.OVERSIZE)
         return Outcome.Built(item, measured.json, measured.bytes)
+    }
+
+    private val DAY_FORMAT: DateTimeFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd", Locale.ROOT)
+
+    private fun sensitivity(marker: String?, refusal: Refusal): Refusal? = when (marker) {
+        null -> null
+        SensitiveTextMarkers.NORMALIZE_FAILED -> Refusal.BUILD_FAILED
+        else -> refusal
     }
 
     /**
@@ -275,7 +284,12 @@ object SkeletonBuilder {
 
         private val valueSteps = HashMap<String, Judged>()
         private val valueSlots = HashMap<String, TextSlot>()
+
+        /** Canonical values a VALUE-judging step caught anywhere in the frame (exact equality). */
         private val caught = HashSet<String>()
+
+        /** Letter runs (≥ [MIN_IDENTITY_RUN] letters, case-folded) of identity ids' text/desc (review GG1). */
+        private val identityRuns = HashSet<String>()
 
         fun scan(node: UiNode): Pending {
             // Reviews BB1/BB2/CC1: validate the RAW class and id BEFORE the grammar gates, which would
@@ -305,29 +319,36 @@ object SkeletonBuilder {
             val trimmed = value.trim()
             val canonical = CensusHash.canonical(value)
             val step = valueStep(trimmed, canonical)
-            // Seeds: the value-judging steps 3, 4, 5, 7, 8 on any field — and step 1 ONLY for an IDENTITY
-            // id (`valueIsPii`, review EE1) on its rendered text/desc. Not the length cap (a duplicate is
-            // itself over-length), not a content id (`description_text_view` renders app copy), not an
-            // intake-only id (its list also covers chrome-bearing instruction bodies, review CC3).
-            val valueSeed = step != null && step != FilterStep.LENGTH_CAP
-            val idSeed = idClass == IdClass.PII_VALUE && seedsFromId
-            if (valueSeed || idSeed) caught += canonical
+            // Seeds: (a) a value-judging step 3, 4, 5, 7, 8 on any field, applied by EXACT canonical
+            // equality; (b) step 1 ONLY for an IDENTITY id (`valueIsPii`, review EE1) on its rendered
+            // text/desc, applied by TOKEN CONTAINMENT of its letter runs (review GG1). Not the length cap
+            // (a duplicate is itself over-length), not a content id (`description_text_view` renders app
+            // copy), not an intake-only id (its list also covers chrome instruction bodies, review CC3).
+            if (step != null && step != FilterStep.LENGTH_CAP) caught += canonical
+            if (idClass == IdClass.PII_VALUE && seedsFromId) {
+                caught += canonical
+                letterRuns(canonical).filterTo(identityRuns) { it.length >= MIN_IDENTITY_RUN }
+            }
             return Field(trimmed, canonical, idWithholds = idClass != IdClass.NONE)
         }
 
-        /** Steps 2–8 of [withholdingStep], memoized; a filter failure withholds (fail closed). */
         /**
-         * Review FF1: the value-judging steps run on BOTH the raw trimmed value AND the canonical form —
-         * either hit withholds. Canonicalization alone can shrink a value below a pattern's minimum
-         * (`"ab  cd"` matches QUOTED_NOTE raw, `"ab cd"` does not); the raw form alone is engine-dependent
-         * (an NBSP-split name, review EE2). Memoized by the raw trimmed string, from which the canonical
-         * form is derived, so one memo covers both; the second evaluation is skipped when they are equal.
+         * Steps 2–8, memoized by the raw trimmed string (the canonical form derives from it); a filter
+         * failure withholds (fail closed).
+         *
+         * Reviews FF1 + GG2: the CANONICAL form is judged first and alone decides the length cap (ADR
+         * step 2), so wide-spaced chrome is not capped on its raw padding and a padded "Deliver  to  Sam"
+         * is still caught and seeded. The RAW form is judged too — only when it differs AND is itself
+         * within the cap, so every pattern still sees bounded input — because canonicalization can
+         * shrink a value below a pattern's minimum (`"ab  cd"` is a quoted note raw, `"ab cd"` is not).
+         * Either hit withholds.
          */
         private fun valueStep(trimmed: String, canonical: String = CensusHash.canonical(trimmed)): FilterStep? =
             valueSteps.getOrPut(trimmed) {
                 Judged(
                     try {
-                        judge(trimmed) ?: if (canonical != trimmed) judge(canonical) else null
+                        judge(canonical)
+                            ?: if (trimmed != canonical && trimmed.length <= MAX_TOKEN_LENGTH) judge(trimmed) else null
                     } catch (_: Exception) {
                         FilterStep.PII_SHAPE
                     },
@@ -337,6 +358,7 @@ object SkeletonBuilder {
         /** Pass 2 for one field: the constant `withheld`, or the value's own (memoized) slot. */
         fun slot(field: Field): TextSlot {
             if (field.idWithholds || field.canonical in caught || valueStep(field.trimmed, field.canonical) != null) return TextSlot.WITHHELD
+            if (identityRuns.isNotEmpty() && letterRuns(field.canonical).any { it in identityRuns }) return TextSlot.WITHHELD
             return valueSlots.getOrPut(field.canonical) { unfilteredSlot(field.canonical) }
         }
 
@@ -357,6 +379,31 @@ object SkeletonBuilder {
         }
     }
 
+    /** An identity value contributes only letter runs of at least this many letters (review GG1). */
+    private const val MIN_IDENTITY_RUN = 3
+
+    /**
+     * The value's maximal runs of Unicode letters (code-point based), case-folded — so "Adam's order"
+     * yields `adam`, `s`, `order` and "Adam, 2 items" yields `adam`, `items` (review GG1).
+     */
+    private fun letterRuns(value: String): List<String> {
+        val runs = ArrayList<String>()
+        val sb = StringBuilder()
+        var i = 0
+        while (i < value.length) {
+            val cp = value.codePointAt(i)
+            if (Character.isLetter(cp)) {
+                sb.appendCodePoint(cp)
+            } else if (sb.isNotEmpty()) {
+                runs += sb.toString().lowercase(Locale.ROOT)
+                sb.setLength(0)
+            }
+            i += Character.charCount(cp)
+        }
+        if (sb.isNotEmpty()) runs += sb.toString().lowercase(Locale.ROOT)
+        return runs
+    }
+
     /**
      * Step 6 and the hash, for a value no withholding step caught: only `words:1..8` hash; a digest
      * failure withholds. PRIVATE (review CC5): every caller goes through the frame-level rule.
@@ -373,19 +420,17 @@ object SkeletonBuilder {
     }
 
     /**
-     * The FIRST withholding §2 step that fires on [canonical] (the trimmed, whitespace-normalized value, `CensusHash.canonical`), or null when
-     * none does. ADR order; the length cap (step 2) precedes every text predicate, so steps 3–8 only
-     * ever see ≤ [MAX_TOKEN_LENGTH] characters. Internal for the tests.
+     * The FIRST value-judging §2 step (2–8) that fires on [value], or null when none does. ADR order; the
+     * length cap (step 2) precedes every text predicate, so steps 3–8 only ever see ≤
+     * [MAX_TOKEN_LENGTH] characters. Step 1 is [IdClass] (review GG4). Internal for the tests.
      */
-    internal fun withholdingStep(canonical: String, nodeId: String?): FilterStep? = when {
-        CustomerTextMarkers.hasIdMarkerSuffix(nodeId) -> FilterStep.PII_ID
-        PiiShapes.hasPiiIdSuffix(nodeId) -> FilterStep.PII_ID_INTAKE
-        canonical.length > MAX_TOKEN_LENGTH -> FilterStep.LENGTH_CAP
-        CustomerTextMarkers.unredactedMarker(canonical) != null -> FilterStep.CUSTOMER_MARKER
-        PiiShapes.customerLeadIn(canonical) != null -> FilterStep.LEAD_IN
-        PiiShapes.containsMask(canonical) -> FilterStep.MASK
-        PiiShapes.hasNameShape(canonical) -> FilterStep.NAME_SHAPE
-        PiiShapes.VALUE_SHAPES.any { it.hits(canonical) } -> FilterStep.PII_SHAPE
+    internal fun withholdingStep(value: String): FilterStep? = when {
+        value.length > MAX_TOKEN_LENGTH -> FilterStep.LENGTH_CAP
+        CustomerTextMarkers.unredactedMarker(value) != null -> FilterStep.CUSTOMER_MARKER
+        PiiShapes.customerLeadIn(value) != null -> FilterStep.LEAD_IN
+        PiiShapes.containsMask(value) -> FilterStep.MASK
+        PiiShapes.hasNameShape(value) -> FilterStep.NAME_SHAPE
+        PiiShapes.VALUE_SHAPES.any { it.hits(value) } -> FilterStep.PII_SHAPE
         else -> null
     }
 }
