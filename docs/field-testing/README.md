@@ -99,6 +99,18 @@ _(The 2026-09-26 entry below **validated and retired** the **#1118** transition-
 clean runs (10/10 + 5/5 accepts inferred from the task surface, 44/44 + 12/12 declines from the confirm sheet, zero
 over-inference); the remaining accept losses are #1119 and the merged card is #1069.)_
 
+- **🆕 NEW — frames keep flowing while the bubble is the active window (#1148).** Content and state
+  changes are now snapshotted from the EVENT's own window (active-root fallback) and coalesced per
+  window (quiet 150 ms / scheduled max-wait 300 ms). Before, a DoorDash content change was rejected
+  whenever our bubble was the active window. **No dash needed:** open DoorDash with the bubble showing,
+  tap the bubble so it is active, then scroll / interact with DoorDash. **How to tell it works:**
+  1. `SCREEN:` VERBOSE lines (and DEBUG captures) keep appearing for DoorDash while the bubble is
+     active — bubble-active frames used to be dropped (`🚫 Skip active window (pre-map)`).
+  2. `💧 DRIP: window=<id> types=0x.. n=<k> span=<ms>ms` DEBUG lines: during a continuous scroll, at
+     most one per ~300 ms per window, and one trailing DRIP after the scroll stops (the settled frame).
+  3. The `PipelineStats` summary shows no new `mappingFailures`.
+  - Issue: #1148. Confirmed: 0/2
+
 - **🆕 NEW — the 8.98.5 drop-off sheet masks on every render that keeps a stable row (#1122 + #1123).** The 09-20 pull
   shipped two Pledge leaks from the same sheet: a raw customer name in the bottom bar of a
   `dropoff_pre_arrival` envelope (the id-less node the rule's id-anchored entry never saw — #1123),

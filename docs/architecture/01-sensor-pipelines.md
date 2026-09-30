@@ -10,7 +10,7 @@
 
 `AccessibilityListener` / `AccessibilitySource` capture raw Android `AccessibilityEvent`s;
 `AccessibilityNodeMapper` normalizes window content into an immutable `UiNode` tree (defined in
-`:domain`). Per-event-type sub-pipelines (`ContentChangedPipeline` — debounced,
+`:domain`). Per-event-type sub-pipelines (`ContentChangedPipeline` — coalesced per window, #1148,
 `StateChangedPipeline`, `WindowsChangedPipeline`, plus click handling in `AccessibilityPipeline`)
 and a parallel `NotificationPipeline` (`NotificationListener` → `NotificationFilter` →
 `NotificationMapper`) emit `PipelineEvent`s. `AccessibilityPipeline.output()` drops in stages:
@@ -212,6 +212,62 @@ periodic `PipelineStats` summary** as `app=<versionName>` — injected through t
 `@Named("appVersionName")` seam `ReplayMetadataProviderImpl` uses, so `:core:pipeline` never sees
 `:app`'s `BuildConfig`. A field-data pull reads the build off any log line instead of inferring it
 from which lines are absent.
+
+**Ingestion: envelope, coalescer, window-specific snapshots (#1148).** Receipt: the 2026-09-21
+TalkBack study (`~/dashbuddy/research/talkback-study/ASTRA-REPORT.md`, wins 4 + 5 — the first
+filing from that study). Four decisions decide *which frames the pipeline ever sees*:
+
+- **D1 — immutable event envelope.** The framework owns the `AccessibilityEvent` handed to
+  `onAccessibilityEvent` and may reuse it after the callback returns, while our shared flow is
+  BUFFERED (`extraBufferCapacity = 64`) and read later. `AccessibilitySource.emit` therefore copies
+  the scalars into an `AccEvent` (`type`, `windowId`, `packageName`, `className`,
+  `contentChangeTypes`, `windowChanges`, `eventTimeMs`) at the callback — `AccEvent.from` is the one
+  construction site — and `AccessibilitySource.events` is a `SharedFlow<AccEvent>`. The clicked node
+  is resolved at emit time ONLY for `TYPE_VIEW_CLICKED` (`SourceNodeRef`, mapped with `toUiNode()`
+  exactly as before); every other type carries `source = null`. TalkBack copies before queuing; this
+  is that ownership rule, not a fix for an observed failure.
+- **D2 — listener gate.** `ListenerGate.admit` (pure, unit-tested) admits `TYPE_WINDOWS_CHANGED`
+  with ANY package, including null — the system fires the topology event with no package, so the
+  old event-package gate meant the windows pipeline never saw it. Every other handled type keeps the
+  enabled-package gate. Package scope for the windows path is enforced on the FETCHED roots
+  (`WindowsChangedPipeline` skips any root outside `Platform.watchedPackages`); the #4 guard is
+  unchanged.
+- **D3 — per-key coalescer.** `coalesceByKey(quietMs, maxWaitMs, keyOf, merge)`
+  (`event/coalesce/CoalesceByKey.kt`) replaced `debounceWithTimeout`. Per key, a burst opens on the
+  first event, folds every event into an accumulator, and emits when EITHER the quiet gap elapses
+  OR the max-wait since the burst OPENED elapses — a SCHEDULED timer that fires with no arrival.
+  After a max-wait emission the burst closes, so a continuing flood emits at most every max-wait
+  and the final quiet always yields a trailing frame; there is no leading edge (it would double the
+  snapshots). Timing is coroutine `delay` only (monotonic, virtual-time tested); the open-burst map
+  is capped at 64 keys, flushing (never dropping) the least-recently-touched burst with one WARN.
+  `ContentChangedPipeline` keys on `windowId` (quiet 150 ms / max 300 ms) with a `CoalescedChange`
+  accumulator that owns the OR of the `contentChangeTypes` bits (the old `pendingChangeTypes`
+  AtomicInteger logged and discarded them); `WindowsChangedPipeline` uses the same shape on one key
+  (quiet 100 ms / max 300 ms), replacing `debounce(100)`, which could starve under a continuous
+  topology flood. **Correction of the record about the old operator:** its max-wait was checked
+  only when the NEXT event arrived (arrival-driven, not scheduled) and it read the wall clock
+  (`System.currentTimeMillis()`), and it coalesced globally across windows — but its trailing
+  emission was NOT lost (the `collectLatest` delay completed after the burst stopped); an earlier
+  claim that a stopped burst lost its trailing frame was wrong.
+- **D4 — window-specific snapshots.** Content and state changes snapshot the EVENT's window, not
+  the active one: with our bubble active, a DoorDash content change used to be rejected pre-map
+  even though the DoorDash window still existed. One resolver (`snapshotForEventWindow`) owns the
+  order: (1) `windowId >= 0` → pre-map `getWindowPackage(windowId)` (root only, the #435 item-3
+  check); a non-target package is skipped without mapping, a target one is read with
+  `getWindowSnapshot(windowId)`; (2) window unavailable (no id, gone, no root, map failure) →
+  the old active-root path (`getActiveWindowPackage` pre-map → `getCurrentRootSnapshot`);
+  (3) the post-map `snapshot.packageName in Platform.watchedPackages` re-check stays. Every
+  snapshot now carries a `TreeSnapshot.WindowContext` (one builder, `AccessibilitySource.contextOf`;
+  the active-root path locates the active window in `service.windows`), and `TreeSnapshot.trigger`
+  records the reason (`CONTENT`/`STATE`/`WINDOWS`), OR-ed change bits, coalesced-event count and
+  span — consumed by the `💧 DRIP` DEBUG log and available to the census (#1138); it is
+  deliberately NOT in the capture envelope. The existing envelope `windowContext` field is now
+  populated on content/state frames too (window id/type/layer/title/active/focused/count — window
+  metadata, no node text).
+
+Not in #1148: `notificationTimeout` (stays 100 ms), TalkBack's subtree-only / focus-gated filters
+(they discard observer evidence), `TYPE_ANNOUNCEMENT`/text events, and any change to `FrameGate`,
+`Observation.identity()`, the classifier or the capture envelope schema.
 
 **The whole recognition + text-scrub layer assumes an ENGLISH device (#938).** Rule anchors and
 BOTH text-marker SSOTs (`SensitiveTextMarkers.KEYWORDS`, `CustomerTextMarkers.MARKERS`) are literal

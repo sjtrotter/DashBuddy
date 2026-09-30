@@ -228,7 +228,7 @@ Full reference: [`docs/architecture/01-sensor-pipelines.md`](docs/architecture/0
 
 `AccessibilityListener`/`AccessibilitySource` capture `AccessibilityEvent`s; `AccessibilityNodeMapper`
 normalizes a window into an immutable `UiNode` tree (`:domain`). Per-event-type sub-pipelines
-(`ContentChangedPipeline` debounced, `StateChangedPipeline`, `WindowsChangedPipeline`, clicks) and the
+(`ContentChangedPipeline` coalesced per window (quiet 150 ms / max 300 ms, #1148); snapshots are taken from the EVENT's window, active-root fallback; `StateChangedPipeline`, `WindowsChangedPipeline`, clicks) and the
 parallel `NotificationPipeline` emit `PipelineEvent`s. `AccessibilityPipeline.output()` gates in order:
 **rulesets-not-loaded** (fail-closed, #432) → **sensitive/noise** (#399) → **disabled platform** →
 **UNKNOWN** (captured to disk for triage, never forwarded to the state machine). Snapshots are attributed
