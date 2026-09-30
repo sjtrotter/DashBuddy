@@ -259,4 +259,32 @@ class WindowsChangedOverlayTest {
         assertEquals(listOf("uber-offer"), out.map { it.tree.text })
         assertEquals(1L, stats.overlaySnapshotCount())
     }
+
+    // --- PR #1155 review round 2 ---------------------------------------------------------------
+
+    @Test
+    fun `CC3 - activity, its sheet above, an enabled overlay above both - ONLY the overlay`() {
+        val out = emitted(
+            listOf(
+                window(3, 2, node(ddPkg, "dd-activity"), active = true),
+                window(7, 5, node(ddPkg, "dd-sheet")),
+                system(9, 9, node(uberPkg, "uber-offer"), OverlayGeometry.UBER_OFFER),
+            ),
+            enabled = setOf(ddPkg, uberPkg),
+        )
+        assertEquals(listOf("uber-offer"), out.map { it.tree.text })
+    }
+
+    @Test
+    fun `CC3 - two stacked enabled overlays - the top one only`() {
+        val out = emitted(
+            listOf(
+                window(3, 2, node(ddPkg, "dd"), active = true),
+                system(9, 9, node(uberPkg, "uber-offer-low"), OverlayGeometry.UBER_OFFER),
+                system(11, 11, node(uberPkg, "uber-offer-top"), OverlayGeometry.UBER_OFFER),
+            ),
+            enabled = setOf(ddPkg, uberPkg),
+        )
+        assertEquals(listOf("uber-offer-top"), out.map { it.tree.text })
+    }
 }

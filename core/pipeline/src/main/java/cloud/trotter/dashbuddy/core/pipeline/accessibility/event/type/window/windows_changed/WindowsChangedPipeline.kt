@@ -7,7 +7,6 @@ import cloud.trotter.dashbuddy.core.pipeline.PipelineStats
 import cloud.trotter.dashbuddy.core.pipeline.accessibility.TreeSnapshot
 import cloud.trotter.dashbuddy.core.pipeline.accessibility.input.AccessibilitySource
 import cloud.trotter.dashbuddy.domain.settings.PlatformPreferences
-import cloud.trotter.dashbuddy.domain.state.Platform
 import cloud.trotter.dashbuddy.core.pipeline.accessibility.event.coalesce.coalesceByKey
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.filter
@@ -22,18 +21,20 @@ import javax.inject.Inject
  *
  * Unlike ContentChanged/StateChanged, which snapshot ONE window per frame (the active enabled
  * window, else the readable enabled window in front — #1148), this pipeline enumerates the window
- * list and snapshots TRUE OVERLAYS only (#1148 review G6/H6): ENABLED-package application windows
- * and ENABLED platform offer overlays (a11y `TYPE_SYSTEM`, size + package —
- * [AccessibilitySource.isOverlayCandidate], #1152 D6) above a cutoff, never one beneath it — that would re-open the interleaving the resolver removed
- * (the activity under an active DoorDash sheet). The cutoff:
+ * list and snapshots at most ONE window per burst (#1148 review G6/H6; PR #1155 review CC2/CC3): the
+ * window in FRONT above a cutoff — an ENABLED application window or an ENABLED platform offer overlay
+ * (a11y `TYPE_SYSTEM`, size + package, #1152 D6) — never one beneath it, and never two (that would
+ * re-open the interleaving the resolver removed). The cutoff:
  * - the ACTIVE window's layer, when the active window is not our own;
  * - when OUR bubble is active (its layer would suppress everything beneath it), the window
  *   [AccessibilitySource.foregroundWindow] reads — the topmost non-own enabled application window
  *   or platform offer overlay — is emitted itself (nothing non-own sits above it by construction); if the foreground is
  *   refused, nothing is emitted.
- * Candidates match [AccessibilitySource.foregroundWindow]: `TYPE_APPLICATION` windows plus platform
- * offer overlays (every other system-layer window — the status bar, a platform's small puck or
- * toast, the notification shade — is not, review H1 / #1152 D2), never picture-in-picture (H2).
+ * Above the active window the walk is [AccessibilitySource.frontAbove] — the SAME readable-top-or-
+ * refuse rule as [AccessibilitySource.foregroundWindow]: `TYPE_APPLICATION` windows plus platform offer
+ * overlays (every other system-layer window — the status bar, a platform's small puck or toast, the
+ * notification shade — is not, review H1 / #1152 D2), never picture-in-picture (H2), our own skipped;
+ * the first decides, and an unreadable window is a barrier (nothing beneath it is emitted).
  * No active window → nothing (accepted: the event-driven pipelines still cover that case).
  * Every overlay emitted is counted (`PipelineStats.onOverlaySnapshot`).
  */
@@ -104,33 +105,17 @@ class WindowsChangedPipeline @Inject constructor(
                 }
                 return@transform
             }
-            for (w in windows) {
-                if (w.isActive || w.layer <= active.layer) continue // never beneath the active window
-                if (w.isInPictureInPictureMode) continue // H2: a PiP (e.g. Maps) is never a platform frame
-                val isOverlay: Boolean
-                val nativeRoot: AccessibilityNodeInfo = when (w.type) {
-                    AccessibilityWindowInfo.TYPE_APPLICATION -> {
-                        isOverlay = false
-                        w.root ?: continue
-                    }
-                    AccessibilityWindowInfo.TYPE_SYSTEM -> {
-                        // #1152 D6: only a platform offer overlay (size, then package) — never the
-                        // status bar, a puck or toast (no root fetch), nor the notification shade.
-                        // An unreadable large window (BB1) has nothing to emit — skipped here; the
-                        // foreground read refuses on it.
-                        val probe = source.overlayProbe(w, displayArea) as? AccessibilitySource.OverlayProbe.Candidate ?: continue
-                        if (probe.packageName !in enabled) continue // a disabled overlay platform is never mapped
-                        isOverlay = true
-                        probe.root ?: w.root ?: continue
-                    }
-                    else -> continue // H1: IME, accessibility overlays, split-screen divider
-                }
-                // Pre-map package read on the native root (#435 item 3): only ENABLED platforms —
-                // never our own bubble or other apps (#4).
-                val livePkg = nativeRoot.packageName?.toString()
-                if (livePkg !in enabled) continue
-                if (isOverlay && livePkg !in Platform.overlayPackages) continue // re-verified on the mapped root
-                snapshotOf(w, nativeRoot, isOverlay)?.let { emit(it) }
+            // PR #1155 review CC2/CC3: ONE winner, the same one the event path would pick — the
+            // readable-top-or-refuse walk over every window ABOVE the active one
+            // ([AccessibilitySource.frontAbove]). An enabled overlay over a covered DoorDash sheet
+            // emits the overlay only (never both — that re-opened the interleaving); an unreadable
+            // window (application, or a LARGE system window) above is a BARRIER — nothing beneath it
+            // is emitted; a foreign application window on top emits nothing.
+            when (val front = source.frontAbove(windows, active) { it in enabled }) {
+                is AccessibilitySource.Foreground.Found ->
+                    snapshotOf(front.located.window, front.located.root, front.located.isOverlay)?.let { emit(it) }
+                is AccessibilitySource.Foreground.Refused ->
+                    Timber.tag("Pipeline").v("🚫 Windows: nothing emitted above the active window (%s)", front.reason)
             }
         }
 }
