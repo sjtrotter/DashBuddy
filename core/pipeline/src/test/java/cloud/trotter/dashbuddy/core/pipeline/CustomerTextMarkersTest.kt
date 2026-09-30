@@ -370,19 +370,22 @@ class CustomerTextMarkersTest {
     }
 
     @Test
-    fun `ID_MARKERS is byte-for-byte the pre-#1160-EE1 suffix list (the runtime backstop is unchanged)`() {
+    fun `ID_MARKERS is the pinned suffix list - EE1 unchanged, NN2 deliberately added order_cx_name`() {
         assertEquals(
             listOf(
                 "customer_name", "user_name", "address_line_1", "address_line_2", "arriving_at_title",
                 "address_subpremise_line", "dasher_instruction_content_collapsed",
                 "dasher_instruction_content_expanded", "description_text_view",
+                // #1160 review NN2 — deliberately ADDED: the GoPuff per-order customer name, promoted
+                // from the intake list so the runtime UNKNOWN scrub covers it too.
+                "order_cx_name",
             ),
             CustomerTextMarkers.ID_MARKERS,
         )
         assertEquals(
             mapOf(
                 "customer_name" to CustomerTextMarkers.IdentityKind.NAME,
-                "user_name" to CustomerTextMarkers.IdentityKind.CONTENT,
+                "user_name" to CustomerTextMarkers.IdentityKind.NAME,
                 "address_line_1" to CustomerTextMarkers.IdentityKind.ADDRESS,
                 "address_line_2" to CustomerTextMarkers.IdentityKind.ADDRESS,
                 "arriving_at_title" to CustomerTextMarkers.IdentityKind.ADDRESS,
@@ -390,6 +393,7 @@ class CustomerTextMarkersTest {
                 "dasher_instruction_content_collapsed" to CustomerTextMarkers.IdentityKind.CONTENT,
                 "dasher_instruction_content_expanded" to CustomerTextMarkers.IdentityKind.CONTENT,
                 "description_text_view" to CustomerTextMarkers.IdentityKind.CONTENT,
+                "order_cx_name" to CustomerTextMarkers.IdentityKind.NAME,
             ),
             CustomerTextMarkers.ID_MARKER_TABLE.associate { it.suffix to it.kind },
         )

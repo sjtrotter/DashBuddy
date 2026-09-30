@@ -138,11 +138,14 @@ object CustomerTextMarkers {
      * absent, so a replayed UNKNOWN frame keeps its shape for triage.
      *
      * The table carries, per suffix, the KIND of value the node holds (#1160 reviews EE1, LL1):
-     * `NAME` — a person's name (`customer_name`); `ADDRESS` — a place (the address lines,
-     * `arriving_at_title`, `address_subpremise_line`); `CONTENT` — a node that can hold customer text but
-     * is also reused for app copy or other people (`user_name`, which also carries the merchant's and the
-     * dasher's own name; the free-text instruction bodies; `description_text_view`, which this file
-     * documents as generic DoorDash chrome). The runtime backstop scrubs on EVERY suffix exactly as
+     * `NAME` — a person's name (`customer_name`, `order_cx_name`, and `user_name` — which is also reused
+     * for the merchant's and the dasher's own name; withholding a store name costs the census nothing,
+     * since recognition never anchors on merchant names, #1160 review NN1); `ADDRESS` — a place (the
+     * address lines, `arriving_at_title`, `address_subpremise_line`); `CONTENT` — a node that can hold
+     * customer text but is also reused for app copy (the free-text instruction bodies;
+     * `description_text_view`, which this file documents as generic DoorDash chrome). The intake list
+     * (`PiiShapes.PII_ID_SUFFIXES`) holds only content/instruction ids plus this table's suffixes, so the
+     * two never disagree on a name id (#1160 review NN2). The runtime backstop scrubs on EVERY suffix exactly as
      * before; only the census's frame-wide duplicate rule reads the kind: a NAME seeds its exact value
      * and its letter runs, an ADDRESS its exact value only (address vocabulary — "Road", "View", "San" —
      * is common English), CONTENT seeds nothing.
@@ -152,10 +155,12 @@ object CustomerTextMarkers {
         IdMarker("customer_name", IdentityKind.NAME),
         // DoorDash drop-off + pickup contact blocks -> customer name (the node the
         // "Delivery for" label sibling names; #910 V5).
-        // NOT an identity id for the census (#1160 review GG5): the class KDoc records it is REUSED for
-        // the MERCHANT on pickup cards and for the dasher's own name — seeding it frame-wide would
-        // withhold a store header (merchant names are not PII). Its own field is still scrubbed.
-        IdMarker("user_name", IdentityKind.CONTENT),
+        // A NAME for the census (#1160 review NN1, reversing GG5): the class KDoc records it is REUSED for
+        // the MERCHANT on pickup cards and for the dasher's own name, so a store header may be withheld
+        // frame-wide on a pickup frame — not a loss: recognition never anchors on a merchant name
+        // (platform chrome only), so a store name is not vocabulary the census needs, while a customer's
+        // bare first name under this id must never hash where the contact block repeats it id-less.
+        IdMarker("user_name", IdentityKind.NAME),
         // DoorDash address block -> street line and city/ST/ZIP line (#910 V1/V5).
         IdMarker("address_line_1", IdentityKind.ADDRESS),
         IdMarker("address_line_2", IdentityKind.ADDRESS),
@@ -200,6 +205,11 @@ object CustomerTextMarkers {
         // unrecognized frame — the same fail-toward-privacy trade `arriving_at_title` already
         // documents for a pickup-leg merchant line — and no recognized frame's kept text moves.
         IdMarker("description_text_view", IdentityKind.CONTENT),
+        // #1160 review NN2: GoPuff (DoorDash Drive) batch screens' per-order CUSTOMER name (#501) — until
+        // now only in the intake list (`PiiShapes.PII_ID_SUFFIXES`), so the runtime UNKNOWN scrub missed
+        // it and the census could hash its frame duplicates. Promoted so the two SSOTs agree on "what is
+        // a customer-name id"; the runtime scrub widens by this one suffix (fail toward privacy).
+        IdMarker("order_cx_name", IdentityKind.NAME),
     )
 
     /** One [ID_MARKER_TABLE] row. */
