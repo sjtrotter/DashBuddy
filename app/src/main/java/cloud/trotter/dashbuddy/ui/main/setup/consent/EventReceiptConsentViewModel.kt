@@ -52,15 +52,24 @@ class EventReceiptConsentViewModel internal constructor(
 data class EventReceiptConsentUiState(
     /** Ask the dasher: the store has been read and nothing is decided yet. */
     val showPrompt: Boolean = false,
-    /** Debug build AND declined: the Dashboard is replaced by the blocking notice. */
+    /** Debug build AND declined: every destination is replaced by the blocking shell. */
     val blocked: Boolean = false,
-)
+    /**
+     * Debug build AND the store not read yet (review MM3): the shell renders a neutral gate — no
+     * NavHost, no deep-link consumption — until the value is known, so a persisted DECLINED can
+     * never be raced by a frame of the real app. Always false in release.
+     */
+    val loading: Boolean = false,
+) {
+    /** The NavHost (and deep-link delivery) may run. */
+    val navigable: Boolean get() = !blocked && !loading
+}
 
 /**
- * The pure projection (testable without Android). A `null` [consent] (store not read yet) shows
- * nothing, so a decided dasher never sees the sheet flash during the first read; the block is
- * reachable ONLY when [isDebugBuild] AND the dasher explicitly DECLINED — a release decline keeps
- * the app fully usable.
+ * The pure projection (testable without Android). A `null` [consent] (store not read yet) shows no
+ * prompt, so a decided dasher never sees the sheet flash; in a DEBUG build it is [loading] — the
+ * shell fails CLOSED until the value is known. The block is reachable ONLY when [isDebugBuild] AND
+ * the dasher explicitly DECLINED — a release build is never blocked and never gated.
  */
 fun buildEventReceiptConsentState(
     consent: EventReceiptConsent?,
@@ -68,4 +77,5 @@ fun buildEventReceiptConsentState(
 ): EventReceiptConsentUiState = EventReceiptConsentUiState(
     showPrompt = consent == EventReceiptConsent.UNDECIDED,
     blocked = isDebugBuild && consent == EventReceiptConsent.DECLINED,
+    loading = isDebugBuild && consent == null,
 )

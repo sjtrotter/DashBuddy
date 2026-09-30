@@ -49,6 +49,16 @@ fun DebugEventReceiptShell(onExit: () -> Unit) {
     }
 }
 
+/**
+ * Review MM3 — the neutral gate a DEBUG build shows while the consent is not read yet: no NavHost,
+ * no route consumption, nothing to tap. Resolves to the app or [DebugEventReceiptShell] within the
+ * first store read.
+ */
+@Composable
+fun DebugEventReceiptLoading() {
+    Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {}
+}
+
 /** The debug block's full-screen notice (see [DebugEventReceiptShell]). */
 @Composable
 fun DebugEventReceiptBlock(

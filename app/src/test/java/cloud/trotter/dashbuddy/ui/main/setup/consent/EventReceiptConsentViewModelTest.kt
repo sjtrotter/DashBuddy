@@ -58,7 +58,29 @@ class EventReceiptConsentViewModelTest {
     @Test
     fun `the prompt never flashes before the store is read`() {
         for (debug in listOf(true, false)) {
-            assertEquals(EventReceiptConsentUiState(), buildEventReceiptConsentState(null, debug))
+            assertFalse(buildEventReceiptConsentState(null, debug).showPrompt)
+        }
+    }
+
+    @Test
+    fun `before the read a debug shell is loading - not blocked, not navigable - and release is untouched`() {
+        val debug = buildEventReceiptConsentState(null, isDebugBuild = true)
+        assertTrue(debug.loading)
+        assertFalse(debug.blocked)
+        assertFalse(debug.navigable)
+
+        assertEquals(EventReceiptConsentUiState(), buildEventReceiptConsentState(null, isDebugBuild = false))
+        assertTrue(buildEventReceiptConsentState(null, isDebugBuild = false).navigable)
+    }
+
+    @Test
+    fun `a known value is never loading`() {
+        for (consent in EventReceiptConsent.entries) {
+            for (debug in listOf(true, false)) {
+                val s = buildEventReceiptConsentState(consent, debug)
+                assertFalse(s.loading)
+                assertEquals(!s.blocked, s.navigable)
+            }
         }
     }
 
@@ -110,14 +132,11 @@ class EventReceiptConsentViewModelTest {
             val prefs = FakePrefs(null)
             val vm = EventReceiptConsentViewModel(prefs, isDebugBuild = debug)
             prefs.consentFlow.value = EventReceiptConsent.UNDECIDED
-            assertTrue(vm.uiState.first { it != EventReceiptConsentUiState() }.showPrompt)
+            assertTrue(vm.uiState.first { it.showPrompt }.showPrompt)
 
             prefs.consentFlow.value = EventReceiptConsent.DECLINED
             val declined = vm.uiState.first { !it.showPrompt }
             assertEquals("debug=$debug", EventReceiptConsentUiState(blocked = debug), declined)
-            if (debug) {
-                assertTrue(vm.uiState.first { it != EventReceiptConsentUiState() }.blocked)
-            }
         }
     }
 

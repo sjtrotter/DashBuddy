@@ -39,6 +39,7 @@ import cloud.trotter.dashbuddy.feature.settings.GeneralSettingsScreen
 import cloud.trotter.dashbuddy.feature.settings.PlatformSettingsScreen
 import cloud.trotter.dashbuddy.ui.main.settings.SettingsHomeScreen
 import cloud.trotter.dashbuddy.feature.settings.StrategySettingsScreen
+import cloud.trotter.dashbuddy.ui.main.setup.consent.DebugEventReceiptLoading
 import cloud.trotter.dashbuddy.ui.main.setup.consent.DebugEventReceiptShell
 import cloud.trotter.dashbuddy.ui.main.setup.consent.EventReceiptConsentViewModel
 import cloud.trotter.dashbuddy.ui.main.setup.consent.FrontDoorViewModel
@@ -84,6 +85,11 @@ class MainActivity : ComponentActivity() {
                 // the block host, plus Exit. The bubble HUD is a separate service and keeps running.
                 val eventReceiptViewModel: EventReceiptConsentViewModel = hiltViewModel()
                 val eventReceipt by eventReceiptViewModel.uiState.collectAsStateWithLifecycle()
+                // MM3: in DEBUG the shell fails CLOSED until the value is read (release: never).
+                if (eventReceipt.loading) {
+                    DebugEventReceiptLoading()
+                    return@DashBuddyTheme
+                }
                 if (eventReceipt.blocked) {
                     DebugEventReceiptShell(onExit = { finishAffinity() })
                     return@DashBuddyTheme
