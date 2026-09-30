@@ -287,7 +287,8 @@ vets them (#192's open question 7 — who reviews — and its Phase C — CONTRI
 census (#1138, ADR-0011) changes who does what while leaving every gate in place:
 
 - **Rules are drafted, not authored.** A cluster of unrecognized screen shapes crosses a threshold
-  on the census server → a shape bundle (skeleton + chrome vocabulary) → a drafting agent proposes a
+  on the census server → a shape bundle (skeleton + the operator's WORKING vocabulary, resolved under
+  ADR-0011's `k_unblind`; the SHIPPED vocabulary is a separate, `k_ship`-gated list) → a drafting agent proposes a
   rule, a synthetic positive fixture (the skeleton re-inflated with vocabulary tokens and pseudonym
   placeholders — the corpus tools already accept hand-pseudonymized fixtures) and a negative
   fixture → a matchers PR.
