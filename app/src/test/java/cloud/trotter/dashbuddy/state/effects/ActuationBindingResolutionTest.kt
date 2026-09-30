@@ -7,6 +7,7 @@ import cloud.trotter.dashbuddy.domain.model.accessibility.UiNode
 import cloud.trotter.dashbuddy.domain.pipeline.NodeRef
 import cloud.trotter.dashbuddy.test.util.TestResourceLoader
 import cloud.trotter.dashbuddy.test.util.TestRulesetFactory
+import cloud.trotter.dashbuddy.util.AccNodeUtils
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
@@ -41,6 +42,15 @@ import org.junit.Test
  *  - labels = the node's own text/contentDescription + its bounded subtree's
  *    (depth 3, 24 nodes) — the same walk as `collectLabels`.
  *  - decision = `ClickCandidateRanker.rank`, then the handler's tie rule.
+ *  - #1149: every candidate is mapped to its action OWNER (nearest clickable self/ancestor, at
+ *    most [AccNodeUtils.MAX_OWNER_WALK] steps — a `UiNode` carries no action list, so
+ *    "clickable" is `isClickable` here), owner-less candidates are dropped, candidates sharing an
+ *    owner are deduped, labels are collected on the owner, and a compound owner (>= 2 labeled
+ *    clickable controls in its bounded subtree) is refused.
+ *  - #1149 strategy 2b (`semantic = true`, the production order): a hinted ref is re-found by
+ *    its subtree labels BEFORE the bounds walk. The #1093 strategy-3 tests below pass
+ *    `semantic = false` to pin the bounds walk in isolation — it is exactly what production runs
+ *    when 2b finds nothing.
  */
 class ActuationBindingResolutionTest {
 
@@ -74,11 +84,12 @@ class ActuationBindingResolutionTest {
      */
     private data class Cand(
         val node: UiNode, val boundsDerived: Boolean = false, val relaxed: Boolean = false,
+        val semantic: Boolean = false,
         /** Indices (into the returned list) of bounds-derived candidates this one is nested inside. */
         val ancestors: List<Int> = emptyList(),
     )
 
-    private fun findCandidates(tree: UiNode, ref: NodeRef): List<Cand> {
+    private fun findCandidates(tree: UiNode, ref: NodeRef, semantic: Boolean = false): List<Cand> {
         ref.viewIdSuffix?.takeIf { it.isNotEmpty() }?.let { id ->
             val byId = tree.findNodes { it.viewIdResourceName == id }
             if (byId.isNotEmpty()) return byId.map { Cand(it) }
@@ -86,6 +97,24 @@ class ActuationBindingResolutionTest {
         ref.text?.takeIf { it.isNotEmpty() }?.let { txt ->
             val byText = tree.findNodes { (it.text?.contains(txt, ignoreCase = true) == true) }
             if (byText.isNotEmpty()) return byText.map { Cand(it) }
+        }
+        if (semantic && ref.labelHintHashes.isNotEmpty()) {
+            // Mirror of `findNodeBySemantics` (#1149): clickable, class-matching, every hint present in
+            // the node's bounded subtree labels; depth/node bounded; always descends, records nesting.
+            val hits = mutableListOf<Cand>()
+            val path = ArrayList<Int>()
+            var visited = 0
+            fun walk(node: UiNode, depth: Int) {
+                if (depth > UiInteractionHandler.SEMANTIC_SCAN_DEPTH || visited >= UiInteractionHandler.SEMANTIC_SCAN_NODES) return
+                visited++
+                val classOk = ref.classNameHint == null || node.className == ref.classNameHint
+                val hit = classOk && node.isClickable && ref.agreesWithLabels(collectLabels(node))
+                if (hit) { hits += Cand(node, semantic = true, ancestors = path.toList()); path.add(hits.size - 1) }
+                node.children.forEach { walk(it, depth + 1) }
+                if (hit) path.removeAt(path.size - 1)
+            }
+            walk(tree, 0)
+            if (hits.isNotEmpty()) return hits
         }
         val b = ref.boundsInScreen
         if (b.right <= b.left || b.bottom <= b.top) return emptyList() // degenerate rect: walk skipped
@@ -114,35 +143,100 @@ class ActuationBindingResolutionTest {
      * Replay the full handler resolution: candidate set → label verification →
      * [ClickCandidateRanker] → the handler's tie rule.
      */
-    private fun resolve(tree: UiNode, ref: NodeRef, expectation: TargetExpectation): Resolution {
-        val candidates = findCandidates(tree, ref)
-        val verifiedIdx = candidates.withIndex().filter { (_, c) ->
-            val labels = collectLabels(c.node)
-            // #1093: a bounds-derived candidate must carry the bind's own subtree labels (a
-            // hint-less ref admits an exact match only) — the handler's gate, mirrored.
-            val identified = !c.boundsDerived ||
-                (if (ref.labelHintHashes.isEmpty()) !c.relaxed else ref.agreesWithLabels(labels))
-            identified && expectation.matchesLabels(labels)
+    /**
+     * Mirror of `AccNodeUtils.resolveActionOwner` over a UiNode (parent pointers from `restoreParents`).
+     *
+     * [clickabilityKnown] = false for the legacy January 2026 bare-DTO fixtures, which spell the flag
+     * `"clickable"` where `UiNodeDto` reads `isClickable` — every node of such a tree loads as
+     * non-clickable (a fixture-format artifact: the live Button owning the prism title IS clickable in
+     * the raw JSON). With no clickability evidence the mirror keeps the pre-#1149 shape (the node is
+     * its own owner) instead of reporting every legacy candidate owner-less.
+     */
+    private fun ownerOf(node: UiNode, clickabilityKnown: Boolean): UiNode? {
+        if (!clickabilityKnown) return node
+        var current: UiNode? = node
+        var steps = 0
+        while (current != null && steps < AccNodeUtils.MAX_OWNER_WALK) {
+            if (current.isClickable) return current
+            current = current.parent
+            steps++
+        }
+        return null
+    }
+
+    /** Mirror of `UiInteractionHandler.isCompoundOwner`. */
+    private fun isCompound(owner: UiNode): Boolean {
+        var labeled = 0
+        var visited = 0
+        fun visit(n: UiNode, depth: Int) {
+            for (child in n.children) {
+                if (labeled >= 2 || depth + 1 > 3 || visited >= 24) return
+                visited++
+                if (child.isClickable) {
+                    if (collectLabels(child).any { NodeRef.hintKeyOrNull(it) != null }) labeled++
+                    continue
+                }
+                visit(child, depth + 1)
+            }
+        }
+        visit(owner, 0)
+        return labeled >= 2
+    }
+
+    /**
+     * Replay the full handler resolution: candidate set → owner resolution + dedupe (#1149) → label
+     * verification on the owner → compound refusal → nested abort → [ClickCandidateRanker] → the
+     * handler's tie rule. [Resolution.resolved] is the matched EVIDENCE node (the ranker's text/bounds
+     * source); the click itself lands on its owner.
+     */
+    private fun resolve(tree: UiNode, ref: NodeRef, expectation: TargetExpectation, semantic: Boolean = false): Resolution {
+        val candidates = findCandidates(tree, ref, semantic)
+        // Owner resolution + dedupe (identity: a UiNode's equals ignores children).
+        val owners = mutableListOf<UiNode>()
+        val members = mutableListOf<MutableList<Int>>()
+        val ownerIndexOf = arrayOfNulls<Int>(candidates.size)
+        val clickabilityKnown = tree.findNodes { it.isClickable }.isNotEmpty()
+        candidates.forEachIndexed { i, c ->
+            val owner = ownerOf(c.node, clickabilityKnown) ?: return@forEachIndexed
+            val j = owners.indexOfFirst { it === owner }
+            if (j >= 0) { members[j] += i; ownerIndexOf[i] = j } else { owners += owner; members += mutableListOf(i); ownerIndexOf[i] = owners.size - 1 }
+        }
+        val refText = ref.text?.takeIf { it.isNotBlank() }
+        data class Owned(val owner: UiNode, val evidence: UiNode, val boundsDerived: Boolean, val relaxed: Boolean, val semantic: Boolean, val ancestors: Set<Int>)
+        val owned = owners.mapIndexed { j, owner ->
+            val group = members[j].map { candidates[it] }
+            val evidence = group.firstOrNull { refText != null && it.node.text?.take(50) == refText }
+                ?: group.firstOrNull { it.boundsDerived && !it.relaxed } ?: group.first()
+            Owned(owner, evidence.node, group.any { it.boundsDerived }, group.all { it.relaxed }, group.any { it.semantic },
+                members[j].flatMap { candidates[it].ancestors }.mapNotNull { ownerIndexOf[it] }.filter { it != j }.toSet())
+        }
+        val verifiedIdx = owned.withIndex().filter { (_, c) ->
+            val labels = collectLabels(c.owner)
+            // #1093: a bounds-derived (or #1149 semantic) candidate must carry the bind's own subtree
+            // labels (a hint-less ref admits an exact match only) — the handler's gate, mirrored.
+            val identified = !(c.boundsDerived || c.semantic) ||
+                (if (ref.labelHintHashes.isEmpty()) c.boundsDerived && !c.relaxed else ref.agreesWithLabels(labels))
+            identified && expectation.matchesLabels(labels) && !isCompound(c.owner)
         }.map { it.index }.toSet()
-        val verified = verifiedIdx.sorted().map { candidates[it].node }
+        val verified = verifiedIdx.sorted().map { owned[it] }
         if (verified.isEmpty()) return Resolution(0, ClickCandidateRanker.Tier.UNRESOLVED, null, decisive = false)
         // Nested VERIFIED candidates are undecidable → the handler aborts to manual (round 3).
-        if (verifiedIdx.any { i -> candidates[i].ancestors.any { it in verifiedIdx } }) {
+        if (verifiedIdx.any { i -> owned[i].ancestors.any { it in verifiedIdx } }) {
             return Resolution(verified.size, ClickCandidateRanker.Tier.UNRESOLVED, null, decisive = false)
         }
 
-        val facts = verified.map { node ->
+        val facts = verified.map { o ->
             ClickCandidateRanker.CandidateFacts(
-                text = node.text,
-                labels = collectLabels(node),
-                bounds = node.boundsInScreen,
+                text = o.evidence.text,
+                labels = collectLabels(o.owner),
+                bounds = o.evidence.boundsInScreen,
             )
         }
         val ranked = ClickCandidateRanker.rank(ref, facts)
         // The handler's tie rule: an UNRESOLVED ranking among >1 survivor is the
         // ambiguous (now aborted) case; a single survivor, or a decisive tier, is fine.
         val decisive = !(ranked.tier == ClickCandidateRanker.Tier.UNRESOLVED && verified.size > 1)
-        return Resolution(verified.size, ranked.tier, verified[ranked.index], decisive)
+        return Resolution(verified.size, ranked.tier, verified[ranked.index].evidence, decisive)
     }
 
     private fun matchTargets(tree: UiNode): Map<String, NodeRef> =
@@ -194,6 +288,7 @@ class ActuationBindingResolutionTest {
                 UiNode(text = "Are you sure you want to decline this offer?"),
                 UiNode( // offer popup (behind the sheet)
                     viewIdResourceName = "secondary_action_button_dash_plus",
+                    isClickable = true, // #1149: the title's action owner
                     boundsInScreen = BoundingBox(40, 1600, 1000, 1720),
                     children = listOf(
                         UiNode(
@@ -204,6 +299,7 @@ class ActuationBindingResolutionTest {
                     ),
                 ),
                 UiNode( // confirm sheet button
+                    isClickable = true, // #1149: the title's action owner
                     boundsInScreen = BoundingBox(40, 2000, 1000, 2120),
                     children = listOf(
                         UiNode(
@@ -556,5 +652,73 @@ class ActuationBindingResolutionTest {
         val b = legacy.boundsInScreen
         val slid = legacy.copy(boundsInScreen = b.copy(top = b.top + 40, bottom = b.bottom + 40))
         assertEquals(0, resolve(tree, slid, RuleAction.EXPAND_EARNINGS.verification).verifiedCount)
+    }
+
+    // =========================================================================
+    // #1149 — strategy 2b (labels before geometry) on the real receipt frames
+    // =========================================================================
+
+    /**
+     * Production order on every id-less 8.93.7+ frame: 2b finds EXACTLY the row (no wrapper, no
+     * stats row, no compound owner) and it resolves decisively to it.
+     */
+    @Test
+    fun `the semantic walk re-finds exactly the id-less row on every id-less frame`() {
+        val action = RuleAction.EXPAND_EARNINGS
+        var frames = 0
+        for ((filename, node, _) in TestResourceLoader.loadSnapshots("snapshots/delivery_summary_collapsed")) {
+            val ref = matchTargets(node)[action.targetBindName] ?: continue
+            if (!ref.viewIdSuffix.isNullOrEmpty()) continue
+            frames++
+            val row = rowOf(node)
+            val cands = findCandidates(node, ref, semantic = true)
+            assertEquals("$filename: 2b must find the row and nothing else", listOf(row), cands.map { it.node })
+            assertTrue("$filename: tagged semantic", cands.single().semantic)
+            val r = resolve(node, ref, action.verification, semantic = true)
+            assertTrue("$filename: decisive", r.decisive)
+            assertTrue("$filename: THE row", r.resolved === row)
+        }
+        assertEquals(3, frames)
+    }
+
+    /**
+     * The #1102 shape on the settled 09-07 frame: the ref was captured mid-slide, 400 px low (where
+     * "Continue dashing" overlaps it), or exactly on the button's rect. Strategy 3 alone rejects the
+     * stranger and aborts (the tests above); in production order 2b re-finds the row by its labels
+     * first, so the tap lands on the row — never on "Continue dashing".
+     */
+    @Test
+    fun `a ref captured mid-slide resolves to the row by labels, never the control now at its rect`() {
+        val (tree, ref) = settledReceipt()
+        val row = rowOf(tree)
+        val button = tree.findNodes { it.isClickable && subtreeHasText(it, "Continue dashing") }
+            .minByOrNull { (it.boundsInScreen.right - it.boundsInScreen.left).toLong() * (it.boundsInScreen.bottom - it.boundsInScreen.top) }!!
+        val b = ref.boundsInScreen
+        val shifts = listOf(
+            ref.copy(boundsInScreen = b.copy(top = b.top + 400, bottom = b.bottom + 400)),
+            ref.copy(boundsInScreen = button.boundsInScreen),
+        )
+        for (shifted in shifts) {
+            val r = resolve(tree, shifted, RuleAction.EXPAND_EARNINGS.verification, semantic = true)
+            assertTrue("${shifted.boundsInScreen}: decisive", r.decisive)
+            assertTrue("${shifted.boundsInScreen}: the row, not the button", r.resolved === row)
+            assertFalse(subtreeHasText(r.resolved!!, "Continue dashing"))
+        }
+    }
+
+    /** The wrapper cases keep aborting in production order: 2b records the nesting like the bounds walk. */
+    @Test
+    fun `a clickable wrapper around the row still aborts under the semantic walk`() {
+        val (tree, ref) = settledReceipt()
+        val b = rowOf(tree).boundsInScreen
+        val innerRow = node(clickable = true, bounds = b.copy(top = b.top + 400, bottom = b.bottom + 400), children = listOf(
+            node(text = "This offer", cls = "android.widget.TextView", bounds = b),
+            node(desc = "Expand", bounds = b),
+        ))
+        val wrapper = node(clickable = true, bounds = b.copy(top = b.top + 390, bottom = b.bottom + 410), children = listOf(innerRow))
+        val synthetic = node(bounds = BoundingBox(0, 0, 1080, 2400), children = listOf(wrapper)).restoreParents()
+
+        assertEquals(listOf(wrapper, innerRow), findCandidates(synthetic, ref, semantic = true).map { it.node })
+        assertFalse(resolve(synthetic, ref, RuleAction.EXPAND_EARNINGS.verification, semantic = true).decisive)
     }
 }
