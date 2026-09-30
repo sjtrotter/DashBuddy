@@ -379,6 +379,8 @@ class CustomerTextMarkersTest {
                 // #1160 review NN2 — deliberately ADDED: the GoPuff per-order customer name, promoted
                 // from the intake list so the runtime UNKNOWN scrub covers it too.
                 "order_cx_name",
+                // #1160 review PP6 — deliberately ADDED: the chat header and last-message preview.
+                "tvTitle", "tvLastMessage",
             ),
             CustomerTextMarkers.ID_MARKERS,
         )
@@ -394,8 +396,17 @@ class CustomerTextMarkersTest {
                 "dasher_instruction_content_expanded" to CustomerTextMarkers.IdentityKind.CONTENT,
                 "description_text_view" to CustomerTextMarkers.IdentityKind.CONTENT,
                 "order_cx_name" to CustomerTextMarkers.IdentityKind.NAME,
+                "tvTitle" to CustomerTextMarkers.IdentityKind.EXACT,
+                "tvLastMessage" to CustomerTextMarkers.IdentityKind.EXACT,
             ),
             CustomerTextMarkers.ID_MARKER_TABLE.associate { it.suffix to it.kind },
         )
+    }
+
+    @Test
+    fun `the UNKNOWN-envelope scrub covers the NN2-promoted order_cx_name (review OO3)`() {
+        val node = UiNode(viewIdResourceName = "com.doordash.driverapp:id/order_cx_name", text = "Morgan")
+        assertEquals("order_cx_name", CustomerTextMarkers.firstUnredactedIdMarker(node))
+        assertEquals("[redacted]", CustomerTextMarkers.scrubUnknown(node).text)
     }
 }

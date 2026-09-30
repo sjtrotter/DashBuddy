@@ -143,9 +143,11 @@ object CustomerTextMarkers {
      * since recognition never anchors on merchant names, #1160 review NN1); `ADDRESS` — a place (the
      * address lines, `arriving_at_title`, `address_subpremise_line`); `CONTENT` — a node that can hold
      * customer text but is also reused for app copy (the free-text instruction bodies;
-     * `description_text_view`, which this file documents as generic DoorDash chrome). The intake list
-     * (`PiiShapes.PII_ID_SUFFIXES`) holds only content/instruction ids plus this table's suffixes, so the
-     * two never disagree on a name id (#1160 review NN2). The runtime backstop scrubs on EVERY suffix exactly as
+     * `description_text_view`, which this file documents as generic DoorDash chrome); `EXACT` — a value
+     * that may be PII or chrome (`tvTitle`, `tvLastMessage`: seeds its exact value only). The intake list
+     * (`PiiShapes.PII_ID_SUFFIXES`) holds only instruction/content ids (message bodies, maneuver/road
+     * text, instruction bodies) plus this table's suffixes, so the two never disagree on a PII id
+     * (#1160 reviews NN2, PP6). The runtime backstop scrubs on EVERY suffix exactly as
      * before; only the census's frame-wide duplicate rule reads the kind: a NAME seeds its exact value
      * and its letter runs, an ADDRESS its exact value only (address vocabulary — "Road", "View", "San" —
      * is common English), CONTENT seeds nothing.
@@ -210,6 +212,13 @@ object CustomerTextMarkers {
         // it and the census could hash its frame duplicates. Promoted so the two SSOTs agree on "what is
         // a customer-name id"; the runtime scrub widens by this one suffix (fail toward privacy).
         IdMarker("order_cx_name", IdentityKind.NAME),
+        // #1160 review PP6: the chat list's header (`tvTitle` — the customer's name on a chat row, but a
+        // generic id other surfaces use for a sheet title such as "Pick up order") and last-message
+        // preview (`tvLastMessage` — the customer's own text). EXACT: withheld on their own field and
+        // seeding their EXACT value frame-wide, never runs, so a chrome sheet title cannot suppress chrome
+        // words. Promoted from the intake list; the runtime UNKNOWN scrub widens by these two suffixes.
+        IdMarker("tvTitle", IdentityKind.EXACT),
+        IdMarker("tvLastMessage", IdentityKind.EXACT),
     )
 
     /** One [ID_MARKER_TABLE] row. */
@@ -223,8 +232,14 @@ object CustomerTextMarkers {
         /** A place (an address line, a destination, a unit). */
         ADDRESS,
 
-        /** Customer-bearing content that is also reused for app copy or other people's names. */
+        /** Customer-bearing content that is also reused for app copy. */
         CONTENT,
+
+        /**
+         * A value that may be PII or chrome (a chat header is a name, a sheet title is "Pick up order"):
+         * withheld on its own field and seeding its EXACT value only — no runs (#1160 review PP6).
+         */
+        EXACT,
     }
 
     /** The suffix list — DERIVED from [ID_MARKER_TABLE], unchanged in content and order (pinned). */
