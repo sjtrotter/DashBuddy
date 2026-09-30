@@ -145,33 +145,57 @@ never coordinates, so frozen bounds never aimed a tap — they decided WHICH nod
 - **Owner first (D1).** `AccNodeUtils.resolveActionOwner` is the one "what does a tap land on" rule: self →
   parent, at most `MAX_OWNER_WALK` = 32 steps, a cycle guard (`==` on visited nodes), clickable =
   `isClickable` OR an advertised `ACTION_CLICK`; no owner → no tap. `performVerifiedClick` maps every candidate
-  to its owner BEFORE verification: owner-less (or foreign-package) owners are dropped (WARN, counts only),
+  to its owner BEFORE verification: owner-less or foreign-package owners are dropped (WARN, counts only);
   candidates sharing an owner are deduped (a button's title TextView and the button are one control, not a #734
-  tie; the matched node stays the ranker's text/bounds `evidence`), labels are verified on the OWNER's bounded
-  subtree, and a **compound owner** — ≥ 2 independently clickable, letter-labeled descendants in its bounded
-  subtree (the footer holding Accept AND Decline) — is refused (WARN, counts only); a button whose descendants are
-  only its own TextViews counts 0. The #1093 nested abort, #788 window scoping, #600 ranking and #734 tie abort
-  all operate on owners. `clickNodeStrict(owner)` clicks the owner itself (no climb, no sibling), after
-  `refresh()`: a failed refresh is a `stale node` WARN and no click, and a refreshed node that no longer takes a
-  click is refused.
+  tie; the matched node stays the ranker's text/bounds `evidence`). **Each distinct owner is `refresh()`ed once,
+  up front (review I1)** and dropped if the refresh fails, so every scan and verification reads its CURRENT
+  state (a recycled row that rebinds Decline → Accept is verified as Accept); `clickNodeStrict(owner, pkg)` then
+  clicks with NO second refresh — it only re-checks that the owner still takes a click in the scoped package.
+  Labels are verified on the OWNER's bounded subtree plus the matched node's own text/description (review I8 — a
+  title more than 3 levels below its button still verifies). The #1093 nested abort, #788 window scoping, #600
+  ranking and #734 tie abort all operate on owners.
+- **A clickable descendant's labels are its own (review I3 — replaced the compound-owner rule).** Every label
+  scan stops at a clickable descendant. A container therefore never borrows a nested button's "Decline" and
+  passes the expectation — the danger the first-round "compound owner" refusal targeted, which is GONE: it
+  failed open when its own scan was cut, and it refused legitimate composite rows (a receipt row holding an info
+  chevron and a link). Consequence: a label-less clickable wrapper around the row no longer inherits the row's
+  fingerprint, so the ROW is found and clicked; the #1093 nested abort still fires when a wrapper carries its own
+  copy of the labels.
+- **One label horizon (review I2).** `NodeRef.LABEL_SCAN_DEPTH` (3) / `LABEL_SCAN_NODES` (24) in `:domain`
+  are the single owner. The bind-time hints (`Ruleset.buildNodeRef` → `NodeRef.hintLabelsOf`) and the fire-time
+  live scan read the same horizon with the same ownership rule, so a fingerprint can match. Residuals: fire time
+  budgets FETCH attempts (a null child spends one) while a mapped `UiNode` has already dropped nulls; bind time's
+  "clickable" is `isClickable` only (a `UiNode` carries no action list).
 - **Labels before geometry (D2, strategy 2b).** Between the text strategy and the bounds walk: a ref with
   `labelHintHashes` is re-found by walking each root for nodes that take a click, match `classNameHint`, and
-  whose COMPLETE label scan is the ref's **exact** fingerprint (`NodeRef.fingerprintMatches`). Bounds are not an
-  entrance test — they stay ranking evidence (the overlap tier). The bounds walk runs only when 2b finds nothing.
-  The four #1102 review constraints on the withdrawn re-find are the design: (1) EXACT set, never containment —
-  a clickable parent card holding the row plus other text is not a candidate, and a bind-time set that filled
-  `MAX_LABEL_HINTS` is unprovable; (2) a walk cut by its bound (depth 40, 600 child fetches per root) ABORTS the
-  whole resolution (WARN) — never a lone survivor, never a fall-through to the bounds walk; (3) every child fetch
-  is budgeted before the binder call and nulls spend budget (2b's walk and its label scans share the budget; the
-  label and compound scans cap their own); (4) label collection never reads an embedded foreign-package subtree,
-  in discovery AND verification. Nesting is recorded like the bounds walk's, so a clickable wrapper around the
-  row still aborts. The real receipt trees (~60 nodes, depth ≤ 19) sit far inside the bound, and on all three
-  id-less corpus frames 2b finds exactly the row — including from a ref captured 400 px low or on the "Continue
-  dashing" rect (`ActuationBindingResolutionTest`).
+  whose COMPLETE label region is the ref's **exact** fingerprint (`NodeRef.fingerprintMatches`). Bounds are not an
+  entrance test. The four #1102 review constraints on the withdrawn re-find are the design: (1) EXACT set, never
+  containment — a clickable parent card holding the row plus other text is not a candidate, and a bind-time set
+  that filled `MAX_LABEL_HINTS` is unprovable; (2) a search that cannot complete leaves no lone survivor;
+  (3) every child fetch is budgeted before the binder call, nulls included — and the walk is ONE pass (review I7):
+  each node's label region is derived post-order from the children the walk already fetched, so the 600-fetch
+  budget counts real IPC once; (4) label collection never reads an embedded foreign-package subtree, in discovery
+  AND verification.
+  - **Incompleteness fails closed where it is an identity claim (review I4).** A null child makes a scan
+    incomplete. A window's search is INCOMPLETE when a bound cut it (depth 40 / 600 fetches), a child read null,
+    or a candidate's OWN label region is incomplete (depth cut, fetch cut, null child) — never "a non-match that
+    lets its twin win". Verifying a label EXPECTATION stays lenient: a found label suffices, and since I3 no
+    collected label comes from a nested control. Open `TODO(vet)`: with I2's shared horizon a label past depth 3
+    is part of neither fingerprint, yet a depth cut still counts as unproven, so such a control only fails closed.
+  - **Per window (review I6).** An incomplete window contributes no candidates; the tap aborts only when some
+    window was incomplete AND the active window produced no complete survivor (then only active-window hits are
+    kept). With no incomplete window and no hit, strategy 3 still runs — the fallback pre-#1149 taps relied on.
+  - **Semantic twins abort (review I5).** ≥ 2 2b survivors after owner dedupe and #788 scoping abort to manual
+    (WARN, counts) unless the ref's stored text matches exactly one survivor — the overlap tier would pick by
+    the captured rect, the very evidence 2b distrusts.
+  The real receipt trees (~60 nodes, depth ≤ 19) sit far inside the bound, and on all three id-less corpus
+  frames 2b finds exactly the row — including from a ref captured 400 px low or on the "Continue dashing" rect
+  (`ActuationBindingResolutionTest`, which skips the legacy `"clickable"`-key fixtures — #1154).
 - **Not done (D3).** A geometry-only frame refreshing bindings without re-entering the state machine: NO.
   `Observation.identity()` is the dedup SSOT and does not change; with 2b a slid control is re-found by labels,
   so the frozen-bounds problem is fixed where it bites. #1102's throttle semantics and the capability gates
   (#417/#425) are unchanged — this changes HOW a target is re-found, never WHAT may be tapped.
 - **Residuals.** The strategy-3 bounds walk is still unbudgeted (#1102's pre-existing note) — it now runs only
-  when 2b found nothing and was not cut. A bounded scan sees only its horizon: a compound owner whose second
-  control lies past the label budget reads as a single control (the same horizon label verification has).
+  when no window's 2b search was incomplete and 2b found nothing. The 2b WARN vocabulary: `no clickable, fresh
+  owner … (N stale)`, `semantic twins`, `a window's search was incomplete … aborting`. The pre-existing
+  `Could not find any live node` WARN no longer prints `ref.text` (moved to DEBUG, review I9a).
