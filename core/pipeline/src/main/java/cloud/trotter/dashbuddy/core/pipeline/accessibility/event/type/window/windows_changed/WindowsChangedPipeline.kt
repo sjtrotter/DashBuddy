@@ -4,6 +4,7 @@ import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityWindowInfo
 import cloud.trotter.dashbuddy.core.pipeline.accessibility.TreeSnapshot
 import cloud.trotter.dashbuddy.core.pipeline.accessibility.input.AccessibilitySource
+import cloud.trotter.dashbuddy.domain.settings.PlatformPreferences
 import cloud.trotter.dashbuddy.domain.state.Platform
 import cloud.trotter.dashbuddy.core.pipeline.accessibility.event.coalesce.coalesceByKey
 import kotlinx.coroutines.flow.Flow
@@ -17,14 +18,18 @@ import javax.inject.Inject
  * Sub-pipeline that reacts to TYPE_WINDOWS_CHANGED events — fired when the
  * accessibility window list changes (a window appears, disappears, or changes focus).
  *
- * Unlike ContentChanged/StateChanged, which snapshot ONE window per frame (the active watched
- * window, else the topmost watched application window — #1148), this pipeline
- * enumerates ALL windows via [AccessibilityService.getWindows()] and snapshots each
- * non-active application window from a watched package. This captures overlay windows
- * (e.g., Uber offer screens) that are invisible to the single-window pipelines.
+ * Unlike ContentChanged/StateChanged, which snapshot ONE window per frame (the active enabled
+ * window, else the readable enabled window in front — #1148), this pipeline enumerates the window
+ * list and snapshots TRUE OVERLAYS only (#1148 review G6): ENABLED-package windows whose layer is
+ * ABOVE the active window's — e.g. an Uber offer (`TYPE_APPLICATION_OVERLAY`, accessibility
+ * `TYPE_SYSTEM`) over DoorDash. A window BENEATH the active one (the activity under a DoorDash
+ * sheet) is never emitted — that would re-open the interleaving the resolver removed. Candidate
+ * types match [AccessibilitySource.foregroundWindow]: application windows and readable
+ * known-platform system windows. No active window → nothing.
  */
 class WindowsChangedPipeline @Inject constructor(
-    private val source: AccessibilitySource
+    private val source: AccessibilitySource,
+    private val platformPreferences: PlatformPreferences,
 ) {
     fun output(): Flow<TreeSnapshot> = source.events
         .filter { it.type == AccessibilityEvent.TYPE_WINDOWS_CHANGED }
@@ -52,15 +57,23 @@ class WindowsChangedPipeline @Inject constructor(
 
             val totalCount = windows.size
 
-            // Emit a TreeSnapshot for each non-active application window.
-            // The active window is already captured by StateChanged/ContentChanged.
+            val active = windows.firstOrNull { it.isActive }
+            if (active == null) {
+                Timber.v("🚫 Windows: no active window — nothing emitted")
+                return@transform
+            }
+            val enabled = platformPreferences.enabledPackages.value
             for (w in windows) {
-                if (w.type != AccessibilityWindowInfo.TYPE_APPLICATION || w.isActive) continue
-                // Pre-map package read on the native root (#435 item 3). Only snapshot
-                // watched-platform windows (e.g. an Uber overlay) — never our own bubble overlay or
-                // other apps. Prevents recognizing our own UI (#4).
+                if (w.isActive || w.layer <= active.layer) continue // never beneath the active window
+                if (w.type != AccessibilityWindowInfo.TYPE_APPLICATION &&
+                    w.type != AccessibilityWindowInfo.TYPE_SYSTEM
+                ) continue
+                // Pre-map package read on the native root (#435 item 3): only ENABLED platforms —
+                // never our own bubble or other apps (#4); a system window must also be a known
+                // platform (the status bar is never read).
                 val nativeRoot = w.root ?: continue
-                if (nativeRoot.packageName?.toString() !in Platform.watchedPackages) continue
+                val pkg = nativeRoot.packageName?.toString()
+                if (pkg !in enabled || pkg !in Platform.watchedPackages) continue
                 // #1148 review F6: the shared snapshot builder (one WindowContext, one map path).
                 val snapshot = source.getWindowSnapshot(w, nativeRoot, totalCount) ?: continue
                 emit(

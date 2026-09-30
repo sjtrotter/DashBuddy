@@ -49,4 +49,10 @@ class ListenerGateTest {
         assertFalse(admit(AccessibilityEvent.TYPE_VIEW_FOCUSED, "com.doordash.driverapp"))
         assertFalse(admit(AccessibilityEvent.TYPE_VIEW_SCROLLED, null))
     }
+
+    @Test
+    fun `WINDOWS_CHANGED is rejected when no platform is enabled (G6)`() {
+        assertFalse(ListenerGate.admit(AccessibilityEvent.TYPE_WINDOWS_CHANGED, null, emptySet(), handled))
+        assertFalse(ListenerGate.admit(AccessibilityEvent.TYPE_WINDOWS_CHANGED, "com.doordash.driverapp", emptySet(), handled))
+    }
 }
