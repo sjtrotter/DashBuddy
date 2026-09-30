@@ -418,10 +418,10 @@ class SkeletonBuilderTest {
     @Test
     fun `DD2 - the value filter runs ONCE per distinct trimmed value across both passes`() {
         val counts = HashMap<String, Int>()
-        val filter = SkeletonBuilder.FrameFilter { v ->
+        val filter = SkeletonBuilder.FrameFilter(judge = { v ->
             counts.merge(v, 1, Int::plus)
             SkeletonBuilder.withholdingStep(v)
-        }
+        })
         val tree = UiNode(
             className = "android.widget.LinearLayout",
             children = listOf(
@@ -512,7 +512,7 @@ class SkeletonBuilderTest {
         assertEquals(words(3, "Add a tip"), slots[3])
         // A different run (a longer word) is not the identity token.
         assertEquals(words(1, "Adamant"), slots[4])
-        // A two-letter identity value seeds no run: "Jo" withholds its exact duplicates only.
+        // Review II1: a two-letter identity value seeds its run too ("Jo's pick" is withheld).
         val jo = SkeletonBuilder.build(
             UiNode(className = "android.widget.LinearLayout", viewIdResourceName = "com.x:id/row", children = listOf(
                 UiNode(className = "android.widget.TextView", viewIdResourceName = "com.x:id/customer_name", text = "Jo"),
@@ -521,7 +521,7 @@ class SkeletonBuilderTest {
             )),
             null, meta, platform, day,
         )!!
-        assertEquals(words(2, "Jo's pick"), jo.root.children[1].text.getValue("text"))
+        assertEquals(TextSlot.WITHHELD, jo.root.children[1].text.getValue("text"))
         assertEquals(TextSlot.WITHHELD, jo.root.children[2].text.getValue("text"))
     }
 
@@ -545,5 +545,88 @@ class SkeletonBuilderTest {
         assertEquals(TextSlot.WITHHELD, item.root.children[1].text.getValue("text"))
         // The FF1 reproducer (raw ≤ 40) is still caught on the raw pass.
         assertEquals(TextSlot.WITHHELD, slot("\"ab  cd\""))
+    }
+
+    // ---- #1160 review round 5 ----------------------------------------------------------------------
+
+    /** A frame with a `customer_name` identity value and id-less siblings; returns the siblings' slots. */
+    private fun beside(identity: String, vararg others: String): List<TextSlot> =
+        SkeletonBuilder.build(
+            UiNode(className = "android.widget.LinearLayout", viewIdResourceName = "com.x:id/row", children = listOf(
+                UiNode(className = "android.widget.TextView", viewIdResourceName = "com.x:id/customer_name", text = identity),
+            ) + others.map { UiNode(className = "android.widget.TextView", text = it) }),
+            null, meta, platform, day,
+        )!!.root.children.drop(1).map { it.text.getValue("text") }
+
+    @Test
+    fun `HH1 - identity containment uses one Unicode case fold`() {
+        assertEquals(listOf(TextSlot.WITHHELD), beside("ΝΙΚΟΣ", "νικος's order"))
+        assertEquals(listOf(TextSlot.WITHHELD), beside("Groß", "GROSS's order"))
+    }
+
+    @Test
+    fun `HH2 - the seed threshold counts letter code points`() {
+        // ONE supplementary-plane letter: two UTF-16 units, but one letter — seeds no run (II1: the
+        // threshold is two letters).
+        val one = "\uD801\uDC00"
+        assertEquals(listOf(words(2, "$one pick"), TextSlot.WITHHELD), beside(one, "$one pick", one))
+        // Two such letters (four units) do seed.
+        val pair = one + "\uD801\uDC01"
+        assertEquals(listOf(TextSlot.WITHHELD), beside(pair, "$pair pick"))
+    }
+
+    @Test
+    fun `HH4 - identity-dependent chrome suppression - a common first name withholds same-word chrome`() {
+        // The documented cost of GG1's containment rule (ADR §7 / residual risk 9).
+        assertEquals(listOf(TextSlot.WITHHELD), beside("May", "May need returns"))
+        assertEquals(listOf(words(3, "May need returns")), beside("Sam", "May need returns"))
+    }
+
+    @Test
+    fun `HH5 - a raw pattern match beyond the cap does not prevent hashing (the bounded raw pass)`() {
+        // Raw: a quoted note (QUOTED_NOTE), but 46 characters — the raw pass is skipped by design (GG2);
+        // canonical: "ab cd" in quotes, too short for QUOTED_NOTE — hashes as words:2.
+        val raw = "\"ab" + " ".repeat(40) + "cd\""
+        assertTrue(raw.length > SkeletonBuilder.MAX_TOKEN_LENGTH)
+        assertEquals(words(2, "\"ab cd\""), slot(raw))
+    }
+
+    @Test
+    fun `II1 - a two-letter first name is covered, a single letter seeds nothing`() {
+        assertEquals(listOf(TextSlot.WITHHELD), beside("Li", "Li's order"))
+        // Whole-run equality: "li" does not match inside another word.
+        assertEquals(listOf(words(2, "Limited offer")), beside("Li", "Limited offer"))
+        assertEquals(listOf(words(2, "A tip")), beside("A", "A tip"))
+    }
+
+    @Test
+    fun `II3 - a name-bearing test-tag id is absent, chrome ids travel`() {
+        listOf("row_Deliver_to_Sam", "com.x:id/chip_Adam_S", "Pickup_for_Sam")
+            .forEach { assertTrue(it, !SkeletonBuilder.isStaticId(it)) }
+        listOf("bc25_fab", "a11y_clock", "Artwork Image", "com.doordash.driverapp:id/customer_name", "Tooltip-0")
+            .forEach { assertTrue(it, SkeletonBuilder.isStaticId(it)) }
+        val item = SkeletonBuilder.build(
+            UiNode(className = "android.widget.Button", viewIdResourceName = "row_Deliver_to_Sam", text = "Go"),
+            null, meta, platform, day,
+        )!!
+        assertNull(item.root.id)
+    }
+
+    @Test
+    fun `II5 - a builder defect is BUILD_FAILED, never INVALID_TREE`() {
+        val defect = SkeletonBuilder.FrameFilter(
+            judge = { SkeletonBuilder.withholdingStep(it) },
+            unfiltered = { throw IllegalArgumentException("a bad TextSlot") },
+        )
+        assertEquals(
+            Outcome.Refused(Refusal.BUILD_FAILED),
+            SkeletonBuilder.outcome(tree("Continue"), null, meta, platform, day, defect),
+        )
+    }
+
+    @Test
+    fun `II6 - a corrupt tri-state is refused as INVALID_TREE, not laundered to unchecked`() {
+        val bad = UiNode(className = "android.widget.CheckBox", text = "Leave at door", isChecked = 7)
+        assertEquals(Outcome.Refused(Refusal.INVALID_TREE), SkeletonBuilder.outcome(bad, null, meta, platform, day))
     }
 }

@@ -3,6 +3,7 @@ package cloud.trotter.dashbuddy.core.pipeline.census
 import cloud.trotter.dashbuddy.core.pipeline.CustomerTextMarkers
 import cloud.trotter.dashbuddy.core.pipeline.SensitiveTextMarkers
 import cloud.trotter.dashbuddy.domain.capture.ReplayMetadata
+import cloud.trotter.dashbuddy.domain.census.contract.CaseFold
 import cloud.trotter.dashbuddy.domain.census.contract.CensusFingerprint
 import cloud.trotter.dashbuddy.domain.census.contract.ClassNameGrammar
 import cloud.trotter.dashbuddy.domain.census.contract.CensusHash
@@ -144,13 +145,30 @@ object SkeletonBuilder {
         meta: ReplayMetadata,
         platform: Platform,
         day: LocalDate,
+    ): Outcome = outcome(tree, windowTitle, meta, platform, day, FrameFilter(::withholdingStep))
+
+    /** [outcome] over an explicit [frame] — internal so a test can inject a defect (review II5). */
+    internal fun outcome(
+        tree: UiNode,
+        windowTitle: String?,
+        meta: ReplayMetadata,
+        platform: Platform,
+        day: LocalDate,
+        frame: FrameFilter,
     ): Outcome = try {
-        buildOutcome(tree, windowTitle, meta, platform, day)
+        buildOutcome(tree, windowTitle, meta, platform, day, frame)
     } catch (e: CancellationException) {
         throw e
+    } catch (_: InvalidTree) {
+        Outcome.Refused(Refusal.INVALID_TREE)
     } catch (_: Throwable) {
+        // Anything else — including a builder-defect `require` (TextSlot, ShapeKind, DTO init) — is a
+        // BUILD failure, never mis-reported as a bad third-party tree (review II5).
         Outcome.Refused(Refusal.BUILD_FAILED)
     }
+
+    /** Thrown ONLY by the raw-tree validation in [FrameFilter.scan]: the input, not the builder, is bad. */
+    internal class InvalidTree(message: String) : Exception(message)
 
     private fun buildOutcome(
         tree: UiNode,
@@ -158,6 +176,7 @@ object SkeletonBuilder {
         meta: ReplayMetadata,
         platform: Platform,
         day: LocalDate,
+        frame: FrameFilter,
     ): Outcome {
         // The whole-frame drop runs on the RAW tree and the RAW title, before anything is built. A scan
         // that FAILED (the marker scan's own fail-closed sentinel) is a build failure, not a banking
@@ -167,22 +186,14 @@ object SkeletonBuilder {
             sensitivity(SensitiveTextMarkers.findMarker(windowTitle), Refusal.SENSITIVE_TITLE)?.let { return Outcome.Refused(it) }
         }
 
-        // Frame-level duplicate rule (ADR-0011 §2; #1160 reviews AA1, CC3). Pass 1 runs the per-field
-        // filter ONCE per field (memoized per frame, review CC5) and seeds the frame's caught set.
-        val frame = FrameFilter(::withholdingStep)
-        val pending = try {
-            frame.scan(tree)
-        } catch (_: IllegalArgumentException) {
-            return Outcome.Refused(Refusal.INVALID_TREE)
-        }
+        // Frame-level duplicate rule (ADR-0011 §2; #1160 reviews AA1, CC3). Pass 1 validates the raw
+        // tree (InvalidTree → INVALID_TREE), runs the per-field filter ONCE per value (memoized per
+        // frame, review CC5) and seeds the frame's sets.
+        val pending = frame.scan(tree)
         val title = frame.field(windowTitle, IdClass.NONE)
 
-        // Pass 2: emit, withholding every field whose canonical value was caught anywhere in the frame.
-        val root = try {
-            frame.emit(pending)
-        } catch (_: IllegalArgumentException) {
-            return Outcome.Refused(Refusal.INVALID_TREE)
-        }
+        // Pass 2: emit, withholding every field the frame-level rule catches.
+        val root = frame.emit(pending)
         val fingerprint = CensusFingerprint.of(root) ?: return Outcome.Refused(Refusal.FINGERPRINT_FAILED)
         val item = try {
             UiSkeletonDto(
@@ -224,6 +235,28 @@ object SkeletonBuilder {
      */
     private fun stamp(value: String?): String? =
         value?.take(UiSkeletonDto.MAX_VERSION_LENGTH)?.takeIf { WireStrings.isWellFormed(it) }
+
+    /**
+     * May [id] travel in the clear and key the fingerprint (ADR-0011 §1)? The contract's static SHAPE
+     * ([ResourceIdGrammar.isStaticShape], which the DTO and the server also enforce) AND — client-side,
+     * because the predicates live in this module (review II3) — no customer-PII value predicate fires on
+     * the id's NAME part with its separators (`_`, `.`, `-`, `:`) read as spaces, judged at EVERY token
+     * start (so `row_Deliver_to_Sam` is caught by the "Deliver to " marker, `chip_Adam_S` by the name
+     * shape). A bare name with no marker, lead-in or initial (`chip_Adam`, `Adam Smith`) has no shape a
+     * frame-free predicate can tell from chrome (`chip_Gold`, `Artwork Image`) — ADR residual risk 10.
+     */
+    fun isStaticId(id: String): Boolean {
+        if (!ResourceIdGrammar.isStaticShape(id)) return false
+        val spoken = CensusHash.canonical(ResourceIdGrammar.namePart(id).replace(ID_SEPARATORS, " "))
+        if (PiiShapes.containsMask(spoken) || PiiShapes.hasNameShape(spoken)) return false
+        val tokens = spoken.split(' ')
+        return tokens.indices.none { i ->
+            val tail = tokens.subList(i, tokens.size).joinToString(" ")
+            CustomerTextMarkers.unredactedMarker(tail) != null || PiiShapes.customerLeadIn(tail) != null
+        }
+    }
+
+    private val ID_SEPARATORS = Regex("[_.:-]")
 
     /** How the §2 step-1 id check classified a node's RAW id (reviews CC3, EE1). */
     internal enum class IdClass {
@@ -275,7 +308,10 @@ object SkeletonBuilder {
      * computed once per distinct canonical value; step 1 once per node. [caught] is the frame-level set.
      * [judge] is the value-only filter (steps 2–8); internal so a test can count its evaluations.
      */
-    internal class FrameFilter(private val judge: (String) -> FilterStep?) {
+    internal class FrameFilter(
+        private val judge: (String) -> FilterStep?,
+        private val unfiltered: (String) -> TextSlot = ::unfilteredSlot,
+    ) {
         /**
          * A cached verdict. Wrapped (review DD2): a bare `FilterStep?` map stores the common "passed"
          * result as `null`, which `getOrPut` reads as ABSENT and recomputes on every lookup.
@@ -285,6 +321,12 @@ object SkeletonBuilder {
         private val valueSteps = HashMap<String, Judged>()
         private val valueSlots = HashMap<String, TextSlot>()
 
+        /** Letter runs per (canonical value, threshold), computed once per frame (review II10). */
+        private val runCache = HashMap<Pair<String, Int>, List<String>>()
+
+        private fun runsOf(canonical: String, minLetters: Int = 0): List<String> =
+            runCache.getOrPut(canonical to minLetters) { letterRuns(canonical, minLetters) }
+
         /** Canonical values a VALUE-judging step caught anywhere in the frame (exact equality). */
         private val caught = HashSet<String>()
 
@@ -292,10 +334,11 @@ object SkeletonBuilder {
         private val identityRuns = HashSet<String>()
 
         fun scan(node: UiNode): Pending {
-            // Reviews BB1/BB2/CC1: validate the RAW class and id BEFORE the grammar gates, which would
-            // otherwise drop a malformed value to null unseen. Refused as INVALID_TREE.
-            node.className?.let { require(WireStrings.isWellFormed(it)) { "malformed class name" } }
-            node.viewIdResourceName?.let { require(WireStrings.isWellFormed(it)) { "malformed view id" } }
+            // Reviews BB1/BB2/CC1/II6: validate the RAW input BEFORE the grammar gates, which would
+            // otherwise drop a malformed value to null unseen. The ONLY source of INVALID_TREE (II5).
+            node.className?.let { if (!WireStrings.isWellFormed(it)) throw InvalidTree("malformed class name") }
+            node.viewIdResourceName?.let { if (!WireStrings.isWellFormed(it)) throw InvalidTree("malformed view id") }
+            if (node.isChecked !in 0..2) throw InvalidTree("isChecked outside the 0/1/2 tri-state")
             val idClass = idClassOf(node.viewIdResourceName)
             val fields = ArrayList<Pair<String, Field>>()
             for ((field, value) in node.scrubbableStrings()) {
@@ -303,7 +346,7 @@ object SkeletonBuilder {
             }
             return Pending(
                 className = ClassNameGrammar.staticOrNull(node.className),
-                id = ResourceIdGrammar.staticOrNull(node.viewIdResourceName),
+                id = node.viewIdResourceName?.takeIf { isStaticId(it) },
                 node = node,
                 fields = fields,
                 children = node.children.map { scan(it) },
@@ -327,7 +370,7 @@ object SkeletonBuilder {
             if (step != null && step != FilterStep.LENGTH_CAP) caught += canonical
             if (idClass == IdClass.PII_VALUE && seedsFromId) {
                 caught += canonical
-                letterRuns(canonical).filterTo(identityRuns) { it.length >= MIN_IDENTITY_RUN }
+                identityRuns += runsOf(canonical, minLetters = MIN_IDENTITY_RUN)
             }
             return Field(trimmed, canonical, idWithholds = idClass != IdClass.NONE)
         }
@@ -343,7 +386,7 @@ object SkeletonBuilder {
          * shrink a value below a pattern's minimum (`"ab  cd"` is a quoted note raw, `"ab cd"` is not).
          * Either hit withholds.
          */
-        private fun valueStep(trimmed: String, canonical: String = CensusHash.canonical(trimmed)): FilterStep? =
+        private fun valueStep(trimmed: String, canonical: String): FilterStep? =
             valueSteps.getOrPut(trimmed) {
                 Judged(
                     try {
@@ -358,8 +401,8 @@ object SkeletonBuilder {
         /** Pass 2 for one field: the constant `withheld`, or the value's own (memoized) slot. */
         fun slot(field: Field): TextSlot {
             if (field.idWithholds || field.canonical in caught || valueStep(field.trimmed, field.canonical) != null) return TextSlot.WITHHELD
-            if (identityRuns.isNotEmpty() && letterRuns(field.canonical).any { it in identityRuns }) return TextSlot.WITHHELD
-            return valueSlots.getOrPut(field.canonical) { unfilteredSlot(field.canonical) }
+            if (identityRuns.isNotEmpty() && runsOf(field.canonical).any { it in identityRuns }) return TextSlot.WITHHELD
+            return valueSlots.getOrPut(field.canonical) { unfiltered(field.canonical) }
         }
 
         fun emit(p: Pending): UiSkeletonNodeDto {
@@ -372,35 +415,47 @@ object SkeletonBuilder {
                 id = p.id,
                 isClickable = p.node.isClickable,
                 isEnabled = p.node.isEnabled,
-                isChecked = p.node.isChecked.takeIf { it in 0..2 } ?: 0,
+                isChecked = p.node.isChecked,
                 text = text,
                 children = p.children.map { emit(it) },
             )
         }
     }
 
-    /** An identity value contributes only letter runs of at least this many letters (review GG1). */
-    private const val MIN_IDENTITY_RUN = 3
+    /**
+     * An identity value contributes only letter runs of at least this many letters (reviews GG1, II1):
+     * two, so a two-letter first name ("Li", "Jo") is covered; whole-run equality keeps it from matching
+     * inside another word, and a single-letter run (an initial) seeds nothing.
+     */
+    private const val MIN_IDENTITY_RUN = 2
 
     /**
-     * The value's maximal runs of Unicode letters (code-point based), case-folded — so "Adam's order"
-     * yields `adam`, `s`, `order` and "Adam, 2 items" yields `adam`, `items` (review GG1).
+     * The value's maximal runs of Unicode letters, case-FOLDED with the one [CaseFold] (review HH1) —
+     * so "Adam's order" yields `adam`, `s`, `order` and "Adam, 2 items" yields `adam`, `items` (review
+     * GG1). [minLetters] counts letter CODE POINTS of the original run before folding (review HH2:
+     * UTF-16 units over-count a supplementary-plane letter, and a fold can change the length).
      */
-    private fun letterRuns(value: String): List<String> {
+    private fun letterRuns(value: String, minLetters: Int = 0): List<String> {
         val runs = ArrayList<String>()
         val sb = StringBuilder()
+        var letters = 0
+        fun flush() {
+            if (sb.isNotEmpty() && letters >= minLetters) runs += CaseFold.fold(sb.toString())
+            sb.setLength(0)
+            letters = 0
+        }
         var i = 0
         while (i < value.length) {
             val cp = value.codePointAt(i)
             if (Character.isLetter(cp)) {
                 sb.appendCodePoint(cp)
-            } else if (sb.isNotEmpty()) {
-                runs += sb.toString().lowercase(Locale.ROOT)
-                sb.setLength(0)
+                letters++
+            } else {
+                flush()
             }
             i += Character.charCount(cp)
         }
-        if (sb.isNotEmpty()) runs += sb.toString().lowercase(Locale.ROOT)
+        flush()
         return runs
     }
 
