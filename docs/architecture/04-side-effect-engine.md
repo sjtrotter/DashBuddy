@@ -154,7 +154,9 @@ never coordinates, so frozen bounds never aimed a tap — they decided WHICH nod
   Labels are verified on the OWNER's bounded subtree plus the matched node's own text/description (review I8 — a
   title more than 3 levels below its button still verifies). An owner's evidence is its STRONGEST fresh member under the cross-owner
   ranker's own tiers — exact stored text, then max overlap with the captured rect (review W1) — so owners compete
-  strongest-vs-strongest, independent of child order. That evidence is as fresh and scoped as the owner
+  strongest-vs-strongest, independent of child order; a tie INSIDE one owner keeps a tied-strongest member
+  (`ClickCandidateRanker.strongest`, review X1 — they are interchangeable), while a tie between distinct owners
+  still fails closed. That evidence is as fresh and scoped as the owner
   (review J1): a matched node that is not the owner is refreshed first, must be in the scoped package and must
   still resolve to the same owner, else the target is dropped as stale. The #1093 nested abort, #788 window scoping, #600
   ranking and #734 tie abort all operate on owners.

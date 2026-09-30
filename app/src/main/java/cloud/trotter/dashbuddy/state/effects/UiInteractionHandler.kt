@@ -504,9 +504,10 @@ class UiInteractionHandler @Inject constructor(
                     m.node.getBoundsInScreen(r)
                     ClickCandidateRanker.CandidateFacts(text = m.node.text?.toString(), labels = emptyList(), bounds = r.toBoundingBox())
                 }
-                val ranked = ClickCandidateRanker.rank(ref, facts)
-                if (ranked.tier != ClickCandidateRanker.Tier.UNRESOLVED) fresh[ranked.index]
-                else fresh.firstOrNull { it.boundsDerived && !it.relaxed } ?: fresh.first()
+                // X1: an intra-owner tie keeps a TIED-STRONGEST member (all interchangeable — same owner),
+                // never the first member overall, which may be the weakest.
+                val top = ClickCandidateRanker.strongest(ref, facts).map { fresh[it] }
+                top.firstOrNull { it.boundsDerived && !it.relaxed } ?: top.first()
             }
             OwnedTarget(
                 index = j,

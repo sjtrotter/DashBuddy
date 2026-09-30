@@ -279,4 +279,27 @@ class UiInteractionHandlerOwnerTest : UiInteractionHandlerTapTestKit() {
             ownerB.neverClicked()
         }
     }
+
+    /**
+     * X1: owner A = ["Decline" far, "Decline offer" @rect, "Decline offer" @rect] — the two strongest members
+     * TIE inside A. A's evidence must be one of the tied-strongest, not the weak "Decline", so owner B's lone
+     * "Decline offer" elsewhere does not become the sole exact-text match. Both enumeration orders → A.
+     */
+    @Test
+    fun `an intra-owner tie keeps a tied-strongest representative`() = runTest {
+        for (reversed in listOf(false, true)) {
+            val weak = view(cls = "android.widget.TextView", text = "Decline", bounds = Rect(40, 100, 1000, 220))
+            val t1 = view(cls = "android.widget.TextView", text = "Decline offer", bounds = Rect(40, 2000, 1000, 2120))
+            val t2 = view(cls = "android.widget.TextView", text = "Decline offer", bounds = Rect(40, 2000, 1000, 2120))
+            val members = listOf(weak, t1, t2).let { if (reversed) it.reversed() else it }
+            val ownerA = view(clickable = true, children = members)
+            val b1 = view(cls = "android.widget.TextView", text = "Decline offer", bounds = Rect(40, 600, 1000, 720))
+            val ownerB = view(clickable = true, children = listOf(b1))
+            val root = windowRoot(ownerA, ownerB, byId = members + b1)
+            val ref = idRef.copy(text = "Decline offer", boundsInScreen = BoundingBox(40, 2000, 1000, 2120))
+            assertTrue("reversed=$reversed", confirmDecline(handler(root), ref))
+            ownerA.clicks(1)
+            ownerB.neverClicked()
+        }
+    }
 }
