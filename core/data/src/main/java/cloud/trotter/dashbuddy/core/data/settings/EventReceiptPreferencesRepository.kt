@@ -38,7 +38,7 @@ import javax.inject.Singleton
 @Singleton
 class EventReceiptPreferencesRepository @Inject constructor(
     private val dataSource: EventReceiptConsentDataSource,
-    @ApplicationScope private val scope: CoroutineScope,
+    @param:ApplicationScope private val scope: CoroutineScope,
 ) : EventReceiptPreferences {
 
     private val _consent = MutableStateFlow<EventReceiptConsent?>(null)
