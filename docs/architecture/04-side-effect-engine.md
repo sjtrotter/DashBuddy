@@ -236,6 +236,11 @@ never coordinates, so frozen bounds never aimed a tap — they decided WHICH nod
     abort fires instead of handing the tap to a lower window's twin.
   - **A cut ACTIVE bounds walk aborts (review S2):** the mirror of L1 for strategy 3 — if the active platform
     window's bounds walk is cut by `TreeLimits`, a background window's control never becomes the sole survivor.
+    **Under keep-all scoping, ANY cut walk aborts (review T1):** with no verified active-window candidate (our
+    bubble active) every window decides, so a cut window could hold the intended control past its cut.
+  - **The hash key is the WHOLE label (review T2):** `hintKeyOrNull` = the capped, trimmed, ROOT-lowercased full
+    label (the 40-char key let "… merchant Alice" and "… merchant Bob" collide); a legacy ref's strategy-3
+    containment may miss a long label across the upgrade — accepted, fail closed.
   - **Evidence labels are capped (review S3):** the matched node's own text/description join the owner's labels
     through the same `UiTextBounds` cap-then-blank-filter as every other label.
   - **A stale target among several aborts (review R6):** in the id/text arms too, a target dropped because its

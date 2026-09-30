@@ -145,4 +145,16 @@ class NodeRefLabelHintsTest {
         assertFalse(seven.complete)
         assertEquals(NodeRef.MAX_LABEL_HINTS, seven.labelHintHashes.size)
     }
+
+    /** #1149 review T2: the hash key is the WHOLE label — two labels sharing a 40-char prefix are different. */
+    @Test
+    fun `labels sharing a long prefix hash differently`() {
+        val alice = "Decline this delivery offer from merchant Alice"
+        val bob = "Decline this delivery offer from merchant Bob"
+        assertTrue(alice.take(40) == bob.take(40))
+        assertFalse(NodeRef.hintHash(alice) == NodeRef.hintHash(bob))
+        val r = ref(alice)
+        assertTrue(r.fingerprintMatches(listOf(alice)))
+        assertFalse("Bob is not a 2b hit for Alice's fingerprint", r.fingerprintMatches(listOf(bob)))
+    }
 }

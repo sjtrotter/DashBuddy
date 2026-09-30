@@ -1093,4 +1093,16 @@ class UiInteractionHandlerOwnerTest {
         assertTrue(expand(handler(listOf(active, bg), active), legacy))
         row.clicks(1)
     }
+
+    /** T2: the fingerprint hashes the WHOLE label — a Bob row is not a 2b hit for Alice's long-titled bind. */
+    @Test
+    fun `a long label differing only past 40 chars is not a 2b hit`() = runTest {
+        fun row(who: String, top: Int) = view(clickable = true, bounds = Rect(36, top, 1044, top + 126), children = listOf(
+            view(cls = "android.widget.TextView", text = "Decline this delivery offer from merchant $who"),
+        ))
+        val ref = bindRef(row("Alice", 1774))
+        val bob = row("Bob", 1774 - 400)
+        assertFalse(expand(handler(windowRoot(bob)), ref))
+        bob.neverClicked()
+    }
 }

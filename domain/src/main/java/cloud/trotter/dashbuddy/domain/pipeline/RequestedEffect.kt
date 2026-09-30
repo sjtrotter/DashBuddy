@@ -126,7 +126,6 @@ data class NodeRef(
 
     companion object {
         const val MAX_LABEL_HINTS = 6
-        const val MAX_LABEL_HINT_LENGTH = 40
 
         /**
          * #1149 review I2 — THE label horizon, one owner for both sides: the bind-time hint
@@ -191,12 +190,19 @@ data class NodeRef(
             LabelHorizon.scan(UiLabelNode(node)) // N8: the one horizon rule
 
         /**
-         * The ONE normalization both sides use: trimmed, clamped, lower-cased (ROOT); null for a
-         * label with no letter at all (a bare amount, a count, a spacer) — those repeat across a
-         * surface and would let a stranger "agree".
+         * The ONE normalization both sides use: the FULL label, capped ([UiTextBounds.cap]), trimmed and
+         * lower-cased (ROOT); null for a label with no letter at all (a bare amount, a count, a spacer)
+         * — those repeat across a surface and would let a stranger "agree".
+         *
+         * #1149 review T2: the key covers the WHOLE label. It used to keep only 40 chars, so "Decline
+         * this delivery offer from merchant Alice" and "… merchant Bob" hashed identically and 2b /
+         * verification accepted Bob. Accepted consequence: a legacy journal/snapshot ref hashed the
+         * 40-char key — it is `labelHintsComplete = false` and never reaches 2b, but its
+         * `agreesWithLabels` containment (strategy 3) may miss a long label for the few seconds a
+         * deferred action lives across the upgrade (fail closed: no tap).
          */
         fun hintKeyOrNull(label: String): String? {
-            val key = label.trim().take(MAX_LABEL_HINT_LENGTH).lowercase(java.util.Locale.ROOT)
+            val key = UiTextBounds.cap(label).trim().lowercase(java.util.Locale.ROOT)
             return key.takeIf { k -> k.any { it.isLetter() } }
         }
 
