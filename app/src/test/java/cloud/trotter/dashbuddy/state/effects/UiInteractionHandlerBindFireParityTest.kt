@@ -225,4 +225,39 @@ class UiInteractionHandlerBindFireParityTest : UiInteractionHandlerTapTestKit() 
         assertFalse(expand(handler(windowRoot(bob)), ref))
         bob.neverClicked()
     }
+
+    /**
+     * V1: P → Q(foreign) → A(P) with a same-package sibling twin B outside Q. Fire-time discovery never
+     * descends into Q, so the bind on A must be REFUSED (the boundary is inherited at mapping) — Ruleset
+     * then emits no reference (R1) and nothing is dispatched, instead of a complete fingerprint that
+     * would resolve to B.
+     */
+    @Test
+    fun `a node beneath a foreign wrapper inherits the boundary and its bind is refused`() = runTest {
+        val a = payRow(top = 1374)
+        val q = view(packageName = "com.example.other", children = listOf(a))
+        val b = payRow(top = 1774 - 200)
+        val root = windowRoot(q, b)
+        val mapped = root.toUiNode()!!
+        val aUi = mapped.findNodes { it.isClickable && it.boundsInScreen.top == 1374 }.single()
+        assertTrue("same package, but beneath a foreign wrapper", aUi.foreignPackage)
+        val hints = NodeRef.bindHintsOf(aUi)
+        assertTrue("the bind is refused — no reference, nothing to dispatch", hints.refused)
+        assertFalse(hints.complete)
+        b.neverClicked()
+    }
+
+    /** V2: one class-name cap on both sides — A (4 097-char class) and B (its 4 096-char prefix) are twins → abort. */
+    @Test
+    fun `the class-name cap is shared so over-long classes stay twins`() = runTest {
+        val prefix = "x".repeat(UiTextBounds.MAX_TEXT_LENGTH)
+        fun row(cls: String, top: Int) = view(cls = cls, clickable = true, bounds = Rect(36, top, 1044, top + 126), children = listOf(
+            view(cls = "android.widget.TextView", text = "This offer"), view(desc = "Expand"),
+        ))
+        val a = row(prefix + "y", 1374)
+        val b = row(prefix, 1574)
+        val ref = expandRef.copy(ownerClassHint = prefix, classNameHint = prefix)
+        assertFalse(expand(handler(windowRoot(a, b)), ref))
+        a.neverClicked(); b.neverClicked()
+    }
 }

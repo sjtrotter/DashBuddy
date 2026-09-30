@@ -110,7 +110,11 @@ private fun convert(
     depth: Int,
     budget: TreeBudget,
     rootPackage: String?,
+    parentForeign: Boolean = false,
 ): UiNode? {
+    // #1149 review V1: a foreign boundary is INHERITED — a same-package node beneath a foreign wrapper is
+    // foreign too, exactly as fire-time discovery never descends into the wrapper to reach it.
+    val foreign = parentForeign || node.packageName?.toString() != rootPackage
     if (!budget.admit(depth)) return null
 
     val childCount = node.childCount
@@ -132,7 +136,7 @@ private fun convert(
 
         val childAccNode = node.getChild(i)
         if (childAccNode != null) {
-            convert(childAccNode, depth + 1, budget, rootPackage)?.let(children::add)
+            convert(childAccNode, depth + 1, budget, rootPackage, foreign)?.let(children::add)
         } else {
             nullChildren++
         }
@@ -167,7 +171,7 @@ private fun convert(
         hasClickAction = node.hasClickAction(), // P6: the one live definition (NodeClick.kt)
         // #1149 review L3: an embedded node of ANOTHER package than the window root (bind-time parity with
         // the executor's package-scoped label scan, which never reads such a subtree).
-        foreignPackage = node.packageName?.toString() != rootPackage,
+        foreignPackage = foreign,
         // #1149 review L4 + N6: every advertised child that did NOT materialize — a null getChild(), a
         // depth refusal, node-budget exhaustion or the loop cap — so a bind over such a node cannot
         // certify its label set complete.

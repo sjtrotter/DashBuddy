@@ -162,7 +162,8 @@ never coordinates, so frozen bounds never aimed a tap — they decided WHICH nod
   failed open when its own scan was cut, and it refused legitimate composite rows (a receipt row holding an info
   chevron and a link). Consequence: a label-less clickable wrapper around the row no longer inherits the row's
   fingerprint, so the ROW is found and clicked; the #1093 nested abort still fires when a wrapper carries its own
-  copy of the labels.
+  copy of the labels. The FOREIGN boundary is inherited at mapping (review V1): a same-package node beneath a
+  foreign wrapper is `foreignPackage` too, so its bind is refused exactly as fire-time discovery never reaches it.
 - **One label horizon (review I2) and one clickability predicate (review J2).** `NodeRef.LABEL_SCAN_DEPTH` (3) /
   `LABEL_SCAN_NODES` (24) in `:domain` are the single owner, and so is the RULE (review N8): `LabelHorizon.scan`
   over a tiny `LabelNode` adapter (`ownLabels`, `takesClick`, `foreign`, `unreadableChildren`, `children()` with
@@ -273,6 +274,8 @@ never coordinates, so frozen bounds never aimed a tap — they decided WHICH nod
     foreign app's unreadable window still counts.
   - **One text cap (review R2):** `UiTextBounds.cap` (4 096, `:domain`) is applied by the mapper at ingestion
     and by `LabelHorizon` before the blank filter, so bind and fire see the same string.
+    The live CLASS name goes through the same cap (`liveClassName`, review V2) in semantic discovery, the bounds
+    walk and the U3 re-check, so an over-long class compares like with like.
   The real receipt trees (~60 nodes, depth ≤ 19) sit far inside the bound, and on all three id-less corpus
   frames 2b finds exactly the row — including from a ref captured 400 px low or on the "Continue dashing" rect
   (`ActuationBindingResolutionTest`, which skips the legacy `"clickable"`-key fixtures — #1154).

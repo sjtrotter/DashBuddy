@@ -3,6 +3,7 @@ package cloud.trotter.dashbuddy.state.effects
 import cloud.trotter.dashbuddy.core.pipeline.accessibility.mapper.takesClick
 import android.view.accessibility.AccessibilityNodeInfo
 import cloud.trotter.dashbuddy.domain.pipeline.LabelNode
+import cloud.trotter.dashbuddy.domain.pipeline.UiTextBounds
 import cloud.trotter.dashbuddy.util.AccNodeUtils
 
 /*
@@ -28,3 +29,10 @@ internal fun ownLabelsOf(node: AccessibilityNodeInfo): List<String> = listOfNotN
     node.text?.toString(),
     node.contentDescription?.toString(),
 ) // raw: LabelHorizon caps then blank-filters (#1149 R2)
+
+/**
+ * #1149 review V2 — a live node's class name under the SAME cap the mapper applies at ingestion
+ * ([UiTextBounds.cap]), so the bind-time `classNameHint` / `ownerClassHint` and the live class are compared
+ * like with like (semantic discovery, the bounds walk and the U3 geometry re-check all read this).
+ */
+internal fun liveClassName(node: AccessibilityNodeInfo): String? = node.className?.toString()?.let(UiTextBounds::cap)

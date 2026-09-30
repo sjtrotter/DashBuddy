@@ -536,7 +536,7 @@ class UiInteractionHandler @Inject constructor(
 
     private fun stillAtCapturedGeometry(target: OwnedTarget, ref: NodeRef): Boolean {
         val owner = target.owner
-        if (ref.classNameHint != null && owner.className?.toString() != ref.classNameHint) return false
+        if (ref.classNameHint != null && liveClassName(owner) != ref.classNameHint) return false // V2
         val liveRect = Rect()
         owner.getBoundsInScreen(liveRect)
         val live = liveRect.toBoundingBox()

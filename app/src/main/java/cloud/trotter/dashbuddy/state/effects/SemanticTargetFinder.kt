@@ -126,7 +126,7 @@ internal fun findNodeBySemantics(root: AccessibilityNodeInfo, ref: NodeRef, expe
                 self.slots[i] = visit(child, depth + 1)
             }
         }
-        val classOk = ownerClass == null || node.className?.toString() == ownerClass
+        val classOk = ownerClass == null || liveClassName(node) == ownerClass // V2: the shared cap
         if (classOk && self.takesClick) {
             val scan = LabelHorizon.scan(self)
             if (!scan.complete) {

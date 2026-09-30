@@ -46,8 +46,8 @@ data class UiNode(
      */
     val hasClickAction: Boolean = false,
     /**
-     * #1149 review L3: this node belongs to a DIFFERENT package than its window root (an embedded
-     * foreign subtree). Not in [allText] or any content/structural hash.
+     * #1149 review L3/V1: this node belongs to a DIFFERENT package than its window root, or sits beneath
+     * one that does (an embedded foreign subtree — the boundary is inherited). Not in [allText] or any content/structural hash.
      */
     val foreignPackage: Boolean = false,
     /**
