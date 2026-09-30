@@ -55,7 +55,15 @@ class AccessibilityListener : AccessibilityService() {
             return
         }
 
-        if (pkg !in platformPreferences.enabledPackages.value) return
+        // #1148 D2: topology events (TYPE_WINDOWS_CHANGED) pass regardless of their package;
+        // every other handled type keeps the enabled-package gate. See [ListenerGate].
+        val admitted = ListenerGate.admit(
+            type = event.eventType,
+            pkg = pkg,
+            enabledPackages = platformPreferences.enabledPackages.value,
+            handledTypes = HANDLED_TYPES,
+        )
+        if (!admitted) return
 
         accessibilitySource.emit(event)
     }
@@ -99,7 +107,7 @@ class AccessibilityListener : AccessibilityService() {
 
     companion object {
         /** Event types that have pipeline handlers — everything else is "unhandled". */
-        private val HANDLED_TYPES = setOf(
+        internal val HANDLED_TYPES = setOf(
             AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED,
             AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED,
             AccessibilityEvent.TYPE_VIEW_CLICKED,

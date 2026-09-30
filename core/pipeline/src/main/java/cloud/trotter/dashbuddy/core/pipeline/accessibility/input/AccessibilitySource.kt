@@ -5,9 +5,12 @@ import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
 import android.view.accessibility.AccessibilityWindowInfo
 import cloud.trotter.dashbuddy.domain.model.accessibility.UiNode
+import cloud.trotter.dashbuddy.core.pipeline.accessibility.ForegroundSkipReason
+import cloud.trotter.dashbuddy.core.pipeline.accessibility.TreeSnapshot
 import cloud.trotter.dashbuddy.core.pipeline.accessibility.mapper.toUiNode
 import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import java.lang.ref.WeakReference
 import javax.inject.Inject
@@ -17,14 +20,18 @@ import javax.inject.Singleton
 class AccessibilitySource @Inject constructor() {
 
     // --- 1. The Event Stream (Push) ---
-    private val _events = MutableSharedFlow<AccessibilityEvent>(
+    // #1148 D1: the flow carries the immutable [AccEvent] envelope, never the framework-owned
+    // AccessibilityEvent — the buffer is read after the callback returned, when the framework
+    // may already have reused the raw event.
+    private val _events = MutableSharedFlow<AccEvent>(
         extraBufferCapacity = 64,
         onBufferOverflow = BufferOverflow.DROP_OLDEST
     )
-    val events = _events.asSharedFlow()
+    val events: SharedFlow<AccEvent> = _events.asSharedFlow()
 
+    /** Copies [event]'s scalars into an [AccEvent] (the one construction site) and emits it. */
     fun emit(event: AccessibilityEvent) {
-        _events.tryEmit(event)
+        _events.tryEmit(AccEvent.from(event))
     }
 
     /**
@@ -80,25 +87,19 @@ class AccessibilitySource @Inject constructor() {
      */
     fun getService(): AccessibilityService? = serviceRef?.get()
 
-    /**
-     * The package owning the active window, read from the native root WITHOUT mapping
-     * the tree (#435 item 3). A full [getCurrentRootSnapshot] converts every node with
-     * one binder IPC apiece; the active-window pipelines drop non-target windows (our
-     * own bubble overlay, the launcher, …) by package, so reading just the package
-     * first lets them skip that whole mapping pass for a window they'll discard anyway.
-     * Cheap: `rootInActiveWindow` fetches only the root node, not the subtree.
-     *
-     * This mirrors [WindowsChangedPipeline], which already reads `nativeRoot.packageName`
-     * before converting. [getCurrentRootSnapshot] re-reads the active root and re-derives
-     * the package, so a rare root swap between the two calls is still caught by the
-     * caller's post-map package re-check — the #4 overlay-drop guarantee is unchanged.
-     *
-     * SAFE to call from background threads.
-     */
-    fun getActiveWindowPackage(): String? = getLiveNativeRoot()?.packageName?.toString()
+    /** This app's own package (the service's), or null when unbound — our bubble's windows. */
+    fun ownPackage(): String? = serviceRef?.get()?.packageName
 
-    /** Active-window root snapshot: the converted [UiNode] tree + the **real package** owning it. */
-    data class RootSnapshot(val tree: UiNode, val packageName: String?)
+    /**
+     * A window's root snapshot: the converted [UiNode] tree + the **real package** owning it, plus
+     * the window's metadata on the paths that already hold the window object (the foreground and
+     * windows-changed paths, #1148 D4); null on the active-root path (review H4).
+     */
+    data class RootSnapshot(
+        val tree: UiNode,
+        val packageName: String?,
+        val windowContext: TreeSnapshot.WindowContext? = null,
+    )
 
     /**
      * Snapshots the active window's root as a [UiNode] tree plus the **real package that owns that
@@ -111,12 +112,120 @@ class AccessibilitySource @Inject constructor() {
      */
     fun getCurrentRootSnapshot(): RootSnapshot? {
         val root = getLiveNativeRoot() ?: return null
+        return getCurrentRootSnapshot(root)
+    }
+
+    /**
+     * [getCurrentRootSnapshot] over an ALREADY-FETCHED active [root] (#1148 review G5) — the
+     * resolver reads the active root once for its package gate and maps that same node, saving a
+     * binder call per frame and removing the read-to-read swap window.
+     */
+    fun getCurrentRootSnapshot(root: AccessibilityNodeInfo): RootSnapshot? {
         val tree = try {
             root.toUiNode()
         } catch (_: Exception) {
             null
         } ?: return null
-        return RootSnapshot(tree = tree, packageName = root.packageName?.toString())
+        return RootSnapshot(
+            tree = tree,
+            packageName = root.packageName?.toString(),
+            // #1148 review H4: no WindowContext on the active-root path — locating it cost a
+            // `service.windows` enumeration per frame for metadata nothing persists.
+            windowContext = null,
+        )
+    }
+
+    /**
+     * A window located by [foregroundWindow], carried with its ALREADY-FETCHED root and the size of
+     * the enumeration it came from, so the caller maps it without a second `getWindows()` /
+     * `window.root` binder round-trip (#1148 review F1).
+     */
+    data class LocatedWindow(
+        val window: AccessibilityWindowInfo,
+        val root: AccessibilityNodeInfo,
+        val totalWindowCount: Int,
+    )
+
+    /** [foregroundWindow]'s verdict: the window in front, or why none is read (#1148 review H3). */
+    sealed interface Foreground {
+        data class Found(val located: LocatedWindow) : Foreground
+        data class Refused(val reason: ForegroundSkipReason) : Foreground
+    }
+
+    /**
+     * The window the dasher actually sees in FRONT, when a non-enabled window (our bubble, the
+     * launcher, system UI) is the active one (#1148 review G5). Enumerated ONCE; each inspected
+     * window's root fetched once.
+     *
+     * Candidates, by `layer` descending: `TYPE_APPLICATION` windows only, EXCEPT our own (this
+     * app's package — the bubble is never "another app in front") and picture-in-picture windows
+     * (review H2: a Google Maps PiP floats above the fullscreen activity with a foreign package, and
+     * would otherwise refuse every frame while the bubble is active). System-layer windows are never
+     * candidates and never have their root fetched (#1148 review H1: a platform's own transient
+     * system-layer toast would otherwise hijack frames, and every SystemUI window would cost a
+     * binder fetch per frame). Overlays that surface as accessibility `TYPE_SYSTEM` (Android's
+     * `TYPE_APPLICATION_OVERLAY`, e.g. Uber's offer overlay) are an open question: #1152.
+     *
+     * The FIRST candidate decides — readable-top-or-refuse: a null root → [Foreground.Refused]
+     * `FRONT_UNREADABLE` (fail closed: we cannot verify what is on top, so never fall through to a
+     * lower readable window); a package that fails [isEnabled] → `FRONT_NOT_ENABLED` (another app is
+     * in front); else [Foreground.Found]. No candidate at all → `NO_CANDIDATE`.
+     *
+     * SAFE to call from background threads.
+     */
+    fun foregroundWindow(isEnabled: (String?) -> Boolean): Foreground = try {
+        foregroundWindow(getWindows(), isEnabled)
+    } catch (_: Exception) {
+        Foreground.Refused(ForegroundSkipReason.FRONT_UNREADABLE)
+    }
+
+    /** [foregroundWindow] over an ALREADY-enumerated [windows] list (one enumeration per frame). */
+    fun foregroundWindow(windows: List<AccessibilityWindowInfo>, isEnabled: (String?) -> Boolean): Foreground = try {
+        val ownPkg = ownPackage()
+        val ordered = windows
+            .filter { it.type == AccessibilityWindowInfo.TYPE_APPLICATION && !it.isInPictureInPictureMode }
+            .sortedByDescending { it.layer }
+        var verdict: Foreground = Foreground.Refused(ForegroundSkipReason.NO_CANDIDATE)
+        for (w in ordered) {
+            val root = w.root
+            if (root == null) { // unreadable application window on top → refuse
+                verdict = Foreground.Refused(ForegroundSkipReason.FRONT_UNREADABLE)
+                break
+            }
+            val pkg = root.packageName?.toString()
+            if (ownPkg != null && pkg == ownPkg) continue // our own bubble is never "in front"
+            verdict = if (isEnabled(pkg)) {
+                Foreground.Found(LocatedWindow(w, root, windows.size))
+            } else {
+                Foreground.Refused(ForegroundSkipReason.FRONT_NOT_ENABLED)
+            }
+            break // the first candidate decides
+        }
+        verdict
+    } catch (_: Exception) {
+        Foreground.Refused(ForegroundSkipReason.FRONT_UNREADABLE)
+    }
+
+    /**
+     * Maps an already-fetched [root] of [window] into a [RootSnapshot] attributed to the root's
+     * real package (#4), with the window's [TreeSnapshot.WindowContext] ([totalWindowCount] from
+     * the same enumeration). No binder call beyond the subtree map. Null when the map fails.
+     */
+    fun getWindowSnapshot(
+        window: AccessibilityWindowInfo,
+        root: AccessibilityNodeInfo,
+        totalWindowCount: Int,
+    ): RootSnapshot? {
+        val tree = try {
+            root.toUiNode()
+        } catch (_: Exception) {
+            null
+        } ?: return null
+        return RootSnapshot(
+            tree = tree,
+            packageName = root.packageName?.toString(),
+            windowContext = contextOf(window, totalWindowCount),
+        )
     }
 
     // --- 3. Multi-Window Support ---
@@ -130,17 +239,15 @@ class AccessibilitySource @Inject constructor() {
         return service.windows ?: emptyList()
     }
 
-    /**
-     * Snapshots the UI tree rooted at a specific window's root node.
-     * Use this to capture non-active windows (e.g., overlay offer screens).
-     */
-    fun getRootForWindow(window: AccessibilityWindowInfo): UiNode? {
-        val root = window.root ?: return null
-        return try {
-            root.toUiNode()
-        } catch (_: Exception) {
-            null
-        }
-    }
-
+    /** The ONE [TreeSnapshot.WindowContext] builder (#1148 D4), used by every snapshot path. */
+    private fun contextOf(window: AccessibilityWindowInfo, total: Int): TreeSnapshot.WindowContext =
+        TreeSnapshot.WindowContext(
+            windowId = window.id,
+            windowType = window.type,
+            windowTitle = window.title?.toString(),
+            windowLayer = window.layer,
+            isActive = window.isActive,
+            isFocused = window.isFocused,
+            totalWindowCount = total,
+        )
 }

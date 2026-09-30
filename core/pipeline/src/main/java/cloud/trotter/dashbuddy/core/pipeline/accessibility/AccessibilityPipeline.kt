@@ -74,15 +74,18 @@ class AccessibilityPipeline @Inject constructor(
     }
 
     private fun clickEvents(): Flow<PipelineEvent.Click> = source.events
-        .filter { it.eventType == AccessibilityEvent.TYPE_VIEW_CLICKED }
+        .filter { it.type == AccessibilityEvent.TYPE_VIEW_CLICKED }
         .mapNotNull { event ->
+            // #1148 review F3: the envelope carries an owned event copy; the binder fetch of the
+            // clicked node happens HERE on the collector, never on the a11y callback thread.
+            val ref = event.source ?: return@mapNotNull null
             try {
-                val sourceNode = event.source ?: return@mapNotNull null
+                val sourceNode = ref.resolve() ?: return@mapNotNull null
                 val node = sourceNode.toUiNode() ?: return@mapNotNull null
                 PipelineEvent.Click(
                     timestamp = System.currentTimeMillis(),
                     node = node,
-                    packageName = event.packageName?.toString(),
+                    packageName = event.packageName,
                 )
             } catch (e: Exception) {
                 // A malformed node tree must cost one click, not the whole
@@ -91,6 +94,8 @@ class AccessibilityPipeline @Inject constructor(
                 stats.onMappingFailure()
                 Timber.w(e, "Click mapping failed — dropping click event")
                 null
+            } finally {
+                ref.release()
             }
         }
 

@@ -1,0 +1,297 @@
+package cloud.trotter.dashbuddy.core.pipeline.accessibility.event.coalesce
+
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.channels.BufferOverflow
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.emptyFlow
+import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.toList
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.test.StandardTestDispatcher
+import kotlinx.coroutines.test.TestScope
+import kotlinx.coroutines.test.advanceTimeBy
+import kotlinx.coroutines.test.advanceUntilIdle
+import kotlinx.coroutines.test.runCurrent
+import kotlinx.coroutines.test.runTest
+import org.junit.After
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
+import org.junit.Before
+import org.junit.Test
+import timber.log.Timber
+
+/**
+ * #1148 D3 — [coalesceByKey] semantics under virtual time: quiet gap, SCHEDULED max-wait (fires
+ * with no arrival), guaranteed trailing emission, no leading edge, per-key independence, the
+ * bounded key map, and cancellation.
+ */
+@OptIn(ExperimentalCoroutinesApi::class)
+class CoalesceByKeyTest {
+
+    /** A test event: its key, a change-type bit, and when (virtual ms) it is emitted. */
+    private data class Ev(val key: Int, val bits: Int, val at: Long)
+
+    private data class Acc(val key: Int, val bits: Int, val count: Int)
+
+    private fun mergeEv(acc: Acc?, e: Ev): Acc =
+        if (acc == null) Acc(e.key, e.bits, 1) else acc.copy(bits = acc.bits or e.bits, count = acc.count + 1)
+
+    /** Emits [events] at their `at` offsets (absolute virtual time, ascending). */
+    private fun timed(events: List<Ev>): Flow<Ev> = flow {
+        var now = 0L
+        for (e in events) {
+            if (e.at > now) delay(e.at - now)
+            now = e.at
+            emit(e)
+        }
+    }
+
+    /** Collects the coalesced stream, stamping each emission with the virtual time it left. */
+    private suspend fun TestScope.run(
+        events: List<Ev>,
+        maxKeys: Int = COALESCE_MAX_KEYS,
+        leadingEdge: Boolean = false,
+    ): List<Pair<Long, Acc>> =
+        timed(events)
+            .coalesceByKey(
+                quietMs = 150L, maxWaitMs = 300L, keyOf = { it.key }, merge = ::mergeEv,
+                maxKeys = maxKeys, leadingEdge = leadingEdge,
+            )
+            .map { testScheduler.currentTime to it }
+            .toList()
+
+    private val warnings = mutableListOf<String>()
+    private val tree = object : Timber.Tree() {
+        override fun log(priority: Int, tag: String?, message: String, t: Throwable?) {
+            if (priority == android.util.Log.WARN) warnings += message
+        }
+    }
+
+    @Before fun plant() = Timber.plant(tree)
+    @After fun uproot() = Timber.uproot(tree)
+
+    @Test
+    fun `a short burst emits ONCE at last event + quiet, bits OR-ed, no leading edge`() = runTest {
+        val bursts = (0 until 5).map { Ev(key = 7, bits = 1 shl it, at = it * 20L) }
+
+        val out = run(bursts)
+
+        assertEquals(1, out.size)
+        val (time, acc) = out.single()
+        assertEquals("emitted at last(80) + quiet(150)", 230L, time)
+        assertEquals(5, acc.count)
+        assertEquals(0b11111, acc.bits)
+    }
+
+    @Test
+    fun `a continuous flood emits on the SCHEDULED max-wait and then a trailing frame`() = runTest {
+        // Every 20 ms for 1 s: 0, 20, …, 980.
+        val flood = (0 until 50).map { Ev(key = 1, bits = 1, at = it * 20L) }
+
+        val out = run(flood)
+        val times = out.map { it.first }
+
+        assertEquals("max-wait cadence + trailing quiet emission", listOf(300L, 600L, 900L, 1130L), times)
+        assertEquals("no event is lost across bursts", 50, out.sumOf { it.second.count })
+    }
+
+    @Test
+    fun `max-wait fires with NO arrival after it (scheduled, not arrival-checked)`() = runTest {
+        // Events 0..280 every 20 ms, then silence: the old operator only checked max-wait on
+        // arrival; the new one must fire at 300 from its own timer (quiet would be 430).
+        val events = (0..14).map { Ev(key = 1, bits = 1, at = it * 20L) }
+
+        val out = run(events)
+
+        assertEquals(listOf(300L), out.map { it.first })
+        assertEquals(15, out.single().second.count)
+    }
+
+    @Test
+    fun `interleaved keys coalesce independently`() = runTest {
+        val events = listOf(
+            Ev(1, 1, 0), Ev(2, 4, 10), Ev(1, 2, 20), Ev(2, 8, 30), Ev(1, 1, 40),
+        )
+
+        val out = run(events)
+
+        assertEquals(2, out.size)
+        val byKey = out.associate { it.second.key to it }
+        assertEquals(190L, byKey.getValue(1).first) // last key-1 event 40 + 150
+        assertEquals(Acc(1, 0b11, 3), byKey.getValue(1).second)
+        assertEquals(180L, byKey.getValue(2).first) // last key-2 event 30 + 150
+        assertEquals(Acc(2, 0b1100, 2), byKey.getValue(2).second)
+    }
+
+    @Test
+    fun `key cap flushes the least-recently-touched burst early, WARNs once, keeps working`() = runTest {
+        val events = listOf(Ev(1, 1, 0), Ev(2, 1, 0), Ev(3, 1, 0), Ev(4, 1, 0))
+
+        val out = run(events, maxKeys = 2)
+
+        // Key 1 evicted when key 3 arrived, key 2 when key 4 arrived — both flushed at t=0.
+        assertEquals(listOf(0L to 1, 0L to 2, 150L to 3, 150L to 4).toSet(), out.map { it.first to it.second.key }.toSet())
+        assertEquals("every burst still emitted exactly once", 4, out.size)
+        assertEquals("one WARN per collection, not per eviction", 1, warnings.size)
+    }
+
+    @Test
+    fun `no events means no emissions`() = runTest {
+        val out = emptyFlow<Ev>()
+            .coalesceByKey(keyOf = { it.key }, merge = ::mergeEv)
+            .toList()
+        assertTrue(out.isEmpty())
+    }
+
+    @Test
+    fun `cancelling the collector cancels the per-key timers`() = runTest {
+        val upstream = MutableSharedFlow<Ev>(extraBufferCapacity = 4)
+        val emitted = mutableListOf<Acc>()
+        val job = launch(StandardTestDispatcher(testScheduler)) {
+            upstream.coalesceByKey(keyOf = { it.key }, merge = ::mergeEv).collect { emitted += it }
+        }
+        runCurrent()
+        assertTrue(upstream.tryEmit(Ev(1, 1, 0)))
+        assertTrue(upstream.tryEmit(Ev(2, 1, 0)))
+        advanceTimeBy(50)
+        runCurrent()
+
+        job.cancel()
+        advanceUntilIdle()
+
+        assertTrue("no timer may fire after cancellation", emitted.isEmpty())
+        assertTrue(job.isCancelled)
+        assertTrue("no per-key job outlives the collector", job.children.none())
+        assertEquals("upstream subscription released", 0, upstream.subscriptionCount.value)
+    }
+
+    private fun Job.activeDescendants(): Int =
+        children.sumOf { (if (it.isActive) 1 else 0) + it.activeDescendants() }
+
+    @Test
+    fun `a stalled consumer keeps bursts open and merging - live jobs bounded, nothing lost`() = runTest {
+        val bursts = 300
+        // One event every 400 ms (each its own burst while the consumer keeps up).
+        val upstream = flow {
+            repeat(bursts) {
+                delay(400)
+                emit(Ev(key = 1, bits = 1, at = 0))
+            }
+        }
+        val gate = CompletableDeferred<Unit>()
+        val out = mutableListOf<Acc>()
+        val job = launch {
+            upstream
+                .coalesceByKey(keyOf = { it.key }, merge = ::mergeEv, maxKeys = 1)
+                .collect { gate.await(); out += it } // stalls on the very first emission
+        }
+        runCurrent()
+        val baseline = job.activeDescendants()
+
+        var peak = 0
+        repeat(bursts) {
+            advanceTimeBy(400)
+            runCurrent()
+            peak = maxOf(peak, job.activeDescendants() - baseline)
+        }
+
+        // H8: sender + max timer + the one quiet job + its pending timed wait (per burst, not per
+        // event — the old per-event cancel/relaunch kept this at 3 but churned a coroutine per event).
+        assertTrue("live coroutines beyond the operator's own must stay <= 4 x maxKeys, was $peak", peak <= 4)
+
+        gate.complete(Unit)
+        advanceUntilIdle()
+        job.join()
+
+        assertEquals("every event is delivered once the consumer resumes", bursts, out.sumOf { it.count })
+        assertTrue("the stalled period collapsed into merged bursts", out.size < bursts)
+    }
+
+    // ── leading edge (#1148 review F5 / G3 / G4) ──────────────────────────
+
+    @Test
+    fun `leading edge - a lone event after idle emits ONCE, immediately`() = runTest {
+        val out = run(listOf(Ev(key = 1, bits = 1, at = 0)), leadingEdge = true)
+
+        assertEquals("one emission at t0, none at t0+150", listOf(0L to Acc(1, 1, 1)), out)
+    }
+
+    @Test
+    fun `leading edge - the trailing burst carries only the events after the lead (G4)`() = runTest {
+        val burst = (0 until 5).map { Ev(key = 1, bits = 1 shl it, at = it * 20L) }
+
+        val out = run(burst, leadingEdge = true)
+
+        assertEquals(
+            listOf(0L to Acc(1, 0b1, 1), 230L to Acc(1, 0b11110, 4)),
+            out,
+        )
+        assertEquals("emitted counts sum to the raw event count", 5, out.sumOf { it.second.count })
+    }
+
+    @Test
+    fun `leading edge - an event within max-wait of the last EMISSION gets no lead (G3)`() = runTest {
+        // Lead at 0 (cooldown to 300); the lone burst closes SILENTLY at 150 (no new cooldown).
+        val out = run(listOf(Ev(1, 1, 0), Ev(1, 2, 200)), leadingEdge = true)
+
+        assertEquals(listOf(0L to Acc(1, 1, 1), 350L to Acc(1, 2, 1)), out)
+    }
+
+    @Test
+    fun `leading edge - the cooldown is anchored on the emission, not the silent close (G3)`() = runTest {
+        // Lead at 0 → cooldown ends at 300. The silent close at 150 must NOT extend it to 450,
+        // so a transition at 400 leads immediately (the old operator: 400 >= 300 → immediate).
+        val out = run(listOf(Ev(1, 1, 0), Ev(1, 2, 400)), leadingEdge = true)
+
+        assertEquals(listOf(0L to Acc(1, 1, 1), 400L to Acc(1, 2, 1)), out)
+    }
+
+    @Test
+    fun `leading edge - a flood leads once, then max-wait cadence and the trailing frame`() = runTest {
+        val flood = (0 until 50).map { Ev(key = 1, bits = 1, at = it * 20L) }
+
+        val out = run(flood, leadingEdge = true)
+
+        assertEquals(listOf(0L, 300L, 600L, 900L, 1130L), out.map { it.first })
+        assertEquals("sum n == raw events (G4)", 50, out.sumOf { it.second.count })
+    }
+
+    @Test
+    fun `leading edge with a stalled consumer never stalls collection - a hot source loses nothing (H7)`() = runTest {
+        // The production shape: a hot, DROP_OLDEST source (AccessibilitySource's buffer). If a lead
+        // were sent on the collector, a stalled consumer would stop collection and the source
+        // would drop raw events.
+        val source = MutableSharedFlow<Ev>(extraBufferCapacity = 64, onBufferOverflow = BufferOverflow.DROP_OLDEST)
+        val gate = CompletableDeferred<Unit>()
+        val out = mutableListOf<Acc>()
+        val job = launch {
+            source
+                .coalesceByKey(keyOf = { it.key }, merge = ::mergeEv, maxKeys = 1, leadingEdge = true)
+                .collect { gate.await(); out += it }
+        }
+        runCurrent()
+        val baseline = job.activeDescendants()
+
+        val events = 300
+        var peak = 0
+        repeat(events) {
+            advanceTimeBy(400) // past the cooldown: every event would lead
+            assertTrue(source.tryEmit(Ev(key = 1, bits = 1, at = 0)))
+            runCurrent()
+            peak = maxOf(peak, job.activeDescendants() - baseline)
+        }
+
+        assertTrue("live coroutines stay bounded (H8 bound + the lead cooldown), was $peak", peak <= 5)
+
+        gate.complete(Unit)
+        advanceUntilIdle()
+        job.cancel()
+
+        assertEquals("every raw event is accounted for once the consumer resumes", events, out.sumOf { it.count })
+    }
+}
