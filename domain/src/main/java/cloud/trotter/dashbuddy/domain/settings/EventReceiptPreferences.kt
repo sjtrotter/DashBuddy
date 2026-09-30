@@ -29,6 +29,17 @@ enum class EventReceiptConsent {
          * off ⇒ a durable [DECLINED]. An explicit act never maps back to [UNDECIDED].
          */
         fun of(allowed: Boolean): EventReceiptConsent = if (allowed) ALLOWED else DECLINED
+
+        /** Android 11 (API 30) — see [isWideReceiptReliable]. */
+        const val UNRELIABLE_WIDE_RECEIPT_SDK = 30
+
+        /**
+         * #1151 review MM2 — the ONE rule for whether clearing `packageNames` at runtime is known to
+         * take effect on [sdkInt]. On Android 11 the framework may treat the dynamic package filter as
+         * additive, so an Allow can leave the manifest filter in force; the app cannot verify that
+         * from its side, so it says so (a WARN from the listener, a caveat on the Settings switch).
+         */
+        fun isWideReceiptReliable(sdkInt: Int): Boolean = sdkInt != UNRELIABLE_WIDE_RECEIPT_SDK
     }
 }
 

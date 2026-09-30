@@ -3,6 +3,7 @@ package cloud.trotter.dashbuddy.core.pipeline.accessibility.input
 import android.accessibilityservice.AccessibilityService
 import android.accessibilityservice.AccessibilityServiceInfo
 import android.content.Intent
+import android.os.Build
 import android.view.accessibility.AccessibilityEvent
 import cloud.trotter.dashbuddy.core.pipeline.BuildConfig
 import cloud.trotter.dashbuddy.domain.pipeline.LocaleBoundaryReporter
@@ -17,6 +18,7 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 import timber.log.Timber
+import java.util.concurrent.atomic.AtomicBoolean
 import javax.inject.Inject
 
 @AndroidEntryPoint
@@ -125,6 +127,13 @@ class AccessibilityListener : AccessibilityService() {
         info.packageNames = packageNames
         serviceInfo = info
         Timber.tag("Pipeline").i("Event receipt: wide=%s", ServiceInfoPolicy.isWide(consent))
+        if (ServiceInfoPolicy.shouldWarnUnreliable(consent, Build.VERSION.SDK_INT, unreliableWarned.get())) {
+            if (unreliableWarned.compareAndSet(false, true)) {
+                Timber.tag("Pipeline").w(
+                    "wide event receipt may not take effect on Android 11 (framework filter is additive)",
+                )
+            }
+        }
     }
 
     override fun onServiceConnected() {
@@ -161,6 +170,9 @@ class AccessibilityListener : AccessibilityService() {
     }
 
     companion object {
+        /** MM2 — the Android 11 caveat WARN fires once per process. */
+        private val unreliableWarned = AtomicBoolean(false)
+
         /** Event types that have pipeline handlers — everything else is "unhandled". */
         internal val HANDLED_TYPES = setOf(
             AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED,

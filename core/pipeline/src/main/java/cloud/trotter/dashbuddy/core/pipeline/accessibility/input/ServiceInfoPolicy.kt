@@ -35,6 +35,16 @@ object ServiceInfoPolicy {
         }
     }
 
+    /** Delegates to the one `:domain` rule ([EventReceiptConsent.isWideReceiptReliable], MM2). */
+    fun isWideReceiptReliable(sdkInt: Int): Boolean = EventReceiptConsent.isWideReceiptReliable(sdkInt)
+
+    /**
+     * MM2 — the listener WARNs (once per process) when it widens on an SDK where widening may not
+     * take effect. Pure so the SDK gating is testable.
+     */
+    fun shouldWarnUnreliable(consent: EventReceiptConsent, sdkInt: Int, alreadyWarned: Boolean): Boolean =
+        !alreadyWarned && isWide(consent) && !isWideReceiptReliable(sdkInt)
+
     /** True when [packageNamesFor] widens to every package — the one fact the INFO line reports. */
     fun isWide(consent: EventReceiptConsent): Boolean = consent == EventReceiptConsent.ALLOWED
 }

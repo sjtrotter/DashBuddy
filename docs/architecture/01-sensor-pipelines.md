@@ -244,7 +244,12 @@ frames the pipeline ever sees*:
   says otherwise). Debug and release are identical since #1151 — the old unconditional debug
   `packageNames = null` is gone; debug still widens `eventTypes` to every type for unhandled-type
   logging. One INFO per apply: `Pipeline` / `Event receipt: wide=<bool>`. `ListenerGate` itself is
-  unchanged.
+  unchanged. **Known limitation — Android 11 (API 30, #1151 review MM2):** the framework may treat
+  the dynamically-set package filter as additive, so clearing `packageNames` can leave the manifest
+  filter in force (Allow logs `wide=true` but `WINDOWS_CHANGED` may never arrive). The app cannot
+  verify enforcement from its side: it still applies, logs one `Pipeline` WARN per process ("wide
+  event receipt may not take effect on Android 11"), and the Settings switch carries the caveat.
+  The rule has one owner, `EventReceiptConsent.isWideReceiptReliable(sdkInt)` (`:domain`).
 - **D3 — per-key coalescer.** `coalesceByKey(quietMs, maxWaitMs, keyOf, merge, maxKeys,
   leadingEdge)` (`event/coalesce/CoalesceByKey.kt`) replaced `debounceWithTimeout`. Per key, a
   burst opens on the first event, folds every event into an accumulator, and emits when EITHER the

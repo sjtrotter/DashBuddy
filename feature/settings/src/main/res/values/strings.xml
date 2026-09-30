@@ -109,5 +109,6 @@
     <string name="event_receipt_deny">Don\'t allow</string>
     <string name="event_receipt_not_now">Not now</string>
     <string name="event_receipt_settings_section">Screen events</string>
+    <string name="event_receipt_android11_caveat">(may not take effect on Android 11)</string>
     <string name="event_receipt_settings_switch">Notice windows from other apps</string>
 </resources>

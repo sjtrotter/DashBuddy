@@ -126,7 +126,7 @@ private fun EventReceiptSection(
             Column(Modifier.padding(horizontal = 16.dp)) {
                 SwitchRow(
                     label = stringResource(R.string.event_receipt_settings_switch),
-                    subtitle = eventReceiptDisclosure(),
+                    subtitle = eventReceiptSettingsHelper(),
                     checked = allowed,
                     onCheckedChange = onAllowedChange,
                 )
