@@ -1,14 +1,12 @@
 package cloud.trotter.dashbuddy.core.pipeline.accessibility.input
 
 import android.accessibilityservice.AccessibilityService
-import android.graphics.Rect
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
 import android.view.accessibility.AccessibilityWindowInfo
 import cloud.trotter.dashbuddy.domain.model.accessibility.UiNode
 import cloud.trotter.dashbuddy.core.pipeline.PipelineStats
 import cloud.trotter.dashbuddy.core.pipeline.accessibility.ForegroundSkipReason
-import cloud.trotter.dashbuddy.core.pipeline.accessibility.OverlayRejectReason
 import cloud.trotter.dashbuddy.core.pipeline.accessibility.TreeSnapshot
 import cloud.trotter.dashbuddy.core.pipeline.accessibility.mapper.toUiNode
 import cloud.trotter.dashbuddy.domain.state.Platform
