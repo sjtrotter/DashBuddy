@@ -14,6 +14,7 @@ import cloud.trotter.dashbuddy.domain.census.contract.UiSkeletonDto
 import cloud.trotter.dashbuddy.domain.census.contract.UiSkeletonNodeDto
 import cloud.trotter.dashbuddy.domain.census.contract.WireStrings
 import cloud.trotter.dashbuddy.domain.model.accessibility.UiNode
+import cloud.trotter.dashbuddy.domain.model.accessibility.UiNodeTextField
 import cloud.trotter.dashbuddy.domain.privacy.PiiShapes
 import kotlin.coroutines.cancellation.CancellationException
 
@@ -34,7 +35,7 @@ import kotlin.coroutines.cancellation.CancellationException
  * - **Only chrome-likely tokens are hashed.** Every non-blank text field runs the §2 filter
  *   ([withholdingStep]) in ADR order; any withholding step emits the constant `withheld`; only a
  *   `words:1..8` survivor is hashed ([CensusHash], fail-closed to `withheld`). The FRAME-LEVEL
- *   duplicate rule then withholds any field whose trimmed value a withholding step caught anywhere
+ *   duplicate rule then withholds any field whose canonical value a withholding step caught anywhere
  *   else in the same frame (a name the id marks on one node is not hashed on its id-less twin).
  * - **Inert.** [outcome] never throws (only coroutine cancellation escapes): any failure is
  *   [Refusal.BUILD_FAILED].
@@ -102,7 +103,7 @@ object SkeletonBuilder {
          */
         PII_ID_INTAKE(1),
 
-        /** The trimmed value is longer than [MAX_TOKEN_LENGTH]. */
+        /** The canonical value is longer than [MAX_TOKEN_LENGTH]. */
         LENGTH_CAP(2),
 
         /** `CustomerTextMarkers.unredactedMarker` hits. */
@@ -175,7 +176,7 @@ object SkeletonBuilder {
         }
         val title = frame.field(windowTitle, IdClass.NONE)
 
-        // Pass 2: emit, withholding every field whose trimmed value was caught anywhere in the frame.
+        // Pass 2: emit, withholding every field whose canonical value was caught anywhere in the frame.
         val root = try {
             frame.emit(pending)
         } catch (_: IllegalArgumentException) {
@@ -215,10 +216,13 @@ object SkeletonBuilder {
     private fun stamp(value: String?): String? =
         value?.take(UiSkeletonDto.MAX_VERSION_LENGTH)?.takeIf { WireStrings.isWellFormed(it) }
 
-    /** How the §2 step-1 id check classified a node's RAW id (review CC3). */
+    /** How the §2 step-1 id check classified a node's RAW id (reviews CC3, EE1). */
     internal enum class IdClass {
-        /** In `CustomerTextMarkers.ID_MARKERS`: the node's VALUE IS PII by construction. */
+        /** An `ID_MARKER_TABLE` row with `valueIsPii` — an IDENTITY id (customer name, address line). */
         PII_VALUE,
+
+        /** An `ID_MARKER_TABLE` row without it — a CONTENT id also reused for app copy. */
+        PII_CONTENT,
 
         /** In `PII_ID_SUFFIXES` only (the intake list; it also covers instruction BODIES). */
         INTAKE_ONLY,
@@ -226,14 +230,24 @@ object SkeletonBuilder {
         NONE,
     }
 
-    private fun idClassOf(id: String?): IdClass = when {
-        CustomerTextMarkers.hasIdMarkerSuffix(id) -> IdClass.PII_VALUE
-        PiiShapes.hasPiiIdSuffix(id) -> IdClass.INTAKE_ONLY
-        else -> IdClass.NONE
+    private fun idClassOf(id: String?): IdClass {
+        val marker = CustomerTextMarkers.idMarkerFor(id)
+        return when {
+            marker != null -> if (marker.valueIsPii) IdClass.PII_VALUE else IdClass.PII_CONTENT
+            PiiShapes.hasPiiIdSuffix(id) -> IdClass.INTAKE_ONLY
+            else -> IdClass.NONE
+        }
     }
 
-    /** One non-blank field after pass 1: its trimmed value, and whether its own id withholds it. */
-    internal class Field(val trimmed: String, val idWithholds: Boolean)
+    /**
+     * The fields an identity id's hit may seed frame-wide from (review EE1): the rendered value only —
+     * never role/hint/tooltip/clickLabel/uid/pane, whose chrome ("Button") would otherwise be withheld
+     * everywhere in the frame.
+     */
+    private val SEED_FIELDS = setOf(UiNodeTextField.TEXT, UiNodeTextField.CONTENT_DESCRIPTION)
+
+    /** One non-blank field after pass 1: its canonical value, and whether its own id withholds it. */
+    internal class Field(val canonical: String, val idWithholds: Boolean)
 
     /** A node after pass 1: its validated class/id, flags, and fields by wire key. */
     internal class Pending(
@@ -246,7 +260,7 @@ object SkeletonBuilder {
 
     /**
      * The per-frame filter state (review CC5): the value-only steps (2–8) and the value's own slot are
-     * computed once per distinct trimmed value; step 1 once per node. [caught] is the frame-level set.
+     * computed once per distinct canonical value; step 1 once per node. [caught] is the frame-level set.
      * [judge] is the value-only filter (steps 2–8); internal so a test can count its evaluations.
      */
     internal class FrameFilter(private val judge: (String) -> FilterStep?) {
@@ -268,7 +282,7 @@ object SkeletonBuilder {
             val idClass = idClassOf(node.viewIdResourceName)
             val fields = ArrayList<Pair<String, Field>>()
             for ((field, value) in node.scrubbableStrings()) {
-                field(value, idClass)?.let { fields += field.wire to it }
+                field(value, idClass, seedsFromId = field in SEED_FIELDS)?.let { fields += field.wire to it }
             }
             return Pending(
                 className = ClassNameGrammar.staticOrNull(node.className),
@@ -279,23 +293,29 @@ object SkeletonBuilder {
             )
         }
 
-        /** Pass 1 for one field: filter it, and seed [caught] per the frame-level rule. */
-        fun field(value: String?, idClass: IdClass): Field? {
+        /**
+         * Pass 1 for one field: canonicalize (review EE2), filter, and seed [caught] per the frame-level
+         * rule. [seedsFromId] is true only for the TEXT / CONTENT_DESCRIPTION fields (review EE1).
+         */
+        fun field(value: String?, idClass: IdClass, seedsFromId: Boolean = true): Field? {
             if (value.isNullOrBlank()) return null
-            val trimmed = value.trim()
-            val step = valueStep(trimmed)
-            // Seeds: the value-judging steps 3, 4, 5, 7, 8 — and step 1 ONLY when the id's VALUE is PII by
-            // construction (ID_MARKERS). Not the length cap (a duplicate is itself over-length), not an
+            val canonical = CensusHash.canonical(value)
+            val step = valueStep(canonical)
+            // Seeds: the value-judging steps 3, 4, 5, 7, 8 on any field — and step 1 ONLY for an IDENTITY
+            // id (`valueIsPii`, review EE1) on its rendered text/desc. Not the length cap (a duplicate is
+            // itself over-length), not a content id (`description_text_view` renders app copy), not an
             // intake-only id (its list also covers chrome-bearing instruction bodies, review CC3).
-            if ((step != null && step != FilterStep.LENGTH_CAP) || idClass == IdClass.PII_VALUE) caught += trimmed
-            return Field(trimmed, idWithholds = idClass != IdClass.NONE)
+            val valueSeed = step != null && step != FilterStep.LENGTH_CAP
+            val idSeed = idClass == IdClass.PII_VALUE && seedsFromId
+            if (valueSeed || idSeed) caught += canonical
+            return Field(canonical, idWithholds = idClass != IdClass.NONE)
         }
 
         /** Steps 2–8 of [withholdingStep], memoized; a filter failure withholds (fail closed). */
-        private fun valueStep(trimmed: String): FilterStep? = valueSteps.getOrPut(trimmed) {
+        private fun valueStep(canonical: String): FilterStep? = valueSteps.getOrPut(canonical) {
             Judged(
                 try {
-                    judge(trimmed)
+                    judge(canonical)
                 } catch (_: Exception) {
                     FilterStep.PII_SHAPE
                 },
@@ -304,8 +324,8 @@ object SkeletonBuilder {
 
         /** Pass 2 for one field: the constant `withheld`, or the value's own (memoized) slot. */
         fun slot(field: Field): TextSlot {
-            if (field.idWithholds || field.trimmed in caught || valueStep(field.trimmed) != null) return TextSlot.WITHHELD
-            return valueSlots.getOrPut(field.trimmed) { unfilteredSlot(field.trimmed) }
+            if (field.idWithholds || field.canonical in caught || valueStep(field.canonical) != null) return TextSlot.WITHHELD
+            return valueSlots.getOrPut(field.canonical) { unfilteredSlot(field.canonical) }
         }
 
         fun emit(p: Pending): UiSkeletonNodeDto {
@@ -329,31 +349,31 @@ object SkeletonBuilder {
      * Step 6 and the hash, for a value no withholding step caught: only `words:1..8` hash; a digest
      * failure withholds. PRIVATE (review CC5): every caller goes through the frame-level rule.
      */
-    private fun unfilteredSlot(trimmed: String): TextSlot = try {
-        val shape = KindClassifier.shapeKind(trimmed)
+    private fun unfilteredSlot(canonical: String): TextSlot = try {
+        val shape = KindClassifier.shapeKind(canonical)
         if (!shape.hashable) {
             TextSlot(kind = shape.wire)
         } else {
-            CensusHash.of(trimmed)?.let { TextSlot(h = it, kind = shape.wire) } ?: TextSlot.WITHHELD
+            CensusHash.of(canonical)?.let { TextSlot(h = it, kind = shape.wire) } ?: TextSlot.WITHHELD
         }
     } catch (_: Exception) {
         TextSlot.WITHHELD
     }
 
     /**
-     * The FIRST withholding §2 step that fires on [trimmed] (the trimmed canonical value), or null when
+     * The FIRST withholding §2 step that fires on [canonical] (the trimmed, whitespace-normalized value, `CensusHash.canonical`), or null when
      * none does. ADR order; the length cap (step 2) precedes every text predicate, so steps 3–8 only
      * ever see ≤ [MAX_TOKEN_LENGTH] characters. Internal for the tests.
      */
-    internal fun withholdingStep(trimmed: String, nodeId: String?): FilterStep? = when {
+    internal fun withholdingStep(canonical: String, nodeId: String?): FilterStep? = when {
         CustomerTextMarkers.hasIdMarkerSuffix(nodeId) -> FilterStep.PII_ID
         PiiShapes.hasPiiIdSuffix(nodeId) -> FilterStep.PII_ID_INTAKE
-        trimmed.length > MAX_TOKEN_LENGTH -> FilterStep.LENGTH_CAP
-        CustomerTextMarkers.unredactedMarker(trimmed) != null -> FilterStep.CUSTOMER_MARKER
-        PiiShapes.customerLeadIn(trimmed) != null -> FilterStep.LEAD_IN
-        PiiShapes.containsMask(trimmed) -> FilterStep.MASK
-        PiiShapes.hasNameShape(trimmed) -> FilterStep.NAME_SHAPE
-        PiiShapes.VALUE_SHAPES.any { it.hits(trimmed) } -> FilterStep.PII_SHAPE
+        canonical.length > MAX_TOKEN_LENGTH -> FilterStep.LENGTH_CAP
+        CustomerTextMarkers.unredactedMarker(canonical) != null -> FilterStep.CUSTOMER_MARKER
+        PiiShapes.customerLeadIn(canonical) != null -> FilterStep.LEAD_IN
+        PiiShapes.containsMask(canonical) -> FilterStep.MASK
+        PiiShapes.hasNameShape(canonical) -> FilterStep.NAME_SHAPE
+        PiiShapes.VALUE_SHAPES.any { it.hits(canonical) } -> FilterStep.PII_SHAPE
         else -> null
     }
 }

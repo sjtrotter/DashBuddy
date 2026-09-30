@@ -438,4 +438,46 @@ class SkeletonBuilderTest {
         assertEquals(TextSlot.WITHHELD, root.children[2].text.getValue("text"))
         assertEquals(mapOf("Accept" to 1, "Jane S" to 1), counts)
     }
+
+    @Test
+    fun `EE1 - a CONTENT id does not seed the frame, and an identity id seeds only from text and desc`() {
+        val content = UiNode(
+            className = "android.widget.LinearLayout",
+            viewIdResourceName = "com.doordash.driverapp:id/sheet",
+            children = listOf(
+                UiNode(className = "android.widget.TextView", text = "Required"),
+                UiNode(className = "android.widget.TextView", text = "Raise to 50%"),
+                UiNode(className = "android.widget.TextView", viewIdResourceName = "com.doordash.driverapp:id/description_text_view", text = "Required"),
+                UiNode(className = "android.widget.TextView", viewIdResourceName = "com.x:id/description_text_view", text = "Raise to 50%"),
+            ),
+        )
+        val item = SkeletonBuilder.build(content, null, meta, "doordash", "2026-09-30")!!
+        assertEquals(words(1, "Required"), item.root.children[0].text.getValue("text"))
+        assertEquals(TextSlot(kind = "mixed"), item.root.children[1].text.getValue("text"))
+        assertEquals(TextSlot.WITHHELD, item.root.children[2].text.getValue("text"))
+        assertEquals(TextSlot.WITHHELD, item.root.children[3].text.getValue("text"))
+
+        val role = UiNode(
+            className = "android.widget.LinearLayout",
+            viewIdResourceName = "com.x:id/row",
+            children = listOf(
+                UiNode(className = "android.widget.TextView", viewIdResourceName = "com.doordash.driverapp:id/customer_name", text = "Sam", roleDescription = "Button"),
+                UiNode(className = "android.widget.Button", text = "Button", contentDescription = "Sam"),
+            ),
+        )
+        val r = SkeletonBuilder.build(role, null, meta, "doordash", "2026-09-30")!!
+        // The identity id's own fields are all withheld (step 1)...
+        assertEquals(TextSlot.WITHHELD, r.root.children[0].text.getValue("role"))
+        // ...but only its TEXT seeds the frame: "Sam" propagates, the role's "Button" does not.
+        assertEquals(TextSlot.WITHHELD, r.root.children[1].text.getValue("desc"))
+        assertEquals(words(1, "Button"), r.root.children[1].text.getValue("text"))
+    }
+
+    @Test
+    fun `EE2 - whitespace is normalized once, so both regex engines agree on withhold and hash`() {
+        assertEquals(TextSlot.WITHHELD, slot("José\u00A0R"))
+        assertEquals(TextSlot.WITHHELD, slot("Jane\u2009S is waiting at the door"))
+        assertEquals(words(2, "Pickup & delivery"), slot("Pickup\u00A0&\u00A0delivery"))
+        assertEquals(words(2, "Pickup & delivery"), slot("  Pickup \t &\n delivery "))
+    }
 }
