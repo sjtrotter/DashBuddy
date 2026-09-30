@@ -106,7 +106,8 @@ class AccessibilitySource @Inject constructor(
         var flaggedActiveRoot: AccessibilityNodeInfo? = null
         val windows = service.windows ?: emptyList()
         // PR #1155 review FF2: the ONE owner of "which window is active" ([activeFromEnumeration]).
-        val flaggedActive = activeFromEnumeration(windows)
+        val activeFlags = activeFromEnumeration(windows)
+        val flaggedActive = activeFlags.single
         for (window in windows) {
             val root = window.root
             if (window === flaggedActive) flaggedActiveRoot = root
@@ -130,7 +131,7 @@ class AccessibilitySource @Inject constructor(
         // PR #1155 review HH2 — keep #1149 U2's fail-closed rule: TWO or more windows flagged active
         // (a transition in flight) is an AMBIGUOUS identity → NO active root (keep-all scoping), never
         // a trusted rootInActiveWindow.
-        val ambiguous = windows.count { it.isActive } >= 2
+        val ambiguous = activeFlags.ambiguous
         val active: AccessibilityNodeInfo? = when {
             ambiguous -> null
             flagged == null -> rootInActive
@@ -159,8 +160,14 @@ class AccessibilitySource @Inject constructor(
      * is null, is `rootInActiveWindow` (read the active root, with no overlay scan) — the pre-#1152
      * behaviour, never a refusal. On the TAP path ≥ 2 flagged means NO active root (HH2, #1149 U2).
      */
-    fun activeFromEnumeration(windows: List<AccessibilityWindowInfo>): AccessibilityWindowInfo? =
-        windows.filter { it.isActive }.singleOrNull()
+    fun activeFromEnumeration(windows: List<AccessibilityWindowInfo>): ActiveFlags {
+        // JJ5: ONE isActive pass serves both the single window and the ambiguity check.
+        val flagged = windows.filter { it.isActive }
+        return ActiveFlags(single = flagged.singleOrNull(), ambiguous = flagged.size >= 2)
+    }
+
+    /** [activeFromEnumeration]'s one pass: the single flagged window (else null), and whether ≥ 2 were flagged. */
+    data class ActiveFlags(val single: AccessibilityWindowInfo?, val ambiguous: Boolean)
 
     /**
      * PR #1155 review HH1 — the ONE three-valued active resolution, shared by the event path
@@ -179,7 +186,7 @@ class AccessibilitySource @Inject constructor(
 
     /** [ActiveWindow] over ONE enumeration — see its KDoc (HH1). */
     fun resolveActive(windows: List<AccessibilityWindowInfo>, isEnabled: (String?) -> Boolean): ActiveWindow {
-        val window = activeFromEnumeration(windows) ?: return ActiveWindow.Unknown(null)
+        val window = activeFromEnumeration(windows).single ?: return ActiveWindow.Unknown(null)
         val root = rootOf(window) ?: return ActiveWindow.Unknown(window)
         val pkg = root.packageName?.toString() ?: return ActiveWindow.Unknown(window)
         return if (isEnabled(pkg)) ActiveWindow.Enabled(window, root) else ActiveWindow.NotEnabled(window, root)
