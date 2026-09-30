@@ -410,10 +410,14 @@ then fired, and were answered with the window beneath). The shipped rules:
   through the one window builder (`getWindowSnapshot` — a focused overlay, the card IS the active
   window, is therefore counted and carries its `WindowContext`, review HH5); Unknown(window) → ONE
   `rootInActiveWindow` read stands in only if it provably IS that window (same non-negative window id)
-  and its package is enabled — mapped through the one window builder (review II1: the frame the
-  pre-#1152 code read); any mismatch → the frame is SKIPPED `FRONT_UNREADABLE` (the topology path
-  emits nothing for Unknown(window), `topologySkip{FRONT_UNREADABLE}`); Unknown(none) → the one fallback, `rootInActiveWindow` with NO
-  overlay scan (pre-#1152); NotEnabled → the front-window read (D4) over the same list. With no overlay
+  and then follows EXACTLY the resolution its package calls for — enabled → mapped through the one
+  window builder, not enabled (our bubble touched while its enumerated root is null) → the front-window
+  read (reviews II1/JJ1: the frames the pre-#1152 code read); a null, negative or mismatched id → the
+  frame is SKIPPED `FRONT_UNREADABLE` (the topology path
+  emits nothing for Unknown(window), `topologySkip{FRONT_UNREADABLE}`); Unknown(none) (zero or ≥ 2 flagged — e.g. an overlay taking focus mid-touch) → the
+  native root's OWN window is located in the list BY ITS ID and resolved as the active one, overlay
+  scan included (review JJ2); only a native root not provably in the list (negative id, absent) takes
+  the pre-#1152 read (the topology path emits nothing for Unknown(none)); NotEnabled → the front-window read (D4) over the same list. With no overlay
   platform enabled the #1148 path is unchanged (no enumeration, H4). **Taps keep #1149 U2's fail-closed
   rule** (review HH2): ≥ 2 flagged active windows give `getLiveWindowRoots` NO active root (keep-all
   scoping), never a trusted `rootInActiveWindow`. A root fetch that THROWS on a size-passing system
@@ -441,8 +445,10 @@ then fired, and were answered with the window beneath). The shipped rules:
   overlay selected" reads the active root. When the active
   window is NOT enabled (our bubble, the launcher), the overlay is reached by step 3's
   `foregroundWindow` (D4). Every overlay frame is counted, `overlaySnapshots=n`, in ONE place — the
-  shared `getWindowSnapshot` builder counts every mapped `TYPE_SYSTEM` window (the only system windows
-  ever mapped are overlay candidates; review FF6); every scan is counted,
+  shared `getWindowSnapshot` builder (review FF6) — and the count MEANS "an offer overlay was read": a
+  mapped `TYPE_SYSTEM` window counts only when it passes the overlay probe (review JJ3, memoized — no
+  fetch for the walk's own candidates); an active system window that is not one (a dragged puck) is
+  still mapped, as before #1152, but not counted; every scan is counted,
   `overlayScans=n` (review CC9). **Cost, accepted (CC9):** with an overlay platform enabled, every
   event-path resolution pays one `getWindows()` enumeration (memoized verdicts keep root fetches
   out of it). There is no safe pre-gate: in release the verdict cache never clears until #1151 lands
