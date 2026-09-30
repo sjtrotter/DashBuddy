@@ -207,13 +207,18 @@ The consent is ONE nullable `StateFlow`; `null` means ONLY "not read yet"
 (review NN2). A failed read logs one ERROR per failure episode and RETRIES with
 bounded backoff (5 × 1 s·attempt, MM5) keeping the value it had; exhausted
 retries settle on a USABLE UNDECIDED (filtered footprint, prompt and switch
-work), and a successful write is observed at once and restarts the reader. A
+work) unless a value is already known this process; writes and the reader are
+serialized (a `Mutex`: `set()` cancels and joins the reader, publishes, starts a
+fresh one; a write generation gates publication, review OO1). A
 write never throws a storage failure — `set()` logs and returns `false` (NN3).
 Enforcement treats `null` as UNDECIDED and dedups on the policy OUTPUT (`isWide`),
 so one apply and one INFO line per connect (MM8/NN4); the prompt waits for a
 value, and a DEBUG shell renders a neutral loading gate — no NavHost, no
 deep-link delivery — until it is known (MM3), offering a notice + Exit after 3 s
-so it is never a silent blank (NN2). The front door has ONE "Not now" string
+so it is never a silent blank (NN2). The front door shows nothing until BOTH readiness signals are true —
+`RuleCapabilityGrants.loaded` (set by the first `reconcile`, even an empty one)
+and the receipt read — so a cold launch can never show the receipt page first
+and swap it out when the capability rows arrive (OO2). The front door has ONE "Not now" string
 (`consent_front_door_not_now`, NN6), and the shared disclosure carries no
 state-dependent sentence, so it is true in every state (NN5). A pending deep link is parked
 in `MainShellViewModel`'s `SavedStateHandle` and cleared only after delivery
