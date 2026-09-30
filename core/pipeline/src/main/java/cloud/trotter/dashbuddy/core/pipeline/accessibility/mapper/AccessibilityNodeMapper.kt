@@ -168,9 +168,10 @@ private fun convert(
         // #1149 review L3: an embedded node of ANOTHER package than the window root (bind-time parity with
         // the executor's package-scoped label scan, which never reads such a subtree).
         foreignPackage = node.packageName?.toString() != rootPackage,
-        // #1149 review L4: children the platform advertised but getChild() could not read — a bind over
-        // such a node cannot certify its label set complete.
-        unreadableChildren = nullChildren,
+        // #1149 review L4 + N6: every advertised child that did NOT materialize — a null getChild(), a
+        // depth refusal, node-budget exhaustion or the loop cap — so a bind over such a node cannot
+        // certify its label set complete.
+        unreadableChildren = (childCount - children.size).coerceAtLeast(0),
         boundsInScreen = bounds.toBoundingBox(),
         children = children,
     )

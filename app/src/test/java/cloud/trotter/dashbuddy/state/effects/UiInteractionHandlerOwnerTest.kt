@@ -872,4 +872,30 @@ class UiInteractionHandlerOwnerTest {
         val ref2 = bindRefOf(root2.toUiNode()!!.findNodes { it.text == "This offer" }.single())
         assertFalse(ref2.hasExactFingerprint)
     }
+
+    // ---------------------------------------------------------------- review N6: mapper budget cuts are unreadable too
+
+    /** A depth cut below the row (inside its label horizon) makes the bind incomplete. */
+    @Test
+    fun `a mapper depth cut inside the horizon makes the bind incomplete`() = runTest {
+        val row = view(clickable = true, desc = "Row", children = listOf(
+            view(cls = "android.widget.TextView", text = "This offer", children = listOf(view(children = listOf(view(text = "deep"))))),
+        ))
+        // Put the row so its grandchild sits at the mapper's depth limit: the grandchild's child is refused.
+        var top: AccessibilityNodeInfo = row
+        repeat(TreeLimits.MAX_TREE_DEPTH - 3) { top = view(children = listOf(top)) }
+        val root = windowRoot(top)
+        val rowUi = root.toUiNode()!!.findNodes { it.contentDescription == "Row" }.single()
+        assertFalse(bindRefOf(rowUi).labelHintsComplete)
+    }
+
+    /** Node-budget exhaustion that drops one of the row's own children makes the bind incomplete. */
+    @Test
+    fun `a mapper node-budget cut of the row's child makes the bind incomplete`() = runTest {
+        val big = view(children = List(TreeLimits.MAX_TREE_NODES) { filler() })
+        val row = view(clickable = true, desc = "Row", children = listOf(big, view(cls = "android.widget.TextView", text = "This offer")))
+        val root = windowRoot(row)
+        val rowUi = root.toUiNode()!!.findNodes { it.contentDescription == "Row" }.single()
+        assertFalse(bindRefOf(rowUi).labelHintsComplete)
+    }
 }

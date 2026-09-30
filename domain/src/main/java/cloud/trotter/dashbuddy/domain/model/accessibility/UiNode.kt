@@ -51,8 +51,8 @@ data class UiNode(
      */
     val foreignPackage: Boolean = false,
     /**
-     * #1149 review L4: advertised children the mapper could not read (`getChild` returned null) — they
-     * are silently absent from [children]. Not in [allText] or any content/structural hash.
+     * #1149 review L4/N6: advertised children the mapper did not materialize — a null `getChild`, or
+     * a [children] entry the tree budget refused (depth, node budget, loop cap) — silently absent. Not in [allText] or any content/structural hash.
      */
     val unreadableChildren: Int = 0,
 
