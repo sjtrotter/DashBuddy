@@ -202,6 +202,21 @@ class PipelineStatsTest {
 
     private fun allNull(ruleId: String) = ParseShortfall(ruleId, allNullFieldCount = 2)
 
+    // ── #1149 review R7: an unprovable action-target bind is its own census ──
+
+    @Test
+    fun `an unprovable bind counts per rule-and-bind on its own census`() {
+        val stats = PipelineStats()
+        val rule = "doordash.screen.delivery_summary_collapsed"
+        val s = ParseShortfall(rule, unprovableBindings = listOf("expandButton"))
+        stats.onParseShortfall(s)
+        stats.onParseShortfall(s)
+        assertEquals(2L, stats.bindUnprovableCount(rule, "expandButton"))
+        assertEquals(0L, stats.bindShortfallCount(rule, "expandButton"))
+        assertEquals(0L, stats.parseShortfallCount(rule))
+        assertTrue(stats.summary(), stats.summary().contains("bindUnprovable{doordash.screen.delivery_summary_collapsed#expandButton=2}"))
+    }
+
     // ── #1093: an optional bind that resolved nothing is its OWN census + WARN ──
 
     @Test
