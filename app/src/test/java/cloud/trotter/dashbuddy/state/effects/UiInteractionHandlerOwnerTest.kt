@@ -441,4 +441,17 @@ class UiInteractionHandlerOwnerTest {
         assertFalse(expand(handler(windowRoot(row))))
         row.neverClicked()
     }
+
+    /**
+     * Review I7: discovery is one pass — the row's children are fetched ONCE by the 2b walk (its label
+     * region is derived from them) and once more only by the owner's own verification scan. The old
+     * scan-then-descend walk fetched them twice during discovery (3 in total).
+     */
+    @Test
+    fun `the semantic walk fetches each child once`() = runTest {
+        val row = payRow(top = 1774 - 400)
+        assertTrue(expand(handler(windowRoot(row))))
+        verify(row, times(2)).getChild(eq(0))
+        verify(row, times(2)).getChild(eq(1))
+    }
 }

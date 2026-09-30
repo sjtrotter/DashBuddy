@@ -445,8 +445,8 @@ class UiInteractionHandler @Inject constructor(
         // overlap tier). A walk cut by its depth/fetch bound aborts the whole resolution.
         if (candidates.isEmpty() && ref.labelHintHashes.isNotEmpty()) {
             for (root in roots) {
-                val found = mutableListOf<WalkHit>()
-                if (!findNodeBySemantics(root, ref, expectedPackage, found)) return CandidateSearch(emptyList(), semanticTruncated = true)
+                val found = findNodeBySemantics(root, ref, expectedPackage)
+                    ?: return CandidateSearch(emptyList(), semanticTruncated = true)
                 val inActive = activeRoot != null && root == activeRoot
                 val base = candidates.size
                 for (hit in found) candidates.add(
@@ -530,59 +530,84 @@ class UiInteractionHandler @Inject constructor(
     private data class WalkHit(val node: AccessibilityNodeInfo, val relaxed: Boolean, val ancestors: List<Int>)
 
     /**
+     * The part of a node's subtree its OWN label scan would read, relative to the node: labels at
+     * relative depth <= [LABEL_SCAN_DEPTH], and `slots[d]` = child slots of region nodes at relative
+     * depth d (each one fetch in [scanLabels]). Clickable and foreign-package children spend a slot
+     * but contribute nothing (#1149 review I3 / constraint 4).
+     */
+    private class LabelRegion {
+        val labels = ArrayList<Pair<Int, String>>()
+        val slots = IntArray(LABEL_SCAN_DEPTH + 1)
+
+        fun absorb(child: LabelRegion) {
+            for ((d, label) in child.labels) if (d + 1 <= LABEL_SCAN_DEPTH) labels.add(d + 1 to label)
+            for (d in 0 until LABEL_SCAN_DEPTH) slots[d + 1] += child.slots[d]
+        }
+
+        /** What [scanLabels] would call complete: <= LABEL_SCAN_NODES fetches and no child below the depth bound. */
+        fun complete(): Boolean = slots.take(LABEL_SCAN_DEPTH).sum() <= LABEL_SCAN_NODES && slots[LABEL_SCAN_DEPTH] == 0
+    }
+
+    private class SemanticHit(val node: AccessibilityNodeInfo, val pre: Int, val lastPre: Int)
+
+    /**
      * Strategy 2b (#1149): every same-package node of [root] that takes a click
      * ([AccNodeUtils.isActionClickable]), matches the ref's class hint (when it has one) and whose
-     * COMPLETE label scan is the ref's EXACT fingerprint ([NodeRef.fingerprintMatches] — no
-     * superset, #1102 review constraint 1). No geometric entrance test. Like the bounds walk it
-     * always descends and records nesting, so a wrapper around the row stays visible to the
-     * caller's nested-abort rule instead of being pruned (or preferred) here.
+     * COMPLETE label region is the ref's EXACT fingerprint ([NodeRef.fingerprintMatches] — no
+     * superset, #1102 review constraint 1). No geometric entrance test. Hits record their nesting
+     * (pre-order intervals), so a wrapper carrying its own copy of the labels around the row stays
+     * visible to the caller's nested-abort rule.
+     *
+     * ONE pass (review I7): each node's label region is derived post-order from the children the
+     * walk already fetched — the same horizon, ownership and completeness [scanLabels] applies —
+     * so every child is fetched once and the budget counts real IPC once.
      *
      * Bounded (#1102 review constraints 2 + 3): at most [SEMANTIC_SCAN_DEPTH] deep and
-     * [SEMANTIC_SCAN_NODES] child fetches per root — the walk's own AND its label scans', each
-     * budgeted before the call, nulls included. Returns FALSE when either bound cut the walk: a
-     * partial scan can leave one wrong survivor, so the caller aborts the whole resolution.
+     * [SEMANTIC_SCAN_NODES] child fetches per root, budgeted before the call, nulls included.
+     * Returns null when the window's search is INCOMPLETE — a bound cut the walk, a child read
+     * null, or a candidate's own region is incomplete (review I4b) — because a partial search can
+     * leave one wrong survivor.
      */
-    private fun findNodeBySemantics(
-        root: AccessibilityNodeInfo,
-        ref: NodeRef,
-        expectedPackage: String,
-        out: MutableList<WalkHit>,
-    ): Boolean {
+    private fun findNodeBySemantics(root: AccessibilityNodeInfo, ref: NodeRef, expectedPackage: String): List<WalkHit>? {
         var fetched = 0
+        var preCounter = 0
         var truncated = false
-        val path = ArrayList<Int>()
-        fun visit(node: AccessibilityNodeInfo, depth: Int) {
-            val classOk = ref.classNameHint == null || node.className?.toString() == ref.classNameHint
-            var hit = false
-            if (classOk && AccNodeUtils.isActionClickable(node)) {
-                val cap = minOf(LABEL_SCAN_NODES, SEMANTIC_SCAN_NODES - fetched)
-                val scan = scanLabels(node, expectedPackage, cap)
-                fetched += scan.fetched
-                // #1149 review I4b: a candidate whose OWN scan is incomplete (depth cut, fetch cut,
-                // unreadable child) is unproven, and "treat it as a non-match" would let a twin win —
-                // so the whole search of this window is incomplete.
-                if (!scan.complete) { truncated = true; return }
-                hit = ref.fingerprintMatches(scan.labels)
-            }
-            if (hit) {
-                out.add(WalkHit(node, relaxed = false, ancestors = path.toList()))
-                path.add(out.size - 1)
-            }
-            val count = node.childCount
-            if (count > 0 && depth >= SEMANTIC_SCAN_DEPTH) { truncated = true; return }
+        val hits = ArrayList<SemanticHit>()
+        fun visit(node: AccessibilityNodeInfo, depth: Int): LabelRegion? {
+            val pre = preCounter++
+            val region = LabelRegion()
+            node.text?.toString()?.takeIf { it.isNotBlank() }?.let { region.labels.add(0 to it) }
+            node.contentDescription?.toString()?.takeIf { it.isNotBlank() }?.let { region.labels.add(0 to it) }
+            val count = node.childCount.coerceAtLeast(0)
+            region.slots[0] = count
+            if (count > 0 && depth >= SEMANTIC_SCAN_DEPTH) { truncated = true; return null }
             for (i in 0 until count) {
-                if (fetched >= SEMANTIC_SCAN_NODES) { truncated = true; return }
+                if (fetched >= SEMANTIC_SCAN_NODES) { truncated = true; return null }
                 fetched++
-                // An unreadable child may hide the real control (or its twin): the search is incomplete.
-                val child = node.getChild(i) ?: run { truncated = true; return }
+                // An unreadable child may hide the real control (or its twin): incomplete (I4).
+                val child = node.getChild(i) ?: run { truncated = true; return null }
                 if (child.packageName?.toString() != expectedPackage) continue
-                visit(child, depth + 1)
-                if (truncated) return
+                val childRegion = visit(child, depth + 1) ?: return null
+                if (!AccNodeUtils.isActionClickable(child)) region.absorb(childRegion)
             }
-            if (hit) path.removeAt(path.size - 1)
+            val classOk = ref.classNameHint == null || node.className?.toString() == ref.classNameHint
+            if (classOk && AccNodeUtils.isActionClickable(node)) {
+                // I4b: an incomplete candidate is unproven — never "a non-match that lets its twin win".
+                // TODO(vet): I2 makes labels past LABEL_SCAN_DEPTH part of NEITHER side's fingerprint,
+                // yet a depth cut still counts as unproven here, so such a control can only fail closed.
+                if (!region.complete()) { truncated = true; return null }
+                if (ref.fingerprintMatches(region.labels.map { it.second })) hits.add(SemanticHit(node, pre, preCounter - 1))
+            }
+            return region
         }
         visit(root, 0)
-        return !truncated
+        if (truncated) return null
+        hits.sortBy { it.pre }
+        return hits.mapIndexed { i, h ->
+            WalkHit(h.node, relaxed = false, ancestors = hits.indices.filter { j ->
+                j != i && hits[j].pre < h.pre && h.pre <= hits[j].lastPre
+            })
+        }
     }
 
     /**
