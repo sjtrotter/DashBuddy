@@ -23,9 +23,12 @@ import kotlinx.coroutines.delay
 @Composable
 fun FrontDoorHost(
     capabilityViewModel: ConsentPromptViewModel = hiltViewModel(),
-    eventReceiptViewModel: EventReceiptConsentViewModel = hiltViewModel(),
+    eventReceiptViewModelOverride: EventReceiptConsentViewModel? = null,
 ) {
     val activityOwner = LocalActivity.current as? ViewModelStoreOwner ?: return
+    // PP7: the SAME activity-scoped instance MainActivity uses — one receipt ViewModel.
+    val eventReceiptViewModel: EventReceiptConsentViewModel =
+        eventReceiptViewModelOverride ?: hiltViewModel(viewModelStoreOwner = activityOwner)
     val frontDoor: FrontDoorViewModel = hiltViewModel(viewModelStoreOwner = activityOwner)
 
     val capability by capabilityViewModel.uiState.collectAsStateWithLifecycle()
