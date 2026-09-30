@@ -1000,4 +1000,14 @@ class UiInteractionHandlerOwnerTest {
         assertTrue(expand(handler(windowRoot(row)), ref))
         row.clicks(1)
     }
+
+    /** R5: strategy 3 is bounded too — a hostile childCount under a hint-less ref stops at the budget, no click. */
+    @Test
+    fun `the bounds walk is bounded by the tree budget`() = runTest {
+        val root = windowRoot()
+        whenever(root.childCount).thenReturn(Int.MAX_VALUE)
+        val legacy = expandRef.copy(labelHintHashes = emptyList(), labelHintsComplete = false)
+        assertFalse(expand(handler(root), legacy))
+        verify(root, org.mockito.kotlin.atMost(TreeLimits.MAX_TREE_NODES)).getChild(any())
+    }
 }

@@ -574,7 +574,10 @@ class UiInteractionHandler @Inject constructor(
         if (candidates.isEmpty() && !degenerate) {
             for (root in roots) {
                 val found = mutableListOf<WalkHit>()
-                findNodeByBounds(root, ref.boundsInScreen, ref.classNameHint, found, ArrayList())
+                if (!findNodeByBounds(root, ref.boundsInScreen, ref.classNameHint, found)) {
+                    Timber.tag("Effects").d("Bounds walk cut by the tree budget — no candidates from this window (#1149 R5)")
+                    continue
+                }
                 val inActive = activeRoot != null && root == activeRoot
                 val base = candidates.size
                 for (hit in found) candidates.add(
@@ -731,13 +734,46 @@ class UiInteractionHandler @Inject constructor(
      *    undecidable — both are the verification stage's call, which is why each hit records the
      *    hits it is nested inside.
      * Runs only when strategy 2b found nothing (#1149).
+     *
+     * Bounded (#1149 review R5): the mapper's [TreeLimits] depth and fetch budget, each fetch counted
+     * before the call (nulls included). Returns false when a bound CUT the walk — the caller then takes
+     * no candidates from this root (fail closed to manual): a partial geometric walk could leave one
+     * wrong survivor exactly like a partial label walk.
      */
     private fun findNodeByBounds(
+        root: AccessibilityNodeInfo,
+        targetBounds: BoundingBox,
+        className: String?,
+        out: MutableList<WalkHit>,
+    ): Boolean {
+        var fetched = 0
+        var cut = false
+        val path = ArrayList<Int>()
+        fun visit(node: AccessibilityNodeInfo, depth: Int) {
+            if (cut) return
+            visitBounds(node, targetBounds, className, out, path) {
+                val count = node.childCount.coerceAtLeast(0)
+                if (count > 0 && depth >= TreeLimits.MAX_TREE_DEPTH) { cut = true; return@visitBounds }
+                for (i in 0 until count) {
+                    if (fetched >= TreeLimits.MAX_TREE_NODES) { cut = true; return@visitBounds }
+                    fetched++
+                    val child = node.getChild(i) ?: continue
+                    visit(child, depth + 1)
+                    if (cut) return@visitBounds
+                }
+            }
+        }
+        visit(root, 0)
+        return !cut
+    }
+
+    private inline fun visitBounds(
         node: AccessibilityNodeInfo,
         targetBounds: BoundingBox,
         className: String?,
         out: MutableList<WalkHit>,
         path: ArrayList<Int>,
+        descend: () -> Unit,
     ) {
         val liveBounds = Rect()
         node.getBoundsInScreen(liveBounds)
@@ -752,10 +788,7 @@ class UiInteractionHandler @Inject constructor(
             out.add(WalkHit(node, relaxed = live != targetBounds, ancestors = path.toList()))
             path.add(out.size - 1)
         }
-        for (i in 0 until node.childCount) {
-            val child = node.getChild(i) ?: continue
-            findNodeByBounds(child, targetBounds, className, out, path)
-        }
+        descend()
         if (hit) path.removeAt(path.size - 1)
     }
 }
