@@ -100,8 +100,19 @@ class WindowsChangedPipeline @Inject constructor(
                 }
 
             val ownPkg = source.ownPackage()
-            // BB10/FF5: the active window's package, read ONCE per burst through the source's cache.
-            val activePkg = source.packageOf(active)
+            // FF5/GG1: the active root is resolved EXACTLY as the event path resolves it — a FRESH root
+            // fetched from the enumerated active window (`rootOf`), once per burst; its package is read
+            // off that root, never off the memoized package (a cached package must not bypass the
+            // readability check). Unreadable → nothing this burst: the content/state path owns the
+            // fallback frame (rootInActiveWindow, no overlay scan), so emitting an overlay here would
+            // disagree with it on the same list.
+            val activeRoot = source.rootOf(active)
+            if (activeRoot == null) {
+                stats.onTopologySkip(ForegroundSkipReason.FRONT_UNREADABLE)
+                Timber.tag("Pipeline").v("🚫 Windows: the active window's root is unreadable — nothing emitted")
+                return@transform
+            }
+            val activePkg = activeRoot.packageName?.toString()
             if (ownPkg != null && activePkg == ownPkg) {
                 // H6: our bubble's layer is no cutoff — emit the window in front of the dasher.
                 // Reuse THIS enumeration (round 4): no second getWindows() per topology burst.

@@ -452,8 +452,10 @@ then fired, and were answered with the window beneath). The shipped rules:
   an unreadable window above is a BARRIER (nothing beneath it is emitted) and a foreign application
   window on top emits nothing; an overlay over a covered sheet emits the overlay only. The bubble-active branch emits the
   `foregroundWindow` result. The topology path takes its active window from the SAME enumeration
-  (`activeFromEnumeration`; none → nothing) and reads the active package ONCE per burst (review
-  FF1/FF5). Its refusals are counted in their OWN census, `topologySkip{…}` (review FF4 —
+  (`activeFromEnumeration`; none → nothing) and resolves the active root EXACTLY as the event path
+  does — a fresh `rootOf` the enumerated active window, once per burst, its package read off that root
+  (review FF1/FF5/GG1); an unreadable active root emits NOTHING, counted `topologySkip{FRONT_UNREADABLE}`
+  (the content/state path owns the fallback frame), and a memoized package never bypasses that check. Its refusals are counted in their OWN census, `topologySkip{…}` (review FF4 —
   `foregroundSkip{…}`'s contract is event-path frame loss). The DEBUG window-list line
   adds `area%=<int>` (the window's share of the display; `-1` when unknown) beside `titleLen` — no
   text.

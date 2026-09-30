@@ -949,4 +949,37 @@ class WindowSpecificSnapshotTest {
         assertEquals(1L, h.stats.overlayRejectedCount(OverlayRejectReason.UNREADABLE))
         assertEquals(0L, h.stats.overlayRejectedCount(OverlayRejectReason.PACKAGE_CHANGED))
     }
+
+    private fun topologyFrames(h: Harness): List<TreeSnapshot> = collectWith(
+        h.events,
+        cloud.trotter.dashbuddy.core.pipeline.accessibility.event.type.window.windows_changed
+            .WindowsChangedPipeline(h.source, h.prefs, h.stats).output(),
+        event(AccessibilityEvent.TYPE_WINDOWS_CHANGED, windowId = -1),
+    )
+
+    @Test
+    fun `GG1 - unreadable flagged active root, COLD cache - event path reads the fallback root, topology emits nothing`() {
+        val dd = node(ddPkg, "dd")
+        val activeWindow = window(3, 5, null, active = true)
+        val h = harness(activeRoot = dd, windows = listOf(activeWindow, uberOverlay(9, 9, node(uberPkg, "uber-offer"))))
+
+        assertEquals(listOf("dd", "dd"), Kind.entries.flatMap { collect(h, it, windowId = 9, pkg = uberPkg) }.map { it.tree.text })
+        assertTrue(topologyFrames(h).isEmpty())
+        assertEquals(1L, h.stats.topologySkipCount(ForegroundSkipReason.FRONT_UNREADABLE))
+        assertEquals(0L, h.stats.overlaySnapshotCount())
+    }
+
+    @Test
+    fun `GG1 - unreadable flagged active root, WARM cache - the memoized package never bypasses the fresh-root check`() {
+        val dd = node(ddPkg, "dd", windowId = 3)
+        val activeWindow = window(3, 5, dd, active = true)
+        val h = harness(activeRoot = dd, windows = listOf(activeWindow, uberOverlay(9, 9, node(uberPkg, "uber-offer"))))
+        // Warm the cache: a readable frame records window 3 → DoorDash (the overlay above is the frame).
+        assertEquals(listOf("uber-offer"), collect(h, Kind.STATE, windowId = 3).map { it.tree.text })
+
+        whenever(activeWindow.root).thenReturn(null) // the active window's root is now unreadable
+        assertEquals(listOf("dd"), collect(h, Kind.STATE, windowId = 9, pkg = uberPkg).map { it.tree.text }) // fallback root
+        assertTrue(topologyFrames(h).isEmpty())
+        assertEquals(1L, h.stats.topologySkipCount(ForegroundSkipReason.FRONT_UNREADABLE))
+    }
 }
