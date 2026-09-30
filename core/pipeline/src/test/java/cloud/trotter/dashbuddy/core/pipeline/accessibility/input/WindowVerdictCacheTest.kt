@@ -143,8 +143,8 @@ class WindowVerdictCacheTest {
         assertEquals("p0", cache.get(0)?.packageName)
         assertNull("the least-recently-used entry is evicted", cache.get(1))
         val b = WindowVerdictCache.Bounds(0, 0, 10, 10)
-        cache.putVerdict(0, null, WindowVerdictCache.Verdict.NOT_OVERLAY_PLATFORM, b, g)
-        assertEquals(WindowVerdictCache.Entry("p0", WindowVerdictCache.Verdict.NOT_OVERLAY_PLATFORM, b), cache.get(0))
+        cache.putVerdict(0, null, WindowVerdictCache.Verdict.NOT_OVERLAY_PLATFORM, b, 100L, g)
+        assertEquals(WindowVerdictCache.Entry("p0", WindowVerdictCache.Verdict.NOT_OVERLAY_PLATFORM, b, 100L), cache.get(0))
         cache.clear()
         assertEquals(0, cache.size)
     }
@@ -154,7 +154,7 @@ class WindowVerdictCacheTest {
         val cache = WindowVerdictCache()
         val started = cache.generation
         cache.clear() // topology changed while the probe was in its root fetch
-        cache.putVerdict(9, "com.ubercab.driver", WindowVerdictCache.Verdict.CANDIDATE, WindowVerdictCache.Bounds(0, 136, 1080, 2347), started)
+        cache.putVerdict(9, "com.ubercab.driver", WindowVerdictCache.Verdict.CANDIDATE, WindowVerdictCache.Bounds(0, 136, 1080, 2347), 2_592_000L, started)
         cache.putPackage(9, "com.ubercab.driver", started)
         assertNull(cache.get(9))
     }

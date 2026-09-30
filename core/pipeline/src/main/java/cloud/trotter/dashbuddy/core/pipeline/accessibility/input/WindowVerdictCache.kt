@@ -12,9 +12,9 @@ package cloud.trotter.dashbuddy.core.pipeline.accessibility.input
  * display area is never memoized (it can become known).
  *
  * PR #1155 review CC1 — the memo is GEOMETRY- and GENERATION-checked:
- * - a verdict stores the [Bounds] it was decided on; a caller honours it only while the window's
- *   CURRENT bounds are equal (a resized window — the puck growing, an offer shrinking — is
- *   re-probed);
+ * - a verdict stores the [Bounds] AND the display area it was decided on; a caller honours it only
+ *   while the window's CURRENT bounds and the CURRENT display area are both equal (a resized window —
+ *   the puck growing, an offer shrinking — or a rotated / changed display is re-probed, review DD5);
  * - [clear] (every `TYPE_WINDOWS_CHANGED`, [AccessibilitySource.emit]) bumps a topology
  *   [generation]; a caller reads the generation BEFORE it starts probing and passes it to every
  *   write, and a write whose generation moved is DISCARDED — a collector paused in a root fetch
@@ -39,7 +39,13 @@ internal class WindowVerdictCache(private val capacity: Int = CAPACITY) {
     /** Immutable screen bounds a verdict was decided on (CC1). */
     data class Bounds(val left: Int, val top: Int, val right: Int, val bottom: Int)
 
-    data class Entry(val packageName: String?, val verdict: Verdict?, val bounds: Bounds? = null)
+    /** [displayArea]: the display area (px²) the verdict was decided against (PR #1155 review DD5). */
+    data class Entry(
+        val packageName: String?,
+        val verdict: Verdict?,
+        val bounds: Bounds? = null,
+        val displayArea: Long? = null,
+    )
 
     private val map = object : LinkedHashMap<Int, Entry>(16, 0.75f, /* accessOrder = */ true) {
         override fun removeEldestEntry(eldest: MutableMap.MutableEntry<Int, Entry>?): Boolean = size > capacity
@@ -59,7 +65,7 @@ internal class WindowVerdictCache(private val capacity: Int = CAPACITY) {
     fun putPackage(windowId: Int, packageName: String, generation: Long) {
         if (generation != gen) return
         val prior = map[windowId]
-        map[windowId] = Entry(packageName, prior?.verdict, prior?.bounds)
+        map[windowId] = Entry(packageName, prior?.verdict, prior?.bounds, prior?.displayArea)
     }
 
     /**
@@ -67,9 +73,16 @@ internal class WindowVerdictCache(private val capacity: Int = CAPACITY) {
      * (size). Discarded if [generation] moved since the caller started probing.
      */
     @Synchronized
-    fun putVerdict(windowId: Int, packageName: String?, verdict: Verdict, bounds: Bounds, generation: Long) {
+    fun putVerdict(
+        windowId: Int,
+        packageName: String?,
+        verdict: Verdict,
+        bounds: Bounds,
+        displayArea: Long,
+        generation: Long,
+    ) {
         if (generation != gen) return
-        map[windowId] = Entry(packageName ?: map[windowId]?.packageName, verdict, bounds)
+        map[windowId] = Entry(packageName ?: map[windowId]?.packageName, verdict, bounds, displayArea)
     }
 
     /** Topology changed: forget everything and bump the generation (in-flight writes are discarded). */

@@ -161,20 +161,20 @@ class OverlayCandidateTest {
     }
 
     @Test
-    fun `CC9 - the display area is memoized per topology generation`() {
-        val res = displayResources()
-        val service = mock<AccessibilityService> {
-            on { resources } doReturn res
-            on { packageName } doReturn "cloud.trotter.dashbuddy"
+    fun `DD5 - the display area doubles, same window bounds - the memo is re-probed and TOO_SMALL`() {
+        val metrics = android.util.DisplayMetrics().apply {
+            widthPixels = OverlayGeometry.DISPLAY_W
+            heightPixels = OverlayGeometry.DISPLAY_H
         }
-        val src = AccessibilitySource(stats).apply { registerService(service) }
-        assertEquals(display, src.displayArea())
-        assertEquals(display, src.displayArea())
-        verify(res, times(1)).displayMetrics
-        @Suppress("DEPRECATION")
-        src.emit(android.view.accessibility.AccessibilityEvent.obtain(android.view.accessibility.AccessibilityEvent.TYPE_WINDOWS_CHANGED))
-        assertEquals(display, src.displayArea())
-        verify(res, times(2)).displayMetrics
+        val res = mock<Resources> { on { displayMetrics } doReturn metrics }
+        val w = window(9, node(uberPkg), Rect(0, 0, 1080, 700)) // ~29 % of 1080×2400
+        val src = source(windows = listOf(w), res = res)
+
+        assertTrue(candidate(src, w, src.displayArea()))
+        metrics.widthPixels = 2 * OverlayGeometry.DISPLAY_W // no topology event — nothing clears the memo
+        assertEquals("read per resolution, never memoized", 2 * display, src.displayArea())
+        assertFalse(candidate(src, w, src.displayArea())) // ~15 % → too small
+        assertEquals(1L, stats.overlayRejectedCount(OverlayRejectReason.TOO_SMALL))
     }
 
     /** CC11: tests assert on the ONE seam's sealed result. */

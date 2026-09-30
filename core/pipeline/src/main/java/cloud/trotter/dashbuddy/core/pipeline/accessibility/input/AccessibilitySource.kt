@@ -306,7 +306,7 @@ class AccessibilitySource @Inject constructor(
                         if (!isEnabled(probe.packageName)) continue
                         // CC10: null → the memo was stale (the fresh root names another package) —
                         // corrected; this window is not an overlay after all, keep walking.
-                        verdict = decideOverlay(w, probe, total, gen, budget) ?: continue
+                        verdict = decideOverlay(w, probe, total, gen, budget, displayArea) ?: continue
                     }
                 }
                 break // the first candidate (or an unverifiable one) decides
@@ -359,6 +359,7 @@ class AccessibilitySource @Inject constructor(
         total: Int,
         gen: Long,
         budget: ScanBudget,
+        displayArea: Long,
     ): Foreground? {
         // PR #1155 review DD4: EVERY root fetch in a walk is charged — a memoized CANDIDATE carries
         // no root, so its revalidation fetch counts against the budget too.
@@ -375,7 +376,7 @@ class AccessibilitySource @Inject constructor(
             } else {
                 WindowVerdictCache.Verdict.NOT_OVERLAY_PLATFORM
             }
-            packageCache.putVerdict(w.id, live, corrected, boundsOf(w), gen)
+            packageCache.putVerdict(w.id, live, corrected, boundsOf(w), displayArea, gen)
             return null
         }
         return Foreground.Found(LocatedWindow(w, root, total, isOverlay = true))
@@ -504,7 +505,8 @@ class AccessibilitySource @Inject constructor(
         // BB7: a DECIDED verdict is memoized per window id — no root fetch, no count — but (CC1) only
         // while the window's CURRENT bounds equal the bounds it was decided on.
         val entry = packageCache.get(w.id)
-        if (entry?.verdict != null && entry.bounds == bounds) {
+        // DD5: … and the display area it was decided against (a rotation / display change re-probes).
+        if (entry?.verdict != null && entry.bounds == bounds && entry.displayArea == displayArea) {
             when (entry.verdict) {
                 WindowVerdictCache.Verdict.TOO_SMALL, WindowVerdictCache.Verdict.NOT_OVERLAY_PLATFORM -> return OverlayProbe.NotCandidate
                 WindowVerdictCache.Verdict.CANDIDATE -> entry.packageName?.let { return OverlayProbe.Candidate(it, null) }
@@ -512,7 +514,7 @@ class AccessibilitySource @Inject constructor(
         }
         val area = (bounds.right - bounds.left).coerceAtLeast(0).toLong() * (bounds.bottom - bounds.top).coerceAtLeast(0).toLong()
         if (area.toDouble() < MIN_OVERLAY_AREA_FRACTION * displayArea) {
-            packageCache.putVerdict(w.id, null, WindowVerdictCache.Verdict.TOO_SMALL, bounds, gen)
+            packageCache.putVerdict(w.id, null, WindowVerdictCache.Verdict.TOO_SMALL, bounds, displayArea, gen)
             return reject(OverlayRejectReason.TOO_SMALL, OverlayProbe.NotCandidate)
         }
         var root: AccessibilityNodeInfo? = null
@@ -524,10 +526,10 @@ class AccessibilitySource @Inject constructor(
             fetched.packageName?.toString() ?: return reject(OverlayRejectReason.UNREADABLE, OverlayProbe.Unreadable)
         }
         if (pkg !in Platform.overlayPackages) {
-            packageCache.putVerdict(w.id, pkg, WindowVerdictCache.Verdict.NOT_OVERLAY_PLATFORM, bounds, gen)
+            packageCache.putVerdict(w.id, pkg, WindowVerdictCache.Verdict.NOT_OVERLAY_PLATFORM, bounds, displayArea, gen)
             return reject(OverlayRejectReason.NOT_OVERLAY_PLATFORM, OverlayProbe.NotCandidate)
         }
-        packageCache.putVerdict(w.id, pkg, WindowVerdictCache.Verdict.CANDIDATE, bounds, gen)
+        packageCache.putVerdict(w.id, pkg, WindowVerdictCache.Verdict.CANDIDATE, bounds, displayArea, gen)
         return OverlayProbe.Candidate(pkg, root)
     }
 
@@ -562,26 +564,19 @@ class AccessibilitySource @Inject constructor(
      * the 142×142 puck "half the display" and a candidate.
      */
     internal fun displayArea(): Long {
-        // PR #1155 review CC9: memoized per topology generation (a rotation / display change fires a
-        // TYPE_WINDOWS_CHANGED, which bumps it); an unknown area is never memoized.
-        val gen = packageCache.generation
-        areaMemo?.let { (g, a) -> if (g == gen) return a }
+        // PR #1155 review DD5 (replaces CC9's per-generation memo): read once per RESOLUTION — a
+        // display change need not produce a topology event (and release never bumps the generation
+        // until #1151), and `resources.displayMetrics` is a cheap local read.
         val metrics = try {
             serviceRef?.get()?.resources?.displayMetrics
         } catch (_: Exception) {
             null
         }
         if (metrics != null && metrics.widthPixels > 0 && metrics.heightPixels > 0) {
-            val area = metrics.widthPixels.toLong() * metrics.heightPixels.toLong()
-            areaMemo = gen to area
-            return area
+            return metrics.widthPixels.toLong() * metrics.heightPixels.toLong()
         }
         return 0L
     }
-
-    /** CC9: `(generation, area)` of the last measured display. */
-    @Volatile
-    private var areaMemo: Pair<Long, Long>? = null
 
     /** A window's on-screen area in px² (bounds are parceled with the window — no binder call). */
     internal fun areaOf(w: AccessibilityWindowInfo): Long {
