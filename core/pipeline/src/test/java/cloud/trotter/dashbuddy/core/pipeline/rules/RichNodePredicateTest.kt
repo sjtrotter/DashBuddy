@@ -78,9 +78,9 @@ class RichNodePredicateTest {
     /** #1147 review X3: the shared helpers accept only the schema's declared JSON type. */
     @Test
     fun `null, numbers and quoted booleans are compile errors for every predicate`() {
-        expectFails("""{ "hasPaneTitle": null }""", contains = "requires a string value")
-        expectFails("""{ "hasHintText": 123 }""", contains = "requires a string value")
-        expectFails("""{ "hasText": true }""", contains = "requires a string value")
+        expectFails("""{ "hasPaneTitle": null }""", contains = "requires a string scalar value")
+        expectFails("""{ "hasHintText": 123 }""", contains = "requires a string scalar value")
+        expectFails("""{ "hasText": true }""", contains = "requires a string scalar value")
         expectFails("""{ "isSelected": "true" }""", contains = "requires a boolean value")
         expectFails("""{ "isClickable": null }""", contains = "requires a boolean value")
         expectFails("""{ "isClickable": 1 }""", contains = "requires a boolean value")

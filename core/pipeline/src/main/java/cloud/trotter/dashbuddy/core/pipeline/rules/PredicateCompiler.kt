@@ -466,7 +466,7 @@ internal object PredicateCompiler {
     private fun primOf(value: JsonElement, key: String): JsonPrimitive =
         (value as? JsonPrimitive)?.takeIf { it.isString }
             ?: throw RuleCompileException(
-                "Predicate '$key' requires a string value, got: $value",
+                "Predicate '$key' requires a string scalar value, got: $value",
                 isolable = true,
             )
 
