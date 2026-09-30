@@ -289,7 +289,8 @@ to files BY VALUE, never folder-wide. Field-enumeration SSOTs keep a new model f
 scrub site: `RawNotificationData.textFields()` (#666 — the 5 flat text fields; `actionLabels` is
 deliberately outside it and scrubbed separately) and `UiNodeTextField` +
 `UiNode.scrubbableStrings()` (#835; `stateDescription` is scrubbed but `UiNode.allText` — what rules
-match on — still excludes it: widening a scrub layer must never move a classification). Rules skip a
+match on — still excludes it: widening a scrub layer must never move a classification; #1147 widened
+it to pane/role/hint/tooltip/error/clickLabel/uid — `allText` still text+desc only). Rules skip a
 file with duplicate ids and a later file re-declaring an id (#624/#633). Release binds `NoOpCaptureBus`
 (#346); UNKNOWN captures are the documented debug-only exception.
 
@@ -351,6 +352,9 @@ compiles, `ObservationClassifier` matches.
   currency figure, disclaimer, merchant-holder + address sibling); `side_nav_drawer` rejects that
   signature; `parseTotalMinutes` feeds `timeToCompleteMinutes` (an estimate, never a deadline). Compose
   taps produced no click envelopes in the field — accept is inferred from the pickup-phase exit.
+- **#1147 node predicates:** `hasPaneTitle*`, `hasRoleDescription`, `hasClickActionLabel*`,
+  `hasHintText*` and the flags `isVisibleToUser`/`isSelected`/`isCheckable`/`isHeading`/`hasClickAction`
+  read the TalkBack-study fields (none in `allText`, no regex forms); no shipped rule uses them yet.
 - **No actuation from rules (#425):** click/gesture verbs are compile-rejected; rules expose target
   bindings (`acceptButton`, `declineButton`, `expandButton`) that the app-owned `RuleAction` registry
   consumes (`docs/design/rule-capability-consent.md`).

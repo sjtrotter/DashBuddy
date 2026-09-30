@@ -99,6 +99,22 @@ _(The 2026-09-26 entry below **validated and retired** the **#1118** transition-
 clean runs (10/10 + 5/5 accepts inferred from the task surface, 44/44 + 12/12 declines from the confirm sheet, zero
 over-inference); the remaining accept losses are #1119 and the merged card is #1069.)_
 
+- **🆕 NEW — captures carry the richer node fields TalkBack reads (#1147).** Every captured node can
+  now also carry a pane title (`"pane"`), a role (`"role"`), the label on its click action
+  (`"clickLabel"`), a `"clickAction"`/`"selected"`/`"heading"`/`"visible"` flag and collection
+  positions — each only when it differs from the default, and each scrubbed like `text`. Nothing on
+  the dash should look different; this is a desk check on a debug pull. **How to tell it works:**
+  1. A DoorDash sheet or dialog capture (the decline-confirm sheet, a timeline sheet) shows a
+     `"pane": …` key on its container — or none anywhere in the pull, which is also an answer
+     (record which).
+  2. An offer-card capture shows `"clickLabel"` and/or `"clickAction": true` on the Accept/Decline
+     buttons (or verifiably neither — record which card generation).
+  3. No customer name or address appears raw in any `pane`/`role`/`hint`/`clickLabel`/`uid` value
+     (grep the pull the way the playbook greps `text`).
+  4. Capture files are not noticeably larger than the previous pull's, and no new WARN/ERROR tagged
+     `Mapper` or `Pipeline` appears.
+  - PR: #1147 (this PR). Confirmed: 0/2
+
 - **🆕 NEW — wide event receipt is an opt-in consent, asked BEFORE the accessibility grant (#1151).**
   The accessibility service receives window-change notices from other apps (what the #1148/#1152
   overlay path needs) ONLY after you allow it, and the question now comes first in the setup

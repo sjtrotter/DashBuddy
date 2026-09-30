@@ -180,7 +180,36 @@ fields (title/text/bigText/tickerText/subText) for
 `CompiledRedact.maskNode`, `CustomerTextMarkers`, `SensitiveTextMarkers.findMarker(tree)`, and the
 corpus `SnapshotSecurityScanner`/`SnapshotRedactor`. Recognition is deliberately untouched by #835:
 `UiNode.allText` (what rules match on) still excludes `stateDescription` — widening a scrub layer
-must never be able to move a classification. **Two #910 additions close the SPLIT-NODE class**
+must never be able to move a classification.
+
+**Node model fields (#1147, the 2026-09-21 TalkBack study win 3).** The mapper now also reads what
+TalkBack reads, all optional with the DOMINANT value as the default so `UiNodeSchema`'s
+`encodeDefaults = false` omits them on a typical node (every committed fixture re-serializes
+byte-identically; a pre-#1147 envelope deserializes to the defaults). Strings — each
+`capText()`-bounded (`UiTextBounds.MAX_TEXT_LENGTH`), each a `UiNodeTextField` entry (so
+`CompiledRedact.maskNode`, both `CustomerTextMarkers` scans, `SensitiveTextMarkers.findMarker`, the
+corpus `SnapshotRedactor`/`SnapshotSecurityScanner` cover it with no edit to those classes), and each
+EXCLUDED from `UiNode.allText` and from every content/structural/stable hash: `paneTitle` (wire
+`pane`, `getPaneTitle()` — the named scope an id-less sheet carries), `roleDescription` (`role`, the
+AndroidX `AccessibilityNodeInfo.roleDescription` extra read off `getExtras()` by key, no androidx
+dependency; a throwing Bundle costs only this field), `hintText` (`hint`), `tooltipText`
+(`tooltip`), `errorText` (`error`, `getError()`), `clickActionLabel` (`clickLabel`, the label on the
+`ACTION_CLICK` entry of `getActionList()` — materialized ONLY when the `getActions()` bitmask already
+says a click action exists, keeping #1149 P6's per-node cost off the common path) and `uniqueId`
+(`uid`, API 33+; execution evidence only — no predicate, no rule may name it). Non-strings (not in
+the scrub contract; no text): `isVisibleToUser` (`visible`, default true), `isFocusable`,
+`isScreenReaderFocusable`, `isCheckable`, `isSelected`, `isHeading`, `liveRegion` (`live`, 0), and
+`collectionRows`/`collectionCols`/`itemRow`/`itemCol` (`collRows`/`collCols`/`itemRow`/`itemCol`,
+-1 = not a collection/item). `hasClickAction`/`foreignPackage`/`unreadableChildren` predate this
+(#1149). Rules reach the new fields only through their own node predicates (see
+`02-rule-engine.md`). Two whole-node masks — `CompiledRedact`'s `RegexEvaluationFailed` fallback and
+`CustomerTextMarkers.scrubUnknown`'s id hit — now leave an ABSENT (null) field absent instead of
+stamping `[redacted]` into it (nothing to leak; no phantom `pane`/`uid`/… keys); every present value
+is still masked whole. The TalkBack receipt the fields rest on: **no hidden Compose identifier
+exists** — TalkBack has no `AndroidComposeView`/`testTag` handling; the best anchors for an id-less
+render are a named scope (pane title) + a label/action label + the semantic owner.
+
+**Two #910 additions close the SPLIT-NODE class**
 (marker and PII in different nodes — a `user_name_label` reading `"Delivery for"` beside a BARE
 `user_name`): (1) a **click envelope inherits the SCREEN rule's `redact`** —
 `Observation.Click.screenRuleId` (stamped from the classifier's per-platform screen-context cache)
