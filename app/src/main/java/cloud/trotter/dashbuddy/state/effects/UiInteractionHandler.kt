@@ -190,6 +190,7 @@ class UiInteractionHandler @Inject constructor(
         // walking each subtree twice (collectLabels is bounded but not free).
         var geometryRejected = 0
         var staleEvidence = 0
+        var semanticUnprovable = 0
         val labeledCandidates = owned.targets.mapNotNull { target ->
             // #1149 review J1: evidence labels must be as fresh and as scoped as the owner's. When the
             // matched node is not the owner, it is refreshed FIRST (a title rebinding Decline → Accept
@@ -226,10 +227,23 @@ class UiInteractionHandler @Inject constructor(
                     ref.labelHintHashes.isEmpty() -> !target.relaxed
                     else -> ref.agreesWithLabels(labels)
                 }
-                if (!identified) { geometryRejected++; return@mapNotNull null }
+                if (!identified) {
+                    // #1149 review J6: a 2b hit whose post-refresh scan is incomplete or no longer the
+                    // fingerprint is UNPROVABLE, not merely absent — dropping it would hand its twin
+                    // the tap as the sole survivor. Counted here; the whole tap aborts below.
+                    if (target.semantic) semanticUnprovable++ else geometryRejected++
+                    return@mapNotNull null
+                }
             }
             if (!expectation.matchesLabels(labels)) return@mapNotNull null
             target to labels
+        }
+        if (semanticUnprovable > 0) {
+            Timber.tag("Effects").w(
+                "%d semantic candidate(s) for %s became unprovable after refresh — aborting to manual (#1149)",
+                semanticUnprovable, description,
+            )
+            return false
         }
         if (staleEvidence > 0) {
             Timber.tag("Effects").w(

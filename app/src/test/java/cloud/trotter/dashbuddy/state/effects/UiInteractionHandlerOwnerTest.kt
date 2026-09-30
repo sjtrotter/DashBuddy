@@ -650,4 +650,18 @@ class UiInteractionHandlerOwnerTest {
         assertFalse(expand(handler(windowRoot(partial, row))))
         row.neverClicked(); partial.neverClicked()
     }
+
+    // ---------------------------------------------------------------- review J6: post-refresh unprovability
+
+    /** Two complete twins; the refresh introduces a null child on one — its twin must NOT become the sole survivor. */
+    @Test
+    fun `a twin that becomes unprovable after refresh aborts the tap`() = runTest {
+        val a = payRow(top = 1774 - 400)
+        val b = payRow(top = 1774 - 200)
+        var aChildren = 2
+        whenever(a.childCount).thenAnswer { aChildren }
+        whenever(a.refresh()).thenAnswer { aChildren = 3; true } // slot 2 now reads null
+        assertFalse(expand(handler(windowRoot(a, b))))
+        a.neverClicked(); b.neverClicked()
+    }
 }
