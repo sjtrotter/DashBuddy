@@ -194,7 +194,13 @@ class WindowSpecificSnapshotTest {
     fun `watched sheet active over its activity - the active root only`() = bothKinds { kind ->
         val sheet = node(ddPkg, "dd-sheet")
         val activity = node(ddPkg, "dd-activity")
-        val h = harness(activeRoot = sheet, windows = listOf(window(7, 5, sheet, active = true), window(3, 2, activity)))
+        // DoorDash-only (no overlay platform enabled): the #1152 BB5 overlay check's pre-gate keeps
+        // this path enumeration-free (H4).
+        val h = harness(
+            activeRoot = sheet,
+            windows = listOf(window(7, 5, sheet, active = true), window(3, 2, activity)),
+            enabled = setOf(ddPkg),
+        )
 
         val emitted = collect(h, kind, windowId = 3) // fired by the hidden activity
 
@@ -402,17 +408,26 @@ class WindowSpecificSnapshotTest {
     }
 
     @Test
-    fun `(d) a DoorDash event while an Uber overlay is above - the ACTIVE DoorDash root`() = bothKinds { kind ->
-        // DoorDash declares no offer overlay: its events never take the branch (the overlay arrives
-        // through its OWN events or the topology path).
+    fun `(d, BB5) a DoorDash event while an enabled Uber overlay is above - the OVERLAY is the frame`() = bothKinds { kind ->
+        // PR #1155 review BB5 supersedes spec (d): an enabled overlay on top wins for EVERY event, so
+        // the covered window can never interleave with it.
         val dd = node(ddPkg, "dd", windowId = 3)
         val h = harness(
             activeRoot = dd,
             windows = listOf(window(3, 5, dd, active = true), uberOverlay(9, 9, node(uberPkg, "uber-offer"))),
         )
 
-        assertEquals(listOf("dd"), collect(h, kind, windowId = 9, pkg = ddPkg).map { it.tree.text })
-        verify(h.service, never()).windows
+        assertEquals(listOf("uber-offer"), collect(h, kind, windowId = 3, pkg = ddPkg).map { it.tree.text })
+        assertEquals(1L, h.stats.overlaySnapshotCount())
+    }
+
+    @Test
+    fun `Uber enabled, nothing system-layer above the active DoorDash - the active root, no metrics read`() = bothKinds { kind ->
+        val dd = node(ddPkg, "dd", windowId = 3)
+        val h = harness(activeRoot = dd, windows = listOf(window(3, 5, dd, active = true), window(4, 2, node(uberPkg, "uber-app"))))
+
+        assertEquals(listOf("dd"), collect(h, kind, windowId = 3).map { it.tree.text })
+        verify(h.service, never()).resources
     }
 
     @Test
@@ -436,7 +451,7 @@ class WindowSpecificSnapshotTest {
 
     @Test
     fun `the overlay with focus is read through the active-root path, not the overlay branch`() = bothKinds { kind ->
-        val uber = node(uberPkg, "uber-offer")
+        val uber = node(uberPkg, "uber-offer", windowId = 9)
         val dd = node(ddPkg, "dd", windowId = 3)
         val h = harness(activeRoot = uber, windows = listOf(uberOverlay(9, 9, uber, active = true), window(3, 5, dd)))
 
@@ -614,5 +629,24 @@ class WindowSpecificSnapshotTest {
         ).map { it.tree.text }
 
         assertTrue("the overlay event forms its own burst and is resolved: $frames", "uber-offer" in frames)
+        // BB5: while the overlay is on top, EVERY burst — DoorDash's included — resolves to it.
+        assertTrue("no DoorDash frame interleaves with the overlay: $frames", frames.all { it == "uber-offer" })
+    }
+
+    @Test
+    fun `BB5 - Uber active under its own offer overlay - every frame is the overlay - dismissed, the map resumes`() {
+        val map = node(uberPkg, "uber-map", windowId = 3)
+        val mapWindow = window(3, 5, map, active = true)
+        val h = harness(activeRoot = map, windows = listOf(mapWindow, uberOverlay(9, 9, node(uberPkg, "uber-offer"))))
+
+        val up = collectSequence(
+            h,
+            listOf(0L to content(3, uberPkg), 100L to content(9, uberPkg), 250L to content(3, uberPkg), 400L to content(9, uberPkg)),
+        ).map { it.tree.text }
+        assertTrue("frames while the offer is up: $up", up.isNotEmpty() && up.all { it == "uber-offer" })
+
+        whenever(h.service.windows).thenReturn(listOf(mapWindow)) // the offer is dismissed
+        val after = collectSequence(h, listOf(0L to content(3, uberPkg))).map { it.tree.text }
+        assertEquals(listOf("uber-map"), after)
     }
 }

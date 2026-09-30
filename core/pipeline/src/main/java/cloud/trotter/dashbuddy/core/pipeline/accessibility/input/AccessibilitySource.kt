@@ -329,39 +329,57 @@ class AccessibilitySource @Inject constructor(
     }
 
     /**
-     * #1152 D5 — the ONE legitimate "event's own window" read: the window [windowId] a content/state
-     * event came from, when it is an ENABLED platform offer overlay ([isOverlayCandidate]) drawn
-     * ABOVE the active window — its `layer` strictly greater than the layer of [activeWindowId]'s
-     * window (the window of the ALREADY-FETCHED active root). The overlay is on top by construction,
-     * so this is never the hidden-activity shape #1148 F1 removed (an activity beneath a sheet is
-     * never `TYPE_SYSTEM`, never above the active window).
+     * #1152 D5 as reworked by PR #1155 review BB5 — **an enabled platform offer overlay on top is
+     * the frame**: the topmost ENABLED overlay candidate ([overlayProbe]) whose `layer` is strictly
+     * greater than the layer of [activeWindowId]'s window (the window of the ALREADY-FETCHED active
+     * root), whichever window fired the event. While it is up, EVERY content/state resolution reads
+     * the overlay — so the covered window (the overlay platform's own map included) can never
+     * interleave with it and flap R0 (the #1148 F1 class); FrameGate's identity dedup collapses the
+     * repeats. Trade-off, accepted: the covered window's own transitions are not read while the
+     * overlay covers it (the dasher is looking at the overlay). It is on top by construction, so this
+     * is never the hidden-activity shape F1 removed.
      *
-     * PR #1155 review BB2 — the active identity is RECONCILED, never assumed: the active root's
-     * window must be in this enumeration AND be the one (and only) window flagged active. Absent, or
-     * the flags disagree (focus moved between the two reads, e.g. to our bubble) → null: the ordering
-     * cannot be verified, so the ordinary active-root path / foreground policy decides. The overlay
-     * being the active window itself → null (the active-root path reads it). Null on any failure.
-     * One enumeration; the package is re-verified on the root that is mapped.
+     * BB2 — the active identity is RECONCILED, never assumed: the active root's window must be in
+     * this enumeration AND be the one (and only) window flagged active; otherwise → null (the ordinary
+     * active-root path decides). BB6 — a DISABLED overlay platform's overlay is skipped. A LARGE
+     * system window above the active one whose owner cannot be read stops the scan → null: never
+     * reach past an unverifiable window to pick an overlay beneath it (the active root, the shipped
+     * ground truth, is read). An overlay that IS the active window is not above it (the active-root
+     * path reads it). Null on any failure. One enumeration; memoized verdicts (BB7) make the scan
+     * cheap; the package is re-verified on the root that is mapped.
      */
-    fun overlayAboveActive(windowId: Int, activeWindowId: Int, isEnabled: (String?) -> Boolean): LocatedWindow? {
-        if (windowId < 0 || windowId == activeWindowId) return null
-        return try {
-            val windows = getWindows()
-            val w = windows.firstOrNull { it.id == windowId } ?: return null
-            if (w.type != AccessibilityWindowInfo.TYPE_SYSTEM) return null // cheap: skip the metrics read
-            val probe = overlayProbe(w, displayArea()) as? OverlayProbe.Candidate ?: return null
-            if (!isEnabled(probe.packageName)) return null
-            val active = windows.firstOrNull { it.id == activeWindowId } ?: return null
-            val flagged = windows.filter { it.isActive }
-            if (flagged.size != 1 || flagged.single().id != active.id) return null // unverifiable ordering
-            if (w.layer <= active.layer) return null // beneath (or level with) the active window
-            val root = probe.root ?: w.root ?: return null
-            val livePkg = root.packageName?.toString()
-            if (livePkg !in Platform.overlayPackages || !isEnabled(livePkg)) return null
-            LocatedWindow(w, root, windows.size, isOverlay = true)
-        } catch (_: Exception) {
-            null
+    fun overlayAboveActive(activeWindowId: Int, isEnabled: (String?) -> Boolean): LocatedWindow? = try {
+        overlayAboveActive(getWindows(), activeWindowId, isEnabled)
+    } catch (_: Exception) {
+        null
+    }
+
+    private fun overlayAboveActive(
+        windows: List<AccessibilityWindowInfo>,
+        activeWindowId: Int,
+        isEnabled: (String?) -> Boolean,
+    ): LocatedWindow? {
+        val active = windows.firstOrNull { it.id == activeWindowId } ?: return null
+        val flagged = windows.filter { it.isActive }
+        if (flagged.size != 1 || flagged.single().id != active.id) return null // unverifiable ordering
+        val above = windows
+            .filter { it.type == AccessibilityWindowInfo.TYPE_SYSTEM && it.layer > active.layer }
+            .sortedByDescending { it.layer }
+        if (above.isEmpty()) return null // no metrics read when nothing system-layer is above
+        val area = displayArea()
+        for (w in above) {
+            when (val probe = overlayProbe(w, area)) {
+                OverlayProbe.NotCandidate -> continue
+                OverlayProbe.Unreadable -> return null // unverifiable window on top — stop
+                is OverlayProbe.Candidate -> {
+                    if (!isEnabled(probe.packageName)) continue // BB6
+                    val root = probe.root ?: w.root ?: return null
+                    if (root.packageName?.toString() != probe.packageName) return null
+                    return LocatedWindow(w, root, windows.size, isOverlay = true)
+                }
+            }
         }
+        return null
     }
 
     /**
@@ -410,8 +428,9 @@ class AccessibilitySource @Inject constructor(
         var root: AccessibilityNodeInfo? = null
         val pkg: String = entry?.packageName ?: run {
             // Not memoized: an unreadable root is retried next frame.
-            root = w.root ?: return reject(OverlayRejectReason.UNREADABLE, OverlayProbe.Unreadable)
-            root?.packageName?.toString() ?: return reject(OverlayRejectReason.UNREADABLE, OverlayProbe.Unreadable)
+            val fetched = w.root ?: return reject(OverlayRejectReason.UNREADABLE, OverlayProbe.Unreadable)
+            root = fetched
+            fetched.packageName?.toString() ?: return reject(OverlayRejectReason.UNREADABLE, OverlayProbe.Unreadable)
         }
         if (pkg !in Platform.overlayPackages) {
             packageCache.putVerdict(w.id, pkg, WindowVerdictCache.Verdict.NOT_OVERLAY_PLATFORM)

@@ -26,10 +26,12 @@ internal sealed interface EventSnapshot {
  *
  * 1. ONE `getLiveNativeRoot()`. Null → `NO_ACTIVE_ROOT` (the pre-#1148 behaviour; never enumerate
  *    as a fallback).
- * 2. Its package enabled → FIRST the one legitimate "event's own window" case (#1152 D5): an event
- *    from an ENABLED [Platform.overlayPackages] package, whose window is a platform offer overlay
- *    drawn ABOVE the active window ([AccessibilitySource.overlayAboveActive]) → map the OVERLAY. It
- *    is on top by construction, so this never reads a window hidden beneath the active one. Else
+ * 2. Its package enabled → FIRST (#1152 D5, PR #1155 review BB5): when any overlay platform is
+ *    enabled, an ENABLED platform offer overlay drawn ABOVE the active window
+ *    ([AccessibilitySource.overlayAboveActive]) is the frame for EVERY event while it is up —
+ *    whichever window fired — so the covered window never interleaves with it (no R0 flap). It is
+ *    on top by construction, so this never reads a window hidden beneath the active one; if the
+ *    overlay fails to map (tearing down mid-walk), the active root is read instead (BB9). Else
  *    map THAT root ([AccessibilitySource.getCurrentRootSnapshot] over the
  *    already-fetched node): the active enabled window is the ground truth, a sheet over its
  *    activity included.
@@ -58,19 +60,19 @@ internal fun AccessibilitySource.snapshotForEvent(
     val activePkg = activeRoot.packageName?.toString()
     var viaOverlay = false
     val snapshot = if (isEnabled(activePkg)) {
-        // #1152 D5 — gated on the event package first, so a non-overlay platform's frame never
-        // pays the enumeration; an event from the active window itself is never "above" it.
-        val overlay = if (
-            eventPackage in Platform.overlayPackages && isEnabled(eventPackage) &&
-            windowId >= 0 && windowId != activeRoot.windowId
-        ) {
-            overlayAboveActive(windowId, activeRoot.windowId, isEnabled)
+        // BB5: the check is independent of which window fired. Its cheap pre-gate: no enumeration at
+        // all unless some overlay platform is enabled (a DoorDash-only dasher pays nothing).
+        val overlay = if (Platform.overlayPackages.any(isEnabled)) {
+            overlayAboveActive(activeRoot.windowId, isEnabled)
         } else {
             null
         }
-        if (overlay != null) {
+        // BB9: an overlay that fails to map (the card tearing down mid-walk) falls back to the
+        // active root — the shipped ground truth — rather than dropping the frame.
+        val overlaySnapshot = overlay?.let { getWindowSnapshot(it.window, it.root, it.totalWindowCount) }
+        if (overlaySnapshot != null) {
             viaOverlay = true
-            getWindowSnapshot(overlay.window, overlay.root, overlay.totalWindowCount)
+            overlaySnapshot
         } else {
             getCurrentRootSnapshot(activeRoot)
         }
