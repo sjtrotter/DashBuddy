@@ -39,14 +39,16 @@ import org.junit.Test
  *    ref's `viewIdSuffix` (the handler's find-by-viewId strategy; corpus ids are
  *    already suffix-form). Falls back to by-text like the handler when the ref
  *    has no id.
- *  - labels = the node's own text/contentDescription + its bounded subtree's
- *    (depth 3, 24 nodes) — the same walk as `collectLabels`.
+ *  - labels = `NodeRef.hintLabelsOf` — the ONE `:domain` label horizon (#1149 review I2): own
+ *    text/contentDescription + the subtree to depth 3 / 24 child slots, stopping at every clickable
+ *    descendant (its labels are its own, review I3).
  *  - decision = `ClickCandidateRanker.rank`, then the handler's tie rule.
  *  - #1149: every candidate is mapped to its action OWNER (nearest clickable self/ancestor, at
  *    most [AccNodeUtils.MAX_OWNER_WALK] steps — a `UiNode` carries no action list, so
  *    "clickable" is `isClickable` here), owner-less candidates are dropped, candidates sharing an
- *    owner are deduped, labels are collected on the owner, and a compound owner (>= 2 labeled
- *    clickable controls in its bounded subtree) is refused.
+ *    owner are deduped, labels are collected on the owner plus the matched node's own (I8), and
+ *    semantic twins abort (I5). Legacy `"clickable"`-key fixtures are skipped, never given
+ *    invented owners (#1154).
  *  - #1149 strategy 2b (`semantic = true`, the production order): a hinted ref is re-found by
  *    its subtree labels BEFORE the bounds walk. The #1093 strategy-3 tests below pass
  *    `semantic = false` to pin the bounds walk in isolation — it is exactly what production runs
@@ -62,28 +64,13 @@ class ActuationBindingResolutionTest {
     )
 
     /**
-     * Mirror of `UiInteractionHandler.scanLabels` over a UiNode subtree (depth 3, 24 child fetches;
-     * [Pair.second] = the scan was complete). A `UiNode` tree is one window of one package, so the
+     * The label horizon over a UiNode: the ONE `:domain` definition (`NodeRef.hintLabelsOf`, #1149
+     * review I2) — the same depth/slot caps and clickable-descendant ownership the executor's live
+     * scan applies ([Pair.second] = complete). A `UiNode` tree is one window of one package, so the
      * production foreign-package skip has nothing to mirror here.
      */
-    private fun scanLabels(node: UiNode): Pair<List<String>, Boolean> {
-        val labels = mutableListOf<String>()
-        var fetched = 0
-        var complete = true
-        fun visit(n: UiNode, depth: Int) {
-            n.text?.takeIf { it.isNotBlank() }?.let { labels.add(it) }
-            n.contentDescription?.takeIf { it.isNotBlank() }?.let { labels.add(it) }
-            if (n.children.isEmpty()) return
-            if (depth >= 3) { complete = false; return }
-            for (c in n.children) {
-                if (fetched >= 24) { complete = false; return }
-                fetched++
-                visit(c, depth + 1)
-            }
-        }
-        visit(node, 0)
-        return labels to complete
-    }
+    private fun scanLabels(node: UiNode): Pair<List<String>, Boolean> =
+        NodeRef.hintLabelsOf(node).let { it.labels to it.complete }
 
     private fun collectLabels(node: UiNode): List<String> = scanLabels(node).first
 
@@ -99,6 +86,9 @@ class ActuationBindingResolutionTest {
         /** Indices (into the returned list) of bounds-derived candidates this one is nested inside. */
         val ancestors: List<Int> = emptyList(),
     )
+
+    /** The mirror's signal for production's incomplete-window abort (a single window here, so it is the active one). */
+    private class SemanticIncomplete : RuntimeException()
 
     private fun findCandidates(tree: UiNode, ref: NodeRef, semantic: Boolean = false): List<Cand> {
         ref.viewIdSuffix?.takeIf { it.isNotEmpty() }?.let { id ->
@@ -119,7 +109,11 @@ class ActuationBindingResolutionTest {
             fun walk(node: UiNode, depth: Int) {
                 check(depth <= UiInteractionHandler.SEMANTIC_SCAN_DEPTH) { "corpus tree deeper than the 2b bound" }
                 val classOk = ref.classNameHint == null || node.className == ref.classNameHint
-                val hit = classOk && node.isClickable && scanLabels(node).let { (l, complete) -> complete && ref.fingerprintMatches(l) }
+                // Review I4b: an incomplete candidate makes the window's search incomplete — abort.
+                val hit = classOk && node.isClickable && scanLabels(node).let { (l, complete) ->
+                    if (!complete) throw SemanticIncomplete()
+                    ref.fingerprintMatches(l)
+                }
                 if (hit) { hits += Cand(node, semantic = true, ancestors = path.toList()); path.add(hits.size - 1) }
                 node.children.forEach { walk(it, depth + 1) }
                 if (hit) path.removeAt(path.size - 1)
@@ -151,20 +145,11 @@ class ActuationBindingResolutionTest {
     }
 
     /**
-     * Replay the full handler resolution: candidate set → label verification →
-     * [ClickCandidateRanker] → the handler's tie rule.
-     */
-    /**
      * Mirror of `AccNodeUtils.resolveActionOwner` over a UiNode (parent pointers from `restoreParents`).
-     *
-     * [clickabilityKnown] = false for the legacy January 2026 bare-DTO fixtures, which spell the flag
-     * `"clickable"` where `UiNodeDto` reads `isClickable` — every node of such a tree loads as
-     * non-clickable (a fixture-format artifact: the live Button owning the prism title IS clickable in
-     * the raw JSON). With no clickability evidence the mirror keeps the pre-#1149 shape (the node is
-     * its own owner) instead of reporting every legacy candidate owner-less.
+     * No fallback: fixtures whose clickability did not survive loading are SKIPPED ([modernSnapshots]),
+     * never given invented owners.
      */
-    private fun ownerOf(node: UiNode, clickabilityKnown: Boolean): UiNode? {
-        if (!clickabilityKnown) return node
+    private fun ownerOf(node: UiNode): UiNode? {
         var current: UiNode? = node
         var steps = 0
         while (current != null && steps < AccNodeUtils.MAX_OWNER_WALK) {
@@ -175,40 +160,38 @@ class ActuationBindingResolutionTest {
         return null
     }
 
-    /** Mirror of `UiInteractionHandler.isCompoundOwner`. */
-    private fun isCompound(owner: UiNode): Boolean {
-        var labeled = 0
-        var visited = 0
-        fun visit(n: UiNode, depth: Int) {
-            for (child in n.children) {
-                if (labeled >= 2 || depth + 1 > 3 || visited >= 24) return
-                visited++
-                if (child.isClickable) {
-                    if (collectLabels(child).any { NodeRef.hintKeyOrNull(it) != null }) labeled++
-                    continue
-                }
-                visit(child, depth + 1)
-            }
+    /**
+     * The corpus folder minus the LEGACY fixtures: the January 2026 bare-DTO captures spell the flag
+     * `"clickable"` where `UiNodeDto` reads `isClickable`, so every node of such a tree loads as
+     * non-clickable and owner resolution — which is all about clickability — cannot be mirrored on
+     * them. Filed, not fixed: #1154 (normalizing that key could move rule classification, so it is
+     * deliberately NOT done in this zero-drift PR). The skip count is printed.
+     */
+    private fun modernSnapshots(dir: String): List<Triple<String, UiNode, List<String>>> {
+        val all = TestResourceLoader.loadSnapshots(dir)
+        val modern = all.filterNot { (name, _, _) ->
+            java.io.File("src/test/resources/$dir/$name").readText().contains("\"clickable\"")
         }
-        visit(owner, 0)
-        return labeled >= 2
+        println("ActuationBindingResolutionTest: $dir — skipped ${all.size - modern.size} of ${all.size} legacy-'clickable' fixtures (#1154)")
+        return modern
     }
 
     /**
      * Replay the full handler resolution: candidate set → owner resolution + dedupe (#1149) → label
-     * verification on the owner → compound refusal → nested abort → [ClickCandidateRanker] → the
-     * handler's tie rule. [Resolution.resolved] is the matched EVIDENCE node (the ranker's text/bounds
+     * verification on the owner (+ the matched node's own labels, I8) → nested abort → semantic-twin
+     * abort (I5) → [ClickCandidateRanker] → the handler's tie rule. [Resolution.resolved] is the matched EVIDENCE node (the ranker's text/bounds
      * source); the click itself lands on its owner.
      */
     private fun resolve(tree: UiNode, ref: NodeRef, expectation: TargetExpectation, semantic: Boolean = false): Resolution {
-        val candidates = findCandidates(tree, ref, semantic)
+        val candidates = try { findCandidates(tree, ref, semantic) } catch (_: SemanticIncomplete) {
+            return Resolution(0, ClickCandidateRanker.Tier.UNRESOLVED, null, decisive = false)
+        }
         // Owner resolution + dedupe (identity: a UiNode's equals ignores children).
         val owners = mutableListOf<UiNode>()
         val members = mutableListOf<MutableList<Int>>()
         val ownerIndexOf = arrayOfNulls<Int>(candidates.size)
-        val clickabilityKnown = tree.findNodes { it.isClickable }.isNotEmpty()
         candidates.forEachIndexed { i, c ->
-            val owner = ownerOf(c.node, clickabilityKnown) ?: return@forEachIndexed
+            val owner = ownerOf(c.node) ?: return@forEachIndexed
             val j = owners.indexOfFirst { it === owner }
             if (j >= 0) { members[j] += i; ownerIndexOf[i] = j } else { owners += owner; members += mutableListOf(i); ownerIndexOf[i] = owners.size - 1 }
         }
@@ -221,18 +204,24 @@ class ActuationBindingResolutionTest {
             Owned(owner, evidence.node, group.any { it.boundsDerived }, group.all { it.relaxed }, group.any { it.semantic },
                 members[j].flatMap { candidates[it].ancestors }.mapNotNull { ownerIndexOf[it] }.filter { it != j }.toSet())
         }
+        fun labelsOf(c: Owned): List<String> {
+            val own = collectLabels(c.owner)
+            val evidence = if (c.evidence === c.owner) emptyList() else listOfNotNull(c.evidence.text, c.evidence.contentDescription).filter { it.isNotBlank() }
+            return own + evidence.filterNot { it in own }
+        }
         val verifiedIdx = owned.withIndex().filter { (_, c) ->
-            val (labels, complete) = scanLabels(c.owner)
+            val (ownerLabels, complete) = scanLabels(c.owner)
+            val labels = labelsOf(c)
             // #1093: a bounds-derived candidate must carry the bind's own subtree labels (a hint-less
             // ref admits an exact match only); a #1149 semantic one its EXACT fingerprint — the
             // handler's gate, mirrored.
             val identified = when {
-                c.semantic -> complete && ref.fingerprintMatches(labels)
+                c.semantic -> complete && ref.fingerprintMatches(ownerLabels)
                 !c.boundsDerived -> true
                 ref.labelHintHashes.isEmpty() -> !c.relaxed
                 else -> ref.agreesWithLabels(labels)
             }
-            identified && expectation.matchesLabels(labels) && !isCompound(c.owner)
+            identified && expectation.matchesLabels(labels)
         }.map { it.index }.toSet()
         val verified = verifiedIdx.sorted().map { owned[it] }
         if (verified.isEmpty()) return Resolution(0, ClickCandidateRanker.Tier.UNRESOLVED, null, decisive = false)
@@ -241,10 +230,17 @@ class ActuationBindingResolutionTest {
             return Resolution(verified.size, ClickCandidateRanker.Tier.UNRESOLVED, null, decisive = false)
         }
 
+        // Review I5: semantic twins abort unless stored text decides exactly one.
+        if (verified.size > 1 && verified.any { it.semantic }) {
+            val refText2 = ref.text?.takeIf { it.isNotBlank() }
+            val byText = if (refText2 == null) emptyList() else verified.filter { it.evidence.text?.take(50) == refText2 }
+            return if (byText.size == 1) Resolution(verified.size, ClickCandidateRanker.Tier.EXACT_TEXT, byText.single().evidence, true)
+            else Resolution(verified.size, ClickCandidateRanker.Tier.UNRESOLVED, null, decisive = false)
+        }
         val facts = verified.map { o ->
             ClickCandidateRanker.CandidateFacts(
                 text = o.evidence.text,
-                labels = collectLabels(o.owner),
+                labels = labelsOf(o),
                 bounds = o.evidence.boundsInScreen,
             )
         }
@@ -271,7 +267,7 @@ class ActuationBindingResolutionTest {
     fun `confirm decline resolves exactly one verified button per corpus snapshot`() {
         val action = RuleAction.CONFIRM_DECLINE
         var withTarget = 0
-        for ((filename, node, _) in TestResourceLoader.loadSnapshots("snapshots/offer_popup_confirm_decline")) {
+        for ((filename, node, _) in modernSnapshots("snapshots/offer_popup_confirm_decline")) {
             val ref = matchTargets(node)[action.targetBindName] ?: continue // optional bind
             withTarget++
             val r = resolve(node, ref, action.verification)
@@ -349,7 +345,7 @@ class ActuationBindingResolutionTest {
         val action = RuleAction.EXPAND_EARNINGS
         var withTarget = 0
         var decisiveFrames = 0
-        for ((filename, node, _) in TestResourceLoader.loadSnapshots("snapshots/delivery_summary_collapsed")) {
+        for ((filename, node, _) in modernSnapshots("snapshots/delivery_summary_collapsed")) {
             val ref = matchTargets(node)[action.targetBindName] ?: continue // optional bind
             if (ref.viewIdSuffix.isNullOrEmpty()) {
                 // #1093: the id-less arm may bind ONLY where no id-bearing pay expandable exists —
@@ -400,8 +396,11 @@ class ActuationBindingResolutionTest {
                 )
             }
         }
-        assertTrue("expected the collapsed-summary corpus to bind expandButton on some frames", withTarget >= 5)
-        assertTrue("expected the pay expandable to resolve decisively on non-degenerate frames", decisiveFrames >= 4)
+        // #1154: 13 of the 18 fixtures are legacy-'clickable' and skipped; the id-bearing arm binds only
+        // on the two modern 07-17 frames, so the floors are pinned to those (they were 5 / 4 over the
+        // full corpus when the legacy frames could still be mirrored).
+        assertEquals("the two modern 07-17 frames bind the id arm", 2, withTarget)
+        assertEquals("and both resolve decisively to the pay expandable", 2, decisiveFrames)
     }
 
     /**
@@ -418,7 +417,7 @@ class ActuationBindingResolutionTest {
         var idLessFrames = 0
         var decisiveFrames = 0
         val idLessFiles = mutableListOf<String>()
-        for ((filename, node, _) in TestResourceLoader.loadSnapshots("snapshots/delivery_summary_collapsed")) {
+        for ((filename, node, _) in modernSnapshots("snapshots/delivery_summary_collapsed")) {
             val ref = matchTargets(node)[action.targetBindName] ?: continue
             if (!ref.viewIdSuffix.isNullOrEmpty()) continue
             idLessFrames++
@@ -484,7 +483,7 @@ class ActuationBindingResolutionTest {
     fun `a relaxed candidate that is a different control is rejected by the bind's label hints`() {
         val action = RuleAction.EXPAND_EARNINGS
         var checked = 0
-        for ((filename, node, _) in TestResourceLoader.loadSnapshots("snapshots/delivery_summary_collapsed")) {
+        for ((filename, node, _) in modernSnapshots("snapshots/delivery_summary_collapsed")) {
             val ref = matchTargets(node)[action.targetBindName] ?: continue
             if (!ref.viewIdSuffix.isNullOrEmpty()) continue
             val b = ref.boundsInScreen
@@ -506,7 +505,7 @@ class ActuationBindingResolutionTest {
 
     /** The settled 09-07 tree + its bound ref, the fixture the synthetic sequences below start from. */
     private fun settledReceipt(): Pair<UiNode, NodeRef> {
-        val (_, node, _) = TestResourceLoader.loadSnapshots("snapshots/delivery_summary_collapsed")
+        val (_, node, _) = modernSnapshots("snapshots/delivery_summary_collapsed")
             .single { it.first.contains("8c8c83") }
         val ref = matchTargets(node)[RuleAction.EXPAND_EARNINGS.targetBindName]!!
         return node to ref
@@ -571,13 +570,13 @@ class ActuationBindingResolutionTest {
     }
 
     /**
-     * Round-2 finding 1b / round-3 finding 1: a CLICKABLE wrapper around the row inherits the row's
-     * labels and, after a 40 px slide, out-overlaps it (0.56 vs 0.52). Both verify, and nothing says
-     * which is the control — the pair is undecidable and the tap ABORTS to manual (a max-overlap
-     * pick would have chosen the wrapper; supersession would have guessed the row).
+     * Round-2 finding 1b / round-3 finding 1, revisited by #1149 review I3: a CLICKABLE wrapper around
+     * the row, which after a 40 px slide out-overlaps it (0.56 vs 0.52). Both are bounds hits, but the
+     * wrapper no longer inherits the row's labels (they belong to the clickable row), so it fails the
+     * hint check and the ROW is resolved — never the wrapper by overlap.
      */
     @Test
-    fun `a clickable wrapper that out-overlaps the slid row makes the pair undecidable — abort`() {
+    fun `a clickable wrapper that out-overlaps the slid row does not inherit its labels — the row resolves`() {
         val (tree, ref) = settledReceipt()
         val row = rowOf(tree)
         val b = row.boundsInScreen
@@ -593,17 +592,18 @@ class ActuationBindingResolutionTest {
         assertEquals("both are hits, the row nested in the wrapper", listOf(wrapper, movedRow), cands.map { it.node })
         assertEquals(listOf(0), cands[1].ancestors)
         val r = resolve(synthetic, ref, RuleAction.EXPAND_EARNINGS.verification)
-        assertEquals(2, r.verifiedCount)
-        assertFalse("nested verified candidates abort", r.decisive)
+        assertEquals("only the row carries the labels", 1, r.verifiedCount)
+        assertTrue(r.decisive)
+        assertTrue(r.resolved === movedRow)
     }
 
     /**
      * Round-3 finding 1: a clickable wrapper at EXACTLY the captured rect with the row inside it. The
-     * old walk pruned at the exact match and tapped the wrapper; now both are exposed, both verify,
-     * and the tap aborts.
+     * old walk pruned at the exact match and tapped the wrapper; since #1149 review I3 the wrapper's
+     * labels exclude the clickable row's, so only the row verifies — and it, never the wrapper, resolves.
      */
     @Test
-    fun `an exact clickable wrapper around the row is not tapped — nested verified candidates abort`() {
+    fun `an exact clickable wrapper around the row is not tapped — the row inside it resolves`() {
         val (tree, ref) = settledReceipt()
         val row = rowOf(tree)
         val b = row.boundsInScreen
@@ -615,7 +615,9 @@ class ActuationBindingResolutionTest {
         val synthetic = node(bounds = BoundingBox(0, 0, 1080, 2400), children = listOf(wrapper)).restoreParents()
 
         assertEquals(listOf(wrapper, innerRow), findCandidates(synthetic, ref).map { it.node })
-        assertFalse(resolve(synthetic, ref, RuleAction.EXPAND_EARNINGS.verification).decisive)
+        val r = resolve(synthetic, ref, RuleAction.EXPAND_EARNINGS.verification)
+        assertTrue(r.decisive)
+        assertTrue(r.resolved === innerRow)
     }
 
     /**
@@ -630,8 +632,10 @@ class ActuationBindingResolutionTest {
         val strayChild = node(clickable = true, bounds = b.copy(top = b.top + 2, bottom = b.bottom + 2), children = listOf(
             node(desc = "Expand", bounds = b),
         ))
+        // The row owns its own "Expand" (non-clickable); the stray clickable child's copy is ITS label (I3).
         val movedRow = node(clickable = true, bounds = b.copy(top = b.top + 1, bottom = b.bottom + 1), children = listOf(
             node(text = "This offer", cls = "android.widget.TextView", bounds = b),
+            node(desc = "Expand", bounds = b),
             strayChild,
         ))
         val synthetic = node(bounds = BoundingBox(0, 0, 1080, 2400), children = listOf(movedRow)).restoreParents()
@@ -676,13 +680,13 @@ class ActuationBindingResolutionTest {
 
     /**
      * Production order on every id-less 8.93.7+ frame: 2b finds EXACTLY the row (no wrapper, no
-     * stats row, no compound owner) and it resolves decisively to it.
+     * stats row) and it resolves decisively to it.
      */
     @Test
     fun `the semantic walk re-finds exactly the id-less row on every id-less frame`() {
         val action = RuleAction.EXPAND_EARNINGS
         var frames = 0
-        for ((filename, node, _) in TestResourceLoader.loadSnapshots("snapshots/delivery_summary_collapsed")) {
+        for ((filename, node, _) in modernSnapshots("snapshots/delivery_summary_collapsed")) {
             val ref = matchTargets(node)[action.targetBindName] ?: continue
             if (!ref.viewIdSuffix.isNullOrEmpty()) continue
             frames++
@@ -722,9 +726,9 @@ class ActuationBindingResolutionTest {
         }
     }
 
-    /** The wrapper cases keep aborting in production order: 2b records the nesting like the bounds walk. */
+    /** Production order (I3): a label-less clickable wrapper is no 2b candidate — the row alone is found and resolves. */
     @Test
-    fun `a clickable wrapper around the row still aborts under the semantic walk`() {
+    fun `a clickable wrapper around the row is not a semantic candidate — the row resolves`() {
         val (tree, ref) = settledReceipt()
         val b = rowOf(tree).boundsInScreen
         val innerRow = node(clickable = true, bounds = b.copy(top = b.top + 400, bottom = b.bottom + 400), children = listOf(
@@ -734,7 +738,9 @@ class ActuationBindingResolutionTest {
         val wrapper = node(clickable = true, bounds = b.copy(top = b.top + 390, bottom = b.bottom + 410), children = listOf(innerRow))
         val synthetic = node(bounds = BoundingBox(0, 0, 1080, 2400), children = listOf(wrapper)).restoreParents()
 
-        assertEquals(listOf(wrapper, innerRow), findCandidates(synthetic, ref, semantic = true).map { it.node })
-        assertFalse(resolve(synthetic, ref, RuleAction.EXPAND_EARNINGS.verification, semantic = true).decisive)
+        assertEquals(listOf(innerRow), findCandidates(synthetic, ref, semantic = true).map { it.node })
+        val r = resolve(synthetic, ref, RuleAction.EXPAND_EARNINGS.verification, semantic = true)
+        assertTrue(r.decisive)
+        assertTrue(r.resolved === innerRow)
     }
 }
