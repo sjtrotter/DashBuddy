@@ -750,4 +750,67 @@ class SkeletonBuilderTest {
         assertEquals(listOf(TextSlot.WITHHELD), beside("Groß", "GRO\u1E9E"))
         assertEquals(listOf(TextSlot.WITHHELD), beside("GRO\u1E9E", "Groß"))
     }
+
+    @Test
+    fun `NN1 NN2 - user_name and order_cx_name are NAME ids that seed the frame`() {
+        fun frame(id: String) = UiNode(
+            className = "android.widget.LinearLayout", viewIdResourceName = "com.x:id/row", children = listOf(
+                UiNode(className = "android.widget.TextView", viewIdResourceName = "com.doordash.driverapp:id/$id", text = "Riley"),
+                UiNode(className = "android.widget.TextView", text = "Riley"),
+                UiNode(className = "android.widget.TextView", text = "Call Riley"),
+            ),
+        )
+        listOf("user_name", "order_cx_name").forEach { id ->
+            val out = SkeletonBuilder.build(frame(id), null, meta, platform, day)!!.root.children
+            assertEquals(id, TextSlot.WITHHELD, out[1].text.getValue("text"))
+            assertEquals(id, TextSlot.WITHHELD, out[2].text.getValue("text"))
+        }
+    }
+
+    @Test
+    fun `NN3 - a NAME desc seeds only the runs its text shares`() {
+        val out = SkeletonBuilder.build(
+            UiNode(className = "android.widget.LinearLayout", viewIdResourceName = "com.x:id/row", children = listOf(
+                UiNode(
+                    className = "android.widget.TextView",
+                    viewIdResourceName = "com.x:id/customer_name",
+                    text = "Adam",
+                    contentDescription = "Customer name Adam",
+                ),
+                UiNode(className = "android.widget.TextView", viewIdResourceName = "com.x:id/customer_name_label", text = "Customer"),
+                UiNode(className = "android.widget.TextView", text = "Name"),
+                UiNode(className = "android.widget.TextView", text = "Adam's order"),
+            )),
+            null, meta, platform, day,
+        )!!.root.children
+        assertEquals("com.x:id/customer_name", out[0].id)
+        assertEquals("com.x:id/customer_name_label", out[1].id)
+        assertEquals(words(1, "Customer"), out[1].text.getValue("text"))
+        assertEquals(words(1, "Name"), out[2].text.getValue("text"))
+        assertEquals(TextSlot.WITHHELD, out[3].text.getValue("text"))
+        // A NAME with a blank text seeds its desc's EXACT value only.
+        val descOnly = SkeletonBuilder.build(
+            UiNode(className = "android.widget.LinearLayout", viewIdResourceName = "com.x:id/row", children = listOf(
+                UiNode(className = "android.widget.TextView", viewIdResourceName = "com.x:id/customer_name", contentDescription = "Customer name Adam"),
+                UiNode(className = "android.widget.TextView", text = "Customer name Adam"),
+                UiNode(className = "android.widget.TextView", text = "Customer"),
+            )),
+            null, meta, platform, day,
+        )!!.root.children
+        assertEquals(TextSlot.WITHHELD, descOnly[1].text.getValue("text"))
+        assertEquals(words(1, "Customer"), descOnly[2].text.getValue("text"))
+    }
+
+    @Test
+    fun `NN5 - one glyph fold defeats zero-width and fullwidth evasions`() {
+        assertEquals(TextSlot.WITHHELD, slot("Deli\u200Bver to Sam"))
+        assertEquals(TextSlot.WITHHELD, slot("\uFF24eliver to Sam"))
+        // A fullwidth chrome word hashes equal to its plain twin (k can count them together).
+        assertEquals(words(1, "Accept"), slot("\uFF21\uFF43\uFF43\uFF45\uFF50\uFF54"))
+    }
+
+    @Test
+    fun `NN6 - an over-long id is refused before the shape regex`() {
+        assertTrue(!SkeletonBuilder.isStaticId("com.x:id/" + "a".repeat(10_000)))
+    }
 }

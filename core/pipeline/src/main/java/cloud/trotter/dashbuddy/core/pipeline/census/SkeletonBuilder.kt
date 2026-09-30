@@ -15,7 +15,6 @@ import cloud.trotter.dashbuddy.domain.census.contract.UiSkeletonDto
 import cloud.trotter.dashbuddy.domain.census.contract.UiSkeletonNodeDto
 import cloud.trotter.dashbuddy.domain.census.contract.WireStrings
 import cloud.trotter.dashbuddy.domain.model.accessibility.UiNode
-import cloud.trotter.dashbuddy.domain.model.accessibility.UiNodeTextField
 import cloud.trotter.dashbuddy.domain.privacy.PiiShapes
 import cloud.trotter.dashbuddy.domain.state.Platform
 import java.time.LocalDate
@@ -290,13 +289,6 @@ object SkeletonBuilder {
     }
 
     /**
-     * The fields an identity id's hit may seed frame-wide from (review EE1): the rendered value only —
-     * never role/hint/tooltip/clickLabel/uid/pane, whose chrome ("Button") would otherwise be withheld
-     * everywhere in the frame.
-     */
-    private val SEED_FIELDS = setOf(UiNodeTextField.TEXT, UiNodeTextField.CONTENT_DESCRIPTION)
-
-    /**
      * One non-blank field after pass 1: its RAW trimmed value (the verdict memo key), its canonical value
      * (the hash/grammar input and the frame-wide key), and whether its own id withholds it.
      */
@@ -350,41 +342,58 @@ object SkeletonBuilder {
             val idClass = idClassOf(node.viewIdResourceName)
             val fields = ArrayList<Pair<String, Field>>()
             for ((field, value) in node.scrubbableStrings()) {
-                field(value, idClass, seedsFromId = field in SEED_FIELDS)?.let { fields += field.wire to it }
+                field(value, idClass)?.let { fields += field.wire to it }
             }
+            seedIdentity(node, idClass)
             return Pending(
                 className = ClassNameGrammar.staticOrNull(node.className),
-                id = node.viewIdResourceName?.takeIf { isStaticId(it) },
+                id = node.viewIdResourceName?.takeIf { raw -> staticIds.getOrPut(raw) { isStaticId(raw) } },
                 node = node,
                 fields = fields,
                 children = node.children.map { scan(it) },
             )
         }
 
+        /** [isStaticId] per raw id, memoized per frame (review NN7: list surfaces repeat one id). */
+        private val staticIds = HashMap<String, Boolean>()
+
         /**
-         * Pass 1 for one field: canonicalize (review EE2), filter both forms (FF1), and seed [caught] per the frame-level
-         * rule. [seedsFromId] is true only for the TEXT / CONTENT_DESCRIPTION fields (review EE1).
+         * Pass 1 for one field: canonicalize (reviews EE2, NN5), filter both forms (FF1), and seed [caught]
+         * with the field's exact canonical value when a VALUE-judging step (3, 4, 7, 8) caught it. A mask
+         * NEVER seeds (review LL1). Not the length cap (a duplicate is itself over-length). The id-based
+         * seeds are [seedIdentity]'s.
          */
-        fun field(value: String?, idClass: IdClass, seedsFromId: Boolean = true): Field? {
+        fun field(value: String?, idClass: IdClass): Field? {
             if (value.isNullOrBlank()) return null
             val trimmed = value.trim()
             val canonical = CensusHash.canonical(value)
             val step = valueStep(trimmed, canonical)
-            // Seeds (review LL1): a mask NEVER seeds anything — it is not identity, and its word
-            // ("redacted", "address") would collide with chrome. Otherwise: (a) a value-judging step 3, 4,
-            // 7, 8 on any field seeds its EXACT canonical value; (b) step 1 on an identity id's rendered
-            // text/desc — a NAME seeds its exact value AND its letter runs (token containment, GG1), an
-            // ADDRESS its exact value ONLY (address vocabulary — "Road", "View", "San" — is common
-            // English and would suppress chrome frame-wide). Not the length cap (a duplicate is itself
-            // over-length), not a CONTENT id, not an intake-only id (review CC3).
-            if (!PiiShapes.containsMask(canonical)) {
-                if (step != null && step != FilterStep.LENGTH_CAP) caught += canonical
-                if (seedsFromId && (idClass == IdClass.PII_NAME || idClass == IdClass.PII_ADDRESS)) caught += canonical
-                if (seedsFromId && idClass == IdClass.PII_NAME) {
-                    identityRuns += runsOf(canonical, minLetters = MIN_IDENTITY_RUN)
-                }
-            }
+            if (step != null && step != FilterStep.LENGTH_CAP && !PiiShapes.containsMask(canonical)) caught += canonical
             return Field(trimmed, canonical, idWithholds = idClass != IdClass.NONE)
+        }
+
+        /**
+         * Step-1 seeds of an identity id (reviews EE1, LL1, NN3), from its rendered value only (TEXT /
+         * CONTENT_DESCRIPTION — never role/hint/tooltip/click-label/uid/pane); a mask never seeds.
+         * - TEXT: its exact canonical value; a NAME also its letter runs.
+         * - CONTENT_DESCRIPTION: its exact canonical value; a NAME seeds from it ONLY the runs that also
+         *   appear in the node's text — a TalkBack desc "Customer name Adam" must not seed `customer` /
+         *   `name` and null the frame's own `customer_name` ids and "Customer" chrome (review NN3).
+         * An ADDRESS seeds exact values only (address vocabulary is common English, review LL1).
+         */
+        private fun seedIdentity(node: UiNode, idClass: IdClass) {
+            if (idClass != IdClass.PII_NAME && idClass != IdClass.PII_ADDRESS) return
+            val text = node.text?.takeIf { it.isNotBlank() }?.let { CensusHash.canonical(it) }?.takeIf { !PiiShapes.containsMask(it) }
+            val desc = node.contentDescription?.takeIf { it.isNotBlank() }?.let { CensusHash.canonical(it) }
+                ?.takeIf { !PiiShapes.containsMask(it) }
+            text?.let { caught += it }
+            desc?.let { caught += it }
+            if (idClass != IdClass.PII_NAME) return
+            val textRuns = text?.let { runsOf(it, minLetters = MIN_IDENTITY_RUN) }.orEmpty()
+            identityRuns += textRuns
+            if (desc != null && textRuns.isNotEmpty()) {
+                identityRuns += runsOf(desc, minLetters = MIN_IDENTITY_RUN).filter { it in textRuns }
+            }
         }
 
         /**
