@@ -303,6 +303,9 @@ class AccessibilitySource @Inject constructor(
                 val displayArea = area ?: displayArea().also { area = it }
                 when (val probe = overlayProbe(w, displayArea, budget)) {
                     OverlayProbe.NotCandidate -> continue // small, or a verified non-overlay package
+                    // PR #1155 review DD8: with no display area the overlay question cannot be
+                    // answered — never walk past a system window on an unknown display.
+                    OverlayProbe.NoDisplayArea -> verdict = Foreground.Refused(ForegroundSkipReason.NO_DISPLAY_AREA)
                     // CC5: out of root fetches — the rest is unverifiable; never fall through.
                     OverlayProbe.BudgetExhausted -> verdict = Foreground.Refused(ForegroundSkipReason.SCAN_BUDGET)
                     // PR #1155 review BB1: a LARGE system window whose owner cannot be read may be an
@@ -499,6 +502,13 @@ class AccessibilitySource @Inject constructor(
         data object NotCandidate : OverlayProbe
         data object Unreadable : OverlayProbe
 
+        /**
+         * DD8: the display area is unknown, so size — and with it the overlay question — cannot be
+         * answered. INCONCLUSIVE, never "not a candidate": the event path reads the active root
+         * (pre-#1152 behaviour), the bubble path refuses `NO_DISPLAY_AREA`.
+         */
+        data object NoDisplayArea : OverlayProbe
+
         /** CC5: the walk's root-fetch budget ran out before this window's owner could be read. */
         data object BudgetExhausted : OverlayProbe
     }
@@ -527,7 +537,7 @@ class AccessibilitySource @Inject constructor(
         if (w.type != AccessibilityWindowInfo.TYPE_SYSTEM || w.isInPictureInPictureMode) return OverlayProbe.NotCandidate
         // CC1: an unknown display area admits nothing — checked BEFORE the memo, so a cached
         // CANDIDATE is never honoured without a measurable display. Not memoized (it can become known).
-        if (displayArea <= 0L) return reject(OverlayRejectReason.NO_DISPLAY_AREA, OverlayProbe.NotCandidate)
+        if (displayArea <= 0L) return reject(OverlayRejectReason.NO_DISPLAY_AREA, OverlayProbe.NoDisplayArea)
         val gen = packageCache.generation // CC1: read BEFORE probing; a write after a clear is discarded
         val bounds = boundsOf(w)
         // BB7: a DECIDED verdict is memoized per window id — no root fetch, no count — but (CC1) only

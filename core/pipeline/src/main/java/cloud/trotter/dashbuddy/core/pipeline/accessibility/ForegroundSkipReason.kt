@@ -32,6 +32,12 @@ enum class ForegroundSkipReason {
      */
     SCAN_BUDGET,
 
+    /**
+     * The display area is unknown, so no system-layer window on top can be verified as (not) an offer
+     * overlay (PR #1155 review DD8) — the bubble path refuses rather than walk past it.
+     */
+    NO_DISPLAY_AREA,
+
     /** The chosen root failed to map (the tree mapper threw or returned nothing). */
     MAP_FAILED,
 }

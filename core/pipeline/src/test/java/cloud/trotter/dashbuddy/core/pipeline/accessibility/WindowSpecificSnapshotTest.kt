@@ -105,8 +105,8 @@ class WindowSpecificSnapshotTest {
         activeRoot: AccessibilityNodeInfo?,
         windows: List<AccessibilityWindowInfo>,
         enabled: Set<String> = setOf(ddPkg, uberPkg),
+        res: android.content.res.Resources? = displayResources(),
     ): Harness {
-        val res = displayResources()
         val service = mock<AccessibilityService> {
             on { rootInActiveWindow } doReturn activeRoot
             on { this.windows } doReturn windows
@@ -817,5 +817,31 @@ class WindowSpecificSnapshotTest {
 
         assertTrue(collect(h, kind).isEmpty())
         h.skipped(ForegroundSkipReason.FRONT_UNREADABLE)
+    }
+
+    @Test
+    fun `DD8 - unknown display area, bubble active - refused NO_DISPLAY_AREA, never walked past`() = bothKinds { kind ->
+        val bubble = node(ownPkg, "bubble")
+        val h = harness(
+            activeRoot = bubble,
+            windows = listOf(window(1, 10, bubble, active = true), uberOverlay(9, 9, node(uberPkg, "uber-offer")), window(3, 2, node(ddPkg, "dd"))),
+            res = null,
+        )
+
+        assertTrue(collect(h, kind).isEmpty())
+        h.skipped(ForegroundSkipReason.NO_DISPLAY_AREA)
+    }
+
+    @Test
+    fun `DD8 - unknown display area, DoorDash active - inconclusive - the active root, counted once`() = bothKinds { kind ->
+        val dd = node(ddPkg, "dd", windowId = 3)
+        val h = harness(
+            activeRoot = dd,
+            windows = listOf(window(3, 5, dd, active = true), uberOverlay(9, 9, node(uberPkg, "uber-offer"))),
+            res = null,
+        )
+
+        assertEquals(listOf("dd"), collect(h, kind, windowId = 3).map { it.tree.text })
+        assertEquals(1L, h.stats.overlayRejectedCount(OverlayRejectReason.NO_DISPLAY_AREA))
     }
 }
