@@ -1,5 +1,6 @@
 package cloud.trotter.dashbuddy.core.pipeline
 
+import cloud.trotter.dashbuddy.domain.privacy.MaskTokens
 import cloud.trotter.dashbuddy.core.pipeline.rules.CompiledRedact
 import cloud.trotter.dashbuddy.domain.model.accessibility.UiNode
 import cloud.trotter.dashbuddy.domain.model.notification.RawNotificationData
@@ -332,7 +333,7 @@ object CustomerTextMarkers {
     val ID_MARKERS: List<String> = ID_MARKER_TABLE.filter { it.runtimeScrub == RuntimeScrub.ALWAYS }.map { it.suffix }
 
     /** Substring that classifies a node's text as already-redacted (VET V1). */
-    private const val REDACTED_MARK = "[redacted"
+    private const val REDACTED_MARK = MaskTokens.REDACTED_PREFIX
 
     /**
      * The first marker [text] carries UN-redacted, or null when clean. A node

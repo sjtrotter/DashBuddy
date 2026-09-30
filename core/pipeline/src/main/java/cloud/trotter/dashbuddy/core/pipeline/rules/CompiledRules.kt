@@ -1,5 +1,6 @@
 package cloud.trotter.dashbuddy.core.pipeline.rules
 
+import cloud.trotter.dashbuddy.domain.privacy.MaskTokens
 import cloud.trotter.dashbuddy.domain.model.accessibility.UiNode
 import cloud.trotter.dashbuddy.domain.model.notification.NotifTextField
 import cloud.trotter.dashbuddy.domain.model.notification.RawNotificationData
@@ -345,7 +346,7 @@ data class CompiledRedact(
          * Fail-closed mask written when the distinctness hash can't be computed
          * (#362/#623): a redacted node still ships redacted, never the raw value.
          */
-        const val REDACTED = "[redacted]"
+        const val REDACTED = MaskTokens.REDACTED
         val EMPTY = CompiledRedact(emptyList())
 
         /**

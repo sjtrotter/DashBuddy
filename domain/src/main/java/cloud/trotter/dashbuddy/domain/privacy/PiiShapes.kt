@@ -328,7 +328,7 @@ object PiiShapes {
      * strip to `words:1`. `[icon]` is NOT here: it is DoorDash's own rendered chrome, not a mask.
      */
     val MASK_LITERALS: List<String> = listOf(
-        "[redacted",
+        MaskTokens.REDACTED_PREFIX,
         "[address]",
         "[email]",
         "[phone]",
