@@ -274,7 +274,8 @@ object CustomerTextMarkers {
         // on its own text marker.
         return tree
             .mapScrubbableStrings {
-                if (byId || unredactedMarker(it) != null) CompiledRedact.REDACTED else it
+                // #1147: a null field stays null (nothing to leak; no phantom keys on the envelope).
+                if (it != null && (byId || unredactedMarker(it) != null)) CompiledRedact.REDACTED else it
             }
             .copy(children = tree.children.map { scrubUnknown(it) })
     }
