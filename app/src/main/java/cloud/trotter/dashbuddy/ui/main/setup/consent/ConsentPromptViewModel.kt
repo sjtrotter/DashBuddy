@@ -35,20 +35,18 @@ class ConsentPromptViewModel @Inject constructor(
             grants.capabilities,
             grants.grantedKeys,
             grants.deniedKeys,
-            grants.loaded,
-        ) { capabilities, granted, denied, loaded ->
-            buildConsentPromptState(capabilities, granted, denied).copy(ready = loaded)
+        ) { capabilities, granted, denied ->
+            buildConsentPromptState(capabilities, granted, denied)
         }.stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5_000),
-            // #1151 review NN1 (the MM7 treatment): seeded from the current values, so the front
-            // door's FIRST pick sees the undecided capabilities and never shows the event-receipt
-            // page first only to swap it for this one with no decision taken.
+            // #1151 review NN1 (the MM7 treatment): seeded from the current values, so the prompt
+            // never renders a frame of the empty default.
             initialValue = buildConsentPromptState(
                 grants.capabilities.value,
                 grants.grantedKeys.value,
                 grants.deniedKeys.value,
-            ).copy(ready = grants.loaded.value),
+            ),
         )
 
     /**
@@ -66,11 +64,6 @@ class ConsentPromptViewModel @Inject constructor(
 /** Immutable per-screen state (UDF). Empty [rows] ⇒ nothing to ask, sheet stays closed. */
 data class ConsentPromptUiState(
     val rows: List<ConsentPromptRow> = emptyList(),
-    /**
-     * #1151 review OO2 — a rule load has published its enumeration, so empty [rows] means "none
-     * pending" rather than "not loaded yet". The front door waits for it.
-     */
-    val ready: Boolean = false,
 )
 
 /** One undecided capability the user must Allow or Don't-allow. */

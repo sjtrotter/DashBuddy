@@ -1,75 +1,34 @@
 package cloud.trotter.dashbuddy.ui.main.setup.consent
 
 import androidx.activity.compose.LocalActivity
-import androidx.compose.animation.AnimatedContent
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.ViewModelStoreOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import kotlinx.coroutines.delay
 
 /**
- * The Dashboard's ONE front door (#1151 review LL1/MM6): picks at most one consent prompt via the
- * pure [pickFrontDoorPrompt] — the capability prompt first, the event-receipt prompt once the
- * capability prompt is answered — inside ONE [FrontDoorSheet], so a fresh install never opens two
- * modal sheets, and "Not now" closes the whole door for this foreground.
- * Deferrals live in the ACTIVITY-scoped [FrontDoorViewModel] (see [FrontDoorDeferrals]).
+ * The Dashboard's front door (#843, #1151 review LL1/MM6): the per-capability automation consent
+ * prompt on the shared [FrontDoorSheet]. "Not now" closes it for this foreground; the deferral lives
+ * in the ACTIVITY-scoped [FrontDoorViewModel] (see [FrontDoorDeferrals]). The event-receipt consent
+ * is NOT here since the 2026-09-30 re-sequencing — it is the first step of the permission chain.
  */
 @Composable
 fun FrontDoorHost(
     capabilityViewModel: ConsentPromptViewModel = hiltViewModel(),
-    eventReceiptViewModelOverride: EventReceiptConsentViewModel? = null,
 ) {
     val activityOwner = LocalActivity.current as? ViewModelStoreOwner ?: return
-    // PP7: the SAME activity-scoped instance MainActivity uses — one receipt ViewModel.
-    val eventReceiptViewModel: EventReceiptConsentViewModel =
-        eventReceiptViewModelOverride ?: hiltViewModel(viewModelStoreOwner = activityOwner)
     val frontDoor: FrontDoorViewModel = hiltViewModel(viewModelStoreOwner = activityOwner)
 
     val capability by capabilityViewModel.uiState.collectAsStateWithLifecycle()
-    val eventReceipt by eventReceiptViewModel.uiState.collectAsStateWithLifecycle()
     val deferrals by frontDoor.deferrals.collectAsStateWithLifecycle()
 
-    // PP2: a bounded wait for the capability load attempt.
-    var waitedOut by remember { mutableStateOf(false) }
-    LaunchedEffect(Unit) {
-        delay(CAPABILITY_WAIT_MS)
-        waitedOut = true
-    }
+    if (!showCapabilityPrompt(capability.rows.isNotEmpty(), deferrals)) return
 
-    val prompt = pickFrontDoorPrompt(
-        capabilitiesReady = capabilitiesReady(capability.ready, waitedOut),
-        capabilityRowsPending = capability.rows.isNotEmpty(),
-        eventReceiptReady = eventReceipt.ready,
-        eventReceiptPending = eventReceipt.showPrompt,
-        deferrals = deferrals,
-    ) ?: return
-
-    // ONE modal for the whole door (MM6): a decision that finishes one prompt swaps the page in place.
-    FrontDoorSheet(
-        onDefer = frontDoor::defer,
-    ) {
-        // PP5: the rows ride in the target state (keyed by prompt), so the exiting capability page
-        // keeps the rows it last showed while it slides out.
-        AnimatedContent(
-            targetState = FrontDoorPageState(prompt, capability.rows),
-            contentKey = { it.prompt },
-            label = "frontDoorPage",
-        ) { page ->
-            when (page.prompt) {
-                FrontDoorPrompt.CAPABILITIES -> ConsentPromptPage(
-                    rows = page.rows,
-                    onDecision = capabilityViewModel::onDecision,
-                )
-                FrontDoorPrompt.EVENT_RECEIPT -> EventReceiptConsentPage(
-                    onDecision = eventReceiptViewModel::onDecision,
-                )
-            }
-        }
+    FrontDoorSheet(onDefer = frontDoor::defer) {
+        ConsentPromptPage(
+            rows = capability.rows,
+            onDecision = capabilityViewModel::onDecision,
+        )
     }
 }

@@ -51,21 +51,6 @@ interface RuleCapabilityGrants {
     val capabilities: StateFlow<List<RuleCapability>>
 
     /**
-     * #1151 review OO2/PP2 — readiness: true once a rule load has been ATTEMPTED — [reconcile]
-     * published an enumeration (even an EMPTY one), or the load ended without one
-     * ([markLoadAttempted]: no files, or a failure). Before that, an empty [capabilities] means "not
-     * loaded yet", not "none pending" — the front door waits on this so it never shows another prompt
-     * first and then swaps to the capability prompt when the rows arrive.
-     */
-    val loaded: StateFlow<Boolean>
-
-    /**
-     * #1151 review PP2 — the loader calls this on EVERY load exit (a `finally`), so [loaded] turns
-     * true even when a load publishes nothing. Never grants, never changes [capabilities].
-     */
-    fun markLoadAttempted()
-
-    /**
      * Grant ([granted] = true) or revoke/deny ([granted] = false) one
      * capability [key] — the consent decision, written from the prompt (#843)
      * or the settings record (#422 PR 3). This is the ONLY way a grant comes

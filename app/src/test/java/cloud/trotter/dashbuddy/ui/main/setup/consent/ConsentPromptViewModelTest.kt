@@ -36,8 +36,6 @@ class ConsentPromptViewModelTest {
         private val _capabilities = MutableStateFlow<List<RuleCapability>>(emptyList())
         private val _granted = MutableStateFlow<Set<String>>(emptySet())
         private val _denied = MutableStateFlow<Set<String>>(emptySet())
-        override val loaded: StateFlow<Boolean> = MutableStateFlow(true)
-        override fun markLoadAttempted() = Unit
         override val capabilities: StateFlow<List<RuleCapability>> = _capabilities
         override val grantedKeys: StateFlow<Set<String>> = _granted
         override val deniedKeys: StateFlow<Set<String>> = _denied

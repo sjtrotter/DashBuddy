@@ -63,8 +63,6 @@ data class EventReceiptConsentUiState(
      * never be raced by a frame of the real app. Always false in release.
      */
     val loading: Boolean = false,
-    /** #1151 review OO2 — the consent has been read (non-null); the front door waits for it. */
-    val ready: Boolean = false,
 )
 
 /**
@@ -80,5 +78,4 @@ fun buildEventReceiptConsentState(
     showPrompt = consent == EventReceiptConsent.UNDECIDED,
     blocked = isDebugBuild && consent == EventReceiptConsent.DECLINED,
     loading = isDebugBuild && consent == null,
-    ready = consent != null,
 )

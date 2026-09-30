@@ -8,17 +8,8 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import javax.inject.Inject
 
-/** The prompts that share the Dashboard's front door (#1151 review LL1) — at most one is shown. */
-enum class FrontDoorPrompt {
-    /** The per-capability automation consent (#843). Asked first. */
-    CAPABILITIES,
-
-    /** The wide-event-receipt feature consent (#1151). Asked only once the capability prompt is not showing. */
-    EVENT_RECEIPT,
-}
-
 /**
- * "Not now" bookkeeping (#1151 review LL3/LL6/MM6). A deferral closes the WHOLE door (every prompt)
+ * "Not now" bookkeeping (#1151 review LL3/LL6/MM6). A deferral closes the door for this foreground
  * and is anchored on the FOREGROUND GENERATION — the number of times the app really left the
  * foreground (a non-configuration-change ON_STOP) — so it holds through rotation, navigation and
  * back-stack re-entry (which the old composable-local `ON_RESUME ⇒ deferred = false` did not:
@@ -37,45 +28,13 @@ data class FrontDoorDeferrals(
 }
 
 /**
- * #1151 review PP5 — what one front-door page renders, carried IN the `AnimatedContent` target
- * state (keyed by [prompt]) so an exiting capability page keeps the rows it was showing instead of
- * recomposing against the now-empty live list and blanking mid-slide.
+ * Whether the front door shows the capability prompt (pure): while any capability is undecided and
+ * the door is not deferred for this foreground. Since the 2026-09-30 re-sequencing the event-receipt
+ * consent is a step in the PERMISSION chain (before the accessibility grant), so the front door
+ * hosts only the capability prompt again.
  */
-data class FrontDoorPageState(
-    val prompt: FrontDoorPrompt,
-    val rows: List<ConsentPromptRow> = emptyList(),
-)
-
-/** #1151 review PP2 — the longest the door waits for a capability load attempt. */
-const val CAPABILITY_WAIT_MS = 5_000L
-
-/**
- * #1151 review PP2 — capability readiness with a BOUNDED wait: a load attempt was seen, or the door
- * has waited [CAPABILITY_WAIT_MS] (so a loader that never reports cannot keep the door shut).
- */
-fun capabilitiesReady(loadAttempted: Boolean, waitedOut: Boolean): Boolean = loadAttempted || waitedOut
-
-/**
- * The one front-door choice (pure): nothing until BOTH sources are ready (review OO2 — the
- * capabilities published by a rule load, the event-receipt consent read), so an early empty
- * enumeration can never let the event-receipt prompt go first and then be swapped out; nothing
- * while the door is deferred; else the capability prompt while it has rows; else the event-receipt
- * prompt while it is pending. Never two — the second prompt appears only once the first is ANSWERED
- * (a decision), never because it was deferred.
- */
-fun pickFrontDoorPrompt(
-    capabilitiesReady: Boolean,
-    capabilityRowsPending: Boolean,
-    eventReceiptReady: Boolean,
-    eventReceiptPending: Boolean,
-    deferrals: FrontDoorDeferrals,
-): FrontDoorPrompt? = when {
-    !capabilitiesReady || !eventReceiptReady -> null
-    deferrals.isDeferred -> null
-    capabilityRowsPending -> FrontDoorPrompt.CAPABILITIES
-    eventReceiptPending -> FrontDoorPrompt.EVENT_RECEIPT
-    else -> null
-}
+fun showCapabilityPrompt(rowsPending: Boolean, deferrals: FrontDoorDeferrals): Boolean =
+    rowsPending && !deferrals.isDeferred
 
 /**
  * ACTIVITY-scoped holder of [FrontDoorDeferrals] (it survives rotation and navigation; `MainActivity`

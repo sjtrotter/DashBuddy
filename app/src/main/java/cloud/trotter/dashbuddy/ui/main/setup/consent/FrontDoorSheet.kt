@@ -25,10 +25,8 @@ import androidx.compose.ui.unit.dp
 import cloud.trotter.dashbuddy.feature.settings.R as SettingsR
 
 /**
- * The ONE front-door modal (#1151 review LL3/MM6). It stays composed while the door has a prompt;
- * [FrontDoorHost] swaps its [content] (animated) when a DECISION advances the door to the next
- * prompt, so the dasher never sees one modal disposed and another composed over their tap. "Not
- * now" (and scrim/back) call [onDefer], which closes the whole door for this foreground. Stateless.
+ * The front-door modal (#1151 review LL3/MM6) hosting the capability-consent page. "Not now" (and
+ * scrim/back) call [onDefer], which closes the door for this foreground. Stateless.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
