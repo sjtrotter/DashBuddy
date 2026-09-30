@@ -5,7 +5,6 @@ import android.view.accessibility.AccessibilityWindowInfo
 import cloud.trotter.dashbuddy.core.pipeline.accessibility.TreeSnapshot
 import cloud.trotter.dashbuddy.core.pipeline.accessibility.input.AccessibilitySource
 import cloud.trotter.dashbuddy.domain.settings.PlatformPreferences
-import cloud.trotter.dashbuddy.domain.state.Platform
 import cloud.trotter.dashbuddy.core.pipeline.accessibility.event.coalesce.coalesceByKey
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.filter
@@ -20,12 +19,11 @@ import javax.inject.Inject
  *
  * Unlike ContentChanged/StateChanged, which snapshot ONE window per frame (the active enabled
  * window, else the readable enabled window in front — #1148), this pipeline enumerates the window
- * list and snapshots TRUE OVERLAYS only (#1148 review G6): ENABLED-package windows whose layer is
- * ABOVE the active window's — e.g. an Uber offer (`TYPE_APPLICATION_OVERLAY`, accessibility
- * `TYPE_SYSTEM`) over DoorDash. A window BENEATH the active one (the activity under a DoorDash
- * sheet) is never emitted — that would re-open the interleaving the resolver removed. Candidate
- * types match [AccessibilitySource.foregroundWindow]: application windows and readable
- * known-platform system windows. No active window → nothing.
+ * list and snapshots TRUE OVERLAYS only (#1148 review G6): ENABLED-package application windows
+ * whose layer is ABOVE the active window's. A window BENEATH the active one (the activity under a DoorDash
+ * sheet) is never emitted — that would re-open the interleaving the resolver removed. Candidates
+ * match [AccessibilitySource.foregroundWindow]: `TYPE_APPLICATION` windows only (review H1; overlays
+ * that surface as accessibility `TYPE_SYSTEM` are #1152). No active window → nothing.
  */
 class WindowsChangedPipeline @Inject constructor(
     private val source: AccessibilitySource,
@@ -65,15 +63,11 @@ class WindowsChangedPipeline @Inject constructor(
             val enabled = platformPreferences.enabledPackages.value
             for (w in windows) {
                 if (w.isActive || w.layer <= active.layer) continue // never beneath the active window
-                if (w.type != AccessibilityWindowInfo.TYPE_APPLICATION &&
-                    w.type != AccessibilityWindowInfo.TYPE_SYSTEM
-                ) continue
+                if (w.type != AccessibilityWindowInfo.TYPE_APPLICATION) continue // H1, #1152
                 // Pre-map package read on the native root (#435 item 3): only ENABLED platforms —
-                // never our own bubble or other apps (#4); a system window must also be a known
-                // platform (the status bar is never read).
+                // never our own bubble or other apps (#4).
                 val nativeRoot = w.root ?: continue
-                val pkg = nativeRoot.packageName?.toString()
-                if (pkg !in enabled || pkg !in Platform.watchedPackages) continue
+                if (nativeRoot.packageName?.toString() !in enabled) continue
                 // #1148 review F6: the shared snapshot builder (one WindowContext, one map path).
                 val snapshot = source.getWindowSnapshot(w, nativeRoot, totalCount) ?: continue
                 emit(

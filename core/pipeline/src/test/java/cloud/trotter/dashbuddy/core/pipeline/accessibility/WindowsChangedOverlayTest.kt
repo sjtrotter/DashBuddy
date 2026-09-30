@@ -21,13 +21,16 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.mockito.kotlin.doReturn
 import org.mockito.kotlin.mock
+import org.mockito.kotlin.never
+import org.mockito.kotlin.verify
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 
 /**
- * #1148 review G6 — the topology path emits TRUE OVERLAYS only: enabled-package windows ABOVE the
- * active window (an Uber offer, a11y `TYPE_SYSTEM`, over DoorDash). A window beneath the active one
- * — the activity under a DoorDash sheet — is never emitted (that re-opened the F1 interleaving).
+ * #1148 review G6/H1 — the topology path emits TRUE OVERLAYS only: enabled-package APPLICATION
+ * windows ABOVE the active window. A window beneath the active one — the activity under a DoorDash
+ * sheet — is never emitted (that re-opened the F1 interleaving); system-layer windows are never
+ * candidates (#1152).
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 @RunWith(RobolectricTestRunner::class)
@@ -88,11 +91,11 @@ class WindowsChangedOverlayTest {
     }
 
     @Test
-    fun `an enabled Uber overlay above the active DoorDash window is emitted`() {
+    fun `an enabled application window above the active DoorDash window is emitted`() {
         val out = emitted(
             listOf(
                 window(3, 2, node(ddPkg, "dd"), active = true),
-                window(9, 9, node(uberPkg, "uber-offer"), windowType = AccessibilityWindowInfo.TYPE_SYSTEM),
+                window(9, 9, node(uberPkg, "uber-offer")),
             ),
             enabled = setOf(ddPkg, uberPkg),
         )
@@ -101,11 +104,11 @@ class WindowsChangedOverlayTest {
     }
 
     @Test
-    fun `a DISABLED Uber overlay is never emitted`() {
+    fun `a DISABLED platform's window above is never emitted`() {
         val out = emitted(
             listOf(
                 window(3, 2, node(ddPkg, "dd"), active = true),
-                window(9, 9, node(uberPkg, "uber-offer"), windowType = AccessibilityWindowInfo.TYPE_SYSTEM),
+                window(9, 9, node(uberPkg, "uber-offer")),
             ),
             enabled = setOf(ddPkg),
         )
@@ -119,5 +122,16 @@ class WindowsChangedOverlayTest {
             enabled = setOf(ddPkg, uberPkg),
         )
         assertTrue(out.isEmpty())
+    }
+
+    @Test
+    fun `a system-layer window is never emitted and never has its root fetched (H1)`() {
+        val uberSystem = window(9, 9, node(uberPkg, "uber-offer"), windowType = AccessibilityWindowInfo.TYPE_SYSTEM)
+        val out = emitted(
+            listOf(window(3, 2, node(ddPkg, "dd"), active = true), uberSystem),
+            enabled = setOf(ddPkg, uberPkg),
+        )
+        assertTrue(out.isEmpty())
+        verify(uberSystem, never()).root
     }
 }

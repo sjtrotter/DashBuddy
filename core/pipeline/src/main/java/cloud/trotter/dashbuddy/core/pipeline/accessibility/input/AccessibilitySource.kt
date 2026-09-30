@@ -7,7 +7,6 @@ import android.view.accessibility.AccessibilityWindowInfo
 import cloud.trotter.dashbuddy.domain.model.accessibility.UiNode
 import cloud.trotter.dashbuddy.core.pipeline.accessibility.TreeSnapshot
 import cloud.trotter.dashbuddy.core.pipeline.accessibility.mapper.toUiNode
-import cloud.trotter.dashbuddy.domain.state.Platform
 import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -146,40 +145,30 @@ class AccessibilitySource @Inject constructor() {
      * launcher, system UI) is the active one (#1148 review G5). Enumerated ONCE; each inspected
      * window's root fetched once.
      *
-     * Candidates, by `layer` descending:
-     * - every `TYPE_APPLICATION` window, EXCEPT our own (this app's package — the bubble is never
-     *   "another app in front");
-     * - a `TYPE_SYSTEM` window only when its root is readable AND its package is a KNOWN platform
-     *   ([isKnownPlatform], the `Platform.watchedPackages` registry) — Android maps
-     *   `TYPE_APPLICATION_OVERLAY` (Uber's offer overlays) to accessibility `TYPE_SYSTEM`; the status
-     *   bar and other unreadable / foreign system windows are never candidates.
+     * Candidates, by `layer` descending: `TYPE_APPLICATION` windows only, EXCEPT our own (this
+     * app's package — the bubble is never "another app in front"). System-layer windows are never
+     * candidates and never have their root fetched (#1148 review H1: a platform's own transient
+     * system-layer toast would otherwise hijack frames, and every SystemUI window would cost a
+     * binder fetch per frame). Overlays that surface as accessibility `TYPE_SYSTEM` (Android's
+     * `TYPE_APPLICATION_OVERLAY`, e.g. Uber's offer overlay) are an open question: #1152.
      *
-     * The FIRST candidate decides — readable-top-or-refuse: an application window with a null root
-     * → null (fail closed: we cannot verify what is on top, so never fall through to a lower
-     * readable window); a package that fails [isEnabled] → null (another app, or a DISABLED
-     * platform's overlay, is in front); else that window. Null when there is no candidate.
+     * The FIRST candidate decides — readable-top-or-refuse: a null root → null (fail closed: we
+     * cannot verify what is on top, so never fall through to a lower readable window); a package
+     * that fails [isEnabled] → null (another app is in front); else that window. Null when there is
+     * no candidate.
      *
      * SAFE to call from background threads.
      */
-    fun foregroundWindow(
-        isEnabled: (String?) -> Boolean,
-        isKnownPlatform: (String?) -> Boolean = { it in Platform.watchedPackages },
-    ): LocatedWindow? = try {
+    fun foregroundWindow(isEnabled: (String?) -> Boolean): LocatedWindow? = try {
         val ownPkg = serviceRef?.get()?.packageName
         val windows = getWindows()
         val ordered = windows
-            .filter { it.type == AccessibilityWindowInfo.TYPE_APPLICATION || it.type == AccessibilityWindowInfo.TYPE_SYSTEM }
+            .filter { it.type == AccessibilityWindowInfo.TYPE_APPLICATION }
             .sortedByDescending { it.layer }
         var located: LocatedWindow? = null
         for (w in ordered) {
-            val root = w.root
-            val pkg = root?.packageName?.toString()
-            if (w.type == AccessibilityWindowInfo.TYPE_SYSTEM) {
-                if (root == null || !isKnownPlatform(pkg)) continue // not a candidate
-                if (isEnabled(pkg)) located = LocatedWindow(w, root, windows.size)
-                break // the first candidate decides
-            }
-            if (root == null) break // unreadable application window on top → refuse
+            val root = w.root ?: break // unreadable application window on top → refuse
+            val pkg = root.packageName?.toString()
             if (ownPkg != null && pkg == ownPkg) continue // our own bubble is never "in front"
             if (isEnabled(pkg)) located = LocatedWindow(w, root, windows.size)
             break // the first candidate decides

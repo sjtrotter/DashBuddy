@@ -38,9 +38,9 @@ import org.robolectric.annotation.Config
  *
  * The event is a TRIGGER only. One active-root read: null → nothing; an ENABLED package → that
  * root (a sheet over its activity included — the hidden activity is never read); otherwise the
- * readable window IN FRONT: application windows (never our own bubble) ∪ readable known-platform
- * system windows (Uber's `TYPE_APPLICATION_OVERLAY` is accessibility `TYPE_SYSTEM`), by layer, the
- * first candidate deciding — an unreadable or non-enabled one refuses the frame.
+ * readable window IN FRONT: `TYPE_APPLICATION` windows only (never our own bubble; system-layer
+ * windows are never candidates — H1, overlays are #1152), by layer, the first candidate deciding —
+ * an unreadable or non-enabled one refuses the frame.
  *
  * Real [AccessibilitySource] over a mocked service (spied, so the path is observable); sdk 36
  * because the node mapper reads the API-36 `getChecked()`.
@@ -171,7 +171,7 @@ class WindowSpecificSnapshotTest {
         val emitted = collect(h, kind, windowId = 3) // fired by the hidden activity
 
         assertEquals(listOf("dd-sheet"), emitted.map { it.tree.text })
-        verify(h.source, never()).foregroundWindow(any(), any())
+        verify(h.source, never()).foregroundWindow(any())
         verify(h.source, never()).getWindowSnapshot(any(), any(), any())
         val trigger = requireNotNull(emitted.single().trigger)
         assertEquals(
@@ -194,34 +194,19 @@ class WindowSpecificSnapshotTest {
     }
 
     @Test
-    fun `bubble active, enabled Uber overlay (a11y TYPE_SYSTEM) above DoorDash - Uber is read`() = bothKinds { kind ->
+    fun `a system-layer window is never a candidate and never has its root fetched (H1)`() = bothKinds { kind ->
+        // Even an ENABLED platform's own system-layer window (a transient toast, an overlay — #1152).
         val bubble = node(ownPkg, "bubble")
         val dd = node(ddPkg, "dd")
         val uber = node(uberPkg, "uber-offer")
+        val uberWindow = window(9, 9, uber, windowType = system)
         val h = harness(
             activeRoot = bubble,
-            windows = listOf(window(1, 10, bubble, active = true), window(3, 2, dd), window(9, 9, uber, windowType = system)),
+            windows = listOf(window(1, 10, bubble, active = true), window(3, 2, dd), uberWindow),
         )
 
-        val emitted = collect(h, kind)
-
-        assertEquals(listOf("uber-offer"), emitted.map { it.tree.text })
-        assertEquals(uberPkg, emitted.single().packageName)
-    }
-
-    @Test
-    fun `bubble active, DISABLED Uber overlay above DoorDash - refused, nothing mapped`() = bothKinds { kind ->
-        val bubble = node(ownPkg, "bubble")
-        val dd = node(ddPkg, "dd")
-        val uber = node(uberPkg, "uber-offer")
-        val h = harness(
-            activeRoot = bubble,
-            windows = listOf(window(1, 10, bubble, active = true), window(3, 2, dd), window(9, 9, uber, windowType = system)),
-            enabled = setOf(ddPkg),
-        )
-
-        assertTrue("the obscured DoorDash window must not be read", collect(h, kind).isEmpty())
-        h.nothingMapped()
+        assertEquals(listOf("dd"), collect(h, kind).map { it.tree.text })
+        verify(uberWindow, never()).root
     }
 
     @Test
@@ -256,10 +241,11 @@ class WindowSpecificSnapshotTest {
         val bubble = node(ownPkg, "bubble")
         val statusBar = node(systemUiPkg, "status")
         val dd = node(ddPkg, "dd")
+        val statusWindow = window(20, 30, statusBar, windowType = system)
         val h = harness(
             activeRoot = bubble,
             windows = listOf(
-                window(20, 30, statusBar, windowType = system),
+                statusWindow,
                 window(21, 29, null, windowType = system),
                 window(1, 10, bubble, active = true),
                 window(3, 2, dd),
@@ -267,6 +253,7 @@ class WindowSpecificSnapshotTest {
         )
 
         assertEquals(listOf("dd"), collect(h, kind).map { it.tree.text })
+        verify(statusWindow, never()).root
     }
 
     @Test
@@ -292,7 +279,7 @@ class WindowSpecificSnapshotTest {
         val source = mock<AccessibilitySource> {
             on { this.events } doReturn events
             on { getLiveNativeRoot() } doReturn bubble
-            on { foregroundWindow(any(), any()) } doReturn located
+            on { foregroundWindow(any()) } doReturn located
             on { getWindowSnapshot(any(), any(), any()) } doReturn
                 AccessibilitySource.RootSnapshot(tree = UiNode(text = "bubble"), packageName = ownPkg)
         }
