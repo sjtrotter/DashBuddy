@@ -169,7 +169,11 @@ class SkeletonIdClassGateTest : SkeletonBuilderTestBase() {
     }
 
     @Test
-    fun `UU5 - a supplementary-plane capital after a lead-in is a capital`() {
+    fun `UU5 WW6 - the capital predicate is code-point based, and a non-ASCII id fails the grammar first`() {
+        // The predicate itself (review WW6: the id grammar is ASCII, so it must be tested directly).
+        assertTrue(SkeletonBuilder.isCapitalAt("to \uD801\uDC08dam", 3))
+        assertTrue(!SkeletonBuilder.isCapitalAt("to adam", 3))
+        // Relabelled grammar case: a supplementary-plane letter is not in the static id grammar at all.
         assertTrue(!SkeletonBuilder.isStaticId("deliver_to_\uD801\uDC08dam"))
         assertTrue(SkeletonBuilder.isStaticId("deliver_to_label"))
     }
@@ -186,5 +190,27 @@ class SkeletonIdClassGateTest : SkeletonBuilderTestBase() {
         assertEquals(listOf(null), ids("user_name", "Riley", "chipRiley"))
         assertEquals(listOf(null), ids("user_name", "Riley S", "chipRileyS"))
         assertEquals(listOf("com.x:id/mainStreetLabel"), ids("address_line_1", "Main St", "mainStreetLabel"))
+    }
+
+    @Test
+    fun `XX3 - the whole-value id run depends on the identity kind`() {
+        fun ids(identityId: String, identity: String, vararg tags: String) = SkeletonBuilder.build(
+            UiNode(className = "android.widget.LinearLayout", viewIdResourceName = "com.x:id/row", children = listOf(
+                UiNode(className = "android.widget.TextView", viewIdResourceName = "com.doordash.driverapp:id/$identityId", text = identity),
+            ) + tags.map { UiNode(className = "android.widget.ImageView", viewIdResourceName = "com.x:id/$it") }),
+            null, meta, platform, day,
+        )!!.root.children.drop(1).map { it.id }
+        // EXACT: a one-word chrome title seeds nothing for ids; the two-token name shape does.
+        assertEquals(listOf("com.x:id/SearchView", "com.x:id/search_bar"), ids("tvTitle", "Search", "SearchView", "search_bar"))
+        assertEquals(listOf(null), ids("tvTitle", "Riley S", "chipRileyS"))
+        // PERSON_OR_MERCHANT: a single-token person name protects ids; a merchant does not.
+        assertEquals(listOf(null), ids("user_name", "Riley", "chipRiley"))
+        assertEquals(listOf("com.x:id/jackInTheBoxLogo"), ids("user_name", "Jack in the Box", "jackInTheBoxLogo"))
+    }
+
+    @Test
+    fun `XX4 - an all-caps constant tag ending in one letter is not a name`() {
+        listOf("TAB_B", "SECTION_C", "PRIMARY_BUTTON_A").forEach { assertTrue(it, SkeletonBuilder.isStaticId(it)) }
+        assertTrue(!SkeletonBuilder.isStaticId("chip_Adam_S"))
     }
 }

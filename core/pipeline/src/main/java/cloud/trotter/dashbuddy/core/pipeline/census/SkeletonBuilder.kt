@@ -330,12 +330,14 @@ object SkeletonBuilder {
         return tokens.indices.none { i ->
             val tail = tokens.subList(i, tokens.size).joinToString(" ")
             val prefix = CustomerTextMarkers.unredactedMarker(tail) ?: PiiShapes.customerLeadIn(tail)
-            // UU5: judge the next CODE POINT (a supplementary-plane capital is a capital).
-            prefix != null && tail.length > prefix.length && Character.isUpperCase(tail.codePointAt(prefix.length))
+            prefix != null && tail.length > prefix.length && isCapitalAt(tail, prefix.length)
         }
     }
 
     private val ID_SEPARATORS = Regex("[_.:-]")
+
+    /** UU5/WW6: the CODE POINT at [index] is an uppercase letter (a supplementary-plane capital counts). */
+    internal fun isCapitalAt(value: String, index: Int): Boolean = Character.isUpperCase(value.codePointAt(index))
 
     /** How the §2 step-1 id check classified a node's RAW id (reviews CC3, EE1, LL1). */
     internal enum class IdClass {
@@ -351,6 +353,9 @@ object SkeletonBuilder {
         /** An `ID_MARKER_TABLE` EXACT row — may be PII or chrome: seeds its exact value only (PP6). */
         PII_EXACT,
 
+        /** An `ID_MARKER_TABLE` PERSON_OR_MERCHANT row (`user_name`): exact seed; person-name whole value (XX3). */
+        PII_PERSON_OR_MERCHANT,
+
         /** In `PII_ID_SUFFIXES` only (the intake list; it also covers instruction BODIES). */
         INTAKE_ONLY,
 
@@ -365,6 +370,7 @@ object SkeletonBuilder {
                 CustomerTextMarkers.IdentityKind.ADDRESS -> IdClass.PII_ADDRESS
                 CustomerTextMarkers.IdentityKind.CONTENT -> IdClass.PII_CONTENT
                 CustomerTextMarkers.IdentityKind.EXACT -> IdClass.PII_EXACT
+                CustomerTextMarkers.IdentityKind.PERSON_OR_MERCHANT -> IdClass.PII_PERSON_OR_MERCHANT
             }
             PiiShapes.hasPiiIdSuffix(id) -> IdClass.INTAKE_ONLY
             else -> IdClass.NONE
@@ -419,10 +425,11 @@ object SkeletonBuilder {
         private val identityRuns = HashSet<String>()
 
         /**
-         * The WHOLE value of an EXACT identity text/desc that reads as a person's name (review VV1), case-folded
-         * with every non-letter removed, as ONE run — matched only against a node id / class (camel segments
-         * and their contiguous joins, review TT2): `user_name` "Riley" nulls `chipRiley`, "Riley S" nulls
-         * `chipRileyS`; a merchant "Jack in the Box", a sheet title "Order Details" and any ADDRESS add none.
+         * The WHOLE value of a PERSON_OR_MERCHANT value that reads as a person's name, or an EXACT value of the
+         * two-token name shape (reviews VV1, XX3), case-folded with every non-letter removed, as ONE run —
+         * matched only against a node id / class (camel segments and contiguous joins, review TT2): `user_name`
+         * "Riley" nulls `chipRiley`, `tvTitle` "Riley S" nulls `chipRileyS`; a merchant "Jack in the Box", a
+         * one-word sheet title "Search" and any ADDRESS add none.
          */
         private val wholeValueRuns = HashSet<String>()
 
@@ -492,21 +499,26 @@ object SkeletonBuilder {
          * ADDRESS and EXACT never seed runs (address vocabulary and sheet titles are common English).
          */
         private fun seedIdentity(textField: Field?, descField: Field?, idClass: IdClass) {
-            if (idClass != IdClass.PII_NAME && idClass != IdClass.PII_ADDRESS && idClass != IdClass.PII_EXACT) return
+            if (idClass != IdClass.PII_NAME && idClass != IdClass.PII_ADDRESS && idClass != IdClass.PII_EXACT &&
+                idClass != IdClass.PII_PERSON_OR_MERCHANT
+            ) return
             // SS7: the already-built Fields' canonicals — never re-canonicalized.
             val text = textField?.takeIf { it.converged }?.canonical?.takeIf { !PiiShapes.containsMask(it) }
             val desc = descField?.takeIf { it.converged }?.canonical?.takeIf { !PiiShapes.containsMask(it) }
             text?.let { caught += it }
             desc?.let { caught += it }
-            // Review VV1: only an EXACT value that reads as a PERSON's name — one Capitalized token ("Riley")
-            // or the capitalized name shape ("Riley S") — contributes its whole value to the id/class check;
-            // a chrome EXACT value ("Order Details" would null `orderDetailsHeader`) and every ADDRESS
-            // contribute none (an address never equals an id segment join in practice).
-            if (idClass == IdClass.PII_EXACT) {
-                listOfNotNull(text, desc).filter { isPersonNameValue(it) }.forEach { value ->
-                    val whole = CaseFold.fold(value.filter { it.isLetter() })
-                    if (whole.codePointCount(0, whole.length) >= MIN_IDENTITY_RUN) wholeValueRuns += whole
-                }
+            // Reviews VV1, XX3: the whole-value id/class run depends on the KIND. PERSON_OR_MERCHANT (never
+            // chrome) contributes whenever the value reads as a person's name (`PiiShapes.isPersonName`, a
+            // single token included); EXACT (may be chrome — a one-word sheet title "Search") only for the
+            // two-token name shape; ADDRESS never.
+            val wholeValueSource = when (idClass) {
+                IdClass.PII_PERSON_OR_MERCHANT -> listOfNotNull(text, desc).filter { PiiShapes.isPersonName(it) }
+                IdClass.PII_EXACT -> listOfNotNull(text, desc).filter { PiiShapes.FIRST_LAST_INITIAL_CAPITALIZED_REGEX.matches(it) }
+                else -> emptyList()
+            }
+            wholeValueSource.forEach { value ->
+                val whole = CaseFold.fold(value.filter { it.isLetter() })
+                if (whole.codePointCount(0, whole.length) >= MIN_IDENTITY_RUN) wholeValueRuns += whole
             }
             if (idClass != IdClass.PII_NAME) return
             // UU6: the text is the run source only when it yielded a usable canonical (not a mask, converged);
@@ -577,16 +589,6 @@ object SkeletonBuilder {
                 children = p.children.map { emit(it) },
             )
         }
-    }
-
-    /**
-     * A single Capitalized token of letters / apostrophes / hyphens ("Riley", "O'Brien"), or the capitalized
-     * first-name + last-initial shape ("Riley S") — review VV1's whole-value gate.
-     */
-    private fun isPersonNameValue(value: String): Boolean {
-        val single = value.isNotEmpty() && Character.isUpperCase(value.codePointAt(0)) &&
-            value.codePoints().allMatch { Character.isLetter(it) || it == '\''.code || it == '\u2019'.code || it == '-'.code }
-        return single || PiiShapes.FIRST_LAST_INITIAL_CAPITALIZED_REGEX.matches(value)
     }
 
     /**

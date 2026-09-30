@@ -50,6 +50,8 @@ class SkeletonCorpusGuardsTest : SkeletonCorpusTestBase() {
         corpus.forEach { f ->
             walkNodes(f.tree) { n -> n.viewIdResourceName?.let { if (!SkeletonBuilder.isStaticId(it)) rejected += it } }
         }
+        // Review XX4: all-caps constant tags ending in a one-letter segment are chrome, never names.
+        listOf("PRIMARY_BUTTON_A", "TAB_B", "SECTION_C").forEach { assertTrue(it, SkeletonBuilder.isStaticId(it)) }
         // A static id that trips the gate is a red test here, never a silent drop (review CC7 admitted a
         // single internal space, so `Artwork Image` is static now).
         assertEquals(
