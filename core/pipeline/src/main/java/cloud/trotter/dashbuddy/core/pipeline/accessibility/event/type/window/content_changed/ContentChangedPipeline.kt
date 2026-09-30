@@ -16,11 +16,12 @@ import timber.log.Timber
 import javax.inject.Inject
 
 /**
- * One coalesced content-change burst for one window (#1148 D3): the accumulator of
- * [coalesceByKey], owning the OR of the `contentChangeTypes` bits the old pipeline logged and
- * discarded.
+ * One coalesced content-change burst (#1148 D3): the accumulator of [coalesceByKey], owning the OR
+ * of the `contentChangeTypes` bits the old pipeline logged and discarded. There is ONE burst across
+ * all windows (review G2), so [windowId] is the LAST event's window — for the DRIP log only.
  */
 data class CoalescedChange(
+    /** The last event's window (DRIP log only — the resolver ignores the event's window). */
     val windowId: Int,
     val packageName: String?,
     /** OR of the `contentChangeTypes` bits across the burst. */
@@ -44,6 +45,7 @@ data class CoalescedChange(
             )
         } else {
             acc.copy(
+                windowId = e.windowId,
                 packageName = e.packageName ?: acc.packageName,
                 changeTypes = acc.changeTypes or e.contentChangeTypes,
                 eventCount = acc.eventCount + 1,
@@ -64,14 +66,16 @@ class ContentChangedPipeline @Inject constructor(
                 it.windowId, it.className, it.contentChangeTypes,
             )
         }
-        // #1148 D3: coalesced PER WINDOW — quiet 150 ms / scheduled max-wait 300 ms, trailing
+        // #1148 D3: ONE burst across all windows (review G2 — the resolver snapshots one window
+        // per frame whatever fired, so a per-window key would only multiply maps of the same root;
+        // the operator stays generic) — quiet 150 ms / scheduled max-wait 300 ms, trailing
         // emission guaranteed. Leading edge ON (review F5): the first change after idle is
         // snapshotted immediately, as the old operator did, so a transition's first frame is not
         // delayed (the #1104 click-before-screen race, `presentedAt`).
         .coalesceByKey(
             quietMs = QUIET_MS,
             maxWaitMs = MAX_WAIT_MS,
-            keyOf = { it.windowId },
+            keyOf = { CONTENT_BURST_KEY },
             merge = CoalescedChange::merge,
             leadingEdge = true,
         )
@@ -109,5 +113,8 @@ class ContentChangedPipeline @Inject constructor(
     companion object {
         const val QUIET_MS = 150L
         const val MAX_WAIT_MS = 300L
+
+        /** The single coalesce key for content changes (review G2). */
+        private const val CONTENT_BURST_KEY = 0
     }
 }
