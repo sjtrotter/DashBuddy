@@ -427,74 +427,49 @@ class AccessibilitySource @Inject constructor(
     }
 
     /**
-     * #1152 D5 as reworked by PR #1155 review BB5 — **an enabled platform offer overlay on top is
-     * the frame**: the topmost ENABLED overlay candidate ([overlayProbe]) whose `layer` is strictly
-     * greater than the layer of [activeWindowId]'s window (the window of the ALREADY-FETCHED active
-     * root), whichever window fired the event. While it is up, EVERY content/state resolution reads
-     * the overlay — so the covered window (the overlay platform's own map included) can never
-     * interleave with it and flap R0 (the #1148 F1 class); FrameGate's identity dedup collapses the
-     * repeats. Trade-off, accepted: the covered window's own transitions are not read while the
-     * overlay covers it (the dasher is looking at the overlay). It is on top by construction, so this
-     * is never the hidden-activity shape F1 removed.
-     *
-     * Returns the sealed [OverlayScan] (PR #1155 review DD12):
-     * - [OverlayScan.Overlay] — an enabled overlay IS the front window above the active one: read it;
-     * - [OverlayScan.None] — no overlay in front: read the already-fetched active root. This covers an
-     *   application window in front of the overlay (CC4), a
-     *   DISABLED overlay platform's overlay (BB6, skipped), an unreadable APPLICATION window above
-     *   (DD6 — it cannot be an offer overlay), an unknown display area (DD8, inconclusive) and any
-     *   exception during the scan (DD7);
-     * - [OverlayScan.Refused] — skip the frame: the active identity does not reconcile (EE1 — the active
-     *   root's window must be in this enumeration and be the one window flagged active; otherwise the
-     *   ordering cannot be verified → `FRONT_UNREADABLE`), an unreadable window that may BE an overlay (a
-     *   LARGE system window, or a selected overlay whose root vanished → `FRONT_UNREADABLE`, CC7/DD6), or
-     *   the walk ran out of root fetches (`SCAN_BUDGET`, CC5/DD4).
-     * An overlay that IS the active window is not above it (the active-root path reads it). One
-     * enumeration; memoized verdicts (BB7) make the scan cheap; the package is re-verified on the root
-     * that is mapped.
+     * PR #1155 review FF1 — the active window's root, read from THAT enumerated window (never a second,
+     * unsynchronised `rootInActiveWindow` read), with its package recorded in the verdict cache under
+     * the generation read before the fetch. Null when unreadable (the caller falls back to
+     * `rootInActiveWindow` with no overlay scan).
      */
-    fun overlayAboveActive(activeWindowId: Int, isEnabled: (String?) -> Boolean): OverlayScan = try {
-        stats.onOverlayScan() // CC9: the per-event enumeration this feature costs, sized in the field
-        overlayAboveActive(getWindows(), activeWindowId, isEnabled)
-    } catch (_: Exception) {
-        OverlayScan.None
+    /** CC9: one event-path overlay scan (the per-event enumeration this feature costs), sized in the field. */
+    internal fun onOverlayScan() = stats.onOverlayScan()
+
+    internal fun rootOf(w: AccessibilityWindowInfo): AccessibilityNodeInfo? {
+        val gen = packageCache.generation
+        val root = try {
+            w.root
+        } catch (_: Exception) {
+            null
+        } ?: return null
+        root.packageName?.toString()?.let { packageCache.putPackage(w.id, it, gen) }
+        return root
     }
 
-    /** [overlayAboveActive]'s verdict: the overlay to read, nothing (read the active root), or refuse the frame. */
+    /**
+     * [overlayFront]'s verdict (#1152 D5 as reworked by PR #1155 reviews BB5 … FF1) — **an enabled
+     * platform offer overlay in front of an enabled active window is the frame**, whichever window
+     * fired, so the covered window never interleaves with it (the #1148 F1 class). It is on top by
+     * construction, so this is never the hidden-activity shape F1 removed.
+     * - [Overlay] — an enabled overlay IS the front window above the active one: read it;
+     * - [None] — no overlay in front: read the active root. Covers an application window in front of
+     *   the overlay (CC4), a DISABLED overlay platform's overlay (BB6, skipped), an unreadable
+     *   APPLICATION window above (DD6 — it cannot be an offer overlay), an unknown display area (DD8,
+     *   inconclusive) and any exception during the scan (DD7);
+     * - [Refused] — skip the frame: an unreadable window that may BE an overlay (a LARGE system window,
+     *   or a selected overlay whose root vanished → `FRONT_UNREADABLE`, CC7/DD6), or the walk ran out of
+     *   root fetches (`SCAN_BUDGET`, CC5/DD4).
+     * The active window and every decision come from ONE enumeration (FF1), so nothing is reconciled.
+     */
     sealed interface OverlayScan {
         data object None : OverlayScan
         data class Overlay(val located: LocatedWindow) : OverlayScan
         data class Refused(val reason: ForegroundSkipReason) : OverlayScan
     }
 
-    private fun overlayAboveActive(
-        windows: List<AccessibilityWindowInfo>,
-        activeWindowId: Int,
-        isEnabled: (String?) -> Boolean,
-    ): OverlayScan {
-        // PR #1155 review EE1: an unreconciled active identity REFUSES the frame — the ordering cannot
-        // be verified, and reading the root while the topology path (same layout) emits the overlay
-        // would interleave the two. Retried on the next frame.
-        val active = reconciledActive(windows, activeWindowId)
-            ?: return OverlayScan.Refused(ForegroundSkipReason.FRONT_UNREADABLE)
-        return overlayFront(windows, active, isEnabled)
-    }
-
-    /**
-     * The ONE active-identity reconciliation (PR #1155 review BB2/EE1), shared by the event and the
-     * topology paths: the window whose id is [activeWindowId] (the fetched active root's window) must be
-     * in [windows] AND be the one and only window flagged active. Otherwise null — the ordering is
-     * unverifiable and neither path reads anything for that frame / burst.
-     */
-    internal fun reconciledActive(windows: List<AccessibilityWindowInfo>, activeWindowId: Int): AccessibilityWindowInfo? {
-        val active = windows.firstOrNull { it.id == activeWindowId } ?: return null
-        val flagged = windows.filter { it.isActive }
-        return active.takeIf { flagged.size == 1 && flagged.single().id == it.id }
-    }
-
     /**
      * PR #1155 review DD3 — the ONE "is an enabled overlay the front above an ENABLED active window"
-     * rule, shared by the event path ([overlayAboveActive]) and the topology path, so the two can
+     * rule, shared by the event path (`snapshotForEvent`) and the topology path, so the two can
      * never disagree: only an OVERLAY winner is returned. The event path owns the active window and
      * never reads a non-active application window, so a non-active application window in front (a
      * DoorDash sheet above its activity) is [OverlayScan.None] on BOTH paths — the topology path must

@@ -181,8 +181,9 @@ class WindowSpecificSnapshotTest {
 
     @Test
     fun `null active root - nothing mapped, nothing enumerated`() = bothKinds { kind ->
+        // DoorDash-only: no overlay platform enabled → the #1148 path, no enumeration (H4).
         val dd = node(ddPkg, "dd")
-        val h = harness(activeRoot = null, windows = listOf(window(3, 2, dd)))
+        val h = harness(activeRoot = null, windows = listOf(window(3, 2, dd)), enabled = setOf(ddPkg))
 
         assertTrue(collect(h, kind).isEmpty())
         h.nothingMapped()
@@ -320,7 +321,9 @@ class WindowSpecificSnapshotTest {
 
         assertEquals(1, collect(h, Kind.STATE).size)
         verify(h.service, times(1)).windows
-        verify(h.service, times(1)).rootInActiveWindow
+        // FF1: with an overlay platform enabled the active window and its root come from the ONE
+        // enumeration — no separate rootInActiveWindow read.
+        verify(h.service, never()).rootInActiveWindow
         verify(ddWindow, times(1)).root
         verify(bubbleWindow, times(1)).root
     }
@@ -464,32 +467,34 @@ class WindowSpecificSnapshotTest {
     }
 
     @Test
-    fun `BB2, EE1 - no flagged active window - the ordering is unverifiable - refused`() = bothKinds { kind ->
+    fun `FF1 - no flagged active window - the fallback reads rootInActiveWindow with no overlay scan`() = bothKinds { kind ->
         val dd = node(ddPkg, "dd", windowId = 3)
         val uber = node(uberPkg, "uber-offer")
         val h = harness(activeRoot = dd, windows = listOf(window(3, 5, dd), uberOverlay(9, 9, uber)))
 
-        assertTrue(collect(h, kind, windowId = 9, pkg = uberPkg).isEmpty())
-        h.skipped(ForegroundSkipReason.FRONT_UNREADABLE)
+        assertEquals(listOf("dd"), collect(h, kind, windowId = 9, pkg = uberPkg).map { it.tree.text })
+        assertEquals(0L, h.stats.overlayScanCount())
         assertEquals(0L, h.stats.overlaySnapshotCount())
     }
 
     @Test
-    fun `BB2, EE1 - the active root's window is absent from the enumeration - refused (topology agrees)`() = bothKinds { kind ->
-        // The same layout as WindowsChangedOverlayTest's EE1 case, which pins "nothing emitted".
-        val dd = node(ddPkg, "dd", windowId = 42) // not enumerated
-        val uber = node(uberPkg, "uber-offer")
-        val h = harness(activeRoot = dd, windows = listOf(window(3, 5, node(ddPkg, "dd-other"), active = true), uberOverlay(9, 9, uber)))
+    fun `FF1 - rootInActiveWindow disagrees with the enumeration - the enumeration decides, nothing reconciled`() = bothKinds { kind ->
+        // rootInActiveWindow says window 42 (not enumerated); the enumeration flags window 3 — its
+        // root is the active root, and the overlay above it (same list) is the frame.
+        val stray = node(ddPkg, "dd-stray", windowId = 42)
+        val h = harness(
+            activeRoot = stray,
+            windows = listOf(window(3, 5, node(ddPkg, "dd-other"), active = true), uberOverlay(9, 9, node(uberPkg, "uber-offer"))),
+        )
 
-        assertTrue(collect(h, kind, windowId = 9, pkg = uberPkg).isEmpty())
-        h.skipped(ForegroundSkipReason.FRONT_UNREADABLE)
-        assertEquals(0L, h.stats.overlaySnapshotCount())
+        assertEquals(listOf("uber-offer"), collect(h, kind, windowId = 9, pkg = uberPkg).map { it.tree.text })
+        verify(h.service, never()).rootInActiveWindow
     }
 
     @Test
-    fun `BB2, EE1 - focus moved to our bubble between the reads - refused, a LOWER overlay never returned`() = bothKinds { kind ->
-        // rootInActiveWindow still says DoorDash (window 3, layer 12); the enumeration flags our
-        // bubble. The overlay (layer 9) is BELOW DoorDash — the old own-active waiver returned it.
+    fun `FF1 - the enumeration flags our bubble - a LOWER overlay is never returned, the front DoorDash is read`() = bothKinds { kind ->
+        // rootInActiveWindow still says DoorDash (window 3, layer 12); the enumeration flags our bubble
+        // (layer 20). The overlay (layer 9) is BELOW DoorDash: the bubble path's front walk reads DoorDash.
         val dd = node(ddPkg, "dd", windowId = 3)
         val bubble = node(ownPkg, "bubble")
         val uber = node(uberPkg, "uber-offer")
@@ -498,8 +503,7 @@ class WindowSpecificSnapshotTest {
             windows = listOf(window(1, 20, bubble, active = true), window(3, 12, dd), uberOverlay(9, 9, uber)),
         )
 
-        assertTrue("never a LOWER overlay, never an unverified root", collect(h, kind, windowId = 9, pkg = uberPkg).isEmpty())
-        h.skipped(ForegroundSkipReason.FRONT_UNREADABLE)
+        assertEquals(listOf("dd"), collect(h, kind, windowId = 9, pkg = uberPkg).map { it.tree.text })
         assertEquals(0L, h.stats.overlaySnapshotCount())
     }
 
@@ -852,19 +856,22 @@ class WindowSpecificSnapshotTest {
     @Test
     fun `DD9 - a clear between the walk's enumeration and a probe - the probe's verdict is not written`() {
         val bubble = node(ownPkg, "bubble")
+        val bubble2 = node(ownPkg, "bubble-2")
         val shade = node(systemUiPkg, "shade")
-        val bubbleWindow = window(1, 50, null, active = true)
+        val bubbleWindow = window(1, 50, bubble, active = true)
+        // A second, non-active window of ours ABOVE the shade: the walk fetches its root (uncached)
+        // and skips it — the topology changes during that fetch, i.e. mid-walk.
+        val bubble2Window = window(2, 40, null)
         val shadeWindow = window(30, 30, shade, windowType = system, bounds = OverlayGeometry.FULL_SCREEN)
-        val h = harness(activeRoot = bubble, windows = listOf(bubbleWindow, shadeWindow, window(3, 2, node(ddPkg, "dd"))))
+        val h = harness(activeRoot = bubble, windows = listOf(bubbleWindow, bubble2Window, shadeWindow, window(3, 2, node(ddPkg, "dd"))))
         var first = true
-        // The walk reads its generation, then the topology changes while it fetches the bubble's root.
-        whenever(bubbleWindow.root).thenAnswer {
+        whenever(bubble2Window.root).thenAnswer {
             if (first) {
                 first = false
                 @Suppress("DEPRECATION")
                 h.source.emit(AccessibilityEvent.obtain(AccessibilityEvent.TYPE_WINDOWS_CHANGED))
             }
-            bubble
+            bubble2
         }
 
         assertEquals(listOf("dd"), collect(h, Kind.STATE).map { it.tree.text })
@@ -897,25 +904,25 @@ class WindowSpecificSnapshotTest {
     }
 
     @Test
-    fun `EE1 - shared fixture - unreconciled active identity - the event path refuses AND the topology path emits nothing`() {
-        // Root id 42 (not enumerated), flagged-active window 3 at layer 5, an enabled Uber overlay at 9.
-        val dd = node(ddPkg, "dd", windowId = 42)
+    fun `FF1 - shared fixture - one enumeration, both paths agree on the overlay`() {
+        // rootInActiveWindow says window 42 (not enumerated); the enumeration flags window 3 at layer 5
+        // with an enabled Uber overlay at 9 above it. Same list → same answer on both paths.
+        val stray = node(ddPkg, "dd-stray", windowId = 42)
         val h = harness(
-            activeRoot = dd,
+            activeRoot = stray,
             windows = listOf(window(3, 5, node(ddPkg, "dd-other"), active = true), uberOverlay(9, 9, node(uberPkg, "uber-offer"))),
         )
 
-        val eventFrames = Kind.entries.flatMap { collect(h, it, windowId = 9, pkg = uberPkg) }
+        val eventFrames = Kind.entries.flatMap { collect(h, it, windowId = 9, pkg = uberPkg) }.map { it.tree.text }
         val topologyFrames = collectWith(
             h.events,
             cloud.trotter.dashbuddy.core.pipeline.accessibility.event.type.window.windows_changed
                 .WindowsChangedPipeline(h.source, h.prefs, h.stats).output(),
             event(AccessibilityEvent.TYPE_WINDOWS_CHANGED, windowId = -1),
-        )
+        ).map { it.tree.text }
 
-        assertTrue("event path: $eventFrames", eventFrames.isEmpty())
-        assertTrue("topology path: $topologyFrames", topologyFrames.isEmpty())
-        assertEquals(2L, h.stats.foregroundSkipCount(ForegroundSkipReason.FRONT_UNREADABLE))
-        assertEquals(0L, h.stats.overlaySnapshotCount())
+        assertEquals(listOf("uber-offer", "uber-offer"), eventFrames)
+        assertEquals(listOf("uber-offer"), topologyFrames)
+        verify(h.service, never()).rootInActiveWindow
     }
 }

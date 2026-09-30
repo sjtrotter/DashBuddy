@@ -76,13 +76,12 @@ class WindowsChangedPipeline @Inject constructor(
 
             val totalCount = windows.size
 
-            // PR #1155 review EE1: the SAME active-identity reconciliation the event path applies —
-            // the fetched active root's window must be enumerated and be the one flagged active.
-            // Unreconciled (or no active root) → nothing this burst, exactly as the event path refuses.
-            val activeRoot = source.getLiveNativeRoot()
-            val active = activeRoot?.let { source.reconciledActive(windows, it.windowId) }
+            // PR #1155 review FF1/FF2: the active window comes from THIS enumeration (the one owner,
+            // `activeFromEnumeration`) — the same list every decision below runs over, and the same
+            // rule the event path applies, so nothing is reconciled. None flagged → nothing.
+            val active = source.activeFromEnumeration(windows)
             if (active == null) {
-                Timber.tag("Pipeline").v("🚫 Windows: active identity unreconciled (or no active root) — nothing emitted")
+                Timber.tag("Pipeline").v("🚫 Windows: no (single) active window — nothing emitted")
                 return@transform
             }
             val enabled = platformPreferences.enabledPackages.value
@@ -100,9 +99,9 @@ class WindowsChangedPipeline @Inject constructor(
                 }
 
             val ownPkg = source.ownPackage()
-            // BB10: read through the source's cache — one owner of "a window's package".
-            val activeIsOwn = ownPkg != null && source.packageOf(active) == ownPkg
-            if (activeIsOwn) {
+            // BB10/FF5: the active window's package, read ONCE per burst through the source's cache.
+            val activePkg = source.packageOf(active)
+            if (ownPkg != null && activePkg == ownPkg) {
                 // H6: our bubble's layer is no cutoff — emit the window in front of the dasher.
                 // Reuse THIS enumeration (round 4): no second getWindows() per topology burst.
                 when (val front = source.foregroundWindow(windows, { it in enabled }, display)) {
@@ -122,7 +121,7 @@ class WindowsChangedPipeline @Inject constructor(
             //   ([AccessibilitySource.overlayFront], the helper the event path calls);
             // - active window not enabled (and not ours) → `frontAbove`'s single winner.
             // Either way an unreadable window above is a BARRIER and a foreign app on top emits nothing.
-            if (source.packageOf(active) in enabled) {
+            if (activePkg in enabled) {
                 when (val scan = source.overlayFront(windows, active, { it in enabled }, display)) {
                     is AccessibilitySource.OverlayScan.Overlay ->
                         snapshotOf(scan.located.window, scan.located.root, overlay = true)?.let { emit(it) }
