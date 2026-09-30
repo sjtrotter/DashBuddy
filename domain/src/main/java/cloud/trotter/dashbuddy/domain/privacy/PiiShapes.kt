@@ -14,7 +14,9 @@ package cloud.trotter.dashbuddy.domain.privacy
  * Every pattern here is app-authored and bounded (fixed-count repetitions, no nested unbounded
  * quantifiers). The census runs them only on values already capped at 40 characters. They are Kotlin
  * [Regex] (the JDK/ICU engine), NOT rule regexes: rule-authored patterns go through `RegexSafety` onto
- * RE2J (#1053) and none of these may move into the rule package. `IcuRegexGuardTest` covers this file.
+ * RE2J (#1053) and none of these may move into the rule package. `IcuRegexGuardTest` sees only the
+ * `Regex("literal")` sites here — the `const`-built and `+`-concatenated patterns are invisible to it — so
+ * `PiiShapesIcuGuardTest` applies the same bare-`}` rule to every COMPILED pattern this object exposes.
  *
  * Licence: this file is part of the app (PolyForm Shield), deliberately OUTSIDE the Apache-2.0
  * census contract package.
