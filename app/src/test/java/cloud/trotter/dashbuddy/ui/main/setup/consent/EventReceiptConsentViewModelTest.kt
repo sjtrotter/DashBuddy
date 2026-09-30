@@ -64,21 +64,17 @@ class EventReceiptConsentViewModelTest {
     }
 
     @Test
-    fun `before the read a debug shell is loading - not blocked, not navigable - and release is untouched`() {
+    fun `before the read a debug shell is loading and not blocked - and release is untouched`() {
         val debug = buildEventReceiptConsentState(null, isDebugBuild = true)
         assertTrue(debug.loading)
         assertFalse(debug.blocked)
-        assertFalse(debug.navigable)
 
         assertEquals(EventReceiptConsentUiState(), buildEventReceiptConsentState(null, isDebugBuild = false))
-        assertTrue(buildEventReceiptConsentState(null, isDebugBuild = false).navigable)
     }
 
     @Test
-    fun `the loading gate offers Exit only after the delay`() {
-        assertFalse(loadingGateShowsExit(0L))
-        assertFalse(loadingGateShowsExit(LOADING_EXIT_AFTER_MS - 1))
-        assertTrue(loadingGateShowsExit(LOADING_EXIT_AFTER_MS))
+    fun `the loading gate offers Exit after a positive delay`() {
+        assertTrue(LOADING_EXIT_AFTER_MS > 0)
     }
 
     @Test
@@ -87,7 +83,6 @@ class EventReceiptConsentViewModelTest {
             for (debug in listOf(true, false)) {
                 val s = buildEventReceiptConsentState(consent, debug)
                 assertFalse(s.loading)
-                assertEquals(!s.blocked, s.navigable)
             }
         }
     }

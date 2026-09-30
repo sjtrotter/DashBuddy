@@ -65,10 +65,7 @@ data class EventReceiptConsentUiState(
     val loading: Boolean = false,
     /** #1151 review OO2 — the consent has been read (non-null); the front door waits for it. */
     val ready: Boolean = false,
-) {
-    /** The NavHost (and deep-link delivery) may run. */
-    val navigable: Boolean get() = !blocked && !loading
-}
+)
 
 /**
  * The pure projection (testable without Android). A `null` [consent] (store not read yet) shows no

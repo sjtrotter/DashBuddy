@@ -18,7 +18,6 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -62,13 +61,14 @@ fun DebugEventReceiptShell(onExit: () -> Unit) {
  */
 @Composable
 fun DebugEventReceiptLoading(onExit: () -> Unit) {
-    var elapsedMs by remember { mutableLongStateOf(0L) }
+    // PP8: a plain flag flipped after delay() — no elapsed-time bookkeeping.
+    var showExit by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) {
         delay(LOADING_EXIT_AFTER_MS)
-        elapsedMs = LOADING_EXIT_AFTER_MS
+        showExit = true
     }
     Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
-        if (loadingGateShowsExit(elapsedMs)) {
+        if (showExit) {
             Column(
                 modifier = Modifier
                     .fillMaxSize()
@@ -91,9 +91,6 @@ fun DebugEventReceiptLoading(onExit: () -> Unit) {
 
 /** NN2 — how long the loading gate stays blank before it offers Exit. */
 const val LOADING_EXIT_AFTER_MS = 3_000L
-
-/** NN2 — the pure rule: the gate offers Exit once it has been up for [LOADING_EXIT_AFTER_MS]. */
-fun loadingGateShowsExit(elapsedMs: Long): Boolean = elapsedMs >= LOADING_EXIT_AFTER_MS
 
 /** The debug block's full-screen notice (see [DebugEventReceiptShell]). */
 @Composable
