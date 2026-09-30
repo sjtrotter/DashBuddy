@@ -636,14 +636,15 @@ class WindowSpecificSnapshotTest {
     }
 
     @Test
-    fun `BB9 - the overlay fails to map (tearing down) - the active root is read, not dropped`() = bothKinds { kind ->
+    fun `DD1 - a SELECTED overlay that fails to map - the frame is skipped, never the covered window`() = bothKinds { kind ->
+        // Reverses BB9: a map failure does not prove the overlay left.
         val dd = node(ddPkg, "dd", windowId = 3)
         val h = harness(activeRoot = dd, windows = listOf(window(3, 5, dd, active = true), uberOverlay(9, 9, node(uberPkg, "uber-offer"))))
         doReturn(null).whenever(h.source).getWindowSnapshot(any(), any(), any())
 
-        assertEquals(listOf("dd"), collect(h, kind, windowId = 9, pkg = uberPkg).map { it.tree.text })
-        assertEquals(0L, h.stats.foregroundSkipCount(ForegroundSkipReason.MAP_FAILED))
-        assertEquals(0L, h.stats.overlaySnapshotCount())
+        assertTrue(collect(h, kind, windowId = 9, pkg = uberPkg).isEmpty())
+        h.skipped(ForegroundSkipReason.MAP_FAILED)
+        verify(h.source, never()).getCurrentRootSnapshot(any<AccessibilityNodeInfo>())
     }
 
     @Test

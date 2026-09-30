@@ -31,7 +31,7 @@ internal sealed interface EventSnapshot {
  *    ([AccessibilitySource.overlayAboveActive]) is the frame for EVERY event while it is up —
  *    whichever window fired — so the covered window never interleaves with it (no R0 flap). It is
  *    on top by construction, so this never reads a window hidden beneath the active one; if the
- *    overlay fails to map (tearing down mid-walk), the active root is read instead (BB9). Else
+ *    overlay was selected but fails to map, the frame is skipped `MAP_FAILED` (DD1 — never the covered window). Else
  *    map THAT root ([AccessibilitySource.getCurrentRootSnapshot] over the
  *    already-fetched node): the active enabled window is the ground truth, a sheet over its
  *    activity included.
@@ -74,12 +74,13 @@ internal fun AccessibilitySource.snapshotForEvent(
         } else {
             null
         }
-        // BB9: an overlay that fails to map (the card tearing down mid-walk) falls back to the
-        // active root — the shipped ground truth — rather than dropping the frame.
-        val overlaySnapshot = overlay?.let { getWindowSnapshot(it.window, it.root, it.totalWindowCount) }
-        if (overlaySnapshot != null) {
+        if (overlay != null) {
+            // PR #1155 review DD1 (reverses BB9): the walk SELECTED an overlay — a map failure does
+            // not prove it left, and reading the covered window beneath would re-open the interleave.
+            // The frame is skipped `MAP_FAILED` (retried on the next); "no overlay selected" is the
+            // only case that reads the active root.
             viaOverlay = true
-            overlaySnapshot
+            getWindowSnapshot(overlay.window, overlay.root, overlay.totalWindowCount)
         } else {
             getCurrentRootSnapshot(activeRoot)
         }
