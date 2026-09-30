@@ -15,7 +15,7 @@ enum class ForegroundSkipReason {
     /** The window in front could not be read (null root) — fail closed. */
     FRONT_UNREADABLE,
 
-    /** A non-enabled window is active and no application window is a candidate. */
+    /** A non-enabled window is active and no window (application or platform offer overlay, #1152) is a candidate. */
     NO_CANDIDATE,
 
     /**

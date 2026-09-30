@@ -1,13 +1,17 @@
 package cloud.trotter.dashbuddy.core.pipeline.accessibility.input
 
 import android.accessibilityservice.AccessibilityService
+import android.graphics.Rect
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
 import android.view.accessibility.AccessibilityWindowInfo
 import cloud.trotter.dashbuddy.domain.model.accessibility.UiNode
+import cloud.trotter.dashbuddy.core.pipeline.PipelineStats
 import cloud.trotter.dashbuddy.core.pipeline.accessibility.ForegroundSkipReason
+import cloud.trotter.dashbuddy.core.pipeline.accessibility.OverlayRejectReason
 import cloud.trotter.dashbuddy.core.pipeline.accessibility.TreeSnapshot
 import cloud.trotter.dashbuddy.core.pipeline.accessibility.mapper.toUiNode
+import cloud.trotter.dashbuddy.domain.state.Platform
 import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -17,7 +21,20 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 @Singleton
-class AccessibilitySource @Inject constructor() {
+class AccessibilitySource @Inject constructor(
+    /** Counts the #1152 overlay-candidate decisions (`overlayRejected{…}`). */
+    private val stats: PipelineStats,
+) {
+
+    /**
+     * Stats-less construction for the unit tests that only exercise window/root plumbing. A
+     * secondary constructor, not a default argument — the PipelineStats (PR #1066) doctrine: an
+     * all-default primary would synthesize a second `@Inject`-annotated constructor Dagger rejects.
+     */
+    constructor() : this(PipelineStats())
+
+    /** #1152 D3: `windowId → packageName`, cleared on every topology change ([emit]). */
+    private val packageCache = WindowPackageCache()
 
     // --- 1. The Event Stream (Push) ---
     // #1148 D1: the flow carries the immutable [AccEvent] envelope, never the framework-owned
@@ -31,6 +48,9 @@ class AccessibilitySource @Inject constructor() {
 
     /** Copies [event]'s scalars into an [AccEvent] (the one construction site) and emits it. */
     fun emit(event: AccessibilityEvent) {
+        // #1152 D3: the window list changed — cached window ids may be stale (cleared BEFORE the
+        // event reaches any collector, so no collector reads the old topology's cache after it).
+        if (event.eventType == AccessibilityEvent.TYPE_WINDOWS_CHANGED) packageCache.clear()
         _events.tryEmit(AccEvent.from(event))
     }
 
@@ -191,6 +211,8 @@ class AccessibilitySource @Inject constructor() {
         val window: AccessibilityWindowInfo,
         val root: AccessibilityNodeInfo,
         val totalWindowCount: Int,
+        /** A platform offer overlay (a11y `TYPE_SYSTEM`, #1152 D2), not an application window. */
+        val isOverlay: Boolean = false,
     )
 
     /** [foregroundWindow]'s verdict: the window in front, or why none is read (#1148 review H3). */
@@ -204,19 +226,23 @@ class AccessibilitySource @Inject constructor() {
      * launcher, system UI) is the active one (#1148 review G5). Enumerated ONCE; each inspected
      * window's root fetched once.
      *
-     * Candidates, by `layer` descending: `TYPE_APPLICATION` windows only, EXCEPT our own (this
-     * app's package — the bubble is never "another app in front") and picture-in-picture windows
-     * (review H2: a Google Maps PiP floats above the fullscreen activity with a foreign package, and
-     * would otherwise refuse every frame while the bubble is active). System-layer windows are never
-     * candidates and never have their root fetched (#1148 review H1: a platform's own transient
-     * system-layer toast would otherwise hijack frames, and every SystemUI window would cost a
-     * binder fetch per frame). Overlays that surface as accessibility `TYPE_SYSTEM` (Android's
-     * `TYPE_APPLICATION_OVERLAY`, e.g. Uber's offer overlay) are an open question: #1152.
+     * Candidates, by `layer` descending: `TYPE_APPLICATION` windows, EXCEPT our own (this app's
+     * package — the bubble is never "another app in front") and picture-in-picture windows (review
+     * H2: a Google Maps PiP floats above the fullscreen activity with a foreign package, and would
+     * otherwise refuse every frame while the bubble is active), PLUS platform offer overlays
+     * ([isOverlayCandidate], #1152 D4: a `TYPE_SYSTEM` window of ≥ [MIN_OVERLAY_AREA_FRACTION] of the
+     * display owned by a [Platform.offerOverlay] package). Every other system-layer window is never
+     * a candidate (#1148 review H1: a platform's own transient toast would otherwise hijack frames) —
+     * a small one never has its root fetched at all (size is checked before package), and a large
+     * one's package is fetched once per window id ([WindowPackageCache]).
      *
      * The FIRST candidate decides — readable-top-or-refuse: a null root → [Foreground.Refused]
      * `FRONT_UNREADABLE` (fail closed: we cannot verify what is on top, so never fall through to a
      * lower readable window); a package that fails [isEnabled] → `FRONT_NOT_ENABLED` (another app is
-     * in front); else [Foreground.Found]. No candidate at all → `NO_CANDIDATE`.
+     * in front — a DISABLED overlay platform's offer included); else [Foreground.Found]. No
+     * candidate at all → `NO_CANDIDATE`. A cached package lets an own/non-enabled application window
+     * decide without a root fetch; a window that is READ always has its package re-checked on the
+     * freshly-fetched root.
      *
      * SAFE to call from background threads.
      */
@@ -230,16 +256,34 @@ class AccessibilitySource @Inject constructor() {
     fun foregroundWindow(windows: List<AccessibilityWindowInfo>, isEnabled: (String?) -> Boolean): Foreground = try {
         val ownPkg = ownPackage()
         val ordered = windows
-            .filter { it.type == AccessibilityWindowInfo.TYPE_APPLICATION && !it.isInPictureInPictureMode }
+            .filter {
+                !it.isInPictureInPictureMode &&
+                    (it.type == AccessibilityWindowInfo.TYPE_APPLICATION || it.type == AccessibilityWindowInfo.TYPE_SYSTEM)
+            }
             .sortedByDescending { it.layer }
+        var area: Long? = null // measured lazily — only when a system-layer window is inspected
         var verdict: Foreground = Foreground.Refused(ForegroundSkipReason.NO_CANDIDATE)
         for (w in ordered) {
+            if (w.type == AccessibilityWindowInfo.TYPE_SYSTEM) {
+                val displayArea = area ?: displayArea(windows).also { area = it }
+                val probe = overlayProbe(w, displayArea) ?: continue // not an overlay candidate
+                verdict = decideOverlay(w, probe, windows.size, isEnabled)
+                break // the first candidate decides
+            }
+            // Application window (#1148, cache-aware since #1152 D3).
+            val cached = packageCache.get(w.id)
+            if (cached != null && ownPkg != null && cached == ownPkg) continue
+            if (cached != null && !isEnabled(cached)) {
+                verdict = Foreground.Refused(ForegroundSkipReason.FRONT_NOT_ENABLED)
+                break
+            }
             val root = w.root
             if (root == null) { // unreadable application window on top → refuse
                 verdict = Foreground.Refused(ForegroundSkipReason.FRONT_UNREADABLE)
                 break
             }
             val pkg = root.packageName?.toString()
+            pkg?.let { packageCache.put(w.id, it) }
             if (ownPkg != null && pkg == ownPkg) continue // our own bubble is never "in front"
             verdict = if (isEnabled(pkg)) {
                 Foreground.Found(LocatedWindow(w, root, windows.size))
@@ -251,6 +295,135 @@ class AccessibilitySource @Inject constructor() {
         verdict
     } catch (_: Exception) {
         Foreground.Refused(ForegroundSkipReason.FRONT_UNREADABLE)
+    }
+
+    /**
+     * The verdict for an overlay candidate that is the top candidate: non-enabled → refuse; its
+     * root (reused from the probe, else fetched once) null → refuse; else found — with the package
+     * RE-VERIFIED on the root that will be mapped (a cache hit is never trusted for a read).
+     */
+    private fun decideOverlay(
+        w: AccessibilityWindowInfo,
+        probe: OverlayProbe,
+        total: Int,
+        isEnabled: (String?) -> Boolean,
+    ): Foreground {
+        if (!isEnabled(probe.packageName)) return Foreground.Refused(ForegroundSkipReason.FRONT_NOT_ENABLED)
+        val root = probe.root ?: w.root ?: return Foreground.Refused(ForegroundSkipReason.FRONT_UNREADABLE)
+        val livePkg = root.packageName?.toString()
+        if (livePkg !in Platform.overlayPackages || !isEnabled(livePkg)) {
+            return Foreground.Refused(ForegroundSkipReason.FRONT_NOT_ENABLED)
+        }
+        return Foreground.Found(LocatedWindow(w, root, total, isOverlay = true))
+    }
+
+    /**
+     * #1152 D5 — the ONE legitimate "event's own window" read: the window [windowId] a content/state
+     * event came from, when it is an ENABLED platform offer overlay ([isOverlayCandidate]) drawn
+     * ABOVE the active window (its `layer` is greater, or no window is flagged active, or the
+     * flagged-active window is our own). The overlay is on top by construction, so this is never
+     * the hidden-activity shape #1148 F1 removed (an activity beneath a sheet is never
+     * `TYPE_SYSTEM`, never above the active window). The overlay being the ACTIVE window itself →
+     * null (the active-root path already reads it). Null on any failure — the caller falls through
+     * to the shipped order. One enumeration; the package is re-verified on the root that is mapped.
+     */
+    fun overlayAboveActive(windowId: Int, isEnabled: (String?) -> Boolean): LocatedWindow? {
+        if (windowId < 0) return null
+        return try {
+            val windows = getWindows()
+            val w = windows.firstOrNull { it.id == windowId } ?: return null
+            if (w.type != AccessibilityWindowInfo.TYPE_SYSTEM) return null // cheap: skip the metrics read
+            val probe = overlayProbe(w, displayArea(windows)) ?: return null
+            if (!isEnabled(probe.packageName)) return null
+            val active = windows.firstOrNull { it.isActive }
+            if (active != null) {
+                if (active.id == w.id) return null // the overlay has focus → the active-root path
+                val ownPkg = ownPackage()
+                val activeIsOwn = ownPkg != null && packageOf(active) == ownPkg
+                if (!activeIsOwn && w.layer <= active.layer) return null // beneath the active window
+            }
+            val root = probe.root ?: w.root ?: return null
+            val livePkg = root.packageName?.toString()
+            if (livePkg !in Platform.overlayPackages || !isEnabled(livePkg)) return null
+            LocatedWindow(w, root, windows.size, isOverlay = true)
+        } catch (_: Exception) {
+            null
+        }
+    }
+
+    /** An overlay candidate's verified owner, with the root when this probe had to fetch it. */
+    internal class OverlayProbe(val packageName: String, val root: AccessibilityNodeInfo?)
+
+    /**
+     * #1152 D2 — is [w] a platform offer overlay? TYPE, then SIZE, then PACKAGE (cheapest first):
+     * 1. `TYPE_SYSTEM` and not picture-in-picture;
+     * 2. its bounds cover ≥ [MIN_OVERLAY_AREA_FRACTION] of [displayArea] (the status bar, the nav
+     *    bar, the 142×142 Uber puck, heads-up notifications and toasts fail here WITHOUT a root
+     *    fetch); an unknown display area (≤ 0) admits nothing — fail closed;
+     * 3. its root's package is in [Platform.overlayPackages] (the registry flag, principle 8), read
+     *    through [WindowPackageCache] — a root is fetched at most once per window id; an unreadable
+     *    root cannot prove its package and is refused.
+     * Enablement is NOT decided here — callers read a candidate only when its package is enabled.
+     */
+    fun isOverlayCandidate(w: AccessibilityWindowInfo, displayArea: Long): Boolean =
+        overlayProbe(w, displayArea) != null
+
+    /** [isOverlayCandidate] carrying the verified package (and the root, if fetched); counts every refusal. */
+    internal fun overlayProbe(w: AccessibilityWindowInfo, displayArea: Long): OverlayProbe? {
+        if (w.type != AccessibilityWindowInfo.TYPE_SYSTEM || w.isInPictureInPictureMode) return null
+        if (displayArea <= 0L) return reject(OverlayRejectReason.NO_DISPLAY_AREA)
+        if (areaOf(w).toDouble() < MIN_OVERLAY_AREA_FRACTION * displayArea) return reject(OverlayRejectReason.TOO_SMALL)
+        val cached = packageCache.get(w.id)
+        val pkg: String
+        var root: AccessibilityNodeInfo? = null
+        if (cached != null) {
+            pkg = cached
+        } else {
+            root = w.root ?: return reject(OverlayRejectReason.UNREADABLE)
+            pkg = root.packageName?.toString() ?: return reject(OverlayRejectReason.UNREADABLE)
+            packageCache.put(w.id, pkg)
+        }
+        if (pkg !in Platform.overlayPackages) return reject(OverlayRejectReason.NOT_OVERLAY_PLATFORM)
+        return OverlayProbe(pkg, root)
+    }
+
+    private fun reject(reason: OverlayRejectReason): OverlayProbe? {
+        stats.onOverlayRejected(reason)
+        return null
+    }
+
+    /** [w]'s owning package through the cache (a miss fetches the root once); null if unreadable. */
+    private fun packageOf(w: AccessibilityWindowInfo): String? {
+        packageCache.get(w.id)?.let { return it }
+        val pkg = w.root?.packageName?.toString() ?: return null
+        packageCache.put(w.id, pkg)
+        return pkg
+    }
+
+    /**
+     * The display area in px² (#1152 D2): the service's display metrics; when the service handle is
+     * gone or reports nothing, the largest `TYPE_APPLICATION` window's bounds; else 0 (no overlay
+     * is admitted — fail closed).
+     */
+    internal fun displayArea(windows: List<AccessibilityWindowInfo>): Long {
+        val metrics = try {
+            serviceRef?.get()?.resources?.displayMetrics
+        } catch (_: Exception) {
+            null
+        }
+        if (metrics != null && metrics.widthPixels > 0 && metrics.heightPixels > 0) {
+            return metrics.widthPixels.toLong() * metrics.heightPixels.toLong()
+        }
+        return windows
+            .filter { it.type == AccessibilityWindowInfo.TYPE_APPLICATION }
+            .maxOfOrNull { areaOf(it) } ?: 0L
+    }
+
+    /** A window's on-screen area in px² (bounds are parceled with the window — no binder call). */
+    internal fun areaOf(w: AccessibilityWindowInfo): Long {
+        val r = Rect()
+        w.getBoundsInScreen(r)
+        return r.width().coerceAtLeast(0).toLong() * r.height().coerceAtLeast(0).toLong()
     }
 
     /**
@@ -284,6 +457,15 @@ class AccessibilitySource @Inject constructor() {
     fun getWindows(): List<AccessibilityWindowInfo> {
         val service = serviceRef?.get() ?: return emptyList()
         return service.windows ?: emptyList()
+    }
+
+    companion object {
+        /**
+         * #1152 D2: an overlay candidate covers at least this fraction of the display. The Uber offer
+         * overlay is ~85–92 %; the puck ~0.8 %, the status bar ~5 %, heads-up notifications and
+         * toasts ≤ 10 %.
+         */
+        const val MIN_OVERLAY_AREA_FRACTION = 0.25
     }
 
     /** The ONE [TreeSnapshot.WindowContext] builder (#1148 D4), used by every snapshot path. */

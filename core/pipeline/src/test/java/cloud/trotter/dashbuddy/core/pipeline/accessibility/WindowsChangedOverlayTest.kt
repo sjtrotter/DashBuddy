@@ -1,9 +1,11 @@
 package cloud.trotter.dashbuddy.core.pipeline.accessibility
 
 import android.accessibilityservice.AccessibilityService
+import android.graphics.Rect
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
 import android.view.accessibility.AccessibilityWindowInfo
+import cloud.trotter.dashbuddy.core.pipeline.PipelineStats
 import cloud.trotter.dashbuddy.core.pipeline.accessibility.event.type.window.windows_changed.WindowsChangedPipeline
 import cloud.trotter.dashbuddy.core.pipeline.accessibility.input.AccEvent
 import cloud.trotter.dashbuddy.core.pipeline.accessibility.input.AccessibilitySource
@@ -29,8 +31,9 @@ import org.robolectric.annotation.Config
 /**
  * #1148 review G6/H1 — the topology path emits TRUE OVERLAYS only: enabled-package APPLICATION
  * windows ABOVE the active window. A window beneath the active one — the activity under a DoorDash
- * sheet — is never emitted (that re-opened the F1 interleaving); system-layer windows are never
- * candidates (#1152).
+ * sheet — is never emitted (that re-opened the F1 interleaving). #1152 D6: a platform offer overlay
+ * (a11y `TYPE_SYSTEM`, size + package) above the active window is emitted too; every other
+ * system-layer window (the puck, the status bar, the shade, a DoorDash toast) never is.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 @RunWith(RobolectricTestRunner::class)
@@ -51,21 +54,32 @@ class WindowsChangedOverlayTest {
         root: AccessibilityNodeInfo?,
         windowType: Int = AccessibilityWindowInfo.TYPE_APPLICATION,
         active: Boolean = false,
-    ): AccessibilityWindowInfo = mock {
-        on { id } doReturn windowId
-        on { layer } doReturn windowLayer
-        on { this.root } doReturn root
-        on { isActive } doReturn active
-        on { type } doReturn windowType
+        bounds: Rect? = null, // null → zero-size
+    ): AccessibilityWindowInfo {
+        val w = mock<AccessibilityWindowInfo> {
+            on { id } doReturn windowId
+            on { layer } doReturn windowLayer
+            on { this.root } doReturn root
+            on { isActive } doReturn active
+            on { type } doReturn windowType
+        }
+        return if (bounds != null) withBounds(w, bounds) else w
     }
 
+    private fun system(windowId: Int, windowLayer: Int, root: AccessibilityNodeInfo?, bounds: Rect) =
+        window(windowId, windowLayer, root, windowType = AccessibilityWindowInfo.TYPE_SYSTEM, bounds = bounds)
+
+    private val stats = PipelineStats()
+
     private fun emitted(windows: List<AccessibilityWindowInfo>, enabled: Set<String>): List<TreeSnapshot> {
+        val res = displayResources()
         val service = mock<AccessibilityService> {
             on { this.windows } doReturn windows
             on { packageName } doReturn "cloud.trotter.dashbuddy"
+            on { resources } doReturn res
         }
-        val source = AccessibilitySource().apply { registerService(service) }
-        val pipeline = WindowsChangedPipeline(source, FakePlatformPreferences(enabled))
+        val source = AccessibilitySource(stats).apply { registerService(service) }
+        val pipeline = WindowsChangedPipeline(source, FakePlatformPreferences(enabled), stats)
         val out = mutableListOf<TreeSnapshot>()
         runTest {
             val job = backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
@@ -118,15 +132,15 @@ class WindowsChangedOverlayTest {
     @Test
     fun `no active window - nothing emitted`() {
         val out = emitted(
-            listOf(window(9, 9, node(uberPkg, "uber-offer"), windowType = AccessibilityWindowInfo.TYPE_SYSTEM)),
+            listOf(system(9, 9, node(uberPkg, "uber-offer"), OverlayGeometry.UBER_OFFER)),
             enabled = setOf(ddPkg, uberPkg),
         )
         assertTrue(out.isEmpty())
     }
 
     @Test
-    fun `a system-layer window is never emitted and never has its root fetched (H1)`() {
-        val uberSystem = window(9, 9, node(uberPkg, "uber-offer"), windowType = AccessibilityWindowInfo.TYPE_SYSTEM)
+    fun `a small system-layer window is never emitted and never has its root fetched (H1)`() {
+        val uberSystem = system(9, 9, node(uberPkg, "uber-puck"), OverlayGeometry.UBER_PUCK)
         val out = emitted(
             listOf(window(3, 2, node(ddPkg, "dd"), active = true), uberSystem),
             enabled = setOf(ddPkg, uberPkg),
@@ -159,5 +173,90 @@ class WindowsChangedOverlayTest {
             enabled = setOf(ddPkg),
         )
         assertTrue(out.isEmpty())
+    }
+
+    // --- #1152 D6 --------------------------------------------------------------------------------
+
+    @Test
+    fun `an Uber offer overlay above the active DoorDash window is emitted and counted`() {
+        val out = emitted(
+            listOf(
+                window(3, 2, node(ddPkg, "dd"), active = true),
+                system(9, 9, node(uberPkg, "uber-offer"), OverlayGeometry.UBER_OFFER),
+            ),
+            enabled = setOf(ddPkg, uberPkg),
+        )
+        assertEquals(listOf("uber-offer"), out.map { it.tree.text })
+        assertEquals(9, out.single().windowContext?.windowId)
+        assertEquals(1L, stats.overlaySnapshotCount())
+    }
+
+    @Test
+    fun `the Uber puck above the active window is never emitted`() {
+        val puck = system(10, 9, node(uberPkg, "uber-puck"), OverlayGeometry.UBER_PUCK)
+        val out = emitted(listOf(window(3, 2, node(ddPkg, "dd"), active = true), puck), enabled = setOf(ddPkg, uberPkg))
+        assertTrue(out.isEmpty())
+        verify(puck, never()).root
+    }
+
+    @Test
+    fun `a DISABLED overlay platform's overlay is never emitted`() {
+        val out = emitted(
+            listOf(
+                window(3, 2, node(ddPkg, "dd"), active = true),
+                system(9, 9, node(uberPkg, "uber-offer"), OverlayGeometry.UBER_OFFER),
+            ),
+            enabled = setOf(ddPkg),
+        )
+        assertTrue(out.isEmpty())
+        assertEquals(0L, stats.overlaySnapshotCount())
+    }
+
+    @Test
+    fun `a large system window of a non-overlay package (the shade, a DoorDash toast) is never emitted`() {
+        val out = emitted(
+            listOf(
+                window(3, 2, node(ddPkg, "dd"), active = true),
+                system(30, 30, node("com.android.systemui", "shade"), OverlayGeometry.FULL_SCREEN),
+                system(11, 9, node(ddPkg, "dd-toast"), OverlayGeometry.UBER_OFFER),
+            ),
+            enabled = setOf(ddPkg, uberPkg),
+        )
+        assertTrue(out.isEmpty())
+    }
+
+    @Test
+    fun `an Uber overlay BENEATH the active window is never emitted`() {
+        val out = emitted(
+            listOf(
+                window(3, 12, node(ddPkg, "dd"), active = true),
+                system(9, 9, node(uberPkg, "uber-offer"), OverlayGeometry.UBER_OFFER),
+            ),
+            enabled = setOf(ddPkg, uberPkg),
+        )
+        assertTrue(out.isEmpty())
+    }
+
+    @Test
+    fun `a DoorDash sheet above the active DoorDash activity - only the sheet (shipped behaviour)`() {
+        val out = emitted(
+            listOf(window(3, 2, node(ddPkg, "dd-activity"), active = true), window(7, 5, node(ddPkg, "dd-sheet"))),
+            enabled = setOf(ddPkg, uberPkg),
+        )
+        assertEquals(listOf("dd-sheet"), out.map { it.tree.text })
+    }
+
+    @Test
+    fun `our bubble active, an Uber overlay above DoorDash - the overlay is emitted and counted`() {
+        val out = emitted(
+            listOf(
+                window(1, 10, node("cloud.trotter.dashbuddy", "bubble"), active = true),
+                system(9, 9, node(uberPkg, "uber-offer"), OverlayGeometry.UBER_OFFER),
+                window(3, 2, node(ddPkg, "dd")),
+            ),
+            enabled = setOf(ddPkg, uberPkg),
+        )
+        assertEquals(listOf("uber-offer"), out.map { it.tree.text })
+        assertEquals(1L, stats.overlaySnapshotCount())
     }
 }

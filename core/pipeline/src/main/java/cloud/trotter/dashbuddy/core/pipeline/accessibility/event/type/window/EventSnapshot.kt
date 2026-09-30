@@ -2,11 +2,16 @@ package cloud.trotter.dashbuddy.core.pipeline.accessibility.event.type.window
 
 import cloud.trotter.dashbuddy.core.pipeline.accessibility.ForegroundSkipReason
 import cloud.trotter.dashbuddy.core.pipeline.accessibility.input.AccessibilitySource
+import cloud.trotter.dashbuddy.domain.state.Platform
 import timber.log.Timber
 
 /** The resolver's verdict (#1148 review H3): a frame, or a counted reason for none. */
 internal sealed interface EventSnapshot {
-    data class Resolved(val snapshot: AccessibilitySource.RootSnapshot) : EventSnapshot
+    /** [viaOverlay]: read from a platform offer overlay (#1152) — the caller counts it. */
+    data class Resolved(
+        val snapshot: AccessibilitySource.RootSnapshot,
+        val viaOverlay: Boolean = false,
+    ) : EventSnapshot
     data class Skipped(val reason: ForegroundSkipReason) : EventSnapshot
 }
 
@@ -21,11 +26,17 @@ internal sealed interface EventSnapshot {
  *
  * 1. ONE `getLiveNativeRoot()`. Null → `NO_ACTIVE_ROOT` (the pre-#1148 behaviour; never enumerate
  *    as a fallback).
- * 2. Its package enabled → map THAT root ([AccessibilitySource.getCurrentRootSnapshot] over the
+ * 2. Its package enabled → FIRST the one legitimate "event's own window" case (#1152 D5): an event
+ *    from an ENABLED [Platform.overlayPackages] package, whose window is a platform offer overlay
+ *    drawn ABOVE the active window ([AccessibilitySource.overlayAboveActive]) → map the OVERLAY. It
+ *    is on top by construction, so this never reads a window hidden beneath the active one. Else
+ *    map THAT root ([AccessibilitySource.getCurrentRootSnapshot] over the
  *    already-fetched node): the active enabled window is the ground truth, a sheet over its
  *    activity included.
  * 3. Otherwise (our bubble, the launcher, system UI active) → [AccessibilitySource.foregroundWindow]:
- *    readable-top-or-refuse over application windows; a refusal carries its reason.
+ *    readable-top-or-refuse over application windows AND platform offer overlays (#1152 D4 — so an
+ *    overlay over a non-enabled active window is reached HERE, under the fail-closed top rule);
+ *    a refusal carries its reason.
  * 4. A root that fails to map → `MAP_FAILED`.
  * 5. A post-map check of the snapshot's package against [isEnabled]. Both builders derive
  *    `packageName` from the SAME already-fetched root the gate read, so this cannot catch a
@@ -45,8 +56,24 @@ internal fun AccessibilitySource.snapshotForEvent(
         return EventSnapshot.Skipped(ForegroundSkipReason.NO_ACTIVE_ROOT)
     }
     val activePkg = activeRoot.packageName?.toString()
+    var viaOverlay = false
     val snapshot = if (isEnabled(activePkg)) {
-        getCurrentRootSnapshot(activeRoot)
+        // #1152 D5 — gated on the event package first, so a non-overlay platform's frame never
+        // pays the enumeration; an event from the active window itself is never "above" it.
+        val overlay = if (
+            eventPackage in Platform.overlayPackages && isEnabled(eventPackage) &&
+            windowId >= 0 && windowId != activeRoot.windowId
+        ) {
+            overlayAboveActive(windowId, isEnabled)
+        } else {
+            null
+        }
+        if (overlay != null) {
+            viaOverlay = true
+            getWindowSnapshot(overlay.window, overlay.root, overlay.totalWindowCount)
+        } else {
+            getCurrentRootSnapshot(activeRoot)
+        }
     } else {
         when (val front = foregroundWindow(isEnabled)) {
             is AccessibilitySource.Foreground.Refused -> {
@@ -56,8 +83,10 @@ internal fun AccessibilitySource.snapshotForEvent(
                 )
                 return EventSnapshot.Skipped(front.reason)
             }
-            is AccessibilitySource.Foreground.Found ->
+            is AccessibilitySource.Foreground.Found -> {
+                viaOverlay = front.located.isOverlay
                 getWindowSnapshot(front.located.window, front.located.root, front.located.totalWindowCount)
+            }
         }
     } ?: return EventSnapshot.Skipped(ForegroundSkipReason.MAP_FAILED)
 
@@ -69,5 +98,5 @@ internal fun AccessibilitySource.snapshotForEvent(
         )
         return EventSnapshot.Skipped(ForegroundSkipReason.POST_MAP_MISMATCH)
     }
-    return EventSnapshot.Resolved(snapshot)
+    return EventSnapshot.Resolved(snapshot, viaOverlay)
 }

@@ -1,6 +1,7 @@
 package cloud.trotter.dashbuddy.core.pipeline.accessibility
 
 import android.accessibilityservice.AccessibilityService
+import android.graphics.Rect
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
 import android.view.accessibility.AccessibilityWindowInfo
@@ -39,9 +40,11 @@ import org.robolectric.annotation.Config
  *
  * The event is a TRIGGER only. One active-root read: null → nothing; an ENABLED package → that
  * root (a sheet over its activity included — the hidden activity is never read); otherwise the
- * readable window IN FRONT: `TYPE_APPLICATION` windows only (never our own bubble; system-layer
- * windows are never candidates — H1, overlays are #1152), by layer, the first candidate deciding —
- * an unreadable or non-enabled one refuses the frame.
+ * readable window IN FRONT: `TYPE_APPLICATION` windows (never our own bubble) plus platform offer
+ * overlays (#1152 — a large `TYPE_SYSTEM` window of an `offerOverlay` platform; every other
+ * system-layer window is never a candidate — H1), by layer, the first candidate deciding — an
+ * unreadable or non-enabled one refuses the frame. #1152 D5 adds the one "event's own window" read:
+ * an enabled overlay platform's event whose window is an overlay ABOVE the active window.
  *
  * Real [AccessibilitySource] over a mocked service (spied, so the path is observable); sdk 36
  * because the node mapper reads the API-36 `getChecked()`.
@@ -72,14 +75,22 @@ class WindowSpecificSnapshotTest {
         windowType: Int = app,
         active: Boolean = false,
         pip: Boolean = false,
-    ): AccessibilityWindowInfo = mock {
-        on { isInPictureInPictureMode } doReturn pip
-        on { id } doReturn windowId
-        on { layer } doReturn windowLayer
-        on { this.root } doReturn root
-        on { isActive } doReturn active
-        on { type } doReturn windowType
+        bounds: Rect? = null, // null → zero-size (getBoundsInScreen unstubbed)
+    ): AccessibilityWindowInfo {
+        val w = mock<AccessibilityWindowInfo> {
+            on { isInPictureInPictureMode } doReturn pip
+            on { id } doReturn windowId
+            on { layer } doReturn windowLayer
+            on { this.root } doReturn root
+            on { isActive } doReturn active
+            on { type } doReturn windowType
+        }
+        return if (bounds != null) withBounds(w, bounds) else w
     }
+
+    /** The Uber offer overlay (#248 geometry): TYPE_SYSTEM, ~92 % of the display. */
+    private fun uberOverlay(windowId: Int, windowLayer: Int, root: AccessibilityNodeInfo?, active: Boolean = false) =
+        window(windowId, windowLayer, root, windowType = system, active = active, bounds = OverlayGeometry.UBER_OFFER)
 
     private class Harness(
         val service: AccessibilityService,
@@ -94,21 +105,24 @@ class WindowSpecificSnapshotTest {
         windows: List<AccessibilityWindowInfo>,
         enabled: Set<String> = setOf(ddPkg, uberPkg),
     ): Harness {
+        val res = displayResources()
         val service = mock<AccessibilityService> {
             on { rootInActiveWindow } doReturn activeRoot
             on { this.windows } doReturn windows
             on { packageName } doReturn ownPkg
+            on { resources } doReturn res
         }
         val events = MutableSharedFlow<AccEvent>(extraBufferCapacity = 4)
-        val source = spy(AccessibilitySource().apply { registerService(service) })
+        val stats = PipelineStats()
+        val source = spy(AccessibilitySource(stats).apply { registerService(service) })
         doReturn(events).whenever(source).events
-        return Harness(service, source, events, FakePlatformPreferences(enabled))
+        return Harness(service, source, events, FakePlatformPreferences(enabled), stats)
     }
 
-    private fun event(type: Int, windowId: Int) = AccEvent(
+    private fun event(type: Int, windowId: Int, pkg: String = ddPkg) = AccEvent(
         type = type,
         windowId = windowId,
-        packageName = ddPkg,
+        packageName = pkg,
         className = "android.widget.FrameLayout",
         contentChangeTypes = 1,
         eventTimeMs = 0L,
@@ -130,8 +144,8 @@ class WindowSpecificSnapshotTest {
             Kind.STATE -> StateChangedPipeline(source, prefs, stats).output()
         }
 
-    private fun collect(h: Harness, kind: Kind, windowId: Int = 3): List<TreeSnapshot> =
-        collectWith(h.events, output(kind, h.source, h.prefs, h.stats), event(kind.type, windowId))
+    private fun collect(h: Harness, kind: Kind, windowId: Int = 3, pkg: String = ddPkg): List<TreeSnapshot> =
+        collectWith(h.events, output(kind, h.source, h.prefs, h.stats), event(kind.type, windowId, pkg))
 
     private fun Harness.skipped(reason: ForegroundSkipReason) =
         assertEquals("counted as $reason (H3)", 1L, stats.foregroundSkipCount(reason))
@@ -209,12 +223,13 @@ class WindowSpecificSnapshotTest {
     }
 
     @Test
-    fun `a system-layer window is never a candidate and never has its root fetched (H1)`() = bothKinds { kind ->
-        // Even an ENABLED platform's own system-layer window (a transient toast, an overlay — #1152).
+    fun `a small system-layer window is never a candidate and never has its root fetched (H1)`() = bothKinds { kind ->
+        // Even an ENABLED overlay platform's own system-layer window, when it is small (the puck,
+        // a toast) — #1152 D2 refuses it on size, before any root fetch.
         val bubble = node(ownPkg, "bubble")
         val dd = node(ddPkg, "dd")
-        val uber = node(uberPkg, "uber-offer")
-        val uberWindow = window(9, 9, uber, windowType = system)
+        val uber = node(uberPkg, "uber-puck")
+        val uberWindow = window(9, 9, uber, windowType = system, bounds = OverlayGeometry.UBER_PUCK)
         val h = harness(
             activeRoot = bubble,
             windows = listOf(window(1, 10, bubble, active = true), window(3, 2, dd), uberWindow),
@@ -327,5 +342,186 @@ class WindowSpecificSnapshotTest {
         // under the legitimate "another app is in front" count.
         assertEquals(1L, stats.foregroundSkipCount(ForegroundSkipReason.POST_MAP_MISMATCH))
         assertEquals(0L, stats.foregroundSkipCount(ForegroundSkipReason.FRONT_NOT_ENABLED))
+    }
+
+    // --- #1152: platform offer overlays (a11y TYPE_SYSTEM) -------------------------------------
+
+    @Test
+    fun `(a) Uber event, Uber overlay above the active DoorDash window - the OVERLAY is read and counted`() = bothKinds { kind ->
+        val dd = node(ddPkg, "dd")
+        val uber = node(uberPkg, "uber-offer")
+        val h = harness(activeRoot = dd, windows = listOf(window(3, 5, dd, active = true), uberOverlay(9, 9, uber)))
+
+        val emitted = collect(h, kind, windowId = 9, pkg = uberPkg)
+
+        assertEquals(listOf("uber-offer"), emitted.map { it.tree.text })
+        assertEquals(uberPkg, emitted.single().packageName)
+        assertEquals(9, emitted.single().windowContext?.windowId)
+        assertEquals(1L, h.stats.overlaySnapshotCount())
+        verify(h.source, never()).getCurrentRootSnapshot(any<AccessibilityNodeInfo>())
+    }
+
+    @Test
+    fun `(b) Uber event from the Uber APP window beneath the active DoorDash - the DoorDash active root`() = bothKinds { kind ->
+        val dd = node(ddPkg, "dd")
+        val uberApp = node(uberPkg, "uber-app")
+        val uberAppWindow = window(4, 2, uberApp, bounds = OverlayGeometry.FULL_SCREEN) // TYPE_APPLICATION
+        val h = harness(activeRoot = dd, windows = listOf(window(3, 5, dd, active = true), uberAppWindow))
+
+        val emitted = collect(h, kind, windowId = 4, pkg = uberPkg)
+
+        assertEquals(listOf("dd"), emitted.map { it.tree.text })
+        assertEquals(0L, h.stats.overlaySnapshotCount())
+        verify(uberAppWindow, never()).root // an application window is never an overlay candidate
+    }
+
+    @Test
+    fun `an Uber overlay BENEATH the active window is never read (the layer rule)`() = bothKinds { kind ->
+        val dd = node(ddPkg, "dd")
+        val uber = node(uberPkg, "uber-offer")
+        val h = harness(activeRoot = dd, windows = listOf(window(3, 12, dd, active = true), uberOverlay(9, 9, uber)))
+
+        assertEquals(listOf("dd"), collect(h, kind, windowId = 9, pkg = uberPkg).map { it.tree.text })
+        assertEquals(0L, h.stats.overlaySnapshotCount())
+    }
+
+    @Test
+    fun `(c) Uber DISABLED - the branch is skipped without an enumeration - DoorDash active root`() = bothKinds { kind ->
+        val dd = node(ddPkg, "dd")
+        val uberWindow = uberOverlay(9, 9, node(uberPkg, "uber-offer"))
+        val h = harness(
+            activeRoot = dd,
+            windows = listOf(window(3, 5, dd, active = true), uberWindow),
+            enabled = setOf(ddPkg),
+        )
+
+        assertEquals(listOf("dd"), collect(h, kind, windowId = 9, pkg = uberPkg).map { it.tree.text })
+        verify(h.service, never()).windows
+        verify(uberWindow, never()).root
+    }
+
+    @Test
+    fun `(d) a DoorDash event while an Uber overlay is above - the ACTIVE DoorDash root`() = bothKinds { kind ->
+        // DoorDash declares no offer overlay: its events never take the branch (the overlay arrives
+        // through its OWN events or the topology path).
+        val dd = node(ddPkg, "dd")
+        val h = harness(
+            activeRoot = dd,
+            windows = listOf(window(3, 5, dd, active = true), uberOverlay(9, 9, node(uberPkg, "uber-offer"))),
+        )
+
+        assertEquals(listOf("dd"), collect(h, kind, windowId = 9, pkg = ddPkg).map { it.tree.text })
+        verify(h.service, never()).windows
+    }
+
+    @Test
+    fun `the Uber PUCK firing an event above DoorDash is never read`() = bothKinds { kind ->
+        val dd = node(ddPkg, "dd")
+        val puck = window(10, 9, node(uberPkg, "uber-puck"), windowType = system, bounds = OverlayGeometry.UBER_PUCK)
+        val h = harness(activeRoot = dd, windows = listOf(window(3, 5, dd, active = true), puck))
+
+        assertEquals(listOf("dd"), collect(h, kind, windowId = 10, pkg = uberPkg).map { it.tree.text })
+        verify(puck, never()).root
+    }
+
+    @Test
+    fun `a DoorDash system-layer window firing a DoorDash event is never read (not an overlay platform)`() = bothKinds { kind ->
+        val dd = node(ddPkg, "dd")
+        val ddToast = window(11, 9, node(ddPkg, "dd-toast"), windowType = system, bounds = OverlayGeometry.UBER_OFFER)
+        val h = harness(activeRoot = dd, windows = listOf(window(3, 5, dd, active = true), ddToast))
+
+        assertEquals(listOf("dd"), collect(h, kind, windowId = 11, pkg = ddPkg).map { it.tree.text })
+    }
+
+    @Test
+    fun `the overlay with focus is read through the active-root path, not the overlay branch`() = bothKinds { kind ->
+        val uber = node(uberPkg, "uber-offer")
+        val dd = node(ddPkg, "dd")
+        val h = harness(activeRoot = uber, windows = listOf(uberOverlay(9, 9, uber, active = true), window(3, 5, dd)))
+
+        val emitted = collect(h, kind, windowId = 9, pkg = uberPkg)
+
+        assertEquals(listOf("uber-offer"), emitted.map { it.tree.text })
+        assertEquals("active-root path carries no WindowContext (H4)", null, emitted.single().windowContext)
+        assertEquals(0L, h.stats.overlaySnapshotCount())
+    }
+
+    @Test
+    fun `no flagged active window - an overlay above everything is read`() = bothKinds { kind ->
+        val dd = node(ddPkg, "dd")
+        val uber = node(uberPkg, "uber-offer")
+        val h = harness(activeRoot = dd, windows = listOf(window(3, 5, dd), uberOverlay(9, 9, uber)))
+
+        assertEquals(listOf("uber-offer"), collect(h, kind, windowId = 9, pkg = uberPkg).map { it.tree.text })
+        assertEquals(1L, h.stats.overlaySnapshotCount())
+    }
+
+    @Test
+    fun `(e) our bubble active, Uber overlay above DoorDash - the overlay via the foreground read, counted`() = bothKinds { kind ->
+        val bubble = node(ownPkg, "bubble")
+        val dd = node(ddPkg, "dd")
+        val uber = node(uberPkg, "uber-offer")
+        val h = harness(
+            activeRoot = bubble,
+            windows = listOf(window(1, 10, bubble, active = true), uberOverlay(9, 9, uber), window(3, 2, dd)),
+        )
+
+        // A DoorDash event: the foreground read decides regardless of which package fired.
+        val emitted = collect(h, kind, windowId = 3, pkg = ddPkg)
+
+        assertEquals(listOf("uber-offer"), emitted.map { it.tree.text })
+        assertEquals(9, emitted.single().windowContext?.windowId)
+        assertEquals(1L, h.stats.overlaySnapshotCount())
+    }
+
+    @Test
+    fun `(f) our bubble active, only the puck and DoorDash - DoorDash`() = bothKinds { kind ->
+        val bubble = node(ownPkg, "bubble")
+        val dd = node(ddPkg, "dd")
+        val puck = window(10, 9, node(uberPkg, "uber-puck"), windowType = system, bounds = OverlayGeometry.UBER_PUCK)
+        val h = harness(activeRoot = bubble, windows = listOf(window(1, 10, bubble, active = true), puck, window(3, 2, dd)))
+
+        assertEquals(listOf("dd"), collect(h, kind).map { it.tree.text })
+        verify(puck, never()).root
+        assertEquals(0L, h.stats.overlaySnapshotCount())
+    }
+
+    @Test
+    fun `bubble active, a DISABLED platform's overlay above DoorDash - refused, another app is in front`() = bothKinds { kind ->
+        val bubble = node(ownPkg, "bubble")
+        val dd = node(ddPkg, "dd")
+        val h = harness(
+            activeRoot = bubble,
+            windows = listOf(window(1, 10, bubble, active = true), uberOverlay(9, 9, node(uberPkg, "uber-offer")), window(3, 2, dd)),
+            enabled = setOf(ddPkg),
+        )
+
+        assertTrue("never read the window hidden beneath a foreign overlay", collect(h, kind).isEmpty())
+        h.nothingMapped()
+        h.skipped(ForegroundSkipReason.FRONT_NOT_ENABLED)
+    }
+
+    @Test
+    fun `bubble active, the notification shade (large, systemui) is not a candidate - DoorDash is read`() = bothKinds { kind ->
+        val bubble = node(ownPkg, "bubble")
+        val dd = node(ddPkg, "dd")
+        val shade = window(30, 30, node(systemUiPkg, "shade"), windowType = system, bounds = OverlayGeometry.FULL_SCREEN)
+        val h = harness(activeRoot = bubble, windows = listOf(shade, window(1, 10, bubble, active = true), window(3, 2, dd)))
+
+        assertEquals(listOf("dd"), collect(h, kind).map { it.tree.text })
+    }
+
+    @Test
+    fun `bubble active, an Uber overlay whose root vanished after the package was cached - refused unreadable`() {
+        val bubble = node(ownPkg, "bubble")
+        val dd = node(ddPkg, "dd")
+        val uber = node(uberPkg, "uber-offer")
+        val overlay = uberOverlay(9, 9, uber)
+        val h = harness(activeRoot = bubble, windows = listOf(window(1, 10, bubble, active = true), overlay, window(3, 2, dd)))
+
+        assertEquals(listOf("uber-offer"), collect(h, Kind.STATE).map { it.tree.text }) // caches uber for id 9
+        whenever(overlay.root).thenReturn(null)
+        assertTrue("an unreadable top candidate refuses — never fall through to DoorDash", collect(h, Kind.STATE).isEmpty())
+        h.skipped(ForegroundSkipReason.FRONT_UNREADABLE)
     }
 }
