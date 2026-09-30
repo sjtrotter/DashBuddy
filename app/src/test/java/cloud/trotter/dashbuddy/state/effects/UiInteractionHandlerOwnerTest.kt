@@ -349,8 +349,8 @@ class UiInteractionHandlerOwnerTest {
     @Test
     fun `the semantic walk is node-count bounded`() = runTest {
         val row = payRow(top = 1774 - 400)
-        val filler = List(TreeLimits.MAX_TREE_NODES) { filler() }
-        assertFalse(expand(handler(windowRoot(*(filler + row).toTypedArray()))))
+        val fillers = List(TreeLimits.MAX_TREE_NODES) { filler() }
+        assertFalse(expand(handler(windowRoot(*(fillers + row).toTypedArray()))))
         row.neverClicked()
     }
 
@@ -375,9 +375,9 @@ class UiInteractionHandlerOwnerTest {
     @Test
     fun `a budget-cut walk with one early survivor aborts rather than clicking it`() = runTest {
         val early = payRow(top = 1774 - 400)
-        val filler = List(TreeLimits.MAX_TREE_NODES) { filler() }
+        val fillers = List(TreeLimits.MAX_TREE_NODES) { filler() }
         val real = payRow(top = 1774 - 380)
-        assertFalse(expand(handler(windowRoot(*(listOf(early) + filler + real).toTypedArray()))))
+        assertFalse(expand(handler(windowRoot(*(listOf(early) + fillers + real).toTypedArray()))))
         early.neverClicked(); real.neverClicked()
     }
 
