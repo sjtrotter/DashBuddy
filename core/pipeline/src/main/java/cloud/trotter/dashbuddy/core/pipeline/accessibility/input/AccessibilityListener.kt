@@ -18,6 +18,8 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
@@ -153,7 +155,7 @@ class AccessibilityListener : AccessibilityService() {
             return true
         } catch (t: Throwable) {
             if (t is CancellationException) throw t
-            Timber.tag("Pipeline").w(t, "Event receipt: apply failed — sensing continues on the manifest footprint")
+            Timber.tag("Pipeline").w(t, "Event receipt: apply failed — the LAST APPLIED subscription stays in force; retrying")
             return false
         }
     }
@@ -185,15 +187,29 @@ class AccessibilityListener : AccessibilityService() {
             eventReceiptPreferences.consent
                 .map { it ?: EventReceiptConsent.UNDECIDED }
                 .distinctUntilChanged()
-                .collect { consent ->
-                    val wide = ServiceInfoPolicy.isWide(consent)
-                    if (wide != appliedWide && applyEventReceipt(consent)) appliedWide = wide
+                .collectLatest { consent ->
+                    // QQ3: a debug decline disables BEFORE any apply — it never waits on IPC.
                     if (!disabledSelf && ServiceInfoPolicy.shouldDisableSelf(consent, BuildConfig.DEBUG)) {
                         disabledSelf = true
                         Timber.tag("Pipeline").i(
                             "event receipt declined on a debug build — disabling the accessibility service",
                         )
                         disableSelf()
+                        return@collectLatest
+                    }
+                    // SS2: a failed apply (a transient RemoteException, a torn-down connection) is
+                    // RETRIED with bounded backoff until it lands — otherwise a failed NARROWING would
+                    // leave the subscription wide indefinitely. A newer consent cancels the retry
+                    // (collectLatest).
+                    val wide = ServiceInfoPolicy.isWide(consent)
+                    var attempt = 0
+                    while (wide != appliedWide) {
+                        if (applyEventReceipt(consent)) {
+                            appliedWide = wide
+                            break
+                        }
+                        attempt++
+                        delay(ServiceInfoPolicy.retryDelayMs(attempt))
                     }
                 }
         }

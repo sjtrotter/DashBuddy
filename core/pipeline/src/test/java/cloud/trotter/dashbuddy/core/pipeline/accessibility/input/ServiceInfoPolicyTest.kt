@@ -95,4 +95,14 @@ class ServiceInfoPolicyTest {
             )
         }
     }
+
+    @Test
+    fun `a failed apply is retried with a doubling, capped backoff (SS2)`() {
+        assertEquals(1_000L, ServiceInfoPolicy.retryDelayMs(1))
+        assertEquals(2_000L, ServiceInfoPolicy.retryDelayMs(2))
+        assertEquals(4_000L, ServiceInfoPolicy.retryDelayMs(3))
+        assertEquals(ServiceInfoPolicy.MAX_RETRY_DELAY_MS, ServiceInfoPolicy.retryDelayMs(6))
+        assertEquals(ServiceInfoPolicy.MAX_RETRY_DELAY_MS, ServiceInfoPolicy.retryDelayMs(1_000))
+        (1..100).forEach { assertTrue(ServiceInfoPolicy.retryDelayMs(it) in 1_000L..ServiceInfoPolicy.MAX_RETRY_DELAY_MS) }
+    }
 }

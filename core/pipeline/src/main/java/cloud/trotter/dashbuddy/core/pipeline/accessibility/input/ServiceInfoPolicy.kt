@@ -51,6 +51,17 @@ object ServiceInfoPolicy {
     fun shouldDisableSelf(consent: EventReceiptConsent, isDebugBuild: Boolean): Boolean =
         isDebugBuild && consent == EventReceiptConsent.DECLINED
 
+    /**
+     * #1151 review SS2 — backoff before retry [attempt] (1-based) of a failed apply: 1 s, 2 s, 4 s …
+     * doubling, capped at [MAX_RETRY_DELAY_MS]. The listener retries until the apply lands or a
+     * newer consent supersedes it.
+     */
+    fun retryDelayMs(attempt: Int): Long =
+        minOf(RETRY_BASE_DELAY_MS * (1L shl attempt.coerceIn(1, 6)), MAX_RETRY_DELAY_MS)
+
+    private const val RETRY_BASE_DELAY_MS = 500L
+    const val MAX_RETRY_DELAY_MS = 30_000L
+
     /** True when [packageNamesFor] widens to every package — the one fact the INFO line reports. */
     fun isWide(consent: EventReceiptConsent): Boolean = consent == EventReceiptConsent.ALLOWED
 }
