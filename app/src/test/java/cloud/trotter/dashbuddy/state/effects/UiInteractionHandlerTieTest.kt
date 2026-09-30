@@ -273,15 +273,19 @@ class UiInteractionHandlerTieTest {
         verify(row, times(1)).performAction(eq(AccessibilityNodeInfo.ACTION_CLICK))
     }
 
-    /** Round-3 finding 1: a clickable wrapper at the captured rect with the row inside — undecidable, abort. */
+    /**
+     * Round-3 finding 1, revisited by #1149 review I3: a clickable wrapper at the captured rect with
+     * the row inside. The wrapper no longer inherits the row's labels (they belong to the clickable
+     * row), so it is no candidate — the row, re-found by its labels, is the one clicked.
+     */
     @Test
-    fun `nested verified candidates in the active window abort with no click`() = runTest {
+    fun `a label-less clickable wrapper at the captured rect does not shadow the row inside it`() = runTest {
         val inner = payRow(top = 1784)
         val wrapper = view(clickable = true, bounds = rowRect, children = listOf(inner))
         val active = windowRoot(wrapper)
-        assertFalse(expand(handler(listOf(active), active)))
+        assertTrue(expand(handler(listOf(active), active)))
         verify(wrapper, never()).performAction(eq(AccessibilityNodeInfo.ACTION_CLICK))
-        verify(inner, never()).performAction(eq(AccessibilityNodeInfo.ACTION_CLICK))
+        verify(inner, times(1)).performAction(eq(AccessibilityNodeInfo.ACTION_CLICK))
     }
 
     /**

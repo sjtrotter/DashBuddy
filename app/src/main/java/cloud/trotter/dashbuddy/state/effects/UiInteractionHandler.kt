@@ -55,8 +55,8 @@ import javax.inject.Singleton
  * ([AccNodeUtils.resolveActionOwner]: `isClickable` OR an advertised `ACTION_CLICK`,
  * a bounded, cycle-safe self → parent walk) BEFORE any check above: owner-less
  * candidates are dropped, candidates sharing an owner are one control (not a #734
- * tie), labels are verified on the owner's subtree, a COMPOUND owner (a container
- * holding >= 2 labeled clickable controls) is refused, and the owner is
+ * tie), labels are verified on the owner's subtree — which stops at every clickable
+ * descendant, whose labels are its own (review I3) — and the owner is
  * `refresh()`ed BEFORE it is verified (review I1), then clicked with no further refresh — a
  * stale node is dropped, and nothing un-verified reaches dispatch. A hinted,
  * id-less bind is re-found by its EXACT subtree-label fingerprint (strategy 2b) BEFORE
@@ -216,17 +216,7 @@ class UiInteractionHandler @Inject constructor(
             return false
         }
 
-        // #1149: a COMPOUND owner — its bounded subtree holds >= 2 independently clickable,
-        // letter-labeled controls (the offer footer holding Accept AND Decline) — is a container,
-        // not a control. Its merged labels would pass almost any expectation, so it is refused.
-        val controls = labeledCandidates.filterNot { isCompoundOwner(it.first.owner, expectedPackage) }
-        if (controls.size < labeledCandidates.size) {
-            Timber.tag("Effects").w(
-                "Refused %d compound owner(s) for %s — a container with >= 2 labeled clickable controls is not a control (#1149); %d candidate(s) remain",
-                labeledCandidates.size - controls.size, description, controls.size,
-            )
-            if (controls.isEmpty()) return false
-        }
+        val controls = labeledCandidates
 
         // #788: scope to the active window. A verified twin in a lower window (the
         // offer popup's "Decline" behind the confirm sheet) would otherwise tie
@@ -407,36 +397,6 @@ class UiInteractionHandler @Inject constructor(
     }
 
     /**
-     * #1149 — true when [owner]'s bounded subtree ([LABEL_SCAN_DEPTH] / [LABEL_SCAN_NODES]) holds
-     * at least two INDEPENDENTLY clickable descendants that each carry a letter-bearing label
-     * ([NodeRef.hintKeyOrNull]). A clickable descendant's own subtree belongs to it, so the scan
-     * does not descend into one: a button whose only descendants are its own TextViews counts 0.
-     * Bounded like every other walk of third-party UI — controls beyond the budget are unseen, the
-     * same horizon label verification itself has.
-     */
-    private fun isCompoundOwner(owner: AccessibilityNodeInfo, expectedPackage: String): Boolean {
-        var labeledControls = 0
-        var fetched = 0
-        fun visit(n: AccessibilityNodeInfo, depth: Int) {
-            if (depth >= LABEL_SCAN_DEPTH) return
-            for (i in 0 until n.childCount) {
-                // Budget the fetch BEFORE it, nulls included (#1102 review constraint 3).
-                if (labeledControls >= 2 || fetched >= LABEL_SCAN_NODES) return
-                fetched++
-                val child = n.getChild(i) ?: continue
-                if (child.packageName?.toString() != expectedPackage) continue
-                if (AccNodeUtils.isActionClickable(child)) {
-                    if (collectLabels(child, expectedPackage).any { NodeRef.hintKeyOrNull(it) != null }) labeledControls++
-                    continue
-                }
-                visit(child, depth + 1)
-            }
-        }
-        visit(owner, 0)
-        return labeledControls >= 2
-    }
-
-    /**
      * Search the scoped roots, strongest strategy first (so a weak bounds
      * match in one window can't beat a viewId match in another), tagging each
      * hit with whether its source window is the active one ([activeRoot], `==`
@@ -514,7 +474,9 @@ class UiInteractionHandler @Inject constructor(
     /**
      * Collect the node's own text/contentDescription plus its bounded subtree's — platform buttons
      * typically carry their label on a child TextView (e.g. DoorDash's
-     * `textView_prism_button_title`). Every child fetch is a binder IPC, so it is budgeted BEFORE
+     * `textView_prism_button_title`). The subtree stops at every clickable descendant: those labels
+     * are that control's, not this node's (#1149 review I3 — the rule that replaced the
+     * compound-owner refusal). Every child fetch is a binder IPC, so it is budgeted BEFORE
      * the call and a null child still spends budget; a child belonging to another package is not
      * read — an embedded foreign subtree must never lend a same-package container its labels
      * (#1102 review constraints 3 and 4, applied in discovery AND verification).
@@ -535,6 +497,10 @@ class UiInteractionHandler @Inject constructor(
                 fetched++
                 val child = n.getChild(i) ?: continue
                 if (child.packageName?.toString() != expectedPackage) continue
+                // #1149 review I3: a clickable descendant is its OWN control — its labels belong to
+                // it, never to the container scanned here. A footer can therefore never borrow its
+                // Decline button's "Decline" and pass the expectation as if it were the button.
+                if (AccNodeUtils.isActionClickable(child)) continue
                 visit(child, depth + 1)
                 if (exhausted) return
             }

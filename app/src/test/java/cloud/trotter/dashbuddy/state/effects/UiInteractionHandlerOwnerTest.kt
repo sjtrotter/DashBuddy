@@ -104,23 +104,43 @@ class UiInteractionHandlerOwnerTest {
         title.neverClicked()
     }
 
-    /** A footer holding clickable Accept AND Decline is a container, not a control — refused. */
+    /**
+     * Review I3 (replaces the compound-owner rule): a footer holding clickable Accept AND Decline
+     * cannot borrow its buttons' labels. Bound on the footer itself, its OWN labels are empty, so the
+     * Decline expectation fails and nothing is clicked.
+     */
     @Test
-    fun `a compound owner is refused with no click`() = runTest {
+    fun `a container never borrows a nested button's label — the expectation fails on it`() = runTest {
         val accept = view(clickable = true, children = listOf(view(cls = "android.widget.TextView", text = "Accept")))
         val decline = view(clickable = true, children = listOf(view(cls = "android.widget.TextView", text = "Decline")))
-        // The bound node is a non-clickable label directly in the footer, so its owner is the footer.
-        val label = view(cls = "android.widget.TextView", text = "Decline")
-        val footer = view(clickable = true, bounds = Rect(0, 2000, 1080, 2200), children = listOf(accept, decline, label))
-        val root = windowRoot(footer, byId = listOf(label))
+        val footer = view(clickable = true, bounds = Rect(0, 2000, 1080, 2200), children = listOf(accept, decline))
+        val root = windowRoot(footer, byId = listOf(footer))
 
         assertFalse(confirmDecline(handler(root)))
         footer.neverClicked(); accept.neverClicked(); decline.neverClicked()
     }
 
-    /** The compound rule counts INDEPENDENT controls: the Decline button inside that same footer still clicks. */
+    /**
+     * Review I3: a legitimate composite row — its own "This offer" plus a clickable info chevron and a
+     * clickable "Breakdown" link — is NOT refused (the old compound rule banned it). Its fingerprint is
+     * {"this offer"} on both sides; the nested controls' labels are theirs.
+     */
     @Test
-    fun `a button inside a compound footer is not itself compound and is clicked`() = runTest {
+    fun `a composite row with its own nested controls is found by its own labels and clicked`() = runTest {
+        val chevron = view(clickable = true, desc = "Details")
+        val link = view(clickable = true, children = listOf(view(cls = "android.widget.TextView", text = "Breakdown")))
+        val row = view(clickable = true, bounds = Rect(36, 1374, 1044, 1500), children = listOf(
+            view(cls = "android.widget.TextView", text = "This offer"), chevron, link,
+        ))
+        val ref = expandRef.copy(labelHintHashes = listOfNotNull(NodeRef.hintHash("This offer")))
+        assertTrue(expand(handler(windowRoot(row)), ref))
+        row.clicks(1)
+        chevron.neverClicked(); link.neverClicked()
+    }
+
+    /** Bound on the Decline title inside that same footer, the owner is the Decline button — clicked. */
+    @Test
+    fun `a title inside a footer resolves to its own button and is clicked`() = runTest {
         val acceptTitle = view(cls = "android.widget.TextView", text = "Accept")
         val declineTitle = view(cls = "android.widget.TextView", text = "Decline")
         val accept = view(clickable = true, children = listOf(acceptTitle))
@@ -220,11 +240,26 @@ class UiInteractionHandlerOwnerTest {
         row.clicks(1)
     }
 
-    /** A clickable wrapper around the slid row inherits its labels — undecidable, abort (the #1093 rule, now via 2b). */
+    /**
+     * Review I3: a clickable wrapper around the slid row does NOT inherit the row's labels (they are
+     * the row's), so it is no candidate and the row itself is clicked.
+     */
     @Test
-    fun `a wrapper around the slid row found by labels makes the pair undecidable — abort`() = runTest {
+    fun `a label-less clickable wrapper does not shadow the slid row inside it`() = runTest {
         val inner = payRow(top = 1774 - 400)
         val wrapper = view(clickable = true, bounds = Rect(20, 1360, 1060, 1520), children = listOf(inner))
+        assertTrue(expand(handler(windowRoot(wrapper))))
+        inner.clicks(1)
+        wrapper.neverClicked()
+    }
+
+    /** A wrapper that carries its OWN copy of the fingerprint around the row is undecidable — abort (#1093 rule). */
+    @Test
+    fun `a wrapper with its own copy of the labels around the row aborts`() = runTest {
+        val inner = payRow(top = 1774 - 400)
+        val wrapper = view(clickable = true, bounds = Rect(20, 1360, 1060, 1520), children = listOf(
+            view(cls = "android.widget.TextView", text = "This offer"), view(desc = "Expand"), inner,
+        ))
         assertFalse(expand(handler(windowRoot(wrapper))))
         wrapper.neverClicked(); inner.neverClicked()
     }
