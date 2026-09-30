@@ -396,17 +396,27 @@ then fired, and were answered with the window beneath). The shipped rules:
   CACHED enabled application window decides "no overlay in front" without a root fetch (review FF3 —
   its root would never be mapped). A
   DoorDash toast is never a candidate (DoorDash has no `offerOverlay`); an Uber toast/puck fails size.
-- **D5 — an enabled overlay on top IS the frame (review BB5).** **ONE enumeration decides "active"**
-  (review FF1, the #1149 N3/U2 pattern): when any overlay platform is enabled, `snapshotForEvent` calls
-  `getWindows()` ONCE; the single window flagged active (`AccessibilitySource.activeFromEnumeration` —
-  review FF2, the ONE owner, shared with the tap path's `getLiveWindowRoots`) is the active window and
-  ITS root is the active root, and every decision below runs over that same list — nothing is
-  reconciled, so two unsynchronised binder reads can never disagree. The one fallback: no window
-  flagged active (none, or two mid-transition) or its root unreadable → `rootInActiveWindow`, with NO
-  overlay scan (the pre-#1152 behaviour: read the active root, never a refusal); with no overlay
-  platform enabled the #1148 path is unchanged (no enumeration, H4). When the active root is an
-  enabled package, the walk covers the windows ABOVE the active one (`overlayFront` → `frontAbove`,
-  every window type —
+- **D5 — an enabled overlay on top IS the frame (review BB5).** **ONE three-valued active resolution**
+  (review HH1, replacing the FF1/GG1 clauses; the #1149 N3/U2 pattern): when any overlay platform is
+  enabled, `snapshotForEvent` calls `getWindows()` ONCE (a THROWING enumeration is no enumeration —
+  review HH4 — not an empty list) and `AccessibilitySource.resolveActive` — shared VERBATIM with the
+  topology path — answers over that one list: **Enabled / NotEnabled** — the single flagged window
+  (`activeFromEnumeration`, review FF2, the ONE owner of "which window is active") whose FRESH root
+  (`rootOf`, never a memoized package) is readable with a non-null package, split by enablement;
+  **Unknown(window)** — flagged but its root is unreadable or package-less (never "not enabled");
+  **Unknown(none)** — none flagged, or ≥ 2 mid-transition. The overlay scan runs off the active
+  WINDOW's layer — it never needs the root — so it runs for Enabled AND Unknown(window): an enabled
+  overlay in front is the frame either way. When it finds none: Enabled → the active window is mapped
+  through the one window builder (`getWindowSnapshot` — a focused overlay, the card IS the active
+  window, is therefore counted and carries its `WindowContext`, review HH5); Unknown(window) → the
+  frame is SKIPPED `FRONT_UNREADABLE` (the topology path emits nothing for the same list,
+  `topologySkip{FRONT_UNREADABLE}`); Unknown(none) → the one fallback, `rootInActiveWindow` with NO
+  overlay scan (pre-#1152); NotEnabled → the front-window read (D4) over the same list. With no overlay
+  platform enabled the #1148 path is unchanged (no enumeration, H4). **Taps keep #1149 U2's fail-closed
+  rule** (review HH2): ≥ 2 flagged active windows give `getLiveWindowRoots` NO active root (keep-all
+  scoping), never a trusted `rootInActiveWindow`. A root fetch that THROWS on a size-passing system
+  window is a possible overlay exactly like a null root (review HH3). The walk covers the windows ABOVE
+  the active one (`FrontWindowWalk.overlayFront` → `frontAbove`, every window type —
   review CC4: an application window, not ours and not PiP, above the overlay means the overlay is not
   frontmost and the active root is read) — whichever window fired. While an enabled overlay is the
   front, EVERY content/state resolution reads it: the covered window's bursts and the overlay's can
@@ -422,7 +432,8 @@ then fired, and were answered with the window beneath). The shipped rules:
   shape F1 removed. (Review EE1's refusal on an unreconciled active identity was SUPERSEDED by FF1:
   refusing whenever two unsynchronised reads disagree dropped every frame while the list was empty or
   stale — service just bound, a window transition, a finger on the bubble.)
-  An overlay that IS the active window is left to the active-root path. A SELECTED overlay that fails
+  An overlay that IS the active window is the Enabled active window (HH5, mapped through the window
+  builder). A SELECTED overlay that fails
   to map is skipped `MAP_FAILED`, retried on the next frame (review DD1, reversing BB9: a map failure
   does not prove the overlay left, and reading the covered window re-opens the interleave) — only "no
   overlay selected" reads the active root. When the active
@@ -452,10 +463,12 @@ then fired, and were answered with the window beneath). The shipped rules:
   an unreadable window above is a BARRIER (nothing beneath it is emitted) and a foreign application
   window on top emits nothing; an overlay over a covered sheet emits the overlay only. The bubble-active branch emits the
   `foregroundWindow` result. The topology path takes its active window from the SAME enumeration
-  (`activeFromEnumeration`; none → nothing) and resolves the active root EXACTLY as the event path
-  does — a fresh `rootOf` the enumerated active window, once per burst, its package read off that root
-  (review FF1/FF5/GG1); an unreadable active root emits NOTHING, counted `topologySkip{FRONT_UNREADABLE}`
-  (the content/state path owns the fallback frame), and a memoized package never bypasses that check. Its refusals are counted in their OWN census, `topologySkip{…}` (review FF4 —
+  through the SAME `resolveActive` (review HH1): Unknown(none) → nothing (`topologySkip{NO_ACTIVE_ROOT}`);
+  Unknown(window) → the overlay scan, and nothing (`topologySkip{FRONT_UNREADABLE}`) when no overlay is
+  in front; Enabled → an overlay winner only; NotEnabled → our bubble's front window or `frontAbove`'s
+  single winner. A null package is never "not enabled"; a memoized package never bypasses the fresh-root
+  check. (Declined, review HH8: a `windowId → root` memo to save the one per-burst `rootOf` — a cached
+  node handle across bursts is a staleness hazard, for a one-fetch saving on a debug-only path, #1151.) Its refusals are counted in their OWN census, `topologySkip{…}` (review FF4 —
   `foregroundSkip{…}`'s contract is event-path frame loss). The DEBUG window-list line
   adds `area%=<int>` (the window's share of the display; `-1` when unknown) beside `titleLen` — no
   text.
