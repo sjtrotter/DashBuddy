@@ -720,4 +720,34 @@ class SkeletonBuilderTest {
         // A NAME still seeds runs: "Adam's order" and `chipAdam` beside `customer_name` "Adam".
         assertEquals(listOf(TextSlot.WITHHELD), beside("Adam", "Adam's order"))
     }
+
+    // ---- #1160 review round 6 ----------------------------------------------------------------------
+
+    @Test
+    fun `MM1 - a name with internal capitals matches across contiguous camel segments`() {
+        fun node(id: String?, cls: String = "android.widget.Button") =
+            UiNode(className = cls, viewIdResourceName = id, text = "Continue")
+        val out = SkeletonBuilder.build(
+            UiNode(className = "android.widget.LinearLayout", viewIdResourceName = "com.x:id/row", children = listOf(
+                UiNode(className = "android.widget.TextView", viewIdResourceName = "com.x:id/customer_name", text = "McKenna"),
+                node("com.x:id/chip_McKenna"),
+                node("com.x:id/chipMcKenna"),
+                node(null, cls = "com.x.McKennaButton"),
+                node("com.x:id/chipMcGold"),
+                UiNode(className = "android.widget.TextView", text = "McKenna's order"),
+            )),
+            null, meta, platform, day,
+        )!!.root.children
+        assertNull(out[1].id)
+        assertNull(out[2].id)
+        assertNull(out[3].className)
+        assertEquals("com.x:id/chipMcGold", out[4].id)
+        assertEquals(TextSlot.WITHHELD, out[5].text.getValue("text"))
+    }
+
+    @Test
+    fun `MM2 - a capital sharp S matches its small form`() {
+        assertEquals(listOf(TextSlot.WITHHELD), beside("Groß", "GRO\u1E9E"))
+        assertEquals(listOf(TextSlot.WITHHELD), beside("GRO\u1E9E", "Groß"))
+    }
 }

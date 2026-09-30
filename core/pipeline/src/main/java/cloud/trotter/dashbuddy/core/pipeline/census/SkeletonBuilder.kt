@@ -463,39 +463,76 @@ object SkeletonBuilder {
      */
     private fun letterRuns(value: String, minLetters: Int = 0, splitCamel: Boolean = false): List<String> {
         val runs = ArrayList<String>()
-        val sb = StringBuilder()
-        var letters = 0
-        var prev = -1
-        fun flush() {
-            if (sb.isNotEmpty() && letters >= minLetters) runs += CaseFold.fold(sb.toString())
-            sb.setLength(0)
-            letters = 0
+        fun emit(run: String) {
+            if (run.codePointCount(0, run.length) >= minLetters) runs += CaseFold.fold(run)
         }
+        for (token in plainLetterRuns(value)) {
+            if (!splitCamel) {
+                emit(token)
+                continue
+            }
+            // KK1 + MM1 (ids/classes only): every CONTIGUOUS concatenation of the token's camel segments
+            // — the singles (`chip`, `Adam`), the whole token (`chipAdam`), and the joins in between
+            // (`Mc`+`Kenna` → `McKenna`), so a name with internal capitals still matches. Bounded by the
+            // token (an id name part is ≤ 64 chars).
+            val segments = camelSegments(token)
+            for (from in segments.indices) {
+                val sb = StringBuilder()
+                for (to in from until segments.size) {
+                    sb.append(segments[to])
+                    emit(sb.toString())
+                }
+            }
+        }
+        return runs
+    }
+
+    /** Maximal runs of Unicode letters (code-point based), unfolded. */
+    private fun plainLetterRuns(value: String): List<String> {
+        val runs = ArrayList<String>()
+        val sb = StringBuilder()
         var i = 0
         while (i < value.length) {
             val cp = value.codePointAt(i)
-            val next = i + Character.charCount(cp)
             if (Character.isLetter(cp)) {
-                // KK1 camelCase boundaries (ids/classes only): lower→Upper (`chip|Adam`), and
-                // Upper→Upper+lower (`XML|Adam`: split before the upper that starts a lowercase word).
-                if (splitCamel && sb.isNotEmpty() && Character.isUpperCase(cp)) {
-                    val nextCp = if (next < value.length) value.codePointAt(next) else -1
-                    if (Character.isLowerCase(prev) ||
-                        (Character.isUpperCase(prev) && nextCp >= 0 && Character.isLowerCase(nextCp))
-                    ) {
-                        flush()
-                    }
-                }
                 sb.appendCodePoint(cp)
-                letters++
-            } else {
-                flush()
+            } else if (sb.isNotEmpty()) {
+                runs += sb.toString()
+                sb.setLength(0)
             }
+            i += Character.charCount(cp)
+        }
+        if (sb.isNotEmpty()) runs += sb.toString()
+        return runs
+    }
+
+    /**
+     * A letter run split at camelCase boundaries (review KK1): lower→Upper (`chip|Adam`), and
+     * Upper→Upper+lower (`XML|Adam`: before the upper that starts a lowercase word).
+     */
+    private fun camelSegments(token: String): List<String> {
+        val segments = ArrayList<String>()
+        val sb = StringBuilder()
+        var prev = -1
+        var i = 0
+        while (i < token.length) {
+            val cp = token.codePointAt(i)
+            val next = i + Character.charCount(cp)
+            if (sb.isNotEmpty() && Character.isUpperCase(cp)) {
+                val nextCp = if (next < token.length) token.codePointAt(next) else -1
+                if (Character.isLowerCase(prev) ||
+                    (Character.isUpperCase(prev) && nextCp >= 0 && Character.isLowerCase(nextCp))
+                ) {
+                    segments += sb.toString()
+                    sb.setLength(0)
+                }
+            }
+            sb.appendCodePoint(cp)
             prev = cp
             i = next
         }
-        flush()
-        return runs
+        if (sb.isNotEmpty()) segments += sb.toString()
+        return segments
     }
 
     /**
