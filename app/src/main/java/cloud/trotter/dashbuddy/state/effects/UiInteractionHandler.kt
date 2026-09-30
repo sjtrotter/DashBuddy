@@ -58,8 +58,12 @@ import javax.inject.Singleton
  * tie), labels are verified on the owner's subtree, a COMPOUND owner (a container
  * holding >= 2 labeled clickable controls) is refused, and the owner is
  * `refresh()`ed immediately before dispatch — a stale node is not clicked. A hinted,
- * id-less bind is re-found by its subtree labels (strategy 2b) BEFORE the bounds
- * walk: labels are identity, geometry is ranking evidence.
+ * id-less bind is re-found by its EXACT subtree-label fingerprint (strategy 2b) BEFORE
+ * the bounds walk: labels are identity, geometry is ranking evidence. Strategy 2b
+ * honours the four constraints the withdrawn #1102 re-find left on record: exact
+ * fingerprint (no superset), a depth/fetch-budget cut aborts the whole resolution,
+ * every child fetch is budgeted before the call (nulls count), and label collection
+ * never reads another package's embedded subtree (discovery and verification).
  *
  * Any check failing skips the tap and logs — the user acts manually instead.
  * The one exception is a transient **no-live-windows** read (#602): a
@@ -145,7 +149,18 @@ class UiInteractionHandler @Inject constructor(
         // package — it was package-filtered out of `roots`, so it matches nothing
         // and scoping no-ops (we fall through to all windows, as before).
         val activeRoot = accessibilitySource.getLiveNativeRoot()
-        val candidates = findCandidates(roots, activeRoot, ref)
+        val search = findCandidates(roots, activeRoot, ref, expectedPackage)
+        if (search.semanticTruncated) {
+            // #1149 / #1102 review constraint 2: a label-only scan that hit its depth or fetch budget
+            // cannot prove its survivors unique (the real control may sit past the cut, leaving one
+            // WRONG survivor) — the whole resolution aborts, and the bounds walk is not a fallback.
+            Timber.tag("Effects").w(
+                "Semantic re-find for %s exceeded its bound (depth %d / %d fetches per window) — aborting to manual (#1149)",
+                description, SEMANTIC_SCAN_DEPTH, SEMANTIC_SCAN_NODES,
+            )
+            return false
+        }
+        val candidates = search.candidates
         if (candidates.isEmpty()) {
             Timber.tag("Effects").w(
                 "Could not find any live node for: %s (id=%s, text=%s, bounds=%s)",
@@ -158,10 +173,10 @@ class UiInteractionHandler @Inject constructor(
         // and dedupe candidates that lead to the same owner (a button's title TextView and the
         // button are ONE control, not a #734 tie). Everything below verifies, scopes, ranks and
         // clicks OWNERS; verification never runs on one node and the click on another.
-        val owned = resolveOwners(candidates, ref)
+        val owned = resolveOwners(candidates, ref, expectedPackage)
         if (owned.orphaned > 0) {
             Timber.tag("Effects").w(
-                "%d of %d candidate(s) for %s have no clickable owner within %d steps — dropped (#1149)",
+                "%d of %d candidate(s) for %s have no clickable owner in the package within %d steps — dropped (#1149)",
                 owned.orphaned, candidates.size, description, AccNodeUtils.MAX_OWNER_WALK,
             )
         }
@@ -172,14 +187,19 @@ class UiInteractionHandler @Inject constructor(
         // walking each subtree twice (collectLabels is bounded but not free).
         var geometryRejected = 0
         val labeledCandidates = owned.targets.mapNotNull { target ->
-            val labels = collectLabels(target.owner)
+            val scan = scanLabels(target.owner, expectedPackage)
+            val labels = scan.labels
             // #1093: a bounds-derived candidate — exact rect or overlap — needs the bind's own
             // subtree labels among its live ones; that, not geometry, separates the slid receipt
             // row from whatever control now sits where the row was captured. A hint-less ref
             // (pre-#1093 snapshot) keeps the legacy exact-only behaviour. #1149: a semantic (2b)
-            // candidate was FOUND by those labels; re-checked here on the owner, the same gate.
+            // candidate was FOUND by its exact label fingerprint; re-checked here on the owner.
             if (target.boundsDerived || target.semantic) {
-                val identified = if (ref.labelHintHashes.isEmpty()) target.boundsDerived && !target.relaxed else ref.agreesWithLabels(labels)
+                val identified = when {
+                    target.semantic -> scan.complete && ref.fingerprintMatches(labels)
+                    ref.labelHintHashes.isEmpty() -> !target.relaxed
+                    else -> ref.agreesWithLabels(labels)
+                }
                 if (!identified) { geometryRejected++; return@mapNotNull null }
             }
             if (!expectation.matchesLabels(labels)) return@mapNotNull null
@@ -196,7 +216,7 @@ class UiInteractionHandler @Inject constructor(
         // #1149: a COMPOUND owner — its bounded subtree holds >= 2 independently clickable,
         // letter-labeled controls (the offer footer holding Accept AND Decline) — is a container,
         // not a control. Its merged labels would pass almost any expectation, so it is refused.
-        val controls = labeledCandidates.filterNot { isCompoundOwner(it.first.owner) }
+        val controls = labeledCandidates.filterNot { isCompoundOwner(it.first.owner, expectedPackage) }
         if (controls.size < labeledCandidates.size) {
             Timber.tag("Effects").w(
                 "Refused %d compound owner(s) for %s — a container with >= 2 labeled clickable controls is not a control (#1149); %d candidate(s) remain",
@@ -332,17 +352,20 @@ class UiInteractionHandler @Inject constructor(
 
     /**
      * #1149 — map each candidate to its action owner ([AccNodeUtils.resolveActionOwner]), DROP
-     * the owner-less (nothing a tap could land on), and DEDUPE candidates whose owners are `==`
+     * the owner-less and the foreign-package owners (nothing a scoped tap could land on), and DEDUPE candidates whose owners are `==`
      * (keeping the first, with the strongest provenance). Candidate nesting is re-expressed
      * between owners, so the #1093 nested-abort still sees a wrapper around a row.
      */
-    private fun resolveOwners(candidates: List<Candidate>, ref: NodeRef): OwnerResolution {
+    private fun resolveOwners(candidates: List<Candidate>, ref: NodeRef, expectedPackage: String): OwnerResolution {
         val owners = ArrayList<AccessibilityNodeInfo>()
         val members = ArrayList<MutableList<Int>>()
         val ownerIndexOf = arrayOfNulls<Int>(candidates.size)
         var orphaned = 0
         candidates.forEachIndexed { i, c ->
+            // The owner is what gets tapped, so it must itself belong to the scoped package — an
+            // embedded foreign-package subtree never lends a tap target (#1149).
             val owner = AccNodeUtils.resolveActionOwner(c.node)
+                ?.takeIf { it.packageName?.toString() == expectedPackage }
             if (owner == null) { orphaned++; return@forEachIndexed }
             val j = owners.indexOfFirst { it == owner }
             if (j >= 0) {
@@ -380,16 +403,19 @@ class UiInteractionHandler @Inject constructor(
      * Bounded like every other walk of third-party UI — controls beyond the budget are unseen, the
      * same horizon label verification itself has.
      */
-    private fun isCompoundOwner(owner: AccessibilityNodeInfo): Boolean {
+    private fun isCompoundOwner(owner: AccessibilityNodeInfo, expectedPackage: String): Boolean {
         var labeledControls = 0
-        var visited = 0
+        var fetched = 0
         fun visit(n: AccessibilityNodeInfo, depth: Int) {
+            if (depth >= LABEL_SCAN_DEPTH) return
             for (i in 0 until n.childCount) {
-                if (labeledControls >= 2 || depth + 1 > LABEL_SCAN_DEPTH || visited >= LABEL_SCAN_NODES) return
+                // Budget the fetch BEFORE it, nulls included (#1102 review constraint 3).
+                if (labeledControls >= 2 || fetched >= LABEL_SCAN_NODES) return
+                fetched++
                 val child = n.getChild(i) ?: continue
-                visited++
+                if (child.packageName?.toString() != expectedPackage) continue
                 if (AccNodeUtils.isActionClickable(child)) {
-                    if (collectLabels(child).any { NodeRef.hintKeyOrNull(it) != null }) labeledControls++
+                    if (collectLabels(child, expectedPackage).any { NodeRef.hintKeyOrNull(it) != null }) labeledControls++
                     continue
                 }
                 visit(child, depth + 1)
@@ -408,11 +434,14 @@ class UiInteractionHandler @Inject constructor(
      * so candidates from every scoped root are collected; the caller's
      * active-window scoping (#788) prefers the active window's, if any.
      */
+    private class CandidateSearch(val candidates: List<Candidate>, val semanticTruncated: Boolean = false)
+
     private fun findCandidates(
         roots: List<AccessibilityNodeInfo>,
         activeRoot: AccessibilityNodeInfo?,
         ref: NodeRef,
-    ): List<Candidate> {
+        expectedPackage: String,
+    ): CandidateSearch {
         val candidates = mutableListOf<Candidate>()
         fun addFrom(root: AccessibilityNodeInfo, nodes: List<AccessibilityNodeInfo>) {
             val inActive = activeRoot != null && root == activeRoot
@@ -429,13 +458,14 @@ class UiInteractionHandler @Inject constructor(
             for (root in roots) addFrom(root, root.findAccessibilityNodeInfosByText(targetText))
         }
         // Strategy 2b (#1149): labels are identity, geometry is evidence. A hinted bind is
-        // re-found by its subtree labels on the CURRENT screen BEFORE the bounds walk, so a sheet
-        // that slid after the bind was captured (#1102) no longer lets frozen bounds decide which
-        // node resolves. Bounds stay ranking evidence (ClickCandidateRanker's overlap tier).
+        // re-found by its EXACT subtree-label fingerprint on the CURRENT screen BEFORE the bounds
+        // walk, so a sheet that slid after the bind was captured (#1102) no longer lets frozen
+        // bounds decide which node resolves. Bounds stay ranking evidence (ClickCandidateRanker's
+        // overlap tier). A walk cut by its depth/fetch bound aborts the whole resolution.
         if (candidates.isEmpty() && ref.labelHintHashes.isNotEmpty()) {
             for (root in roots) {
                 val found = mutableListOf<WalkHit>()
-                findNodeBySemantics(root, ref, found)
+                if (!findNodeBySemantics(root, ref, expectedPackage, found)) return CandidateSearch(emptyList(), semanticTruncated = true)
                 val inActive = activeRoot != null && root == activeRoot
                 val base = candidates.size
                 for (hit in found) candidates.add(
@@ -459,61 +489,105 @@ class UiInteractionHandler @Inject constructor(
                 )
             }
         }
-        return candidates
+        return CandidateSearch(candidates)
     }
 
     /**
-     * Collect the candidate's own text/contentDescription plus its bounded
-     * subtree's — platform buttons typically carry their label on a child
-     * TextView (e.g. DoorDash's `textView_prism_button_title`).
+     * A bounded, package-scoped label scan (#1149). [complete] = nothing was cut (no node past
+     * [LABEL_SCAN_DEPTH] with children, no fetch refused by the cap) — only a complete scan can
+     * prove a label fingerprint EXACT. [fetched] counts child fetch attempts, nulls included.
+     * [exhausted] = the fetch cap (not the depth) cut it.
      */
-    private fun collectLabels(node: AccessibilityNodeInfo): List<String> {
+    private class LabelScan(val labels: List<String>, val complete: Boolean, val exhausted: Boolean, val fetched: Int)
+
+    /**
+     * Collect the node's own text/contentDescription plus its bounded subtree's — platform buttons
+     * typically carry their label on a child TextView (e.g. DoorDash's
+     * `textView_prism_button_title`). Every child fetch is a binder IPC, so it is budgeted BEFORE
+     * the call and a null child still spends budget; a child belonging to another package is not
+     * read — an embedded foreign subtree must never lend a same-package container its labels
+     * (#1102 review constraints 3 and 4, applied in discovery AND verification).
+     */
+    private fun scanLabels(node: AccessibilityNodeInfo, expectedPackage: String, fetchCap: Int = LABEL_SCAN_NODES): LabelScan {
         val labels = mutableListOf<String>()
-        var visited = 0
+        var fetched = 0
+        var complete = true
+        var exhausted = false
         fun visit(n: AccessibilityNodeInfo, depth: Int) {
-            if (depth > LABEL_SCAN_DEPTH || visited >= LABEL_SCAN_NODES) return
-            visited++
             n.text?.toString()?.takeIf { it.isNotBlank() }?.let { labels.add(it) }
             n.contentDescription?.toString()?.takeIf { it.isNotBlank() }?.let { labels.add(it) }
-            for (i in 0 until n.childCount) {
+            val count = n.childCount
+            if (count <= 0) return
+            if (depth >= LABEL_SCAN_DEPTH) { complete = false; return }
+            for (i in 0 until count) {
+                if (fetched >= fetchCap) { complete = false; exhausted = true; return }
+                fetched++
                 val child = n.getChild(i) ?: continue
+                if (child.packageName?.toString() != expectedPackage) continue
                 visit(child, depth + 1)
+                if (exhausted) return
             }
         }
         visit(node, 0)
-        return labels
+        return LabelScan(labels, complete, exhausted, fetched)
     }
+
+    private fun collectLabels(node: AccessibilityNodeInfo, expectedPackage: String): List<String> =
+        scanLabels(node, expectedPackage).labels
 
     /** A walk hit: [ancestors] are the indices (into the SAME `out` list) of hits this one is inside. */
     private data class WalkHit(val node: AccessibilityNodeInfo, val relaxed: Boolean, val ancestors: List<Int>)
 
     /**
-     * Strategy 2b (#1149): every node within [SEMANTIC_SCAN_DEPTH] / [SEMANTIC_SCAN_NODES] of
-     * [root] that takes a click ([AccNodeUtils.isActionClickable]), matches the ref's class hint
-     * (when it has one) and whose bounded subtree labels carry EVERY hint
-     * ([NodeRef.agreesWithLabels]). No geometric entrance test. Like the bounds walk it always
-     * descends and records nesting, so a wrapper around the row stays visible to the caller's
-     * nested-abort rule instead of being pruned (or preferred) here.
+     * Strategy 2b (#1149): every same-package node of [root] that takes a click
+     * ([AccNodeUtils.isActionClickable]), matches the ref's class hint (when it has one) and whose
+     * COMPLETE label scan is the ref's EXACT fingerprint ([NodeRef.fingerprintMatches] — no
+     * superset, #1102 review constraint 1). No geometric entrance test. Like the bounds walk it
+     * always descends and records nesting, so a wrapper around the row stays visible to the
+     * caller's nested-abort rule instead of being pruned (or preferred) here.
+     *
+     * Bounded (#1102 review constraints 2 + 3): at most [SEMANTIC_SCAN_DEPTH] deep and
+     * [SEMANTIC_SCAN_NODES] child fetches per root — the walk's own AND its label scans', each
+     * budgeted before the call, nulls included. Returns FALSE when either bound cut the walk: a
+     * partial scan can leave one wrong survivor, so the caller aborts the whole resolution.
      */
-    private fun findNodeBySemantics(root: AccessibilityNodeInfo, ref: NodeRef, out: MutableList<WalkHit>) {
-        var visited = 0
+    private fun findNodeBySemantics(
+        root: AccessibilityNodeInfo,
+        ref: NodeRef,
+        expectedPackage: String,
+        out: MutableList<WalkHit>,
+    ): Boolean {
+        var fetched = 0
+        var truncated = false
         val path = ArrayList<Int>()
         fun visit(node: AccessibilityNodeInfo, depth: Int) {
-            if (depth > SEMANTIC_SCAN_DEPTH || visited >= SEMANTIC_SCAN_NODES) return
-            visited++
             val classOk = ref.classNameHint == null || node.className?.toString() == ref.classNameHint
-            val hit = classOk && AccNodeUtils.isActionClickable(node) && ref.agreesWithLabels(collectLabels(node))
+            var hit = false
+            if (classOk && AccNodeUtils.isActionClickable(node)) {
+                val cap = minOf(LABEL_SCAN_NODES, SEMANTIC_SCAN_NODES - fetched)
+                val scan = scanLabels(node, expectedPackage, cap)
+                fetched += scan.fetched
+                if (scan.exhausted && cap < LABEL_SCAN_NODES) { truncated = true; return }
+                hit = scan.complete && ref.fingerprintMatches(scan.labels)
+            }
             if (hit) {
                 out.add(WalkHit(node, relaxed = false, ancestors = path.toList()))
                 path.add(out.size - 1)
             }
-            for (i in 0 until node.childCount) {
+            val count = node.childCount
+            if (count > 0 && depth >= SEMANTIC_SCAN_DEPTH) { truncated = true; return }
+            for (i in 0 until count) {
+                if (fetched >= SEMANTIC_SCAN_NODES) { truncated = true; return }
+                fetched++
                 val child = node.getChild(i) ?: continue
+                if (child.packageName?.toString() != expectedPackage) continue
                 visit(child, depth + 1)
+                if (truncated) return
             }
             if (hit) path.removeAt(path.size - 1)
         }
         visit(root, 0)
+        return !truncated
     }
 
     /**

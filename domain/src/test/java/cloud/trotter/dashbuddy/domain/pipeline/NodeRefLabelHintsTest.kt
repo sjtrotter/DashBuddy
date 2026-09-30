@@ -52,4 +52,18 @@ class NodeRefLabelHintsTest {
         assertTrue(legacy.labelHintHashes.isEmpty())
         assertFalse(legacy.agreesWithLabels(listOf("anything")))
     }
+
+    /** #1149 — the label-only re-find needs the EXACT set: no missing hint, no extra letter-bearing label. */
+    @Test
+    fun `the exact fingerprint rejects supersets, subsets, hint-less and possibly-truncated refs`() {
+        val r = ref("This offer", "Expand")
+        assertTrue(r.fingerprintMatches(listOf("this offer", "EXPAND", "\$40.57", "This offer")))
+        assertFalse("a parent card with more text is a superset", r.fingerprintMatches(listOf("This offer", "Expand", "Continue dashing")))
+        assertFalse("a subset is not the control", r.fingerprintMatches(listOf("This offer")))
+        assertFalse(ref().fingerprintMatches(emptyList()))
+        val full = ref("a1", "b1", "c1", "d1", "e1", "f1")
+        assertEquals(NodeRef.MAX_LABEL_HINTS, full.labelHintHashes.size)
+        assertFalse("a bind-time set at the cap may be truncated — equality unprovable",
+            full.fingerprintMatches(listOf("a1", "b1", "c1", "d1", "e1", "f1")))
+    }
 }

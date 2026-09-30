@@ -38,8 +38,10 @@ class UiInteractionHandlerOwnerTest {
         cls: String = "android.view.View", clickable: Boolean = false, advertisesClick: Boolean = false,
         bounds: Rect = Rect(0, 0, 10, 10), text: String? = null, desc: String? = null,
         children: List<AccessibilityNodeInfo> = emptyList(), refreshes: Boolean = true,
+        packageName: String = pkg,
     ): AccessibilityNodeInfo {
         val node = mock<AccessibilityNodeInfo>()
+        whenever(node.packageName).thenReturn(packageName)
         whenever(node.className).thenReturn(cls)
         whenever(node.text).thenReturn(text)
         whenever(node.contentDescription).thenReturn(desc)
@@ -220,7 +222,10 @@ class UiInteractionHandlerOwnerTest {
         half.neverClicked()
     }
 
-    /** Bounded ingestion: a row deeper than SEMANTIC_SCAN_DEPTH is outside the 2b walk (and slid past the bounds walk). */
+    /**
+     * Bounded ingestion: a row deeper than SEMANTIC_SCAN_DEPTH is outside the 2b walk — and a cut walk
+     * ABORTS the resolution (a partial scan can leave one wrong survivor; #1102 review constraint 2).
+     */
     @Test
     fun `the semantic walk is depth bounded`() = runTest {
         val row = payRow(top = 1774 - 400)
@@ -230,15 +235,16 @@ class UiInteractionHandlerOwnerTest {
         assertFalse(expand(handler(windowRoot(top))))
         row.neverClicked()
 
-        // Control: the same row one level shallower IS found.
+        // Control: the same row two levels shallower — its own leaf labels at depth SEMANTIC_SCAN_DEPTH
+        // — is inside the bound and found.
         val row2 = payRow(top = 1774 - 400)
         var top2: AccessibilityNodeInfo = row2
-        repeat(UiInteractionHandler.SEMANTIC_SCAN_DEPTH - 1) { top2 = view(children = listOf(top2)) }
+        repeat(UiInteractionHandler.SEMANTIC_SCAN_DEPTH - 2) { top2 = view(children = listOf(top2)) }
         assertTrue(expand(handler(windowRoot(top2))))
         row2.clicks(1)
     }
 
-    /** Bounded ingestion: a row past SEMANTIC_SCAN_NODES visited nodes is outside the 2b walk. */
+    /** Bounded ingestion: a row past SEMANTIC_SCAN_NODES fetches is outside the 2b walk, and the cut aborts. */
     @Test
     fun `the semantic walk is node-count bounded`() = runTest {
         val row = payRow(top = 1774 - 400)
@@ -258,5 +264,76 @@ class UiInteractionHandlerOwnerTest {
         val exact = payRow()
         assertTrue(expand(handler(windowRoot(exact)), legacy))
         exact.clicks(1)
+    }
+
+    /**
+     * #1102 review constraint 2: a budget cut can leave exactly one WRONG survivor. Here a clickable
+     * row-shaped stranger sits early in the tree and the real row lies past the fetch budget; the cut
+     * must abort, not hand the tap to the lone survivor.
+     */
+    @Test
+    fun `a budget-cut walk with one early survivor aborts rather than clicking it`() = runTest {
+        val early = payRow(top = 1774 - 400)
+        val filler = List(UiInteractionHandler.SEMANTIC_SCAN_NODES) { view() }
+        val real = payRow(top = 1774 - 380)
+        assertFalse(expand(handler(windowRoot(*(listOf(early) + filler + real).toTypedArray()))))
+        early.neverClicked(); real.neverClicked()
+    }
+
+    /** #1102 review constraint 3: null children spend budget — a root reporting 100 000 null children stops at the bound. */
+    @Test
+    fun `null children spend the fetch budget and the walk aborts at the bound`() = runTest {
+        val root = windowRoot()
+        whenever(root.childCount).thenReturn(100_000)
+        assertFalse(expand(handler(root)))
+        verify(root, org.mockito.kotlin.atMost(UiInteractionHandler.SEMANTIC_SCAN_NODES)).getChild(any())
+    }
+
+    /**
+     * #1102 review constraint 1: containment is not identity. A clickable parent card holding a
+     * NON-clickable copy of the row plus other text contains every hint — with no geometric evidence
+     * it must not be tapped (the exact fingerprint rejects the superset).
+     */
+    @Test
+    fun `a clickable parent card that merely contains the row's labels is not clicked`() = runTest {
+        val innerRow = payRow(top = 1374, clickable = false)
+        val card = view(clickable = true, bounds = Rect(0, 1300, 1080, 1700), children = listOf(
+            innerRow, view(cls = "android.widget.TextView", text = "Continue dashing"),
+        ))
+        assertFalse(expand(handler(windowRoot(card))))
+        card.neverClicked(); innerRow.neverClicked()
+    }
+
+    /**
+     * #1102 review constraint 4: label collection never reads another package's embedded subtree, so
+     * a same-package container cannot acquire the hints from foreign content.
+     */
+    @Test
+    fun `a container whose labels come from a foreign-package subtree is not clicked`() = runTest {
+        val foreign = view(packageName = "com.example.other", children = listOf(
+            view(cls = "android.widget.TextView", text = "This offer", packageName = "com.example.other"),
+            view(desc = "Expand", packageName = "com.example.other"),
+        ))
+        val container = view(clickable = true, bounds = Rect(36, 1374, 1044, 1500), children = listOf(foreign))
+        assertFalse(expand(handler(windowRoot(container))))
+        container.neverClicked()
+
+        // Control: the same shape with same-package content IS the row.
+        val local = view(children = listOf(
+            view(cls = "android.widget.TextView", text = "This offer"), view(desc = "Expand"),
+        ))
+        val container2 = view(clickable = true, bounds = Rect(36, 1374, 1044, 1500), children = listOf(local))
+        assertTrue(expand(handler(windowRoot(container2))))
+        container2.clicks(1)
+    }
+
+    /** An owner outside the scoped package is never a tap target. */
+    @Test
+    fun `a candidate whose owner belongs to another package is dropped`() = runTest {
+        val title = view(cls = "android.widget.TextView", text = "Decline offer")
+        val foreignButton = view(clickable = true, children = listOf(title), packageName = "com.example.other")
+        val root = windowRoot(foreignButton, byId = listOf(title))
+        assertFalse(confirmDecline(handler(root)))
+        foreignButton.neverClicked()
     }
 }

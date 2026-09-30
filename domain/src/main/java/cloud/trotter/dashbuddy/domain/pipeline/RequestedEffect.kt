@@ -67,6 +67,21 @@ data class NodeRef(
         return labelHintHashes.all { it in live }
     }
 
+    /**
+     * #1149 — the EXACT control fingerprint a label-only re-find (the executor's strategy 2b)
+     * requires: the distinct hint hashes of [liveLabels] EQUAL this ref's hint set. Containment is
+     * not enough there (the #1102 review's constraint 1): a clickable parent card holding the row
+     * plus other text CONTAINS every hint, and with no geometric evidence nothing else would tell
+     * the two apart. False when there are no hints, or when the bind-time set filled
+     * [MAX_LABEL_HINTS] — it may have been truncated, so equality is unprovable. The caller must
+     * only pass a COMPLETE live scan (a budget-cut scan cannot prove "no extra label").
+     */
+    fun fingerprintMatches(liveLabels: List<String>): Boolean {
+        if (labelHintHashes.isEmpty() || labelHintHashes.size >= MAX_LABEL_HINTS) return false
+        val live = liveLabels.mapNotNull(::hintHash).toHashSet()
+        return live == labelHintHashes.toHashSet()
+    }
+
     companion object {
         const val MAX_LABEL_HINTS = 6
         const val MAX_LABEL_HINT_LENGTH = 40

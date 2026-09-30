@@ -61,20 +61,31 @@ class ActuationBindingResolutionTest {
         val decisive: Boolean,
     )
 
-    /** Mirror of `UiInteractionHandler.collectLabels` over a UiNode subtree. */
-    private fun collectLabels(node: UiNode): List<String> {
+    /**
+     * Mirror of `UiInteractionHandler.scanLabels` over a UiNode subtree (depth 3, 24 child fetches;
+     * [Pair.second] = the scan was complete). A `UiNode` tree is one window of one package, so the
+     * production foreign-package skip has nothing to mirror here.
+     */
+    private fun scanLabels(node: UiNode): Pair<List<String>, Boolean> {
         val labels = mutableListOf<String>()
-        var visited = 0
+        var fetched = 0
+        var complete = true
         fun visit(n: UiNode, depth: Int) {
-            if (depth > 3 || visited >= 24) return
-            visited++
             n.text?.takeIf { it.isNotBlank() }?.let { labels.add(it) }
             n.contentDescription?.takeIf { it.isNotBlank() }?.let { labels.add(it) }
-            for (c in n.children) visit(c, depth + 1)
+            if (n.children.isEmpty()) return
+            if (depth >= 3) { complete = false; return }
+            for (c in n.children) {
+                if (fetched >= 24) { complete = false; return }
+                fetched++
+                visit(c, depth + 1)
+            }
         }
         visit(node, 0)
-        return labels
+        return labels to complete
     }
+
+    private fun collectLabels(node: UiNode): List<String> = scanLabels(node).first
 
     /**
      * Mirror of `UiInteractionHandler.findCandidates` (viewId → text → bounds walk) over a UiNode
@@ -99,16 +110,16 @@ class ActuationBindingResolutionTest {
             if (byText.isNotEmpty()) return byText.map { Cand(it) }
         }
         if (semantic && ref.labelHintHashes.isNotEmpty()) {
-            // Mirror of `findNodeBySemantics` (#1149): clickable, class-matching, every hint present in
-            // the node's bounded subtree labels; depth/node bounded; always descends, records nesting.
+            // Mirror of `findNodeBySemantics` (#1149): clickable, class-matching, a COMPLETE label scan
+            // that is the ref's EXACT fingerprint; always descends, records nesting. The corpus trees
+            // (~60 nodes, depth <= 19) sit far inside the production depth/fetch bound, which the
+            // handler tests pin; the mirror asserts it is never approached.
             val hits = mutableListOf<Cand>()
             val path = ArrayList<Int>()
-            var visited = 0
             fun walk(node: UiNode, depth: Int) {
-                if (depth > UiInteractionHandler.SEMANTIC_SCAN_DEPTH || visited >= UiInteractionHandler.SEMANTIC_SCAN_NODES) return
-                visited++
+                check(depth <= UiInteractionHandler.SEMANTIC_SCAN_DEPTH) { "corpus tree deeper than the 2b bound" }
                 val classOk = ref.classNameHint == null || node.className == ref.classNameHint
-                val hit = classOk && node.isClickable && ref.agreesWithLabels(collectLabels(node))
+                val hit = classOk && node.isClickable && scanLabels(node).let { (l, complete) -> complete && ref.fingerprintMatches(l) }
                 if (hit) { hits += Cand(node, semantic = true, ancestors = path.toList()); path.add(hits.size - 1) }
                 node.children.forEach { walk(it, depth + 1) }
                 if (hit) path.removeAt(path.size - 1)
@@ -211,11 +222,16 @@ class ActuationBindingResolutionTest {
                 members[j].flatMap { candidates[it].ancestors }.mapNotNull { ownerIndexOf[it] }.filter { it != j }.toSet())
         }
         val verifiedIdx = owned.withIndex().filter { (_, c) ->
-            val labels = collectLabels(c.owner)
-            // #1093: a bounds-derived (or #1149 semantic) candidate must carry the bind's own subtree
-            // labels (a hint-less ref admits an exact match only) — the handler's gate, mirrored.
-            val identified = !(c.boundsDerived || c.semantic) ||
-                (if (ref.labelHintHashes.isEmpty()) c.boundsDerived && !c.relaxed else ref.agreesWithLabels(labels))
+            val (labels, complete) = scanLabels(c.owner)
+            // #1093: a bounds-derived candidate must carry the bind's own subtree labels (a hint-less
+            // ref admits an exact match only); a #1149 semantic one its EXACT fingerprint — the
+            // handler's gate, mirrored.
+            val identified = when {
+                c.semantic -> complete && ref.fingerprintMatches(labels)
+                !c.boundsDerived -> true
+                ref.labelHintHashes.isEmpty() -> !c.relaxed
+                else -> ref.agreesWithLabels(labels)
+            }
             identified && expectation.matchesLabels(labels) && !isCompound(c.owner)
         }.map { it.index }.toSet()
         val verified = verifiedIdx.sorted().map { owned[it] }

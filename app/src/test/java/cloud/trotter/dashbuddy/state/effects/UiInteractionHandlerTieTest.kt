@@ -51,6 +51,7 @@ class UiInteractionHandlerTieTest {
         whenever(node.getBoundsInScreen(any())).thenAnswer { (it.arguments[0] as Rect).set(bounds) }
         whenever(node.performAction(eq(AccessibilityNodeInfo.ACTION_CLICK))).thenReturn(clickResult)
         whenever(node.refresh()).thenReturn(true) // #1149: the owner is refreshed before dispatch
+        whenever(node.packageName).thenReturn(pkg) // #1149: owners and label scans are package-scoped
         return node
     }
 
@@ -232,6 +233,7 @@ class UiInteractionHandlerTieTest {
         whenever(node.getBoundsInScreen(any())).thenAnswer { (it.arguments[0] as Rect).set(bounds) }
         whenever(node.performAction(eq(AccessibilityNodeInfo.ACTION_CLICK))).thenReturn(true)
         whenever(node.refresh()).thenReturn(true) // #1149: the owner is refreshed before dispatch
+        whenever(node.packageName).thenReturn(pkg) // #1149: owners and label scans are package-scoped
         return node
     }
 
