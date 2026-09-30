@@ -1,7 +1,6 @@
 package cloud.trotter.dashbuddy.domain.census.contract
 
 import org.junit.Assert.assertFalse
-import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -10,10 +9,8 @@ class ResourceIdGrammarTest {
 
     @Test
     fun `static vectors pass, dynamic vectors are absent`() {
-        ResourceIdGrammarVectors.STATIC.forEach { assertTrue(it, ResourceIdGrammar.isStatic(it)) }
-        ResourceIdGrammarVectors.DYNAMIC.forEach { assertFalse(it, ResourceIdGrammar.isStatic(it)) }
-        assertNull(ResourceIdGrammar.staticOrNull(ResourceIdGrammarVectors.DYNAMIC.first()))
-        assertNull(ResourceIdGrammar.staticOrNull(null))
+        ResourceIdGrammarVectors.STATIC.forEach { assertTrue(it, ResourceIdGrammar.isStaticShape(it)) }
+        ResourceIdGrammarVectors.DYNAMIC.forEach { assertFalse(it, ResourceIdGrammar.isStaticShape(it)) }
     }
 
     @Test
@@ -21,7 +18,7 @@ class ResourceIdGrammarTest {
         val prints = ResourceIdGrammarVectors.DYNAMIC.take(3).map {
             CensusFingerprint.of(
                 UiSkeletonNodeDto(className = "android.view.View", id = "com.x:id/host", children = listOf(
-                    UiSkeletonNodeDto(className = "android.widget.Button", id = ResourceIdGrammar.staticOrNull(it)),
+                    UiSkeletonNodeDto(className = "android.widget.Button", id = it.takeIf { id -> ResourceIdGrammar.isStaticShape(id) }),
                 )),
             )
         }.toSet()

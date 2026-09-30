@@ -28,8 +28,10 @@ package cloud.trotter.dashbuddy.domain.census.contract
  * form (a short Python script, not this Kotlin), so they check the algorithm, not a snapshot of it.
  * Regenerated for the length-prefixed encoding (#1160 review AA2).
  *
- * Required cases: null vs empty id, an empty wrapper, a multi-child wrapper, a wrapper root, and the
- * two nesting cases (`A(B(C)) != A(B, C)`; `A(W(C1, C2)) == A(C1, C2)`).
+ * Required cases: an empty wrapper, a multi-child wrapper, a wrapper root, and the
+ * two nesting cases (`A(B(C)) != A(B, C)`; `A(W(C1, C2)) == A(C1, C2)`). The null-vs-empty-id case is a
+ * property of the pure byte function (an empty id can no longer enter a DTO, #1160 review II2), pinned in
+ * `CensusFingerprintTest` on `CensusFingerprint.Shape`.
  */
 object CensusFingerprintVectors {
 
@@ -58,14 +60,12 @@ object CensusFingerprintVectors {
     val EMPTY_WRAPPER: UiSkeletonNodeDto = node(LIST_CLASS, LIST_ID, node(WRAPPER_CLASS, null), title)
     val EMPTY_WRAPPER_REFERENCE: UiSkeletonNodeDto = node(LIST_CLASS, LIST_ID, title)
     val NULL_ID: UiSkeletonNodeDto = node(TEXT_CLASS, null)
-    val EMPTY_ID: UiSkeletonNodeDto = node(TEXT_CLASS, "")
     val WRAPPER_CLASS_WITH_ID: UiSkeletonNodeDto =
         node(LIST_CLASS, LIST_ID, node(WRAPPER_CLASS, "com.example:id/frame", title, button))
 
     val PINNED: List<Pinned> = listOf(
         Pinned("single node", title, "412ea97cebef7fce763ae82bef6aa9b32c14bbfa17d847a4c1d6e49b83a43496"),
         Pinned("null id", NULL_ID, "b953104254b69ae14bff2b0ebbc5bdabff72faad70068fc7ea49a3b7aad0b340"),
-        Pinned("empty id", EMPTY_ID, "a91614370e3ff0e734b49b46533e149941518e42a7062916f2eb80663bf91517"),
         Pinned("flat", FLAT, "865c0a09f9ef2510a99b3a1285bc29a22e6b47a8bdcd256d3446c8321a7ed66f"),
         Pinned("multi-child wrapper", MULTI_CHILD_WRAPPER, "865c0a09f9ef2510a99b3a1285bc29a22e6b47a8bdcd256d3446c8321a7ed66f"),
         Pinned("nested", NESTED, "e8f5491c07ebf95c25f659b6c65def1eed40cc580dd945ff759ada113d183e71"),
@@ -77,15 +77,9 @@ object CensusFingerprintVectors {
             WRAPPER_CLASS_WITH_ID,
             "6dfe76bcd1329afdabbf3393d94f42798ff591b5a47324a8bea6d9b5a7bda83b",
         ),
-        Pinned(
-            "UTF-8 id bytes",
-            node(TEXT_CLASS, "com.example:id/café"),
-            "03c247acf1220e3284014331a15827779ffb289e8f9dbc4168296fcdc61c0ef2",
-        ),
     )
 
     val RELATIONS: List<Relation> = listOf(
-        Relation("null id differs from empty id", NULL_ID, EMPTY_ID, equal = false),
         Relation("A(W(C1, C2)) == A(C1, C2)", MULTI_CHILD_WRAPPER, FLAT, equal = true),
         Relation("A(B(C)) != A(B, C)", NESTED, SIBLINGS, equal = false),
         Relation("fingerprint(A) == fingerprint(W(A))", WRAPPER_ROOT, title, equal = true),

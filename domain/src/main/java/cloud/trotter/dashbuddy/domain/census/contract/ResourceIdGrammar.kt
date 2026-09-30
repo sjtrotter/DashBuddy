@@ -16,8 +16,9 @@
  * SPDX-License-Identifier: Apache-2.0
  *
  * Census wire contract (ADR-0011). This package depends on nothing but the JDK,
- * kotlinx-serialization and `domain.util.sha256OrNull`, so that extracting it to a
- * standalone Apache-2.0 `census-contract/` build is a move, not a rewrite.
+ * kotlinx-serialization, `domain.util.sha256OrNull` and
+ * `domain.model.accessibility.AnonymousWrappers`, so that extracting it to a standalone
+ * Apache-2.0 `census-contract/` build is a move, not a rewrite.
  */
 package cloud.trotter.dashbuddy.domain.census.contract
 
@@ -48,8 +49,14 @@ object ResourceIdGrammar {
     private val HEX_RUN = Regex("[0-9a-fA-F]{8}")
     private val DECIMAL_RUN = Regex("[0-9]{4}")
 
-    /** True when [id] may be shipped in the clear and used in the fingerprint. */
-    fun isStatic(id: String): Boolean {
+    /**
+     * True when [id] has the STATIC resource-name SHAPE. Necessary, not sufficient (#1160 review II3):
+     * the shape cannot tell `chip_Gold` from a name-shaped Compose test tag, so the client builder ALSO
+     * judges the id's name part through the customer-PII value predicates (which live in
+     * `:core:pipeline`, outside this contract) before an id travels. The DTO and the server enforce the
+     * shape; the PII judgement is client-side.
+     */
+    fun isStaticShape(id: String): Boolean {
         val m = SHAPE.matchEntire(id) ?: return false
         val pkg = m.groupValues[1]
         val name = m.groupValues[2]
@@ -57,6 +64,6 @@ object ResourceIdGrammar {
         return !HEX_RUN.containsMatchIn(name) && !DECIMAL_RUN.containsMatchIn(name)
     }
 
-    /** [id] when it is static, else null (absent) — the builder's one call. */
-    fun staticOrNull(id: String?): String? = id?.takeIf { isStatic(it) }
+    /** The resource NAME part of [id] (after `:id/`, or the whole id when it has no prefix). */
+    fun namePart(id: String): String = id.substringAfter(":id/")
 }

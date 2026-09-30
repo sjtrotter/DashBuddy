@@ -16,8 +16,9 @@
  * SPDX-License-Identifier: Apache-2.0
  *
  * Census wire contract (ADR-0011). This package depends on nothing but the JDK,
- * kotlinx-serialization and `domain.util.sha256OrNull`, so that extracting it to a
- * standalone Apache-2.0 `census-contract/` build is a move, not a rewrite.
+ * kotlinx-serialization, `domain.util.sha256OrNull` and
+ * `domain.model.accessibility.AnonymousWrappers`, so that extracting it to a standalone
+ * Apache-2.0 `census-contract/` build is a move, not a rewrite.
  */
 package cloud.trotter.dashbuddy.domain.census.contract
 
@@ -77,6 +78,10 @@ data class UiSkeletonNodeDto(
         // surrogate encodes to the same UTF-8 bytes as `?`, which would collide two fingerprints.
         require(className == null || WireStrings.isWellFormed(className)) { "a class name must be well-formed UTF-16 without U+0000" }
         require(id == null || WireStrings.isWellFormed(id)) { "a view id must be well-formed UTF-16 without U+0000" }
+        // Review II2: the static class/id gates have ONE owner and run at construction AND decode, so a
+        // forked or old client cannot post a UUID id or a free-text class the server would cluster on.
+        require(className == null || ClassNameGrammar.isStatic(className)) { "a class name must be a static binary class name" }
+        require(id == null || ResourceIdGrammar.isStaticShape(id)) { "a view id must have the static resource-name shape" }
     }
 }
 

@@ -1,5 +1,6 @@
 package cloud.trotter.dashbuddy.domain.census.contract
 
+import cloud.trotter.dashbuddy.domain.model.accessibility.AnonymousWrappers
 import cloud.trotter.dashbuddy.domain.model.accessibility.UiNode
 import cloud.trotter.dashbuddy.domain.util.sha256OrNull
 import org.junit.Assert.assertEquals
@@ -92,7 +93,6 @@ class CensusFingerprintTest {
         assertTrue(CensusFingerprint.canonicalBytes(lone).contentEquals(CensusFingerprint.canonicalBytes(question)))
         assertTrue(!WireStrings.isWellFormed("\uD800"))
         assertTrue(WireStrings.isWellFormed("?"))
-        UiSkeletonNodeDto(className = "?")
         listOf(
             { UiSkeletonNodeDto(className = "\uD800") },
             { UiSkeletonNodeDto(className = "a\uDC00b") },
@@ -108,9 +108,9 @@ class CensusFingerprintTest {
             fail("malformed UTF-16 must be refused on decode")
         } catch (_: IllegalArgumentException) {
         }
-        // A well-formed supplementary-plane character is fine.
+        // A well-formed supplementary-plane character is well-formed UTF-16 (the class GRAMMAR is a
+        // separate, later gate).
         assertTrue(WireStrings.isWellFormed("\uD801\uDC00"))
-        UiSkeletonNodeDto(className = "\uD801\uDC00")
     }
 
     @Test
@@ -127,6 +127,41 @@ class CensusFingerprintTest {
         try {
             SkeletonSchema.json.decodeFromString(UiSkeletonNodeDto.serializer(), "{\"class\":\"a\\u0000b\"}")
             fail("a NUL must be refused on decode")
+        } catch (_: IllegalArgumentException) {
+        }
+    }
+
+    @Test
+    fun `the byte function distinguishes a null id from an empty one (review II2 moved this off the DTO)`() {
+        fun root(id: String?) = CensusFingerprint.Shape("", null, listOf(CensusFingerprint.Shape("android.widget.TextView", id, emptyList())))
+        val nullId = CensusFingerprint.canonicalBytes(root(null))
+        val emptyId = CensusFingerprint.canonicalBytes(root(""))
+        assertTrue(!nullId.contentEquals(emptyId))
+        // Independent Python vectors (the pre-II2 pinned values).
+        assertEquals("b953104254b69ae14bff2b0ebbc5bdabff72faad70068fc7ea49a3b7aad0b340", sha256OrNull(nullId))
+        assertEquals("a91614370e3ff0e734b49b46533e149941518e42a7062916f2eb80663bf91517", sha256OrNull(emptyId))
+        // UTF-8 byte lengths: a non-ASCII id can no longer enter a DTO (the static grammar is ASCII), but
+        // the byte function still defines it (independent Python vector).
+        val utf8 = CensusFingerprint.canonicalBytes(root("com.example:id/caf\u00e9"))
+        assertEquals("03c247acf1220e3284014331a15827779ffb289e8f9dbc4168296fcdc61c0ef2", sha256OrNull(utf8))
+    }
+
+    @Test
+    fun `the DTO refuses a non-static class or id shape, at construction and on decode (review II2)`() {
+        listOf(
+            { UiSkeletonNodeDto(id = "") },
+            { UiSkeletonNodeDto(id = "PRIMARY_BUTTON_3f488d4a-0f0b-4fb9-9c86-c4e0253ba22a") },
+            { UiSkeletonNodeDto(className = "Jane Smith's button") },
+            { UiSkeletonNodeDto(className = "Composable_3f488d4a") },
+        ).forEach { make ->
+            try {
+                make(); fail("a non-static class/id must be refused")
+            } catch (_: IllegalArgumentException) {
+            }
+        }
+        try {
+            SkeletonSchema.json.decodeFromString(UiSkeletonNodeDto.serializer(), "{\"id\":\"row_1234\"}")
+            fail("a non-static id must be refused on decode")
         } catch (_: IllegalArgumentException) {
         }
     }

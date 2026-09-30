@@ -16,11 +16,13 @@
  * SPDX-License-Identifier: Apache-2.0
  *
  * Census wire contract (ADR-0011). This package depends on nothing but the JDK,
- * kotlinx-serialization and `domain.util.sha256OrNull`, so that extracting it to a
- * standalone Apache-2.0 `census-contract/` build is a move, not a rewrite.
+ * kotlinx-serialization, `domain.util.sha256OrNull` and
+ * `domain.model.accessibility.AnonymousWrappers`, so that extracting it to a standalone
+ * Apache-2.0 `census-contract/` build is a move, not a rewrite.
  */
 package cloud.trotter.dashbuddy.domain.census.contract
 
+import cloud.trotter.dashbuddy.domain.model.accessibility.AnonymousWrappers
 import cloud.trotter.dashbuddy.domain.util.sha256OrNull
 import java.io.ByteArrayOutputStream
 
