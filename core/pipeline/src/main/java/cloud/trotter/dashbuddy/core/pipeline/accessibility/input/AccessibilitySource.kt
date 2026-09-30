@@ -146,7 +146,9 @@ class AccessibilitySource @Inject constructor() {
      * window's root fetched once.
      *
      * Candidates, by `layer` descending: `TYPE_APPLICATION` windows only, EXCEPT our own (this
-     * app's package — the bubble is never "another app in front"). System-layer windows are never
+     * app's package — the bubble is never "another app in front") and picture-in-picture windows
+     * (review H2: a Google Maps PiP floats above the fullscreen activity with a foreign package, and
+     * would otherwise refuse every frame while the bubble is active). System-layer windows are never
      * candidates and never have their root fetched (#1148 review H1: a platform's own transient
      * system-layer toast would otherwise hijack frames, and every SystemUI window would cost a
      * binder fetch per frame). Overlays that surface as accessibility `TYPE_SYSTEM` (Android's
@@ -163,7 +165,7 @@ class AccessibilitySource @Inject constructor() {
         val ownPkg = serviceRef?.get()?.packageName
         val windows = getWindows()
         val ordered = windows
-            .filter { it.type == AccessibilityWindowInfo.TYPE_APPLICATION }
+            .filter { it.type == AccessibilityWindowInfo.TYPE_APPLICATION && !it.isInPictureInPictureMode }
             .sortedByDescending { it.layer }
         var located: LocatedWindow? = null
         for (w in ordered) {

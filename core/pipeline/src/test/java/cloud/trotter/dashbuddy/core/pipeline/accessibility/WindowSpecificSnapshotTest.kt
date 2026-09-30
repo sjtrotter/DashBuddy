@@ -70,7 +70,9 @@ class WindowSpecificSnapshotTest {
         root: AccessibilityNodeInfo?,
         windowType: Int = app,
         active: Boolean = false,
+        pip: Boolean = false,
     ): AccessibilityWindowInfo = mock {
+        on { isInPictureInPictureMode } doReturn pip
         on { id } doReturn windowId
         on { layer } doReturn windowLayer
         on { this.root } doReturn root
@@ -220,6 +222,21 @@ class WindowSpecificSnapshotTest {
 
         assertTrue("never fall through below an unreadable top window", collect(h, kind).isEmpty())
         h.nothingMapped()
+    }
+
+    @Test
+    fun `bubble active, a picture-in-picture Maps window above DoorDash is skipped (H2)`() = bothKinds { kind ->
+        val bubble = node(ownPkg, "bubble")
+        val maps = node("com.google.android.apps.maps", "maps-pip")
+        val dd = node(ddPkg, "dd")
+        val mapsWindow = window(8, 9, maps, pip = true)
+        val h = harness(
+            activeRoot = bubble,
+            windows = listOf(window(1, 10, bubble, active = true), mapsWindow, window(3, 2, dd)),
+        )
+
+        assertEquals(listOf("dd"), collect(h, kind).map { it.tree.text })
+        verify(mapsWindow, never()).root
     }
 
     @Test

@@ -64,6 +64,7 @@ class WindowsChangedPipeline @Inject constructor(
             for (w in windows) {
                 if (w.isActive || w.layer <= active.layer) continue // never beneath the active window
                 if (w.type != AccessibilityWindowInfo.TYPE_APPLICATION) continue // H1, #1152
+                if (w.isInPictureInPictureMode) continue // H2: a PiP (e.g. Maps) is never a platform frame
                 // Pre-map package read on the native root (#435 item 3): only ENABLED platforms —
                 // never our own bubble or other apps (#4).
                 val nativeRoot = w.root ?: continue
