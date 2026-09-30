@@ -8,6 +8,7 @@ import cloud.trotter.dashbuddy.core.pipeline.accessibility.mapper.toUiNode
 import cloud.trotter.dashbuddy.domain.action.RuleAction
 import cloud.trotter.dashbuddy.domain.model.accessibility.BoundingBox
 import cloud.trotter.dashbuddy.domain.pipeline.NodeRef
+import cloud.trotter.dashbuddy.domain.pipeline.UiTextBounds
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -1023,5 +1024,33 @@ class UiInteractionHandlerOwnerTest {
 
         assertFalse(confirmDecline(handler(listOf(active, background), active)))
         sheetButton.neverClicked(); popupButton.neverClicked()
+    }
+
+    /** S1: the #788 stale-title shape where the sheet vanished mid-walk (parent = null, refresh fails) → abort, not the twin. */
+    @Test
+    fun `a vanished active-window title with no reachable owner does not hand the tap to the twin`() = runTest {
+        val sheetTitle = view(cls = "android.widget.TextView", text = "Decline offer", refreshes = false)
+        val sheetButton = view(clickable = true, children = listOf(sheetTitle))
+        whenever(sheetTitle.parent).thenReturn(null) // the parent chain is gone
+        val active = windowRoot(sheetButton, byId = listOf(sheetTitle))
+        val popupTitle = view(cls = "android.widget.TextView", text = "Decline")
+        val popupButton = view(clickable = true, children = listOf(popupTitle))
+        val background = windowRoot(popupButton, byId = listOf(popupTitle))
+
+        assertFalse(confirmDecline(handler(listOf(active, background), active)))
+        sheetButton.neverClicked(); popupButton.neverClicked()
+    }
+
+    /** S3: evidence labels go through the cap — a 4 096-space + "Decline" title under an "Accept" owner is no Decline. */
+    @Test
+    fun `evidence labels are capped like every other label`() = runTest {
+        val padded = " ".repeat(UiTextBounds.MAX_TEXT_LENGTH) + "Decline"
+        val title = view(cls = "android.widget.TextView", text = padded)
+        var chain: AccessibilityNodeInfo = title
+        repeat(4) { chain = view(children = listOf(chain)) } // past the owner scan's depth
+        val button = view(clickable = true, children = listOf(view(cls = "android.widget.TextView", text = "Accept"), chain))
+        val root = windowRoot(button, byId = listOf(title))
+        assertFalse(confirmDecline(handler(root)))
+        button.neverClicked()
     }
 }

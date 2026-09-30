@@ -8,6 +8,7 @@ import cloud.trotter.dashbuddy.domain.pipeline.LabelHorizon
 import cloud.trotter.dashbuddy.domain.pipeline.LabelNode
 import cloud.trotter.dashbuddy.domain.pipeline.LabelScan
 import cloud.trotter.dashbuddy.domain.pipeline.NodeRef
+import cloud.trotter.dashbuddy.domain.pipeline.UiTextBounds
 import cloud.trotter.dashbuddy.core.pipeline.accessibility.input.AccessibilitySource
 import cloud.trotter.dashbuddy.core.pipeline.accessibility.mapper.TreeLimits
 import cloud.trotter.dashbuddy.core.pipeline.accessibility.mapper.toBoundingBox
@@ -225,10 +226,11 @@ class UiInteractionHandler @Inject constructor(
             // Consistent with I3: the evidence node is inside the owner and not itself clickable (else it
             // would BE the owner). Only the lenient expectation/ranking set grows; the semantic
             // fingerprint below reads the owner scan alone (for a 2b hit, evidence IS the owner).
+            // S3: through the SAME cap-then-blank-filter as every other label (UiTextBounds, R2).
             val evidenceLabels = if (!separateEvidence) emptyList() else listOfNotNull(
-                target.evidence.text?.toString()?.takeIf { it.isNotBlank() },
-                target.evidence.contentDescription?.toString()?.takeIf { it.isNotBlank() },
-            )
+                target.evidence.text?.toString(),
+                target.evidence.contentDescription?.toString(),
+            ).map(UiTextBounds::cap).filter { it.isNotBlank() }
             val labels = scan.labels + evidenceLabels.filterNot { it in scan.labels }
             // #1093: a bounds-derived candidate — exact rect or overlap — needs the bind's own
             // subtree labels among its live ones; that, not geometry, separates the slid receipt
@@ -436,7 +438,16 @@ class UiInteractionHandler @Inject constructor(
             // The owner is what gets tapped, so it must itself belong to the scoped package — an
             // embedded foreign-package subtree never lends a tap target (#1149).
             val owner = AccNodeUtils.resolveActionOwner(c.node, expectedPackage)
-            if (owner == null || staleOwners.any { it == owner }) { orphaned++; return@forEachIndexed }
+            if (owner == null) {
+                // #1149 review S1: a node FOUND by id/text whose owner walk failed because the node itself
+                // is gone (its refresh fails too — the parent chain came back null mid-walk) is STALE,
+                // not an orphan: with other targets present the tap aborts (R6) instead of handing it to
+                // a lower window's twin.
+                if (!c.semantic && !c.boundsDerived && !c.node.refresh()) stale++
+                orphaned++
+                return@forEachIndexed
+            }
+            if (staleOwners.any { it == owner }) { orphaned++; return@forEachIndexed }
             val j = owners.indexOfFirst { it == owner }
             if (j >= 0) {
                 members[j].add(i); ownerIndexOf[i] = j
