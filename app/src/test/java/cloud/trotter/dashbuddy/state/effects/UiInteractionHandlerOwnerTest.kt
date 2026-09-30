@@ -454,4 +454,36 @@ class UiInteractionHandlerOwnerTest {
         verify(row, times(2)).getChild(eq(0))
         verify(row, times(2)).getChild(eq(1))
     }
+
+    // ---------------------------------------------------------------- review I6: per-window truncation
+
+    private fun handler(roots: List<AccessibilityNodeInfo>, active: AccessibilityNodeInfo): UiInteractionHandler {
+        val source = mock<AccessibilitySource> {
+            on { getLiveWindowRoots() } doReturn roots
+            on { getLiveNativeRoot() } doReturn active
+        }
+        return UiInteractionHandler(source)
+    }
+
+    /** An incomplete background window does not veto a complete, exact hit on the active sheet. */
+    @Test
+    fun `an incomplete background window does not block the active window's row`() = runTest {
+        val row = payRow(top = 1774 - 400)
+        val active = windowRoot(row)
+        val background = windowRoot(view())
+        whenever(background.childCount).thenReturn(2) // slot 1 reads null → that window is incomplete
+        assertTrue(expand(handler(listOf(active, background), active)))
+        row.clicks(1)
+    }
+
+    /** The same with the ACTIVE window incomplete: no complete active survivor → abort, even with a background row. */
+    @Test
+    fun `an incomplete active window aborts even when a background window holds the row`() = runTest {
+        val active = windowRoot(view())
+        whenever(active.childCount).thenReturn(2)
+        val bgRow = payRow(top = 1774 - 400)
+        val background = windowRoot(bgRow)
+        assertFalse(expand(handler(listOf(active, background), active)))
+        bgRow.neverClicked()
+    }
 }

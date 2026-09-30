@@ -152,11 +152,12 @@ class UiInteractionHandler @Inject constructor(
         val activeRoot = accessibilitySource.getLiveNativeRoot()
         val search = findCandidates(roots, activeRoot, ref, expectedPackage)
         if (search.semanticTruncated) {
-            // #1149 / #1102 review constraint 2: a label-only scan that hit its depth or fetch budget
-            // cannot prove its survivors unique (the real control may sit past the cut, leaving one
-            // WRONG survivor) — the whole resolution aborts, and the bounds walk is not a fallback.
+            // #1149 / #1102 review constraint 2: a label-only search that could not complete cannot
+            // prove its survivors unique (the real control may sit past the cut, leaving one WRONG
+            // survivor). Per window (review I6): this fires only when the active window has no
+            // complete survivor; the bounds walk is then not a fallback.
             Timber.tag("Effects").w(
-                "Semantic re-find for %s exceeded its bound (depth %d / %d fetches per window) — aborting to manual (#1149)",
+                "Semantic re-find for %s: a window's search was incomplete (bound depth %d / %d fetches, or an unreadable node) and the active window has no complete survivor — aborting to manual (#1149)",
                 description, SEMANTIC_SCAN_DEPTH, SEMANTIC_SCAN_NODES,
             )
             return false
@@ -444,14 +445,34 @@ class UiInteractionHandler @Inject constructor(
         // bounds decide which node resolves. Bounds stay ranking evidence (ClickCandidateRanker's
         // overlap tier). A walk cut by its depth/fetch bound aborts the whole resolution.
         if (candidates.isEmpty() && ref.labelHintHashes.isNotEmpty()) {
+            // #1149 review I6: truncation is PER WINDOW. An incomplete window contributes no
+            // candidates. The tap aborts only when some window was incomplete AND the active window
+            // produced no complete survivor — a background window that overflows its budget must
+            // not veto an exact, complete hit on the active sheet. When any window was incomplete,
+            // only the active window's hits are kept (an incomplete window may hide a twin of a
+            // background survivor). No window incomplete and no hit → strategy 3 runs as before.
+            var incompleteWindows = 0
+            val semantic = mutableListOf<Candidate>()
             for (root in roots) {
                 val found = findNodeBySemantics(root, ref, expectedPackage)
-                    ?: return CandidateSearch(emptyList(), semanticTruncated = true)
+                if (found == null) { incompleteWindows++; continue }
                 val inActive = activeRoot != null && root == activeRoot
-                val base = candidates.size
-                for (hit in found) candidates.add(
+                val base = semantic.size
+                for (hit in found) semantic.add(
                     Candidate(hit.node, inActive, semantic = true, ancestors = hit.ancestors.map { it + base }),
                 )
+            }
+            if (incompleteWindows > 0) {
+                val active = semantic.withIndex().filter { it.value.inActiveWindow }
+                if (active.isEmpty()) return CandidateSearch(emptyList(), semanticTruncated = true)
+                val remap = active.withIndex().associate { (newIdx, old) -> old.index to newIdx }
+                active.forEach { (_, c) -> candidates.add(c.copy(ancestors = c.ancestors.mapNotNull { remap[it] })) }
+                Timber.tag("Effects").d(
+                    "Semantic re-find: %d incomplete window(s) ignored, %d active-window survivor(s) kept",
+                    incompleteWindows, candidates.size,
+                )
+            } else {
+                candidates.addAll(semantic)
             }
         }
         // Strategy 3: walk each tree matching by bounds + className. A zero-area ref rect (a
