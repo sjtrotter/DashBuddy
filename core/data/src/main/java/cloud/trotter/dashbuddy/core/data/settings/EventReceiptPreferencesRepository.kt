@@ -44,6 +44,9 @@ import javax.inject.Singleton
  * collector for the repository's lifetime (review UU1/UU2); after its retries are exhausted it waits
  * for a conflated "read again" poke, which every successful write sends — so the decision is always
  * read back, including a write that lands while the collector is still in its exhausted `catch`.
+ * Between the final failure and `receive()` the collector has no suspension point (the catch's
+ * emit only sets a StateFlow), so "during the catch" and "before the catch completes" are the same
+ * window for the conflated poke — a buffered poke is consumed at `receive()` either way (review VV3).
  */
 @Singleton
 class EventReceiptPreferencesRepository @Inject constructor(

@@ -13,6 +13,8 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.emitAll
 import kotlinx.coroutines.flow.flowOf
@@ -165,7 +167,7 @@ class EventReceiptPreferencesRepositoryTest {
     }
 
     @Test
-    fun `UU1 - a write that lands while the collector is in its exhausted catch is read back`() = runTest {
+    fun `UU1 - a poke sent before the exhausted catch completes is buffered and the write is read back`() = runTest {
         val storeScope = CoroutineScope(StandardTestDispatcher(testScheduler) + Job())
         val real = PreferenceDataStoreFactory.create(
             scope = storeScope,
@@ -181,8 +183,9 @@ class EventReceiptPreferencesRepositoryTest {
                 when {
                     collections < failing -> throw IOException("unreadable #$collections")
                     collections == failing -> {
-                        // The LAST failure waits here, so the write completes between it and the
-                        // exhausted catch's emit of the stale value.
+                        // The LAST failure waits here: the write (and its poke) complete BEFORE the
+                        // exhausted catch runs, so the conflated channel buffers the poke and the
+                        // loop consumes it at receive() — the write is read back.
                         lastFailureGate.await()
                         throw IOException("unreadable — exhausting")
                     }
@@ -196,40 +199,80 @@ class EventReceiptPreferencesRepositoryTest {
         advanceUntilIdle() // parked on the last failure's gate
         assertEquals(failing, collections)
 
-        assertTrue(repo.set(EventReceiptConsent.ALLOWED)) // lands while the collector is mid-exhaustion
-        lastFailureGate.complete(Unit) // … the catch now emits the stale value and the loop re-reads
+        assertTrue(repo.set(EventReceiptConsent.ALLOWED)) // write + poke, before the catch runs
+        lastFailureGate.complete(Unit) // … the catch emits the stale value; receive() takes the poke
         advanceUntilIdle()
 
         assertEquals("the written value is read back", EventReceiptConsent.ALLOWED, repo.consent.value)
     }
 
     @Test
-    fun `UU2 - two successful writes after exhaustion leave exactly ONE subscription`() = runTest {
+    fun `UU1 - write persisted first, poke sent only after the exhausted catch ran - still read back`() = runTest {
+        val storeScope = CoroutineScope(StandardTestDispatcher(testScheduler) + Job())
+        val real = PreferenceDataStoreFactory.create(
+            scope = storeScope,
+            produceFile = { File(tmp.root, "uu1b.preferences_pb") },
+        )
+        real.edit { it[stringPreferencesKey("event_receipt_consent")] = "DECLINED" }
+        val lastFailureGate = CompletableDeferred<Unit>()
+        val failing = EventReceiptPreferencesRepository.MAX_RETRIES + 1
+        var collections = 0
+        val flaky = object : DataStore<Preferences> {
+            override val data: Flow<Preferences> = flow {
+                collections++
+                when {
+                    collections < failing -> throw IOException("unreadable #$collections")
+                    collections == failing -> {
+                        lastFailureGate.await()
+                        throw IOException("unreadable — exhausting")
+                    }
+                    else -> emitAll(real.data)
+                }
+            }
+            // The real-device ordering: the write PERSISTS, then the final read failure is released
+            // and the collector runs its exhausted catch (emitting the stale value) and parks at
+            // receive() — and only THEN does set() return and send its poke.
+            override suspend fun updateData(transform: suspend (Preferences) -> Preferences): Preferences {
+                val written = real.updateData(transform)
+                lastFailureGate.complete(Unit)
+                delay(1) // lets the collector finish the catch and reach receive() before the poke
+                return written
+            }
+        }
+        val repo = EventReceiptPreferencesRepository(EventReceiptConsentDataSource(flaky), storeScope)
+        advanceUntilIdle()
+        assertEquals(failing, collections)
+
+        assertTrue(repo.set(EventReceiptConsent.ALLOWED))
+        advanceUntilIdle()
+
+        assertEquals("the written value is read back", EventReceiptConsent.ALLOWED, repo.consent.value)
+    }
+
+    @Test
+    fun `UU2 - ONE collector for the repository's lifetime, by identity`() = runTest {
         val storeScope = CoroutineScope(StandardTestDispatcher(testScheduler) + Job())
         val real = PreferenceDataStoreFactory.create(
             scope = storeScope,
             produceFile = { File(tmp.root, "uu2.preferences_pb") },
         )
         var readsBroken = true
-        var active = 0
-        var maxActive = 0
-        val counting = object : DataStore<Preferences> {
+        // The collecting coroutine's Job on EVERY subscription, failing ones included. A design that
+        // re-launches a reader (the old `if (!reader.isActive) startReader()`) records a second Job.
+        val collectorJobs = mutableListOf<Job?>()
+        val recording = object : DataStore<Preferences> {
             override val data: Flow<Preferences> = flow {
+                collectorJobs += currentCoroutineContext()[Job]
                 if (readsBroken) throw IOException("unreadable")
-                active++
-                maxActive = maxOf(maxActive, active)
-                try {
-                    emitAll(real.data)
-                } finally {
-                    active--
-                }
+                emitAll(real.data)
             }
             override suspend fun updateData(transform: suspend (Preferences) -> Preferences) =
                 real.updateData(transform)
         }
-        val repo = EventReceiptPreferencesRepository(EventReceiptConsentDataSource(counting), storeScope)
+        val repo = EventReceiptPreferencesRepository(EventReceiptConsentDataSource(recording), storeScope)
         advanceUntilIdle() // exhausted → UNDECIDED, waiting for a poke
         assertEquals(EventReceiptConsent.UNDECIDED, repo.consent.value)
+        val lifetimeCollector = collectorJobs.first()
 
         readsBroken = false
         val first = async { repo.set(EventReceiptConsent.ALLOWED) }
@@ -238,9 +281,12 @@ class EventReceiptPreferencesRepositoryTest {
         assertTrue(second.await())
         advanceUntilIdle()
 
-        assertEquals(1, active)
-        assertEquals("never two collectors", 1, maxActive)
         assertEquals(EventReceiptConsent.DECLINED, repo.consent.value)
+        assertTrue("subscribed again after the writes", collectorJobs.size > EventReceiptPreferencesRepository.MAX_RETRIES + 1)
+        assertTrue(
+            "every subscription — before exhaustion and after both writes — is the SAME collector",
+            collectorJobs.all { it === lifetimeCollector },
+        )
     }
 
     @Test
