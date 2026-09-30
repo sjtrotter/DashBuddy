@@ -73,9 +73,11 @@ fun PermissionsBottomSheet(
         val head = uiState.steps.firstOrNull()
         if (head != null) {
             displayedPermission = head
-            // #1151 review UU3: a queue that re-populated mid-hide cancelled that animation and
-            // left the sheet at its interrupted offset — bring it back up (idempotent when shown).
-            if (!sheetState.isVisible) sheetState.show()
+            // #1151 review UU3/VV1: a queue that re-populated mid-hide cancelled that animation and
+            // left the sheet at its interrupted offset — bring it back up. show() unconditionally —
+            // isVisible reads currentValue and is still Expanded mid-hide (a show() on an already
+            // expanded sheet is a no-op animation).
+            sheetState.show()
         } else if (displayedPermission != null && uiState.allGranted) {
             // The queue emptied while a card was up ⇒ the gate just closed: animate out, tell the
             // host. All-granted with nothing ever displayed is the "gate never opened" case and
