@@ -136,10 +136,15 @@ class UiInteractionHandler @Inject constructor(
         }
         val roots = if (allowRetry) awaitLiveRoots(expectedPackage, source = rootsSource) else rootsSource()
         if (roots.isEmpty()) {
-            Timber.tag("Effects").w(
-                "No live windows for package %s after %d retries over %dms — cannot click (%s)",
-                expectedPackage, RETRY_DELAYS_MS.size, RETRY_DELAYS_MS.sum(), description,
-            )
+            // R10: AUTOMATION makes ONE read — only a user tap retried (#602).
+            if (allowRetry) {
+                Timber.tag("Effects").w(
+                    "No live windows for package %s after %d retries over %dms — cannot click (%s)",
+                    expectedPackage, RETRY_DELAYS_MS.size, RETRY_DELAYS_MS.sum(), description,
+                )
+            } else {
+                Timber.tag("Effects").w("No live windows for package %s (single read) — cannot click (%s)", expectedPackage, description)
+            }
             return false
         }
 

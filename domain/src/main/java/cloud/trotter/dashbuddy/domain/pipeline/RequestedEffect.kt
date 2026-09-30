@@ -86,11 +86,11 @@ data class NodeRef(
      * records that the set was not truncated at [MAX_LABEL_HINTS]; no size proxy). The executor gates strategy 2b on
      * it; an unprovable ref skips 2b for the bounds walk's containment check (the pre-#1149 shape).
      */
-    /** #1149 review P8 — the hint set, built once per ref (not per region the 2b walk checks). Not serialized (delegated). */
-    private val hintSet: Set<String> by lazy { labelHintHashes.toHashSet() }
-
     val hasExactFingerprint: Boolean
         get() = labelHintHashes.isNotEmpty() && labelHintsComplete
+
+    /** #1149 review P8 — the hint set, built once per ref (not per region the 2b walk checks). Not serialized (delegated). */
+    private val hintSet: Set<String> by lazy { labelHintHashes.toHashSet() }
 
     /**
      * #1149 — the EXACT control fingerprint a label-only re-find (the executor's strategy 2b)
