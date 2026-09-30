@@ -250,6 +250,11 @@ frames the pipeline ever sees*:
   verify enforcement from its side: it still applies, logs one `Pipeline` WARN per process ("wide
   event receipt may not take effect on Android 11"), and the Settings switch carries the caveat.
   The rule has one owner, `EventReceiptConsent.isWideReceiptReliable(sdkInt)` (`:domain`).
+  **Debug decline disables the service (#1151, dev re-sequencing 2026-09-30):** the consent is asked
+  as the first permission-chain step, BEFORE the accessibility grant; on a DEBUG build that declines,
+  the listener calls `disableSelf()` once (`ServiceInfoPolicy.shouldDisableSelf`, INFO "event receipt
+  declined on a debug build — disabling the accessibility service"), so recognition and the HUD stop
+  even when the service had been granted earlier. A release build never disables itself.
 - **D3 — per-key coalescer.** `coalesceByKey(quietMs, maxWaitMs, keyOf, merge, maxKeys,
   leadingEdge)` (`event/coalesce/CoalesceByKey.kt`) replaced `debounceWithTimeout`. Per key, a
   burst opens on the first event, folds every event into an accumulator, and emits when EITHER the

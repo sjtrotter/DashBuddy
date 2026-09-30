@@ -747,7 +747,7 @@ Every new feature or refactor holds to these — they are forefront design input
      undecided; only an explicit user act grants; the gate fires only on granted). Per Google
      Play policy the user opts into EACH automation individually. A dasher-pressed Accept/Decline
      is its own consent (integrity checks still apply). Consent is collected by a **prompt**
-     (`ConsentPromptPage` in the one `FrontDoorSheet`, #843/#1151 — the app's front door, joining the a11y/notification permission
+     (`ConsentPromptPage` in the `FrontDoorSheet`, #843/#1151 — the app's front door, joining the a11y/notification permission
      chain: fires on app foreground whenever `capabilities − granted − denied ≠ ∅`, one Allow /
      Don't-allow row per undecided capability, no "allow all"; "Not now" defers, a denial is
      durable) and reviewed/revoked in Settings → Data & Privacy → **Automation & Consent**
@@ -758,10 +758,11 @@ Every new feature or refactor holds to these — they are forefront design input
      pre-#843 auto-granted keys on upgrade (denials preserved) so the prompt re-collects consent.
      **Wide event receipt is a separate FEATURE consent (#1151)**, never a capability grant: one
      value (`EventReceiptPreferences`, `:domain` → DataStore in `:core:data`), opt-in (UNDECIDED =
-     filtered), a durable decline, prompted after the permission chain through the Dashboard's ONE front door
-     (`FrontDoorHost` — never two consent sheets at once), recorded on the Automation & Consent
-     screen; enforced only by `AccessibilityListener`. A debug build that is DECLINED blocks the
-     whole shell (`DebugEventReceiptShell` replaces the NavHost).
+     filtered), a durable decline, asked as the FIRST step of the permission chain — BEFORE the
+     accessibility grant, which is offered only after a decision (dev ruling 2026-09-30) — and
+     recorded on the Automation & Consent screen; enforced only by `AccessibilityListener`. A debug
+     build that is DECLINED disables its own service (`disableSelf()`) and blocks the whole shell
+     (`DebugEventReceiptShell` replaces the NavHost).
    When a change touches recognition, capture, network, or effects, state its security/privacy
    posture in the PR — what's trusted, what's gated, what's scrubbed.
 7. **Semantic, PII-safe logging.** Log levels carry *meaning*, not volume convenience, and the log is
