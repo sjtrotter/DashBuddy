@@ -823,4 +823,31 @@ class ActuationBindingResolutionTest {
         assertFalse(ref!!.labelHintsComplete)
         assertTrue(shortfalls.any { RuleAction.EXPAND_EARNINGS.targetBindName in it.unprovableBindings })
     }
+
+    /**
+     * #1149 review R9 — corpus proof for the verification ownership rule (I3): on every modern
+     * confirm-decline frame the CONFIRM_DECLINE expectation is found on the OWNER's own label scan —
+     * which never reads through a clickable descendant — not merely via the matched node's own label
+     * (the I8 evidence path). I.e. fielded Prism buttons carry their title on a NON-clickable child.
+     */
+    @Test
+    fun `fielded confirm-decline owners carry the expectation label on their own scan`() {
+        val action = RuleAction.CONFIRM_DECLINE
+        var checked = 0
+        for ((filename, node, _) in modernSnapshots("snapshots/offer_popup_confirm_decline")) {
+            val ref = matchTargets(node)[action.targetBindName] ?: continue
+            val matched = findCandidates(node, ref).map { it.node }
+            val owners = matched.mapNotNull { ownerOf(it) }.distinct()
+            assertTrue("$filename: the bind resolves to at least one owner", owners.isNotEmpty())
+            for (owner in owners) {
+                val (labels, _) = scanLabels(owner)
+                if (matched.none { ownerOf(it) === owner && it.text?.contains("Decline", ignoreCase = true) == true } &&
+                    !action.verification.matchesLabels(labels)) continue // an owner of an unrelated twin
+                assertTrue("$filename: the owner's OWN scan carries the expectation label (not only the evidence node): $labels",
+                    action.verification.matchesLabels(labels))
+            }
+            checked++
+        }
+        assertTrue("expected the modern confirm-decline corpus to be checked, got $checked", checked >= 4)
+    }
 }
