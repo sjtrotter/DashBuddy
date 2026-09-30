@@ -474,9 +474,11 @@ class UiInteractionHandler @Inject constructor(
     }
 
     /**
-     * A bounded, package-scoped label scan (#1149). [complete] = nothing was cut (no node past
-     * [LABEL_SCAN_DEPTH] with children, no fetch refused by the cap) — only a complete scan can
-     * prove a label fingerprint EXACT. [fetched] counts child fetch attempts, nulls included.
+     * A bounded, package-scoped label scan (#1149). [complete] = nothing was cut or unreadable (no
+     * node past [LABEL_SCAN_DEPTH] with children, no fetch refused by the cap, no null child —
+     * review I4a) — only a complete scan can prove a label fingerprint EXACT. Verification of a
+     * label EXPECTATION does not need completeness (review I4c): a found label suffices, and since
+     * I3 a collected label can never come from a nested control. [fetched] counts child fetch attempts, nulls included.
      * [exhausted] = the fetch cap (not the depth) cut it.
      */
     private class LabelScan(val labels: List<String>, val complete: Boolean, val exhausted: Boolean, val fetched: Int)
@@ -505,7 +507,9 @@ class UiInteractionHandler @Inject constructor(
             for (i in 0 until count) {
                 if (fetched >= fetchCap) { complete = false; exhausted = true; return }
                 fetched++
-                val child = n.getChild(i) ?: continue
+                // #1149 review I4a: an advertised child that cannot be read is UNPROVEN — the scan is
+                // incomplete (it still spent a fetch, #1102 constraint 3).
+                val child = n.getChild(i) ?: run { complete = false; null } ?: continue
                 if (child.packageName?.toString() != expectedPackage) continue
                 // #1149 review I3: a clickable descendant is its OWN control — its labels belong to
                 // it, never to the container scanned here. A footer can therefore never borrow its
@@ -554,8 +558,11 @@ class UiInteractionHandler @Inject constructor(
                 val cap = minOf(LABEL_SCAN_NODES, SEMANTIC_SCAN_NODES - fetched)
                 val scan = scanLabels(node, expectedPackage, cap)
                 fetched += scan.fetched
-                if (scan.exhausted && cap < LABEL_SCAN_NODES) { truncated = true; return }
-                hit = scan.complete && ref.fingerprintMatches(scan.labels)
+                // #1149 review I4b: a candidate whose OWN scan is incomplete (depth cut, fetch cut,
+                // unreadable child) is unproven, and "treat it as a non-match" would let a twin win —
+                // so the whole search of this window is incomplete.
+                if (!scan.complete) { truncated = true; return }
+                hit = ref.fingerprintMatches(scan.labels)
             }
             if (hit) {
                 out.add(WalkHit(node, relaxed = false, ancestors = path.toList()))
@@ -566,7 +573,8 @@ class UiInteractionHandler @Inject constructor(
             for (i in 0 until count) {
                 if (fetched >= SEMANTIC_SCAN_NODES) { truncated = true; return }
                 fetched++
-                val child = node.getChild(i) ?: continue
+                // An unreadable child may hide the real control (or its twin): the search is incomplete.
+                val child = node.getChild(i) ?: run { truncated = true; return }
                 if (child.packageName?.toString() != expectedPackage) continue
                 visit(child, depth + 1)
                 if (truncated) return

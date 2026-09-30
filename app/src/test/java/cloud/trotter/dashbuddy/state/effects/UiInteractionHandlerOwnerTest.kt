@@ -404,4 +404,41 @@ class UiInteractionHandlerOwnerTest {
         assertFalse(confirmDecline(handler(root)))
         foreignButton.neverClicked()
     }
+
+    // ---------------------------------------------------------------- review I4: incompleteness fails closed
+
+    /** I4a/b: one unreadable child beside a matching survivor — the survivor is unproven unique, no click. */
+    @Test
+    fun `a null child beside a matching survivor aborts`() = runTest {
+        val row = payRow(top = 1774 - 400)
+        val root = windowRoot(row)
+        whenever(root.childCount).thenReturn(2) // slot 1 advertises a child that reads null
+        assertFalse(expand(handler(root)))
+        row.neverClicked()
+    }
+
+    /** I4a/b: a row whose own scan is cut (> LABEL_SCAN_NODES fetches) next to a shallow twin — no click. */
+    @Test
+    fun `a real row with an over-budget scan next to a shallow twin aborts`() = runTest {
+        val bigRow = view(clickable = true, bounds = Rect(36, 1374, 1044, 1500), children = listOf(
+            view(cls = "android.widget.TextView", text = "This offer"), view(desc = "Expand"),
+        ) + List(NodeRef.LABEL_SCAN_NODES) { view() })
+        val twin = payRow(top = 1774 - 200)
+        assertFalse(expand(handler(windowRoot(bigRow, twin))))
+        bigRow.neverClicked(); twin.neverClicked()
+    }
+
+    /**
+     * I2 + I4b: a label past LABEL_SCAN_DEPTH is outside the fingerprint on BOTH sides, but the live
+     * scan of that row is cut by the depth bound, so 2b cannot prove it and the tap fails closed.
+     */
+    @Test
+    fun `a row whose subtree runs past the label depth is unproven and not clicked`() = runTest {
+        val deep = view(children = listOf(view(children = listOf(view(children = listOf(view(text = "Too deep")))))))
+        val row = view(clickable = true, bounds = Rect(36, 1374, 1044, 1500), children = listOf(
+            view(cls = "android.widget.TextView", text = "This offer"), view(desc = "Expand"), deep,
+        ))
+        assertFalse(expand(handler(windowRoot(row))))
+        row.neverClicked()
+    }
 }
