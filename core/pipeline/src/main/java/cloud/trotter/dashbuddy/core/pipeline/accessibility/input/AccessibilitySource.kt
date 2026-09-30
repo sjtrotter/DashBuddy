@@ -230,7 +230,7 @@ class AccessibilitySource @Inject constructor(
      * package — the bubble is never "another app in front") and picture-in-picture windows (review
      * H2: a Google Maps PiP floats above the fullscreen activity with a foreign package, and would
      * otherwise refuse every frame while the bubble is active), PLUS platform offer overlays
-     * ([isOverlayCandidate], #1152 D4: a `TYPE_SYSTEM` window of ≥ [MIN_OVERLAY_AREA_FRACTION] of the
+     * ([overlayProbe], #1152 D4: a `TYPE_SYSTEM` window of ≥ [MIN_OVERLAY_AREA_FRACTION] of the
      * display owned by a [Platform.offerOverlay] package). Every other system-layer window is never
      * a candidate (#1148 review H1: a platform's own transient toast would otherwise hijack frames) —
      * a small one never has its root fetched at all (size is checked before package), and a large
@@ -468,14 +468,10 @@ class AccessibilitySource @Inject constructor(
      *    through [WindowVerdictCache] — a root is fetched at most once per window id; an unreadable
      *    root cannot prove its package and is refused.
      * Enablement is NOT decided here — callers read a candidate only when its package is enabled.
-     *
-     * A TEST seam only (PR #1155 review BB11): production code calls [overlayProbe], the one seam,
-     * which also distinguishes an unreadable window (BB1).
+     * The sealed [OverlayProbe] is the ONE seam (PR #1155 review CC11 deleted the Boolean
+     * `isOverlayCandidate`, which lost the [OverlayProbe.Unreadable] distinction). A [budget], when
+     * given, bounds the root fetches of the walk it belongs to (CC5). Counts every refusal.
      */
-    internal fun isOverlayCandidate(w: AccessibilityWindowInfo, displayArea: Long): Boolean =
-        overlayProbe(w, displayArea) is OverlayProbe.Candidate
-
-    /** [isOverlayCandidate] carrying the verified package (and the root, if fetched); counts every refusal. */
     internal fun overlayProbe(w: AccessibilityWindowInfo, displayArea: Long, budget: ScanBudget? = null): OverlayProbe {
         if (w.type != AccessibilityWindowInfo.TYPE_SYSTEM || w.isInPictureInPictureMode) return OverlayProbe.NotCandidate
         // CC1: an unknown display area admits nothing — checked BEFORE the memo, so a cached

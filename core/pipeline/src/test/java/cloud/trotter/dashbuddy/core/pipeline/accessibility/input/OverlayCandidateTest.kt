@@ -71,13 +71,13 @@ class OverlayCandidateTest {
     @Test
     fun `the Uber offer overlay (1080x2211 on 1080x2400) is a candidate`() {
         val w = window(9, node(uberPkg), OverlayGeometry.UBER_OFFER)
-        assertTrue(source().isOverlayCandidate(w, display))
+        assertTrue(candidate(source(), w, display))
     }
 
     @Test
     fun `the 142x142 Uber puck is refused on size, root never fetched`() {
         val w = window(10, node(uberPkg), OverlayGeometry.UBER_PUCK)
-        assertFalse(source().isOverlayCandidate(w, display))
+        assertFalse(candidate(source(), w, display))
         verify(w, never()).root
         assertEquals(1L, stats.overlayRejectedCount(OverlayRejectReason.TOO_SMALL))
     }
@@ -85,7 +85,7 @@ class OverlayCandidateTest {
     @Test
     fun `the status bar is refused on size, root never fetched`() {
         val w = window(20, node(systemUiPkg), OverlayGeometry.STATUS_BAR)
-        assertFalse(source().isOverlayCandidate(w, display))
+        assertFalse(candidate(source(), w, display))
         verify(w, never()).root
     }
 
@@ -93,16 +93,16 @@ class OverlayCandidateTest {
     fun `the size threshold is a quarter of the display`() {
         val quarter = Rect(0, 0, 1080, 600) // exactly 25 %
         val justUnder = Rect(0, 0, 1080, 599)
-        assertTrue(source().isOverlayCandidate(window(1, node(uberPkg), quarter), display))
-        assertFalse(source().isOverlayCandidate(window(2, node(uberPkg), justUnder), display))
+        assertTrue(candidate(source(), window(1, node(uberPkg), quarter), display))
+        assertFalse(candidate(source(), window(2, node(uberPkg), justUnder), display))
     }
 
     @Test
     fun `the expanded shade passes size, fails package, and its root is fetched ONCE across two frames`() {
         val shade = window(30, node(systemUiPkg), OverlayGeometry.FULL_SCREEN)
         val src = source()
-        assertFalse(src.isOverlayCandidate(shade, display))
-        assertFalse(src.isOverlayCandidate(shade, display))
+        assertFalse(candidate(src, shade, display))
+        assertFalse(candidate(src, shade, display))
         verify(shade, times(1)).root
         assertEquals("BB7: counted once per decision, not per frame", 1L, stats.overlayRejectedCount(OverlayRejectReason.NOT_OVERLAY_PLATFORM))
     }
@@ -110,7 +110,7 @@ class OverlayCandidateTest {
     @Test
     fun `a DoorDash system-layer window is refused - DoorDash declares no offer overlay`() {
         val w = window(11, node(ddPkg), OverlayGeometry.UBER_OFFER)
-        assertFalse(source().isOverlayCandidate(w, display))
+        assertFalse(candidate(source(), w, display))
         assertEquals(1L, stats.overlayRejectedCount(OverlayRejectReason.NOT_OVERLAY_PLATFORM))
     }
 
@@ -118,16 +118,16 @@ class OverlayCandidateTest {
     fun `picture-in-picture and application windows are never overlay candidates`() {
         val pip = window(12, node(uberPkg), OverlayGeometry.UBER_OFFER, pip = true)
         val app = window(13, node(uberPkg), OverlayGeometry.UBER_OFFER, type = AccessibilityWindowInfo.TYPE_APPLICATION)
-        assertFalse(source().isOverlayCandidate(pip, display))
-        assertFalse(source().isOverlayCandidate(app, display))
+        assertFalse(candidate(source(), pip, display))
+        assertFalse(candidate(source(), app, display))
         verify(pip, never()).root
         verify(app, never()).root
     }
 
     @Test
-    fun `a large unreadable system window cannot prove its package - refused`() {
+    fun `a large unreadable system window cannot prove its package - Unreadable, not merely false`() {
         val w = window(14, null, OverlayGeometry.UBER_OFFER)
-        assertFalse(source().isOverlayCandidate(w, display))
+        assertEquals(AccessibilitySource.OverlayProbe.Unreadable, source().overlayProbe(w, display)) // CC11: the distinction a Boolean lost
         assertEquals(1L, stats.overlayRejectedCount(OverlayRejectReason.UNREADABLE))
     }
 
@@ -137,7 +137,7 @@ class OverlayCandidateTest {
         val src = source(windows = listOf(w), res = null)
         val area = src.displayArea()
         assertEquals(0L, area)
-        assertFalse(src.isOverlayCandidate(w, area))
+        assertFalse(candidate(src, w, area))
         verify(w, never()).root
         assertEquals(1L, stats.overlayRejectedCount(OverlayRejectReason.NO_DISPLAY_AREA))
     }
@@ -150,7 +150,7 @@ class OverlayCandidateTest {
         val puck = window(10, node(uberPkg), OverlayGeometry.UBER_PUCK)
         val src = source(windows = listOf(pip, puck), res = null)
         assertEquals(0L, src.displayArea())
-        assertFalse(src.isOverlayCandidate(puck, src.displayArea()))
+        assertFalse(candidate(src, puck, src.displayArea()))
         verify(puck, never()).root
         assertEquals(1L, stats.overlayRejectedCount(OverlayRejectReason.NO_DISPLAY_AREA))
     }
@@ -176,4 +176,8 @@ class OverlayCandidateTest {
         assertEquals(display, src.displayArea())
         verify(res, times(2)).displayMetrics
     }
+
+    /** CC11: tests assert on the ONE seam's sealed result. */
+    private fun candidate(src: AccessibilitySource, w: AccessibilityWindowInfo, area: Long): Boolean =
+        src.overlayProbe(w, area) is AccessibilitySource.OverlayProbe.Candidate
 }

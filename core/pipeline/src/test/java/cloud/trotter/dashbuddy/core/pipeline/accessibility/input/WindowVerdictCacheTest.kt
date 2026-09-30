@@ -70,16 +70,16 @@ class WindowVerdictCacheTest {
         val shade = window(30, node("com.android.systemui"), 20, AccessibilityWindowInfo.TYPE_SYSTEM)
         val src = source(listOf(shade))
 
-        src.isOverlayCandidate(shade, display)
-        src.isOverlayCandidate(shade, display)
+        candidate(src, shade, display)
+        candidate(src, shade, display)
         verify(shade, times(1)).root // second probe was a cache hit
 
         src.emit(event(AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED))
-        src.isOverlayCandidate(shade, display)
+        candidate(src, shade, display)
         verify(shade, times(1)).root // a content event leaves the cache alone
 
         src.emit(event(AccessibilityEvent.TYPE_WINDOWS_CHANGED))
-        src.isOverlayCandidate(shade, display)
+        candidate(src, shade, display)
         verify(shade, times(2)).root // topology changed → re-fetched once
     }
 
@@ -170,8 +170,8 @@ class WindowVerdictCacheTest {
             uber
         }
 
-        assertTrue(src.isOverlayCandidate(overlay, display)) // this frame's own decision stands
-        src.isOverlayCandidate(overlay, display)
+        assertTrue(candidate(src, overlay, display)) // this frame's own decision stands
+        candidate(src, overlay, display)
         verify(overlay, times(2)).root // nothing was memoized across the clear → re-probed
     }
 
@@ -195,9 +195,9 @@ class WindowVerdictCacheTest {
         }
         val src = AccessibilitySource(stats).apply { registerService(service) }
 
-        assertTrue(src.isOverlayCandidate(w, display))
+        assertTrue(candidate(src, w, display))
         withBounds(w, OverlayGeometry.UBER_PUCK) // the same window id, now puck-sized
-        assertEquals(false, src.isOverlayCandidate(w, display))
+        assertEquals(false, candidate(src, w, display))
         assertEquals(1L, stats.overlayRejectedCount(OverlayRejectReason.TOO_SMALL))
     }
 
@@ -206,7 +206,11 @@ class WindowVerdictCacheTest {
         val uber = node("com.ubercab.driver")
         val w = window(9, uber, 9, AccessibilityWindowInfo.TYPE_SYSTEM)
         val src = source(listOf(w))
-        assertTrue(src.isOverlayCandidate(w, display))
-        assertEquals(false, src.isOverlayCandidate(w, 0L))
+        assertTrue(candidate(src, w, display))
+        assertEquals(false, candidate(src, w, 0L))
     }
+
+    /** CC11: tests assert on the ONE seam's sealed result. */
+    private fun candidate(src: AccessibilitySource, w: AccessibilityWindowInfo, area: Long): Boolean =
+        src.overlayProbe(w, area) is AccessibilitySource.OverlayProbe.Candidate
 }
