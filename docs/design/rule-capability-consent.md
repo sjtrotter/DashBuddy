@@ -180,9 +180,12 @@ wide accessibility event receipt (#1151) today, the UNKNOWN-screen census
   never enabled — and never recognizes a screen — before the dasher decided.
   The pure `buildPermissionsUiState` withholds the accessibility step until a
   decision (`accessibilityOffered`); a release decline proceeds to the grant
-  (filtered footprint), a DEBUG decline shows a notice IN PLACE of the grant.
-  An undecided consent opens the chain even when every OS permission is
-  granted. It is **recorded** on the Automation & Consent screen (a switch that
+  (filtered footprint), a DEBUG decline never gets the grant (its shell is
+  replaced by `DebugEventReceiptShell`). Until the consent is READ the queue is
+  empty and nothing counts as all-granted, so no OS card ever leads the
+  Screen-events step (review TT4); the Dashboard opens the sheet from this ONE
+  projection (`PermissionsViewModel`). An undecided consent opens the chain even
+  when every OS permission is granted. It is **recorded** on the Automation & Consent screen (a switch that
   writes through the same owner — never a second gate);
 - **enforced in one place** — for event receipt, `AccessibilityListener`
   applying `ServiceInfoPolicy` to `serviceInfo.packageNames` (and, on a DEBUG
@@ -224,11 +227,18 @@ The consent is ONE nullable `StateFlow`; `null` means ONLY "not read yet". One
 collector on the application scope reads the store (review PP1): a failed read
 is retried with bounded backoff (5 × 1 s·attempt; a WARN per attempt, ERROR only
 when exhausted) and, exhausted, settles on the value already known this process,
-else a USABLE UNDECIDED. `set()` publishes optimistically, then writes on the
-APPLICATION scope (a closing screen can never cancel it half-way); a failed write
-is logged, rolled back and reported as `false`, never thrown. Enforcement treats
-`null` as UNDECIDED and applies once per distinct policy OUTPUT (`isWide`), so
-one apply and one INFO line per connect. An apply never takes sensing down: the
+else a USABLE UNDECIDED. The collector is the ONLY writer of the value (review
+SS1): `set()` only writes the store, on the APPLICATION scope (a closing screen
+can never cancel it half-way), and the collector publishes the decision when the
+store emits; a failed write is logged and reported as `false`, never thrown, the
+value untouched; a successful write restarts a collector that gave up. Enforcement
+treats `null` as UNDECIDED and applies once per distinct policy OUTPUT (`isWide`),
+so one apply and one INFO line per connect; a failed apply is RETRIED with a
+doubling backoff capped at 30 s until it lands (`ServiceInfoPolicy.retryDelayMs`,
+`collectLatest` — a newer consent cancels the retry), so a failed narrowing can
+never leave the subscription wide (SS2). A debug build that connects with a
+known decline disables itself BEFORE registering the source or reporting the
+locale boundary (TT1). An apply never takes sensing down: the
 service scope has a `CoroutineExceptionHandler` and the apply catches
 everything (one log line; the manifest's filtered footprint stays); a null
 `serviceInfo` (no connection) is one WARN and `onServiceConnected` re-applies.
