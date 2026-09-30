@@ -97,8 +97,11 @@ class AccessibilitySourceWindowRootsTest {
         assertNull("no active window → no active root", live.active)
     }
 
-    private fun typedWindow(node: AccessibilityNodeInfo?, type: Int, id: Int, pip: Boolean = false): AccessibilityWindowInfo =
-        mock { on { root } doReturn node; on { this.type } doReturn type; on { this.id } doReturn id; on { isInPictureInPictureMode } doReturn pip }
+    private fun typedWindow(node: AccessibilityNodeInfo?, type: Int, id: Int, pip: Boolean = false, active: Boolean = false): AccessibilityWindowInfo =
+        mock {
+            on { root } doReturn node; on { this.type } doReturn type; on { this.id } doReturn id
+            on { isInPictureInPictureMode } doReturn pip; on { isActive } doReturn active
+        }
 
     /**
      * #1149 review P3/R3: an unreadable APPLICATION window is counted — not an IME/SystemUI window, not a
@@ -210,9 +213,20 @@ class AccessibilitySourceWindowRootsTest {
     @Test
     fun `the active window is never counted as unreadable`() {
         val active = mock<AccessibilityNodeInfo> { on { windowId } doReturn 5 }
-        val windowList = listOf(typedWindow(null, AccessibilityWindowInfo.TYPE_APPLICATION, id = 5))
+        val windowList = listOf(typedWindow(null, AccessibilityWindowInfo.TYPE_APPLICATION, id = 5, active = true))
         val service = mock<AccessibilityService> {
             on { rootInActiveWindow } doReturn active
+            on { windows } doReturn windowList
+        }
+        assertEquals(0, sourceFor(service).getLiveWindowRoots().unreadableWindows)
+    }
+
+    /** T4: with rootInActiveWindow NULL, the active application window is still excluded by its own isActive flag. */
+    @Test
+    fun `a null active root never makes the active window count as unreadable`() {
+        val windowList = listOf(typedWindow(null, AccessibilityWindowInfo.TYPE_APPLICATION, id = 5, active = true))
+        val service = mock<AccessibilityService> {
+            on { rootInActiveWindow } doReturn null
             on { windows } doReturn windowList
         }
         assertEquals(0, sourceFor(service).getLiveWindowRoots().unreadableWindows)

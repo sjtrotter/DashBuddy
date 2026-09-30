@@ -1105,4 +1105,15 @@ class UiInteractionHandlerOwnerTest {
         assertFalse(expand(handler(windowRoot(bob)), ref))
         bob.neverClicked()
     }
+
+    /** T3: bubble active, one platform window unreadable, a twin at the rect in the readable one → no click. */
+    @Test
+    fun `under the bubble an unreadable window counts as a cut bounds walk`() = runTest {
+        val legacy = expandRef.copy(labelHintHashes = emptyList(), labelHintsComplete = false)
+        val twin = payRow()
+        val readable = windowRoot(twin)
+        val bubble = mock<AccessibilityNodeInfo>()
+        assertFalse(expand(handler(listOf(readable), bubble, unreadableWindows = 1), legacy))
+        twin.neverClicked()
+    }
 }

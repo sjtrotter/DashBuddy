@@ -590,6 +590,9 @@ class UiInteractionHandler @Inject constructor(
         val degenerate = b.right <= b.left || b.bottom <= b.top
         var cutBoundsWindows = 0
         if (candidates.isEmpty() && !degenerate) {
+            // #1149 review T3: an unreadable application window is a cut window for strategy 3 — under
+            // keep-all scoping it could hold the intended control while a twin sits at the rect elsewhere.
+            cutBoundsWindows += unreadableWindows
             for (root in roots) {
                 val found = mutableListOf<WalkHit>()
                 if (!findNodeByBounds(root, ref.boundsInScreen, ref.classNameHint, found)) {

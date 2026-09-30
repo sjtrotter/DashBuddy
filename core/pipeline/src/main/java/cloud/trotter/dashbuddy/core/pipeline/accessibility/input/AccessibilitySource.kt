@@ -79,8 +79,10 @@ class AccessibilitySource @Inject constructor() {
             // hide a platform twin (an IME, SystemUI or our overlay cannot; the active window is
             // already `active`). Residual: its package is unknown, so a foreign app's unreadable
             // window still counts.
+            // T4: the active window is excluded by its OWN flag — `active?.windowId` is null exactly when
+            // rootInActiveWindow is null, which is when the active window would otherwise be counted.
             if (window.type == AccessibilityWindowInfo.TYPE_APPLICATION &&
-                window.id != active?.windowId &&
+                !window.isActive &&
                 !window.isInPictureInPictureMode
             ) unreadable++
         }
