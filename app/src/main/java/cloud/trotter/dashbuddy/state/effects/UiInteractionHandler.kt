@@ -155,6 +155,12 @@ class UiInteractionHandler @Inject constructor(
         // package (e.g. the dasher's bubble holds focus), it was package-filtered out of `roots`, so it
         // matches nothing and scoping no-ops (we fall through to all windows, as before).
         val search = findCandidates(roots, activeRoot, ref, expectedPackage, unreadableWindows)
+        if (search.activeBoundsCut) {
+            Timber.tag("Effects").w(
+                "Bounds walk of the active window for %s was cut by the tree budget — aborting to manual (#1149)", description,
+            )
+            return false
+        }
         if (search.inconclusiveHits > 0) {
             // #1149 review L1 (decideSemanticOutcome): 2b found hit(s) but a window of the deciding set
             // could not be read completely — a hidden twin is possible, and the bounds walk must not
@@ -499,7 +505,7 @@ class UiInteractionHandler @Inject constructor(
      * active-window scoping (#788) prefers the active window's, if any.
      */
     /** [inconclusiveHits] > 0: 2b found that many hits in a deciding set that was incomplete — abort (#1149 L1). */
-    private class CandidateSearch(val candidates: List<Candidate>, val inconclusiveHits: Int = 0)
+    private class CandidateSearch(val candidates: List<Candidate>, val inconclusiveHits: Int = 0, val activeBoundsCut: Boolean = false)
 
     private class SemanticWindow(val result: SemanticSearch, val inActive: Boolean)
 
@@ -604,6 +610,9 @@ class UiInteractionHandler @Inject constructor(
             for (root in roots) {
                 val found = mutableListOf<WalkHit>()
                 if (!findNodeByBounds(root, ref.boundsInScreen, ref.classNameHint, found)) {
+                    // S2 — the mirror of L1 for strategy 3: when the ACTIVE platform window's walk was cut,
+                    // a background window's control must not become the sole survivor. Abort.
+                    if (activeRoot != null && root == activeRoot) return CandidateSearch(emptyList(), activeBoundsCut = true)
                     Timber.tag("Effects").d("Bounds walk cut by the tree budget — no candidates from this window (#1149 R5)")
                     continue
                 }

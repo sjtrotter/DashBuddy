@@ -1053,4 +1053,16 @@ class UiInteractionHandlerOwnerTest {
         assertFalse(confirmDecline(handler(root)))
         button.neverClicked()
     }
+
+    /** S2: the ACTIVE window's bounds walk is cut → a background control at the rect must NOT become the sole survivor. */
+    @Test
+    fun `a cut active bounds walk never falls back to a background window`() = runTest {
+        val legacy = expandRef.copy(labelHintHashes = emptyList(), labelHintsComplete = false)
+        val active = windowRoot()
+        whenever(active.childCount).thenReturn(Int.MAX_VALUE)
+        val bgRow = payRow() // exactly at the captured rect
+        val background = windowRoot(bgRow)
+        assertFalse(expand(handler(listOf(active, background), active), legacy))
+        bgRow.neverClicked()
+    }
 }
