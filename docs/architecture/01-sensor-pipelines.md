@@ -594,11 +594,11 @@ side-effect-free half.
   `SnapshotRedactor` delegates, `PiiShapesParityTest` pins it; `PiiShapesIcuGuardTest` applies the ICU
   bare-`}` rule to every compiled pattern); `CustomerTextMarkers.ID_MARKER_TABLE` is the ONE owner of
   "what kind of value an id carries" — `IdMarker(suffix, kind, runtimeScrub)`, kind NAME / ADDRESS /
-  EXACT / PERSON_OR_MERCHANT / CONTENT, runtime scrub ALWAYS / NEVER / WHEN_NAME_LIKE — and `ID_MARKERS` is its ALWAYS
-  projection: #1160 added `order_cx_name` and `tvLastMessage` (always customer text) to the runtime
-  UNKNOWN scrub, while `tvTitle` scrubs only when its value reads as a person's name (`PiiShapes.isPersonName`,
-  the ONE name predicate: "Riley" / "Riley S." masked, "Pick up order" kept for debug triage, title-case
-  "Pick Up" masked — an accepted cost); the recognized `doordash.screen.chat` / `chat_conversation` rules
+  EXACT / PERSON_OR_MERCHANT / CONTENT, runtime scrub ALWAYS / NEVER — and `ID_MARKERS` is its ALWAYS
+  projection: #1160 added `order_cx_name`, `tvTitle` and `tvLastMessage` to the runtime UNKNOWN scrub,
+  all ALWAYS on the id alone (review round 11: no value-shape gate — "李明", "de la Cruz" read as chrome to
+  any shape — so an UNKNOWN sheet title under `tvTitle`, "Pick up order", loses its X-Ray line, ADR residual
+  11); the recognized `doordash.screen.chat` / `chat_conversation` rules
   redact `tvTitle` (customer-name normalized) and `tvLastMessage` (plain); the corpus intake (`PII_ID_SUFFIXES`) holds every table suffix. The frame-rule
   off-switch exists only as the test/diagnostic `census.diagnostics.DiagnosticSkeletonBuilder`.
 - *The filter* — `core.pipeline.census.SkeletonBuilder` (typed API: `Platform`, `LocalDate`). A
@@ -614,13 +614,15 @@ side-effect-free half.
   (≥ 2 letters in code points, `CaseFold`-folded) of a NAME id's text (else its desc). NAME run-seeding
   is reserved for ids whose value is ONLY ever a person's name (`customer_name`, `order_cx_name`); a
   reused id that is a person or a merchant (`user_name`) is PERSON_OR_MERCHANT and a value that may be
-  chrome (`tvTitle`, `tvLastMessage`) is EXACT — both exact-seeded for text, with a kind-dependent
-  whole-value run for ids/classes; the address ids are ADDRESS (exact only — address vocabulary
+  chrome (`tvTitle`, `tvLastMessage`) is EXACT — both exact-seeded for text; NAME, PERSON_OR_MERCHANT and
+  EXACT also add their WHOLE value (a single token included, no name-shape gate) as an id-only run; the address ids are ADDRESS (exact only — address vocabulary
   is common English); CONTENT ids (`description_text_view`, the instruction bodies) and masks seed
-  nothing. The same NAME containment, split also at camelCase boundaries (contiguous segments), makes a
-  node's id or class absent (`chipAdam` beside `customer_name` "Adam"). On the id path the PII judgement
-  is stricter-to-trigger: a lead-in withholds only before a Capitalized token and the name shape needs a
-  Capitalized first token and an uppercase initial (`deliver_to_label`, `tabB` travel). Each value is
+  nothing. The same containment, split also at camelCase boundaries (contiguous segments), makes a
+  node's id absent (`chipAdam` beside `customer_name` "Adam", `search_bar` beside `tvTitle` "Search");
+  a class name is never containment-checked. On the id path the PII judgement is stricter-to-trigger: a
+  lead-in withholds only before a Capitalized token and the name shape needs an uppercase-led
+  (Capitalized or all-caps) first token and an uppercase initial (`deliver_to_label`, `tabB` travel;
+  `chip_RILEY_S` and — the recall cost — `TAB_B` are absent). Each value is
   judged once per frame (memoized). `outcome()` never throws: every failure is `Refusal.BUILD_FAILED`
   (the #909 inertness rule); refusals are reasons, never text.
 - *Tests* — `SkeletonCorpusTest` asserts ADR §7 (a)–(f) over the whole committed corpus (full-tree

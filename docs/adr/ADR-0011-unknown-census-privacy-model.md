@@ -61,8 +61,10 @@ with no marker, lead-in or initial (`chip_Adam`, `Adam Smith`) is indistinguisha
 (§2 frame-level rule), and travels in the clear otherwise — residual risk 10. On the id path the PII
 judgement is deliberately harder to trigger than on text: a marker or lead-in withholds only when the
 token after it is Capitalized (`deliver_to_Sam` is absent, `deliver_to_label` travels), and the name shape
-needs a Capitalized first token and an uppercase initial (`chip_Adam_S` is absent; `tabB`, `optionA`
-travel) — review round 8. `class` likewise travels only when it matches `ClassNameGrammar` — a Java binary
+needs an UPPERCASE-led first token — Capitalized or all-caps — and an uppercase initial (`chip_Adam_S` and
+`chip_RILEY_S` are absent; `tabB`, `optionA`, `tab_B` travel) — review rounds 8 and 11. The all-caps arm
+(review round 11) costs recall: SCREAMING_SNAKE constants ending in a one-letter segment (`TAB_B`,
+`SECTION_C`, `PRIMARY_BUTTON_A`) are absent too — fail closed. `class` likewise travels only when it matches `ClassNameGrammar` — a Java binary
 class name, ≤ 128 characters, the same digit-run rule — else it is absent (null on the wire, `""` in the
 fingerprint), because Compose/Flutter/WebView/custom views can report any string as their class), the three flags (`isClickable`/`isEnabled` as booleans, `isChecked` as the
 `UiNode` tri-state `Int` 0/1/2 — wire types stated so the shared vectors cannot disagree), and
@@ -207,18 +209,20 @@ filter over every text field of the frame (tree + window title) and SEEDS:
   "the"/"in"/"box" from "Jack in the Box" and suppress chrome and `TextView`-class wrappers per store) —
   seed their exact value only, so a duplicated first name is still caught (review rounds 8, 10). A NAME seeds runs from its text, so a TalkBack-style desc "Customer name Adam" beside text "Adam"
   seeds no `customer`/`name`, while a name rendered only in a desc still propagates — and a NAME whose
-  text is a mask or has no canonical form takes its runs from the desc. For the ID / CLASS check only, a
+  text is a mask or has no canonical form takes its runs from the desc. For the ID check only, a
   WHOLE-value run (case-folded, non-letters removed) is matched against the candidate's camel segments and
-  their contiguous joins, contributed by KIND (review round 10):
+  their contiguous joins, contributed by KIND (review rounds 10, 11 — no name-shape gate: fail closed):
 
-  | Kind | Whole-value run for ids / classes |
+  | Kind | Whole-value run for ids |
   |---|---|
-  | NAME | none needed — its letter runs already apply |
-  | PERSON_OR_MERCHANT (`user_name`) | when the value reads as a person's name (`PiiShapes.isPersonName`, a single token included): "Riley" nulls `chipRiley`; "Jack in the Box" adds none |
-  | EXACT (`tvTitle`, `tvLastMessage`) | only for the two-token name shape ("Riley S" nulls `chipRileyS`); a one-word chrome title "Search" or "Order Details" adds none |
-  | ADDRESS, CONTENT | none |
+  | NAME | always ("Mary Jo" nulls `chipMaryJo`), beside its letter runs |
+  | PERSON_OR_MERCHANT (`user_name`) | always, a single token included: "Riley" nulls `chipRiley`; "Jack in the Box" nulls `jackInTheBoxLogo` (recall cost), never `boxView` |
+  | EXACT (`tvTitle`, `tvLastMessage`) | always: "Riley Smith" nulls `chipRileySmith`; a one-word chrome title "Search" nulls `search_bar` on its frame (recall cost) |
+  | ADDRESS, CONTENT | none (street vocabulary is common English) |
 
-  Text slots never use the whole-value rule.
+  Text slots never use the whole-value rule, and CLASS names are never containment-checked (review round
+  11): a class is a compiled type name, not frame data — a `SearchView` class beside `tvTitle` "Search"
+  stays.
   `PII_ID_SUFFIXES` holds EVERY suffix of this table (a guard test pins the subset) plus other
   instruction/content ids (message bodies, maneuver/road text) (review rounds 6–9);
 - a MASK never seeds anything (`[redacted…]`, `[address]`, …): it is not identity, and its word would
@@ -227,12 +231,12 @@ filter over every text field of the frame (tree + window title) and SEEDS:
 Pass 2 emits the constant `withheld` for every field whose canonical value is a seeded exact value,
 wherever it sits, and — by TOKEN CONTAINMENT — for every field containing a NAME run: `customer_name`
 "Adam" withholds an id-less "Adam's order" or "Adam, 2 items" (which pass steps 3–8), while "Add a tip"
-beside it still hashes. The containment rule applies to text slots AND to the id and class of every node
-on the frame; ids and classes are split into runs ALSO at camelCase boundaries (lower→Upper, and
+beside it still hashes. The containment rule applies to text slots AND to the id of every node on the
+frame (never the class — review round 11); ids are split into runs ALSO at camelCase boundaries (lower→Upper, and
 Upper→Upper+lower: `XMLAdam` → `XML` + `Adam`), because Compose test tags are usually camelCase, while
 text slots keep the plain letter-run split; a seed is tested against every CONTIGUOUS concatenation of
 a token's camel segments (the singles, the joins, the whole token), so a name with internal capitals
-still matches — `chipMcKenna` → `Mc`+`Kenna` → `mckenna` (amended in #1160 review round 6). A static id or class carrying a NAME run is ABSENT for the
+still matches — `chipMcKenna` → `Mc`+`Kenna` → `mckenna` (amended in #1160 review round 6). A static id carrying a NAME run is ABSENT for the
 wire and the fingerprint, exactly like a dynamic id — `chipAdam` / `chip_Adam` beside `customer_name`
 "Adam" does not travel, `chipGold` and `chipAdamant` (whole-run equality) do (one owner,
 `FrameFilter.containsIdentityRun`). A CONTENT id and a `PII_ID_SUFFIXES`-only id (the intake list, which
@@ -638,20 +642,19 @@ must stay green.
     still travels in the clear. The corpus has none (the rejected-id pin lists only the three dynamic
     UUIDs, and no identity seed collides with a committed chrome id); the controls are that pin and the
     k-gated, human-reviewed promotion path.
-   The same containment applies to ids and classes, so in the rarer case of a first name equal to an id
+   The same containment applies to ids (not classes, review round 11), so in the rarer case of a first name equal to an id
    token (`Star` / `star_rating_bar`, `Page` / `page_indicator`, `Dash` / `dash_now_button`) the id is
    nulled and the CLUSTER KEY itself moves: that surface lands in a singleton cluster for that install on
    that frame. Fingerprinting the pre-containment structure would break the server's
    recompute-from-the-wire rule, so this is accepted: the drop costs availability (a cluster that does
    not reach k), never privacy (#1160 review round 6).
-11. **Title-case chrome in the runtime chat-header scrub** (#1160 review round 10). The runtime UNKNOWN
-    scrub masks `tvTitle` when its value reads as a person's name (`PiiShapes.isPersonName`), which a
-    title-case two-word sheet title ("Pick Up", "Order Details") also satisfies — so such a header line is
-    lost from the debug X-Ray triage. Accepted, privacy first: a full "Riley Smith" chat header must never
-    persist; sentence-case chrome ("Pick up order") is kept. The runtime gate uses `isPersonName`'s
-    RUNTIME_SCRUB mode, which also accepts all-caps names and initials ("RILEY S"), so all-caps chrome
-    ("TAB B") is scrubbed in triage too — the same trade; census seeding and the id path use the
-    not-all-caps SEEDING_AND_IDS mode (review round 11).
+11. **Every `tvTitle` line in the runtime UNKNOWN scrub** (#1160 review rounds 10, 11). The runtime UNKNOWN
+    id scrub masks `tvTitle` (the chat header — a customer's name) ALWAYS, whatever its value: a
+    value-shape gate cannot tell "李明", "محمد" or "de la Cruz" from chrome, so the runtime path fails
+    closed on the id alone. The cost: DoorDash reuses the generic `tvTitle` for sheet titles, so an
+    UNKNOWN sheet titled "Pick up order" loses that line in the debug X-Ray triage. The census skeleton
+    is unaffected — it keeps the node's id and structure (its text slot was already withheld as an
+    EXACT id). A recognized chat frame masks through its rule's `redact` (customer-name hash) instead.
 
 ## Open questions (dev decisions; the same items appear in #1157's plan §10 under its own numbering — this list is the ADR's reference)
 
