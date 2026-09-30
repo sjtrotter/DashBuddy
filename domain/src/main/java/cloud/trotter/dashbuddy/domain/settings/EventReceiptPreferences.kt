@@ -21,6 +21,15 @@ enum class EventReceiptConsent {
 
     /** The dasher declined — durable; filtered receipt, the topology path stays off. */
     DECLINED,
+    ;
+
+    companion object {
+        /**
+         * The ONE on/off → decision rule (a switch or an Allow / Don't allow pair): on ⇒ [ALLOWED],
+         * off ⇒ a durable [DECLINED]. An explicit act never maps back to [UNDECIDED].
+         */
+        fun of(allowed: Boolean): EventReceiptConsent = if (allowed) ALLOWED else DECLINED
+    }
 }
 
 /**
@@ -32,18 +41,12 @@ enum class EventReceiptConsent {
 interface EventReceiptPreferences {
 
     /**
-     * The persisted decision, materialized once (#356). Its value BEFORE the store has been read is
-     * [EventReceiptConsent.UNDECIDED] — the filtered, fail-closed footprint.
+     * The persisted decision, materialized once (#356). `null` means the store has not been read
+     * yet (or could not be read) — enforcement treats it as [EventReceiptConsent.UNDECIDED] (the
+     * filtered, fail-closed footprint), while the prompt waits for a non-null value so a decided
+     * dasher never sees it flash. ONE flow, so the two can never disagree for a frame.
      */
-    val consent: StateFlow<EventReceiptConsent>
-
-    /**
-     * True once [consent] reflects the persisted store (false only for the brief window before the
-     * first DataStore read). UI surfaces that act on [EventReceiptConsent.UNDECIDED] (the prompt)
-     * wait on it so a decided dasher never sees the sheet flash; enforcement does not need it,
-     * because the pre-load value is already the filtered footprint.
-     */
-    val loaded: StateFlow<Boolean>
+    val consent: StateFlow<EventReceiptConsent?>
 
     /** Persist a decision. */
     suspend fun set(consent: EventReceiptConsent)

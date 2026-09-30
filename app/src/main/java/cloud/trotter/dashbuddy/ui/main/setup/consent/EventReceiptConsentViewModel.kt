@@ -8,7 +8,7 @@ import cloud.trotter.dashbuddy.domain.settings.EventReceiptPreferences
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import javax.inject.Inject
@@ -29,8 +29,8 @@ class EventReceiptConsentViewModel internal constructor(
     constructor(preferences: EventReceiptPreferences) : this(preferences, BuildConfig.DEBUG)
 
     val uiState: StateFlow<EventReceiptConsentUiState> =
-        combine(preferences.consent, preferences.loaded) { consent, loaded ->
-            buildEventReceiptConsentState(consent, loaded, isDebugBuild)
+        preferences.consent.map { consent ->
+            buildEventReceiptConsentState(consent, isDebugBuild)
         }.stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5_000),
@@ -43,7 +43,7 @@ class EventReceiptConsentViewModel internal constructor(
      */
     fun onDecision(allow: Boolean) {
         viewModelScope.launch {
-            preferences.set(if (allow) EventReceiptConsent.ALLOWED else EventReceiptConsent.DECLINED)
+            preferences.set(EventReceiptConsent.of(allow))
         }
     }
 }
@@ -57,15 +57,15 @@ data class EventReceiptConsentUiState(
 )
 
 /**
- * The pure projection (testable without Android). The prompt waits for [loaded] so a decided dasher
- * never sees the sheet flash during the first store read; the block is reachable ONLY when
- * [isDebugBuild] AND the dasher explicitly DECLINED — a release decline keeps the app fully usable.
+ * The pure projection (testable without Android). A `null` [consent] (store not read yet) shows
+ * nothing, so a decided dasher never sees the sheet flash during the first read; the block is
+ * reachable ONLY when [isDebugBuild] AND the dasher explicitly DECLINED — a release decline keeps
+ * the app fully usable.
  */
 fun buildEventReceiptConsentState(
-    consent: EventReceiptConsent,
-    loaded: Boolean,
+    consent: EventReceiptConsent?,
     isDebugBuild: Boolean,
 ): EventReceiptConsentUiState = EventReceiptConsentUiState(
-    showPrompt = loaded && consent == EventReceiptConsent.UNDECIDED,
+    showPrompt = consent == EventReceiptConsent.UNDECIDED,
     blocked = isDebugBuild && consent == EventReceiptConsent.DECLINED,
 )

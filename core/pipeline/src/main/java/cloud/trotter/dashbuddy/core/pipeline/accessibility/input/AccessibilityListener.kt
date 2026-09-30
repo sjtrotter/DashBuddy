@@ -134,7 +134,10 @@ class AccessibilityListener : AccessibilityService() {
         val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
         serviceScope = scope
         scope.launch {
-            eventReceiptPreferences.consent.collect { consent -> applyEventReceipt(consent) }
+            // null = the store is not read yet (or unreadable) ⇒ UNDECIDED, the filtered footprint.
+            eventReceiptPreferences.consent.collect { consent ->
+                applyEventReceipt(consent ?: EventReceiptConsent.UNDECIDED)
+            }
         }
 
         // Register with the source

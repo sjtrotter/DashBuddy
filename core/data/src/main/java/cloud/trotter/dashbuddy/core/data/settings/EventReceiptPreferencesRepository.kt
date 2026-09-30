@@ -7,8 +7,10 @@ import cloud.trotter.dashbuddy.domain.settings.EventReceiptPreferences
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
+import timber.log.Timber
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -18,7 +20,8 @@ import javax.inject.Singleton
  * prompt and the Settings switch all read this one [StateFlow].
  *
  * **Fail-closed decode:** nothing saved, or an unrecognized stored name, reads as
- * [EventReceiptConsent.UNDECIDED] — the filtered footprint. Only an explicit ALLOWED widens.
+ * [EventReceiptConsent.UNDECIDED] — the filtered footprint. Only an explicit ALLOWED widens. The
+ * pre-read / unreadable value is `null`, which every consumer treats as UNDECIDED.
  */
 @Singleton
 class EventReceiptPreferencesRepository @Inject constructor(
@@ -26,18 +29,18 @@ class EventReceiptPreferencesRepository @Inject constructor(
     @ApplicationScope scope: CoroutineScope,
 ) : EventReceiptPreferences {
 
-    /** null until the store has been read — the pre-load marker behind [loaded]. */
-    private val stored: StateFlow<EventReceiptConsent?> = dataSource.consent
-        .map { decode(it) }
+    /**
+     * THE materialization: `null` until the first read. **Fails closed and LOUD:** a store that
+     * cannot be read (corrupt file, I/O) emits `null` — filtered footprint, no prompt — and logs an
+     * ERROR, instead of terminating the sharing coroutine and freezing every reader.
+     */
+    override val consent: StateFlow<EventReceiptConsent?> = dataSource.consent
+        .map<String?, EventReceiptConsent?> { decode(it) }
+        .catch { t ->
+            Timber.tag("Data").e(t, "event-receipt consent unreadable — treating as undecided")
+            emit(null)
+        }
         .stateIn(scope, SharingStarted.Eagerly, null)
-
-    override val consent: StateFlow<EventReceiptConsent> = stored
-        .map { it ?: EventReceiptConsent.UNDECIDED }
-        .stateIn(scope, SharingStarted.Eagerly, EventReceiptConsent.UNDECIDED)
-
-    override val loaded: StateFlow<Boolean> = stored
-        .map { it != null }
-        .stateIn(scope, SharingStarted.Eagerly, false)
 
     override suspend fun set(consent: EventReceiptConsent) {
         dataSource.setConsent(consent.name)

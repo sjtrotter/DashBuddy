@@ -1,6 +1,8 @@
 package cloud.trotter.dashbuddy.core.data.settings
 
+import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.PreferenceDataStoreFactory
+import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
 import cloud.trotter.dashbuddy.core.datastore.settings.EventReceiptConsentDataSource
@@ -8,22 +10,25 @@ import cloud.trotter.dashbuddy.domain.settings.EventReceiptConsent
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertFalse
-import org.junit.Assert.assertTrue
+import org.junit.Assert.assertNull
 import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.TemporaryFolder
 import java.io.File
+import java.io.IOException
 
 /**
  * #1151 — the event-receipt consent over a REAL Preferences DataStore: UNDECIDED by default (the
  * filtered footprint), a decision round-trips through the one [StateFlow] every consumer reads, a
- * corrupt stored name fails closed to UNDECIDED, and [loaded] only turns true once the store was read.
+ * corrupt stored name fails closed to UNDECIDED, the value is null until the store was read, and an
+ * unreadable store fails closed to null (LL7) instead of terminating the shared flow.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class EventReceiptPreferencesRepositoryTest {
@@ -41,14 +46,26 @@ class EventReceiptPreferencesRepositoryTest {
     }
 
     @Test
-    fun `defaults to UNDECIDED and is not loaded before the first read`() = runTest {
+    fun `null before the first read, then UNDECIDED by default`() = runTest {
         val repo = newRepo(this, "a.preferences_pb")
-        assertEquals(EventReceiptConsent.UNDECIDED, repo.consent.value)
-        assertFalse(repo.loaded.value)
+        assertNull("not read yet", repo.consent.value)
 
         advanceUntilIdle()
         assertEquals(EventReceiptConsent.UNDECIDED, repo.consent.value)
-        assertTrue(repo.loaded.value)
+    }
+
+    @Test
+    fun `an unreadable store fails closed to null instead of killing the flow`() = runTest {
+        val storeScope = CoroutineScope(StandardTestDispatcher(testScheduler) + Job())
+        val broken = object : DataStore<Preferences> {
+            override val data: Flow<Preferences> = flow { throw IOException("corrupt") }
+            override suspend fun updateData(transform: suspend (Preferences) -> Preferences) =
+                throw IOException("corrupt")
+        }
+        val repo = EventReceiptPreferencesRepository(EventReceiptConsentDataSource(broken), storeScope)
+        advanceUntilIdle()
+
+        assertNull("unreadable ⇒ null (filtered footprint, no prompt)", repo.consent.value)
     }
 
     @Test
@@ -77,7 +94,12 @@ class EventReceiptPreferencesRepositoryTest {
         advanceUntilIdle()
 
         assertEquals(EventReceiptConsent.UNDECIDED, repo.consent.value)
-        assertTrue(repo.loaded.value)
+    }
+
+    @Test
+    fun `of maps the on-off rule`() {
+        assertEquals(EventReceiptConsent.ALLOWED, EventReceiptConsent.of(true))
+        assertEquals(EventReceiptConsent.DECLINED, EventReceiptConsent.of(false))
     }
 
     @Test

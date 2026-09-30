@@ -61,7 +61,7 @@ class CapabilityConsentViewModel @Inject constructor(
     /** #1151 — on ⇒ ALLOWED, off ⇒ a durable DECLINED (an explicit act, never back to UNDECIDED). */
     fun setEventReceiptAllowed(allowed: Boolean) {
         viewModelScope.launch {
-            eventReceipt.set(if (allowed) EventReceiptConsent.ALLOWED else EventReceiptConsent.DECLINED)
+            eventReceipt.set(EventReceiptConsent.of(allowed))
         }
     }
 }

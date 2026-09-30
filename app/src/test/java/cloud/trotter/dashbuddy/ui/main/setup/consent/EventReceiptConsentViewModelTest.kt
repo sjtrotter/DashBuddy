@@ -28,14 +28,10 @@ import org.junit.Test
 @OptIn(ExperimentalCoroutinesApi::class)
 class EventReceiptConsentViewModelTest {
 
-    private class FakePrefs(
-        initial: EventReceiptConsent = EventReceiptConsent.UNDECIDED,
-        loaded: Boolean = true,
-    ) : EventReceiptPreferences {
+    private class FakePrefs(initial: EventReceiptConsent? = EventReceiptConsent.UNDECIDED) :
+        EventReceiptPreferences {
         val consentFlow = MutableStateFlow(initial)
-        val loadedFlow = MutableStateFlow(loaded)
-        override val consent: StateFlow<EventReceiptConsent> = consentFlow
-        override val loaded: StateFlow<Boolean> = loadedFlow
+        override val consent: StateFlow<EventReceiptConsent?> = consentFlow
         val setCalls = mutableListOf<EventReceiptConsent>()
         override suspend fun set(consent: EventReceiptConsent) {
             setCalls += consent
@@ -51,9 +47,9 @@ class EventReceiptConsentViewModelTest {
     // ---- pure projection ------------------------------------------------------------------
 
     @Test
-    fun `UNDECIDED shows the prompt once loaded`() {
+    fun `UNDECIDED shows the prompt`() {
         for (debug in listOf(true, false)) {
-            val s = buildEventReceiptConsentState(EventReceiptConsent.UNDECIDED, loaded = true, isDebugBuild = debug)
+            val s = buildEventReceiptConsentState(EventReceiptConsent.UNDECIDED, isDebugBuild = debug)
             assertTrue(s.showPrompt)
             assertFalse(s.blocked)
         }
@@ -61,32 +57,29 @@ class EventReceiptConsentViewModelTest {
 
     @Test
     fun `the prompt never flashes before the store is read`() {
-        val s = buildEventReceiptConsentState(EventReceiptConsent.UNDECIDED, loaded = false, isDebugBuild = true)
-        assertFalse(s.showPrompt)
-        assertFalse(s.blocked)
+        for (debug in listOf(true, false)) {
+            assertEquals(EventReceiptConsentUiState(), buildEventReceiptConsentState(null, debug))
+        }
     }
 
     @Test
     fun `ALLOWED and DECLINED hide the prompt`() {
         for (consent in listOf(EventReceiptConsent.ALLOWED, EventReceiptConsent.DECLINED)) {
             for (debug in listOf(true, false)) {
-                assertFalse(buildEventReceiptConsentState(consent, loaded = true, isDebugBuild = debug).showPrompt)
+                assertFalse(buildEventReceiptConsentState(consent, isDebugBuild = debug).showPrompt)
             }
         }
     }
 
     @Test
     fun `the block is reachable only when DEBUG and DECLINED`() {
-        for (consent in EventReceiptConsent.entries) {
+        for (consent in EventReceiptConsent.entries + listOf(null)) {
             for (debug in listOf(true, false)) {
-                for (loaded in listOf(true, false)) {
-                    val blocked = buildEventReceiptConsentState(consent, loaded, debug).blocked
-                    assertEquals(
-                        "consent=$consent debug=$debug loaded=$loaded",
-                        debug && consent == EventReceiptConsent.DECLINED,
-                        blocked,
-                    )
-                }
+                assertEquals(
+                    "consent=$consent debug=$debug",
+                    debug && consent == EventReceiptConsent.DECLINED,
+                    buildEventReceiptConsentState(consent, debug).blocked,
+                )
             }
         }
     }
@@ -98,7 +91,7 @@ class EventReceiptConsentViewModelTest {
         val prefs = FakePrefs(EventReceiptConsent.UNDECIDED)
         val vm = EventReceiptConsentViewModel(prefs, isDebugBuild = true)
 
-        assertTrue(vm.uiState.first { it.showPrompt }.showPrompt)
+        assertTrue(vm.uiState.first { it != EventReceiptConsentUiState() }.showPrompt)
 
         prefs.consentFlow.value = EventReceiptConsent.DECLINED
         val declined = vm.uiState.first { !it.showPrompt }
@@ -110,13 +103,22 @@ class EventReceiptConsentViewModelTest {
     }
 
     @Test
-    fun `a release build never blocks on DECLINED`() = runTest {
-        val prefs = FakePrefs(EventReceiptConsent.DECLINED)
-        val vm = EventReceiptConsentViewModel(prefs, isDebugBuild = false)
-        prefs.loadedFlow.value = true
-        val s = vm.uiState.first()
-        assertFalse(s.blocked)
-        assertFalse(s.showPrompt)
+    fun `DECLINED blocks in debug and never in release - asserted on a non-default emission`() = runTest {
+        for (debug in listOf(true, false)) {
+            // Start at UNDECIDED so the first non-default emission is the prompt, then decline —
+            // the assertion is on the emission AFTER the decline, never on the stateIn initial.
+            val prefs = FakePrefs(null)
+            val vm = EventReceiptConsentViewModel(prefs, isDebugBuild = debug)
+            prefs.consentFlow.value = EventReceiptConsent.UNDECIDED
+            assertTrue(vm.uiState.first { it != EventReceiptConsentUiState() }.showPrompt)
+
+            prefs.consentFlow.value = EventReceiptConsent.DECLINED
+            val declined = vm.uiState.first { !it.showPrompt }
+            assertEquals("debug=$debug", EventReceiptConsentUiState(blocked = debug), declined)
+            if (debug) {
+                assertTrue(vm.uiState.first { it != EventReceiptConsentUiState() }.blocked)
+            }
+        }
     }
 
     @Test
