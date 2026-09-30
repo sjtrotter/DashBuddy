@@ -53,11 +53,12 @@ and the server accepts ANY key in that map (every value has the same `{h?, kind}
 is not a privacy change) while rejecting unknown fields everywhere else — an object `{h?, kind}`: `kind` is a coarse shape class and `h` is present
 only when the §2 filter admits a hash (§3 only defines how the admitted token is hashed). **The type has no plaintext slot**: a leak of a text value is a
 type error. **`uniqueId` (`uid`) is a text slot like every other enum entry** — hashed through the filter, never
-sent in the clear. It is an app-assigned identifier (a Compose test tag — the only stable handle on an
-id-less Compose card, the #1114 class), and a clear-text gate was considered and REJECTED: no shape
-rule can tell `store_Chipotle` or `customer_row_JaneS` from chrome, and the operator's trusted phone
-resolves the hash immediately under `k_unblind` anyway, so hashing costs the drafter nothing while
-community installs keep the k protection. **The window title is the ONE explicit non-node
+sent in the clear. It is the optional API-33 `AccessibilityNodeInfo.getUniqueId()` value; whether the
+platforms set it, and whether it is stable, is UNVERIFIED (#1147 shipped it as capture evidence only
+and the rule compiler deliberately exposes no predicate for it), so it cannot anchor a rule today. A
+clear-text gate was considered and REJECTED: no shape rule can tell `store_Chipotle` or
+`customer_row_JaneS` from chrome, and if it ever proves useful the operator's trusted phone resolves
+the hash under `k_unblind` anyway. **The window title is the ONE explicit non-node
 text field** (it lives on
 `windowContext`, outside `UiNodeTextField`) and goes through the same `{h?, kind}` rule; it is the
 single named exception to "enumerate the enum", and `SkeletonCorpusTest` names it. `deviceFingerprint`
@@ -87,14 +88,18 @@ be hashed) AFTER the 40-character cap (§2 step 2 runs before the grammar, so th
 category test see bounded input), first match wins. It is computed in two stages so that
 classification and filtering are not circular: the grammar (rows 2–4 below) yields an intermediate `shapeKind`; §2's filter then
 consults `shapeKind` (step 6) and decides; the EMITTED `kind` is `withheld` when a withholding step
-fired, otherwise `shapeKind` — so `digits` and `mixed` ARE emitted (hash refused), and `words:N` is
-emitted only together with its hash.
+fired, otherwise `shapeKind` — so `digits`, `mixed` and `words:8+` ARE emitted (hash refused), and `words:1` …
+`words:8` are emitted only together with their hash.
 
 | Precedence | `kind` | Rule |
 |---|---|---|
 | 1 | `withheld` | a WITHHOLDING filter step in §2 (steps 1–5, 7, 8) caught the field, OR `sha256OrNull` returned null for a `words:N` survivor (emit `{kind: withheld}` with no `h`) — a CONSTANT, so a caught PII slot reveals nothing, not even its word count. Step 6 is NOT a withholding step: it only refuses the HASH, and the token keeps its `digits`/`mixed` kind |
 | 2 | `digits` | every non-whitespace character is a Unicode decimal digit (`Character.isDigit`) |
-| 3 | `words:N` | split on whitespace runs; DROP any run that contains no letter and no digit (`&`, `→`, `-`, emoji-only — so `Pickup & delivery` is `words:2`); strip LEADING and TRAILING punctuation (Unicode general category P*) from each remaining run (interior apostrophes and hyphens are kept, so `O'Brien` and `Drop-off` are one run each); every remaining run must contain at least one Unicode letter and no digit (letter/digit tests are CODE-POINT based — `Character.isLetter(int)`/`isDigit(int)` — so supplementary-plane scripts count); N = the run count and must be ≥ 1 (all runs dropped → `mixed`); `words:8+` when N > 8, and `words:8+` is NOT a hashable `words:N` for step 6 (nine-plus runs is body text, not chrome) |
+| 3 | `words:N` | split on whitespace runs; DROP any run that contains no letter and no digit (`&`, `→`, `-`, emoji-only — so `Pickup & delivery` is `words:2`); strip LEADING and TRAILING punctuation (Unicode general category P*) from each remaining run (interior apostrophes and hyphens are kept, so `O'Brien` and `Drop-off` are one run each); every remaining run must contain at least one Unicode letter and no digit (letter/digit tests are CODE-POINT based — `Character.isLetter(int)`/`isDigit(int)` — so supplementary-plane scripts count); N = the run count and must be ≥ 1 (all runs dropped → `mixed`); `words:8+` when N > 8 |
+
+`words:1` … `words:8` are emitted only together with a hash; `words:8+` is emitted WITHOUT a hash (nine-plus
+runs is body text, not chrome — step 6 refuses it) and still passes through steps 7–8, which may override
+it to `withheld`.
 | 4 | `mixed` | everything else — money (`$45.66`), clock times, unit numbers, gate codes, order ids, plates, symbols, emoji |
 
 A null or blank field is OMITTED from the skeleton before any classification, never emitted —
@@ -133,11 +138,14 @@ SSOTs the redact side uses, in this order, and **any hit withholds the hash**:
    emitted with that kind and no hash. The `kind`
    grammar is the digit backstop: any run containing a digit makes the token `digits` or `mixed`, never `words:N`, so gate codes, PINs, unit numbers and phone fragments emit `kind` only by construction
    (a future grammar change that lets a digit into `words:N` must re-add an explicit digit rule);
-7. `PiiShapes.FIRST_LAST_INITIAL_PATTERN` (the id-less name shape, byte-SSOT with the redact side) —
-   run in SUBSTRING mode (`containsMatchIn`, `IGNORE_CASE`), deliberately STRICTER than
-   `SnapshotRedactor`'s whole-value `matches`, so `Jane S is waiting at the door` (no lead-in prefix)
-   is withheld rather than hashed as `words:6`; over-withholding a chrome sentence is the accepted
-   cost;
+7. the id-less name shape. `PiiShapes` owns ONE pattern BODY (`FIRST_LAST_INITIAL_BODY`) and derives
+   two variants from it: the existing ANCHORED whole-value pattern (`^…$`, `FIRST_LAST_INITIAL_PATTERN`,
+   byte-SSOT with the redact side and unchanged) and a BOUNDARY-DELIMITED substring variant
+   (`(?<![\p{L}])…(?![\p{L}])`, `FIRST_LAST_INITIAL_EMBEDDED`) that the census runs here with
+   `containsMatchIn` + `IGNORE_CASE` — merely searching the anchored pattern would still reject
+   `Jane S is waiting at the door` (the anchors survive `containsMatchIn`). That sentence, with no
+   lead-in prefix, must emit `{kind: withheld}` — a required vector; over-withholding a chrome sentence
+   is the accepted cost;
 8. any other promoted `PiiShapes` pattern — each keeps the match mode `SnapshotRedactor` uses today
    (`BARE_STREET` whole-value, the others substring), pinned by the byte-SSOT tests. It runs on every
    token that reached it (step 6 does not terminate), so the digit-bearing shapes (street number, ZIP,
