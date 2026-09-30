@@ -405,8 +405,11 @@ class AccessibilitySource @Inject constructor(
      *    through [WindowVerdictCache] — a root is fetched at most once per window id; an unreadable
      *    root cannot prove its package and is refused.
      * Enablement is NOT decided here — callers read a candidate only when its package is enabled.
+     *
+     * A TEST seam only (PR #1155 review BB11): production code calls [overlayProbe], the one seam,
+     * which also distinguishes an unreadable window (BB1).
      */
-    fun isOverlayCandidate(w: AccessibilityWindowInfo, displayArea: Long): Boolean =
+    internal fun isOverlayCandidate(w: AccessibilityWindowInfo, displayArea: Long): Boolean =
         overlayProbe(w, displayArea) is OverlayProbe.Candidate
 
     /** [isOverlayCandidate] carrying the verified package (and the root, if fetched); counts every refusal. */
