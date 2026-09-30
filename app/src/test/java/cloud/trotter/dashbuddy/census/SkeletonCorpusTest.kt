@@ -256,52 +256,140 @@ class SkeletonCorpusTest {
         assertEquals(sortedSetOf<String>(), frameDropped)
     }
 
-    @Test
-    fun `the frame-level rule flips no chrome slot to withheld (review OO2)`() {
-        // Build each fixture with the frame-level rule ON and OFF (a diagnostic seam). Every slot that
-        // flips to `withheld` only because of the frame rule must be explained by the frame's own PII:
-        // its canonical value is a seeded exact value (value-judged or an identity id's text/desc), or it
-        // shares a letter run with a NAME identity id's text on that fixture. Anything else is chrome the
-        // rule over-withholds (the GG5 / LL1 class) and is listed here.
-        val unexplained = mutableListOf<String>()
-        var flips = 0
-        for ((f, item) in built) {
-            item ?: continue
-            val off = (SkeletonBuilder.outcomeWithoutFrameRule(f.tree, null, META, platformOf(f.path), DAY)
-                as? SkeletonBuilder.Outcome.Built)?.skeleton ?: continue
-            val seededExact = HashSet<String>()
-            val nameRuns = HashSet<String>()
-            walkNodes(f.tree) { n ->
-                val kind = CustomerTextMarkers.idMarkerFor(n.viewIdResourceName)?.kind
-                n.scrubbableStrings().forEach { (field, v) ->
-                    if (v.isNullOrBlank()) return@forEach
-                    val c = CensusHash.canonical(v)
-                    if (PiiShapes.containsMask(c)) return@forEach
-                    val raw = v.trim()
-                    if (valueJudged(c) || (raw.length <= 40 && valueJudged(raw))) seededExact += c
-                    val rendered = field == UiNodeTextField.TEXT || field == UiNodeTextField.CONTENT_DESCRIPTION
-                    if (rendered && kind != null && kind != CustomerTextMarkers.IdentityKind.CONTENT) seededExact += c
-                    if (rendered && kind == CustomerTextMarkers.IdentityKind.NAME) nameRuns += letterRuns(c, minLetters = 2)
-                }
+    /**
+     * Reviews OO2 + QQ1: build [tree] with the frame-level rule ON and OFF (the diagnostic seam) and return
+     * (flips, unexplained). A flip is a text slot the frame rule alone turned `withheld`; it is explained
+     * only by the builder's EXACT seeding rule on this frame — its canonical value equals a seeded exact
+     * value (value-judged on the canonical form, or on the raw form within the cap; or an identity id's
+     * text/desc), or it contains a NAME run (from the NAME node's TEXT when non-blank, otherwise its DESC).
+     * Anything else is chrome the rule over-withholds (the GG5 / LL1 class). Never records frame text.
+     */
+    private fun frameFlips(path: String, platform: Platform, tree: UiNode): Pair<Int, List<String>> {
+        val on = (SkeletonBuilder.outcome(tree, null, META, platform, DAY) as? SkeletonBuilder.Outcome.Built)?.skeleton
+            ?: return 0 to emptyList()
+        val off = (SkeletonBuilder.outcomeWithoutFrameRule(tree, null, META, platform, DAY) as? SkeletonBuilder.Outcome.Built)
+            ?.skeleton ?: return 0 to emptyList()
+        val seededExact = HashSet<String>()
+        val nameRuns = HashSet<String>()
+        walkNodes(tree) { n ->
+            val kind = CustomerTextMarkers.idMarkerFor(n.viewIdResourceName)?.kind
+            n.scrubbableStrings().forEach { (field, v) ->
+                if (v.isNullOrBlank()) return@forEach
+                val c = CensusHash.canonical(v)
+                if (PiiShapes.containsMask(c)) return@forEach
+                val raw = v.trim()
+                if (valueJudged(c) || (raw.length <= 40 && valueJudged(raw))) seededExact += c
+                val rendered = field == UiNodeTextField.TEXT || field == UiNodeTextField.CONTENT_DESCRIPTION
+                if (rendered && kind != null && kind != CustomerTextMarkers.IdentityKind.CONTENT) seededExact += c
             }
-            fun walk(n: UiNode, on: UiSkeletonNodeDto, offNode: UiSkeletonNodeDto) {
-                n.scrubbableStrings().forEach { (field, v) ->
-                    if (v.isNullOrBlank()) return@forEach
-                    val a = on.text[field.wire]
-                    val b = offNode.text[field.wire]
-                    if (a == TextSlot.WITHHELD && b != TextSlot.WITHHELD) {
-                        flips++
-                        val c = CensusHash.canonical(v)
-                        val explained = c in seededExact || letterRuns(c).any { it in nameRuns }
-                        if (!explained) unexplained += "${f.path}: ${field.wire} flipped by the frame rule"
+            if (kind == CustomerTextMarkers.IdentityKind.NAME) {
+                val source = if (!n.text.isNullOrBlank()) n.text else n.contentDescription?.takeIf { it.isNotBlank() }
+                source?.let { CensusHash.canonical(it) }?.takeIf { !PiiShapes.containsMask(it) }
+                    ?.let { nameRuns += letterRuns(it, minLetters = 2) }
+            }
+        }
+        var flips = 0
+        val unexplained = mutableListOf<String>()
+        fun walk(n: UiNode, a: UiSkeletonNodeDto, b: UiSkeletonNodeDto) {
+            n.scrubbableStrings().forEach { (field, v) ->
+                if (v.isNullOrBlank()) return@forEach
+                if (a.text[field.wire] == TextSlot.WITHHELD && b.text[field.wire] != TextSlot.WITHHELD) {
+                    flips++
+                    val c = CensusHash.canonical(v)
+                    if (c !in seededExact && letterRuns(c).none { it in nameRuns }) {
+                        unexplained += "$path: ${field.wire} flipped by the frame rule"
                     }
                 }
-                n.children.indices.forEach { walk(n.children[it], on.children[it], offNode.children[it]) }
             }
-            walk(f.tree, item.root, off.root)
+            n.children.indices.forEach { walk(n.children[it], a.children[it], b.children[it]) }
         }
-        println("frame-rule flips across the corpus: $flips")
+        walk(tree, on.root, off.root)
+        return flips to unexplained
+    }
+
+    /** QQ1's third substitution family: a BARE first name in name masks (not caught per field). */
+    private fun barePseudonym(mask: String): String =
+        if (mask.startsWith("[redacted") || mask == "[name]") "Jordan" else pseudonym(mask, 0)
+
+    /**
+     * Hand-written guard inputs (QQ1): the frame-rule shapes, with RAW pseudonyms, so the guard fires even
+     * though the committed corpus (masked) and its pseudonym substitutions produce no frame-rule flips.
+     */
+    private val guardFixtures: List<Pair<String, UiNode>> = listOf(
+        // AA1: a raw pseudonym repeated beside a `customer_name` (exact + run containment).
+        "aa1" to UiNode(
+            className = "android.widget.LinearLayout",
+            viewIdResourceName = "com.doordash.driverapp:id/contact_row",
+            contentDescription = "Jordan",
+            children = listOf(
+                UiNode(className = "android.widget.TextView", viewIdResourceName = "com.doordash.driverapp:id/customer_name", text = "Jordan"),
+                UiNode(className = "android.widget.TextView", text = "Jordan's order"),
+                UiNode(className = "android.widget.TextView", text = "Call Jordan"),
+                UiNode(className = "android.widget.TextView", text = "Leave at door"),
+            ),
+        ),
+        // PP2: a NAME rendered only in its desc.
+        "desc-only-name" to UiNode(
+            className = "android.widget.LinearLayout",
+            viewIdResourceName = "com.doordash.driverapp:id/contact_row",
+            children = listOf(
+                UiNode(className = "android.widget.ImageView", viewIdResourceName = "com.doordash.driverapp:id/user_name", contentDescription = "Morgan"),
+                UiNode(className = "android.widget.TextView", text = "Morgan, 2 items"),
+                UiNode(className = "android.widget.TextView", text = "Continue"),
+            ),
+        ),
+        // LL1 / PP6: an ADDRESS and an EXACT id seed their exact values only.
+        "exact-seeds" to UiNode(
+            className = "android.widget.LinearLayout",
+            viewIdResourceName = "com.doordash.driverapp:id/sheet",
+            children = listOf(
+                UiNode(className = "android.widget.TextView", viewIdResourceName = "com.doordash.driverapp:id/address_line_1", text = "Bay View Commons"),
+                UiNode(className = "android.widget.TextView", text = "Bay View Commons"),
+                UiNode(className = "android.widget.TextView", text = "View details"),
+                UiNode(className = "android.widget.TextView", viewIdResourceName = "com.doordash.driverapp:id/tvTitle", text = "Riley"),
+                UiNode(className = "android.widget.ImageView", contentDescription = "Riley"),
+            ),
+        ),
+    ).map { (name, tree) -> name to tree.restoreParents() }
+
+    @Test
+    fun `the frame-level rule flips no chrome slot to withheld (reviews OO2, QQ1)`() {
+        val unexplained = mutableListOf<String>()
+        var committedFlips = 0
+        var substitutedFlips = 0
+        var bareFlips = 0
+        for ((f, _) in built) {
+            val (n, u) = frameFlips(f.path, platformOf(f.path), f.tree)
+            committedFlips += n
+            unexplained += u
+            // QQ1: substitute RAW identity values back into the mask slots, so seeding actually happens.
+            // (b)'s two families ("Jordan T" / "Morgan K" …) are caught per FIELD by the name shape, so
+            // they never exercise the frame rule; a third, BARE-first-name family ("Jordan" / "Morgan" in
+            // name masks — a realistic `user_name` render) is caught only by the frame rule's seeding.
+            if (corpusHasNoMask(f.tree)) continue
+            for (variant in 0..2) {
+                val substituted = mapTree(f.tree) { s ->
+                    s?.let { MASK_TOKEN.replace(it) { m -> if (variant == 2) barePseudonym(m.value) else pseudonym(m.value, variant) } }
+                }
+                val (sn, su) = frameFlips("${f.path}#v$variant", platformOf(f.path), substituted)
+                if (variant == 2) bareFlips += sn else substitutedFlips += sn
+                unexplained += su
+            }
+        }
+        var handFlips = 0
+        for ((name, tree) in guardFixtures) {
+            val (n, u) = frameFlips("handwritten:$name", Platform.DoorDash, tree)
+            handFlips += n
+            unexplained += u
+        }
+        println("frame-rule flips: committed=$committedFlips substitutedB=$substitutedFlips bareNames=$bareFlips handwritten=$handFlips")
         assertTrue(unexplained.take(20).joinToString("\n"), unexplained.isEmpty())
+        // The guard must never go vacuous again: it has to see real seeding.
+        // The guard must never go vacuous again. The committed corpus is masked and its substitutions are
+        // caught per field (only one committed fixture has an id-less mask beside a masked NAME, and that
+        // one is marker-led), so the floor is pinned on the hand-written shapes: AA1 (3) + desc-only
+        // name (1) + the ADDRESS and EXACT exact duplicates (2).
+        assertEquals("hand-written frame-rule flips", 6, handFlips)
     }
 
     @Test
