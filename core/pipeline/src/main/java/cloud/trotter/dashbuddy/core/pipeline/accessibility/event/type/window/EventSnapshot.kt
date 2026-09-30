@@ -63,51 +63,80 @@ internal fun AccessibilitySource.snapshotForEvent(
     } else {
         null
     }
-    val activeWindow = windows?.let { activeFromEnumeration(it) }
-    val enumeratedRoot = activeWindow?.let { rootOf(it) }
-    // The one fallback (FF2): no flagged window / unreadable root → rootInActiveWindow, no overlay scan.
-    val activeRoot = enumeratedRoot ?: getLiveNativeRoot()
-    if (activeRoot == null) {
-        Timber.tag("Pipeline").v("🚫 Skip: no active root (event window=%d pkg=%s)", windowId, eventPackage)
-        return EventSnapshot.Skipped(ForegroundSkipReason.NO_ACTIVE_ROOT)
-    }
-    val activePkg = activeRoot.packageName?.toString()
-    val snapshot = if (isEnabled(activePkg)) {
-        val overlay = if (windows != null && activeWindow != null && enumeratedRoot != null) {
+    // PR #1155 review HH1: ONE three-valued active resolution, shared with the topology path.
+    val resolution = windows?.let { resolveActive(it, isEnabled) }
+    val snapshot = when {
+        resolution is AccessibilitySource.ActiveWindow.Enabled ||
+            (resolution is AccessibilitySource.ActiveWindow.Unknown && resolution.window != null) -> {
+            val list = windows
+            val activeWindow = when (resolution) {
+                is AccessibilitySource.ActiveWindow.Enabled -> resolution.window
+                is AccessibilitySource.ActiveWindow.Unknown -> resolution.window!!
+            }
+            // HH1: the overlay scan runs off the active WINDOW's layer — it never needs the root, so
+            // it runs even when that root is unreadable (an enabled overlay above is the frame).
             onOverlayScan()
-            when (val scan = overlayFront(windows, activeWindow, isEnabled)) {
-                AccessibilitySource.OverlayScan.None -> null
-                is AccessibilitySource.OverlayScan.Overlay -> scan.located
+            when (val scan = overlayFront(list, activeWindow, isEnabled)) {
                 is AccessibilitySource.OverlayScan.Refused -> {
                     Timber.tag("Pipeline").v("🚫 Skip: overlay scan refused %s (event window=%d)", scan.reason, windowId)
                     return EventSnapshot.Skipped(scan.reason)
                 }
+                // PR #1155 review DD1 (reverses BB9): the walk SELECTED an overlay — a map failure does
+                // not prove it left, and reading the covered window beneath would re-open the
+                // interleave. The frame is skipped `MAP_FAILED` (retried on the next).
+                is AccessibilitySource.OverlayScan.Overlay ->
+                    getWindowSnapshot(scan.located.window, scan.located.root, scan.located.totalWindowCount)
+                AccessibilitySource.OverlayScan.None -> when (resolution) {
+                    is AccessibilitySource.ActiveWindow.Enabled -> getCurrentRootSnapshot(resolution.root)
+                    else -> {
+                        // HH1: the flagged active window's root is unreadable and no overlay is in
+                        // front — skip (the topology path emits nothing for the same case).
+                        Timber.tag("Pipeline").v("🚫 Skip: active window root unreadable, no overlay in front (event window=%d)", windowId)
+                        return EventSnapshot.Skipped(ForegroundSkipReason.FRONT_UNREADABLE)
+                    }
+                }
             }
-        } else {
-            null
         }
-        if (overlay != null) {
-            // PR #1155 review DD1 (reverses BB9): the walk SELECTED an overlay — a map failure does
-            // not prove it left, and reading the covered window beneath would re-open the interleave.
-            // The frame is skipped `MAP_FAILED` (retried on the next); "no overlay selected" is the
-            // only case that reads the active root.
-            getWindowSnapshot(overlay.window, overlay.root, overlay.totalWindowCount)
-        } else {
-            getCurrentRootSnapshot(activeRoot)
-        }
-    } else {
-        // Reuse THIS enumeration when there is one (FF1); else enumerate as #1148 did.
-        val front = if (windows != null) foregroundWindow(windows, isEnabled) else foregroundWindow(isEnabled)
-        when (front) {
-            is AccessibilitySource.Foreground.Refused -> {
-                Timber.tag("Pipeline").v(
-                    "🚫 Skip (pre-map): active pkg=%s not enabled, front refused %s (event window=%d pkg=%s)",
-                    activePkg, front.reason, windowId, eventPackage,
-                )
-                return EventSnapshot.Skipped(front.reason)
+        // Our bubble / the launcher / a disabled platform is active → the window in front (#1148 D4),
+        // over THIS enumeration.
+        resolution is AccessibilitySource.ActiveWindow.NotEnabled ->
+            when (val front = foregroundWindow(windows, isEnabled)) {
+                is AccessibilitySource.Foreground.Refused -> {
+                    Timber.tag("Pipeline").v(
+                        "🚫 Skip (pre-map): active window not enabled, front refused %s (event window=%d pkg=%s)",
+                        front.reason, windowId, eventPackage,
+                    )
+                    return EventSnapshot.Skipped(front.reason)
+                }
+                is AccessibilitySource.Foreground.Found ->
+                    getWindowSnapshot(front.located.window, front.located.root, front.located.totalWindowCount)
             }
-            is AccessibilitySource.Foreground.Found ->
-                getWindowSnapshot(front.located.window, front.located.root, front.located.totalWindowCount)
+        else -> {
+            // No overlay platform enabled (#1148 H4 — no enumeration), or no single flagged active
+            // window (FF2's one fallback): rootInActiveWindow, with NO overlay scan — pre-#1152.
+            val activeRoot = getLiveNativeRoot()
+            if (activeRoot == null) {
+                Timber.tag("Pipeline").v("🚫 Skip: no active root (event window=%d pkg=%s)", windowId, eventPackage)
+                return EventSnapshot.Skipped(ForegroundSkipReason.NO_ACTIVE_ROOT)
+            }
+            val activePkg = activeRoot.packageName?.toString()
+            if (isEnabled(activePkg)) {
+                getCurrentRootSnapshot(activeRoot)
+            } else {
+                // Reuse THIS enumeration when there is one (FF1); else enumerate as #1148 did.
+                val front = if (windows != null) foregroundWindow(windows, isEnabled) else foregroundWindow(isEnabled)
+                when (front) {
+                    is AccessibilitySource.Foreground.Refused -> {
+                        Timber.tag("Pipeline").v(
+                            "🚫 Skip (pre-map): active pkg=%s not enabled, front refused %s (event window=%d pkg=%s)",
+                            activePkg, front.reason, windowId, eventPackage,
+                        )
+                        return EventSnapshot.Skipped(front.reason)
+                    }
+                    is AccessibilitySource.Foreground.Found ->
+                        getWindowSnapshot(front.located.window, front.located.root, front.located.totalWindowCount)
+                }
+            }
         }
     } ?: return EventSnapshot.Skipped(ForegroundSkipReason.MAP_FAILED)
 

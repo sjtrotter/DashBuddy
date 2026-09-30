@@ -10,6 +10,7 @@ import cloud.trotter.dashbuddy.core.pipeline.accessibility.input.AccessibilitySo
 import cloud.trotter.dashbuddy.domain.settings.PlatformPreferences
 import cloud.trotter.dashbuddy.core.pipeline.accessibility.event.coalesce.coalesceByKey
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.FlowCollector
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.transform
@@ -76,15 +77,6 @@ class WindowsChangedPipeline @Inject constructor(
 
             val totalCount = windows.size
 
-            // PR #1155 review FF1/FF2: the active window comes from THIS enumeration (the one owner,
-            // `activeFromEnumeration`) — the same list every decision below runs over, and the same
-            // rule the event path applies, so nothing is reconciled. None flagged → nothing.
-            val active = source.activeFromEnumeration(windows)
-            if (active == null) {
-                stats.onTopologySkip(ForegroundSkipReason.NO_ACTIVE_ROOT) // FF4
-                Timber.tag("Pipeline").v("🚫 Windows: no (single) active window — nothing emitted")
-                return@transform
-            }
             val enabled = platformPreferences.enabledPackages.value
             fun trigger() = TreeSnapshot.Trigger(
                 reason = TreeSnapshot.Trigger.Reason.WINDOWS,
@@ -99,60 +91,72 @@ class WindowsChangedPipeline @Inject constructor(
                     TreeSnapshot(it.tree, it.packageName, it.windowContext, trigger())
                 }
 
+            val isEnabled: (String?) -> Boolean = { it in enabled }
             val ownPkg = source.ownPackage()
-            // FF5/GG1: the active root is resolved EXACTLY as the event path resolves it — a FRESH root
-            // fetched from the enumerated active window (`rootOf`), once per burst; its package is read
-            // off that root, never off the memoized package (a cached package must not bypass the
-            // readability check). Unreadable → nothing this burst: the content/state path owns the
-            // fallback frame (rootInActiveWindow, no overlay scan), so emitting an overlay here would
-            // disagree with it on the same list.
-            val activeRoot = source.rootOf(active)
-            if (activeRoot == null) {
-                stats.onTopologySkip(ForegroundSkipReason.FRONT_UNREADABLE)
-                Timber.tag("Pipeline").v("🚫 Windows: the active window's root is unreadable — nothing emitted")
-                return@transform
-            }
-            val activePkg = activeRoot.packageName?.toString()
-            if (ownPkg != null && activePkg == ownPkg) {
-                // H6: our bubble's layer is no cutoff — emit the window in front of the dasher.
-                // Reuse THIS enumeration (round 4): no second getWindows() per topology burst.
-                when (val front = source.foregroundWindow(windows, { it in enabled }, display)) {
-                    is AccessibilitySource.Foreground.Found ->
-                        snapshotOf(front.located.window, front.located.root)?.let { emit(it) }
-                    is AccessibilitySource.Foreground.Refused -> {
-                        stats.onTopologySkip(front.reason) // FF4: the topology path's own census
-                        Timber.tag("Pipeline").v("🚫 Windows: our window active, foreground refused %s", front.reason)
+            // PR #1155 review HH1: the SAME three-valued active resolution the event path uses, over
+            // THIS enumeration — a fresh root from the flagged window, never a memoized package, and a
+            // null package is never "not enabled".
+            when (val resolution = source.resolveActive(windows, isEnabled)) {
+                is AccessibilitySource.ActiveWindow.Unknown -> {
+                    val active = resolution.window
+                    if (active == null) {
+                        stats.onTopologySkip(ForegroundSkipReason.NO_ACTIVE_ROOT) // FF4
+                        Timber.tag("Pipeline").v("🚫 Windows: no (single) active window — nothing emitted")
+                        return@transform
+                    }
+                    // Flagged but unreadable: the overlay scan still runs off its LAYER (HH1). No
+                    // overlay in front → nothing (the event path skips FRONT_UNREADABLE for the same
+                    // list).
+                    emitOverlayOrNothing(source.overlayFront(windows, active, isEnabled, display), ::snapshotOf) {
+                        stats.onTopologySkip(ForegroundSkipReason.FRONT_UNREADABLE)
                     }
                 }
-                return@transform
-            }
-            // PR #1155 review CC2/CC3/DD3: at most ONE window, chosen by the SAME rules the event
-            // path applies, so the two paths never disagree:
-            // - active window ENABLED → the event path owns it (and never reads a non-active
-            //   application window above it), so only an OVERLAY winner is emitted
-            //   ([AccessibilitySource.overlayFront], the helper the event path calls);
-            // - active window not enabled (and not ours) → `frontAbove`'s single winner.
-            // Either way an unreadable window above is a BARRIER and a foreign app on top emits nothing.
-            if (activePkg in enabled) {
-                when (val scan = source.overlayFront(windows, active, { it in enabled }, display)) {
-                    is AccessibilitySource.OverlayScan.Overlay ->
-                        snapshotOf(scan.located.window, scan.located.root)?.let { emit(it) }
-                    is AccessibilitySource.OverlayScan.Refused -> {
-                        stats.onTopologySkip(scan.reason) // FF4
-                        Timber.tag("Pipeline").v("🚫 Windows: overlay scan refused %s", scan.reason)
+                is AccessibilitySource.ActiveWindow.Enabled ->
+                    // CC2/CC3/DD3: the event path owns the enabled active window (and never reads a
+                    // non-active application window above it), so only an OVERLAY winner is emitted.
+                    emitOverlayOrNothing(source.overlayFront(windows, resolution.window, isEnabled, display), ::snapshotOf) {}
+                is AccessibilitySource.ActiveWindow.NotEnabled -> {
+                    val isOwn = ownPkg != null && resolution.root?.packageName?.toString() == ownPkg
+                    // H6: our bubble's layer is no cutoff — the window in front of the dasher (over THIS
+                    // enumeration); another non-enabled window → `frontAbove`'s single winner. Either
+                    // way an unreadable window above is a BARRIER and a foreign app on top emits nothing.
+                    val front = if (isOwn) {
+                        source.foregroundWindow(windows, isEnabled, display)
+                    } else {
+                        source.frontAbove(windows, resolution.window, isEnabled, display)
                     }
-                    AccessibilitySource.OverlayScan.None ->
-                        Timber.tag("Pipeline").v("🚫 Windows: enabled active window, no overlay in front — nothing emitted")
-                }
-                return@transform
-            }
-            when (val front = source.frontAbove(windows, active, { it in enabled }, display)) {
-                is AccessibilitySource.Foreground.Found ->
-                    snapshotOf(front.located.window, front.located.root)?.let { emit(it) }
-                is AccessibilitySource.Foreground.Refused -> {
-                    stats.onTopologySkip(front.reason) // FF4
-                    Timber.tag("Pipeline").v("🚫 Windows: nothing emitted above the active window (%s)", front.reason)
+                    when (front) {
+                        is AccessibilitySource.Foreground.Found ->
+                            snapshotOf(front.located.window, front.located.root)?.let { emit(it) }
+                        is AccessibilitySource.Foreground.Refused -> {
+                            stats.onTopologySkip(front.reason) // FF4: the topology path's own census
+                            Timber.tag("Pipeline").v("🚫 Windows: nothing emitted in front (%s)", front.reason)
+                        }
+                    }
                 }
             }
         }
+
+    /**
+     * Emits the overlay a scan selected; counts a refusal in `topologySkip{…}`; on no overlay runs
+     * [onNone] (the unreadable-active case counts FRONT_UNREADABLE there, HH1).
+     */
+    private suspend fun FlowCollector<TreeSnapshot>.emitOverlayOrNothing(
+        scan: AccessibilitySource.OverlayScan,
+        snapshotOf: (AccessibilityWindowInfo, AccessibilityNodeInfo) -> TreeSnapshot?,
+        onNone: () -> Unit,
+    ) {
+        when (scan) {
+            is AccessibilitySource.OverlayScan.Overlay ->
+                snapshotOf(scan.located.window, scan.located.root)?.let { emit(it) }
+            is AccessibilitySource.OverlayScan.Refused -> {
+                stats.onTopologySkip(scan.reason) // FF4
+                Timber.tag("Pipeline").v("🚫 Windows: overlay scan refused %s", scan.reason)
+            }
+            AccessibilitySource.OverlayScan.None -> {
+                onNone()
+                Timber.tag("Pipeline").v("🚫 Windows: no overlay in front of the active window — nothing emitted")
+            }
+        }
+    }
 }

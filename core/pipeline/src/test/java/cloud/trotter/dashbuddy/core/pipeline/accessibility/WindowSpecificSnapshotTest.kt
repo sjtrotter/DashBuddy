@@ -958,27 +958,34 @@ class WindowSpecificSnapshotTest {
     )
 
     @Test
-    fun `GG1 - unreadable flagged active root, COLD cache - event path reads the fallback root, topology emits nothing`() {
+    fun `GG1, HH1 - unreadable flagged active root, COLD cache, enabled overlay above - BOTH paths yield the overlay`() {
         val dd = node(ddPkg, "dd")
         val activeWindow = window(3, 5, null, active = true)
         val h = harness(activeRoot = dd, windows = listOf(activeWindow, uberOverlay(9, 9, node(uberPkg, "uber-offer"))))
 
-        assertEquals(listOf("dd", "dd"), Kind.entries.flatMap { collect(h, it, windowId = 9, pkg = uberPkg) }.map { it.tree.text })
-        assertTrue(topologyFrames(h).isEmpty())
-        assertEquals(1L, h.stats.topologySkipCount(ForegroundSkipReason.FRONT_UNREADABLE))
-        assertEquals(0L, h.stats.overlaySnapshotCount())
+        assertEquals(listOf("uber-offer", "uber-offer"), Kind.entries.flatMap { collect(h, it, windowId = 3) }.map { it.tree.text })
+        assertEquals(listOf("uber-offer"), topologyFrames(h).map { it.tree.text })
     }
 
     @Test
-    fun `GG1 - unreadable flagged active root, WARM cache - the memoized package never bypasses the fresh-root check`() {
+    fun `GG1, HH1 - unreadable flagged active root, WARM cache - the memoized package never bypasses the fresh-root check`() {
         val dd = node(ddPkg, "dd", windowId = 3)
         val activeWindow = window(3, 5, dd, active = true)
         val h = harness(activeRoot = dd, windows = listOf(activeWindow, uberOverlay(9, 9, node(uberPkg, "uber-offer"))))
-        // Warm the cache: a readable frame records window 3 → DoorDash (the overlay above is the frame).
-        assertEquals(listOf("uber-offer"), collect(h, Kind.STATE, windowId = 3).map { it.tree.text })
+        assertEquals(listOf("uber-offer"), collect(h, Kind.STATE, windowId = 3).map { it.tree.text }) // warms window 3 → DoorDash
 
         whenever(activeWindow.root).thenReturn(null) // the active window's root is now unreadable
-        assertEquals(listOf("dd"), collect(h, Kind.STATE, windowId = 9, pkg = uberPkg).map { it.tree.text }) // fallback root
+        assertEquals(listOf("uber-offer"), collect(h, Kind.STATE, windowId = 3).map { it.tree.text })
+        assertEquals(listOf("uber-offer"), topologyFrames(h).map { it.tree.text })
+    }
+
+    @Test
+    fun `HH1 - unreadable flagged active root, NO overlay above - the event path skips, the topology path emits nothing`() {
+        val dd = node(ddPkg, "dd")
+        val h = harness(activeRoot = dd, windows = listOf(window(3, 5, null, active = true), window(4, 2, node(ddPkg, "dd-below"))))
+
+        assertTrue("never the rootInActiveWindow fallback while a flagged window is unreadable", collect(h, Kind.STATE, windowId = 3).isEmpty())
+        h.skipped(ForegroundSkipReason.FRONT_UNREADABLE)
         assertTrue(topologyFrames(h).isEmpty())
         assertEquals(1L, h.stats.topologySkipCount(ForegroundSkipReason.FRONT_UNREADABLE))
     }

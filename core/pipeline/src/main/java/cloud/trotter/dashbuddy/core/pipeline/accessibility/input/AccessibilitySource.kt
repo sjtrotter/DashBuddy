@@ -153,6 +153,29 @@ class AccessibilitySource @Inject constructor(
     fun activeFromEnumeration(windows: List<AccessibilityWindowInfo>): AccessibilityWindowInfo? =
         windows.filter { it.isActive }.singleOrNull()
 
+    /**
+     * PR #1155 review HH1 — the ONE three-valued active resolution, shared by the event path
+     * (`snapshotForEvent`) and the topology path, so they can never disagree on one list:
+     * - [Enabled] / [NotEnabled] — the single flagged window ([activeFromEnumeration]) whose FRESH
+     *   root ([rootOf]) is readable with a non-null package, split by `isEnabled(package)`;
+     * - [Unknown] with a [Unknown.window] — flagged, but its root is unreadable or package-less (never
+     *   treated as "not enabled"); the overlay scan still runs off the window's LAYER;
+     * - [Unknown] with no window — none flagged, or ≥ 2 (a transition in flight, HH2).
+     */
+    sealed interface ActiveWindow {
+        data class Enabled(val window: AccessibilityWindowInfo, val root: AccessibilityNodeInfo) : ActiveWindow
+        data class NotEnabled(val window: AccessibilityWindowInfo, val root: AccessibilityNodeInfo?) : ActiveWindow
+        data class Unknown(val window: AccessibilityWindowInfo?) : ActiveWindow
+    }
+
+    /** [ActiveWindow] over ONE enumeration — see its KDoc (HH1). */
+    fun resolveActive(windows: List<AccessibilityWindowInfo>, isEnabled: (String?) -> Boolean): ActiveWindow {
+        val window = activeFromEnumeration(windows) ?: return ActiveWindow.Unknown(null)
+        val root = rootOf(window) ?: return ActiveWindow.Unknown(window)
+        val pkg = root.packageName?.toString() ?: return ActiveWindow.Unknown(window)
+        return if (isEnabled(pkg)) ActiveWindow.Enabled(window, root) else ActiveWindow.NotEnabled(window, root)
+    }
+
     data class LiveRoots(
         val active: AccessibilityNodeInfo?,
         val roots: List<AccessibilityNodeInfo>,
