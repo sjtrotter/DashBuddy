@@ -892,9 +892,14 @@ class UiInteractionHandlerOwnerTest {
     /** Node-budget exhaustion that drops one of the row's own children makes the bind incomplete. */
     @Test
     fun `a mapper node-budget cut of the row's child makes the bind incomplete`() = runTest {
-        val big = view(children = List(TreeLimits.MAX_TREE_NODES) { filler() })
-        val row = view(clickable = true, desc = "Row", children = listOf(big, view(cls = "android.widget.TextView", text = "This offer")))
-        val root = windowRoot(row)
+        // Pre-order admission: root + big + 3 996 fillers + row + its title = exactly MAX_TREE_NODES, so
+        // the row's SECOND child is the first node the budget refuses (its first child is fully read —
+        // without N6 the row would look complete: one slot, well under the label cap).
+        val big = view(children = List(TreeLimits.MAX_TREE_NODES - 4) { filler() })
+        val row = view(clickable = true, desc = "Row", children = listOf(
+            view(cls = "android.widget.TextView", text = "This offer"), view(desc = "Details"),
+        ))
+        val root = windowRoot(big, row)
         val rowUi = root.toUiNode()!!.findNodes { it.contentDescription == "Row" }.single()
         assertFalse(bindRefOf(rowUi).labelHintsComplete)
     }
