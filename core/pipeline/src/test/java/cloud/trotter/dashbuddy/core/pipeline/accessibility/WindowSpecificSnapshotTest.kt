@@ -867,4 +867,28 @@ class WindowSpecificSnapshotTest {
         assertEquals(listOf("dd"), collect(h, Kind.STATE).map { it.tree.text })
         verify(shadeWindow, times(2)).root // the first walk's NOT_OVERLAY_PLATFORM was stale → never memoized
     }
+
+    @Test
+    fun `DD10 - a corrected memo whose fresh package IS an enabled overlay platform is used - the overlay, not beneath`() {
+        val bubble = node(ownPkg, "bubble")
+        val uber = node(uberPkg, "uber-offer")
+        val other = "com.example.other"
+        val h = harness(
+            activeRoot = bubble,
+            windows = listOf(window(1, 10, bubble, active = true), uberOverlay(9, 9, uber), window(3, 2, node(ddPkg, "dd"))),
+            enabled = setOf(ddPkg, uberPkg, other),
+        )
+        // Seed a STALE memoized CANDIDATE naming another (enabled) package for the overlay's id.
+        val field = AccessibilitySource::class.java.getDeclaredField("packageCache").apply { isAccessible = true }
+        val cache = field.get(h.source) as cloud.trotter.dashbuddy.core.pipeline.accessibility.input.WindowVerdictCache
+        val b = OverlayGeometry.UBER_OFFER
+        cache.putVerdict(
+            9, other, cloud.trotter.dashbuddy.core.pipeline.accessibility.input.WindowVerdictCache.Verdict.CANDIDATE,
+            cloud.trotter.dashbuddy.core.pipeline.accessibility.input.WindowVerdictCache.Bounds(b.left, b.top, b.right, b.bottom),
+            OverlayGeometry.DISPLAY_W.toLong() * OverlayGeometry.DISPLAY_H, cache.generation,
+        )
+
+        assertEquals(listOf("uber-offer"), collect(h, Kind.STATE).map { it.tree.text })
+        assertEquals(1L, h.stats.overlayRejectedCount(OverlayRejectReason.PACKAGE_CHANGED))
+    }
 }

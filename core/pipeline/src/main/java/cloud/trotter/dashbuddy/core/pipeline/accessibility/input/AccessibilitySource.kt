@@ -319,7 +319,7 @@ class AccessibilitySource @Inject constructor(
                         if (!isEnabled(probe.packageName)) continue
                         // CC10: null → the memo was stale (the fresh root names another package) —
                         // corrected; this window is not an overlay after all, keep walking.
-                        verdict = decideOverlay(w, probe, total, gen, budget, displayArea) ?: continue
+                        verdict = decideOverlay(w, probe, total, gen, budget, displayArea, isEnabled) ?: continue
                     }
                 }
                 break // the first candidate (or an unverifiable one) decides
@@ -363,8 +363,10 @@ class AccessibilitySource @Inject constructor(
      * PR #1155 review CC10: a fresh root naming a DIFFERENT package means the memoized verdict was
      * stale — the memo is CORRECTED from the fresh root (so the next frame does not re-fetch and
      * refuse again), the refusal is counted truthfully as `overlayRejected{PACKAGE_CHANGED}` (never
-     * `FRONT_NOT_ENABLED`), and null tells the walk "not an overlay after all — keep walking". A
-     * fresh root with no package cannot be verified → refuse unreadable.
+     * `FRONT_NOT_ENABLED`); DD10: when the fresh package is itself an ENABLED overlay platform's the
+     * corrected memo is used at once (Found on the fresh root), otherwise null tells the walk "not an
+     * overlay after all — keep walking" (a disabled one is skipped, BB6). A fresh root with no
+     * package cannot be verified → refuse unreadable.
      */
     private fun decideOverlay(
         w: AccessibilityWindowInfo,
@@ -373,6 +375,7 @@ class AccessibilitySource @Inject constructor(
         gen: Long,
         budget: ScanBudget,
         displayArea: Long,
+        isEnabled: (String?) -> Boolean,
     ): Foreground? {
         // PR #1155 review DD4: EVERY root fetch in a walk is charged — a memoized CANDIDATE carries
         // no root, so its revalidation fetch counts against the budget too.
@@ -390,6 +393,12 @@ class AccessibilitySource @Inject constructor(
                 WindowVerdictCache.Verdict.NOT_OVERLAY_PLATFORM
             }
             packageCache.putVerdict(w.id, live, corrected, boundsOf(w), displayArea, gen)
+            // PR #1155 review DD10: a corrected memo is USED — if the fresh root is itself an enabled
+            // overlay platform's, this IS the overlay in front (never read beneath a live overlay).
+            // The fetch that found it was already charged (DD4).
+            if (corrected == WindowVerdictCache.Verdict.CANDIDATE && isEnabled(live)) {
+                return Foreground.Found(LocatedWindow(w, root, total, isOverlay = true))
+            }
             return null
         }
         return Foreground.Found(LocatedWindow(w, root, total, isOverlay = true))
