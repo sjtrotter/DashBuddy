@@ -987,4 +987,17 @@ class UiInteractionHandlerOwnerTest {
         assertTrue(expand(handler(windowRoot(iconPanel, row))))
         row.clicks(1)
     }
+
+    /** R2: one text cap on both sides — a 4 096-space description + "Primary" is blank at bind AND live. */
+    @Test
+    fun `the text cap is applied identically at bind and at fire`() = runTest {
+        val padded = " ".repeat(cloud.trotter.dashbuddy.domain.pipeline.UiTextBounds.MAX_TEXT_LENGTH) + "Primary"
+        val row = view(clickable = true, bounds = Rect(36, 1374, 1044, 1500), children = listOf(
+            view(cls = "android.widget.TextView", text = "This offer"), view(desc = padded),
+        ))
+        val ref = bindRef(row)
+        assertEquals(listOfNotNull(NodeRef.hintHash("This offer")), ref.labelHintHashes)
+        assertTrue(expand(handler(windowRoot(row)), ref))
+        row.clicks(1)
+    }
 }

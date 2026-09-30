@@ -808,6 +808,6 @@ internal suspend fun awaitLiveRoots(
 
 /** A live node's own non-blank text and contentDescription — the [LabelNode.ownLabels] of both fire-time adapters. */
 private fun ownLabelsOf(node: AccessibilityNodeInfo): List<String> = listOfNotNull(
-    node.text?.toString()?.takeIf { it.isNotBlank() },
-    node.contentDescription?.toString()?.takeIf { it.isNotBlank() },
-)
+    node.text?.toString(),
+    node.contentDescription?.toString(),
+) // raw: LabelHorizon caps then blank-filters (#1149 R2)

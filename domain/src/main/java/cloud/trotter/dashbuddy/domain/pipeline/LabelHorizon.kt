@@ -7,8 +7,18 @@ import cloud.trotter.dashbuddy.domain.model.accessibility.UiNode
  * (bind time, [UiLabelNode]) and, in `:app`, for a live `AccessibilityNodeInfo` (fire time: the
  * post-refresh verification scan, and the strategy-2b walk's already-fetched nodes).
  */
+/**
+ * #1149 review R2 — the ONE per-string cap on third-party text (#590), shared by the mapper's ingestion
+ * (`capText`) and the label horizon's normalization, so bind and fire see the same string: a 4 096-space
+ * description followed by "Primary" is blank on BOTH sides, not blank at bind and "Primary" live.
+ */
+object UiTextBounds {
+    const val MAX_TEXT_LENGTH = 4_096
+    fun cap(s: String): String = if (s.length <= MAX_TEXT_LENGTH) s else s.take(MAX_TEXT_LENGTH)
+}
+
 interface LabelNode {
-    /** This node's own non-blank text and contentDescription, in that order. */
+    /** This node's own text and contentDescription, raw (non-null), in that order — [LabelHorizon] caps and blank-filters them (R2). */
     val ownLabels: List<String>
 
     /** `UiNode.takesClick` / `AccNodeUtils.isActionClickable` — a descendant that does is its own control. */
@@ -48,7 +58,8 @@ object LabelHorizon {
         var fetched = 0
         var complete = true
         fun visit(n: LabelNode, depth: Int): Boolean {
-            labels.addAll(n.ownLabels)
+            // R2: cap, THEN blank-filter (hintKeyOrNull trims later) — the mapper's exact order.
+            for (raw in n.ownLabels) UiTextBounds.cap(raw).takeIf { it.isNotBlank() }?.let(labels::add)
             if (depth >= NodeRef.LABEL_SCAN_DEPTH) return true // the horizon, not a cut
             if (n.unreadableChildren > 0) complete = false
             val kids = n.children()
@@ -70,10 +81,7 @@ object LabelHorizon {
 
 /** The bind-time [LabelNode]: a mapped [UiNode] (foreign / unreadable stamped by the mapper, L3/L4/N6). */
 class UiLabelNode(private val node: UiNode) : LabelNode {
-    override val ownLabels: List<String> get() = listOfNotNull(
-        node.text?.takeIf { it.isNotBlank() },
-        node.contentDescription?.takeIf { it.isNotBlank() },
-    )
+    override val ownLabels: List<String> get() = listOfNotNull(node.text, node.contentDescription)
     override val takesClick: Boolean get() = node.takesClick
     override val foreign: Boolean get() = node.foreignPackage
     override val unreadableChildren: Int get() = node.unreadableChildren

@@ -80,7 +80,7 @@ internal class TreeBudget(
          * `endsWith` on short snippets, so the cap is behavior-free there while
          * closing the same balloon-capture threat for a hostile mocked value).
          */
-        const val MAX_TEXT_LENGTH = 4_096
+        const val MAX_TEXT_LENGTH = cloud.trotter.dashbuddy.domain.pipeline.UiTextBounds.MAX_TEXT_LENGTH // one owner (#1149 R2)
     }
 }
 
@@ -103,7 +103,7 @@ fun AccessibilityNodeInfo?.toUiNode(): UiNode? {
  * cap, so every real screen string is untouched.
  */
 private fun String.capText(): String =
-    if (length <= TreeBudget.MAX_TEXT_LENGTH) this else take(TreeBudget.MAX_TEXT_LENGTH)
+    cloud.trotter.dashbuddy.domain.pipeline.UiTextBounds.cap(this) // #1149 R2: the shared cap
 
 private fun convert(
     node: AccessibilityNodeInfo,
