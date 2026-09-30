@@ -22,8 +22,9 @@
 package cloud.trotter.dashbuddy.domain.census.contract
 
 /**
- * Golden vectors for [CensusFingerprint] (ADR-0011 §8), shared by the client tests and the census
- * server (#1157). The pinned hex values were computed by an INDEPENDENT implementation of the §8 byte
+ * Golden vectors for [CensusFingerprint] (ADR-0011 §8). They live with the contract's TESTS (#1160
+ * review GG9 — never shipped in the APK); a future server consumer (#1157) takes them as a published
+ * test-fixtures artifact. The pinned hex values were computed by an INDEPENDENT implementation of the §8 byte
  * form (a short Python script, not this Kotlin), so they check the algorithm, not a snapshot of it.
  * Regenerated for the length-prefixed encoding (#1160 review AA2).
  *

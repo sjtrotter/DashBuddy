@@ -21,7 +21,10 @@
  */
 package cloud.trotter.dashbuddy.domain.census.contract
 
-/** Golden vectors for [ResourceIdGrammar] (ADR-0011 §1), shared with the census server (#1157). */
+/**
+ * Golden vectors for [ResourceIdGrammar] (ADR-0011 §1). They live with the contract's TESTS (#1160 review
+ * GG9); the census server (#1157) takes them as a published test-fixtures artifact.
+ */
 object ResourceIdGrammarVectors {
 
     /** Static ids (from the committed corpus, digit-bearing ones included) — shipped in the clear. */

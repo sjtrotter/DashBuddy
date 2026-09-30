@@ -22,8 +22,9 @@
 package cloud.trotter.dashbuddy.domain.census.contract
 
 /**
- * Golden vectors for [KindClassifier.shapeKind] (ADR-0011 §1) — shared by the client tests AND the
- * census server (#1157), so the two implementations of the grammar cannot disagree silently.
+ * Golden vectors for [KindClassifier.shapeKind] (ADR-0011 §1). They live with the contract's TESTS
+ * (#1160 review GG9 — never shipped in the APK); the census server (#1157) takes them as a published
+ * test-fixtures artifact, so the two implementations of the grammar cannot disagree silently.
  *
  * Each vector is the trimmed, capped INPUT and the SHAPE kind the grammar yields for it. The shape is
  * not always what is emitted: the §2 filter may still withhold (e.g. `Apt 12` is `mixed` by shape and
