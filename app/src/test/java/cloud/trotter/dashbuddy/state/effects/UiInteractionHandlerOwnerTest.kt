@@ -855,4 +855,21 @@ class UiInteractionHandlerOwnerTest {
         assertTrue(expand(handler(windowRoot(row)), ref))
         row.clicks(1)
     }
+
+    /** N5: a foreign id-less control carrying "This offer" never yields an exact fingerprint (a foreign node is never an owner). */
+    @Test
+    fun `a foreign control never yields an exact fingerprint`() = runTest {
+        val foreign = view(clickable = true, desc = "This offer", packageName = "com.example.other")
+        val root = windowRoot(foreign)
+        val ref = bindRefOf(root.toUiNode()!!.findNodes { it.contentDescription == "This offer" }.single())
+        assertFalse(ref.hasExactFingerprint)
+        assertTrue(ref.labelHintHashes.isEmpty())
+
+        // ...nor does a same-package label whose owner walk would cross into a foreign clickable.
+        val inner = view(cls = "android.widget.TextView", text = "This offer")
+        val foreignOwner = view(clickable = true, packageName = "com.example.other", children = listOf(inner))
+        val root2 = windowRoot(foreignOwner)
+        val ref2 = bindRefOf(root2.toUiNode()!!.findNodes { it.text == "This offer" }.single())
+        assertFalse(ref2.hasExactFingerprint)
+    }
 }

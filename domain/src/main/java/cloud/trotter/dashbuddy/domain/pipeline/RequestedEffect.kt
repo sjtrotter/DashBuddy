@@ -142,14 +142,25 @@ data class NodeRef(
          * #1149 review L2 — the bind-time fingerprint is the ACTION OWNER's, like the fire-time one: the
          * bound node's nearest [UiNode.takesClick] self-or-ancestor (at most [MAX_OWNER_WALK] steps).
          * Its label region is hashed, its completeness recorded, and its class returned as the 2b
-         * class filter. No owner → hints from the bound node, never complete (no 2b).
+         * class filter. No owner → hints from the bound node, never complete (no 2b). A foreign bound
+         * node or owner walk (review N5) → no hints, never complete.
          */
         fun bindHintsOf(bound: cloud.trotter.dashbuddy.domain.model.accessibility.UiNode): BindHints {
-            var owner: cloud.trotter.dashbuddy.domain.model.accessibility.UiNode? = bound
+            // N5: a foreign node is never an owner and is never crossed. A bound node that is itself
+            // foreign, or whose owner walk would reach/cross a foreign node, yields NO hints and is
+            // never complete (no 2b) — the executor would never read or tap there anyway.
+            val none = BindHints(emptyList(), complete = false, ownerClassHint = null)
+            if (bound.foreignPackage) return none
+            var owner: cloud.trotter.dashbuddy.domain.model.accessibility.UiNode = bound
             var steps = 0
             // N4: self + (MAX_OWNER_WALK - 1) parents — exactly what the live resolveActionOwner inspects.
-            while (owner != null && !owner.takesClick && steps < MAX_OWNER_WALK - 1) { owner = owner.parent; steps++ }
-            val found = owner?.takeIf { it.takesClick }
+            while (!owner.takesClick && steps < MAX_OWNER_WALK - 1) {
+                val parent = owner.parent ?: break
+                if (parent.foreignPackage) return none
+                owner = parent
+                steps++
+            }
+            val found = owner.takeIf { it.takesClick }
             val scan = hintLabelsOf(found ?: bound)
             val hashes = scan.labels.asSequence().mapNotNull(::hintHash).distinct().take(MAX_LABEL_HINTS).toList()
             return BindHints(hashes, complete = found != null && scan.complete, ownerClassHint = found?.className)
