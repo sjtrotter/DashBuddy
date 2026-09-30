@@ -112,7 +112,17 @@ so the RE2J surface is unchanged) and the boolean flags `isVisibleToUser`, `isSe
 are NOT in `allText`, so `hasAnyText*` never sees them — a rule opts in through these keys only. There
 is deliberately NO predicate for `uniqueId`, tooltip, error, live region or collection indices
 (unverified or reorder-unstable identity); naming one is the ordinary unknown-key reject. No shipped
-rule uses them yet — each adoption is a corpus-gated follow-up per surface.
+rule uses them yet — each adoption is a corpus-gated follow-up per surface. **The flags default to
+their dominant value on deserialization** (`isVisibleToUser` true; `hasClickAction`, `isSelected`,
+`isCheckable`, `isHeading` false), so every pre-#1147 fixture is INDISTINGUISHABLE from an observed
+node with that value: a rule adopting `isVisibleToUser`/`hasClickAction`/`isSelected`/`isCheckable`/
+`isHeading` must ship post-#1147 corpus behind it (the parse-golden discipline for new intents
+applies), or the old corpus "passes" on a default it never observed (review W5).
+`hasClickActionLabel` is also bind-safe: the click-action label is a LABEL on both sides of the
+#1149 label horizon (`UiLabelNode` / `ownLabelsOf`), so a text-less control bound by it carries a
+provable fingerprint (review W3). **Value types are strict (review X3):** a string predicate takes
+only a JSON string and a flag only an unquoted JSON boolean — `null`, a number or `"true"` fails
+the load, for every predicate old and new.
 Rules also carry `require` predicates, `bind` blocks, `parse`
 blocks that produce typed fields via `ParsedFieldsFactory`, and an optional `redact` block
 (#598) — node predicates whose matched text is masked in the capture envelope (a screen rule

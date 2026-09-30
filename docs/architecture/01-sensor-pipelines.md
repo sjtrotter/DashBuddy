@@ -208,7 +208,17 @@ the scrub contract; no text): `isVisibleToUser` (`visible`, default true), `isFo
 `02-rule-engine.md`). Two whole-node masks — `CompiledRedact`'s `RegexEvaluationFailed` fallback and
 `CustomerTextMarkers.scrubUnknown`'s id hit — now leave an ABSENT (null) field absent instead of
 stamping `[redacted]` into it (nothing to leak; no phantom `pane`/`uid`/… keys); every present value
-is still masked whole. The TalkBack receipt the fields rest on: **no hidden Compose identifier
+is still masked whole. **Scan order is frozen (review X1):** `allScrubbableText()` returns the PRE-#1147
+projection (`UiNodeTextField.LEGACY_SCAN_ORDER` = text, desc, state — every node, DFS) FIRST and the
+new fields AFTER it, because `SensitiveTextMarkers` joins the stream and relies on sibling adjacency
+(`"Transfer"` | `"$45.66"`); interleaving a role between them split the transfer shape and offered the
+capture. **Recognized clicks are text-marker scrubbed too (review X2):** the old premise "a
+rule-matched click is an app-vocabulary button whose labels carry no PII" held for text/desc, not for
+a Compose button's click-action label / hint / tooltip, so `CaptureWriter.captureClick` now runs the
+`CustomerTextMarkers` text scrub on EVERY click envelope (byte-identical unless a marker hits;
+`ID_MARKERS` stays UNKNOWN-only). **The click label is a bind label (review W3):** `UiLabelNode` and
+the fire-time `ownLabelsOf` both add it (one live read, `NodeClick.clickActionLabelOrNull`, no IPC).
+The corpus-wide additive claim is pinned by `CorpusNodeFieldsAdditiveTest` (X4). The TalkBack receipt the fields rest on: **no hidden Compose identifier
 exists** — TalkBack has no `AndroidComposeView`/`testTag` handling; the best anchors for an id-less
 render are a named scope (pane title) + a label/action label + the semantic owner.
 

@@ -355,6 +355,8 @@ compiles, `ObservationClassifier` matches.
 - **#1147 node predicates:** `hasPaneTitle*`, `hasRoleDescription`, `hasClickActionLabel*`,
   `hasHintText*` and the flags `isVisibleToUser`/`isSelected`/`isCheckable`/`isHeading`/`hasClickAction`
   read the TalkBack-study fields (none in `allText`, no regex forms); no shipped rule uses them yet.
+  Predicate values are strictly typed (a string predicate takes only a JSON string, a flag only an
+  unquoted boolean — review X3).
 - **No actuation from rules (#425):** click/gesture verbs are compile-rejected; rules expose target
   bindings (`acceptButton`, `declineButton`, `expandButton`) that the app-owned `RuleAction` registry
   consumes (`docs/design/rule-capability-consent.md`).
