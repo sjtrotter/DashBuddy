@@ -3,6 +3,7 @@ package cloud.trotter.dashbuddy.core.pipeline.accessibility.input
 import android.accessibilityservice.AccessibilityService
 import android.view.accessibility.AccessibilityNodeInfo
 import android.view.accessibility.AccessibilityWindowInfo
+import cloud.trotter.dashbuddy.core.pipeline.accessibility.ForegroundSkipReason
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
@@ -151,7 +152,7 @@ class AccessibilitySourceWindowRootsTest {
         }
         val source = sourceFor(service)
 
-        val located = requireNotNull(source.foregroundWindow({ it == "com.doordash.driverapp" }))
+        val located = (source.foregroundWindow { it == "com.doordash.driverapp" } as AccessibilitySource.Foreground.Found).located
 
         assertEquals("highest-layer enabled window below our bubble (the IME is no candidate)", 7, located.window.id)
         assertSame(dialogRoot, located.root)
@@ -171,7 +172,10 @@ class AccessibilitySourceWindowRootsTest {
             on { windows } doReturn windowList
         }
 
-        assertNull(sourceFor(service).foregroundWindow({ it == "com.doordash.driverapp" }))
+        assertEquals(
+            AccessibilitySource.Foreground.Refused(ForegroundSkipReason.FRONT_NOT_ENABLED),
+            sourceFor(service).foregroundWindow { it == "com.doordash.driverapp" },
+        )
     }
 
     @Test

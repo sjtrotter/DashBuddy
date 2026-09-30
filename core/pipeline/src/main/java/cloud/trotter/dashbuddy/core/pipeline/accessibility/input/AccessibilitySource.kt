@@ -5,6 +5,7 @@ import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
 import android.view.accessibility.AccessibilityWindowInfo
 import cloud.trotter.dashbuddy.domain.model.accessibility.UiNode
+import cloud.trotter.dashbuddy.core.pipeline.accessibility.ForegroundSkipReason
 import cloud.trotter.dashbuddy.core.pipeline.accessibility.TreeSnapshot
 import cloud.trotter.dashbuddy.core.pipeline.accessibility.mapper.toUiNode
 import kotlinx.coroutines.channels.BufferOverflow
@@ -140,6 +141,12 @@ class AccessibilitySource @Inject constructor() {
         val totalWindowCount: Int,
     )
 
+    /** [foregroundWindow]'s verdict: the window in front, or why none is read (#1148 review H3). */
+    sealed interface Foreground {
+        data class Found(val located: LocatedWindow) : Foreground
+        data class Refused(val reason: ForegroundSkipReason) : Foreground
+    }
+
     /**
      * The window the dasher actually sees in FRONT, when a non-enabled window (our bubble, the
      * launcher, system UI) is the active one (#1148 review G5). Enumerated ONCE; each inspected
@@ -154,30 +161,38 @@ class AccessibilitySource @Inject constructor() {
      * binder fetch per frame). Overlays that surface as accessibility `TYPE_SYSTEM` (Android's
      * `TYPE_APPLICATION_OVERLAY`, e.g. Uber's offer overlay) are an open question: #1152.
      *
-     * The FIRST candidate decides — readable-top-or-refuse: a null root → null (fail closed: we
-     * cannot verify what is on top, so never fall through to a lower readable window); a package
-     * that fails [isEnabled] → null (another app is in front); else that window. Null when there is
-     * no candidate.
+     * The FIRST candidate decides — readable-top-or-refuse: a null root → [Foreground.Refused]
+     * `FRONT_UNREADABLE` (fail closed: we cannot verify what is on top, so never fall through to a
+     * lower readable window); a package that fails [isEnabled] → `FRONT_NOT_ENABLED` (another app is
+     * in front); else [Foreground.Found]. No candidate at all → `NO_CANDIDATE`.
      *
      * SAFE to call from background threads.
      */
-    fun foregroundWindow(isEnabled: (String?) -> Boolean): LocatedWindow? = try {
+    fun foregroundWindow(isEnabled: (String?) -> Boolean): Foreground = try {
         val ownPkg = serviceRef?.get()?.packageName
         val windows = getWindows()
         val ordered = windows
             .filter { it.type == AccessibilityWindowInfo.TYPE_APPLICATION && !it.isInPictureInPictureMode }
             .sortedByDescending { it.layer }
-        var located: LocatedWindow? = null
+        var verdict: Foreground = Foreground.Refused(ForegroundSkipReason.NO_CANDIDATE)
         for (w in ordered) {
-            val root = w.root ?: break // unreadable application window on top → refuse
+            val root = w.root
+            if (root == null) { // unreadable application window on top → refuse
+                verdict = Foreground.Refused(ForegroundSkipReason.FRONT_UNREADABLE)
+                break
+            }
             val pkg = root.packageName?.toString()
             if (ownPkg != null && pkg == ownPkg) continue // our own bubble is never "in front"
-            if (isEnabled(pkg)) located = LocatedWindow(w, root, windows.size)
+            verdict = if (isEnabled(pkg)) {
+                Foreground.Found(LocatedWindow(w, root, windows.size))
+            } else {
+                Foreground.Refused(ForegroundSkipReason.FRONT_NOT_ENABLED)
+            }
             break // the first candidate decides
         }
-        located
+        verdict
     } catch (_: Exception) {
-        null
+        Foreground.Refused(ForegroundSkipReason.FRONT_UNREADABLE)
     }
 
     /**

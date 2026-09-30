@@ -4,6 +4,7 @@ import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
 import cloud.trotter.dashbuddy.core.pipeline.accessibility.event.type.window.content_changed.ContentChangedPipeline
 import cloud.trotter.dashbuddy.core.pipeline.accessibility.event.type.window.state_changed.StateChangedPipeline
+import cloud.trotter.dashbuddy.core.pipeline.PipelineStats
 import cloud.trotter.dashbuddy.core.pipeline.accessibility.input.AccEvent
 import cloud.trotter.dashbuddy.core.pipeline.accessibility.input.AccessibilitySource
 import cloud.trotter.dashbuddy.domain.model.accessibility.UiNode
@@ -63,6 +64,8 @@ class PreMapPackageSkipTest {
         return mock {
             on { this.events } doReturn events
             on { getLiveNativeRoot() } doReturn activeRoot
+            on { foregroundWindow(any()) } doReturn
+                AccessibilitySource.Foreground.Refused(ForegroundSkipReason.FRONT_NOT_ENABLED)
             on { getCurrentRootSnapshot(any<AccessibilityNodeInfo>()) } doReturn snapshot
         }
     }
@@ -102,7 +105,7 @@ class PreMapPackageSkipTest {
         val source = sourceWith(events, activePkg = nonTargetPkg, snapshot = snapshotOf(nonTargetPkg))
 
         val emitted = collectWith(
-            events, ContentChangedPipeline(source, prefs).output(),
+            events, ContentChangedPipeline(source, prefs, PipelineStats()).output(),
             event(AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED),
         )
 
@@ -117,7 +120,7 @@ class PreMapPackageSkipTest {
         val source = sourceWith(events, activePkg = targetPkg, snapshot = snapshotOf(targetPkg))
 
         val emitted = collectWith(
-            events, ContentChangedPipeline(source, prefs).output(),
+            events, ContentChangedPipeline(source, prefs, PipelineStats()).output(),
             event(AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED),
         )
 
@@ -134,7 +137,7 @@ class PreMapPackageSkipTest {
         val source = sourceWith(events, activePkg = nonTargetPkg, snapshot = snapshotOf(nonTargetPkg))
 
         val emitted = collectWith(
-            events, StateChangedPipeline(source, prefs).output(),
+            events, StateChangedPipeline(source, prefs, PipelineStats()).output(),
             event(AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED),
         )
 
@@ -149,7 +152,7 @@ class PreMapPackageSkipTest {
         val source = sourceWith(events, activePkg = targetPkg, snapshot = snapshotOf(targetPkg))
 
         val emitted = collectWith(
-            events, StateChangedPipeline(source, prefs).output(),
+            events, StateChangedPipeline(source, prefs, PipelineStats()).output(),
             event(AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED),
         )
 

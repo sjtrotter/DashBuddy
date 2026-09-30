@@ -6,6 +6,7 @@ import android.view.accessibility.AccessibilityNodeInfo
 import android.view.accessibility.AccessibilityWindowInfo
 import cloud.trotter.dashbuddy.core.pipeline.accessibility.event.type.window.content_changed.ContentChangedPipeline
 import cloud.trotter.dashbuddy.core.pipeline.accessibility.event.type.window.state_changed.StateChangedPipeline
+import cloud.trotter.dashbuddy.core.pipeline.PipelineStats
 import cloud.trotter.dashbuddy.core.pipeline.accessibility.input.AccEvent
 import cloud.trotter.dashbuddy.core.pipeline.accessibility.input.AccessibilitySource
 import cloud.trotter.dashbuddy.domain.model.accessibility.UiNode
@@ -85,6 +86,7 @@ class WindowSpecificSnapshotTest {
         val source: AccessibilitySource,
         val events: MutableSharedFlow<AccEvent>,
         val prefs: FakePlatformPreferences,
+        val stats: PipelineStats = PipelineStats(),
     )
 
     private fun harness(
@@ -117,14 +119,22 @@ class WindowSpecificSnapshotTest {
         STATE(AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED),
     }
 
-    private fun output(kind: Kind, source: AccessibilitySource, prefs: FakePlatformPreferences): Flow<TreeSnapshot> =
+    private fun output(
+        kind: Kind,
+        source: AccessibilitySource,
+        prefs: FakePlatformPreferences,
+        stats: PipelineStats = PipelineStats(),
+    ): Flow<TreeSnapshot> =
         when (kind) {
-            Kind.CONTENT -> ContentChangedPipeline(source, prefs).output()
-            Kind.STATE -> StateChangedPipeline(source, prefs).output()
+            Kind.CONTENT -> ContentChangedPipeline(source, prefs, stats).output()
+            Kind.STATE -> StateChangedPipeline(source, prefs, stats).output()
         }
 
     private fun collect(h: Harness, kind: Kind, windowId: Int = 3): List<TreeSnapshot> =
-        collectWith(h.events, output(kind, h.source, h.prefs), event(kind.type, windowId))
+        collectWith(h.events, output(kind, h.source, h.prefs, h.stats), event(kind.type, windowId))
+
+    private fun Harness.skipped(reason: ForegroundSkipReason) =
+        assertEquals("counted as $reason (H3)", 1L, stats.foregroundSkipCount(reason))
 
     private fun collectWith(
         events: MutableSharedFlow<AccEvent>,
@@ -162,6 +172,7 @@ class WindowSpecificSnapshotTest {
         assertTrue(collect(h, kind).isEmpty())
         h.nothingMapped()
         verify(h.service, never()).windows
+        h.skipped(ForegroundSkipReason.NO_ACTIVE_ROOT)
     }
 
     @Test
@@ -222,6 +233,7 @@ class WindowSpecificSnapshotTest {
 
         assertTrue("never fall through below an unreadable top window", collect(h, kind).isEmpty())
         h.nothingMapped()
+        h.skipped(ForegroundSkipReason.FRONT_UNREADABLE)
     }
 
     @Test
@@ -251,6 +263,7 @@ class WindowSpecificSnapshotTest {
 
         assertTrue(collect(h, kind).isEmpty())
         h.nothingMapped()
+        h.skipped(ForegroundSkipReason.FRONT_NOT_ENABLED)
     }
 
     @Test
@@ -296,13 +309,13 @@ class WindowSpecificSnapshotTest {
         val source = mock<AccessibilitySource> {
             on { this.events } doReturn events
             on { getLiveNativeRoot() } doReturn bubble
-            on { foregroundWindow(any()) } doReturn located
+            on { foregroundWindow(any()) } doReturn AccessibilitySource.Foreground.Found(located)
             on { getWindowSnapshot(any(), any(), any()) } doReturn
                 AccessibilitySource.RootSnapshot(tree = UiNode(text = "bubble"), packageName = ownPkg)
         }
 
         val emitted = collectWith(
-            events, ContentChangedPipeline(source, FakePlatformPreferences(setOf(ddPkg))).output(),
+            events, ContentChangedPipeline(source, FakePlatformPreferences(setOf(ddPkg)), PipelineStats()).output(),
             event(Kind.CONTENT.type, windowId = 3),
         )
 

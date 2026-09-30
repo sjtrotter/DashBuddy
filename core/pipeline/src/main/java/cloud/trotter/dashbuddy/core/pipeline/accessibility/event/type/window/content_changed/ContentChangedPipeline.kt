@@ -4,6 +4,8 @@ import android.view.accessibility.AccessibilityEvent
 import cloud.trotter.dashbuddy.core.pipeline.BuildConfig
 import cloud.trotter.dashbuddy.core.pipeline.accessibility.TreeSnapshot
 import cloud.trotter.dashbuddy.core.pipeline.accessibility.event.coalesce.coalesceByKey
+import cloud.trotter.dashbuddy.core.pipeline.PipelineStats
+import cloud.trotter.dashbuddy.core.pipeline.accessibility.event.type.window.EventSnapshot
 import cloud.trotter.dashbuddy.core.pipeline.accessibility.event.type.window.snapshotForEvent
 import cloud.trotter.dashbuddy.core.pipeline.accessibility.input.AccEvent
 import cloud.trotter.dashbuddy.core.pipeline.accessibility.input.AccessibilitySource
@@ -59,6 +61,7 @@ data class CoalescedChange(
 class ContentChangedPipeline @Inject constructor(
     private val source: AccessibilitySource,
     private val platformPreferences: PlatformPreferences,
+    private val stats: PipelineStats,
 ) {
     fun output(): Flow<TreeSnapshot> = source.events
         .filter { it.type == AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED }
@@ -91,10 +94,16 @@ class ContentChangedPipeline @Inject constructor(
             // #1148 D4 (review F1/G5): the active ENABLED window is the ground truth; with a
             // non-enabled window active (bubble, launcher) the readable window in front is read,
             // or the frame is refused. Package-gated before and after the map.
-            val snapshot = source.snapshotForEvent(change.windowId, change.packageName) {
+            val resolved = source.snapshotForEvent(change.windowId, change.packageName) {
                 it in platformPreferences.enabledPackages.value
             }
-                ?: return@mapNotNull null
+            val snapshot = when (resolved) {
+                is EventSnapshot.Resolved -> resolved.snapshot
+                is EventSnapshot.Skipped -> {
+                    stats.onForegroundSkip(resolved.reason) // #1148 review H3
+                    return@mapNotNull null
+                }
+            }
             if (BuildConfig.DEBUG) {
                 Timber.d("🌳 Tree snapshot: %d nodes, pkg=%s", countNodes(snapshot.tree), snapshot.packageName)
             }

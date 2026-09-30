@@ -1,5 +1,6 @@
 package cloud.trotter.dashbuddy.core.pipeline
 
+import cloud.trotter.dashbuddy.core.pipeline.accessibility.ForegroundSkipReason
 import cloud.trotter.dashbuddy.domain.pipeline.ParseShortfall
 import cloud.trotter.dashbuddy.domain.state.ParsedFields
 import org.junit.Assert.assertEquals
@@ -285,5 +286,18 @@ class PipelineStatsTest {
         override fun log(priority: Int, tag: String?, message: String, t: Throwable?) {
             messages += message
         }
+    }
+
+    @Test
+    fun `foregroundSkip census renders non-zero reasons only, and is absent when empty (#1148 H3)`() {
+        val stats = PipelineStats()
+        assertFalse(stats.summary().contains("foregroundSkip"))
+
+        stats.onForegroundSkip(ForegroundSkipReason.FRONT_NOT_ENABLED)
+        stats.onForegroundSkip(ForegroundSkipReason.FRONT_NOT_ENABLED)
+        stats.onForegroundSkip(ForegroundSkipReason.NO_ACTIVE_ROOT)
+
+        assertTrue(stats.summary().endsWith(" foregroundSkip{NO_ACTIVE_ROOT=1,FRONT_NOT_ENABLED=2}"))
+        assertEquals(2L, stats.foregroundSkipCount(ForegroundSkipReason.FRONT_NOT_ENABLED))
     }
 }

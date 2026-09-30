@@ -2,6 +2,8 @@ package cloud.trotter.dashbuddy.core.pipeline.accessibility.event.type.window.st
 
 import android.view.accessibility.AccessibilityEvent
 import cloud.trotter.dashbuddy.core.pipeline.accessibility.TreeSnapshot
+import cloud.trotter.dashbuddy.core.pipeline.PipelineStats
+import cloud.trotter.dashbuddy.core.pipeline.accessibility.event.type.window.EventSnapshot
 import cloud.trotter.dashbuddy.core.pipeline.accessibility.event.type.window.snapshotForEvent
 import cloud.trotter.dashbuddy.core.pipeline.accessibility.input.AccessibilitySource
 import cloud.trotter.dashbuddy.domain.settings.PlatformPreferences
@@ -15,6 +17,7 @@ import javax.inject.Inject
 class StateChangedPipeline @Inject constructor(
     private val source: AccessibilitySource,
     private val platformPreferences: PlatformPreferences,
+    private val stats: PipelineStats,
 ) {
     fun output(): Flow<TreeSnapshot> = source.events
         .filter { it.type == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED }
@@ -27,10 +30,16 @@ class StateChangedPipeline @Inject constructor(
         .mapNotNull { event ->
             // Immediate (no coalescing). #1148 D4 (review F1/G5): active enabled window, else the
             // readable enabled window in front, else refuse; package-gated before and after the map.
-            val snapshot = source.snapshotForEvent(event.windowId, event.packageName) {
+            val resolved = source.snapshotForEvent(event.windowId, event.packageName) {
                 it in platformPreferences.enabledPackages.value
             }
-                ?: return@mapNotNull null
+            val snapshot = when (resolved) {
+                is EventSnapshot.Resolved -> resolved.snapshot
+                is EventSnapshot.Skipped -> {
+                    stats.onForegroundSkip(resolved.reason) // #1148 review H3
+                    return@mapNotNull null
+                }
+            }
             TreeSnapshot(
                 tree = snapshot.tree,
                 packageName = snapshot.packageName,

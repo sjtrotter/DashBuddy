@@ -3,6 +3,8 @@ package cloud.trotter.dashbuddy.core.pipeline
 import cloud.trotter.dashbuddy.domain.pipeline.ParseShortfall
 import cloud.trotter.dashbuddy.domain.state.ParsedFields
 import timber.log.Timber
+import cloud.trotter.dashbuddy.core.pipeline.accessibility.ForegroundSkipReason
+import java.util.EnumMap
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicLong
 import javax.inject.Inject
@@ -65,6 +67,12 @@ class PipelineStats @Inject constructor(
     private val notifRedactBackstopScrubs = AtomicLong()
     private val notifListenerConnects = AtomicLong()
     private val notifListenerDisconnects = AtomicLong()
+
+    /** #1148 review H3: event-driven window-resolver skips, by reason (counts only). */
+    private val foregroundSkips: Map<ForegroundSkipReason, AtomicLong> =
+        EnumMap<ForegroundSkipReason, AtomicLong>(ForegroundSkipReason::class.java).apply {
+            ForegroundSkipReason.entries.forEach { put(it, AtomicLong()) }
+        }
 
     /**
      * `packageName → versionName` for every observed third-party app whose version resolved
@@ -268,6 +276,17 @@ class PipelineStats @Inject constructor(
      *  reconnect, so this is a degradation, not a milestone. Returns the running disconnect count. */
     fun onNotifListenerDisconnected(): Long = notifListenerDisconnects.incrementAndGet()
 
+    /**
+     * The content/state window resolver produced no frame (#1148 review H3) — counted so the
+     * enabled-package pre-map gate (a disabled platform's active frame now dies there, before
+     * [onDisabledPlatformDrop] could see it) stays visible in the summary.
+     */
+    fun onForegroundSkip(reason: ForegroundSkipReason) {
+        foregroundSkips.getValue(reason).incrementAndGet()
+    }
+
+    fun foregroundSkipCount(reason: ForegroundSkipReason): Long = foregroundSkips.getValue(reason).get()
+
     /** An observation was forwarded to the state machine. */
     fun onForwarded() {
         val n = forwarded.incrementAndGet()
@@ -297,7 +316,18 @@ class PipelineStats @Inject constructor(
             " restarts=${restarts.get()}" +
             platformAppVersionsSuffix() +
             parseShortfallSuffix() +
-            bindShortfallSuffix()
+            bindShortfallSuffix() +
+            foregroundSkipSuffix()
+
+    /**
+     * `" foregroundSkip{NO_ACTIVE_ROOT=3,FRONT_NOT_ENABLED=12}"` (#1148 review H3), non-zero reasons
+     * only, in declaration order; empty when none. Enum names and counts — PII-free (principle 7).
+     */
+    private fun foregroundSkipSuffix(): String {
+        val nonZero = foregroundSkips.entries.filter { it.value.get() > 0 }
+        if (nonZero.isEmpty()) return ""
+        return nonZero.joinToString(",", prefix = " foregroundSkip{", postfix = "}") { "${it.key.name}=${it.value.get()}" }
+    }
 
     /**
      * `"app=0.230.0+ab12cd34 "`, or empty when no version was injected (PR #1066).
