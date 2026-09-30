@@ -17,8 +17,9 @@ import cloud.trotter.dashbuddy.domain.state.Platform
 
 /**
  * The front-window walk (#1152, PR #1155 review FF9 — extracted from [AccessibilitySource], principle
- * 3): the ONE readable-top-or-refuse walk (`frontOf`) behind the foreground read, the "above the
- * active window" read and the overlay decision; the overlay candidacy probe (TYPE → SIZE → PACKAGE)
+ * 3): the ONE walk ([walk]) that reports what it STOPPED at as data ([WalkStop], review JJ10), and the
+ * one-line policies over it — [foreground] (readable-top-or-refuse, also behind [frontAbove]) and
+ * [overlayFront] (only an overlay winner); the overlay candidacy probe (TYPE → SIZE → PACKAGE)
  * over the [WindowVerdictCache]; the per-walk root-fetch budget; the display-area read. Pure decision
  * logic over already-enumerated windows — [AccessibilitySource] stays the I/O seam (events, service
  * handle, roots, snapshot mapping) and delegates here. The result types ([Foreground],
@@ -42,31 +43,128 @@ internal class FrontWindowWalk(
     fun lazyDisplayArea(): Lazy<Long> = lazy(LazyThreadSafetyMode.NONE) { displayArea() }
 
     /**
-     * The single window in front among the windows ABOVE [active] (PR #1155 review CC3/CC4): the same
-     * readable-top-or-refuse rule as [foregroundWindow], over every window type, restricted to those
-     * with a strictly greater `layer`. An application window (not ours, not PiP) above an overlay is
-     * the front — the overlay is not frontmost; a LARGE unreadable system window is a barrier.
-     * [total] for the snapshot's WindowContext is the whole enumeration.
+     * PR #1155 review JJ10 — what the ONE walk STOPPED at, as data; each caller applies its own
+     * one-line policy over it ([foreground] for the front-window read, [overlayFront] for the overlay
+     * decision). No policy flag goes in, no reason is reverse-engineered out.
+     * - [Stopped] — the first deciding window: an [Kind.APPLICATION] window (not ours, not PiP) or a
+     *   [Kind.SYSTEM_CANDIDATE] (a size-passing `TYPE_SYSTEM` window of an ENABLED overlay platform, or
+     *   one whose owner could not be read). [readable] false = its root/package could not be read.
+     *   An application window decided from the verdict cache carries its [packageName] but no [root]
+     *   (review FF3 — a caller that maps it fetches through [fetchRoot], charged to the walk's budget);
+     * - [Exhausted] — the root-fetch budget ran out (CC5/DD4); [NoDisplayArea] — a system window on an
+     *   unknown display (DD8); [NoCandidate] — nothing decided; [Failed] — the walk threw (DD7).
+     */
+    sealed interface WalkStop {
+        enum class Kind { APPLICATION, SYSTEM_CANDIDATE }
+
+        class Stopped(
+            val window: AccessibilityWindowInfo,
+            val kind: Kind,
+            val readable: Boolean,
+            val packageName: String?,
+            val root: AccessibilityNodeInfo?,
+            val total: Int,
+            val fetchRoot: () -> RootFetch,
+        ) : WalkStop
+
+        data object Exhausted : WalkStop
+        data object NoDisplayArea : WalkStop
+        data object NoCandidate : WalkStop
+        data object Failed : WalkStop
+    }
+
+    /** A budget-charged root fetch after the walk (FF3's deferred fetch). */
+    sealed interface RootFetch {
+        data object Exhausted : RootFetch
+        data object Unreadable : RootFetch
+        data class Root(val root: AccessibilityNodeInfo) : RootFetch
+    }
+
+    /**
+     * The window in front — readable-top-or-refuse (#1148 D4, #1152 D4): the policy the foreground
+     * read and the topology path apply over [walk]. An unreadable window on top refuses
+     * `FRONT_UNREADABLE`; another app in front refuses `FRONT_NOT_ENABLED`.
+     */
+    fun foreground(
+        windows: List<AccessibilityWindowInfo>,
+        isEnabled: (String?) -> Boolean,
+        display: Lazy<Long> = lazyDisplayArea(),
+        total: Int = windows.size,
+    ): Foreground = when (val stop = walk(windows, isEnabled, display, total)) {
+        WalkStop.Exhausted -> Foreground.Refused(ForegroundSkipReason.SCAN_BUDGET)
+        WalkStop.NoDisplayArea -> Foreground.Refused(ForegroundSkipReason.NO_DISPLAY_AREA)
+        WalkStop.NoCandidate -> Foreground.Refused(ForegroundSkipReason.NO_CANDIDATE)
+        WalkStop.Failed -> Foreground.Refused(ForegroundSkipReason.FRONT_UNREADABLE)
+        is WalkStop.Stopped -> when {
+            !stop.readable -> Foreground.Refused(ForegroundSkipReason.FRONT_UNREADABLE)
+            stop.kind == WalkStop.Kind.APPLICATION && !isEnabled(stop.packageName) ->
+                Foreground.Refused(ForegroundSkipReason.FRONT_NOT_ENABLED)
+            stop.root != null -> Foreground.Found(LocatedWindow(stop.window, stop.root, stop.total))
+            else -> when (val fetched = stop.fetchRoot()) { // a cached enabled application window
+                RootFetch.Exhausted -> Foreground.Refused(ForegroundSkipReason.SCAN_BUDGET)
+                RootFetch.Unreadable -> Foreground.Refused(ForegroundSkipReason.FRONT_UNREADABLE)
+                is RootFetch.Root ->
+                    if (isEnabled(fetched.root.packageName?.toString())) {
+                        Foreground.Found(LocatedWindow(stop.window, fetched.root, stop.total))
+                    } else {
+                        Foreground.Refused(ForegroundSkipReason.FRONT_NOT_ENABLED)
+                    }
+            }
+        }
+    }
+
+    /**
+     * [foreground] over the windows ABOVE [active] (PR #1155 review CC3/CC4): every window type with a
+     * strictly greater `layer` (which already excludes the active window, HH6). [total] for the
+     * snapshot's WindowContext is the whole enumeration.
      */
     fun frontAbove(
         windows: List<AccessibilityWindowInfo>,
         active: AccessibilityWindowInfo,
         isEnabled: (String?) -> Boolean,
         display: Lazy<Long> = lazyDisplayArea(),
-        overlayOnly: Boolean = false,
-    ): Foreground =
-        frontOf(windows.filter { it.layer > active.layer }, isEnabled, windows.size, display, overlayOnly) // HH6: `layer >` already excludes the active window
+    ): Foreground = foreground(windows.filter { it.layer > active.layer }, isEnabled, display, windows.size)
 
-    /** The ONE readable-top-or-refuse walk behind [foregroundWindow] and [frontAbove]. */
-    fun frontOf(
+    /**
+     * PR #1155 review DD3 — the ONE "is an enabled overlay in front above the active window" policy,
+     * shared by the event and topology paths: only an OVERLAY winner is ever returned.
+     * - a readable SYSTEM candidate → [OverlayScan.Overlay];
+     * - an unreadable SYSTEM candidate (a possible overlay we cannot verify) or an exhausted budget →
+     *   [OverlayScan.Refused] (CC5/CC7/DD6: reading the covered window beneath would interleave it with
+     *   the overlay across its animate-in / tear-down frames);
+     * - an APPLICATION window in front (readable or not — it cannot be an offer overlay; CC4/DD6), an
+     *   unknown display (DD8), nothing, or a throwing walk (DD7) → [OverlayScan.None]: the active root
+     *   stays the ground truth (#1148).
+     */
+    fun overlayFront(
+        windows: List<AccessibilityWindowInfo>,
+        active: AccessibilityWindowInfo,
+        isEnabled: (String?) -> Boolean,
+        display: Lazy<Long> = lazyDisplayArea(),
+    ): OverlayScan = try {
+        when (val stop = walk(windows.filter { it.layer > active.layer }, isEnabled, display, windows.size)) {
+            WalkStop.Exhausted -> OverlayScan.Refused(ForegroundSkipReason.SCAN_BUDGET)
+            is WalkStop.Stopped -> when {
+                stop.kind == WalkStop.Kind.APPLICATION -> OverlayScan.None
+                !stop.readable -> OverlayScan.Refused(ForegroundSkipReason.FRONT_UNREADABLE)
+                else -> OverlayScan.Overlay(LocatedWindow(stop.window, stop.root!!, stop.total))
+            }
+            WalkStop.NoDisplayArea, WalkStop.NoCandidate, WalkStop.Failed -> OverlayScan.None
+        }
+    } catch (_: Exception) {
+        OverlayScan.None // DD7: a throwing isEnabled / stale window means "no overlay"
+    }
+
+    /**
+     * The ONE readable-top-or-refuse walk (by `layer`, descending) over application windows (own and
+     * PiP skipped) and overlay candidates; the first deciding window stops it ([WalkStop]).
+     */
+    fun walk(
         windows: List<AccessibilityWindowInfo>,
         isEnabled: (String?) -> Boolean,
-        total: Int,
         display: Lazy<Long>,
-        // FF3: the caller only ever maps an OVERLAY winner ([overlayFront]) — an application window
-        // in front is never mapped, so its root is not needed once its package is known.
-        overlayOnly: Boolean = false,
-    ): Foreground = try {
+        total: Int,
+    ): WalkStop = try {
         val ownPkg = ownPackage()
         val ordered = windows
             .filter {
@@ -75,31 +173,27 @@ internal class FrontWindowWalk(
             }
             .sortedByDescending { it.layer }
         val gen = cache.generation // CC1: read BEFORE any fetch; stale writes are discarded
-        // CC5: at most MAX_SCAN_ROOT_FETCHES discovery root fetches per walk; exhaustion refuses.
+        // CC5: at most MAX_SCAN_ROOT_FETCHES root fetches per walk (DD4: every one charged).
         val budget = ScanBudget(MAX_SCAN_ROOT_FETCHES)
-        var verdict: Foreground = Foreground.Refused(ForegroundSkipReason.NO_CANDIDATE)
+        val fetchCharged: (AccessibilityWindowInfo) -> RootFetch = { w ->
+            if (!budget.take()) RootFetch.Exhausted else fetchRoot(w)?.let { RootFetch.Root(it) } ?: RootFetch.Unreadable
+        }
+        var stop: WalkStop = WalkStop.NoCandidate
         for (w in ordered) {
             if (w.type == AccessibilityWindowInfo.TYPE_SYSTEM) {
                 val displayArea = display.value // DD11: one read per resolution, on first use
-                when (val probe = overlayProbe(w, displayArea, budget, gen)) {
+                stop = when (val probe = overlayProbe(w, displayArea, budget, gen)) {
                     OverlayProbe.NotCandidate -> continue // small, or a verified non-overlay package
-                    // PR #1155 review DD8: with no display area the overlay question cannot be
-                    // answered — never walk past a system window on an unknown display.
-                    OverlayProbe.NoDisplayArea -> verdict = Foreground.Refused(ForegroundSkipReason.NO_DISPLAY_AREA)
-                    // CC5: out of root fetches — the rest is unverifiable; never fall through.
-                    OverlayProbe.BudgetExhausted -> verdict = Foreground.Refused(ForegroundSkipReason.SCAN_BUDGET)
-                    // PR #1155 review BB1: a LARGE system window whose owner cannot be read may be an
-                    // offer overlay — readable-top-or-refuse, exactly like an unreadable application
-                    // window. Never read the window beneath it.
+                    OverlayProbe.NoDisplayArea -> WalkStop.NoDisplayArea // DD8: never walk past it
+                    OverlayProbe.BudgetExhausted -> WalkStop.Exhausted // CC5: never fall through
+                    // BB1/HH3: a LARGE system window whose owner cannot be read may be an offer overlay.
                     OverlayProbe.Unreadable ->
-                        verdict = Foreground.Refused(ForegroundSkipReason.FRONT_UNREADABLE, possibleOverlay = true)
+                        WalkStop.Stopped(w, WalkStop.Kind.SYSTEM_CANDIDATE, false, null, null, total) { RootFetch.Unreadable }
                     is OverlayProbe.Candidate -> {
-                        // PR #1155 review BB6: a DISABLED overlay platform's overlay is not a candidate
-                        // — the dasher chose to ignore that platform; read what is beneath it.
+                        // BB6: a DISABLED overlay platform's overlay is not a candidate — read beneath it.
                         if (!isEnabled(probe.packageName)) continue
-                        // CC10: null → the memo was stale (the fresh root names another package) —
-                        // corrected; this window is not an overlay after all, keep walking.
-                        verdict = decideOverlay(w, probe, total, gen, budget, displayArea, isEnabled) ?: continue
+                        // CC10: null → the memo was stale and is corrected; not an overlay — keep walking.
+                        decideOverlay(w, probe, total, gen, budget, displayArea, isEnabled) ?: continue
                     }
                 }
                 break // the first candidate (or an unverifiable one) decides
@@ -107,53 +201,38 @@ internal class FrontWindowWalk(
             // Application window (#1148, cache-aware since #1152 D3).
             val cached = cache.get(w.id)?.packageName
             if (cached != null && ownPkg != null && cached == ownPkg) continue
-            if (cached != null && !isEnabled(cached)) {
-                verdict = Foreground.Refused(ForegroundSkipReason.FRONT_NOT_ENABLED)
-                break
-            }
-            if (cached != null && overlayOnly) {
-                // PR #1155 review FF3: a cached ENABLED application window decides the overlay walk
-                // ("no overlay in front") without a root fetch — the root would never be mapped.
-                verdict = Foreground.Refused(ForegroundSkipReason.NO_CANDIDATE)
+            if (cached != null) {
+                // FF3: decided from the cache — no fetch; a caller that maps it fetches (charged).
+                stop = WalkStop.Stopped(w, WalkStop.Kind.APPLICATION, true, cached, null, total) { fetchCharged(w) }
                 break
             }
             if (!budget.take()) { // CC5
-                verdict = Foreground.Refused(ForegroundSkipReason.SCAN_BUDGET)
+                stop = WalkStop.Exhausted
                 break
             }
             val root = w.root
-            if (root == null) { // unreadable application window on top → refuse
-                verdict = Foreground.Refused(ForegroundSkipReason.FRONT_UNREADABLE)
+            if (root == null) { // unreadable application window on top
+                stop = WalkStop.Stopped(w, WalkStop.Kind.APPLICATION, false, null, null, total) { RootFetch.Unreadable }
                 break
             }
             val pkg = root.packageName?.toString()
             pkg?.let { cache.putPackage(w.id, it, gen) }
             if (ownPkg != null && pkg == ownPkg) continue // our own bubble is never "in front"
-            verdict = if (isEnabled(pkg)) {
-                Foreground.Found(LocatedWindow(w, root, total))
-            } else {
-                Foreground.Refused(ForegroundSkipReason.FRONT_NOT_ENABLED)
-            }
+            stop = WalkStop.Stopped(w, WalkStop.Kind.APPLICATION, true, pkg, root, total) { RootFetch.Root(root) }
             break // the first candidate decides
         }
-        verdict
+        stop
     } catch (_: Exception) {
-        Foreground.Refused(ForegroundSkipReason.FRONT_UNREADABLE)
+        WalkStop.Failed
     }
 
-
     /**
-     * The verdict for an ENABLED overlay candidate that is the top candidate: its root (reused from
-     * the probe, else fetched once) null → refuse unreadable; else found — with the package
-     * RE-VERIFIED on the root that will be mapped (a memoized verdict is never trusted for a read).
-     *
-     * PR #1155 review CC10: a fresh root naming a DIFFERENT package means the memoized verdict was
-     * stale — the memo is CORRECTED from the fresh root (so the next frame does not re-fetch and
-     * refuse again), the refusal is counted truthfully as `overlayRejected{PACKAGE_CHANGED}` (never
-     * `FRONT_NOT_ENABLED`); DD10: when the fresh package is itself an ENABLED overlay platform's the
-     * corrected memo is used at once (Found on the fresh root), otherwise null tells the walk "not an
-     * overlay after all — keep walking" (a disabled one is skipped, BB6). A fresh root with no
-     * package cannot be verified → refuse unreadable.
+     * An ENABLED overlay candidate that is the top candidate: its root (reused from the probe, else
+     * fetched once, charged — DD4) is RE-VERIFIED (a memoized verdict is never trusted for a read). A
+     * null or package-less fresh root → an unreadable [WalkStop.Stopped] (counted UNREADABLE, FF4/JJ4).
+     * CC10: a fresh root naming a DIFFERENT package corrects the memo (counted PACKAGE_CHANGED); DD10:
+     * if that package is itself an enabled overlay platform's it is used at once, otherwise null tells
+     * the walk "not an overlay after all — keep walking".
      */
     private fun decideOverlay(
         w: AccessibilityWindowInfo,
@@ -163,21 +242,19 @@ internal class FrontWindowWalk(
         budget: ScanBudget,
         displayArea: Long,
         isEnabled: (String?) -> Boolean,
-    ): Foreground? {
-        // PR #1155 review DD4: EVERY root fetch in a walk is charged — a memoized CANDIDATE carries
-        // no root, so its revalidation fetch counts against the budget too.
+    ): WalkStop? {
+        val unreadable = WalkStop.Stopped(w, WalkStop.Kind.SYSTEM_CANDIDATE, false, null, null, total) { RootFetch.Unreadable }
         val root = probe.root ?: run {
-            if (!budget.take()) return Foreground.Refused(ForegroundSkipReason.SCAN_BUDGET)
-            fetchRoot(w) // HH3: throwing ≡ null — a possible overlay we cannot verify
+            if (!budget.take()) return WalkStop.Exhausted
+            fetchRoot(w) // HH3: throwing ≡ null
         } ?: run {
-            // JJ4: the unreadable revalidation is counted like the package-less case below.
-            stats.onOverlayRejected(OverlayRejectReason.UNREADABLE)
-            return Foreground.Refused(ForegroundSkipReason.FRONT_UNREADABLE, possibleOverlay = true)
+            stats.onOverlayRejected(OverlayRejectReason.UNREADABLE) // JJ4
+            return unreadable
         }
         val live = root.packageName?.toString()
         if (live == null) { // FF4: a package-less fresh root is UNREADABLE, not a package change
             stats.onOverlayRejected(OverlayRejectReason.UNREADABLE)
-            return Foreground.Refused(ForegroundSkipReason.FRONT_UNREADABLE, possibleOverlay = true)
+            return unreadable
         }
         if (live != probe.packageName) {
             stats.onOverlayRejected(OverlayRejectReason.PACKAGE_CHANGED)
@@ -187,67 +264,9 @@ internal class FrontWindowWalk(
                 WindowVerdictCache.Verdict.NOT_OVERLAY_PLATFORM
             }
             cache.putVerdict(w.id, live, corrected, boundsOf(w), displayArea, gen)
-            // PR #1155 review DD10: a corrected memo is USED — if the fresh root is itself an enabled
-            // overlay platform's, this IS the overlay in front (never read beneath a live overlay).
-            // The fetch that found it was already charged (DD4).
-            if (corrected == WindowVerdictCache.Verdict.CANDIDATE && isEnabled(live)) {
-                return Foreground.Found(LocatedWindow(w, root, total))
-            }
-            return null
+            if (corrected != WindowVerdictCache.Verdict.CANDIDATE || !isEnabled(live)) return null
         }
-        return Foreground.Found(LocatedWindow(w, root, total))
-    }
-
-
-    /**
-     * PR #1155 review DD3 — the ONE "is an enabled overlay the front above an ENABLED active window"
-     * rule, shared by the event path (`snapshotForEvent`) and the topology path, so the two can
-     * never disagree: only an OVERLAY winner is returned. The event path owns the active window and
-     * never reads a non-active application window, so a non-active application window in front (a
-     * DoorDash sheet above its activity) is [OverlayScan.None] on BOTH paths — the topology path must
-     * not emit it, or it interleaves with the activity the event path reads.
-     *
-     * CC4: EVERY window type above the active one, by layer — an application window (not ours, not
-     * PiP) above the overlay means the overlay is not frontmost (→ None). CC5: a walk out of root
-     * fetches refuses the frame. DD6 (narrowing CC7): only an unreadable window that may BE an
-     * overlay — a LARGE `TYPE_SYSTEM` window, [Foreground.Refused.possibleOverlay] — refuses; an
-     * unreadable APPLICATION window (our bubble tearing down, a platform popup, a foreign panel) cannot
-     * be an offer overlay → None: the active enabled root stays the ground truth (#1148).
-     */
-    fun overlayFront(
-        windows: List<AccessibilityWindowInfo>,
-        active: AccessibilityWindowInfo,
-        isEnabled: (String?) -> Boolean,
-        display: Lazy<Long> = lazyDisplayArea(),
-    ): OverlayScan = try {
-        overlayFrontUnguarded(windows, active, isEnabled, display)
-    } catch (_: Exception) {
-        // PR #1155 review DD7: an exception during the scan (a stale AccessibilityWindowInfo, a
-        // throwing isEnabled) means "no overlay" — the already-fetched active root is read (the
-        // pre-#1152 behaviour), never a dropped frame. (frontOf's own catch yields a non-overlay
-        // FRONT_UNREADABLE, which maps to None below for the same reason.)
-        OverlayScan.None
-    }
-
-    private fun overlayFrontUnguarded(
-        windows: List<AccessibilityWindowInfo>,
-        active: AccessibilityWindowInfo,
-        isEnabled: (String?) -> Boolean,
-        display: Lazy<Long>,
-    ): OverlayScan {
-        return when (val front = frontAbove(windows, active, isEnabled, display, overlayOnly = true)) {
-            // FF6: the only system-layer windows the walk ever finds are overlay candidates.
-            is Foreground.Found ->
-                if (front.located.window.type == AccessibilityWindowInfo.TYPE_SYSTEM) OverlayScan.Overlay(front.located) else OverlayScan.None
-            is Foreground.Refused -> when {
-                front.reason == ForegroundSkipReason.SCAN_BUDGET -> OverlayScan.Refused(front.reason)
-                // CC7/DD6: a possible overlay we cannot verify refuses (reading the covered window
-                // beneath would interleave it with the overlay across its animate-in / tear-down
-                // frames); any other unreadable window is not a barrier on this path.
-                front.reason == ForegroundSkipReason.FRONT_UNREADABLE && front.possibleOverlay -> OverlayScan.Refused(front.reason)
-                else -> OverlayScan.None
-            }
-        }
+        return WalkStop.Stopped(w, WalkStop.Kind.SYSTEM_CANDIDATE, true, live, root, total) { RootFetch.Root(root) }
     }
 
 

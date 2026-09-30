@@ -385,8 +385,11 @@ then fired, and were answered with the window beneath). The shipped rules:
   after a mid-walk clear never writes under the new generation. Area has ONE definition,
   `WindowVerdictCache.Bounds.area()`, used by the size rule and the `area%` log (review DD11); the
   display is read at most once per resolution and passed down.
-- **D4 — the front window: ONE readable-top-or-refuse walk** (`frontOf`, behind `foregroundWindow` and
-  `frontAbove`). Candidates are the application windows (as shipped, own and PiP skipped) ∪ ENABLED
+- **D4 — the front window: ONE walk, reported as data** (`FrontWindowWalk.walk` → `WalkStop`: the
+  window it stopped at — application or system candidate, readable or not, its package/root — or
+  `Exhausted` / `NoDisplayArea` / `NoCandidate` / `Failed`; review JJ10). Each caller applies its one-line
+  policy over it: `foreground` (readable-top-or-refuse, behind `foregroundWindow` and `frontAbove`) and
+  `overlayFront` (only an overlay winner) — no policy flag in, no reason-sniffing out. Candidates are the application windows (as shipped, own and PiP skipped) ∪ ENABLED
   overlay candidates, over EVERY window type by `layer`; the first decides. A LARGE unreadable system
   window refuses `FRONT_UNREADABLE` (review BB1 — never read the window beneath what may be an offer
   overlay; a small one is skipped without a fetch); a cached overlay whose root vanished →

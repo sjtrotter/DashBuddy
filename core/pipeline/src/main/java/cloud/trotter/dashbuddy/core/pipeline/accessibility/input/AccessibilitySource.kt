@@ -274,16 +274,7 @@ class AccessibilitySource @Inject constructor(
     /** [foregroundWindow]'s verdict: the window in front, or why none is read (#1148 review H3). */
     sealed interface Foreground {
         data class Found(val located: LocatedWindow) : Foreground
-        /**
-         * [possibleOverlay] (PR #1155 review DD6): the refusal is an unreadable window that may be a
-         * platform offer overlay — a LARGE `TYPE_SYSTEM` window whose owner cannot be read, or a
-         * selected overlay whose root vanished. Only such a refusal may drop a frame on the EVENT
-         * path; an unreadable APPLICATION window cannot be an offer overlay.
-         */
-        data class Refused(
-            val reason: ForegroundSkipReason,
-            val possibleOverlay: Boolean = false,
-        ) : Foreground
+        data class Refused(val reason: ForegroundSkipReason) : Foreground
     }
 
     /**
@@ -324,7 +315,7 @@ class AccessibilitySource @Inject constructor(
         windows: List<AccessibilityWindowInfo>,
         isEnabled: (String?) -> Boolean,
         display: Lazy<Long> = walk.lazyDisplayArea(),
-    ): Foreground = walk.frontOf(windows, isEnabled, windows.size, display)
+    ): Foreground = walk.foreground(windows, isEnabled, display)
 
 
     /** CC9: one event-path overlay scan (the per-event enumeration this feature costs), sized in the field. */
