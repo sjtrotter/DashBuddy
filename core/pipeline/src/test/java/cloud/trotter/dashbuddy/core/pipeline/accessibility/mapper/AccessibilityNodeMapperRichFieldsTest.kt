@@ -53,7 +53,7 @@ class AccessibilityNodeMapperRichFieldsTest {
         whenever(m.isCheckable).thenReturn(true)
         whenever(m.isSelected).thenReturn(true)
         whenever(m.isHeading).thenReturn(true)
-        whenever(m.liveRegion).thenReturn(AccessibilityNodeInfo.ACCESSIBILITY_LIVE_REGION_POLITE)
+        whenever(m.liveRegion).thenReturn(android.view.View.ACCESSIBILITY_LIVE_REGION_POLITE)
         whenever(m.collectionInfo).thenReturn(CollectionInfo(4, 2, false))
         whenever(m.collectionItemInfo).thenReturn(CollectionItemInfo(3, 1, 1, 1, false))
         return m
