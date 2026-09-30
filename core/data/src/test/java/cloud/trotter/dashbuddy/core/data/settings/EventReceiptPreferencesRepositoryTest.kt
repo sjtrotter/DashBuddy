@@ -7,11 +7,13 @@ import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
 import cloud.trotter.dashbuddy.core.datastore.settings.EventReceiptConsentDataSource
 import cloud.trotter.dashbuddy.domain.settings.EventReceiptConsent
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.emitAll
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestScope
@@ -90,6 +92,48 @@ class EventReceiptPreferencesRepositoryTest {
         assertTrue(repo.set(EventReceiptConsent.ALLOWED))
         advanceUntilIdle()
         assertEquals("a successful write is observed", EventReceiptConsent.ALLOWED, repo.consent.value)
+    }
+
+    @Test
+    fun `a read that fails after a successful write never publishes over the written value`() = runTest {
+        val storeScope = CoroutineScope(StandardTestDispatcher(testScheduler) + Job())
+        val real = PreferenceDataStoreFactory.create(
+            scope = storeScope,
+            produceFile = { File(tmp.root, "g.preferences_pb") },
+        )
+        val gate = CompletableDeferred<Unit>()
+        var collections = 0
+        var readsBroken = false
+        val flaky = object : DataStore<Preferences> {
+            override val data: Flow<Preferences> = flow {
+                collections++
+                if (collections == 1) {
+                    // The in-flight read: emits, then fails once the gate opens (after the write).
+                    emit(real.data.first())
+                    gate.await()
+                    throw IOException("in-flight read failed")
+                }
+                if (readsBroken) throw IOException("store unreadable")
+                emitAll(real.data)
+            }
+            override suspend fun updateData(transform: suspend (Preferences) -> Preferences) =
+                real.updateData(transform)
+        }
+        val repo = EventReceiptPreferencesRepository(EventReceiptConsentDataSource(flaky), storeScope)
+        runCurrent()
+        assertEquals(EventReceiptConsent.UNDECIDED, repo.consent.value)
+
+        readsBroken = true
+        assertTrue(repo.set(EventReceiptConsent.DECLINED))
+        assertEquals(EventReceiptConsent.DECLINED, repo.consent.value)
+
+        gate.complete(Unit) // the in-flight read now fails …
+        advanceUntilIdle() // … and every later read fails until retries are exhausted
+        assertEquals(
+            "no reader may publish UNDECIDED over the value written after it started",
+            EventReceiptConsent.DECLINED,
+            repo.consent.value,
+        )
     }
 
     @Test
