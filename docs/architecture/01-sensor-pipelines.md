@@ -599,8 +599,14 @@ UTF-8-encodes as `?`); `ClassNameGrammar` (a non-static class is absent, like a 
 frame-level set seeded by step 1 only for `ID_MARKERS` ids, not intake-only `PII_ID_SUFFIXES`; optional
 version stamps truncated rather than refusing the item; per-frame memoization with the per-field path
 private; `SkeletonSchema.measure` and `WireStrings.isLowerHex` as single owners; and
-`PiiShapesIcuGuardTest`, applying the ICU bare-`}` rule to every compiled `PiiShapes` pattern. Nothing
-calls the builder at runtime yet: the publisher stage,
+`PiiShapesIcuGuardTest`, applying the ICU bare-`}` rule to every compiled `PiiShapes` pattern. Review
+round 3: `CustomerTextMarkers.ID_MARKERS` is now DERIVED from `ID_MARKER_TABLE` (`IdMarker(suffix,
+valueIsPii)`, list content/order pinned — the runtime backstop is unchanged); the census seeds its
+frame-wide set from step 1 only for IDENTITY ids (`valueIsPii`) and only from their text/desc; every step,
+the grammar and the hash run on `CensusHash.canonical` (trimmed, census whitespace collapsed to one ASCII
+space) so the JVM and ICU regex engines agree; the envelope validates stamps as well-formed and the day as
+a real month/day; the per-frame verdict cache stores a wrapped verdict so a passing value is judged once.
+Nothing calls the builder at runtime yet: the publisher stage,
 `CensusSink` and `PipelineStats` counters are #1146 (M1b); upload is M3.
 
 **The whole recognition + text-scrub layer assumes an ENGLISH device (#938).** Rule anchors and

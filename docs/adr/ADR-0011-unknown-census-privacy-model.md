@@ -170,15 +170,19 @@ would under-withhold: a customer name withheld on the node whose id marks it wou
 id-less parent that repeats it. `SkeletonBuilder` therefore runs two passes: pass 1 runs the per-field
 filter over every text field of the frame (tree + window title) and collects the set of trimmed
 canonical values caught by (a) a VALUE-judging step — 3, 4, 5, 7, 8 (not the length cap, whose duplicate is
-itself over-length) — or (b) step 1 ONLY when the id is in `ID_MARKERS`, the runtime list of ids whose
-VALUE is PII by construction; pass 2 emits the constant `withheld` for every field whose trimmed value is
-in that set, wherever it sits. A `PII_ID_SUFFIXES`-only hit (the intake list, which also covers
-instruction BODIES that may merely contain PII — `step_description`, `instruction_text`, `tvTitle`, whose
-values are often chrome such as "Hand it to me") withholds its OWN field but does not seed the set, so the
-chrome vocabulary the census exists for is not withheld frame-wide (amended in #1160 review round 2).
-§7(c) compares the skeleton against FULL-TREE redaction for this reason, with exactly that one stated
-exemption: a value the intake rewrites document-wide only because an intake-only id carries it
-elsewhere, and which survives redaction in isolation.
+itself over-length) — or (b) step 1 ONLY when the id is an IDENTITY id — an `ID_MARKER_TABLE` row flagged
+`valueIsPii` (a customer name or address line: `customer_name`, `user_name`, `address_line_1/2`,
+`arriving_at_title`, `address_subpremise_line`) — and ONLY from that node's TEXT / CONTENT_DESCRIPTION,
+never its role/hint/tooltip/click-label/uid/pane; pass 2 emits the constant `withheld` for every field
+whose canonical value is in that set, wherever it sits. A CONTENT id (an `ID_MARKER_TABLE` row without the
+flag — the free-text instruction bodies, `description_text_view`, which the same table documents as
+generic DoorDash chrome such as "Raise to 50%" or "Required") and a `PII_ID_SUFFIXES`-only id (the intake
+list, which also covers instruction BODIES — `step_description`, `instruction_text`, `tvTitle`) withhold
+their OWN field but do not seed the set, so the chrome vocabulary the census exists for is not withheld
+frame-wide (amended in #1160 review rounds 2 and 3). §7(c) compares the skeleton against FULL-TREE
+redaction for this reason, with exactly that one stated exemption: a value the intake rewrites
+document-wide only because a non-seeding PII-id field carries it elsewhere, which survives redaction in
+isolation and has no other withholding cause anywhere in the frame.
 
 **What the builder consumes.** `SkeletonBuilder` takes the RAW admitted `UiNode` tree plus the
 window title. #1146's publisher sits on the UNKNOWN SCREEN BRANCH of `AccessibilityPipeline.output()`
@@ -190,8 +194,11 @@ build that uploads. The
 corpus tests feed fixture trees that ARE masked captures; that is a superset condition (every mask
 token is caught by step 5 and emits `withheld`), not the runtime shape.
 
-**Inputs and predicates, exactly.** Every step sees the TRIMMED canonical value — the same bytes
-`CensusHash` would hash — so a leading space cannot slip a prefix past a `startsWith`. Step 1 uses the
+**Inputs and predicates, exactly.** Every step sees the CANONICAL value — trimmed and
+whitespace-normalized (`CensusHash.canonical`: every run of code points the classifier treats as whitespace,
+`Character.isWhitespace || isSpaceChar`, collapsed to one ASCII space; amended in #1160 because the JVM's
+regex `\s` excludes NBSP/thin space while ICU's includes `\p{Z}`, so the decision was engine-dependent) —
+the same bytes `CensusHash` hashes — so a leading space cannot slip a prefix past a `startsWith`. Step 1 uses the
 two EXISTING predicates as they are: `ID_MARKERS` is a case-insensitive SUFFIX match on the full
 resource id (`ID_MARKERS.any { id.endsWith(it, ignoreCase = true) }`, today inline in
 `CustomerTextMarkers.unredactedIdMarker`; #1145 extracts it as the shared helper both call),
@@ -218,7 +225,8 @@ can never drift apart.
 
 ### 3. Hashing: unsalted sha256 with a domain-separation prefix
 
-`CensusHash.of(text) = sha256("census.v1:" + trimmed)`, first 16 hex, through the fail-closed
+`CensusHash.of(text) = sha256("census.v1:" + canonical)`, first 16 hex, where `canonical` is the
+trimmed, whitespace-normalized value (§2 "Inputs and predicates"), through the fail-closed
 `sha256OrNull` (a failure withholds; plaintext is never echoed, #362). Unsalted because
 **cross-install equality is what the k rule needs**. The `census.v1:` prefix separates digest
 domains — a census hash can never EQUAL a parse-side `customerNameHash` (sha256 of the normalized
