@@ -3,6 +3,7 @@ package cloud.trotter.dashbuddy.state.effects
 import android.graphics.Rect
 import android.view.accessibility.AccessibilityNodeInfo
 import cloud.trotter.dashbuddy.core.pipeline.accessibility.input.AccessibilitySource
+import cloud.trotter.dashbuddy.core.pipeline.accessibility.mapper.TreeLimits
 import cloud.trotter.dashbuddy.core.pipeline.accessibility.mapper.toUiNode
 import cloud.trotter.dashbuddy.domain.action.RuleAction
 import cloud.trotter.dashbuddy.domain.model.accessibility.BoundingBox
@@ -59,6 +60,9 @@ class UiInteractionHandlerOwnerTest {
         whenever(node.refresh()).thenReturn(refreshes)
         return node
     }
+
+    /** A cheap leaf for budget tests (thousands of them): only what the walk reads. */
+    private fun filler(): AccessibilityNodeInfo = mock<AccessibilityNodeInfo>().also { whenever(it.packageName).thenReturn(pkg) }
 
     private fun windowRoot(vararg children: AccessibilityNodeInfo, byId: List<AccessibilityNodeInfo> = emptyList()): AccessibilityNodeInfo {
         val root = view(cls = "android.widget.FrameLayout", bounds = Rect(0, 0, 1080, 2400), children = children.toList())
@@ -320,32 +324,32 @@ class UiInteractionHandlerOwnerTest {
     }
 
     /**
-     * Bounded ingestion: a row deeper than SEMANTIC_SCAN_DEPTH is outside the 2b walk — and a cut walk
+     * Bounded ingestion: a row deeper than MAX_TREE_DEPTH is outside the 2b walk — and a cut walk
      * ABORTS the resolution (a partial scan can leave one wrong survivor; #1102 review constraint 2).
      */
     @Test
     fun `the semantic walk is depth bounded`() = runTest {
         val row = payRow(top = 1774 - 400)
         var top: AccessibilityNodeInfo = row
-        repeat(UiInteractionHandler.SEMANTIC_SCAN_DEPTH) { top = view(children = listOf(top)) }
-        // row now sits at depth SEMANTIC_SCAN_DEPTH + 1 below the window root
+        repeat(TreeLimits.MAX_TREE_DEPTH) { top = view(children = listOf(top)) }
+        // row now sits at depth MAX_TREE_DEPTH + 1 below the window root
         assertFalse(expand(handler(windowRoot(top))))
         row.neverClicked()
 
-        // Control: the same row two levels shallower — its own leaf labels at depth SEMANTIC_SCAN_DEPTH
+        // Control: the same row two levels shallower — its own leaf labels at depth MAX_TREE_DEPTH
         // — is inside the bound and found.
         val row2 = payRow(top = 1774 - 400)
         var top2: AccessibilityNodeInfo = row2
-        repeat(UiInteractionHandler.SEMANTIC_SCAN_DEPTH - 2) { top2 = view(children = listOf(top2)) }
+        repeat(TreeLimits.MAX_TREE_DEPTH - 2) { top2 = view(children = listOf(top2)) }
         assertTrue(expand(handler(windowRoot(top2))))
         row2.clicks(1)
     }
 
-    /** Bounded ingestion: a row past SEMANTIC_SCAN_NODES fetches is outside the 2b walk, and the cut aborts. */
+    /** Bounded ingestion: a row past MAX_TREE_NODES fetches is outside the 2b walk, and the cut aborts. */
     @Test
     fun `the semantic walk is node-count bounded`() = runTest {
         val row = payRow(top = 1774 - 400)
-        val filler = List(UiInteractionHandler.SEMANTIC_SCAN_NODES) { view() }
+        val filler = List(TreeLimits.MAX_TREE_NODES) { filler() }
         assertFalse(expand(handler(windowRoot(*(filler + row).toTypedArray()))))
         row.neverClicked()
     }
@@ -371,7 +375,7 @@ class UiInteractionHandlerOwnerTest {
     @Test
     fun `a budget-cut walk with one early survivor aborts rather than clicking it`() = runTest {
         val early = payRow(top = 1774 - 400)
-        val filler = List(UiInteractionHandler.SEMANTIC_SCAN_NODES) { view() }
+        val filler = List(TreeLimits.MAX_TREE_NODES) { filler() }
         val real = payRow(top = 1774 - 380)
         assertFalse(expand(handler(windowRoot(*(listOf(early) + filler + real).toTypedArray()))))
         early.neverClicked(); real.neverClicked()
@@ -383,7 +387,7 @@ class UiInteractionHandlerOwnerTest {
         val root = windowRoot()
         whenever(root.childCount).thenReturn(100_000)
         assertFalse(expand(handler(root)))
-        verify(root, org.mockito.kotlin.atMost(UiInteractionHandler.SEMANTIC_SCAN_NODES)).getChild(any())
+        verify(root, org.mockito.kotlin.atMost(TreeLimits.MAX_TREE_NODES)).getChild(any())
     }
 
     /**

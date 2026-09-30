@@ -1,5 +1,6 @@
 package cloud.trotter.dashbuddy.state.effects
 
+import cloud.trotter.dashbuddy.core.pipeline.accessibility.mapper.TreeLimits
 import cloud.trotter.dashbuddy.domain.action.RuleAction
 import cloud.trotter.dashbuddy.domain.action.TargetExpectation
 import cloud.trotter.dashbuddy.domain.model.accessibility.BoundingBox
@@ -107,7 +108,7 @@ class ActuationBindingResolutionTest {
             val hits = mutableListOf<Cand>()
             val path = ArrayList<Int>()
             fun walk(node: UiNode, depth: Int) {
-                check(depth <= UiInteractionHandler.SEMANTIC_SCAN_DEPTH) { "corpus tree deeper than the 2b bound" }
+                check(depth <= TreeLimits.MAX_TREE_DEPTH) { "corpus tree deeper than the 2b bound" }
                 val classOk = ref.classNameHint == null || node.className == ref.classNameHint
                 // Review I4b: an incomplete candidate makes the window's search incomplete — abort.
                 val hit = classOk && node.isClickable && scanLabels(node).let { (l, complete) ->

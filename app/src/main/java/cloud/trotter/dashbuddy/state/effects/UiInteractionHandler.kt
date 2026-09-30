@@ -6,6 +6,7 @@ import cloud.trotter.dashbuddy.domain.action.TargetExpectation
 import cloud.trotter.dashbuddy.domain.model.accessibility.BoundingBox
 import cloud.trotter.dashbuddy.domain.pipeline.NodeRef
 import cloud.trotter.dashbuddy.core.pipeline.accessibility.input.AccessibilitySource
+import cloud.trotter.dashbuddy.core.pipeline.accessibility.mapper.TreeLimits
 import cloud.trotter.dashbuddy.core.pipeline.accessibility.mapper.toBoundingBox
 import cloud.trotter.dashbuddy.util.AccNodeUtils
 import kotlinx.coroutines.delay
@@ -87,11 +88,9 @@ class UiInteractionHandler @Inject constructor(
         /** Max child fetches per label scan — bounded ingestion; one owner: [NodeRef.LABEL_SCAN_NODES] (#1149 I2). */
         private const val LABEL_SCAN_NODES = NodeRef.LABEL_SCAN_NODES
 
-        /** #1149 — max depth of the strategy-2b label walk, per window root. */
-        internal const val SEMANTIC_SCAN_DEPTH = 40
-
-        /** #1149 — max nodes the strategy-2b label walk visits, per window root. */
-        internal const val SEMANTIC_SCAN_NODES = 600
+        // #1149 review J5: the strategy-2b walk's depth / fetch bounds are the MAPPER's own tree
+        // budget (TreeLimits — one owner): "incomplete" means a tree the mapper itself would have
+        // truncated, never an arbitrary lower cut.
     }
 
     /**
@@ -158,7 +157,7 @@ class UiInteractionHandler @Inject constructor(
             // complete survivor; the bounds walk is then not a fallback.
             Timber.tag("Effects").w(
                 "Semantic re-find for %s: a window's search was incomplete (bound depth %d / %d fetches, or an unreadable node) and the active window has no complete survivor — aborting to manual (#1149)",
-                description, SEMANTIC_SCAN_DEPTH, SEMANTIC_SCAN_NODES,
+                description, TreeLimits.MAX_TREE_DEPTH, TreeLimits.MAX_TREE_NODES,
             )
             return false
         }
@@ -631,8 +630,8 @@ class UiInteractionHandler @Inject constructor(
      * walk already fetched — the same horizon, ownership and completeness [scanLabels] applies —
      * so every child is fetched once and the budget counts real IPC once.
      *
-     * Bounded (#1102 review constraints 2 + 3): at most [SEMANTIC_SCAN_DEPTH] deep and
-     * [SEMANTIC_SCAN_NODES] child fetches per root, budgeted before the call, nulls included.
+     * Bounded (#1102 review constraints 2 + 3): at most [TreeLimits.MAX_TREE_DEPTH] deep and
+     * [TreeLimits.MAX_TREE_NODES] child fetches per root, budgeted before the call, nulls included.
      * Returns null when the window's search is INCOMPLETE — a bound cut the walk, a child read
      * null, or a candidate's own region is incomplete (review I4b) — because a partial search can
      * leave one wrong survivor.
@@ -649,9 +648,9 @@ class UiInteractionHandler @Inject constructor(
             node.contentDescription?.toString()?.takeIf { it.isNotBlank() }?.let { region.labels.add(0 to it) }
             val count = node.childCount.coerceAtLeast(0)
             region.slots[0] = count
-            if (count > 0 && depth >= SEMANTIC_SCAN_DEPTH) { truncated = true; return null }
+            if (count > 0 && depth >= TreeLimits.MAX_TREE_DEPTH) { truncated = true; return null }
             for (i in 0 until count) {
-                if (fetched >= SEMANTIC_SCAN_NODES) { truncated = true; return null }
+                if (fetched >= TreeLimits.MAX_TREE_NODES) { truncated = true; return null }
                 fetched++
                 // An unreadable child may hide the real control (or its twin): incomplete (I4).
                 val child = node.getChild(i) ?: run { truncated = true; return null }

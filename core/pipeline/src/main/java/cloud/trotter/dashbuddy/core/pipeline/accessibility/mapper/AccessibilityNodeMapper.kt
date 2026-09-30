@@ -8,6 +8,15 @@ import cloud.trotter.dashbuddy.domain.model.accessibility.UiNode
 import timber.log.Timber
 
 /**
+ * The mapper's tree limits, public so every other walk of the same live tree shares ONE owner
+ * (#1149 review J5: the executor's strategy-2b walk truncates exactly where the mapper would).
+ */
+object TreeLimits {
+    const val MAX_TREE_DEPTH = 60
+    const val MAX_TREE_NODES = 4_000
+}
+
+/**
  * Per-tree ingestion budget (#363). Third-party trees are untrusted input:
  * every `getChild(i)` is a binder IPC and the converted tree is serialized
  * into the capture envelope, so a pathological/redesigned target UI must not
@@ -56,8 +65,8 @@ internal class TreeBudget(
     }
 
     companion object {
-        const val MAX_TREE_DEPTH = 60
-        const val MAX_TREE_NODES = 4_000
+        const val MAX_TREE_DEPTH = TreeLimits.MAX_TREE_DEPTH
+        const val MAX_TREE_NODES = TreeLimits.MAX_TREE_NODES
 
         /**
          * Per-string ingestion cap (#590). Third-party text is untrusted: a node
