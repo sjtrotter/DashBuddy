@@ -55,7 +55,7 @@ internal class FrontWindowWalk(
         display: Lazy<Long> = lazyDisplayArea(),
         overlayOnly: Boolean = false,
     ): Foreground =
-        frontOf(windows.filter { it.id != active.id && it.layer > active.layer }, isEnabled, windows.size, display, overlayOnly)
+        frontOf(windows.filter { it.layer > active.layer }, isEnabled, windows.size, display, overlayOnly) // HH6: `layer >` already excludes the active window
 
     /** The ONE readable-top-or-refuse walk behind [foregroundWindow] and [frontAbove]. */
     fun frontOf(

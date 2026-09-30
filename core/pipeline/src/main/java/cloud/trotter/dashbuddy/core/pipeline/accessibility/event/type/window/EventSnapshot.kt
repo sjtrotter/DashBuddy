@@ -79,7 +79,7 @@ internal fun AccessibilitySource.snapshotForEvent(
             // HH1: the overlay scan runs off the active WINDOW's layer — it never needs the root, so
             // it runs even when that root is unreadable (an enabled overlay above is the frame).
             onOverlayScan()
-            when (val scan = overlayFront(list, activeWindow, isEnabled)) {
+            when (val scan = walk.overlayFront(list, activeWindow, isEnabled)) {
                 is AccessibilitySource.OverlayScan.Refused -> {
                     Timber.tag("Pipeline").v("🚫 Skip: overlay scan refused %s (event window=%d)", scan.reason, windowId)
                     return EventSnapshot.Skipped(scan.reason)

@@ -127,7 +127,7 @@ class OverlayCandidateTest {
     @Test
     fun `a large unreadable system window cannot prove its package - Unreadable, not merely false`() {
         val w = window(14, null, OverlayGeometry.UBER_OFFER)
-        assertEquals(AccessibilitySource.OverlayProbe.Unreadable, source().overlayProbe(w, display)) // CC11: the distinction a Boolean lost
+        assertEquals(AccessibilitySource.OverlayProbe.Unreadable, source().walk.overlayProbe(w, display)) // CC11: the distinction a Boolean lost
         assertEquals(1L, stats.overlayRejectedCount(OverlayRejectReason.UNREADABLE))
     }
 
@@ -135,7 +135,7 @@ class OverlayCandidateTest {
     fun `an unknown display area admits nothing and fetches nothing (fail closed)`() {
         val w = window(15, node(uberPkg), OverlayGeometry.UBER_OFFER)
         val src = source(windows = listOf(w), res = null)
-        val area = src.displayArea()
+        val area = src.walk.displayArea()
         assertEquals(0L, area)
         assertFalse(candidate(src, w, area))
         verify(w, never()).root
@@ -149,15 +149,15 @@ class OverlayCandidateTest {
         val pip = window(3, node("com.google.android.apps.maps"), Rect(0, 0, 200, 200), type = AccessibilityWindowInfo.TYPE_APPLICATION, pip = true)
         val puck = window(10, node(uberPkg), OverlayGeometry.UBER_PUCK)
         val src = source(windows = listOf(pip, puck), res = null)
-        assertEquals(0L, src.displayArea())
-        assertFalse(candidate(src, puck, src.displayArea()))
+        assertEquals(0L, src.walk.displayArea())
+        assertFalse(candidate(src, puck, src.walk.displayArea()))
         verify(puck, never()).root
         assertEquals(1L, stats.overlayRejectedCount(OverlayRejectReason.NO_DISPLAY_AREA))
     }
 
     @Test
     fun `display area is the service's display metrics`() {
-        assertEquals(display, source().displayArea())
+        assertEquals(display, source().walk.displayArea())
     }
 
     @Test
@@ -170,14 +170,14 @@ class OverlayCandidateTest {
         val w = window(9, node(uberPkg), Rect(0, 0, 1080, 700)) // ~29 % of 1080×2400
         val src = source(windows = listOf(w), res = res)
 
-        assertTrue(candidate(src, w, src.displayArea()))
+        assertTrue(candidate(src, w, src.walk.displayArea()))
         metrics.widthPixels = 2 * OverlayGeometry.DISPLAY_W // no topology event — nothing clears the memo
-        assertEquals("read per resolution, never memoized", 2 * display, src.displayArea())
-        assertFalse(candidate(src, w, src.displayArea())) // ~15 % → too small
+        assertEquals("read per resolution, never memoized", 2 * display, src.walk.displayArea())
+        assertFalse(candidate(src, w, src.walk.displayArea())) // ~15 % → too small
         assertEquals(1L, stats.overlayRejectedCount(OverlayRejectReason.TOO_SMALL))
     }
 
     /** CC11: tests assert on the ONE seam's sealed result. */
     private fun candidate(src: AccessibilitySource, w: AccessibilityWindowInfo, area: Long): Boolean =
-        src.overlayProbe(w, area) is AccessibilitySource.OverlayProbe.Candidate
+        src.walk.overlayProbe(w, area) is AccessibilitySource.OverlayProbe.Candidate
 }

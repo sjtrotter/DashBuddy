@@ -61,14 +61,14 @@ class WindowsChangedPipeline @Inject constructor(
             val windows = source.getWindows()
             // #1152 D2: measured once per burst, shared by the list log and the overlay checks.
             // DD11: ONE display read per burst, passed down to every walk of this burst.
-            val display = source.lazyDisplayArea()
+            val display = source.walk.lazyDisplayArea()
             val displayArea = display.value
             Timber.tag("Pipeline").d("\uD83E\uDE9F Window list: %d windows", windows.size)
             windows.forEachIndexed { i, w ->
                 // The window TITLE is app-controlled text (#1148 review G1) — logged by LENGTH only,
                 // even at DEBUG: app.log leaves the device in every post-dash pull. area% (#1152) is
                 // the window's share of the display, an int — what the overlay size rule reads.
-                val areaPct = if (displayArea > 0L) (source.areaOf(w) * 100 / displayArea).toInt() else -1
+                val areaPct = if (displayArea > 0L) (source.walk.areaOf(w) * 100 / displayArea).toInt() else -1
                 Timber.tag("Pipeline").d(
                     "  [%d] id=%d type=%d layer=%d area%%=%d titleLen=%d active=%s focused=%s",
                     i, w.id, w.type, w.layer, areaPct, w.title?.length ?: 0, w.isActive, w.isFocused
@@ -107,14 +107,14 @@ class WindowsChangedPipeline @Inject constructor(
                     // Flagged but unreadable: the overlay scan still runs off its LAYER (HH1). No
                     // overlay in front → nothing (the event path skips FRONT_UNREADABLE for the same
                     // list).
-                    emitOverlayOrNothing(source.overlayFront(windows, active, isEnabled, display), ::snapshotOf) {
+                    emitOverlayOrNothing(source.walk.overlayFront(windows, active, isEnabled, display), ::snapshotOf) {
                         stats.onTopologySkip(ForegroundSkipReason.FRONT_UNREADABLE)
                     }
                 }
                 is AccessibilitySource.ActiveWindow.Enabled ->
                     // CC2/CC3/DD3: the event path owns the enabled active window (and never reads a
                     // non-active application window above it), so only an OVERLAY winner is emitted.
-                    emitOverlayOrNothing(source.overlayFront(windows, resolution.window, isEnabled, display), ::snapshotOf) {}
+                    emitOverlayOrNothing(source.walk.overlayFront(windows, resolution.window, isEnabled, display), ::snapshotOf) {}
                 is AccessibilitySource.ActiveWindow.NotEnabled -> {
                     val isOwn = ownPkg != null && resolution.root?.packageName?.toString() == ownPkg
                     // H6: our bubble's layer is no cutoff — the window in front of the dasher (over THIS
@@ -123,7 +123,7 @@ class WindowsChangedPipeline @Inject constructor(
                     val front = if (isOwn) {
                         source.foregroundWindow(windows, isEnabled, display)
                     } else {
-                        source.frontAbove(windows, resolution.window, isEnabled, display)
+                        source.walk.frontAbove(windows, resolution.window, isEnabled, display)
                     }
                     when (front) {
                         is AccessibilitySource.Foreground.Found ->

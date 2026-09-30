@@ -36,8 +36,12 @@ class AccessibilitySource @Inject constructor(
     /** #1152 D3/BB7: `windowId → (package, overlay verdict)`, cleared on every topology change ([emit]). */
     private val packageCache = WindowVerdictCache()
 
-    /** PR #1155 review FF9: the front-window walk — decision logic this I/O seam delegates to. */
-    private val walk = FrontWindowWalk(
+    /**
+     * PR #1155 review FF9/HH6: the front-window walk — decision logic this I/O seam delegates to.
+     * Internal consumers (the topology pipeline, the event resolver, tests) reach it DIRECTLY; the
+     * only public entry kept here is [foregroundWindow].
+     */
+    internal val walk = FrontWindowWalk(
         ownPackage = { ownPackage() },
         cache = packageCache,
         stats = stats,
@@ -285,7 +289,7 @@ class AccessibilitySource @Inject constructor(
      * package — the bubble is never "another app in front") and picture-in-picture windows (review
      * H2: a Google Maps PiP floats above the fullscreen activity with a foreign package, and would
      * otherwise refuse every frame while the bubble is active), PLUS platform offer overlays
-     * ([overlayProbe], #1152 D4: a `TYPE_SYSTEM` window of ≥ [MIN_OVERLAY_AREA_FRACTION] of the
+     * ([FrontWindowWalk.overlayProbe], #1152 D4: a `TYPE_SYSTEM` window of ≥ [MIN_OVERLAY_AREA_FRACTION] of the
      * display owned by a [Platform.offerOverlay] package). Every other system-layer window is never
      * a candidate (#1148 review H1: a platform's own transient toast would otherwise hijack frames) —
      * a small one never has its root fetched at all (size is checked before package), and a large
@@ -313,47 +317,9 @@ class AccessibilitySource @Inject constructor(
     fun foregroundWindow(
         windows: List<AccessibilityWindowInfo>,
         isEnabled: (String?) -> Boolean,
-        display: Lazy<Long> = lazyDisplayArea(),
+        display: Lazy<Long> = walk.lazyDisplayArea(),
     ): Foreground = walk.frontOf(windows, isEnabled, windows.size, display)
 
-    // --- The front-window walk (FF9: decision logic lives in [FrontWindowWalk]; these delegate) ---
-
-    /** One lazy display read per resolution (DD11) — [FrontWindowWalk.lazyDisplayArea]. */
-    internal fun lazyDisplayArea(): Lazy<Long> = walk.lazyDisplayArea()
-
-    /** The single front window ABOVE [active] (CC3/CC4) — [FrontWindowWalk.frontAbove]. */
-    internal fun frontAbove(
-        windows: List<AccessibilityWindowInfo>,
-        active: AccessibilityWindowInfo,
-        isEnabled: (String?) -> Boolean,
-        display: Lazy<Long> = lazyDisplayArea(),
-        overlayOnly: Boolean = false,
-    ): Foreground = walk.frontAbove(windows, active, isEnabled, display, overlayOnly)
-
-    /** Is an enabled overlay the front above the ENABLED active window (DD3) — [FrontWindowWalk.overlayFront]. */
-    internal fun overlayFront(
-        windows: List<AccessibilityWindowInfo>,
-        active: AccessibilityWindowInfo,
-        isEnabled: (String?) -> Boolean,
-        display: Lazy<Long> = lazyDisplayArea(),
-    ): OverlayScan = walk.overlayFront(windows, active, isEnabled, display)
-
-    /** The overlay candidacy probe (D2) — [FrontWindowWalk.overlayProbe]. */
-    internal fun overlayProbe(
-        w: AccessibilityWindowInfo,
-        displayArea: Long,
-        budget: FrontWindowWalk.ScanBudget? = null,
-        gen: Long = packageCache.generation,
-    ): OverlayProbe = walk.overlayProbe(w, displayArea, budget, gen)
-
-    /** [w]'s owning package through the cache (BB10) — [FrontWindowWalk.packageOf]. */
-    internal fun packageOf(w: AccessibilityWindowInfo): String? = walk.packageOf(w)
-
-    /** The display area in px², else 0 (BB4/DD5) — [FrontWindowWalk.displayArea]. */
-    internal fun displayArea(): Long = walk.displayArea()
-
-    /** A window's on-screen area in px² (DD11) — [FrontWindowWalk.areaOf]. */
-    internal fun areaOf(w: AccessibilityWindowInfo): Long = walk.areaOf(w)
 
     /** CC9: one event-path overlay scan (the per-event enumeration this feature costs), sized in the field. */
     internal fun onOverlayScan() = stats.onOverlayScan()
@@ -376,7 +342,7 @@ class AccessibilitySource @Inject constructor(
     }
 
     /**
-     * [overlayFront]'s verdict (#1152 D5 as reworked by PR #1155 reviews BB5 … FF1) — **an enabled
+     * [FrontWindowWalk.overlayFront]'s verdict (#1152 D5 as reworked by PR #1155 reviews BB5 … FF1) — **an enabled
      * platform offer overlay in front of an enabled active window is the frame**, whichever window
      * fired, so the covered window never interleaves with it (the #1148 F1 class). It is on top by
      * construction, so this is never the hidden-activity shape F1 removed.
@@ -397,7 +363,7 @@ class AccessibilitySource @Inject constructor(
     }
 
     /**
-     * [overlayProbe]'s three-valued outcome (PR #1155 review BB1): a verified candidate, a verified
+     * [FrontWindowWalk.overlayProbe]'s three-valued outcome (PR #1155 review BB1): a verified candidate, a verified
      * non-candidate (wrong type, too small, a non-overlay package, no display area), or a LARGE
      * system window whose owner cannot be read — which a readable-top-or-refuse caller must treat as
      * "something unverifiable is on top", never as "nothing here".

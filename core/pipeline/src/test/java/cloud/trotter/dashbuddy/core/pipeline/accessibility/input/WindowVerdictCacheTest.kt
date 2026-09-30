@@ -117,7 +117,7 @@ class WindowVerdictCacheTest {
         }
         val src = AccessibilitySource(stats).apply { registerService(service) }
 
-        repeat(2) { src.overlayProbe(statusBar, display) }
+        repeat(2) { src.walk.overlayProbe(statusBar, display) }
 
         verify(statusBar, never()).root
         assertEquals(1L, stats.overlayRejectedCount(OverlayRejectReason.TOO_SMALL))
@@ -128,7 +128,7 @@ class WindowVerdictCacheTest {
         val unreadable = window(9, node("x"), 9, AccessibilityWindowInfo.TYPE_SYSTEM)
         whenever(unreadable.root).thenReturn(null)
         val src = source(listOf(unreadable))
-        repeat(2) { assertEquals(AccessibilitySource.OverlayProbe.Unreadable, src.overlayProbe(unreadable, display)) }
+        repeat(2) { assertEquals(AccessibilitySource.OverlayProbe.Unreadable, src.walk.overlayProbe(unreadable, display)) }
         verify(unreadable, times(2)).root
     }
 
@@ -212,5 +212,5 @@ class WindowVerdictCacheTest {
 
     /** CC11: tests assert on the ONE seam's sealed result. */
     private fun candidate(src: AccessibilitySource, w: AccessibilityWindowInfo, area: Long): Boolean =
-        src.overlayProbe(w, area) is AccessibilitySource.OverlayProbe.Candidate
+        src.walk.overlayProbe(w, area) is AccessibilitySource.OverlayProbe.Candidate
 }
