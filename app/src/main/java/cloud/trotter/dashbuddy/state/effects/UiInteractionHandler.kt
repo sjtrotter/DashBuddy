@@ -144,15 +144,11 @@ class UiInteractionHandler @Inject constructor(
         // and scoping no-ops (we fall through to all windows, as before).
         val activeRoot = accessibilitySource.getLiveNativeRoot()
         val search = findCandidates(roots, activeRoot, ref, expectedPackage)
-        if (search.semanticTruncated) {
-            // #1149 / #1102 review constraint 2: a label-only search that could not complete cannot
-            // prove its survivors unique (the real control may sit past the cut, leaving one WRONG
-            // survivor). Per window (review I6): this fires only when the active window has no
-            // complete survivor; the bounds walk is then not a fallback.
-            Timber.tag("Effects").w(
-                "Semantic re-find for %s: a window's search was incomplete (bound depth %d / %d fetches, or an unreadable node) and the active window has no complete survivor — aborting to manual (#1149)",
-                description, TreeLimits.MAX_TREE_DEPTH, TreeLimits.MAX_TREE_NODES,
-            )
+        if (search.inconclusiveHits > 0) {
+            // #1149 review L1 (decideSemanticOutcome): 2b found hit(s) but a window of the deciding set
+            // could not be read completely — a hidden twin is possible, and the bounds walk must not
+            // guess past it (#1102 review constraint 2).
+            warnInconclusive(description, search.inconclusiveHits)
             return false
         }
         val candidates = search.candidates
@@ -176,6 +172,10 @@ class UiInteractionHandler @Inject constructor(
                 "%d of %d candidate(s) for %s have no clickable, fresh owner in the package within %d steps (%d stale) — dropped (#1149)",
                 owned.orphaned, candidates.size, description, AccNodeUtils.MAX_OWNER_WALK, owned.stale,
             )
+        }
+        if (owned.staleSemantic > 0) {
+            warnInconclusive(description, candidates.count { it.semantic })
+            return false
         }
         if (owned.targets.isEmpty()) return false
 
@@ -234,10 +234,8 @@ class UiInteractionHandler @Inject constructor(
             target to labels
         }
         if (semanticUnprovable > 0) {
-            Timber.tag("Effects").w(
-                "%d semantic candidate(s) for %s became unprovable after refresh — aborting to manual (#1149)",
-                semanticUnprovable, description,
-            )
+            // J6 under L1: an unprovable 2b hit in the deciding set is |H| >= 1 ∧ I.
+            warnInconclusive(description, owned.targets.count { it.semantic })
             return false
         }
         if (staleEvidence > 0) {
@@ -397,7 +395,7 @@ class UiInteractionHandler @Inject constructor(
         val ancestors: Set<Int>,
     )
 
-    private class OwnerResolution(val targets: List<OwnedTarget>, val orphaned: Int, val stale: Int)
+    private class OwnerResolution(val targets: List<OwnedTarget>, val orphaned: Int, val stale: Int, val staleSemantic: Int)
 
     /**
      * #1149 — map each candidate to its action owner ([AccNodeUtils.resolveActionOwner]), DROP
@@ -411,6 +409,7 @@ class UiInteractionHandler @Inject constructor(
         val ownerIndexOf = arrayOfNulls<Int>(candidates.size)
         var orphaned = 0
         var stale = 0
+        var staleSemantic = 0
         val staleOwners = ArrayList<AccessibilityNodeInfo>()
         candidates.forEachIndexed { i, c ->
             // The owner is what gets tapped, so it must itself belong to the scoped package — an
@@ -427,7 +426,14 @@ class UiInteractionHandler @Inject constructor(
                 // (Decline → Accept) is verified as what it now is. A failed refresh means the view
                 // is gone: the owner is dropped with the orphans. The click follows verification
                 // with no second refresh, so nothing un-verified can reach dispatch.
-                if (!owner.refresh()) { staleOwners.add(owner); orphaned++; stale++; return@forEachIndexed }
+                if (!owner.refresh()) {
+                    staleOwners.add(owner); orphaned++; stale++
+                    // #1149 review L5: a 2b hit that cannot be refreshed is UNPROVABLE, not absent —
+                    // dropping it would hand its twin the tap. Every semantic candidate here is from the
+                    // deciding set (decideSemanticOutcome), so the caller aborts.
+                    if (c.semantic) staleSemantic++
+                    return@forEachIndexed
+                }
                 owners.add(owner); members.add(mutableListOf(i)); ownerIndexOf[i] = owners.size - 1
             }
         }
@@ -449,7 +455,7 @@ class UiInteractionHandler @Inject constructor(
                     .mapNotNull { ownerIndexOf[it] }.filter { it != j }.toSet(),
             )
         }
-        return OwnerResolution(targets, orphaned, stale)
+        return OwnerResolution(targets, orphaned, stale, staleSemantic)
     }
 
     /**
@@ -461,7 +467,49 @@ class UiInteractionHandler @Inject constructor(
      * so candidates from every scoped root are collected; the caller's
      * active-window scoping (#788) prefers the active window's, if any.
      */
-    private class CandidateSearch(val candidates: List<Candidate>, val semanticTruncated: Boolean = false)
+    /** [inconclusiveHits] > 0: 2b found that many hits in a deciding set that was incomplete — abort (#1149 L1). */
+    private class CandidateSearch(val candidates: List<Candidate>, val inconclusiveHits: Int = 0)
+
+    private class SemanticWindow(val result: SemanticSearch, val inActive: Boolean)
+
+    private sealed interface SemanticOutcome {
+        data class Use(val candidates: List<Candidate>) : SemanticOutcome
+        data class Inconclusive(val hits: Int) : SemanticOutcome
+        data object FallThrough : SemanticOutcome
+    }
+
+    /**
+     * #1149 review L1 — THE 2b outcome rule, one owner. The DECIDING set is the active window's search
+     * when a platform window is active, else every scoped window's (a user tap from our bubble — the
+     * #788 "no active-window candidate → keep all" shape); background-window incompleteness never
+     * matters while a platform window is active. With H = the deciding set's hits and I = "a window
+     * in it was incomplete" (walk cut, unreadable child, or a vetoing region):
+     *  - |H| = 0 → FALL THROUGH to strategy 3, whether or not I: nothing was found, so nothing can be
+     *    wrong, and strategy 3 keeps its own gates (containment, nested abort, ranker, #788);
+     *  - |H| ≥ 1 ∧ I → INCONCLUSIVE, abort: a hidden twin is possible;
+     *  - otherwise USE H (≥ 2 of them are twins: stored-text tie-break or abort, downstream).
+     */
+    private fun decideSemanticOutcome(windows: List<SemanticWindow>, activePlatformWindow: Boolean): SemanticOutcome {
+        val deciding = if (activePlatformWindow) windows.filter { it.inActive } else windows
+        val hits = deciding.sumOf { it.result.hits.size }
+        if (hits == 0) return SemanticOutcome.FallThrough
+        if (deciding.any { it.result.incomplete }) return SemanticOutcome.Inconclusive(hits)
+        val out = mutableListOf<Candidate>()
+        for (w in deciding) {
+            val base = out.size
+            for (hit in w.result.hits) out.add(
+                Candidate(hit.node, w.inActive, semantic = true, ancestors = hit.ancestors.map { it + base }),
+            )
+        }
+        return SemanticOutcome.Use(out)
+    }
+
+    private fun warnInconclusive(description: String, hits: Int) {
+        Timber.tag("Effects").w(
+            "Semantic re-find for %s inconclusive (%d hit(s), incomplete) — aborting to manual (#1149)",
+            description, hits,
+        )
+    }
 
     private fun findCandidates(
         roots: List<AccessibilityNodeInfo>,
@@ -492,34 +540,16 @@ class UiInteractionHandler @Inject constructor(
         // #1149 review J3: only a ref with a PROVABLE exact fingerprint enters 2b (NodeRef.hasExactFingerprint);
         // an unprovable one goes straight to strategy 3's containment check, the pre-#1149 shape.
         if (candidates.isEmpty() && ref.hasExactFingerprint) {
-            // #1149 review I6: truncation is PER WINDOW. An incomplete window contributes no
-            // candidates. The tap aborts only when some window was incomplete AND the active window
-            // produced no complete survivor — a background window that overflows its budget must
-            // not veto an exact, complete hit on the active sheet. When any window was incomplete,
-            // only the active window's hits are kept (an incomplete window may hide a twin of a
-            // background survivor). No window incomplete and no hit → strategy 3 runs as before.
-            var incompleteWindows = 0
-            val semantic = mutableListOf<Candidate>()
-            for (root in roots) {
-                val found = findNodeBySemantics(root, ref, expectedPackage)
-                if (found == null) { incompleteWindows++; continue }
-                val inActive = activeRoot != null && root == activeRoot
-                val base = semantic.size
-                for (hit in found) semantic.add(
-                    Candidate(hit.node, inActive, semantic = true, ancestors = hit.ancestors.map { it + base }),
-                )
+            val windows = roots.map { root ->
+                SemanticWindow(findNodeBySemantics(root, ref, expectedPackage), inActive = activeRoot != null && root == activeRoot)
             }
-            if (incompleteWindows > 0) {
-                val active = semantic.withIndex().filter { it.value.inActiveWindow }
-                if (active.isEmpty()) return CandidateSearch(emptyList(), semanticTruncated = true)
-                val remap = active.withIndex().associate { (newIdx, old) -> old.index to newIdx }
-                active.forEach { (_, c) -> candidates.add(c.copy(ancestors = c.ancestors.mapNotNull { remap[it] })) }
-                Timber.tag("Effects").d(
-                    "Semantic re-find: %d incomplete window(s) ignored, %d active-window survivor(s) kept",
-                    incompleteWindows, candidates.size,
+            when (val outcome = decideSemanticOutcome(windows, activePlatformWindow = windows.any { it.inActive })) {
+                is SemanticOutcome.Use -> candidates.addAll(outcome.candidates)
+                is SemanticOutcome.Inconclusive -> return CandidateSearch(emptyList(), inconclusiveHits = outcome.hits)
+                SemanticOutcome.FallThrough -> Timber.tag("Effects").d(
+                    "Semantic re-find found nothing (%d incomplete window(s) in the deciding set) — strategy 3",
+                    windows.count { it.result.incomplete },
                 )
-            } else {
-                candidates.addAll(semantic)
             }
         }
         // Strategy 3: walk each tree matching by bounds + className. A zero-area ref rect (a
@@ -605,19 +635,25 @@ class UiInteractionHandler @Inject constructor(
     private class LabelRegion {
         val labels = ArrayList<Pair<Int, String>>()
         val slots = IntArray(NodeRef.LABEL_SCAN_DEPTH + 1)
+        /** `unread[d]`: a region node at relative depth d has a child slot the walk could not read (null, cut). */
+        val unread = BooleanArray(NodeRef.LABEL_SCAN_DEPTH)
 
         fun absorb(child: LabelRegion) {
             for ((d, label) in child.labels) if (d + 1 <= NodeRef.LABEL_SCAN_DEPTH) labels.add(d + 1 to label)
             for (d in 0 until NodeRef.LABEL_SCAN_DEPTH) slots[d + 1] += child.slots[d]
+            for (d in 0 until NodeRef.LABEL_SCAN_DEPTH - 1) if (child.unread[d]) unread[d + 1] = true
         }
 
         /**
-         * What [scanLabels] would call complete: <= NodeRef.LABEL_SCAN_NODES in-horizon fetches. Nodes below
-         * NodeRef.LABEL_SCAN_DEPTH are outside the fingerprint on BOTH sides (the horizon), so they never
-         * make it incomplete; a null child already aborted the walk (I4).
+         * What [scanLabels] would call complete: <= NodeRef.LABEL_SCAN_NODES in-horizon fetches and no
+         * unreadable in-horizon slot. Nodes below NodeRef.LABEL_SCAN_DEPTH are outside the fingerprint on
+         * BOTH sides (the horizon), so they never make it incomplete.
          */
-        fun complete(): Boolean = slots.take(NodeRef.LABEL_SCAN_DEPTH).sum() <= NodeRef.LABEL_SCAN_NODES
+        fun complete(): Boolean = slots.take(NodeRef.LABEL_SCAN_DEPTH).sum() <= NodeRef.LABEL_SCAN_NODES && unread.none { it }
     }
+
+    /** One window's 2b result: its hits, and whether anything in it could not be read completely (#1149 L1). */
+    private class SemanticSearch(val hits: List<WalkHit>, val incomplete: Boolean)
 
     private class SemanticHit(val node: AccessibilityNodeInfo, val pre: Int, val lastPre: Int)
 
@@ -635,45 +671,50 @@ class UiInteractionHandler @Inject constructor(
      *
      * Bounded (#1102 review constraints 2 + 3): at most [TreeLimits.MAX_TREE_DEPTH] deep and
      * [TreeLimits.MAX_TREE_NODES] child fetches per root, budgeted before the call, nulls included.
-     * Returns null when the window's search is INCOMPLETE — a bound cut the walk, a child read
-     * null, or a candidate's own region is incomplete (review I4b) — because a partial search can
-     * leave one wrong survivor.
+     * Returns the hits found AND whether the window is INCOMPLETE — a bound cut the walk, a child read
+     * null, or a candidate's own region is incomplete with its visible labels still consistent
+     * (I4b/J4). What that means for the tap is [decideSemanticOutcome]'s call (L1).
      */
-    private fun findNodeBySemantics(root: AccessibilityNodeInfo, ref: NodeRef, expectedPackage: String): List<WalkHit>? {
+    private fun findNodeBySemantics(root: AccessibilityNodeInfo, ref: NodeRef, expectedPackage: String): SemanticSearch {
         var fetched = 0
         var preCounter = 0
-        var truncated = false
+        var incomplete = false
+        var stopped = false
         val hits = ArrayList<SemanticHit>()
-        fun visit(node: AccessibilityNodeInfo, depth: Int): LabelRegion? {
+        // L2: 2b filters on the bind's OWNER class (its fingerprint is the owner's); a legacy ref falls back.
+        val ownerClass = ref.ownerClassHint ?: ref.classNameHint
+        fun visit(node: AccessibilityNodeInfo, depth: Int): LabelRegion {
             val pre = preCounter++
             val region = LabelRegion()
             node.text?.toString()?.takeIf { it.isNotBlank() }?.let { region.labels.add(0 to it) }
             node.contentDescription?.toString()?.takeIf { it.isNotBlank() }?.let { region.labels.add(0 to it) }
             val count = node.childCount.coerceAtLeast(0)
             region.slots[0] = count
-            if (count > 0 && depth >= TreeLimits.MAX_TREE_DEPTH) { truncated = true; return null }
-            for (i in 0 until count) {
-                if (fetched >= TreeLimits.MAX_TREE_NODES) { truncated = true; return null }
-                fetched++
-                // An unreadable child may hide the real control (or its twin): incomplete (I4).
-                val child = node.getChild(i) ?: run { truncated = true; return null }
-                if (child.packageName?.toString() != expectedPackage) continue
-                val childRegion = visit(child, depth + 1) ?: return null
-                if (!AccNodeUtils.isActionClickable(child)) region.absorb(childRegion)
+            if (count > 0 && depth >= TreeLimits.MAX_TREE_DEPTH) {
+                // A tree the mapper itself would have cut: incomplete, and this node's children are unread.
+                incomplete = true; region.unread[0] = true
+            } else {
+                for (i in 0 until count) {
+                    if (stopped || fetched >= TreeLimits.MAX_TREE_NODES) {
+                        incomplete = true; stopped = true; region.unread[0] = true; break
+                    }
+                    fetched++
+                    // An unreadable child may hide the real control (or its twin): incomplete (I4 → L1).
+                    val child = node.getChild(i) ?: run { incomplete = true; region.unread[0] = true; null } ?: continue
+                    if (child.packageName?.toString() != expectedPackage) continue
+                    val childRegion = visit(child, depth + 1)
+                    if (!AccNodeUtils.isActionClickable(child)) region.absorb(childRegion)
+                }
             }
-            // L2: 2b filters on the bind's OWNER class (its fingerprint is the owner's); a legacy ref falls back.
-            val ownerClass = ref.ownerClassHint ?: ref.classNameHint
             val classOk = ownerClass == null || node.className?.toString() == ownerClass
             if (classOk && AccNodeUtils.isActionClickable(node)) {
                 val labels = region.labels.map { it.second }
                 if (!region.complete()) {
-                    // I4b, refined by review J4: an incomplete candidate (fetch-budget cut) vetoes the
-                    // window ONLY if what IS visible is still consistent with the fingerprint (visible
-                    // hint set ⊆ the ref's) — then the unseen part could complete it into the real
-                    // control or its twin. A region already carrying a label OUTSIDE the set can never
-                    // be an exact match whatever is unseen, so a big unrelated card does not veto.
-                    // A depth cut is the horizon, not incompleteness; a null child aborted above.
-                    if (ref.visibleConsistentWith(labels)) { truncated = true; return null }
+                    // I4b, refined by J4: an incomplete candidate marks the window incomplete ONLY if what
+                    // IS visible is still consistent with the fingerprint (visible hint set ⊆ the ref's) —
+                    // the unseen part could complete it into the control or its twin. A region already
+                    // carrying a label OUTSIDE the set can never be an exact match, so it does not count.
+                    if (ref.visibleConsistentWith(labels)) incomplete = true
                 } else if (ref.fingerprintMatches(labels)) {
                     hits.add(SemanticHit(node, pre, preCounter - 1))
                 }
@@ -681,13 +722,12 @@ class UiInteractionHandler @Inject constructor(
             return region
         }
         visit(root, 0)
-        if (truncated) return null
         hits.sortBy { it.pre }
-        return hits.mapIndexed { i, h ->
+        return SemanticSearch(hits.mapIndexed { i, h ->
             WalkHit(h.node, relaxed = false, ancestors = hits.indices.filter { j ->
                 j != i && hits[j].pre < h.pre && h.pre <= hits[j].lastPre
             })
-        }
+        }, incomplete)
     }
 
     /**

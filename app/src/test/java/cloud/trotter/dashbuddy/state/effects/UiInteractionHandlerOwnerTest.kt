@@ -381,12 +381,16 @@ class UiInteractionHandlerOwnerTest {
         early.neverClicked(); real.neverClicked()
     }
 
-    /** #1102 review constraint 3: null children spend budget — a root reporting 100 000 null children stops at the bound. */
+    /**
+     * #1102 review constraint 3: null children spend budget — the 2b walk over a root reporting 100 000
+     * null children stops at the bound. (The ref's rect is degenerate so the UNBUDGETED strategy-3
+     * fallback — L1's fall-through, #1102's pre-existing residual — does not run and muddy the count.)
+     */
     @Test
-    fun `null children spend the fetch budget and the walk aborts at the bound`() = runTest {
+    fun `null children spend the fetch budget and the walk stops at the bound`() = runTest {
         val root = windowRoot()
         whenever(root.childCount).thenReturn(100_000)
-        assertFalse(expand(handler(root)))
+        assertFalse(expand(handler(root), expandRef.copy(boundsInScreen = BoundingBox(0, 0, 0, 0))))
         verify(root, org.mockito.kotlin.atMost(TreeLimits.MAX_TREE_NODES)).getChild(any())
     }
 
@@ -524,7 +528,11 @@ class UiInteractionHandlerOwnerTest {
         row.clicks(1)
     }
 
-    /** The same with the ACTIVE window incomplete: no complete active survivor → abort, even with a background row. */
+    /**
+     * The same with the ACTIVE window incomplete and no hit in it: L1 falls through to strategy 3 (the
+     * background row is outside the deciding set while a platform window is active), which cannot reach
+     * a row 400 px from the captured rect — no click.
+     */
     @Test
     fun `an incomplete active window aborts even when a background window holds the row`() = runTest {
         val active = windowRoot(view())
@@ -719,5 +727,95 @@ class UiInteractionHandlerOwnerTest {
         val ref = bindRef(row)
         assertFalse(ref.labelHintsComplete)
         assertFalse(ref.hasExactFingerprint)
+    }
+
+    // ---------------------------------------------------------------- review L1 / L5: decideSemanticOutcome
+
+    /** A RecyclerView with an unreadable child in a BACKGROUND window: the active window is complete → 2b clicks the row. */
+    @Test
+    fun `an unreadable recycler child in a background window does not stop the active row`() = runTest {
+        val row = payRow(top = 1774 - 400)
+        val active = windowRoot(row)
+        val recycler = view(cls = "androidx.recyclerview.widget.RecyclerView", children = listOf(view()))
+        whenever(recycler.childCount).thenReturn(2)
+        val background = windowRoot(recycler)
+        assertTrue(expand(handler(listOf(active, background), active)))
+        row.clicks(1)
+    }
+
+    /**
+     * Same window incomplete but NO exact 2b hit (the row carries one extra label): nothing was found, so
+     * L1 falls through and strategy 3's containment check clicks the row at its captured rect.
+     */
+    @Test
+    fun `an incomplete window with no 2b hit falls through to strategy 3`() = runTest {
+        val row = view(clickable = true, bounds = rowRect, children = listOf(
+            view(cls = "android.widget.TextView", text = "This offer"), view(desc = "Expand"),
+            view(cls = "android.widget.TextView", text = "Base pay"),
+        ))
+        val recycler = view(cls = "androidx.recyclerview.widget.RecyclerView", children = listOf(view()))
+        whenever(recycler.childCount).thenReturn(2)
+        assertTrue(expand(handler(windowRoot(recycler, row))))
+        row.clicks(1)
+    }
+
+    /** An exact hit in an incomplete window: a hidden twin is possible — abort (no strategy-3 guess). */
+    @Test
+    fun `an exact hit in an incomplete window aborts`() = runTest {
+        val row = payRow()
+        val recycler = view(cls = "androidx.recyclerview.widget.RecyclerView", children = listOf(view()))
+        whenever(recycler.childCount).thenReturn(2)
+        assertFalse(expand(handler(windowRoot(recycler, row))))
+        row.neverClicked()
+    }
+
+    /**
+     * Bubble active (the active root is not a platform window) → the deciding set is EVERY scoped window,
+     * so an incomplete second DoorDash window makes the one hit inconclusive — abort (see the report:
+     * the round-3 brief's expected click contradicts its own rule; the rule is implemented).
+     */
+    @Test
+    fun `with the bubble active an incomplete second platform window makes the hit inconclusive`() = runTest {
+        val row = payRow(top = 1774 - 400)
+        val w1 = windowRoot(row)
+        val w2 = windowRoot(view())
+        whenever(w2.childCount).thenReturn(2)
+        val bubble = mock<AccessibilityNodeInfo>()
+        assertFalse(expand(handler(listOf(w1, w2), bubble)))
+        row.neverClicked()
+    }
+
+    /** Bubble active, both platform windows complete: the one hit is clicked (the #788 keep-all shape). */
+    @Test
+    fun `with the bubble active a single hit across complete platform windows is clicked`() = runTest {
+        val row = payRow(top = 1774 - 400)
+        val w1 = windowRoot(row)
+        val w2 = windowRoot(view())
+        val bubble = mock<AccessibilityNodeInfo>()
+        assertTrue(expand(handler(listOf(w1, w2), bubble)))
+        row.clicks(1)
+    }
+
+    /** L5: two twins, the intended one's refresh fails — the other must NOT become the sole survivor. */
+    @Test
+    fun `a twin whose refresh fails aborts the tap`() = runTest {
+        val a = payRow(top = 1774 - 400)
+        val b = payRow(top = 1774 - 200)
+        whenever(a.refresh()).thenReturn(false)
+        assertFalse(expand(handler(windowRoot(a, b))))
+        a.neverClicked(); b.neverClicked()
+    }
+
+    /** L5: a BACKGROUND hit that would fail its refresh is outside the deciding set — the complete active hit is clicked. */
+    @Test
+    fun `an unprovable background hit does not veto the active target`() = runTest {
+        val row = payRow(top = 1774 - 400)
+        val active = windowRoot(row)
+        val bgRow = payRow(top = 1774 - 200)
+        whenever(bgRow.refresh()).thenReturn(false)
+        val background = windowRoot(bgRow)
+        assertTrue(expand(handler(listOf(active, background), active)))
+        row.clicks(1)
+        bgRow.neverClicked()
     }
 }
