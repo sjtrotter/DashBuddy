@@ -464,27 +464,30 @@ class WindowSpecificSnapshotTest {
     }
 
     @Test
-    fun `BB2 - no flagged active window - the ordering is unverifiable - the active root is read`() = bothKinds { kind ->
+    fun `BB2, EE1 - no flagged active window - the ordering is unverifiable - refused`() = bothKinds { kind ->
         val dd = node(ddPkg, "dd", windowId = 3)
         val uber = node(uberPkg, "uber-offer")
         val h = harness(activeRoot = dd, windows = listOf(window(3, 5, dd), uberOverlay(9, 9, uber)))
 
-        assertEquals(listOf("dd"), collect(h, kind, windowId = 9, pkg = uberPkg).map { it.tree.text })
+        assertTrue(collect(h, kind, windowId = 9, pkg = uberPkg).isEmpty())
+        h.skipped(ForegroundSkipReason.FRONT_UNREADABLE)
         assertEquals(0L, h.stats.overlaySnapshotCount())
     }
 
     @Test
-    fun `BB2 - the active root's window is absent from the enumeration - the active root is read`() = bothKinds { kind ->
+    fun `BB2, EE1 - the active root's window is absent from the enumeration - refused (topology agrees)`() = bothKinds { kind ->
+        // The same layout as WindowsChangedOverlayTest's EE1 case, which pins "nothing emitted".
         val dd = node(ddPkg, "dd", windowId = 42) // not enumerated
         val uber = node(uberPkg, "uber-offer")
         val h = harness(activeRoot = dd, windows = listOf(window(3, 5, node(ddPkg, "dd-other"), active = true), uberOverlay(9, 9, uber)))
 
-        assertEquals(listOf("dd"), collect(h, kind, windowId = 9, pkg = uberPkg).map { it.tree.text })
+        assertTrue(collect(h, kind, windowId = 9, pkg = uberPkg).isEmpty())
+        h.skipped(ForegroundSkipReason.FRONT_UNREADABLE)
         assertEquals(0L, h.stats.overlaySnapshotCount())
     }
 
     @Test
-    fun `BB2 - focus moved to our bubble between the reads - a LOWER overlay is never returned`() = bothKinds { kind ->
+    fun `BB2, EE1 - focus moved to our bubble between the reads - refused, a LOWER overlay never returned`() = bothKinds { kind ->
         // rootInActiveWindow still says DoorDash (window 3, layer 12); the enumeration flags our
         // bubble. The overlay (layer 9) is BELOW DoorDash — the old own-active waiver returned it.
         val dd = node(ddPkg, "dd", windowId = 3)
@@ -495,7 +498,8 @@ class WindowSpecificSnapshotTest {
             windows = listOf(window(1, 20, bubble, active = true), window(3, 12, dd), uberOverlay(9, 9, uber)),
         )
 
-        assertEquals(listOf("dd"), collect(h, kind, windowId = 9, pkg = uberPkg).map { it.tree.text })
+        assertTrue("never a LOWER overlay, never an unverified root", collect(h, kind, windowId = 9, pkg = uberPkg).isEmpty())
+        h.skipped(ForegroundSkipReason.FRONT_UNREADABLE)
         assertEquals(0L, h.stats.overlaySnapshotCount())
     }
 
@@ -890,5 +894,28 @@ class WindowSpecificSnapshotTest {
 
         assertEquals(listOf("uber-offer"), collect(h, Kind.STATE).map { it.tree.text })
         assertEquals(1L, h.stats.overlayRejectedCount(OverlayRejectReason.PACKAGE_CHANGED))
+    }
+
+    @Test
+    fun `EE1 - shared fixture - unreconciled active identity - the event path refuses AND the topology path emits nothing`() {
+        // Root id 42 (not enumerated), flagged-active window 3 at layer 5, an enabled Uber overlay at 9.
+        val dd = node(ddPkg, "dd", windowId = 42)
+        val h = harness(
+            activeRoot = dd,
+            windows = listOf(window(3, 5, node(ddPkg, "dd-other"), active = true), uberOverlay(9, 9, node(uberPkg, "uber-offer"))),
+        )
+
+        val eventFrames = Kind.entries.flatMap { collect(h, it, windowId = 9, pkg = uberPkg) }
+        val topologyFrames = collectWith(
+            h.events,
+            cloud.trotter.dashbuddy.core.pipeline.accessibility.event.type.window.windows_changed
+                .WindowsChangedPipeline(h.source, h.prefs, h.stats).output(),
+            event(AccessibilityEvent.TYPE_WINDOWS_CHANGED, windowId = -1),
+        )
+
+        assertTrue("event path: $eventFrames", eventFrames.isEmpty())
+        assertTrue("topology path: $topologyFrames", topologyFrames.isEmpty())
+        assertEquals(2L, h.stats.foregroundSkipCount(ForegroundSkipReason.FRONT_UNREADABLE))
+        assertEquals(0L, h.stats.overlaySnapshotCount())
     }
 }

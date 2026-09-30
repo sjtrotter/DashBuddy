@@ -410,7 +410,9 @@ then fired, and were answered with the window beneath). The shipped rules:
   on top. An exception during the scan means "no overlay" (review DD7). Budget exhaustion refuses
   `SCAN_BUDGET`. Safe by construction: the overlay is ON TOP, so this is never the hidden-activity
   shape F1 removed. The active identity is RECONCILED (review BB2): the active root's window must be
-  in the enumeration and be the one window flagged active — else no overlay, the active root is read.
+  in the enumeration and be the one window flagged active — else the frame is REFUSED
+  `FRONT_UNREADABLE` and the topology path emits nothing for that burst (review EE1: one shared
+  `reconciledActive`, so the two paths can never disagree and interleave).
   An overlay that IS the active window is left to the active-root path. A SELECTED overlay that fails
   to map is skipped `MAP_FAILED`, retried on the next frame (review DD1, reversing BB9: a map failure
   does not prove the overlay left, and reading the covered window re-opens the interleave) — only "no

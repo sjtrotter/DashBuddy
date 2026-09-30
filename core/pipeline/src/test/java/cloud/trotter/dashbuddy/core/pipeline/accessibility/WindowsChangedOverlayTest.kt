@@ -71,9 +71,16 @@ class WindowsChangedOverlayTest {
 
     private val stats = PipelineStats()
 
-    private fun emitted(windows: List<AccessibilityWindowInfo>, enabled: Set<String>): List<TreeSnapshot> {
+    private fun emitted(
+        windows: List<AccessibilityWindowInfo>,
+        enabled: Set<String>,
+        // EE1: the fetched active root's window id — by default the flagged-active window's (reconciled).
+        activeRootWindowId: Int? = windows.firstOrNull { it.isActive }?.id,
+    ): List<TreeSnapshot> {
         val res = displayResources()
+        val activeRoot = activeRootWindowId?.let { id -> mock<AccessibilityNodeInfo> { on { windowId } doReturn id } }
         val service = mock<AccessibilityService> {
+            on { rootInActiveWindow } doReturn activeRoot
             on { this.windows } doReturn windows
             on { packageName } doReturn "cloud.trotter.dashbuddy"
             on { resources } doReturn res
@@ -354,5 +361,18 @@ class WindowsChangedOverlayTest {
             enabled = setOf(ddPkg, uberPkg),
         )
         assertEquals(listOf("uber-offer"), out.map { it.tree.text })
+    }
+
+    @Test
+    fun `EE1 - the fetched active root's window is not enumerated - nothing emitted`() {
+        val out = emitted(
+            listOf(
+                window(3, 5, node(ddPkg, "dd-other"), active = true),
+                system(9, 9, node(uberPkg, "uber-offer"), OverlayGeometry.UBER_OFFER),
+            ),
+            enabled = setOf(ddPkg, uberPkg),
+            activeRootWindowId = 42,
+        )
+        assertTrue(out.isEmpty())
     }
 }

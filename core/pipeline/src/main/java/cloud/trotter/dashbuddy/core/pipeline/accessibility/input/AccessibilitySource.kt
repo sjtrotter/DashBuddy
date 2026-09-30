@@ -427,15 +427,16 @@ class AccessibilitySource @Inject constructor(
      *
      * Returns the sealed [OverlayScan] (PR #1155 review DD12):
      * - [OverlayScan.Overlay] — an enabled overlay IS the front window above the active one: read it;
-     * - [OverlayScan.None] — no overlay in front: read the already-fetched active root. This covers the
-     *   active identity not reconciling (BB2: the active root's window must be in this enumeration and
-     *   be the one window flagged active), an application window in front of the overlay (CC4), a
+     * - [OverlayScan.None] — no overlay in front: read the already-fetched active root. This covers an
+     *   application window in front of the overlay (CC4), a
      *   DISABLED overlay platform's overlay (BB6, skipped), an unreadable APPLICATION window above
      *   (DD6 — it cannot be an offer overlay), an unknown display area (DD8, inconclusive) and any
      *   exception during the scan (DD7);
-     * - [OverlayScan.Refused] — skip the frame: an unreadable window that may BE an overlay (a LARGE
-     *   system window, or a selected overlay whose root vanished → `FRONT_UNREADABLE`, CC7/DD6), or the
-     *   walk ran out of root fetches (`SCAN_BUDGET`, CC5/DD4).
+     * - [OverlayScan.Refused] — skip the frame: the active identity does not reconcile (EE1 — the active
+     *   root's window must be in this enumeration and be the one window flagged active; otherwise the
+     *   ordering cannot be verified → `FRONT_UNREADABLE`), an unreadable window that may BE an overlay (a
+     *   LARGE system window, or a selected overlay whose root vanished → `FRONT_UNREADABLE`, CC7/DD6), or
+     *   the walk ran out of root fetches (`SCAN_BUDGET`, CC5/DD4).
      * An overlay that IS the active window is not above it (the active-root path reads it). One
      * enumeration; memoized verdicts (BB7) make the scan cheap; the package is re-verified on the root
      * that is mapped.
@@ -459,10 +460,24 @@ class AccessibilitySource @Inject constructor(
         activeWindowId: Int,
         isEnabled: (String?) -> Boolean,
     ): OverlayScan {
-        val active = windows.firstOrNull { it.id == activeWindowId } ?: return OverlayScan.None
-        val flagged = windows.filter { it.isActive }
-        if (flagged.size != 1 || flagged.single().id != active.id) return OverlayScan.None // unverifiable ordering
+        // PR #1155 review EE1: an unreconciled active identity REFUSES the frame — the ordering cannot
+        // be verified, and reading the root while the topology path (same layout) emits the overlay
+        // would interleave the two. Retried on the next frame.
+        val active = reconciledActive(windows, activeWindowId)
+            ?: return OverlayScan.Refused(ForegroundSkipReason.FRONT_UNREADABLE)
         return overlayFront(windows, active, isEnabled)
+    }
+
+    /**
+     * The ONE active-identity reconciliation (PR #1155 review BB2/EE1), shared by the event and the
+     * topology paths: the window whose id is [activeWindowId] (the fetched active root's window) must be
+     * in [windows] AND be the one and only window flagged active. Otherwise null — the ordering is
+     * unverifiable and neither path reads anything for that frame / burst.
+     */
+    internal fun reconciledActive(windows: List<AccessibilityWindowInfo>, activeWindowId: Int): AccessibilityWindowInfo? {
+        val active = windows.firstOrNull { it.id == activeWindowId } ?: return null
+        val flagged = windows.filter { it.isActive }
+        return active.takeIf { flagged.size == 1 && flagged.single().id == it.id }
     }
 
     /**

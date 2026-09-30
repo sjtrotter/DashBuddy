@@ -36,7 +36,8 @@ import javax.inject.Inject
  * overlays (every other system-layer window — the status bar, a platform's small puck or toast, the
  * notification shade — is not, review H1 / #1152 D2), never picture-in-picture (H2), our own skipped;
  * the first decides, and an unreadable window is a barrier (nothing beneath it is emitted).
- * No active window → nothing (accepted: the event-driven pipelines still cover that case).
+ * No active window, or an active identity that does not reconcile with the fetched active root
+ * (PR #1155 review EE1, the event path's rule) → nothing (the event-driven pipelines cover it).
  * Every overlay emitted is counted (`PipelineStats.onOverlaySnapshot`).
  */
 class WindowsChangedPipeline @Inject constructor(
@@ -75,9 +76,13 @@ class WindowsChangedPipeline @Inject constructor(
 
             val totalCount = windows.size
 
-            val active = windows.firstOrNull { it.isActive }
+            // PR #1155 review EE1: the SAME active-identity reconciliation the event path applies —
+            // the fetched active root's window must be enumerated and be the one flagged active.
+            // Unreconciled (or no active root) → nothing this burst, exactly as the event path refuses.
+            val activeRoot = source.getLiveNativeRoot()
+            val active = activeRoot?.let { source.reconciledActive(windows, it.windowId) }
             if (active == null) {
-                Timber.tag("Pipeline").v("🚫 Windows: no active window — nothing emitted")
+                Timber.tag("Pipeline").v("🚫 Windows: active identity unreconciled (or no active root) — nothing emitted")
                 return@transform
             }
             val enabled = platformPreferences.enabledPackages.value
