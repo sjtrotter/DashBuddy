@@ -605,7 +605,9 @@ side-effect-free half.
   any shape — so an UNKNOWN sheet title under `tvTitle`, "Pick up order", loses its X-Ray line, ADR residual
   11); the recognized `doordash.screen.chat` / `chat_conversation` rules
   redact `tvTitle` (customer-name normalized) and `tvLastMessage` (plain); the corpus intake's PII-id list IS the table (`ID_MARKER_SUFFIXES`, the former intake-only ids as
-  CONTENT / `NEVER` rows — one list, one `endsWith` match, #1160 AL3). The frame-rule
+  CONTENT / `NEVER` rows — one list, one `endsWith` match, #1160 AL3). Intake id matching is `endsWith(ignoreCase)` against
+  that one table (`CustomerTextMarkers.idMarkerFor`) — accepted cost: `rating_description_text_view`
+  ("Raise to 50%", two Dasher-Rewards fixtures) is masked at their next re-intake. The frame-rule
   off-switch exists only as `census.diagnostics.DiagnosticSkeletonBuilder` in `:core:pipeline`'s TEST
   FIXTURES (`src/testFixtures`, consumed by `:app` tests via `testFixtures(project(":core:pipeline"))`) —
   never in `main`, guarded by `DiagnosticsNotInMainTest`.
