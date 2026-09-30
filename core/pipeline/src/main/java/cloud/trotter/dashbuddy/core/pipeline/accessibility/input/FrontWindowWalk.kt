@@ -168,7 +168,7 @@ internal class FrontWindowWalk(
         // no root, so its revalidation fetch counts against the budget too.
         val root = probe.root ?: run {
             if (!budget.take()) return Foreground.Refused(ForegroundSkipReason.SCAN_BUDGET)
-            w.root
+            fetchRoot(w) // HH3: throwing ≡ null — a possible overlay we cannot verify
         } ?: return Foreground.Refused(ForegroundSkipReason.FRONT_UNREADABLE, possibleOverlay = true)
         val live = root.packageName?.toString()
         if (live == null) { // FF4: a package-less fresh root is UNREADABLE, not a package change
@@ -292,7 +292,10 @@ internal class FrontWindowWalk(
         val pkg: String = entry?.packageName ?: run {
             if (budget != null && !budget.take()) return OverlayProbe.BudgetExhausted // CC5
             // Not memoized: an unreadable root is retried next frame.
-            val fetched = w.root ?: return reject(OverlayRejectReason.UNREADABLE, OverlayProbe.Unreadable)
+            // PR #1155 review HH3: a THROWING root fetch on a window that passed type + size is a
+            // possible overlay exactly like a null root — never a generic walk failure that the
+            // event path would read beneath.
+            val fetched = fetchRoot(w) ?: return reject(OverlayRejectReason.UNREADABLE, OverlayProbe.Unreadable)
             root = fetched
             fetched.packageName?.toString() ?: return reject(OverlayRejectReason.UNREADABLE, OverlayProbe.Unreadable)
         }
@@ -357,5 +360,12 @@ internal class FrontWindowWalk(
     class ScanBudget(private var left: Int) {
         /** Consumes one fetch; false when none is left. */
         fun take(): Boolean = if (left > 0) { left--; true } else false
+    }
+
+    /** A root fetch whose failure (a stale window, a dead binder) reads as unreadable, never throws (HH3). */
+    private fun fetchRoot(w: AccessibilityWindowInfo): AccessibilityNodeInfo? = try {
+        w.root
+    } catch (_: Exception) {
+        null
     }
 }

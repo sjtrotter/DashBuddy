@@ -1000,4 +1000,16 @@ class WindowSpecificSnapshotTest {
         h.skipped(ForegroundSkipReason.FRONT_UNREADABLE)
         assertEquals(0L, h.stats.foregroundSkipCount(ForegroundSkipReason.NO_CANDIDATE))
     }
+
+    @Test
+    fun `HH3 - a THROWING root fetch on a size-passing system window is a possible overlay - refused, never read beneath`() = bothKinds { kind ->
+        val dd = node(ddPkg, "dd", windowId = 3)
+        val overlay = uberOverlay(9, 9, node(uberPkg, "uber-offer"))
+        whenever(overlay.root).thenThrow(IllegalStateException("stale window"))
+        val h = harness(activeRoot = dd, windows = listOf(window(3, 5, dd, active = true), overlay))
+
+        assertTrue(collect(h, kind, windowId = 3).isEmpty())
+        h.skipped(ForegroundSkipReason.FRONT_UNREADABLE)
+        assertEquals(1L, h.stats.overlayRejectedCount(OverlayRejectReason.UNREADABLE))
+    }
 }
