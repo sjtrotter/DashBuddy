@@ -22,6 +22,7 @@ class PermissionsUiStateTest {
         bubbles: Boolean = true,
     ) = missingPermissions(
         accessibilityGranted = accessibility,
+        accessibilityOffered = true,
         notificationListenerGranted = listener,
         locationGranted = location,
         postNotificationsGranted = postNotifications,

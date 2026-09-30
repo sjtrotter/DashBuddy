@@ -1,5 +1,7 @@
 package cloud.trotter.dashbuddy.ui.main.dashboard
 
+import androidx.activity.ComponentActivity
+import androidx.activity.compose.LocalActivity
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -22,6 +24,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -51,6 +54,7 @@ import cloud.trotter.dashbuddy.ui.main.analytics.ReviewItem
 import cloud.trotter.dashbuddy.ui.main.analytics.ReviewList
 import cloud.trotter.dashbuddy.ui.main.analytics.reviewTexts
 import cloud.trotter.dashbuddy.ui.main.navigation.Screen
+import cloud.trotter.dashbuddy.ui.main.setup.consent.EventReceiptConsentViewModel
 import cloud.trotter.dashbuddy.ui.main.setup.consent.FrontDoorHost
 import cloud.trotter.dashbuddy.ui.main.setup.permissions.PermissionsBottomSheet
 import cloud.trotter.dashbuddy.util.PermissionUtils
@@ -118,9 +122,20 @@ fun DashboardScreen(
     // ========================================================================
     // THE GATE: If permissions are missing, force the Bottom Sheet to appear
     // ========================================================================
+    // #1151 (dev re-sequencing): an undecided event-receipt consent opens the same gate — its
+    // Screen-events step comes first and gates the accessibility grant. The shell-scoped
+    // (activity) ViewModel is the one MainActivity reads.
+    val eventReceiptViewModel: EventReceiptConsentViewModel =
+        hiltViewModel(viewModelStoreOwner = LocalActivity.current as ComponentActivity)
+    val eventReceipt by eventReceiptViewModel.uiState.collectAsStateWithLifecycle()
+    LaunchedEffect(eventReceipt.showPrompt) {
+        if (eventReceipt.showPrompt) showPermissionSheet = true
+    }
+
     if (showPermissionSheet) {
         PermissionsBottomSheet(
-            onAllGranted = { showPermissionSheet = false }
+            onAllGranted = { showPermissionSheet = false },
+            onOpenConsentSettings = { onNavigate(Screen.ConsentSettings.route) },
         )
     }
 

@@ -10,14 +10,14 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
-import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 /**
- * Drives the wide-event-receipt consent prompt and the debug block (#1151). A FEATURE consent, not
- * a capability grant: it reads and writes ONLY [EventReceiptPreferences] (the value's one owner)
- * and never touches `RuleCapabilityGrants`. Enforcement lives in the accessibility listener; this
- * is an acquisition surface, never a second gate.
+ * The shell's read of the wide-event-receipt consent (#1151): whether the permission chain's
+ * Screen-events step is due ([EventReceiptConsentUiState.showPrompt]) and the debug shell's
+ * loading / blocked state. Read-only — the decision is written by `PermissionsViewModel` (the chain's
+ * step) or the Settings switch, both through [EventReceiptPreferences], the value's one owner.
+ * Enforcement lives in the accessibility listener.
  */
 @HiltViewModel
 class EventReceiptConsentViewModel internal constructor(
@@ -38,22 +38,11 @@ class EventReceiptConsentViewModel internal constructor(
             // composes a frame of the NavHost before the shell replaces it.
             initialValue = buildEventReceiptConsentState(preferences.consent.value, isDebugBuild),
         )
-
-    /**
-     * Allow ⇒ [EventReceiptConsent.ALLOWED], Don't allow ⇒ a durable [EventReceiptConsent.DECLINED].
-     * "Not now" is NOT a decision — the composable defers locally and the value stays UNDECIDED.
-     */
-    fun onDecision(allow: Boolean) {
-        viewModelScope.launch {
-            // NN3: a failed write is logged by the repository; the prompt simply stays up.
-            preferences.set(EventReceiptConsent.of(allow))
-        }
-    }
 }
 
 /** Immutable per-screen state (UDF). The defaults show nothing and block nothing. */
 data class EventReceiptConsentUiState(
-    /** Ask the dasher: the store has been read and nothing is decided yet. */
+    /** The chain's Screen-events step is due: the store has been read and nothing is decided. */
     val showPrompt: Boolean = false,
     /** Debug build AND declined: every destination is replaced by the blocking shell. */
     val blocked: Boolean = false,

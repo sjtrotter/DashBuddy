@@ -151,15 +151,4 @@ class EventReceiptConsentViewModelTest {
         val unread = EventReceiptConsentViewModel(FakePrefs(null), isDebugBuild = true)
         assertTrue(unread.uiState.value.loading)
     }
-
-    @Test
-    fun `decisions write through the preference`() = runTest {
-        val prefs = FakePrefs()
-        val vm = EventReceiptConsentViewModel(prefs, isDebugBuild = false)
-
-        vm.onDecision(allow = true)
-        vm.onDecision(allow = false)
-
-        assertEquals(listOf(EventReceiptConsent.ALLOWED, EventReceiptConsent.DECLINED), prefs.setCalls)
-    }
 }

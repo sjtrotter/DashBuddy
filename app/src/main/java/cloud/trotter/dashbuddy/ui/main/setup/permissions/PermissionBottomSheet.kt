@@ -6,6 +6,7 @@ import android.content.Intent
 import android.os.Build
 import android.provider.Settings
 import android.widget.Toast
+import androidx.activity.compose.LocalActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.ActivityResultLauncher
 import androidx.activity.result.contract.ActivityResultContracts
@@ -47,9 +48,11 @@ import kotlinx.coroutines.launch
 @Composable
 fun PermissionsBottomSheet(
     onAllGranted: () -> Unit,
+    onOpenConsentSettings: () -> Unit,
     viewModel: PermissionsViewModel = hiltViewModel(),
 ) {
     val context = LocalContext.current
+    val activity = LocalActivity.current
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val scope = rememberCoroutineScope()
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
@@ -61,7 +64,7 @@ fun PermissionsBottomSheet(
      * Being composition-local also means a re-opened gate starts from null, so a ViewModel that
      * outlived the previous sheet can never make this one report "all granted" on arrival.
      */
-    var displayedPermission by remember { mutableStateOf<PermissionType?>(null) }
+    var displayedPermission by remember { mutableStateOf<PermissionStep?>(null) }
 
     // Poll on entry: the ViewModel is scoped to the nav entry and can outlive this sheet, so its
     // state may predate the gate re-opening. (ON_RESUME below cannot cover this — the sheet is
@@ -72,8 +75,8 @@ fun PermissionsBottomSheet(
     // Event up; the ViewModel owns the read.
     LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { viewModel.refresh() }
 
-    LaunchedEffect(uiState.missing) {
-        val head = uiState.missing.firstOrNull()
+    LaunchedEffect(uiState.steps) {
+        val head = uiState.steps.firstOrNull()
         if (head != null) {
             displayedPermission = head
         } else if (displayedPermission != null) {
@@ -111,19 +114,29 @@ fun PermissionsBottomSheet(
             dragHandle = null,
             modifier = Modifier.padding(bottom = bottomPadding)
         ) {
-            PermissionCard(
-                type = currentPerm,
-                onGrantClicked = {
-                    launchGrantFlow(
-                        context = context,
-                        type = currentPerm,
-                        accessibilityToastMsg = accToastMsg,
-                        bubblesToastMsg = bubblesToastMsg,
-                        locationLauncher = locationLauncher,
-                        postNotificationsLauncher = notifLauncher,
-                    )
-                }
-            )
+            when (currentPerm) {
+                // #1151 (dev re-sequencing): the consent step comes BEFORE the accessibility grant.
+                PermissionStep.ScreenEvents -> ScreenEventsCard(
+                    onDecision = viewModel::onScreenEventsDecision,
+                )
+                PermissionStep.ScreenEventsDebugDeclined -> ScreenEventsDeclinedCard(
+                    onOpenConsentSettings = onOpenConsentSettings,
+                    onExit = { activity?.finishAffinity() },
+                )
+                is PermissionStep.Os -> PermissionCard(
+                    type = currentPerm.type,
+                    onGrantClicked = {
+                        launchGrantFlow(
+                            context = context,
+                            type = currentPerm.type,
+                            accessibilityToastMsg = accToastMsg,
+                            bubblesToastMsg = bubblesToastMsg,
+                            locationLauncher = locationLauncher,
+                            postNotificationsLauncher = notifLauncher,
+                        )
+                    }
+                )
+            }
         }
     }
 }
