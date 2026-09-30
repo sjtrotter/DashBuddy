@@ -25,10 +25,19 @@ fun eventReceiptSettingsPath(): String = stringResource(R.string.event_receipt_s
  */
 @Composable
 fun eventReceiptSettingsHelper(sdkInt: Int = Build.VERSION.SDK_INT): String {
-    val disclosure = eventReceiptDisclosure()
+    // RR1: the switch row tells the same truth as the chain's step — disclosure + requirement note.
+    val disclosure = eventReceiptDisclosure() + "\n\n" + eventReceiptRequirementNote()
     return if (EventReceiptConsent.isWideReceiptReliable(sdkInt)) {
         disclosure
     } else {
         disclosure + " " + stringResource(R.string.event_receipt_android11_caveat)
     }
 }
+
+/**
+ * #1151 RR1 — whether declining is allowed in THIS build: "Optional…" in release, "Required in this
+ * debug build…" in debug. One key, overridden in `src/debug/res` — never a BuildConfig branch, and
+ * never a sentence shared by both variants that is true in only one of them.
+ */
+@Composable
+fun eventReceiptRequirementNote(): String = stringResource(R.string.event_receipt_requirement_note)

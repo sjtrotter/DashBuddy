@@ -21,6 +21,7 @@ import androidx.compose.ui.unit.dp
 import cloud.trotter.dashbuddy.R
 import cloud.trotter.dashbuddy.feature.settings.R as SettingsR
 import cloud.trotter.dashbuddy.feature.settings.eventReceiptDisclosure
+import cloud.trotter.dashbuddy.feature.settings.eventReceiptRequirementNote
 import cloud.trotter.dashbuddy.feature.settings.eventReceiptSettingsPath
 
 /**
@@ -47,6 +48,13 @@ fun ScreenEventsCard(onDecision: (allow: Boolean) -> Unit) {
             text = eventReceiptDisclosure(),
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Spacer(Modifier.height(12.dp))
+        // RR1: debug requires, release offers — the variant's own note (a source-set override).
+        Text(
+            text = eventReceiptRequirementNote(),
+            style = MaterialTheme.typography.bodyMedium,
+            fontWeight = FontWeight.SemiBold,
         )
         Spacer(Modifier.height(24.dp))
         Row(

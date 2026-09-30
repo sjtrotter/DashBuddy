@@ -169,6 +169,10 @@ wide accessibility event receipt (#1151) today, the UNKNOWN-screen census
 - **opt-in** — the default (UNDECIDED) behaves as declined; the pre-load value
   is the same fail-closed default;
 - **a durable decline** — "Don't allow" persists;
+- **debug requires, release offers; copy differs by source-set override, same key** (#1151 RR1):
+  `event_receipt_requirement_note` is "Optional…" in `:feature:settings` `src/main/res` and
+  "Required in this debug build…" in `src/debug/res`; it is rendered on the chain's step AND on
+  the Automation & Consent switch row. The disclosure body stays one shared string;
 - **asked BEFORE the accessibility grant** (dev re-sequencing, 2026-09-30): the
   event-receipt consent is the FIRST step of the permission chain
   (`PermissionsBottomSheet` / `PermissionsViewModel`, the "Screen events" card —
