@@ -623,8 +623,9 @@ side-effect-free half.
   (≥ 2 letters in code points, `CaseFold`-folded) of a NAME id's text (else its desc). NAME run-seeding
   is reserved for ids whose value is ONLY ever a person's name (`customer_name`, `order_cx_name`); a
   reused id that is a person or a merchant (`user_name`) is PERSON_OR_MERCHANT — exact-seeded, plus letter
-  runs (≥ 3 letters) only when its value reads as a person's name (≤ 2 letter-only Capitalized tokens —
-  never "In-N-Out Burger", "7-Eleven" or "Jack in the Box") —
+  runs (≥ 3 letters) only when its value reads as a person's name (≤ 2 letter-only Capitalized tokens,
+  optionally plus one trailing initial — "Riley S"; never "In-N-Out Burger", "7-Eleven" or "Jack in the
+  Box") —
   and a value that may be chrome (`tvTitle`, `tvLastMessage`) is EXACT — exact-seeded only (what a kind
   seeds is the kind table's `seedsExactValue` / `maxRunSeedTokens` / `minRunLetters` /
   `personNameShapeOnly` / `runsGuardClasses`; its source is `nameRunSource` — usable text, else desc); the `idProtect` rows (`customer_name`, `order_cx_name`,
@@ -634,8 +635,9 @@ side-effect-free half.
   nothing. The same containment, over every contiguous join of camel segments ACROSS separators
   (`row_mc_kenna`), replaces a node's static id with the reserved sentinel `~` (`chipAdam` beside
   `customer_name` "Adam", `search_bar` beside `tvTitle` "Search") so the fingerprint's STRUCTURE never
-  depends on the customer; an app (non-framework — not `android.`/`androidx.`/`com.google.android.material.`)
-  class carrying a customer-NAME run is absent (`com.x.RileyButton`). `IdPathJudgement.isStaticId` is
+  depends on the customer; a class carrying a customer-NAME run is absent (`com.x.RileyButton`,
+  `androidx.RileyButton`) unless it is a KNOWN framework class (`FrameworkClasses.KNOWN`, exact names,
+  corpus-pinned). `IdPathJudgement.isStaticId` is
   memoized process-wide in a bounded LRU (512). A malformed (NUL / lone-surrogate) CLASS is emitted absent and counted
   (`Outcome.Built.malformedClass`); a malformed VIEW ID refuses the frame (`INVALID_TREE` — its identity
   classification cannot be verified, #1160 round 13). On the id path the PII judgement is stricter-to-trigger: a

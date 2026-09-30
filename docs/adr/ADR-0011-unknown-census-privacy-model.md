@@ -208,8 +208,9 @@ filter over every text field of the frame (tree + window title) and SEEDS:
   10); a **PERSON_OR_MERCHANT** id — a REUSED id that is a person or a merchant but never chrome
   (`user_name`, which also carries the merchant's and the dasher's own name) — seeds its exact value, and
   its letter runs (≥ 3 letters) only when the value READS AS A PERSON'S NAME: at most TWO tokens, each a
-  letter-only Capitalized word of ≥ 2 letters (an apostrophe allowed; no hyphen, digit or single-letter
-  initial). "Text Riley" beside `user_name` "Riley" is withheld exactly as beside `customer_name`, while
+  letter-only Capitalized word of ≥ 2 letters (an apostrophe allowed; no hyphen or digit), optionally
+  followed by ONE trailing capital initial ("Riley S", "Mary Jo S." — the run floor keeps the initial
+  itself from seeding). "Text Riley" beside `user_name` "Riley" is withheld exactly as beside `customer_name`, while
   "In-N-Out Burger", "Sonic Drive-In", "7-Eleven", "Jack in the Box" and "The Home Depot" seed their
   exact value only (never `in`/`out`/`the`, which would withhold "Sign in" and turn `sign_in_button`
   into `~` per merchant). A name-shaped merchant ("Wing Stop") seeds runs too — accepted: a merchant word
@@ -236,11 +237,12 @@ filter over every text field of the frame (tree + window title) and SEEDS:
   Text slots never use the whole-value rule. A CLASS name is third-party-set (the mapper copies it and the
   grammar checks only its syntax), so it is checked against customer-name runs ONLY — the runs of a
   class-guarding kind (NAME: `com.x.RileyButton` beside `customer_name` "Riley" is absent) — never a
-  title or merchant word (a `SearchView` class beside `tvTitle` "Search" stays), and never a FRAMEWORK
-  class — a binary name under `android.`, `androidx.` or `com.google.android.material.` cannot carry a
-  customer's name, so "Chip" never nulls `…material.chip.Chip` and forks the fingerprint per customer;
-  every wrapper class is framework, so wrapper eligibility cannot depend on the customer (review rounds
-  11–13).
+  title or merchant word (a `SearchView` class beside `tvTitle` "Search" stays), and never a KNOWN
+  framework class — an exact binary name in `FrameworkClasses.KNOWN` (every framework-prefixed class the
+  committed corpus renders, pinned by a corpus guard, plus the wrapper set and Material's `Chip`), so
+  "Chip" never nulls `…material.chip.Chip` and forks the fingerprint per customer, and wrapper
+  eligibility cannot depend on the customer. A framework PREFIX is not proof: an app can name its own
+  class `androidx.RileyButton`, and any unlisted class is judged like an app class (review rounds 11–14).
   `PII_ID_SUFFIXES` holds EVERY suffix of this table (a guard test pins the subset) plus other
   instruction/content ids (message bodies, maneuver/road text) (review rounds 6–9);
 - a MASK never seeds anything (`[redacted…]`, `[address]`, …): it is not identity, and its word would
