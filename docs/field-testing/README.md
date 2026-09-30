@@ -100,18 +100,22 @@ clean runs (10/10 + 5/5 accepts inferred from the task surface, 44/44 + 12/12 de
 over-inference); the remaining accept losses are #1119 and the merged card is #1069.)_
 
 - **🆕 NEW — frames keep flowing while the bubble is the active window (#1148).** Content and state
-  changes still read the active window when it is DoorDash's (a DoorDash sheet included); when a
-  NON-watched window is active (our bubble, the launcher) the TOPMOST DoorDash application window is
-  snapshotted instead of the frame being dropped. Content changes are coalesced per window (quiet
-  150 ms / scheduled max-wait 300 ms, with the first change after idle emitted immediately). Before,
+  changes still read the active window when it is an ENABLED platform's (a DoorDash sheet included);
+  when a NON-enabled window is active (our bubble, the launcher) the readable enabled window IN FRONT
+  is read — or the frame is refused if something unreadable or another app is on top. Content
+  changes are coalesced as one burst (quiet 150 ms / scheduled max-wait 300 ms, with the first
+  change after idle emitted immediately). Before,
   a DoorDash content change was rejected whenever our bubble was the active window. **No dash needed:** open DoorDash with the bubble showing,
   tap the bubble so it is active, then scroll / interact with DoorDash. **How to tell it works:**
   1. `SCREEN:` VERBOSE lines (and DEBUG captures) keep appearing for DoorDash while the bubble is
      active — bubble-active frames used to be dropped (`🚫 Skip active window (pre-map)`).
   2. `💧 DRIP: window=<id> types=0x.. n=<k> span=<ms>ms` DEBUG lines: during a continuous scroll, at
-     most one per ~300 ms per window, and one trailing DRIP after the scroll stops (the settled frame).
+     most one per ~300 ms, the first change after idle immediately, and one trailing DRIP after the
+     scroll stops (the settled frame).
   3. With a DoorDash sheet open (e.g. the decline-confirm sheet over the offer card), R0 does NOT flap
      between the sheet and the card underneath — the hidden card must never be recognized.
+     - With the bubble active and an Uber offer overlay over DoorDash, the overlay frame is the one
+       captured (Uber enabled) — not the DoorDash screen beneath it.
   4. The `PipelineStats` summary shows no new `mappingFailures`.
   - Issue: #1148. Confirmed: 0/2
 

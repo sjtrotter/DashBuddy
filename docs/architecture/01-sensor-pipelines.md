@@ -231,12 +231,12 @@ frames the pipeline ever sees*:
   calls `getSource()`). Every other type carries `source = null`.
 - **D2 — listener gate.** `ListenerGate.admit` (pure, unit-tested) admits `TYPE_WINDOWS_CHANGED`
   with ANY package, including null — the system fires the topology event with no package, so the
-  old event-package gate meant the windows pipeline never saw it. Every other handled type keeps the
-  enabled-package gate. Package scope for the windows path is enforced on the FETCHED roots
-  (`WindowsChangedPipeline` skips any root outside `Platform.watchedPackages`); the #4 guard is
-  unchanged. **Caveat:** topology events only REACH the gate in DEBUG builds, which widen the
-  service to all packages; release pins `packageNames`, so a package-less `WINDOWS_CHANGED` is
-  still filtered by the framework there — see the release-packageNames issue #1151.
+  old event-package gate meant the windows pipeline never saw it — but only while at least one
+  platform is enabled (review G6). Every other handled type keeps the enabled-package gate. Package
+  scope for the windows path is enforced on the FETCHED roots (D4); the #4 guard is unchanged.
+  **Caveat:** topology events only REACH the gate in DEBUG builds, which widen the service to all
+  packages; release pins `packageNames`, so a package-less `WINDOWS_CHANGED` is still filtered by
+  the framework there — see the release-packageNames issue #1151.
 - **D3 — per-key coalescer.** `coalesceByKey(quietMs, maxWaitMs, keyOf, merge, maxKeys,
   leadingEdge)` (`event/coalesce/CoalesceByKey.kt`) replaced `debounceWithTimeout`. Per key, a
   burst opens on the first event, folds every event into an accumulator, and emits when EITHER the
@@ -248,42 +248,57 @@ frames the pipeline ever sees*:
   timer takes one of `maxKeys` emission permits BEFORE it removes its burst and holds it through
   `send`, so a stalled consumer leaves bursts OPEN and MERGING instead of spawning fresh timers —
   live coroutines ≤ 3 × `maxKeys`, and the merged burst carries every event once the consumer
-  resumes. **Leading edge (review F5, opt-in):** a burst opening on a key with no close in the last
-  max-wait emits its opening event immediately; its later flush emits only if more events merged
-  in (a lone event is ONE frame). `ContentChangedPipeline` turns it on — without it, the first frame
-  of every in-window transition was delayed 150–300 ms, widening the #1104 click-before-screen race
-  and shifting `presentedAt` — and keys on `windowId` (quiet 150 ms / max 300 ms) with a
-  `CoalescedChange` accumulator that owns the OR of the `contentChangeTypes` bits (the old
-  `pendingChangeTypes` AtomicInteger logged and discarded them). `WindowsChangedPipeline` uses the
-  same shape on one key without a leading edge (quiet 100 ms / max 300 ms), replacing
-  `debounce(100)`, which could starve under a continuous topology flood. **Correction of the record
-  about the old operator:** its max-wait was checked only when the NEXT event arrived
-  (arrival-driven, not scheduled), it read the wall clock (`System.currentTimeMillis()`), and it
-  coalesced globally across windows — but its trailing emission was NOT lost (the `collectLatest`
-  delay completed after the burst stopped); an earlier claim that a stopped burst lost its trailing
-  frame was wrong.
-- **D4 — which window a frame is read from (review F1).** The event is a TRIGGER only; its window
-  is never the snapshot source (a hidden activity under a watched modal sheet keeps firing content
-  changes with ITS window id — snapshotting it interleaved obscured frames with the sheet's and
-  flapped R0 `decline_confirm` ↔ `offer_popup`). One resolver (`snapshotForEvent`) owns the order
-  for the content and state pipelines: (1) the **active watched window is the ground truth** —
-  `getActiveWindowPackage()` (root only, the #435 item-3 pre-map read) in `Platform.watchedPackages`
-  → `getCurrentRootSnapshot()`, a watched sheet over a watched activity included (the pre-#1148
-  behaviour); (2) when a **NON-watched window (our bubble, the launcher) is active**, the TOPMOST
-  watched application window (`AccessibilitySource.topmostWindow`: highest `layer`, one enumeration,
-  each candidate's root fetched once, returned WITH its root) is snapshotted through
-  `getWindowSnapshot(window, root, total)` instead of dropping the frame; (3) none → null, nothing
-  mapped; (4) the post-map `snapshot.packageName in Platform.watchedPackages` re-check stays (#4).
-  `WindowsChangedPipeline` maps its non-active watched windows through the same builder (F6). Every
-  snapshot carries a `TreeSnapshot.WindowContext` (one private builder, `contextOf`); the
-  active-root path matches it by the captured root's OWN `windowId` (a local getter), never by
-  `isActive`, which may already name another window if focus moved during the map (review F4).
-  `TreeSnapshot.trigger` records the reason (`CONTENT`/`STATE`/`WINDOWS`), OR-ed change bits,
-  coalesced-event count and span — consumed by the `💧 DRIP` DEBUG log and available to the census
-  (#1138); it is deliberately NOT in the capture envelope. The existing envelope `windowContext`
-  field is now populated on content/state frames too; its title is app-controlled text and is
-  scrubbed at the envelope edge (sensitive → drop, customer → mask, 64-char cap —
-  `WindowTitleScrubTest`).
+  resumes. **Leading edge (review F5/G3/G4, opt-in):** a burst opening on a key with no EMISSION in
+  the last max-wait emits its opening event immediately; the burst's accumulator then restarts
+  empty, so its later flush carries only the post-lead events and emits only if there are any (a
+  lone event is ONE frame, and the emitted counts sum to the raw event count). The cooldown is
+  anchored on the key's last emission (a lead, an emitting flush, an emitting eviction) — a silent
+  close starts none, so a transition 300 ms after a lone lead leads again, as the old operator
+  did. **`ContentChangedPipeline` runs ONE burst across all windows** (a constant key, review G2 —
+  the resolver reads one window per frame whatever fired, so a per-window key only multiplied maps
+  of the same root; the operator stays generic), quiet 150 ms / max 300 ms, leading edge on —
+  without it the first frame of every transition was delayed 150–300 ms, widening the #1104
+  click-before-screen race and shifting `presentedAt`. Its `CoalescedChange` accumulator owns the
+  OR of the `contentChangeTypes` bits (the old `pendingChangeTypes` AtomicInteger logged and
+  discarded them); its `windowId` is the last event's window, for the DRIP log only.
+  `WindowsChangedPipeline` uses the same shape on one key without a leading edge (quiet 100 ms /
+  max 300 ms), replacing `debounce(100)`, which could starve under a continuous topology flood.
+  **Correction of the record about the old operator:** its max-wait was checked only when the NEXT
+  event arrived (arrival-driven, not scheduled), it read the wall clock
+  (`System.currentTimeMillis()`), and it coalesced globally across windows — but its trailing
+  emission was NOT lost (the `collectLatest` delay completed after the burst stopped); an earlier
+  claim that a stopped burst lost its trailing frame was wrong.
+- **D4 — the foreground policy (review F1/G5/G6).** The event is a TRIGGER only; its window is never
+  the snapshot source (a hidden activity under a watched modal sheet keeps firing content changes
+  with ITS window id — snapshotting it interleaved obscured frames with the sheet's and flapped R0
+  `decline_confirm` ↔ `offer_popup`). "Watched" here means the **ENABLED** platform packages
+  (`PlatformPreferences.enabledPackages`, injected into all three window pipelines), never the
+  static registry alone. One resolver (`snapshotForEvent`) owns the order for the content and state
+  pipelines: (1) ONE `getLiveNativeRoot()` — null → skip the frame, never enumerate as a fallback;
+  (2) its package enabled → map THAT already-fetched root (`getCurrentRootSnapshot(root)`): the
+  active enabled window is the ground truth, a sheet over its activity included; (3) otherwise (our
+  bubble, the launcher, system UI active) → `AccessibilitySource.foregroundWindow`,
+  **readable-top-or-refuse**: candidates by `layer` descending are application windows (never our
+  own package) and readable KNOWN-platform `TYPE_SYSTEM` windows — Android maps
+  `TYPE_APPLICATION_OVERLAY` (Uber's offer overlays) to accessibility `TYPE_SYSTEM`, and the status
+  bar / unreadable system windows are never candidates. The FIRST candidate decides: an application
+  window with a null root refuses the frame (we cannot verify what the dasher sees — never fall
+  through to a lower readable window); a non-enabled package (another app, or a disabled platform's
+  overlay) refuses it; else that window is mapped with `getWindowSnapshot(window, root, total)`
+  (one enumeration, one root fetch per inspected window). (4) The post-map re-check of the
+  snapshot's own package against the enabled set stays (#4). **The windows pipeline emits true
+  overlays only** (G6): enabled-package windows (application or readable known-platform system)
+  whose layer is ABOVE the active window's — never one beneath it; no active window → nothing. It
+  maps through the same builder (F6). Every snapshot carries a `TreeSnapshot.WindowContext` (one
+  private builder, `contextOf`); the active-root path matches it by the captured root's OWN
+  `windowId` (a local getter), never by `isActive`, which may already name another window if focus
+  moved during the map (review F4). `TreeSnapshot.trigger` records the reason
+  (`CONTENT`/`STATE`/`WINDOWS`), OR-ed change bits, coalesced-event count and span — consumed by the
+  `💧 DRIP` DEBUG log and available to the census (#1138); it is deliberately NOT in the capture
+  envelope. The existing envelope `windowContext` field is now populated on content/state frames
+  too, but its **title is never persisted** (written null on every path — review G1: a name- or
+  address-shaped title passes every marker scan); the hashed form arrives with #1145. The one kept
+  control: an UNKNOWN frame whose title carries a sensitive marker is dropped (`WindowTitleScrubTest`).
 
 Not in #1148: `notificationTimeout` (stays 100 ms), TalkBack's subtree-only / focus-gated filters
 (they discard observer evidence), `TYPE_ANNOUNCEMENT`/text events, and any change to `FrameGate`,
