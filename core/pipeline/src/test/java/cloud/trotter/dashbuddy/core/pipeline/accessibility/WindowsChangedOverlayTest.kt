@@ -6,10 +6,14 @@ import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
 import android.view.accessibility.AccessibilityWindowInfo
 import cloud.trotter.dashbuddy.core.pipeline.PipelineStats
+import cloud.trotter.dashbuddy.core.pipeline.accessibility.event.type.window.content_changed.ContentChangedPipeline
+import cloud.trotter.dashbuddy.core.pipeline.accessibility.event.type.window.state_changed.StateChangedPipeline
 import cloud.trotter.dashbuddy.core.pipeline.accessibility.event.type.window.windows_changed.WindowsChangedPipeline
 import cloud.trotter.dashbuddy.core.pipeline.accessibility.input.AccEvent
 import cloud.trotter.dashbuddy.core.pipeline.accessibility.input.AccessibilitySource
+import cloud.trotter.dashbuddy.domain.model.accessibility.UiNode
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
@@ -21,10 +25,14 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
+import org.mockito.kotlin.any
 import org.mockito.kotlin.doReturn
 import org.mockito.kotlin.mock
 import org.mockito.kotlin.never
+import org.mockito.kotlin.spy
+import org.mockito.kotlin.times
 import org.mockito.kotlin.verify
+import org.mockito.kotlin.whenever
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 
@@ -33,38 +41,14 @@ import org.robolectric.annotation.Config
  * windows ABOVE the active window. A window beneath the active one — the activity under a DoorDash
  * sheet — is never emitted (that re-opened the F1 interleaving). #1152 D6: a platform offer overlay
  * (a11y `TYPE_SYSTEM`, size + package) above the active window is emitted too; every other
- * system-layer window (the puck, the status bar, the shade, a DoorDash toast) never is.
+ * system-layer window (the puck, the status bar, the shade, a DoorDash toast) never is. The
+ * shared-fixture cases (review FF1/GG1/HH1, moved here by HH7) assert the topology path and the event
+ * path agree on ONE window list.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [36])
-class WindowsChangedOverlayTest {
-
-    private val ddPkg = "com.doordash.driverapp"
-    private val uberPkg = "com.ubercab.driver"
-
-    private fun node(pkg: String, label: String): AccessibilityNodeInfo = mock {
-        on { packageName } doReturn pkg
-        on { text } doReturn label
-    }
-
-    private fun window(
-        windowId: Int,
-        windowLayer: Int,
-        root: AccessibilityNodeInfo?,
-        windowType: Int = AccessibilityWindowInfo.TYPE_APPLICATION,
-        active: Boolean = false,
-        bounds: Rect? = null, // null → zero-size
-    ): AccessibilityWindowInfo {
-        val w = mock<AccessibilityWindowInfo> {
-            on { id } doReturn windowId
-            on { layer } doReturn windowLayer
-            on { this.root } doReturn root
-            on { isActive } doReturn active
-            on { type } doReturn windowType
-        }
-        return if (bounds != null) withBounds(w, bounds) else w
-    }
+class WindowsChangedOverlayTest : WindowResolverTestBase() {
 
     private fun system(windowId: Int, windowLayer: Int, root: AccessibilityNodeInfo?, bounds: Rect) =
         window(windowId, windowLayer, root, windowType = AccessibilityWindowInfo.TYPE_SYSTEM, bounds = bounds)
@@ -370,5 +354,63 @@ class WindowsChangedOverlayTest {
             enabled = setOf(ddPkg, uberPkg),
         )
         assertTrue(out.isEmpty())
+    }
+
+    // --- Shared-fixture: the topology path agrees with the event path (FF1/GG1/HH1) ---
+
+    @Test
+    fun `FF1 - shared fixture - one enumeration, both paths agree on the overlay`() {
+        // rootInActiveWindow says window 42 (not enumerated); the enumeration flags window 3 at layer 5
+        // with an enabled Uber overlay at 9 above it. Same list → same answer on both paths.
+        val stray = node(ddPkg, "dd-stray", windowId = 42)
+        val h = harness(
+            activeRoot = stray,
+            windows = listOf(window(3, 5, node(ddPkg, "dd-other"), active = true), uberOverlay(9, 9, node(uberPkg, "uber-offer"))),
+        )
+
+        val eventFrames = Kind.entries.flatMap { collect(h, it, windowId = 9, pkg = uberPkg) }.map { it.tree.text }
+        val topologyFrames = collectWith(
+            h.events,
+            cloud.trotter.dashbuddy.core.pipeline.accessibility.event.type.window.windows_changed
+                .WindowsChangedPipeline(h.source, h.prefs, h.stats).output(),
+            event(AccessibilityEvent.TYPE_WINDOWS_CHANGED, windowId = -1),
+        ).map { it.tree.text }
+
+        assertEquals(listOf("uber-offer", "uber-offer"), eventFrames)
+        assertEquals(listOf("uber-offer"), topologyFrames)
+        verify(h.service, never()).rootInActiveWindow
+    }
+
+    @Test
+    fun `GG1, HH1 - unreadable flagged active root, COLD cache, enabled overlay above - BOTH paths yield the overlay`() {
+        val dd = node(ddPkg, "dd")
+        val activeWindow = window(3, 5, null, active = true)
+        val h = harness(activeRoot = dd, windows = listOf(activeWindow, uberOverlay(9, 9, node(uberPkg, "uber-offer"))))
+
+        assertEquals(listOf("uber-offer", "uber-offer"), Kind.entries.flatMap { collect(h, it, windowId = 3) }.map { it.tree.text })
+        assertEquals(listOf("uber-offer"), topologyFrames(h).map { it.tree.text })
+    }
+
+    @Test
+    fun `GG1, HH1 - unreadable flagged active root, WARM cache - the memoized package never bypasses the fresh-root check`() {
+        val dd = node(ddPkg, "dd", windowId = 3)
+        val activeWindow = window(3, 5, dd, active = true)
+        val h = harness(activeRoot = dd, windows = listOf(activeWindow, uberOverlay(9, 9, node(uberPkg, "uber-offer"))))
+        assertEquals(listOf("uber-offer"), collect(h, Kind.STATE, windowId = 3).map { it.tree.text }) // warms window 3 → DoorDash
+
+        whenever(activeWindow.root).thenReturn(null) // the active window's root is now unreadable
+        assertEquals(listOf("uber-offer"), collect(h, Kind.STATE, windowId = 3).map { it.tree.text })
+        assertEquals(listOf("uber-offer"), topologyFrames(h).map { it.tree.text })
+    }
+
+    @Test
+    fun `HH1 - unreadable flagged active root, NO overlay above - the event path skips, the topology path emits nothing`() {
+        val dd = node(ddPkg, "dd")
+        val h = harness(activeRoot = dd, windows = listOf(window(3, 5, null, active = true), window(4, 2, node(ddPkg, "dd-below"))))
+
+        assertTrue("never the rootInActiveWindow fallback while a flagged window is unreadable", collect(h, Kind.STATE, windowId = 3).isEmpty())
+        h.skipped(ForegroundSkipReason.FRONT_UNREADABLE)
+        assertTrue(topologyFrames(h).isEmpty())
+        assertEquals(1L, h.stats.topologySkipCount(ForegroundSkipReason.FRONT_UNREADABLE))
     }
 }

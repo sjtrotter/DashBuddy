@@ -7,7 +7,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 
 /** A fixed enabled-package set for the #1148 window-resolution tests. */
-internal class FakePlatformPreferences(enabled: Set<String>) : PlatformPreferences {
+class FakePlatformPreferences(enabled: Set<String>) : PlatformPreferences {
     override val enabledPlatforms: StateFlow<Set<Platform>> =
         MutableStateFlow(enabled.map { Platform.fromPackage(it) }.toSet())
     override val enabledPackages: StateFlow<Set<String>> = MutableStateFlow(enabled)
