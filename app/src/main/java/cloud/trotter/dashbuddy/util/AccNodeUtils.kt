@@ -18,7 +18,9 @@ object AccNodeUtils {
     /**
      * #1149 — the one definition of "this node takes a click": `isClickable`, OR an advertised
      * [AccessibilityNodeInfo.ACTION_CLICK] in its action list (Compose and custom views often
-     * advertise the action without setting the flag — TalkBack's own test).
+     * advertise the action without setting the flag — TalkBack's own test). Its bind-time mirror is
+     * `UiNode.takesClick` (`isClickable || hasClickAction`, #1149 review J2): the two MUST stay the
+     * same predicate, or bind and fire disagree on which labels a control owns.
      */
     fun isActionClickable(node: AccessibilityNodeInfo): Boolean =
         node.isClickable || node.actionList.orEmpty().any { it.id == AccessibilityNodeInfo.ACTION_CLICK }

@@ -100,14 +100,14 @@ data class NodeRef(
         /**
          * #1149 review I2 — the bind-time mirror of the executor's live label scan over a mapped
          * [UiNode]: own text/contentDescription, then children breadth-first-in-order down to
-         * [LABEL_SCAN_DEPTH], at most [LABEL_SCAN_NODES] child slots, never descending into an
-         * `isClickable` descendant. [UiLabelScan.complete] is false only when the slot cap cut it — the
+         * [LABEL_SCAN_DEPTH], at most [LABEL_SCAN_NODES] child slots, never descending into a
+         * descendant that [UiNode.takesClick] (review J2 — the live `isActionClickable`'s mirror). [UiLabelScan.complete] is false only when the slot cap cut it — the
          * depth bound is the shared HORIZON (labels below it belong to neither side's fingerprint).
          *
          * Residual (documented): fire time budgets FETCH attempts (a null child spends one), while a
          * mapped [UiNode] has already dropped null children, so a live window with null slots can
-         * reach its cap sooner; and a `UiNode` carries no action list, so bind time's "clickable" is
-         * `isClickable` only where fire time also honours an advertised `ACTION_CLICK`.
+         * reach its cap sooner. (The former "clickable means isClickable only at bind time" residual
+         * is closed by [UiNode.hasClickAction], review J2.)
          */
         fun hintLabelsOf(node: cloud.trotter.dashbuddy.domain.model.accessibility.UiNode): UiLabelScan {
             val labels = mutableListOf<String>()
@@ -121,7 +121,7 @@ data class NodeRef(
                 for (child in n.children) {
                     if (fetched >= LABEL_SCAN_NODES) { complete = false; return false }
                     fetched++
-                    if (child.isClickable) continue
+                    if (child.takesClick) continue // J2: the same predicate as the live isActionClickable
                     if (!visit(child, depth + 1)) return false
                 }
                 return true

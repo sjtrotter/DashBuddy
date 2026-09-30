@@ -153,6 +153,8 @@ private fun convert(
         isClickable = node.isClickable,
         isEnabled = node.isEnabled,
         isChecked = node.checked,
+        // #1149 review J2: the advertised click action (the live `AccNodeUtils.isActionClickable` half).
+        hasClickAction = node.actionList.orEmpty().any { it.id == AccessibilityNodeInfo.ACTION_CLICK },
         boundsInScreen = bounds.toBoundingBox(),
         children = children,
     )

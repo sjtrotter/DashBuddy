@@ -3,6 +3,7 @@ package cloud.trotter.dashbuddy.state.effects
 import android.graphics.Rect
 import android.view.accessibility.AccessibilityNodeInfo
 import cloud.trotter.dashbuddy.core.pipeline.accessibility.input.AccessibilitySource
+import cloud.trotter.dashbuddy.core.pipeline.accessibility.mapper.toUiNode
 import cloud.trotter.dashbuddy.domain.action.RuleAction
 import cloud.trotter.dashbuddy.domain.model.accessibility.BoundingBox
 import cloud.trotter.dashbuddy.domain.pipeline.NodeRef
@@ -537,5 +538,46 @@ class UiInteractionHandlerOwnerTest {
         val elsewhere = payRow(top = 1774 - 400)
         assertFalse(expand(handler(windowRoot(onRect, elsewhere))))
         onRect.neverClicked(); elsewhere.neverClicked()
+    }
+
+    // ---------------------------------------------------------------- review J2: one clickability predicate
+
+    /** A row whose info chevron ADVERTISES ACTION_CLICK without the flag (the Compose shape). */
+    private fun rowWithActionOnlyChevron(top: Int) = view(clickable = true, bounds = Rect(36, top, 1044, top + 126), children = listOf(
+        view(cls = "android.widget.TextView", text = "This offer"),
+        view(desc = "Expand"),
+        view(clickable = false, advertisesClick = true, desc = "Details"),
+    ))
+
+    /** Bind the ref the production way: native mapping → the :domain label horizon (what Ruleset.buildNodeRef hashes). */
+    private fun bindRef(live: AccessibilityNodeInfo): NodeRef {
+        val scan = NodeRef.hintLabelsOf(live.toUiNode()!!)
+        return expandRef.copy(labelHintHashes = scan.labels.mapNotNull(NodeRef::hintHash).distinct())
+    }
+
+    /**
+     * Bind and fire agree the action-only chevron owns "Details", so the fingerprint is {this offer,
+     * expand}: the REAL row is found, never the competitor whose non-clickable "Details" makes it a
+     * superset. (With bind reading isClickable only, bind absorbed "Details" and the competitor
+     * became the sole exact survivor — an abort turned into a wrong click.)
+     */
+    @Test
+    fun `an action-only descendant is owned identically at bind and fire — the real row is found`() = runTest {
+        val row = rowWithActionOnlyChevron(top = 1374)
+        val competitor = view(clickable = true, bounds = Rect(36, 1600, 1044, 1726), children = listOf(
+            view(cls = "android.widget.TextView", text = "This offer"), view(desc = "Expand"), view(desc = "Details"),
+        ))
+        val ref = bindRef(row)
+        assertTrue(expand(handler(windowRoot(row, competitor)), ref))
+        row.clicks(1)
+        competitor.neverClicked()
+    }
+
+    @Test
+    fun `two genuine twins with action-only chevrons still abort`() = runTest {
+        val a = rowWithActionOnlyChevron(top = 1374)
+        val b = rowWithActionOnlyChevron(top = 1600)
+        assertFalse(expand(handler(windowRoot(a, b)), bindRef(a)))
+        a.neverClicked(); b.neverClicked()
     }
 }

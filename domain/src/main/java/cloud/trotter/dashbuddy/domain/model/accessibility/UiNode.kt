@@ -38,6 +38,13 @@ data class UiNode(
     val isClickable: Boolean = false,
     val isEnabled: Boolean = false,
     val isChecked: Int = 0,
+    /**
+     * #1149 review J2 (the #1147 field, brought forward): the live node ADVERTISES
+     * `ACTION_CLICK` in its action list — Compose controls often do without setting
+     * [isClickable]. Deliberately NOT in [allText] and NOT in any content/structural hash;
+     * read it through [takesClick].
+     */
+    val hasClickAction: Boolean = false,
 
     val boundsInScreen: BoundingBox = BoundingBox(0, 0, 0, 0),
 
@@ -52,6 +59,14 @@ data class UiNode(
      */
     var parent: UiNode? = null
         private set
+
+    /**
+     * #1149 review J2 — THE bind-time "this node takes a click" predicate: [isClickable] OR an
+     * advertised click action ([hasClickAction]). Its live mirror is
+     * `AccNodeUtils.isActionClickable` (`isClickable` OR `ACTION_CLICK` in the action list), so the
+     * label horizon's clickable-descendant ownership is decided identically on both sides.
+     */
+    val takesClick: Boolean get() = isClickable || hasClickAction
 
     /**
      * Wire the parent back-references for the whole tree (#363). The single
@@ -86,6 +101,7 @@ data class UiNode(
         if (isClickable != other.isClickable) return false
         if (isEnabled != other.isEnabled) return false
         if (isChecked != other.isChecked) return false
+        if (hasClickAction != other.hasClickAction) return false
         // Bounds
         if (boundsInScreen != other.boundsInScreen) return false
 
@@ -105,6 +121,7 @@ data class UiNode(
         result = 31 * result + isClickable.hashCode()
         result = 31 * result + isEnabled.hashCode()
         result = 31 * result + isChecked.hashCode()
+        result = 31 * result + hasClickAction.hashCode()
         // Bounds
         result = 31 * result + boundsInScreen.hashCode()
         return result

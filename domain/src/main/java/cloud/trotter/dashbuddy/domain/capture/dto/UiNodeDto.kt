@@ -14,6 +14,9 @@ data class UiNodeDto(
     val isClickable: Boolean = false,
     val isEnabled: Boolean = false,
     val isChecked: Int = 0,
+    // #1149 review J2: default false and omitted when false (encodeDefaults = false), so committed
+    // fixtures and captures without it are byte-identical.
+    @SerialName("clickAction") val hasClickAction: Boolean = false,
 
     @SerialName("bounds") val boundsInScreen: BoundingBoxDto,
     @SerialName("children") val children: List<UiNodeDto> = emptyList()
