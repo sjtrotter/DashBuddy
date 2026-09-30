@@ -23,6 +23,7 @@ import org.robolectric.RobolectricTestRunner
 @RunWith(RobolectricTestRunner::class)
 class AccNodeUtilsOwnerTest {
 
+    @Suppress("DEPRECATION") // getActions(): the legacy bitmask the P6 predicate reads
     private fun node(clickable: Boolean = false, advertisesClick: Boolean = false, parent: AccessibilityNodeInfo? = null): AccessibilityNodeInfo {
         val n = mock<AccessibilityNodeInfo>()
         whenever(n.isClickable).thenReturn(clickable)

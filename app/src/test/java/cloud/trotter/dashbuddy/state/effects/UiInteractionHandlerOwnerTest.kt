@@ -37,6 +37,7 @@ class UiInteractionHandlerOwnerTest {
     private val titleId = "com.doordash.driverapp:id/textView_prism_button_title"
 
     /** A mocked live node whose children's `parent` points back at it (the owner walk climbs it). */
+    @Suppress("DEPRECATION") // getActions(): the legacy bitmask the P6 predicate reads
     private fun view(
         cls: String = "android.view.View", clickable: Boolean = false, advertisesClick: Boolean = false,
         bounds: Rect = Rect(0, 0, 10, 10), text: String? = null, desc: String? = null,
