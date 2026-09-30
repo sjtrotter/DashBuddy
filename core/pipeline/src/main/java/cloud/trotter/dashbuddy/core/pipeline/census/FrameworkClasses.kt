@@ -9,13 +9,33 @@ object FrameworkClasses {
     val PACKAGES = listOf("android.", "androidx.", "com.google.android.material.")
 
     /**
-     * The KNOWN framework classes the class check exempts (reviews AF2, AG2), by EXACT binary name: every
-     * [PACKAGES] class the committed corpus renders (a corpus guard fails on an unlisted one),
-     * every `AnonymousWrappers.WRAPPER_CLASSES` member (pinned by a test), and the Material `Chip` the
-     * AG2 vectors name. Any other framework-PREFIXED class is judged like an app class — the prefix is
-     * not proof (`androidx.RileyButton` is nulled beside "Riley").
+     * The KNOWN framework classes the class check exempts (reviews AF2, AG2, AI1), by EXACT binary name:
+     * the pinned INVENTORY ([INVENTORY_RESOURCE] — every public class under `android.view.`, `android.widget.`,
+     * `android.webkit.`, `androidx.` and `com.google.android.material.` in the SDK `android.jar` and the
+     * AndroidX / Material artifacts the build resolves; regenerated and diffed by `:app`'s
+     * `FrameworkClassInventoryTest`) ∪ [CORPUS] ∪ the wrapper set (pinned by a test). Any other framework-
+     * PREFIXED class is judged like an app class — the prefix is not proof (`androidx.RileyButton` is nulled
+     * beside "Riley"). A missing resource shrinks the set, which only withholds MORE (fail closed).
      */
-    val KNOWN: Set<String> = setOf(
+    val KNOWN: Set<String> by lazy { CORPUS + loadInventory() }
+
+    /** The classpath resource holding the generated inventory, one binary name per line (review AI1). */
+    const val INVENTORY_RESOURCE = "/census/framework-classes.txt"
+
+    private fun loadInventory(): Set<String> = try {
+        FrameworkClasses::class.java.getResourceAsStream(INVENTORY_RESOURCE)
+            ?.bufferedReader()?.useLines { lines -> lines.map { it.trim() }.filter { it.isNotEmpty() }.toSet() }
+            ?: emptySet()
+    } catch (_: Exception) {
+        emptySet()
+    }
+
+    /**
+     * Every [PACKAGES] class the committed corpus renders (a corpus guard fails on an unlisted one), the
+     * wrapper set, and the Material `Chip` the AG2 vectors name — kept even when the inventory resource is
+     * unavailable.
+     */
+    val CORPUS: Set<String> = setOf(
         "android.appwidget.AppWidgetHostView",
         "android.view.SurfaceView",
         "android.view.TextureView",

@@ -157,6 +157,10 @@ android {
             System.getProperty("updateParseGolden")?.let {
                 test.systemProperty("updateParseGolden", it)
             }
+            // #1160 review AI1: same forwarding for the framework-class inventory regen.
+            System.getProperty("updateFrameworkClasses")?.let {
+                test.systemProperty("updateFrameworkClasses", it)
+            }
 
             // Two families are excluded from an UNFILTERED sweep. Both stay runnable by
             // name (`--tests "*Foo*"` sets commandLineIncludePatterns, so the whole block

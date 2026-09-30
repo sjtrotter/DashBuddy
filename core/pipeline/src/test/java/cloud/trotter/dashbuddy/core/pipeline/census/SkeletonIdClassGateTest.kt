@@ -370,4 +370,27 @@ class SkeletonIdClassGateTest : SkeletonBuilderTestBase() {
         assertEquals("~", li.root.children[1].id)
         assertEquals(riley.fingerprint, li.fingerprint)
     }
+
+    @Test
+    fun `AI1 - an inventoried framework class the corpus never renders is exempt too`() {
+        assertEquals(listOf<String?>("com.google.android.material.card.MaterialCardView"),
+            classesBeside("customer_name", "Card", "com.google.android.material.card.MaterialCardView"))
+        assertEquals(listOf<String?>("android.widget.GridLayout"), classesBeside("customer_name", "Grid", "android.widget.GridLayout"))
+        fun print(customer: String) = SkeletonBuilder.build(
+            UiNode(className = "android.widget.FrameLayout", viewIdResourceName = "com.x:id/host", children = listOf(
+                UiNode(className = "android.widget.TextView", viewIdResourceName = "com.doordash.driverapp:id/customer_name", text = customer),
+                UiNode(className = "com.google.android.material.card.MaterialCardView", children = listOf(
+                    UiNode(className = "android.widget.GridLayout"),
+                )),
+            )),
+            null, meta, platform, day,
+        )!!.fingerprint
+        assertEquals(print("Card Grid"), print("Riley"))
+        // The fake-prefix vectors still null.
+        assertEquals(
+            listOf<String?>(null, null, null),
+            classesBeside("customer_name", "Riley", "androidx.RileyButton", "android.widget.RileyView", "com.google.android.material.RileyChip"),
+        )
+        assertTrue(FrameworkClasses.KNOWN.size > FrameworkClasses.CORPUS.size)
+    }
 }
