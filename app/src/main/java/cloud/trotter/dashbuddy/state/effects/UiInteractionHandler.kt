@@ -487,8 +487,13 @@ class UiInteractionHandler @Inject constructor(
         val refText = ref.text?.takeIf { it.isNotBlank() }
         val targets = owners.mapIndexed { j, owner ->
             val group = members[j].map { candidates[it] }
-            val evidence = group.firstOrNull { refText != null && it.node.text?.toString()?.take(50) == refText }
-                ?: group.firstOrNull { it.boundsDerived && !it.relaxed }
+            // #1149 review T5: the evidence slot is chosen AFTER a refresh — a stale matched node must not
+            // win it (on its cached stored text) over a sibling that currently carries that text. If none
+            // refreshes, the first member stands in and fails its own J1 refresh (stale).
+            val fresh = group.filter { it.node == owner || it.node.refresh() }
+            val evidence = fresh.firstOrNull { refText != null && it.node.text?.toString()?.take(50) == refText }
+                ?: fresh.firstOrNull { it.boundsDerived && !it.relaxed }
+                ?: fresh.firstOrNull()
                 ?: group.first()
             OwnedTarget(
                 index = j,

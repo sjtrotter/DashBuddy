@@ -1116,4 +1116,15 @@ class UiInteractionHandlerOwnerTest {
         assertFalse(expand(handler(listOf(readable), bubble, unreadableWindows = 1), legacy))
         twin.neverClicked()
     }
+
+    /** T5: a stale title must not win the evidence slot over a fresh sibling that carries the stored text. */
+    @Test
+    fun `evidence is chosen after refresh`() = runTest {
+        val staleTitle = view(cls = "android.widget.TextView", text = "Decline offer", refreshes = false)
+        val freshTitle = view(cls = "android.widget.TextView", text = "Decline offer")
+        val button = view(clickable = true, children = listOf(staleTitle, freshTitle))
+        val root = windowRoot(button, byId = listOf(staleTitle, freshTitle))
+        assertTrue(confirmDecline(handler(root), idRef.copy(text = "Decline offer")))
+        button.clicks(1)
+    }
 }
