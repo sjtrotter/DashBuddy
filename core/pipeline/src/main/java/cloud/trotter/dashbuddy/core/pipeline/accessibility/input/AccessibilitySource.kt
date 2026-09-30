@@ -400,10 +400,15 @@ class AccessibilitySource @Inject constructor(
         } catch (_: Exception) {
             null
         } ?: return null
-        // PR #1155 review FF6: overlay frames are counted in ONE place — this shared builder. The only
-        // system-layer windows ever mapped are platform offer overlays (every walk admits a
-        // TYPE_SYSTEM window only as an overlay candidate).
-        if (window.type == AccessibilityWindowInfo.TYPE_SYSTEM) stats.onOverlaySnapshot()
+        // PR #1155 review FF6/JJ3: overlay frames are counted in ONE place — this shared builder — and
+        // the count means "an OFFER OVERLAY was read": a system-layer window counts only when it passes
+        // the overlay probe (memoized — no fetch on the walk's own candidates). An ACTIVE system window
+        // that is not one (a dragged puck) is still mapped (pre-#1152 behaviour) but not counted.
+        if (window.type == AccessibilityWindowInfo.TYPE_SYSTEM &&
+            walk.overlayProbe(window, walk.displayArea()) is OverlayProbe.Candidate
+        ) {
+            stats.onOverlaySnapshot()
+        }
         return RootSnapshot(
             tree = tree,
             packageName = root.packageName?.toString(),

@@ -412,4 +412,14 @@ class OverlayEventPathTest : WindowResolverTestBase() {
         h.skipped(ForegroundSkipReason.FRONT_UNREADABLE)
         assertEquals(1L, h.stats.overlayRejectedCount(OverlayRejectReason.UNREADABLE))
     }
+
+    @Test
+    fun `JJ3 - an ACTIVE puck (a small system window) is mapped but never counted as an overlay snapshot`() = bothKinds { kind ->
+        val puckRoot = node(uberPkg, "uber-puck", windowId = 10)
+        val puck = window(10, 9, puckRoot, windowType = system, active = true, bounds = OverlayGeometry.UBER_PUCK)
+        val h = harness(activeRoot = puckRoot, windows = listOf(puck, window(3, 2, node(ddPkg, "dd"))))
+
+        assertEquals(listOf("uber-puck"), collect(h, kind, windowId = 10, pkg = uberPkg).map { it.tree.text })
+        assertEquals(0L, h.stats.overlaySnapshotCount())
+    }
 }
