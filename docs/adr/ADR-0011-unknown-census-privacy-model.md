@@ -43,7 +43,8 @@ it true by construction) so a violation is a compile error or a failing test, no
 
 A new versioned schema, `uinode.skeleton.v1` (`UiSkeletonDto` + `SkeletonSchema`, beside
 `UiNodeSchema`, ADR-0003 rules apply). Per node: `class`, `id` (the platform's own resource name —
-chrome by construction), `bounds`, the three flags (`isClickable`/`isEnabled`/`isChecked`), and
+chrome by construction), the three flags (`isClickable`/`isEnabled` as booleans, `isChecked` as the
+`UiNode` tri-state `Int` 0/1/2 — wire types stated so the shared vectors cannot disagree), and
 `children`. Per text field — enumerated from **`UiNodeTextField`**, the #835 scrub contract, never a
 hand-list, so a string field added later (#1147's `paneTitle`, `hintText`, `clickActionLabel`, …) is
 covered automatically — an object `{h?, kind}`: `kind` is a coarse shape class and `h` is present
@@ -62,7 +63,8 @@ order. Bounds are a v2 candidate only with a leak analysis that covers container
 siblings.
 
 The permitted fields, at both levels, are the test allowlist (§7a): per node `class`, `id`, `kind`,
-`h` (strings) plus the three flags — no bounds; per envelope the strings `schemaId`,
+`h` (strings) plus the three typed flags — no bounds; per envelope the `windowTitle` `{h?, kind}`
+object (§1's one non-node text field), the strings `schemaId`,
 `fingerprint`, `platform`, `platformAppVersion`, `appVersion`, `rulesetReleaseTag`, `day` (an `hour`
 bucket in flight only) and the integers `filterRev`, `engineVersion`, `rulesetFormatVersion` — the
 names are `ReplayMetadata`'s own. The install id is added by the M3 uploader at the transport layer,
@@ -73,7 +75,7 @@ be hashed), first match wins:
 
 | Precedence | `kind` | Rule |
 |---|---|---|
-| 1 | `withheld` | any filter step in §2 withheld the field — a CONSTANT, so a caught PII slot reveals nothing, not even its word count |
+| 1 | `withheld` | a WITHHOLDING filter step in §2 (steps 1–5, 7, 8) caught the field — a CONSTANT, so a caught PII slot reveals nothing, not even its word count. Step 6 is NOT a withholding step: it only refuses the HASH, and the token keeps its `digits`/`mixed` kind |
 | 2 | `digits` | every non-whitespace character is a Unicode decimal digit (`Character.isDigit`) |
 | 3 | `words:N` | split on whitespace runs; strip LEADING and TRAILING punctuation (Unicode general category P*) from each run (interior apostrophes and hyphens are kept, so `O'Brien` and `Drop-off` are one run each); every run must contain at least one Unicode letter and no digit; N = the run count, `words:8+` when N > 8 |
 | 4 | `mixed` | everything else — money (`$45.66`), clock times, unit numbers, gate codes, order ids, plates, symbols, emoji |
@@ -103,10 +105,11 @@ SSOTs the redact side uses, in this order, and **any hit withholds the hash**:
 4. `PiiShapes.customerLeadIn` hits (the intake prefix rule, incl. `GATED_NAME_PREFIXES`);
 5. the value is a MASK token — `PiiShapes.isMaskToken`, one shared predicate covering every mask the
    redact side and the corpus intake emit (`[redacted…]`, `[address]`, `[email]`, `[phone]`, `[card]`,
-   `[note]`, …); a mask must never be hashed (`[address]` would otherwise strip to `words:1`), and
-   the predicate is what §7(e) asserts against;
-6. `kind` is not `words:N` — **only `words:N` tokens are ever hashed**. The `kind` grammar is the
-   digit backstop: any run containing a digit makes the token `digits` or `mixed`, never `words:N`, so gate codes, PINs, unit numbers and phone fragments emit `kind` only by construction
+   `[note]`, …) → `withheld`; a mask must never be hashed (`[address]` would otherwise strip to
+   `words:1`), and the predicate is what §7(e) asserts against;
+6. `kind` is not `words:N` — **only `words:N` tokens are ever hashed** (this step refuses the hash
+   only; the token is emitted with its `digits`/`mixed` kind, it is not `withheld`). The `kind`
+   grammar is the digit backstop: any run containing a digit makes the token `digits` or `mixed`, never `words:N`, so gate codes, PINs, unit numbers and phone fragments emit `kind` only by construction
    (a future grammar change that lets a digit into `words:N` must re-add an explicit digit rule);
 7. `PiiShapes.FIRST_LAST_INITIAL_PATTERN` (the id-less name shape, byte-SSOT with the redact side —
    the existing match mode, `matches` with `IGNORE_CASE`, is preserved);
@@ -118,8 +121,8 @@ SSOTs the redact side uses, in this order, and **any hit withholds the hash**:
 post-admission stage (#1146's publisher, after the rulesets-loaded / sensitive / disabled-platform /
 UNKNOWN gates and `UnknownSuppressor`), never the capture DTO — the release build binds
 `NoOpCaptureBus` and produces no DTO, and the census must work in the only build that uploads. The
-corpus tests feed fixture trees that ARE masked captures; that is a superset condition (a `[redacted…]`
-token is `mixed`), not the runtime shape.
+corpus tests feed fixture trees that ARE masked captures; that is a superset condition (every mask
+token is caught by step 5 and emits `withheld`), not the runtime shape.
 
 **Inputs and predicates, exactly.** Every step sees the TRIMMED canonical value — the same bytes
 `CensusHash` would hash — so a leading space cannot slip a prefix past a `startsWith`. Step 1 uses the
@@ -134,7 +137,7 @@ surfaces are blocked, never described). That frame-level scan is the EXISTING ru
 capture path and runs as it does today; the bounded-input claim above is about the per-field census
 filter.
 
-**Module homes.** `SkeletonBuilder` lives in `:core:pipeline`, because steps 1, 4 and the frame drop
+**Module homes.** `SkeletonBuilder` lives in `:core:pipeline`, because steps 1, 3 and the frame drop
 need `ID_MARKERS`, `CustomerTextMarkers` and `SensitiveTextMarkers`, which live there and which
 `:domain` may not depend on. The wire contract — `UiSkeletonDto`, `SkeletonSchema`, `CensusHash`,
 the fingerprint — lives in `:domain` or the Apache-2.0 contract module (open question 1). The
@@ -237,10 +240,12 @@ runs on one phone with zero community contributors — the fleet adds speed and 
 precondition. Community installs never carry plaintext; the server rejects a clear-text envelope from
 a non-trusted key.
 
-The trusted path reuses the existing scrubbed PAYLOAD, not the existing metadata: `EnvelopeBuilder`
-stamps `deviceFingerprint` (`Build.FINGERPRINT`) and a millisecond timestamp, so the trusted
-transport (M3) strips the device fingerprint and reduces the timestamp to the documented precision
-(hour in flight, day at rest) before anything persists. And the promise is scoped honestly: **the
+The trusted path reuses the existing scrubbed PAYLOAD, not the existing metadata:
+`ReplayMetadataProviderImpl` supplies `deviceFingerprint` (`Build.FINGERPRINT`) and `EnvelopeBuilder`
+copies it and stamps a millisecond timestamp, so the trusted transport (M3) applies ONE projection at
+the transport boundary — drop the device fingerprint, reduce the timestamp to the documented
+precision (hour in flight, day at rest) — before anything persists; the on-device capture path is
+unchanged. And the promise is scoped honestly: **the
 operator CAN read a trusted envelope's text, including any customer detail the redact and marker
 layers missed** — that is the operator's own device and the same residual the pull directories carry
 today. The "operator cannot see what you typed or whom you delivered to" statement applies to
@@ -259,8 +264,9 @@ including `SENSITIVE/` and `UNKNOWN/negative/` and asserts (a) no string field o
 allowlist (per node `class`/`id`/`kind`/`h`; per envelope the enumerated metadata) and no bounds on
 any node; (b) invariance under two shape-matched pseudonym
 substitutions; (c) redactor parity — any value `SnapshotRedactor.redact` changes has no `h`; (d)
-every `SENSITIVE/` fixture the markers catch yields no skeleton; (e) no `h` equals the hash of any
-`CorpusDecoys` value or mask token; (f) determinism and idempotence. A seeded property (#878) adds:
+every `SENSITIVE/` fixture the markers catch yields no skeleton; (e) no `h` equals `CensusHash.of(x)` (trimmed, as the builder hashes) for any PII-VALUED
+`CorpusDecoys` entry (pseudonym names, addresses, notes — not retained chrome labels such as
+`"Hand it to me: "`, which are legitimately hashed) or for any mask token; (f) determinism and idempotence. A seeded property (#878) adds:
 no string matching any `PiiShapes` pattern ever hashes, and no output contains an input token
 verbatim outside `class`/`id`.
 
@@ -280,10 +286,13 @@ published canonical form — UTF-8; per node `class`, `id`, child count, then th
 null represented distinctly from empty — with shared client/server test vectors. It keeps ONE
 structural rule of `stableHash` deliberately: an **anonymous wrapper** (no id AND a class in
 `{android.view.View, android.view.ViewGroup, android.widget.FrameLayout, android.widget.LinearLayout}`)
-is TRANSPARENT (`A(Wrapper(C)) == A(C)`), because a Compose recomposition adds and removes such
-wrappers and the cluster must not split on them; every other boundary is preserved
-(`A(B(C)) ≠ A(B, C)`). `stableHash` and `UnknownSuppressor` are untouched; the wrapper class set is
-shared with `computeStableHash` through one constant so the two rules cannot drift. (The corpus librarian's variant check is a TEXT fingerprint and
+is TRANSPARENT: it contributes no node of its own and its children are SPLICED into its parent's
+child sequence in order (`A(W(C1, C2)) == A(C1, C2)`; the parent's child count is the spliced count),
+because a Compose recomposition adds and removes such wrappers and the cluster must not split on
+them; every other boundary is preserved (`A(B(C)) ≠ A(B, C)`). This is the census's OWN rule — today's
+`computeStableHash` folds a wrapper's children as a nested group and never splices, so the two
+algorithms are deliberately different; only the wrapper CLASS SET is shared through one constant.
+`stableHash` and `UnknownSuppressor` are untouched. (The corpus librarian's variant check is a TEXT fingerprint and
 `FrameGate`'s identity is `Observation.identity()`; neither is touched — a structural key would
 collapse the librarian's store-distinct variants.) The server RECOMPUTES the fingerprint from the
 skeleton it received rather than trusting the client's (#1157), which is why the wire contract must
@@ -307,7 +316,7 @@ vocabulary rows that lose eligibility.
 
 | Data | Retention |
 |---|---|
-| Sub-k token hash | 30 days after last sighting, then deleted from EVERY persisted copy — the sightings table, the `h` values inside stored cluster samples (rewritten to `withheld`), and rejected vocabulary rows (which keep neither hash nor text past the TTL); never listed, exported or logged in bulk. A community sample is rendered or exported only with its sub-k hashes suppressed |
+| Sub-k token hash | 30 days after last sighting, then deleted from EVERY persisted copy — the sightings table, the `h` values inside stored cluster samples (replaced by the SERVER-ONLY value `expired`, distinct from the client's `withheld`; the server rejects `expired` inbound), and rejected vocabulary rows (which keep neither hash nor text past the TTL); never listed, exported or logged in bulk. A community sample is rendered or exported only with its sub-k hashes suppressed |
 | Cluster samples | at most 5 skeleton bodies per (cluster, app version), no install id; an UNRESOLVED cluster's samples expire 90 days after the cluster's last sighting; purged 30 days after the cluster resolves |
 | Per-install cluster sightings | 90 days rolling (distinct from the 30-day TOKEN sightings above) |
 | Install records | deleted on "delete my census data", else 365 days after last activity; ingest ledger 7 days; server logs (install-id PREFIX, counts, reason codes — never bodies) 14 days |
