@@ -258,6 +258,7 @@ class UiInteractionHandlerTieTest {
         viewIdSuffix = null, text = null, classNameHint = "android.view.View",
         boundsInScreen = BoundingBox(36, 1774, 1044, 1900), pathFingerprint = "",
         labelHintHashes = listOfNotNull(NodeRef.hintHash("This offer"), NodeRef.hintHash("Expand")),
+        labelHintsComplete = true,
     )
 
     private suspend fun expand(handler: UiInteractionHandler) = handler.performVerifiedClick(

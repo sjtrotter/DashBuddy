@@ -8,6 +8,7 @@ import cloud.trotter.dashbuddy.domain.action.RuleAction
 import cloud.trotter.dashbuddy.domain.model.accessibility.BoundingBox
 import cloud.trotter.dashbuddy.domain.pipeline.NodeRef
 import kotlinx.coroutines.test.runTest
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -248,6 +249,7 @@ class UiInteractionHandlerOwnerTest {
         viewIdSuffix = null, text = null, classNameHint = "android.view.View",
         boundsInScreen = BoundingBox(rowRect.left, rowRect.top, rowRect.right, rowRect.bottom), pathFingerprint = "",
         labelHintHashes = listOfNotNull(NodeRef.hintHash("This offer"), NodeRef.hintHash("Expand")),
+        labelHintsComplete = true,
     )
 
     private suspend fun expand(h: UiInteractionHandler, ref: NodeRef = expandRef) = h.performVerifiedClick(
@@ -552,7 +554,7 @@ class UiInteractionHandlerOwnerTest {
     /** Bind the ref the production way: native mapping → the :domain label horizon (what Ruleset.buildNodeRef hashes). */
     private fun bindRef(live: AccessibilityNodeInfo): NodeRef {
         val scan = NodeRef.hintLabelsOf(live.toUiNode()!!)
-        return expandRef.copy(labelHintHashes = scan.labels.mapNotNull(NodeRef::hintHash).distinct())
+        return expandRef.copy(labelHintHashes = scan.labels.mapNotNull(NodeRef::hintHash).distinct(), labelHintsComplete = scan.complete)
     }
 
     /**
@@ -579,5 +581,44 @@ class UiInteractionHandlerOwnerTest {
         val b = rowWithActionOnlyChevron(top = 1600)
         assertFalse(expand(handler(windowRoot(a, b)), bindRef(a)))
         a.neverClicked(); b.neverClicked()
+    }
+
+    // ---------------------------------------------------------------- review J3: completeness rides the ref
+
+    /** A bind scan cut at the slot cap cannot claim an exact fingerprint: 2b is skipped, the slid row is not re-found. */
+    @Test
+    fun `a ref whose bind scan was cut at the slot cap skips 2b — strategy 3 still runs`() = runTest {
+        val bound = view(clickable = true, bounds = rowRect, children = listOf(
+            view(cls = "android.widget.TextView", text = "This offer"), view(desc = "Expand"),
+        ) + List(NodeRef.LABEL_SCAN_NODES) { view() })
+        val ref = bindRef(bound)
+        assertFalse(ref.labelHintsComplete)
+        assertFalse(ref.hasExactFingerprint)
+
+        val slid = payRow(top = 1774 - 400)
+        assertFalse("no 2b, and the bounds walk cannot reach a row 400 px away", expand(handler(windowRoot(slid)), ref))
+        slid.neverClicked()
+
+        val atRect = payRow()
+        assertTrue("strategy 3 (containment) still finds the row at its rect", expand(handler(windowRoot(atRect)), ref))
+        atRect.clicks(1)
+    }
+
+    /** A 6-hint ref may have been truncated at MAX_LABEL_HINTS: no 2b, strategy 3 still runs. */
+    @Test
+    fun `a ref at MAX_LABEL_HINTS skips 2b — strategy 3 still runs`() = runTest {
+        val words = listOf("This offer", "Expand", "Base pay", "Tip", "Peak pay", "Details")
+        fun sixRow(top: Int) = view(clickable = true, bounds = Rect(36, top, 1044, top + 126),
+            children = words.map { view(cls = "android.widget.TextView", text = it) })
+        val ref = expandRef.copy(labelHintHashes = words.mapNotNull(NodeRef::hintHash))
+        assertEquals(NodeRef.MAX_LABEL_HINTS, ref.labelHintHashes.size)
+        assertFalse(ref.hasExactFingerprint)
+
+        val slid = sixRow(1774 - 400)
+        assertFalse(expand(handler(windowRoot(slid)), ref))
+        slid.neverClicked()
+        val atRect = sixRow(1774)
+        assertTrue(expand(handler(windowRoot(atRect)), ref))
+        atRect.clicks(1)
     }
 }

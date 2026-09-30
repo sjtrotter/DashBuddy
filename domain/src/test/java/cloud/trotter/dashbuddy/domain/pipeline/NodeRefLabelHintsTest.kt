@@ -19,6 +19,7 @@ class NodeRefLabelHintsTest {
         viewIdSuffix = null, text = null, classNameHint = "android.view.View",
         boundsInScreen = BoundingBox(0, 0, 10, 10), pathFingerprint = "fp",
         labelHintHashes = labels.mapNotNull(NodeRef::hintHash),
+        labelHintsComplete = true,
     )
 
     @Test
@@ -101,5 +102,18 @@ class NodeRefLabelHintsTest {
         val scan = NodeRef.hintLabelsOf(many)
         assertEquals(NodeRef.LABEL_SCAN_NODES, scan.labels.size)
         assertFalse(scan.complete)
+    }
+
+    /** #1149 review J3: an incomplete bind set, or a legacy ref with no completeness field, is never an exact fingerprint. */
+    @Test
+    fun `completeness rides the ref — incomplete and legacy refs are never exact`() {
+        val incomplete = ref("This offer", "Expand").copy(labelHintsComplete = false)
+        assertFalse(incomplete.hasExactFingerprint)
+        assertFalse(incomplete.fingerprintMatches(listOf("This offer", "Expand")))
+        val legacy = Json.decodeFromString(NodeRef.serializer(),
+            """{"viewIdSuffix":null,"text":null,"classNameHint":null,"boundsInScreen":{"left":0,"top":0,"right":1,"bottom":1},"pathFingerprint":"fp","labelHintHashes":["${NodeRef.hintHash("Expand")}"]}""")
+        assertFalse(legacy.labelHintsComplete)
+        assertFalse(legacy.hasExactFingerprint)
+        assertTrue(ref("This offer", "Expand").hasExactFingerprint)
     }
 }

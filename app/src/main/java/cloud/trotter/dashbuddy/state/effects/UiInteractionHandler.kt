@@ -483,7 +483,9 @@ class UiInteractionHandler @Inject constructor(
         // walk, so a sheet that slid after the bind was captured (#1102) no longer lets frozen
         // bounds decide which node resolves. Bounds stay ranking evidence (ClickCandidateRanker's
         // overlap tier). A walk cut by its depth/fetch bound aborts the whole resolution.
-        if (candidates.isEmpty() && ref.labelHintHashes.isNotEmpty()) {
+        // #1149 review J3: only a ref with a PROVABLE exact fingerprint enters 2b (NodeRef.hasExactFingerprint);
+        // an unprovable one goes straight to strategy 3's containment check, the pre-#1149 shape.
+        if (candidates.isEmpty() && ref.hasExactFingerprint) {
             // #1149 review I6: truncation is PER WINDOW. An incomplete window contributes no
             // candidates. The tap aborts only when some window was incomplete AND the active window
             // produced no complete survivor — a background window that overflows its budget must

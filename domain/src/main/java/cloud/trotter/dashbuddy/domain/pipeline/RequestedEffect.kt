@@ -56,6 +56,12 @@ data class NodeRef(
      * subtree label can be anything the platform renders (Pledge — nothing raw is persisted).
      */
     val labelHintHashes: List<String> = emptyList(),
+    /**
+     * #1149 review J3 — the bind-time label scan ([hintLabelsOf]) was COMPLETE (no slot-cap cut), so
+     * [labelHintHashes] is the whole in-horizon set. Defaults false: a legacy journal/snapshot ref
+     * (no field) loads as unprovable and never claims an exact fingerprint.
+     */
+    val labelHintsComplete: Boolean = false,
 ) {
     /**
      * True when EVERY hint is present among [liveLabels] (normalized + hashed the same way).
@@ -68,16 +74,24 @@ data class NodeRef(
     }
 
     /**
+     * #1149 review J3 — the ONE owner of "this ref carries a provable exact fingerprint": hints
+     * present, the bind-time scan complete ([labelHintsComplete]), and the set below
+     * [MAX_LABEL_HINTS] (at the cap it may have been truncated). The executor gates strategy 2b on
+     * it; an unprovable ref skips 2b for the bounds walk's containment check (the pre-#1149 shape).
+     */
+    val hasExactFingerprint: Boolean
+        get() = labelHintHashes.isNotEmpty() && labelHintsComplete && labelHintHashes.size < MAX_LABEL_HINTS
+
+    /**
      * #1149 — the EXACT control fingerprint a label-only re-find (the executor's strategy 2b)
      * requires: the distinct hint hashes of [liveLabels] EQUAL this ref's hint set. Containment is
      * not enough there (the #1102 review's constraint 1): a clickable parent card holding the row
      * plus other text CONTAINS every hint, and with no geometric evidence nothing else would tell
-     * the two apart. False when there are no hints, or when the bind-time set filled
-     * [MAX_LABEL_HINTS] — it may have been truncated, so equality is unprovable. The caller must
+     * the two apart. False unless [hasExactFingerprint]. The caller must
      * only pass a COMPLETE live scan (a budget-cut scan cannot prove "no extra label").
      */
     fun fingerprintMatches(liveLabels: List<String>): Boolean {
-        if (labelHintHashes.isEmpty() || labelHintHashes.size >= MAX_LABEL_HINTS) return false
+        if (!hasExactFingerprint) return false
         val live = liveLabels.mapNotNull(::hintHash).toHashSet()
         return live == labelHintHashes.toHashSet()
     }

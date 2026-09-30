@@ -390,6 +390,7 @@ class Ruleset<TInput>(rules: List<CompiledRule<TInput>>) {
             current = current.parent
             depth++
         }
+        val hintScan = NodeRef.hintLabelsOf(node)
         return NodeRef(
             viewIdSuffix = node.viewIdResourceName,
             text = node.text?.take(50),
@@ -398,11 +399,13 @@ class Ruleset<TInput>(rules: List<CompiledRule<TInput>>) {
             pathFingerprint = pathParts.joinToString("/"),
             // #1149 review I2: the SAME bounded, ownership-aware horizon the executor scans at fire
             // time (NodeRef.hintLabelsOf / LABEL_SCAN_*), so a fingerprint can actually match.
-            labelHintHashes = NodeRef.hintLabelsOf(node).labels.asSequence()
+            labelHintHashes = hintScan.labels.asSequence()
                 .mapNotNull(NodeRef::hintHash)
                 .distinct()
                 .take(NodeRef.MAX_LABEL_HINTS)
                 .toList(),
+            // #1149 review J3: completeness rides the ref — an incomplete bind set is never exact.
+            labelHintsComplete = hintScan.complete,
         )
     }
 }
