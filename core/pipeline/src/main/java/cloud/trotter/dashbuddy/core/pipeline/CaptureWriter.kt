@@ -183,9 +183,10 @@ class CaptureWriter @Inject constructor(
         if (!captureBus.isEnabled) return obs
         // Same fail-closed backstop as captureScreen (#432), added with #597:
         // an UNKNOWN click envelope carries the raw tapped node, and a tap on
-        // an unruled sensitive surface must not persist its text. (Rule-matched
-        // clicks are app-vocabulary buttons — Accept/Decline/confirm — whose
-        // labels carry no PII.)
+        // an unruled sensitive surface must not persist its text. (A rule-matched
+        // click was recognized as an app button, so the DASHER-banking drop stays
+        // UNKNOWN-only; the customer-PII scrub below no longer assumes its labels
+        // are clean — #1147 review X2.)
         if (obs.target == UNKNOWN_TARGET) {
             val marker = SensitiveTextMarkers.findMarker(event.node)
             if (marker != null) {
@@ -212,22 +213,30 @@ class CaptureWriter @Inject constructor(
         // are what carry here.
         val screenRedact = screenRuleId?.let { redactionSource.redactFor(it) }
         val redactedNode = screenRedact?.apply(event.node) ?: event.node
-        // #806 customer-PII backstop for the UNKNOWN click node: a tap on a
-        // "Deliver to <name>"/"Pickup for <name>" row on an unrecognized screen would
-        // otherwise persist the raw customer text in the click envelope. Rule-matched
-        // clicks are app-vocabulary buttons (Accept/Decline/confirm) whose labels carry
-        // no PII, so — like the recognized-screen path — only UNKNOWN clicks are scanned
-        // (recognized clicks stay byte-identical). #910 adds the node-ID scan beside the
-        // text scan (see scrubUnknownTree). Fail toward privacy. The dedup hash below is
-        // still on the ORIGINAL node (both the redact and the scrub are envelope-only).
-        val payloadNode = if (obs.target == UNKNOWN_TARGET) {
-            scrubUnknownTree(
-                redactedNode,
-                CustomerTextMarkers.firstUnredactedMarker(redactedNode),
-                kind = "click node",
-            )
-        } else {
-            redactedNode
+        // #806 customer-PII backstop for the click node, on EVERY click (#1147 review X2),
+        // mirroring the screen path: a tap on a "Deliver to <name>" row on an unrecognized
+        // screen would otherwise persist the raw customer text. The old premise — "a
+        // rule-matched click is an app-vocabulary button whose labels carry no PII" — held
+        // for text/desc but not for the #1147 fields: a Compose button's click-action label,
+        // hint or tooltip is arbitrary app text (fielded shape: `accept_button` text "Accept"
+        // with a customer name in its action label). So a RECOGNIZED click runs the TEXT-marker
+        // scrub too — byte-identical unless a marker hits; the `ID_MARKERS` node-id scan stays
+        // UNKNOWN-only (a recognized frame keeps its rule's id decisions, #910). Fail toward
+        // privacy. The dedup hash below is still on the ORIGINAL node (envelope-only).
+        val clickMarker = CustomerTextMarkers.firstUnredactedMarker(redactedNode)
+        val payloadNode = when {
+            obs.target == UNKNOWN_TARGET -> scrubUnknownTree(redactedNode, clickMarker, kind = "click node")
+            clickMarker == null -> redactedNode
+            else -> {
+                stats.onRedactBackstopScrub()
+                // Principle 7: marker id + rule id only (#862) — never the value or the marker verbatim.
+                Timber.tag("Pipeline").w(
+                    "Capture backstop: recognized click carried un-redacted customer marker " +
+                        "id '%s' (ruleId=%s) — scrubbing node from envelope",
+                    MarkerLogId.of(clickMarker), obs.ruleId,
+                )
+                CustomerTextMarkers.scrub(redactedNode)
+            }
         }
         val platform = Platform.fromPackage(event.packageName).wire
         val capture = EnvelopeBuilder.build(
