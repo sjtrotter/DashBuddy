@@ -54,9 +54,13 @@ class CoalesceByKeyTest {
     private suspend fun TestScope.run(
         events: List<Ev>,
         maxKeys: Int = COALESCE_MAX_KEYS,
+        leadingEdge: Boolean = false,
     ): List<Pair<Long, Acc>> =
         timed(events)
-            .coalesceByKey(quietMs = 150L, maxWaitMs = 300L, keyOf = { it.key }, merge = ::mergeEv, maxKeys = maxKeys)
+            .coalesceByKey(
+                quietMs = 150L, maxWaitMs = 300L, keyOf = { it.key }, merge = ::mergeEv,
+                maxKeys = maxKeys, leadingEdge = leadingEdge,
+            )
             .map { testScheduler.currentTime to it }
             .toList()
 
@@ -203,5 +207,52 @@ class CoalesceByKeyTest {
 
         assertEquals("every event is delivered once the consumer resumes", bursts, out.sumOf { it.count })
         assertTrue("the stalled period collapsed into merged bursts", out.size < bursts)
+    }
+
+    // ── leading edge (#1148 review F5) ─────────────────────────────────────
+
+    @Test
+    fun `leading edge - a lone event after idle emits ONCE, immediately`() = runTest {
+        val out = run(listOf(Ev(key = 1, bits = 1, at = 0)), leadingEdge = true)
+
+        assertEquals("one emission at t0, none at t0+150", listOf(0L to Acc(1, 1, 1)), out)
+    }
+
+    @Test
+    fun `leading edge - a burst emits the opening event now and the merged burst after quiet`() = runTest {
+        val burst = (0 until 5).map { Ev(key = 1, bits = 1 shl it, at = it * 20L) }
+
+        val out = run(burst, leadingEdge = true)
+
+        assertEquals(
+            listOf(0L to Acc(1, 0b1, 1), 230L to Acc(1, 0b11111, 5)),
+            out,
+        )
+    }
+
+    @Test
+    fun `leading edge - a burst opening within max-wait of the previous close gets no leading emission`() = runTest {
+        // t0 leads; its burst closes silently at 150; t200 opens within 300 ms of that close.
+        val out = run(listOf(Ev(1, 1, 0), Ev(1, 2, 200)), leadingEdge = true)
+
+        assertEquals(listOf(0L to Acc(1, 1, 1), 350L to Acc(1, 2, 1)), out)
+    }
+
+    @Test
+    fun `leading edge - the cooldown expires after max-wait and the next burst leads again`() = runTest {
+        // Close at 150, cooldown until 450; t500 leads again.
+        val out = run(listOf(Ev(1, 1, 0), Ev(1, 2, 500)), leadingEdge = true)
+
+        assertEquals(listOf(0L to Acc(1, 1, 1), 500L to Acc(1, 2, 1)), out)
+    }
+
+    @Test
+    fun `leading edge - a flood leads once, then max-wait cadence and the trailing frame`() = runTest {
+        val flood = (0 until 50).map { Ev(key = 1, bits = 1, at = it * 20L) }
+
+        val out = run(flood, leadingEdge = true)
+
+        assertEquals(listOf(0L, 300L, 600L, 900L, 1130L), out.map { it.first })
+        assertEquals("leading event counted once more inside its burst", 51, out.sumOf { it.second.count })
     }
 }

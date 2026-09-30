@@ -68,12 +68,15 @@ class ContentChangedPipeline @Inject constructor(
             )
         }
         // #1148 D3: coalesced PER WINDOW — quiet 150 ms / scheduled max-wait 300 ms, trailing
-        // emission guaranteed, no leading edge.
+        // emission guaranteed. Leading edge ON (review F5): the first change after idle is
+        // snapshotted immediately, as the old operator did, so a transition's first frame is not
+        // delayed (the #1104 click-before-screen race, `presentedAt`).
         .coalesceByKey(
             quietMs = QUIET_MS,
             maxWaitMs = MAX_WAIT_MS,
             keyOf = { it.windowId },
             merge = CoalescedChange::merge,
+            leadingEdge = true,
         )
         .onEach {
             Timber.d(
