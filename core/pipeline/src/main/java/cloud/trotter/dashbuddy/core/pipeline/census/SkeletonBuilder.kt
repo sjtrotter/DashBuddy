@@ -12,6 +12,7 @@ import cloud.trotter.dashbuddy.domain.census.contract.TextSlot
 import cloud.trotter.dashbuddy.domain.census.contract.UiSkeletonDto
 import cloud.trotter.dashbuddy.domain.census.contract.WireStrings
 import cloud.trotter.dashbuddy.domain.model.accessibility.UiNode
+import cloud.trotter.dashbuddy.domain.pipeline.UiTextBounds
 import cloud.trotter.dashbuddy.domain.privacy.PiiShapes
 import cloud.trotter.dashbuddy.domain.state.Platform
 import java.time.LocalDate
@@ -301,13 +302,9 @@ object SkeletonBuilder {
      * that platform. Truncated to [UiSkeletonDto.MAX_VERSION_LENGTH]; null when not well-formed (a
      * truncation that splits a surrogate pair included). The DTO keeps its hard `require` for decode.
      */
-    private fun stamp(value: String?): String? {
-        if (value == null) return null
-        var end = minOf(value.length, UiSkeletonDto.MAX_VERSION_LENGTH)
-        // Review PP7: cut at a code-point boundary — never split a surrogate pair and then drop the stamp.
-        if (end < value.length && end > 0 && Character.isHighSurrogate(value[end - 1])) end--
-        return value.substring(0, end).takeIf { WireStrings.isWellFormed(it) }
-    }
+    private fun stamp(value: String?): String? =
+        // Reviews PP7, AL4: the ONE code-point-safe cut (`UiTextBounds.cap`); AL5: an empty stamp is absent.
+        value?.let { UiTextBounds.cap(it, UiSkeletonDto.MAX_VERSION_LENGTH) }?.takeIf { it.isNotEmpty() && WireStrings.isWellFormed(it) }
 
     /**
      * The NAME-run source rule's ONE owner (reviews NN3, PP2, UU6, AC4): the usable canonical TEXT, else the

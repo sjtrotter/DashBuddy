@@ -17,6 +17,7 @@ import cloud.trotter.dashbuddy.domain.census.contract.UiSkeletonDto
 import cloud.trotter.dashbuddy.domain.census.contract.UiSkeletonNodeDto
 import cloud.trotter.dashbuddy.domain.model.accessibility.UiNode
 import cloud.trotter.dashbuddy.domain.model.accessibility.UiNodeTextField
+import cloud.trotter.dashbuddy.domain.pipeline.UiTextBounds
 import cloud.trotter.dashbuddy.domain.privacy.PiiShapes
 import cloud.trotter.dashbuddy.domain.state.Platform
 import cloud.trotter.dashbuddy.test.util.CorpusDecoys
@@ -136,6 +137,19 @@ class SkeletonCorpusGuardsTest : SkeletonCorpusTestBase() {
      * explicitly: these slots, classes and ids must survive beside the identity values that once
      * suppressed them (the LL1 address words, the SS1 merchant under `user_name`, the NN3 TalkBack desc).
      */
+    @Test
+    fun `the code-point-safe text cap changes no committed value (review AL4)`() {
+        val changed = mutableListOf<String>()
+        corpus.forEach { f ->
+            walkNodes(f.tree) { n ->
+                (n.scrubbableStrings().mapNotNull { it.second } + listOfNotNull(n.className, n.viewIdResourceName)).forEach { v ->
+                    if (UiTextBounds.cap(v) != v.take(UiTextBounds.MAX_TEXT_LENGTH)) changed += f.path
+                }
+            }
+        }
+        assertEquals(emptyList<String>(), changed)
+    }
+
     @Test
     fun `chrome recall - named chrome slots, classes and ids are not suppressed by identity seeding (review SS5)`() {
         fun build(vararg nodes: UiNode): List<UiSkeletonNodeDto> = SkeletonBuilder.build(

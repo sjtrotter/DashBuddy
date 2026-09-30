@@ -339,7 +339,7 @@ abstract class SkeletonCorpusTestBase {
                     (field == UiNodeTextField.TEXT || field == UiNodeTextField.CONTENT_DESCRIPTION)
                 when {
                     seeds -> idSeeded += canonical
-                    PiiShapes.hasPiiIdSuffix(id) -> propagatedNotSeeded += canonical
+                    CustomerTextMarkers.idMarkerFor(id) != null -> propagatedNotSeeded += canonical
                 }
             }
             // Reviews GG1, LL1, NN3, PP2, AC4: only a NAME contributes letter runs (≥2 letters) — from its

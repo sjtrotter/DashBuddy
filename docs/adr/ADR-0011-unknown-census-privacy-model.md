@@ -46,7 +46,7 @@ A new versioned schema, `uinode.skeleton.v1` (`UiSkeletonDto` + `SkeletonSchema`
 `UiNodeSchema`, ADR-0003 rules apply). Per node: `class`, `id` (the platform's own resource name —
 chrome by construction WHEN it matches the static resource-name grammar, `ResourceIdGrammar`: an optional
 `<package>:id/` prefix (`[A-Za-z][A-Za-z0-9_.]*`), a name `[A-Za-z_][A-Za-z0-9_.-]*` with at most one
-internal space, ≤ 64 characters, no run of 8+ hex digits and no run of 4+ decimal digits; a dynamic id — a
+internal space, ≤ 64 characters, no run of 8+ hex characters containing a decimal digit (a letter-only hex run is a word — `AddedBadgeView`, review round 16) and no run of 4+ decimal digits; a dynamic id — a
 per-frame UUID in a Compose test tag, three committed frames `PRIMARY_BUTTON_<uuid>` — is treated as
 ABSENT for both the wire and the fingerprint, never rewritten; the §2 PII-id step still runs on the raw
 id; amended in #1160. The SHAPE is the contract's (`ResourceIdGrammar.isStaticShape`) and is enforced by
@@ -145,8 +145,9 @@ Hash-only is necessary, not sufficient: a hash of a low-entropy value (a first n
 dictionary-attackable. Before hashing, `SkeletonBuilder` runs every text field through the SAME
 SSOTs the redact side uses, in this order, and **any hit withholds the hash**:
 
-1. the node id is in `ID_MARKERS ∪ PII_ID_SUFFIXES` (a view id whose value is PII by construction;
-   the two sets are deliberately NOT the same set — the union is used);
+1. the node id ends with a row of `CustomerTextMarkers.ID_MARKER_TABLE` (a view id whose value is PII by
+   construction) — ONE list since review round 16: the runtime rows (`ID_MARKERS`, `runtimeScrub =
+   ALWAYS`) and the former intake-only ids as CONTENT rows with `runtimeScrub = NEVER`;
 2. length > 40 characters — **this cap runs before any pattern in this list**, so every step below
    runs on bounded input on the device (the #803 instruction-body class never hashes);
 3. `CustomerTextMarkers.unredactedMarker` hits;
@@ -240,19 +241,21 @@ filter over every text field of the frame (tree + window title) and SEEDS:
   class-guarding kind (NAME: `com.x.RileyButton` beside `customer_name` "Riley" is absent) — never a
   title or merchant word (a `SearchView` class beside `tvTitle` "Search" stays), and never a KNOWN
   framework class — an exact binary name in `FrameworkClasses.KNOWN`: the pinned inventory
-  `core/pipeline/src/main/resources/census/framework-classes.txt.gz` (gzip, review round 15; every public class under
+  `core/pipeline/src/main/resources/census/framework-classes.txt` (review rounds 15–16: every public
+  `android.view.View` SUBCLASS — the `super_class` chain followed across the classpath — under
   `android.view.`/`android.widget.`/`android.webkit.` in the SDK `android.jar` and under `androidx.` /
   `com.google.android.material.` in the RELEASE runtime classpath (`:app:censusReleaseClasspath` —
-  debug-only artifacts never exempted); Kotlin facades, the Compose icon tables, `androidx.compose.ui.tooling.`
-  and any name the class grammar rejects excluded — regenerated and diffed by `FrameworkClassInventoryTest`;
-  the loader is strict (malformed UTF-8, truncation or an invalid entry discards the whole resource, which
-  only shrinks the set), review rounds 15–16) ∪ every framework-prefixed class the committed corpus renders (pinned by a corpus
+  debug-only artifacts never exempted); 233 names, ~10 KB, plain text under a `#sha256=` header; any
+  name the class grammar rejects excluded — regenerated and diffed by `FrameworkClassInventoryTest`; the
+  loader is strict (malformed UTF-8, a header/body sha256 mismatch such as truncation, or an invalid entry
+  discards the whole resource, which only shrinks the set)) ∪ every framework-prefixed class the committed corpus renders (pinned by a corpus
   guard) ∪ the wrapper set and Material's `Chip`, so
   "Chip" never nulls `…material.chip.Chip` and forks the fingerprint per customer, and wrapper
   eligibility cannot depend on the customer. A framework PREFIX is not proof: an app can name its own
   class `androidx.RileyButton`, and any unlisted class is judged like an app class (review rounds 11–14).
-  `PII_ID_SUFFIXES` holds EVERY suffix of this table (a guard test pins the subset) plus other
-  instruction/content ids (message bodies, maneuver/road text) (review rounds 6–9);
+  The commit-path intake list IS this table (`ID_MARKER_SUFFIXES`, review round 16): the intake-only
+  ids (message bodies, maneuver/road text, instruction bodies) are its CONTENT / `NEVER` rows (review
+  rounds 6–9, 16);
 - a MASK never seeds anything (`[redacted…]`, `[address]`, …): it is not identity, and its word would
   collide with chrome and with address-block ids.
 
@@ -268,8 +271,8 @@ internal capitals or split by a separator still matches — `chipMcKenna`, `row_
 (amended in #1160 review rounds 6, 12). A static id carrying a seeded run is replaced by the reserved
 sentinel id `~` (`ResourceIdGrammar.FRAME_WITHHELD_ID`, §8) on the wire and in the fingerprint — `chipAdam` / `chip_Adam` beside `customer_name`
 "Adam" does not travel, `chipGold` and `chipAdamant` (whole-run equality) do (one owner,
-`FrameFilter.containsIdentityRun`). A CONTENT id and a `PII_ID_SUFFIXES`-only id (the intake list, which
-also covers instruction BODIES — `step_description`, `instruction_text`) withhold their OWN field but
+`FrameFilter.containsIdentityRun`). A CONTENT id (including the intake-only rows, which cover
+instruction BODIES — `step_description`, `instruction_text`) withholds its OWN field but
 seed nothing, so the chrome vocabulary the census exists for is not withheld frame-wide (amended in #1160
 review rounds 2–5). An EXACT id (`tvTitle`, `tvLastMessage`) DOES seed its exact value, so an id-less
 duplicate of a chrome sheet title ("Pick up order") on the same frame is withheld too — duplicate-chrome
@@ -313,11 +316,10 @@ checked over every code point by a unit test).
 Classification and hashing use the canonical form, and the frame-wide duplicate set is keyed by it
 (amended in #1160 review round 4 — canonicalization alone can shrink a value below a pattern's minimum:
 `"ab  cd"` is a quoted note raw, `"ab cd"` is not). Step 1 uses the
-two EXISTING predicates as they are: `ID_MARKERS` is a case-insensitive SUFFIX match on the full
-resource id (`ID_MARKERS.any { id.endsWith(it, ignoreCase = true) }`, today inline in
-`CustomerTextMarkers.unredactedIdMarker`; #1145 extracts it as the shared helper both call),
-`PII_ID_SUFFIXES` is exact membership of the id's part after the last `/` (the `SnapshotRedactor`
-rule); a hit on either withholds.
+ONE predicate: `CustomerTextMarkers.idMarkerFor`, a case-insensitive SUFFIX match on the full
+resource id against the whole table — the runtime scrub, the census and the `SnapshotRedactor` intake
+all use it (review round 16 retired the intake's separate exact-last-segment list, a widening toward
+privacy that moved no committed fixture).
 
 A `SensitiveTextMarkers` hit anywhere on the frame → **no skeleton at all** (the dasher's banking
 surfaces are blocked, never described). `SkeletonBuilder` invokes the shared sensitive-marker scans
@@ -330,8 +332,9 @@ need `ID_MARKERS`, `CustomerTextMarkers` and `SensitiveTextMarkers`, which live 
 `:domain` may not depend on. The wire contract — `UiSkeletonDto`, `SkeletonSchema`, `CensusHash`,
 the fingerprint — lives in `:domain` or the Apache-2.0 contract module (open question 1). The
 promotion to `:domain` (`privacy/PiiShapes.kt`) covers EVERY test-only pattern the filter uses:
-`FIRST_LAST_INITIAL_PATTERN`, the shape patterns, `NAME_PREFIXES`, `GATED_NAME_PREFIXES`,
-`PII_ID_SUFFIXES` and `customerLeadIn()`; `SnapshotRedactor` delegates to it with byte-SSOT pins.
+`FIRST_LAST_INITIAL_PATTERN`, the shape patterns, `NAME_PREFIXES`, `GATED_NAME_PREFIXES` and
+`customerLeadIn()`; `SnapshotRedactor` delegates to it with byte-SSOT pins (its PII-id list is the
+`ID_MARKER_TABLE`, review round 16).
 
 **A withheld field emits the constant `kind: withheld` — no length, no word count, no hash.** A
 length or a word count is a small leak on a name and would break invariant 7 (pseudonym invariance); §1 carries no geometry at all for the same reason. Because `PiiShapes` is the one owner on both sides, the census filter and the corpus intake

@@ -131,8 +131,8 @@ partial is recognized on the device but its envelope loses the label to the #103
 collateral and replays UNKNOWN (intake nuisance, not a leak). Candidate text markers are vetted against the
 corpus before joining the runtime set — chrome-ambiguous prefixes ("Return ", "Focus on ",
 "Heading to ") are REJECTED because `CaptureBackstopCorpusTest` goes red on a clean corpus,
-reasoning recorded in the `CustomerTextMarkers` KDoc; the rule redact is the primary control (#806). Intake-side prefix lists (`SnapshotRedactor.NAME_PREFIXES`,
-`PII_ID_SUFFIXES`) are deliberately ASYMMETRIC with the runtime markers — an over-scrub at intake
+reasoning recorded in the `CustomerTextMarkers` KDoc; the rule redact is the primary control (#806). Intake-side prefix lists (`SnapshotRedactor.NAME_PREFIXES`;
+the intake PII-id list is the `ID_MARKER_TABLE` itself since #1160, its NEVER rows intake-only) are deliberately ASYMMETRIC with the runtime markers — an over-scrub at intake
 costs triage text, a runtime false positive scrubs a live envelope — **but that asymmetry has a
 floor (#1064): an intake over-scrub that eats a rule's own recognition ANCHOR costs the fixture,
 not triage text.** `"Return "` was the receipt (added unconditionally by #994, it masked DoorDash's
@@ -604,7 +604,8 @@ side-effect-free half.
   all ALWAYS on the id alone (review round 11: no value-shape gate — "李明", "de la Cruz" read as chrome to
   any shape — so an UNKNOWN sheet title under `tvTitle`, "Pick up order", loses its X-Ray line, ADR residual
   11); the recognized `doordash.screen.chat` / `chat_conversation` rules
-  redact `tvTitle` (customer-name normalized) and `tvLastMessage` (plain); the corpus intake (`PII_ID_SUFFIXES`) holds every table suffix. The frame-rule
+  redact `tvTitle` (customer-name normalized) and `tvLastMessage` (plain); the corpus intake's PII-id list IS the table (`ID_MARKER_SUFFIXES`, the former intake-only ids as
+  CONTENT / `NEVER` rows — one list, one `endsWith` match, #1160 AL3). The frame-rule
   off-switch exists only as `census.diagnostics.DiagnosticSkeletonBuilder` in `:core:pipeline`'s TEST
   FIXTURES (`src/testFixtures`, consumed by `:app` tests via `testFixtures(project(":core:pipeline"))`) —
   never in `main`, guarded by `DiagnosticsNotInMainTest`.
@@ -614,7 +615,7 @@ side-effect-free half.
   `SensitiveTextMarkers` hit on the raw tree or title yields no skeleton (a caller may pass the verdict
   it already computed, bound to that exact tree instance; a mismatched one is ignored); a FAILED marker
   scan is `BUILD_FAILED`, not a sensitive frame. Per field: step 1 is the node's own RAW id
-  (`ID_MARKER_TABLE` ∪ `PII_ID_SUFFIXES`, via `IdClass`); steps 2–8 judge the CANONICAL form (a fixed point
+  (`ID_MARKER_TABLE`, via `IdClass`); steps 2–8 judge the CANONICAL form (a fixed point
   or none — a value with no canonical form is withheld; the canonical form alone decides the 40-char cap,
   and a value with more than 4 × 40 non-FORMAT, non-whitespace code points is capped WITHOUT folding —
   4 is the longest canonical decomposition, checked exhaustively by `SkeletonLengthBoundTest`)
@@ -639,8 +640,9 @@ side-effect-free half.
   `customer_name` "Adam", `search_bar` beside `tvTitle` "Search") so the fingerprint's STRUCTURE never
   depends on the customer; a class carrying a customer-NAME run is absent (`com.x.RileyButton`,
   `androidx.RileyButton`) unless it is a KNOWN framework class (`FrameworkClasses.KNOWN`, exact names: the
-  inventory `census/framework-classes.txt.gz` (gzip, #1160 AI2) generated from the RELEASE runtime classpath
-  listed by `:app:censusReleaseClasspath` (AK4), diffed on its decompressed content by `:app`'s
+  inventory `census/framework-classes.txt` — `android.view.View` subclasses only, 233 names under a
+  `#sha256=` header (#1160 AL2) — generated from the RELEASE runtime classpath listed by
+  `:app:censusReleaseClasspath` (AK4), diffed by `:app`'s
   `FrameworkClassInventoryTest` — regenerate with `-DupdateFrameworkClasses=true` — ∪ the corpus set). `IdPathJudgement.isStaticId` is
   memoized process-wide in a bounded LRU (512). A malformed (NUL / lone-surrogate) CLASS is emitted absent and counted
   (`Outcome.Built.malformedClass`); a malformed VIEW ID refuses the frame (`INVALID_TREE` — its identity

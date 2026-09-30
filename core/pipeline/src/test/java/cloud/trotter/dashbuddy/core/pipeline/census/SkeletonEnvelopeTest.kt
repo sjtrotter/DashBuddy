@@ -155,6 +155,13 @@ class SkeletonEnvelopeTest : SkeletonBuilderTestBase() {
     }
 
     @Test
+    fun `AL5 - an empty stamp is absent, never an empty wire string`() {
+        val item = SkeletonBuilder.build(tree("Continue"), null, meta.copy(appVersion = "", platformAppVersion = ""), platform, day)!!
+        assertNull(item.appVersion)
+        assertNull(item.platformAppVersion)
+    }
+
+    @Test
     fun `CC2 - an over-long optional stamp is truncated, never a refusal`() {
         val long = meta.copy(platformAppVersion = "9".repeat(90), rulesetReleaseTag = "r".repeat(70))
         val out = SkeletonBuilder.outcome(tree("Continue"), null, long, platform, day)

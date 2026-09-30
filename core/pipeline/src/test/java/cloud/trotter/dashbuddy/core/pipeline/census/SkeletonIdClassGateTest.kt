@@ -395,14 +395,12 @@ class SkeletonIdClassGateTest : SkeletonBuilderTestBase() {
     }
 
     @Test
-    fun `AI2 - a missing or corrupt inventory only shrinks KNOWN (fail closed)`() {
+    fun `AI2 AL2 - a missing or corrupt inventory only shrinks KNOWN (fail closed)`() {
         assertEquals(emptySet<String>(), FrameworkClasses.parseInventory(null))
-        assertEquals(emptySet<String>(), FrameworkClasses.parseInventory("not gzip".byteInputStream()))
-        val gz = java.io.ByteArrayOutputStream().also { out ->
-            java.util.zip.GZIPOutputStream(out).use { it.write("android.widget.GridLayout\n".toByteArray()) }
-        }.toByteArray()
-        assertEquals(setOf("android.widget.GridLayout"), FrameworkClasses.parseInventory(gz.inputStream()))
-        // The shipped resource loads (compressed) and carries the inventory.
+        assertEquals(emptySet<String>(), FrameworkClasses.parseInventory("android.widget.GridLayout\n".byteInputStream()))
+        val good = FrameworkClasses.inventoryText(listOf("android.widget.GridLayout"))
+        assertEquals(setOf("android.widget.GridLayout"), FrameworkClasses.parseInventory(good.byteInputStream()))
+        // The shipped resource loads and carries the inventory.
         assertTrue("android.widget.GridLayout" in FrameworkClasses.KNOWN)
     }
 
@@ -415,23 +413,22 @@ class SkeletonIdClassGateTest : SkeletonBuilderTestBase() {
     }
 
     @Test
-    fun `AK5 - a malformed, truncated, failing or invalid inventory is discarded whole`() {
-        fun gz(bytes: ByteArray) = java.io.ByteArrayOutputStream().also { out ->
-            java.util.zip.GZIPOutputStream(out).use { it.write(bytes) }
-        }.toByteArray()
-        val good = gz("android.widget.GridLayout\nandroid.widget.TextView\n".toByteArray())
+    fun `AK5 AL2 - a malformed, truncated, failing or invalid inventory is discarded whole`() {
+        val good = FrameworkClasses.inventoryText(listOf("android.widget.GridLayout", "android.widget.TextView")).toByteArray()
         assertEquals(setOf("android.widget.GridLayout", "android.widget.TextView"), FrameworkClasses.parseInventory(good.inputStream()))
-        // Malformed UTF-8.
-        assertEquals(emptySet<String>(), FrameworkClasses.parseInventory(gz(byteArrayOf(0x61, 0xC3.toByte(), 0x28, 0x0A)).inputStream()))
-        // Truncated gzip.
-        assertEquals(emptySet<String>(), FrameworkClasses.parseInventory(good.copyOf(good.size / 2).inputStream()))
+        // Malformed UTF-8 (a valid header over a body with a bad byte).
+        val badBody = byteArrayOf(0x61, 0xC3.toByte(), 0x28, 0x0A)
+        assertEquals(emptySet<String>(), FrameworkClasses.parseInventory(("#sha256=00\n".toByteArray() + badBody).inputStream()))
+        // Truncated: the header's sha256 no longer matches the body.
+        assertEquals(emptySet<String>(), FrameworkClasses.parseInventory(good.copyOf(good.size - 5).inputStream()))
         // A mid-stream exception.
         val failing = object : java.io.InputStream() {
             var i = 0
             override fun read(): Int = if (i < good.size / 2) good[i++].toInt() and 0xFF else throw java.io.IOException("boom")
         }
         assertEquals(emptySet<String>(), FrameworkClasses.parseInventory(failing))
-        // One entry that is not a static class name spoils the whole resource.
-        assertEquals(emptySet<String>(), FrameworkClasses.parseInventory(gz("android.widget.TextView\nnot a class!\n".toByteArray()).inputStream()))
+        // One entry that is not a static class name spoils the whole resource, even with a matching header.
+        val invalid = FrameworkClasses.inventoryText(listOf("android.widget.TextView", "not a class!"))
+        assertEquals(emptySet<String>(), FrameworkClasses.parseInventory(invalid.byteInputStream()))
     }
 }
