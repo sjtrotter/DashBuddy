@@ -15,7 +15,6 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import kotlinx.coroutines.flow.MutableStateFlow
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -53,11 +52,10 @@ class MainActivity : ComponentActivity() {
 
     /**
      * Deep-link target route pushed by an external launcher (the bubble's "Vehicle" just-in-time
-     * action, #693). Held as a one-shot: the NavHost consumes it once and clears it, so a
-     * config-change recomposition doesn't re-navigate. `onNewIntent` re-arms it when an already-open
-     * instance is brought forward.
+     * action, #693). Held in [MainShellViewModel]'s SavedStateHandle (#1151 review MM4) so a route
+     * waiting behind the debug block survives recreation; delivered once, then cleared.
      */
-    private val pendingRoute = MutableStateFlow<String?>(null)
+    private val shell: MainShellViewModel by viewModels()
 
     /**
      * #1151 review LL6 — the front door's deferral generation lives here (activity-scoped, survives
@@ -71,7 +69,7 @@ class MainActivity : ComponentActivity() {
         // Consume-once (#693 review F2b): getIntent() is sticky across recreation — without
         // removing the extra, a rotation re-reads it in the new instance's onCreate and pushes a
         // duplicate destination onto the restored back stack.
-        pendingRoute.value = intent?.getStringExtra(EXTRA_ROUTE)
+        shell.offer(intent?.getStringExtra(EXTRA_ROUTE))
         intent?.removeExtra(EXTRA_ROUTE)
 
         setContent {
@@ -95,16 +93,16 @@ class MainActivity : ComponentActivity() {
                     return@DashBuddyTheme
                 }
 
-                // Consume a deep-link route once, then clear it (#693 vehicle action).
-                val route by pendingRoute.collectAsStateWithLifecycle()
+                // Deliver a deep-link route once, then clear it (#693 vehicle action). Composed only
+                // when the shell is navigable, so a route waits behind the debug gate (MM4).
+                val route by shell.pendingRoute.collectAsStateWithLifecycle()
                 LaunchedEffect(route) {
-                    route?.let {
+                    shell.deliver(navigable = eventReceipt.navigable) {
                         // #693 review F3: MainActivity is exported (launcher) — a forged extra
                         // carrying a non-route string would crash navigate() with
                         // IllegalArgumentException. Fail closed: navigate only to known routes.
                         if (it in Screen.allRoutes) navController.navigate(it)
                         else Timber.tag("Main").w("Dropped unknown deep-link route (#693)")
-                        pendingRoute.value = null
                     }
                 }
 
@@ -270,7 +268,7 @@ class MainActivity : ComponentActivity() {
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
-        pendingRoute.value = intent.getStringExtra(EXTRA_ROUTE)
+        shell.offer(intent.getStringExtra(EXTRA_ROUTE))
         intent.removeExtra(EXTRA_ROUTE)
     }
 
