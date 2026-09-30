@@ -130,15 +130,19 @@ data class UiSkeletonDto(
                 s.all { it in 'a'..'z' || it in '0'..'9' || it == '_' || it == '-' }
 
         /**
-         * `YYYY-MM-DD` with month 01–12 and day 01–31 (the day bucket at rest; no finer time ever rides
-         * the item). Review EE3: a shape-only check admitted `2026-99-99`.
+         * `YYYY-MM-DD` naming a real calendar date (the day bucket at rest; no finer time ever rides the
+         * item). Reviews EE3/GG7: a shape-only check admitted `2026-99-99` and `2026-02-31`.
          */
         private fun isDay(s: String): Boolean {
             if (s.length != 10 || s[4] != '-' || s[7] != '-') return false
             if (!(0 until 10).filter { it != 4 && it != 7 }.all { s[it] in '0'..'9' }) return false
-            val month = s.substring(5, 7).toInt()
-            val day = s.substring(8, 10).toInt()
-            return month in 1..12 && day in 1..31
+            // Review GG7: a REAL calendar date (ISO_LOCAL_DATE resolves STRICT — `2026-02-31` is refused).
+            return try {
+                java.time.LocalDate.parse(s)
+                true
+            } catch (_: java.time.format.DateTimeParseException) {
+                false
+            }
         }
     }
 }

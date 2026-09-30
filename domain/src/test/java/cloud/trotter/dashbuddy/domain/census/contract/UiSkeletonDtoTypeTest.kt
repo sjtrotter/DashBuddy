@@ -148,6 +148,9 @@ class UiSkeletonDtoTypeTest {
         assertThrows { sampleItem().copy(day = "2026-13-01") }
         assertThrows { sampleItem().copy(day = "2026-12-32") }
         assertThrows { sampleItem().copy(day = "2026-00-10") }
+        assertThrows { sampleItem().copy(day = "2026-02-31") }
+        assertThrows { sampleItem().copy(day = "2026-04-31") }
+        sampleItem().copy(day = "2028-02-29")
         sampleItem().copy(day = "2026-12-31")
     }
 
