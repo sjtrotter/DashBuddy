@@ -244,6 +244,13 @@ never coordinates, so frozen bounds never aimed a tap — they decided WHICH nod
   - **Label-free by design is not unprovable (review T9):** an action with a null label expectation
     (`EXPAND_EARNINGS` — "the control carries no text") is never counted as unprovable for lacking a label; the
     icon-only census (S7) stays for label-verified actions.
+  - **One source for "active" (review U1/U2):** `LiveRoots.active` is the root of the window the ENUMERATION flags
+    `isActive` (`rootInActiveWindow` only as the fallback; if the two name different windows there is no active root
+    for that attempt — keep-all, fail closed), and an active application window whose root is readable nowhere is
+    COUNTED unreadable, so a background twin never becomes the sole candidate.
+  - **Geometry is re-checked after the refresh (review U3):** a bounds-derived target keeps its credit only if the
+    refreshed owner still has the class hint and the captured rect (exact for a hint-less or exact hit, the same IoU
+    tier for a relaxed one); otherwise it is dropped as stale (the R6/S1 multi-target abort applies).
   - **The hash key is the WHOLE label (review T2):** `hintKeyOrNull` = the capped, trimmed, ROOT-lowercased full
     label (the 40-char key let "… merchant Alice" and "… merchant Bob" collide); a legacy ref's strategy-3
     containment may miss a long label across the upgrade — accepted, fail closed.

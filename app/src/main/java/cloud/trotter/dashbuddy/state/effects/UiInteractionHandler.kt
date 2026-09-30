@@ -225,6 +225,11 @@ class UiInteractionHandler @Inject constructor(
                         AccNodeUtils.resolveActionOwner(target.evidence, expectedPackage) != target.owner
                     )
             ) { staleEvidence++; return@mapNotNull null }
+            // #1149 review U3: a bounds-derived target's geometric credit was earned BEFORE the owner's
+            // refresh. Re-check it on the refreshed owner — same class, and the captured rect exactly
+            // (hint-less / exact hit) or the same IoU tier (relaxed hit); a refresh that rebound the node
+            // to another control drops it as stale (the R6/S1 multi-target abort then applies).
+            if (target.boundsDerived && !stillAtCapturedGeometry(target, ref)) { staleEvidence++; return@mapNotNull null }
             val scan = scanLabels(target.owner, expectedPackage)
             // #1149 review I8: the MATCHED node's own (refreshed, in-package — J1) text/contentDescription
             // always count — the owner may sit more than NodeRef.LABEL_SCAN_DEPTH levels (or NodeRef.LABEL_SCAN_NODES
@@ -528,6 +533,19 @@ class UiInteractionHandler @Inject constructor(
         /** T1: non-active windows whose strategy-3 walk was cut by the tree budget. */
         val cutBoundsWindows: Int = 0,
     )
+
+    private fun stillAtCapturedGeometry(target: OwnedTarget, ref: NodeRef): Boolean {
+        val owner = target.owner
+        if (ref.classNameHint != null && owner.className?.toString() != ref.classNameHint) return false
+        val liveRect = Rect()
+        owner.getBoundsInScreen(liveRect)
+        val live = liveRect.toBoundingBox()
+        val exact = live == ref.boundsInScreen
+        return when {
+            ref.labelHintHashes.isEmpty() || !target.relaxed -> exact
+            else -> exact || ClickCandidateRanker.boundsIoU(live, ref.boundsInScreen) >= RELAXED_BOUNDS_IOU
+        }
+    }
 
     private fun warnInconclusive(description: String, hits: Int) {
         Timber.tag("Effects").w(

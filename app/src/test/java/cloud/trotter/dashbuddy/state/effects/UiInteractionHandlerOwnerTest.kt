@@ -243,4 +243,18 @@ class UiInteractionHandlerOwnerTest : UiInteractionHandlerTapTestKit() {
         assertTrue(confirmDecline(handler(root), idRef.copy(text = "Decline offer")))
         button.clicks(1)
     }
+
+    /** U3: a hint-less exact bounds hit whose refresh rebinds it to "Continue dashing" elsewhere → dropped, no click. */
+    @Test
+    fun `a bounds hit that moves on refresh loses its geometric credit`() = runTest {
+        var bounds = rowRect
+        var label = "This offer"
+        val row = view(clickable = true)
+        whenever(row.getBoundsInScreen(any())).thenAnswer { (it.arguments[0] as Rect).set(bounds) }
+        whenever(row.text).thenAnswer { label }
+        whenever(row.refresh()).thenAnswer { bounds = Rect(36, 2200, 1044, 2300); label = "Continue dashing"; true }
+        val legacy = expandRef.copy(labelHintHashes = emptyList(), labelHintsComplete = false)
+        assertFalse(expand(handler(windowRoot(row)), legacy))
+        row.neverClicked()
+    }
 }
