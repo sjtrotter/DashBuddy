@@ -195,4 +195,27 @@ class OverlayVerdictShapesTest : WindowResolverTestBase() {
         assertEquals(1L, h.stats.overlayRejectedCount(OverlayRejectReason.UNREADABLE))
         assertEquals(0L, h.stats.overlayRejectedCount(OverlayRejectReason.PACKAGE_CHANGED))
     }
+
+    @Test
+    fun `KK1 - a clear between the enumeration and the walk - the walk's verdicts are not written`() {
+        val bubble = node(ownPkg, "bubble")
+        val shade = node(systemUiPkg, "shade")
+        val shadeWindow = window(30, 30, shade, windowType = system, bounds = OverlayGeometry.FULL_SCREEN)
+        val list = listOf(window(1, 50, bubble, active = true), shadeWindow, window(3, 2, node(ddPkg, "dd")))
+        val h = harness(activeRoot = bubble, windows = list)
+        var first = true
+        // The topology changes right AFTER this enumeration returned, before the walk probes the shade.
+        whenever(h.service.windows).thenAnswer {
+            if (first) {
+                first = false
+                @Suppress("DEPRECATION")
+                h.source.emit(AccessibilityEvent.obtain(AccessibilityEvent.TYPE_WINDOWS_CHANGED))
+            }
+            list
+        }
+
+        assertEquals(listOf("dd"), collect(h, Kind.STATE).map { it.tree.text })
+        assertEquals(listOf("dd"), collect(h, Kind.STATE).map { it.tree.text })
+        verify(shadeWindow, times(2)).root // the first walk's verdict was decided on the old list → never memoized
+    }
 }

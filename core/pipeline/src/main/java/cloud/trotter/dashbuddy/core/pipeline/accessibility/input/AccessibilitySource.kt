@@ -175,13 +175,33 @@ class AccessibilitySource @Inject constructor(
         data class Unknown(val window: AccessibilityWindowInfo?) : ActiveWindow
     }
 
-    /** [ActiveWindow] over ONE enumeration — see its KDoc (HH1). */
-    fun resolveActive(windows: List<AccessibilityWindowInfo>, isEnabled: (String?) -> Boolean): ActiveWindow {
-        val window = activeFromEnumeration(windows).single ?: return ActiveWindow.Unknown(null)
-        val root = rootOf(window) ?: return ActiveWindow.Unknown(window)
+    /**
+     * [ActiveWindow] of an already-located active [window] — see its KDoc (HH1). PR #1155 review KK2:
+     * the paths call this only AFTER the overlay scan (which needs the window's layer, never its root)
+     * found nothing, so no root is fetched while an enabled overlay is up. [gen] is the generation the
+     * caller read before its enumeration (KK1).
+     */
+    fun resolveActive(window: AccessibilityWindowInfo, isEnabled: (String?) -> Boolean, gen: Long): ActiveWindow =
+        rootOf(window, gen)?.let { classify(window, it, isEnabled, gen) } ?: ActiveWindow.Unknown(window)
+
+    /**
+     * PR #1155 review KK3 — the ONE package → [ActiveWindow] classification of an already-fetched [root]
+     * of [window] (the enumerated root, or a `rootInActiveWindow` proven by id to be that window),
+     * recording the package in the verdict cache.
+     */
+    fun classify(
+        window: AccessibilityWindowInfo,
+        root: AccessibilityNodeInfo,
+        isEnabled: (String?) -> Boolean,
+        gen: Long,
+    ): ActiveWindow {
         val pkg = root.packageName?.toString() ?: return ActiveWindow.Unknown(window)
+        packageCache.putPackage(window.id, pkg, gen)
         return if (isEnabled(pkg)) ActiveWindow.Enabled(window, root) else ActiveWindow.NotEnabled(window, root)
     }
+
+    /** The verdict-cache generation — read BEFORE an enumeration and passed down (PR #1155 review KK1). */
+    internal val generation: Long get() = packageCache.generation
 
     /**
      * #1149 review N3 — one live window enumeration: the active root (any package) and all roots, active
@@ -269,6 +289,8 @@ class AccessibilitySource @Inject constructor(
         val window: AccessibilityWindowInfo,
         val root: AccessibilityNodeInfo,
         val totalWindowCount: Int,
+        /** The walk's own fact that this is an offer-overlay candidate (PR #1155 review KK4) — counted, never re-probed. */
+        val overlay: Boolean = false,
     )
 
     /** [foregroundWindow]'s verdict: the window in front, or why none is read (#1148 review H3). */
@@ -305,7 +327,8 @@ class AccessibilitySource @Inject constructor(
      * SAFE to call from background threads.
      */
     fun foregroundWindow(isEnabled: (String?) -> Boolean): Foreground = try {
-        foregroundWindow(getWindows(), isEnabled)
+        val gen = generation // KK1: before the enumeration
+        foregroundWindow(getWindows(), isEnabled, gen = gen)
     } catch (_: Exception) {
         Foreground.Refused(ForegroundSkipReason.FRONT_UNREADABLE)
     }
@@ -315,8 +338,20 @@ class AccessibilitySource @Inject constructor(
         windows: List<AccessibilityWindowInfo>,
         isEnabled: (String?) -> Boolean,
         display: Lazy<Long> = walk.lazyDisplayArea(),
-    ): Foreground = walk.foreground(windows, isEnabled, display)
+        gen: Long = generation,
+    ): Foreground = walk.foreground(windows, isEnabled, display, gen = gen)
 
+
+    /** The one overlay-frame counter increment ([mapWindow], PR #1155 review FF6/KK4). */
+    internal fun countOverlaySnapshot() = stats.onOverlaySnapshot()
+
+    /**
+     * KK4: is the ACTIVE window itself an offer overlay (a focused card)? The one place the active
+     * window — which no walk visits — is probed, and only when it is a system window being mapped.
+     */
+    internal fun activeIsOverlay(window: AccessibilityWindowInfo, gen: Long): Boolean =
+        window.type == AccessibilityWindowInfo.TYPE_SYSTEM &&
+            walk.overlayProbe(window, walk.displayArea(), gen = gen) is OverlayProbe.Candidate
 
     /** CC9: one event-path overlay scan (the per-event enumeration this feature costs), sized in the field. */
     internal fun onOverlayScan() = stats.onOverlayScan()
@@ -324,11 +359,10 @@ class AccessibilitySource @Inject constructor(
     /**
      * PR #1155 review FF1 — the active window's root, read from THAT enumerated window (never a second,
      * unsynchronised `rootInActiveWindow` read), with its package recorded in the verdict cache under
-     * the generation read before the fetch. Null when unreadable — [resolveActive] then reports
-     * [ActiveWindow.Unknown] with the window (HH1), never "not enabled".
+     * [gen] (read by the caller BEFORE its enumeration, KK1). Null when unreadable — [resolveActive]
+     * then reports [ActiveWindow.Unknown] with the window (HH1), never "not enabled".
      */
-    internal fun rootOf(w: AccessibilityWindowInfo): AccessibilityNodeInfo? {
-        val gen = packageCache.generation
+    internal fun rootOf(w: AccessibilityWindowInfo, gen: Long = generation): AccessibilityNodeInfo? {
         val root = try {
             w.root
         } catch (_: Exception) {
@@ -397,15 +431,6 @@ class AccessibilitySource @Inject constructor(
         } catch (_: Exception) {
             null
         } ?: return null
-        // PR #1155 review FF6/JJ3: overlay frames are counted in ONE place — this shared builder — and
-        // the count means "an OFFER OVERLAY was read": a system-layer window counts only when it passes
-        // the overlay probe (memoized — no fetch on the walk's own candidates). An ACTIVE system window
-        // that is not one (a dragged puck) is still mapped (pre-#1152 behaviour) but not counted.
-        if (window.type == AccessibilityWindowInfo.TYPE_SYSTEM &&
-            walk.overlayProbe(window, walk.displayArea()) is OverlayProbe.Candidate
-        ) {
-            stats.onOverlaySnapshot()
-        }
         return RootSnapshot(
             tree = tree,
             packageName = root.packageName?.toString(),
@@ -453,3 +478,23 @@ class AccessibilitySource @Inject constructor(
             totalWindowCount = total,
         )
 }
+
+/**
+ * PR #1155 review FF6/JJ3/KK4 — every window-path frame is mapped HERE ([getWindowSnapshot], the one
+ * builder) and overlay frames are counted in this ONE place, from the CALLER's fact
+ * ([countAsOverlay]: the walk's SYSTEM_CANDIDATE, or the active window's own probe verdict) —
+ * never by re-probing. An active system window that is not an offer overlay (a dragged puck) is
+ * still mapped (pre-#1152 behaviour) but not counted. Counted only when the map succeeds.
+ */
+internal fun AccessibilitySource.mapWindow(
+    window: AccessibilityWindowInfo,
+    root: AccessibilityNodeInfo,
+    totalWindowCount: Int,
+    countAsOverlay: Boolean,
+): AccessibilitySource.RootSnapshot? = getWindowSnapshot(window, root, totalWindowCount)?.also {
+    if (countAsOverlay) countOverlaySnapshot()
+}
+
+/** [mapWindow] of a [LocatedWindow] from the walk — counted when the walk said it is an overlay (KK4). */
+internal fun AccessibilitySource.mapWindow(located: AccessibilitySource.LocatedWindow): AccessibilitySource.RootSnapshot? =
+    mapWindow(located.window, located.root, located.totalWindowCount, located.overlay)

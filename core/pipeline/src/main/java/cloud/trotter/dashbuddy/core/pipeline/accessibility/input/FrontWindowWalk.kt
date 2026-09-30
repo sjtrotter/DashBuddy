@@ -90,7 +90,8 @@ internal class FrontWindowWalk(
         isEnabled: (String?) -> Boolean,
         display: Lazy<Long> = lazyDisplayArea(),
         total: Int = windows.size,
-    ): Foreground = when (val stop = walk(windows, isEnabled, display, total)) {
+        gen: Long = cache.generation,
+    ): Foreground = when (val stop = walk(windows, isEnabled, display, total, gen)) {
         WalkStop.Exhausted -> Foreground.Refused(ForegroundSkipReason.SCAN_BUDGET)
         WalkStop.NoDisplayArea -> Foreground.Refused(ForegroundSkipReason.NO_DISPLAY_AREA)
         WalkStop.NoCandidate -> Foreground.Refused(ForegroundSkipReason.NO_CANDIDATE)
@@ -99,7 +100,8 @@ internal class FrontWindowWalk(
             !stop.readable -> Foreground.Refused(ForegroundSkipReason.FRONT_UNREADABLE)
             stop.kind == WalkStop.Kind.APPLICATION && !isEnabled(stop.packageName) ->
                 Foreground.Refused(ForegroundSkipReason.FRONT_NOT_ENABLED)
-            stop.root != null -> Foreground.Found(LocatedWindow(stop.window, stop.root, stop.total))
+            stop.root != null ->
+                Foreground.Found(LocatedWindow(stop.window, stop.root, stop.total, overlay = stop.kind == WalkStop.Kind.SYSTEM_CANDIDATE))
             else -> when (val fetched = stop.fetchRoot()) { // a cached enabled application window
                 RootFetch.Exhausted -> Foreground.Refused(ForegroundSkipReason.SCAN_BUDGET)
                 RootFetch.Unreadable -> Foreground.Refused(ForegroundSkipReason.FRONT_UNREADABLE)
@@ -123,7 +125,8 @@ internal class FrontWindowWalk(
         active: AccessibilityWindowInfo,
         isEnabled: (String?) -> Boolean,
         display: Lazy<Long> = lazyDisplayArea(),
-    ): Foreground = foreground(windows.filter { it.layer > active.layer }, isEnabled, display, windows.size)
+        gen: Long = cache.generation,
+    ): Foreground = foreground(windows.filter { it.layer > active.layer }, isEnabled, display, windows.size, gen)
 
     /**
      * PR #1155 review DD3 — the ONE "is an enabled overlay in front above the active window" policy,
@@ -141,13 +144,14 @@ internal class FrontWindowWalk(
         active: AccessibilityWindowInfo,
         isEnabled: (String?) -> Boolean,
         display: Lazy<Long> = lazyDisplayArea(),
+        gen: Long = cache.generation,
     ): OverlayScan = try {
-        when (val stop = walk(windows.filter { it.layer > active.layer }, isEnabled, display, windows.size)) {
+        when (val stop = walk(windows.filter { it.layer > active.layer }, isEnabled, display, windows.size, gen)) {
             WalkStop.Exhausted -> OverlayScan.Refused(ForegroundSkipReason.SCAN_BUDGET)
             is WalkStop.Stopped -> when {
                 stop.kind == WalkStop.Kind.APPLICATION -> OverlayScan.None
                 !stop.readable -> OverlayScan.Refused(ForegroundSkipReason.FRONT_UNREADABLE)
-                else -> OverlayScan.Overlay(LocatedWindow(stop.window, stop.root!!, stop.total))
+                else -> OverlayScan.Overlay(LocatedWindow(stop.window, stop.root!!, stop.total, overlay = true))
             }
             WalkStop.NoDisplayArea, WalkStop.NoCandidate, WalkStop.Failed -> OverlayScan.None
         }
@@ -164,6 +168,9 @@ internal class FrontWindowWalk(
         isEnabled: (String?) -> Boolean,
         display: Lazy<Long>,
         total: Int,
+        // PR #1155 review KK1: the generation the CALLER read BEFORE its enumeration — a clear landing
+        // between `getWindows()` and this walk must discard every verdict decided on the old list.
+        gen: Long,
     ): WalkStop = try {
         val ownPkg = ownPackage()
         val ordered = windows
@@ -172,7 +179,6 @@ internal class FrontWindowWalk(
                     (it.type == AccessibilityWindowInfo.TYPE_APPLICATION || it.type == AccessibilityWindowInfo.TYPE_SYSTEM)
             }
             .sortedByDescending { it.layer }
-        val gen = cache.generation // CC1: read BEFORE any fetch; stale writes are discarded
         // CC5: at most MAX_SCAN_ROOT_FETCHES root fetches per walk (DD4: every one charged).
         val budget = ScanBudget(MAX_SCAN_ROOT_FETCHES)
         val fetchCharged: (AccessibilityWindowInfo) -> RootFetch = { w ->
@@ -337,18 +343,6 @@ internal class FrontWindowWalk(
         return WindowVerdictCache.Bounds(r.left, r.top, r.right, r.bottom)
     }
 
-
-    /**
-     * [w]'s owning package through the cache (a miss fetches the root once and records it); null if
-     * unreadable. The ONE owner of "a window's package" outside a read (PR #1155 review BB10).
-     */
-    fun packageOf(w: AccessibilityWindowInfo): String? {
-        cache.get(w.id)?.packageName?.let { return it }
-        val gen = cache.generation
-        val pkg = w.root?.packageName?.toString() ?: return null
-        cache.putPackage(w.id, pkg, gen)
-        return pkg
-    }
 
     private fun reject(reason: OverlayRejectReason, outcome: OverlayProbe): OverlayProbe {
         stats.onOverlayRejected(reason)

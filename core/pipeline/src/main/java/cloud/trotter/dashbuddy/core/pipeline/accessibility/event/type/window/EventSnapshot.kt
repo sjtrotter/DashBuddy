@@ -2,6 +2,7 @@ package cloud.trotter.dashbuddy.core.pipeline.accessibility.event.type.window
 
 import cloud.trotter.dashbuddy.core.pipeline.accessibility.ForegroundSkipReason
 import cloud.trotter.dashbuddy.core.pipeline.accessibility.input.AccessibilitySource
+import cloud.trotter.dashbuddy.core.pipeline.accessibility.input.mapWindow
 import cloud.trotter.dashbuddy.domain.state.Platform
 import timber.log.Timber
 
@@ -54,6 +55,8 @@ internal fun AccessibilitySource.snapshotForEvent(
     eventPackage: String?,
     isEnabled: (String?) -> Boolean,
 ): EventSnapshot {
+    // KK1: the verdict-cache generation is read BEFORE the enumeration and passed down.
+    val gen = generation
     // FF1: one enumeration decides "active" — only when an overlay could matter at all.
     val windows = if (Platform.overlayPackages.any(isEnabled)) {
         try {
@@ -70,7 +73,7 @@ internal fun AccessibilitySource.snapshotForEvent(
     val step: Step = if (windows == null) {
         preOverlayRead(getLiveNativeRoot(), null, isEnabled, windowId, eventPackage)
     } else {
-        resolveOnList(windows, isEnabled, windowId, eventPackage)
+        resolveOnList(windows, gen, isEnabled, windowId, eventPackage)
     }
     val snapshot = when (step) {
         is Step.Skip -> return EventSnapshot.Skipped(step.reason)
@@ -95,66 +98,57 @@ private sealed interface Step {
 }
 
 /**
- * Resolution over ONE enumeration (FF1/HH1). The active window comes from [AccessibilitySource.resolveActive];
- * with no single flagged window (JJ2) the native root's OWN window is located in the list by its id
- * and resolved as the active one; only when the native root is not provably in the list is the
- * pre-#1152 read taken.
+ * Resolution over ONE enumeration (FF1/HH1/KK2). The active WINDOW is the single flagged one; with none
+ * or ≥ 2 flagged (JJ2) the native root's OWN window, located in the list by its id — only a native root
+ * not provably in the list takes the pre-#1152 read. The overlay scan runs FIRST, off that window's
+ * layer (KK2: no active root is fetched while an enabled overlay is up); only when it finds nothing is
+ * the active window classified ([AccessibilitySource.resolveActive] / [AccessibilitySource.classify]).
  */
 private fun AccessibilitySource.resolveOnList(
     windows: List<android.view.accessibility.AccessibilityWindowInfo>,
+    gen: Long,
     isEnabled: (String?) -> Boolean,
     windowId: Int,
     eventPackage: String?,
 ): Step {
-    var resolution = resolveActive(windows, isEnabled)
-    if (resolution is AccessibilitySource.ActiveWindow.Unknown && resolution.window == null) {
-        // PR #1155 review JJ2: zero or ≥ 2 flagged windows — the native root's own window, found BY ID
-        // in this list, is the active window (so an overlay above it is still scanned). Not provably
-        // in the list → the pre-#1152 read.
+    var nativeForWindow: android.view.accessibility.AccessibilityNodeInfo? = null
+    val active = activeFromEnumeration(windows).single ?: run {
+        // PR #1155 review JJ2: zero or ≥ 2 flagged windows — the native root's own window, found BY ID.
         val native = getLiveNativeRoot()
-        val nativeWindow = native?.windowId?.takeIf { it >= 0 }?.let { id -> windows.firstOrNull { it.id == id } }
+        val w = native?.windowId?.takeIf { it >= 0 }?.let { id -> windows.firstOrNull { it.id == id } }
             ?: return preOverlayRead(native, windows, isEnabled, windowId, eventPackage)
-        resolution = classify(nativeWindow, native, isEnabled)
+        nativeForWindow = native
+        w
     }
-    return when (val r = resolution) {
-        is AccessibilitySource.ActiveWindow.NotEnabled -> frontRead(windows, isEnabled, windowId, eventPackage)
-        is AccessibilitySource.ActiveWindow.Enabled -> scanThen(windows, r.window, isEnabled, windowId) {
-            // HH5: the window object is in hand — the ONE window builder maps it.
-            Step.Frame(getWindowSnapshot(r.window, r.root, windows.size))
-        }
-        is AccessibilitySource.ActiveWindow.Unknown -> {
-            val active = r.window ?: return preOverlayRead(getLiveNativeRoot(), windows, isEnabled, windowId, eventPackage)
-            scanThen(windows, active, isEnabled, windowId) {
-                // II1/JJ1: the flagged window's own root was unreadable — ONE rootInActiveWindow read
+    val provenNative = nativeForWindow
+    return scanThen(windows, active, gen, isEnabled, windowId) {
+        val resolution = provenNative?.let { classify(active, it, isEnabled, gen) }
+            ?: resolveActive(active, isEnabled, gen)
+        when (resolution) {
+            // HH5/KK4: the window object is in hand — the ONE window builder maps it; a focused offer
+            // overlay (the card IS the active window) is counted from its own probe verdict.
+            is AccessibilitySource.ActiveWindow.Enabled ->
+                Step.Frame(mapWindow(active, resolution.root, windows.size, activeIsOverlay(active, gen)))
+            is AccessibilitySource.ActiveWindow.NotEnabled -> frontRead(windows, gen, isEnabled, windowId, eventPackage)
+            is AccessibilitySource.ActiveWindow.Unknown -> {
+                // II1/JJ1: the active window's own root was unreadable — ONE rootInActiveWindow read
                 // stands in only if it provably IS that window (same non-negative id); it then follows
                 // exactly the resolution its package calls for. Anything else → skip (the topology
                 // path emits nothing for the same case).
                 val native = getLiveNativeRoot()
                 if (native == null || native.windowId < 0 || native.windowId != active.id) {
                     Timber.tag("Pipeline").v("🚫 Skip: active window root unreadable, no overlay in front (event window=%d)", windowId)
-                    return@scanThen Step.Skip(ForegroundSkipReason.FRONT_UNREADABLE)
-                }
-                when (val matched = classify(active, native, isEnabled)) {
-                    is AccessibilitySource.ActiveWindow.Enabled -> Step.Frame(getWindowSnapshot(active, native, windows.size))
-                    is AccessibilitySource.ActiveWindow.NotEnabled -> frontRead(windows, isEnabled, windowId, eventPackage)
-                    is AccessibilitySource.ActiveWindow.Unknown -> Step.Skip(ForegroundSkipReason.FRONT_UNREADABLE)
+                    Step.Skip(ForegroundSkipReason.FRONT_UNREADABLE)
+                } else {
+                    when (val matched = classify(active, native, isEnabled, gen)) {
+                        is AccessibilitySource.ActiveWindow.Enabled ->
+                            Step.Frame(mapWindow(active, matched.root, windows.size, activeIsOverlay(active, gen)))
+                        is AccessibilitySource.ActiveWindow.NotEnabled -> frontRead(windows, gen, isEnabled, windowId, eventPackage)
+                        is AccessibilitySource.ActiveWindow.Unknown -> Step.Skip(ForegroundSkipReason.FRONT_UNREADABLE)
+                    }
                 }
             }
         }
-    }
-}
-
-/** [resolveActive]'s classification of an ALREADY-fetched root of [window] (JJ1/JJ2). */
-private fun classify(
-    window: android.view.accessibility.AccessibilityWindowInfo,
-    root: android.view.accessibility.AccessibilityNodeInfo,
-    isEnabled: (String?) -> Boolean,
-): AccessibilitySource.ActiveWindow {
-    val pkg = root.packageName?.toString() ?: return AccessibilitySource.ActiveWindow.Unknown(window)
-    return if (isEnabled(pkg)) {
-        AccessibilitySource.ActiveWindow.Enabled(window, root)
-    } else {
-        AccessibilitySource.ActiveWindow.NotEnabled(window, root)
     }
 }
 
@@ -165,12 +159,13 @@ private fun classify(
 private inline fun AccessibilitySource.scanThen(
     windows: List<android.view.accessibility.AccessibilityWindowInfo>,
     active: android.view.accessibility.AccessibilityWindowInfo,
+    gen: Long,
     noinline isEnabled: (String?) -> Boolean,
     windowId: Int,
     onNone: () -> Step,
 ): Step {
     onOverlayScan()
-    return when (val scan = walk.overlayFront(windows, active, isEnabled)) {
+    return when (val scan = walk.overlayFront(windows, active, isEnabled, gen = gen)) {
         is AccessibilitySource.OverlayScan.Refused -> {
             Timber.tag("Pipeline").v("🚫 Skip: overlay scan refused %s (event window=%d)", scan.reason, windowId)
             Step.Skip(scan.reason)
@@ -178,7 +173,7 @@ private inline fun AccessibilitySource.scanThen(
         // PR #1155 review DD1 (reverses BB9): the walk SELECTED an overlay — a map failure does not
         // prove it left; the frame is skipped `MAP_FAILED` (retried on the next), never the window beneath.
         is AccessibilitySource.OverlayScan.Overlay ->
-            Step.Frame(getWindowSnapshot(scan.located.window, scan.located.root, scan.located.totalWindowCount))
+            Step.Frame(mapWindow(scan.located))
         AccessibilitySource.OverlayScan.None -> onNone()
     }
 }
@@ -186,12 +181,13 @@ private inline fun AccessibilitySource.scanThen(
 /** Our bubble / the launcher / a disabled platform is active → the window in front (#1148 D4). */
 private fun AccessibilitySource.frontRead(
     windows: List<android.view.accessibility.AccessibilityWindowInfo>?,
+    gen: Long,
     isEnabled: (String?) -> Boolean,
     windowId: Int,
     eventPackage: String?,
 ): Step {
     // Reuse THIS enumeration when there is one (FF1); else enumerate as #1148 did.
-    val front = if (windows != null) foregroundWindow(windows, isEnabled) else foregroundWindow(isEnabled)
+    val front = if (windows != null) foregroundWindow(windows, isEnabled, gen = gen) else foregroundWindow(isEnabled)
     return when (front) {
         is AccessibilitySource.Foreground.Refused -> {
             Timber.tag("Pipeline").v(
@@ -201,7 +197,7 @@ private fun AccessibilitySource.frontRead(
             Step.Skip(front.reason)
         }
         is AccessibilitySource.Foreground.Found ->
-            Step.Frame(getWindowSnapshot(front.located.window, front.located.root, front.located.totalWindowCount))
+            Step.Frame(mapWindow(front.located))
     }
 }
 
@@ -223,6 +219,6 @@ private fun AccessibilitySource.preOverlayRead(
     return if (isEnabled(activeRoot.packageName?.toString())) {
         Step.Frame(getCurrentRootSnapshot(activeRoot))
     } else {
-        frontRead(windows, isEnabled, windowId, eventPackage)
+        frontRead(windows, generation, isEnabled, windowId, eventPackage)
     }
 }
