@@ -111,13 +111,15 @@ data class NodeRef(
     }
 
     /**
-     * #1149 review J4/L7 — could a PARTIALLY seen region still complete into this fingerprint? True
-     * when its visible distinct hint set is a subset of the ref's (the empty set included). Same
-     * cheap count pre-check before hashing as [fingerprintMatches].
+     * #1149 review J4/L7/R4 — could a PARTIALLY seen region still complete into this fingerprint? True
+     * when it shows AT LEAST ONE letter-bearing key and all of its visible keys are in the ref's set.
+     * An EMPTY visible set is no evidence at all (R4 — no vacuous veto: icon-only Compose regions would
+     * otherwise veto every window); a hidden twin under an unreadable label-less region is the
+     * accepted residual. Same cheap count pre-check before hashing as [fingerprintMatches].
      */
     fun visibleConsistentWith(visibleLabels: List<String>): Boolean {
         val keys = visibleLabels.mapNotNullTo(HashSet(), ::hintKeyOrNull)
-        if (keys.size > labelHintHashes.size) return false
+        if (keys.isEmpty() || keys.size > labelHintHashes.size) return false
         // A hash failure is treated as CONSISTENT (the veto side — fail closed).
         return keys.all { k -> cloud.trotter.dashbuddy.domain.util.sha256OrNull(k)?.let { it in hintSet } ?: true }
     }

@@ -122,7 +122,8 @@ class NodeRefLabelHintsTest {
     @Test
     fun `visible consistency is a subset test and the fingerprint count pre-check is exact`() {
         val r = ref("This offer", "Expand")
-        assertTrue(r.visibleConsistentWith(emptyList()))
+        assertFalse("R4: no letter-bearing key is no evidence — no vacuous veto", r.visibleConsistentWith(emptyList()))
+        assertFalse(r.visibleConsistentWith(listOf("\$40.57")))
         assertTrue(r.visibleConsistentWith(listOf("This offer", "\$40.57")))
         assertFalse(r.visibleConsistentWith(listOf("This offer", "Order details")))
         assertFalse(r.visibleConsistentWith(listOf("a", "b", "c")))

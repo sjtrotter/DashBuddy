@@ -978,4 +978,13 @@ class UiInteractionHandlerOwnerTest {
         assertFalse(expand(handler(windowRoot(a, b)), expandRef.copy(text = "\$12.50")))
         a.neverClicked(); b.neverClicked()
     }
+
+    /** R4: a label-less (icon-only) clickable region cut at the slot cap is no evidence — the exact row still clicks. */
+    @Test
+    fun `a label-less over-cap region does not veto the exact row`() = runTest {
+        val iconPanel = view(clickable = true, bounds = Rect(0, 200, 1080, 1200), children = List(NodeRef.LABEL_SCAN_NODES + 1) { view() })
+        val row = payRow(top = 1774 - 400)
+        assertTrue(expand(handler(windowRoot(iconPanel, row))))
+        row.clicks(1)
+    }
 }
