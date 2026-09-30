@@ -162,10 +162,12 @@ class UiInteractionHandler @Inject constructor(
         }
         val candidates = search.candidates
         if (candidates.isEmpty()) {
+            // Principle 7: `ref.text` is third-party UI text — DEBUG only, never the exportable WARN slice.
             Timber.tag("Effects").w(
-                "Could not find any live node for: %s (id=%s, text=%s, bounds=%s)",
-                description, ref.viewIdSuffix, ref.text, ref.boundsInScreen,
+                "Could not find any live node for: %s (id=%s, bounds=%s, hints=%d)",
+                description, ref.viewIdSuffix, ref.boundsInScreen, ref.labelHintHashes.size,
             )
+            Timber.tag("Effects").d("Unfound ref text for %s: %s", description, ref.text)
             return false
         }
 
