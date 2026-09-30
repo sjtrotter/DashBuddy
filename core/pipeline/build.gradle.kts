@@ -41,6 +41,10 @@ android {
     buildFeatures {
         buildConfig = true
     }
+    // #1160 review AD4: the frame-rule-OFF `DiagnosticSkeletonBuilder` lives in test fixtures, never `main`.
+    testFixtures {
+        enable = true
+    }
 }
 
 dependencies {
@@ -54,6 +58,8 @@ dependencies {
     implementation(libs.re2j)
 
     implementation(project(":domain"))
+    // #1160 review AD4: the test-fixture DiagnosticSkeletonBuilder reads the domain model.
+    testFixturesImplementation(project(":domain"))
 
     ksp(libs.hilt.compiler)
 

@@ -4,6 +4,7 @@ import cloud.trotter.dashbuddy.domain.model.accessibility.UiNode
 import cloud.trotter.dashbuddy.domain.model.notification.RawNotificationData
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
@@ -367,5 +368,110 @@ class CustomerTextMarkersTest {
         assertNull(CustomerTextMarkers.unredactedMarker("123 Main Street, Austin"))
         // DoorDash order_ready puts the customer name at the START (no lead-in).
         assertNull(CustomerTextMarkers.unredactedMarker("Adam's order is ready for pickup at 7-Eleven"))
+    }
+
+    @Test
+    fun `ID_MARKERS is the pinned suffix list - EE1 unchanged, NN2 TT1 ZZ1 deliberately added`() {
+        assertEquals(
+            listOf(
+                "customer_name", "user_name", "address_line_1", "address_line_2", "arriving_at_title",
+                "address_subpremise_line", "dasher_instruction_content_collapsed",
+                "dasher_instruction_content_expanded", "description_text_view",
+                // #1160 review NN2 — deliberately ADDED: the GoPuff per-order customer name, promoted
+                // from the intake list so the runtime UNKNOWN scrub covers it too.
+                "order_cx_name",
+                // #1160 review ZZ1 — deliberately ADDED: the chat header, ALWAYS (fail closed; a value-shape
+                // gate missed non-Latin and particle names).
+                "tvTitle",
+                // #1160 review TT1 — deliberately ADDED: the chat last-message preview is always customer text.
+                "tvLastMessage",
+            ),
+            CustomerTextMarkers.ID_MARKERS,
+        )
+        assertEquals(
+            mapOf(
+                "customer_name" to CustomerTextMarkers.IdentityKind.NAME,
+                "user_name" to CustomerTextMarkers.IdentityKind.PERSON_OR_MERCHANT,
+                "address_line_1" to CustomerTextMarkers.IdentityKind.ADDRESS,
+                "address_line_2" to CustomerTextMarkers.IdentityKind.ADDRESS,
+                "arriving_at_title" to CustomerTextMarkers.IdentityKind.ADDRESS,
+                "address_subpremise_line" to CustomerTextMarkers.IdentityKind.ADDRESS,
+                "dasher_instruction_content_collapsed" to CustomerTextMarkers.IdentityKind.CONTENT,
+                "dasher_instruction_content_expanded" to CustomerTextMarkers.IdentityKind.CONTENT,
+                "description_text_view" to CustomerTextMarkers.IdentityKind.CONTENT,
+                "order_cx_name" to CustomerTextMarkers.IdentityKind.NAME,
+                "tvTitle" to CustomerTextMarkers.IdentityKind.EXACT,
+                "tvLastMessage" to CustomerTextMarkers.IdentityKind.EXACT,
+            ),
+            CustomerTextMarkers.ID_MARKER_TABLE.filter { it.runtimeScrub == CustomerTextMarkers.RuntimeScrub.ALWAYS }
+                .associate { it.suffix to it.kind },
+        )
+    }
+
+    @Test
+    fun `the UNKNOWN-envelope scrub covers the NN2-promoted order_cx_name (review OO3)`() {
+        val node = UiNode(viewIdResourceName = "com.doordash.driverapp:id/order_cx_name", text = "Morgan")
+        assertEquals("order_cx_name", CustomerTextMarkers.firstUnredactedIdMarker(node))
+        assertEquals("[redacted]", CustomerTextMarkers.scrubUnknown(node).text)
+    }
+
+    @Test
+    fun `tvTitle and tvLastMessage always scrub at runtime (reviews SS9, TT1, ZZ1)`() {
+        // AL3: every RUNTIME row is ALWAYS; the NEVER rows are exactly the intake-only CONTENT ids.
+        assertEquals(CustomerTextMarkers.RuntimeScrub.ALWAYS, CustomerTextMarkers.ID_MARKER_TABLE.single { it.suffix == "tvTitle" }.runtimeScrub)
+        assertEquals(CustomerTextMarkers.RuntimeScrub.ALWAYS, CustomerTextMarkers.ID_MARKER_TABLE.single { it.suffix == "tvLastMessage" }.runtimeScrub)
+        CustomerTextMarkers.ID_MARKER_TABLE.filter { it.runtimeScrub == CustomerTextMarkers.RuntimeScrub.NEVER }.forEach {
+            assertEquals(it.suffix, CustomerTextMarkers.IdentityKind.CONTENT, it.kind)
+            assertTrue(it.suffix, !it.idProtect)
+        }
+        listOf("Riley", "李明", "محمد", "de la Cruz", "RILEY S", "Pick up order").forEach {
+            val node = UiNode(viewIdResourceName = "com.x:id/tvTitle", text = it)
+            assertEquals(it, "[redacted]", CustomerTextMarkers.scrubUnknown(node).text)
+        }
+        val message = UiNode(viewIdResourceName = "com.x:id/tvLastMessage", text = "My gate code is 2468")
+        assertEquals("[redacted]", CustomerTextMarkers.scrubUnknown(message).text)
+    }
+
+    @Test
+    fun `the runtime mode is applied before the first match, on the real table (reviews UU4, AL3)`() {
+        // An intake-only NEVER row never scrubs at runtime …
+        assertNull(CustomerTextMarkers.idMarkerSuffix("com.x:id/message_input"))
+        assertNull(CustomerTextMarkers.idMarkerSuffix("com.x:id/primaryManeuverText"))
+        // … and never switches an overlapping ALWAYS row off.
+        assertEquals("address_line_1", CustomerTextMarkers.idMarkerSuffix("com.x:id/bottom_sheet_address_line_1"))
+        // The intake list IS the table (one list), and the census sees every row.
+        assertEquals(CustomerTextMarkers.ID_MARKER_TABLE.map { it.suffix }.toSet(), CustomerTextMarkers.ID_MARKER_SUFFIXES)
+        assertEquals(CustomerTextMarkers.IdentityKind.CONTENT, CustomerTextMarkers.idMarkerFor("com.x:id/step_description")?.kind)
+    }
+
+    @Test
+    fun `idProtect is pinned - only rows whose value a test tag can embed (review AB4)`() {
+        assertEquals(
+            setOf("customer_name", "user_name", "order_cx_name", "tvTitle"),
+            CustomerTextMarkers.ID_MARKER_TABLE.filter { it.idProtect }.map { it.suffix }.toSet(),
+        )
+    }
+
+    @Test
+    fun `what a kind seeds is pinned on the kind table (review AB1)`() {
+        assertEquals(
+            mapOf(
+                CustomerTextMarkers.IdentityKind.NAME to listOf(true, Int.MAX_VALUE, 2, false, true),
+                CustomerTextMarkers.IdentityKind.ADDRESS to listOf(true, 0, 0, false, false),
+                CustomerTextMarkers.IdentityKind.CONTENT to listOf(false, 0, 0, false, false),
+                CustomerTextMarkers.IdentityKind.EXACT to listOf(true, 0, 0, false, false),
+                CustomerTextMarkers.IdentityKind.PERSON_OR_MERCHANT to listOf(true, 2, 3, true, false),
+            ),
+            CustomerTextMarkers.IdentityKind.entries.associateWith {
+                listOf(it.seedsExactValue, it.maxRunSeedTokens, it.minRunLetters, it.personNameShapeOnly, it.runsGuardClasses)
+            },
+        )
+        // Reviews AD2, AF1: a person-or-merchant value seeds runs only when it reads as a person's name.
+        val pom = CustomerTextMarkers.IdentityKind.PERSON_OR_MERCHANT
+        listOf("Riley", "Mary Jo", "O'Brien", "Wing Stop", "Riley S", "Riley S.", "Mary Jo S").forEach { assertTrue(it, pom.seedsRunsFrom(it)) }
+        listOf("S", "Riley S T", "Mary Jo Anne", "In-N-Out Burger", "Sonic Drive-In", "7-Eleven", "The Home Depot", "Jack in the Box", "riley")
+            .forEach { assertTrue(it, !pom.seedsRunsFrom(it)) }
+        assertTrue(CustomerTextMarkers.IdentityKind.NAME.seedsRunsFrom("Mary Jo Anne Smith"))
+        assertTrue(!CustomerTextMarkers.IdentityKind.EXACT.seedsRunsFrom("Riley"))
     }
 }

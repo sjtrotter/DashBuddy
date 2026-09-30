@@ -131,8 +131,8 @@ partial is recognized on the device but its envelope loses the label to the #103
 collateral and replays UNKNOWN (intake nuisance, not a leak). Candidate text markers are vetted against the
 corpus before joining the runtime set — chrome-ambiguous prefixes ("Return ", "Focus on ",
 "Heading to ") are REJECTED because `CaptureBackstopCorpusTest` goes red on a clean corpus,
-reasoning recorded in the `CustomerTextMarkers` KDoc; the rule redact is the primary control (#806). Intake-side prefix lists (`SnapshotRedactor.NAME_PREFIXES`,
-`PII_ID_SUFFIXES`) are deliberately ASYMMETRIC with the runtime markers — an over-scrub at intake
+reasoning recorded in the `CustomerTextMarkers` KDoc; the rule redact is the primary control (#806). Intake-side prefix lists (`SnapshotRedactor.NAME_PREFIXES`;
+the intake PII-id list is the `ID_MARKER_TABLE` itself since #1160, its NEVER rows intake-only) are deliberately ASYMMETRIC with the runtime markers — an over-scrub at intake
 costs triage text, a runtime false positive scrubs a live envelope — **but that asymmetry has a
 floor (#1064): an intake over-scrub that eats a rule's own recognition ANCHOR costs the fixture,
 not triage text.** `"Return "` was the receipt (added unconditionally by #994, it masked DoorDash's
@@ -560,6 +560,108 @@ then fired, and were answered with the window beneath). The shipped rules:
 Not in #1148: `notificationTimeout` (stays 100 ms), TalkBack's subtree-only / focus-gated filters
 (they discard observer evidence), `TYPE_ANNOUNCEMENT`/text events, and any change to `FrameGate`,
 `Observation.identity()`, the classifier or the capture envelope schema.
+
+**Census skeleton (M1a, #1145; hardened over four review rounds of PR #1160) — pure, not yet wired.**
+The UNKNOWN-screen census (Epic #1138) is specified by ADR-0011; this layer holds its first,
+side-effect-free half.
+
+- *Wire contract* — the Apache-2.0-headed package `domain.census.contract`: `UiSkeletonDto` /
+  `UiSkeletonNodeDto` / `TextSlot` + `SkeletonSchema` (`uinode.skeleton.v1`, ADR §1 — no plaintext slot,
+  no bounds; a per-node `text` map keyed by `UiNodeTextField.wire`, each value `{h?, kind}`, `h` present
+  iff `kind` is `words:1..8`; invariants checked at construction AND on decode, incl. well-formed UTF-16
+  without U+0000 for class/id/stamps (`WireStrings`) and a real calendar `day`; 64 KB item cap measured
+  once by `SkeletonSchema.measure`); `CensusHash` (§3, `sha256("census.v1:" + canonical)` → 16 hex,
+  fail-closed to `withheld`, where `CensusHash.canonical` — a fixed point — is the value after the census glyph
+  fold `TextFold.foldForCensus` (FORMAT strip by code point, then NFKC, then dash fold; `TextFold` also
+  owns the sensitive scan's boundary-preserving form `foldGlyphsPreservingSupplementary`, byte-for-byte
+  the pre-#1160 normalizer; `SensitiveTextMarkers.findMarker` scans it AND the STRIPPED form — that same
+  preserving output minus its supplementary-plane FORMAT code points (`TextFold.stripSupplementaryFormat`),
+  never `foldForCensus`, which is census-only (WW1) — the second only when the preserving OUTPUT carries a
+  supplementary FORMAT code point (judged on the emitted string, AG1), and drops on either hit, #1160
+  reviews RR1/UU2/UU8/WW1), trimmed, with every
+  census-whitespace run collapsed to one ASCII space; the builder hashes the judged string via
+  `CensusHash.ofCanonical`); `KindClassifier` (§1's two-stage grammar, code-point based);
+  `CensusFingerprint` (§8: wrapper-to-forest over a synthetic root, every string LENGTH-PREFIXED so the
+  encoding is injective, digested through `sha256OrNull(ByteArray)`); and the static gates
+  `ResourceIdGrammar.isStaticShape` / `ClassNameGrammar` (the DTO enforces `ResourceIdGrammar.isWireId` —
+  a static shape or the reserved sentinel `~` — and `ClassNameGrammar` at construction and decode) — a
+  dynamic id (a per-frame-UUID Compose test tag) or a non-static class is ABSENT (null) on the wire and in
+  the fingerprint; an id `IdPathJudgement.isStaticId` rejects because its name part trips a
+  frame-free customer-PII predicate (`row_Deliver_to_Sam`) is emitted as the sentinel `~` (only a
+  grammar-dynamic id is null); and the frame-level containment rule likewise EMITS the sentinel `~` (`ResourceIdGrammar.FRAME_WITHHELD_ID`) in place of a static id carrying an identity
+  run of the same frame (`chip_Adam` beside `customer_name` "Adam"), so the node keeps its place in the
+  fingerprint's structure, and makes absent a non-wrapper class carrying a customer-name run. The golden vectors live with the
+  contract's tests (never in the APK).
+- *Shared vocabulary* — the anonymous-wrapper predicate (`domain.model.accessibility.AnonymousWrappers`,
+  owned by the core model and imported by the contract) is the one `UiNode.stableHash`
+  also uses (algorithm unchanged, pinned by `UiNodeStableHashPinTest`); the customer-PII shapes moved
+  byte-for-byte from the test-only `SnapshotRedactor` to `domain.privacy.PiiShapes` (app licence;
+  `SnapshotRedactor` delegates, `PiiShapesParityTest` pins it; `PiiShapesIcuGuardTest` applies the ICU
+  bare-`}` rule to every compiled pattern); `CustomerTextMarkers.ID_MARKER_TABLE` is the ONE owner of
+  "what kind of value an id carries" — `IdMarker(suffix, kind, runtimeScrub)`, kind NAME / ADDRESS /
+  EXACT / PERSON_OR_MERCHANT / CONTENT, runtime scrub ALWAYS / NEVER — and `ID_MARKERS` is its ALWAYS
+  projection: #1160 added `order_cx_name`, `tvTitle` and `tvLastMessage` to the runtime UNKNOWN scrub,
+  all ALWAYS on the id alone (review round 11: no value-shape gate — "李明", "de la Cruz" read as chrome to
+  any shape — so an UNKNOWN sheet title under `tvTitle`, "Pick up order", loses its X-Ray line, ADR residual
+  11); the recognized `doordash.screen.chat` / `chat_conversation` rules
+  redact `tvTitle` (customer-name normalized) and `tvLastMessage` (plain); the corpus intake's PII-id list IS the table (`ID_MARKER_SUFFIXES`, the former intake-only ids as
+  CONTENT / `NEVER` rows — one list, one `endsWith` match, #1160 AL3). Intake id matching is `endsWith(ignoreCase)` against
+  that one table (`CustomerTextMarkers.idMarkerFor`) — accepted cost: `rating_description_text_view`
+  ("Raise to 50%", two Dasher-Rewards fixtures) is masked at their next re-intake. The frame-rule
+  off-switch exists only as `census.diagnostics.DiagnosticSkeletonBuilder` in `:core:pipeline`'s TEST
+  FIXTURES (`src/testFixtures`, consumed by `:app` tests via `testFixtures(project(":core:pipeline"))`) —
+  never in `main`, guarded by `DiagnosticsNotInMainTest`.
+- *The filter* — `core.pipeline.census.SkeletonBuilder` (typed API: `Platform`, `LocalDate`; build/outcome/
+  refusals/envelope), with the per-frame state in `FrameFilter`, the run vocabulary in `LetterRuns` and the
+  frame-free id judgement in `IdPathJudgement` (split by #1160 review round 12). A
+  `SensitiveTextMarkers` hit on the raw tree or title yields no skeleton (a caller may pass the verdict
+  it already computed, bound to that exact tree instance; a mismatched one is ignored); a FAILED marker
+  scan is `BUILD_FAILED`, not a sensitive frame. Per field: step 1 is the node's own RAW id
+  (`ID_MARKER_TABLE`, via `IdClass`); steps 2–8 judge the CANONICAL form (a fixed point
+  or none — a value with no canonical form is withheld; the canonical form alone decides the 40-char cap,
+  and a value with more than 4 × 40 non-FORMAT, non-whitespace code points is capped WITHOUT folding —
+  4 is the longest canonical decomposition, checked exhaustively by `SkeletonLengthBoundTest`)
+  and, when it differs and is itself within the cap, the RAW trimmed form — either hit withholds; only a
+  `words:1..8` survivor hashes, on the judged canonical form. The FRAME-LEVEL duplicate rule then
+  withholds (a) any field whose canonical value is a seeded EXACT value — value-judged anywhere in the
+  frame, or the text/desc of a NAME, ADDRESS or EXACT id — and (b) any field containing a letter run
+  (≥ 2 letters in code points, `CaseFold`-folded) of a NAME id's text (else its desc). NAME run-seeding
+  is reserved for ids whose value is ONLY ever a person's name (`customer_name`, `order_cx_name`); a
+  reused id that is a person or a merchant (`user_name`) is PERSON_OR_MERCHANT — exact-seeded, plus letter
+  runs (≥ 3 letters) only when its value reads as a person's name (≤ 2 letter-only Capitalized tokens,
+  optionally plus one trailing initial — "Riley S"; never "In-N-Out Burger", "7-Eleven" or "Jack in the
+  Box") —
+  and a value that may be chrome (`tvTitle`, `tvLastMessage`) is EXACT — exact-seeded only (what a kind
+  seeds is the kind table's `seedsExactValue` / `maxRunSeedTokens` / `minRunLetters` /
+  `personNameShapeOnly` / `runsGuardClasses`; its source is `nameRunSource` — usable text, else desc); the `idProtect` rows (`customer_name`, `order_cx_name`,
+  `user_name`, `tvTitle` — not `tvLastMessage`) also add their WHOLE value (≥ 3 code-point letters, a
+  single token included, no name-shape gate) as an id-only run, matched across id separators; the address ids are ADDRESS (exact only — address vocabulary
+  is common English); CONTENT ids (`description_text_view`, the instruction bodies) and masks seed
+  nothing. The same containment, over every contiguous join of camel segments ACROSS separators
+  (`row_mc_kenna`), replaces a node's static id with the reserved sentinel `~` (`chipAdam` beside
+  `customer_name` "Adam", `search_bar` beside `tvTitle` "Search") so the fingerprint's STRUCTURE never
+  depends on the customer; a class carrying a customer-NAME run is absent (`com.x.RileyButton`,
+  `androidx.RileyButton`) unless it is a KNOWN framework class (`FrameworkClasses.KNOWN`, exact names: the
+  inventory `census/framework-classes.txt` — `android.view.View` subclasses only, 233 names under a
+  `#sha256=` header (#1160 AL2) — generated from the RELEASE runtime classpath listed by
+  `:app:censusReleaseClasspath` (AK4), diffed by `:app`'s
+  `FrameworkClassInventoryTest` — regenerate with `-DupdateFrameworkClasses=true` — ∪ the corpus set). `IdPathJudgement.isStaticId` is
+  memoized process-wide in a bounded LRU (512). A malformed (NUL / lone-surrogate) CLASS is emitted absent and counted
+  (`Outcome.Built.malformedClass`); a malformed VIEW ID refuses the frame (`INVALID_TREE` — its identity
+  classification cannot be verified, #1160 round 13). On the id path the PII judgement is stricter-to-trigger: a
+  lead-in withholds only before a Capitalized token and the name shape needs an uppercase-led
+  (Capitalized or all-caps) first token and an uppercase initial (`deliver_to_label`, `tabB` travel;
+  `chip_RILEY_S` and — the recall cost — `TAB_B` are absent). A `uid` (test-tag) value is judged by the id path on its
+  bounded CANONICAL form, after the over-cap pre-check (`IdPathJudgement.namePartCarriesPii` — `chip_Riley_S`,
+  fullwidth `chip＿Riley＿S`), then as text; a hit seeds the frame-wide exact set (#1160 AK1–AK3); a value that
+  canonicalizes to nothing (FORMAT-only) is dropped, never a phantom slot (#1160 round 15). Each value is
+  judged once per frame (memoized). `outcome()` never throws: every failure is `Refusal.BUILD_FAILED`
+  (the #909 inertness rule); refusals are reasons, never text.
+- *Tests* — `SkeletonCorpusTest` asserts ADR §7 (a)–(f) over the whole committed corpus (full-tree
+  redactor parity with exactly one stated exemption, plus a negative control) and a seeded property.
+
+Nothing calls the builder at runtime yet: the publisher stage, `CensusSink` and `PipelineStats` counters
+are #1146 (M1b); upload is M3.
 
 **The whole recognition + text-scrub layer assumes an ENGLISH device (#938).** Rule anchors and
 BOTH text-marker SSOTs (`SensitiveTextMarkers.KEYWORDS`, `CustomerTextMarkers.MARKERS`) are literal

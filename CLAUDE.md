@@ -145,7 +145,14 @@ sibling surface, left for a future extraction.
   `formatDuration`/`formatCountdown` — the locale policy, #358/#456/#467; lives here so both the
   UI and the state layer route through one definition; the Compose time helpers
   `rememberNow`/`rememberTimeFormatter` stay in `:core:designsystem`). No Android
-  dependencies. (Repository *implementations* and Hilt bindings live in `:core:data`.)
+  dependencies. (Repository *implementations* and Hilt bindings live in `:core:data`.) Two #1145 packages:
+  `domain.census.contract` — the census wire contract (ADR-0011: skeleton DTOs/schema, `CensusHash`,
+  `CensusFingerprint`, the kind classifier, the id/class grammars, `WireStrings`) — is **Apache-2.0-headed**,
+  depends on nothing but the JDK, kotlinx-serialization, `domain.util.sha256OrNull` and
+  `domain.model.accessibility.AnonymousWrappers` (the wrapper class set, owned by the core model so `UiNode`
+  never imports the contract), and is bound for extraction to its own build (ADR-0011 open question 1); `domain.privacy.PiiShapes` (app licence) is the
+  promoted customer-PII pattern SSOT that the test-side `SnapshotRedactor` delegates to and the census
+  filter reads.
 - **`:core:pipeline`** — Accessibility pipeline, notification pipeline, JSON rule engine
   (RuleCompiler, Ruleset, JsonRuleInterpreter), observation classifier. Reads third-party UI.
 - **`:core:state`** — Multi-region state machine (StateMachine, FlowRegionStepper,
@@ -231,7 +238,7 @@ Full reference: [`docs/architecture/01-sensor-pipelines.md`](docs/architecture/0
 `AccessibilityListener`/`AccessibilitySource` capture `AccessibilityEvent`s; `AccessibilityNodeMapper`
 normalizes a window into an immutable `UiNode` tree (`:domain`). Per-event-type sub-pipelines
 (`ContentChangedPipeline` coalesced as one burst, `StateChangedPipeline`, `WindowsChangedPipeline`, clicks — #1148: 150/300 ms quiet/max with a leading edge; the active enabled window is the ground truth, else the readable enabled application window in front (own bubble and PiP skipped) or the frame is refused and counted, and the windows pipeline emits at most one window, by the event path's rules; an enabled platform offer overlay on top is the frame while it is up, #1152 — detail in the reference; the package-less `WINDOWS_CHANGED` reaches the #1148 D2 `ListenerGate` only when the dasher's **event-receipt consent** is ALLOWED — the listener clears `packageNames` via the pure `ServiceInfoPolicy`, in debug AND release, #1151) and the
-parallel `NotificationPipeline` emit `PipelineEvent`s. `AccessibilityPipeline.output()` gates in order:
+parallel `NotificationPipeline` emit `PipelineEvent`s. The UNKNOWN-screen census skeleton (ADR-0011, #1145) is built by the pure, not-yet-wired `census.SkeletonBuilder` over the `domain.census.contract` wire types, sharing `domain.privacy.PiiShapes` with `SnapshotRedactor`. `AccessibilityPipeline.output()` gates in order:
 **rulesets-not-loaded** (fail-closed, #432) → **sensitive/noise** (#399) → **disabled platform** →
 **UNKNOWN** (captured to disk for triage, never forwarded to the state machine). Snapshots are attributed
 to the window's *real* package, so our own overlay is dropped. `FrameGate` admits frames (identity dedup +
@@ -279,7 +286,11 @@ PR #1066 — read a pull's build from the logs, never infer it).
 **Backstops (rules-independent, cross-platform DATA):** `SensitiveTextMarkers` drops the dasher's
 banking screens; `CustomerTextMarkers` (#624/#806) scrubs a node/field carrying a customer-PII marker on
 recognized AND UNKNOWN screen/notification/click envelopes, plus `ID_MARKERS` (view-id suffixes whose
-VALUE is PII, `hasIdSuffix`, #910/#993/#1058) on UNKNOWN screen + click envelopes only (a recognized
+VALUE is PII, `hasIdSuffix`, #910/#993/#1058) on UNKNOWN screen + click envelopes only — the census kind
+table `ID_MARKER_TABLE` is the one owner of "what kind of value an id carries", and `ID_MARKERS` is its
+ALWAYS runtime-scrub projection (#1160 adds `order_cx_name`, `tvTitle`, `tvLastMessage` — `tvTitle`
+fails closed on the id alone, so an UNKNOWN sheet title under it loses its triage line — on EVERY
+platform, since the suffix is a generic Hungarian name an Uber `…:id/tvTitle` also matches) (a recognized
 frame keeps its rule's deliberate decisions). A click envelope inherits the SCREEN rule's redact
 (`Observation.Click.screenRuleId`, #910). Candidate text markers are vetted against the corpus
 (`CaptureBackstopCorpusTest`); chrome-ambiguous prefixes are rejected and the rule redact is the primary

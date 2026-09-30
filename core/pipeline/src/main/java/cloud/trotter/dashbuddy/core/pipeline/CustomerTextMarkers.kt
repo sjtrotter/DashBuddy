@@ -1,5 +1,6 @@
 package cloud.trotter.dashbuddy.core.pipeline
 
+import cloud.trotter.dashbuddy.domain.privacy.MaskTokens
 import cloud.trotter.dashbuddy.core.pipeline.rules.CompiledRedact
 import cloud.trotter.dashbuddy.domain.model.accessibility.UiNode
 import cloud.trotter.dashbuddy.domain.model.notification.RawNotificationData
@@ -136,16 +137,38 @@ object CustomerTextMarkers {
      * address line, so scrubbing it can never take app vocabulary with it: the
      * label siblings (`user_name_label`, `customer_name_label`) are deliberately
      * absent, so a replayed UNKNOWN frame keeps its shape for triage.
+     *
+     * The table carries, per suffix, the KIND of value the node holds (#1160 reviews EE1, LL1):
+     * `NAME` — an id whose value is ONLY ever a person's name (`customer_name`, `order_cx_name`): seeds
+     * its exact value and its letter runs; `ADDRESS` — a place (the
+     * address lines, `arriving_at_title`, `address_subpremise_line`); `CONTENT` — a node that can hold
+     * customer text but is also reused for app copy (the free-text instruction bodies;
+     * `description_text_view`, which this file documents as generic DoorDash chrome); `EXACT` — a value
+     * that may be PII or chrome (`tvTitle`, `tvLastMessage`): seeds its exact value only; `PERSON_OR_MERCHANT` —
+     * an id REUSED for other people but never chrome (`user_name`, also the merchant's and the dasher's
+     * name): exact value only for text, plus a whole-value id/class run when it reads as a person's name
+     * (#1160 reviews PP6, SS1, XX3). The intake list
+     * is DERIVED from this table ([ID_MARKER_SUFFIXES], review AL3): the intake-only ids (message bodies,
+     * maneuver/road text, instruction bodies) are CONTENT rows with `runtimeScrub = NEVER`, so the two can
+     * never disagree on a PII id (#1160 reviews NN2, PP6, UU3, AL3). The runtime backstop scrubs on EVERY suffix exactly as
+     * before; only the census's frame-wide duplicate rule reads the kind: a NAME seeds its exact value
+     * and its letter runs, an ADDRESS its exact value only (address vocabulary — "Road", "View", "San" —
+     * is common English), CONTENT seeds nothing.
      */
-    val ID_MARKERS: List<String> = listOf(
+    val ID_MARKER_TABLE: List<IdMarker> = listOf(
         // DoorDash multi-order pickup rows / pickup arrival card -> customer name.
-        "customer_name",
+        IdMarker("customer_name", IdentityKind.NAME, idProtect = true),
         // DoorDash drop-off + pickup contact blocks -> customer name (the node the
         // "Delivery for" label sibling names; #910 V5).
-        "user_name",
+        // EXACT for the census (#1160 review SS1): the class KDoc records it is REUSED for the MERCHANT on
+        // pickup cards and for the dasher's own name, so its letter runs must never seed ("The Home Depot"
+        // → `the`; "Jack in the Box" → `in`/`box` would withhold chrome and, through the class/id check,
+        // null `TextView`-class wrappers per store). EXACT still withholds an exact duplicate of a
+        // customer's first name; a merchant name costs nothing (recognition never anchors on one).
+        IdMarker("user_name", IdentityKind.PERSON_OR_MERCHANT, idProtect = true),
         // DoorDash address block -> street line and city/ST/ZIP line (#910 V1/V5).
-        "address_line_1",
-        "address_line_2",
+        IdMarker("address_line_1", IdentityKind.ADDRESS),
+        IdMarker("address_line_2", IdentityKind.ADDRESS),
         // DoorDash's OWN nav arrival banner title -> the destination, which on a dropoff leg is
         // the customer's full street address (#993, fielded 08-02: "<street>, Apt <n>, <City>,
         // <ST> <zip>, USA"). The rule-declared `redact` now covers it on every dropoff-phase rule
@@ -154,7 +177,7 @@ object CustomerTextMarkers {
         // MERCHANT, so an UNKNOWN pickup-nav frame loses a merchant line from its triage text —
         // fail toward privacy, and the RECOGNIZED path is untouched by this scan, so #886's
         // deliberate "pickup_navigation keeps its merchant address raw" decision still stands.
-        "arriving_at_title",
+        IdMarker("arriving_at_title", IdentityKind.ADDRESS),
         // #1058 (fielded 2026-08-28, four envelopes): the drop-off address block's SUBPREMISE
         // line — the customer's unit/apartment number, rendered fused with its label
         // ("Apt/Suite: <n>"). It is customer-locating PII by construction, `SnapshotRedactor`
@@ -162,7 +185,7 @@ object CustomerTextMarkers {
         // declares it — but the UNKNOWN path had nothing, so an unrecognized variant of the
         // arrival card (the alcohol render, which carries no customer lead-in for the prefix
         // scan) persisted it verbatim.
-        "address_subpremise_line",
+        IdMarker("address_subpremise_line", IdentityKind.ADDRESS),
         // #1058, same four envelopes: the customer's own free-text delivery instructions. The
         // node holds nothing else — the "Hand it to recipient" label is a separate
         // `instructions_title` sibling — and the fielded value carried a door code. This is the
@@ -172,8 +195,8 @@ object CustomerTextMarkers {
         // construction — the ruleset's own `redact` blocks have always declared the pair
         // together, and listing only the state that happened to field is the enumeration debt
         // #986 already paid for once.
-        "dasher_instruction_content_collapsed",
-        "dasher_instruction_content_expanded",
+        IdMarker("dasher_instruction_content_collapsed", IdentityKind.CONTENT),
+        IdMarker("dasher_instruction_content_expanded", IdentityKind.CONTENT),
         // #1107 (fielded 2026-09-13, three envelopes): DoorDash 8.97.8's "Drop off steps"
         // wrapper renders the customer's free-text delivery instruction in a
         // `description_text_view` node — the fielded value carried a gate code — and nothing
@@ -186,11 +209,158 @@ object CustomerTextMarkers {
         // on UNKNOWN screen/click envelopes ONLY, so the cost is a line of triage text on an
         // unrecognized frame — the same fail-toward-privacy trade `arriving_at_title` already
         // documents for a pickup-leg merchant line — and no recognized frame's kept text moves.
-        "description_text_view",
+        IdMarker("description_text_view", IdentityKind.CONTENT),
+        // #1160 review NN2: GoPuff (DoorDash Drive) batch screens' per-order CUSTOMER name (#501) — until
+        // now only in the intake list (`PiiShapes.PII_ID_SUFFIXES`), so the runtime UNKNOWN scrub missed
+        // it and the census could hash its frame duplicates. Promoted so the two SSOTs agree on "what is
+        // a customer-name id"; the runtime scrub widens by this one suffix (fail toward privacy).
+        IdMarker("order_cx_name", IdentityKind.NAME, idProtect = true),
+        // #1160 reviews PP6, SS9, TT1: the chat list's header (`tvTitle` — the customer's name on a chat row,
+        // but a generic id other surfaces use for a sheet title such as "Pick up order") and last-message
+        // preview (`tvLastMessage` — ALWAYS the customer's own text, never chrome). EXACT for the census:
+        // withheld on their own field and seeding their exact value, never runs. Runtime UNKNOWN scrub:
+        // ALWAYS for both (review ZZ1 — fail closed; no value-shape gate can tell "李明", "محمد" or "de la
+        // Cruz" from chrome). ACCEPTED RECALL COST (ADR-0011 residual 11): an UNKNOWN sheet title under
+        // `tvTitle` ("Pick up order") loses that line in the X-Ray; the census skeleton keeps the id and
+        // structure.
+        IdMarker("tvTitle", IdentityKind.EXACT, idProtect = true),
+        IdMarker("tvLastMessage", IdentityKind.EXACT),
+        // #1160 review AL3: the INTAKE-ONLY ids (formerly `PiiShapes.PII_ID_SUFFIXES`, a second hand list with
+        // exact-last-segment semantics) are rows here now — ONE list, ONE match semantics (`endsWith`,
+        // ignoring case: a widening toward privacy on the commit path). `runtimeScrub = NEVER`: the runtime
+        // UNKNOWN scrub keeps its deliberate set; the census withholds their own field and seeds nothing
+        // (CONTENT). Kept LAST so a first-match lookup never shadows a runtime row above.
+        // The embedded Google-Nav maneuver cluster (#886): a number-LESS destination street carries no
+        // digits, so no address shape catches it — ids are the only handle.
+        IdMarker("primaryManeuverText", IdentityKind.CONTENT, RuntimeScrub.NEVER),
+        IdMarker("subManeuverText", IdentityKind.CONTENT, RuntimeScrub.NEVER),
+        IdMarker("secondaryManeuverText", IdentityKind.CONTENT, RuntimeScrub.NEVER),
+        IdMarker("roadNameView", IdentityKind.CONTENT, RuntimeScrub.NEVER),
+        // Chat bodies and inputs.
+        IdMarker("message_self_message", IdentityKind.CONTENT, RuntimeScrub.NEVER),
+        IdMarker("message_other_message", IdentityKind.CONTENT, RuntimeScrub.NEVER),
+        IdMarker("message_input", IdentityKind.CONTENT, RuntimeScrub.NEVER),
+        IdMarker("chat_input_text_field", IdentityKind.CONTENT, RuntimeScrub.NEVER),
+        // Bottom-sheet address/instruction blocks (the address lines also end in an ADDRESS row above).
+        IdMarker("bottom_sheet_address_line_1", IdentityKind.CONTENT, RuntimeScrub.NEVER),
+        IdMarker("bottom_sheet_address_line_2", IdentityKind.CONTENT, RuntimeScrub.NEVER),
+        IdMarker("bottom_sheet_instructions", IdentityKind.CONTENT, RuntimeScrub.NEVER),
+        // Instruction bodies.
+        IdMarker("step_description", IdentityKind.CONTENT, RuntimeScrub.NEVER),
+        IdMarker("instructions_list", IdentityKind.CONTENT, RuntimeScrub.NEVER),
+        IdMarker("instruction_text", IdentityKind.CONTENT, RuntimeScrub.NEVER),
     )
 
+    /** Every table suffix — the commit-path intake list, DERIVED (review AL3; `SnapshotRedactor`). */
+    val ID_MARKER_SUFFIXES: Set<String> = ID_MARKER_TABLE.map { it.suffix }.toSet()
+
+    /**
+     * One [ID_MARKER_TABLE] row. [runtimeScrub] (#1160 reviews SS9, TT1, ZZ1) says whether the runtime UNKNOWN
+     * scrub covers the suffix: [RuntimeScrub.ALWAYS] (the [ID_MARKERS] projection) or [RuntimeScrub.NEVER]
+     * (census-only). There is no value-dependent mode (ZZ1): the runtime path fails closed on the id alone.
+     * [idProtect] (#1160 review AB4): the census adds the row's WHOLE value as an id-only run — true only
+     * where the value can plausibly be a name a test tag embeds (`customer_name`, `order_cx_name`,
+     * `user_name`, `tvTitle`); a chat reply (`tvLastMessage` "Ok") must not null `ok_button`, and an
+     * address or content row never protects an id by its whole value.
+     */
+    data class IdMarker(
+        val suffix: String,
+        val kind: IdentityKind,
+        val runtimeScrub: RuntimeScrub = RuntimeScrub.ALWAYS,
+        val idProtect: Boolean = false,
+    )
+
+    /** Whether the runtime UNKNOWN id scrub applies to an [IdMarker] (#1160 reviews TT1, ZZ1). */
+    enum class RuntimeScrub {
+        ALWAYS,
+        NEVER,
+    }
+
+    /**
+     * What an [IdMarker]'s node value IS (#1160 review LL1), and — the ONE owner the census builder and its
+     * test-side mirrors both read (review AB1) — what it seeds on the frame: [seedsExactValue] (its rendered
+     * text/desc canonical value), its letter runs of at least [minRunLetters] letters when the value has at
+     * most [maxRunSeedTokens] whitespace tokens and — with [personNameShapeOnly] — every token reads as a
+     * person's name ([seedsRunsFrom], reviews AD2, AF1), and whether those runs also guard CLASS names
+     * ([runsGuardClasses], review AC2 — a customer's first name as a class segment is the leak vector).
+     */
+    enum class IdentityKind(
+        val seedsExactValue: Boolean,
+        val maxRunSeedTokens: Int,
+        val minRunLetters: Int,
+        val personNameShapeOnly: Boolean,
+        val runsGuardClasses: Boolean,
+    ) {
+        /** A person's name: runs (≥ 2 letters — "Li", "Jo") from any value. */
+        NAME(seedsExactValue = true, maxRunSeedTokens = Int.MAX_VALUE, minRunLetters = 2, personNameShapeOnly = false, runsGuardClasses = true),
+
+        /** A place (an address line, a destination, a unit): exact only (address vocabulary is common English). */
+        ADDRESS(seedsExactValue = true, maxRunSeedTokens = 0, minRunLetters = 0, personNameShapeOnly = false, runsGuardClasses = false),
+
+        /** Customer-bearing content that is also reused for app copy: seeds nothing. */
+        CONTENT(seedsExactValue = false, maxRunSeedTokens = 0, minRunLetters = 0, personNameShapeOnly = false, runsGuardClasses = false),
+
+        /**
+         * A value that may be PII or chrome (a chat header is a name, a sheet title is "Pick up order"):
+         * withheld on its own field and seeding its EXACT value only — no letter runs (#1160 review PP6). For
+         * the id check an `idProtect` row adds its whole value as one run (ZZ3).
+         */
+        EXACT(seedsExactValue = true, maxRunSeedTokens = 0, minRunLetters = 0, personNameShapeOnly = false, runsGuardClasses = false),
+
+        /**
+         * A value that is a person OR a merchant, never chrome (`user_name`, #1160 reviews XX3, ZZ3, AD2, AF1):
+         * it seeds letter runs only when it reads as a PERSON'S NAME — at most two tokens, each a letter-only
+         * Capitalized word of ≥ 2 letters (an apostrophe allowed; no hyphen or digit), optionally followed by
+         * ONE trailing capital initial ("Riley S", "Mary Jo S.", review AG3) — and only runs of ≥ 3 letters, so "Text Riley" beside "Riley" is withheld while "In-N-Out
+         * Burger", "Sonic Drive-In" and "7-Eleven" seed their exact value only (never `in`/`out`, which
+         * would withhold "Sign in"/"Cash out" and fork `sign_in_button` per merchant). A 2-letter first name
+         * keeps its exact seed. A name-shaped merchant ("Wing Stop") seeds runs — accepted, residual risk 9.
+         */
+        PERSON_OR_MERCHANT(seedsExactValue = true, maxRunSeedTokens = 2, minRunLetters = 3, personNameShapeOnly = true, runsGuardClasses = false),
+        ;
+
+        /** Does a canonical [value] of this kind seed letter runs (reviews AD2, AF1)? Canonical = single spaces. */
+        fun seedsRunsFrom(value: String): Boolean {
+            if (maxRunSeedTokens <= 0) return false
+            // AG3: a person's name may end in a single capital initial ("Riley S", "Riley S.", "Mary Jo S"); it
+            // is not counted as a name token, and the run floor keeps it from seeding.
+            val tokens = value.split(' ').let { t ->
+                if (personNameShapeOnly && t.size > 1 && isInitial(t.last())) t.dropLast(1) else t
+            }
+            if (maxRunSeedTokens != Int.MAX_VALUE && tokens.size > maxRunSeedTokens) return false
+            return !personNameShapeOnly || tokens.all { isPersonNameToken(it) }
+        }
+
+        private fun isInitial(token: String): Boolean {
+            val letter = token.removeSuffix(".")
+            return letter.codePointCount(0, letter.length) == 1 && Character.isUpperCase(letter.codePointAt(0))
+        }
+
+        private fun isPersonNameToken(token: String): Boolean {
+            if (token.isEmpty() || !Character.isUpperCase(token.codePointAt(0))) return false
+            var letters = 0
+            var i = 0
+            while (i < token.length) {
+                val cp = token.codePointAt(i)
+                when {
+                    Character.isLetter(cp) -> letters++
+                    cp == '\''.code || cp == 0x2019 -> Unit
+                    else -> return false
+                }
+                i += Character.charCount(cp)
+            }
+            return letters >= 2
+        }
+    }
+
+    /**
+     * The ALWAYS runtime-scrub suffix list — the [ID_MARKER_TABLE] rows with [RuntimeScrub.ALWAYS], in table order
+     * (pinned). The table is the one owner of "what kind of value an id carries"; this is its projection.
+     */
+    val ID_MARKERS: List<String> = ID_MARKER_TABLE.filter { it.runtimeScrub == RuntimeScrub.ALWAYS }.map { it.suffix }
+
     /** Substring that classifies a node's text as already-redacted (VET V1). */
-    private const val REDACTED_MARK = "[redacted"
+    private const val REDACTED_MARK = MaskTokens.REDACTED_PREFIX
 
     /**
      * The first marker [text] carries UN-redacted, or null when clean. A node
@@ -234,6 +404,29 @@ object CustomerTextMarkers {
     // --- Node-id path, UNKNOWN envelopes only (#910) --------------------------
 
     /**
+     * The runtime-scrub marker suffix [id] ends with, or null — the UNKNOWN-envelope scan's predicate
+     * (#1160 reviews SS9, TT1, ZZ1): an ALWAYS row matches on the id alone, a NEVER row never. The census
+     * filter (ADR-0011 §2 step 1) calls [idMarkerFor] over the whole table.
+     */
+    fun idMarkerSuffix(id: String?): String? {
+        // UU4: the runtime mode is applied BEFORE the first match, so a NEVER row can never switch an
+        // overlapping ALWAYS row's scrub off.
+        if (id.isNullOrEmpty()) return null
+        return ID_MARKER_TABLE.firstOrNull { row ->
+            row.runtimeScrub == RuntimeScrub.ALWAYS && id.endsWith(row.suffix, ignoreCase = true)
+        }?.suffix
+    }
+
+    /**
+     * The [ID_MARKER_TABLE] row [id] ends with (case-insensitive SUFFIX match on the FULL resource id —
+     * the rules' `hasIdSuffix` semantics), or null. The ONE owner of that comparison (#1145).
+     */
+    fun idMarkerFor(id: String?): IdMarker? {
+        if (id.isNullOrEmpty()) return null
+        return ID_MARKER_TABLE.firstOrNull { id.endsWith(it.suffix, ignoreCase = true) }
+    }
+
+    /**
      * The [ID_MARKERS] suffix [node]'s own view id carries while the node still
      * holds UN-redacted text/description, or null. A node whose every value is
      * already masked (a rule's own `[redacted:…]` output, or an empty node) returns
@@ -241,12 +434,10 @@ object CustomerTextMarkers {
      * re-scrubs a mask.
      */
     fun unredactedIdMarker(node: UiNode): String? {
-        val id = node.viewIdResourceName
-        if (id.isNullOrEmpty()) return null
-        val marker = ID_MARKERS.firstOrNull { id.endsWith(it, ignoreCase = true) } ?: return null
+        val marker = idMarkerSuffix(node.viewIdResourceName) ?: return null
         // #835: every serialized string field counts as "still carrying raw" — a
         // customer-PII node whose only remaining value is its `stateDescription`
-        // must still be scrubbed.
+        // must still be scrubbed. (XX7: one pass over the fields.)
         val carriesRaw = node.scrubbableStrings()
             .any { (_, value) -> !value.isNullOrEmpty() && !value.contains(REDACTED_MARK) }
         return if (carriesRaw) marker else null

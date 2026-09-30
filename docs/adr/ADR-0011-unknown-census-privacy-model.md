@@ -44,12 +44,37 @@ it true by construction) so a violation is a compile error or a failing test, no
 
 A new versioned schema, `uinode.skeleton.v1` (`UiSkeletonDto` + `SkeletonSchema`, beside
 `UiNodeSchema`, ADR-0003 rules apply). Per node: `class`, `id` (the platform's own resource name —
-chrome by construction), the three flags (`isClickable`/`isEnabled` as booleans, `isChecked` as the
+chrome by construction WHEN it matches the static resource-name grammar, `ResourceIdGrammar`: an optional
+`<package>:id/` prefix (`[A-Za-z][A-Za-z0-9_.]*`), a name `[A-Za-z_][A-Za-z0-9_.-]*` with at most one
+internal space, ≤ 64 characters, no UUID-shaped token (dynamic whatever its digits, review round 17), no other run of 8+ hex characters containing a decimal digit (a letter-only hex run is a word — `AddedBadgeView`, review round 16) and no run of 4+ decimal digits — residual: an opaque per-frame id made only of letters, outside the UUID shape, reads as static; a dynamic id — a
+per-frame UUID in a Compose test tag, three committed frames `PRIMARY_BUTTON_<uuid>` — is treated as
+ABSENT for both the wire and the fingerprint, never rewritten; the §2 PII-id step still runs on the raw
+id; amended in #1160. The SHAPE is the contract's (`ResourceIdGrammar.isStaticShape`) and is enforced by
+the DTO at construction and decode, and by the server; in addition the CLIENT judges the id's name part —
+separators read as spaces, every token start — through the frame-free customer-PII predicates (marker,
+lead-in, mask, name shape), and a hit replaces the id with the sentinel `~` (§8, review round 14 — a null
+would splice a wrapper-class node for one customer and keep it for the next): `row_Deliver_to_Sam` and `chip_Adam_S` do not
+travel; the id's camelCase segments count as words too (`deliverToSam`), and only the name shape with a
+CASE-SENSITIVE initial runs on the id path, so `option_a`/`tab_b` chrome ids travel (review round 7).
+Those predicates live in `:core:pipeline`, so that judgement is client-side only; a bare name
+with no marker, lead-in or initial (`chip_Adam`, `Adam Smith`) is indistinguishable by shape from chrome
+(`chip_Gold`, `Artwork Image`) — it is replaced by the sentinel `~` when an identity id on the same
+frame carries that name (§2 frame-level rule, §8), and travels in the clear otherwise — residual risk 10. On the id path the PII
+judgement is deliberately harder to trigger than on text: a marker or lead-in withholds only when the
+token after it is Capitalized (`deliver_to_Sam` is absent, `deliver_to_label` travels), and the name shape
+needs an UPPERCASE-led first token — Capitalized or all-caps — and an uppercase initial (`chip_Adam_S` and
+`chip_RILEY_S` are absent; `tabB`, `optionA`, `tab_B` travel) — review rounds 8 and 11. The all-caps arm
+(review round 11) costs recall: SCREAMING_SNAKE constants ending in a one-letter segment (`TAB_B`,
+`SECTION_C`, `PRIMARY_BUTTON_A`) are absent too — fail closed. `class` likewise travels only when it matches `ClassNameGrammar` — a Java binary
+class name, ≤ 128 characters, the same digit-run rule — else it is absent (null on the wire, `""` in the
+fingerprint), because Compose/Flutter/WebView/custom views can report any string as their class), the three flags (`isClickable`/`isEnabled` as booleans, `isChecked` as the
 `UiNode` tri-state `Int` 0/1/2 — wire types stated so the shared vectors cannot disagree), and
 `children`. Per text field — enumerated from **`UiNodeTextField`**, the #835 scrub contract, never a
 hand-list, so #1147's strings (`paneTitle`, `hintText`, `clickActionLabel`, …) and any entry added
 later are covered automatically; the node's text fields travel as a MAP keyed by the enum's wire key,
-and the server accepts ANY key in that map (every value has the same `{h?, kind}` shape, so a new key
+and the server accepts any key OF THE WIRE-KEY SHAPE `^[a-z][A-Za-z0-9]{0,15}$` in that map — a field
+name, never free text; a new enum entry must use a wire key of that shape (every value has the same
+`{h?, kind}` shape, so a new key
 is not a privacy change) while rejecting unknown fields everywhere else — an object `{h?, kind}`: `kind` is a coarse shape class and `h` is present
 only when the §2 filter admits a hash (§3 only defines how the admitted token is hashed). **The type has no plaintext slot**: a leak of a text value is a
 type error. **`uniqueId` (`uid`) is a text slot like every other enum entry** — hashed through the filter, never
@@ -107,7 +132,8 @@ including on a node whose id would withhold it. Money and time are deliberately
 NOT classes of their own: `CurrencyShape` lives in `:core:pipeline` and the contract module may not
 depend on it, and a second currency regex would be exactly the SSOT drift `CurrencyShapePinTest`
 exists to prevent; a money or time slot is anchored by its id/class and siblings when a rule is
-drafted. Shared client/server golden vectors for this table live in the contract module; the server
+drafted. Shared client/server golden vectors for this table live with the contract's tests (published to
+the server as a test-fixtures artifact, never shipped in the APK — amended in #1160); the server
 verifies `kind` where it has text — on trusted envelopes (paired plaintext) and on the vectors — and
 cannot re-classify a community skeleton, which carries no text. A skeleton item is capped at **65 536
 uncompressed UTF-8 bytes of its serialized JSON** (the whole item, metadata included); over the cap
@@ -119,8 +145,9 @@ Hash-only is necessary, not sufficient: a hash of a low-entropy value (a first n
 dictionary-attackable. Before hashing, `SkeletonBuilder` runs every text field through the SAME
 SSOTs the redact side uses, in this order, and **any hit withholds the hash**:
 
-1. the node id is in `ID_MARKERS ∪ PII_ID_SUFFIXES` (a view id whose value is PII by construction;
-   the two sets are deliberately NOT the same set — the union is used);
+1. the node id ends with a row of `CustomerTextMarkers.ID_MARKER_TABLE` (a view id whose value is PII by
+   construction) — ONE list since review round 16: the runtime rows (`ID_MARKERS`, `runtimeScrub =
+   ALWAYS`) and the former intake-only ids as CONTENT rows with `runtimeScrub = NEVER`;
 2. length > 40 characters — **this cap runs before any pattern in this list**, so every step below
    runs on bounded input on the device (the #803 instruction-body class never hashes);
 3. `CustomerTextMarkers.unredactedMarker` hits;
@@ -141,8 +168,12 @@ SSOTs the redact side uses, in this order, and **any hit withholds the hash**:
 7. the id-less name shape. `PiiShapes` owns ONE pattern BODY (`FIRST_LAST_INITIAL_BODY`) and derives
    two variants from it: the existing ANCHORED whole-value pattern (`^…$`, `FIRST_LAST_INITIAL_PATTERN`,
    byte-SSOT with the redact side and unchanged) and a BOUNDARY-DELIMITED substring variant
-   (`(?<![\p{L}])…(?![\p{L}])`, `FIRST_LAST_INITIAL_EMBEDDED`) that the census runs here with
-   `containsMatchIn` + `IGNORE_CASE` — merely searching the anchored pattern would still reject
+   (`(?<![\p{L}])…(?![\p{L}])`, `FIRST_LAST_INITIAL_EMBEDDED`). Step 7 withholds when the anchored
+   pattern matches the WHOLE value OR the embedded one occurs anywhere (`PiiShapes.hasNameShape`,
+   `IGNORE_CASE`); in the embedded variant the INITIAL alone is case-sensitive (`(?-i:[A-Z])`), because a
+   case-insensitive initial reads the English words "a"/"i" as initials and withheld every `<word> a
+   <word>` chrome phrase ("Take a photo", "Report a problem") — amended in #1160; a lowercase whole-value
+   name ("jordan t") is still caught by the anchored arm — merely searching the anchored pattern would still reject
    `Jane S is waiting at the door` (the anchors survive `containsMatchIn`). That sentence, with no
    lead-in prefix, must emit `{kind: withheld}` — a required vector; over-withholding a chrome sentence
    is the accepted cost;
@@ -152,6 +183,104 @@ SSOTs the redact side uses, in this order, and **any hit withholds the hash**:
    apartment, PIN, phone, card) withhold a `digits`/`mixed` token and the letter-only shapes (quoted
    note, city/state, email's local part) withhold a `words:N` one. The list stays the one `PiiShapes`
    owner — no census-specific subset is hand-maintained.
+
+**Frame-level duplicate rule** (amended in #1160). The corpus intake's replacements are DOCUMENT-WIDE
+(`SnapshotRedactor.redact` rewrites every occurrence of a value it masks), so the per-field filter alone
+would under-withhold: a customer name withheld on the node whose id marks it would be hashed on an
+id-less parent that repeats it. `SkeletonBuilder` therefore runs two passes. Pass 1 runs the per-field
+filter over every text field of the frame (tree + window title) and SEEDS:
+
+- the exact canonical value of any field a VALUE-judging step caught (3, 4, 7, 8 — not the length cap,
+  whose duplicate is itself over-length);
+- from step 1, ONLY on an identity id's TEXT / CONTENT_DESCRIPTION (never its
+  role/hint/tooltip/click-label/uid/pane), by the id's KIND in `CustomerTextMarkers.ID_MARKER_TABLE`:
+  a **NAME** id — reserved for ids whose value is ONLY ever a person's name (`customer_name`,
+  `order_cx_name`) — seeds its exact value AND its maximal letter runs of at least 2 letters
+  (counted in code points, case-folded with the one `CaseFold`: `ẞ` → `ß`, then upper- and lower-case
+  ROOT, final sigma to medial) — from its TEXT when the text is non-blank, otherwise from its
+  CONTENT_DESCRIPTION (review round 7); an **ADDRESS** id (`address_line_1/2`,
+  `arriving_at_title`, `address_subpremise_line`) seeds its exact value ONLY — address vocabulary
+  ("Road", "View", "San", "Lane", "Way") is common English, and seeding its runs would withhold "View
+  details" or "Road closed" chrome, and camelCase ids like `roadNameLayout`, on every frame with an
+  address, while a person's name rarely collides with chrome; a **CONTENT** id (the free-text
+  instruction bodies; `description_text_view`, generic DoorDash chrome such as "Raise to 50%") seeds
+  nothing; an **EXACT** id — a value that may be chrome (`tvTitle`, `tvLastMessage`: the chat header is a
+  customer's name and the preview their text, but the same generic id titles other sheets, "Pick up
+  order") — seeds its exact value only, so a duplicated first name is still caught (review rounds 8,
+  10); a **PERSON_OR_MERCHANT** id — a REUSED id that is a person or a merchant but never chrome
+  (`user_name`, which also carries the merchant's and the dasher's own name) — seeds its exact value, and
+  its letter runs (≥ 3 letters) only when the value READS AS A PERSON'S NAME: at most TWO tokens, each a
+  letter-only Capitalized word of ≥ 2 letters (an apostrophe allowed; no hyphen or digit), optionally
+  followed by ONE trailing capital initial ("Riley S", "Mary Jo S." — the run floor keeps the initial
+  itself from seeding). "Text Riley" beside `user_name` "Riley" is withheld exactly as beside `customer_name`, while
+  "In-N-Out Burger", "Sonic Drive-In", "7-Eleven", "Jack in the Box" and "The Home Depot" seed their
+  exact value only (never `in`/`out`/`the`, which would withhold "Sign in" and turn `sign_in_button`
+  into `~` per merchant). A name-shaped merchant ("Wing Stop") seeds runs too — accepted: a merchant word
+  is never a recognition anchor, and its collision with chrome is residual risk 9 (review rounds 12, 13). A NAME seeds runs from its text, so a TalkBack-style desc "Customer name Adam" beside text "Adam"
+  seeds no `customer`/`name`, while a name rendered only in a desc still propagates — and a NAME whose
+  text is a mask or has no canonical form takes its runs from the desc. What a kind seeds is owned by
+  the kind table itself (`IdentityKind.seedsExactValue` / `maxRunSeedTokens` / `minRunLetters` /
+  `personNameShapeOnly` / `runsGuardClasses`), and the source rule (usable text, else usable desc) by
+  `SkeletonBuilder.nameRunSource`, which the builder and the test mirrors both call — it feeds BOTH the
+  letter runs and the whole-value id seed, so a TalkBack label-only desc ("Customer name") beside text
+  "Adam" never seeds `customername` (review rounds 11–13). For the ID check only, a WHOLE-value run (case-folded, code-point
+  letters only, ≥ 3 letters) is matched against every contiguous join of the id's camel segments ACROSS
+  separators (`row_mary_jo`, `chip-mary-jo`, `rowMaryJo` beside "Mary Jo"), contributed only by the
+  `idProtect` rows — values a test tag can plausibly embed (review rounds 10, 11 — no name-shape gate:
+  fail closed):
+
+  | Row | Whole-value run for ids |
+  |---|---|
+  | `customer_name`, `order_cx_name` (NAME) | always ("Mary Jo" nulls `chipMaryJo`), beside its letter runs |
+  | `user_name` (PERSON_OR_MERCHANT) | always, a single token included: "Riley" nulls `chipRiley`; "Jack in the Box" nulls `jackInTheBoxLogo` (recall cost), never `boxView` |
+  | `tvTitle` (EXACT) | always: "Riley Smith" nulls `chipRileySmith`; a one-word chrome title "Search" nulls `search_bar` on its frame (recall cost) |
+  | `tvLastMessage` (EXACT), every ADDRESS and CONTENT row | none — a chat reply "Ok" must not null `ok_button` or move the fingerprint per message; street vocabulary is common English |
+
+  Text slots never use the whole-value rule. A CLASS name is third-party-set (the mapper copies it and the
+  grammar checks only its syntax), so it is checked against customer-name runs ONLY — the runs of a
+  class-guarding kind (NAME: `com.x.RileyButton` beside `customer_name` "Riley" is absent) — never a
+  title or merchant word (a `SearchView` class beside `tvTitle` "Search" stays), and never a KNOWN
+  framework class — an exact binary name in `FrameworkClasses.KNOWN`: the pinned inventory
+  `core/pipeline/src/main/resources/census/framework-classes.txt` (review rounds 15–16: every public
+  `android.view.View` SUBCLASS — the `super_class` chain followed across the classpath — under
+  `android.view.`/`android.widget.`/`android.webkit.` in the SDK `android.jar` and under `androidx.` /
+  `com.google.android.material.` in the RELEASE runtime classpath (`:app:censusReleaseClasspath` —
+  debug-only artifacts never exempted); 233 names, ~10 KB, plain text under a `#sha256=` header; any
+  name the class grammar rejects excluded — regenerated and diffed by `FrameworkClassInventoryTest`; the
+  loader is strict (malformed UTF-8, a header/body sha256 mismatch such as truncation, or an invalid entry
+  discards the whole resource, which only shrinks the set)) ∪ every framework-prefixed class the committed corpus renders (pinned by a corpus
+  guard) ∪ the wrapper set and Material's `Chip`, so
+  "Chip" never nulls `…material.chip.Chip` and forks the fingerprint per customer, and wrapper
+  eligibility cannot depend on the customer. A framework PREFIX is not proof: an app can name its own
+  class `androidx.RileyButton`, and any unlisted class is judged like an app class (review rounds 11–14).
+  The commit-path intake list IS this table (`ID_MARKER_SUFFIXES`, review round 16): the intake-only
+  ids (message bodies, maneuver/road text, instruction bodies) are its CONTENT / `NEVER` rows (review
+  rounds 6–9, 16);
+- a MASK never seeds anything (`[redacted…]`, `[address]`, …): it is not identity, and its word would
+  collide with chrome and with address-block ids.
+
+Pass 2 emits the constant `withheld` for every field whose canonical value is a seeded exact value,
+wherever it sits, and — by TOKEN CONTAINMENT — for every field containing a NAME run: `customer_name`
+"Adam" withholds an id-less "Adam's order" or "Adam, 2 items" (which pass steps 3–8), while "Add a tip"
+beside it still hashes. The containment rule applies to text slots AND to the id of every node on the
+frame (and, for customer-name runs only, its class — see above); ids and classes are split into runs ALSO at camelCase boundaries (lower→Upper, and
+Upper→Upper+lower: `XMLAdam` → `XML` + `Adam`), because Compose test tags are usually camelCase, while
+text slots keep the plain letter-run split; a seed is tested against every CONTIGUOUS concatenation of
+the camel segments ACROSS separators (the singles, the joins, the whole name part), so a name with
+internal capitals or split by a separator still matches — `chipMcKenna`, `row_mc_kenna` → `mckenna`
+(amended in #1160 review rounds 6, 12). A static id carrying a seeded run is replaced by the reserved
+sentinel id `~` (`ResourceIdGrammar.FRAME_WITHHELD_ID`, §8) on the wire and in the fingerprint — `chipAdam` / `chip_Adam` beside `customer_name`
+"Adam" does not travel, `chipGold` and `chipAdamant` (whole-run equality) do (one owner,
+`FrameFilter.containsIdentityRun`). A CONTENT id (including the intake-only rows, which cover
+instruction BODIES — `step_description`, `instruction_text`) withholds its OWN field but
+seed nothing, so the chrome vocabulary the census exists for is not withheld frame-wide (amended in #1160
+review rounds 2–5). An EXACT id (`tvTitle`, `tvLastMessage`) DOES seed its exact value, so an id-less
+duplicate of a chrome sheet title ("Pick up order") on the same frame is withheld too — duplicate-chrome
+suppression is the accepted trade, because exempting chrome-shaped values would also exempt a bare
+customer name ("Adam") in the same slot (review round 8). §7(c) compares the skeleton against FULL-TREE redaction for this
+reason, with exactly that one stated exemption: a value the intake rewrites document-wide only because a
+non-seeding PII-id field carries it elsewhere, which survives redaction in isolation and has no other
+withholding cause anywhere in the frame.
 
 **What the builder consumes.** `SkeletonBuilder` takes the RAW admitted `UiNode` tree plus the
 window title. #1146's publisher sits on the UNKNOWN SCREEN BRANCH of `AccessibilityPipeline.output()`
@@ -163,13 +292,34 @@ build that uploads. The
 corpus tests feed fixture trees that ARE masked captures; that is a superset condition (every mask
 token is caught by step 5 and emits `withheld`), not the runtime shape.
 
-**Inputs and predicates, exactly.** Every step sees the TRIMMED canonical value — the same bytes
-`CensusHash` would hash — so a leading space cannot slip a prefix past a `startsWith`. Step 1 uses the
-two EXISTING predicates as they are: `ID_MARKERS` is a case-insensitive SUFFIX match on the full
-resource id (`ID_MARKERS.any { id.endsWith(it, ignoreCase = true) }`, today inline in
-`CustomerTextMarkers.unredactedIdMarker`; #1145 extracts it as the shared helper both call),
-`PII_ID_SUFFIXES` is exact membership of the id's part after the last `/` (the `SnapshotRedactor`
-rule); a hit on either withholds.
+**Inputs and predicates, exactly.** Every step sees the CANONICAL value — glyph-folded, trimmed and
+whitespace-normalized (`CensusHash.canonical`: first the census glyph fold `TextFold.foldForCensus` —
+`Character.FORMAT` stripped by code point FIRST, then NFKC, then the Unicode-dash fold — so a zero-width
+or tag character inside a marker, or a fullwidth letter, cannot defeat steps 3/4/7, and a fullwidth
+chrome word hashes equal to its plain twin (amended in #1160 review rounds 6–7); then every run of code points the classifier treats as whitespace,
+`Character.isWhitespace || isSpaceChar`, collapsed to one ASCII space. The canonical form is a FIXED
+POINT — `canonical(canonical(x)) == canonical(x)`; stripping FORMAT before NFKC lets a combining mark
+hidden behind a zero-width joiner compose in the first pass; the pass is applied at most 3 times and the
+value is canonical when a pass leaves it unchanged; otherwise it has NO canonical form (`canonical`
+returns null) and is withheld, and an id without one is not static (review round 8). The builder HASHES the canonical string it JUDGED
+(`CensusHash.ofCanonical`), never a re-canonicalized one (review round 7). Amended in #1160 because the JVM's
+regex `\s` excludes NBSP/thin space while ICU's includes `\p{Z}`, so the decision was engine-dependent) —
+the same bytes `CensusHash` hashes — so a leading space cannot slip a prefix past a `startsWith`. Every
+value-judging step (3, 4, 5, 7, 8) runs on the canonical form AND — when the raw trimmed value differs
+and is itself within the 40-character cap — on the raw trimmed value; either hit withholds. The cap
+(step 2) is decided by the CANONICAL form alone, so wide-spaced chrome is not capped on its padding and a
+padded "Deliver  to  Sam" is still caught (and seeds); the raw pass keeps every pattern on bounded input.
+A value PROVABLY over the cap — more than 4 × 40 non-FORMAT, non-whitespace code points, 4 being the
+longest canonical decomposition NFKC can compose into one code point — is capped without folding at all,
+so a multi-kilobyte body never runs the fixed-point fold (review round 11; both premises of the bound are
+checked over every code point by a unit test).
+Classification and hashing use the canonical form, and the frame-wide duplicate set is keyed by it
+(amended in #1160 review round 4 — canonicalization alone can shrink a value below a pattern's minimum:
+`"ab  cd"` is a quoted note raw, `"ab cd"` is not). Step 1 uses the
+ONE predicate: `CustomerTextMarkers.idMarkerFor`, a case-insensitive SUFFIX match on the full
+resource id against the whole table — the runtime scrub, the census and the `SnapshotRedactor` intake
+all use it (review round 16 retired the intake's separate exact-last-segment list, a widening toward
+privacy that moved no committed fixture).
 
 A `SensitiveTextMarkers` hit anywhere on the frame → **no skeleton at all** (the dasher's banking
 surfaces are blocked, never described). `SkeletonBuilder` invokes the shared sensitive-marker scans
@@ -182,8 +332,9 @@ need `ID_MARKERS`, `CustomerTextMarkers` and `SensitiveTextMarkers`, which live 
 `:domain` may not depend on. The wire contract — `UiSkeletonDto`, `SkeletonSchema`, `CensusHash`,
 the fingerprint — lives in `:domain` or the Apache-2.0 contract module (open question 1). The
 promotion to `:domain` (`privacy/PiiShapes.kt`) covers EVERY test-only pattern the filter uses:
-`FIRST_LAST_INITIAL_PATTERN`, the shape patterns, `NAME_PREFIXES`, `GATED_NAME_PREFIXES`,
-`PII_ID_SUFFIXES` and `customerLeadIn()`; `SnapshotRedactor` delegates to it with byte-SSOT pins.
+`FIRST_LAST_INITIAL_PATTERN`, the shape patterns, `NAME_PREFIXES`, `GATED_NAME_PREFIXES` and
+`customerLeadIn()`; `SnapshotRedactor` delegates to it with byte-SSOT pins (its PII-id list is the
+`ID_MARKER_TABLE`, review round 16).
 
 **A withheld field emits the constant `kind: withheld` — no length, no word count, no hash.** A
 length or a word count is a small leak on a name and would break invariant 7 (pseudonym invariance); §1 carries no geometry at all for the same reason. Because `PiiShapes` is the one owner on both sides, the census filter and the corpus intake
@@ -191,7 +342,8 @@ can never drift apart.
 
 ### 3. Hashing: unsalted sha256 with a domain-separation prefix
 
-`CensusHash.of(text) = sha256("census.v1:" + trimmed)`, first 16 hex, through the fail-closed
+`CensusHash.of(text) = sha256("census.v1:" + canonical)`, first 16 hex, where `canonical` is the
+trimmed, whitespace-normalized value (§2 "Inputs and predicates"), through the fail-closed
 `sha256OrNull` (a failure withholds; plaintext is never echoed, #362). Unsalted because
 **cross-install equality is what the k rule needs**. The `census.v1:` prefix separates digest
 domains — a census hash can never EQUAL a parse-side `customerNameHash` (sha256 of the normalized
@@ -304,15 +456,23 @@ so trusted envelopes are swept manually and stored under the same retention the 
 For every fixture with a hand-pseudonymized twin, `skeleton(raw) == skeleton(pseudonymized)`: a PII
 token the filter catches can never change what leaves the phone — the guarantee is equality under
 **shape-preserving substitution in known PII slots** (those slots emit the constant `withheld`), and
-the residual for an uncaught value is stated in risk 6. `SkeletonCorpusTest` (#1145) walks the ENTIRE corpus
+the residual for an uncaught value is stated in risk 6. The equality holds for the PII slots
+THEMSELVES; a CHROME slot that shares a letter run with an identity value is withheld only while that
+value is present — identity-dependent chrome suppression, the cost of the §2 token-containment rule, and
+why a common first name such as "May", "June" or "Will" suppresses same-word chrome frame-wide
+("May need returns" is withheld beside `customer_name` "May" and hashes beside "Sam"; risk 9, amended in
+#1160 review round 5). The corpus substitutions of test (b) use pseudonyms that share no run with the
+chrome, so (b) asserts whole-skeleton equality there. `SkeletonCorpusTest` (#1145) walks the ENTIRE corpus
 including `SENSITIVE/` and `UNKNOWN/negative/` and asserts (a) no string field outside the §1 allowlist (per node `class`/`id`/`kind`/`h`; per envelope the
 enumerated metadata) and no bounds on any node; (b) invariance under two shape-matched pseudonym
 substitutions; (c) redactor parity — any value `SnapshotRedactor.redact` changes has no `h` (load-bearing only on
 the pseudonym and decoy fixtures: on an already-redacted committed fixture `redact` is idempotent); (d)
-every `SENSITIVE/` fixture the markers catch yields no skeleton; (e) no `h` equals `CensusHash.of(x)` (trimmed, as the builder hashes) for any PII-VALUED
+every `SENSITIVE/` fixture the markers catch yields no skeleton; (e) no `h` equals `CensusHash.of(x)` (canonical, as the builder hashes) for any PII-VALUED
 `CorpusDecoys` entry (pseudonym names, addresses, notes — not retained chrome labels such as
 `"Hand it to me: "`, which are legitimately hashed) or for any mask token; (f) determinism and idempotence. A seeded property (#878) adds:
-no string matching any `PiiShapes` pattern (substring mode, as step 7/8 run them) ever hashes, and
+no string ever hashes whose canonical form — or whose raw trimmed form, when that is within the
+40-character cap (the bounded raw pass, §2) — matches any `PiiShapes` pattern in substring mode (as steps
+7/8 run them; a raw match beyond the cap does not prevent hashing by design — amended in #1160), and
 no output contains an input token verbatim outside `class`/`id`.
 
 ### 8. Bounded, budgeted, deduplicated (D5)
@@ -326,15 +486,35 @@ skeletons), a per-cluster cap, a bounded on-disk queue (drop-oldest), batch uplo
 **Cluster fingerprint** (`CensusFingerprint`) is a NEW function in the contract module, not
 today's `stableHash`: `stableHash` is a 32-bit `Int` (`31 * h + child`, collidable, and the type of
 `FrameGate.admit(contentHash)` and of every fixture's `contentHash`), which the server cannot
-recompute safely and which must not change type. The fingerprint is a full sha256 (**64 hex**) over ONE canonical byte form, pre-order: per node
-`"C"` + class (UTF-8, `""` when null) + `0x00` + (`"I"` + id UTF-8, or the single byte `"N"` when the
-id is null — so a null id and an empty id differ) + `0x00` + the spliced child count as ASCII decimal
-+ `0x00`, then the children in order. Transparent wrappers are removed first (wrapper-to-forest
+recompute safely and which must not change type. The fingerprint is a full sha256 (**64 hex**) over ONE canonical byte form, pre-order, every string
+LENGTH-PREFIXED so the encoding is prefix-free and therefore injective (amended in #1160 — a
+delimiter-only form let a value that mimics the framing collide two different trees): per node `"C"` +
+the class's UTF-8 byte length as ASCII decimal + `0x00` + the class UTF-8 (`""` when null) + (`"I"` + the
+id's byte length as ASCII decimal + `0x00` + the id UTF-8, or the single byte `"N"` when the id is null —
+so a null id and an empty id differ) + the spliced child count as ASCII decimal + `0x00`, then the
+children in order. class/id must be well-formed UTF-16 with no U+0000 (`WireStrings.isWellFormed` — a
+lone surrogate would otherwise UTF-8-encode as `?` and collide); a violating class or id is refused at
+construction and on decode. In the builder the two differ (review rounds 12, 13): a malformed CLASS
+carries no identity semantics, so it is emitted ABSENT (null never enters the byte form, so the encoding
+stays injective) and counted (`Outcome.Built.malformedClass`) — one bad node must not blind a surface;
+a malformed VIEW ID refuses the frame (`INVALID_TREE`), because its identity classification cannot be
+verified (`customer_name` + U+0000 misses every suffix lookup and would ship the name it marks). The id is a static resource name
+OR the one reserved non-grammar value `~` (`ResourceIdGrammar.FRAME_WITHHELD_ID`): a static-shaped id the
+builder withheld — by the §2 FRAME rule or by the frame-free PII judgement of the id itself (§1) — it keeps the node a non-wrapper, so the tree STRUCTURE never
+depends on the customer on the frame; a grammar-rejected (dynamic) id stays null, since it is rejected
+identically on every frame. The server accepts `~`. Fingerprinting happens AFTER that frame-level
+withholding, so a colliding id (`mark_read_button` beside `customer_name` "Mark") still moves the
+cluster key by that one id — fingerprinting the pre-withholding structure would break the server's
+recompute-from-the-wire rule; the sentinel keeps the structure stable, and the single-id difference is
+residual risk 9 (review round 12).
+Wrapper transparency is judged on the WIRE id: a container whose only id was dynamic (or empty) arrives
+with a null id and IS spliced — a deliberate divergence from `stableHash`, which sees the raw id; the
+server can only recompute from the wire tree (amended in #1160). Transparent wrappers are removed first (wrapper-to-forest
 normalization): a wrapper's children are spliced into its parent, an EMPTY wrapper contributes
 nothing (the parent's count drops), and the normalized forest ALWAYS hangs under one synthetic root
 (class `""`, null id, the spliced count) — whether or not the original root was a wrapper — so
-`fingerprint(A) == fingerprint(W(A))` holds; that equality is a required vector. The contract module publishes vectors
-for: null vs empty id, an empty wrapper, a multi-child wrapper, a wrapper root, and the two nesting
+`fingerprint(A) == fingerprint(W(A))` holds; that equality is a required vector. The contract's tests hold vectors
+for: null vs empty id (on the pure byte function — an empty id can no longer enter a DTO), an empty wrapper, a multi-child wrapper, a wrapper root, and the two nesting
 cases below. It keeps ONE
 structural rule of `stableHash` deliberately: an **anonymous wrapper** (no id AND a class in
 `{android.view.View, android.view.ViewGroup, android.widget.FrameLayout, android.widget.LinearLayout}`)
@@ -343,7 +523,8 @@ child sequence in order (`A(W(C1, C2)) == A(C1, C2)`; the parent's child count i
 because a Compose recomposition adds and removes such wrappers and the cluster must not split on
 them; every other boundary is preserved (`A(B(C)) ≠ A(B, C)`). This is the census's OWN rule — today's
 `computeStableHash` folds a wrapper's children as a nested group and never splices, so the two
-algorithms are deliberately different; only the wrapper CLASS SET is shared through one constant.
+algorithms are deliberately different; only the wrapper CLASS SET is shared, through one constant owned
+by the core model (`domain.model.accessibility.AnonymousWrappers`, which the contract imports).
 `stableHash` and `UnknownSuppressor` are untouched. (The corpus librarian's variant check is a TEXT fingerprint and
 `FrameGate`'s identity is `Observation.identity()`; neither is touched — a structural key would
 collapse the librarian's store-distinct variants.) The server RECOMPUTES the fingerprint from the
@@ -440,7 +621,9 @@ the dictionary-linkage residual on low-entropy hashes (risk 1). The endpoint is 
 - **M4:** unblinding tool, `skeleton.v2`, the working-vocabulary → shipped-allowlist promotion gate.
 - **Contract placement (open question 1) — the default until the dev decides otherwise:** an
   Apache-2.0-headed package `cloud.trotter.dashbuddy.domain.census.contract` inside `:domain`, with
-  no dependency on anything outside the JDK and `domain.util.sha256OrNull` (which STAYS where it is —
+  no dependency on anything outside the JDK, kotlinx-serialization, `domain.util.sha256OrNull` and
+  `domain.model.accessibility.AnonymousWrappers` (the four-class wrapper set, owned by the core model so
+  `UiNode` never imports the contract; amended in #1160); `sha256OrNull` STAYS where it is —
   it is the #362 recognition-side SSOT the parse transform and the redact masks share; on extraction
   the contract module carries its own ten-line copy or depends on `:domain`), so extraction to a
   `census-contract/` included build is a move, not a rewrite.
@@ -485,6 +668,46 @@ must stay green.
    the undetected-PII residual, the same class as risk 1.
 7. **Dictionary attack by the operator on sub-k hashes.** Sub-k hashes are never listed, but the
    operator holds the database. The control is the same as 3, plus the 30-day TTL.
+8. **The raw-form pass re-admits the JVM-vs-ICU regex divergence** (#1160 review round 4). The canonical
+   form closes the `\s` difference (the JVM's excludes NBSP/thin space, ICU's includes `\p{Z}`), but the
+   raw-form pass (§2 "Inputs and predicates") still runs the patterns on un-normalized text, where ICU's
+   `\s`/`\b`/`\w` are wider than the JVM's. Every divergence found so far withholds MORE on ART, so the
+   device withholds a superset of what the corpus tests (JVM) prove hashed: the privacy direction is
+   safe, but fixture-derived RECALL is optimistic. The JVM tests remain the oracle until the builder's
+   vectors run instrumented on ART (a #1146 follow-up).
+9. **Identity-dependent chrome suppression** (#1160 review round 5). The §2 token-containment rule
+   withholds any field sharing a ≥2-letter run with an identity value (case-folded), so a customer whose
+   first name is also an English word ("May", "June", "Will", "Grace") suppresses same-word chrome on
+   that frame, and the skeleton's chrome slots depend on who the customer is: a withheld-vs-hashed
+   difference on a chrome slot reveals only that SOME identity value on the frame shares that word —
+   never the value — but it is a real one-bit channel and a recall cost, accepted in exchange for
+   withholding "Adam's order".
+10. **A name-shaped test-tag id on a frame with NO identity id bearing that name** (#1160 review round 5).
+    The static id gate cannot tell a Compose test tag built from a customer's name with no marker,
+    lead-in or initial (`chip_Adam`, `Adam Smith`) from chrome of the same shape (`chip_Gold`, `Artwork
+    Image`). The frame-level containment rule closes the case where an identity id on the same frame
+    carries that name (the id is then absent); a name-shaped tag on a frame with no such identity id
+    still travels in the clear. The corpus has none (the rejected-id pin lists only the three dynamic
+    UUIDs, and no identity seed collides with a committed chrome id); the controls are that pin and the
+    k-gated, human-reviewed promotion path.
+   The same containment applies to ids (and, for customer-name runs, to non-wrapper classes — review
+   round 12), so in the rarer case of a first name equal to an id token (`Star` / `star_rating_bar`,
+   `Page` / `page_indicator`, `Dash` / `dash_now_button`) the id becomes the sentinel `~` (the class
+   becomes absent) and the CLUSTER KEY itself moves by that one value — never the tree structure (§8): that surface lands in a singleton cluster for that install on
+   that frame. Fingerprinting the pre-containment structure would break the server's
+   recompute-from-the-wire rule, so this is accepted: the drop costs availability (a cluster that does
+   not reach k), never privacy (#1160 review round 6).
+11. **Every `tvTitle` line in the runtime UNKNOWN scrub** (#1160 review rounds 10, 11). The runtime UNKNOWN
+    id scrub masks `tvTitle` (the chat header — a customer's name) ALWAYS, whatever its value: a
+    value-shape gate cannot tell "李明", "محمد" or "de la Cruz" from chrome, so the runtime path fails
+    closed on the id alone. The cost: DoorDash reuses the generic `tvTitle` for sheet titles, so an
+    UNKNOWN sheet titled "Pick up order" loses that line in the debug X-Ray triage. The census skeleton
+    is unaffected — it keeps the node's id and structure (its text slot was already withheld as an
+    EXACT id). A recognized chat frame masks through its rule's `redact` (customer-name hash) instead.
+    The blast radius is CROSS-PLATFORM (review round 15): the scrub is keyed on generic Hungarian-notation
+    suffixes (`tvTitle`, `tvLastMessage`), so any platform's `…:id/tvTitle` node on an UNKNOWN capture — an
+    Uber sheet title included — is scrubbed too. Accepted, not scoped by a chat ancestor: the path is
+    debug-only (release binds `NoOpCaptureBus`) and the cost is triage text, never privacy.
 
 ## Open questions (dev decisions; the same items appear in #1157's plan §10 under its own numbering — this list is the ADR's reference)
 

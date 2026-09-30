@@ -619,8 +619,10 @@ enum class UiNodeTextField(val wire: String) {
 // ============================================================================
 
 private fun computeStableHash(node: UiNode): Int {
-    // Anonymous wrapper: no ID, generic class — hash through to children only
-    if (node.viewIdResourceName == null && node.className.isAnonymousWrapper()) {
+    // Anonymous wrapper: no ID, generic class — hash through to children only. The predicate is the ONE
+    // shared with the census fingerprint (ADR-0011 §8); this algorithm (fold, never splice) is unchanged,
+    // pinned by UiNodeStableHashPinTest.
+    if (AnonymousWrappers.isAnonymousWrapper(node.className, node.viewIdResourceName)) {
         var result = 0
         for (child in node.children) {
             result = 31 * result + computeStableHash(child)
@@ -634,12 +636,4 @@ private fun computeStableHash(node: UiNode): Int {
         result = 31 * result + computeStableHash(child)
     }
     return result
-}
-
-private fun String?.isAnonymousWrapper(): Boolean = when (this) {
-    "android.view.View",
-    "android.view.ViewGroup",
-    "android.widget.FrameLayout",
-    "android.widget.LinearLayout" -> true
-    else -> false
 }

@@ -1,7 +1,7 @@
 package cloud.trotter.dashbuddy.core.pipeline
 
+import cloud.trotter.dashbuddy.domain.census.contract.TextFold
 import cloud.trotter.dashbuddy.domain.model.accessibility.UiNode
-import java.text.Normalizer
 import java.util.Locale
 
 /**
@@ -197,33 +197,64 @@ object SensitiveTextMarkers {
     }
 
     /**
-     * Single-pass homoglyph/whitespace normalizer (#590) shared by both scan
-     * overloads and applied to BOTH sides (markers + scanned text). Closes the
-     * evasion classes a plain `contains` substring test misses:
-     *  - NFKC folds NBSP (U+00A0) / narrow-NBSP (U+202F) → space and fullwidth
-     *    digits/letters (U+FF10+) / ideographic space (U+3000) → ASCII;
-     *  - zero-width & other format chars (U+200B/200C/200D/FEFF, `Character.FORMAT`)
-     *    are stripped, so a marker split by an invisible char rejoins;
-     *  - unicode dashes (U+2010–U+2015, U+2212 minus) fold to ASCII `-` so the
-     *    SSN/PAN shapes match homoglyph hyphens;
-     *  - all remaining whitespace (incl. the `` unit separator used to join
-     *    sibling text) collapses to a single ASCII space;
-     *  - `Locale.ROOT` lowercase gives locale-safe case-insensitivity in one place
-     *    (so the scan can use a plain, allocation-light `contains`).
-     * Single allocation pass over the NFKC output; NFKC itself is O(n).
+     * The fully STRIPPED normal form (#1160 reviews RR1, WW1): EXACTLY the boundary-preserving form
+     * ([normalizePreserving], the pre-#1160 normalizer) with its supplementary-plane FORMAT code points
+     * removed — "old normalizer + strip", no further NFKC. (A second NFKC pass — the census fold — composed
+     * `Vis<tag>a<ZWJ><U+0301>` into `visá` and lost the `visa` keyword both forms must see.) The census
+     * canonical fold (`TextFold.foldForCensus`) is the builder's own and is NOT a sensitive-scan form. The
+     * KEYWORDS are normalized with this form; being ASCII, they read the same in both forms.
      */
-    internal fun normalize(s: String): String {
-        val nfkc = Normalizer.normalize(s, Normalizer.Form.NFKC)
-        val sb = StringBuilder(nfkc.length)
-        for (ch in nfkc) {
-            when {
-                Character.getType(ch) == Character.FORMAT.toInt() -> {} // strip zero-width / format
-                ch in '‐'..'―' || ch == '−' -> sb.append('-') // unicode dashes → hyphen
-                ch == '' || ch.isWhitespace() -> sb.append(' ') // canonicalize whitespace
-                else -> sb.append(ch)
-            }
+    internal fun normalize(s: String): String = TextFold.stripSupplementaryFormat(normalizePreserving(s))
+
+    /**
+     * The BOUNDARY-PRESERVING normal form — byte-for-byte the pre-#1160 normalizer (#590; supplementary-plane
+     * FORMAT chars kept), a single allocation pass over the NFKC output. It closes the evasion classes a
+     * plain `contains` substring test misses:
+     *  - NFKC folds NBSP (U+00A0) / narrow-NBSP (U+202F) → space and fullwidth digits/letters (U+FF10+) /
+     *    ideographic space (U+3000) → ASCII;
+     *  - BMP zero-width & other format chars (U+200B/200C/200D/FEFF, `Character.FORMAT`) are stripped, so a
+     *    marker split by an invisible char rejoins;
+     *  - unicode dashes (U+2010–U+2015, U+2212 minus) fold to ASCII `-` so the SSN/PAN shapes match
+     *    homoglyph hyphens;
+     *  - whitespace and lowercase: [spaceAndLower].
+     * Review RR1: [findMarker] scans the SCANNED TEXT in this form AND in the fully stripped [normalize] and
+     * drops on EITHER hit — stripping a supplementary FORMAT char can erase the `\b` a shape pattern needs,
+     * while keeping it lets a tag char split a keyword; the union covers both (fail toward privacy).
+     */
+    internal fun normalizePreserving(s: String): String = spaceAndLower(TextFold.foldGlyphsPreservingSupplementary(s))
+
+    /** [normalizePreserving] plus the fold's own supplementary-FORMAT flag (review AF6). */
+    private fun normalizePreservingFlagged(s: String): TextFold.Folded {
+        val folded = TextFold.foldGlyphsPreservingSupplementaryFlagged(s)
+        return TextFold.Folded(spaceAndLower(folded.text), folded.hasSupplementaryFormat)
+    }
+
+    /**
+     * Every remaining whitespace char (incl. the U+001F unit separator used to join sibling text) becomes
+     * one ASCII space, and `Locale.ROOT` lowercase gives locale-safe case-insensitivity in one place (so the
+     * scan can use a plain, allocation-light `contains`).
+     */
+    private fun spaceAndLower(folded: String): String {
+        val sb = StringBuilder(folded.length)
+        for (ch in folded) {
+            if (ch == '\u001F' || ch.isWhitespace()) sb.append(' ') else sb.append(ch)
         }
         return sb.toString().lowercase(Locale.ROOT)
+    }
+
+    /**
+     * Scan both normal forms; the first hit wins (review RR1). Since the stripped form is the preserving
+     * form minus its supplementary-plane FORMAT code points (review WW1), the two strings are IDENTICAL
+     * unless such a code point is present — so skipping the second scan when there is none is exact, not
+     * an approximation (reviews UU2, WW3). The LogScrubber and CaptureWriter hot paths scan once. Review
+     * AB6: the stripped form is derived from the ALREADY-computed preserving form — the identity
+     * [normalize] is defined by — never re-normalized from the raw text.
+     */
+    private fun scanBothForms(text: String): String? {
+        // AF6: the flag comes from the fold's own pass (lowercasing cannot add or remove a FORMAT code point).
+        val preserving = normalizePreservingFlagged(text)
+        return scan(preserving.text)
+            ?: if (preserving.hasSupplementaryFormat) scan(TextFold.stripSupplementaryFormat(preserving.text)) else null
     }
 
     /**
@@ -255,7 +286,7 @@ object SensitiveTextMarkers {
      * that field because rules match on it; this scan must not.
      */
     fun findMarker(tree: UiNode): String? = try {
-        scan(normalize(tree.allScrubbableText().joinToString(" ")))
+        scanBothForms(tree.allScrubbableText().joinToString(" "))
     } catch (_: Throwable) {
         NORMALIZE_FAILED
     }
@@ -265,7 +296,7 @@ object SensitiveTextMarkers {
      * FAIL-CLOSED: a normalization throw returns the toxic sentinel, never null.
      */
     fun findMarker(text: String): String? = try {
-        scan(normalize(text))
+        scanBothForms(text)
     } catch (_: Throwable) {
         NORMALIZE_FAILED
     }

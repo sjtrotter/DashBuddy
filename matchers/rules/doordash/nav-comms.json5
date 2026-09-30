@@ -163,6 +163,21 @@
     {
       "id": "doordash.screen.chat",
       "priority": 92,
+      "comment": "#1160 review XX2: the chat LIST renders one row per conversation — `tvTitle` is the customer's name and `tvLastMessage` their own last message — and this rule shipped with no redact, so on a RECOGNIZED frame both reached the debug envelope raw (the runtime id backstop is UNKNOWN-only by design). `tvTitle` masks through `normalize: customerName` so its hex matches the persisted customerNameHash and the conversation title (`chat_conversation`); the preview is free customer text, masked plain. Recognize-only rule: redact without parse is legal and the parse goldens are untouched.",
+      "redact": [
+        {
+          "find": {
+            "hasIdSuffix": "tvTitle"
+          },
+          "normalize": "customerName"
+        },
+        {
+          "find": {
+            "hasIdSuffix": "tvLastMessage"
+          },
+          "plainMask": true
+        }
+      ],
       "reject": [
         {
           "allTextContains": "folder"
@@ -200,6 +215,19 @@
           "find": {
             "hasIdSuffix": "admin_message_text"
           }
+        },
+        {
+          "comment": "#1160 review XX2: the chat LIST can render inside this surface too (the committed chat_conversation fixtures carry `tvTitle` / `tvLastMessage` rows) — same entries as `doordash.screen.chat`.",
+          "find": {
+            "hasIdSuffix": "tvTitle"
+          },
+          "normalize": "customerName"
+        },
+        {
+          "find": {
+            "hasIdSuffix": "tvLastMessage"
+          },
+          "plainMask": true
         }
       ],
       "require": {

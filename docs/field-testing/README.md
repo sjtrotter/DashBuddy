@@ -99,6 +99,18 @@ _(The 2026-09-26 entry below **validated and retired** the **#1118** transition-
 clean runs (10/10 + 5/5 accepts inferred from the task surface, 44/44 + 12/12 declines from the confirm sheet, zero
 over-inference); the remaining accept losses are #1119 and the merged card is #1069.)_
 
+- **🆕 NEW — chat header and chat preview are masked in captures (PR #1160 / #1145).** Desk check on a
+  debug pull; nothing on the dash looks different. **How to tell it works:**
+  1. A capture of the live DoorDash chat list (the conversation row with the customer's name and their
+     last message) shows the `tvTitle` value as `[redacted:<4hex>]` — the 4 hex equal the first 4 of that
+     delivery's `customerNameHash` — and the `tvLastMessage` value as plain `[redacted]`. No customer
+     name or message text anywhere in the envelope.
+  2. An UNKNOWN capture of any other sheet whose title renders under `tvTitle` ("Pick up order" and the
+     like) shows ONLY that title NODE masked — all of its fields (text, description, …) as `[redacted]`;
+     the rest of the X-Ray triage text is intact. That single lost node is the accepted cost (ADR-0011
+     residual 11, on any platform whose id ends in `tvTitle`); anything more masked is a finding.
+  - Confirmed: 0/2
+
 - **🆕 NEW — captures carry the richer node fields TalkBack reads (#1147).** Every captured node can
   now also carry a pane title (`"pane"`), a role (`"role"`), the label on its click action
   (`"clickLabel"`), a `"clickAction"`/`"selected"`/`"heading"`/`"visible"` flag and collection
