@@ -4,12 +4,15 @@ import android.accessibilityservice.AccessibilityService
 import android.view.accessibility.AccessibilityNodeInfo
 import android.view.accessibility.AccessibilityWindowInfo
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertSame
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.mockito.kotlin.doReturn
 import org.mockito.kotlin.mock
 import org.robolectric.RobolectricTestRunner
+import org.robolectric.annotation.Config
 
 /**
  * #788 — [AccessibilitySource.getLiveWindowRoots] must dedup the active-window
@@ -23,7 +26,10 @@ import org.robolectric.RobolectricTestRunner
  * back to reference `equals`, so the same mock instance handed to both
  * `rootInActiveWindow` and a window's `root` models "same underlying node".
  */
+// sdk 36: the node mapper reads AccessibilityNodeInfo.getChecked() (API 36) — the #1148 snapshot
+// tests map real (mocked) roots, same as AccessibilityNodeMapperPropertyTest.
 @RunWith(RobolectricTestRunner::class)
+@Config(sdk = [36])
 class AccessibilitySourceWindowRootsTest {
 
     private fun window(node: AccessibilityNodeInfo?): AccessibilityWindowInfo =
@@ -82,5 +88,75 @@ class AccessibilitySourceWindowRootsTest {
 
         assertEquals(1, roots.size)
         assertSame(w1, roots[0])
+    }
+
+    // ── #1148 D4: WindowContext on every snapshot + window-specific snapshots ──
+
+    private fun windowInfo(
+        windowId: Int,
+        node: AccessibilityNodeInfo?,
+        active: Boolean,
+        windowType: Int = AccessibilityWindowInfo.TYPE_APPLICATION,
+    ): AccessibilityWindowInfo = mock {
+        on { id } doReturn windowId
+        on { root } doReturn node
+        on { isActive } doReturn active
+        on { isFocused } doReturn active
+        on { type } doReturn windowType
+        on { layer } doReturn windowId
+    }
+
+    private fun nodeOf(pkg: String): AccessibilityNodeInfo = mock { on { packageName } doReturn pkg }
+
+    @Test
+    fun `getCurrentRootSnapshot fills windowContext from the active window`() {
+        val activeRoot = nodeOf("com.doordash.driverapp")
+        val other = nodeOf("cloud.trotter.dashbuddy")
+        val windowList = listOf(windowInfo(7, other, active = false), windowInfo(9, activeRoot, active = true))
+        val service = mock<AccessibilityService> {
+            on { rootInActiveWindow } doReturn activeRoot
+            on { windows } doReturn windowList
+        }
+
+        val snapshot = sourceFor(service).getCurrentRootSnapshot()
+
+        assertNotNull(snapshot)
+        val ctx = requireNotNull(snapshot!!.windowContext) { "active-root snapshot must carry its WindowContext" }
+        assertEquals(9, ctx.windowId)
+        assertEquals(true, ctx.isActive)
+        assertEquals(2, ctx.totalWindowCount)
+        assertEquals("com.doordash.driverapp", snapshot.packageName)
+    }
+
+    @Test
+    fun `getWindowSnapshot reads the requested window, not the active one`() {
+        val bubbleRoot = nodeOf("cloud.trotter.dashbuddy")
+        val ddRoot = nodeOf("com.doordash.driverapp")
+        val windowList = listOf(windowInfo(1, bubbleRoot, active = true), windowInfo(42, ddRoot, active = false))
+        val service = mock<AccessibilityService> {
+            on { rootInActiveWindow } doReturn bubbleRoot
+            on { windows } doReturn windowList
+        }
+        val source = sourceFor(service)
+
+        assertEquals("com.doordash.driverapp", source.getWindowPackage(42))
+        val snapshot = requireNotNull(source.getWindowSnapshot(42))
+        assertEquals("com.doordash.driverapp", snapshot.packageName)
+        assertEquals(42, snapshot.windowContext?.windowId)
+        assertEquals(false, snapshot.windowContext?.isActive)
+    }
+
+    @Test
+    fun `getWindowSnapshot returns null for an unknown window id`() {
+        val root = nodeOf("com.doordash.driverapp")
+        val windowList = listOf(windowInfo(1, root, active = true))
+        val service = mock<AccessibilityService> {
+            on { rootInActiveWindow } doReturn root
+            on { windows } doReturn windowList
+        }
+        val source = sourceFor(service)
+
+        assertNull(source.getWindowSnapshot(999))
+        assertNull(source.getWindowPackage(999))
     }
 }

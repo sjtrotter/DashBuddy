@@ -5,9 +5,11 @@ import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
 import android.view.accessibility.AccessibilityWindowInfo
 import cloud.trotter.dashbuddy.domain.model.accessibility.UiNode
+import cloud.trotter.dashbuddy.core.pipeline.accessibility.TreeSnapshot
 import cloud.trotter.dashbuddy.core.pipeline.accessibility.mapper.toUiNode
 import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import java.lang.ref.WeakReference
 import javax.inject.Inject
@@ -17,14 +19,18 @@ import javax.inject.Singleton
 class AccessibilitySource @Inject constructor() {
 
     // --- 1. The Event Stream (Push) ---
-    private val _events = MutableSharedFlow<AccessibilityEvent>(
+    // #1148 D1: the flow carries the immutable [AccEvent] envelope, never the framework-owned
+    // AccessibilityEvent — the buffer is read after the callback returned, when the framework
+    // may already have reused the raw event.
+    private val _events = MutableSharedFlow<AccEvent>(
         extraBufferCapacity = 64,
         onBufferOverflow = BufferOverflow.DROP_OLDEST
     )
-    val events = _events.asSharedFlow()
+    val events: SharedFlow<AccEvent> = _events.asSharedFlow()
 
+    /** Copies [event]'s scalars into an [AccEvent] (the one construction site) and emits it. */
     fun emit(event: AccessibilityEvent) {
-        _events.tryEmit(event)
+        _events.tryEmit(AccEvent.from(event))
     }
 
     /**
@@ -97,8 +103,16 @@ class AccessibilitySource @Inject constructor() {
      */
     fun getActiveWindowPackage(): String? = getLiveNativeRoot()?.packageName?.toString()
 
-    /** Active-window root snapshot: the converted [UiNode] tree + the **real package** owning it. */
-    data class RootSnapshot(val tree: UiNode, val packageName: String?)
+    /**
+     * A window's root snapshot: the converted [UiNode] tree + the **real package** owning it, plus
+     * the window's metadata when the platform can supply it (#1148 D4 — every snapshot path fills
+     * it; null only when the window could not be located in `service.windows`).
+     */
+    data class RootSnapshot(
+        val tree: UiNode,
+        val packageName: String?,
+        val windowContext: TreeSnapshot.WindowContext? = null,
+    )
 
     /**
      * Snapshots the active window's root as a [UiNode] tree plus the **real package that owns that
@@ -116,7 +130,62 @@ class AccessibilitySource @Inject constructor() {
         } catch (_: Exception) {
             null
         } ?: return null
-        return RootSnapshot(tree = tree, packageName = root.packageName?.toString())
+        return RootSnapshot(
+            tree = tree,
+            packageName = root.packageName?.toString(),
+            windowContext = activeWindowContext(root),
+        )
+    }
+
+    /**
+     * The package owning window [windowId]'s root, read WITHOUT mapping the subtree — the #435
+     * item-3 pre-map check, for the window-specific path (#1148 D4). Null when the window is gone
+     * or has no root.
+     */
+    fun getWindowPackage(windowId: Int): String? = try {
+        findWindow(getWindows(), windowId)?.root?.packageName?.toString()
+    } catch (_: Exception) {
+        null
+    }
+
+    /**
+     * Snapshots the root of the window the triggering EVENT came from (#1148 D4), not the active
+     * window: when our bubble is the active window, a DoorDash content change used to be rejected
+     * pre-map even though the DoorDash window still existed. Attributed to the window root's real
+     * package (#4). Null when the window is gone, has no root, or fails to map — callers fall back
+     * to the active-root path.
+     */
+    fun getWindowSnapshot(windowId: Int): RootSnapshot? {
+        val windows = getWindows()
+        val window = findWindow(windows, windowId) ?: return null
+        val root = window.root ?: return null
+        val tree = try {
+            root.toUiNode()
+        } catch (_: Exception) {
+            null
+        } ?: return null
+        return RootSnapshot(
+            tree = tree,
+            packageName = root.packageName?.toString(),
+            windowContext = contextOf(window, windows.size),
+        )
+    }
+
+    private fun findWindow(windows: List<AccessibilityWindowInfo>, windowId: Int): AccessibilityWindowInfo? =
+        windows.firstOrNull { it.id == windowId }
+
+    /**
+     * Locates the active window's metadata: the window flagged `isActive`, else the window whose
+     * root equals [activeRoot]. Null when neither is found — fail-open, the context is diagnostic
+     * metadata and must never cost a frame.
+     */
+    private fun activeWindowContext(activeRoot: AccessibilityNodeInfo): TreeSnapshot.WindowContext? = try {
+        val windows = getWindows()
+        val window = windows.firstOrNull { it.isActive }
+            ?: windows.firstOrNull { it.root == activeRoot }
+        window?.let { contextOf(it, windows.size) }
+    } catch (_: Exception) {
+        null
     }
 
     // --- 3. Multi-Window Support ---
@@ -143,4 +212,21 @@ class AccessibilitySource @Inject constructor() {
         }
     }
 
+    companion object {
+        /**
+         * The ONE [TreeSnapshot.WindowContext] builder, shared by the active-root, window-specific
+         * and windows-changed paths (#1148 D4). `internal` rather than private so
+         * `WindowsChangedPipeline` (same module) uses it instead of building its own.
+         */
+        internal fun contextOf(window: AccessibilityWindowInfo, total: Int): TreeSnapshot.WindowContext =
+            TreeSnapshot.WindowContext(
+                windowId = window.id,
+                windowType = window.type,
+                windowTitle = window.title?.toString(),
+                windowLayer = window.layer,
+                isActive = window.isActive,
+                isFocused = window.isFocused,
+                totalWindowCount = total,
+            )
+    }
 }

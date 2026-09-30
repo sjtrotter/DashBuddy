@@ -2,72 +2,111 @@ package cloud.trotter.dashbuddy.core.pipeline.accessibility.event.type.window.co
 
 import android.view.accessibility.AccessibilityEvent
 import cloud.trotter.dashbuddy.core.pipeline.BuildConfig
-import cloud.trotter.dashbuddy.domain.model.accessibility.UiNode
 import cloud.trotter.dashbuddy.core.pipeline.accessibility.TreeSnapshot
+import cloud.trotter.dashbuddy.core.pipeline.accessibility.event.coalesce.coalesceByKey
+import cloud.trotter.dashbuddy.core.pipeline.accessibility.event.type.window.snapshotForEventWindow
+import cloud.trotter.dashbuddy.core.pipeline.accessibility.input.AccEvent
 import cloud.trotter.dashbuddy.core.pipeline.accessibility.input.AccessibilitySource
-import cloud.trotter.dashbuddy.domain.state.Platform
-import kotlinx.coroutines.FlowPreview
+import cloud.trotter.dashbuddy.domain.model.accessibility.UiNode
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.mapNotNull
 import kotlinx.coroutines.flow.onEach
 import timber.log.Timber
-import java.util.concurrent.atomic.AtomicInteger
 import javax.inject.Inject
 
-@OptIn(FlowPreview::class)
+/**
+ * One coalesced content-change burst for one window (#1148 D3): the accumulator of
+ * [coalesceByKey], owning the OR of the `contentChangeTypes` bits the old pipeline logged and
+ * discarded.
+ */
+data class CoalescedChange(
+    val windowId: Int,
+    val packageName: String?,
+    /** OR of the `contentChangeTypes` bits across the burst. */
+    val changeTypes: Int,
+    val eventCount: Int,
+    val firstEventTimeMs: Long,
+    val lastEventTimeMs: Long,
+    val lastClassName: String?,
+) {
+    val spanMs: Long get() = lastEventTimeMs - firstEventTimeMs
+
+    companion object {
+        /** The [coalesceByKey] merge: open on the first event, fold every later one in. */
+        fun merge(acc: CoalescedChange?, e: AccEvent): CoalescedChange = if (acc == null) {
+            CoalescedChange(
+                windowId = e.windowId,
+                packageName = e.packageName,
+                changeTypes = e.contentChangeTypes,
+                eventCount = 1,
+                firstEventTimeMs = e.eventTimeMs,
+                lastEventTimeMs = e.eventTimeMs,
+                lastClassName = e.className,
+            )
+        } else {
+            acc.copy(
+                packageName = e.packageName ?: acc.packageName,
+                changeTypes = acc.changeTypes or e.contentChangeTypes,
+                eventCount = acc.eventCount + 1,
+                lastEventTimeMs = e.eventTimeMs,
+                lastClassName = e.className,
+            )
+        }
+    }
+}
+
 class ContentChangedPipeline @Inject constructor(
     private val source: AccessibilitySource
 ) {
-    /** OR-accumulates contentChangeTypes across the debounce window. */
-    private val pendingChangeTypes = AtomicInteger(0)
-
     fun output(): Flow<TreeSnapshot> = source.events
-        .filter { it.eventType == AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED }
+        .filter { it.type == AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED }
         .onEach {
-            val types = it.contentChangeTypes
-            pendingChangeTypes.getAndUpdate { prev -> prev or types }
-            Timber.v("🌊 FLOOD: Content Change from %s  types=0x%02x", it.className, types)
+            Timber.v(
+                "🌊 FLOOD: Content Change window=%d from %s  types=0x%02x",
+                it.windowId, it.className, it.contentChangeTypes,
+            )
         }
-        .debounceWithTimeout(150L, 300L)
+        // #1148 D3: coalesced PER WINDOW — quiet 150 ms / scheduled max-wait 300 ms, trailing
+        // emission guaranteed, no leading edge.
+        .coalesceByKey(
+            quietMs = QUIET_MS,
+            maxWaitMs = MAX_WAIT_MS,
+            keyOf = { it.windowId },
+            merge = CoalescedChange::merge,
+        )
         .onEach {
-            Timber.d("💧 DRIP: triggered by %s, accumulated types=0x%02x", it.className, pendingChangeTypes.get())
+            Timber.d(
+                "💧 DRIP: window=%d types=0x%02x n=%d span=%dms",
+                it.windowId, it.changeTypes, it.eventCount, it.spanMs,
+            )
         }
-        .mapNotNull { event ->
-            // Reset for the next debounce window; the accumulated bitmask itself is
-            // logged above (#439 — TreeSnapshot no longer carries it, never consumed).
-            pendingChangeTypes.set(0)
-            // Check-before-map (#435 item 3): read the active window's package first and
-            // skip the full tree mapping for a non-target window (bubble overlay, launcher).
-            val activePkg = source.getActiveWindowPackage()
-            if (activePkg !in Platform.watchedPackages) {
-                Timber.v(
-                    "🚫 Skip active window (pre-map): non-target pkg=%s (event pkg=%s)",
-                    activePkg, event.packageName,
-                )
-                return@mapNotNull null
-            }
-            val snapshot = source.getCurrentRootSnapshot() ?: return@mapNotNull null
-            // Attribute to the window actually on screen, not the triggering event. Drop snapshots
-            // of non-target windows (our own bubble overlay, launcher, etc.) so we never recognize
-            // our own UI as the platform — the #4 self-recognition feedback loop. Retained as a
-            // post-map re-check: the active root can swap between the package read and the map.
-            if (snapshot.packageName !in Platform.watchedPackages) {
-                Timber.v(
-                    "🚫 Skip active window: non-target pkg=%s (event pkg=%s)",
-                    snapshot.packageName, event.packageName,
-                )
-                return@mapNotNull null
-            }
+        .mapNotNull { change ->
+            // #1148 D4: snapshot the EVENT's window (active-root fallback), package-gated
+            // before and after the map.
+            val snapshot = source.snapshotForEventWindow(change.windowId, change.packageName)
+                ?: return@mapNotNull null
             if (BuildConfig.DEBUG) {
                 Timber.d("🌳 Tree snapshot: %d nodes, pkg=%s", countNodes(snapshot.tree), snapshot.packageName)
             }
             TreeSnapshot(
                 tree = snapshot.tree,
                 packageName = snapshot.packageName,
+                windowContext = snapshot.windowContext,
+                trigger = TreeSnapshot.Trigger(
+                    reason = TreeSnapshot.Trigger.Reason.CONTENT,
+                    changeTypes = change.changeTypes,
+                    coalescedEvents = change.eventCount,
+                    spanMs = change.spanMs,
+                ),
             )
         }
 
     private fun countNodes(node: UiNode): Int =
         1 + node.children.sumOf { countNodes(it) }
+
+    companion object {
+        const val QUIET_MS = 150L
+        const val MAX_WAIT_MS = 300L
+    }
 }

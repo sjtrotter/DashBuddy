@@ -5,11 +5,11 @@ import android.view.accessibility.AccessibilityWindowInfo
 import cloud.trotter.dashbuddy.core.pipeline.accessibility.TreeSnapshot
 import cloud.trotter.dashbuddy.core.pipeline.accessibility.input.AccessibilitySource
 import cloud.trotter.dashbuddy.domain.state.Platform
+import cloud.trotter.dashbuddy.core.pipeline.accessibility.event.coalesce.coalesceByKey
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.asFlow
-import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.flatMapConcat
 import kotlinx.coroutines.flow.mapNotNull
@@ -31,10 +31,17 @@ class WindowsChangedPipeline @Inject constructor(
     private val source: AccessibilitySource
 ) {
     fun output(): Flow<TreeSnapshot> = source.events
-        .filter { it.eventType == AccessibilityEvent.TYPE_WINDOWS_CHANGED }
-        .debounce(100L)
-        .onEach { Timber.d("\uD83E\uDE9F WINDOWS_CHANGED") }
-        .flatMapConcat { _ ->
+        .filter { it.type == AccessibilityEvent.TYPE_WINDOWS_CHANGED }
+        // #1148 D3: the same bounded shape as content changes — quiet 100 ms, scheduled max-wait
+        // 300 ms — on a single key (topology is one global stream). The accumulator is the count.
+        .coalesceByKey(
+            quietMs = 100L,
+            maxWaitMs = 300L,
+            keyOf = { 0 },
+            merge = { acc: Int?, _ -> (acc ?: 0) + 1 },
+        )
+        .onEach { n -> Timber.d("\uD83E\uDE9F WINDOWS_CHANGED (coalesced n=%d)", n) }
+        .flatMapConcat { coalesced ->
             val windows = source.getWindows()
             Timber.d(
                 "\uD83E\uDE9F Window list: %d windows",
@@ -72,14 +79,12 @@ class WindowsChangedPipeline @Inject constructor(
                     TreeSnapshot(
                         tree = tree,
                         packageName = pkg,
-                        windowContext = TreeSnapshot.WindowContext(
-                            windowId = w.id,
-                            windowType = w.type,
-                            windowTitle = w.title?.toString(),
-                            windowLayer = w.layer,
-                            isActive = w.isActive,
-                            isFocused = w.isFocused,
-                            totalWindowCount = totalCount,
+                        windowContext = AccessibilitySource.contextOf(w, totalCount),
+                        trigger = TreeSnapshot.Trigger(
+                            reason = TreeSnapshot.Trigger.Reason.WINDOWS,
+                            changeTypes = 0,
+                            coalescedEvents = coalesced,
+                            spanMs = 0L,
                         ),
                     )
                 }
