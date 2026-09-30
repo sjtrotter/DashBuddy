@@ -300,7 +300,9 @@ class AccessibilitySource @Inject constructor(
         active: AccessibilityWindowInfo,
         isEnabled: (String?) -> Boolean,
         display: Lazy<Long> = lazyDisplayArea(),
-    ): Foreground = frontOf(windows.filter { it.id != active.id && it.layer > active.layer }, isEnabled, windows.size, display)
+        overlayOnly: Boolean = false,
+    ): Foreground =
+        frontOf(windows.filter { it.id != active.id && it.layer > active.layer }, isEnabled, windows.size, display, overlayOnly)
 
     /** The ONE readable-top-or-refuse walk behind [foregroundWindow] and [frontAbove]. */
     private fun frontOf(
@@ -308,6 +310,9 @@ class AccessibilitySource @Inject constructor(
         isEnabled: (String?) -> Boolean,
         total: Int,
         display: Lazy<Long>,
+        // FF3: the caller only ever maps an OVERLAY winner ([overlayFront]) — an application window
+        // in front is never mapped, so its root is not needed once its package is known.
+        overlayOnly: Boolean = false,
     ): Foreground = try {
         val ownPkg = ownPackage()
         val ordered = windows
@@ -351,6 +356,12 @@ class AccessibilitySource @Inject constructor(
             if (cached != null && ownPkg != null && cached == ownPkg) continue
             if (cached != null && !isEnabled(cached)) {
                 verdict = Foreground.Refused(ForegroundSkipReason.FRONT_NOT_ENABLED)
+                break
+            }
+            if (cached != null && overlayOnly) {
+                // PR #1155 review FF3: a cached ENABLED application window decides the overlay walk
+                // ("no overlay in front") without a root fetch — the root would never be mapped.
+                verdict = Foreground.Refused(ForegroundSkipReason.NO_CANDIDATE)
                 break
             }
             if (!budget.take()) { // CC5
@@ -503,7 +514,7 @@ class AccessibilitySource @Inject constructor(
         isEnabled: (String?) -> Boolean,
         display: Lazy<Long>,
     ): OverlayScan {
-        return when (val front = frontAbove(windows, active, isEnabled, display)) {
+        return when (val front = frontAbove(windows, active, isEnabled, display, overlayOnly = true)) {
             is Foreground.Found -> if (front.located.isOverlay) OverlayScan.Overlay(front.located) else OverlayScan.None
             is Foreground.Refused -> when {
                 front.reason == ForegroundSkipReason.SCAN_BUDGET -> OverlayScan.Refused(front.reason)

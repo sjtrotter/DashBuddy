@@ -925,4 +925,14 @@ class WindowSpecificSnapshotTest {
         assertEquals(listOf("uber-offer"), topologyFrames)
         verify(h.service, never()).rootInActiveWindow
     }
+
+    @Test
+    fun `FF3 - a cached enabled application window above the active one decides the overlay walk without a root fetch`() {
+        val dd = node(ddPkg, "dd", windowId = 3)
+        val sheetWindow = window(7, 9, node(ddPkg, "dd-sheet"))
+        val h = harness(activeRoot = dd, windows = listOf(window(3, 2, dd, active = true), uberOverlay(9, 5, node(uberPkg, "uber-offer")), sheetWindow))
+
+        repeat(2) { assertEquals(listOf("dd"), collect(h, Kind.STATE, windowId = 3).map { it.tree.text }) }
+        verify(sheetWindow, times(1)).root // the second walk decides on the cached package
+    }
 }
