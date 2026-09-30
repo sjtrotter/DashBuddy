@@ -39,6 +39,12 @@ import java.text.Normalizer
  */
 object TextFold {
 
+    /** The ONE "is this a `Character.FORMAT` code point" predicate (#1160 review AB7). */
+    fun isFormat(cp: Int): Boolean = Character.getType(cp) == Character.FORMAT.toInt()
+
+    /** A supplementary-plane FORMAT code point (a tag char, …) — the RR1/WW1 dual-form trigger (review AB7). */
+    fun isSupplementaryFormat(cp: Int): Boolean = cp >= 0x10000 && isFormat(cp)
+
     /**
      * The census's ORDERED fold (review OO1): FORMAT code points stripped FIRST, then NFKC, then the dash
      * fold — so a combining mark hidden behind a zero-width joiner composes in the one NFKC pass and the
@@ -50,7 +56,7 @@ object TextFold {
         var i = 0
         while (i < value.length) {
             val cp = value.codePointAt(i)
-            if (Character.getType(cp) != Character.FORMAT.toInt()) stripped.appendCodePoint(cp)
+            if (!isFormat(cp)) stripped.appendCodePoint(cp)
             i += Character.charCount(cp)
         }
         val nfkc = Normalizer.normalize(stripped, Normalizer.Form.NFKC)
@@ -73,7 +79,7 @@ object TextFold {
         val sb = StringBuilder(nfkc.length)
         for (ch in nfkc) {
             when {
-                Character.getType(ch) == Character.FORMAT.toInt() -> {}
+                isFormat(ch.code) -> {}
                 ch in '\u2010'..'\u2015' || ch == '\u2212' -> sb.append('-')
                 else -> sb.append(ch)
             }

@@ -226,7 +226,7 @@ object SensitiveTextMarkers {
         var i = 0
         while (i < s.length) {
             val cp = s.codePointAt(i)
-            if (!(cp >= 0x10000 && Character.getType(cp) == Character.FORMAT.toInt())) sb.appendCodePoint(cp)
+            if (!TextFold.isSupplementaryFormat(cp)) sb.appendCodePoint(cp)
             i += Character.charCount(cp)
         }
         return sb.toString()
@@ -252,16 +252,20 @@ object SensitiveTextMarkers {
      * Scan both normal forms; the first hit wins (review RR1). Since the stripped form is the preserving
      * form minus its supplementary-plane FORMAT code points (review WW1), the two strings are IDENTICAL
      * unless such a code point is present — so skipping the second scan when there is none is exact, not
-     * an approximation (reviews UU2, WW3). The LogScrubber and CaptureWriter hot paths scan once.
+     * an approximation (reviews UU2, WW3). The LogScrubber and CaptureWriter hot paths scan once. Review
+     * AB6: the stripped form is derived from the ALREADY-computed preserving form — the identity
+     * [normalize] is defined by — never re-normalized from the raw text.
      */
-    private fun scanBothForms(text: String): String? =
-        scan(normalizePreserving(text)) ?: if (hasSupplementaryFormat(text)) scan(normalize(text)) else null
+    private fun scanBothForms(text: String): String? {
+        val preserving = normalizePreserving(text)
+        return scan(preserving) ?: if (hasSupplementaryFormat(preserving)) scan(stripSupplementaryFormat(preserving)) else null
+    }
 
     private fun hasSupplementaryFormat(text: String): Boolean {
         var i = 0
         while (i < text.length) {
             val cp = text.codePointAt(i)
-            if (cp >= 0x10000 && Character.getType(cp) == Character.FORMAT.toInt()) return true
+            if (TextFold.isSupplementaryFormat(cp)) return true
             i += Character.charCount(cp)
         }
         return false
