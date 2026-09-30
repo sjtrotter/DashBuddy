@@ -39,7 +39,10 @@ import cloud.trotter.dashbuddy.feature.settings.GeneralSettingsScreen
 import cloud.trotter.dashbuddy.feature.settings.PlatformSettingsScreen
 import cloud.trotter.dashbuddy.ui.main.settings.SettingsHomeScreen
 import cloud.trotter.dashbuddy.feature.settings.StrategySettingsScreen
+import cloud.trotter.dashbuddy.ui.main.setup.consent.DebugEventReceiptShell
+import cloud.trotter.dashbuddy.ui.main.setup.consent.EventReceiptConsentViewModel
 import cloud.trotter.dashbuddy.ui.main.setup.consent.FrontDoorViewModel
+import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import cloud.trotter.dashbuddy.ui.main.setup.wizard.WizardScreen
 import cloud.trotter.dashbuddy.core.designsystem.theme.DashBuddyTheme
 import dagger.hilt.android.AndroidEntryPoint
@@ -73,6 +76,18 @@ class MainActivity : ComponentActivity() {
         setContent {
             DashBuddyTheme {
                 val navController = rememberNavController()
+
+                // #1151 review LL4 — the debug decline gates the whole SHELL, not one screen: while
+                // `DEBUG && DECLINED` (the pure buildEventReceiptConsentState) the block replaces
+                // EVERY destination, deep links included (a pending route waits until unblocked).
+                // The one allowed way forward is the Automation & Consent screen, rendered inside
+                // the block host, plus Exit. The bubble HUD is a separate service and keeps running.
+                val eventReceiptViewModel: EventReceiptConsentViewModel = hiltViewModel()
+                val eventReceipt by eventReceiptViewModel.uiState.collectAsStateWithLifecycle()
+                if (eventReceipt.blocked) {
+                    DebugEventReceiptShell(onExit = { finishAffinity() })
+                    return@DashBuddyTheme
+                }
 
                 // Consume a deep-link route once, then clear it (#693 vehicle action).
                 val route by pendingRoute.collectAsStateWithLifecycle()

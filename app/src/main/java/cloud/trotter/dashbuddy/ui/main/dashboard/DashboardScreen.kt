@@ -1,6 +1,5 @@
 package cloud.trotter.dashbuddy.ui.main.dashboard
 
-import androidx.activity.compose.LocalActivity
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -52,9 +51,7 @@ import cloud.trotter.dashbuddy.ui.main.analytics.ReviewItem
 import cloud.trotter.dashbuddy.ui.main.analytics.ReviewList
 import cloud.trotter.dashbuddy.ui.main.analytics.reviewTexts
 import cloud.trotter.dashbuddy.ui.main.navigation.Screen
-import cloud.trotter.dashbuddy.ui.main.setup.consent.DebugEventReceiptBlock
 import cloud.trotter.dashbuddy.ui.main.setup.consent.FrontDoorHost
-import cloud.trotter.dashbuddy.ui.main.setup.consent.EventReceiptConsentViewModel
 import cloud.trotter.dashbuddy.ui.main.setup.permissions.PermissionsBottomSheet
 import cloud.trotter.dashbuddy.util.PermissionUtils
 import kotlinx.coroutines.launch
@@ -116,20 +113,6 @@ fun DashboardScreen(
         if (!granted) {
             showPermissionSheet = true
         }
-    }
-
-    // #1151 — wide event receipt. A DEBUG build whose dasher DECLINED it renders only the blocking
-    // notice (nothing else on the Dashboard is reachable); `blocked` is false in every release build
-    // by construction (see buildEventReceiptConsentState).
-    val eventReceiptViewModel: EventReceiptConsentViewModel = hiltViewModel()
-    val eventReceipt by eventReceiptViewModel.uiState.collectAsStateWithLifecycle()
-    val activity = LocalActivity.current
-    if (eventReceipt.blocked) {
-        DebugEventReceiptBlock(
-            onOpenSettings = { onNavigate(Screen.ConsentSettings.route) },
-            onExit = { activity?.finishAffinity() },
-        )
-        return
     }
 
     // ========================================================================

@@ -1,5 +1,6 @@
 package cloud.trotter.dashbuddy.ui.main.setup.consent
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
@@ -13,21 +14,42 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import cloud.trotter.dashbuddy.R
+import cloud.trotter.dashbuddy.feature.settings.CapabilityConsentScreen
 import cloud.trotter.dashbuddy.feature.settings.eventReceiptDisclosure
 import cloud.trotter.dashbuddy.feature.settings.eventReceiptSettingsPath
 
 /**
- * #1151 — the debug build's answer to a declined event receipt: the Dashboard is REPLACED by this
- * full-screen notice (nothing else on it is reachable). The host renders it only when
- * [EventReceiptConsentUiState.blocked] — `BuildConfig.DEBUG && consent == DECLINED`, decided by the
- * pure [buildEventReceiptConsentState]; a release build can never reach it.
+ * #1151 review LL4 — the shell that replaces EVERY `MainActivity` destination while
+ * [EventReceiptConsentUiState.blocked] (`BuildConfig.DEBUG && consent == DECLINED`, the pure
+ * [buildEventReceiptConsentState]; a release build can never reach it). Two ways out only: the
+ * Automation & Consent screen, rendered right here so its switch is reachable (turning it on
+ * unblocks the app live), and Exit.
  */
+@Composable
+fun DebugEventReceiptShell(onExit: () -> Unit) {
+    var showConsentSettings by rememberSaveable { mutableStateOf(false) }
+    if (showConsentSettings) {
+        BackHandler { showConsentSettings = false }
+        CapabilityConsentScreen(onBack = { showConsentSettings = false })
+    } else {
+        DebugEventReceiptBlock(
+            onOpenSettings = { showConsentSettings = true },
+            onExit = onExit,
+        )
+    }
+}
+
+/** The debug block's full-screen notice (see [DebugEventReceiptShell]). */
 @Composable
 fun DebugEventReceiptBlock(
     onOpenSettings: () -> Unit,
