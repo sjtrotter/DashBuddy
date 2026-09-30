@@ -74,7 +74,15 @@ class AccessibilitySource @Inject constructor() {
         var unreadable = 0
         (service.windows ?: emptyList()).forEach { window ->
             val root = window.root
-            if (root == null) unreadable++ else roots.add(root)
+            if (root != null) { roots.add(root); return@forEach }
+            // R3: only an APPLICATION window that is not the active one and not picture-in-picture can
+            // hide a platform twin (an IME, SystemUI or our overlay cannot; the active window is
+            // already `active`). Residual: its package is unknown, so a foreign app's unreadable
+            // window still counts.
+            if (window.type == AccessibilityWindowInfo.TYPE_APPLICATION &&
+                window.id != active?.windowId &&
+                !window.isInPictureInPictureMode
+            ) unreadable++
         }
         val deduped = mutableListOf<AccessibilityNodeInfo>()
         for (root in roots) if (deduped.none { it == root }) deduped.add(root)
@@ -83,8 +91,9 @@ class AccessibilitySource @Inject constructor() {
 
     /**
      * #1149 review N3 — one live window enumeration: the active root (any package) and all roots, active
-     * first. [unreadableWindows] (review P3) counts enumerated windows whose root came back null — they
-     * are silently absent from [roots], and may be of any package.
+     * first. [unreadableWindows] (review P3/R3) counts enumerated APPLICATION windows — not the active
+     * one, not picture-in-picture — whose root came back null; they are absent from [roots], and their
+     * package is unknown.
      */
     data class LiveRoots(
         val active: AccessibilityNodeInfo?,
