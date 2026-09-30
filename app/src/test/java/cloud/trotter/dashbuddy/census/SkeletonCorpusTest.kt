@@ -336,7 +336,7 @@ class SkeletonCorpusTest {
         // text/desc — reviews CC3, EE1). Canonical form, as the builder keys them (review EE2).
         val propagatedNotSeeded = HashSet<String>()
         val idSeeded = HashSet<String>()
-        val nameSeeded = HashSet<String>()
+        val idRuns = HashSet<String>()
         walkNodes(tree) { n ->
             val id = n.viewIdResourceName
             val kind = CustomerTextMarkers.idMarkerFor(id)?.kind
@@ -347,17 +347,21 @@ class SkeletonCorpusTest {
                 val seeds = identity && !PiiShapes.containsMask(canonical) &&
                     (field == UiNodeTextField.TEXT || field == UiNodeTextField.CONTENT_DESCRIPTION)
                 when {
-                    seeds -> {
-                        idSeeded += canonical
-                        // Review LL1: only a NAME contributes letter runs.
-                        if (kind == CustomerTextMarkers.IdentityKind.NAME) nameSeeded += canonical
-                    }
+                    seeds -> idSeeded += canonical
                     PiiShapes.hasPiiIdSuffix(id) -> propagatedNotSeeded += canonical
                 }
             }
+            // Reviews GG1, LL1, NN3: only a NAME contributes letter runs (≥2 letters) — from its TEXT, and
+            // from its CONTENT_DESCRIPTION only the runs that also appear in its text.
+            if (kind == CustomerTextMarkers.IdentityKind.NAME) {
+                val text = n.text?.takeIf { it.isNotBlank() }?.let { CensusHash.canonical(it) }?.takeIf { !PiiShapes.containsMask(it) }
+                val desc = n.contentDescription?.takeIf { it.isNotBlank() }?.let { CensusHash.canonical(it) }
+                    ?.takeIf { !PiiShapes.containsMask(it) }
+                val textRuns = text?.let { letterRuns(it, minLetters = 2) }.orEmpty()
+                idRuns += textRuns
+                if (desc != null) idRuns += letterRuns(desc, minLetters = 2).filter { it in textRuns }
+            }
         }
-        // Review GG1: an identity value also withholds any field CONTAINING one of its ≥3-letter runs.
-        val idRuns = nameSeeded.flatMap { letterRuns(it, minLetters = 2) }.toSet()
         // Review HH3: every canonical key a value predicate caught ANYWHERE in the frame — on the canonical
         // form, or on the raw trimmed form when that is within the cap (the builder's bounded raw pass).
         val judgedKeys = HashSet<String>()
