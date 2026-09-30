@@ -157,6 +157,32 @@ which additionally gates on signature verification (#416) before it may even be
 enumerated. Neither is granted without a user act. A rule can recognize screens
 immediately but cannot aim a tap without an explicit, content-pinned grant.
 
+### Feature consents (#1151) — distinct from capability grants
+
+Some consents switch a whole FEATURE on rather than authorizing one tap: the
+wide accessibility event receipt (#1151) today, the UNKNOWN-screen census
+(#1138 M3) later. They do NOT go through `RuleCapabilityGrants`. Each is:
+
+- **one value, one owner** — e.g. `EventReceiptPreferences` (`:domain`
+  contract, DataStore-backed repository in `:core:data`); every reader
+  derives from it, no second copy;
+- **opt-in** — the default (UNDECIDED) behaves as declined; the pre-load value
+  is the same fail-closed default;
+- **a durable decline** — "Don't allow" persists; "Not now" only defers for
+  the current foreground;
+- **prompted at the front door** (`EventReceiptConsentSheet`, the
+  `ConsentPromptSheet` rhythm, after the permission chain) and **recorded** on
+  the Automation & Consent screen (a switch that writes through the same
+  owner — never a second gate);
+- **enforced in one place** — for event receipt, `AccessibilityListener`
+  applying `ServiceInfoPolicy` to `serviceInfo.packageNames`.
+
+The disclosure copy (`event_receipt_*`, `:feature:settings`) is written in the
+Play prominent-disclosure shape so #1138 M3 can reuse it. A DEBUG build treats a
+declined event receipt as blocking (`DebugEventReceiptBlock` — the dev needs the
+wide receipt for overlay capture); a release decline keeps the app working with
+the topology path off.
+
 ## Lifecycle (current state)
 
 1. **Enumerate at load** — implemented (`enumerateCapabilities`).
