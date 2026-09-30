@@ -32,7 +32,7 @@ import javax.inject.Singleton
  *    node sharing the same view id can survive underneath it in a *lower*
  *    window (the offer popup's bare "Decline" behind the confirm sheet's
  *    "Decline offer"). Each candidate's source root is compared (`==`) against
- *    [AccessibilitySource.getLiveNativeRoot]; when any label-verified candidate
+ *    [AccessibilitySource.LiveRoots.active] (one enumeration, #1149 N3); when any label-verified candidate
  *    is in the active window we drop the other-window candidates before
  *    disambiguation — the
  *    implicit "click the first (active-window) candidate" that worked in the
@@ -121,9 +121,13 @@ class UiInteractionHandler @Inject constructor(
         // recognition milliseconds earlier — an empty enumeration there means the
         // window genuinely left; retrying could resolve against whatever screen
         // returns (#618 review F2). Single fail-closed read for AUTOMATION.
+        // #1149 review N3: the roots AND the active root come from ONE enumeration; each read records
+        // the active root of the very enumeration its roots came from.
+        var activeRoot: AccessibilityNodeInfo? = null
         val rootsSource = {
-            accessibilitySource.getLiveWindowRoots()
-                .filter { it.packageName?.toString() == expectedPackage }
+            val live = accessibilitySource.getLiveWindowRoots()
+            activeRoot = live.active
+            live.roots.filter { it.packageName?.toString() == expectedPackage }
         }
         val roots = if (allowRetry) awaitLiveRoots(expectedPackage, source = rootsSource) else rootsSource()
         if (roots.isEmpty()) {
@@ -134,15 +138,11 @@ class UiInteractionHandler @Inject constructor(
             return false
         }
 
-        // #788: the active (topmost) window's root, used to scope candidates below.
-        // `getLiveNativeRoot()` returns `rootInActiveWindow` — the same node
-        // `getLiveWindowRoots()` puts first — so a root in `roots` that `==` this
-        // (AccessibilityNodeInfo.equals = windowId+sourceNodeId) IS the active
-        // window. When the active window belongs to another package (e.g. the
-        // dasher's bubble holds focus), this is non-null but owned by that other
-        // package — it was package-filtered out of `roots`, so it matches nothing
-        // and scoping no-ops (we fall through to all windows, as before).
-        val activeRoot = accessibilitySource.getLiveNativeRoot()
+        // #788: the active (topmost) window's root, used to scope candidates below — from the SAME
+        // enumeration as `roots` (N3), so a root in `roots` that `==` it (AccessibilityNodeInfo.equals
+        // = windowId+sourceNodeId) IS the active window. When the active window belongs to another
+        // package (e.g. the dasher's bubble holds focus), it was package-filtered out of `roots`, so it
+        // matches nothing and scoping no-ops (we fall through to all windows, as before).
         val search = findCandidates(roots, activeRoot, ref, expectedPackage)
         if (search.inconclusiveHits > 0) {
             // #1149 review L1 (decideSemanticOutcome): 2b found hit(s) but a window of the deciding set

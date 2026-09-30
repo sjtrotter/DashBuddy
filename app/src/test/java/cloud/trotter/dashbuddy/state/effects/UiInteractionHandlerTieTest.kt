@@ -63,13 +63,13 @@ class UiInteractionHandlerTieTest {
     }
 
     private fun handler(root: AccessibilityNodeInfo): UiInteractionHandler {
-        val source = mock<AccessibilitySource> { on { getLiveWindowRoots() } doReturn listOf(root) }
+        val source = mock<AccessibilitySource> { on { getLiveWindowRoots() } doReturn AccessibilitySource.LiveRoots(null, listOf(root)) }
         return UiInteractionHandler(source)
     }
 
     /**
      * Multi-window handler: [roots] is the (active-first) live window list and
-     * [activeRoot] is what `getLiveNativeRoot()` returns — the #788 active-window
+     * [activeRoot] is the enumeration's `LiveRoots.active` (#1149 N3) — the #788 active-window
      * scoping compares each candidate's source root against it.
      */
     private fun handler(
@@ -77,8 +77,7 @@ class UiInteractionHandlerTieTest {
         activeRoot: AccessibilityNodeInfo?,
     ): UiInteractionHandler {
         val source = mock<AccessibilitySource> {
-            on { getLiveWindowRoots() } doReturn roots
-            on { getLiveNativeRoot() } doReturn activeRoot
+            on { getLiveWindowRoots() } doReturn AccessibilitySource.LiveRoots(activeRoot, roots)
         }
         return UiInteractionHandler(source)
     }

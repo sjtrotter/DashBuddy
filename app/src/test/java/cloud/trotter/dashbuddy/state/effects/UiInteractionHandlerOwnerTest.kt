@@ -73,8 +73,7 @@ class UiInteractionHandlerOwnerTest {
 
     private fun handler(root: AccessibilityNodeInfo): UiInteractionHandler {
         val source = mock<AccessibilitySource> {
-            on { getLiveWindowRoots() } doReturn listOf(root)
-            on { getLiveNativeRoot() } doReturn root
+            on { getLiveWindowRoots() } doReturn AccessibilitySource.LiveRoots(root, listOf(root))
         }
         return UiInteractionHandler(source)
     }
@@ -511,8 +510,7 @@ class UiInteractionHandlerOwnerTest {
 
     private fun handler(roots: List<AccessibilityNodeInfo>, active: AccessibilityNodeInfo): UiInteractionHandler {
         val source = mock<AccessibilitySource> {
-            on { getLiveWindowRoots() } doReturn roots
-            on { getLiveNativeRoot() } doReturn active
+            on { getLiveWindowRoots() } doReturn AccessibilitySource.LiveRoots(active, roots)
         }
         return UiInteractionHandler(source)
     }

@@ -59,18 +59,26 @@ class AccessibilitySource @Inject constructor() {
      * with that `equals`. Active-window-FIRST ordering is preserved for stability/diagnostics —
      * `rootInActiveWindow` is added first and kept, its later twin dropped. (Nothing consumes list
      * position anymore: `UiInteractionHandler`'s #788 scoping identifies the active window by `==`
-     * against a fresh [getLiveNativeRoot], not by index.) The list is a handful of windows, so the
-     * O(n²) scan is trivial.
+     * against [LiveRoots.active], not by index.) The list is a handful of windows, so the O(n²) scan
+     * is trivial.
+     *
+     * #1149 review N3: the active root and the roots come from ONE enumeration ([LiveRoots]) — a
+     * separate `getLiveNativeRoot()` read could see a platform window that became active in between
+     * and is absent from the list, wrongly reading as "no active platform window".
      */
-    fun getLiveWindowRoots(): List<AccessibilityNodeInfo> {
-        val service = serviceRef?.get() ?: return emptyList()
+    fun getLiveWindowRoots(): LiveRoots {
+        val service = serviceRef?.get() ?: return LiveRoots(null, emptyList())
+        val active = service.rootInActiveWindow
         val roots = mutableListOf<AccessibilityNodeInfo>()
-        service.rootInActiveWindow?.let { roots.add(it) }
+        active?.let { roots.add(it) }
         (service.windows ?: emptyList()).forEach { window -> window.root?.let { roots.add(it) } }
         val deduped = mutableListOf<AccessibilityNodeInfo>()
         for (root in roots) if (deduped.none { it == root }) deduped.add(root)
-        return deduped
+        return LiveRoots(active, deduped)
     }
+
+    /** #1149 review N3 — one live window enumeration: the active root (any package) and all roots, active first. */
+    data class LiveRoots(val active: AccessibilityNodeInfo?, val roots: List<AccessibilityNodeInfo>)
 
     // --- 2. The Service Connection (Pull) ---
     // We use a WeakReference so we don't leak the Service if it restarts

@@ -54,7 +54,9 @@ class AccessibilitySourceWindowRootsTest {
             on { windows } doReturn windowList
         }
 
-        val roots = sourceFor(service).getLiveWindowRoots()
+        val live = sourceFor(service).getLiveWindowRoots()
+        val roots = live.roots
+        assertSame("#1149 N3: the active root comes from the SAME enumeration", activeRoot, live.active)
 
         assertEquals("the active-window twin must be deduped to one", 2, roots.size)
         assertSame("active-window root stays first (load-bearing ordering)", activeRoot, roots[0])
@@ -72,7 +74,7 @@ class AccessibilitySourceWindowRootsTest {
             on { windows } doReturn windowList
         }
 
-        val roots = sourceFor(service).getLiveWindowRoots()
+        val roots = sourceFor(service).getLiveWindowRoots().roots
 
         assertEquals("distinct roots must all survive dedup", 3, roots.size)
         assertSame(activeRoot, roots[0])
@@ -87,10 +89,12 @@ class AccessibilitySourceWindowRootsTest {
             on { windows } doReturn windowList
         }
 
-        val roots = sourceFor(service).getLiveWindowRoots()
+        val live = sourceFor(service).getLiveWindowRoots()
+        val roots = live.roots
 
         assertEquals(1, roots.size)
         assertSame(w1, roots[0])
+        assertNull("no active window → no active root", live.active)
     }
 
     // ── #1148 D4: WindowContext on every snapshot + window-specific snapshots ──
