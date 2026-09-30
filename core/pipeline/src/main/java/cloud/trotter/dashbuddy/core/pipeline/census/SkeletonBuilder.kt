@@ -6,12 +6,14 @@ import cloud.trotter.dashbuddy.domain.capture.ReplayMetadata
 import cloud.trotter.dashbuddy.domain.census.contract.CensusFingerprint
 import cloud.trotter.dashbuddy.domain.census.contract.CensusHash
 import cloud.trotter.dashbuddy.domain.census.contract.KindClassifier
+import cloud.trotter.dashbuddy.domain.census.contract.ResourceIdGrammar
 import cloud.trotter.dashbuddy.domain.census.contract.SkeletonSchema
 import cloud.trotter.dashbuddy.domain.census.contract.TextSlot
 import cloud.trotter.dashbuddy.domain.census.contract.UiSkeletonDto
 import cloud.trotter.dashbuddy.domain.census.contract.UiSkeletonNodeDto
 import cloud.trotter.dashbuddy.domain.model.accessibility.UiNode
 import cloud.trotter.dashbuddy.domain.privacy.PiiShapes
+import kotlin.coroutines.cancellation.CancellationException
 
 /**
  * Builds the census SKELETON of an admitted UNKNOWN frame (ADR-0011 §1–§3, §8; #1145 M1a).
@@ -29,7 +31,11 @@ import cloud.trotter.dashbuddy.domain.privacy.PiiShapes
  *   scanned HERE regardless of the capture bus.
  * - **Only chrome-likely tokens are hashed.** Every non-blank text field runs the §2 filter
  *   ([withholdingStep]) in ADR order; any withholding step emits the constant `withheld`; only a
- *   `words:1..8` survivor is hashed ([CensusHash], fail-closed to `withheld`).
+ *   `words:1..8` survivor is hashed ([CensusHash], fail-closed to `withheld`). The FRAME-LEVEL
+ *   duplicate rule then withholds any field whose trimmed value a withholding step caught anywhere
+ *   else in the same frame (a name the id marks on one node is not hashed on its id-less twin).
+ * - **Inert.** [outcome] never throws (only coroutine cancellation escapes): any failure is
+ *   [Refusal.BUILD_FAILED].
  * - **Bounded.** The 40-character cap precedes the grammar and every pattern; an item over
  *   [SkeletonSchema.MAX_ITEM_BYTES] yields no skeleton ([Refusal.OVERSIZE]).
  */
@@ -57,11 +63,22 @@ object SkeletonBuilder {
 
         /** The envelope inputs failed the contract's validation (e.g. a malformed `day`/`platform`). */
         INVALID_ENVELOPE,
+
+        /** A node failed the contract's validation (e.g. a class/id carrying U+0000, ADR §8). */
+        INVALID_TREE,
+
+        /**
+         * Anything else went wrong building the item — e.g. a `StackOverflowError` on a pathological
+         * deep tree (#1160 review AA4). The census is a diagnostic: it must be INERT to the pipeline
+         * that hosts it (the #909 silent-death class), so nothing but coroutine cancellation escapes.
+         */
+        BUILD_FAILED,
     }
 
     /** The builder's result: a skeleton, or the reason there is none. */
     sealed interface Outcome {
-        data class Built(val skeleton: UiSkeletonDto, val itemBytes: Int) : Outcome
+        /** [json] is the canonical serialization [itemBytes] measured — the caller never re-serializes. */
+        data class Built(val skeleton: UiSkeletonDto, val json: String, val itemBytes: Int) : Outcome
         data class Refused(val reason: Refusal) : Outcome
     }
 
@@ -86,7 +103,10 @@ object SkeletonBuilder {
         /** The value contains a mask literal anywhere (`PiiShapes.containsMask`). */
         MASK(5),
 
-        /** The boundary-delimited id-less name shape, `containsMatchIn` + `IGNORE_CASE`. */
+        /**
+         * The id-less name shape: the anchored redact-side pattern on the whole value, or the
+         * boundary-delimited embedded one anywhere (case-sensitive initial) — `PiiShapes.hasNameShape`.
+         */
         NAME_SHAPE(7),
 
         /** Any other promoted `PiiShapes` value shape, in its own match mode. */
@@ -113,6 +133,20 @@ object SkeletonBuilder {
         meta: ReplayMetadata,
         platform: String,
         day: String,
+    ): Outcome = try {
+        buildOutcome(tree, windowTitle, meta, platform, day)
+    } catch (e: CancellationException) {
+        throw e
+    } catch (_: Throwable) {
+        Outcome.Refused(Refusal.BUILD_FAILED)
+    }
+
+    private fun buildOutcome(
+        tree: UiNode,
+        windowTitle: String?,
+        meta: ReplayMetadata,
+        platform: String,
+        day: String,
     ): Outcome {
         // The whole-frame drop runs on the RAW tree and the RAW title, before anything is built.
         if (SensitiveTextMarkers.findMarker(tree) != null) return Outcome.Refused(Refusal.SENSITIVE_FRAME)
@@ -120,7 +154,19 @@ object SkeletonBuilder {
             return Outcome.Refused(Refusal.SENSITIVE_TITLE)
         }
 
-        val root = skeletonOf(tree)
+        // Frame-level duplicate rule (ADR-0011 §2, #1160 review AA1), pass 1: every trimmed value a
+        // withholding step caught ANYWHERE in the frame. The corpus intake's replacements are
+        // document-wide, so a value it masks where the id marks it is masked where the id does not.
+        val caught = HashSet<String>()
+        collectCaught(tree, caught)
+        collectCaughtValue(windowTitle, nodeId = null, caught)
+
+        // Pass 2: build, withholding every field whose trimmed value was caught somewhere.
+        val root = try {
+            skeletonOf(tree, caught)
+        } catch (_: IllegalArgumentException) {
+            return Outcome.Refused(Refusal.INVALID_TREE)
+        }
         val fingerprint = CensusFingerprint.of(root) ?: return Outcome.Refused(Refusal.FINGERPRINT_FAILED)
         val item = try {
             UiSkeletonDto(
@@ -135,15 +181,42 @@ object SkeletonBuilder {
                 engineVersion = meta.engineVersion,
                 rulesetFormatVersion = meta.rulesetFormatVersion,
                 day = day,
-                windowTitle = slotFor(windowTitle, nodeId = null),
+                windowTitle = frameSlot(windowTitle, nodeId = null, caught),
                 root = root,
             )
         } catch (_: IllegalArgumentException) {
             return Outcome.Refused(Refusal.INVALID_ENVELOPE)
         }
-        val bytes = SkeletonSchema.itemBytes(item)
+        val json = SkeletonSchema.serialize(item)
+        val bytes = json.toByteArray(Charsets.UTF_8).size
         if (bytes > SkeletonSchema.MAX_ITEM_BYTES) return Outcome.Refused(Refusal.OVERSIZE)
-        return Outcome.Built(item, bytes)
+        return Outcome.Built(item, json, bytes)
+    }
+
+    private fun collectCaught(node: UiNode, caught: MutableSet<String>) {
+        for ((_, value) in node.scrubbableStrings()) collectCaughtValue(value, node.viewIdResourceName, caught)
+        node.children.forEach { collectCaught(it, caught) }
+    }
+
+    /**
+     * Pass-1 membership: steps 1, 3, 4, 5, 7, 8. The length cap (step 2) is excluded — a duplicate of
+     * an over-length value is itself over-length. A filter failure counts as caught (fail closed).
+     */
+    private fun collectCaughtValue(value: String?, nodeId: String?, caught: MutableSet<String>) {
+        if (value.isNullOrBlank()) return
+        val trimmed = value.trim()
+        val step = try {
+            withholdingStep(trimmed, nodeId)
+        } catch (_: Exception) {
+            FilterStep.PII_SHAPE
+        }
+        if (step != null && step != FilterStep.LENGTH_CAP) caught += trimmed
+    }
+
+    /** [slotFor] under the frame-level duplicate rule. */
+    private fun frameSlot(value: String?, nodeId: String?, caught: Set<String>): TextSlot? {
+        val slot = slotFor(value, nodeId) ?: return null
+        return if (value!!.trim() in caught) TextSlot.WITHHELD else slot
     }
 
     /**
@@ -179,25 +252,27 @@ object SkeletonBuilder {
         CustomerTextMarkers.unredactedMarker(trimmed) != null -> FilterStep.CUSTOMER_MARKER
         PiiShapes.customerLeadIn(trimmed) != null -> FilterStep.LEAD_IN
         PiiShapes.containsMask(trimmed) -> FilterStep.MASK
-        PiiShapes.FIRST_LAST_INITIAL_EMBEDDED_REGEX.containsMatchIn(trimmed) -> FilterStep.NAME_SHAPE
+        PiiShapes.hasNameShape(trimmed) -> FilterStep.NAME_SHAPE
         PiiShapes.VALUE_SHAPES.any { it.hits(trimmed) } -> FilterStep.PII_SHAPE
         else -> null
     }
 
     /** The skeleton of one node and its subtree: structure + flags + per-field slots, no bounds. */
-    private fun skeletonOf(node: UiNode): UiSkeletonNodeDto {
+    private fun skeletonOf(node: UiNode, caught: Set<String>): UiSkeletonNodeDto {
         val text = LinkedHashMap<String, TextSlot>()
         for ((field, value) in node.scrubbableStrings()) {
-            slotFor(value, node.viewIdResourceName)?.let { text[field.wire] = it }
+            frameSlot(value, node.viewIdResourceName, caught)?.let { text[field.wire] = it }
         }
         return UiSkeletonNodeDto(
             className = node.className,
-            id = node.viewIdResourceName,
+            // ADR §1 / review AA10: only a STATIC resource name travels (and keys the fingerprint); a
+            // dynamic id (a per-frame UUID test tag) is absent. The §2 PII-id step above used the RAW id.
+            id = ResourceIdGrammar.staticOrNull(node.viewIdResourceName),
             isClickable = node.isClickable,
             isEnabled = node.isEnabled,
             isChecked = node.isChecked.takeIf { it in 0..2 } ?: 0,
             text = text,
-            children = node.children.map { skeletonOf(it) },
+            children = node.children.map { skeletonOf(it, caught) },
         )
     }
 }

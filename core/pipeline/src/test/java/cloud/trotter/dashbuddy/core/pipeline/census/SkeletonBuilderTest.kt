@@ -149,7 +149,9 @@ class SkeletonBuilderTest {
     fun `step 7 - an embedded first-name last-initial withholds`() {
         assertEquals(FilterStep.NAME_SHAPE, SkeletonBuilder.withholdingStep("Jane S is waiting at the door", null))
         assertEquals(FilterStep.NAME_SHAPE, SkeletonBuilder.withholdingStep("Brandon C", null))
-        assertEquals(FilterStep.NAME_SHAPE, SkeletonBuilder.withholdingStep("Call jane s. now", null))
+        assertEquals(FilterStep.NAME_SHAPE, SkeletonBuilder.withholdingStep("Call Jane S. now", null))
+        // A lowercase WHOLE-VALUE name is still caught, by the anchored redact-side pattern.
+        assertEquals(FilterStep.NAME_SHAPE, SkeletonBuilder.withholdingStep("jordan t", null))
         assertEquals(FilterStep.NAME_SHAPE, SkeletonBuilder.withholdingStep("José  R", null))
         assertNull(SkeletonBuilder.withholdingStep("Hand it to me", null))
         assertNull(SkeletonBuilder.withholdingStep("Confirm pickup", null))
@@ -263,5 +265,83 @@ class SkeletonBuilderTest {
         listOf("Accept", "Chipotle", "Jane", "Offer", "should/never/leave").forEach {
             assertTrue("'$it' must not appear in $json", !json.contains(it))
         }
+    }
+
+    // ---- #1160 review round 1 ----------------------------------------------------------------------
+
+    @Test
+    fun `AA3 - an article or pronoun a is not an initial - chrome phrases hash`() {
+        listOf(
+            "Take a photo", "Report a problem", "Send a message", "Add a tip", "Leave a note",
+            "Choose a reason", "Enter a code", "Start a Dash", "Tap a store",
+        ).forEach { phrase ->
+            val n = phrase.split(' ').size
+            assertEquals(phrase, words(n, phrase), slot(phrase))
+        }
+        assertEquals(TextSlot.WITHHELD, slot("Jane S is waiting at the door"))
+    }
+
+    @Test
+    fun `AA1 - a value withheld anywhere in the frame is withheld everywhere in it`() {
+        // The codex fixture: the parent repeats the child's customer name, and only the child's id marks it.
+        val frame = UiNode(
+            className = "android.widget.LinearLayout",
+            viewIdResourceName = "com.doordash.driverapp:id/row",
+            contentDescription = "Sam",
+            children = listOf(
+                UiNode(className = "android.widget.TextView", viewIdResourceName = "com.doordash.driverapp:id/customer_name", text = "Sam"),
+                UiNode(className = "android.widget.TextView", text = "Sam "),
+                UiNode(className = "android.widget.TextView", text = "Accept"),
+            ),
+        ).restoreParents()
+        // In isolation "Sam" is words:1 and would hash.
+        assertEquals(words(1, "Sam"), slot("Sam"))
+        val item = SkeletonBuilder.build(frame, "Sam", meta, "doordash", "2026-09-30")!!
+        assertEquals(TextSlot.WITHHELD, item.root.text.getValue("desc"))
+        assertEquals(TextSlot.WITHHELD, item.root.children[0].text.getValue("text"))
+        assertEquals(TextSlot.WITHHELD, item.root.children[1].text.getValue("text"))
+        assertEquals(TextSlot.WITHHELD, item.windowTitle)
+        assertEquals(words(1, "Accept"), item.root.children[2].text.getValue("text"))
+    }
+
+    @Test
+    fun `AA4 - a pathological deep tree is refused, never thrown`() {
+        var node = UiNode(className = "android.widget.TextView", text = "Accept")
+        repeat(200_000) { node = UiNode(className = "android.widget.ScrollView", viewIdResourceName = "x:id/n", children = listOf(node)) }
+        // Never a throw. Which stage overflows first is JVM-stack dependent: the sensitive-marker scan
+        // fails CLOSED on its own (its throw sentinel reads as a hit → SENSITIVE_FRAME); anything past
+        // it lands in the whole-build catch (BUILD_FAILED). Both are refusals with no skeleton.
+        val out = SkeletonBuilder.outcome(node, null, meta, "doordash", "2026-09-30")
+        assertTrue("$out", out == Outcome.Refused(Refusal.BUILD_FAILED) || out == Outcome.Refused(Refusal.SENSITIVE_FRAME))
+        assertNull(SkeletonBuilder.build(node, null, meta, "doordash", "2026-09-30"))
+    }
+
+    @Test
+    fun `AA2 - a NUL in a class or id refuses the tree`() {
+        val bad = UiNode(className = "android.widget.TextView\u0000N", text = "Accept")
+        assertEquals(Outcome.Refused(Refusal.INVALID_TREE), SkeletonBuilder.outcome(bad, null, meta, "doordash", "2026-09-30"))
+    }
+
+    @Test
+    fun `AA7 - Built carries the canonical JSON it measured`() {
+        val out = SkeletonBuilder.outcome(tree("Continue"), null, meta, "doordash", "2026-09-30") as Outcome.Built
+        assertEquals(SkeletonSchema.serialize(out.skeleton), out.json)
+        assertEquals(out.json.toByteArray(Charsets.UTF_8).size, out.itemBytes)
+    }
+
+    @Test
+    fun `AA10 - a dynamic test-tag id is absent on the wire and in the fingerprint`() {
+        fun frame(tag: String) = UiNode(
+            className = "android.widget.FrameLayout",
+            viewIdResourceName = "com.doordash.driverapp:id/drop_off_step_instructions_activity_host_fragment",
+            children = listOf(UiNode(className = "android.widget.Button", viewIdResourceName = tag, text = "Continue")),
+        ).restoreParents()
+        val a = SkeletonBuilder.build(frame("PRIMARY_BUTTON_3f488d4a-0f0b-4fb9-9c86-c4e0253ba22a"), null, meta, "doordash", "2026-09-30")!!
+        val b = SkeletonBuilder.build(frame("PRIMARY_BUTTON_9db4e2af-5a58-4a43-ba63-295126ceddef"), null, meta, "doordash", "2026-09-30")!!
+        assertNull(a.root.children.single().id)
+        assertEquals(a.fingerprint, b.fingerprint)
+        assertEquals("com.doordash.driverapp:id/drop_off_step_instructions_activity_host_fragment", a.root.id)
+        // The §2 PII-id step still sees the RAW id: a dynamic id ending in a PII suffix withholds.
+        assertEquals(FilterStep.PII_ID, SkeletonBuilder.withholdingStep("Sam", "x:id/row_1234_customer_name"))
     }
 }
