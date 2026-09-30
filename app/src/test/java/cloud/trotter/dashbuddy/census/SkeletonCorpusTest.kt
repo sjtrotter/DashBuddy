@@ -257,6 +257,54 @@ class SkeletonCorpusTest {
     }
 
     @Test
+    fun `the frame-level rule flips no chrome slot to withheld (review OO2)`() {
+        // Build each fixture with the frame-level rule ON and OFF (a diagnostic seam). Every slot that
+        // flips to `withheld` only because of the frame rule must be explained by the frame's own PII:
+        // its canonical value is a seeded exact value (value-judged or an identity id's text/desc), or it
+        // shares a letter run with a NAME identity id's text on that fixture. Anything else is chrome the
+        // rule over-withholds (the GG5 / LL1 class) and is listed here.
+        val unexplained = mutableListOf<String>()
+        var flips = 0
+        for ((f, item) in built) {
+            item ?: continue
+            val off = (SkeletonBuilder.outcomeWithoutFrameRule(f.tree, null, META, platformOf(f.path), DAY)
+                as? SkeletonBuilder.Outcome.Built)?.skeleton ?: continue
+            val seededExact = HashSet<String>()
+            val nameRuns = HashSet<String>()
+            walkNodes(f.tree) { n ->
+                val kind = CustomerTextMarkers.idMarkerFor(n.viewIdResourceName)?.kind
+                n.scrubbableStrings().forEach { (field, v) ->
+                    if (v.isNullOrBlank()) return@forEach
+                    val c = CensusHash.canonical(v)
+                    if (PiiShapes.containsMask(c)) return@forEach
+                    val raw = v.trim()
+                    if (valueJudged(c) || (raw.length <= 40 && valueJudged(raw))) seededExact += c
+                    val rendered = field == UiNodeTextField.TEXT || field == UiNodeTextField.CONTENT_DESCRIPTION
+                    if (rendered && kind != null && kind != CustomerTextMarkers.IdentityKind.CONTENT) seededExact += c
+                    if (rendered && kind == CustomerTextMarkers.IdentityKind.NAME) nameRuns += letterRuns(c, minLetters = 2)
+                }
+            }
+            fun walk(n: UiNode, on: UiSkeletonNodeDto, offNode: UiSkeletonNodeDto) {
+                n.scrubbableStrings().forEach { (field, v) ->
+                    if (v.isNullOrBlank()) return@forEach
+                    val a = on.text[field.wire]
+                    val b = offNode.text[field.wire]
+                    if (a == TextSlot.WITHHELD && b != TextSlot.WITHHELD) {
+                        flips++
+                        val c = CensusHash.canonical(v)
+                        val explained = c in seededExact || letterRuns(c).any { it in nameRuns }
+                        if (!explained) unexplained += "${f.path}: ${field.wire} flipped by the frame rule"
+                    }
+                }
+                n.children.indices.forEach { walk(n.children[it], on.children[it], offNode.children[it]) }
+            }
+            walk(f.tree, item.root, off.root)
+        }
+        println("frame-rule flips across the corpus: $flips")
+        assertTrue(unexplained.take(20).joinToString("\n"), unexplained.isEmpty())
+    }
+
+    @Test
     fun `the class gate rejects no committed class, and no rejected class is shipped (review CC1)`() {
         val rejected = sortedSetOf<String>()
         corpus.forEach { f ->
@@ -340,7 +388,8 @@ class SkeletonCorpusTest {
         walkNodes(tree) { n ->
             val id = n.viewIdResourceName
             val kind = CustomerTextMarkers.idMarkerFor(id)?.kind
-            val identity = kind == CustomerTextMarkers.IdentityKind.NAME || kind == CustomerTextMarkers.IdentityKind.ADDRESS
+            val identity = kind == CustomerTextMarkers.IdentityKind.NAME || kind == CustomerTextMarkers.IdentityKind.ADDRESS ||
+                kind == CustomerTextMarkers.IdentityKind.EXACT
             n.scrubbableStrings().forEach { (field, v) ->
                 if (v.isNullOrBlank()) return@forEach
                 val canonical = CensusHash.canonical(v)
@@ -351,15 +400,12 @@ class SkeletonCorpusTest {
                     PiiShapes.hasPiiIdSuffix(id) -> propagatedNotSeeded += canonical
                 }
             }
-            // Reviews GG1, LL1, NN3: only a NAME contributes letter runs (≥2 letters) — from its TEXT, and
-            // from its CONTENT_DESCRIPTION only the runs that also appear in its text.
+            // Reviews GG1, LL1, NN3, PP2: only a NAME contributes letter runs (≥2 letters) — from its TEXT
+            // when the text is non-blank, otherwise from its CONTENT_DESCRIPTION.
             if (kind == CustomerTextMarkers.IdentityKind.NAME) {
-                val text = n.text?.takeIf { it.isNotBlank() }?.let { CensusHash.canonical(it) }?.takeIf { !PiiShapes.containsMask(it) }
-                val desc = n.contentDescription?.takeIf { it.isNotBlank() }?.let { CensusHash.canonical(it) }
-                    ?.takeIf { !PiiShapes.containsMask(it) }
-                val textRuns = text?.let { letterRuns(it, minLetters = 2) }.orEmpty()
-                idRuns += textRuns
-                if (desc != null) idRuns += letterRuns(desc, minLetters = 2).filter { it in textRuns }
+                val source = if (!n.text.isNullOrBlank()) n.text else n.contentDescription?.takeIf { it.isNotBlank() }
+                source?.let { CensusHash.canonical(it) }?.takeIf { !PiiShapes.containsMask(it) }
+                    ?.let { idRuns += letterRuns(it, minLetters = 2) }
             }
         }
         // Review HH3: every canonical key a value predicate caught ANYWHERE in the frame — on the canonical
