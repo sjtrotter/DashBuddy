@@ -185,9 +185,11 @@ never coordinates, so frozen bounds never aimed a tap — they decided WHICH nod
   `hintLabelsOf` spends a foreign child's slot without reading it (as `scanLabels` does) and marks the bind
   INCOMPLETE when an in-horizon node reports unreadable children (so the ref is unprovable and 2b is skipped).
 - **Completeness rides the ref (review J3).** `NodeRef.labelHintsComplete` (default false — legacy
-  journal/snapshot refs load as unprovable) records that the bind-time scan was complete;
-  `NodeRef.hasExactFingerprint` (hints present, complete, below `MAX_LABEL_HINTS`) is the one owner, required by
-  `fingerprintMatches` and gating strategy 2b. An unprovable ref skips 2b for strategy 3's containment check.
+  journal/snapshot refs load as unprovable) records that the bind-time scan was complete AND (review P7) that the
+  distinct set fit in `MAX_LABEL_HINTS` — truncation is recorded where it is known, so a control with exactly 6
+  labels is provable (no size proxy); `NodeRef.hasExactFingerprint` (hints present and complete) is the one owner,
+  required by `fingerprintMatches` and gating strategy 2b. An unprovable ref skips 2b for strategy 3's containment
+  check.
 - **Labels before geometry (D2, strategy 2b).** Between the text strategy and the bounds walk: a ref with
   `labelHintHashes` is re-found by walking each root for nodes that take a click, match `ownerClassHint` (L2), and
   whose COMPLETE label region is the ref's **exact** fingerprint (`NodeRef.fingerprintMatches`). Bounds are not an
@@ -227,7 +229,12 @@ never coordinates, so frozen bounds never aimed a tap — they decided WHICH nod
     action-only Compose control at the exact rect is found.
   - **Semantic twins abort (review I5).** ≥ 2 2b survivors after owner dedupe and #788 scoping abort to manual
     (WARN, counts) unless the ref's stored text matches exactly one survivor — the overlap tier would pick by
-    the captured rect, the very evidence 2b distrusts.
+    the captured rect, the very evidence 2b distrusts. The stored text is the BOUND child's, so it is matched
+    against each survivor's in-horizon labels, never the owner's own text (review P5).
+  - **One live owner walk, scoped (review P2):** `resolveActionOwner(node, pkg)` ends with NO owner at the first
+    node of another package — a foreign hop is never crossed, exactly as bind time refuses it (N5).
+  - **Unreadable windows (review P3):** `LiveRoots.unreadableWindows` counts enumerated windows whose root was
+    null; when every window decides (our bubble, or no active hit), one counts as an incomplete window.
   The real receipt trees (~60 nodes, depth ≤ 19) sit far inside the bound, and on all three id-less corpus
   frames 2b finds exactly the row — including from a ref captured 400 px low or on the "Continue dashing" rect
   (`ActuationBindingResolutionTest`, which skips the legacy `"clickable"`-key fixtures — #1154).
