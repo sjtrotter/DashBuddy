@@ -157,4 +157,24 @@ class NodeRefLabelHintsTest {
         assertTrue(r.fingerprintMatches(listOf(alice)))
         assertFalse("Bob is not a 2b hit for Alice's fingerprint", r.fingerprintMatches(listOf(bob)))
     }
+
+    /**
+     * #1147 review W3: a text-less Compose control bound by its ACTION_CLICK label must carry a
+     * provable fingerprint — the click label is a label on the bind side (fire side: `ownLabelsOf`).
+     */
+    @Test
+    fun `a node whose only label is its click-action label yields exactly one hint`() {
+        val bound = cloud.trotter.dashbuddy.domain.model.accessibility.UiNode(
+            hasClickAction = true,
+            clickActionLabel = "Accept offer",
+            className = "android.view.View",
+        )
+        val hints = NodeRef.bindHintsOf(bound)
+        assertEquals(listOf(NodeRef.hintHash("Accept offer")), hints.labelHintHashes)
+        assertTrue(hints.complete)
+        assertFalse(hints.refused)
+        // and a letter-less click label contributes nothing, like any other label
+        val amount = NodeRef.bindHintsOf(bound.copy(clickActionLabel = "\$40.57"))
+        assertTrue(amount.labelHintHashes.isEmpty())
+    }
 }

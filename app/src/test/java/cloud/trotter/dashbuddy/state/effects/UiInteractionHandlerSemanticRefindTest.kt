@@ -61,6 +61,26 @@ class UiInteractionHandlerSemanticRefindTest : UiInteractionHandlerTapTestKit() 
     }
 
     /**
+     * #1147 review W3: a text-less Compose control whose ONLY label is its ACTION_CLICK label. The bind
+     * side (the mapped node) and the fire side (the live node) both read that label, so the ref carries
+     * a provable fingerprint and 2b re-finds the slid control by it — a stranger with no label is ignored.
+     */
+    @Test
+    fun `a text-less control is re-found by its click-action label`() = runTest {
+        val slid = Rect(36, 1374, 1044, 1500)
+        val control = view(clickable = false, clickLabel = "Show earnings", bounds = slid)
+        val stranger = view(clickable = true, bounds = rowRect)
+        // The bind side: map the SAME live node and derive the ref's hints from it.
+        val hints = NodeRef.bindHintsOf(control.toUiNode()!!)
+        assertEquals(listOf(NodeRef.hintHash("Show earnings")), hints.labelHintHashes)
+        assertTrue(hints.complete)
+        val ref = expandRef.copy(labelHintHashes = hints.labelHintHashes, labelHintsComplete = hints.complete)
+        assertTrue(expand(handler(windowRoot(stranger, control)), ref))
+        control.clicks(1)
+        stranger.neverClicked()
+    }
+
+    /**
      * Review I3: a clickable wrapper around the slid row does NOT inherit the row's labels (they are
      * the row's), so it is no candidate and the row itself is clicked.
      */

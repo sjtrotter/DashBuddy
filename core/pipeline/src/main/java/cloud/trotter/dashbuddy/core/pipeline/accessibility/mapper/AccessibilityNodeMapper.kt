@@ -162,11 +162,7 @@ private fun convert(
 
     // #1147: the ACTION_CLICK label is read only when the bitmask says a click action exists, so
     // the per-node actionList materialization #1149 P6 avoided stays off the common path.
-    val clickLabel = if (hasClick) {
-        node.actionList
-            ?.firstOrNull { it.id == AccessibilityNodeInfo.ACTION_CLICK }
-            ?.label?.toString()?.capText()
-    } else null
+    val clickLabel = node.clickActionLabelOrNull()?.capText() // NodeClick.kt: the one live read
     // #1147 review W1: `getExtras()` allocates a Bundle on an extras-less node and forces a full
     // unparcel on one that has extras — per node per frame. A role is published by an interactive
     // control, so the extras are read ONLY for a node that takes a click or is (screen-reader)

@@ -18,7 +18,10 @@ object UiTextBounds {
 }
 
 interface LabelNode {
-    /** This node's own text and contentDescription, raw (non-null), in that order — [LabelHorizon] caps and blank-filters them (R2). */
+    /**
+     * This node's own text, contentDescription and `ACTION_CLICK` label (#1147 review W3), raw
+     * (non-null), in that order — [LabelHorizon] caps and blank-filters them (R2).
+     */
     val ownLabels: List<String>
 
     /** `UiNode.takesClick` / the live `takesClick()` — a descendant that does is its own control. */
@@ -89,7 +92,8 @@ object LabelHorizon {
 
 /** The bind-time [LabelNode]: a mapped [UiNode] (foreign / unreadable stamped by the mapper, L3/L4/N6). */
 class UiLabelNode(private val node: UiNode) : LabelNode {
-    override val ownLabels: List<String> get() = listOfNotNull(node.text, node.contentDescription)
+    // #1147 review W3: the click-action label is a label on BOTH sides (fire side: `ownLabelsOf`).
+    override val ownLabels: List<String> get() = listOfNotNull(node.text, node.contentDescription, node.clickActionLabel)
     override val takesClick: Boolean get() = node.takesClick
     override val foreign: Boolean get() = node.foreignPackage
     override val unreadableChildren: Int get() = node.unreadableChildren
