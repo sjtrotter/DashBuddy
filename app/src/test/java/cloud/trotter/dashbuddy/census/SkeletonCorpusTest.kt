@@ -306,11 +306,15 @@ class SkeletonCorpusTest {
         var exempt = 0
         val problems = mutableListOf<String>()
         val intakeOnlyValues = HashSet<String>()
+        val piiIdValues = HashSet<String>()
         walkNodes(tree) { n ->
             val id = n.viewIdResourceName
-            if (PiiShapes.hasPiiIdSuffix(id) && !CustomerTextMarkers.hasIdMarkerSuffix(id)) {
-                n.scrubbableStrings().forEach { (_, v) -> if (!v.isNullOrBlank()) intakeOnlyValues += v.trim() }
+            val bucket = when {
+                CustomerTextMarkers.hasIdMarkerSuffix(id) -> piiIdValues
+                PiiShapes.hasPiiIdSuffix(id) -> intakeOnlyValues
+                else -> null
             }
+            bucket?.let { b -> n.scrubbableStrings().forEach { (_, v) -> if (!v.isNullOrBlank()) b += v.trim() } }
         }
         fun walk(o: UiNode, r: UiNode, s: UiSkeletonNodeDto) {
             val redactedValues = r.scrubbableStrings().toMap()
@@ -324,8 +328,11 @@ class SkeletonCorpusTest {
                 // it shares with an id-less node may be rewritten document-wide by the intake yet hashed
                 // by the census. Exempt exactly that case: the value survives redaction in isolation, and
                 // its only document-wide cause is an intake-only id.
+                // Review DD1: "ONLY cause" is verified — no ID_MARKERS occurrence and no value-judging step
+                // anywhere in the frame; otherwise the value must have been withheld and this is a problem.
+                val trimmed = value.trim()
                 if (redactedInIsolation(o.viewIdResourceName, field.wire, value) == value &&
-                    value.trim() in intakeOnlyValues
+                    trimmed in intakeOnlyValues && trimmed !in piiIdValues && !valueJudged(trimmed)
                 ) {
                     exempt++
                     continue
@@ -338,6 +345,37 @@ class SkeletonCorpusTest {
         walk(tree, redacted, item.root)
         if (exempt > 0) println("$path: $exempt intake-only-id parity exemption(s) (ADR §2, review CC3)")
         return Triple(rewritten, decoys, problems)
+    }
+
+    /**
+     * The §2 value-judging steps 3, 4, 5, 7, 8 through their PUBLIC owners (the builder's
+     * `withholdingStep` is internal to `:core:pipeline`) — used only to prove an exemption has no other
+     * cause, so a drift here can only make the guard STRICTER (it would refuse an exemption).
+     */
+    private fun valueJudged(trimmed: String): Boolean =
+        CustomerTextMarkers.unredactedMarker(trimmed) != null ||
+            PiiShapes.customerLeadIn(trimmed) != null ||
+            PiiShapes.containsMask(trimmed) ||
+            PiiShapes.hasNameShape(trimmed) ||
+            PiiShapes.VALUE_SHAPES.any { it.hits(trimmed) }
+
+    @Test
+    fun `(c) negative control - the exemption refuses a value with an independent ID_MARKERS cause (review DD1)`() {
+        val frame = UiNode(
+            className = "android.widget.LinearLayout",
+            contentDescription = "Sam",
+            children = listOf(
+                UiNode(className = "android.widget.TextView", viewIdResourceName = "com.doordash.driverapp:id/customer_name", text = "Sam"),
+                UiNode(className = "android.widget.TextView", viewIdResourceName = "com.doordash.driverapp:id/step_description", text = "Sam"),
+            ),
+        ).restoreParents()
+        val good = SkeletonBuilder.build(frame, null, META, "doordash", DAY)!!
+        assertEquals(TextSlot.WITHHELD, good.root.text.getValue("desc"))
+        assertTrue(parityProblems("good", frame, good).third.isEmpty())
+        // An INCORRECTLY hashed root slot: the intake-only occurrence must not exempt it.
+        val bad = good.copy(root = good.root.copy(text = mapOf("desc" to TextSlot(h = CensusHash.of("Sam"), kind = "words:1"))))
+        val (_, _, problems) = parityProblems("bad", frame, bad)
+        assertEquals(problems.toString(), 1, problems.size)
     }
 
     private fun redactedInIsolation(id: String?, wire: String, value: String): String {
