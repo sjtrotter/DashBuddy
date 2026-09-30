@@ -175,32 +175,40 @@ SSOTs the redact side uses, in this order, and **any hit withholds the hash**:
 **Frame-level duplicate rule** (amended in #1160). The corpus intake's replacements are DOCUMENT-WIDE
 (`SnapshotRedactor.redact` rewrites every occurrence of a value it masks), so the per-field filter alone
 would under-withhold: a customer name withheld on the node whose id marks it would be hashed on an
-id-less parent that repeats it. `SkeletonBuilder` therefore runs two passes: pass 1 runs the per-field
-filter over every text field of the frame (tree + window title) and collects the set of trimmed
-canonical values caught by (a) a VALUE-judging step — 3, 4, 5, 7, 8 (not the length cap, whose duplicate is
-itself over-length) — or (b) step 1 ONLY when the id is an IDENTITY id — an `ID_MARKER_TABLE` row flagged
-`valueIsPii` (a customer name or address line: `customer_name`, `address_line_1/2`, `arriving_at_title`,
-`address_subpremise_line`; NOT `user_name`, which the same table documents is reused for the merchant's
-and the dasher's own name) — and ONLY from that node's TEXT / CONTENT_DESCRIPTION, never its
-role/hint/tooltip/click-label/uid/pane. Pass 2 emits the constant `withheld` for every field whose
-canonical value is in that set, wherever it sits; and, for the identity seeds only, by TOKEN CONTAINMENT:
-each identity value contributes its maximal letter runs of at least 2 letters (counted in code points,
-case-folded with the one `CaseFold`), and any
-field containing one of those runs is withheld — so `customer_name` "Adam" withholds an id-less
-"Adam's order" or "Adam, 2 items" (which pass steps 3–8), while "Add a tip" beside it still hashes
-(amended in #1160 review round 4). The containment rule applies to text slots AND to the id and class of
-every node on the frame: a static id whose name part (separators read as spaces) or a class that carries
-an identity run is treated as ABSENT for the wire and the fingerprint, exactly like a dynamic id —
-`chip_Adam` beside `customer_name` "Adam" does not travel, `chip_Gold` does (one owner,
-`FrameFilter.containsIdentityRun`; amended in #1160 review round 5). A CONTENT id (an `ID_MARKER_TABLE` row without the
-flag — the free-text instruction bodies, `description_text_view`, which the same table documents as
-generic DoorDash chrome such as "Raise to 50%" or "Required") and a `PII_ID_SUFFIXES`-only id (the intake
-list, which also covers instruction BODIES — `step_description`, `instruction_text`, `tvTitle`) withhold
-their OWN field but do not seed the set, so the chrome vocabulary the census exists for is not withheld
-frame-wide (amended in #1160 review rounds 2 and 3). §7(c) compares the skeleton against FULL-TREE
-redaction for this reason, with exactly that one stated exemption: a value the intake rewrites
-document-wide only because a non-seeding PII-id field carries it elsewhere, which survives redaction in
-isolation and has no other withholding cause anywhere in the frame.
+id-less parent that repeats it. `SkeletonBuilder` therefore runs two passes. Pass 1 runs the per-field
+filter over every text field of the frame (tree + window title) and SEEDS:
+
+- the exact canonical value of any field a VALUE-judging step caught (3, 4, 7, 8 — not the length cap,
+  whose duplicate is itself over-length);
+- from step 1, ONLY on an identity id's TEXT / CONTENT_DESCRIPTION (never its
+  role/hint/tooltip/click-label/uid/pane), by the id's KIND in `CustomerTextMarkers.ID_MARKER_TABLE`:
+  a **NAME** id (`customer_name`) seeds its exact value AND its maximal letter runs of at least 2 letters
+  (counted in code points, case-folded with the one `CaseFold`); an **ADDRESS** id (`address_line_1/2`,
+  `arriving_at_title`, `address_subpremise_line`) seeds its exact value ONLY — address vocabulary
+  ("Road", "View", "San", "Lane", "Way") is common English, and seeding its runs would withhold "View
+  details" or "Road closed" chrome, and camelCase ids like `roadNameLayout`, on every frame with an
+  address, while a person's name rarely collides with chrome; a **CONTENT** id (`user_name`, which is
+  also reused for the merchant's and the dasher's own name; the free-text instruction bodies;
+  `description_text_view`, generic DoorDash chrome such as "Raise to 50%") seeds nothing;
+- a MASK never seeds anything (`[redacted…]`, `[address]`, …): it is not identity, and its word would
+  collide with chrome and with address-block ids.
+
+Pass 2 emits the constant `withheld` for every field whose canonical value is a seeded exact value,
+wherever it sits, and — by TOKEN CONTAINMENT — for every field containing a NAME run: `customer_name`
+"Adam" withholds an id-less "Adam's order" or "Adam, 2 items" (which pass steps 3–8), while "Add a tip"
+beside it still hashes. The containment rule applies to text slots AND to the id and class of every node
+on the frame; ids and classes are split into runs ALSO at camelCase boundaries (lower→Upper, and
+Upper→Upper+lower: `XMLAdam` → `XML` + `Adam`), because Compose test tags are usually camelCase, while
+text slots keep the plain letter-run split. A static id or class carrying a NAME run is ABSENT for the
+wire and the fingerprint, exactly like a dynamic id — `chipAdam` / `chip_Adam` beside `customer_name`
+"Adam" does not travel, `chipGold` and `chipAdamant` (whole-run equality) do (one owner,
+`FrameFilter.containsIdentityRun`). A CONTENT id and a `PII_ID_SUFFIXES`-only id (the intake list, which
+also covers instruction BODIES — `step_description`, `instruction_text`, `tvTitle`) withhold their OWN
+field but seed nothing, so the chrome vocabulary the census exists for is not withheld frame-wide
+(amended in #1160 review rounds 2–5). §7(c) compares the skeleton against FULL-TREE redaction for this
+reason, with exactly that one stated exemption: a value the intake rewrites document-wide only because a
+non-seeding PII-id field carries it elsewhere, which survives redaction in isolation and has no other
+withholding cause anywhere in the frame.
 
 **What the builder consumes.** `SkeletonBuilder` takes the RAW admitted `UiNode` tree plus the
 window title. #1146's publisher sits on the UNKNOWN SCREEN BRANCH of `AccessibilityPipeline.output()`

@@ -587,7 +587,8 @@ side-effect-free half.
   byte-for-byte from the test-only `SnapshotRedactor` to `domain.privacy.PiiShapes` (app licence;
   `SnapshotRedactor` delegates, `PiiShapesParityTest` pins it; `PiiShapesIcuGuardTest` applies the ICU
   bare-`}` rule to every compiled pattern); `CustomerTextMarkers.ID_MARKERS` is derived from
-  `ID_MARKER_TABLE` (`IdMarker(suffix, valueIsPii)`, list pinned — the runtime backstop is unchanged).
+  `ID_MARKER_TABLE` (`IdMarker(suffix, kind)`, kind NAME / ADDRESS / CONTENT; list pinned — the runtime
+  backstop is unchanged).
 - *The filter* — `core.pipeline.census.SkeletonBuilder` (typed API: `Platform`, `LocalDate`). A
   `SensitiveTextMarkers` hit on the raw tree or title yields no skeleton; a FAILED marker scan is
   `BUILD_FAILED`, not a sensitive frame. Per field: step 1 is the node's own RAW id (`ID_MARKERS` ∪
@@ -595,10 +596,12 @@ side-effect-free half.
   cap) and, when it differs and is itself within the cap, the RAW trimmed form — either hit withholds;
   only a `words:1..8` survivor hashes, on the canonical form. The FRAME-LEVEL duplicate rule then
   withholds (a) any field whose canonical value a value-judging step caught anywhere in the frame, and (b)
-  any field containing a letter run (≥ 2 letters in code points, `CaseFold`-folded) of an IDENTITY id's rendered
-  text/desc (`valueIsPii`: `customer_name`, the address lines, `arriving_at_title`,
-  `address_subpremise_line` — not `user_name`, which also carries merchant/dasher names, and not content
-  ids such as `description_text_view`), so "Adam's order" beside a `customer_name` "Adam" is withheld.
+  any field containing a letter run (≥ 2 letters in code points, `CaseFold`-folded) of a NAME identity
+  id's rendered text/desc (`customer_name`); an ADDRESS id (the address lines, `arriving_at_title`,
+  `address_subpremise_line`) seeds its exact value only, because address vocabulary is common English;
+  a CONTENT id (`user_name`, `description_text_view`, the instruction bodies) and a mask seed nothing.
+  The same NAME containment, split also at camelCase boundaries, makes a node's id or class absent
+  (`chipAdam` beside `customer_name` "Adam"), while "Adam's order" is withheld as a text slot.
   Each value is judged once per frame (memoized). `outcome()` never throws: every failure is
   `Refusal.BUILD_FAILED` (the #909 inertness rule); refusals are reasons, never text.
 - *Tests* — `SkeletonCorpusTest` asserts ADR §7 (a)–(f) over the whole committed corpus (full-tree
