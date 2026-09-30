@@ -73,6 +73,9 @@ class PipelineStats @Inject constructor(
     /** #1152: frames read from a platform offer overlay (a11y `TYPE_SYSTEM`), on any window path. */
     private val overlaySnapshots = AtomicLong()
 
+    /** PR #1155 review CC9: event-path enumerations looking for an enabled overlay above the active window. */
+    private val overlayScans = AtomicLong()
+
     /** #1152 D2: system-layer windows refused as overlay candidates, per first failed check. */
     private val overlayRejections: Map<OverlayRejectReason, AtomicLong> =
         EnumMap<OverlayRejectReason, AtomicLong>(OverlayRejectReason::class.java).apply {
@@ -361,6 +364,13 @@ class PipelineStats @Inject constructor(
 
     fun overlaySnapshotCount(): Long = overlaySnapshots.get()
 
+    /** One event-path `getWindows()` spent looking for an overlay above the active window (CC9). */
+    fun onOverlayScan() {
+        overlayScans.incrementAndGet()
+    }
+
+    fun overlayScanCount(): Long = overlayScans.get()
+
     /** A system-layer window was refused as an overlay candidate (#1152 D2) — `overlayRejected{…}`. */
     fun onOverlayRejected(reason: OverlayRejectReason) {
         overlayRejections.getValue(reason).incrementAndGet()
@@ -396,6 +406,7 @@ class PipelineStats @Inject constructor(
             " notifListenerDisconnects=${notifListenerDisconnects.get()}" +
             " restarts=${restarts.get()}" +
             " overlaySnapshots=${overlaySnapshots.get()}" +
+            " overlayScans=${overlayScans.get()}" +
             platformAppVersionsSuffix() +
             parseShortfallSuffix() +
             bindShortfallSuffix() +

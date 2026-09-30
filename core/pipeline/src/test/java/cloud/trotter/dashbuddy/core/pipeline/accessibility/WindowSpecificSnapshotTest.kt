@@ -365,6 +365,7 @@ class WindowSpecificSnapshotTest {
         assertEquals(uberPkg, emitted.single().packageName)
         assertEquals(9, emitted.single().windowContext?.windowId)
         assertEquals(1L, h.stats.overlaySnapshotCount())
+        assertEquals("CC9: one scan per resolution, counted", 1L, h.stats.overlayScanCount())
         verify(h.source, never()).getCurrentRootSnapshot(any<AccessibilityNodeInfo>())
     }
 

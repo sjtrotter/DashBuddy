@@ -159,4 +159,21 @@ class OverlayCandidateTest {
     fun `display area is the service's display metrics`() {
         assertEquals(display, source().displayArea())
     }
+
+    @Test
+    fun `CC9 - the display area is memoized per topology generation`() {
+        val res = displayResources()
+        val service = mock<AccessibilityService> {
+            on { resources } doReturn res
+            on { packageName } doReturn "cloud.trotter.dashbuddy"
+        }
+        val src = AccessibilitySource(stats).apply { registerService(service) }
+        assertEquals(display, src.displayArea())
+        assertEquals(display, src.displayArea())
+        verify(res, times(1)).displayMetrics
+        @Suppress("DEPRECATION")
+        src.emit(android.view.accessibility.AccessibilityEvent.obtain(android.view.accessibility.AccessibilityEvent.TYPE_WINDOWS_CHANGED))
+        assertEquals(display, src.displayArea())
+        verify(res, times(2)).displayMetrics
+    }
 }

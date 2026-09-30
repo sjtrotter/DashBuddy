@@ -382,6 +382,7 @@ class AccessibilitySource @Inject constructor(
      * cheap; the package is re-verified on the root that is mapped.
      */
     fun overlayAboveActive(activeWindowId: Int, isEnabled: (String?) -> Boolean): OverlayScan = try {
+        stats.onOverlayScan() // CC9: the per-event enumeration this feature costs, sized in the field
         overlayAboveActive(getWindows(), activeWindowId, isEnabled)
     } catch (_: Exception) {
         OverlayScan.None
@@ -526,16 +527,26 @@ class AccessibilitySource @Inject constructor(
      * the 142×142 puck "half the display" and a candidate.
      */
     internal fun displayArea(): Long {
+        // PR #1155 review CC9: memoized per topology generation (a rotation / display change fires a
+        // TYPE_WINDOWS_CHANGED, which bumps it); an unknown area is never memoized.
+        val gen = packageCache.generation
+        areaMemo?.let { (g, a) -> if (g == gen) return a }
         val metrics = try {
             serviceRef?.get()?.resources?.displayMetrics
         } catch (_: Exception) {
             null
         }
         if (metrics != null && metrics.widthPixels > 0 && metrics.heightPixels > 0) {
-            return metrics.widthPixels.toLong() * metrics.heightPixels.toLong()
+            val area = metrics.widthPixels.toLong() * metrics.heightPixels.toLong()
+            areaMemo = gen to area
+            return area
         }
         return 0L
     }
+
+    /** CC9: `(generation, area)` of the last measured display. */
+    @Volatile
+    private var areaMemo: Pair<Long, Long>? = null
 
     /** A window's on-screen area in px² (bounds are parceled with the window — no binder call). */
     internal fun areaOf(w: AccessibilityWindowInfo): Long {
