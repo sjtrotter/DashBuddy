@@ -13,7 +13,7 @@ object AccNodeUtils {
      * third-party input: a parent chain is bounded ingestion like everything else, and a cyclic or
      * pathologically deep chain resolves to NO owner (fail closed), never a hang.
      */
-    const val MAX_OWNER_WALK = 32
+    const val MAX_OWNER_WALK = cloud.trotter.dashbuddy.domain.pipeline.NodeRef.MAX_OWNER_WALK // one owner, shared with bind time (#1149 L2)
 
     /**
      * #1149 — the one definition of "this node takes a click": `isClickable`, OR an advertised

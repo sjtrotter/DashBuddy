@@ -62,6 +62,12 @@ data class NodeRef(
      * (no field) loads as unprovable and never claims an exact fingerprint.
      */
     val labelHintsComplete: Boolean = false,
+    /**
+     * #1149 review L2 — the class of the bind's ACTION OWNER (whose region the hints fingerprint). The
+     * 2b walk filters on it; [classNameHint] stays the bound node's class for strategies 1–3. Null on
+     * a legacy ref (2b then falls back to [classNameHint]).
+     */
+    val ownerClassHint: String? = null,
 ) {
     /**
      * True when EVERY hint is present among [liveLabels] (normalized + hashed the same way).
@@ -128,12 +134,33 @@ data class NodeRef(
         /** #1149 review I2 — the child fetches (bind time: child slots visited) one label scan may spend. */
         const val LABEL_SCAN_NODES = 24
 
+        /** #1149 — the most self → parent steps an action-owner walk takes (bind time and fire time). */
+        const val MAX_OWNER_WALK = 32
+
+        /**
+         * #1149 review L2 — the bind-time fingerprint is the ACTION OWNER's, like the fire-time one: the
+         * bound node's nearest [UiNode.takesClick] self-or-ancestor (at most [MAX_OWNER_WALK] steps).
+         * Its label region is hashed, its completeness recorded, and its class returned as the 2b
+         * class filter. No owner → hints from the bound node, never complete (no 2b).
+         */
+        fun bindHintsOf(bound: cloud.trotter.dashbuddy.domain.model.accessibility.UiNode): BindHints {
+            var owner: cloud.trotter.dashbuddy.domain.model.accessibility.UiNode? = bound
+            var steps = 0
+            while (owner != null && !owner.takesClick && steps < MAX_OWNER_WALK) { owner = owner.parent; steps++ }
+            val found = owner?.takeIf { it.takesClick }
+            val scan = hintLabelsOf(found ?: bound)
+            val hashes = scan.labels.asSequence().mapNotNull(::hintHash).distinct().take(MAX_LABEL_HINTS).toList()
+            return BindHints(hashes, complete = found != null && scan.complete, ownerClassHint = found?.className)
+        }
+
         /**
          * #1149 review I2 — the bind-time mirror of the executor's live label scan over a mapped
          * [UiNode]: own text/contentDescription, then children depth-first in pre-order (the same order as the
          * executor's `scanLabels`) down to
          * [LABEL_SCAN_DEPTH], at most [LABEL_SCAN_NODES] child slots, never descending into a
-         * descendant that [UiNode.takesClick] (review J2 — the live `isActionClickable`'s mirror). [UiLabelScan.complete] is false only when the slot cap cut it — the
+         * descendant that [UiNode.takesClick] (review J2 — the live `isActionClickable`'s mirror),
+         * never reading a [UiNode.foreignPackage] child (L3), and incomplete when an in-horizon node
+         * reports [UiNode.unreadableChildren] (L4) — both mirrors of the live scan. [UiLabelScan.complete] is false only when the slot cap cut it — the
          * depth bound is the shared HORIZON (labels below it belong to neither side's fingerprint).
          *
          * Residual (documented): fire time budgets FETCH attempts (a null child spends one), while a
@@ -148,11 +175,15 @@ data class NodeRef(
             fun visit(n: cloud.trotter.dashbuddy.domain.model.accessibility.UiNode, depth: Int): Boolean {
                 n.text?.takeIf { it.isNotBlank() }?.let { labels.add(it) }
                 n.contentDescription?.takeIf { it.isNotBlank() }?.let { labels.add(it) }
-                if (n.children.isEmpty()) return true
                 if (depth >= LABEL_SCAN_DEPTH) return true // the horizon, not a cut
+                // L4: an advertised child the mapper could not read is an in-horizon label left unseen.
+                if (n.unreadableChildren > 0) complete = false
                 for (child in n.children) {
                     if (fetched >= LABEL_SCAN_NODES) { complete = false; return false }
                     fetched++
+                    // L3: an embedded foreign-package child spends its slot but is never read — the
+                    // executor's scanLabels skips it the same way.
+                    if (child.foreignPackage) continue
                     if (child.takesClick) continue // J2: the same predicate as the live isActionClickable
                     if (!visit(child, depth + 1)) return false
                 }
@@ -177,6 +208,9 @@ data class NodeRef(
             hintKeyOrNull(label)?.let { cloud.trotter.dashbuddy.domain.util.sha256OrNull(it) }
     }
 }
+/** #1149 review L2 — the bind-time fingerprint of the bound node's action owner ([NodeRef.bindHintsOf]). */
+data class BindHints(val labelHintHashes: List<String>, val complete: Boolean, val ownerClassHint: String?)
+
 /** #1149 review I2 — a bounded bind-time label scan ([NodeRef.hintLabelsOf]); [complete] = the slot cap did not cut it. */
 data class UiLabelScan(val labels: List<String>, val complete: Boolean)
 

@@ -21,6 +21,8 @@ fun UiNode.toDto(): UiNodeDto {
         isEnabled = this.isEnabled,
         isChecked = this.isChecked,
         hasClickAction = this.hasClickAction,
+        foreignPackage = this.foreignPackage,
+        unreadableChildren = this.unreadableChildren,
         boundsInScreen = this.boundsInScreen.toDto(),
         children = this.children.map { it.toDto() }
     )
@@ -41,6 +43,8 @@ private fun UiNodeDto.toDomainNode(): UiNode = UiNode(
     isEnabled = this.isEnabled,
     isChecked = this.isChecked,
         hasClickAction = this.hasClickAction,
+        foreignPackage = this.foreignPackage,
+        unreadableChildren = this.unreadableChildren,
     boundsInScreen = this.boundsInScreen.toDomain(),
     children = this.children.map { it.toDomainNode() },
 )

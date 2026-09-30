@@ -556,9 +556,12 @@ class UiInteractionHandlerOwnerTest {
     ))
 
     /** Bind the ref the production way: native mapping → the :domain label horizon (what Ruleset.buildNodeRef hashes). */
-    private fun bindRef(live: AccessibilityNodeInfo): NodeRef {
-        val scan = NodeRef.hintLabelsOf(live.toUiNode()!!)
-        return expandRef.copy(labelHintHashes = scan.labels.mapNotNull(NodeRef::hintHash).distinct(), labelHintsComplete = scan.complete)
+    private fun bindRef(live: AccessibilityNodeInfo): NodeRef = bindRefOf(live.toUiNode()!!)
+
+    /** The production bind: NodeRef.bindHintsOf over a mapped node (what Ruleset.buildNodeRef hashes). */
+    private fun bindRefOf(bound: cloud.trotter.dashbuddy.domain.model.accessibility.UiNode): NodeRef {
+        val h = NodeRef.bindHintsOf(bound)
+        return expandRef.copy(labelHintHashes = h.labelHintHashes, labelHintsComplete = h.complete, ownerClassHint = h.ownerClassHint)
     }
 
     /**
@@ -674,5 +677,47 @@ class UiInteractionHandlerOwnerTest {
         val row = payRow(clickable = false, advertisesClick = true)
         assertTrue(expand(handler(windowRoot(row)), legacy))
         row.clicks(1)
+    }
+
+    // ---------------------------------------------------------------- review L2–L4: bind-time parity
+
+    /** L2: a bind on the TITLE of a clickable row fingerprints the row (its owner), so 2b finds the row. */
+    @Test
+    fun `a bind on a row's title fingerprints the owner row — 2b finds the row`() = runTest {
+        val row = view(clickable = true, bounds = Rect(36, 1374, 1044, 1500), children = listOf(
+            view(cls = "android.widget.TextView", text = "This offer"), view(desc = "Details"),
+        ))
+        val root = windowRoot(row)
+        val titleUi = root.toUiNode()!!.findNodes { it.text == "This offer" }.single()
+        val ref = bindRefOf(titleUi).copy(classNameHint = "android.widget.TextView")
+        assertTrue(ref.hasExactFingerprint)
+        assertEquals("android.view.View", ref.ownerClassHint)
+        assertTrue(expand(handler(root), ref))
+        row.clicks(1)
+    }
+
+    /** L3: an embedded foreign-package subtree is outside the fingerprint on BOTH sides. */
+    @Test
+    fun `an embedded foreign subtree is excluded at bind and at fire`() = runTest {
+        val other = "com.example.other"
+        val row = view(clickable = true, bounds = Rect(36, 1374, 1044, 1500), children = listOf(
+            view(cls = "android.widget.TextView", text = "This offer"),
+            view(packageName = other, children = listOf(view(cls = "android.widget.TextView", text = "Sponsored", packageName = other))),
+        ))
+        val root = windowRoot(row)
+        val ref = bindRefOf(root.toUiNode()!!.findNodes { it.text == "This offer" }.single().parent!!)
+        assertEquals(listOfNotNull(NodeRef.hintHash("This offer")), ref.labelHintHashes)
+        assertTrue(expand(handler(root), ref))
+        row.clicks(1)
+    }
+
+    /** L4: a row with a child the mapper could not read is never certified complete — no exact fingerprint. */
+    @Test
+    fun `a bind over an unreadable child is incomplete`() = runTest {
+        val row = payRow(top = 1374)
+        whenever(row.childCount).thenReturn(3) // slot 2 reads null at mapping time
+        val ref = bindRef(row)
+        assertFalse(ref.labelHintsComplete)
+        assertFalse(ref.hasExactFingerprint)
     }
 }

@@ -45,6 +45,16 @@ data class UiNode(
      * read it through [takesClick].
      */
     val hasClickAction: Boolean = false,
+    /**
+     * #1149 review L3: this node belongs to a DIFFERENT package than its window root (an embedded
+     * foreign subtree). Not in [allText] or any content/structural hash.
+     */
+    val foreignPackage: Boolean = false,
+    /**
+     * #1149 review L4: advertised children the mapper could not read (`getChild` returned null) — they
+     * are silently absent from [children]. Not in [allText] or any content/structural hash.
+     */
+    val unreadableChildren: Int = 0,
 
     val boundsInScreen: BoundingBox = BoundingBox(0, 0, 0, 0),
 
@@ -102,6 +112,8 @@ data class UiNode(
         if (isEnabled != other.isEnabled) return false
         if (isChecked != other.isChecked) return false
         if (hasClickAction != other.hasClickAction) return false
+        if (foreignPackage != other.foreignPackage) return false
+        if (unreadableChildren != other.unreadableChildren) return false
         // Bounds
         if (boundsInScreen != other.boundsInScreen) return false
 
@@ -122,6 +134,8 @@ data class UiNode(
         result = 31 * result + isEnabled.hashCode()
         result = 31 * result + isChecked.hashCode()
         result = 31 * result + hasClickAction.hashCode()
+        result = 31 * result + foreignPackage.hashCode()
+        result = 31 * result + unreadableChildren
         // Bounds
         result = 31 * result + boundsInScreen.hashCode()
         return result

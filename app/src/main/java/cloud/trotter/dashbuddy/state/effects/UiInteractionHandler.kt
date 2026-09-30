@@ -661,7 +661,9 @@ class UiInteractionHandler @Inject constructor(
                 val childRegion = visit(child, depth + 1) ?: return null
                 if (!AccNodeUtils.isActionClickable(child)) region.absorb(childRegion)
             }
-            val classOk = ref.classNameHint == null || node.className?.toString() == ref.classNameHint
+            // L2: 2b filters on the bind's OWNER class (its fingerprint is the owner's); a legacy ref falls back.
+            val ownerClass = ref.ownerClassHint ?: ref.classNameHint
+            val classOk = ownerClass == null || node.className?.toString() == ownerClass
             if (classOk && AccNodeUtils.isActionClickable(node)) {
                 val labels = region.labels.map { it.second }
                 if (!region.complete()) {

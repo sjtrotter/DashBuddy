@@ -92,7 +92,7 @@ internal class TreeBudget(
 fun AccessibilityNodeInfo?.toUiNode(): UiNode? {
     if (this == null) return null
     val budget = TreeBudget()
-    val root = convert(this, depth = 0, budget = budget) ?: return null
+    val root = convert(this, depth = 0, budget = budget, rootPackage = packageName?.toString()) ?: return null
     budget.logIfTruncated(className)
     return root.restoreParents()
 }
@@ -109,6 +109,7 @@ private fun convert(
     node: AccessibilityNodeInfo,
     depth: Int,
     budget: TreeBudget,
+    rootPackage: String?,
 ): UiNode? {
     if (!budget.admit(depth)) return null
 
@@ -131,7 +132,7 @@ private fun convert(
 
         val childAccNode = node.getChild(i)
         if (childAccNode != null) {
-            convert(childAccNode, depth + 1, budget)?.let(children::add)
+            convert(childAccNode, depth + 1, budget, rootPackage)?.let(children::add)
         } else {
             nullChildren++
         }
@@ -164,6 +165,12 @@ private fun convert(
         isChecked = node.checked,
         // #1149 review J2: the advertised click action (the live `AccNodeUtils.isActionClickable` half).
         hasClickAction = node.actionList.orEmpty().any { it.id == AccessibilityNodeInfo.ACTION_CLICK },
+        // #1149 review L3: an embedded node of ANOTHER package than the window root (bind-time parity with
+        // the executor's package-scoped label scan, which never reads such a subtree).
+        foreignPackage = node.packageName?.toString() != rootPackage,
+        // #1149 review L4: children the platform advertised but getChild() could not read — a bind over
+        // such a node cannot certify its label set complete.
+        unreadableChildren = nullChildren,
         boundsInScreen = bounds.toBoundingBox(),
         children = children,
     )
