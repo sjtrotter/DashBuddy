@@ -44,7 +44,11 @@ it true by construction) so a violation is a compile error or a failing test, no
 
 A new versioned schema, `uinode.skeleton.v1` (`UiSkeletonDto` + `SkeletonSchema`, beside
 `UiNodeSchema`, ADR-0003 rules apply). Per node: `class`, `id` (the platform's own resource name —
-chrome by construction), the three flags (`isClickable`/`isEnabled` as booleans, `isChecked` as the
+chrome by construction WHEN it matches the static resource-name grammar, `ResourceIdGrammar`: an optional
+`<package>:id/` prefix, a name `[A-Za-z_][A-Za-z0-9_-]*` of ≤ 64 characters, no run of 8+ hex digits and
+no run of 4+ decimal digits; a dynamic id — a per-frame UUID in a Compose test tag, three committed frames
+`PRIMARY_BUTTON_<uuid>` — or a space-bearing one is treated as ABSENT for both the wire and the
+fingerprint, never rewritten; the §2 PII-id step still runs on the raw id; amended in #1160), the three flags (`isClickable`/`isEnabled` as booleans, `isChecked` as the
 `UiNode` tri-state `Int` 0/1/2 — wire types stated so the shared vectors cannot disagree), and
 `children`. Per text field — enumerated from **`UiNodeTextField`**, the #835 scrub contract, never a
 hand-list, so #1147's strings (`paneTitle`, `hintText`, `clickActionLabel`, …) and any entry added
@@ -141,8 +145,12 @@ SSOTs the redact side uses, in this order, and **any hit withholds the hash**:
 7. the id-less name shape. `PiiShapes` owns ONE pattern BODY (`FIRST_LAST_INITIAL_BODY`) and derives
    two variants from it: the existing ANCHORED whole-value pattern (`^…$`, `FIRST_LAST_INITIAL_PATTERN`,
    byte-SSOT with the redact side and unchanged) and a BOUNDARY-DELIMITED substring variant
-   (`(?<![\p{L}])…(?![\p{L}])`, `FIRST_LAST_INITIAL_EMBEDDED`) that the census runs here with
-   `containsMatchIn` + `IGNORE_CASE` — merely searching the anchored pattern would still reject
+   (`(?<![\p{L}])…(?![\p{L}])`, `FIRST_LAST_INITIAL_EMBEDDED`). Step 7 withholds when the anchored
+   pattern matches the WHOLE value OR the embedded one occurs anywhere (`PiiShapes.hasNameShape`,
+   `IGNORE_CASE`); in the embedded variant the INITIAL alone is case-sensitive (`(?-i:[A-Z])`), because a
+   case-insensitive initial reads the English words "a"/"i" as initials and withheld every `<word> a
+   <word>` chrome phrase ("Take a photo", "Report a problem") — amended in #1160; a lowercase whole-value
+   name ("jordan t") is still caught by the anchored arm — merely searching the anchored pattern would still reject
    `Jane S is waiting at the door` (the anchors survive `containsMatchIn`). That sentence, with no
    lead-in prefix, must emit `{kind: withheld}` — a required vector; over-withholding a chrome sentence
    is the accepted cost;
@@ -152,6 +160,16 @@ SSOTs the redact side uses, in this order, and **any hit withholds the hash**:
    apartment, PIN, phone, card) withhold a `digits`/`mixed` token and the letter-only shapes (quoted
    note, city/state, email's local part) withhold a `words:N` one. The list stays the one `PiiShapes`
    owner — no census-specific subset is hand-maintained.
+
+**Frame-level duplicate rule** (amended in #1160). The corpus intake's replacements are DOCUMENT-WIDE
+(`SnapshotRedactor.redact` rewrites every occurrence of a value it masks), so the per-field filter alone
+would under-withhold: a customer name withheld on the node whose id marks it would be hashed on an
+id-less parent that repeats it. `SkeletonBuilder` therefore runs two passes: pass 1 runs the per-field
+filter over every text field of the frame (tree + window title) and collects the set of trimmed
+canonical values that any withholding step (1, 3, 4, 5, 7, 8 — not the length cap, whose duplicate is
+itself over-length) caught; pass 2 emits the constant `withheld` for every field whose trimmed value is in
+that set, wherever it sits. §7(c) compares the skeleton against FULL-TREE redaction for exactly this
+reason.
 
 **What the builder consumes.** `SkeletonBuilder` takes the RAW admitted `UiNode` tree plus the
 window title. #1146's publisher sits on the UNKNOWN SCREEN BRANCH of `AccessibilityPipeline.output()`
@@ -326,10 +344,13 @@ skeletons), a per-cluster cap, a bounded on-disk queue (drop-oldest), batch uplo
 **Cluster fingerprint** (`CensusFingerprint`) is a NEW function in the contract module, not
 today's `stableHash`: `stableHash` is a 32-bit `Int` (`31 * h + child`, collidable, and the type of
 `FrameGate.admit(contentHash)` and of every fixture's `contentHash`), which the server cannot
-recompute safely and which must not change type. The fingerprint is a full sha256 (**64 hex**) over ONE canonical byte form, pre-order: per node
-`"C"` + class (UTF-8, `""` when null) + `0x00` + (`"I"` + id UTF-8, or the single byte `"N"` when the
-id is null — so a null id and an empty id differ) + `0x00` + the spliced child count as ASCII decimal
-+ `0x00`, then the children in order. Transparent wrappers are removed first (wrapper-to-forest
+recompute safely and which must not change type. The fingerprint is a full sha256 (**64 hex**) over ONE canonical byte form, pre-order, every string
+LENGTH-PREFIXED so the encoding is prefix-free and therefore injective (amended in #1160 — a
+delimiter-only form let a value that mimics the framing collide two different trees): per node `"C"` +
+the class's UTF-8 byte length as ASCII decimal + `0x00` + the class UTF-8 (`""` when null) + (`"I"` + the
+id's byte length as ASCII decimal + `0x00` + the id UTF-8, or the single byte `"N"` when the id is null —
+so a null id and an empty id differ) + the spliced child count as ASCII decimal + `0x00`, then the
+children in order. A class or id carrying U+0000 is refused at construction and on decode. Transparent wrappers are removed first (wrapper-to-forest
 normalization): a wrapper's children are spliced into its parent, an EMPTY wrapper contributes
 nothing (the parent's count drops), and the normalized forest ALWAYS hangs under one synthetic root
 (class `""`, null id, the spliced count) — whether or not the original root was a wrapper — so

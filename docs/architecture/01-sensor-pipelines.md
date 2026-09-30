@@ -582,7 +582,17 @@ in ADR order per text field (PII id — `CustomerTextMarkers.hasIdMarkerSuffix`,
 mask, the step-6 hash refusal, the embedded name shape, the value shapes); a `SensitiveTextMarkers` hit
 on the raw tree or window title yields no skeleton, and so does an oversize item; refusals are reasons
 (`SkeletonBuilder.Refusal`), never text. `SkeletonCorpusTest` asserts ADR §7 (a)–(f) over the whole
-committed corpus plus a seeded property. Nothing calls the builder at runtime yet: the publisher stage,
+committed corpus plus a seeded property. Review round 1 (PR #1160) added, each amended into the ADR: the
+FRAME-LEVEL duplicate rule (a value any withholding step caught anywhere in the frame is withheld
+everywhere in it — the intake's replacements are document-wide, so §7(c) now compares against full-tree
+redaction); a case-sensitive INITIAL in the embedded name variant (step 7 = anchored whole-value OR
+embedded, `PiiShapes.hasNameShape`) so "Take a photo" is not a name; a LENGTH-PREFIXED fingerprint byte
+form (injective; a NUL class/id is refused) digested through the one `sha256OrNull(ByteArray)`; the static
+resource-name gate `ResourceIdGrammar` (a per-frame-UUID Compose test tag is treated as an absent id on the
+wire and in the fingerprint; the PII-id step still reads the raw id); a whole-build `Throwable` catch
+(`Refusal.BUILD_FAILED`, the #909 inertness rule); `Outcome.Built` carrying the measured JSON; and
+`UiNodeStableHashPinTest`, freezing `stableHash` over committed fixtures now that its wrapper predicate is
+shared (`AnonymousWrappers.isAnonymousWrapper`). Nothing calls the builder at runtime yet: the publisher stage,
 `CensusSink` and `PipelineStats` counters are #1146 (M1b); upload is M3.
 
 **The whole recognition + text-scrub layer assumes an ENGLISH device (#938).** Rule anchors and
