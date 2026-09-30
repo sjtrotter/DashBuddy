@@ -22,6 +22,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -30,7 +31,6 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
@@ -51,9 +51,9 @@ import cloud.trotter.dashbuddy.ui.main.analytics.ReviewItem
 import cloud.trotter.dashbuddy.ui.main.analytics.ReviewList
 import cloud.trotter.dashbuddy.ui.main.analytics.reviewTexts
 import cloud.trotter.dashbuddy.ui.main.navigation.Screen
-import cloud.trotter.dashbuddy.ui.main.setup.consent.ConsentPromptSheet
+import cloud.trotter.dashbuddy.ui.main.setup.consent.FrontDoorHost
 import cloud.trotter.dashbuddy.ui.main.setup.permissions.PermissionsBottomSheet
-import cloud.trotter.dashbuddy.util.PermissionUtils
+import cloud.trotter.dashbuddy.ui.main.setup.permissions.PermissionsViewModel
 import kotlinx.coroutines.launch
 
 /**
@@ -83,7 +83,6 @@ fun DashboardScreen(
     onNavigateToSettings: () -> Unit,
     onNavigateToWizard: () -> Unit
 ) {
-    val context = LocalContext.current
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val scope = rememberCoroutineScope()
 
@@ -102,35 +101,36 @@ fun DashboardScreen(
         }
     }
 
-    // Permissions are an OS-level fact re-checked on every resume — kept as
-    // composable-local state, not in the UiState, since ON_RESUME owns the read.
-    var hasPermissions by remember { mutableStateOf<Boolean?>(null) }
+    // The permission gate's ONE projection (#944, #1151 review TT4): the OS permissions AND the
+    // event-receipt consent's Screen-events step, from PermissionsViewModel (the same nav-entry
+    // instance the sheet uses). ON_RESUME re-polls the OS; the consent is reactive. Nothing is
+    // decided until the consent is READ (`consentRead`) — then the gate opens whenever a step is
+    // outstanding, the Screen-events step always at its head.
+    val permissionsViewModel: PermissionsViewModel = hiltViewModel()
+    val permissions by permissionsViewModel.uiState.collectAsStateWithLifecycle()
+    val hasPermissions: Boolean? = if (permissions.consentRead) permissions.allGranted else null
     var showPermissionSheet by remember { mutableStateOf(false) }
 
-    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) {
-        val granted = PermissionUtils.hasAllEssentialPermissions(context)
-        hasPermissions = granted
-        if (!granted) {
-            showPermissionSheet = true
-        }
+    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { permissionsViewModel.refresh() }
+    LaunchedEffect(permissions.consentRead, permissions.allGranted) {
+        if (permissions.consentRead && !permissions.allGranted) showPermissionSheet = true
     }
 
     // ========================================================================
-    // THE GATE: If permissions are missing, force the Bottom Sheet to appear
+    // THE GATE: If a step is outstanding, force the Bottom Sheet to appear
     // ========================================================================
     if (showPermissionSheet) {
         PermissionsBottomSheet(
-            onAllGranted = { showPermissionSheet = false }
+            onAllGranted = { showPermissionSheet = false },
+            viewModel = permissionsViewModel,
         )
     }
 
-    // Prompted automation consent (#843): once essential permissions are in, the
-    // app-foreground front door asks for per-capability automation consent — the
-    // same rhythm the permission sheet uses. Self-gating: renders nothing when no
-    // capability is undecided. Held back while the permission gate is up so the
-    // two sheets never stack.
+    // The front door (#843 capability consent): once the permission chain — whose FIRST step is the
+    // #1151 event-receipt consent (`ScreenEventsCard`) — is complete, the capability prompt may
+    // show. Held back while the permission gate is up so no two sheets ever stack.
     if (hasPermissions == true && !showPermissionSheet) {
-        ConsentPromptSheet()
+        FrontDoorHost()
     }
 
     Scaffold { padding ->

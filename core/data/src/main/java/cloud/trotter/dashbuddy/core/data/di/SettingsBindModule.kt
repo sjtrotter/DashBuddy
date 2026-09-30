@@ -1,6 +1,8 @@
 package cloud.trotter.dashbuddy.core.data.di
 
+import cloud.trotter.dashbuddy.core.data.settings.EventReceiptPreferencesRepository
 import cloud.trotter.dashbuddy.core.data.settings.PlatformPreferencesRepository
+import cloud.trotter.dashbuddy.domain.settings.EventReceiptPreferences
 import cloud.trotter.dashbuddy.domain.settings.GraceConfigProvider
 import cloud.trotter.dashbuddy.domain.settings.PlatformPreferences
 import dagger.Binds
@@ -24,6 +26,13 @@ abstract class SettingsBindModule {
     abstract fun bindPlatformPreferences(
         impl: PlatformPreferencesRepository,
     ): PlatformPreferences
+
+    /** #1151 — the wide-event-receipt consent; the listener applies it, the UI writes it. */
+    @Binds
+    @Singleton
+    abstract fun bindEventReceiptPreferences(
+        impl: EventReceiptPreferencesRepository,
+    ): EventReceiptPreferences
 
     companion object {
         /**

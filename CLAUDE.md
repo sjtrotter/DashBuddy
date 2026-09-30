@@ -228,7 +228,7 @@ Full reference: [`docs/architecture/01-sensor-pipelines.md`](docs/architecture/0
 
 `AccessibilityListener`/`AccessibilitySource` capture `AccessibilityEvent`s; `AccessibilityNodeMapper`
 normalizes a window into an immutable `UiNode` tree (`:domain`). Per-event-type sub-pipelines
-(`ContentChangedPipeline` coalesced as one burst, `StateChangedPipeline`, `WindowsChangedPipeline`, clicks — #1148: 150/300 ms quiet/max with a leading edge; the active enabled window is the ground truth, else the readable enabled application window in front (own bubble and PiP skipped) or the frame is refused and counted, and the windows pipeline emits at most one window, by the event path's rules; an enabled platform offer overlay on top is the frame while it is up, #1152 — detail in the reference) and the
+(`ContentChangedPipeline` coalesced as one burst, `StateChangedPipeline`, `WindowsChangedPipeline`, clicks — #1148: 150/300 ms quiet/max with a leading edge; the active enabled window is the ground truth, else the readable enabled application window in front (own bubble and PiP skipped) or the frame is refused and counted, and the windows pipeline emits at most one window, by the event path's rules; an enabled platform offer overlay on top is the frame while it is up, #1152 — detail in the reference; the package-less `WINDOWS_CHANGED` reaches the #1148 D2 `ListenerGate` only when the dasher's **event-receipt consent** is ALLOWED — the listener clears `packageNames` via the pure `ServiceInfoPolicy`, in debug AND release, #1151) and the
 parallel `NotificationPipeline` emit `PipelineEvent`s. `AccessibilityPipeline.output()` gates in order:
 **rulesets-not-loaded** (fail-closed, #432) → **sensitive/noise** (#399) → **disabled platform** →
 **UNKNOWN** (captured to disk for triage, never forwarded to the state machine). Snapshots are attributed
@@ -747,7 +747,7 @@ Every new feature or refactor holds to these — they are forefront design input
      undecided; only an explicit user act grants; the gate fires only on granted). Per Google
      Play policy the user opts into EACH automation individually. A dasher-pressed Accept/Decline
      is its own consent (integrity checks still apply). Consent is collected by a **prompt**
-     (`ConsentPromptSheet`, #843 — the app's front door, joining the a11y/notification permission
+     (`ConsentPromptPage` in the `FrontDoorSheet`, #843/#1151 — the app's front door, joining the a11y/notification permission
      chain: fires on app foreground whenever `capabilities − granted − denied ≠ ∅`, one Allow /
      Don't-allow row per undecided capability, no "allow all"; "Not now" defers, a denial is
      durable) and reviewed/revoked in Settings → Data & Privacy → **Automation & Consent**
@@ -756,6 +756,13 @@ Every new feature or refactor holds to these — they are forefront design input
      `PerformRuleAction` seam, and a denial persists so a later load can't silently re-grant it
      (fail-closed). A one-shot schema migration (`RuleCapabilityDataSource`, #843) clears any
      pre-#843 auto-granted keys on upgrade (denials preserved) so the prompt re-collects consent.
+     **Wide event receipt is a separate FEATURE consent (#1151)**, never a capability grant: one
+     value (`EventReceiptPreferences`, `:domain` → DataStore in `:core:data`), opt-in (UNDECIDED =
+     filtered), a durable decline, asked as the FIRST step of the permission chain — BEFORE the
+     accessibility grant, which is offered only after a decision (dev ruling 2026-09-30) — and
+     recorded on the Automation & Consent screen; enforced only by `AccessibilityListener`. A debug
+     build that is DECLINED disables its own service (`disableSelf()`) and blocks the whole shell
+     (`DebugEventReceiptShell` replaces the NavHost).
    When a change touches recognition, capture, network, or effects, state its security/privacy
    posture in the PR — what's trusted, what's gated, what's scrubbed.
 7. **Semantic, PII-safe logging.** Log levels carry *meaning*, not volume convenience, and the log is
@@ -783,7 +790,7 @@ Every new feature or refactor holds to these — they are forefront design input
    `"Effects"`…), never the catch-all `App`. The tag rule is **enforced by a ratchet guard**
    (#764, `TimberTagGuardTest` in `:app` unit tests): any new bare `Timber.i/w/e/wtf(` (incl. the
    `Timber.Forest.*` form) in a main-type source set fails the build; the frozen allowlist
-   (`app/src/test/resources/timber-tag-guard-allowlist.txt`, 26 files as of #1149) is the visible debt list —
+   (`app/src/test/resources/timber-tag-guard-allowlist.txt`, 25 files as of #1151) is the visible debt list —
    tag a file's sites, shrink its entry (counts dropping below the frozen number also fail, so the
    list only burns down). The INFO-must-be-PII-safe rule is **fail-closed and
    tested** (reuse `SensitiveTextMarkers`): a raw merchant/customer string in an INFO+ line is a

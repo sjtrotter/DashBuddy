@@ -5,6 +5,7 @@ import android.content.Intent
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.activity.viewModels
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
@@ -14,7 +15,6 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import kotlinx.coroutines.flow.MutableStateFlow
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -38,6 +38,11 @@ import cloud.trotter.dashbuddy.feature.settings.GeneralSettingsScreen
 import cloud.trotter.dashbuddy.feature.settings.PlatformSettingsScreen
 import cloud.trotter.dashbuddy.ui.main.settings.SettingsHomeScreen
 import cloud.trotter.dashbuddy.feature.settings.StrategySettingsScreen
+import cloud.trotter.dashbuddy.ui.main.setup.consent.DebugEventReceiptLoading
+import cloud.trotter.dashbuddy.ui.main.setup.consent.DebugEventReceiptShell
+import cloud.trotter.dashbuddy.ui.main.setup.consent.EventReceiptConsentViewModel
+import cloud.trotter.dashbuddy.ui.main.setup.consent.FrontDoorViewModel
+import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import cloud.trotter.dashbuddy.ui.main.setup.wizard.WizardScreen
 import cloud.trotter.dashbuddy.core.designsystem.theme.DashBuddyTheme
 import dagger.hilt.android.AndroidEntryPoint
@@ -47,11 +52,16 @@ class MainActivity : ComponentActivity() {
 
     /**
      * Deep-link target route pushed by an external launcher (the bubble's "Vehicle" just-in-time
-     * action, #693). Held as a one-shot: the NavHost consumes it once and clears it, so a
-     * config-change recomposition doesn't re-navigate. `onNewIntent` re-arms it when an already-open
-     * instance is brought forward.
+     * action, #693). Held in [MainShellViewModel]'s SavedStateHandle (#1151 review MM4) so a route
+     * waiting behind the debug block survives recreation; delivered once, then cleared.
      */
-    private val pendingRoute = MutableStateFlow<String?>(null)
+    private val shell: MainShellViewModel by viewModels()
+
+    /**
+     * #1151 review LL6 — the front door's deferral generation lives here (activity-scoped, survives
+     * rotation); [onStop] bumps it only on a REAL departure from the foreground.
+     */
+    private val frontDoor: FrontDoorViewModel by viewModels()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -59,23 +69,41 @@ class MainActivity : ComponentActivity() {
         // Consume-once (#693 review F2b): getIntent() is sticky across recreation — without
         // removing the extra, a rotation re-reads it in the new instance's onCreate and pushes a
         // duplicate destination onto the restored back stack.
-        pendingRoute.value = intent?.getStringExtra(EXTRA_ROUTE)
+        shell.offer(intent?.getStringExtra(EXTRA_ROUTE))
         intent?.removeExtra(EXTRA_ROUTE)
 
         setContent {
             DashBuddyTheme {
                 val navController = rememberNavController()
 
-                // Consume a deep-link route once, then clear it (#693 vehicle action).
-                val route by pendingRoute.collectAsStateWithLifecycle()
+                // #1151 review LL4 — the debug decline gates the whole SHELL, not one screen: while
+                // `DEBUG && DECLINED` (the pure buildEventReceiptConsentState) the block replaces
+                // EVERY destination, deep links included (a pending route waits until unblocked).
+                // The one allowed way forward is the Automation & Consent screen, rendered inside
+                // the block host, plus Exit. The bubble HUD is a separate service and keeps running.
+                val eventReceiptViewModel: EventReceiptConsentViewModel = hiltViewModel()
+                val eventReceipt by eventReceiptViewModel.uiState.collectAsStateWithLifecycle()
+                // MM3: in DEBUG the shell fails CLOSED until the value is read (release: never).
+                if (eventReceipt.loading) {
+                    DebugEventReceiptLoading(onExit = { finishAffinity() })
+                    return@DashBuddyTheme
+                }
+                if (eventReceipt.blocked) {
+                    DebugEventReceiptShell(onExit = { finishAffinity() })
+                    return@DashBuddyTheme
+                }
+
+                // Deliver a deep-link route once, then clear it (#693 vehicle action). This is
+                // composed only AFTER the loading/blocked early returns above — composition order
+                // is the one gate, so a route waits (parked, MM4) behind the debug gate (NN7).
+                val route by shell.pendingRoute.collectAsStateWithLifecycle()
                 LaunchedEffect(route) {
-                    route?.let {
+                    shell.deliver {
                         // #693 review F3: MainActivity is exported (launcher) — a forged extra
                         // carrying a non-route string would crash navigate() with
                         // IllegalArgumentException. Fail closed: navigate only to known routes.
                         if (it in Screen.allRoutes) navController.navigate(it)
                         else Timber.tag("Main").w("Dropped unknown deep-link route (#693)")
-                        pendingRoute.value = null
                     }
                 }
 
@@ -233,10 +261,15 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    override fun onStop() {
+        super.onStop()
+        if (!isChangingConfigurations) frontDoor.onBackgrounded()
+    }
+
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
-        pendingRoute.value = intent.getStringExtra(EXTRA_ROUTE)
+        shell.offer(intent.getStringExtra(EXTRA_ROUTE))
         intent.removeExtra(EXTRA_ROUTE)
     }
 

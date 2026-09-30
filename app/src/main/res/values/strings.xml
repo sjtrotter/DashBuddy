@@ -162,14 +162,14 @@
 
     <!-- settings/DataExportScreen.kt -->
     <!-- settings/CapabilityConsentScreen.kt (#422/#843) — Google-Play-consistent automation record -->
-    <!-- setup/consent/ConsentPromptSheet.kt (#843) — prompted per-capability consent -->
+    <!-- setup/consent/ConsentPromptPage.kt (#843) — prompted per-capability consent, a page of the
+         FrontDoorHost sheet (#1151) -->
     <string name="consent_prompt_heading">Allow DashBuddy to tap for you?</string>
     <string name="consent_prompt_body">Your delivery-app rules can automate these taps. Nothing is turned on until you allow it — choose each one individually, or tap \"Not now\" to decide later.</string>
     <string name="consent_prompt_source_bundled_format">Built-in %1$s rules</string>
     <string name="consent_prompt_source_downloaded_format">Downloaded %1$s rules</string>
     <string name="consent_prompt_allow">Allow</string>
     <string name="consent_prompt_deny">Don\'t allow</string>
-    <string name="consent_prompt_not_now">Not now</string>
     <!-- settings/components/FakeOfferCard.kt -->
     <!-- main/analytics/OffersTab.kt (#975 — was DecisionsTab) -->
     <string name="offers_tab_offer_funnel_title">OFFER FUNNEL</string>
@@ -835,4 +835,10 @@
     <string name="playbook_plan_none_body">A plan picks your best hours from your own record, then grades itself next Sunday.</string>
     <string name="playbook_plan_none_action">Build a plan →</string>
     <string name="playbook_heatmap_plan_outline_caption">Outlined cells are the hours this week\'s plan picked.</string>
+    <!-- #1151 — debug builds only: shown instead of the Dashboard while wide event receipt is declined. -->
+    <string name="debug_event_receipt_block_title">Wide event receipt is off</string>
+    <string name="debug_event_receipt_block_body">This debug build needs wide event receipt. While it is off, DashBuddy\'s accessibility service is not enabled. Allow it again under %1$s, then turn the service on when asked.</string>
+    <string name="debug_event_receipt_block_open_settings">Open Automation &amp; Consent</string>
+    <string name="debug_event_receipt_block_exit">Exit</string>
+    <string name="debug_event_receipt_loading_notice">Still reading the screen-events setting. If this does not clear, exit and reopen the app.</string>
 </resources>

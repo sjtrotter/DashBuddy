@@ -146,7 +146,7 @@ skipped.
 publishes the enumeration; every capability — bundled OR downloaded — lands
 **undecided** until the user explicitly opts in. Per Google Play policy each
 automation is consented to individually. Consent is collected by the
-**prompt** (`ConsentPromptSheet`, the app's front door — same rhythm as the
+**prompt** (`ConsentPromptPage` in the `FrontDoorSheet`, the app's front door — same rhythm as the
 a11y/notification permission prompts), and reviewed/revoked in the settings
 record. A one-shot schema migration clears any pre-#843 auto-granted keys on
 upgrade (denials preserved) so the prompt re-collects honest consent.
@@ -156,6 +156,102 @@ upgrade (denials preserved) so the prompt re-collects honest consent.
 which additionally gates on signature verification (#416) before it may even be
 enumerated. Neither is granted without a user act. A rule can recognize screens
 immediately but cannot aim a tap without an explicit, content-pinned grant.
+
+### Feature consents (#1151) — distinct from capability grants
+
+Some consents switch a whole FEATURE on rather than authorizing one tap: the
+wide accessibility event receipt (#1151) today, the UNKNOWN-screen census
+(#1138 M3) later. They do NOT go through `RuleCapabilityGrants`. Each is:
+
+- **one value, one owner** — e.g. `EventReceiptPreferences` (`:domain`
+  contract, DataStore-backed repository in `:core:data`); every reader
+  derives from it, no second copy;
+- **opt-in** — the default (UNDECIDED) behaves as declined; the pre-load value
+  is the same fail-closed default;
+- **a durable decline** — "Don't allow" persists;
+- **debug requires, release offers; copy differs by source-set override, same key** (#1151 RR1):
+  `event_receipt_requirement_note` is "Optional…" in `:feature:settings` `src/main/res` and
+  "Required in this debug build…" in `src/debug/res`; it is rendered on the chain's step AND on
+  the Automation & Consent switch row. The disclosure body stays one shared string;
+- **asked BEFORE the accessibility grant** (dev re-sequencing, 2026-09-30): the
+  event-receipt consent is the FIRST step of the permission chain
+  (`PermissionsBottomSheet` / `PermissionsViewModel`, the "Screen events" card —
+  the disclosure with Allow / Don't allow, no "Not now"), so the service is
+  never enabled — and never recognizes a screen — before the dasher decided.
+  The pure `buildPermissionsUiState` withholds the accessibility step until a
+  decision (`accessibilityOffered`); a release decline proceeds to the grant
+  (filtered footprint), a DEBUG decline never gets the grant (its shell is
+  replaced by `DebugEventReceiptShell`). Until the consent is READ the queue is
+  empty and nothing counts as all-granted, so no OS card ever leads the
+  Screen-events step (review TT4); the Dashboard opens the sheet from this ONE
+  projection (`PermissionsViewModel`). An undecided consent opens the chain even
+  when every OS permission is granted. It is **recorded** on the Automation & Consent screen (a switch that
+  writes through the same owner — never a second gate);
+- **enforced in one place** — for event receipt, `AccessibilityListener`
+  applying `ServiceInfoPolicy` to `serviceInfo.packageNames` (and, on a DEBUG
+  build that declined, `disableSelf()` once — `ServiceInfoPolicy.shouldDisableSelf`
+  — so recognition and the HUD stop even if the service had been granted
+  before; a release build never disables itself).
+
+The Dashboard's front door (`FrontDoorHost` on the shared `FrontDoorSheet`)
+hosts only the per-capability prompt (#843); "Not now" closes it for this
+foreground, anchored on a FOREGROUND GENERATION held by the activity-scoped
+`FrontDoorViewModel` (bumped by `MainActivity.onStop` unless changing
+configurations), so a deferral survives rotation, navigation and re-entry. It
+has ONE "Not now" string (`consent_front_door_not_now`).
+
+The disclosure copy is ONE string (`event_receipt_body`, resolved by
+`eventReceiptDisclosure()` in `:feature:settings`, naming the screen through the
+one `event_receipt_settings_path` string) rendered by the chain's step, the
+Settings switch and the debug block, in the Play prominent-disclosure shape so
+#1138 M3 can reuse it. It carries no state-dependent sentence, and states the
+full scope: events of every subscribed type from every app; only enabled
+delivery-app windows are inspected or captured; other windows are identified by
+app name only; nothing from them is stored — except that offer screenshots,
+when separately turned on, capture the whole screen whatever app is behind the
+offer.
+
+A DEBUG build treats a declined event receipt as blocking at the SHELL:
+`MainActivity` renders `DebugEventReceiptShell` instead of the NavHost while
+`DEBUG && DECLINED` (the backstop a dasher sees on reopening a declined debug
+build — its body says the service has been turned off), so every destination
+and deep link is unreachable; the one way forward is the Automation & Consent
+screen rendered inside the shell (turning the switch on unblocks live and the
+chain then re-requests the accessibility grant), plus Exit. While the consent is
+unread a DEBUG shell shows a neutral loading gate (no NavHost, no deep-link
+delivery), offering a notice + Exit after 3 s. A pending deep link is parked in
+`MainShellViewModel`'s `SavedStateHandle` and cleared only after delivery. A
+release decline keeps the app working with the topology path off.
+
+The consent is ONE nullable `StateFlow`; `null` means ONLY "not read yet". One
+collector on the application scope reads the store (review PP1): a failed read
+is retried with bounded backoff (5 × 1 s·attempt; a WARN per attempt, ERROR only
+when exhausted) and, exhausted, settles on the value already known this process,
+else a USABLE UNDECIDED. The collector is the ONLY writer of the value (review
+SS1): `set()` only writes the store, on the APPLICATION scope (a closing screen
+can never cancel it half-way), and the collector publishes the decision when the
+store emits; a failed write is logged and reported as `false`, never thrown, the
+value untouched. There is ONE collector for the repository's lifetime: after its
+retries are exhausted it waits for a CONFLATED "read again" poke that every
+successful write sends, so a write that lands mid-exhaustion is still read back
+and two collectors can never exist (review UU1/UU2). Enforcement
+treats `null` as UNDECIDED and applies once per distinct policy OUTPUT (`isWide`),
+so one apply and one INFO line per connect; a failed apply is RETRIED with a
+doubling backoff capped at 30 s until it lands (`ServiceInfoPolicy.retryDelayMs`,
+`collectLatest` — a newer consent cancels the retry), so a failed narrowing can
+never leave the subscription wide (SS2). A debug build that connects with a
+known decline disables itself BEFORE registering the source or reporting the
+locale boundary (TT1). An apply never takes sensing down: the
+service scope has a `CoroutineExceptionHandler` and the apply catches
+everything (one log line; the manifest's filtered footprint stays); a null
+`serviceInfo` (no connection) is one WARN and `onServiceConnected` re-applies.
+On Android 11 the runtime package filter may not clear; the listener WARNs once
+and the switch carries a caveat (the rule's one owner is
+`EventReceiptConsent.isWideReceiptReliable`). The on/off → decision rule has one
+owner, `EventReceiptConsent.of(allowed)`. `ServiceInfoPolicy` refuses an EMPTY
+package registry (the framework treats an empty `packageNames` like `null`), and
+a unit test pins the manifest's `android:packageNames` equal to
+`Platform.watchedPackages`.
 
 ## Lifecycle (current state)
 

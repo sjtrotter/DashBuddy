@@ -99,4 +99,21 @@
     <string name="developer_settings_bubble_session_follow_explainer">Follows whichever platform you last touched. Picking a platform in the bubble\'s switcher holds until that dash ends, then it goes back to following.</string>
     <string name="developer_settings_bubble_session_pinned_explainer">Your switcher pick sticks until you change it — including across that platform\'s next dash. While the pinned platform is offline the bubble falls back to following.</string>
     <string name="developer_settings_bubble_session_merged_explainer">Test mode: one card stack folding every live dash, each card chipped with its platform. The switcher is hidden and chat stays on the followed dash.</string>
+    <!-- #1151 — the wide-event-receipt FEATURE consent. ONE copy, shared by the permission chain's
+         first step (:app ScreenEventsCard), the Settings switch row below and the debug block; also
+         the prominent-disclosure shape #1138 M3 will reuse. -->
+    <string name="event_receipt_title">Let DashBuddy notice windows from other apps</string>
+    <!-- #1151 RR1 — the requirement note: PRODUCTION wording here; src/debug/res/values/strings.xml
+         overrides the SAME key with the debug wording (debug requires, release offers). Rendered
+         on the permission-chain step and on the Automation & Consent switch row. -->
+    <string name="event_receipt_requirement_note">Optional. You can decline and still use DashBuddy; it will only receive events from the supported delivery apps. Change this any time under Settings → Data &amp; Privacy → Automation &amp; Consent.</string>
+    <string name="event_receipt_settings_path">Settings → Data &amp; Privacy → Automation &amp; Consent</string>
+    <string name="event_receipt_body">If you allow this, DashBuddy\'s accessibility service receives events from every app on your phone, not only from the supported delivery apps, so an offer drawn on top of whatever you\'re doing (like a rideshare offer popup) can be noticed. Only windows from a delivery app you enabled are ever inspected or captured; other windows are identified by app name only, and nothing from them is stored. If you have offer screenshots turned on in Settings → Data &amp; Privacy, a picture of the whole screen may be saved when an offer appears, whatever app is behind it. You can turn this off any time in %1$s.</string>
+    <string name="event_receipt_allow">Allow</string>
+    <string name="event_receipt_deny">Don\'t allow</string>
+    <!-- The front door's ONE "Not now" (the :app FrontDoorSheet button; review NN6). -->
+    <string name="consent_front_door_not_now">Not now</string>
+    <string name="event_receipt_settings_section">Screen events</string>
+    <string name="event_receipt_android11_caveat">(may not take effect on Android 11)</string>
+    <string name="event_receipt_settings_switch">Notice windows from other apps</string>
 </resources>

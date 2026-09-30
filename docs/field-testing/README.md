@@ -99,6 +99,33 @@ _(The 2026-09-26 entry below **validated and retired** the **#1118** transition-
 clean runs (10/10 + 5/5 accepts inferred from the task surface, 44/44 + 12/12 declines from the confirm sheet, zero
 over-inference); the remaining accept losses are #1119 and the merged card is #1069.)_
 
+- **🆕 NEW — wide event receipt is an opt-in consent, asked BEFORE the accessibility grant (#1151).**
+  The accessibility service receives window-change notices from other apps (what the #1148/#1152
+  overlay path needs) ONLY after you allow it, and the question now comes first in the setup
+  sheets. **How to tell it works:**
+  1. Fresh install: the "Let DashBuddy notice windows from other apps" step appears BEFORE the
+     accessibility-service request (Allow / Don't allow, no "Not now"). The accessibility card never
+     appears before you answer. On an install where the service was already on, the step still
+     appears once.
+  2. Allow → the accessibility step follows; once the service is on, exactly one
+     `Event receipt: wide=true` INFO line (tag `Pipeline`) at connect, and
+     `WINDOWS_CHANGED (coalesced …)` DEBUG lines begin in `app.log`.
+  3. Release, Don't allow → the accessibility step still follows; at connect the line reads
+     `wide=false` and no `WINDOWS_CHANGED` lines appear.
+  4. Debug build, Don't allow → NO accessibility request; the "Wide event receipt is off" notice
+     replaces every screen (a bubble deep link or the Sunday plan notification lands on it too). If
+     the service was already on, it is turned off (`event receipt declined on a debug build —
+     disabling the accessibility service`) and the bubble stops. **Exit** closes the app; **Open
+     Automation & Consent** shows that screen inside the notice — turning "Notice windows from other
+     apps" on restores the app and the setup sheet asks you to turn the service back on.
+  5. Turning the switch off in Settings logs `wide=false` and the `WINDOWS_CHANGED` lines stop (on a
+     debug build the service is also turned off).
+  6. The phone is Android 13+ (a Pixel 7): no `may not take effect on Android 11` WARN and no caveat on
+     the switch. (On an Android 11 device both appear — a known limitation, see the sensor reference.)
+  7. Debug build, a bubble deep link that arrives while the notice is up, then a rotation, then
+     Allow: the app opens the linked screen exactly once.
+  - Issue: #1151. Confirmed: 0/2
+
 - **🆕 NEW — Uber offers drawn as an overlay are captured, whatever has focus (#1152).** Uber draws its
   offer as a floating system overlay above other apps; it used to be read only when it had focus.
   Now a large system-layer window from an ENABLED overlay platform is a candidate (size ≥ ¼ of the

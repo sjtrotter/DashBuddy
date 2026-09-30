@@ -15,18 +15,6 @@ import cloud.trotter.dashbuddy.core.pipeline.notification.input.NotificationList
 
 object PermissionUtils {
 
-    /**
-     * Checks if all required permissions are granted.
-     * Use this in onResume() to detect if a service was killed/disabled.
-     */
-    fun hasAllEssentialPermissions(context: Context): Boolean {
-        return hasPostNotificationsPermission(context) &&
-                hasLocationPermission(context) &&
-                isAccessibilityServiceEnabled(context) &&
-                isNotificationListenerEnabled(context) &&
-                hasFullBubblePreference(context)
-    }
-
     // Standard Runtime Permission
     fun hasPostNotificationsPermission(context: Context): Boolean {
         return NotificationManagerCompat.from(context).areNotificationsEnabled()

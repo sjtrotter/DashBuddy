@@ -234,9 +234,27 @@ frames the pipeline ever sees*:
   old event-package gate meant the windows pipeline never saw it — but only while at least one
   platform is enabled (review G6). Every other handled type keeps the enabled-package gate. Package
   scope for the windows path is enforced on the FETCHED roots (D4); the #4 guard is unchanged.
-  **Caveat:** topology events only REACH the gate in DEBUG builds, which widen the service to all
-  packages; release pins `packageNames`, so a package-less `WINDOWS_CHANGED` is still filtered by
-  the framework there — see the release-packageNames issue #1151.
+  **Reach (#1151):** the framework filters by `packageNames` BEFORE `onAccessibilityEvent`, so a
+  package-less `WINDOWS_CHANGED` reaches the gate ONLY while the dasher's **event-receipt consent**
+  is ALLOWED. `AccessibilityListener` applies the pure `ServiceInfoPolicy.packageNamesFor(consent,
+  Platform.watchedPackages)` in `onServiceConnected` and on every change of
+  `EventReceiptPreferences.consent` (a service-scoped collector, cancelled in `onUnbind`/`onDestroy`):
+  ALLOWED ⇒ `null` (all packages), UNDECIDED/DECLINED ⇒ exactly the watched registry (the XML's
+  cold-start default; the pre-load value is UNDECIDED, so the footprint is filtered until the store
+  says otherwise). Debug and release are identical since #1151 — the old unconditional debug
+  `packageNames = null` is gone; debug still widens `eventTypes` to every type for unhandled-type
+  logging. One INFO per apply: `Pipeline` / `Event receipt: wide=<bool>`. `ListenerGate` itself is
+  unchanged. **Known limitation — Android 11 (API 30, #1151 review MM2):** the framework may treat
+  the dynamically-set package filter as additive, so clearing `packageNames` can leave the manifest
+  filter in force (Allow logs `wide=true` but `WINDOWS_CHANGED` may never arrive). The app cannot
+  verify enforcement from its side: it still applies, logs one `Pipeline` WARN per process ("wide
+  event receipt may not take effect on Android 11"), and the Settings switch carries the caveat.
+  The rule has one owner, `EventReceiptConsent.isWideReceiptReliable(sdkInt)` (`:domain`).
+  **Debug decline disables the service (#1151, dev re-sequencing 2026-09-30):** the consent is asked
+  as the first permission-chain step, BEFORE the accessibility grant; on a DEBUG build that declines,
+  the listener calls `disableSelf()` once (`ServiceInfoPolicy.shouldDisableSelf`, INFO "event receipt
+  declined on a debug build — disabling the accessibility service"), so recognition and the HUD stop
+  even when the service had been granted earlier. A release build never disables itself.
 - **D3 — per-key coalescer.** `coalesceByKey(quietMs, maxWaitMs, keyOf, merge, maxKeys,
   leadingEdge)` (`event/coalesce/CoalesceByKey.kt`) replaced `debounceWithTimeout`. Per key, a
   burst opens on the first event, folds every event into an accumulator, and emits when EITHER the

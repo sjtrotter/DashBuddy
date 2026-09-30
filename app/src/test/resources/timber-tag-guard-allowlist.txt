@@ -30,7 +30,6 @@ core/pipeline/src/main/java/cloud/trotter/dashbuddy/core/pipeline/FrameGate.kt 1
 core/pipeline/src/main/java/cloud/trotter/dashbuddy/core/pipeline/PipelineStats.kt 1
 core/pipeline/src/main/java/cloud/trotter/dashbuddy/core/pipeline/PipelineSupervision.kt 1
 core/pipeline/src/main/java/cloud/trotter/dashbuddy/core/pipeline/accessibility/AccessibilityPipeline.kt 2
-core/pipeline/src/main/java/cloud/trotter/dashbuddy/core/pipeline/accessibility/input/AccessibilityListener.kt 1
 core/pipeline/src/main/java/cloud/trotter/dashbuddy/core/pipeline/accessibility/mapper/AccessibilityNodeMapper.kt 1
 core/pipeline/src/main/java/cloud/trotter/dashbuddy/core/pipeline/rules/JsonRuleInterpreter.kt 14
 core/pipeline/src/main/java/cloud/trotter/dashbuddy/core/pipeline/rules/ParsedFieldsFactory.kt 2

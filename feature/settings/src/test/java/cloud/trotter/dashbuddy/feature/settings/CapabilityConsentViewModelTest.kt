@@ -3,6 +3,8 @@ package cloud.trotter.dashbuddy.feature.settings
 import cloud.trotter.dashbuddy.domain.action.RuleAction
 import cloud.trotter.dashbuddy.domain.capability.RuleCapability
 import cloud.trotter.dashbuddy.domain.capability.RuleCapabilityGrants
+import cloud.trotter.dashbuddy.domain.settings.EventReceiptConsent
+import cloud.trotter.dashbuddy.domain.settings.EventReceiptPreferences
 import cloud.trotter.dashbuddy.domain.state.Platform
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -30,6 +32,20 @@ import org.junit.Test
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class CapabilityConsentViewModelTest {
+
+    /** In-memory [EventReceiptPreferences] (#1151) — writes recorded, value drivable. */
+    private class FakeEventReceipt(
+        initial: EventReceiptConsent = EventReceiptConsent.UNDECIDED,
+    ) : EventReceiptPreferences {
+        private val _consent = MutableStateFlow<EventReceiptConsent?>(initial)
+        override val consent: StateFlow<EventReceiptConsent?> = _consent
+        val setCalls = mutableListOf<EventReceiptConsent>()
+        override suspend fun set(consent: EventReceiptConsent): Boolean {
+            setCalls += consent
+            _consent.value = consent
+            return true
+        }
+    }
 
     /** In-memory [RuleCapabilityGrants] — the enumeration + granted set are drivable, writes recorded. */
     private class FakeGrants : RuleCapabilityGrants {
@@ -129,7 +145,7 @@ class CapabilityConsentViewModelTest {
             listOf(cap("k1", "doordash.screen.offer_popup", RuleAction.ACCEPT_OFFER, "asset:rules/doordash.json")),
         )
         grants.setGrantedKeys(setOf("k1"))
-        val vm = CapabilityConsentViewModel(grants)
+        val vm = CapabilityConsentViewModel(grants, FakeEventReceipt())
 
         // WhileSubscribed: collecting is what starts the upstream combine.
         val state = vm.uiState.first { it.sources.isNotEmpty() }
@@ -140,7 +156,7 @@ class CapabilityConsentViewModelTest {
     @Test
     fun `setGranted grant routes through the grant store`() = runTest {
         val grants = FakeGrants()
-        val vm = CapabilityConsentViewModel(grants)
+        val vm = CapabilityConsentViewModel(grants, FakeEventReceipt())
 
         vm.setGranted("k1", true)
 
@@ -151,12 +167,53 @@ class CapabilityConsentViewModelTest {
     fun `setGranted revoke routes through the grant store as false and drops the key`() = runTest {
         val grants = FakeGrants()
         grants.setGrantedKeys(setOf("k1"))
-        val vm = CapabilityConsentViewModel(grants)
+        val vm = CapabilityConsentViewModel(grants, FakeEventReceipt())
 
         vm.setGranted("k1", false)
 
         assertEquals(listOf("k1" to false), grants.setGrantedCalls)
         // Revocation surfaces on the read side immediately (the engine gate then fails closed).
         assertFalse(grants.grantedKeys.value.contains("k1"))
+    }
+
+    // =========================================================================
+    // #1151 — the "Screen events" switch (a FEATURE consent, not a grant)
+    // =========================================================================
+
+    @Test
+    fun `event receipt switch reads ALLOWED only`() = runTest {
+        for ((consent, expected) in listOf(
+            EventReceiptConsent.UNDECIDED to false,
+            EventReceiptConsent.DECLINED to false,
+            EventReceiptConsent.ALLOWED to true,
+        )) {
+            // A non-empty enumeration lets the test wait for the COMBINED emission, not the default.
+            val grants = FakeGrants()
+            grants.setEnumeration(
+                listOf(cap("k1", "doordash.screen.offer_popup", RuleAction.ACCEPT_OFFER, "asset:rules/doordash.json")),
+            )
+            val vm = CapabilityConsentViewModel(grants, FakeEventReceipt(consent))
+            val state = vm.uiState.first { it.sources.isNotEmpty() }
+            assertEquals("$consent", expected, state.eventReceiptAllowed)
+        }
+    }
+
+    @Test
+    fun `the switch initial state is seeded from the current value`() {
+        val vm = CapabilityConsentViewModel(FakeGrants(), FakeEventReceipt(EventReceiptConsent.ALLOWED))
+        assertTrue("no subscriber yet — the stateIn initial value", vm.uiState.value.eventReceiptAllowed)
+    }
+
+    @Test
+    fun `event receipt switch writes through the preference, never the grant store`() = runTest {
+        val grants = FakeGrants()
+        val receipt = FakeEventReceipt()
+        val vm = CapabilityConsentViewModel(grants, receipt)
+
+        vm.setEventReceiptAllowed(true)
+        vm.setEventReceiptAllowed(false)
+
+        assertEquals(listOf(EventReceiptConsent.ALLOWED, EventReceiptConsent.DECLINED), receipt.setCalls)
+        assertTrue("a feature consent never touches the grant store", grants.setGrantedCalls.isEmpty())
     }
 }

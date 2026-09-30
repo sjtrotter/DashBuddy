@@ -2,6 +2,7 @@ package cloud.trotter.dashbuddy.log
 
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import cloud.trotter.dashbuddy.guard.RepoRoot
 import java.io.File
 
 /**
@@ -114,7 +115,7 @@ class TimberTagGuardTest {
      */
     private val bareCallRegex = Regex("""Timber\s*(?:\.\s*Forest\s*)?\.\s*(?:i|w|e|wtf)\s*\(""")
 
-    private val repoRoot: File by lazy { locateRepoRoot() }
+    private val repoRoot: File by lazy { RepoRoot.locate() }
 
     private val allowlistFile: File by lazy {
         File(repoRoot, "app/src/test/resources/timber-tag-guard-allowlist.txt")
@@ -222,15 +223,4 @@ class TimberTagGuardTest {
      * JVM unit tests run with the working directory at the `:app` module root, but be robust to
      * a repo-root (or any nested) cwd too — walk up until `settings.gradle.kts` is found.
      */
-    private fun locateRepoRoot(): File {
-        var dir = File(".").absoluteFile.normalize()
-        while (true) {
-            if (File(dir, "settings.gradle.kts").isFile) return dir
-            dir = dir.parentFile
-                ?: error(
-                    "Could not locate repo root (settings.gradle.kts) walking up from " +
-                        File(".").absoluteFile.normalize().path,
-                )
-        }
-    }
 }

@@ -3,6 +3,7 @@ package cloud.trotter.dashbuddy.log
 import cloud.trotter.dashbuddy.domain.pipeline.StateMachineContract
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import cloud.trotter.dashbuddy.guard.RepoRoot
 import java.io.File
 
 /**
@@ -32,7 +33,7 @@ class NotificationIntentSsotGuardTest {
     /** Source-set directory-name prefixes to skip — test code is out of scope. */
     private val excludedSourceSetPrefixes = listOf("test", "androidTest")
 
-    private val repoRoot: File by lazy { locateRepoRoot() }
+    private val repoRoot: File by lazy { RepoRoot.locate() }
 
     private val roots: List<String> by lazy {
         modules.flatMap { module ->
@@ -77,17 +78,5 @@ class NotificationIntentSsotGuardTest {
                 problems.sorted().joinToString("\n"),
             problems.isEmpty(),
         )
-    }
-
-    private fun locateRepoRoot(): File {
-        var dir = File(".").absoluteFile.normalize()
-        while (true) {
-            if (File(dir, "settings.gradle.kts").isFile) return dir
-            dir = dir.parentFile
-                ?: error(
-                    "Could not locate repo root (settings.gradle.kts) walking up from " +
-                        File(".").absoluteFile.normalize().path,
-                )
-        }
     }
 }

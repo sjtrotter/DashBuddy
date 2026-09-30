@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- #1151 RR1 — DEBUG override of the requirement note (the main value is the production
+         wording). Same key, different source set: debug requires, release offers. -->
+    <string name="event_receipt_requirement_note">Required in this debug build. If you decline, DashBuddy\'s accessibility service turns itself off and the app cannot be used until you allow it under Settings → Data &amp; Privacy → Automation &amp; Consent.</string>
+</resources>

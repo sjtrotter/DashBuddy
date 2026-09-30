@@ -21,7 +21,6 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -31,7 +30,6 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import cloud.trotter.dashbuddy.R
-import kotlinx.coroutines.launch
 
 /**
  * The permission gate: one "trust card" at a time until every required permission is granted.
@@ -51,7 +49,6 @@ fun PermissionsBottomSheet(
 ) {
     val context = LocalContext.current
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
-    val scope = rememberCoroutineScope()
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
     /**
@@ -61,7 +58,7 @@ fun PermissionsBottomSheet(
      * Being composition-local also means a re-opened gate starts from null, so a ViewModel that
      * outlived the previous sheet can never make this one report "all granted" on arrival.
      */
-    var displayedPermission by remember { mutableStateOf<PermissionType?>(null) }
+    var displayedPermission by remember { mutableStateOf<PermissionStep?>(null) }
 
     // Poll on entry: the ViewModel is scoped to the nav entry and can outlive this sheet, so its
     // state may predate the gate re-opening. (ON_RESUME below cannot cover this — the sheet is
@@ -72,18 +69,23 @@ fun PermissionsBottomSheet(
     // Event up; the ViewModel owns the read.
     LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { viewModel.refresh() }
 
-    LaunchedEffect(uiState.missing) {
-        val head = uiState.missing.firstOrNull()
+    LaunchedEffect(uiState.steps, uiState.allGranted) {
+        val head = uiState.steps.firstOrNull()
         if (head != null) {
             displayedPermission = head
-        } else if (displayedPermission != null) {
+            // #1151 review UU3/VV1: a queue that re-populated mid-hide cancelled that animation and
+            // left the sheet at its interrupted offset — bring it back up. show() unconditionally —
+            // isVisible reads currentValue and is still Expanded mid-hide (a show() on an already
+            // expanded sheet is a no-op animation).
+            sheetState.show()
+        } else if (displayedPermission != null && uiState.allGranted) {
             // The queue emptied while a card was up ⇒ the gate just closed: animate out, tell the
             // host. All-granted with nothing ever displayed is the "gate never opened" case and
-            // reports nothing.
-            scope.launch {
-                sheetState.hide()
-                onAllGranted()
-            }
+            // reports nothing. #1151 review SS3: the hide runs INSIDE this keyed effect, so a queue
+            // that re-populates mid-animation cancels it; after the hide the state is re-checked,
+            // and a gate that re-opened slides back up with its sticky card instead of reporting.
+            sheetState.hide()
+            if (viewModel.uiState.value.allGranted) onAllGranted() else sheetState.show()
         }
     }
 
@@ -111,19 +113,25 @@ fun PermissionsBottomSheet(
             dragHandle = null,
             modifier = Modifier.padding(bottom = bottomPadding)
         ) {
-            PermissionCard(
-                type = currentPerm,
-                onGrantClicked = {
-                    launchGrantFlow(
-                        context = context,
-                        type = currentPerm,
-                        accessibilityToastMsg = accToastMsg,
-                        bubblesToastMsg = bubblesToastMsg,
-                        locationLauncher = locationLauncher,
-                        postNotificationsLauncher = notifLauncher,
-                    )
-                }
-            )
+            when (currentPerm) {
+                // #1151 (dev re-sequencing): the consent step comes BEFORE the accessibility grant.
+                PermissionStep.ScreenEvents -> ScreenEventsCard(
+                    onDecision = viewModel::onScreenEventsDecision,
+                )
+                is PermissionStep.Os -> PermissionCard(
+                    type = currentPerm.type,
+                    onGrantClicked = {
+                        launchGrantFlow(
+                            context = context,
+                            type = currentPerm.type,
+                            accessibilityToastMsg = accToastMsg,
+                            bubblesToastMsg = bubblesToastMsg,
+                            locationLauncher = locationLauncher,
+                            postNotificationsLauncher = notifLauncher,
+                        )
+                    }
+                )
+            }
         }
     }
 }
