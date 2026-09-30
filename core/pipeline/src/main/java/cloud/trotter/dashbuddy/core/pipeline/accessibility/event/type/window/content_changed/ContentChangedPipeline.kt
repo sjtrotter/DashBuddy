@@ -28,7 +28,6 @@ data class CoalescedChange(
     val eventCount: Int,
     val firstEventTimeMs: Long,
     val lastEventTimeMs: Long,
-    val lastClassName: String?,
 ) {
     val spanMs: Long get() = lastEventTimeMs - firstEventTimeMs
 
@@ -42,7 +41,6 @@ data class CoalescedChange(
                 eventCount = 1,
                 firstEventTimeMs = e.eventTimeMs,
                 lastEventTimeMs = e.eventTimeMs,
-                lastClassName = e.className,
             )
         } else {
             acc.copy(
@@ -50,7 +48,6 @@ data class CoalescedChange(
                 changeTypes = acc.changeTypes or e.contentChangeTypes,
                 eventCount = acc.eventCount + 1,
                 lastEventTimeMs = e.eventTimeMs,
-                lastClassName = e.className,
             )
         }
     }

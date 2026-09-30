@@ -25,7 +25,6 @@ data class AccEvent(
     val packageName: String?,
     val className: String?,
     val contentChangeTypes: Int,
-    val windowChanges: Int,
     val eventTimeMs: Long,
     val source: SourceNodeRef? = null,
 ) {
@@ -39,7 +38,6 @@ data class AccEvent(
                 packageName = event.packageName?.toString(),
                 className = event.className?.toString(),
                 contentChangeTypes = event.contentChangeTypes,
-                windowChanges = event.windowChanges,
                 eventTimeMs = event.eventTime,
                 source = if (type == AccessibilityEvent.TYPE_VIEW_CLICKED) {
                     SourceNodeRef(copyOf(event))

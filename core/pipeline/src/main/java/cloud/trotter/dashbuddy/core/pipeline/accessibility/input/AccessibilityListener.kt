@@ -61,7 +61,6 @@ class AccessibilityListener : AccessibilityService() {
             type = event.eventType,
             pkg = pkg,
             enabledPackages = platformPreferences.enabledPackages.value,
-            isDebug = BuildConfig.DEBUG,
             handledTypes = HANDLED_TYPES,
         )
         if (!admitted) return

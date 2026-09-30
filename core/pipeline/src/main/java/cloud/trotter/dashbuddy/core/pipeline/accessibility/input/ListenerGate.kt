@@ -13,16 +13,12 @@ import android.view.accessibility.AccessibilityEvent
  *   enforced downstream on the FETCHED roots (`WindowsChangedPipeline` skips any root whose
  *   package is not in `Platform.watchedPackages`) — the #4 self-recognition guard is unchanged.
  * - Every other handled type keeps the event-package gate against the enabled platforms.
- *
- * [isDebug] is part of the signature so the decision is fully explicit, but the rule is the same
- * in both build types (debug only widens WHICH events arrive, not which are admitted).
  */
 internal object ListenerGate {
     fun admit(
         type: Int,
         pkg: String?,
         enabledPackages: Set<String>,
-        @Suppress("UNUSED_PARAMETER") isDebug: Boolean,
         handledTypes: Set<Int>,
     ): Boolean {
         if (type !in handledTypes) return false

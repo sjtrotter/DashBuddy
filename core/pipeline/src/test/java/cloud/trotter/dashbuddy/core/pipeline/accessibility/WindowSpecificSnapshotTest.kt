@@ -96,7 +96,6 @@ class WindowSpecificSnapshotTest {
         packageName = ddPkg,
         className = "android.widget.FrameLayout",
         contentChangeTypes = 1,
-        windowChanges = 0,
         eventTimeMs = 0L,
     )
 

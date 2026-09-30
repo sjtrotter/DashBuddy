@@ -55,7 +55,6 @@ class PreMapPackageSkipTest {
         packageName = nonTargetPkg,
         className = "android.widget.FrameLayout",
         contentChangeTypes = 0,
-        windowChanges = 0,
         eventTimeMs = 0L,
     )
 

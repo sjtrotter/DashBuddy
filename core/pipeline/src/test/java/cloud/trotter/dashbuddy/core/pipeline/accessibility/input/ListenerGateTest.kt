@@ -17,13 +17,12 @@ class ListenerGateTest {
     private val enabled = setOf("com.doordash.driverapp")
     private val handled = AccessibilityListener.HANDLED_TYPES
 
-    private fun admit(type: Int, pkg: String?, isDebug: Boolean = false) =
-        ListenerGate.admit(type, pkg, enabled, isDebug, handled)
+    private fun admit(type: Int, pkg: String?) =
+        ListenerGate.admit(type, pkg, enabled, handled)
 
     @Test
     fun `WINDOWS_CHANGED with a null package is admitted`() {
         assertTrue(admit(AccessibilityEvent.TYPE_WINDOWS_CHANGED, null))
-        assertTrue(admit(AccessibilityEvent.TYPE_WINDOWS_CHANGED, null, isDebug = true))
     }
 
     @Test
@@ -37,7 +36,7 @@ class ListenerGateTest {
         assertFalse(admit(AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED, "com.android.launcher3"))
         assertFalse(admit(AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED, null))
         assertFalse(admit(AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED, "cloud.trotter.dashbuddy"))
-        assertFalse(admit(AccessibilityEvent.TYPE_VIEW_CLICKED, "com.android.launcher3", isDebug = true))
+        assertFalse(admit(AccessibilityEvent.TYPE_VIEW_CLICKED, "com.android.launcher3"))
     }
 
     @Test
