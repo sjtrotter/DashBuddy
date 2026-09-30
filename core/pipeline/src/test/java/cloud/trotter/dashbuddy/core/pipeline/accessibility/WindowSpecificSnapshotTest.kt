@@ -575,4 +575,43 @@ class WindowSpecificSnapshotTest {
         assertEquals(listOf("dd"), collect(h, kind).map { it.tree.text })
         verify(small, never()).root
     }
+
+    /** Emits [seq] (virtual-time offset ms → event) into a CONTENT pipeline and collects every frame. */
+    private fun collectSequence(h: Harness, seq: List<Pair<Long, AccEvent>>): List<TreeSnapshot> {
+        val emitted = mutableListOf<TreeSnapshot>()
+        runTest {
+            val job = backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
+                output(Kind.CONTENT, h.source, h.prefs, h.stats).collect { emitted += it }
+            }
+            advanceUntilIdle()
+            var now = 0L
+            for ((at, e) in seq) {
+                advanceTimeBy(at - now)
+                runCurrent()
+                now = at
+                assertTrue("test harness: event must enter the shared flow", h.events.tryEmit(e))
+                runCurrent()
+            }
+            advanceTimeBy(1_000)
+            runCurrent()
+            job.cancel()
+        }
+        return emitted
+    }
+
+    private fun content(windowId: Int, pkg: String) = event(Kind.CONTENT.type, windowId, pkg)
+
+    @Test
+    fun `BB3 - DoorDash, overlay, DoorDash content bursts - the overlay's update is not folded away`() {
+        val dd = node(ddPkg, "dd", windowId = 3)
+        val uber = node(uberPkg, "uber-offer")
+        val h = harness(activeRoot = dd, windows = listOf(window(3, 5, dd, active = true), uberOverlay(9, 9, uber)))
+
+        val frames = collectSequence(
+            h,
+            listOf(0L to content(3, ddPkg), 100L to content(9, uberPkg), 200L to content(3, ddPkg)),
+        ).map { it.tree.text }
+
+        assertTrue("the overlay event forms its own burst and is resolved: $frames", "uber-offer" in frames)
+    }
 }
