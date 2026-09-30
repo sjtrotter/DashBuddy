@@ -653,4 +653,71 @@ class SkeletonBuilderTest {
         )!!
         assertEquals("com.x:id/chip_Adam", alone.root.id)
     }
+
+    @Test
+    fun `KK1 - ids and classes split at camelCase boundaries, text slots do not`() {
+        fun tagOf(tag: String): String? = SkeletonBuilder.build(
+            UiNode(className = "android.widget.LinearLayout", viewIdResourceName = "com.x:id/row", children = listOf(
+                UiNode(className = "android.widget.TextView", viewIdResourceName = "com.x:id/customer_name", text = "Adam"),
+                UiNode(className = "android.widget.Button", viewIdResourceName = "com.x:id/$tag", text = "Continue"),
+            )),
+            null, meta, platform, day,
+        )!!.root.children[1].id
+        assertNull(tagOf("chipAdam"))
+        assertNull(tagOf("XMLAdamRow"))
+        assertNull(tagOf("chip_adam"))
+        assertEquals("com.x:id/chipAdamant", tagOf("chipAdamant"))
+        assertEquals("com.x:id/chipGold", tagOf("chipGold"))
+        // A text slot keeps the plain letter-run split: "chipAdam" is one run, not the identity run.
+        assertEquals(listOf(words(1, "chipAdam")), beside("Adam", "chipAdam"))
+    }
+
+    @Test
+    fun `LL1 - an ADDRESS seeds its exact value only, a NAME its runs too, a mask nothing`() {
+        fun frame(identityId: String, identity: String, vararg nodes: UiNode) = UiNode(
+            className = "android.widget.LinearLayout",
+            viewIdResourceName = "com.x:id/sheet",
+            children = listOf(
+                UiNode(className = "android.widget.TextView", viewIdResourceName = "com.x:id/$identityId", text = identity),
+            ) + nodes,
+        )
+        val address = SkeletonBuilder.build(
+            frame(
+                "address_line_1", "Bay View Commons",
+                UiNode(className = "android.widget.TextView", text = "View details"),
+                UiNode(className = "android.widget.TextView", text = "Bay View Commons"),
+                UiNode(className = "android.widget.ImageView", viewIdResourceName = "com.x:id/roadNameLayout"),
+                UiNode(className = "android.widget.ImageView", viewIdResourceName = "com.x:id/bayViewIcon"),
+            ),
+            null, meta, platform, day,
+        )!!.root.children
+        assertEquals(words(2, "View details"), address[1].text.getValue("text"))
+        // AA1's exact-duplicate rule still holds for an address.
+        assertEquals(TextSlot.WITHHELD, address[2].text.getValue("text"))
+        assertEquals("com.x:id/roadNameLayout", address[3].id)
+        assertEquals("com.x:id/bayViewIcon", address[4].id)
+
+        // A mask seeds nothing — neither its exact value's words nor ids carrying "redacted"/"address".
+        val masked = SkeletonBuilder.build(
+            frame(
+                "customer_name", "[redacted:ab12]",
+                UiNode(className = "android.widget.TextView", text = "Redacted items"),
+                UiNode(className = "android.widget.ImageView", viewIdResourceName = "com.x:id/redactedBadge"),
+            ),
+            null, meta, platform, day,
+        )!!.root.children
+        assertEquals(words(2, "Redacted items"), masked[1].text.getValue("text"))
+        assertEquals("com.x:id/redactedBadge", masked[2].id)
+        val addressMask = SkeletonBuilder.build(
+            frame(
+                "address_line_1", "[address]",
+                UiNode(className = "android.widget.ImageView", viewIdResourceName = "com.x:id/addressIcon"),
+            ),
+            null, meta, platform, day,
+        )!!.root.children
+        assertEquals("com.x:id/addressIcon", addressMask[1].id)
+
+        // A NAME still seeds runs: "Adam's order" and `chipAdam` beside `customer_name` "Adam".
+        assertEquals(listOf(TextSlot.WITHHELD), beside("Adam", "Adam's order"))
+    }
 }

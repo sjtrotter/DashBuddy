@@ -42,10 +42,11 @@ import kotlin.coroutines.cancellation.CancellationException
  *   ([CensusHash.canonical]) and — when the raw trimmed value is itself within the cap — also on the raw
  *   form; either hit withholds. Only a `words:1..8` survivor is hashed, on its canonical form
  *   ([CensusHash], fail-closed to `withheld`). The FRAME-LEVEL duplicate rule then withholds (a) any field
- *   whose canonical value a value-judging step caught anywhere in the frame, and (b) any field that
- *   CONTAINS a letter run (≥ 3 letters, case-insensitive) of an IDENTITY id's rendered text/desc — so a
- *   customer name the id marks on one node is not hashed on an id-less node that repeats or embeds it
- *   ("Adam's order").
+ *   whose canonical value a value-judging step or a NAME/ADDRESS identity id caught anywhere in the
+ *   frame, and (b) any field — and any node's id name part or class, split also at camelCase — that
+ *   CONTAINS a letter run (≥ 2 letters, case-folded) of a NAME identity id's rendered text/desc, so a
+ *   customer name the id marks on one node is not hashed on a node that repeats or embeds it ("Adam's
+ *   order", `chipAdam`). Masks never seed; an ADDRESS seeds its exact value only.
  * - **Inert.** [outcome] never throws (only coroutine cancellation escapes): any failure is
  *   [Refusal.BUILD_FAILED].
  * - **Bounded.** The 40-character cap precedes the grammar and every pattern; an item over
@@ -258,12 +259,15 @@ object SkeletonBuilder {
 
     private val ID_SEPARATORS = Regex("[_.:-]")
 
-    /** How the §2 step-1 id check classified a node's RAW id (reviews CC3, EE1). */
+    /** How the §2 step-1 id check classified a node's RAW id (reviews CC3, EE1, LL1). */
     internal enum class IdClass {
-        /** An `ID_MARKER_TABLE` row with `valueIsPii` — an IDENTITY id (customer name, address line). */
-        PII_VALUE,
+        /** An `ID_MARKER_TABLE` NAME row — a person's name: seeds its exact value AND its letter runs. */
+        PII_NAME,
 
-        /** An `ID_MARKER_TABLE` row without it — a CONTENT id also reused for app copy. */
+        /** An `ID_MARKER_TABLE` ADDRESS row — a place: seeds its exact value only (no runs, review LL1). */
+        PII_ADDRESS,
+
+        /** An `ID_MARKER_TABLE` CONTENT row — also reused for app copy / other people: seeds nothing. */
         PII_CONTENT,
 
         /** In `PII_ID_SUFFIXES` only (the intake list; it also covers instruction BODIES). */
@@ -275,7 +279,11 @@ object SkeletonBuilder {
     private fun idClassOf(id: String?): IdClass {
         val marker = CustomerTextMarkers.idMarkerFor(id)
         return when {
-            marker != null -> if (marker.valueIsPii) IdClass.PII_VALUE else IdClass.PII_CONTENT
+            marker != null -> when (marker.kind) {
+                CustomerTextMarkers.IdentityKind.NAME -> IdClass.PII_NAME
+                CustomerTextMarkers.IdentityKind.ADDRESS -> IdClass.PII_ADDRESS
+                CustomerTextMarkers.IdentityKind.CONTENT -> IdClass.PII_CONTENT
+            }
             PiiShapes.hasPiiIdSuffix(id) -> IdClass.INTAKE_ONLY
             else -> IdClass.NONE
         }
@@ -322,15 +330,15 @@ object SkeletonBuilder {
         private val valueSlots = HashMap<String, TextSlot>()
 
         /** Letter runs per (canonical value, threshold), computed once per frame (review II10). */
-        private val runCache = HashMap<Pair<String, Int>, List<String>>()
+        private val runCache = HashMap<Triple<String, Int, Boolean>, List<String>>()
 
-        private fun runsOf(canonical: String, minLetters: Int = 0): List<String> =
-            runCache.getOrPut(canonical to minLetters) { letterRuns(canonical, minLetters) }
+        private fun runsOf(canonical: String, minLetters: Int = 0, splitCamel: Boolean = false): List<String> =
+            runCache.getOrPut(Triple(canonical, minLetters, splitCamel)) { letterRuns(canonical, minLetters, splitCamel) }
 
         /** Canonical values a VALUE-judging step caught anywhere in the frame (exact equality). */
         private val caught = HashSet<String>()
 
-        /** Letter runs (≥ [MIN_IDENTITY_RUN] letters, case-folded) of identity ids' text/desc (review GG1). */
+        /** Letter runs (≥ [MIN_IDENTITY_RUN] letters, folded) of NAME identity ids' text/desc (GG1, LL1). */
         private val identityRuns = HashSet<String>()
 
         fun scan(node: UiNode): Pending {
@@ -362,15 +370,19 @@ object SkeletonBuilder {
             val trimmed = value.trim()
             val canonical = CensusHash.canonical(value)
             val step = valueStep(trimmed, canonical)
-            // Seeds: (a) a value-judging step 3, 4, 5, 7, 8 on any field, applied by EXACT canonical
-            // equality; (b) step 1 ONLY for an IDENTITY id (`valueIsPii`, review EE1) on its rendered
-            // text/desc, applied by TOKEN CONTAINMENT of its letter runs (review GG1). Not the length cap
-            // (a duplicate is itself over-length), not a content id (`description_text_view` renders app
-            // copy), not an intake-only id (its list also covers chrome instruction bodies, review CC3).
-            if (step != null && step != FilterStep.LENGTH_CAP) caught += canonical
-            if (idClass == IdClass.PII_VALUE && seedsFromId) {
-                caught += canonical
-                identityRuns += runsOf(canonical, minLetters = MIN_IDENTITY_RUN)
+            // Seeds (review LL1): a mask NEVER seeds anything — it is not identity, and its word
+            // ("redacted", "address") would collide with chrome. Otherwise: (a) a value-judging step 3, 4,
+            // 7, 8 on any field seeds its EXACT canonical value; (b) step 1 on an identity id's rendered
+            // text/desc — a NAME seeds its exact value AND its letter runs (token containment, GG1), an
+            // ADDRESS its exact value ONLY (address vocabulary — "Road", "View", "San" — is common
+            // English and would suppress chrome frame-wide). Not the length cap (a duplicate is itself
+            // over-length), not a CONTENT id, not an intake-only id (review CC3).
+            if (!PiiShapes.containsMask(canonical)) {
+                if (step != null && step != FilterStep.LENGTH_CAP) caught += canonical
+                if (seedsFromId && (idClass == IdClass.PII_NAME || idClass == IdClass.PII_ADDRESS)) caught += canonical
+                if (seedsFromId && idClass == IdClass.PII_NAME) {
+                    identityRuns += runsOf(canonical, minLetters = MIN_IDENTITY_RUN)
+                }
             }
             return Field(trimmed, canonical, idWithholds = idClass != IdClass.NONE)
         }
@@ -411,8 +423,8 @@ object SkeletonBuilder {
          * name part and the class name of every node — an id built from the customer's name
          * (`chip_Adam` beside `customer_name` "Adam") is as identifying as a text slot.
          */
-        fun containsIdentityRun(candidate: String): Boolean =
-            identityRuns.isNotEmpty() && runsOf(candidate).any { it in identityRuns }
+        fun containsIdentityRun(candidate: String, splitCamel: Boolean = false): Boolean =
+            identityRuns.isNotEmpty() && runsOf(candidate, splitCamel = splitCamel).any { it in identityRuns }
 
         fun emit(p: Pending): UiSkeletonNodeDto {
             val text = LinkedHashMap<String, TextSlot>()
@@ -422,8 +434,10 @@ object SkeletonBuilder {
                 // fingerprint); anything else is absent. The §2 PII-id step used the RAW id.
                 // JJ1: a static class/id that carries an identity run of THIS frame is absent too — for the
                 // wire and (since the fingerprint is computed from this tree) the fingerprint.
-                className = p.className?.takeIf { !containsIdentityRun(it) },
-                id = p.id?.takeIf { !containsIdentityRun(ResourceIdGrammar.namePart(it)) },
+                // KK1: ids and classes also split at camelCase boundaries (Compose test tags are usually
+                // camelCase — `chipAdam`); text slots keep the plain letter-run split.
+                className = p.className?.takeIf { !containsIdentityRun(it, splitCamel = true) },
+                id = p.id?.takeIf { !containsIdentityRun(ResourceIdGrammar.namePart(it), splitCamel = true) },
                 isClickable = p.node.isClickable,
                 isEnabled = p.node.isEnabled,
                 isChecked = p.node.isChecked,
@@ -441,15 +455,17 @@ object SkeletonBuilder {
     private const val MIN_IDENTITY_RUN = 2
 
     /**
-     * The value's maximal runs of Unicode letters, case-FOLDED with the one [CaseFold] (review HH1) —
+     * The value's maximal runs of Unicode letters (with [splitCamel], also split at camelCase boundaries —
+     * the id/class form, review KK1), case-FOLDED with the one [CaseFold] (review HH1) —
      * so "Adam's order" yields `adam`, `s`, `order` and "Adam, 2 items" yields `adam`, `items` (review
      * GG1). [minLetters] counts letter CODE POINTS of the original run before folding (review HH2:
      * UTF-16 units over-count a supplementary-plane letter, and a fold can change the length).
      */
-    private fun letterRuns(value: String, minLetters: Int = 0): List<String> {
+    private fun letterRuns(value: String, minLetters: Int = 0, splitCamel: Boolean = false): List<String> {
         val runs = ArrayList<String>()
         val sb = StringBuilder()
         var letters = 0
+        var prev = -1
         fun flush() {
             if (sb.isNotEmpty() && letters >= minLetters) runs += CaseFold.fold(sb.toString())
             sb.setLength(0)
@@ -458,13 +474,25 @@ object SkeletonBuilder {
         var i = 0
         while (i < value.length) {
             val cp = value.codePointAt(i)
+            val next = i + Character.charCount(cp)
             if (Character.isLetter(cp)) {
+                // KK1 camelCase boundaries (ids/classes only): lower→Upper (`chip|Adam`), and
+                // Upper→Upper+lower (`XML|Adam`: split before the upper that starts a lowercase word).
+                if (splitCamel && sb.isNotEmpty() && Character.isUpperCase(cp)) {
+                    val nextCp = if (next < value.length) value.codePointAt(next) else -1
+                    if (Character.isLowerCase(prev) ||
+                        (Character.isUpperCase(prev) && nextCp >= 0 && Character.isLowerCase(nextCp))
+                    ) {
+                        flush()
+                    }
+                }
                 sb.appendCodePoint(cp)
                 letters++
             } else {
                 flush()
             }
-            i += Character.charCount(cp)
+            prev = cp
+            i = next
         }
         flush()
         return runs
