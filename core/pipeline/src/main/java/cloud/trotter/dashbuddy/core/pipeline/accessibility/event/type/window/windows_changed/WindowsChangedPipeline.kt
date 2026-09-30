@@ -23,23 +23,23 @@ import javax.inject.Inject
  *
  * Unlike ContentChanged/StateChanged, which snapshot ONE window per frame (the active enabled
  * window, else the readable enabled window in front — #1148), this pipeline enumerates the window
- * list and snapshots at most ONE window per burst (#1148 review G6/H6; PR #1155 review CC2/CC3): the
- * window in FRONT above a cutoff — an ENABLED application window or an ENABLED platform offer overlay
- * (a11y `TYPE_SYSTEM`, size + package, #1152 D6) — never one beneath it, and never two (that would
- * re-open the interleaving the resolver removed). The cutoff:
- * - the ACTIVE window's layer, when the active window is not our own;
- * - when OUR bubble is active (its layer would suppress everything beneath it), the window
- *   [AccessibilitySource.foregroundWindow] reads — the topmost non-own enabled application window
- *   or platform offer overlay — is emitted itself (nothing non-own sits above it by construction); if the foreground is
- *   refused, nothing is emitted.
- * Above the active window the walk is [AccessibilitySource.frontAbove] — the SAME readable-top-or-
- * refuse rule as [AccessibilitySource.foregroundWindow]: `TYPE_APPLICATION` windows plus platform offer
- * overlays (every other system-layer window — the status bar, a platform's small puck or toast, the
- * notification shade — is not, review H1 / #1152 D2), never picture-in-picture (H2), our own skipped;
- * the first decides, and an unreadable window is a barrier (nothing beneath it is emitted).
- * No active window, or an active identity that does not reconcile with the fetched active root
- * (PR #1155 review EE1, the event path's rule) → nothing (the event-driven pipelines cover it).
- * Every overlay emitted is counted (`PipelineStats.onOverlaySnapshot`).
+ * list and snapshots at most ONE window per burst (#1148 review G6/H6; PR #1155 reviews CC2/CC3/DD3/
+ * HH1) — chosen by the SAME rules the event path applies, over the SAME three-valued
+ * [AccessibilitySource.resolveActive], so the two paths never disagree on one list:
+ * - **Enabled** active window → the event path owns it (and never reads a non-active application
+ *   window above it) → only an ENABLED platform offer overlay in front above it is emitted
+ *   ([FrontWindowWalk.overlayFront]);
+ * - **Unknown(window)** (flagged, root unreadable) → the same overlay scan off its layer; no overlay
+ *   → nothing, `topologySkip{FRONT_UNREADABLE}` (the event path owns that frame);
+ * - **NotEnabled** → our bubble: [AccessibilitySource.foregroundWindow]'s window in front; another
+ *   non-enabled window: [FrontWindowWalk.frontAbove]'s single winner;
+ * - **Unknown(none)** (zero or ≥ 2 flagged) → nothing, `topologySkip{NO_ACTIVE_ROOT}`.
+ * Every walk is readable-top-or-refuse: an unreadable window above is a BARRIER (nothing beneath it is
+ * emitted) and a foreign application window on top emits nothing. Refusals are counted in
+ * `topologySkip{…}` (review FF4).
+ * Every overlay emitted is counted (`PipelineStats.onOverlaySnapshot`, in the one window builder).
+ *
+ * [FrontWindowWalk]: `cloud.trotter.dashbuddy.core.pipeline.accessibility.input.FrontWindowWalk`.
  */
 class WindowsChangedPipeline @Inject constructor(
     private val source: AccessibilitySource,

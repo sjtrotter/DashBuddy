@@ -20,26 +20,25 @@ internal sealed interface EventSnapshot {
  * [isEnabled] is the ENABLED-platform package set (`PlatformPreferences.enabledPackages`), not the
  * static watched set: a disabled platform's window is never read.
  *
- * 1. The ACTIVE ROOT (PR #1155 review FF1). When an overlay platform is enabled: ONE `getWindows()`;
- *    the single window flagged active ([AccessibilitySource.activeFromEnumeration]) is the active
- *    window and ITS root is the active root — the overlay decision then runs over that same list, so
- *    nothing is reconciled. When no window is flagged active (or its root is unreadable), or no overlay
- *    platform is enabled (a DoorDash-only dasher, #1148 H4 — no enumeration on this path), the one
- *    fallback: `getLiveNativeRoot()`, with NO overlay scan (the pre-#1152 behaviour). Null →
- *    `NO_ACTIVE_ROOT`.
- * 2. Its package enabled → FIRST (#1152 D5, PR #1155 review BB5): when the active window came from
- *    the enumeration, an ENABLED platform offer overlay in front above it
- *    ([AccessibilitySource.overlayFront]) is the frame for EVERY event while it is up —
- *    whichever window fired — so the covered window never interleaves with it (no R0 flap). It is
- *    on top by construction, so this never reads a window hidden beneath the active one; if the
- *    overlay was selected but fails to map, the frame is skipped `MAP_FAILED` (DD1 — never the covered window). Else
- *    map THAT root ([AccessibilitySource.getCurrentRootSnapshot] over the
- *    already-fetched node): the active enabled window is the ground truth, a sheet over its
- *    activity included.
- * 3. Otherwise (our bubble, the launcher, system UI active) → [AccessibilitySource.foregroundWindow]:
- *    readable-top-or-refuse over application windows AND platform offer overlays (#1152 D4 — so an
- *    overlay over a non-enabled active window is reached HERE, under the fail-closed top rule);
- *    a refusal carries its reason.
+ * 1. The ACTIVE WINDOW. No overlay platform enabled (a DoorDash-only dasher, #1148 H4) or a throwing
+ *    enumeration (PR #1155 review HH4) → the pre-#1152 read: `rootInActiveWindow`; null →
+ *    `NO_ACTIVE_ROOT`; enabled → map it; else step 3. Otherwise ONE `getWindows()` and the three-valued
+ *    [AccessibilitySource.resolveActive] (review HH1, shared with the topology path): **Enabled /
+ *    NotEnabled** — the single flagged window with a readable, packaged FRESH root; **Unknown(window)**
+ *    — flagged but unreadable; **Unknown(none)** — zero or ≥ 2 flagged, in which case the native root's
+ *    OWN window, located in the list by its id, is resolved as the active one (review JJ2), and only a
+ *    native root not provably in the list takes the pre-#1152 read.
+ * 2. Enabled or Unknown(window) → the overlay scan off the active WINDOW's layer
+ *    ([FrontWindowWalk.overlayFront], #1152 D5 / review BB5): an ENABLED platform offer overlay in
+ *    front is the frame for EVERY event while it is up — whichever window fired — so the covered
+ *    window never interleaves with it; a selected overlay that fails to map skips `MAP_FAILED` (DD1).
+ *    No overlay: Enabled → the active window through the ONE window builder (HH5); Unknown(window) →
+ *    a `rootInActiveWindow` that provably IS that window (same non-negative id) follows the resolution
+ *    its package calls for — enabled → mapped, not enabled → step 3 (reviews II1/JJ1); anything else
+ *    skips `FRONT_UNREADABLE`.
+ * 3. NotEnabled (our bubble, the launcher, a disabled platform) → [AccessibilitySource.foregroundWindow]
+ *    over the same list: readable-top-or-refuse over application windows AND platform offer overlays
+ *    (#1152 D4); a refusal carries its reason.
  * 4. A root that fails to map → `MAP_FAILED`.
  * 5. A post-map check of the snapshot's package against [isEnabled]. Both builders derive
  *    `packageName` from the SAME already-fetched root the gate read, so this cannot catch a
@@ -47,6 +46,8 @@ internal sealed interface EventSnapshot {
  *    (review H5) guarding the #4 self-recognition rule.
  *
  * Every [EventSnapshot.Skipped] is counted by the caller (`PipelineStats.onForegroundSkip`).
+ *
+ * [FrontWindowWalk]: `cloud.trotter.dashbuddy.core.pipeline.accessibility.input.FrontWindowWalk`.
  */
 internal fun AccessibilitySource.snapshotForEvent(
     windowId: Int,
