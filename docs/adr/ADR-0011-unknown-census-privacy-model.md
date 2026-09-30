@@ -46,7 +46,7 @@ A new versioned schema, `uinode.skeleton.v1` (`UiSkeletonDto` + `SkeletonSchema`
 `UiNodeSchema`, ADR-0003 rules apply). Per node: `class`, `id` (the platform's own resource name —
 chrome by construction WHEN it matches the static resource-name grammar, `ResourceIdGrammar`: an optional
 `<package>:id/` prefix (`[A-Za-z][A-Za-z0-9_.]*`), a name `[A-Za-z_][A-Za-z0-9_.-]*` with at most one
-internal space, ≤ 64 characters, no run of 8+ hex characters containing a decimal digit (a letter-only hex run is a word — `AddedBadgeView`, review round 16) and no run of 4+ decimal digits; a dynamic id — a
+internal space, ≤ 64 characters, no UUID-shaped token (dynamic whatever its digits, review round 17), no other run of 8+ hex characters containing a decimal digit (a letter-only hex run is a word — `AddedBadgeView`, review round 16) and no run of 4+ decimal digits — residual: an opaque per-frame id made only of letters, outside the UUID shape, reads as static; a dynamic id — a
 per-frame UUID in a Compose test tag, three committed frames `PRIMARY_BUTTON_<uuid>` — is treated as
 ABSENT for both the wire and the fingerprint, never rewritten; the §2 PII-id step still runs on the raw
 id; amended in #1160. The SHAPE is the contract's (`ResourceIdGrammar.isStaticShape`) and is enforced by

@@ -31,7 +31,14 @@ package cloud.trotter.dashbuddy.domain.census.contract
  */
 object DynamicRuns {
 
+    /**
+     * Review AM2: a UUID-shaped token anywhere is dynamic REGARDLESS of digits — its hex groups can all be
+     * letters (`deadbeef-acde-4abc-…` still has the version digit, but `…-acde-acde-…` groups may not).
+     */
+    private val UUID = Regex("[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}")
+
     fun hasDynamicRun(value: String): Boolean {
+        if (UUID.containsMatchIn(value)) return true
         var hexRun = 0
         var hexDigits = 0
         var decimalRun = 0

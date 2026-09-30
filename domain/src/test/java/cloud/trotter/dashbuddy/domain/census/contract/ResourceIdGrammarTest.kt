@@ -72,4 +72,13 @@ class ResourceIdGrammarTest {
         assertFalse(ResourceIdGrammar.isStaticShape("PRIMARY_BUTTON_3f488d4a-0f0b-4fb9-9c86-c4e0253ba22a"))
         assertTrue(ResourceIdGrammar.isStaticShape("com.x:id/added_badge_view"))
     }
+
+    @Test
+    fun `a UUID-shaped token is dynamic regardless of digits (review AM2)`() {
+        assertTrue(DynamicRuns.hasDynamicRun("PRIMARY_BUTTON_deadbeef-acde-4abc-acde-acdeabcdefab"))
+        assertTrue(DynamicRuns.hasDynamicRun("deadbeef-acde-abcd-acde-acdeabcdefab"))
+        assertFalse(ResourceIdGrammar.isStaticShape("PRIMARY_BUTTON_deadbeef-acde-4abc-acde-acdeabcdefab"))
+        // A letter-only word is still not dynamic.
+        assertFalse(DynamicRuns.hasDynamicRun("AddedBadgeView"))
+    }
 }
