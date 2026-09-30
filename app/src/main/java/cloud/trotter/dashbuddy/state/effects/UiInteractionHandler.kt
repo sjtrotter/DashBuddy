@@ -661,10 +661,19 @@ class UiInteractionHandler @Inject constructor(
             }
             val classOk = ref.classNameHint == null || node.className?.toString() == ref.classNameHint
             if (classOk && AccNodeUtils.isActionClickable(node)) {
-                // I4b: an incomplete candidate (fetch-budget cut; a null child aborted above) is unproven —
-                // never "a non-match that lets its twin win". A depth cut is the horizon, not incomplete.
-                if (!region.complete()) { truncated = true; return null }
-                if (ref.fingerprintMatches(region.labels.map { it.second })) hits.add(SemanticHit(node, pre, preCounter - 1))
+                val labels = region.labels.map { it.second }
+                if (!region.complete()) {
+                    // I4b, refined by review J4: an incomplete candidate (fetch-budget cut) vetoes the
+                    // window ONLY if what IS visible is still consistent with the fingerprint (visible
+                    // hint set ⊆ the ref's) — then the unseen part could complete it into the real
+                    // control or its twin. A region already carrying a label OUTSIDE the set can never
+                    // be an exact match whatever is unseen, so a big unrelated card does not veto.
+                    // A depth cut is the horizon, not incompleteness; a null child aborted above.
+                    val visible = labels.mapNotNull(NodeRef::hintHash).toHashSet()
+                    if (ref.labelHintHashes.containsAll(visible)) { truncated = true; return null }
+                } else if (ref.fingerprintMatches(labels)) {
+                    hits.add(SemanticHit(node, pre, preCounter - 1))
+                }
             }
             return region
         }

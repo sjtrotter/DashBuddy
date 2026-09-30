@@ -621,4 +621,29 @@ class UiInteractionHandlerOwnerTest {
         assertTrue(expand(handler(windowRoot(atRect)), ref))
         atRect.clicks(1)
     }
+
+    // ---------------------------------------------------------------- review J4: the veto only where it could BE the fingerprint
+
+    /** A big unrelated clickable card (over the slot cap, carrying a foreign label) beside the exact row does not veto. */
+    @Test
+    fun `a big unrelated clickable card beside the exact row does not veto — the row is clicked`() = runTest {
+        val card = view(clickable = true, bounds = Rect(0, 200, 1080, 1200), children = listOf(
+            view(cls = "android.widget.TextView", text = "Order details"),
+        ) + List(NodeRef.LABEL_SCAN_NODES) { view() })
+        val row = payRow(top = 1774 - 400)
+        assertTrue(expand(handler(windowRoot(card, row))))
+        row.clicks(1)
+        card.neverClicked()
+    }
+
+    /** A partially-seen region whose visible labels are a subset of the ref's could BE the control — abort. */
+    @Test
+    fun `a partially seen region whose visible labels fit the fingerprint aborts`() = runTest {
+        val partial = view(clickable = true, bounds = Rect(0, 200, 1080, 1200), children = listOf(
+            view(cls = "android.widget.TextView", text = "This offer"),
+        ) + List(NodeRef.LABEL_SCAN_NODES) { view() })
+        val row = payRow(top = 1774 - 400)
+        assertFalse(expand(handler(windowRoot(partial, row))))
+        row.neverClicked(); partial.neverClicked()
+    }
 }
