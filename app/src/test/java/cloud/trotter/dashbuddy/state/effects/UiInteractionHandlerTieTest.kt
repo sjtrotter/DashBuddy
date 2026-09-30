@@ -50,6 +50,7 @@ class UiInteractionHandlerTieTest {
         whenever(node.parent).thenReturn(null)
         whenever(node.getBoundsInScreen(any())).thenAnswer { (it.arguments[0] as Rect).set(bounds) }
         whenever(node.performAction(eq(AccessibilityNodeInfo.ACTION_CLICK))).thenReturn(clickResult)
+        whenever(node.refresh()).thenReturn(true) // #1149: the owner is refreshed before dispatch
         return node
     }
 
@@ -230,6 +231,7 @@ class UiInteractionHandlerTieTest {
         whenever(node.parent).thenReturn(null)
         whenever(node.getBoundsInScreen(any())).thenAnswer { (it.arguments[0] as Rect).set(bounds) }
         whenever(node.performAction(eq(AccessibilityNodeInfo.ACTION_CLICK))).thenReturn(true)
+        whenever(node.refresh()).thenReturn(true) // #1149: the owner is refreshed before dispatch
         return node
     }
 
