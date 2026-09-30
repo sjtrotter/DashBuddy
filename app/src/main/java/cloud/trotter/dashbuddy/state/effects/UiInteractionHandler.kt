@@ -57,7 +57,8 @@ import javax.inject.Singleton
  * candidates are dropped, candidates sharing an owner are one control (not a #734
  * tie), labels are verified on the owner's subtree, a COMPOUND owner (a container
  * holding >= 2 labeled clickable controls) is refused, and the owner is
- * `refresh()`ed immediately before dispatch — a stale node is not clicked. A hinted,
+ * `refresh()`ed BEFORE it is verified (review I1), then clicked with no further refresh — a
+ * stale node is dropped, and nothing un-verified reaches dispatch. A hinted,
  * id-less bind is re-found by its EXACT subtree-label fingerprint (strategy 2b) BEFORE
  * the bounds walk: labels are identity, geometry is ranking evidence. Strategy 2b
  * honours the four constraints the withdrawn #1102 re-find left on record: exact
@@ -178,8 +179,8 @@ class UiInteractionHandler @Inject constructor(
         val owned = resolveOwners(candidates, ref, expectedPackage)
         if (owned.orphaned > 0) {
             Timber.tag("Effects").w(
-                "%d of %d candidate(s) for %s have no clickable owner in the package within %d steps — dropped (#1149)",
-                owned.orphaned, candidates.size, description, AccNodeUtils.MAX_OWNER_WALK,
+                "%d of %d candidate(s) for %s have no clickable, fresh owner in the package within %d steps (%d stale) — dropped (#1149)",
+                owned.orphaned, candidates.size, description, AccNodeUtils.MAX_OWNER_WALK, owned.stale,
             )
         }
         if (owned.targets.isEmpty()) return false
@@ -308,7 +309,7 @@ class UiInteractionHandler @Inject constructor(
                 description, ranked.tier, verified.size,
             )
         }
-        return AccNodeUtils.clickNodeStrict(target.owner)
+        return AccNodeUtils.clickNodeStrict(target.owner, expectedPackage)
     }
 
     /**
@@ -350,7 +351,7 @@ class UiInteractionHandler @Inject constructor(
         val ancestors: Set<Int>,
     )
 
-    private class OwnerResolution(val targets: List<OwnedTarget>, val orphaned: Int)
+    private class OwnerResolution(val targets: List<OwnedTarget>, val orphaned: Int, val stale: Int)
 
     /**
      * #1149 — map each candidate to its action owner ([AccNodeUtils.resolveActionOwner]), DROP
@@ -363,16 +364,24 @@ class UiInteractionHandler @Inject constructor(
         val members = ArrayList<MutableList<Int>>()
         val ownerIndexOf = arrayOfNulls<Int>(candidates.size)
         var orphaned = 0
+        var stale = 0
+        val staleOwners = ArrayList<AccessibilityNodeInfo>()
         candidates.forEachIndexed { i, c ->
             // The owner is what gets tapped, so it must itself belong to the scoped package — an
             // embedded foreign-package subtree never lends a tap target (#1149).
             val owner = AccNodeUtils.resolveActionOwner(c.node)
                 ?.takeIf { it.packageName?.toString() == expectedPackage }
-            if (owner == null) { orphaned++; return@forEachIndexed }
+            if (owner == null || staleOwners.any { it == owner }) { orphaned++; return@forEachIndexed }
             val j = owners.indexOfFirst { it == owner }
             if (j >= 0) {
                 members[j].add(i); ownerIndexOf[i] = j
             } else {
+                // #1149 review I1: refresh each distinct owner ONCE, up front, so every scan and
+                // verification below reads its CURRENT state — a recycled row that rebinds
+                // (Decline → Accept) is verified as what it now is. A failed refresh means the view
+                // is gone: the owner is dropped with the orphans. The click follows verification
+                // with no second refresh, so nothing un-verified can reach dispatch.
+                if (!owner.refresh()) { staleOwners.add(owner); orphaned++; stale++; return@forEachIndexed }
                 owners.add(owner); members.add(mutableListOf(i)); ownerIndexOf[i] = owners.size - 1
             }
         }
@@ -394,7 +403,7 @@ class UiInteractionHandler @Inject constructor(
                     .mapNotNull { ownerIndexOf[it] }.filter { it != j }.toSet(),
             )
         }
-        return OwnerResolution(targets, orphaned)
+        return OwnerResolution(targets, orphaned, stale)
     }
 
     /**

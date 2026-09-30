@@ -153,6 +153,23 @@ class UiInteractionHandlerOwnerTest {
         button.neverClicked()
     }
 
+    /**
+     * Review I1: the owner is refreshed BEFORE verification. A recycled row that rebinds on refresh
+     * (Decline → Accept) must be verified as what it now is — and so NOT clicked by a decline tap.
+     */
+    @Test
+    fun `an owner that rebinds on refresh is verified post-refresh and not clicked`() = runTest {
+        var label = "Decline offer"
+        val button = view(clickable = true)
+        whenever(button.text).thenAnswer { label }
+        whenever(button.refresh()).thenAnswer { label = "Accept"; true }
+        val root = windowRoot(button, byId = listOf(button))
+
+        assertFalse(confirmDecline(handler(root)))
+        verify(button, times(1)).refresh()
+        button.neverClicked()
+    }
+
     // ---------------------------------------------------------------- strategy 2b (D2)
 
     private val rowRect = Rect(36, 1774, 1044, 1900)

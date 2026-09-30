@@ -94,37 +94,37 @@ class AccNodeUtilsOwnerTest {
         assertNull(AccNodeUtils.resolveActionOwner(null))
     }
 
-    @Test
-    fun `clickNodeStrict does not dispatch to a node whose refresh fails`() {
-        val owner = node(clickable = true)
-        whenever(owner.refresh()).thenReturn(false)
-        whenever(owner.performAction(eq(AccessibilityNodeInfo.ACTION_CLICK))).thenReturn(true)
-
-        assertFalse(AccNodeUtils.clickNodeStrict(owner))
-        verify(owner, never()).performAction(eq(AccessibilityNodeInfo.ACTION_CLICK))
-    }
+    private val pkg = "com.doordash.driverapp"
 
     @Test
-    fun `clickNodeStrict refreshes and then clicks the owner itself`() {
+    fun `clickNodeStrict clicks the owner itself without refreshing it again`() {
         val parent = node(clickable = true)
         val owner = node(clickable = true, parent = parent)
-        whenever(owner.refresh()).thenReturn(true)
+        whenever(owner.packageName).thenReturn(pkg)
         whenever(owner.performAction(eq(AccessibilityNodeInfo.ACTION_CLICK))).thenReturn(true)
 
-        assertTrue(AccNodeUtils.clickNodeStrict(owner))
-        verify(owner, times(1)).refresh()
+        assertTrue(AccNodeUtils.clickNodeStrict(owner, pkg))
+        verify(owner, never()).refresh() // #1149 review I1: the caller refreshed BEFORE verifying
         verify(owner, times(1)).performAction(eq(AccessibilityNodeInfo.ACTION_CLICK))
         verify(parent, never()).performAction(eq(AccessibilityNodeInfo.ACTION_CLICK))
     }
 
     @Test
-    fun `clickNodeStrict refuses a refreshed node that no longer takes a click — and never climbs`() {
+    fun `clickNodeStrict refuses a node that no longer takes a click — and never climbs`() {
         val parent = node(clickable = true)
         val stale = node(clickable = false, parent = parent)
-        whenever(stale.refresh()).thenReturn(true)
+        whenever(stale.packageName).thenReturn(pkg)
 
-        assertFalse(AccNodeUtils.clickNodeStrict(stale))
+        assertFalse(AccNodeUtils.clickNodeStrict(stale, pkg))
         verify(stale, never()).performAction(eq(AccessibilityNodeInfo.ACTION_CLICK))
         verify(parent, never()).performAction(eq(AccessibilityNodeInfo.ACTION_CLICK))
+    }
+
+    @Test
+    fun `clickNodeStrict refuses an owner outside the scoped package`() {
+        val owner = node(clickable = true)
+        whenever(owner.packageName).thenReturn("com.example.other")
+        assertFalse(AccNodeUtils.clickNodeStrict(owner, pkg))
+        verify(owner, never()).performAction(eq(AccessibilityNodeInfo.ACTION_CLICK))
     }
 }

@@ -50,26 +50,22 @@ object AccNodeUtils {
     /**
      * STRICT CLICK (#425, #1149): clicks [owner] itself — no sibling fallback, no ancestor climb.
      *
-     * The caller resolved [owner] via [resolveActionOwner] and label-verified THAT node's
-     * subtree; a clickable sibling can be the opposite control (Accept sits beside Decline in the
-     * offer footer), so falling laterally — or climbing past the verified node — would tap
-     * something the verification never looked at.
+     * The caller resolved [owner] via [resolveActionOwner], `refresh()`ed it, and label-verified
+     * THAT refreshed state; a clickable sibling can be the opposite control (Accept sits beside
+     * Decline in the offer footer), so falling laterally — or climbing past the verified node —
+     * would tap something the verification never looked at.
      *
-     * Freshness (#1149): the owner is [AccessibilityNodeInfo.refresh]ed immediately before
-     * dispatch. A node whose view is gone (a sheet dismissed between resolve and tap) refuses the
-     * refresh → no click. After the refresh the owner must still take a click.
+     * No second refresh here (#1149 review I1): a refresh between verification and dispatch could
+     * rebind the node (a recycled row turning Decline → Accept) and click what was never verified.
+     * The owner must still take a click and still belong to [expectedPackage].
      */
-    fun clickNodeStrict(owner: AccessibilityNodeInfo?): Boolean {
+    fun clickNodeStrict(owner: AccessibilityNodeInfo?, expectedPackage: String): Boolean {
         if (owner == null) {
             Timber.tag("Effects").w("Cannot click: node is null.")
             return false
         }
-        if (!owner.refresh()) {
-            Timber.tag("Effects").w("Strict click: stale node (refresh failed) — refusing (fail closed).")
-            return false
-        }
-        if (!isActionClickable(owner)) {
-            Timber.tag("Effects").w("Strict click: refusing — the refreshed target no longer takes a click (no sibling fallback).")
+        if (!isActionClickable(owner) || owner.packageName?.toString() != expectedPackage) {
+            Timber.tag("Effects").w("Strict click: refusing — the target no longer takes a click in the scoped package (no sibling fallback).")
             return false
         }
         return owner.performAction(AccessibilityNodeInfo.ACTION_CLICK)
