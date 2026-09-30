@@ -250,20 +250,19 @@ object CustomerTextMarkers {
     // --- Node-id path, UNKNOWN envelopes only (#910) --------------------------
 
     /**
-     * The [ID_MARKERS] entry [id] ends with (case-insensitive SUFFIX match on the FULL resource id —
-     * the rules' `hasIdSuffix` semantics), or null. The ONE owner of that comparison (#1145): the
-     * UNKNOWN-envelope scan below and the census filter (ADR-0011 §2 step 1) both call it.
+     * The [ID_MARKERS] entry [id] ends with, or null — [idMarkerFor]'s suffix. The UNKNOWN-envelope scan
+     * below calls it; the census filter (ADR-0011 §2 step 1) calls [idMarkerFor] for the flag.
      */
     fun idMarkerSuffix(id: String?): String? = idMarkerFor(id)?.suffix
 
-    /** The [ID_MARKER_TABLE] row [id] ends with (same suffix semantics as [idMarkerSuffix]), or null. */
+    /**
+     * The [ID_MARKER_TABLE] row [id] ends with (case-insensitive SUFFIX match on the FULL resource id —
+     * the rules' `hasIdSuffix` semantics), or null. The ONE owner of that comparison (#1145).
+     */
     fun idMarkerFor(id: String?): IdMarker? {
         if (id.isNullOrEmpty()) return null
         return ID_MARKER_TABLE.firstOrNull { id.endsWith(it.suffix, ignoreCase = true) }
     }
-
-    /** True when [id] carries an [ID_MARKERS] suffix — [idMarkerSuffix] as a predicate. */
-    fun hasIdMarkerSuffix(id: String?): Boolean = idMarkerSuffix(id) != null
 
     /**
      * The [ID_MARKERS] suffix [node]'s own view id carries while the node still
