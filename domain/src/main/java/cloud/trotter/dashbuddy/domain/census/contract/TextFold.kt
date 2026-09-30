@@ -45,6 +45,30 @@ object TextFold {
     /** A supplementary-plane FORMAT code point (a tag char, …) — the RR1/WW1 dual-form trigger (review AB7). */
     fun isSupplementaryFormat(cp: Int): Boolean = cp >= 0x10000 && isFormat(cp)
 
+    /** [value] minus its supplementary-plane FORMAT code points — the sensitive scan's stripped form (AD9). */
+    fun stripSupplementaryFormat(value: String): String {
+        if (!hasSupplementaryFormat(value)) return value
+        val sb = StringBuilder(value.length)
+        var i = 0
+        while (i < value.length) {
+            val cp = value.codePointAt(i)
+            if (!isSupplementaryFormat(cp)) sb.appendCodePoint(cp)
+            i += Character.charCount(cp)
+        }
+        return sb.toString()
+    }
+
+    /** Does [value] carry a supplementary-plane FORMAT code point (review AD9)? */
+    fun hasSupplementaryFormat(value: String): Boolean {
+        var i = 0
+        while (i < value.length) {
+            val cp = value.codePointAt(i)
+            if (isSupplementaryFormat(cp)) return true
+            i += Character.charCount(cp)
+        }
+        return false
+    }
+
     /**
      * The census's ORDERED fold (review OO1): FORMAT code points stripped FIRST, then NFKC, then the dash
      * fold — so a combining mark hidden behind a zero-width joiner composes in the one NFKC pass and the
