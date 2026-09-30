@@ -162,7 +162,8 @@
 
     <!-- settings/DataExportScreen.kt -->
     <!-- settings/CapabilityConsentScreen.kt (#422/#843) — Google-Play-consistent automation record -->
-    <!-- setup/consent/ConsentPromptSheet.kt (#843) — prompted per-capability consent -->
+    <!-- setup/consent/ConsentPromptPage.kt (#843) — prompted per-capability consent, a page of the
+         FrontDoorHost sheet (#1151) -->
     <string name="consent_prompt_heading">Allow DashBuddy to tap for you?</string>
     <string name="consent_prompt_body">Your delivery-app rules can automate these taps. Nothing is turned on until you allow it — choose each one individually, or tap \"Not now\" to decide later.</string>
     <string name="consent_prompt_source_bundled_format">Built-in %1$s rules</string>

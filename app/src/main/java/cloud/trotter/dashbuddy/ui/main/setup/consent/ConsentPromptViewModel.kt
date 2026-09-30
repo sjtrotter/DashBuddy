@@ -53,9 +53,9 @@ class ConsentPromptViewModel @Inject constructor(
     /**
      * Record the user's per-row decision: Allow ⇒ grant, Don't allow ⇒ a durable
      * denial. Either answer removes the row from [uiState] reactively (both leave
-     * the undecided set). "Not now" is NOT a decision — it defers the whole sheet
-     * (composable-local), leaving the capability undecided to re-prompt next
-     * foreground.
+     * the undecided set). "Not now" is NOT a decision — it closes the whole front
+     * door until the next real return to the foreground (the activity-scoped
+     * generation in `FrontDoorViewModel`, #1151), leaving the capability undecided.
      */
     fun onDecision(key: String, allow: Boolean) {
         viewModelScope.launch { grants.setGranted(key, allow) }

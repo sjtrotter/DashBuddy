@@ -100,7 +100,8 @@
     <string name="developer_settings_bubble_session_pinned_explainer">Your switcher pick sticks until you change it — including across that platform\'s next dash. While the pinned platform is offline the bubble falls back to following.</string>
     <string name="developer_settings_bubble_session_merged_explainer">Test mode: one card stack folding every live dash, each card chipped with its platform. The switcher is hidden and chat stays on the followed dash.</string>
     <!-- #1151 — the wide-event-receipt FEATURE consent. ONE copy, shared by the Dashboard prompt
-         (:app EventReceiptConsentSheet) and the Settings switch below; also the prominent-disclosure
+         (:app EventReceiptConsentPage in the FrontDoorHost sheet), the Settings switch below and the
+         debug block; also the prominent-disclosure
          shape #1138 M3 will reuse. -->
     <string name="event_receipt_title">Let DashBuddy notice windows from other apps</string>
     <string name="event_receipt_settings_path">Settings → Data &amp; Privacy → Automation &amp; Consent</string>

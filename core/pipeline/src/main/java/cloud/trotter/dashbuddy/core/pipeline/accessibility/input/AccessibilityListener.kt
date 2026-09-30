@@ -72,8 +72,8 @@ class AccessibilityListener : AccessibilityService() {
 
         val pkg = event.packageName?.toString()
 
-        // In debug builds we receive ALL event types from ALL packages.
-        // Log unhandled types so we can see what fires, then return.
+        // In debug builds we receive ALL event types (packages are consent-gated in every build,
+        // #1151). Log unhandled types from enabled packages so we can see what fires, then return.
         if (BuildConfig.DEBUG && event.eventType !in HANDLED_TYPES) {
             if (pkg in platformPreferences.enabledPackages.value) {
                 Timber.d(
