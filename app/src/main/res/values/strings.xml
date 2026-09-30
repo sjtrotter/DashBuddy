@@ -169,7 +169,6 @@
     <string name="consent_prompt_source_downloaded_format">Downloaded %1$s rules</string>
     <string name="consent_prompt_allow">Allow</string>
     <string name="consent_prompt_deny">Don\'t allow</string>
-    <string name="consent_prompt_not_now">Not now</string>
     <!-- settings/components/FakeOfferCard.kt -->
     <!-- main/analytics/OffersTab.kt (#975 — was DecisionsTab) -->
     <string name="offers_tab_offer_funnel_title">OFFER FUNNEL</string>
