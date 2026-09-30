@@ -225,16 +225,29 @@ never coordinates, so frozen bounds never aimed a tap — they decided WHICH nod
     control with deeper nodes still has a fully determined fingerprint and IS matched. Verifying a label
     EXPECTATION stays lenient: a found label suffices, and since I3 no collected label comes from a nested
     control.
-  - **Strategy 3 shares the predicate (review J7):** the bounds walk uses `isActionClickable`, so an
-    action-only Compose control at the exact rect is found.
-  - **Semantic twins abort (review I5).** ≥ 2 2b survivors after owner dedupe and #788 scoping abort to manual
-    (WARN, counts) unless the ref's stored text matches exactly one survivor — the overlap tier would pick by
-    the captured rect, the very evidence 2b distrusts. The stored text is the BOUND child's, so it is matched
-    against each survivor's in-horizon labels, never the owner's own text (review P5).
+  - **Strategy 3 shares the predicate (review J7) and is bounded (review R5):** the bounds walk uses
+    `isActionClickable`, so an action-only Compose control at the exact rect is found, and it applies the
+    mapper's `TreeLimits` (depth + fetch budget, nulls counted) — a cut walk takes NO candidates from that root.
+  - **Semantic twins abort, unconditionally (review I5/R8).** ≥ 2 2b survivors after owner dedupe and #788
+    scoping abort to manual (WARN, counts) — the overlap tier would pick by the captured rect, the very evidence
+    2b distrusts. There is no stored-text tie-break (the round-5 one was dead by construction and was removed).
+  - **A stale target among several aborts (review R6):** in the id/text arms too, a target dropped because its
+    owner or matched node failed `refresh()` aborts the tap when ≥ 2 targets existed — otherwise the drop would
+    also un-scope #788 and hand the tap to another window's twin. A lone stale target is simply not clicked.
+  - **A refused bind is UNRESOLVED (review R1):** a bind whose bound node or owner walk is foreign, or that has
+    no owner at all, emits NO `NodeRef` (so not even strategy 3's exact-bounds arm can tap a same-class control
+    at the rect); for an action target it rides the #1093 `bindShortfall` census. An action target whose
+    bind-time fingerprint is UNPROVABLE (unreadable children, > 6 labels) still has a reference but is counted
+    in its own census (review R7): `bindUnprovable{<rule>#<bind>=n}` on the `PipelineStats` summary, one
+    `Pipeline` WARN per rule+bind per process. Both censuses cover `RuleAction` target binds only.
   - **One live owner walk, scoped (review P2):** `resolveActionOwner(node, pkg)` ends with NO owner at the first
     node of another package — a foreign hop is never crossed, exactly as bind time refuses it (N5).
-  - **Unreadable windows (review P3):** `LiveRoots.unreadableWindows` counts enumerated windows whose root was
-    null; when every window decides (our bubble, or no active hit), one counts as an incomplete window.
+  - **Unreadable windows (review P3/R3):** `LiveRoots.unreadableWindows` counts enumerated APPLICATION windows —
+    not the active one, not picture-in-picture — whose root was null; when every window decides (our bubble, or
+    no active hit), one counts as an incomplete window. Residual: such a window's package is unknown, so a
+    foreign app's unreadable window still counts.
+  - **One text cap (review R2):** `UiTextBounds.cap` (4 096, `:domain`) is applied by the mapper at ingestion
+    and by `LabelHorizon` before the blank filter, so bind and fire see the same string.
   The real receipt trees (~60 nodes, depth ≤ 19) sit far inside the bound, and on all three id-less corpus
   frames 2b finds exactly the row — including from a ref captured 400 px low or on the "Continue dashing" rect
   (`ActuationBindingResolutionTest`, which skips the legacy `"clickable"`-key fixtures — #1154).
@@ -248,10 +261,10 @@ never coordinates, so frozen bounds never aimed a tap — they decided WHICH nod
   ACCEPTED (review L9).** After an owner `refresh()`, the
   accessibility client's subtree cache can still serve a pre-rebind copy of a CHILD to `getChild`; every
   accessibility consumer lives with this, and DashBuddy refreshes the owner and the matched evidence node (I1/J1)
-  but cannot force-refresh a whole subtree cheaply. (2) **A label-less cut region forces strategy 3:** a clickable
-  region cut at the slot cap with no visible label is "consistent" with any fingerprint (∅ ⊆ anything), so it
-  marks its window incomplete; with no 2b hit that only means strategy 3 runs, with a hit it aborts.
-  (3) The strategy-3 bounds walk is still unbudgeted (#1102's pre-existing note); it runs when 2b found nothing.
+  but cannot force-refresh a whole subtree cheaply. (2) **A label-less incomplete region no longer vetoes
+  (review R4):** a region vetoes only with ≥ 1 visible letter-bearing key, all in the ref's set; a hidden twin
+  under an unreadable label-less region is the accepted residual. (3) An unreadable APPLICATION window of
+  unknown package still counts as incomplete when every window decides (R3).
   The WARN vocabulary: `no clickable, fresh owner … (N stale)`, `semantic re-find inconclusive (N hit(s),
   incomplete)` (the |H| ≥ 1 ∧ I abort, also used for L5/J6), `semantic twins`; the L1 fall-through is DEBUG. The
   pre-existing `Could not find any live node` WARN no longer prints `ref.text` (moved to DEBUG, review I9a).

@@ -516,7 +516,8 @@ PROVABLE exact fingerprint (`NodeRef.hasExactFingerprint`; bind side = the bound
 package- and readability-aware) by those labels BEFORE geometry, bounded by the mapper's `TreeLimits`. One
 outcome rule (`decideSemanticOutcome`) over the deciding set — the active platform window when it has a hit,
 else every window (#788), roots and active root from ONE enumeration: no hit → strategy 3; hit(s) with an
-incomplete deciding window or an unprovable hit → abort; twins → abort unless stored text decides), `OfferActionReceiver`.
+incomplete deciding window or an unprovable hit → abort; twins → abort; a refused bind (foreign / no owner)
+emits no reference at all), `OfferActionReceiver`.
 
 - **Every odometer fix is gated (#1057/#918).** The pure `:domain` `OdometerFixPolicy` judges each fix
   against the last ACCEPTED one (`MIN_DELTA_METERS` 5, `MAX_ACCURACY_METERS` 50, `MAX_SPEED_MPS` 67,
