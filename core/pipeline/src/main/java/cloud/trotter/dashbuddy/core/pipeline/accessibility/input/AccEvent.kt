@@ -64,6 +64,10 @@ data class AccEvent(
  * binder fetch on the CALLER's (collector's) thread; [release] returns the copy to the pool below
  * API 33 and must be called once the click has been mapped. Deliberately NOT a data class: node
  * identity is not part of the envelope's value equality.
+ *
+ * Accepted gap (#1148 review G8): a click envelope the shared flow drops (`DROP_OLDEST` on a full
+ * buffer, or no collector) is never [release]d — the copy is left to GC. That is a no-op on API
+ * 33+ (no pool) and only a missed pool return below it, never a leak of a live node.
  */
 class SourceNodeRef(private val eventCopy: AccessibilityEvent) {
     /** The clicked node, fetched now (binder). Null when the node is gone. */
