@@ -31,10 +31,12 @@ package cloud.trotter.dashbuddy.domain.census.contract
  * dynamic id is therefore treated as ABSENT — `id = null` on the wire AND in the fingerprint — never
  * rewritten or suffix-stripped.
  *
- * Static means: optional `<package>:id/` prefix (`[a-z][a-z0-9_.]*`, ≤ [MAX_PACKAGE_LENGTH]); a name
- * `[A-Za-z_][A-Za-z0-9_-]*` of ≤ [MAX_NAME_LENGTH] characters (no spaces — a space-bearing id reads as
- * text); and in the name no run of 8+ hex digits and no run of 4+ decimal digits. `bc25_fab`,
- * `a11y_clock`, `otp_5_input_field`, `Tooltip-0` pass. The builder still runs the §2 PII-id step on
+ * Static means: optional `<package>:id/` prefix (`[A-Za-z][A-Za-z0-9_.]*` — an applicationId may carry
+ * upper case — ≤ [MAX_PACKAGE_LENGTH]); a name `[A-Za-z_][A-Za-z0-9_.-]*` with at most ONE internal
+ * space (static GoPuff test tags such as `Artwork Image`; dotted Compose test tags) of ≤
+ * [MAX_NAME_LENGTH] characters; and in the name no run of 8+ hex digits and no run of 4+ decimal
+ * digits — the dynamic-id rule. `bc25_fab`, `a11y_clock`, `otp_5_input_field`, `Tooltip-0` pass
+ * (#1160 review CC7 widened the shape; the run rule is unchanged). The builder still runs the §2 PII-id step on
  * the RAW id, so gating the wire never weakens withholding.
  */
 object ResourceIdGrammar {
@@ -42,7 +44,7 @@ object ResourceIdGrammar {
     const val MAX_NAME_LENGTH: Int = 64
     const val MAX_PACKAGE_LENGTH: Int = 128
 
-    private val SHAPE = Regex("^(?:([a-z][a-z0-9_.]*):id/)?([A-Za-z_][A-Za-z0-9_-]*)$")
+    private val SHAPE = Regex("^(?:([A-Za-z][A-Za-z0-9_.]*):id/)?([A-Za-z_][A-Za-z0-9_.-]*(?: [A-Za-z0-9_.-]+)?)$")
     private val HEX_RUN = Regex("[0-9a-fA-F]{8}")
     private val DECIMAL_RUN = Regex("[0-9]{4}")
 

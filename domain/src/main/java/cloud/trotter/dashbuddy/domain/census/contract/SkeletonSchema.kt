@@ -49,6 +49,12 @@ object SkeletonSchema {
 
     fun deserialize(text: String): UiSkeletonDto = json.decodeFromString(UiSkeletonDto.serializer(), text)
 
-    /** The serialized item's size in uncompressed UTF-8 bytes — what [MAX_ITEM_BYTES] caps. */
-    fun itemBytes(item: UiSkeletonDto): Int = serialize(item).toByteArray(Charsets.UTF_8).size
+    /** A serialized item and its size in uncompressed UTF-8 bytes — what [MAX_ITEM_BYTES] caps. */
+    data class Measured(val json: String, val bytes: Int)
+
+    /** Serialize [item] ONCE and measure it (#1160 review CC6: the one owner of the size rule). */
+    fun measure(item: UiSkeletonDto): Measured {
+        val json = serialize(item)
+        return Measured(json, json.toByteArray(Charsets.UTF_8).size)
+    }
 }

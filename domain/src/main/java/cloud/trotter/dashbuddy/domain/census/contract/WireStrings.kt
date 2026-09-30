@@ -49,4 +49,11 @@ object WireStrings {
         }
         return true
     }
+
+    /**
+     * True when [s] is exactly [length] LOWERCASE hex characters — the one shape check for the census
+     * hash (16) and the cluster fingerprint (64) (#1160 review CC6).
+     */
+    fun isLowerHex(s: String, length: Int): Boolean =
+        s.length == length && s.all { it in '0'..'9' || it in 'a'..'f' }
 }

@@ -36,6 +36,9 @@ object ResourceIdGrammarVectors {
         "com.ubercab.driver:id/ub__map_controls_map_type_selection_container_top_right",
         "a11y_clock",
         "bc25_fab",
+        "Artwork Image",
+        "Com.Upper:id/name",
+        "com.example:id/checkout.primary_button",
     )
 
     /** Dynamic / text-like ids — treated as absent. The first three are the committed DoorDash frames. */
@@ -43,11 +46,12 @@ object ResourceIdGrammarVectors {
         "PRIMARY_BUTTON_3f488d4a-0f0b-4fb9-9c86-c4e0253ba22a",
         "PRIMARY_BUTTON_62132347-ff07-4f36-988d-db9d3cfa4dbd",
         "PRIMARY_BUTTON_9db4e2af-5a58-4a43-ba63-295126ceddef",
-        "Artwork Image",
         "row_1234",
         "",
         "com.x:id/",
         "x".repeat(65),
-        "Com.Upper:id/name",
+        "two  spaces",
+        "one two three",
+        " leading",
     )
 }

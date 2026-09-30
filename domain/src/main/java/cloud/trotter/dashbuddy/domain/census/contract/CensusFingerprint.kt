@@ -54,8 +54,7 @@ object CensusFingerprint {
     fun of(root: UiSkeletonNodeDto): String? = sha256OrNull(canonicalBytes(root))
 
     /** True when [s] is [HEX_LENGTH] lowercase hex. */
-    fun isWellFormed(s: String): Boolean =
-        s.length == HEX_LENGTH && s.all { it in '0'..'9' || it in 'a'..'f' }
+    fun isWellFormed(s: String): Boolean = WireStrings.isLowerHex(s, HEX_LENGTH)
 
     /** The canonical byte form [of] digests (exposed for the shared vectors and the server). */
     fun canonicalBytes(root: UiSkeletonNodeDto): ByteArray =

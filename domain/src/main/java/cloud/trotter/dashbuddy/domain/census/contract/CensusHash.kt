@@ -57,6 +57,5 @@ object CensusHash {
     }
 
     /** True when [h] has the wire shape of a census hash: exactly [HEX_LENGTH] lowercase hex. */
-    fun isWellFormed(h: String): Boolean =
-        h.length == HEX_LENGTH && h.all { it in '0'..'9' || it in 'a'..'f' }
+    fun isWellFormed(h: String): Boolean = WireStrings.isLowerHex(h, HEX_LENGTH)
 }
