@@ -97,6 +97,20 @@ class AccessibilitySourceWindowRootsTest {
         assertNull("no active window → no active root", live.active)
     }
 
+    /** #1149 review P3: an enumerated window whose root is null is counted, not silently dropped. */
+    @Test
+    fun `an enumerated window with a null root is counted as unreadable`() {
+        val w1 = mock<AccessibilityNodeInfo>()
+        val windowList = listOf(window(w1), window(null))
+        val service = mock<AccessibilityService> {
+            on { rootInActiveWindow } doReturn null
+            on { windows } doReturn windowList
+        }
+        val live = sourceFor(service).getLiveWindowRoots()
+        assertEquals(1, live.roots.size)
+        assertEquals(1, live.unreadableWindows)
+    }
+
     // ── #1148 D4: WindowContext on every snapshot + window-specific snapshots ──
 
     private fun windowInfo(

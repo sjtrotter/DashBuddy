@@ -127,9 +127,11 @@ class UiInteractionHandler @Inject constructor(
         // #1149 review N3: the roots AND the active root come from ONE enumeration; each read records
         // the active root of the very enumeration its roots came from.
         var activeRoot: AccessibilityNodeInfo? = null
+        var unreadableWindows = 0
         val rootsSource = {
             val live = accessibilitySource.getLiveWindowRoots()
             activeRoot = live.active
+            unreadableWindows = live.unreadableWindows
             live.roots.filter { it.packageName?.toString() == expectedPackage }
         }
         val roots = if (allowRetry) awaitLiveRoots(expectedPackage, source = rootsSource) else rootsSource()
@@ -146,7 +148,7 @@ class UiInteractionHandler @Inject constructor(
         // = windowId+sourceNodeId) IS the active window. When the active window belongs to another
         // package (e.g. the dasher's bubble holds focus), it was package-filtered out of `roots`, so it
         // matches nothing and scoping no-ops (we fall through to all windows, as before).
-        val search = findCandidates(roots, activeRoot, ref, expectedPackage)
+        val search = findCandidates(roots, activeRoot, ref, expectedPackage, unreadableWindows)
         if (search.inconclusiveHits > 0) {
             // #1149 review L1 (decideSemanticOutcome): 2b found hit(s) but a window of the deciding set
             // could not be read completely — a hidden twin is possible, and the bounds walk must not
@@ -518,6 +520,7 @@ class UiInteractionHandler @Inject constructor(
         activeRoot: AccessibilityNodeInfo?,
         ref: NodeRef,
         expectedPackage: String,
+        unreadableWindows: Int = 0,
     ): CandidateSearch {
         val candidates = mutableListOf<Candidate>()
         fun addFrom(root: AccessibilityNodeInfo, nodes: List<AccessibilityNodeInfo>) {
@@ -551,7 +554,10 @@ class UiInteractionHandler @Inject constructor(
                 listOf(activeWindow)
             } else {
                 listOfNotNull(activeWindow) + roots.filterIndexed { i, _ -> i != activeIdx }
-                    .map { SemanticWindow(findNodeBySemantics(it, ref, expectedPackage), inActive = false) }
+                    .map { SemanticWindow(findNodeBySemantics(it, ref, expectedPackage), inActive = false) } +
+                    // P3: an enumerated window whose root was unreadable could hold a twin — when the
+                    // deciding set is every window, it counts as one more INCOMPLETE window.
+                    List(if (unreadableWindows > 0) 1 else 0) { SemanticWindow(SemanticSearch(emptyList(), incomplete = true), inActive = false) }
             }
             when (val outcome = decideSemanticOutcome(deciding)) {
                 is SemanticOutcome.Use -> candidates.addAll(outcome.candidates)

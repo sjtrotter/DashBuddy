@@ -71,14 +71,26 @@ class AccessibilitySource @Inject constructor() {
         val active = service.rootInActiveWindow
         val roots = mutableListOf<AccessibilityNodeInfo>()
         active?.let { roots.add(it) }
-        (service.windows ?: emptyList()).forEach { window -> window.root?.let { roots.add(it) } }
+        var unreadable = 0
+        (service.windows ?: emptyList()).forEach { window ->
+            val root = window.root
+            if (root == null) unreadable++ else roots.add(root)
+        }
         val deduped = mutableListOf<AccessibilityNodeInfo>()
         for (root in roots) if (deduped.none { it == root }) deduped.add(root)
-        return LiveRoots(active, deduped)
+        return LiveRoots(active, deduped, unreadable)
     }
 
-    /** #1149 review N3 — one live window enumeration: the active root (any package) and all roots, active first. */
-    data class LiveRoots(val active: AccessibilityNodeInfo?, val roots: List<AccessibilityNodeInfo>)
+    /**
+     * #1149 review N3 — one live window enumeration: the active root (any package) and all roots, active
+     * first. [unreadableWindows] (review P3) counts enumerated windows whose root came back null — they
+     * are silently absent from [roots], and may be of any package.
+     */
+    data class LiveRoots(
+        val active: AccessibilityNodeInfo?,
+        val roots: List<AccessibilityNodeInfo>,
+        val unreadableWindows: Int = 0,
+    )
 
     // --- 2. The Service Connection (Pull) ---
     // We use a WeakReference so we don't leak the Service if it restarts

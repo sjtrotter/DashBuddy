@@ -510,9 +510,9 @@ class UiInteractionHandlerOwnerTest {
 
     // ---------------------------------------------------------------- review I6: per-window truncation
 
-    private fun handler(roots: List<AccessibilityNodeInfo>, active: AccessibilityNodeInfo): UiInteractionHandler {
+    private fun handler(roots: List<AccessibilityNodeInfo>, active: AccessibilityNodeInfo, unreadableWindows: Int = 0): UiInteractionHandler {
         val source = mock<AccessibilitySource> {
-            on { getLiveWindowRoots() } doReturn AccessibilitySource.LiveRoots(active, roots)
+            on { getLiveWindowRoots() } doReturn AccessibilitySource.LiveRoots(active, roots, unreadableWindows)
         }
         return UiInteractionHandler(source)
     }
@@ -914,5 +914,24 @@ class UiInteractionHandlerOwnerTest {
         val root = windowRoot(button, byId = listOf(title))
         assertFalse(confirmDecline(handler(root)))
         button.neverClicked()
+    }
+
+    /** P3: under the bubble the deciding set is every window, so an UNREADABLE window beside a lone complete hit → abort. */
+    @Test
+    fun `an unreadable window under the bubble makes a lone hit inconclusive`() = runTest {
+        val row = payRow(top = 1774 - 400)
+        val w1 = windowRoot(row)
+        val bubble = mock<AccessibilityNodeInfo>()
+        assertFalse(expand(handler(listOf(w1), bubble, unreadableWindows = 1)))
+        row.neverClicked()
+    }
+
+    /** P3: an unreadable window does not matter when the active platform window has the hit. */
+    @Test
+    fun `an unreadable window does not matter when the active platform window has the hit`() = runTest {
+        val row = payRow(top = 1774 - 400)
+        val active = windowRoot(row)
+        assertTrue(expand(handler(listOf(active), active, unreadableWindows = 1)))
+        row.clicks(1)
     }
 }
