@@ -203,13 +203,19 @@ inside the shell (turning the switch on unblocks live), plus Exit. The bubble
 HUD is a separate service and keeps running. A release decline keeps the app
 working with the topology path off.
 
-The consent is ONE nullable `StateFlow` (`null` = not read yet, or unreadable).
-A failed read emits `null`, logs one ERROR per failure episode and RETRIES with
-bounded backoff (5 × 1 s·attempt, review MM5) so a transient I/O error cannot
-freeze the value; enforcement treats `null` as UNDECIDED (the listener maps it
-BEFORE dedup, so it applies once per distinct effective value, MM8), the prompt
-waits for a value, and a DEBUG shell renders a neutral loading gate — no NavHost,
-no deep-link delivery — until it is known (MM3). A pending deep link is parked
+The consent is ONE nullable `StateFlow`; `null` means ONLY "not read yet"
+(review NN2). A failed read logs one ERROR per failure episode and RETRIES with
+bounded backoff (5 × 1 s·attempt, MM5) keeping the value it had; exhausted
+retries settle on a USABLE UNDECIDED (filtered footprint, prompt and switch
+work), and a successful write is observed at once and restarts the reader. A
+write never throws a storage failure — `set()` logs and returns `false` (NN3).
+Enforcement treats `null` as UNDECIDED and dedups on the policy OUTPUT (`isWide`),
+so one apply and one INFO line per connect (MM8/NN4); the prompt waits for a
+value, and a DEBUG shell renders a neutral loading gate — no NavHost, no
+deep-link delivery — until it is known (MM3), offering a notice + Exit after 3 s
+so it is never a silent blank (NN2). The front door has ONE "Not now" string
+(`consent_front_door_not_now`, NN6), and the shared disclosure carries no
+state-dependent sentence, so it is true in every state (NN5). A pending deep link is parked
 in `MainShellViewModel`'s `SavedStateHandle` and cleared only after delivery
 (MM4). Both consent ViewModels seed their initial state from the current value
 (MM7). An apply that finds no `serviceInfo` is a WARN and a parked retry on the
