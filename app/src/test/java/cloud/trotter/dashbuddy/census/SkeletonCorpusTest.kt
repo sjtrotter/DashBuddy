@@ -241,6 +241,19 @@ class SkeletonCorpusTest {
         built.mapNotNull { it.second }.forEach { item ->
             walkSkeleton(item.root) { n -> n.id?.let { assertTrue(it, SkeletonBuilder.isStaticId(it)) } }
         }
+        // Review JJ1: the frame-level containment rule nulls no committed chrome id — no identity seed
+        // collides with a static id anywhere in the corpus (every static raw id reaches the wire).
+        val frameDropped = sortedSetOf<String>()
+        for ((f, item) in built) {
+            item ?: continue
+            fun pair(n: UiNode, s: UiSkeletonNodeDto) {
+                val raw = n.viewIdResourceName
+                if (raw != null && SkeletonBuilder.isStaticId(raw) && s.id == null) frameDropped += "${f.path}: $raw"
+                n.children.zip(s.children).forEach { (a, b) -> pair(a, b) }
+            }
+            pair(f.tree, item.root)
+        }
+        assertEquals(sortedSetOf<String>(), frameDropped)
     }
 
     @Test
