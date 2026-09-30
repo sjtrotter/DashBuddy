@@ -440,6 +440,17 @@ class AccessibilitySource @Inject constructor(
         return OverlayProbe.Candidate(pkg, root)
     }
 
+    /**
+     * [w]'s owning package through the cache (a miss fetches the root once and records it); null if
+     * unreadable. The ONE owner of "a window's package" outside a read (PR #1155 review BB10).
+     */
+    internal fun packageOf(w: AccessibilityWindowInfo): String? {
+        packageCache.get(w.id)?.packageName?.let { return it }
+        val pkg = w.root?.packageName?.toString() ?: return null
+        packageCache.putPackage(w.id, pkg)
+        return pkg
+    }
+
     private fun reject(reason: OverlayRejectReason, outcome: OverlayProbe): OverlayProbe {
         stats.onOverlayRejected(reason)
         return outcome

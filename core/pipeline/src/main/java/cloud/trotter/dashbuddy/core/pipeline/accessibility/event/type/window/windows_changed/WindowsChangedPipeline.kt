@@ -91,7 +91,8 @@ class WindowsChangedPipeline @Inject constructor(
                 }
 
             val ownPkg = source.ownPackage()
-            val activeIsOwn = ownPkg != null && active.root?.packageName?.toString() == ownPkg
+            // BB10: read through the source's cache — one owner of "a window's package".
+            val activeIsOwn = ownPkg != null && source.packageOf(active) == ownPkg
             if (activeIsOwn) {
                 // H6: our bubble's layer is no cutoff — emit the window in front of the dasher.
                 // Reuse THIS enumeration (round 4): no second getWindows() per topology burst.
