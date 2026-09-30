@@ -182,15 +182,22 @@ filter over every text field of the frame (tree + window title) and SEEDS:
   whose duplicate is itself over-length);
 - from step 1, ONLY on an identity id's TEXT / CONTENT_DESCRIPTION (never its
   role/hint/tooltip/click-label/uid/pane), by the id's KIND in `CustomerTextMarkers.ID_MARKER_TABLE`:
-  a **NAME** id (`customer_name`) seeds its exact value AND its maximal letter runs of at least 2 letters
+  a **NAME** id (`customer_name`, `order_cx_name`, and `user_name` — which is also reused for the
+  merchant's and the dasher's own name; withholding a store name costs the census nothing, because
+  recognition never anchors on a merchant name, #1160 review round 6) seeds its exact value AND its
+  maximal letter runs of at least 2 letters
   (counted in code points, case-folded with the one `CaseFold`: `ẞ` → `ß`, then upper- and lower-case
   ROOT, final sigma to medial); an **ADDRESS** id (`address_line_1/2`,
   `arriving_at_title`, `address_subpremise_line`) seeds its exact value ONLY — address vocabulary
   ("Road", "View", "San", "Lane", "Way") is common English, and seeding its runs would withhold "View
   details" or "Road closed" chrome, and camelCase ids like `roadNameLayout`, on every frame with an
-  address, while a person's name rarely collides with chrome; a **CONTENT** id (`user_name`, which is
-  also reused for the merchant's and the dasher's own name; the free-text instruction bodies;
-  `description_text_view`, generic DoorDash chrome such as "Raise to 50%") seeds nothing;
+  address, while a person's name rarely collides with chrome; a **CONTENT** id (the free-text
+  instruction bodies; `description_text_view`, generic DoorDash chrome such as "Raise to 50%") seeds
+  nothing. A NAME's letter runs come from its TEXT; from its CONTENT_DESCRIPTION only the runs that
+  also appear in its text (a TalkBack-style desc "Customer name Adam" must not seed `customer`/`name`),
+  and a NAME whose text is blank seeds its desc's exact value only (#1160 review round 6). Every
+  customer-name id the intake knows is in this table as NAME, so `PII_ID_SUFFIXES` holds only
+  content/instruction ids plus the table's suffixes;
 - a MASK never seeds anything (`[redacted…]`, `[address]`, …): it is not identity, and its word would
   collide with chrome and with address-block ids.
 
@@ -223,8 +230,11 @@ build that uploads. The
 corpus tests feed fixture trees that ARE masked captures; that is a superset condition (every mask
 token is caught by step 5 and emits `withheld`), not the runtime shape.
 
-**Inputs and predicates, exactly.** Every step sees the CANONICAL value — trimmed and
-whitespace-normalized (`CensusHash.canonical`: every run of code points the classifier treats as whitespace,
+**Inputs and predicates, exactly.** Every step sees the CANONICAL value — glyph-folded, trimmed and
+whitespace-normalized (`CensusHash.canonical`: first the ONE glyph fold `TextFold.foldGlyphs` it shares
+with the sensitive-marker scan — NFKC, `Character.FORMAT` strip, Unicode-dash fold — so a zero-width
+space inside a marker or a fullwidth letter cannot defeat steps 3/4/7, and a fullwidth chrome word hashes
+equal to its plain twin (amended in #1160 review round 6); then every run of code points the classifier treats as whitespace,
 `Character.isWhitespace || isSpaceChar`, collapsed to one ASCII space; amended in #1160 because the JVM's
 regex `\s` excludes NBSP/thin space while ICU's includes `\p{Z}`, so the decision was engine-dependent) —
 the same bytes `CensusHash` hashes — so a leading space cannot slip a prefix past a `startsWith`. Every
@@ -597,6 +607,12 @@ must stay green.
     still travels in the clear. The corpus has none (the rejected-id pin lists only the three dynamic
     UUIDs, and no identity seed collides with a committed chrome id); the controls are that pin and the
     k-gated, human-reviewed promotion path.
+   The same containment applies to ids and classes, so in the rarer case of a first name equal to an id
+   token (`Star` / `star_rating_bar`, `Page` / `page_indicator`, `Dash` / `dash_now_button`) the id is
+   nulled and the CLUSTER KEY itself moves: that surface lands in a singleton cluster for that install on
+   that frame. Fingerprinting the pre-containment structure would break the server's
+   recompute-from-the-wire rule, so this is accepted: the drop costs availability (a cluster that does
+   not reach k), never privacy (#1160 review round 6).
 
 ## Open questions (dev decisions; the same items appear in #1157's plan §10 under its own numbering — this list is the ADR's reference)
 

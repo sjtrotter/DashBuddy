@@ -571,8 +571,9 @@ side-effect-free half.
   iff `kind` is `words:1..8`; invariants checked at construction AND on decode, incl. well-formed UTF-16
   without U+0000 for class/id/stamps (`WireStrings`) and a real calendar `day`; 64 KB item cap measured
   once by `SkeletonSchema.measure`); `CensusHash` (§3, `sha256("census.v1:" + canonical)` → 16 hex,
-  fail-closed to `withheld`, where `CensusHash.canonical` is the trimmed value with every census-whitespace
-  run collapsed to one ASCII space); `KindClassifier` (§1's two-stage grammar, code-point based);
+  fail-closed to `withheld`, where `CensusHash.canonical` is the value after the ONE glyph fold
+  `TextFold.foldGlyphs` — NFKC, FORMAT strip, dash fold, shared with `SensitiveTextMarkers.normalize` —
+  trimmed, with every census-whitespace run collapsed to one ASCII space); `KindClassifier` (§1's two-stage grammar, code-point based);
   `CensusFingerprint` (§8: wrapper-to-forest over a synthetic root, every string LENGTH-PREFIXED so the
   encoding is injective, digested through `sha256OrNull(ByteArray)`); and the static gates
   `ResourceIdGrammar.isStaticShape` / `ClassNameGrammar` (enforced by the DTO at construction and decode)
@@ -597,7 +598,8 @@ side-effect-free half.
   only a `words:1..8` survivor hashes, on the canonical form. The FRAME-LEVEL duplicate rule then
   withholds (a) any field whose canonical value a value-judging step caught anywhere in the frame, and (b)
   any field containing a letter run (≥ 2 letters in code points, `CaseFold`-folded) of a NAME identity
-  id's rendered text/desc (`customer_name`); an ADDRESS id (the address lines, `arriving_at_title`,
+  id's rendered text (`customer_name`, `order_cx_name`, `user_name`; from a desc only runs its text
+  shares); an ADDRESS id (the address lines, `arriving_at_title`,
   `address_subpremise_line`) seeds its exact value only, because address vocabulary is common English;
   a CONTENT id (`user_name`, `description_text_view`, the instruction bodies) and a mask seed nothing.
   The same NAME containment, split also at camelCase boundaries, makes a node's id or class absent
