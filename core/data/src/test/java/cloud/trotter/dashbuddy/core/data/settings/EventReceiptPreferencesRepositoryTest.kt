@@ -11,10 +11,12 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.emitAll
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceUntilIdle
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
@@ -66,6 +68,37 @@ class EventReceiptPreferencesRepositoryTest {
         advanceUntilIdle()
 
         assertNull("unreadable ⇒ null (filtered footprint, no prompt)", repo.consent.value)
+    }
+
+    @Test
+    fun `a transient read failure recovers to the stored value and later writes are observed`() = runTest {
+        val storeScope = CoroutineScope(StandardTestDispatcher(testScheduler) + Job())
+        val real = PreferenceDataStoreFactory.create(
+            scope = storeScope,
+            produceFile = { File(tmp.root, "d.preferences_pb") },
+        )
+        real.edit { it[stringPreferencesKey("event_receipt_consent")] = "DECLINED" }
+        var collections = 0
+        val throwOnce = object : DataStore<Preferences> {
+            override val data: Flow<Preferences> = flow {
+                collections++
+                if (collections == 1) throw IOException("transient")
+                emitAll(real.data)
+            }
+            override suspend fun updateData(transform: suspend (Preferences) -> Preferences) =
+                real.updateData(transform)
+        }
+        val repo = EventReceiptPreferencesRepository(EventReceiptConsentDataSource(throwOnce), storeScope)
+
+        runCurrent()
+        assertNull("while retrying: fail-closed null", repo.consent.value)
+
+        advanceUntilIdle()
+        assertEquals("recovered to the stored value", EventReceiptConsent.DECLINED, repo.consent.value)
+
+        repo.set(EventReceiptConsent.ALLOWED)
+        advanceUntilIdle()
+        assertEquals("a later write is read back", EventReceiptConsent.ALLOWED, repo.consent.value)
     }
 
     @Test
