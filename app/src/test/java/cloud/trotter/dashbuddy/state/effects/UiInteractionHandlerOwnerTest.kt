@@ -1010,4 +1010,18 @@ class UiInteractionHandlerOwnerTest {
         assertFalse(expand(handler(root), legacy))
         verify(root, org.mockito.kotlin.atMost(TreeLimits.MAX_TREE_NODES)).getChild(any())
     }
+
+    /** R6: the #788 shape with the ACTIVE sheet's title stale — the background popup's twin must NOT get the tap. */
+    @Test
+    fun `a stale active-window title does not hand the tap to the background twin`() = runTest {
+        val sheetTitle = view(cls = "android.widget.TextView", text = "Decline offer", refreshes = false)
+        val sheetButton = view(clickable = true, children = listOf(sheetTitle))
+        val active = windowRoot(sheetButton, byId = listOf(sheetTitle))
+        val popupTitle = view(cls = "android.widget.TextView", text = "Decline")
+        val popupButton = view(clickable = true, children = listOf(popupTitle))
+        val background = windowRoot(popupButton, byId = listOf(popupTitle))
+
+        assertFalse(confirmDecline(handler(listOf(active, background), active)))
+        sheetButton.neverClicked(); popupButton.neverClicked()
+    }
 }

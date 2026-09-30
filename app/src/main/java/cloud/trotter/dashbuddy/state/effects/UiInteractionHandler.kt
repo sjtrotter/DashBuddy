@@ -187,6 +187,15 @@ class UiInteractionHandler @Inject constructor(
             warnInconclusive(description, candidates.count { it.semantic })
             return false
         }
+        if (owned.stale > 0 && owned.targets.size + owned.stale >= 2) {
+            // #1149 review R6: a stale owner among several targets is not "absent" — dropping it would
+            // also un-scope #788 and hand the tap to another window's twin. Abort.
+            Timber.tag("Effects").w(
+                "%d stale owner(s) among %d target(s) for %s — aborting to manual (#1149)",
+                owned.stale, owned.targets.size + owned.stale, description,
+            )
+            return false
+        }
         if (owned.targets.isEmpty()) return false
 
         // Label-verify once, on the OWNER's bounded subtree, and keep each surviving owner's labels
@@ -246,6 +255,15 @@ class UiInteractionHandler @Inject constructor(
         if (semanticUnprovable > 0) {
             // J6 under L1: an unprovable 2b hit in the deciding set is |H| >= 1 ∧ I.
             warnInconclusive(description, owned.targets.count { it.semantic })
+            return false
+        }
+        if (staleEvidence > 0 && owned.targets.size >= 2) {
+            // #1149 review R6: the id/text arms too — the active sheet's stale title must not hand the
+            // tap to the lower window's twin (#788). A lone stale target simply isn't clicked (below).
+            Timber.tag("Effects").w(
+                "%d stale matched node(s) among %d target(s) for %s — aborting to manual (#1149)",
+                staleEvidence, owned.targets.size, description,
+            )
             return false
         }
         if (staleEvidence > 0) {
