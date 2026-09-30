@@ -313,7 +313,7 @@ class SkeletonFrameRuleTest : SkeletonBuilderTestBase() {
     }
 
     @Test
-    fun `SS1 - a merchant name under user_name suppresses no chrome and no class`() {
+    fun `SS1 ZZ3 - a merchant name under user_name suppresses no chrome, no class and no one-word id`() {
         val out = SkeletonBuilder.build(
             UiNode(className = "android.widget.LinearLayout", viewIdResourceName = "com.x:id/row", children = listOf(
                 UiNode(className = "android.widget.TextView", viewIdResourceName = "com.doordash.driverapp:id/user_name", text = "Jack in the Box"),

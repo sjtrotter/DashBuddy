@@ -50,8 +50,9 @@ class SkeletonCorpusGuardsTest : SkeletonCorpusTestBase() {
         corpus.forEach { f ->
             walkNodes(f.tree) { n -> n.viewIdResourceName?.let { if (!SkeletonBuilder.isStaticId(it)) rejected += it } }
         }
-        // Review XX4: all-caps constant tags ending in a one-letter segment are chrome, never names.
-        listOf("PRIMARY_BUTTON_A", "TAB_B", "SECTION_C").forEach { assertTrue(it, SkeletonBuilder.isStaticId(it)) }
+        // Review ZZ4 (reverses XX4): an all-caps tag ending in a one-letter segment reads as a name
+        // (`chip_RILEY_S`), so these constants are withheld too — the accepted recall cost.
+        listOf("PRIMARY_BUTTON_A", "TAB_B", "SECTION_C").forEach { assertTrue(it, !SkeletonBuilder.isStaticId(it)) }
         // A static id that trips the gate is a red test here, never a silent drop (review CC7 admitted a
         // single internal space, so `Artwork Image` is static now).
         assertEquals(
@@ -153,8 +154,8 @@ class SkeletonCorpusGuardsTest : SkeletonCorpusTestBase() {
             UiNode(className = "android.widget.TextView", text = "Total"),
         )
         hashed("Head to the store", text(merchant[1]))
-        // Reviews TT2, VV1: a merchant value is not a person's name, so it protects no id by its whole
-        // value — its logo id, `boxView` and `roadNameLayout` all travel.
+        // Reviews TT2, ZZ3: a merchant's whole value protects only an id built from its WHOLE name (the logo
+        // id — the accepted recall cost); `boxView` and `roadNameLayout` (ADDRESS adds no run) travel.
         val merchantIds = build(
             UiNode(className = "android.widget.TextView", viewIdResourceName = "com.doordash.driverapp:id/user_name", text = "Jack in the Box"),
             UiNode(className = "android.widget.ImageView", viewIdResourceName = "com.doordash.driverapp:id/jackInTheBoxLogo"),
@@ -162,7 +163,7 @@ class SkeletonCorpusGuardsTest : SkeletonCorpusTestBase() {
             UiNode(className = "android.widget.TextView", viewIdResourceName = "com.doordash.driverapp:id/address_line_1", text = "10927 Culebra Road"),
             UiNode(className = "android.widget.ImageView", viewIdResourceName = "com.doordash.driverapp:id/roadNameLayout"),
         )
-        assertEquals("com.doordash.driverapp:id/jackInTheBoxLogo", merchantIds[1].id)
+        assertNull(merchantIds[1].id)
         assertEquals("com.doordash.driverapp:id/boxView", merchantIds[2].id)
         assertEquals("com.doordash.driverapp:id/roadNameLayout", merchantIds[4].id)
         hashed("Sign in", text(merchant[2]))

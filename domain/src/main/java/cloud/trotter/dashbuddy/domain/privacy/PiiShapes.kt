@@ -249,63 +249,17 @@ object PiiShapes {
     val FIRST_LAST_INITIAL = Regex(FIRST_LAST_INITIAL_PATTERN, RegexOption.IGNORE_CASE)
 
     /**
-     * The FULLY case-sensitive id-path variant (#1160 reviews SS3, XX4): a CAPITALIZED, not all-caps, first
-     * token (lookahead `\p{Lu}\p{Ll}` — `TAB B` / `PRIMARY BUTTON A` are constants, not names) and an
-     * uppercase initial, compiled WITHOUT `IGNORE_CASE`. A test-tag id's camel/snake
-     * segments read as words, and `tab B` / `option A` there are chrome, not a name; `Adam S` is a name.
+     * The FULLY case-sensitive id-path variant (#1160 reviews SS3, XX4, ZZ4): an UPPERCASE-led first token —
+     * Capitalized ("Riley S") OR all-caps ("RILEY S", a SCREAMING_SNAKE test tag `chip_RILEY_S`) — and an
+     * uppercase initial, compiled WITHOUT `IGNORE_CASE`. A lowercase-led `tab B` / `option A` stays chrome.
+     * Accepted recall cost (ZZ4, fail closed): all-caps constants of the same shape (`TAB_B`, `SECTION_C`,
+     * `PRIMARY_BUTTON_A`) are withheld too — ADR-0011 residual risk 10.
      */
-    const val FIRST_LAST_INITIAL_CAPITALIZED =
-        "(?<![\\p{L}])(?=\\p{Lu}\\p{Ll})" + FIRST_LAST_INITIAL_TOKENS + "\\p{Lu}\\.?" + "(?![\\p{L}])"
+    const val FIRST_LAST_INITIAL_ID_PATH =
+        "(?<![\\p{L}])(?=\\p{Lu})" + FIRST_LAST_INITIAL_TOKENS + "\\p{Lu}\\.?" + "(?![\\p{L}])"
 
-    /** [FIRST_LAST_INITIAL_CAPITALIZED], case-sensitive — the id-path name matcher. */
-    val FIRST_LAST_INITIAL_CAPITALIZED_REGEX = Regex(FIRST_LAST_INITIAL_CAPITALIZED)
-
-    private val WHITESPACE_RUN = Regex("\\s+")
-
-    /** How [isPersonName] judges a value (#1160 reviews XX4, YY1). */
-    enum class NameMode {
-        /**
-         * The RUNTIME scrub gate: privacy first, so all-caps tokens (`\p{Lu}{2,}`, "RILEY") and single-letter
-         * initials ("S", "S.") count too — an all-caps chrome title scrubbed in debug triage is the same
-         * accepted trade as title-case.
-         */
-        RUNTIME_SCRUB,
-
-        /**
-         * Census seeding and the id path: every token Capitalized-not-all-caps, so `TAB B` / `PRIMARY BUTTON A`
-         * constants never read as names (the recall reason of review XX4).
-         */
-        SEEDING_AND_IDS,
-    }
-
-    /**
-     * The ONE "does this value read as a person's name?" predicate (#1160 reviews XX1, XX5, YY1): a
-     * whole-value match of [FIRST_LAST_INITIAL_CAPITALIZED] ("Riley S", "Riley S.", "Mary Jo S"), OR 1–3
-     * whitespace tokens, each made only of letters / apostrophes / hyphens (a trailing initial's period
-     * aside) and either Capitalized-not-all-caps ("Riley", "Mary Jo", "O'Brien") or — in
-     * [NameMode.RUNTIME_SCRUB] only — all-caps ("RILEY") or a single-letter initial ("S", "S."). Never
-     * lowercase ("riley"). The runtime `WHEN_NAME_LIKE` gate uses RUNTIME_SCRUB; the census whole-value
-     * seeding uses SEEDING_AND_IDS.
-     */
-    fun isPersonName(value: String?, mode: NameMode = NameMode.SEEDING_AND_IDS): Boolean {
-        val trimmed = value?.trim()?.takeIf { it.isNotEmpty() } ?: return false
-        if (FIRST_LAST_INITIAL_CAPITALIZED_REGEX.matches(trimmed)) return true
-        val tokens = trimmed.split(WHITESPACE_RUN)
-        if (tokens.size > 3) return false
-        return tokens.all { token -> isNameToken(token, mode) }
-    }
-
-    private fun isNameToken(token: String, mode: NameMode): Boolean {
-        val letters = token.removeSuffix(".")
-        if (letters.isEmpty() || !Character.isUpperCase(letters.codePointAt(0))) return false
-        if (!letters.codePoints().allMatch { Character.isLetter(it) || it == '\''.code || it == 0x2019 || it == '-'.code }) return false
-        val capitalized = letters.codePoints().anyMatch { Character.isLowerCase(it) } && token == letters
-        if (capitalized) return true
-        if (mode != NameMode.RUNTIME_SCRUB) return false
-        val letterCount = letters.codePoints().filter { Character.isLetter(it) }.count()
-        val allCaps = letters.codePoints().filter { Character.isLetter(it) }.allMatch { Character.isUpperCase(it) }
-        return allCaps && (letterCount >= 2 && token == letters || letterCount == 1L)
-    }
+    /** [FIRST_LAST_INITIAL_ID_PATH], case-sensitive — the id-path name matcher. */
+    val FIRST_LAST_INITIAL_ID_PATH_REGEX = Regex(FIRST_LAST_INITIAL_ID_PATH)
 
     /** [FIRST_LAST_INITIAL_EMBEDDED], compiled `IGNORE_CASE` (the initial stays case-sensitive). */
     val FIRST_LAST_INITIAL_EMBEDDED_REGEX = Regex(FIRST_LAST_INITIAL_EMBEDDED, RegexOption.IGNORE_CASE)

@@ -90,7 +90,7 @@ class SkeletonIdClassGateTest : SkeletonBuilderTestBase() {
     }
 
     @Test
-    fun `KK1 - ids and classes split at camelCase boundaries, text slots do not`() {
+    fun `KK1 - ids split at camelCase boundaries, text slots do not`() {
         fun tagOf(tag: String): String? = SkeletonBuilder.build(
             UiNode(className = "android.widget.LinearLayout", viewIdResourceName = "com.x:id/row", children = listOf(
                 UiNode(className = "android.widget.TextView", viewIdResourceName = "com.x:id/customer_name", text = "Adam"),
@@ -124,7 +124,8 @@ class SkeletonIdClassGateTest : SkeletonBuilderTestBase() {
         )!!.root.children
         assertNull(out[1].id)
         assertNull(out[2].id)
-        assertNull(out[3].className)
+        // Review ZZ3: a class name is never containment-checked — a compiled type name is not frame data.
+        assertEquals("com.x.McKennaButton", out[3].className)
         assertEquals("com.x:id/chipMcGold", out[4].id)
         assertEquals(TextSlot.WITHHELD, out[5].text.getValue("text"))
     }
@@ -153,7 +154,7 @@ class SkeletonIdClassGateTest : SkeletonBuilderTestBase() {
     }
 
     @Test
-    fun `TT2 - an EXACT or ADDRESS whole value protects a sibling id, never a text slot`() {
+    fun `TT2 ZZ3 - a name-capable whole value protects a sibling id, an ADDRESS never, a text slot never`() {
         fun ids(identityId: String, identity: String, vararg tags: String) = SkeletonBuilder.build(
             UiNode(className = "android.widget.LinearLayout", viewIdResourceName = "com.x:id/row", children = listOf(
                 UiNode(className = "android.widget.TextView", viewIdResourceName = "com.doordash.driverapp:id/$identityId", text = identity),
@@ -161,8 +162,9 @@ class SkeletonIdClassGateTest : SkeletonBuilderTestBase() {
             null, meta, platform, day,
         )!!.root.children.drop(1).map { it.id }
         assertEquals(listOf(null, "com.x:id/chipGold"), ids("user_name", "Riley", "chipRiley", "chipGold"))
-        // Review VV1: a merchant value is not a person's name — its logo id and every chrome id travel.
-        assertEquals(listOf("com.x:id/jackInTheBoxLogo", "com.x:id/boxView"), ids("user_name", "Jack in the Box", "jackInTheBoxLogo", "boxView"))
+        // Review ZZ3: a PERSON_OR_MERCHANT whole value is never shape-gated — a merchant's logo id carrying
+        // its whole name is absent (the accepted recall cost); a chrome id sharing one word travels.
+        assertEquals(listOf(null, "com.x:id/boxView"), ids("user_name", "Jack in the Box", "jackInTheBoxLogo", "boxView"))
         assertEquals(listOf("com.x:id/roadNameLayout"), ids("address_line_1", "10927 Culebra Road", "roadNameLayout"))
         // A text slot is untouched by the whole-value rule: "Call Riley" beside user_name "Riley" hashes.
         assertEquals(listOf(words(2, "Call Riley")), beside2("user_name", "Riley", "Call Riley"))
@@ -179,38 +181,51 @@ class SkeletonIdClassGateTest : SkeletonBuilderTestBase() {
     }
 
     @Test
-    fun `VV1 - only a person-name EXACT value protects an id by its whole value`() {
+    fun `VV1 ZZ3 - every EXACT value protects an id by its whole value, an ADDRESS none`() {
         fun ids(identityId: String, identity: String, vararg tags: String) = SkeletonBuilder.build(
             UiNode(className = "android.widget.LinearLayout", viewIdResourceName = "com.x:id/row", children = listOf(
                 UiNode(className = "android.widget.TextView", viewIdResourceName = "com.doordash.driverapp:id/$identityId", text = identity),
             ) + tags.map { UiNode(className = "android.widget.ImageView", viewIdResourceName = "com.x:id/$it") }),
             null, meta, platform, day,
         )!!.root.children.drop(1).map { it.id }
-        assertEquals(listOf("com.x:id/orderDetailsHeader"), ids("tvTitle", "Order Details", "orderDetailsHeader"))
+        // ZZ3: fail closed — a chrome title under `tvTitle` nulls an id built from it on its frame.
+        assertEquals(listOf(null), ids("tvTitle", "Order Details", "orderDetailsHeader"))
         assertEquals(listOf(null), ids("user_name", "Riley", "chipRiley"))
         assertEquals(listOf(null), ids("user_name", "Riley S", "chipRileyS"))
         assertEquals(listOf("com.x:id/mainStreetLabel"), ids("address_line_1", "Main St", "mainStreetLabel"))
     }
 
     @Test
-    fun `XX3 - the whole-value id run depends on the identity kind`() {
-        fun ids(identityId: String, identity: String, vararg tags: String) = SkeletonBuilder.build(
+    fun `XX3 ZZ3 - NAME, PERSON_OR_MERCHANT and EXACT protect ids by their whole value, single tokens included`() {
+        fun nodes(identityId: String, identity: String, vararg tags: String) = SkeletonBuilder.build(
             UiNode(className = "android.widget.LinearLayout", viewIdResourceName = "com.x:id/row", children = listOf(
                 UiNode(className = "android.widget.TextView", viewIdResourceName = "com.doordash.driverapp:id/$identityId", text = identity),
-            ) + tags.map { UiNode(className = "android.widget.ImageView", viewIdResourceName = "com.x:id/$it") }),
+            ) + tags.map { UiNode(className = "android.widget.SearchView", viewIdResourceName = "com.x:id/$it") }),
             null, meta, platform, day,
-        )!!.root.children.drop(1).map { it.id }
-        // EXACT: a one-word chrome title seeds nothing for ids; the two-token name shape does.
-        assertEquals(listOf("com.x:id/SearchView", "com.x:id/search_bar"), ids("tvTitle", "Search", "SearchView", "search_bar"))
+        )!!.root.children.drop(1)
+        fun ids(identityId: String, identity: String, vararg tags: String) = nodes(identityId, identity, *tags).map { it.id }
+        // EXACT: a one-word chrome title nulls an id built from it; the class never moves.
+        val search = nodes("tvTitle", "Search", "search_bar")
+        assertEquals(listOf<String?>(null), search.map { it.id })
+        assertEquals(listOf<String?>("android.widget.SearchView"), search.map { it.className })
+        assertEquals(listOf(null), ids("tvTitle", "Riley", "chipRiley"))
+        assertEquals(listOf(null), ids("tvTitle", "Riley Smith", "chipRileySmith"))
         assertEquals(listOf(null), ids("tvTitle", "Riley S", "chipRileyS"))
-        // PERSON_OR_MERCHANT: a single-token person name protects ids; a merchant does not.
+        // PERSON_OR_MERCHANT: a single token included; a merchant's whole name too.
         assertEquals(listOf(null), ids("user_name", "Riley", "chipRiley"))
-        assertEquals(listOf("com.x:id/jackInTheBoxLogo"), ids("user_name", "Jack in the Box", "jackInTheBoxLogo"))
+        assertEquals(listOf(null), ids("user_name", "Jack in the Box", "jackInTheBoxLogo"))
+        // NAME: the whole value joins across tokens ("Mary Jo" → `chipMaryJo`).
+        assertEquals(listOf(null), ids("customer_name", "Mary Jo", "chipMaryJo"))
+        // ADDRESS never adds a whole-value run.
+        assertEquals(listOf("com.x:id/mainStreetLabel"), ids("address_line_1", "Main Street", "mainStreetLabel"))
     }
 
     @Test
-    fun `XX4 - an all-caps constant tag ending in one letter is not a name`() {
-        listOf("TAB_B", "SECTION_C", "PRIMARY_BUTTON_A").forEach { assertTrue(it, SkeletonBuilder.isStaticId(it)) }
+    fun `ZZ4 - an all-caps tag ending in one letter reads as a name - the accepted recall cost`() {
+        listOf("TAB_B", "SECTION_C", "PRIMARY_BUTTON_A", "chip_RILEY_S", "com.x:id/chip_RILEY_S")
+            .forEach { assertTrue(it, !SkeletonBuilder.isStaticId(it)) }
         assertTrue(!SkeletonBuilder.isStaticId("chip_Adam_S"))
+        // A lowercase-led tag stays chrome.
+        listOf("tab_B", "option_a", "tabB").forEach { assertTrue(it, SkeletonBuilder.isStaticId(it)) }
     }
 }

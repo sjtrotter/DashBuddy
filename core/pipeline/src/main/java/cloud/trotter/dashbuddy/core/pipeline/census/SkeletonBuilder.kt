@@ -318,14 +318,14 @@ object SkeletonBuilder {
         // Review PP1: camelCase segments are words too (`deliverToSam` → "deliver To Sam"), by the same
         // rule the frame-level check uses. Review PP4: only the CASE-SENSITIVE-initial name shape runs on
         // the id path — the IGNORE_CASE anchored variant nulled every `option_a` / `tab_b` chrome id.
-        // Review SS3 (id path only): the name shape is FULLY case-sensitive (a Capitalized first token and an
-        // uppercase initial — `tab B` / `option A` are chrome), and a marker / lead-in withholds only when the
+        // Review SS3 (id path only): the name shape is FULLY case-sensitive (an uppercase-led first token —
+        // Capitalized or, since ZZ4, all-caps — and an uppercase initial; `tab B` / `option A` are chrome), and a marker / lead-in withholds only when the
         // token AFTER it is Capitalized (a name): `deliver_to_Sam` is absent, `deliver_to_label` travels.
         // SS8: an id with no canonical form is not static.
         val spoken = CensusHash.canonical(
             ResourceIdGrammar.namePart(id).split(ID_SEPARATORS).joinToString(" ") { camelSegments(it).joinToString(" ") },
         ) ?: return false
-        if (PiiShapes.containsMask(spoken) || PiiShapes.FIRST_LAST_INITIAL_CAPITALIZED_REGEX.containsMatchIn(spoken)) return false
+        if (PiiShapes.containsMask(spoken) || PiiShapes.FIRST_LAST_INITIAL_ID_PATH_REGEX.containsMatchIn(spoken)) return false
         val tokens = spoken.split(' ')
         return tokens.indices.none { i ->
             val tail = tokens.subList(i, tokens.size).joinToString(" ")
@@ -350,10 +350,10 @@ object SkeletonBuilder {
         /** An `ID_MARKER_TABLE` CONTENT row — also reused for app copy: seeds nothing. */
         PII_CONTENT,
 
-        /** An `ID_MARKER_TABLE` EXACT row — may be PII or chrome: seeds its exact value only (PP6). */
+        /** An `ID_MARKER_TABLE` EXACT row — may be PII or chrome: exact seed; whole-value id run (PP6, ZZ3). */
         PII_EXACT,
 
-        /** An `ID_MARKER_TABLE` PERSON_OR_MERCHANT row (`user_name`): exact seed; person-name whole value (XX3). */
+        /** An `ID_MARKER_TABLE` PERSON_OR_MERCHANT row (`user_name`): exact seed; whole-value id run (XX3, ZZ3). */
         PII_PERSON_OR_MERCHANT,
 
         /** In `PII_ID_SUFFIXES` only (the intake list; it also covers instruction BODIES). */
@@ -425,11 +425,11 @@ object SkeletonBuilder {
         private val identityRuns = HashSet<String>()
 
         /**
-         * The WHOLE value of a PERSON_OR_MERCHANT value that reads as a person's name, or an EXACT value of the
-         * two-token name shape (reviews VV1, XX3), case-folded with every non-letter removed, as ONE run —
-         * matched only against a node id / class (camel segments and contiguous joins, review TT2): `user_name`
-         * "Riley" nulls `chipRiley`, `tvTitle` "Riley S" nulls `chipRileyS`; a merchant "Jack in the Box", a
-         * one-word sheet title "Search" and any ADDRESS add none.
+         * The WHOLE value of a NAME, PERSON_OR_MERCHANT or EXACT id's text/desc (reviews VV1, XX3, ZZ3 — a single
+         * token included, no name-shape gate), case-folded with every non-letter removed, as ONE run — matched
+         * only against a node id's name part (camel segments and contiguous joins, review TT2): `user_name`
+         * "Riley" nulls `chipRiley`, `tvTitle` "Riley Smith" nulls `chipRileySmith`, `tvTitle` "Search" nulls
+         * `search_bar` (the accepted recall cost). An ADDRESS adds none.
          */
         private val wholeValueRuns = HashSet<String>()
 
@@ -496,7 +496,8 @@ object SkeletonBuilder {
          * - NAME only: letter runs from its TEXT when the text is non-blank, otherwise from its
          *   CONTENT_DESCRIPTION — so a name rendered only in a desc still propagates ("Adam's order"),
          *   while a TalkBack desc "Customer name Adam" beside text "Adam" seeds no `customer`/`name`.
-         * ADDRESS and EXACT never seed runs (address vocabulary and sheet titles are common English).
+         * - NAME, PERSON_OR_MERCHANT, EXACT: the whole value as ONE id-only run ([wholeValueRuns], ZZ3).
+         * ADDRESS and EXACT never seed letter runs (address vocabulary and sheet titles are common English).
          */
         private fun seedIdentity(textField: Field?, descField: Field?, idClass: IdClass) {
             if (idClass != IdClass.PII_NAME && idClass != IdClass.PII_ADDRESS && idClass != IdClass.PII_EXACT &&
@@ -507,18 +508,15 @@ object SkeletonBuilder {
             val desc = descField?.takeIf { it.converged }?.canonical?.takeIf { !PiiShapes.containsMask(it) }
             text?.let { caught += it }
             desc?.let { caught += it }
-            // Reviews VV1, XX3: the whole-value id/class run depends on the KIND. PERSON_OR_MERCHANT (never
-            // chrome) contributes whenever the value reads as a person's name (`PiiShapes.isPersonName`, a
-            // single token included); EXACT (may be chrome — a one-word sheet title "Search") only for the
-            // two-token name shape; ADDRESS never.
-            val wholeValueSource = when (idClass) {
-                IdClass.PII_PERSON_OR_MERCHANT -> listOfNotNull(text, desc).filter { PiiShapes.isPersonName(it) }
-                IdClass.PII_EXACT -> listOfNotNull(text, desc).filter { PiiShapes.FIRST_LAST_INITIAL_CAPITALIZED_REGEX.matches(it) }
-                else -> emptyList()
-            }
-            wholeValueSource.forEach { value ->
-                val whole = CaseFold.fold(value.filter { it.isLetter() })
-                if (whole.codePointCount(0, whole.length) >= MIN_IDENTITY_RUN) wholeValueRuns += whole
+            // Reviews VV1, XX3, ZZ3: every kind that can carry a NAME (NAME, PERSON_OR_MERCHANT, EXACT) adds its
+            // whole value's letters as an id run — a single token included, with no name-shape gate (fail
+            // closed: `tvTitle` "Search" nulls a `search_bar` id on its frame). ADDRESS never does (street
+            // vocabulary is common English).
+            if (idClass != IdClass.PII_ADDRESS) {
+                listOfNotNull(text, desc).forEach { value ->
+                    val whole = CaseFold.fold(value.filter { it.isLetter() })
+                    if (whole.codePointCount(0, whole.length) >= MIN_IDENTITY_RUN) wholeValueRuns += whole
+                }
             }
             if (idClass != IdClass.PII_NAME) return
             // UU6: the text is the run source only when it yielded a usable canonical (not a mask, converged);
@@ -558,15 +556,16 @@ object SkeletonBuilder {
         }
 
         /**
-         * The frame-level containment rule's ONE owner (reviews GG1, JJ1): does [candidate] carry a letter
+         * The frame-level containment rule's ONE owner (reviews GG1, JJ1, ZZ3): does [candidate] carry a letter
          * run equal to any identity seed's run on this frame? Applied to every text slot AND to the id's
-         * name part and the class name of every node — an id built from the customer's name
-         * (`chip_Adam` beside `customer_name` "Adam") is as identifying as a text slot.
+         * name part of every node — an id built from the customer's name (`chip_Adam` beside
+         * `customer_name` "Adam") is as identifying as a text slot. Class names are never checked (ZZ3):
+         * a class is a compiled type name, never built from one frame's customer.
          */
         fun containsIdentityRun(candidate: String, splitCamel: Boolean = false): Boolean {
             if (!frameLevel || (identityRuns.isEmpty() && (!splitCamel || wholeValueRuns.isEmpty()))) return false
             val runs = runsOf(candidate, splitCamel = splitCamel)
-            // Review TT2: ids/classes also match an EXACT/ADDRESS seed's whole value; text slots never do.
+            // Review TT2: ids also match an EXACT/ADDRESS seed's whole value; text slots never do.
             return runs.any { it in identityRuns || (splitCamel && it in wholeValueRuns) }
         }
 
@@ -576,11 +575,12 @@ object SkeletonBuilder {
             return UiSkeletonNodeDto(
                 // ADR §1 / reviews AA10, CC1: only a STATIC class / resource name travels (and keys the
                 // fingerprint); anything else is absent. The §2 PII-id step used the RAW id.
-                // JJ1: a static class/id that carries an identity run of THIS frame is absent too — for the
-                // wire and (since the fingerprint is computed from this tree) the fingerprint.
-                // KK1: ids and classes also split at camelCase boundaries (Compose test tags are usually
-                // camelCase — `chipAdam`); text slots keep the plain letter-run split.
-                className = p.className?.takeIf { !containsIdentityRun(it, splitCamel = true) },
+                // JJ1: a static id that carries an identity run of THIS frame is absent too — for the wire
+                // and (since the fingerprint is computed from this tree) the fingerprint. ZZ3: the class
+                // name is never containment-checked (a compiled type name is not frame data).
+                // KK1: ids split at camelCase boundaries (Compose test tags are usually camelCase —
+                // `chipAdam`); text slots keep the plain letter-run split.
+                className = p.className,
                 id = p.id?.takeIf { !containsIdentityRun(ResourceIdGrammar.namePart(it), splitCamel = true) },
                 isClickable = p.node.isClickable,
                 isEnabled = p.node.isEnabled,
