@@ -11,8 +11,9 @@ import android.view.accessibility.AccessibilityEvent
  *   one platform is enabled (#1148 review G6; with none, there is nothing to look for): the system fires the
  *   topology event with no (or a foreign) package, and gating it on the event's package meant the
  *   windows pipeline never got to inspect the actual windows. Package scope for that path is
- *   enforced downstream on the FETCHED roots (`WindowsChangedPipeline` skips any root whose
- *   package is not in `Platform.watchedPackages`) — the #4 self-recognition guard is unchanged.
+ *   enforced downstream on the FETCHED roots (`WindowsChangedPipeline` reads only ENABLED-platform
+ *   roots — `PlatformPreferences.enabledPackages`, the D4 rule) — the #4 self-recognition guard is
+ *   unchanged.
  * - Every other handled type keeps the event-package gate against the enabled platforms.
  */
 internal object ListenerGate {

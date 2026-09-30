@@ -194,6 +194,14 @@ private class KeyedCoalescer<T, K, A : Any>(
      * (keep waiting); true once the burst is no longer open.
      */
     private suspend fun flush(key: K, burst: Burst, quietGen: Long?): Boolean {
+        // Cheap pre-check under the lock BEFORE queuing for a permit (round 4): a dead wake (the max
+        // timer of a burst the quiet job already closed, or a stale quiet wake) must not sit in
+        // the semaphore's FIFO ahead of live flushes and consume a freed permit for nothing. The
+        // same checks are repeated under the lock after the acquire — the permit wait is a window.
+        lock.withLock {
+            if (bursts[key] !== burst) return true
+            if (quietGen != null && burst.quietGen != quietGen) return false
+        }
         permits.acquire()
         try {
             val value = lock.withLock {

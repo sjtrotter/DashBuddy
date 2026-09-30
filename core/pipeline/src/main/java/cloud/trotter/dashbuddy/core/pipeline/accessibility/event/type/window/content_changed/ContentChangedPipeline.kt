@@ -66,7 +66,7 @@ class ContentChangedPipeline @Inject constructor(
     fun output(): Flow<TreeSnapshot> = source.events
         .filter { it.type == AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED }
         .onEach {
-            Timber.v(
+            Timber.tag("Pipeline").v(
                 "🌊 FLOOD: Content Change window=%d from %s  types=0x%02x",
                 it.windowId, it.className, it.contentChangeTypes,
             )
@@ -85,7 +85,7 @@ class ContentChangedPipeline @Inject constructor(
             leadingEdge = true,
         )
         .onEach {
-            Timber.d(
+            Timber.tag("Pipeline").d(
                 "💧 DRIP: window=%d types=0x%02x n=%d span=%dms",
                 it.windowId, it.changeTypes, it.eventCount, it.spanMs,
             )
@@ -105,7 +105,7 @@ class ContentChangedPipeline @Inject constructor(
                 }
             }
             if (BuildConfig.DEBUG) {
-                Timber.d("🌳 Tree snapshot: %d nodes, pkg=%s", countNodes(snapshot.tree), snapshot.packageName)
+                Timber.tag("Pipeline").d("🌳 Tree snapshot: %d nodes, pkg=%s", countNodes(snapshot.tree), snapshot.packageName)
             }
             TreeSnapshot(
                 tree = snapshot.tree,

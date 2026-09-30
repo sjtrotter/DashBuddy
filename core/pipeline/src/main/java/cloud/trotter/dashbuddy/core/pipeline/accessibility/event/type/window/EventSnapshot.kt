@@ -41,7 +41,7 @@ internal fun AccessibilitySource.snapshotForEvent(
 ): EventSnapshot {
     val activeRoot = getLiveNativeRoot()
     if (activeRoot == null) {
-        Timber.v("🚫 Skip: no active root (event window=%d pkg=%s)", windowId, eventPackage)
+        Timber.tag("Pipeline").v("🚫 Skip: no active root (event window=%d pkg=%s)", windowId, eventPackage)
         return EventSnapshot.Skipped(ForegroundSkipReason.NO_ACTIVE_ROOT)
     }
     val activePkg = activeRoot.packageName?.toString()
@@ -50,7 +50,7 @@ internal fun AccessibilitySource.snapshotForEvent(
     } else {
         when (val front = foregroundWindow(isEnabled)) {
             is AccessibilitySource.Foreground.Refused -> {
-                Timber.v(
+                Timber.tag("Pipeline").v(
                     "🚫 Skip (pre-map): active pkg=%s not enabled, front refused %s (event window=%d pkg=%s)",
                     activePkg, front.reason, windowId, eventPackage,
                 )
@@ -62,11 +62,12 @@ internal fun AccessibilitySource.snapshotForEvent(
     } ?: return EventSnapshot.Skipped(ForegroundSkipReason.MAP_FAILED)
 
     if (!isEnabled(snapshot.packageName)) { // invariant — see step 5 (H5)
-        Timber.v(
-            "🚫 Skip window: non-target pkg=%s (event window=%d pkg=%s)",
-            snapshot.packageName, windowId, eventPackage,
+        // A defended invariant fired (principle 7 → WARN, counts/packages only, no UI text).
+        Timber.tag("Pipeline").w(
+            "Post-map package mismatch: snapshot pkg=%s failed the gate its own root passed (event window=%d) — dropping",
+            snapshot.packageName, windowId,
         )
-        return EventSnapshot.Skipped(ForegroundSkipReason.FRONT_NOT_ENABLED)
+        return EventSnapshot.Skipped(ForegroundSkipReason.POST_MAP_MISMATCH)
     }
     return EventSnapshot.Resolved(snapshot)
 }

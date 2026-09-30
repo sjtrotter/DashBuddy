@@ -22,7 +22,7 @@ class StateChangedPipeline @Inject constructor(
     fun output(): Flow<TreeSnapshot> = source.events
         .filter { it.type == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED }
         .onEach {
-            Timber.d(
+            Timber.tag("Pipeline").d(
                 "⚡ STATE_CHANGED window=%d from %s  types=0x%02x",
                 it.windowId, it.className, it.contentChangeTypes,
             )

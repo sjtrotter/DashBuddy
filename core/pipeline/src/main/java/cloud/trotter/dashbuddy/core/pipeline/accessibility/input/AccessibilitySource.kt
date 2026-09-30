@@ -174,8 +174,14 @@ class AccessibilitySource @Inject constructor() {
      * SAFE to call from background threads.
      */
     fun foregroundWindow(isEnabled: (String?) -> Boolean): Foreground = try {
+        foregroundWindow(getWindows(), isEnabled)
+    } catch (_: Exception) {
+        Foreground.Refused(ForegroundSkipReason.FRONT_UNREADABLE)
+    }
+
+    /** [foregroundWindow] over an ALREADY-enumerated [windows] list (one enumeration per frame). */
+    fun foregroundWindow(windows: List<AccessibilityWindowInfo>, isEnabled: (String?) -> Boolean): Foreground = try {
         val ownPkg = ownPackage()
-        val windows = getWindows()
         val ordered = windows
             .filter { it.type == AccessibilityWindowInfo.TYPE_APPLICATION && !it.isInPictureInPictureMode }
             .sortedByDescending { it.layer }

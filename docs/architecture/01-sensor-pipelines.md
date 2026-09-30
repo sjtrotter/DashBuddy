@@ -298,9 +298,17 @@ frames the pipeline ever sees*:
   NOT read — that question is **#1152**. (4) A post-map check of the snapshot's package against the
   enabled set stays as a belt-and-braces INVARIANT (H5): both builders derive the package from the
   same already-fetched root, so it cannot catch a read-to-read swap and only fires on a programming
-  error. **Every skip is counted** (H3): both pipelines call `PipelineStats.onForegroundSkip(reason)`,
+  error — which is why it has its OWN reason, `POST_MAP_MISMATCH`, plus a `Pipeline` WARN (review
+  round 4), never the legitimate `FRONT_NOT_ENABLED` count. **Every skip is counted** (H3): both pipelines call `PipelineStats.onForegroundSkip(reason)`,
   rendered as `foregroundSkip{…}` (enum names + counts) on the periodic summary — a disabled
   platform's active frame now dies here, before `disabledPlatformDropped` could see it.
+  Accepted residuals (round 4): a TRANSIENT null-root application window on top (our bubble
+  finishing, an app's starting window) refuses frames for its few milliseconds, counted
+  `FRONT_UNREADABLE`; and downstream ORDER between a burst's flush and the next event's leading
+  emission is not guaranteed across a burst boundary (two senders) — harmless, since every
+  snapshot re-reads the live tree, but `firstEventTimeMs` is not monotonic across DRIP lines.
+  Every log site in the ingestion path is tagged `Pipeline` (principle 7); the windows-list DEBUG
+  line logs the title's LENGTH only.
   **The windows pipeline emits true overlays only** (G6/H6): enabled-package `TYPE_APPLICATION`
   (non-PiP) windows above a cutoff, never one beneath it. The cutoff is the ACTIVE window's layer
   when the active window is not ours; when OUR bubble is active (its layer would suppress

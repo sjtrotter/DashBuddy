@@ -18,6 +18,13 @@ enum class ForegroundSkipReason {
     /** A non-enabled window is active and no application window is a candidate. */
     NO_CANDIDATE,
 
+    /**
+     * The mapped snapshot's package disagrees with the package the gate read from the SAME root —
+     * a programming error, never a race (PR #1150 review round 4). Counted on its own so the
+     * invariant firing is visible in the census instead of hiding under [FRONT_NOT_ENABLED].
+     */
+    POST_MAP_MISMATCH,
+
     /** The chosen root failed to map (the tree mapper threw or returned nothing). */
     MAP_FAILED,
 }

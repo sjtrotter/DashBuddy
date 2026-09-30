@@ -46,17 +46,16 @@ class WindowsChangedPipeline @Inject constructor(
             keyOf = { 0 },
             merge = { acc: Int?, _ -> (acc ?: 0) + 1 },
         )
-        .onEach { n -> Timber.d("\uD83E\uDE9F WINDOWS_CHANGED (coalesced n=%d)", n) }
+        .onEach { n -> Timber.tag("Pipeline").d("\uD83E\uDE9F WINDOWS_CHANGED (coalesced n=%d)", n) }
         .transform { coalesced ->
             val windows = source.getWindows()
-            Timber.d(
-                "\uD83E\uDE9F Window list: %d windows",
-                windows.size
-            )
+            Timber.tag("Pipeline").d("\uD83E\uDE9F Window list: %d windows", windows.size)
             windows.forEachIndexed { i, w ->
-                Timber.d(
-                    "  [%d] id=%d type=%d layer=%d title=%s active=%s focused=%s",
-                    i, w.id, w.type, w.layer, w.title, w.isActive, w.isFocused
+                // The window TITLE is app-controlled text (#1148 review G1) — logged by LENGTH only,
+                // even at DEBUG: app.log leaves the device in every post-dash pull.
+                Timber.tag("Pipeline").d(
+                    "  [%d] id=%d type=%d layer=%d titleLen=%d active=%s focused=%s",
+                    i, w.id, w.type, w.layer, w.title?.length ?: 0, w.isActive, w.isFocused
                 )
             }
 
@@ -64,7 +63,7 @@ class WindowsChangedPipeline @Inject constructor(
 
             val active = windows.firstOrNull { it.isActive }
             if (active == null) {
-                Timber.v("🚫 Windows: no active window — nothing emitted")
+                Timber.tag("Pipeline").v("🚫 Windows: no active window — nothing emitted")
                 return@transform
             }
             val enabled = platformPreferences.enabledPackages.value
@@ -84,11 +83,12 @@ class WindowsChangedPipeline @Inject constructor(
             val activeIsOwn = ownPkg != null && active.root?.packageName?.toString() == ownPkg
             if (activeIsOwn) {
                 // H6: our bubble's layer is no cutoff — emit the window in front of the dasher.
-                when (val front = source.foregroundWindow { it in enabled }) {
+                // Reuse THIS enumeration (round 4): no second getWindows() per topology burst.
+                when (val front = source.foregroundWindow(windows) { it in enabled }) {
                     is AccessibilitySource.Foreground.Found ->
                         snapshotOf(front.located.window, front.located.root)?.let { emit(it) }
                     is AccessibilitySource.Foreground.Refused ->
-                        Timber.v("🚫 Windows: our window active, foreground refused %s", front.reason)
+                        Timber.tag("Pipeline").v("🚫 Windows: our window active, foreground refused %s", front.reason)
                 }
                 return@transform
             }

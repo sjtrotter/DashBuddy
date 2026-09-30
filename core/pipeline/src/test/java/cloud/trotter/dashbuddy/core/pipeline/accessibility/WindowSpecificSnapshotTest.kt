@@ -316,11 +316,16 @@ class WindowSpecificSnapshotTest {
                 AccessibilitySource.RootSnapshot(tree = UiNode(text = "bubble"), packageName = ownPkg)
         }
 
+        val stats = PipelineStats()
         val emitted = collectWith(
-            events, ContentChangedPipeline(source, FakePlatformPreferences(setOf(ddPkg)), PipelineStats()).output(),
+            events, ContentChangedPipeline(source, FakePlatformPreferences(setOf(ddPkg)), stats).output(),
             event(Kind.CONTENT.type, windowId = 3),
         )
 
         assertTrue("a snapshot attributed to a non-enabled package must never be emitted", emitted.isEmpty())
+        // Round 4: the invariant has its OWN census reason, so a firing is visible instead of hiding
+        // under the legitimate "another app is in front" count.
+        assertEquals(1L, stats.foregroundSkipCount(ForegroundSkipReason.POST_MAP_MISMATCH))
+        assertEquals(0L, stats.foregroundSkipCount(ForegroundSkipReason.FRONT_NOT_ENABLED))
     }
 }
