@@ -629,4 +629,28 @@ class SkeletonBuilderTest {
         val bad = UiNode(className = "android.widget.CheckBox", text = "Leave at door", isChecked = 7)
         assertEquals(Outcome.Refused(Refusal.INVALID_TREE), SkeletonBuilder.outcome(bad, null, meta, platform, day))
     }
+
+    @Test
+    fun `JJ1 - an id carrying the frame's identity run is absent for the wire and the fingerprint`() {
+        fun frame(tag: String?) = UiNode(
+            className = "android.widget.LinearLayout",
+            viewIdResourceName = "com.x:id/row",
+            children = listOf(
+                UiNode(className = "android.widget.TextView", viewIdResourceName = "com.x:id/customer_name", text = "Adam"),
+                UiNode(className = "android.widget.Button", viewIdResourceName = tag, text = "Continue"),
+            ),
+        )
+        val adam = SkeletonBuilder.build(frame("com.x:id/chip_Adam"), null, meta, platform, day)!!
+        assertNull(adam.root.children[1].id)
+        val gold = SkeletonBuilder.build(frame("com.x:id/chip_Gold"), null, meta, platform, day)!!
+        assertEquals("com.x:id/chip_Gold", gold.root.children[1].id)
+        val none = SkeletonBuilder.build(frame(null), null, meta, platform, day)!!
+        assertEquals(none.fingerprint, adam.fingerprint)
+        // Without an identity id on the frame, the same tag travels (ADR residual risk 10).
+        val alone = SkeletonBuilder.build(
+            UiNode(className = "android.widget.Button", viewIdResourceName = "com.x:id/chip_Adam", text = "Continue"),
+            null, meta, platform, day,
+        )!!
+        assertEquals("com.x:id/chip_Adam", alone.root.id)
+    }
 }

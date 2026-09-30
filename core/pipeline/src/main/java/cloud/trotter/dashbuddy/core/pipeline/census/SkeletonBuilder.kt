@@ -401,9 +401,18 @@ object SkeletonBuilder {
         /** Pass 2 for one field: the constant `withheld`, or the value's own (memoized) slot. */
         fun slot(field: Field): TextSlot {
             if (field.idWithholds || field.canonical in caught || valueStep(field.trimmed, field.canonical) != null) return TextSlot.WITHHELD
-            if (identityRuns.isNotEmpty() && runsOf(field.canonical).any { it in identityRuns }) return TextSlot.WITHHELD
+            if (containsIdentityRun(field.canonical)) return TextSlot.WITHHELD
             return valueSlots.getOrPut(field.canonical) { unfiltered(field.canonical) }
         }
+
+        /**
+         * The frame-level containment rule's ONE owner (reviews GG1, JJ1): does [candidate] carry a letter
+         * run equal to any identity seed's run on this frame? Applied to every text slot AND to the id's
+         * name part and the class name of every node — an id built from the customer's name
+         * (`chip_Adam` beside `customer_name` "Adam") is as identifying as a text slot.
+         */
+        fun containsIdentityRun(candidate: String): Boolean =
+            identityRuns.isNotEmpty() && runsOf(candidate).any { it in identityRuns }
 
         fun emit(p: Pending): UiSkeletonNodeDto {
             val text = LinkedHashMap<String, TextSlot>()
@@ -411,8 +420,10 @@ object SkeletonBuilder {
             return UiSkeletonNodeDto(
                 // ADR §1 / reviews AA10, CC1: only a STATIC class / resource name travels (and keys the
                 // fingerprint); anything else is absent. The §2 PII-id step used the RAW id.
-                className = p.className,
-                id = p.id,
+                // JJ1: a static class/id that carries an identity run of THIS frame is absent too — for the
+                // wire and (since the fingerprint is computed from this tree) the fingerprint.
+                className = p.className?.takeIf { !containsIdentityRun(it) },
+                id = p.id?.takeIf { !containsIdentityRun(ResourceIdGrammar.namePart(it)) },
                 isClickable = p.node.isClickable,
                 isEnabled = p.node.isEnabled,
                 isChecked = p.node.isChecked,
