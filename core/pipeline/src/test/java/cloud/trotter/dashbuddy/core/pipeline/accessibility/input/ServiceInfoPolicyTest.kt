@@ -6,6 +6,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertThrows
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -49,5 +50,19 @@ class ServiceInfoPolicyTest {
             ServiceInfoPolicy.packageNamesFor(it, watched) == null
         }
         assertEquals(listOf(EventReceiptConsent.ALLOWED), wide)
+    }
+
+    @Test
+    fun `an empty registry is refused for every consent - an empty packageNames means ALL packages`() {
+        EventReceiptConsent.entries.forEach { consent ->
+            assertThrows(IllegalArgumentException::class.java) {
+                ServiceInfoPolicy.packageNamesFor(consent, emptySet())
+            }
+        }
+    }
+
+    @Test
+    fun `the production registry is non-empty`() {
+        assertTrue(Platform.watchedPackages.isNotEmpty())
     }
 }

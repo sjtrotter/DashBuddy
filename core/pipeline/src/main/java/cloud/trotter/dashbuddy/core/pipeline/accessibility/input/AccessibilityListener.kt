@@ -112,10 +112,17 @@ class AccessibilityListener : AccessibilityService() {
      */
     private fun applyEventReceipt(consent: EventReceiptConsent) {
         val info = serviceInfo ?: return
+        val packageNames = try {
+            ServiceInfoPolicy.packageNamesFor(consent, Platform.watchedPackages)
+        } catch (e: IllegalArgumentException) {
+            // LL9: refuse to apply — the manifest's package list stays in force (fail-closed).
+            Timber.tag("Pipeline").e(e, "Event receipt: refused to apply an empty package list")
+            return
+        }
         if (BuildConfig.DEBUG) {
             info.eventTypes = AccessibilityServiceInfo.DEFAULT or AccessibilityEvent.TYPES_ALL_MASK
         }
-        info.packageNames = ServiceInfoPolicy.packageNamesFor(consent, Platform.watchedPackages)
+        info.packageNames = packageNames
         serviceInfo = info
         Timber.tag("Pipeline").i("Event receipt: wide=%s", ServiceInfoPolicy.isWide(consent))
     }
