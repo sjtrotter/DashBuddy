@@ -468,8 +468,8 @@ class CustomerTextMarkersTest {
         )
         // Reviews AD2, AF1: a person-or-merchant value seeds runs only when it reads as a person's name.
         val pom = CustomerTextMarkers.IdentityKind.PERSON_OR_MERCHANT
-        listOf("Riley", "Mary Jo", "O'Brien", "Wing Stop").forEach { assertTrue(it, pom.seedsRunsFrom(it)) }
-        listOf("Riley S", "In-N-Out Burger", "Sonic Drive-In", "7-Eleven", "The Home Depot", "Jack in the Box", "riley")
+        listOf("Riley", "Mary Jo", "O'Brien", "Wing Stop", "Riley S", "Riley S.", "Mary Jo S").forEach { assertTrue(it, pom.seedsRunsFrom(it)) }
+        listOf("S", "Riley S T", "Mary Jo Anne", "In-N-Out Burger", "Sonic Drive-In", "7-Eleven", "The Home Depot", "Jack in the Box", "riley")
             .forEach { assertTrue(it, !pom.seedsRunsFrom(it)) }
         assertTrue(CustomerTextMarkers.IdentityKind.NAME.seedsRunsFrom("Mary Jo Anne Smith"))
         assertTrue(!CustomerTextMarkers.IdentityKind.EXACT.seedsRunsFrom("Riley"))

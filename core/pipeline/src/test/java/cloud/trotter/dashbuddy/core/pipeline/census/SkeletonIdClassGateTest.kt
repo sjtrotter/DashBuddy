@@ -323,8 +323,8 @@ class SkeletonIdClassGateTest : SkeletonBuilderTestBase() {
         assertEquals(listOf<String?>("com.google.android.material.chip.Chip"), classesBeside("customer_name", "Chip", "com.google.android.material.chip.Chip"))
         assertEquals(listOf<String?>("androidx.cardview.widget.CardView"), classesBeside("customer_name", "Card", "androidx.cardview.widget.CardView"))
         assertEquals(listOf<String?>(null), classesBeside("customer_name", "Riley", "com.x.RileyButton"))
-        // Every wrapper class is framework, so wrapper eligibility can never depend on the customer.
-        AnonymousWrappers.WRAPPER_CLASSES.forEach { cls -> assertTrue(cls, FrameFilter.FRAMEWORK_PACKAGES.any { cls.startsWith(it) }) }
+        // Every wrapper class is a KNOWN framework class, so wrapper eligibility can never depend on the customer.
+        AnonymousWrappers.WRAPPER_CLASSES.forEach { cls -> assertTrue(cls, cls in FrameworkClasses.KNOWN) }
     }
 
     @Test
@@ -333,5 +333,22 @@ class SkeletonIdClassGateTest : SkeletonBuilderTestBase() {
         val first = ids.map { IdPathJudgement.isStaticId(it) }
         assertEquals(first, ids.map { IdPathJudgement.isStaticId(it) })
         assertEquals(listOf(true, false, false), listOf("chip_Gold", "chip_Adam_S", "row_Deliver_to_Sam").map { IdPathJudgement.isStaticId(it) })
+    }
+
+    @Test
+    fun `AG2 - a framework PREFIX is not proof, only a known framework class is exempt`() {
+        assertEquals(
+            listOf<String?>(null, null, null),
+            classesBeside("customer_name", "Riley", "androidx.RileyButton", "android.widget.RileyView", "com.google.android.material.RileyChip"),
+        )
+        assertEquals(listOf<String?>("com.google.android.material.chip.Chip"), classesBeside("customer_name", "Chip", "com.google.android.material.chip.Chip"))
+    }
+
+    @Test
+    fun `AG3 - a user_name with a trailing initial seeds runs`() {
+        assertEquals(listOf("~"), idsBeside("user_name", "Riley S", "chipRiley"))
+        assertEquals(listOf(TextSlot.WITHHELD), beside2("user_name", "Riley S", "Text Riley"))
+        assertEquals(listOf(TextSlot.WITHHELD), beside2("user_name", "Mary Jo S.", "Mary's order"))
+        assertEquals(listOf(words(2, "Sign in")), beside2("user_name", "In-N-Out Burger", "Sign in"))
     }
 }

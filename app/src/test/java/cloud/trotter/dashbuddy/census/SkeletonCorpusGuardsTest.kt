@@ -1,6 +1,7 @@
 package cloud.trotter.dashbuddy.census
 import cloud.trotter.dashbuddy.core.pipeline.CustomerTextMarkers
 import cloud.trotter.dashbuddy.core.pipeline.SensitiveTextMarkers
+import cloud.trotter.dashbuddy.core.pipeline.census.FrameworkClasses
 import cloud.trotter.dashbuddy.core.pipeline.census.IdPathJudgement
 import cloud.trotter.dashbuddy.core.pipeline.census.SkeletonBuilder
 import cloud.trotter.dashbuddy.core.pipeline.census.diagnostics.DiagnosticSkeletonBuilder
@@ -188,6 +189,19 @@ class SkeletonCorpusGuardsTest : SkeletonCorpusTestBase() {
         hashed("Name", text(talkback[2]))
         assertEquals("com.doordash.driverapp:id/customer_name", talkback[0].id)
         assertEquals("com.doordash.driverapp:id/customer_name_label", talkback[3].id)
+    }
+
+    @Test
+    fun `every framework-prefixed class the corpus renders is a known framework class (review AG2)`() {
+        val unlisted = sortedSetOf<String>()
+        corpus.forEach { f ->
+            walkNodes(f.tree) { n ->
+                n.className?.let { cls ->
+                    if (FrameworkClasses.PACKAGES.any { cls.startsWith(it) } && cls !in FrameworkClasses.KNOWN) unlisted += cls
+                }
+            }
+        }
+        assertEquals(sortedSetOf<String>(), unlisted)
     }
 
     @Test

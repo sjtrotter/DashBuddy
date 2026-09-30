@@ -282,8 +282,8 @@ object CustomerTextMarkers {
         /**
          * A value that is a person OR a merchant, never chrome (`user_name`, #1160 reviews XX3, ZZ3, AD2, AF1):
          * it seeds letter runs only when it reads as a PERSON'S NAME — at most two tokens, each a letter-only
-         * Capitalized word of ≥ 2 letters (an apostrophe allowed; no hyphen, digit or single-letter initial)
-         * — and only runs of ≥ 3 letters, so "Text Riley" beside "Riley" is withheld while "In-N-Out
+         * Capitalized word of ≥ 2 letters (an apostrophe allowed; no hyphen or digit), optionally followed by
+         * ONE trailing capital initial ("Riley S", "Mary Jo S.", review AG3) — and only runs of ≥ 3 letters, so "Text Riley" beside "Riley" is withheld while "In-N-Out
          * Burger", "Sonic Drive-In" and "7-Eleven" seed their exact value only (never `in`/`out`, which
          * would withhold "Sign in"/"Cash out" and fork `sign_in_button` per merchant). A 2-letter first name
          * keeps its exact seed. A name-shaped merchant ("Wing Stop") seeds runs — accepted, residual risk 9.
@@ -294,9 +294,18 @@ object CustomerTextMarkers {
         /** Does a canonical [value] of this kind seed letter runs (reviews AD2, AF1)? Canonical = single spaces. */
         fun seedsRunsFrom(value: String): Boolean {
             if (maxRunSeedTokens <= 0) return false
-            val tokens = value.split(' ')
+            // AG3: a person's name may end in a single capital initial ("Riley S", "Riley S.", "Mary Jo S"); it
+            // is not counted as a name token, and the run floor keeps it from seeding.
+            val tokens = value.split(' ').let { t ->
+                if (personNameShapeOnly && t.size > 1 && isInitial(t.last())) t.dropLast(1) else t
+            }
             if (maxRunSeedTokens != Int.MAX_VALUE && tokens.size > maxRunSeedTokens) return false
             return !personNameShapeOnly || tokens.all { isPersonNameToken(it) }
+        }
+
+        private fun isInitial(token: String): Boolean {
+            val letter = token.removeSuffix(".")
+            return letter.codePointCount(0, letter.length) == 1 && Character.isUpperCase(letter.codePointAt(0))
         }
 
         private fun isPersonNameToken(token: String): Boolean {

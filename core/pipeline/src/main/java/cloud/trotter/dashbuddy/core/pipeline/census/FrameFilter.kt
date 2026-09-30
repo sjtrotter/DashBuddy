@@ -251,14 +251,14 @@ internal class FrameFilter(
     /**
      * The CLASS containment check (review AC2, narrowing ZZ3): a third-party-set class name is withheld
      * when a join carries a run of a class-guarding kind (NAME: `com.x.RileyButton` beside `customer_name`
-     * "Riley") — never a title or merchant word, so `SearchView` beside `tvTitle` "Search" stays. A
-     * FRAMEWORK class ([FRAMEWORK_PACKAGES], review AF2) is never checked: it cannot carry a customer's name,
-     * so "Chip" never nulls `com.google.android.material.chip.Chip` and forks the fingerprint per customer.
-     * This also covers every wrapper class (`AnonymousWrappers.WRAPPER_CLASSES` are all `android.*`), so
-     * wrapper eligibility — the fingerprint's structure — never depends on the customer.
+     * "Riley") — never a title or merchant word, so `SearchView` beside `tvTitle` "Search" stays. A KNOWN
+     * framework class ([FrameworkClasses.KNOWN], reviews AF2, AG2 — an exact binary name, never a prefix: an
+     * app can name its own class `androidx.RileyButton`) is never checked, so "Chip" never nulls
+     * `com.google.android.material.chip.Chip` and forks the fingerprint per customer. The set holds every
+     * wrapper class, so wrapper eligibility — the fingerprint's structure — never depends on the customer.
      */
     fun classCarriesNameRun(className: String): Boolean {
-        if (!frameLevel || classSeeds.isEmpty() || FRAMEWORK_PACKAGES.any { className.startsWith(it) }) return false
+        if (!frameLevel || classSeeds.isEmpty() || className in FrameworkClasses.KNOWN) return false
         return classJoinHits.getOrPut(className) { LetterRuns.anyJoinIn(LetterRuns.foldedSegments(className), classSeeds, classSeedLengths) }
     }
 
@@ -284,13 +284,7 @@ internal class FrameFilter(
         )
     }
 
-    internal companion object {
-        /**
-         * Class-name prefixes never containment-checked (review AF2): framework classes, not app-defined.
-         * Every `AnonymousWrappers.WRAPPER_CLASSES` member is under one of them (pinned by a test).
-         */
-        val FRAMEWORK_PACKAGES = listOf("android.", "androidx.", "com.google.android.material.")
-
+    private companion object {
         /**
          * A whole-value id seed needs at least this many letters (review AB4): three, so a short value
          * ("Ok", "No", "Hi") never nulls `ok_button` / `no_thanks_button` / `hi_res_image`. NAME word runs
