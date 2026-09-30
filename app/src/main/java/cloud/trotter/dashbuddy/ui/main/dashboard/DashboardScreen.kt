@@ -52,9 +52,8 @@ import cloud.trotter.dashbuddy.ui.main.analytics.ReviewItem
 import cloud.trotter.dashbuddy.ui.main.analytics.ReviewList
 import cloud.trotter.dashbuddy.ui.main.analytics.reviewTexts
 import cloud.trotter.dashbuddy.ui.main.navigation.Screen
-import cloud.trotter.dashbuddy.ui.main.setup.consent.ConsentPromptSheet
 import cloud.trotter.dashbuddy.ui.main.setup.consent.DebugEventReceiptBlock
-import cloud.trotter.dashbuddy.ui.main.setup.consent.EventReceiptConsentSheet
+import cloud.trotter.dashbuddy.ui.main.setup.consent.FrontDoorHost
 import cloud.trotter.dashbuddy.ui.main.setup.consent.EventReceiptConsentViewModel
 import cloud.trotter.dashbuddy.ui.main.setup.permissions.PermissionsBottomSheet
 import cloud.trotter.dashbuddy.util.PermissionUtils
@@ -142,19 +141,11 @@ fun DashboardScreen(
         )
     }
 
-    // Prompted automation consent (#843): once essential permissions are in, the
-    // app-foreground front door asks for per-capability automation consent — the
-    // same rhythm the permission sheet uses. Self-gating: renders nothing when no
-    // capability is undecided. Held back while the permission gate is up so the
-    // two sheets never stack.
+    // The front door (#843 capability consent, #1151 event-receipt consent): once essential
+    // permissions are in, ONE host shows at most one consent sheet at a time (#1151 review LL1).
+    // Held back while the permission gate is up so no two sheets ever stack.
     if (hasPermissions == true && !showPermissionSheet) {
-        ConsentPromptSheet()
-        // #1151 — the wide-event-receipt FEATURE consent, after the permission chain (it means
-        // nothing before the accessibility service runs). Self-gating on `showPrompt`.
-        EventReceiptConsentSheet(
-            showPrompt = eventReceipt.showPrompt,
-            onDecision = eventReceiptViewModel::onDecision,
-        )
+        FrontDoorHost()
     }
 
     Scaffold { padding ->

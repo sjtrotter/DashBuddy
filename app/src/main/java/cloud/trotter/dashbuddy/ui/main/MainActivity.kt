@@ -5,6 +5,7 @@ import android.content.Intent
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.activity.viewModels
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
@@ -38,6 +39,7 @@ import cloud.trotter.dashbuddy.feature.settings.GeneralSettingsScreen
 import cloud.trotter.dashbuddy.feature.settings.PlatformSettingsScreen
 import cloud.trotter.dashbuddy.ui.main.settings.SettingsHomeScreen
 import cloud.trotter.dashbuddy.feature.settings.StrategySettingsScreen
+import cloud.trotter.dashbuddy.ui.main.setup.consent.FrontDoorViewModel
 import cloud.trotter.dashbuddy.ui.main.setup.wizard.WizardScreen
 import cloud.trotter.dashbuddy.core.designsystem.theme.DashBuddyTheme
 import dagger.hilt.android.AndroidEntryPoint
@@ -52,6 +54,12 @@ class MainActivity : ComponentActivity() {
      * instance is brought forward.
      */
     private val pendingRoute = MutableStateFlow<String?>(null)
+
+    /**
+     * #1151 review LL6 — the front door's deferral generation lives here (activity-scoped, survives
+     * rotation); [onStop] bumps it only on a REAL departure from the foreground.
+     */
+    private val frontDoor: FrontDoorViewModel by viewModels()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -231,6 +239,11 @@ class MainActivity : ComponentActivity() {
                 }
             }
         }
+    }
+
+    override fun onStop() {
+        super.onStop()
+        if (!isChangingConfigurations) frontDoor.onBackgrounded()
     }
 
     override fun onNewIntent(intent: Intent) {
