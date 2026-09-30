@@ -40,7 +40,14 @@ class ConsentPromptViewModel @Inject constructor(
         }.stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5_000),
-            initialValue = ConsentPromptUiState(),
+            // #1151 review NN1 (the MM7 treatment): seeded from the current values, so the front
+            // door's FIRST pick sees the undecided capabilities and never shows the event-receipt
+            // page first only to swap it for this one with no decision taken.
+            initialValue = buildConsentPromptState(
+                grants.capabilities.value,
+                grants.grantedKeys.value,
+                grants.deniedKeys.value,
+            ),
         )
 
     /**
