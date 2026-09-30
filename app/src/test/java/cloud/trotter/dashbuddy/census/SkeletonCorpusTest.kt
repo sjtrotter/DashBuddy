@@ -5,9 +5,9 @@ import cloud.trotter.dashbuddy.core.pipeline.SensitiveTextMarkers
 import cloud.trotter.dashbuddy.core.pipeline.census.SkeletonBuilder
 import cloud.trotter.dashbuddy.domain.capture.ReplayMetadata
 import cloud.trotter.dashbuddy.domain.capture.schema.UiNodeSchema
+import cloud.trotter.dashbuddy.domain.census.contract.CaseFold
 import cloud.trotter.dashbuddy.domain.census.contract.CensusHash
 import cloud.trotter.dashbuddy.domain.census.contract.ClassNameGrammar
-import cloud.trotter.dashbuddy.domain.census.contract.ResourceIdGrammar
 import cloud.trotter.dashbuddy.domain.census.contract.SkeletonSchema
 import cloud.trotter.dashbuddy.domain.census.contract.TextSlot
 import cloud.trotter.dashbuddy.domain.census.contract.UiSkeletonDto
@@ -226,7 +226,7 @@ class SkeletonCorpusTest {
     fun `the id gate rejects exactly the dynamic ids in the corpus, and no rejected id is shipped`() {
         val rejected = sortedSetOf<String>()
         corpus.forEach { f ->
-            walkNodes(f.tree) { n -> n.viewIdResourceName?.let { if (!ResourceIdGrammar.isStatic(it)) rejected += it } }
+            walkNodes(f.tree) { n -> n.viewIdResourceName?.let { if (!SkeletonBuilder.isStaticId(it)) rejected += it } }
         }
         // A static id that trips the gate is a red test here, never a silent drop (review CC7 admitted a
         // single internal space, so `Artwork Image` is static now).
@@ -239,7 +239,7 @@ class SkeletonCorpusTest {
             rejected,
         )
         built.mapNotNull { it.second }.forEach { item ->
-            walkSkeleton(item.root) { n -> n.id?.let { assertTrue(it, ResourceIdGrammar.isStatic(it)) } }
+            walkSkeleton(item.root) { n -> n.id?.let { assertTrue(it, SkeletonBuilder.isStaticId(it)) } }
         }
     }
 
@@ -336,7 +336,18 @@ class SkeletonCorpusTest {
             }
         }
         // Review GG1: an identity value also withholds any field CONTAINING one of its ≥3-letter runs.
-        val idRuns = idSeeded.flatMap { letterRuns(it) }.filter { it.length >= 3 }.toSet()
+        val idRuns = idSeeded.flatMap { letterRuns(it, minLetters = 2) }.toSet()
+        // Review HH3: every canonical key a value predicate caught ANYWHERE in the frame — on the canonical
+        // form, or on the raw trimmed form when that is within the cap (the builder's bounded raw pass).
+        val judgedKeys = HashSet<String>()
+        walkNodes(tree) { n ->
+            n.scrubbableStrings().forEach { (_, v) ->
+                if (v.isNullOrBlank()) return@forEach
+                val raw = v.trim()
+                val canonical = CensusHash.canonical(v)
+                if (valueJudged(canonical) || (raw.length <= 40 && valueJudged(raw))) judgedKeys += canonical
+            }
+        }
         fun walk(o: UiNode, r: UiNode, s: UiSkeletonNodeDto) {
             val redactedValues = r.scrubbableStrings().toMap()
             for ((field, value) in o.scrubbableStrings()) {
@@ -352,8 +363,8 @@ class SkeletonCorpusTest {
                 // no seeding identity-id occurrence and no value-judging step anywhere in the frame).
                 val trimmed = CensusHash.canonical(value)
                 if (redactedInIsolation(o.viewIdResourceName, field.wire, value) == value &&
-                    trimmed in propagatedNotSeeded && trimmed !in idSeeded && !valueJudged(trimmed) &&
-                    !valueJudged(value.trim()) && letterRuns(trimmed).none { it in idRuns }
+                    trimmed in propagatedNotSeeded && trimmed !in idSeeded && trimmed !in judgedKeys &&
+                    letterRuns(trimmed).none { it in idRuns }
                 ) {
                     exempt++
                     continue
@@ -394,6 +405,24 @@ class SkeletonCorpusTest {
     }
 
     @Test
+    fun `(c) negative control - a RAW-only seed elsewhere refuses the exemption (review HH3)`() {
+        val frame = UiNode(
+            className = "android.widget.LinearLayout",
+            text = "\"ab cd\"",
+            children = listOf(
+                UiNode(className = "android.widget.TextView", viewIdResourceName = "com.doordash.driverapp:id/step_description", text = "\"ab cd\""),
+                UiNode(className = "android.widget.TextView", text = "\"ab  cd\""),
+            ),
+        ).restoreParents()
+        val good = SkeletonBuilder.build(frame, null, META, Platform.DoorDash, DAY)!!
+        assertEquals(TextSlot.WITHHELD, good.root.text.getValue("text"))
+        assertTrue(parityProblems("good", frame, good).third.isEmpty())
+        val bad = good.copy(root = good.root.copy(text = mapOf("text" to TextSlot(h = CensusHash.of("\"ab cd\""), kind = "words:2"))))
+        val (_, _, problems) = parityProblems("bad", frame, bad)
+        assertEquals(problems.toString(), 1, problems.size)
+    }
+
+    @Test
     fun `(c) negative control - the exemption refuses a value with an independent ID_MARKERS cause (review DD1)`() {
         val frame = UiNode(
             className = "android.widget.LinearLayout",
@@ -416,8 +445,12 @@ class SkeletonCorpusTest {
      * Maximal Unicode-letter runs, case-folded — the test-side mirror of the builder's private token
      * split (review GG1). Used only to REFUSE an exemption, so a drift can only make the guard stricter.
      */
-    private fun letterRuns(value: String): List<String> =
-        Regex("\\p{L}+").findAll(value).map { it.value.lowercase(java.util.Locale.ROOT) }.toList()
+    private fun letterRuns(value: String, minLetters: Int = 0): List<String> =
+        Regex("\\p{L}+").findAll(value)
+            .map { it.value }
+            .filter { it.codePointCount(0, it.length) >= minLetters } // HH2: letter code points
+            .map { CaseFold.fold(it) } // HH1: the one fold the builder uses
+            .toList()
 
     private fun redactedInIsolation(id: String?, wire: String, value: String): String {
         val json = Json.encodeToString(
@@ -546,7 +579,8 @@ class SkeletonCorpusTest {
         var piiSeen = 0
         checkAll(PropSeeds.samples(500), PropSeeds.config(SEED), valueArb) { value ->
             // Steps 7/8 judge the raw trimmed value AND the canonical form (reviews EE2, FF1).
-            val forms = setOf(value.trim(), CensusHash.canonical(value))
+            // Review HH5: the raw form counts only within the cap — the builder's raw pass is bounded (GG2).
+            val forms = setOfNotNull(value.trim().takeIf { it.length <= 40 }, CensusHash.canonical(value))
             // A sensitive fragment ("Visa ••••…") refuses the whole one-node frame — nothing to check.
             val slot = slotOf(value) ?: return@checkAll
             if (forms.any { form -> shapes.any { it.containsMatchIn(form) } }) {
