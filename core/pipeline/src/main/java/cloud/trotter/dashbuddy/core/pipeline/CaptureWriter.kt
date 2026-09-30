@@ -3,6 +3,7 @@ package cloud.trotter.dashbuddy.core.pipeline
 import cloud.trotter.dashbuddy.core.pipeline.accessibility.AccessibilityPipeline
 import cloud.trotter.dashbuddy.core.pipeline.accessibility.clickDedupHash
 import cloud.trotter.dashbuddy.core.pipeline.notification.NotificationPipeline
+import cloud.trotter.dashbuddy.core.pipeline.rules.CompiledRedact
 import cloud.trotter.dashbuddy.core.pipeline.rules.ScreenRedactionSource
 import cloud.trotter.dashbuddy.domain.capture.CaptureBus
 import cloud.trotter.dashbuddy.domain.capture.EnvelopeBuilder
@@ -63,12 +64,31 @@ class CaptureWriter @Inject constructor(
                 return obs
             }
         }
+        // #1148 (security review): the window TITLE is app-controlled text (`Activity.setTitle` /
+        // `Dialog.setTitle` → `AccessibilityWindowInfo.title`) and rides the envelope's
+        // `windowContext` on EVERY content/state frame now, on BOTH frame classes — outside the
+        // tree, so none of the tree scrubs (sensitive drop, rule redact, customer markers) ever
+        // saw it, and no rule `redact` selector can address it. Same controls as a flat
+        // notification field: a sensitive marker DROPS the capture (any frame class — the rule
+        // vetted the tree, never the title), a customer marker MASKS it, and it is length-capped.
+        val rawTitle = event.snapshot.windowContext?.windowTitle
+        if (rawTitle != null) {
+            val marker = SensitiveTextMarkers.findMarker(rawTitle)
+            if (marker != null) {
+                stats.onScrubbedUnknownCapture()
+                Timber.tag("Pipeline").w(
+                    "Capture scrubbed: window title hit sensitive marker id '%s' (target=%s)",
+                    MarkerLogId.of(marker), obs.target,
+                )
+                return obs
+            }
+        }
         val platform = Platform.fromPackage(event.packageName).wire
         val winCtx = event.snapshot.windowContext?.let { wc ->
             WindowContextDto(
                 windowId = wc.windowId,
                 windowType = wc.windowType,
-                windowTitle = wc.windowTitle,
+                windowTitle = scrubWindowTitle(wc.windowTitle, obs),
                 windowLayer = wc.windowLayer,
                 isActive = wc.isActive,
                 isFocused = wc.isFocused,
@@ -244,6 +264,27 @@ class CaptureWriter @Inject constructor(
     }
 
     /**
+     * Envelope form of an app-controlled window title (#1148): a customer-marker hit masks the
+     * whole value (the notification-field policy — there is no rule redact for a title, so the
+     * marker backstop is the ONLY control on both frame classes), and the survivor is capped at
+     * [MAX_WINDOW_TITLE_LENGTH] — a title is chrome ("Dasher", a dialog label), never a body.
+     * The sensitive-marker DROP runs earlier in [captureScreen]; this only masks.
+     */
+    private fun scrubWindowTitle(title: String?, obs: Observation.Screen): String? {
+        if (title == null) return null
+        val marker = CustomerTextMarkers.unredactedMarker(title)
+        if (marker != null) {
+            if (obs.target == UNKNOWN_TARGET) stats.onUnknownCustomerScrub() else stats.onRedactBackstopScrub()
+            Timber.tag("Pipeline").w(
+                "Capture backstop: window title carried customer marker id '%s' (target=%s) — masking",
+                MarkerLogId.of(marker), obs.target,
+            )
+            return CompiledRedact.REDACTED
+        }
+        return if (title.length <= MAX_WINDOW_TITLE_LENGTH) title else title.take(MAX_WINDOW_TITLE_LENGTH)
+    }
+
+    /**
      * The UNKNOWN-envelope customer scrub shared by the screen and click paths.
      *
      * Two structurally different scans, one traversal:
@@ -381,5 +422,10 @@ class CaptureWriter @Inject constructor(
             contentHash = capture.contentHash,
         )
         return obs.copy(captureId = captureId)
+    }
+
+    companion object {
+        /** Bounded ingestion for the envelope's window title (#1148) — chrome-length, never a body. */
+        const val MAX_WINDOW_TITLE_LENGTH = 64
     }
 }
