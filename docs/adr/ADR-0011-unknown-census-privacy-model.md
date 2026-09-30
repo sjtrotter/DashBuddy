@@ -52,11 +52,12 @@ later are covered automatically; the node's text fields travel as a MAP keyed by
 and the server accepts ANY key in that map (every value has the same `{h?, kind}` shape, so a new key
 is not a privacy change) while rejecting unknown fields everywhere else — an object `{h?, kind}`: `kind` is a coarse shape class and `h` is present
 only when the §2 filter admits a hash (§3 only defines how the admitted token is hashed). **The type has no plaintext slot**: a leak of a text value is a
-type error. **`uniqueId` (`uid`) is the one enum entry treated as an IDENTIFIER, not a text slot**:
-it is an app-assigned identifier (a Compose test tag — the only stable handle on an id-less Compose
-card, the #1114 class), so it travels in the CLEAR beside `id` when it passes the identifier gate
-(≤ 40 chars, only `[A-Za-z0-9_.:/-]`, no run of 3+ digits, no `CustomerTextMarkers` marker, not a
-mask) and is `withheld` otherwise; it is never hashed. **The window title is the ONE explicit non-node
+type error. **`uniqueId` (`uid`) is a text slot like every other enum entry** — hashed through the filter, never
+sent in the clear. It is an app-assigned identifier (a Compose test tag — the only stable handle on an
+id-less Compose card, the #1114 class), and a clear-text gate was considered and REJECTED: no shape
+rule can tell `store_Chipotle` or `customer_row_JaneS` from chrome, and the operator's trusted phone
+resolves the hash immediately under `k_unblind` anyway, so hashing costs the drafter nothing while
+community installs keep the k protection. **The window title is the ONE explicit non-node
 text field** (it lives on
 `windowContext`, outside `UiNodeTextField`) and goes through the same `{h?, kind}` rule; it is the
 single named exception to "enumerate the enum", and `SkeletonCorpusTest` names it. `deviceFingerprint`
@@ -82,8 +83,9 @@ the §7(a) test enumerates both groups explicitly. The install id is added by th
 never inside the skeleton.
 
 `kind` is a NORMATIVE classifier, evaluated on the trimmed canonical value (the same bytes that would
-be hashed), first match wins. It is computed in two stages so that classification and filtering are
-not circular: the grammar (rows 2–4 below) yields an intermediate `shapeKind`; §2's filter then
+be hashed) AFTER the 40-character cap (§2 step 2 runs before the grammar, so the split and every
+category test see bounded input), first match wins. It is computed in two stages so that
+classification and filtering are not circular: the grammar (rows 2–4 below) yields an intermediate `shapeKind`; §2's filter then
 consults `shapeKind` (step 6) and decides; the EMITTED `kind` is `withheld` when a withholding step
 fired, otherwise `shapeKind` — so `digits` and `mixed` ARE emitted (hash refused), and `words:N` is
 emitted only together with its hash.
@@ -92,7 +94,7 @@ emitted only together with its hash.
 |---|---|---|
 | 1 | `withheld` | a WITHHOLDING filter step in §2 (steps 1–5, 7, 8) caught the field, OR `sha256OrNull` returned null for a `words:N` survivor (emit `{kind: withheld}` with no `h`) — a CONSTANT, so a caught PII slot reveals nothing, not even its word count. Step 6 is NOT a withholding step: it only refuses the HASH, and the token keeps its `digits`/`mixed` kind |
 | 2 | `digits` | every non-whitespace character is a Unicode decimal digit (`Character.isDigit`) |
-| 3 | `words:N` | split on whitespace runs; DROP any run that contains no letter and no digit (`&`, `→`, `-`, emoji-only — so `Pickup & delivery` is `words:2`); strip LEADING and TRAILING punctuation (Unicode general category P*) from each remaining run (interior apostrophes and hyphens are kept, so `O'Brien` and `Drop-off` are one run each); every remaining run must contain at least one Unicode letter and no digit; N = the run count, `words:8+` when N > 8 |
+| 3 | `words:N` | split on whitespace runs; DROP any run that contains no letter and no digit (`&`, `→`, `-`, emoji-only — so `Pickup & delivery` is `words:2`); strip LEADING and TRAILING punctuation (Unicode general category P*) from each remaining run (interior apostrophes and hyphens are kept, so `O'Brien` and `Drop-off` are one run each); every remaining run must contain at least one Unicode letter and no digit (letter/digit tests are CODE-POINT based — `Character.isLetter(int)`/`isDigit(int)` — so supplementary-plane scripts count); N = the run count and must be ≥ 1 (all runs dropped → `mixed`); `words:8+` when N > 8, and `words:8+` is NOT a hashable `words:N` for step 6 (nine-plus runs is body text, not chrome) |
 | 4 | `mixed` | everything else — money (`$45.66`), clock times, unit numbers, gate codes, order ids, plates, symbols, emoji |
 
 A null or blank field is OMITTED from the skeleton before any classification, never emitted —
@@ -131,8 +133,11 @@ SSOTs the redact side uses, in this order, and **any hit withholds the hash**:
    emitted with that kind and no hash. The `kind`
    grammar is the digit backstop: any run containing a digit makes the token `digits` or `mixed`, never `words:N`, so gate codes, PINs, unit numbers and phone fragments emit `kind` only by construction
    (a future grammar change that lets a digit into `words:N` must re-add an explicit digit rule);
-7. `PiiShapes.FIRST_LAST_INITIAL_PATTERN` (the id-less name shape, byte-SSOT with the redact side —
-   the existing match mode, `matches` with `IGNORE_CASE`, is preserved);
+7. `PiiShapes.FIRST_LAST_INITIAL_PATTERN` (the id-less name shape, byte-SSOT with the redact side) —
+   run in SUBSTRING mode (`containsMatchIn`, `IGNORE_CASE`), deliberately STRICTER than
+   `SnapshotRedactor`'s whole-value `matches`, so `Jane S is waiting at the door` (no lead-in prefix)
+   is withheld rather than hashed as `words:6`; over-withholding a chrome sentence is the accepted
+   cost;
 8. any other promoted `PiiShapes` pattern — each keeps the match mode `SnapshotRedactor` uses today
    (`BARE_STREET` whole-value, the others substring), pinned by the byte-SSOT tests. It runs on every
    token that reached it (step 6 does not terminate), so the digit-bearing shapes (street number, ZIP,
@@ -255,12 +260,17 @@ delta are written in M3 against the screen they belong to (moved out of M0 by de
 ### 6. **Trusted installs** are the unblinding source (dev amendment 2026-09-29)
 
 A trusted install is a device the operator owns (the dev's phone; later, any self-hoster's phone
-against their own server). It is enrolled explicitly — a per-install key marked trusted server-side
+against their own server) **running a capture-enabled build** — the redacted envelope it uploads
+exists only where a real `CaptureBus` is bound, and every release build binds `NoOpCaptureBus`
+(`captureScreen` returns before building anything). A release build therefore cannot be enrolled as
+trusted; the server refuses a trusted enrolment that does not declare the capture capability, and a
+self-hoster runs the same debug/dev flavour the developer does. It is enrolled explicitly — a per-install key marked trusted server-side
 and a dev-settings switch on the client that is never reachable from the consent screen. A trusted
 install uploads the **existing redacted capture envelope** for UNKNOWN frames (today's
 `captureScreen` order: sensitive drop → rule redact → customer text + id scrub) beside the skeleton
-so the two can be paired (the trusted transport stamps the envelope with the same census
-`fingerprint` it computed for the skeleton);
+so the two can be paired by the envelope's `captureId` (unique per capture — the census `fingerprint`
+is a CLUSTER key shared by many frames and must never be the pairing key, or one frame's hashes would
+resolve against another frame's text);
 a trusted envelope or a trusted capture the operator already holds locally are the only sources from
 which a hash is ever resolved to text. For a trusted install k = 1 by definition, so the whole loop
 runs on one phone with zero community contributors — the fleet adds speed and coverage, never a
@@ -287,16 +297,15 @@ For every fixture with a hand-pseudonymized twin, `skeleton(raw) == skeleton(pse
 token the filter catches can never change what leaves the phone — the guarantee is equality under
 **shape-preserving substitution in known PII slots** (those slots emit the constant `withheld`), and
 the residual for an uncaught value is stated in risk 6. `SkeletonCorpusTest` (#1145) walks the ENTIRE corpus
-including `SENSITIVE/` and `UNKNOWN/negative/` and asserts (a) no string field outside the §1
-allowlist (per node `class`/`id`/`kind`/`h`; per envelope the enumerated metadata) and no bounds on
-any node; (b) invariance under two shape-matched pseudonym
+including `SENSITIVE/` and `UNKNOWN/negative/` and asserts (a) no string field outside the §1 allowlist (per node `class`/`id`/`kind`/`h`; per envelope the
+enumerated metadata) and no bounds on any node; (b) invariance under two shape-matched pseudonym
 substitutions; (c) redactor parity — any value `SnapshotRedactor.redact` changes has no `h` (load-bearing only on
 the pseudonym and decoy fixtures: on an already-redacted committed fixture `redact` is idempotent); (d)
 every `SENSITIVE/` fixture the markers catch yields no skeleton; (e) no `h` equals `CensusHash.of(x)` (trimmed, as the builder hashes) for any PII-VALUED
 `CorpusDecoys` entry (pseudonym names, addresses, notes — not retained chrome labels such as
 `"Hand it to me: "`, which are legitimately hashed) or for any mask token; (f) determinism and idempotence. A seeded property (#878) adds:
-no string matching any `PiiShapes` pattern ever hashes, and no output contains an input token
-verbatim outside `class`/`id`.
+no string matching any `PiiShapes` pattern (substring mode, as step 7/8 run them) ever hashes, and
+no output contains an input token verbatim outside `class`/`id`.
 
 ### 8. Bounded, budgeted, deduplicated (D5)
 
@@ -407,8 +416,9 @@ the dictionary-linkage residual on low-entropy hashes (risk 1). The endpoint is 
 - **#1146 (M1b, inert):** the `CensusSink` interface in `:domain`, a `NoOp` binding, the publisher
   stage on the UNKNOWN screen branch in `:core:pipeline`, `PipelineStats` counters — and the
   trusted-install PAIRING the 2026-09-29 amendment assigned to M1: the publisher hands the sink the
-  skeleton together with the census `fingerprint` and, when a capture envelope exists, that envelope's
-  `captureId`, so a trusted transport can pair the two with no new redaction code. Nothing leaves the
+  skeleton together with the census `fingerprint` (its cluster key) and, when a capture envelope
+  exists, that envelope's `captureId` (the PAIRING key), so a trusted transport can pair the two with
+  no new redaction code. Nothing leaves the
   device. The trusted TRANSPORT itself (upload, metadata projection) is M3's — a deliberate deferral
   recorded here, because nothing uploads before M3.
 - **Sequencing:** the TalkBack issues (#1147, #1148, #1149 — and #1151/#1152 from their review) shipped
