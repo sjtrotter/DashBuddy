@@ -86,6 +86,9 @@ data class NodeRef(
      * records that the set was not truncated at [MAX_LABEL_HINTS]; no size proxy). The executor gates strategy 2b on
      * it; an unprovable ref skips 2b for the bounds walk's containment check (the pre-#1149 shape).
      */
+    /** #1149 review P8 — the hint set, built once per ref (not per region the 2b walk checks). Not serialized (delegated). */
+    private val hintSet: Set<String> by lazy { labelHintHashes.toHashSet() }
+
     val hasExactFingerprint: Boolean
         get() = labelHintHashes.isNotEmpty() && labelHintsComplete
 
@@ -104,7 +107,7 @@ data class NodeRef(
         val keys = liveLabels.mapNotNullTo(HashSet(), ::hintKeyOrNull)
         if (keys.size != labelHintHashes.size) return false
         val live = keys.mapNotNullTo(HashSet()) { cloud.trotter.dashbuddy.domain.util.sha256OrNull(it) }
-        return live == labelHintHashes.toHashSet()
+        return live == hintSet
     }
 
     /**
@@ -115,9 +118,8 @@ data class NodeRef(
     fun visibleConsistentWith(visibleLabels: List<String>): Boolean {
         val keys = visibleLabels.mapNotNullTo(HashSet(), ::hintKeyOrNull)
         if (keys.size > labelHintHashes.size) return false
-        val hints = labelHintHashes.toHashSet()
         // A hash failure is treated as CONSISTENT (the veto side — fail closed).
-        return keys.all { k -> cloud.trotter.dashbuddy.domain.util.sha256OrNull(k)?.let { it in hints } ?: true }
+        return keys.all { k -> cloud.trotter.dashbuddy.domain.util.sha256OrNull(k)?.let { it in hintSet } ?: true }
     }
 
     companion object {

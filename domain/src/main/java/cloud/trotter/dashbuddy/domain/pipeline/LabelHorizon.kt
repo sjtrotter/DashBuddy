@@ -77,5 +77,9 @@ class UiLabelNode(private val node: UiNode) : LabelNode {
     override val takesClick: Boolean get() = node.takesClick
     override val foreign: Boolean get() = node.foreignPackage
     override val unreadableChildren: Int get() = node.unreadableChildren
-    override fun children(): List<LabelNode?> = node.children.map(::UiLabelNode)
+    // P8: a view that wraps on demand — the horizon touches at most LABEL_SCAN_NODES slots.
+    override fun children(): List<LabelNode?> = object : AbstractList<LabelNode?>() {
+        override val size: Int get() = node.children.size
+        override fun get(index: Int): LabelNode? = UiLabelNode(node.children[index])
+    }
 }
