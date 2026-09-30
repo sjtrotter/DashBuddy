@@ -154,6 +154,9 @@ private fun convert(
     }
 
     val hasClick = node.hasClickAction()
+    val clickable = node.isClickable
+    val focusable = node.isFocusable
+    val srFocusable = node.isScreenReaderFocusable
     val bounds = Rect()
     node.getBoundsInScreen(bounds)
 
@@ -164,6 +167,11 @@ private fun convert(
             ?.firstOrNull { it.id == AccessibilityNodeInfo.ACTION_CLICK }
             ?.label?.toString()?.capText()
     } else null
+    // #1147 review W1: `getExtras()` allocates a Bundle on an extras-less node and forces a full
+    // unparcel on one that has extras — per node per frame. A role is published by an interactive
+    // control, so the extras are read ONLY for a node that takes a click or is (screen-reader)
+    // focusable; every other node maps `roleDescription = null` without touching them.
+    val role = if (clickable || hasClick || focusable || srFocusable) node.roleDescriptionOrNull() else null
     val collection = node.collectionInfo
     val item = node.collectionItemInfo
 
@@ -176,7 +184,7 @@ private fun convert(
         // #1147 (TalkBack study win 3): every new string is capText()-bounded and joins the #835
         // scrub contract through UiNodeTextField; none reaches UiNode.allText.
         paneTitle = node.paneTitle?.toString()?.capText(),
-        roleDescription = node.roleDescriptionOrNull()?.capText(),
+        roleDescription = role?.capText(),
         hintText = node.hintText?.toString()?.capText(),
         tooltipText = node.tooltipText?.toString()?.capText(),
         errorText = node.error?.toString()?.capText(),
@@ -186,7 +194,7 @@ private fun convert(
         } else null,
         viewIdResourceName = node.viewIdResourceName?.capText(),
         className = node.className?.toString()?.capText(),
-        isClickable = node.isClickable,
+        isClickable = clickable,
         isEnabled = node.isEnabled,
         isChecked = node.checked,
         // #1149 review J2: the advertised click action (the half of the live `takesClick()`).
@@ -199,8 +207,8 @@ private fun convert(
         // certify its label set complete.
         unreadableChildren = (childCount - children.size).coerceAtLeast(0),
         isVisibleToUser = node.isVisibleToUser,
-        isFocusable = node.isFocusable,
-        isScreenReaderFocusable = node.isScreenReaderFocusable,
+        isFocusable = focusable,
+        isScreenReaderFocusable = srFocusable,
         isCheckable = node.isCheckable,
         isSelected = node.isSelected,
         isHeading = node.isHeading,
@@ -218,11 +226,18 @@ private fun convert(
  * #1147: the role description a control publishes through the AndroidX
  * `AccessibilityNodeInfoCompat.setRoleDescription` extra (Compose sets it for Button/Tab/…). Read
  * straight off the framework extras by key so `:core:pipeline` takes no androidx dependency. The
- * key is the AndroidX constant's value, not a platform literal.
+ * key is the AndroidX constant's value, not a platform literal. Called ONLY for a node that takes a
+ * click or is (screen-reader) focusable (review W1 — the extras read is the costly one).
  */
 private const val ROLE_DESCRIPTION_EXTRA_KEY = "AccessibilityNodeInfo.roleDescription"
 
 private fun AccessibilityNodeInfo.roleDescriptionOrNull(): String? =
     // The extras Bundle is third-party data unparcelled on first read; a malformed one must cost only
-    // this field, never the frame (the mapper never throws on hostile input — #590).
-    runCatching { extras?.getCharSequence(ROLE_DESCRIPTION_EXTRA_KEY)?.toString() }.getOrNull()
+    // this field, never the frame (the mapper never throws on hostile input — #590). Review W7:
+    // `Exception` only — a fatal Error (OOM, stack overflow) propagates to the supervised restart
+    // (#430) like every other read in convert(), never admitted on a possibly-corrupt heap.
+    try {
+        extras?.getCharSequence(ROLE_DESCRIPTION_EXTRA_KEY)?.toString()
+    } catch (e: Exception) {
+        null
+    }

@@ -192,7 +192,10 @@ corpus `SnapshotRedactor`/`SnapshotSecurityScanner` cover it with no edit to tho
 EXCLUDED from `UiNode.allText` and from every content/structural/stable hash: `paneTitle` (wire
 `pane`, `getPaneTitle()` — the named scope an id-less sheet carries), `roleDescription` (`role`, the
 AndroidX `AccessibilityNodeInfo.roleDescription` extra read off `getExtras()` by key, no androidx
-dependency; a throwing Bundle costs only this field), `hintText` (`hint`), `tooltipText`
+dependency; `getExtras()` allocates/unparcels a Bundle, so it is read ONLY on a node that takes a
+click or is focusable/screen-reader-focusable — every other node maps a null role (review W1); an
+`Exception` from a hostile Bundle costs only this field, while a fatal `Error` propagates to the
+supervised restart like every other read, W7), `hintText` (`hint`), `tooltipText`
 (`tooltip`), `errorText` (`error`, `getError()`), `clickActionLabel` (`clickLabel`, the label on the
 `ACTION_CLICK` entry of `getActionList()` — materialized ONLY when the `getActions()` bitmask already
 says a click action exists, keeping #1149 P6's per-node cost off the common path) and `uniqueId`

@@ -9,6 +9,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
+import org.junit.Assert.fail
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.mockito.kotlin.mock
@@ -118,17 +119,59 @@ class AccessibilityNodeMapperRichFieldsTest {
     }
 
     @Test
-    fun `a bare node maps to the dominant defaults and a throwing extras bundle costs only the role`() {
+    fun `a bare node maps to the dominant defaults without touching its extras`() {
         val m = mock<AccessibilityNodeInfo>()
         whenever(m.childCount).thenReturn(0)
         whenever(m.isVisibleToUser).thenReturn(true)
-        whenever(m.extras).thenThrow(RuntimeException("hostile bundle"))
+        whenever(m.extras).thenReturn(Bundle().apply { putCharSequence("AccessibilityNodeInfo.roleDescription", "Button") })
         val n = m.toUiNode()!!
-        assertNull(n.roleDescription)
+        assertNull("a non-interactive node never reads a role (review W1)", n.roleDescription)
+        verify(m, never()).extras
         assertNull(n.paneTitle)
         assertTrue(n.isVisibleToUser)
         assertEquals(-1, n.collectionRows)
         assertEquals(-1, n.itemRow)
         assertEquals(0, n.liveRegion)
+    }
+
+    @Test
+    fun `a focusable-only or screen-reader-focusable-only node still reads its role`() {
+        for (setup in listOf<(AccessibilityNodeInfo) -> Unit>(
+            { whenever(it.isFocusable).thenReturn(true) },
+            { whenever(it.isScreenReaderFocusable).thenReturn(true) },
+            { whenever(it.isClickable).thenReturn(true) },
+        )) {
+            val m = mock<AccessibilityNodeInfo>()
+            whenever(m.childCount).thenReturn(0)
+            setup(m)
+            whenever(m.extras).thenReturn(Bundle().apply { putCharSequence("AccessibilityNodeInfo.roleDescription", "Tab") })
+            assertEquals("Tab", m.toUiNode()!!.roleDescription)
+        }
+    }
+
+    @Test
+    fun `a throwing extras bundle costs only the role`() {
+        val m = mock<AccessibilityNodeInfo>()
+        whenever(m.childCount).thenReturn(0)
+        whenever(m.text).thenReturn("Tab one")
+        whenever(m.isFocusable).thenReturn(true)
+        whenever(m.extras).thenThrow(RuntimeException("hostile bundle"))
+        val n = m.toUiNode()!!
+        assertNull(n.roleDescription)
+        assertEquals("Tab one", n.text)
+    }
+
+    @Test
+    fun `a fatal Error while unparcelling extras is not swallowed (review W7)`() {
+        val m = mock<AccessibilityNodeInfo>()
+        whenever(m.childCount).thenReturn(0)
+        whenever(m.isFocusable).thenReturn(true)
+        whenever(m.extras).thenThrow(StackOverflowError("hostile bundle"))
+        try {
+            m.toUiNode()
+            fail("a fatal Error must propagate to the supervised restart")
+        } catch (e: StackOverflowError) {
+            // expected
+        }
     }
 }
