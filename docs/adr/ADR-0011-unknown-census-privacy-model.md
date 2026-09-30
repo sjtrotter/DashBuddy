@@ -242,9 +242,11 @@ filter over every text field of the frame (tree + window title) and SEEDS:
   framework class — an exact binary name in `FrameworkClasses.KNOWN`: the pinned inventory
   `core/pipeline/src/main/resources/census/framework-classes.txt.gz` (gzip, review round 15; every public class under
   `android.view.`/`android.widget.`/`android.webkit.` in the SDK `android.jar` and under `androidx.` /
-  `com.google.android.material.` in the artifacts the build resolves — Kotlin facades and the Compose icon
-  tables excluded — regenerated from the unit-test classpath and diffed by `FrameworkClassInventoryTest`,
-  review round 15) ∪ every framework-prefixed class the committed corpus renders (pinned by a corpus
+  `com.google.android.material.` in the RELEASE runtime classpath (`:app:censusReleaseClasspath` —
+  debug-only artifacts never exempted); Kotlin facades, the Compose icon tables, `androidx.compose.ui.tooling.`
+  and any name the class grammar rejects excluded — regenerated and diffed by `FrameworkClassInventoryTest`;
+  the loader is strict (malformed UTF-8, truncation or an invalid entry discards the whole resource, which
+  only shrinks the set), review rounds 15–16) ∪ every framework-prefixed class the committed corpus renders (pinned by a corpus
   guard) ∪ the wrapper set and Material's `Chip`, so
   "Chip" never nulls `…material.chip.Chip` and forks the fingerprint per customer, and wrapper
   eligibility cannot depend on the customer. A framework PREFIX is not proof: an app can name its own

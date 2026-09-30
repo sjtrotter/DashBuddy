@@ -639,15 +639,17 @@ side-effect-free half.
   `customer_name` "Adam", `search_bar` beside `tvTitle` "Search") so the fingerprint's STRUCTURE never
   depends on the customer; a class carrying a customer-NAME run is absent (`com.x.RileyButton`,
   `androidx.RileyButton`) unless it is a KNOWN framework class (`FrameworkClasses.KNOWN`, exact names: the
-  classpath-generated inventory `census/framework-classes.txt.gz` (gzip, #1160 AI2), diffed on its decompressed content by `:app`'s
+  inventory `census/framework-classes.txt.gz` (gzip, #1160 AI2) generated from the RELEASE runtime classpath
+  listed by `:app:censusReleaseClasspath` (AK4), diffed on its decompressed content by `:app`'s
   `FrameworkClassInventoryTest` — regenerate with `-DupdateFrameworkClasses=true` — ∪ the corpus set). `IdPathJudgement.isStaticId` is
   memoized process-wide in a bounded LRU (512). A malformed (NUL / lone-surrogate) CLASS is emitted absent and counted
   (`Outcome.Built.malformedClass`); a malformed VIEW ID refuses the frame (`INVALID_TREE` — its identity
   classification cannot be verified, #1160 round 13). On the id path the PII judgement is stricter-to-trigger: a
   lead-in withholds only before a Capitalized token and the name shape needs an uppercase-led
   (Capitalized or all-caps) first token and an uppercase initial (`deliver_to_label`, `tabB` travel;
-  `chip_RILEY_S` and — the recall cost — `TAB_B` are absent). A `uid` (test-tag) value is judged by the id path FIRST
-  (`IdPathJudgement.namePartCarriesPii` — `chip_Riley_S` is withheld), then as text; a value that
+  `chip_RILEY_S` and — the recall cost — `TAB_B` are absent). A `uid` (test-tag) value is judged by the id path on its
+  bounded CANONICAL form, after the over-cap pre-check (`IdPathJudgement.namePartCarriesPii` — `chip_Riley_S`,
+  fullwidth `chip＿Riley＿S`), then as text; a hit seeds the frame-wide exact set (#1160 AK1–AK3); a value that
   canonicalizes to nothing (FORMAT-only) is dropped, never a phantom slot (#1160 round 15). Each value is
   judged once per frame (memoized). `outcome()` never throws: every failure is `Refusal.BUILD_FAILED`
   (the #909 inertness rule); refusals are reasons, never text.
