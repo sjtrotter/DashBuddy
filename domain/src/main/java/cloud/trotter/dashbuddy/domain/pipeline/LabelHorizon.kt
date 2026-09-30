@@ -14,7 +14,17 @@ import cloud.trotter.dashbuddy.domain.model.accessibility.UiNode
  */
 object UiTextBounds {
     const val MAX_TEXT_LENGTH = 4_096
-    fun cap(s: String): String = if (s.length <= MAX_TEXT_LENGTH) s else s.take(MAX_TEXT_LENGTH)
+
+    /**
+     * [s] cut to at most [max] UTF-16 units at a CODE-POINT boundary (#1160 review AL4): a cut that would
+     * split a surrogate pair drops the whole pair, so an over-long value ending in a supplementary code point
+     * never becomes a lone high surrogate (which the census wire rejects, refusing the surface forever).
+     */
+    fun cap(s: String, max: Int = MAX_TEXT_LENGTH): String {
+        if (s.length <= max) return s
+        val end = if (max > 0 && Character.isHighSurrogate(s[max - 1]) && Character.isLowSurrogate(s[max])) max - 1 else max
+        return s.substring(0, end)
+    }
 }
 
 interface LabelNode {
