@@ -304,8 +304,11 @@ class UiInteractionHandler @Inject constructor(
         // different background windows — no active-window candidate — abort the same way.)
         if (scopedCandidates.size > 1 && scopedCandidates.any { it.first.semantic }) {
             val refText = ref.text?.takeIf { it.isNotBlank() }
+            // P5: like with like — ref.text is the BOUND child's text, so it is matched against each
+            // survivor's in-horizon labels (for a 2b hit, evidence IS the owner, whose own text is
+            // usually null; comparing that was a dead branch).
             val byText = if (refText == null) emptyList() else
-                scopedCandidates.filter { it.first.evidence.text?.toString()?.take(50) == refText }
+                scopedCandidates.filter { (_, labels) -> labels.any { it.take(50) == refText } }
             if (byText.size != 1) {
                 Timber.tag("Effects").w(
                     "%d semantic twins for %s share the bind's fingerprint and no stored text decides — aborting to manual (#1149)",
