@@ -64,6 +64,8 @@ object CensusHash {
      */
     fun canonical(text: String): String? {
         var current = canonicalPass(text)
+        // Review AF5: an input that is already its own pass is a proven fixed point — one pass, not two.
+        if (current == text) return current
         repeat(MAX_PASSES - 1) {
             val next = canonicalPass(current)
             if (next == current) return current

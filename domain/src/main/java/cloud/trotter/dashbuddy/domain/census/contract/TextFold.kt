@@ -86,10 +86,16 @@ object TextFold {
         val nfkc = Normalizer.normalize(stripped, Normalizer.Form.NFKC)
         val sb = StringBuilder(nfkc.length)
         for (ch in nfkc) {
-            if (ch in '\u2010'..'\u2015' || ch == '\u2212') sb.append('-') else sb.append(ch)
+            if (isFoldableDash(ch)) sb.append('-') else sb.append(ch)
         }
         return sb.toString()
     }
+
+    /** The ONE dash-fold predicate (review AF7): the Unicode dashes U+2010–U+2015 and U+2212 minus. */
+    fun isFoldableDash(ch: Char): Boolean = ch in '\u2010'..'\u2015' || ch == '\u2212'
+
+    /** A fold's output plus whether it still carries a supplementary-plane FORMAT code point (review AF6). */
+    data class Folded(val text: String, val hasSupplementaryFormat: Boolean)
 
     /**
      * The sensitive-marker scan's BOUNDARY-PRESERVING fold — exactly the pre-#1160 loop, per UTF-16 unit:
@@ -98,17 +104,32 @@ object TextFold {
      * (`x<U+E0020>123-45-6789` → `x123-45-6789` defeats the SSN's `\b`), so the scan runs this form AND
      * the same output minus its supplementary FORMAT code points, and drops on either hit.
      */
-    fun foldGlyphsPreservingSupplementary(value: String): String {
+    fun foldGlyphsPreservingSupplementary(value: String): String = foldGlyphsPreservingSupplementaryFlagged(value).text
+
+    /**
+     * [foldGlyphsPreservingSupplementary] that also reports, from the SAME pass, whether the output keeps a
+     * supplementary-plane FORMAT code point (review AF6) — so the sensitive scan need not re-walk the blob
+     * to decide whether its second (stripped) form differs.
+     */
+    fun foldGlyphsPreservingSupplementaryFlagged(value: String): Folded {
         val nfkc = Normalizer.normalize(value, Normalizer.Form.NFKC)
         val sb = StringBuilder(nfkc.length)
-        for (ch in nfkc) {
+        var supplementaryFormat = false
+        for ((i, ch) in nfkc.withIndex()) {
             when {
                 isFormat(ch.code) -> {}
-                ch in '\u2010'..'\u2015' || ch == '\u2212' -> sb.append('-')
-                else -> sb.append(ch)
+                isFoldableDash(ch) -> sb.append('-')
+                else -> {
+                    sb.append(ch)
+                    if (Character.isHighSurrogate(ch) && i + 1 < nfkc.length && Character.isLowSurrogate(nfkc[i + 1]) &&
+                        isSupplementaryFormat(Character.toCodePoint(ch, nfkc[i + 1]))
+                    ) {
+                        supplementaryFormat = true
+                    }
+                }
             }
         }
-        return sb.toString()
+        return Folded(sb.toString(), supplementaryFormat)
     }
 
 }
