@@ -31,6 +31,29 @@ data class UiNode(
     val contentDescription: String? = null,
     val stateDescription: String? = null,
 
+    // #1147 (the TalkBack study, win 3) — the richer third-party strings TalkBack reads. Every one is
+    // `capText()`-bounded at the mapper, a [UiNodeTextField] entry (so every scrub/redact/PII-scan
+    // site covers it through [scrubbableStrings]/[mapScrubbableStrings]), and deliberately OUTSIDE
+    // [allText] and every content/structural hash — widening the scrub layer never moves a
+    // classification or a frame identity. Rules reach them only through their own node predicates.
+    /** `AccessibilityNodeInfo.getPaneTitle()` — the named scope an id-less sheet/dialog carries. */
+    val paneTitle: String? = null,
+    /** The AndroidX `roleDescription` extra (e.g. "Button", "Tab") a Compose control publishes. */
+    val roleDescription: String? = null,
+    /** `getHintText()` — an input's placeholder/hint. */
+    val hintText: String? = null,
+    /** `getTooltipText()`. */
+    val tooltipText: String? = null,
+    /** `getError()` — an input's error message. */
+    val errorText: String? = null,
+    /** The label attached to this node's `ACTION_CLICK` entry ("Accept offer"), when it has one. */
+    val clickActionLabel: String? = null,
+    /**
+     * `getUniqueId()` (API 33+). Execution evidence only — NO predicate exposes it and no rule may
+     * name it; unverified whether any platform sets it.
+     */
+    val uniqueId: String? = null,
+
     val viewIdResourceName: String? = null,
     val className: String? = null,
 
@@ -55,6 +78,26 @@ data class UiNode(
      * a [children] entry the tree budget refused (depth, node budget, loop cap) — silently absent. Not in [allText] or any content/structural hash.
      */
     val unreadableChildren: Int = 0,
+
+    // #1147 — non-string semantics TalkBack reads. Defaults are the dominant value so a typical
+    // node serializes nothing new. Not in [allText] or any content/structural hash.
+    val isVisibleToUser: Boolean = true,
+    val isFocusable: Boolean = false,
+    val isScreenReaderFocusable: Boolean = false,
+    val isCheckable: Boolean = false,
+    val isSelected: Boolean = false,
+    val isHeading: Boolean = false,
+    /** `getLiveRegion()` — 0 none, 1 polite, 2 assertive. */
+    val liveRegion: Int = 0,
+    /** `getCollectionInfo()` row/column counts; -1 when the node is not a collection. */
+    val collectionRows: Int = -1,
+    val collectionCols: Int = -1,
+    /**
+     * `getCollectionItemInfo()` row/column index; -1 when not a collection item. Weak identity —
+     * indices move when items reorder — so no predicate exposes them.
+     */
+    val itemRow: Int = -1,
+    val itemCol: Int = -1,
 
     val boundsInScreen: BoundingBox = BoundingBox(0, 0, 0, 0),
 
@@ -104,6 +147,13 @@ data class UiNode(
         if (text != other.text) return false
         if (contentDescription != other.contentDescription) return false
         if (stateDescription != other.stateDescription) return false
+        if (paneTitle != other.paneTitle) return false
+        if (roleDescription != other.roleDescription) return false
+        if (hintText != other.hintText) return false
+        if (tooltipText != other.tooltipText) return false
+        if (errorText != other.errorText) return false
+        if (clickActionLabel != other.clickActionLabel) return false
+        if (uniqueId != other.uniqueId) return false
         // ID and className
         if (viewIdResourceName != other.viewIdResourceName) return false
         if (className != other.className) return false
@@ -114,6 +164,17 @@ data class UiNode(
         if (hasClickAction != other.hasClickAction) return false
         if (foreignPackage != other.foreignPackage) return false
         if (unreadableChildren != other.unreadableChildren) return false
+        if (isVisibleToUser != other.isVisibleToUser) return false
+        if (isFocusable != other.isFocusable) return false
+        if (isScreenReaderFocusable != other.isScreenReaderFocusable) return false
+        if (isCheckable != other.isCheckable) return false
+        if (isSelected != other.isSelected) return false
+        if (isHeading != other.isHeading) return false
+        if (liveRegion != other.liveRegion) return false
+        if (collectionRows != other.collectionRows) return false
+        if (collectionCols != other.collectionCols) return false
+        if (itemRow != other.itemRow) return false
+        if (itemCol != other.itemCol) return false
         // Bounds
         if (boundsInScreen != other.boundsInScreen) return false
 
@@ -126,6 +187,13 @@ data class UiNode(
         var result = text?.hashCode() ?: 0
         result = 31 * result + (contentDescription?.hashCode() ?: 0)
         result = 31 * result + (stateDescription?.hashCode() ?: 0)
+        result = 31 * result + (paneTitle?.hashCode() ?: 0)
+        result = 31 * result + (roleDescription?.hashCode() ?: 0)
+        result = 31 * result + (hintText?.hashCode() ?: 0)
+        result = 31 * result + (tooltipText?.hashCode() ?: 0)
+        result = 31 * result + (errorText?.hashCode() ?: 0)
+        result = 31 * result + (clickActionLabel?.hashCode() ?: 0)
+        result = 31 * result + (uniqueId?.hashCode() ?: 0)
         // ID and className
         result = 31 * result + (viewIdResourceName?.hashCode() ?: 0)
         result = 31 * result + (className?.hashCode() ?: 0)
@@ -136,6 +204,17 @@ data class UiNode(
         result = 31 * result + hasClickAction.hashCode()
         result = 31 * result + foreignPackage.hashCode()
         result = 31 * result + unreadableChildren
+        result = 31 * result + isVisibleToUser.hashCode()
+        result = 31 * result + isFocusable.hashCode()
+        result = 31 * result + isScreenReaderFocusable.hashCode()
+        result = 31 * result + isCheckable.hashCode()
+        result = 31 * result + isSelected.hashCode()
+        result = 31 * result + isHeading.hashCode()
+        result = 31 * result + liveRegion
+        result = 31 * result + collectionRows
+        result = 31 * result + collectionCols
+        result = 31 * result + itemRow
+        result = 31 * result + itemCol
         // Bounds
         result = 31 * result + boundsInScreen.hashCode()
         return result
@@ -325,6 +404,13 @@ data class UiNode(
         UiNodeTextField.TEXT to text,
         UiNodeTextField.CONTENT_DESCRIPTION to contentDescription,
         UiNodeTextField.STATE_DESCRIPTION to stateDescription,
+        UiNodeTextField.PANE_TITLE to paneTitle,
+        UiNodeTextField.ROLE_DESCRIPTION to roleDescription,
+        UiNodeTextField.HINT_TEXT to hintText,
+        UiNodeTextField.TOOLTIP_TEXT to tooltipText,
+        UiNodeTextField.ERROR_TEXT to errorText,
+        UiNodeTextField.CLICK_ACTION_LABEL to clickActionLabel,
+        UiNodeTextField.UNIQUE_ID to uniqueId,
     )
 
     /**
@@ -342,6 +428,13 @@ data class UiNode(
         text = transform(text),
         contentDescription = transform(contentDescription),
         stateDescription = transform(stateDescription),
+        paneTitle = transform(paneTitle),
+        roleDescription = transform(roleDescription),
+        hintText = transform(hintText),
+        tooltipText = transform(tooltipText),
+        errorText = transform(errorText),
+        clickActionLabel = transform(clickActionLabel),
+        uniqueId = transform(uniqueId),
     )
 
     /**
@@ -374,7 +467,8 @@ data class UiNode(
      * Collects all text and content descriptions from the entire tree.
      * Used primarily by Screen Recognizers.
      *
-     * RECOGNITION SSOT — deliberately EXCLUDES [stateDescription] (#835). Rules
+     * RECOGNITION SSOT — deliberately EXCLUDES [stateDescription] (#835) and the #1147
+     * fields ([paneTitle], [clickActionLabel], …). Rules
      * match on this list, so folding a new field in would shift classification
      * corpus-wide; the privacy layers read [allScrubbableText] instead.
      */
@@ -487,6 +581,15 @@ enum class UiNodeTextField(val wire: String) {
     TEXT("text"),
     CONTENT_DESCRIPTION("desc"),
     STATE_DESCRIPTION("state"),
+    // #1147 — the TalkBack-study strings. Each is scrubbed/redacted/scanned like `text` the moment it
+    // is listed here; none is in [UiNode.allText].
+    PANE_TITLE("pane"),
+    ROLE_DESCRIPTION("role"),
+    HINT_TEXT("hint"),
+    TOOLTIP_TEXT("tooltip"),
+    ERROR_TEXT("error"),
+    CLICK_ACTION_LABEL("clickLabel"),
+    UNIQUE_ID("uid"),
     ;
 
     companion object {
