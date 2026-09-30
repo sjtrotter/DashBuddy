@@ -405,4 +405,12 @@ class SkeletonIdClassGateTest : SkeletonBuilderTestBase() {
         // The shipped resource loads (compressed) and carries the inventory.
         assertTrue("android.widget.GridLayout" in FrameworkClasses.KNOWN)
     }
+
+    @Test
+    fun `AJ6 - one tri-state verdict per id`() {
+        assertEquals(IdPathJudgement.IdVerdict.DYNAMIC, IdPathJudgement.verdict("PRIMARY_BUTTON_3f488d4a-0f0b-4fb9-9c86-c4e0253ba22a"))
+        assertEquals(IdPathJudgement.IdVerdict.PII_WITHHELD, IdPathJudgement.verdict("com.x:id/chip_Riley_S"))
+        assertEquals(IdPathJudgement.IdVerdict.STATIC, IdPathJudgement.verdict("com.x:id/chip_Gold"))
+        assertTrue(IdPathJudgement.isStaticId("com.x:id/chip_Gold"))
+    }
 }

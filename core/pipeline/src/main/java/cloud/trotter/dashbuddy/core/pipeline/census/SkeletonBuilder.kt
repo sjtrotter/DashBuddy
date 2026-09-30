@@ -395,8 +395,17 @@ object SkeletonBuilder {
      * length cap (step 2) precedes every text predicate, so steps 3–8 only ever see ≤
      * [MAX_TOKEN_LENGTH] characters. Step 1 is `IdClass` (review GG4). Internal for the tests.
      */
-    internal fun withholdingStep(value: String): FilterStep? = when {
-        value.length > MAX_TOKEN_LENGTH -> FilterStep.LENGTH_CAP
+    internal fun withholdingStep(value: String): FilterStep? =
+        if (value.length > MAX_TOKEN_LENGTH) FilterStep.LENGTH_CAP else valueJudgingStep(value)
+
+    /**
+     * Does a value-judging step (3–8, the cap-less projection of [withholdingStep]) fire on [value]? Public
+     * (review AJ7) so the corpus tests call the builder's own predicates rather than re-deriving them.
+     */
+    fun judgesValue(value: String): Boolean = valueJudgingStep(value) != null
+
+    /** Steps 3–8 — the ONE owner both [withholdingStep] and [judgesValue] read. */
+    private fun valueJudgingStep(value: String): FilterStep? = when {
         CustomerTextMarkers.unredactedMarker(value) != null -> FilterStep.CUSTOMER_MARKER
         PiiShapes.customerLeadIn(value) != null -> FilterStep.LEAD_IN
         PiiShapes.containsMask(value) -> FilterStep.MASK

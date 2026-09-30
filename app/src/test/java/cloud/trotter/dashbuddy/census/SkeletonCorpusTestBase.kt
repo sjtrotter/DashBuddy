@@ -14,6 +14,7 @@ import cloud.trotter.dashbuddy.domain.census.contract.UiSkeletonDto
 import cloud.trotter.dashbuddy.domain.census.contract.UiSkeletonNodeDto
 import cloud.trotter.dashbuddy.domain.model.accessibility.UiNode
 import cloud.trotter.dashbuddy.domain.model.accessibility.UiNodeTextField
+import cloud.trotter.dashbuddy.domain.privacy.MaskTokens
 import cloud.trotter.dashbuddy.domain.privacy.PiiShapes
 import cloud.trotter.dashbuddy.domain.state.Platform
 import cloud.trotter.dashbuddy.test.util.CorpusDecoys
@@ -72,7 +73,10 @@ abstract class SkeletonCorpusTestBase {
         /** CorpusDecoys entries that are retained CHROME labels, legitimately hashed (ADR §7e). */
         val CHROME_DECOYS = setOf("Hand it to me: ")
 
-        val MASK_TOKEN = Regex("""\[(?:redacted(?::[0-9a-f]{4})?|address|email|phone|card|note|name)\]""")
+        // AJ5: the runtime mask prefix comes from its one owner (`MaskTokens.REDACTED_PREFIX`).
+        val MASK_TOKEN = Regex(
+            Regex.escape(MaskTokens.REDACTED_PREFIX) + """(?::[0-9a-f]{4})?\]|\[(?:address|email|phone|card|note|name)\]""",
+        )
     }
 
     protected data class Fixture(val path: String, val tree: UiNode)
@@ -386,17 +390,8 @@ abstract class SkeletonCorpusTestBase {
         return Triple(rewritten, decoys, problems)
     }
 
-    /**
-     * The §2 value-judging steps 3, 4, 5, 7, 8 through their PUBLIC owners (the builder's
-     * `withholdingStep` is internal to `:core:pipeline`) — used only to prove an exemption has no other
-     * cause, so a drift here can only make the guard STRICTER (it would refuse an exemption).
-     */
-    protected fun valueJudged(trimmed: String): Boolean =
-        CustomerTextMarkers.unredactedMarker(trimmed) != null ||
-            PiiShapes.customerLeadIn(trimmed) != null ||
-            PiiShapes.containsMask(trimmed) ||
-            PiiShapes.hasNameShape(trimmed) ||
-            PiiShapes.VALUE_SHAPES.any { it.hits(trimmed) }
+    /** The §2 value-judging steps 3–8 through the builder's OWN public predicate (review AJ7). */
+    protected fun valueJudged(trimmed: String): Boolean = SkeletonBuilder.judgesValue(trimmed)
 
     /** The builder's OWN letter-run split (`LetterRuns.letterRuns`, review AH5) — never a re-implementation. */
     protected fun letterRuns(value: String, minLetters: Int = 0): List<String> = LetterRuns.letterRuns(value, minLetters)

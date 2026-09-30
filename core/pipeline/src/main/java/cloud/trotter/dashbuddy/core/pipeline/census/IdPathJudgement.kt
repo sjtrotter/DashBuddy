@@ -21,9 +21,28 @@ object IdPathJudgement {
      * shape). A bare name with no marker, lead-in or initial (`chip_Adam`, `Adam Smith`) has no shape a
      * frame-free predicate can tell from chrome (`chip_Gold`, `Artwork Image`) — ADR residual risk 10.
      */
-    fun isStaticId(id: String): Boolean {
+    fun isStaticId(id: String): Boolean = verdict(id) == IdVerdict.STATIC
+
+    /** What the frame-free id judgement makes of a raw view id (review AJ6: ONE call per node). */
+    enum class IdVerdict {
+        /** Fails the static resource-name grammar (a per-frame UUID tag): null on the wire. */
+        DYNAMIC,
+
+        /** Static shape, no PII predicate fires: travels (subject to the frame rule). */
+        STATIC,
+
+        /** Static shape whose name part reads as customer PII: the sentinel `~` on the wire (AH1). */
+        PII_WITHHELD,
+    }
+
+    /** [id]'s [IdVerdict], memoized process-wide (review AF4 — frame-free, never changes for a raw id). */
+    fun verdict(id: String): IdVerdict {
         synchronized(cache) { cache[id] }?.let { return it }
-        val verdict = judge(id)
+        val verdict = when {
+            !ResourceIdGrammar.isStaticShape(id) -> IdVerdict.DYNAMIC
+            namePartCarriesPii(ResourceIdGrammar.namePart(id)) -> IdVerdict.PII_WITHHELD
+            else -> IdVerdict.STATIC
+        }
         synchronized(cache) { cache[id] = verdict }
         return verdict
     }
@@ -34,26 +53,32 @@ object IdPathJudgement {
      */
     private const val CACHE_SIZE = 512
 
-    private val cache = object : LinkedHashMap<String, Boolean>(CACHE_SIZE, 0.75f, true) {
-        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, Boolean>?): Boolean = size > CACHE_SIZE
+    private val cache = object : LinkedHashMap<String, IdVerdict>(CACHE_SIZE, 0.75f, true) {
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, IdVerdict>?): Boolean = size > CACHE_SIZE
     }
 
-    private fun judge(id: String): Boolean {
-        if (!ResourceIdGrammar.isStaticShape(id)) return false
+    /**
+     * Does an id-SHAPED value ([namePart] — an id's name part, or a `uid` test tag, review AJ1) read as
+     * customer PII once its separators (`_`, `.`, `-`, `:`) are spaces and its camelCase segments are
+     * words? The id-path name shape or a marker / lead-in before a Capitalized token. No canonical form →
+     * true (fail closed).
+     */
+    fun namePartCarriesPii(namePart: String): Boolean {
         // Review PP1: camelCase segments are words too (`deliverToSam` → "deliver To Sam"), by the same
         // rule the frame-level check uses. Review PP4: only the CASE-SENSITIVE-initial name shape runs on
         // the id path — the IGNORE_CASE anchored variant nulled every `option_a` / `tab_b` chrome id.
         // Review SS3 (id path only): the name shape is FULLY case-sensitive (an uppercase-led first token —
         // Capitalized or, since ZZ4, all-caps — and an uppercase initial; `tab B` / `option A` are chrome),
         // and a marker / lead-in withholds only when the token AFTER it is Capitalized (a name):
-        // `deliver_to_Sam` is absent, `deliver_to_label` travels. SS8: an id with no canonical form is not static.
+        // `deliver_to_Sam` is withheld, `deliver_to_label` travels. SS8: no canonical form reads as PII.
+        // AJ8: no mask check — the id grammar rejects `[`, so a mask literal can never reach the id path
+        // (a `uid` mask is caught by the text steps it continues through).
         val spoken = CensusHash.canonical(
-            ResourceIdGrammar.namePart(id).split(ID_SEPARATORS)
-                .joinToString(" ") { LetterRuns.camelSegments(it).joinToString(" ") },
-        ) ?: return false
-        if (PiiShapes.containsMask(spoken) || PiiShapes.FIRST_LAST_INITIAL_ID_PATH_REGEX.containsMatchIn(spoken)) return false
+            namePart.split(ID_SEPARATORS).joinToString(" ") { LetterRuns.camelSegments(it).joinToString(" ") },
+        ) ?: return true
+        if (PiiShapes.FIRST_LAST_INITIAL_ID_PATH_REGEX.containsMatchIn(spoken)) return true
         val tokens = spoken.split(' ')
-        return tokens.indices.none { i ->
+        return tokens.indices.any { i ->
             val tail = tokens.subList(i, tokens.size).joinToString(" ")
             val prefix = CustomerTextMarkers.unredactedMarker(tail) ?: PiiShapes.customerLeadIn(tail)
             prefix != null && tail.length > prefix.length && isCapitalAt(tail, prefix.length)

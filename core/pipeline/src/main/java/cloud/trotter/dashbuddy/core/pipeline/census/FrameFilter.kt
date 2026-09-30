@@ -126,7 +126,7 @@ internal class FrameFilter(
         var textField: Field? = null
         var descField: Field? = null
         for ((field, value) in node.scrubbableStrings()) {
-            val f = field(value, idClass) ?: continue
+            val f = field(value, idClass, idShaped = field == UiNodeTextField.UNIQUE_ID) ?: continue
             fields += field.wire to f
             if (field == UiNodeTextField.TEXT) textField = f
             if (field == UiNodeTextField.CONTENT_DESCRIPTION) descField = f
@@ -138,10 +138,10 @@ internal class FrameFilter(
             // shaped id the PII judgement withholds (`chip_Riley_S`) is the sentinel, exactly like a frame-rule
             // withholding, so a wrapper-class node is never spliced for one customer and kept for the next.
             id = node.viewIdResourceName?.let { raw ->
-                when {
-                    !ResourceIdGrammar.isStaticShape(raw) -> null
-                    IdPathJudgement.isStaticId(raw) -> raw
-                    else -> ResourceIdGrammar.FRAME_WITHHELD_ID
+                when (IdPathJudgement.verdict(raw)) { // AJ6: one judgement call per node
+                    IdPathJudgement.IdVerdict.DYNAMIC -> null
+                    IdPathJudgement.IdVerdict.STATIC -> raw
+                    IdPathJudgement.IdVerdict.PII_WITHHELD -> ResourceIdGrammar.FRAME_WITHHELD_ID
                 }
             },
             node = node,
@@ -156,14 +156,20 @@ internal class FrameFilter(
      * NEVER seeds (review LL1). Not the length cap (a duplicate is itself over-length). The id-based
      * seeds are [seedIdentity]'s.
      */
-    fun field(value: String?, idClass: IdClass): Field? {
+    fun field(value: String?, idClass: IdClass, idShaped: Boolean = false): Field? {
         if (value.isNullOrBlank()) return null
         val trimmed = value.trim()
+        // AJ1: an id-shaped value (the `uid` test tag) is judged by the ID path FIRST — `chip_Riley_S` or
+        // `deliver_to_Sam` passes every whitespace-dependent text predicate — then continues as text.
+        if (idShaped && IdPathJudgement.namePartCarriesPii(trimmed)) return Field(trimmed, null, idWithholds = true)
         // Reviews AB8, OO1, AH4, AH7: the ONE pass-1 rule (`SkeletonBuilder.canonicalFormOf`, over the frame's
         // memoized fold). A value provably over the cap, or with no fixed point, is withheld with a NULL
         // canonical and seeds nothing (a duplicate of an over-cap value is itself over-length).
         val canonical = (SkeletonBuilder.canonicalFormOf(trimmed, ::canonicalOf) as? SkeletonBuilder.CanonicalForm.Of)?.value
             ?: return Field(trimmed, null, idWithholds = true)
+        // AJ2: a value that canonicalizes to NOTHING (FORMAT-only, e.g. a lone ZWSP) is dropped — never a
+        // phantom `mixed` slot that splits the text map on nothing visible.
+        if (canonical.isEmpty()) return null
         val step = valueStep(trimmed, canonical)
         if (step != null && step != FilterStep.LENGTH_CAP && !PiiShapes.containsMask(canonical)) caught += canonical
         return Field(trimmed, canonical, idWithholds = idClass != IdClass.NONE)

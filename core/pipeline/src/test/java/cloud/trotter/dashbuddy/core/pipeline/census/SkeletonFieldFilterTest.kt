@@ -258,4 +258,26 @@ class SkeletonFieldFilterTest : SkeletonBuilderTestBase() {
         assertEquals(TextSlot.WITHHELD, slot("x\uDB40\uDC20123 Main St"))
         assertEquals(TextSlot.WITHHELD, slot("x\uDB40\uDC20Jane S is here"))
     }
+
+    @Test
+    fun `AJ1 - an id-shaped uid is judged by the id path first`() {
+        fun uid(value: String) = SkeletonBuilder.build(
+            UiNode(className = "android.widget.Button", uniqueId = value, text = "Continue"),
+            null, meta, platform, day,
+        )!!.root.text.getValue("uid")
+        assertEquals(TextSlot.WITHHELD, uid("chip_Riley_S"))
+        assertEquals(TextSlot.WITHHELD, uid("deliver_to_Sam"))
+        val chrome = uid("offerAcceptCta")
+        assertTrue("$chrome", chrome.h != null && chrome.kind.startsWith("words:"))
+        assertEquals(CensusHash.of("offerAcceptCta"), chrome.h)
+    }
+
+    @Test
+    fun `AJ2 - a value that canonicalizes to nothing is dropped, never a phantom slot`() {
+        val out = SkeletonBuilder.build(
+            UiNode(className = "android.widget.TextView", text = "\u200B", contentDescription = "Continue"),
+            null, meta, platform, day,
+        )!!.root.text
+        assertEquals(setOf("desc"), out.keys)
+    }
 }
