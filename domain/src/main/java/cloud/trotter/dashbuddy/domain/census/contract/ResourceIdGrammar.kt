@@ -45,6 +45,18 @@ object ResourceIdGrammar {
     const val MAX_NAME_LENGTH: Int = 64
     const val MAX_PACKAGE_LENGTH: Int = 128
 
+    /**
+     * The reserved id a node carries when its STATIC id was withheld by the builder's FRAME rule (ADR-0011
+     * §1/§8, #1160 review AC3) — the one allowed non-grammar id value. It keeps the node a non-wrapper, so
+     * the fingerprint's tree STRUCTURE never depends on which customer is on the frame (a nulled
+     * `LinearLayout` id would otherwise become a spliced wrapper). A grammar-rejected (dynamic) id stays
+     * null: it is rejected identically on every frame. Not a static shape (`~` is outside the grammar).
+     */
+    const val FRAME_WITHHELD_ID: String = "~"
+
+    /** A wire id the DTO and the server accept: a static shape, or [FRAME_WITHHELD_ID] (review AC3). */
+    fun isWireId(id: String): Boolean = id == FRAME_WITHHELD_ID || isStaticShape(id)
+
     private val SHAPE = Regex("^(?:([A-Za-z][A-Za-z0-9_.]*):id/)?([A-Za-z_][A-Za-z0-9_.-]*(?: [A-Za-z0-9_.-]+)?)$")
     private val HEX_RUN = Regex("[0-9a-fA-F]{8}")
     private val DECIMAL_RUN = Regex("[0-9]{4}")

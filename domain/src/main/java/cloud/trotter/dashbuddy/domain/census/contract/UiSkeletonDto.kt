@@ -81,7 +81,8 @@ data class UiSkeletonNodeDto(
         // Review II2: the static class/id gates have ONE owner and run at construction AND decode, so a
         // forked or old client cannot post a UUID id or a free-text class the server would cluster on.
         require(className == null || ClassNameGrammar.isStatic(className)) { "a class name must be a static binary class name" }
-        require(id == null || ResourceIdGrammar.isStaticShape(id)) { "a view id must have the static resource-name shape" }
+        // Review AC3: or the reserved frame-withheld sentinel `~`.
+        require(id == null || ResourceIdGrammar.isWireId(id)) { "a view id must have the static resource-name shape (or be ~)" }
         // Review UU1: a text-map KEY is a field name, never free text. Pinned to the wire-key SHAPE (every
         // `UiNodeTextField.wire` matches); an unknown key of that shape stays accepted, so a new enum entry
         // is still not a schema bump (ADR-0011 §1).
