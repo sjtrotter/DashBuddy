@@ -31,27 +31,46 @@ class DiagnosticsNotInMainTest {
         else -> emptyList()
     }
 
-    /** Main (non-test, non-fixture) class outputs of this module: dirs holding `SkeletonBuilder.class`, and jars. */
+    /**
+     * The `:core:pipeline` module dir, resolved from [SkeletonBuilder]'s compiled code source (review AH2 —
+     * never the working directory): walk up to the dir that holds this module's `build.gradle.kts` and its
+     * main source tree.
+     */
+    private fun moduleDir(): File {
+        var dir: File? = location(SkeletonBuilder::class.java)
+        while (dir != null) {
+            if (File(dir, "build.gradle.kts").isFile && File(dir, "src/main/java/cloud/trotter/dashbuddy/core/pipeline").isDirectory) return dir
+            dir = dir.parentFile
+        }
+        error("no :core:pipeline module dir above ${location(SkeletonBuilder::class.java)}")
+    }
+
+    /**
+     * Main (non-test, non-fixture) class outputs of this module under `build/intermediates`, in ONE walk
+     * (review AH2): every dir holding `SkeletonBuilder.class`, and every `classes.jar`.
+     */
     private fun mainOutputs(): List<File> {
-        val intermediates = File("build/intermediates")
         val marker = "cloud/trotter/dashbuddy/core/pipeline/census/SkeletonBuilder.class"
-        fun isTestOrFixture(f: File) = f.path.contains("TestFixtures", ignoreCase = true) ||
-            f.path.contains("UnitTest", ignoreCase = true) || f.path.contains("AndroidTest", ignoreCase = true)
-        val dirs = intermediates.walkTopDown()
-            .filter { it.isFile && it.path.endsWith(marker) }
-            .map { File(it.path.removeSuffix(marker)) }
-            .filterNot { isTestOrFixture(it) }
-        val jars = intermediates.walkTopDown().filter { it.isFile && it.name == "classes.jar" }.filterNot { isTestOrFixture(it) }
-        return (dirs + jars).toList()
+        fun isTestOrFixture(f: File) = listOf("TestFixtures", "UnitTest", "AndroidTest").any { f.path.contains(it, ignoreCase = true) }
+        val outputs = ArrayList<File>()
+        File(moduleDir(), "build/intermediates").walkTopDown().filter { it.isFile }.forEach { f ->
+            when {
+                isTestOrFixture(f) -> Unit
+                f.path.endsWith(marker) -> outputs += File(f.path.removeSuffix(marker))
+                f.name == "classes.jar" -> outputs += f
+            }
+        }
+        return outputs
     }
 
     @Test
     fun `no diagnostics class in any compiled main output`() {
         val main = location(SkeletonBuilder::class.java)
-        assertTrue("compiled main output not found at $main", main.exists())
         assertTrue("SkeletonBuilder's output must not be the fixtures output: $main", !main.path.contains("TestFixtures", ignoreCase = true))
-        val outputs = (mainOutputs() + main).distinct()
-        assertTrue("no compiled main output under build/intermediates", outputs.isNotEmpty())
+        val outputs = mainOutputs()
+        // FAIL loud (AH2): the running main output itself is found by the walk, never appended to it.
+        assertTrue("no compiled main class output under ${File(moduleDir(), "build/intermediates")}", outputs.isNotEmpty())
+        assertTrue("the running main output $main was not found by the walk", outputs.any { it.canonicalFile == main.canonicalFile })
         val leaked = outputs.flatMap { diagnosticsClassesIn(it) }
         assertEquals(emptyList<String>(), leaked)
     }

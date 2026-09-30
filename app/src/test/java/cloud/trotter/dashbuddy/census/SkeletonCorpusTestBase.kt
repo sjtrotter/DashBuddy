@@ -1,11 +1,11 @@
 package cloud.trotter.dashbuddy.census
 import cloud.trotter.dashbuddy.core.pipeline.CustomerTextMarkers
 import cloud.trotter.dashbuddy.core.pipeline.SensitiveTextMarkers
+import cloud.trotter.dashbuddy.core.pipeline.census.LetterRuns
 import cloud.trotter.dashbuddy.core.pipeline.census.SkeletonBuilder
 import cloud.trotter.dashbuddy.core.pipeline.census.diagnostics.DiagnosticSkeletonBuilder
 import cloud.trotter.dashbuddy.domain.capture.ReplayMetadata
 import cloud.trotter.dashbuddy.domain.capture.schema.UiNodeSchema
-import cloud.trotter.dashbuddy.domain.census.contract.CaseFold
 import cloud.trotter.dashbuddy.domain.census.contract.CensusHash
 import cloud.trotter.dashbuddy.domain.census.contract.ClassNameGrammar
 import cloud.trotter.dashbuddy.domain.census.contract.SkeletonSchema
@@ -398,16 +398,8 @@ abstract class SkeletonCorpusTestBase {
             PiiShapes.hasNameShape(trimmed) ||
             PiiShapes.VALUE_SHAPES.any { it.hits(trimmed) }
 
-    /**
-     * Maximal Unicode-letter runs, case-folded — the test-side mirror of the builder's private token
-     * split (review GG1). Used only to REFUSE an exemption, so a drift can only make the guard stricter.
-     */
-    protected fun letterRuns(value: String, minLetters: Int = 0): List<String> =
-        Regex("\\p{L}+").findAll(value)
-            .map { it.value }
-            .filter { it.codePointCount(0, it.length) >= minLetters } // HH2: letter code points
-            .map { CaseFold.fold(it) } // HH1: the one fold the builder uses
-            .toList()
+    /** The builder's OWN letter-run split (`LetterRuns.letterRuns`, review AH5) — never a re-implementation. */
+    protected fun letterRuns(value: String, minLetters: Int = 0): List<String> = LetterRuns.letterRuns(value, minLetters)
 
     protected fun redactedInIsolation(id: String?, wire: String, value: String): String {
         val json = Json.encodeToString(
