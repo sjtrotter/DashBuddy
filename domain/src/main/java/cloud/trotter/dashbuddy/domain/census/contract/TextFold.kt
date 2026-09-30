@@ -30,10 +30,11 @@ import java.text.Normalizer
  * BOM, tag chars — a marker split by an invisible char rejoins), and the Unicode dashes U+2010–U+2015 and
  * U+2212 folded to ASCII `-`. TWO pinned folds:
  * - [foldForCensus] — FORMAT stripped by code point FIRST, then NFKC, then dashes: the census canonical form
- *   (a fixed point) AND the sensitive scan's fully stripped form;
+ *   (a fixed point) ONLY — not a sensitive-scan form (review WW1);
  * - [foldGlyphsPreservingSupplementary] — byte-for-byte the pre-#1160 normalizer (NFKC first, per UTF-16
  *   unit, supplementary FORMAT chars KEPT): the sensitive scan's boundary-preserving form (review RR1:
- *   the order matters for a shape pattern's `\b`).
+ *   the order matters for a shape pattern's `\b`); the scan's stripped form is this output minus its
+ *   supplementary FORMAT code points (review WW1).
  * Whitespace handling and case are the CALLER's.
  */
 object TextFold {
@@ -41,8 +42,8 @@ object TextFold {
     /**
      * The census's ORDERED fold (review OO1): FORMAT code points stripped FIRST, then NFKC, then the dash
      * fold — so a combining mark hidden behind a zero-width joiner composes in the one NFKC pass and the
-     * census canonical form is a fixed point. Code-point based. Also the sensitive scan's fully stripped
-     * form (review UU8).
+     * census canonical form is a fixed point. Code-point based. The census's own fold — never a
+     * sensitive-scan form (review WW1).
      */
     fun foldForCensus(value: String): String {
         val stripped = StringBuilder(value.length)
@@ -65,7 +66,7 @@ object TextFold {
      * a BMP FORMAT char is stripped, a supplementary-plane one (a surrogate pair — never FORMAT per unit)
      * is KEPT. Review RR1: stripping it can REMOVE a word boundary a shape pattern relies on
      * (`x<U+E0020>123-45-6789` → `x123-45-6789` defeats the SSN's `\b`), so the scan runs this form AND
-     * the fully stripped [foldForCensus] and drops on either hit.
+     * the same output minus its supplementary FORMAT code points, and drops on either hit.
      */
     fun foldGlyphsPreservingSupplementary(value: String): String {
         val nfkc = Normalizer.normalize(value, Normalizer.Form.NFKC)

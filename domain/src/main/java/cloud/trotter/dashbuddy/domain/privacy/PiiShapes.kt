@@ -249,15 +249,37 @@ object PiiShapes {
     val FIRST_LAST_INITIAL = Regex(FIRST_LAST_INITIAL_PATTERN, RegexOption.IGNORE_CASE)
 
     /**
-     * The FULLY case-sensitive id-path variant (#1160 review SS3): a CAPITALIZED first token (lookahead
-     * `\p{Lu}`) and an uppercase initial, compiled WITHOUT `IGNORE_CASE`. A test-tag id's camel/snake
+     * The FULLY case-sensitive id-path variant (#1160 reviews SS3, XX4): a CAPITALIZED, not all-caps, first
+     * token (lookahead `\p{Lu}\p{Ll}` — `TAB B` / `PRIMARY BUTTON A` are constants, not names) and an
+     * uppercase initial, compiled WITHOUT `IGNORE_CASE`. A test-tag id's camel/snake
      * segments read as words, and `tab B` / `option A` there are chrome, not a name; `Adam S` is a name.
      */
     const val FIRST_LAST_INITIAL_CAPITALIZED =
-        "(?<![\\p{L}])(?=\\p{Lu})" + FIRST_LAST_INITIAL_TOKENS + "\\p{Lu}\\.?" + "(?![\\p{L}])"
+        "(?<![\\p{L}])(?=\\p{Lu}\\p{Ll})" + FIRST_LAST_INITIAL_TOKENS + "\\p{Lu}\\.?" + "(?![\\p{L}])"
 
     /** [FIRST_LAST_INITIAL_CAPITALIZED], case-sensitive — the id-path name matcher. */
     val FIRST_LAST_INITIAL_CAPITALIZED_REGEX = Regex(FIRST_LAST_INITIAL_CAPITALIZED)
+
+    private val WHITESPACE_RUN = Regex("\\s+")
+
+    /**
+     * The ONE "does this value read as a person's name?" predicate (#1160 reviews XX1, XX5): a whole-value
+     * match of [FIRST_LAST_INITIAL_CAPITALIZED] ("Riley S", "Riley S.", "Mary Jo S"), OR 1–3 whitespace
+     * tokens each Capitalized-not-all-caps — a leading uppercase letter, only letters / apostrophes /
+     * hyphens, and at least one lowercase letter ("Riley", "Mary Jo", "O'Brien"; not "TAB B", not "riley").
+     * Consumed by the runtime `WHEN_NAME_LIKE` scrub and the census whole-value seeding.
+     */
+    fun isPersonName(value: String?): Boolean {
+        val trimmed = value?.trim()?.takeIf { it.isNotEmpty() } ?: return false
+        if (FIRST_LAST_INITIAL_CAPITALIZED_REGEX.matches(trimmed)) return true
+        val tokens = trimmed.split(WHITESPACE_RUN)
+        if (tokens.size > 3) return false
+        return tokens.all { token ->
+            Character.isUpperCase(token.codePointAt(0)) &&
+                token.codePoints().allMatch { Character.isLetter(it) || it == '\''.code || it == 0x2019 || it == '-'.code } &&
+                token.codePoints().anyMatch { Character.isLowerCase(it) }
+        }
+    }
 
     /** [FIRST_LAST_INITIAL_EMBEDDED], compiled `IGNORE_CASE` (the initial stays case-sensitive). */
     val FIRST_LAST_INITIAL_EMBEDDED_REGEX = Regex(FIRST_LAST_INITIAL_EMBEDDED, RegexOption.IGNORE_CASE)
