@@ -100,28 +100,6 @@ object PiiShapes {
         "Message from ", "Heading to ", "Pick up at ",
     )
 
-    /**
-     * Chrome-AMBIGUOUS lead-ins: the prefix alone does not prove the tail is a customer, so each
-     * carries a predicate over the tail and fires only when that predicate holds (#1064).
-     *
-     * `"Return "` is the only member. DoorDash renders it both as the timeline's return-order task
-     * line (`"Return <FirstName L> to <store>"`, #994 — the customer's name, raw) and as its own
-     * `"Return to dash"` navigation button (platform chrome, and a recognition anchor). The
-     * discriminator is the conjugation's own `" to "` separator: the segment ahead of it is a
-     * customer name on the task line (`"Riley P"`) and is not one on the button (`"to dash"` has
-     * no separator, so the whole tail is tested and fails the name shape). The shape test is
-     * [FIRST_LAST_INITIAL] itself — the byte-SSOT the rule side shares — never a second copy.
-     *
-     * The intake gate is deliberately belt-and-braces, not the primary control: on the RECOGNIZED
-     * path the `doordash.screen.timeline` rule's own `redact` masks this line at the edge (#806
-     * doctrine), and the runtime `CustomerTextMarkers` set still REJECTS a bare `"Return "` for
-     * exactly the ambiguity above. What this gate covers is the frame that arrives UNKNOWN — a
-     * layout change drops the timeline out of recognition and the raw name would reach the
-     * commit path with no rule redact behind it.
-     */
-    val GATED_NAME_PREFIXES: Map<String, (String) -> Boolean> = mapOf(
-        "Return " to { tail -> FIRST_LAST_INITIAL.matches(tail.substringBefore(" to ")) },
-    )
 
     /**
      * The ONE owner of "does this value open with a customer lead-in whose tail is raw PII?" —
@@ -263,6 +241,32 @@ object PiiShapes {
 
     /** [FIRST_LAST_INITIAL_EMBEDDED], compiled `IGNORE_CASE` (the initial stays case-sensitive). */
     val FIRST_LAST_INITIAL_EMBEDDED_REGEX = Regex(FIRST_LAST_INITIAL_EMBEDDED, RegexOption.IGNORE_CASE)
+
+    /**
+     * Chrome-AMBIGUOUS lead-ins: the prefix alone does not prove the tail is a customer, so each
+     * carries a predicate over the tail and fires only when that predicate holds (#1064).
+     *
+     * `"Return "` is the only member. DoorDash renders it both as the timeline's return-order task
+     * line (`"Return <FirstName L> to <store>"`, #994 — the customer's name, raw) and as its own
+     * `"Return to dash"` navigation button (platform chrome, and a recognition anchor). The
+     * discriminator is the conjugation's own `" to "` separator: the segment ahead of it is a
+     * customer name on the task line (`"Riley P"`) and is not one on the button (`"to dash"` has
+     * no separator, so the whole tail is tested and fails the name shape). The shape test is
+     * [FIRST_LAST_INITIAL] itself — the byte-SSOT the rule side shares — never a second copy.
+     *
+     * The intake gate is deliberately belt-and-braces, not the primary control: on the RECOGNIZED
+     * path the `doordash.screen.timeline` rule's own `redact` masks this line at the edge (#806
+     * doctrine), and the runtime `CustomerTextMarkers` set still REJECTS a bare `"Return "` for
+     * exactly the ambiguity above. What this gate covers is the frame that arrives UNKNOWN — a
+     * layout change drops the timeline out of recognition and the raw name would reach the
+     * commit path with no rule redact behind it.
+     */
+    // #1160 review AH6: DECLARED AFTER [FIRST_LAST_INITIAL] on purpose — object properties initialize in
+    // declaration order, so every regex this map's predicates read is built before the map exists (the
+    // #909 `<clinit>` class). Keep this block below the name-shape regexes.
+    val GATED_NAME_PREFIXES: Map<String, (String) -> Boolean> = mapOf(
+        "Return " to { tail -> FIRST_LAST_INITIAL.matches(tail.substringBefore(" to ")) },
+    )
 
     /**
      * The census step-7 predicate (ADR-0011 §2): the WHOLE value is the anchored redact-side name
