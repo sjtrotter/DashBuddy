@@ -170,14 +170,21 @@ never coordinates, so frozen bounds never aimed a tap — they decided WHICH nod
   #1147 field brought forward; `clickAction` in the DTO, default false and omitted, so fixtures are unchanged; set
   by the mapper from the action list; not in `allText` or any content hash) mirrors
   `AccNodeUtils.isActionClickable`. Otherwise an action-only descendant was absorbed at bind time and excluded at
-  fire time, and a twin could become the sole survivor. Residual: fire time budgets FETCH attempts (a null child
-  spends one) while a mapped `UiNode` has already dropped nulls.
+  fire time, and a twin could become the sole survivor. **The bind side fingerprints the ACTION OWNER (review L2):**
+  `NodeRef.bindHintsOf` walks from the bound node to its nearest `takesClick` self-or-ancestor (`MAX_OWNER_WALK`,
+  owned by `NodeRef`) and hashes THAT region, as fire time does; the owner's class rides the ref as
+  `ownerClassHint`, the 2b class filter (`classNameHint` stays the bound node's, for strategies 1–3). **Package and
+  readability parity (L3/L4):** the mapper stamps `UiNode.foreignPackage` (DTO `foreign`) on nodes of another
+  package than the window root and `UiNode.unreadableChildren` (DTO `nullKids`) from its null-`getChild` count —
+  both default-and-omitted, so fixtures are byte-identical, and neither is in `allText` or any hash;
+  `hintLabelsOf` spends a foreign child's slot without reading it (as `scanLabels` does) and marks the bind
+  INCOMPLETE when an in-horizon node reports unreadable children (so the ref is unprovable and 2b is skipped).
 - **Completeness rides the ref (review J3).** `NodeRef.labelHintsComplete` (default false — legacy
   journal/snapshot refs load as unprovable) records that the bind-time scan was complete;
   `NodeRef.hasExactFingerprint` (hints present, complete, below `MAX_LABEL_HINTS`) is the one owner, required by
   `fingerprintMatches` and gating strategy 2b. An unprovable ref skips 2b for strategy 3's containment check.
 - **Labels before geometry (D2, strategy 2b).** Between the text strategy and the bounds walk: a ref with
-  `labelHintHashes` is re-found by walking each root for nodes that take a click, match `classNameHint`, and
+  `labelHintHashes` is re-found by walking each root for nodes that take a click, match `ownerClassHint` (L2), and
   whose COMPLETE label region is the ref's **exact** fingerprint (`NodeRef.fingerprintMatches`). Bounds are not an
   entrance test. The four #1102 review constraints on the withdrawn re-find are the design: (1) EXACT set, never
   containment — a clickable parent card holding the row plus other text is not a candidate, and a bind-time set
@@ -186,22 +193,28 @@ never coordinates, so frozen bounds never aimed a tap — they decided WHICH nod
   each node's label region is derived post-order from the children the walk already fetched, so the fetch
   budget counts real IPC once; (4) label collection never reads an embedded foreign-package subtree, in discovery
   AND verification.
-  - **Incompleteness fails closed where it is an identity claim (review I4).** A null child makes a scan
-    incomplete. A window's search is INCOMPLETE when a bound cut the walk — the MAPPER's own tree budget
+  - **The outcome rule (review L1, `decideSemanticOutcome` — one owner).** The DECIDING set is the active
+    window's search when a platform window is active, else every scoped window's (a user tap from our bubble);
+    H = its 2b hits, I = any of its windows incomplete: **|H| = 0 → fall through to strategy 3 (whether or not
+    I); |H| ≥ 1 ∧ I → abort ("semantic re-find inconclusive"); else use H (≥ 2 are twins).** Background
+    incompleteness never matters while a platform window is active. Why: `👻 NULL CHILDREN` appears in ~5 % of
+    fielded frames (23 957 lines across 143 pulled files; `recycler_view` 3 219×), and the round-2 "any null
+    child aborts, no fallback" veto would have refused the expand tap on that share of receipts. A 2b hit that
+    becomes unprovable at verification — a failed owner refresh (L5), an incomplete post-refresh scan or a
+    fingerprint mismatch (J6) — counts as |H| ≥ 1 ∧ I in the deciding set and aborts.
+  - **Incompleteness (review I4, J4, J5).** A null child makes a scan incomplete. A window's search is
+    INCOMPLETE when a bound cut the walk — the MAPPER's own tree budget
     (`TreeLimits.MAX_TREE_DEPTH` 60 / `MAX_TREE_NODES` 4 000, review J5: "incomplete" means a tree the mapper
-    itself would have truncated) — or a child read null (an unread subtree can hide a whole twin), or a candidate's
+    itself would have truncated) — or a child read null (recorded in the window AND in the enclosing label
+    regions; the walk continues collecting hits), or a candidate's
     OWN label region is cut by the slot cap AND its visible labels are still consistent with the fingerprint
     (visible hint set ⊆ the ref's, review J4) — never "a non-match that lets its twin win". A region already
     carrying a label outside the set cannot be an exact match whatever is unseen, so a big unrelated card does not
-    veto. A 2b hit whose POST-REFRESH verification scan is incomplete or no longer the fingerprint aborts the whole
-    tap (review J6) rather than handing its twin the tap. The `LABEL_SCAN_DEPTH` cut is the HORIZON, not incompleteness (vet decision on I2 × I4b):
+    count. The `LABEL_SCAN_DEPTH` cut is the HORIZON, not incompleteness (vet decision on I2 × I4b):
     both sides define the fingerprint as the owner's labels within depth 3, excluding clickable descendants, so a
     control with deeper nodes still has a fully determined fingerprint and IS matched. Verifying a label
     EXPECTATION stays lenient: a found label suffices, and since I3 no collected label comes from a nested
     control.
-  - **Per window (review I6).** An incomplete window contributes no candidates; the tap aborts only when some
-    window was incomplete AND the active window produced no complete survivor (then only active-window hits are
-    kept). With no incomplete window and no hit, strategy 3 still runs — the fallback pre-#1149 taps relied on.
   - **Strategy 3 shares the predicate (review J7):** the bounds walk uses `isActionClickable`, so an
     action-only Compose control at the exact rect is found.
   - **Semantic twins abort (review I5).** ≥ 2 2b survivors after owner dedupe and #788 scoping abort to manual
@@ -214,7 +227,13 @@ never coordinates, so frozen bounds never aimed a tap — they decided WHICH nod
   `Observation.identity()` is the dedup SSOT and does not change; with 2b a slid control is re-found by labels,
   so the frozen-bounds problem is fixed where it bites. #1102's throttle semantics and the capability gates
   (#417/#425) are unchanged — this changes HOW a target is re-found, never WHAT may be tapped.
-- **Residuals.** The strategy-3 bounds walk is still unbudgeted (#1102's pre-existing note) — it now runs only
-  when no window's 2b search was incomplete and 2b found nothing. The 2b WARN vocabulary: `no clickable, fresh
-  owner … (N stale)`, `semantic twins`, `a window's search was incomplete … aborting`. The pre-existing
-  `Could not find any live node` WARN no longer prints `ref.text` (moved to DEBUG, review I9a).
+- **Residuals.** (1) **The accessibility rebind race — ACCEPTED (review L9).** After an owner `refresh()`, the
+  accessibility client's subtree cache can still serve a pre-rebind copy of a CHILD to `getChild`; every
+  accessibility consumer lives with this, and DashBuddy refreshes the owner and the matched evidence node (I1/J1)
+  but cannot force-refresh a whole subtree cheaply. (2) **A label-less cut region forces strategy 3:** a clickable
+  region cut at the slot cap with no visible label is "consistent" with any fingerprint (∅ ⊆ anything), so it
+  marks its window incomplete; with no 2b hit that only means strategy 3 runs, with a hit it aborts.
+  (3) The strategy-3 bounds walk is still unbudgeted (#1102's pre-existing note); it runs when 2b found nothing.
+  The WARN vocabulary: `no clickable, fresh owner … (N stale)`, `semantic re-find inconclusive (N hit(s),
+  incomplete)` (the |H| ≥ 1 ∧ I abort, also used for L5/J6), `semantic twins`; the L1 fall-through is DEBUG. The
+  pre-existing `Could not find any live node` WARN no longer prints `ref.text` (moved to DEBUG, review I9a).

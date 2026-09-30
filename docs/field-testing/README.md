@@ -108,7 +108,7 @@ over-inference); the remaining accept losses are #1119 and the merged card is #1
   1. The settled receipt's `EXPAND_EARNINGS` tap lands on the FIRST admitted settled frame:
      `Performing expand_earnings` → `Single verified candidate` with no `Could not find any live node`
      before it (the #1102 retry should no longer be needed).
-  2. No new `Strict click: refusing`, `(N stale)`, `semantic twins` or `a window's search was incomplete`
+  2. No new `Strict click: refusing`, `(N stale)`, `semantic twins` or `semantic re-find inconclusive`
      WARNs on known-good surfaces (the receipt, the heads-up Accept/Decline buttons).
   3. The `bindShortfall{…}` census in `PipelineStats` is unchanged from the previous pull.
   Confirm-decline automation stays DENIED by the dev's choice — it is not a validation target here.
