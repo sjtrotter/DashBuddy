@@ -294,3 +294,39 @@ ksp {
 tasks.withType<Test>().configureEach {
     dependsOn(":core:pipeline:importMatchersRules")
 }
+// #1160 review AK4 — the census framework-class inventory is generated from the RELEASE runtime classpath
+// (plus the compileSdk boot classpath, i.e. android.jar), never the debug one: debug-only artifacts
+// (`androidx.compose.ui.tooling.*`, leakcanary) must not be exempted. This task only LISTS the jars;
+// `FrameworkClassInventoryTest` scans them (diff, or regenerate with -DupdateFrameworkClasses=true).
+abstract class CensusReleaseClasspath : DefaultTask() {
+    @get:InputFiles
+    abstract val jars: ConfigurableFileCollection
+
+    @get:OutputFile
+    abstract val out: RegularFileProperty
+
+    @TaskAction
+    fun run() {
+        val list = jars.files.filter { it.isFile && it.name.endsWith(".jar") }.map { it.absolutePath }.sorted()
+        if (list.isEmpty()) throw GradleException("censusReleaseClasspath resolved no jars")
+        out.get().asFile.apply { parentFile.mkdirs() }.writeText(list.joinToString("\n", postfix = "\n"))
+    }
+}
+
+val censusReleaseClasspath = tasks.register<CensusReleaseClasspath>("censusReleaseClasspath") {
+    group = "census"
+    description = "Lists the release runtime classpath jars + android.jar for the census framework-class inventory."
+    jars.from(
+        configurations.named("releaseRuntimeClasspath").map { cfg ->
+            cfg.incoming.artifactView {
+                attributes { attribute(Attribute.of("artifactType", String::class.java), "android-classes-jar") }
+            }.files
+        },
+    )
+    jars.from(androidComponents.sdkComponents.bootClasspath)
+    out.set(layout.buildDirectory.file("census/release-classpath.txt"))
+}
+
+tasks.withType<Test>().configureEach {
+    dependsOn(censusReleaseClasspath)
+}
