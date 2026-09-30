@@ -486,4 +486,15 @@ class UiInteractionHandlerOwnerTest {
         assertFalse(expand(handler(listOf(active, background), active)))
         bgRow.neverClicked()
     }
+
+    // ---------------------------------------------------------------- review I5: semantic twins
+
+    /** Two rows with identical fingerprints, one sitting exactly on the captured rect — the stale rect must not decide. */
+    @Test
+    fun `semantic twins abort even when one occupies the captured rect`() = runTest {
+        val onRect = payRow()
+        val elsewhere = payRow(top = 1774 - 400)
+        assertFalse(expand(handler(windowRoot(onRect, elsewhere))))
+        onRect.neverClicked(); elsewhere.neverClicked()
+    }
 }

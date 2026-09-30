@@ -269,6 +269,26 @@ class UiInteractionHandler @Inject constructor(
             return false
         }
 
+        // #1149 review I5: semantic TWINS abort. Two or more 2b survivors left after owner dedupe and
+        // #788 scoping carry the same exact fingerprint; the ranker's overlap tier would pick between
+        // them by the captured rect — the very evidence 2b exists to distrust. Only a decisive stored
+        // `text` that exactly ONE survivor's evidence matches may break the tie. (Survivors from
+        // different background windows — no active-window candidate — abort the same way.)
+        if (scopedCandidates.size > 1 && scopedCandidates.any { it.first.semantic }) {
+            val refText = ref.text?.takeIf { it.isNotBlank() }
+            val byText = if (refText == null) emptyList() else
+                scopedCandidates.filter { it.first.evidence.text?.toString()?.take(50) == refText }
+            if (byText.size != 1) {
+                Timber.tag("Effects").w(
+                    "%d semantic twins for %s share the bind's fingerprint and no stored text decides — aborting to manual (#1149)",
+                    scopedCandidates.size, description,
+                )
+                return false
+            }
+            Timber.tag("Effects").d("Semantic twins for %s resolved by exact stored text", description)
+            return AccNodeUtils.clickNodeStrict(byText.single().first.owner, expectedPackage)
+        }
+
         // Disambiguate (#600): rank the label-verified survivors by evidence —
         // exact stored text, then max bounds overlap — instead of exact-bounds
         // `==`, which dies to the temporal drift of an animating sheet (see
