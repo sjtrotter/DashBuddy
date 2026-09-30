@@ -109,25 +109,32 @@ class SkeletonEnvelopeTest : SkeletonBuilderTestBase() {
     }
 
     @Test
-    fun `AA2 BB1 BB2 AD5 - a NUL or malformed UTF-16 class or id is emitted absent and counted`() {
-        listOf(
-            UiNode(className = "android.widget.TextView\u0000N", text = "Accept"),
-            // Review BB2: a NUL-bearing ID must refuse too, not be dropped to null by the grammar gate.
-            UiNode(className = "android.widget.TextView", viewIdResourceName = "x:id/a\u0000", text = "Accept"),
-            // Review BB1: a lone surrogate (class or id) is malformed UTF-16.
-            UiNode(className = "\uD800", text = "Accept"),
-            UiNode(className = "android.widget.TextView", viewIdResourceName = "x:id/a\uDC00", text = "Accept"),
-        ).forEach { bad ->
-            val child = UiNode(className = "android.widget.FrameLayout", viewIdResourceName = "x:id/host", children = listOf(bad))
-            val out = SkeletonBuilder.outcome(child, null, meta, platform, day) as Outcome.Built
-            assertEquals(1, out.malformedIdOrClass)
+    fun `AA2 BB1 BB2 AD5 AE1 - a malformed class is absent and counted, a malformed id refuses the frame`() {
+        fun wrap(bad: UiNode) = UiNode(className = "android.widget.FrameLayout", viewIdResourceName = "x:id/host", children = listOf(bad))
+        // A malformed CLASS (NUL; BB1 lone surrogate): Built, class absent, counted.
+        listOf("android.widget.TextView\u0000N", "\uD800").forEach { cls ->
+            val out = SkeletonBuilder.outcome(wrap(UiNode(className = cls, text = "Accept")), null, meta, platform, day) as Outcome.Built
+            assertEquals(1, out.malformedClass)
             val node = out.skeleton.root.children.single()
-            if (bad.className != "android.widget.TextView") assertNull(node.className) else assertEquals(bad.className, node.className)
-            assertNull(node.id)
+            assertNull(node.className)
             assertEquals(words(1, "Accept"), node.text.getValue("text"))
         }
+        // A malformed VIEW ID (BB2 NUL; a trailing lone surrogate) refuses: its identity cannot be verified.
+        listOf("x:id/a\u0000", "x:id/a\uDC00", "com.doordash.driverapp:id/customer_name\uD800").forEach { id ->
+            val bad = UiNode(className = "android.widget.TextView", viewIdResourceName = id, text = "Accept")
+            assertEquals(id, Outcome.Refused(Refusal.INVALID_TREE), SkeletonBuilder.outcome(wrap(bad), null, meta, platform, day))
+        }
         // A clean frame counts nothing.
-        assertEquals(0, (SkeletonBuilder.outcome(tree("Continue"), null, meta, platform, day) as Outcome.Built).malformedIdOrClass)
+        assertEquals(0, (SkeletonBuilder.outcome(tree("Continue"), null, meta, platform, day) as Outcome.Built).malformedClass)
+    }
+
+    @Test
+    fun `AE1 - a corrupted identity id cannot bypass identity protection`() {
+        val frame = UiNode(className = "android.widget.LinearLayout", viewIdResourceName = "com.x:id/row", children = listOf(
+            UiNode(className = "android.widget.TextView", viewIdResourceName = "com.doordash.driverapp:id/customer_name\u0000", text = "Adam"),
+            UiNode(className = "android.widget.Button", viewIdResourceName = "com.x:id/chipAdam", text = "Text Adam"),
+        ))
+        assertEquals(Outcome.Refused(Refusal.INVALID_TREE), SkeletonBuilder.outcome(frame, null, meta, platform, day))
     }
 
     @Test

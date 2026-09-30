@@ -77,9 +77,10 @@ object SkeletonBuilder {
         INVALID_ENVELOPE,
 
         /**
-         * A node failed the raw-tree validation (an `isChecked` outside the tri-state). A malformed class
-         * or view id no longer refuses the frame: it is emitted ABSENT and counted in
-         * [Outcome.Built.malformedIdOrClass] (review AD5).
+         * A node failed the raw-tree validation: a malformed view id (NUL / lone surrogate — its identity
+         * classification cannot be verified, review AE1) or an `isChecked` outside the tri-state. A malformed
+         * CLASS does not refuse the frame: it is emitted ABSENT and counted in [Outcome.Built.malformedClass]
+         * (review AD5).
          */
         INVALID_TREE,
 
@@ -95,10 +96,10 @@ object SkeletonBuilder {
     sealed interface Outcome {
         /**
          * [json] is the canonical serialization [itemBytes] measured — the caller never re-serializes.
-         * [malformedIdOrClass] counts nodes whose class or view id was malformed and emitted absent (AD5) —
+         * [malformedClass] counts nodes whose class was malformed and emitted absent (reviews AD5, AE1) —
          * a counter #1146's publisher can read; never text.
          */
-        data class Built(val skeleton: UiSkeletonDto, val json: String, val itemBytes: Int, val malformedIdOrClass: Int = 0) : Outcome
+        data class Built(val skeleton: UiSkeletonDto, val json: String, val itemBytes: Int, val malformedClass: Int = 0) : Outcome
         data class Refused(val reason: Refusal) : Outcome
     }
 
@@ -282,7 +283,7 @@ object SkeletonBuilder {
         }
         val measured = SkeletonSchema.measure(item)
         if (measured.bytes > SkeletonSchema.MAX_ITEM_BYTES) return Outcome.Refused(Refusal.OVERSIZE)
-        return Outcome.Built(item, measured.json, measured.bytes, frame.malformedIdOrClass)
+        return Outcome.Built(item, measured.json, measured.bytes, frame.malformedClass)
     }
 
     private val DAY_FORMAT: DateTimeFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd", Locale.ROOT)

@@ -87,8 +87,8 @@ internal class FrameFilter(
     private val classSeeds = HashSet<String>()
     private val classSeedLengths = HashSet<Int>()
 
-    /** Nodes whose class or view id was malformed (NUL / lone surrogate) and emitted ABSENT (review AD5). */
-    var malformedIdOrClass: Int = 0
+    /** Nodes whose CLASS was malformed (NUL / lone surrogate) and emitted ABSENT (reviews AD5, AE1). */
+    var malformedClass: Int = 0
         private set
 
     /** Canonical form per raw trimmed value, memoized per frame (review SS7); null = no fixed point. */
@@ -107,13 +107,14 @@ internal class FrameFilter(
     private val classJoinHits = HashMap<String, Boolean>()
 
     fun scan(node: UiNode): Pending {
-        // Review AD5 (refines BB1/BB2): a malformed class or view id (NUL, lone surrogate) is emitted ABSENT
-        // and counted — null never enters the byte form, so the fingerprint stays injective, and one bad node
-        // no longer refuses its whole surface. The DTO `init` still refuses one (defence in depth). The §2
-        // PII-id step still reads the RAW id, so a malformed PII id still withholds its fields.
+        // Reviews AD5, AE1 (refine BB1/BB2), split by field. A malformed CLASS (NUL, lone surrogate) carries
+        // no identity semantics: it is emitted ABSENT and counted — null never enters the byte form, so the
+        // fingerprint stays injective, and one bad node does not refuse its surface. A malformed VIEW ID
+        // REFUSES the frame (INVALID_TREE): its identity classification cannot be verified (a corrupted
+        // `customer_name\u0000` misses every suffix lookup and would ship its name — fail closed).
         val classOk = node.className?.let { WireStrings.isWellFormed(it) } ?: true
-        val idOk = node.viewIdResourceName?.let { WireStrings.isWellFormed(it) } ?: true
-        if (!classOk || !idOk) malformedIdOrClass++
+        node.viewIdResourceName?.let { if (!WireStrings.isWellFormed(it)) throw SkeletonBuilder.InvalidTree("malformed view id") }
+        if (!classOk) malformedClass++
         if (node.isChecked !in 0..2) throw SkeletonBuilder.InvalidTree("isChecked outside the 0/1/2 tri-state")
         // AD7: the marker row is looked up ONCE per node.
         val marker = CustomerTextMarkers.idMarkerFor(node.viewIdResourceName)
@@ -134,7 +135,7 @@ internal class FrameFilter(
         seedIdentity(textField, descField, marker)
         return Pending(
             className = node.className?.takeIf { classOk }?.let { ClassNameGrammar.staticOrNull(it) },
-            id = node.viewIdResourceName?.takeIf { raw -> idOk && staticIds.getOrPut(raw) { IdPathJudgement.isStaticId(raw) } },
+            id = node.viewIdResourceName?.takeIf { raw -> staticIds.getOrPut(raw) { IdPathJudgement.isStaticId(raw) } },
             node = node,
             fields = fields,
             children = node.children.map { scan(it) },
