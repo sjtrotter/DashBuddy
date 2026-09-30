@@ -1,4 +1,6 @@
 package cloud.trotter.dashbuddy.core.pipeline.census
+
+import cloud.trotter.dashbuddy.core.pipeline.SensitiveTextMarkers
 import cloud.trotter.dashbuddy.core.pipeline.census.SkeletonBuilder.FilterStep
 import cloud.trotter.dashbuddy.core.pipeline.census.SkeletonBuilder.Outcome
 import cloud.trotter.dashbuddy.core.pipeline.census.SkeletonBuilder.Refusal
@@ -126,6 +128,14 @@ class SkeletonEnvelopeTest : SkeletonBuilderTestBase() {
         }
         // A clean frame counts nothing.
         assertEquals(0, (SkeletonBuilder.outcome(tree("Continue"), null, meta, platform, day) as Outcome.Built).malformedClass)
+    }
+
+    @Test
+    fun `AG1 - a BMP FORMAT char splitting a surrogate pair cannot hide a sensitive keyword`() {
+        val text = "Vi\uDB40\u200D\uDC20sa ending 6222"
+        assertTrue(SensitiveTextMarkers.findMarker(text) != null)
+        val frame = UiNode(className = "android.widget.LinearLayout", children = listOf(UiNode(className = "android.widget.TextView", text = text)))
+        assertEquals(Outcome.Refused(Refusal.SENSITIVE_FRAME), SkeletonBuilder.outcome(frame, null, meta, platform, day))
     }
 
     @Test

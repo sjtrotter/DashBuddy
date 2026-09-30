@@ -22,6 +22,13 @@ class TextFoldTest {
     }
 
     @Test
+    fun `the flag is judged on the emitted output - a dropped BMP FORMAT char can join a pair (review AG1)`() {
+        val split = TextFold.foldGlyphsPreservingSupplementaryFlagged("vi\uDB40\u200D\uDC20sa")
+        assertEquals("vi\uDB40\uDC20sa", split.text)
+        assertTrue(split.hasSupplementaryFormat)
+    }
+
+    @Test
     fun `one dash predicate`() {
         ('‐'..'―').forEach { assertTrue(TextFold.isFoldableDash(it)) }
         assertTrue(TextFold.isFoldableDash('−'))

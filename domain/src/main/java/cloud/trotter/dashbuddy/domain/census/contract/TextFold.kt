@@ -107,29 +107,23 @@ object TextFold {
     fun foldGlyphsPreservingSupplementary(value: String): String = foldGlyphsPreservingSupplementaryFlagged(value).text
 
     /**
-     * [foldGlyphsPreservingSupplementary] that also reports, from the SAME pass, whether the output keeps a
-     * supplementary-plane FORMAT code point (review AF6) — so the sensitive scan need not re-walk the blob
-     * to decide whether its second (stripped) form differs.
+     * [foldGlyphsPreservingSupplementary] that also reports whether the OUTPUT keeps a supplementary-plane
+     * FORMAT code point (reviews AF6, AG1). Judged on the EMITTED string, never on input adjacency:
+     * dropping a BMP FORMAT char can JOIN a new surrogate pair (`vi<high><ZWJ><low>sa` → a tag char), and
+     * that pair is exactly what the second (stripped) scan must see — correctness over the saved walk.
      */
     fun foldGlyphsPreservingSupplementaryFlagged(value: String): Folded {
         val nfkc = Normalizer.normalize(value, Normalizer.Form.NFKC)
         val sb = StringBuilder(nfkc.length)
-        var supplementaryFormat = false
-        for ((i, ch) in nfkc.withIndex()) {
+        for (ch in nfkc) {
             when {
                 isFormat(ch.code) -> {}
                 isFoldableDash(ch) -> sb.append('-')
-                else -> {
-                    sb.append(ch)
-                    if (Character.isHighSurrogate(ch) && i + 1 < nfkc.length && Character.isLowSurrogate(nfkc[i + 1]) &&
-                        isSupplementaryFormat(Character.toCodePoint(ch, nfkc[i + 1]))
-                    ) {
-                        supplementaryFormat = true
-                    }
-                }
+                else -> sb.append(ch)
             }
         }
-        return Folded(sb.toString(), supplementaryFormat)
+        val out = sb.toString()
+        return Folded(out, hasSupplementaryFormat(out))
     }
 
 }
