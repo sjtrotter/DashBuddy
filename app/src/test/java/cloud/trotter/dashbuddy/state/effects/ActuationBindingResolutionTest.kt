@@ -797,8 +797,9 @@ class ActuationBindingResolutionTest {
         val match = TestRulesetFactory.screenRuleset.matchFirst(foreignRow, onParseShortfall = { shortfalls += it })
         assertNotNull("the receipt still matches", match)
         assertNull("a refused bind emits NO reference", match!!.targets[RuleAction.EXPAND_EARNINGS.targetBindName])
-        assertTrue("the refusal rides the #1093 bind census",
-            shortfalls.any { RuleAction.EXPAND_EARNINGS.targetBindName in it.unresolvedOptionalBindings })
+        assertTrue("the refusal has its OWN census (S4), not the unresolved-optional one",
+            shortfalls.any { RuleAction.EXPAND_EARNINGS.targetBindName in it.refusedBindings })
+        assertFalse(shortfalls.any { RuleAction.EXPAND_EARNINGS.targetBindName in it.unresolvedOptionalBindings })
     }
 
     /** R7: an action target bound over a node with an unreadable child is counted as unprovable. */

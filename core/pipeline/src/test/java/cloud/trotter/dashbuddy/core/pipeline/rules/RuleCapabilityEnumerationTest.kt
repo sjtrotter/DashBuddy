@@ -176,4 +176,30 @@ class RuleCapabilityEnumerationTest {
         assertEquals("the rule still matches", true, result != null)
         assertEquals(null, result!!.targets["declineButton"])
     }
+
+    /** #1149 review S4: an owner-less bind is REFUSED — its own refusedBindings entry, never an "unresolved optional" one. */
+    @Test
+    fun `a refused bind is reported as refused`() {
+        val ruleset = Ruleset(compile(declineTargetRule()))
+        val tree = UiNode(children = listOf(UiNode(text = "Decline"))).restoreParents()
+        val shortfalls = mutableListOf<cloud.trotter.dashbuddy.domain.pipeline.ParseShortfall>()
+        ruleset.matchFirst(tree, platformWire = "doordash", onParseShortfall = { shortfalls += it })
+        assertTrue(shortfalls.any { "declineButton" in it.refusedBindings })
+        assertTrue(shortfalls.none { "declineButton" in it.unresolvedOptionalBindings })
+    }
+
+    /** #1149 review S7: an icon-only action target (no letter-bearing label) is unprovable, with that reason. */
+    @Test
+    fun `an icon-only action target is reported unprovable`() {
+        val ruleset = Ruleset(compile(declineTargetRule(bindPredicate = """{ "hasIdSuffix": "icon_button" }""")))
+        val tree = UiNode(children = listOf(
+            UiNode(text = "Decline"),
+            UiNode(viewIdResourceName = "com.doordash.driverapp:id/icon_button", isClickable = true),
+        )).restoreParents()
+        val shortfalls = mutableListOf<cloud.trotter.dashbuddy.domain.pipeline.ParseShortfall>()
+        val result = ruleset.matchFirst(tree, platformWire = "doordash", onParseShortfall = { shortfalls += it })
+        assertEquals("the target is still exposed", true, result?.targets?.containsKey("declineButton"))
+        val s = shortfalls.single { "declineButton" in it.unprovableBindings }
+        assertEquals("no letter-bearing label", s.unprovableReasons["declineButton"])
+    }
 }

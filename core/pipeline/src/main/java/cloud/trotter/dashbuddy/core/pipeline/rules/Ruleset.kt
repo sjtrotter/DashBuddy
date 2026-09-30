@@ -167,11 +167,7 @@ class Ruleset<TInput>(rules: List<CompiledRule<TInput>>) {
                 // #1093: an OPTIONAL bind that resolved nothing rides the same sink — the target
                 // anchor can rot exactly like a parse anchor, and an optional bind is the one
                 // place a rot leaves no trace at all (a mandatory one skips the rule).
-                // #1149 review R1/R7: the bind references are built HERE (pure) so the census sees them:
-                // a REFUSED bind emits no reference and counts as unresolved; an action target whose
-                // fingerprint is unprovable is counted as such.
-                val bindRefs = buildBindRefs(allBindings)
-                onParseShortfall?.let { sink -> shortfallOf(rule.id, branch, rawFields, allBindings, bindRefs)?.let(sink) }
+                onParseShortfall?.let { sink -> shortfallOf(rule.id, branch, rawFields, allBindings)?.let(sink) }
 
                 // Phase 5: Validate
                 var branchSkip = false
@@ -212,9 +208,33 @@ class Ruleset<TInput>(rules: List<CompiledRule<TInput>>) {
 
                 // Expose resolved bindings as named targets (#425) —
                 // recognition-layer data for the app-owned action registry.
+                // #1149 review S5: references are built for the RETURNED branch only, after validation,
+                // and only for ACTION-target binds (RuleAction.byTargetBindName) — the owner walk, label
+                // scan and sha256 run once per classification, never for a Skip-discarded branch or a
+                // parse-scope bind. A REFUSED bind (R1: foreign / no owner) emits NO reference; its
+                // refusal and any unprovable fingerprint (R7/S7) are reported from this same branch.
+                val refused = mutableListOf<String>()
+                val unprovable = mutableListOf<Pair<String, String>>()
                 val targets = buildMap {
-                    for ((name, ref) in bindRefs) if (ref != null) put(name, ref)
+                    for ((name, node) in allBindings) {
+                        if (node == null || name !in RuleAction.byTargetBindName) continue
+                        val ref = buildNodeRef(node)
+                        if (ref == null) { refused += name; continue }
+                        put(name, ref)
+                        when {
+                            ref.labelHintHashes.isEmpty() -> unprovable += name to "no letter-bearing label"
+                            !ref.labelHintsComplete -> unprovable += name to "incomplete bind-time label scan"
+                        }
+                    }
                 }
+                if (refused.isNotEmpty() || unprovable.isNotEmpty()) onParseShortfall?.invoke(
+                    ParseShortfall(
+                        ruleId = rule.id,
+                        refusedBindings = refused.sorted(),
+                        unprovableBindings = unprovable.map { it.first }.sorted(),
+                        unprovableReasons = unprovable.toMap(),
+                    ),
+                )
 
                 return RuleMatchResult(
                     ruleId = rule.id,
@@ -253,7 +273,6 @@ class Ruleset<TInput>(rules: List<CompiledRule<TInput>>) {
         branch: CompiledBranch<TInput>,
         rawFields: Map<String, Any?>,
         bindings: Bindings,
-        bindRefs: Map<String, NodeRef?>,
     ): ParseShortfall? {
         val evidence = branch.parseEvidenceFields
         val allNull = evidence.isNotEmpty() &&
@@ -261,20 +280,13 @@ class Ruleset<TInput>(rules: List<CompiledRule<TInput>>) {
         val nullRequired = branch.requiredParseFields.filter { rawFields[it] == null }
         // Only an OPTIONAL bind can be present-and-null here: a mandatory miss already skipped
         // the rule in resolveBindings (#1093).
-        // R1: a refused ACTION-target bind (resolved a node, but no reference) is unresolved too.
-        val refusedTargets = bindRefs.filter { (name, ref) -> ref == null && name in RuleAction.byTargetBindName }.keys
-        val unresolvedBinds = (bindings.filterValues { it == null }.keys + refusedTargets).sorted()
-        // R7: an action target whose bind-time fingerprint is unprovable (never 2b).
-        val unprovable = bindRefs.filter { (name, ref) ->
-            ref != null && !ref.labelHintsComplete && name in RuleAction.byTargetBindName
-        }.keys.sorted()
-        if (!allNull && nullRequired.isEmpty() && unresolvedBinds.isEmpty() && unprovable.isEmpty()) return null
+        val unresolvedBinds = bindings.filterValues { it == null }.keys.sorted()
+        if (!allNull && nullRequired.isEmpty() && unresolvedBinds.isEmpty()) return null
         return ParseShortfall(
             ruleId = ruleId,
             allNullFieldCount = if (allNull) evidence.size else 0,
             nullRequiredFields = nullRequired,
             unresolvedOptionalBindings = unresolvedBinds,
-            unprovableBindings = unprovable,
         )
     }
 
@@ -388,11 +400,6 @@ class Ruleset<TInput>(rules: List<CompiledRule<TInput>>) {
         return value
             .replace(Regex("[\\p{Cc}\\p{Cn}]"), "")
             .take(MAX_TEMPLATE_VALUE_LENGTH)
-    }
-
-    /** Every resolved bind's reference; a REFUSED bind (R1) maps to null — it emits no reference. */
-    private fun buildBindRefs(bindings: Bindings): Map<String, NodeRef?> = buildMap {
-        for ((name, node) in bindings) if (node != null) put(name, buildNodeRef(node))
     }
 
     /** #1149 review R1: null when the bind is REFUSED (foreign / no owner) — no reference, nothing tappable. */

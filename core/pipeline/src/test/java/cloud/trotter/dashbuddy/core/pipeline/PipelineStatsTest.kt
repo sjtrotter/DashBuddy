@@ -217,6 +217,16 @@ class PipelineStatsTest {
         assertTrue(stats.summary(), stats.summary().contains("bindUnprovable{doordash.screen.delivery_summary_collapsed#expandButton=2}"))
     }
 
+    @Test
+    fun `a refused bind has its own census, never the unresolved-optional one`() {
+        val stats = PipelineStats()
+        val rule = "doordash.screen.offer_popup"
+        stats.onParseShortfall(ParseShortfall(rule, refusedBindings = listOf("declineButton")))
+        assertEquals(1L, stats.bindRefusedCount(rule, "declineButton"))
+        assertEquals(0L, stats.bindShortfallCount(rule, "declineButton"))
+        assertTrue(stats.summary(), stats.summary().contains("bindRefused{doordash.screen.offer_popup#declineButton=1}"))
+    }
+
     // ── #1093: an optional bind that resolved nothing is its OWN census + WARN ──
 
     @Test

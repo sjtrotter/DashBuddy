@@ -146,8 +146,8 @@ data class NodeRef(
          * #1149 review L2 — the bind-time fingerprint is the ACTION OWNER's, like the fire-time one: the
          * bound node's nearest [UiNode.takesClick] self-or-ancestor (at most [MAX_OWNER_WALK] steps).
          * Its label region is hashed, its completeness recorded, and its class returned as the 2b
-         * class filter. No owner → hints from the bound node, never complete (no 2b). A foreign bound
-         * node or owner walk (review N5) → no hints, never complete.
+         * class filter. No owner, a foreign bound node or a foreign owner walk (N5) → REFUSED (R1): no
+         * hints, never complete, and the caller emits no reference (the scan is skipped, S5).
          */
         fun bindHintsOf(bound: cloud.trotter.dashbuddy.domain.model.accessibility.UiNode): BindHints {
             // N5: a foreign node is never an owner and is never crossed. A bound node that is itself
@@ -164,17 +164,16 @@ data class NodeRef(
                 owner = parent
                 steps++
             }
-            val found = owner.takeIf { it.takesClick }
-            val scan = hintLabelsOf(found ?: bound)
+            // S5: no owner → refused; skip the scan and hashing the caller would discard.
+            val found = owner.takeIf { it.takesClick } ?: return none
+            val scan = hintLabelsOf(found)
             val distinct = scan.labels.asSequence().mapNotNull(::hintHash).distinct().toList()
             // P7: truncation is RECORDED here, where it is known — a set cut at MAX_LABEL_HINTS is not
             // complete; an owner with exactly MAX_LABEL_HINTS labels is.
             return BindHints(
                 distinct.take(MAX_LABEL_HINTS),
-                complete = found != null && scan.complete && distinct.size <= MAX_LABEL_HINTS,
-                ownerClassHint = found?.className,
-                // R1: no owner → nothing a tap could land on; the bind emits NO reference.
-                refused = found == null,
+                complete = scan.complete && distinct.size <= MAX_LABEL_HINTS,
+                ownerClassHint = found.className,
             )
         }
 
