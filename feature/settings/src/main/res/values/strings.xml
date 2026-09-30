@@ -99,4 +99,14 @@
     <string name="developer_settings_bubble_session_follow_explainer">Follows whichever platform you last touched. Picking a platform in the bubble\'s switcher holds until that dash ends, then it goes back to following.</string>
     <string name="developer_settings_bubble_session_pinned_explainer">Your switcher pick sticks until you change it — including across that platform\'s next dash. While the pinned platform is offline the bubble falls back to following.</string>
     <string name="developer_settings_bubble_session_merged_explainer">Test mode: one card stack folding every live dash, each card chipped with its platform. The switcher is hidden and chat stays on the followed dash.</string>
+    <!-- #1151 — the wide-event-receipt FEATURE consent. ONE copy, shared by the Dashboard prompt
+         (:app EventReceiptConsentSheet) and the Settings switch below; also the prominent-disclosure
+         shape #1138 M3 will reuse. -->
+    <string name="event_receipt_title">Let DashBuddy notice windows from other apps</string>
+    <string name="event_receipt_body">Right now DashBuddy\'s accessibility service only receives screen events from the delivery apps you turned on. If you allow this, it will also receive window-change notices from every app, so an offer drawn on top of whatever you\'re doing (like a rideshare offer popup) can be seen. Only windows that belong to a delivery app you enabled are ever read. Nothing from any other app is stored. You can turn this off any time in Settings → Data &amp; Privacy.</string>
+    <string name="event_receipt_allow">Allow</string>
+    <string name="event_receipt_deny">Don\'t allow</string>
+    <string name="event_receipt_not_now">Not now</string>
+    <string name="event_receipt_settings_section">Screen events</string>
+    <string name="event_receipt_settings_switch">Notice windows from other apps</string>
 </resources>

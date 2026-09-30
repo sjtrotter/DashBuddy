@@ -5,6 +5,8 @@ import androidx.lifecycle.viewModelScope
 import cloud.trotter.dashbuddy.domain.action.RuleAction
 import cloud.trotter.dashbuddy.domain.capability.RuleCapability
 import cloud.trotter.dashbuddy.domain.capability.RuleCapabilityGrants
+import cloud.trotter.dashbuddy.domain.settings.EventReceiptConsent
+import cloud.trotter.dashbuddy.domain.settings.EventReceiptPreferences
 import cloud.trotter.dashbuddy.domain.state.Platform
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.SharingStarted
@@ -26,15 +28,25 @@ import javax.inject.Inject
  * The ViewModel holds no Android resources — human disclosure copy is resolved
  * from the app-owned [RuleAction] vocabulary in the composable (never from
  * rule-supplied text; see `docs/design/rule-capability-consent.md`).
+ *
+ * #1151 — the screen also records the wide-event-receipt FEATURE consent ("Screen events"). That
+ * value is owned by [EventReceiptPreferences] (never the grant store) and enforced by the
+ * accessibility listener; the switch here only writes through [setEventReceiptAllowed].
  */
 @HiltViewModel
 class CapabilityConsentViewModel @Inject constructor(
     private val grants: RuleCapabilityGrants,
+    private val eventReceipt: EventReceiptPreferences,
 ) : ViewModel() {
 
     val uiState: StateFlow<ConsentUiState> =
-        combine(grants.capabilities, grants.grantedKeys) { capabilities, grantedKeys ->
+        combine(
+            grants.capabilities,
+            grants.grantedKeys,
+            eventReceipt.consent,
+        ) { capabilities, grantedKeys, consent ->
             buildConsentUiState(capabilities, grantedKeys)
+                .copy(eventReceiptAllowed = consent == EventReceiptConsent.ALLOWED)
         }.stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5_000),
@@ -45,11 +57,20 @@ class CapabilityConsentViewModel @Inject constructor(
     fun setGranted(key: String, granted: Boolean) {
         viewModelScope.launch { grants.setGranted(key, granted) }
     }
+
+    /** #1151 — on ⇒ ALLOWED, off ⇒ a durable DECLINED (an explicit act, never back to UNDECIDED). */
+    fun setEventReceiptAllowed(allowed: Boolean) {
+        viewModelScope.launch {
+            eventReceipt.set(if (allowed) EventReceiptConsent.ALLOWED else EventReceiptConsent.DECLINED)
+        }
+    }
 }
 
 /** Immutable per-screen state (UDF). Empty [sources] ⇒ the empty-state copy. */
 data class ConsentUiState(
     val sources: List<ConsentSourceGroup> = emptyList(),
+    /** #1151 — the "Screen events" switch: true only when the consent is ALLOWED. */
+    val eventReceiptAllowed: Boolean = false,
 )
 
 /** One ruleset source (a bundled asset file, or a future downloaded source). */

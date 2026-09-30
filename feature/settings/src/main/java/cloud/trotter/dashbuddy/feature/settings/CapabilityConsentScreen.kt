@@ -70,6 +70,11 @@ fun CapabilityConsentScreen(
                 .verticalScroll(rememberScrollState()),
         ) {
             Spacer(Modifier.height(8.dp))
+            EventReceiptSection(
+                allowed = uiState.eventReceiptAllowed,
+                onAllowedChange = viewModel::setEventReceiptAllowed,
+            )
+            Spacer(Modifier.height(16.dp))
             DisclosureHeader()
 
             if (uiState.sources.isEmpty()) {
@@ -90,6 +95,42 @@ fun CapabilityConsentScreen(
             }
 
             Spacer(Modifier.height(32.dp))
+        }
+    }
+}
+
+/**
+ * #1151 — "Screen events": the wide-event-receipt FEATURE consent's record. The switch writes
+ * through [CapabilityConsentViewModel.setEventReceiptAllowed]; the listener enforces it.
+ */
+@Composable
+private fun EventReceiptSection(
+    allowed: Boolean,
+    onAllowedChange: (Boolean) -> Unit,
+) {
+    Column(Modifier.fillMaxWidth()) {
+        Text(
+            text = stringResource(R.string.event_receipt_settings_section),
+            style = MaterialTheme.typography.labelLarge,
+            color = MaterialTheme.colorScheme.primary,
+            modifier = Modifier.padding(horizontal = 24.dp, vertical = 4.dp),
+        )
+        Surface(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp),
+            shape = MaterialTheme.shapes.medium,
+            color = MaterialTheme.colorScheme.surfaceContainer,
+            tonalElevation = 2.dp,
+        ) {
+            Column(Modifier.padding(horizontal = 16.dp)) {
+                SwitchRow(
+                    label = stringResource(R.string.event_receipt_settings_switch),
+                    subtitle = stringResource(R.string.event_receipt_body),
+                    checked = allowed,
+                    onCheckedChange = onAllowedChange,
+                )
+            }
         }
     }
 }
