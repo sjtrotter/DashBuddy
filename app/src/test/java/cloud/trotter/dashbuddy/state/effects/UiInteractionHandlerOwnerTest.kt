@@ -302,4 +302,42 @@ class UiInteractionHandlerOwnerTest : UiInteractionHandlerTapTestKit() {
             ownerB.neverClicked()
         }
     }
+
+    private suspend fun accept(h: UiInteractionHandler, ref: NodeRef) = h.performVerifiedClick(
+        ref = ref, expectedPackage = pkg, expectation = RuleAction.ACCEPT_OFFER.verification, description = "accept",
+    )
+
+    /** A bound non-clickable container four levels under its owner, its "Accept" on an immediate child. */
+    private fun deepAcceptOwner(containerBounds: Rect): Pair<AccessibilityNodeInfo, AccessibilityNodeInfo> {
+        val container = view(bounds = containerBounds, children = listOf(view(cls = "android.widget.TextView", text = "Accept")))
+        var chain: AccessibilityNodeInfo = container
+        repeat(3) { chain = view(children = listOf(chain)) }
+        val owner = view(clickable = true, children = listOf(chain))
+        return owner to container
+    }
+
+    /** Y1: the matched container's own child label counts (its bounded subtree) — the lone deep container is clicked. */
+    @Test
+    fun `a deep bound container verifies through its own subtree`() = runTest {
+        val rect = Rect(40, 2000, 1000, 2120)
+        val (ownerA, container) = deepAcceptOwner(rect)
+        val root = windowRoot(ownerA, byId = listOf(container))
+        val ref = idRef.copy(boundsInScreen = BoundingBox(rect.left, rect.top, rect.right, rect.bottom))
+        assertTrue(accept(handler(root), ref))
+        ownerA.clicks(1)
+    }
+
+    /** Y1: with a competitor B sharing the id (readable "Accept", less overlap), A still wins — B is never clicked. */
+    @Test
+    fun `a deep bound container is not out-verified by a shallow competitor`() = runTest {
+        val rect = Rect(40, 2000, 1000, 2120)
+        val (ownerA, containerA) = deepAcceptOwner(rect)
+        val containerB = view(bounds = Rect(40, 2100, 1000, 2220), children = listOf(view(cls = "android.widget.TextView", text = "Accept")))
+        val ownerB = view(clickable = true, children = listOf(containerB))
+        val root = windowRoot(ownerA, ownerB, byId = listOf(containerA, containerB))
+        val ref = idRef.copy(boundsInScreen = BoundingBox(rect.left, rect.top, rect.right, rect.bottom))
+        assertTrue(accept(handler(root), ref))
+        ownerA.clicks(1)
+        ownerB.neverClicked()
+    }
 }

@@ -237,9 +237,11 @@ class UiInteractionHandler @Inject constructor(
             // Consistent with I3: the evidence node is inside the owner and not itself clickable (else it
             // would BE the owner). Only the lenient expectation/ranking set grows; the semantic
             // fingerprint below reads the owner scan alone (for a 2b hit, evidence IS the owner).
-            // S3/T6: the ONE own-label read (ownLabelsOf) and the ONE normalization (LabelHorizon).
-            val evidenceLabels = if (!separateEvidence) emptyList() else
-                LabelHorizon.normalizeOwnLabels(ownLabelsOf(target.evidence))
+            // S3/T6/Y1: the matched node contributes its bounded SUBTREE through the ONE horizon rule
+            // (LabelHorizon — same depth/slot horizon, package and nested-clickable boundaries, capped): a
+            // bound container whose "Accept" sits on its own child, deeper than the owner scan reaches, still
+            // verifies. Expectation verification only — the semantic fingerprint stays OWNER-scoped.
+            val evidenceLabels = if (!separateEvidence) emptyList() else scanLabels(target.evidence, expectedPackage).labels
             val labels = scan.labels + evidenceLabels.filterNot { it in scan.labels }
             // #1093: a bounds-derived candidate — exact rect or overlap — needs the bind's own
             // subtree labels among its live ones; that, not geometry, separates the slid receipt
