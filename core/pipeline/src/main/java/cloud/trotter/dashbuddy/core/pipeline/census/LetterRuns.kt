@@ -5,9 +5,10 @@ import cloud.trotter.dashbuddy.domain.census.contract.CaseFold
 /**
  * The census's letter-run vocabulary (ADR-0011 §2; split from `SkeletonBuilder` by #1160 review AD10): the
  * code-point letter runs text slots are judged on, the camelCase split ids and classes add, and the bounded
- * cross-separator join search the frame rule runs on an id or class.
+ * cross-separator join search the frame rule runs on an id or class. Public (review AH5) so the `:app` corpus
+ * mirrors call the same split rather than re-implementing it; it holds vocabulary, no policy.
  */
-internal object LetterRuns {
+object LetterRuns {
 
     /**
      * The value's maximal runs of Unicode letters, case-FOLDED with the one [CaseFold] (review HH1) — so

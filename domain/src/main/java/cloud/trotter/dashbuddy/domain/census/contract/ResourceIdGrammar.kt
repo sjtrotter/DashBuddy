@@ -46,8 +46,9 @@ object ResourceIdGrammar {
     const val MAX_PACKAGE_LENGTH: Int = 128
 
     /**
-     * The reserved id a node carries when its STATIC id was withheld by the builder's FRAME rule (ADR-0011
-     * §1/§8, #1160 review AC3) — the one allowed non-grammar id value. It keeps the node a non-wrapper, so
+     * The reserved id a node carries when its STATIC-shaped id was withheld by the builder — by the frame
+     * rule, or by the frame-free PII judgement of the id itself (ADR-0011 §1/§8, #1160 reviews AC3, AH1) —
+     * the one allowed non-grammar id value. It keeps the node a non-wrapper, so
      * the fingerprint's tree STRUCTURE never depends on which customer is on the frame (a nulled
      * `LinearLayout` id would otherwise become a spliced wrapper). A grammar-rejected (dynamic) id stays
      * null: it is rejected identically on every frame. Not a static shape (`~` is outside the grammar).

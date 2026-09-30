@@ -25,10 +25,12 @@ internal enum class IdClass {
 }
 
 /**
- * One non-blank field after pass 1: its RAW trimmed value (the verdict memo key), its canonical value
- * (the hash/grammar input and the frame-wide key), and whether its own id withholds it.
+ * One non-blank field after pass 1: its RAW trimmed value (the verdict memo key), its canonical value (the
+ * hash/grammar input and the frame-wide key), and whether its own id withholds it. Review AH7: [canonical]
+ * is null for a value provably over the cap or with no fixed point — such a field is always withheld, and
+ * no consumer can hash or compare its raw string.
  */
-internal class Field(val trimmed: String, val canonical: String, val idWithholds: Boolean, val converged: Boolean = true)
+internal class Field(val trimmed: String, val canonical: String?, val idWithholds: Boolean)
 
 /** A node after pass 1: its validated class/id, flags, and fields by wire key. */
 internal class Pending(
@@ -132,7 +134,16 @@ internal class FrameFilter(
         seedIdentity(textField, descField, marker)
         return Pending(
             className = node.className?.takeIf { classOk }?.let { ClassNameGrammar.staticOrNull(it) },
-            id = node.viewIdResourceName?.takeIf { raw -> IdPathJudgement.isStaticId(raw) },
+            // AH1: a GRAMMAR-dynamic id is null (rejected identically on every frame of the surface); a static-
+            // shaped id the PII judgement withholds (`chip_Riley_S`) is the sentinel, exactly like a frame-rule
+            // withholding, so a wrapper-class node is never spliced for one customer and kept for the next.
+            id = node.viewIdResourceName?.let { raw ->
+                when {
+                    !ResourceIdGrammar.isStaticShape(raw) -> null
+                    IdPathJudgement.isStaticId(raw) -> raw
+                    else -> ResourceIdGrammar.FRAME_WITHHELD_ID
+                }
+            },
             node = node,
             fields = fields,
             children = node.children.map { scan(it) },
@@ -148,17 +159,11 @@ internal class FrameFilter(
     fun field(value: String?, idClass: IdClass): Field? {
         if (value.isNullOrBlank()) return null
         val trimmed = value.trim()
-        // Review AB8: a value PROVABLY over the cap is withheld without folding the whole raw value —
-        // LENGTH_CAP, seeding nothing (a duplicate of it is itself over-length).
-        if (SkeletonBuilder.provablyOverCap(trimmed)) {
-            valueSteps[trimmed] = Judged(FilterStep.LENGTH_CAP)
-            return Field(trimmed, trimmed, idWithholds = idClass != IdClass.NONE, converged = false)
-        }
-        // Review OO1: a value whose canonical form does not reach a fixed point is withheld outright
-        // (never judged on one form and hashed on another) and seeds nothing; SS7: its placeholder
-        // canonical is the trimmed value (nothing reads it).
-        val canonical = canonicalOf(trimmed)
-            ?: return Field(trimmed, trimmed, idWithholds = true, converged = false)
+        // Reviews AB8, OO1, AH4, AH7: the ONE pass-1 rule (`SkeletonBuilder.canonicalFormOf`, over the frame's
+        // memoized fold). A value provably over the cap, or with no fixed point, is withheld with a NULL
+        // canonical and seeds nothing (a duplicate of an over-cap value is itself over-length).
+        val canonical = (SkeletonBuilder.canonicalFormOf(trimmed, ::canonicalOf) as? SkeletonBuilder.CanonicalForm.Of)?.value
+            ?: return Field(trimmed, null, idWithholds = true)
         val step = valueStep(trimmed, canonical)
         if (step != null && step != FilterStep.LENGTH_CAP && !PiiShapes.containsMask(canonical)) caught += canonical
         return Field(trimmed, canonical, idWithholds = idClass != IdClass.NONE)
@@ -177,8 +182,8 @@ internal class FrameFilter(
     private fun seedIdentity(textField: Field?, descField: Field?, marker: CustomerTextMarkers.IdMarker?) {
         if (marker == null || !marker.kind.seedsExactValue) return
         // SS7: the already-built Fields' canonicals — never re-canonicalized.
-        val text = textField?.takeIf { it.converged }?.canonical
-        val desc = descField?.takeIf { it.converged }?.canonical
+        val text = textField?.canonical
+        val desc = descField?.canonical
         listOfNotNull(text, desc).filterNot { PiiShapes.containsMask(it) }.forEach { caught += it }
         // UU6 / AC4 / AF8: the ONE source rule (usable text, else usable desc; it owns the mask rule) feeds
         // BOTH the whole-value id seed (AF3 — a TalkBack label-only desc "Customer name" beside text "Adam"
@@ -229,9 +234,10 @@ internal class FrameFilter(
 
     /** Pass 2 for one field: the constant `withheld`, or the value's own (memoized) slot. */
     fun slot(field: Field): TextSlot {
-        if (field.idWithholds || valueStep(field.trimmed, field.canonical) != null) return TextSlot.WITHHELD
-        if ((frameLevel && field.canonical in caught) || containsIdentityRun(field.canonical)) return TextSlot.WITHHELD
-        return valueSlots.getOrPut(field.canonical) { unfiltered(field.canonical) }
+        val canonical = field.canonical ?: return TextSlot.WITHHELD
+        if (field.idWithholds || valueStep(field.trimmed, canonical) != null) return TextSlot.WITHHELD
+        if ((frameLevel && canonical in caught) || containsIdentityRun(canonical)) return TextSlot.WITHHELD
+        return valueSlots.getOrPut(canonical) { unfiltered(canonical) }
     }
 
     /**
@@ -274,7 +280,13 @@ internal class FrameFilter(
             // AC2: a class carrying a class-guarding run is absent (null) — see [classCarriesNameRun].
             className = p.className?.takeIf { !classCarriesNameRun(it) },
             id = p.id?.let {
-                if (containsIdentityRun(ResourceIdGrammar.namePart(it), idForm = true)) ResourceIdGrammar.FRAME_WITHHELD_ID else it
+                if (it == ResourceIdGrammar.FRAME_WITHHELD_ID ||
+                    containsIdentityRun(ResourceIdGrammar.namePart(it), idForm = true)
+                ) {
+                    ResourceIdGrammar.FRAME_WITHHELD_ID
+                } else {
+                    it
+                }
             },
             isClickable = p.node.isClickable,
             isEnabled = p.node.isEnabled,

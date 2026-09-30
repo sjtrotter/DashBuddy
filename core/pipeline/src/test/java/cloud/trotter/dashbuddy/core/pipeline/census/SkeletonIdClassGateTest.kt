@@ -63,7 +63,8 @@ class SkeletonIdClassGateTest : SkeletonBuilderTestBase() {
             UiNode(className = "android.widget.Button", viewIdResourceName = "row_Deliver_to_Sam", text = "Go"),
             null, meta, platform, day,
         )!!
-        assertNull(item.root.id)
+        // AH1: a PII-judged static-shaped id is the sentinel, never null.
+        assertEquals("~", item.root.id)
     }
 
     @Test
@@ -199,8 +200,8 @@ class SkeletonIdClassGateTest : SkeletonBuilderTestBase() {
         // ZZ3: fail closed — a chrome title under `tvTitle` nulls an id built from it on its frame.
         assertEquals(listOf("~"), ids("tvTitle", "Order Details", "orderDetailsHeader"))
         assertEquals(listOf("~"), ids("user_name", "Riley", "chipRiley"))
-        // `chipRileyS` carries the id-path name shape: grammar-absent (null), not frame-withheld.
-        assertEquals(listOf(null), ids("user_name", "Riley S", "chipRileyS"))
+        // `chipRileyS` carries the id-path name shape: PII-judged, so the sentinel (AH1).
+        assertEquals(listOf("~"), ids("user_name", "Riley S", "chipRileyS"))
         assertEquals(listOf("com.x:id/mainStreetLabel"), ids("address_line_1", "Main St", "mainStreetLabel"))
     }
 
@@ -219,7 +220,7 @@ class SkeletonIdClassGateTest : SkeletonBuilderTestBase() {
         assertEquals(listOf<String?>("android.widget.SearchView"), search.map { it.className })
         assertEquals(listOf("~"), ids("tvTitle", "Riley", "chipRiley"))
         assertEquals(listOf("~"), ids("tvTitle", "Riley Smith", "chipRileySmith"))
-        assertEquals(listOf(null), ids("tvTitle", "Riley S", "chipRileyS"))
+        assertEquals(listOf("~"), ids("tvTitle", "Riley S", "chipRileyS"))
         // PERSON_OR_MERCHANT: a single token included; a merchant's whole name too.
         assertEquals(listOf("~"), ids("user_name", "Riley", "chipRiley"))
         assertEquals(listOf("~"), ids("user_name", "Jack in the Box", "jackInTheBoxLogo"))
@@ -350,5 +351,23 @@ class SkeletonIdClassGateTest : SkeletonBuilderTestBase() {
         assertEquals(listOf(TextSlot.WITHHELD), beside2("user_name", "Riley S", "Text Riley"))
         assertEquals(listOf(TextSlot.WITHHELD), beside2("user_name", "Mary Jo S.", "Mary's order"))
         assertEquals(listOf(words(2, "Sign in")), beside2("user_name", "In-N-Out Burger", "Sign in"))
+    }
+
+    @Test
+    fun `AH1 - a PII-judged id and a frame-withheld id fingerprint alike on a wrapper node`() {
+        fun frame(customer: String, tag: String) = SkeletonBuilder.build(
+            UiNode(className = "android.widget.FrameLayout", viewIdResourceName = "com.x:id/host", children = listOf(
+                UiNode(className = "android.widget.TextView", viewIdResourceName = "com.doordash.driverapp:id/customer_name", text = customer),
+                UiNode(className = "android.widget.LinearLayout", viewIdResourceName = "com.x:id/$tag", children = listOf(
+                    UiNode(className = "android.widget.TextView", text = "Continue"),
+                )),
+            )),
+            null, meta, platform, day,
+        )!!
+        val riley = frame("Riley", "chip_Riley_S")
+        val li = frame("Li", "chip_Li")
+        assertEquals("~", riley.root.children[1].id)
+        assertEquals("~", li.root.children[1].id)
+        assertEquals(riley.fingerprint, li.fingerprint)
     }
 }

@@ -323,9 +323,29 @@ object SkeletonBuilder {
      */
     fun seedCanonicalOf(raw: String?): String? {
         if (raw.isNullOrBlank()) return null
-        val trimmed = raw.trim()
-        return if (provablyOverCap(trimmed)) null else CensusHash.canonical(trimmed)
+        return (canonicalFormOf(raw.trim()) as? CanonicalForm.Of)?.value
     }
+
+    /** What pass 1 makes of a trimmed value (review AH4): the ONE owner of the over-cap → fixed-point order. */
+    internal sealed interface CanonicalForm {
+        /** Provably longer than the cap (AB8): LENGTH_CAP, never folded. */
+        data object OverCap : CanonicalForm
+
+        /** No fixed point within the bounded passes (OO1): withheld outright. */
+        data object NoFixedPoint : CanonicalForm
+
+        data class Of(val value: String) : CanonicalForm
+    }
+
+    /**
+     * [trimmed]'s pass-1 form through [canonicalize] (the frame's memoized fold, or the plain one): over-cap
+     * first (AB8 — never folded), then the fixed point. Called by `FrameFilter.field` and [seedCanonicalOf].
+     */
+    internal fun canonicalFormOf(trimmed: String, canonicalize: (String) -> String? = CensusHash::canonical): CanonicalForm =
+        when {
+            provablyOverCap(trimmed) -> CanonicalForm.OverCap
+            else -> canonicalize(trimmed)?.let { CanonicalForm.Of(it) } ?: CanonicalForm.NoFixedPoint
+        }
 
     /**
      * The most input code points one canonical code point can absorb (review AB8): the canonical fold
