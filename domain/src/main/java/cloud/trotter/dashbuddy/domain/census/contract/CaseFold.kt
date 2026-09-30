@@ -29,11 +29,12 @@ import java.util.Locale
  *
  * Lowercasing alone is not a case-insensitive comparison: `ß` has no single-letter uppercase-lowercase
  * round trip (`GROSS` vs `Groß`), and Greek sigma has a final form (`ς`) and a medial one (`σ`). The fold
- * is `uppercase(ROOT)` then `lowercase(ROOT)` (ß → SS → ss; ς/σ → Σ), with any remaining final sigma
+ * is `ẞ → ß`, then `uppercase(ROOT)` then `lowercase(ROOT)` (ß → SS → ss; ς/σ → Σ), with any remaining final sigma
  * mapped to the medial form so a run's position in its string cannot change its fold.
  */
 object CaseFold {
 
     fun fold(value: String): String =
-        value.uppercase(Locale.ROOT).lowercase(Locale.ROOT).replace('ς', 'σ')
+        value.replace('\u1E9E', '\u00DF') // capital sharp S → ß first (review MM2): ẞ lowercases without expanding
+            .uppercase(Locale.ROOT).lowercase(Locale.ROOT).replace('\u03C2', '\u03C3')
 }
