@@ -167,44 +167,17 @@ data class NodeRef(
         }
 
         /**
-         * #1149 review I2 — the bind-time mirror of the executor's live label scan over a mapped
-         * [UiNode]: own text/contentDescription, then children depth-first in pre-order (the same order as the
-         * executor's `scanLabels`) down to
-         * [LABEL_SCAN_DEPTH], at most [LABEL_SCAN_NODES] child slots, never descending into a
-         * descendant that [UiNode.takesClick] (review J2 — the live `isActionClickable`'s mirror),
-         * never reading a [UiNode.foreignPackage] child (L3), and incomplete when an in-horizon node
-         * reports [UiNode.unreadableChildren] (L4) — both mirrors of the live scan. [UiLabelScan.complete] is false only when the slot cap cut it — the
-         * depth bound is the shared HORIZON (labels below it belong to neither side's fingerprint).
+         * #1149 review I2/N8 — the bind-time label scan: [LabelHorizon.scan] (the ONE horizon rule the
+         * executor's fire-time scans also run) over a mapped [UiNode] via [UiLabelNode] — takesClick
+         * ownership (J2), foreign children never read (L3), unreadable / budget-dropped children make it
+         * incomplete (L4/N6); the depth bound is the shared horizon.
          *
-         * Residual (documented): fire time budgets FETCH attempts (a null child spends one), while a
-         * mapped [UiNode] has already dropped null children, so a live window with null slots can
-         * reach its cap sooner. (The former "clickable means isClickable only at bind time" residual
-         * is closed by [UiNode.hasClickAction], review J2.)
+         * Residual (documented): a live null child spends a fetch slot, while a mapped [UiNode] carries
+         * dropped children only as a count, so slot positions can differ — any drop makes the bind
+         * incomplete anyway, so no exact fingerprint rests on that difference.
          */
-        fun hintLabelsOf(node: cloud.trotter.dashbuddy.domain.model.accessibility.UiNode): UiLabelScan {
-            val labels = mutableListOf<String>()
-            var fetched = 0
-            var complete = true
-            fun visit(n: cloud.trotter.dashbuddy.domain.model.accessibility.UiNode, depth: Int): Boolean {
-                n.text?.takeIf { it.isNotBlank() }?.let { labels.add(it) }
-                n.contentDescription?.takeIf { it.isNotBlank() }?.let { labels.add(it) }
-                if (depth >= LABEL_SCAN_DEPTH) return true // the horizon, not a cut
-                // L4: an advertised child the mapper could not read is an in-horizon label left unseen.
-                if (n.unreadableChildren > 0) complete = false
-                for (child in n.children) {
-                    if (fetched >= LABEL_SCAN_NODES) { complete = false; return false }
-                    fetched++
-                    // L3: an embedded foreign-package child spends its slot but is never read — the
-                    // executor's scanLabels skips it the same way.
-                    if (child.foreignPackage) continue
-                    if (child.takesClick) continue // J2: the same predicate as the live isActionClickable
-                    if (!visit(child, depth + 1)) return false
-                }
-                return true
-            }
-            visit(node, 0)
-            return UiLabelScan(labels, complete)
-        }
+        fun hintLabelsOf(node: cloud.trotter.dashbuddy.domain.model.accessibility.UiNode): LabelScan =
+            LabelHorizon.scan(UiLabelNode(node)) // N8: the one horizon rule
 
         /**
          * The ONE normalization both sides use: trimmed, clamped, lower-cased (ROOT); null for a
@@ -224,8 +197,6 @@ data class NodeRef(
 /** #1149 review L2 — the bind-time fingerprint of the bound node's action owner ([NodeRef.bindHintsOf]). */
 data class BindHints(val labelHintHashes: List<String>, val complete: Boolean, val ownerClassHint: String?)
 
-/** #1149 review I2 — a bounded bind-time label scan ([NodeRef.hintLabelsOf]); [complete] = the slot cap did not cut it. */
-data class UiLabelScan(val labels: List<String>, val complete: Boolean)
 
 /**
  * Gate condition evaluated against parsed fields to decide whether

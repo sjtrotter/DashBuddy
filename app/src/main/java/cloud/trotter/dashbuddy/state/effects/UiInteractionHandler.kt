@@ -4,6 +4,9 @@ import android.graphics.Rect
 import android.view.accessibility.AccessibilityNodeInfo
 import cloud.trotter.dashbuddy.domain.action.TargetExpectation
 import cloud.trotter.dashbuddy.domain.model.accessibility.BoundingBox
+import cloud.trotter.dashbuddy.domain.pipeline.LabelHorizon
+import cloud.trotter.dashbuddy.domain.pipeline.LabelNode
+import cloud.trotter.dashbuddy.domain.pipeline.LabelScan
 import cloud.trotter.dashbuddy.domain.pipeline.NodeRef
 import cloud.trotter.dashbuddy.core.pipeline.accessibility.input.AccessibilitySource
 import cloud.trotter.dashbuddy.core.pipeline.accessibility.mapper.TreeLimits
@@ -579,85 +582,47 @@ class UiInteractionHandler @Inject constructor(
         return CandidateSearch(candidates)
     }
 
-    /**
-     * A bounded, package-scoped label scan (#1149). [complete] = no in-horizon label went unseen: no
-     * fetch refused by the [NodeRef.LABEL_SCAN_NODES] cap and no null child (review I4a). The
-     * [NodeRef.LABEL_SCAN_DEPTH] cut is the HORIZON, not incompleteness (vet decision on I2 × I4b): both
-     * sides define the fingerprint as the owner's labels within that depth, excluding clickable
-     * descendants, so deeper nodes leave it fully determined. Only a complete scan can prove a label
-     * fingerprint EXACT. Verification of a label EXPECTATION does not need completeness (review
-     * I4c): a found label suffices, and since I3 a collected label can never come from a nested
-     * control.
-     */
-    private class LabelScan(val labels: List<String>, val complete: Boolean)
-
-    /**
-     * Collect the node's own text/contentDescription plus its bounded subtree's — platform buttons
-     * typically carry their label on a child TextView (e.g. DoorDash's
-     * `textView_prism_button_title`). The subtree stops at every clickable descendant: those labels
-     * are that control's, not this node's (#1149 review I3 — the rule that replaced the
-     * compound-owner refusal). Every child fetch is a binder IPC, so it is budgeted BEFORE
-     * the call and a null child still spends budget; a child belonging to another package is not
-     * read — an embedded foreign subtree must never lend a same-package container its labels
-     * (#1102 review constraints 3 and 4, applied in discovery AND verification).
-     */
-    private fun scanLabels(node: AccessibilityNodeInfo, expectedPackage: String): LabelScan {
-        val labels = mutableListOf<String>()
-        var fetched = 0
-        var complete = true
-        var exhausted = false
-        fun visit(n: AccessibilityNodeInfo, depth: Int) {
-            n.text?.toString()?.takeIf { it.isNotBlank() }?.let { labels.add(it) }
-            n.contentDescription?.toString()?.takeIf { it.isNotBlank() }?.let { labels.add(it) }
-            val count = n.childCount
-            if (count <= 0) return
-            if (depth >= NodeRef.LABEL_SCAN_DEPTH) return // the shared horizon, not a cut (I2 × I4b vet)
-            for (i in 0 until count) {
-                if (fetched >= NodeRef.LABEL_SCAN_NODES) { complete = false; exhausted = true; return }
-                fetched++
-                // #1149 review I4a: an advertised child that cannot be read is UNPROVEN — the scan is
-                // incomplete (it still spent a fetch, #1102 constraint 3).
-                val child = n.getChild(i) ?: run { complete = false; null } ?: continue
-                if (child.packageName?.toString() != expectedPackage) continue
-                // #1149 review I3: a clickable descendant is its OWN control — its labels belong to
-                // it, never to the container scanned here. A footer can therefore never borrow its
-                // Decline button's "Decline" and pass the expectation as if it were the button.
-                if (AccNodeUtils.isActionClickable(child)) continue
-                visit(child, depth + 1)
-                if (exhausted) return
-            }
-        }
-        visit(node, 0)
-        return LabelScan(labels, complete)
-    }
-
     /** A walk hit: [ancestors] are the indices (into the SAME `out` list) of hits this one is inside. */
     private data class WalkHit(val node: AccessibilityNodeInfo, val relaxed: Boolean, val ancestors: List<Int>)
 
     /**
-     * The part of a node's subtree its OWN label scan would read, relative to the node: labels at
-     * relative depth <= [NodeRef.LABEL_SCAN_DEPTH], and `slots[d]` = child slots of region nodes at relative
-     * depth d (each one fetch in [scanLabels]). Clickable and foreign-package children spend a slot
-     * but contribute nothing (#1149 review I3 / constraint 4).
+     * #1149 review N8 — the POST-REFRESH verification scan: the one [LabelHorizon] rule over the live
+     * owner. Every child fetch is a binder IPC, so [LiveLabelNode] fetches on `get(i)` and the horizon
+     * budgets each slot BEFORE touching it (a null child still spends one); another package's child is
+     * never read (#1102 review constraints 3 and 4). For a 2b hit this is a DELIBERATE second read
+     * (review J9): discovery read the pre-refresh tree, verification must read the refreshed owner (I1).
+     * Verification of a label EXPECTATION does not need [LabelScan.complete] (I4c): a found label
+     * suffices, and since I3 a collected label can never come from a nested control.
      */
-    private class LabelRegion {
-        val labels = ArrayList<Pair<Int, String>>()
-        val slots = IntArray(NodeRef.LABEL_SCAN_DEPTH + 1)
-        /** `unread[d]`: a region node at relative depth d has a child slot the walk could not read (null, cut). */
-        val unread = BooleanArray(NodeRef.LABEL_SCAN_DEPTH)
+    private fun scanLabels(node: AccessibilityNodeInfo, expectedPackage: String): LabelScan =
+        LabelHorizon.scan(LiveLabelNode(node, expectedPackage))
 
-        fun absorb(child: LabelRegion) {
-            for ((d, label) in child.labels) if (d + 1 <= NodeRef.LABEL_SCAN_DEPTH) labels.add(d + 1 to label)
-            for (d in 0 until NodeRef.LABEL_SCAN_DEPTH) slots[d + 1] += child.slots[d]
-            for (d in 0 until NodeRef.LABEL_SCAN_DEPTH - 1) if (child.unread[d]) unread[d + 1] = true
+    /** A live node as a [LabelNode]: children are fetched lazily, one `getChild` per slot the horizon touches. */
+    private class LiveLabelNode(private val node: AccessibilityNodeInfo, private val expectedPackage: String) : LabelNode {
+        override val ownLabels: List<String> = ownLabelsOf(node)
+        override val takesClick: Boolean get() = AccNodeUtils.isActionClickable(node)
+        override val foreign: Boolean get() = node.packageName?.toString() != expectedPackage
+        override val unreadableChildren: Int get() = 0
+        override fun children(): List<LabelNode?> = object : AbstractList<LabelNode?>() {
+            override val size: Int = node.childCount.coerceAtLeast(0)
+            override fun get(index: Int): LabelNode? = node.getChild(index)?.let { LiveLabelNode(it, expectedPackage) }
         }
+    }
 
-        /**
-         * What [scanLabels] would call complete: <= NodeRef.LABEL_SCAN_NODES in-horizon fetches and no
-         * unreadable in-horizon slot. Nodes below NodeRef.LABEL_SCAN_DEPTH are outside the fingerprint on
-         * BOTH sides (the horizon), so they never make it incomplete.
-         */
-        fun complete(): Boolean = slots.take(NodeRef.LABEL_SCAN_DEPTH).sum() <= NodeRef.LABEL_SCAN_NODES && unread.none { it }
+    /**
+     * A node the 2b walk already fetched, as a [LabelNode] (review I7 + N8): its [slots] hold the children
+     * the walk read; a slot the walk did not (or could not) read is null — unreadable to the horizon, so
+     * scanning a candidate never issues a second fetch.
+     */
+    private class WalkNode(
+        node: AccessibilityNodeInfo,
+        override val foreign: Boolean,
+        override val takesClick: Boolean,
+        val slots: Array<WalkNode?>,
+    ) : LabelNode {
+        override val ownLabels: List<String> = ownLabelsOf(node)
+        override val unreadableChildren: Int get() = 0
+        override fun children(): List<LabelNode?> = slots.asList()
     }
 
     /** One window's 2b result: its hits, and whether anything in it could not be read completely (#1149 L1). */
@@ -667,21 +632,21 @@ class UiInteractionHandler @Inject constructor(
 
     /**
      * Strategy 2b (#1149): every same-package node of [root] that takes a click
-     * ([AccNodeUtils.isActionClickable]), matches the ref's class hint (when it has one) and whose
-     * COMPLETE label region is the ref's EXACT fingerprint ([NodeRef.fingerprintMatches] — no
+     * ([AccNodeUtils.isActionClickable]), matches the bind's owner class (when it has one) and whose
+     * COMPLETE label horizon is the ref's EXACT fingerprint ([NodeRef.fingerprintMatches] — no
      * superset, #1102 review constraint 1). No geometric entrance test. Hits record their nesting
      * (pre-order intervals), so a wrapper carrying its own copy of the labels around the row stays
      * visible to the caller's nested-abort rule.
      *
-     * ONE pass (review I7): each node's label region is derived post-order from the children the
-     * walk already fetched — the same horizon, ownership and completeness [scanLabels] applies —
-     * so every child is fetched once and the budget counts real IPC once.
+     * ONE pass (review I7): every child is fetched once, into a [WalkNode]; each candidate's horizon is
+     * then [LabelHorizon.scan] over those already-fetched nodes (N8 — the same rule as bind time and
+     * verification), so the budget counts real IPC once.
      *
      * Bounded (#1102 review constraints 2 + 3): at most [TreeLimits.MAX_TREE_DEPTH] deep and
      * [TreeLimits.MAX_TREE_NODES] child fetches per root, budgeted before the call, nulls included.
      * Returns the hits found AND whether the window is INCOMPLETE — a bound cut the walk, a child read
-     * null, or a candidate's own region is incomplete with its visible labels still consistent
-     * (I4b/J4). What that means for the tap is [decideSemanticOutcome]'s call (L1).
+     * null, or a candidate's own horizon is incomplete with its visible labels still consistent
+     * (I4b/J4). What that means for the tap is [decideSemanticOutcome]'s call (L1/N1).
      */
     private fun findNodeBySemantics(root: AccessibilityNodeInfo, ref: NodeRef, expectedPackage: String): SemanticSearch {
         var fetched = 0
@@ -693,43 +658,39 @@ class UiInteractionHandler @Inject constructor(
         // ownerClassHint on a ref that reached 2b (hasExactFingerprint) means the owner HAD no class —
         // no filter; legacy refs never reach 2b (they are never complete), so there is no fallback.
         val ownerClass = ref.ownerClassHint
-        fun visit(node: AccessibilityNodeInfo, depth: Int): LabelRegion {
+        fun visit(node: AccessibilityNodeInfo, depth: Int): WalkNode {
             val pre = preCounter++
-            val region = LabelRegion()
-            node.text?.toString()?.takeIf { it.isNotBlank() }?.let { region.labels.add(0 to it) }
-            node.contentDescription?.toString()?.takeIf { it.isNotBlank() }?.let { region.labels.add(0 to it) }
             val count = node.childCount.coerceAtLeast(0)
-            region.slots[0] = count
+            val self = WalkNode(node, foreign = false, takesClick = AccNodeUtils.isActionClickable(node), slots = arrayOfNulls(count))
             if (count > 0 && depth >= TreeLimits.MAX_TREE_DEPTH) {
-                // A tree the mapper itself would have cut: incomplete, and this node's children are unread.
-                incomplete = true; region.unread[0] = true
+                incomplete = true // a tree the mapper itself would have cut; the slots stay unreadable
             } else {
                 for (i in 0 until count) {
-                    if (stopped || fetched >= TreeLimits.MAX_TREE_NODES) {
-                        incomplete = true; stopped = true; region.unread[0] = true; break
-                    }
+                    if (stopped || fetched >= TreeLimits.MAX_TREE_NODES) { incomplete = true; stopped = true; break }
                     fetched++
                     // An unreadable child may hide the real control (or its twin): incomplete (I4 → L1).
-                    val child = node.getChild(i) ?: run { incomplete = true; region.unread[0] = true; null } ?: continue
-                    if (child.packageName?.toString() != expectedPackage) continue
-                    val childRegion = visit(child, depth + 1)
-                    if (!AccNodeUtils.isActionClickable(child)) region.absorb(childRegion)
+                    val child = node.getChild(i) ?: run { incomplete = true; null } ?: continue
+                    if (child.packageName?.toString() != expectedPackage) {
+                        self.slots[i] = WalkNode(child, foreign = true, takesClick = false, slots = emptyArray())
+                        continue
+                    }
+                    self.slots[i] = visit(child, depth + 1)
                 }
             }
             val classOk = ownerClass == null || node.className?.toString() == ownerClass
-            if (classOk && AccNodeUtils.isActionClickable(node)) {
-                val labels = region.labels.map { it.second }
-                if (!region.complete()) {
+            if (classOk && self.takesClick) {
+                val scan = LabelHorizon.scan(self)
+                if (!scan.complete) {
                     // I4b, refined by J4: an incomplete candidate marks the window incomplete ONLY if what
                     // IS visible is still consistent with the fingerprint (visible hint set ⊆ the ref's) —
                     // the unseen part could complete it into the control or its twin. A region already
                     // carrying a label OUTSIDE the set can never be an exact match, so it does not count.
-                    if (ref.visibleConsistentWith(labels)) incomplete = true
-                } else if (ref.fingerprintMatches(labels)) {
+                    if (ref.visibleConsistentWith(scan.labels)) incomplete = true
+                } else if (ref.fingerprintMatches(scan.labels)) {
                     hits.add(SemanticHit(node, pre, preCounter - 1))
                 }
             }
-            return region
+            return self
         }
         visit(root, 0)
         hits.sortBy { it.pre }
@@ -830,3 +791,9 @@ internal suspend fun awaitLiveRoots(
     }
     return emptyList()
 }
+
+/** A live node's own non-blank text and contentDescription — the [LabelNode.ownLabels] of both fire-time adapters. */
+private fun ownLabelsOf(node: AccessibilityNodeInfo): List<String> = listOfNotNull(
+    node.text?.toString()?.takeIf { it.isNotBlank() },
+    node.contentDescription?.toString()?.takeIf { it.isNotBlank() },
+)
