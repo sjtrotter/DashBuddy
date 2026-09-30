@@ -527,9 +527,9 @@ class UiInteractionHandlerOwnerTest {
     }
 
     /**
-     * The same with the ACTIVE window incomplete and no hit in it: L1 falls through to strategy 3 (the
-     * background row is outside the deciding set while a platform window is active), which cannot reach
-     * a row 400 px from the captured rect — no click.
+     * The same with the ACTIVE window incomplete and no hit in it: N1 widens the deciding set to every
+     * window (the background row is a hit) while keeping the active window's incompleteness — |H| ≥ 1 ∧ I,
+     * abort. No frozen-bounds guess either.
      */
     @Test
     fun `an incomplete active window aborts even when a background window holds the row`() = runTest {
@@ -815,5 +815,31 @@ class UiInteractionHandlerOwnerTest {
         assertTrue(expand(handler(listOf(active, background), active)))
         row.clicks(1)
         bgRow.neverClicked()
+    }
+
+    // ---------------------------------------------------------------- review N1/N2: the deciding set falls back to all windows
+
+    /**
+     * A small same-package dialog is active (complete, no hit) over the still-sliding receipt sheet in a
+     * background window: the sheet's exact hit is used (#788 "active contributes none → keep all"), NOT
+     * a frozen-bounds strategy-3 guess.
+     */
+    @Test
+    fun `an active dialog without a hit defers to the background sheet's exact hit`() = runTest {
+        val dialog = windowRoot(view(clickable = true, children = listOf(view(cls = "android.widget.TextView", text = "Got it"))))
+        val row = payRow(top = 1774 - 400)
+        val sheet = windowRoot(row)
+        assertTrue(expand(handler(listOf(dialog, sheet), dialog)))
+        row.clicks(1)
+    }
+
+    /** N2: when the active window has the hit, the background windows are never walked. */
+    @Test
+    fun `background windows are not walked when the active window has the hit`() = runTest {
+        val row = payRow(top = 1774 - 400)
+        val active = windowRoot(row)
+        val background = windowRoot(view())
+        assertTrue(expand(handler(listOf(active, background), active)))
+        verify(background, never()).getChild(any())
     }
 }

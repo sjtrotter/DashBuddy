@@ -475,24 +475,24 @@ class UiInteractionHandler @Inject constructor(
     private sealed interface SemanticOutcome {
         data class Use(val candidates: List<Candidate>) : SemanticOutcome
         data class Inconclusive(val hits: Int) : SemanticOutcome
-        data object FallThrough : SemanticOutcome
+        data class FallThrough(val incompleteWindows: Int) : SemanticOutcome
     }
 
     /**
-     * #1149 review L1 — THE 2b outcome rule, one owner. The DECIDING set is the active window's search
-     * when a platform window is active, else every scoped window's (a user tap from our bubble — the
-     * #788 "no active-window candidate → keep all" shape); background-window incompleteness never
-     * matters while a platform window is active. With H = the deciding set's hits and I = "a window
-     * in it was incomplete" (walk cut, unreadable child, or a vetoing region):
+     * #1149 review L1/N1 — THE 2b outcome rule, one owner, over the DECIDING set: the active platform
+     * window's search when it produced ≥ 1 hit; otherwise EVERY scoped window's search (with all their
+     * incompleteness) — the #788 rule "active contributes none → keep them all" (a small same-package
+     * dialog active over the still-sliding receipt sheet must not hand the tap to frozen bounds).
+     * With H = the deciding set's hits and I = "a window in it was incomplete" (walk cut, unreadable
+     * child, or a vetoing region):
      *  - |H| = 0 → FALL THROUGH to strategy 3, whether or not I: nothing was found, so nothing can be
      *    wrong, and strategy 3 keeps its own gates (containment, nested abort, ranker, #788);
      *  - |H| ≥ 1 ∧ I → INCONCLUSIVE, abort: a hidden twin is possible;
      *  - otherwise USE H (≥ 2 of them are twins: stored-text tie-break or abort, downstream).
      */
-    private fun decideSemanticOutcome(windows: List<SemanticWindow>, activePlatformWindow: Boolean): SemanticOutcome {
-        val deciding = if (activePlatformWindow) windows.filter { it.inActive } else windows
+    private fun decideSemanticOutcome(deciding: List<SemanticWindow>): SemanticOutcome {
         val hits = deciding.sumOf { it.result.hits.size }
-        if (hits == 0) return SemanticOutcome.FallThrough
+        if (hits == 0) return SemanticOutcome.FallThrough(deciding.count { it.result.incomplete })
         if (deciding.any { it.result.incomplete }) return SemanticOutcome.Inconclusive(hits)
         val out = mutableListOf<Candidate>()
         for (w in deciding) {
@@ -540,15 +540,23 @@ class UiInteractionHandler @Inject constructor(
         // #1149 review J3: only a ref with a PROVABLE exact fingerprint enters 2b (NodeRef.hasExactFingerprint);
         // an unprovable one goes straight to strategy 3's containment check, the pre-#1149 shape.
         if (candidates.isEmpty() && ref.hasExactFingerprint) {
-            val windows = roots.map { root ->
-                SemanticWindow(findNodeBySemantics(root, ref, expectedPackage), inActive = activeRoot != null && root == activeRoot)
+            // N2: walk the active platform root FIRST; the other roots only when it produced no hit (N1's
+            // fallback to every window). Under our bubble (active root not in `roots`) walk them all.
+            val activeIdx = if (activeRoot == null) -1 else roots.indexOfFirst { it == activeRoot }
+            val activeWindow = if (activeIdx < 0) null else
+                SemanticWindow(findNodeBySemantics(roots[activeIdx], ref, expectedPackage), inActive = true)
+            val deciding = if (activeWindow != null && activeWindow.result.hits.isNotEmpty()) {
+                listOf(activeWindow)
+            } else {
+                listOfNotNull(activeWindow) + roots.filterIndexed { i, _ -> i != activeIdx }
+                    .map { SemanticWindow(findNodeBySemantics(it, ref, expectedPackage), inActive = false) }
             }
-            when (val outcome = decideSemanticOutcome(windows, activePlatformWindow = windows.any { it.inActive })) {
+            when (val outcome = decideSemanticOutcome(deciding)) {
                 is SemanticOutcome.Use -> candidates.addAll(outcome.candidates)
                 is SemanticOutcome.Inconclusive -> return CandidateSearch(emptyList(), inconclusiveHits = outcome.hits)
-                SemanticOutcome.FallThrough -> Timber.tag("Effects").d(
+                is SemanticOutcome.FallThrough -> Timber.tag("Effects").d(
                     "Semantic re-find found nothing (%d incomplete window(s) in the deciding set) — strategy 3",
-                    windows.count { it.result.incomplete },
+                    outcome.incompleteWindows,
                 )
             }
         }
