@@ -57,6 +57,7 @@ class OverlayVerdictShapesTest : WindowResolverTestBase() {
         whenever(overlay.root).thenReturn(null)
         assertTrue("an unreadable top candidate refuses — never fall through to DoorDash", collect(h, Kind.STATE).isEmpty())
         h.skipped(ForegroundSkipReason.FRONT_UNREADABLE)
+        assertEquals("JJ4: the unreadable revalidation is counted", 1L, h.stats.overlayRejectedCount(OverlayRejectReason.UNREADABLE))
     }
 
     @Test

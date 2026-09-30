@@ -169,7 +169,11 @@ internal class FrontWindowWalk(
         val root = probe.root ?: run {
             if (!budget.take()) return Foreground.Refused(ForegroundSkipReason.SCAN_BUDGET)
             fetchRoot(w) // HH3: throwing ≡ null — a possible overlay we cannot verify
-        } ?: return Foreground.Refused(ForegroundSkipReason.FRONT_UNREADABLE, possibleOverlay = true)
+        } ?: run {
+            // JJ4: the unreadable revalidation is counted like the package-less case below.
+            stats.onOverlayRejected(OverlayRejectReason.UNREADABLE)
+            return Foreground.Refused(ForegroundSkipReason.FRONT_UNREADABLE, possibleOverlay = true)
+        }
         val live = root.packageName?.toString()
         if (live == null) { // FF4: a package-less fresh root is UNREADABLE, not a package change
             stats.onOverlayRejected(OverlayRejectReason.UNREADABLE)
