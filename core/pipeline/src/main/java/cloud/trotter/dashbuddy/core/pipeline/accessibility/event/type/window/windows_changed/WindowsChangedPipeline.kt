@@ -115,7 +115,9 @@ class WindowsChangedPipeline @Inject constructor(
                     AccessibilityWindowInfo.TYPE_SYSTEM -> {
                         // #1152 D6: only a platform offer overlay (size, then package) — never the
                         // status bar, a puck or toast (no root fetch), nor the notification shade.
-                        val probe = source.overlayProbe(w, displayArea) ?: continue
+                        // An unreadable large window (BB1) has nothing to emit — skipped here; the
+                        // foreground read refuses on it.
+                        val probe = source.overlayProbe(w, displayArea) as? AccessibilitySource.OverlayProbe.Candidate ?: continue
                         if (probe.packageName !in enabled) continue // a disabled overlay platform is never mapped
                         isOverlay = true
                         probe.root ?: w.root ?: continue

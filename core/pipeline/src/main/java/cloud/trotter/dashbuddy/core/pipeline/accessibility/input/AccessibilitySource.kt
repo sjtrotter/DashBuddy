@@ -266,9 +266,15 @@ class AccessibilitySource @Inject constructor(
         for (w in ordered) {
             if (w.type == AccessibilityWindowInfo.TYPE_SYSTEM) {
                 val displayArea = area ?: displayArea(windows).also { area = it }
-                val probe = overlayProbe(w, displayArea) ?: continue // not an overlay candidate
-                verdict = decideOverlay(w, probe, windows.size, isEnabled)
-                break // the first candidate decides
+                when (val probe = overlayProbe(w, displayArea)) {
+                    OverlayProbe.NotCandidate -> continue // small, or a verified non-overlay package
+                    // PR #1155 review BB1: a LARGE system window whose owner cannot be read may be an
+                    // offer overlay — readable-top-or-refuse, exactly like an unreadable application
+                    // window. Never read the window beneath it.
+                    OverlayProbe.Unreadable -> verdict = Foreground.Refused(ForegroundSkipReason.FRONT_UNREADABLE)
+                    is OverlayProbe.Candidate -> verdict = decideOverlay(w, probe, windows.size, isEnabled)
+                }
+                break // the first candidate (or an unverifiable one) decides
             }
             // Application window (#1148, cache-aware since #1152 D3).
             val cached = packageCache.get(w.id)
@@ -304,7 +310,7 @@ class AccessibilitySource @Inject constructor(
      */
     private fun decideOverlay(
         w: AccessibilityWindowInfo,
-        probe: OverlayProbe,
+        probe: OverlayProbe.Candidate,
         total: Int,
         isEnabled: (String?) -> Boolean,
     ): Foreground {
@@ -333,7 +339,7 @@ class AccessibilitySource @Inject constructor(
             val windows = getWindows()
             val w = windows.firstOrNull { it.id == windowId } ?: return null
             if (w.type != AccessibilityWindowInfo.TYPE_SYSTEM) return null // cheap: skip the metrics read
-            val probe = overlayProbe(w, displayArea(windows)) ?: return null
+            val probe = overlayProbe(w, displayArea(windows)) as? OverlayProbe.Candidate ?: return null
             if (!isEnabled(probe.packageName)) return null
             val active = windows.firstOrNull { it.isActive }
             if (active != null) {
@@ -351,8 +357,18 @@ class AccessibilitySource @Inject constructor(
         }
     }
 
-    /** An overlay candidate's verified owner, with the root when this probe had to fetch it. */
-    internal class OverlayProbe(val packageName: String, val root: AccessibilityNodeInfo?)
+    /**
+     * [overlayProbe]'s three-valued outcome (PR #1155 review BB1): a verified candidate, a verified
+     * non-candidate (wrong type, too small, a non-overlay package, no display area), or a LARGE
+     * system window whose owner cannot be read — which a readable-top-or-refuse caller must treat as
+     * "something unverifiable is on top", never as "nothing here".
+     */
+    internal sealed interface OverlayProbe {
+        /** The verified owner, with the root when this probe had to fetch it. */
+        class Candidate(val packageName: String, val root: AccessibilityNodeInfo?) : OverlayProbe
+        data object NotCandidate : OverlayProbe
+        data object Unreadable : OverlayProbe
+    }
 
     /**
      * #1152 D2 — is [w] a platform offer overlay? TYPE, then SIZE, then PACKAGE (cheapest first):
@@ -366,30 +382,32 @@ class AccessibilitySource @Inject constructor(
      * Enablement is NOT decided here — callers read a candidate only when its package is enabled.
      */
     fun isOverlayCandidate(w: AccessibilityWindowInfo, displayArea: Long): Boolean =
-        overlayProbe(w, displayArea) != null
+        overlayProbe(w, displayArea) is OverlayProbe.Candidate
 
     /** [isOverlayCandidate] carrying the verified package (and the root, if fetched); counts every refusal. */
-    internal fun overlayProbe(w: AccessibilityWindowInfo, displayArea: Long): OverlayProbe? {
-        if (w.type != AccessibilityWindowInfo.TYPE_SYSTEM || w.isInPictureInPictureMode) return null
-        if (displayArea <= 0L) return reject(OverlayRejectReason.NO_DISPLAY_AREA)
-        if (areaOf(w).toDouble() < MIN_OVERLAY_AREA_FRACTION * displayArea) return reject(OverlayRejectReason.TOO_SMALL)
+    internal fun overlayProbe(w: AccessibilityWindowInfo, displayArea: Long): OverlayProbe {
+        if (w.type != AccessibilityWindowInfo.TYPE_SYSTEM || w.isInPictureInPictureMode) return OverlayProbe.NotCandidate
+        if (displayArea <= 0L) return reject(OverlayRejectReason.NO_DISPLAY_AREA, OverlayProbe.NotCandidate)
+        if (areaOf(w).toDouble() < MIN_OVERLAY_AREA_FRACTION * displayArea) {
+            return reject(OverlayRejectReason.TOO_SMALL, OverlayProbe.NotCandidate)
+        }
         val cached = packageCache.get(w.id)
         val pkg: String
         var root: AccessibilityNodeInfo? = null
         if (cached != null) {
             pkg = cached
         } else {
-            root = w.root ?: return reject(OverlayRejectReason.UNREADABLE)
-            pkg = root.packageName?.toString() ?: return reject(OverlayRejectReason.UNREADABLE)
+            root = w.root ?: return reject(OverlayRejectReason.UNREADABLE, OverlayProbe.Unreadable)
+            pkg = root.packageName?.toString() ?: return reject(OverlayRejectReason.UNREADABLE, OverlayProbe.Unreadable)
             packageCache.put(w.id, pkg)
         }
-        if (pkg !in Platform.overlayPackages) return reject(OverlayRejectReason.NOT_OVERLAY_PLATFORM)
-        return OverlayProbe(pkg, root)
+        if (pkg !in Platform.overlayPackages) return reject(OverlayRejectReason.NOT_OVERLAY_PLATFORM, OverlayProbe.NotCandidate)
+        return OverlayProbe.Candidate(pkg, root)
     }
 
-    private fun reject(reason: OverlayRejectReason): OverlayProbe? {
+    private fun reject(reason: OverlayRejectReason, outcome: OverlayProbe): OverlayProbe {
         stats.onOverlayRejected(reason)
-        return null
+        return outcome
     }
 
     /** [w]'s owning package through the cache (a miss fetches the root once); null if unreadable. */

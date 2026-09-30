@@ -524,4 +524,28 @@ class WindowSpecificSnapshotTest {
         assertTrue("an unreadable top candidate refuses — never fall through to DoorDash", collect(h, Kind.STATE).isEmpty())
         h.skipped(ForegroundSkipReason.FRONT_UNREADABLE)
     }
+
+    @Test
+    fun `BB1 - bubble active, cold cache, an unreadable LARGE system window above DoorDash - refused unreadable`() = bothKinds { kind ->
+        // It may be an offer overlay whose owner we cannot verify: never read the window beneath it.
+        val bubble = node(ownPkg, "bubble")
+        val dd = node(ddPkg, "dd")
+        val unreadable = window(9, 9, null, windowType = system, bounds = OverlayGeometry.UBER_OFFER)
+        val h = harness(activeRoot = bubble, windows = listOf(window(1, 10, bubble, active = true), unreadable, window(3, 2, dd)))
+
+        assertTrue(collect(h, kind).isEmpty())
+        h.nothingMapped()
+        h.skipped(ForegroundSkipReason.FRONT_UNREADABLE)
+    }
+
+    @Test
+    fun `BB1 - the same unreadable system window when SMALL is skipped without a root fetch`() = bothKinds { kind ->
+        val bubble = node(ownPkg, "bubble")
+        val dd = node(ddPkg, "dd")
+        val small = window(9, 9, null, windowType = system, bounds = OverlayGeometry.UBER_PUCK)
+        val h = harness(activeRoot = bubble, windows = listOf(window(1, 10, bubble, active = true), small, window(3, 2, dd)))
+
+        assertEquals(listOf("dd"), collect(h, kind).map { it.tree.text })
+        verify(small, never()).root
+    }
 }
