@@ -7,12 +7,12 @@ import cloud.trotter.dashbuddy.domain.model.accessibility.UiNode
  */
 data class TreeSnapshot(
     val tree: UiNode,
-    /** Package name of the app that triggered this snapshot. */
+    /** Package owning the window the tree was read from (never the triggering event's, #4). */
     val packageName: String? = null,
     /**
-     * Metadata of the window the tree was read from. Filled on every path since #1148 D4 (active
-     * root, the event's own window, and WINDOWS_CHANGED enumeration); null only when the window
-     * could not be located.
+     * Metadata of the window the tree was read from — filled only on the paths that already hold
+     * the window object (#1148 D4: the foreground-window read when a non-enabled window is active,
+     * and WINDOWS_CHANGED enumeration); null on the active-root path (review H4).
      */
     val windowContext: WindowContext? = null,
     /**

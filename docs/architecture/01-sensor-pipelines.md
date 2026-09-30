@@ -10,7 +10,7 @@
 
 `AccessibilityListener` / `AccessibilitySource` capture raw Android `AccessibilityEvent`s;
 `AccessibilityNodeMapper` normalizes window content into an immutable `UiNode` tree (defined in
-`:domain`). Per-event-type sub-pipelines (`ContentChangedPipeline` — coalesced per window, #1148,
+`:domain`). Per-event-type sub-pipelines (`ContentChangedPipeline` — coalesced as one burst, #1148,
 `StateChangedPipeline`, `WindowsChangedPipeline`, plus click handling in `AccessibilityPipeline`)
 and a parallel `NotificationPipeline` (`NotificationListener` → `NotificationFilter` →
 `NotificationMapper`) emit `PipelineEvent`s. `AccessibilityPipeline.output()` drops in stages:
@@ -247,9 +247,15 @@ frames the pipeline ever sees*:
   (never dropping) the least-recently-touched burst with one WARN. **Backpressure (review F2):** a
   timer takes one of `maxKeys` emission permits BEFORE it removes its burst and holds it through
   `send`, so a stalled consumer leaves bursts OPEN and MERGING instead of spawning fresh timers —
-  live coroutines ≤ 3 × `maxKeys`, and the merged burst carries every event once the consumer
-  resumes. **Leading edge (review F5/G3/G4, opt-in):** a burst opening on a key with no EMISSION in
-  the last max-wait emits its opening event immediately; the burst's accumulator then restarts
+  live coroutines ≤ 4 × `maxKeys`, and the merged burst carries every event once the consumer
+  resumes. Each burst has ONE long-lived quiet job (review H8): an event bumps a generation and
+  pokes a conflated channel, and the job waits for a poke or the quiet timeout — no coroutine is
+  cancelled and relaunched per raw event (a map pan is hundreds a second), and the emission still
+  lands exactly quiet-ms after the burst's last event. **Leading edge (review F5/G3/G4/H7, opt-in):** a burst opening on a key with no EMISSION in
+  the last max-wait emits its opening event immediately — sent by a launched sender HOLDING an
+  emission permit, never on the collector (H7: a collector suspended in `send` stops collection
+  and the hot DROP_OLDEST source drops raw events; no free permit → no lead, the burst merges);
+  the burst's accumulator then restarts
   empty, so its later flush carries only the post-lead events and emits only if there are any (a
   lone event is ONE frame, and the emitted counts sum to the raw event count). The cooldown is
   anchored on the key's last emission (a lead, an emitting flush, an emitting eviction) — a silent
@@ -268,37 +274,48 @@ frames the pipeline ever sees*:
   (`System.currentTimeMillis()`), and it coalesced globally across windows — but its trailing
   emission was NOT lost (the `collectLatest` delay completed after the burst stopped); an earlier
   claim that a stopped burst lost its trailing frame was wrong.
-- **D4 — the foreground policy (review F1/G5/G6).** The event is a TRIGGER only; its window is never
-  the snapshot source (a hidden activity under a watched modal sheet keeps firing content changes
-  with ITS window id — snapshotting it interleaved obscured frames with the sheet's and flapped R0
-  `decline_confirm` ↔ `offer_popup`). "Watched" here means the **ENABLED** platform packages
-  (`PlatformPreferences.enabledPackages`, injected into all three window pipelines), never the
-  static registry alone. One resolver (`snapshotForEvent`) owns the order for the content and state
-  pipelines: (1) ONE `getLiveNativeRoot()` — null → skip the frame, never enumerate as a fallback;
-  (2) its package enabled → map THAT already-fetched root (`getCurrentRootSnapshot(root)`): the
-  active enabled window is the ground truth, a sheet over its activity included; (3) otherwise (our
-  bubble, the launcher, system UI active) → `AccessibilitySource.foregroundWindow`,
-  **readable-top-or-refuse**: candidates by `layer` descending are application windows (never our
-  own package) and readable KNOWN-platform `TYPE_SYSTEM` windows — Android maps
-  `TYPE_APPLICATION_OVERLAY` (Uber's offer overlays) to accessibility `TYPE_SYSTEM`, and the status
-  bar / unreadable system windows are never candidates. The FIRST candidate decides: an application
-  window with a null root refuses the frame (we cannot verify what the dasher sees — never fall
-  through to a lower readable window); a non-enabled package (another app, or a disabled platform's
-  overlay) refuses it; else that window is mapped with `getWindowSnapshot(window, root, total)`
-  (one enumeration, one root fetch per inspected window). (4) The post-map re-check of the
-  snapshot's own package against the enabled set stays (#4). **The windows pipeline emits true
-  overlays only** (G6): enabled-package windows (application or readable known-platform system)
-  whose layer is ABOVE the active window's — never one beneath it; no active window → nothing. It
-  maps through the same builder (F6). Every snapshot carries a `TreeSnapshot.WindowContext` (one
-  private builder, `contextOf`); the active-root path matches it by the captured root's OWN
-  `windowId` (a local getter), never by `isActive`, which may already name another window if focus
-  moved during the map (review F4). `TreeSnapshot.trigger` records the reason
-  (`CONTENT`/`STATE`/`WINDOWS`), OR-ed change bits, coalesced-event count and span — consumed by the
-  `💧 DRIP` DEBUG log and available to the census (#1138); it is deliberately NOT in the capture
-  envelope. The existing envelope `windowContext` field is now populated on content/state frames
-  too, but its **title is never persisted** (written null on every path — review G1: a name- or
-  address-shaped title passes every marker scan); the hashed form arrives with #1145. The one kept
-  control: an UNKNOWN frame whose title carries a sensitive marker is dropped (`WindowTitleScrubTest`).
+- **D4 — the foreground policy (review F1/G5/G6, narrowed by H1–H6).** The event is a TRIGGER only;
+  its window is never the snapshot source (a hidden activity under a watched modal sheet keeps
+  firing content changes with ITS window id — snapshotting it interleaved obscured frames with the
+  sheet's and flapped R0 `decline_confirm` ↔ `offer_popup`). "Watched" here means the **ENABLED**
+  platform packages (`PlatformPreferences.enabledPackages`, injected into all three window
+  pipelines), never the static registry alone. One resolver (`snapshotForEvent`) owns the order for
+  the content and state pipelines and returns `Resolved(snapshot)` or `Skipped(reason)`:
+  (1) ONE `getLiveNativeRoot()` — null → `NO_ACTIVE_ROOT`, never enumerate as a fallback; (2) its
+  package enabled → map THAT already-fetched root (`getCurrentRootSnapshot(root)`): the active
+  enabled window is the ground truth, a sheet over its activity included; (3) otherwise (our bubble,
+  the launcher, system UI active) → `AccessibilitySource.foregroundWindow`,
+  **readable-top-or-refuse** over **`TYPE_APPLICATION` windows only** (H1 — a platform's own
+  transient system-layer toast would otherwise hijack frames, and every SystemUI window would cost a
+  root fetch per frame; system-layer windows are never candidates and never have their root
+  fetched), skipping our OWN package and **picture-in-picture** windows (H2 — a Google Maps PiP
+  above DoorDash would otherwise refuse every bubble-active frame). The FIRST candidate by `layer`
+  decides: a null root → `FRONT_UNREADABLE` (never fall through to a lower readable window); a
+  non-enabled package → `FRONT_NOT_ENABLED`; else that window is mapped with
+  `getWindowSnapshot(window, root, total)` (one enumeration, one root fetch per inspected window);
+  no candidate → `NO_CANDIDATE`; a map failure → `MAP_FAILED`. Overlays that surface as
+  accessibility `TYPE_SYSTEM` (Android's `TYPE_APPLICATION_OVERLAY`, e.g. Uber's offer overlay) are
+  NOT read — that question is **#1152**. (4) A post-map check of the snapshot's package against the
+  enabled set stays as a belt-and-braces INVARIANT (H5): both builders derive the package from the
+  same already-fetched root, so it cannot catch a read-to-read swap and only fires on a programming
+  error. **Every skip is counted** (H3): both pipelines call `PipelineStats.onForegroundSkip(reason)`,
+  rendered as `foregroundSkip{…}` (enum names + counts) on the periodic summary — a disabled
+  platform's active frame now dies here, before `disabledPlatformDropped` could see it.
+  **The windows pipeline emits true overlays only** (G6/H6): enabled-package `TYPE_APPLICATION`
+  (non-PiP) windows above a cutoff, never one beneath it. The cutoff is the ACTIVE window's layer
+  when the active window is not ours; when OUR bubble is active (its layer would suppress
+  everything), the window `foregroundWindow` reads is emitted itself, and nothing if the foreground
+  is refused. No active window → nothing (accepted — the event-driven pipelines cover that case).
+  It maps through the same builder (F6). `TreeSnapshot.WindowContext` is filled only where the
+  window object is already in hand — the foreground and windows paths (one private builder,
+  `contextOf`); the active-root path carries none (H4: locating it cost a `service.windows`
+  enumeration per frame for metadata nothing persists). `TreeSnapshot.trigger` records the reason
+  (`CONTENT`/`STATE`/`WINDOWS`), OR-ed change bits, coalesced-event count and span — consumed by
+  the `💧 DRIP` DEBUG log and available to the census (#1138); it is deliberately NOT in the capture
+  envelope. The envelope `windowContext` title is **never persisted** (written null on every path —
+  review G1: a name- or address-shaped title passes every marker scan); the hashed form arrives
+  with #1145. The one kept control: an UNKNOWN frame whose title carries a sensitive marker is
+  dropped (`WindowTitleScrubTest`).
 
 Not in #1148: `notificationTimeout` (stays 100 ms), TalkBack's subtree-only / focus-gated filters
 (they discard observer evidence), `TYPE_ANNOUNCEMENT`/text events, and any change to `FrameGate`,
