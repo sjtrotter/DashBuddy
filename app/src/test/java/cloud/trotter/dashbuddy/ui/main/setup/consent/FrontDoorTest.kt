@@ -40,6 +40,14 @@ class FrontDoorTest {
     }
 
     @Test
+    fun `capability readiness is a load attempt OR the bounded wait`() {
+        assertFalse(capabilitiesReady(loadAttempted = false, waitedOut = false))
+        assertTrue(capabilitiesReady(loadAttempted = true, waitedOut = false))
+        assertTrue(capabilitiesReady(loadAttempted = false, waitedOut = true))
+        assertEquals(5_000L, CAPABILITY_WAIT_MS)
+    }
+
+    @Test
     fun `a deferral closes the whole door - it never hands off to the next prompt`() {
         val d = fresh.defer()
         assertNull(pick(caps = true, receipt = true, d = d))

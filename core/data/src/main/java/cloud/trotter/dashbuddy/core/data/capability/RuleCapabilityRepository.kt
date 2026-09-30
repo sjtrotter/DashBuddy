@@ -48,6 +48,10 @@ class RuleCapabilityRepository @Inject constructor(
     private val _loaded = MutableStateFlow(false)
     override val loaded: StateFlow<Boolean> = _loaded
 
+    override fun markLoadAttempted() {
+        _loaded.value = true
+    }
+
     override val grantedKeys: StateFlow<Set<String>> = dataSource.granted
         .stateIn(scope, SharingStarted.Eagerly, emptySet())
 

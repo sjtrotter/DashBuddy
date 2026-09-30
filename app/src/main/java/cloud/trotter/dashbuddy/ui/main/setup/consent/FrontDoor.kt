@@ -36,6 +36,15 @@ data class FrontDoorDeferrals(
     fun onBackgrounded(): FrontDoorDeferrals = copy(foregroundGeneration = foregroundGeneration + 1)
 }
 
+/** #1151 review PP2 — the longest the door waits for a capability load attempt. */
+const val CAPABILITY_WAIT_MS = 5_000L
+
+/**
+ * #1151 review PP2 — capability readiness with a BOUNDED wait: a load attempt was seen, or the door
+ * has waited [CAPABILITY_WAIT_MS] (so a loader that never reports cannot keep the door shut).
+ */
+fun capabilitiesReady(loadAttempted: Boolean, waitedOut: Boolean): Boolean = loadAttempted || waitedOut
+
 /**
  * The one front-door choice (pure): nothing until BOTH sources are ready (review OO2 — the
  * capabilities published by a rule load, the event-receipt consent read), so an early empty

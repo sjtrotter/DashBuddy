@@ -34,6 +34,7 @@ class FrontDoorFirstChoiceTest {
 
     private class OneUndecidedGrants(published: Boolean = true) : RuleCapabilityGrants {
         override val loaded: StateFlow<Boolean> = MutableStateFlow(published)
+        override fun markLoadAttempted() = Unit
         override val capabilities: StateFlow<List<RuleCapability>> = MutableStateFlow(
             if (!published) emptyList() else listOf(
                 RuleCapability(

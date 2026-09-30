@@ -182,6 +182,10 @@ class JsonRuleInterpreter @Inject constructor(
             )
         } catch (e: Exception) {
             Timber.e(e, "JsonRuleInterpreter: failed to load rules directory")
+        } finally {
+            // #1151 review PP2: every exit — rules or no rules, early return or catch — is a load
+            // ATTEMPT; the consent front door waits for this, never for a successful enumeration.
+            capabilityGrants.markLoadAttempted()
         }
     }
 

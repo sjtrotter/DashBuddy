@@ -3,10 +3,15 @@ package cloud.trotter.dashbuddy.ui.main.setup.consent
 import androidx.activity.compose.LocalActivity
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.ViewModelStoreOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import kotlinx.coroutines.delay
 
 /**
  * The Dashboard's ONE front door (#1151 review LL1/MM6): picks at most one consent prompt via the
@@ -27,8 +32,15 @@ fun FrontDoorHost(
     val eventReceipt by eventReceiptViewModel.uiState.collectAsStateWithLifecycle()
     val deferrals by frontDoor.deferrals.collectAsStateWithLifecycle()
 
+    // PP2: a bounded wait for the capability load attempt.
+    var waitedOut by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) {
+        delay(CAPABILITY_WAIT_MS)
+        waitedOut = true
+    }
+
     val prompt = pickFrontDoorPrompt(
-        capabilitiesReady = capability.ready,
+        capabilitiesReady = capabilitiesReady(capability.ready, waitedOut),
         capabilityRowsPending = capability.rows.isNotEmpty(),
         eventReceiptReady = eventReceipt.ready,
         eventReceiptPending = eventReceipt.showPrompt,

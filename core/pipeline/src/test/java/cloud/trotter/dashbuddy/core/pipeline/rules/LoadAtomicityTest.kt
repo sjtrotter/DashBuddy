@@ -40,6 +40,7 @@ class LoadAtomicityTest {
         override val grantedKeys: StateFlow<Set<String>> = MutableStateFlow(emptySet())
         override val deniedKeys: StateFlow<Set<String>> = MutableStateFlow(emptySet())
         override val loaded: StateFlow<Boolean> = MutableStateFlow(true)
+        override fun markLoadAttempted() = Unit
         override val capabilities: StateFlow<List<RuleCapability>> = MutableStateFlow(emptyList())
         override suspend fun reconcile(capabilities: List<RuleCapability>) {
             reconcileCalls += capabilities

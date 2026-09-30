@@ -74,6 +74,14 @@ class RuleCapabilityRepositoryTest {
     }
 
     @Test
+    fun `a load attempt that publishes nothing still marks loaded (#1151 PP2)`() = runTest {
+        val (repo, _) = newRepo(this, "attempt.preferences_pb")
+        repo.markLoadAttempted()
+        assertTrue(repo.loaded.value)
+        assertTrue("never changes the enumeration", repo.capabilities.value.isEmpty())
+    }
+
+    @Test
     fun `reconcile grants nothing - even asset-prefixed sources`() = runTest {
         val (repo, _) = newRepo(this, "recon1.preferences_pb")
 
