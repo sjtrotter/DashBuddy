@@ -141,6 +141,14 @@ class UiSkeletonDtoTypeTest {
         assertThrows { sampleItem().copy(hashDomain = 2) }
         assertThrows { sampleItem().copy(schemaId = "uinode.v1") }
         assertThrows { sampleItem().copy(appVersion = "x".repeat(65)) }
+        // Review EE3: a stamp must be well-formed, and the day must be a real month/day.
+        assertThrows { sampleItem().copy(platformAppVersion = "8.97\uD800") }
+        assertThrows { sampleItem().copy(rulesetReleaseTag = "tag\u0000") }
+        assertThrows { sampleItem().copy(day = "2026-99-99") }
+        assertThrows { sampleItem().copy(day = "2026-13-01") }
+        assertThrows { sampleItem().copy(day = "2026-12-32") }
+        assertThrows { sampleItem().copy(day = "2026-00-10") }
+        sampleItem().copy(day = "2026-12-31")
     }
 
     private fun assertThrows(block: () -> Unit) {

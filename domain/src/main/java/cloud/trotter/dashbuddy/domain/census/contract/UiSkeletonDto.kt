@@ -115,6 +115,7 @@ data class UiSkeletonDto(
         require(isDay(day)) { "day is YYYY-MM-DD" }
         listOfNotNull(platformAppVersion, appVersion, rulesetReleaseTag).forEach {
             require(it.length <= MAX_VERSION_LENGTH) { "a version stamp is at most $MAX_VERSION_LENGTH chars" }
+            require(WireStrings.isWellFormed(it)) { "a version stamp must be well-formed UTF-16 without U+0000" }
         }
     }
 
@@ -128,9 +129,16 @@ data class UiSkeletonDto(
             s.isNotEmpty() && s.length <= MAX_PLATFORM_LENGTH &&
                 s.all { it in 'a'..'z' || it in '0'..'9' || it == '_' || it == '-' }
 
-        /** `YYYY-MM-DD` shape (the day bucket at rest; no finer time ever rides the item). */
-        private fun isDay(s: String): Boolean =
-            s.length == 10 && s[4] == '-' && s[7] == '-' &&
-                (0 until 10).filter { it != 4 && it != 7 }.all { s[it] in '0'..'9' }
+        /**
+         * `YYYY-MM-DD` with month 01–12 and day 01–31 (the day bucket at rest; no finer time ever rides
+         * the item). Review EE3: a shape-only check admitted `2026-99-99`.
+         */
+        private fun isDay(s: String): Boolean {
+            if (s.length != 10 || s[4] != '-' || s[7] != '-') return false
+            if (!(0 until 10).filter { it != 4 && it != 7 }.all { s[it] in '0'..'9' }) return false
+            val month = s.substring(5, 7).toInt()
+            val day = s.substring(8, 10).toInt()
+            return month in 1..12 && day in 1..31
+        }
     }
 }
