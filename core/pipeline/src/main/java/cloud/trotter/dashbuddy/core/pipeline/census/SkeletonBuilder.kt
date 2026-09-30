@@ -10,6 +10,7 @@ import cloud.trotter.dashbuddy.domain.census.contract.CensusHash
 import cloud.trotter.dashbuddy.domain.census.contract.KindClassifier
 import cloud.trotter.dashbuddy.domain.census.contract.ResourceIdGrammar
 import cloud.trotter.dashbuddy.domain.census.contract.SkeletonSchema
+import cloud.trotter.dashbuddy.domain.census.contract.TextFold
 import cloud.trotter.dashbuddy.domain.census.contract.TextSlot
 import cloud.trotter.dashbuddy.domain.census.contract.UiSkeletonDto
 import cloud.trotter.dashbuddy.domain.census.contract.UiSkeletonNodeDto
@@ -402,6 +403,8 @@ object SkeletonBuilder {
         private val unfiltered: (String) -> TextSlot = ::unfilteredSlot,
         /** False ONLY for `census.diagnostics.DiagnosticSkeletonBuilder` (reviews OO2, UU7). */
         private val frameLevel: Boolean = true,
+        /** The canonical fold; a seam so a test can count folds (review AB8). */
+        private val canonicalize: (String) -> String? = CensusHash::canonical,
     ) {
         /**
          * A cached verdict. Wrapped (review DD2): a bare `FilterStep?` map stores the common "passed"
@@ -439,7 +442,7 @@ object SkeletonBuilder {
         /** A memoized canonical form, wrapped so a stored null ("no fixed point") is not read as absent. */
         private class Canon(val canonical: String?)
 
-        private fun canonicalOf(trimmed: String): String? = canonicals.getOrPut(trimmed) { Canon(CensusHash.canonical(trimmed)) }.canonical
+        private fun canonicalOf(trimmed: String): String? = canonicals.getOrPut(trimmed) { Canon(canonicalize(trimmed)) }.canonical
 
         fun scan(node: UiNode): Pending {
             // Reviews BB1/BB2/CC1/II6: validate the RAW input BEFORE the grammar gates, which would
@@ -457,7 +460,7 @@ object SkeletonBuilder {
                 if (field == UiNodeTextField.TEXT) textField = f
                 if (field == UiNodeTextField.CONTENT_DESCRIPTION) descField = f
             }
-            seedIdentity(textField, descField, idClass)
+            seedIdentity(textField, descField, CustomerTextMarkers.idMarkerFor(node.viewIdResourceName))
             return Pending(
                 className = ClassNameGrammar.staticOrNull(node.className),
                 id = node.viewIdResourceName?.takeIf { raw -> staticIds.getOrPut(raw) { isStaticId(raw) } },
@@ -479,6 +482,12 @@ object SkeletonBuilder {
         fun field(value: String?, idClass: IdClass): Field? {
             if (value.isNullOrBlank()) return null
             val trimmed = value.trim()
+            // Review AB8: a value PROVABLY over the cap is withheld without folding the whole raw value —
+            // LENGTH_CAP, seeding nothing (a duplicate of it is itself over-length).
+            if (provablyOverCap(trimmed)) {
+                valueSteps[trimmed] = Judged(FilterStep.LENGTH_CAP)
+                return Field(trimmed, trimmed, idWithholds = idClass != IdClass.NONE, converged = false)
+            }
             // Review OO1: a value whose canonical form does not reach a fixed point is withheld outright
             // (never judged on one form and hashed on another) and seeds nothing; SS7: its placeholder
             // canonical is the trimmed value (nothing reads it).
@@ -499,26 +508,27 @@ object SkeletonBuilder {
          * - NAME, PERSON_OR_MERCHANT, EXACT: the whole value as ONE id-only run ([wholeValueRuns], ZZ3).
          * ADDRESS and EXACT never seed letter runs (address vocabulary and sheet titles are common English).
          */
-        private fun seedIdentity(textField: Field?, descField: Field?, idClass: IdClass) {
-            if (idClass != IdClass.PII_NAME && idClass != IdClass.PII_ADDRESS && idClass != IdClass.PII_EXACT &&
-                idClass != IdClass.PII_PERSON_OR_MERCHANT
-            ) return
+        private fun seedIdentity(textField: Field?, descField: Field?, marker: CustomerTextMarkers.IdMarker?) {
+            // AB1: what a kind seeds is the kind table's (`IdentityKind.seedsExactValue` / `seedsRuns`).
+            if (marker == null || !marker.kind.seedsExactValue) return
             // SS7: the already-built Fields' canonicals — never re-canonicalized.
             val text = textField?.takeIf { it.converged }?.canonical?.takeIf { !PiiShapes.containsMask(it) }
             val desc = descField?.takeIf { it.converged }?.canonical?.takeIf { !PiiShapes.containsMask(it) }
             text?.let { caught += it }
             desc?.let { caught += it }
-            // Reviews VV1, XX3, ZZ3: every kind that can carry a NAME (NAME, PERSON_OR_MERCHANT, EXACT) adds its
-            // whole value's letters as an id run — a single token included, with no name-shape gate (fail
-            // closed: `tvTitle` "Search" nulls a `search_bar` id on its frame). ADDRESS never does (street
-            // vocabulary is common English).
-            if (idClass != IdClass.PII_ADDRESS) {
+            // Reviews VV1, XX3, ZZ3, AB4: every `idProtect` row (a value that can be a name a test tag embeds —
+            // `customer_name`, `order_cx_name`, `user_name`, `tvTitle`) adds its whole value's letters as an
+            // id run — a single token included, with no name-shape gate (fail closed: `tvTitle` "Search" nulls
+            // a `search_bar` id on its frame). ≥ [MIN_WHOLE_VALUE_RUN] letters, so a short value never nulls
+            // chrome. ADDRESS, CONTENT and `tvLastMessage` never do.
+            if (marker.idProtect) {
                 listOfNotNull(text, desc).forEach { value ->
-                    val whole = CaseFold.fold(value.filter { it.isLetter() })
-                    if (whole.codePointCount(0, whole.length) >= MIN_IDENTITY_RUN) wholeValueRuns += whole
+                    // AB2: code-point letters (the candidate side is code-point based too).
+                    val letters = plainLetterRuns(value).joinToString("")
+                    if (letters.codePointCount(0, letters.length) >= MIN_WHOLE_VALUE_RUN) wholeValueRuns += CaseFold.fold(letters)
                 }
             }
-            if (idClass != IdClass.PII_NAME) return
+            if (!marker.kind.seedsRuns) return
             // UU6: the text is the run source only when it yielded a usable canonical (not a mask, converged);
             // otherwise fall through to the desc — `[redacted:ab12]` + desc "Adam" still propagates.
             val runSource = text ?: desc
@@ -565,9 +575,28 @@ object SkeletonBuilder {
         fun containsIdentityRun(candidate: String, splitCamel: Boolean = false): Boolean {
             if (!frameLevel || (identityRuns.isEmpty() && (!splitCamel || wholeValueRuns.isEmpty()))) return false
             val runs = runsOf(candidate, splitCamel = splitCamel)
-            // Review TT2: ids also match an EXACT/ADDRESS seed's whole value; text slots never do.
-            return runs.any { it in identityRuns || (splitCamel && it in wholeValueRuns) }
+            if (runs.any { it in identityRuns }) return true
+            // Reviews TT2, AB3: an id also matches a whole-value seed — text slots never do — against every
+            // CONTIGUOUS concatenation of its camel segments ACROSS separators (`row_mary_jo`, `chip-mary-jo`,
+            // `rowMaryJo` beside "Mary Jo"). Bounded: an id name part is ≤ 64 chars, so ≤ 64 segments.
+            return splitCamel && wholeValueRuns.isNotEmpty() && crossRuns(candidate).any { it in wholeValueRuns }
         }
+
+        /** Every contiguous join of [candidate]'s camel segments across letter runs, folded (review AB3). */
+        private fun crossRuns(candidate: String): List<String> = crossRunCache.getOrPut(candidate) {
+            val segments = plainLetterRuns(candidate).flatMap { camelSegments(it) }
+            val out = ArrayList<String>()
+            for (from in segments.indices) {
+                val sb = StringBuilder()
+                for (to in from until segments.size) {
+                    sb.append(segments[to])
+                    out += CaseFold.fold(sb.toString())
+                }
+            }
+            out
+        }
+
+        private val crossRunCache = HashMap<String, List<String>>()
 
         fun emit(p: Pending): UiSkeletonNodeDto {
             val text = LinkedHashMap<String, TextSlot>()
@@ -597,6 +626,40 @@ object SkeletonBuilder {
      * inside another word, and a single-letter run (an initial) seeds nothing.
      */
     private const val MIN_IDENTITY_RUN = 2
+
+    /**
+     * The most input code points one canonical code point can absorb (review AB8): the canonical fold
+     * (FORMAT strip → NFKC → dashes → whitespace collapse) never drops a counted code point to nothing
+     * (every non-FORMAT, non-whitespace code point's NFKD keeps one) and NFKC composition merges at most
+     * the longest canonical decomposition — 4 code points (Greek `ᾂ`; Hangul LVT is 3). Both premises are
+     * checked exhaustively over every code point by `SkeletonLengthBoundTest` on the running JVM.
+     */
+    internal const val MAX_COMPOSITION_RATIO = 4
+
+    /**
+     * True when [trimmed] has more than [MAX_COMPOSITION_RATIO] × [MAX_TOKEN_LENGTH] non-FORMAT,
+     * non-whitespace code points — so its canonical form is certainly longer than the cap (review AB8).
+     * Stops counting at the bound: O(bound), never O(value).
+     */
+    internal fun provablyOverCap(trimmed: String): Boolean {
+        val bound = MAX_COMPOSITION_RATIO * MAX_TOKEN_LENGTH
+        if (trimmed.length <= bound) return false
+        var counted = 0
+        var i = 0
+        while (i < trimmed.length) {
+            val cp = trimmed.codePointAt(i)
+            if (!TextFold.isFormat(cp) && !KindClassifier.isWhitespace(cp) && ++counted > bound) return true
+            i += Character.charCount(cp)
+        }
+        return false
+    }
+
+    /**
+     * A whole-value id seed needs at least this many letters (review AB4): three, so a short value ("Ok",
+     * "No", "Hi") never nulls `ok_button` / `no_thanks_button` / `hi_res_image`. NAME word runs keep
+     * [MIN_IDENTITY_RUN] ("Li" still protects `chipLi` through its letter run).
+     */
+    private const val MIN_WHOLE_VALUE_RUN = 3
 
     /**
      * The value's maximal runs of Unicode letters (with [splitCamel], also split at camelCase boundaries —

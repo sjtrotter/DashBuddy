@@ -443,4 +443,26 @@ class CustomerTextMarkersTest {
         assertEquals("customer_name", CustomerTextMarkers.idMarkerSuffix("com.x:id/customer_name", table))
         assertNull(CustomerTextMarkers.idMarkerSuffix("com.x:id/pane_name", table))
     }
+
+    @Test
+    fun `idProtect is pinned - only rows whose value a test tag can embed (review AB4)`() {
+        assertEquals(
+            setOf("customer_name", "user_name", "order_cx_name", "tvTitle"),
+            CustomerTextMarkers.ID_MARKER_TABLE.filter { it.idProtect }.map { it.suffix }.toSet(),
+        )
+    }
+
+    @Test
+    fun `what a kind seeds is pinned on the kind table (review AB1)`() {
+        assertEquals(
+            mapOf(
+                CustomerTextMarkers.IdentityKind.NAME to (true to true),
+                CustomerTextMarkers.IdentityKind.ADDRESS to (true to false),
+                CustomerTextMarkers.IdentityKind.CONTENT to (false to false),
+                CustomerTextMarkers.IdentityKind.EXACT to (true to false),
+                CustomerTextMarkers.IdentityKind.PERSON_OR_MERCHANT to (true to false),
+            ),
+            CustomerTextMarkers.IdentityKind.entries.associateWith { it.seedsExactValue to it.seedsRuns },
+        )
+    }
 }

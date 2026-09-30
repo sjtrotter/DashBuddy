@@ -199,9 +199,9 @@ abstract class SkeletonCorpusTestBase {
                 val raw = v.trim()
                 if (valueJudged(c) || (raw.length <= 40 && valueJudged(raw))) seededExact += c
                 val rendered = field == UiNodeTextField.TEXT || field == UiNodeTextField.CONTENT_DESCRIPTION
-                if (rendered && kind != null && kind != CustomerTextMarkers.IdentityKind.CONTENT) seededExact += c
+                if (rendered && kind?.seedsExactValue == true) seededExact += c
             }
-            if (kind == CustomerTextMarkers.IdentityKind.NAME) {
+            if (kind?.seedsRuns == true) {
                 val source = if (!n.text.isNullOrBlank()) n.text else n.contentDescription?.takeIf { it.isNotBlank() }
                 source?.let { canon(it) }?.takeIf { !PiiShapes.containsMask(it) }
                     ?.let { nameRuns += letterRuns(it, minLetters = 2) }
@@ -320,8 +320,8 @@ abstract class SkeletonCorpusTestBase {
         walkNodes(tree) { n ->
             val id = n.viewIdResourceName
             val kind = CustomerTextMarkers.idMarkerFor(id)?.kind
-            val identity = kind == CustomerTextMarkers.IdentityKind.NAME || kind == CustomerTextMarkers.IdentityKind.ADDRESS ||
-                kind == CustomerTextMarkers.IdentityKind.EXACT
+            // Review AB1: derived from the kind table, never a hand-list — a kind that seeds anything.
+            val identity = kind?.seedsExactValue == true
             n.scrubbableStrings().forEach { (field, v) ->
                 if (v.isNullOrBlank()) return@forEach
                 val canonical = canon(v)
@@ -334,7 +334,7 @@ abstract class SkeletonCorpusTestBase {
             }
             // Reviews GG1, LL1, NN3, PP2: only a NAME contributes letter runs (≥2 letters) — from its TEXT
             // when the text is non-blank, otherwise from its CONTENT_DESCRIPTION.
-            if (kind == CustomerTextMarkers.IdentityKind.NAME) {
+            if (kind?.seedsRuns == true) {
                 val source = if (!n.text.isNullOrBlank()) n.text else n.contentDescription?.takeIf { it.isNotBlank() }
                 source?.let { canon(it) }?.takeIf { !PiiShapes.containsMask(it) }
                     ?.let { idRuns += letterRuns(it, minLetters = 2) }

@@ -156,7 +156,7 @@ object CustomerTextMarkers {
      */
     val ID_MARKER_TABLE: List<IdMarker> = listOf(
         // DoorDash multi-order pickup rows / pickup arrival card -> customer name.
-        IdMarker("customer_name", IdentityKind.NAME),
+        IdMarker("customer_name", IdentityKind.NAME, idProtect = true),
         // DoorDash drop-off + pickup contact blocks -> customer name (the node the
         // "Delivery for" label sibling names; #910 V5).
         // EXACT for the census (#1160 review SS1): the class KDoc records it is REUSED for the MERCHANT on
@@ -164,7 +164,7 @@ object CustomerTextMarkers {
         // → `the`; "Jack in the Box" → `in`/`box` would withhold chrome and, through the class/id check,
         // null `TextView`-class wrappers per store). EXACT still withholds an exact duplicate of a
         // customer's first name; a merchant name costs nothing (recognition never anchors on one).
-        IdMarker("user_name", IdentityKind.PERSON_OR_MERCHANT),
+        IdMarker("user_name", IdentityKind.PERSON_OR_MERCHANT, idProtect = true),
         // DoorDash address block -> street line and city/ST/ZIP line (#910 V1/V5).
         IdMarker("address_line_1", IdentityKind.ADDRESS),
         IdMarker("address_line_2", IdentityKind.ADDRESS),
@@ -213,7 +213,7 @@ object CustomerTextMarkers {
         // now only in the intake list (`PiiShapes.PII_ID_SUFFIXES`), so the runtime UNKNOWN scrub missed
         // it and the census could hash its frame duplicates. Promoted so the two SSOTs agree on "what is
         // a customer-name id"; the runtime scrub widens by this one suffix (fail toward privacy).
-        IdMarker("order_cx_name", IdentityKind.NAME),
+        IdMarker("order_cx_name", IdentityKind.NAME, idProtect = true),
         // #1160 reviews PP6, SS9, TT1: the chat list's header (`tvTitle` — the customer's name on a chat row,
         // but a generic id other surfaces use for a sheet title such as "Pick up order") and last-message
         // preview (`tvLastMessage` — ALWAYS the customer's own text, never chrome). EXACT for the census:
@@ -222,7 +222,7 @@ object CustomerTextMarkers {
         // Cruz" from chrome). ACCEPTED RECALL COST (ADR-0011 residual 11): an UNKNOWN sheet title under
         // `tvTitle` ("Pick up order") loses that line in the X-Ray; the census skeleton keeps the id and
         // structure.
-        IdMarker("tvTitle", IdentityKind.EXACT),
+        IdMarker("tvTitle", IdentityKind.EXACT, idProtect = true),
         IdMarker("tvLastMessage", IdentityKind.EXACT),
     )
 
@@ -230,11 +230,16 @@ object CustomerTextMarkers {
      * One [ID_MARKER_TABLE] row. [runtimeScrub] (#1160 reviews SS9, TT1, ZZ1) says whether the runtime UNKNOWN
      * scrub covers the suffix: [RuntimeScrub.ALWAYS] (the [ID_MARKERS] projection) or [RuntimeScrub.NEVER]
      * (census-only). There is no value-dependent mode (ZZ1): the runtime path fails closed on the id alone.
+     * [idProtect] (#1160 review AB4): the census adds the row's WHOLE value as an id-only run — true only
+     * where the value can plausibly be a name a test tag embeds (`customer_name`, `order_cx_name`,
+     * `user_name`, `tvTitle`); a chat reply (`tvLastMessage` "Ok") must not null `ok_button`, and an
+     * address or content row never protects an id by its whole value.
      */
     data class IdMarker(
         val suffix: String,
         val kind: IdentityKind,
         val runtimeScrub: RuntimeScrub = RuntimeScrub.ALWAYS,
+        val idProtect: Boolean = false,
     )
 
     /** Whether the runtime UNKNOWN id scrub applies to an [IdMarker] (#1160 reviews TT1, ZZ1). */
@@ -243,30 +248,34 @@ object CustomerTextMarkers {
         NEVER,
     }
 
-    /** What an [IdMarker]'s node value IS (#1160 review LL1). */
-    enum class IdentityKind {
+    /**
+     * What an [IdMarker]'s node value IS (#1160 review LL1), and — the ONE owner the census builder and its
+     * test-side mirrors both read (review AB1) — what it seeds on the frame: [seedsExactValue] (its rendered
+     * text/desc canonical value) and [seedsRuns] (its letter runs).
+     */
+    enum class IdentityKind(val seedsExactValue: Boolean, val seedsRuns: Boolean) {
         /** A person's name. */
-        NAME,
+        NAME(seedsExactValue = true, seedsRuns = true),
 
         /** A place (an address line, a destination, a unit). */
-        ADDRESS,
+        ADDRESS(seedsExactValue = true, seedsRuns = false),
 
         /** Customer-bearing content that is also reused for app copy. */
-        CONTENT,
+        CONTENT(seedsExactValue = false, seedsRuns = false),
 
         /**
          * A value that may be PII or chrome (a chat header is a name, a sheet title is "Pick up order"):
          * withheld on its own field and seeding its EXACT value only — no letter runs (#1160 review PP6). For
          * the id check it adds its whole value as one run (ZZ3 — "Search" nulls `search_bar` on its frame).
          */
-        EXACT,
+        EXACT(seedsExactValue = true, seedsRuns = false),
 
         /**
          * A value that is a person OR a merchant, never chrome (`user_name`, #1160 reviews XX3, ZZ3):
          * EXACT-seeded for text, and for the id check its whole value as one run (a single token included —
          * "Riley" protects `chipRiley`).
          */
-        PERSON_OR_MERCHANT,
+        PERSON_OR_MERCHANT(seedsExactValue = true, seedsRuns = false),
     }
 
     /**

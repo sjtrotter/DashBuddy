@@ -162,6 +162,26 @@ class SkeletonCorpusTest : SkeletonCorpusTestBase() {
     }
 
     @Test
+    fun `(c) negative control - a user_name that stops seeding is reported, never exempted (review AB1)`() {
+        val frame = UiNode(
+            className = "android.widget.LinearLayout",
+            children = listOf(
+                UiNode(className = "android.widget.TextView", viewIdResourceName = "com.doordash.driverapp:id/user_name", text = "Riley"),
+                UiNode(className = "android.widget.TextView", text = "Riley"),
+            ),
+        ).restoreParents()
+        val good = SkeletonBuilder.build(frame, null, META, Platform.DoorDash, DAY)!!
+        assertEquals(TextSlot.WITHHELD, good.root.children[1].text.getValue("text"))
+        assertTrue(parityProblems("good", frame, good).third.isEmpty())
+        // The regression: the frame rule no longer seeds `user_name`, so its id-less duplicate hashes. The
+        // mirror derives "seeds" from the kind table, so PERSON_OR_MERCHANT is never exempted.
+        val bad = (DiagnosticSkeletonBuilder.outcomeWithoutFrameRule(frame, null, META, Platform.DoorDash, DAY)
+            as SkeletonBuilder.Outcome.Built).skeleton
+        val (_, _, problems) = parityProblems("bad", frame, bad)
+        assertEquals(problems.toString(), 1, problems.size)
+    }
+
+    @Test
     fun `(c) redactor parity - any value the FULL-TREE redaction rewrites has no h`() {
         val problems = mutableListOf<String>()
         var rewritten = 0

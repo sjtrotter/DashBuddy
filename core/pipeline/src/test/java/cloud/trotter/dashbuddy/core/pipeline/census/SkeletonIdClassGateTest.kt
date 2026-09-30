@@ -228,4 +228,39 @@ class SkeletonIdClassGateTest : SkeletonBuilderTestBase() {
         // A lowercase-led tag stays chrome.
         listOf("tab_B", "option_a", "tabB").forEach { assertTrue(it, SkeletonBuilder.isStaticId(it)) }
     }
+
+    private fun idsBeside(identityId: String, identity: String, vararg tags: String) = SkeletonBuilder.build(
+        UiNode(className = "android.widget.LinearLayout", viewIdResourceName = "com.x:id/row", children = listOf(
+            UiNode(className = "android.widget.TextView", viewIdResourceName = "com.doordash.driverapp:id/$identityId", text = identity),
+        ) + tags.map { UiNode(className = "android.widget.ImageView", viewIdResourceName = "com.x:id/$it") }),
+        null, meta, platform, day,
+    )!!.root.children.drop(1).map { it.id }
+
+    @Test
+    fun `AB2 - a supplementary-plane name protects a tag built from it`() {
+        // Osage (U+104B0..): a Capitalized supplementary-plane name; the static id grammar is ASCII, so the
+        // tag side is exercised through the containment predicate the id path uses.
+        val name = "\uD801\uDCB0\uD801\uDCD8\uD801\uDCD8"
+        val filter = SkeletonBuilder.FrameFilter(judge = SkeletonBuilder::withholdingStep)
+        filter.scan(UiNode(className = "android.widget.TextView", viewIdResourceName = "com.x:id/tvTitle", text = name))
+        assertTrue(filter.containsIdentityRun("chip" + name, splitCamel = true))
+        assertTrue(!filter.containsIdentityRun("chipGold", splitCamel = true))
+    }
+
+    @Test
+    fun `AB3 - a multi-token whole value matches across id separators`() {
+        assertEquals(listOf(null, null, null, "com.x:id/row_mary_label"), idsBeside("tvTitle", "Mary Jo", "row_mary_jo", "chip-mary-jo", "rowMaryJo", "row_mary_label"))
+        assertEquals(listOf(null), idsBeside("customer_name", "Mary Jo", "row_mary_jo"))
+    }
+
+    @Test
+    fun `AB4 - only idProtect rows with 3 or more letters add a whole-value id run`() {
+        assertEquals(listOf("com.x:id/ok_button"), idsBeside("tvLastMessage", "Ok", "ok_button"))
+        assertEquals(listOf("com.x:id/thanks_button"), idsBeside("tvLastMessage", "Thanks", "thanks_button"))
+        assertEquals(listOf("com.x:id/ok_button"), idsBeside("tvTitle", "Ok", "ok_button"))
+        assertEquals(listOf(null), idsBeside("tvTitle", "Riley", "chipRiley"))
+        assertEquals(listOf("com.x:id/mainStreetLabel"), idsBeside("address_line_1", "Main Street", "mainStreetLabel"))
+        // A NAME's 2-letter word run still protects (its letter runs, not the whole-value rule).
+        assertEquals(listOf(null), idsBeside("customer_name", "Li", "chipLi"))
+    }
 }
