@@ -141,6 +141,15 @@ class EventReceiptConsentViewModelTest {
     }
 
     @Test
+    fun `the initial state is seeded from the current value - no frame of the default`() {
+        val declined = EventReceiptConsentViewModel(FakePrefs(EventReceiptConsent.DECLINED), isDebugBuild = true)
+        assertTrue("no subscriber yet — the stateIn initial value", declined.uiState.value.blocked)
+
+        val unread = EventReceiptConsentViewModel(FakePrefs(null), isDebugBuild = true)
+        assertTrue(unread.uiState.value.loading)
+    }
+
+    @Test
     fun `decisions write through the preference`() = runTest {
         val prefs = FakePrefs()
         val vm = EventReceiptConsentViewModel(prefs, isDebugBuild = false)

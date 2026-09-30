@@ -198,6 +198,12 @@ class CapabilityConsentViewModelTest {
     }
 
     @Test
+    fun `the switch initial state is seeded from the current value`() {
+        val vm = CapabilityConsentViewModel(FakeGrants(), FakeEventReceipt(EventReceiptConsent.ALLOWED))
+        assertTrue("no subscriber yet — the stateIn initial value", vm.uiState.value.eventReceiptAllowed)
+    }
+
+    @Test
     fun `event receipt switch writes through the preference, never the grant store`() = runTest {
         val grants = FakeGrants()
         val receipt = FakeEventReceipt()

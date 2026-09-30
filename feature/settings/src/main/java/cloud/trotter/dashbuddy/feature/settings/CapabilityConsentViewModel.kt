@@ -50,7 +50,10 @@ class CapabilityConsentViewModel @Inject constructor(
         }.stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5_000),
-            initialValue = ConsentUiState(),
+            // MM7: seeded from the synchronously readable values — the switch never renders OFF
+            // for a frame for an ALLOWED dasher.
+            initialValue = buildConsentUiState(grants.capabilities.value, grants.grantedKeys.value)
+                .copy(eventReceiptAllowed = eventReceipt.consent.value == EventReceiptConsent.ALLOWED),
         )
 
     /** Grant or revoke one capability. Revoking is fail-closed (persists a denial). */

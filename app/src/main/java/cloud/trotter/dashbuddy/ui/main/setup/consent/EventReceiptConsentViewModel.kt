@@ -34,7 +34,9 @@ class EventReceiptConsentViewModel internal constructor(
         }.stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5_000),
-            initialValue = EventReceiptConsentUiState(),
+            // MM7: seeded from the synchronously readable value — a DECLINED debug build never
+            // composes a frame of the NavHost before the shell replaces it.
+            initialValue = buildEventReceiptConsentState(preferences.consent.value, isDebugBuild),
         )
 
     /**
