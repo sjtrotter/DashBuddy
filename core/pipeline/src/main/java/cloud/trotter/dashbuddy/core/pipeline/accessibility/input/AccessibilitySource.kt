@@ -218,34 +218,15 @@ class AccessibilitySource @Inject constructor() {
         return service.windows ?: emptyList()
     }
 
-    /**
-     * Snapshots the UI tree rooted at a specific window's root node.
-     * Use this to capture non-active windows (e.g., overlay offer screens).
-     */
-    fun getRootForWindow(window: AccessibilityWindowInfo): UiNode? {
-        val root = window.root ?: return null
-        return try {
-            root.toUiNode()
-        } catch (_: Exception) {
-            null
-        }
-    }
-
-    companion object {
-        /**
-         * The ONE [TreeSnapshot.WindowContext] builder, shared by the active-root, window-specific
-         * and windows-changed paths (#1148 D4). `internal` rather than private so
-         * `WindowsChangedPipeline` (same module) uses it instead of building its own.
-         */
-        internal fun contextOf(window: AccessibilityWindowInfo, total: Int): TreeSnapshot.WindowContext =
-            TreeSnapshot.WindowContext(
-                windowId = window.id,
-                windowType = window.type,
-                windowTitle = window.title?.toString(),
-                windowLayer = window.layer,
-                isActive = window.isActive,
-                isFocused = window.isFocused,
-                totalWindowCount = total,
-            )
-    }
+    /** The ONE [TreeSnapshot.WindowContext] builder (#1148 D4), used by every snapshot path. */
+    private fun contextOf(window: AccessibilityWindowInfo, total: Int): TreeSnapshot.WindowContext =
+        TreeSnapshot.WindowContext(
+            windowId = window.id,
+            windowType = window.type,
+            windowTitle = window.title?.toString(),
+            windowLayer = window.layer,
+            isActive = window.isActive,
+            isFocused = window.isFocused,
+            totalWindowCount = total,
+        )
 }
