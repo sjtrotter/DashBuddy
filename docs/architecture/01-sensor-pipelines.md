@@ -594,10 +594,12 @@ side-effect-free half.
   `SnapshotRedactor` delegates, `PiiShapesParityTest` pins it; `PiiShapesIcuGuardTest` applies the ICU
   bare-`}` rule to every compiled pattern); `CustomerTextMarkers.ID_MARKER_TABLE` is the ONE owner of
   "what kind of value an id carries" — `IdMarker(suffix, kind, runtimeScrub)`, kind NAME / ADDRESS /
-  EXACT / CONTENT, runtime scrub ALWAYS / NEVER / WHEN_NAME_LIKE — and `ID_MARKERS` is its ALWAYS
+  EXACT / PERSON_OR_MERCHANT / CONTENT, runtime scrub ALWAYS / NEVER / WHEN_NAME_LIKE — and `ID_MARKERS` is its ALWAYS
   projection: #1160 added `order_cx_name` and `tvLastMessage` (always customer text) to the runtime
-  UNKNOWN scrub, while `tvTitle` scrubs only when its value is name-like ("Riley" masked, "Pick up order"
-  kept for debug triage); the corpus intake (`PII_ID_SUFFIXES`) holds every table suffix. The frame-rule
+  UNKNOWN scrub, while `tvTitle` scrubs only when its value reads as a person's name (`PiiShapes.isPersonName`,
+  the ONE name predicate: "Riley" / "Riley S." masked, "Pick up order" kept for debug triage, title-case
+  "Pick Up" masked — an accepted cost); the recognized `doordash.screen.chat` / `chat_conversation` rules
+  redact `tvTitle` (customer-name normalized) and `tvLastMessage` (plain); the corpus intake (`PII_ID_SUFFIXES`) holds every table suffix. The frame-rule
   off-switch exists only as the test/diagnostic `census.diagnostics.DiagnosticSkeletonBuilder`.
 - *The filter* — `core.pipeline.census.SkeletonBuilder` (typed API: `Platform`, `LocalDate`). A
   `SensitiveTextMarkers` hit on the raw tree or title yields no skeleton (a caller may pass the verdict
@@ -611,8 +613,9 @@ side-effect-free half.
   frame, or the text/desc of a NAME, ADDRESS or EXACT id — and (b) any field containing a letter run
   (≥ 2 letters in code points, `CaseFold`-folded) of a NAME id's text (else its desc). NAME run-seeding
   is reserved for ids whose value is ONLY ever a person's name (`customer_name`, `order_cx_name`); a
-  reused id (`user_name`, also the merchant's and the dasher's name) and a value that may be chrome
-  (`tvTitle`, `tvLastMessage`) are EXACT; the address ids are ADDRESS (exact only — address vocabulary
+  reused id that is a person or a merchant (`user_name`) is PERSON_OR_MERCHANT and a value that may be
+  chrome (`tvTitle`, `tvLastMessage`) is EXACT — both exact-seeded for text, with a kind-dependent
+  whole-value run for ids/classes; the address ids are ADDRESS (exact only — address vocabulary
   is common English); CONTENT ids (`description_text_view`, the instruction bodies) and masks seed
   nothing. The same NAME containment, split also at camelCase boundaries (contiguous segments), makes a
   node's id or class absent (`chipAdam` beside `customer_name` "Adam"). On the id path the PII judgement

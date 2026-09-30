@@ -69,7 +69,9 @@ fingerprint), because Compose/Flutter/WebView/custom views can report any string
 `children`. Per text field — enumerated from **`UiNodeTextField`**, the #835 scrub contract, never a
 hand-list, so #1147's strings (`paneTitle`, `hintText`, `clickActionLabel`, …) and any entry added
 later are covered automatically; the node's text fields travel as a MAP keyed by the enum's wire key,
-and the server accepts ANY key in that map (every value has the same `{h?, kind}` shape, so a new key
+and the server accepts any key OF THE WIRE-KEY SHAPE `^[a-z][A-Za-z0-9]{0,15}$` in that map — a field
+name, never free text; a new enum entry must use a wire key of that shape (every value has the same
+`{h?, kind}` shape, so a new key
 is not a privacy change) while rejecting unknown fields everywhere else — an object `{h?, kind}`: `kind` is a coarse shape class and `h` is present
 only when the §2 filter admits a hash (§3 only defines how the admitted token is hashed). **The type has no plaintext slot**: a leak of a text value is a
 type error. **`uniqueId` (`uid`) is a text slot like every other enum entry** — hashed through the filter, never
@@ -198,20 +200,25 @@ filter over every text field of the frame (tree + window title) and SEEDS:
   details" or "Road closed" chrome, and camelCase ids like `roadNameLayout`, on every frame with an
   address, while a person's name rarely collides with chrome; a **CONTENT** id (the free-text
   instruction bodies; `description_text_view`, generic DoorDash chrome such as "Raise to 50%") seeds
-  nothing; an **EXACT** id — a REUSED id (`user_name`, which also carries the merchant's and the
-  dasher's own name: its runs would seed "the"/"in"/"box" from "Jack in the Box" and suppress chrome and
-  `TextView`-class wrappers per store) or a value that may be chrome (`tvTitle`, `tvLastMessage`: the chat
-  header is a customer's name and the preview their text, but the same generic id titles other sheets,
-  "Pick up order") — seeds its exact value only, so a duplicated first name is still caught (review
-  round 8). A NAME seeds runs from its text, so a TalkBack-style desc "Customer name Adam" beside text "Adam"
+  nothing; an **EXACT** id — a value that may be chrome (`tvTitle`, `tvLastMessage`: the chat header is a
+  customer's name and the preview their text, but the same generic id titles other sheets, "Pick up
+  order") — and a **PERSON_OR_MERCHANT** id — a REUSED id that is a person or a merchant but never chrome
+  (`user_name`, which also carries the merchant's and the dasher's own name: its runs would seed
+  "the"/"in"/"box" from "Jack in the Box" and suppress chrome and `TextView`-class wrappers per store) —
+  seed their exact value only, so a duplicated first name is still caught (review rounds 8, 10). A NAME seeds runs from its text, so a TalkBack-style desc "Customer name Adam" beside text "Adam"
   seeds no `customer`/`name`, while a name rendered only in a desc still propagates — and a NAME whose
-  text is a mask or has no canonical form takes its runs from the desc. For the ID / CLASS check only, an
-  EXACT value that reads as a PERSON's name — one Capitalized token ("Riley") or the capitalized
-  first-name + last-initial shape ("Riley S") — also contributes its WHOLE value (case-folded, non-letters
-  removed) as one run, matched against the candidate's camel segments and their contiguous joins:
-  `user_name` "Riley" nulls `chipRiley`, "Riley S" nulls `chipRileyS`. A chrome EXACT value ("Order
-  Details" beside `orderDetailsHeader`), a merchant ("Jack in the Box"), and every ADDRESS contribute no
-  whole-value run (review round 10); text slots never use the whole-value rule.
+  text is a mask or has no canonical form takes its runs from the desc. For the ID / CLASS check only, a
+  WHOLE-value run (case-folded, non-letters removed) is matched against the candidate's camel segments and
+  their contiguous joins, contributed by KIND (review round 10):
+
+  | Kind | Whole-value run for ids / classes |
+  |---|---|
+  | NAME | none needed — its letter runs already apply |
+  | PERSON_OR_MERCHANT (`user_name`) | when the value reads as a person's name (`PiiShapes.isPersonName`, a single token included): "Riley" nulls `chipRiley`; "Jack in the Box" adds none |
+  | EXACT (`tvTitle`, `tvLastMessage`) | only for the two-token name shape ("Riley S" nulls `chipRileyS`); a one-word chrome title "Search" or "Order Details" adds none |
+  | ADDRESS, CONTENT | none |
+
+  Text slots never use the whole-value rule.
   `PII_ID_SUFFIXES` holds EVERY suffix of this table (a guard test pins the subset) plus other
   instruction/content ids (message bodies, maneuver/road text) (review rounds 6–9);
 - a MASK never seeds anything (`[redacted…]`, `[address]`, …): it is not identity, and its word would
@@ -637,6 +644,11 @@ must stay green.
    that frame. Fingerprinting the pre-containment structure would break the server's
    recompute-from-the-wire rule, so this is accepted: the drop costs availability (a cluster that does
    not reach k), never privacy (#1160 review round 6).
+11. **Title-case chrome in the runtime chat-header scrub** (#1160 review round 10). The runtime UNKNOWN
+    scrub masks `tvTitle` when its value reads as a person's name (`PiiShapes.isPersonName`), which a
+    title-case two-word sheet title ("Pick Up", "Order Details") also satisfies — so such a header line is
+    lost from the debug X-Ray triage. Accepted, privacy first: a full "Riley Smith" chat header must never
+    persist; sentence-case chrome ("Pick up order") is kept.
 
 ## Open questions (dev decisions; the same items appear in #1157's plan §10 under its own numbering — this list is the ADR's reference)
 
