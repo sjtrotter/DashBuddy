@@ -66,12 +66,16 @@ The permitted fields, at both levels, are the test allowlist (§7a): per node `c
 `h` (strings) plus the three typed flags — no bounds; per envelope the `windowTitle` `{h?, kind}`
 object (§1's one non-node text field), the strings `schemaId`,
 `fingerprint`, `platform`, `platformAppVersion`, `appVersion`, `rulesetReleaseTag`, `day` (an `hour`
-bucket in flight only) and the integers `filterRev`, `engineVersion`, `rulesetFormatVersion` — the
-names are `ReplayMetadata`'s own. The install id is added by the M3 uploader at the transport layer,
+bucket in flight only) and the integers `filterRev`, `hashDomain`, `engineVersion`,
+`rulesetFormatVersion` — the metadata names are `ReplayMetadata`'s own. The install id is added by the M3 uploader at the transport layer,
 never inside the skeleton.
 
 `kind` is a NORMATIVE classifier, evaluated on the trimmed canonical value (the same bytes that would
-be hashed), first match wins:
+be hashed), first match wins. It is computed in two stages so that classification and filtering are
+not circular: the grammar (rows 2–4 below) yields an intermediate `shapeKind`; §2's filter then
+consults `shapeKind` (step 6) and decides; the EMITTED `kind` is `withheld` when a withholding step
+fired, otherwise `shapeKind` — so `digits` and `mixed` ARE emitted (hash refused), and `words:N` is
+emitted only together with its hash.
 
 | Precedence | `kind` | Rule |
 |---|---|---|
@@ -103,8 +107,10 @@ SSOTs the redact side uses, in this order, and **any hit withholds the hash**:
    runs on bounded input on the device (the #803 instruction-body class never hashes);
 3. `CustomerTextMarkers.unredactedMarker` hits;
 4. `PiiShapes.customerLeadIn` hits (the intake prefix rule, incl. `GATED_NAME_PREFIXES`);
-5. the value is a MASK token — `PiiShapes.isMaskToken`, one shared predicate covering every mask the
-   redact side and the corpus intake emit (`[redacted…]`, `[address]`, `[email]`, `[phone]`, `[card]`,
+5. the value CONTAINS a mask ANYWHERE — `PiiShapes.containsMask`, one shared predicate covering every
+   mask the redact side and the corpus intake emit, matched as a substring so composite values such
+   as `Apt [redacted]` or `For [redacted:eacf]` (both `words:N` after punctuation stripping) are
+   caught — the corpus has both shapes and they are vectors (`[redacted…]`, `[address]`, `[email]`, `[phone]`, `[card]`,
    `[note]`, …) → `withheld`; a mask must never be hashed (`[address]` would otherwise strip to
    `words:1`), and the predicate is what §7(e) asserts against;
 6. `kind` is not `words:N` — **only `words:N` tokens are ever hashed** (this step refuses the hash
@@ -117,10 +123,13 @@ SSOTs the redact side uses, in this order, and **any hit withholds the hash**:
    apartment, PIN, quoted note, phone, email, card) — each keeps the match mode `SnapshotRedactor`
    uses today (`BARE_STREET` whole-value, the others substring), pinned by the byte-SSOT tests.
 
-**What the builder consumes.** `SkeletonBuilder` takes the RAW admitted `UiNode` tree at the
-post-admission stage (#1146's publisher, after the rulesets-loaded / sensitive / disabled-platform /
-UNKNOWN gates and `UnknownSuppressor`), never the capture DTO — the release build binds
-`NoOpCaptureBus` and produces no DTO, and the census must work in the only build that uploads. The
+**What the builder consumes.** `SkeletonBuilder` takes the RAW admitted `UiNode` tree plus the
+window title. #1146's publisher sits on the UNKNOWN SCREEN BRANCH of `AccessibilityPipeline.output()`
+— after the rulesets-loaded / sensitive / disabled-platform gates and `FrameGate.admit`, and BEFORE
+the terminal filter that keeps UNKNOWN observations away from the state machine (placing it after
+that filter would receive nothing). It never consumes the capture DTO — the release build binds
+`NoOpCaptureBus` and `captureScreen` returns before its scans run, so the census must work in the only
+build that uploads. The
 corpus tests feed fixture trees that ARE masked captures; that is a superset condition (every mask
 token is caught by step 5 and emits `withheld`), not the runtime shape.
 
@@ -133,9 +142,10 @@ resource id (`ID_MARKERS.any { id.endsWith(it, ignoreCase = true) }`, today inli
 rule); a hit on either withholds.
 
 A `SensitiveTextMarkers` hit anywhere on the frame → **no skeleton at all** (the dasher's banking
-surfaces are blocked, never described). That frame-level scan is the EXISTING runtime control on the
-capture path and runs as it does today; the bounded-input claim above is about the per-field census
-filter.
+surfaces are blocked, never described). `SkeletonBuilder` invokes the shared sensitive-marker scans
+ITSELF — on the raw tree (`findMarker(tree)`) and on the window title — regardless of the capture
+bus's state, because `captureScreen`'s scans do not run in release; the bounded-input claim above is
+about the per-field census filter, not this whole-frame scan.
 
 **Module homes.** `SkeletonBuilder` lives in `:core:pipeline`, because steps 1, 3 and the frame drop
 need `ID_MARKERS`, `CustomerTextMarkers` and `SensitiveTextMarkers`, which live there and which
@@ -281,9 +291,15 @@ skeletons), a per-cluster cap, a bounded on-disk queue (drop-oldest), batch uplo
 **Cluster fingerprint** (`CensusFingerprint`) is a NEW function in the contract module, not
 today's `stableHash`: `stableHash` is a 32-bit `Int` (`31 * h + child`, collidable, and the type of
 `FrameGate.admit(contentHash)` and of every fixture's `contentHash`), which the server cannot
-recompute safely and which must not change type. The fingerprint is a full sha256 (**64 hex**) over a
-published canonical form — UTF-8; per node `class`, `id`, child count, then the children in order;
-null represented distinctly from empty — with shared client/server test vectors. It keeps ONE
+recompute safely and which must not change type. The fingerprint is a full sha256 (**64 hex**) over ONE canonical byte form, pre-order: per node
+`"C"` + class (UTF-8, `""` when null) + `0x00` + (`"I"` + id UTF-8, or the single byte `"N"` when the
+id is null — so a null id and an empty id differ) + `0x00` + the spliced child count as ASCII decimal
++ `0x00`, then the children in order. Transparent wrappers are removed first (wrapper-to-forest
+normalization): a wrapper's children are spliced into its parent, an EMPTY wrapper contributes
+nothing (the parent's count drops), and when the ROOT itself is a wrapper the forest hangs under a
+synthetic root with class `""`, null id and the spliced count. The contract module publishes vectors
+for: null vs empty id, an empty wrapper, a multi-child wrapper, a wrapper root, and the two nesting
+cases below. It keeps ONE
 structural rule of `stableHash` deliberately: an **anonymous wrapper** (no id AND a class in
 `{android.view.View, android.view.ViewGroup, android.widget.FrameLayout, android.widget.LinearLayout}`)
 is TRANSPARENT: it contributes no node of its own and its children are SPLICED into its parent's
@@ -331,7 +347,7 @@ The **operator-trust statement** (the residual no design removes): the official 
 machine operated by the DashBuddy maintainer running the published image digest of an AGPL-3.0
 repository; `GET /v1/policy` reports the digest and the retention numbers. The operator can see
 shapes, counts, the text of their OWN trusted devices' redacted envelopes (`k_unblind`), and — once
-`k_ship` installs have shown a token — the shipped chrome vocabulary; for a community install the
+a token entered the shipped chrome vocabulary by one of §4's two routes — that vocabulary; for a community install the
 operator cannot see what the dasher typed, whom they delivered to, or what they earned, subject to
 the dictionary-linkage residual on low-entropy hashes (risk 1). The endpoint is user-selectable
 (the #193 pattern), so a dasher can point the app at any server running this code.
@@ -341,8 +357,10 @@ the dictionary-linkage residual on low-entropy hashes (risk 1). The endpoint is 
 - **Schema versions** are explicit wire fields (`schemaId`); the server negotiates accepted versions
   through `GET /v1/policy` and rejects the rest. Adding a field on the client (a new `UiNodeTextField`
   entry) is a schema bump, not a silent widening — the server rejects unknown fields.
-- **Hash versions** are the domain prefix (`census.v1:`); counts are NEVER pooled across hash
-  versions, so a normalization change starts a new count.
+- **Hash versions** are the domain prefix (`census.v1:`) AND an explicit integer `hashDomain` in the
+  envelope allowlist (1 for `census.v1:`) — the prefix is inside the digest and `h` is 16 hex, so the
+  wire needs its own discriminator; sightings and vocabulary are keyed by `(hashDomain, h)` and counts
+  are NEVER pooled across hash versions, so a normalization change starts a new count.
 - **Filter revisions** ride every item as `filterRev` (mandatory; the server rejects items below the
   minimum accepted revision published in `GET /v1/policy`, not only the client's bundle). Token and
   cluster sighting rows and vocabulary rows carry the `filterRev` that produced them, so when a
@@ -353,7 +371,9 @@ the dictionary-linkage residual on low-entropy hashes (risk 1). The endpoint is 
   removed from the allowlist, purged server-side, and — a PRIVACY revocation, not a version bump —
   rejected as a clear token across EVERY accepted bundle version immediately, so a client still
   holding the old list cannot re-ingest it. Previously published bundles stay irreversible on the
-  device; they never again authorize server ingestion of a revoked token.
+  device; they never again authorize server ingestion of a revoked token. The revocation is a DURABLE
+  TOMBSTONE — the one record exempt from ordinary hash deletion — kept for the lifetime of every
+  accepted bundle that carried the token and replayed before a restored server accepts traffic.
 - **Install identity**: secret rotation preserves the install id and its counts; a reset deletes the
   old identity first (the deletion contract), enrols anew, restarts the 7-day quarantine, and
   requires fresh trusted enrolment.
@@ -363,9 +383,16 @@ the dictionary-linkage residual on low-entropy hashes (risk 1). The endpoint is 
 - **#1145 (M1a, pure):** the wire contract (`UiSkeletonDto`, `SkeletonSchema`, `CensusHash`,
   `CensusFingerprint` + vectors, the `kind` classifier + vectors, the shared anonymous-wrapper class
   constant) and `SkeletonBuilder` with the §2 filter; the `PiiShapes` promotion. No wiring, no I/O.
-- **#1146 (M1b, inert):** the `CensusSink` interface in `:domain`, a `NoOp` binding, the
-  post-admission publisher stage in `:core:pipeline`, `PipelineStats` counters. Nothing leaves the
-  device.
+- **#1146 (M1b, inert):** the `CensusSink` interface in `:domain`, a `NoOp` binding, the publisher
+  stage on the UNKNOWN screen branch in `:core:pipeline`, `PipelineStats` counters — and the
+  trusted-install PAIRING the 2026-09-29 amendment assigned to M1: the publisher hands the sink the
+  skeleton together with the census `fingerprint` and, when a capture envelope exists, that envelope's
+  `captureId`, so a trusted transport can pair the two with no new redaction code. Nothing leaves the
+  device. The trusted TRANSPORT itself (upload, metadata projection) is M3's — a deliberate deferral
+  recorded here, because nothing uploads before M3.
+- **Sequencing:** the TalkBack issues (#1147, #1148, #1149 — and #1151/#1152 from their review) shipped
+  FIRST by dev decision (2026-09-29) so the census sees the richer, window-correct tree; the census
+  chain is `#1144 → #1145 → #1146`, with #1157 in parallel from #1144/#1145.
 - **M2:** the bounded local queue and the in-app viewer (`:core:data` + `:app`).
 - **M3 (client, #1138) + #1157 (server):** `census_prefs`, consent + disclosure copy + LEGAL.md +
   Data Safety delta, the uploader in `:core:data` behind `:core:network` (the pipeline never performs
@@ -382,8 +409,7 @@ the dictionary-linkage residual on low-entropy hashes (risk 1). The endpoint is 
 **Positive.** A leak of text is a type error. The k rule protects contributors while the operator's
 own device keeps the loop working at k = 1. The filter and the corpus intake share one pattern owner,
 so they cannot drift. The skeleton enumerates the scrub contract, so #1147's fields and any later one
-are covered without a census change. The fingerprint has one owner across FrameGate, the librarian
-and the server.
+are covered without a census change. Client and server share `CensusFingerprint`; `FrameGate`'s and the librarian's identities are unchanged.
 
 **Negative / tradeoffs.** Chrome that is rare (a screen only one market sees) never crosses k from
 community installs alone — the trusted install must see it. The filter over-withholds by design
