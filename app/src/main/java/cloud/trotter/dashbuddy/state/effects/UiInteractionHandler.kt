@@ -671,8 +671,7 @@ class UiInteractionHandler @Inject constructor(
                     // control or its twin. A region already carrying a label OUTSIDE the set can never
                     // be an exact match whatever is unseen, so a big unrelated card does not veto.
                     // A depth cut is the horizon, not incompleteness; a null child aborted above.
-                    val visible = labels.mapNotNull(NodeRef::hintHash).toHashSet()
-                    if (ref.labelHintHashes.containsAll(visible)) { truncated = true; return null }
+                    if (ref.visibleConsistentWith(labels)) { truncated = true; return null }
                 } else if (ref.fingerprintMatches(labels)) {
                     hits.add(SemanticHit(node, pre, preCounter - 1))
                 }

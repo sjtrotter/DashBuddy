@@ -116,4 +116,16 @@ class NodeRefLabelHintsTest {
         assertFalse(legacy.hasExactFingerprint)
         assertTrue(ref("This offer", "Expand").hasExactFingerprint)
     }
+
+    /** #1149 review L7: the count pre-check agrees with the hashed comparison; the subset test includes ∅. */
+    @Test
+    fun `visible consistency is a subset test and the fingerprint count pre-check is exact`() {
+        val r = ref("This offer", "Expand")
+        assertTrue(r.visibleConsistentWith(emptyList()))
+        assertTrue(r.visibleConsistentWith(listOf("This offer", "\$40.57")))
+        assertFalse(r.visibleConsistentWith(listOf("This offer", "Order details")))
+        assertFalse(r.visibleConsistentWith(listOf("a", "b", "c")))
+        assertFalse("one key short", r.fingerprintMatches(listOf("This offer")))
+        assertTrue("duplicates collapse", r.fingerprintMatches(listOf("This offer", "this offer ", "Expand")))
+    }
 }

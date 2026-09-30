@@ -92,8 +92,25 @@ data class NodeRef(
      */
     fun fingerprintMatches(liveLabels: List<String>): Boolean {
         if (!hasExactFingerprint) return false
-        val live = liveLabels.mapNotNull(::hintHash).toHashSet()
+        // #1149 review L7: cheap pre-check before any sha256 — the distinct letter-bearing keys must
+        // number exactly the hints (the walk calls this for every clickable region).
+        val keys = liveLabels.mapNotNullTo(HashSet(), ::hintKeyOrNull)
+        if (keys.size != labelHintHashes.size) return false
+        val live = keys.mapNotNullTo(HashSet()) { cloud.trotter.dashbuddy.domain.util.sha256OrNull(it) }
         return live == labelHintHashes.toHashSet()
+    }
+
+    /**
+     * #1149 review J4/L7 — could a PARTIALLY seen region still complete into this fingerprint? True
+     * when its visible distinct hint set is a subset of the ref's (the empty set included). Same
+     * cheap count pre-check before hashing as [fingerprintMatches].
+     */
+    fun visibleConsistentWith(visibleLabels: List<String>): Boolean {
+        val keys = visibleLabels.mapNotNullTo(HashSet(), ::hintKeyOrNull)
+        if (keys.size > labelHintHashes.size) return false
+        val hints = labelHintHashes.toHashSet()
+        // A hash failure is treated as CONSISTENT (the veto side — fail closed).
+        return keys.all { k -> cloud.trotter.dashbuddy.domain.util.sha256OrNull(k)?.let { it in hints } ?: true }
     }
 
     companion object {
