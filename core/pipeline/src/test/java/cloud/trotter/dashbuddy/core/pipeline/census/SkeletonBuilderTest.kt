@@ -386,9 +386,9 @@ class SkeletonBuilderTest {
         val item = (out as Outcome.Built).skeleton
         assertEquals("9".repeat(64), item.platformAppVersion)
         assertEquals("r".repeat(64), item.rulesetReleaseTag)
-        // A truncation that would split a surrogate pair drops the stamp rather than ship malformed text.
-        val split = meta.copy(appVersion = "a".repeat(63) + "\uD801\uDC00")
-        assertNull(SkeletonBuilder.build(tree("Continue"), null, split, platform, day)!!.appVersion)
+        // Review PP7: a truncation that would split a surrogate pair cuts BEFORE it (the stamp survives).
+        val split = meta.copy(appVersion = "a".repeat(63) + "\uD83D\uDE97" + "tail")
+        assertEquals("a".repeat(63), SkeletonBuilder.build(tree("Continue"), null, split, platform, day)!!.appVersion)
     }
 
     @Test
@@ -768,7 +768,7 @@ class SkeletonBuilderTest {
     }
 
     @Test
-    fun `NN3 - a NAME desc seeds only the runs its text shares`() {
+    fun `NN3 PP2 - runs come from the text, or from the desc only when the text is blank`() {
         val out = SkeletonBuilder.build(
             UiNode(className = "android.widget.LinearLayout", viewIdResourceName = "com.x:id/row", children = listOf(
                 UiNode(
@@ -788,17 +788,19 @@ class SkeletonBuilderTest {
         assertEquals(words(1, "Customer"), out[1].text.getValue("text"))
         assertEquals(words(1, "Name"), out[2].text.getValue("text"))
         assertEquals(TextSlot.WITHHELD, out[3].text.getValue("text"))
-        // A NAME with a blank text seeds its desc's EXACT value only.
+        // Review PP2: a NAME rendered ONLY in its desc seeds runs from the desc, so it still propagates.
         val descOnly = SkeletonBuilder.build(
             UiNode(className = "android.widget.LinearLayout", viewIdResourceName = "com.x:id/row", children = listOf(
-                UiNode(className = "android.widget.TextView", viewIdResourceName = "com.x:id/customer_name", contentDescription = "Customer name Adam"),
-                UiNode(className = "android.widget.TextView", text = "Customer name Adam"),
+                UiNode(className = "android.widget.TextView", viewIdResourceName = "com.x:id/customer_name", contentDescription = "Adam"),
+                UiNode(className = "android.widget.TextView", text = "Adam"),
+                UiNode(className = "android.widget.TextView", text = "Adam's order"),
                 UiNode(className = "android.widget.TextView", text = "Customer"),
             )),
             null, meta, platform, day,
         )!!.root.children
         assertEquals(TextSlot.WITHHELD, descOnly[1].text.getValue("text"))
-        assertEquals(words(1, "Customer"), descOnly[2].text.getValue("text"))
+        assertEquals(TextSlot.WITHHELD, descOnly[2].text.getValue("text"))
+        assertEquals(words(1, "Customer"), descOnly[3].text.getValue("text"))
     }
 
     @Test
@@ -812,5 +814,66 @@ class SkeletonBuilderTest {
     @Test
     fun `NN6 - an over-long id is refused before the shape regex`() {
         assertTrue(!SkeletonBuilder.isStaticId("com.x:id/" + "a".repeat(10_000)))
+    }
+
+    // ---- #1160 review round 7 ----------------------------------------------------------------------
+
+    @Test
+    fun `OO1 - the judged form is the hashed form, and the ZWJ-hidden name is withheld`() {
+        assertEquals(listOf(TextSlot.WITHHELD), beside("\u00C5dam", "A\u200D\u030Adam"))
+        // Direct vs builder agreement on an NFKC-sensitive value.
+        val ligature = "\uFB01nance"
+        assertEquals(CensusHash.of(ligature), slot(ligature)!!.h)
+        assertEquals(CensusHash.ofCanonical("finance"), slot(ligature)!!.h)
+    }
+
+    @Test
+    fun `PP1 PP4 - camelCase ids are judged, single-letter chrome ids are not names`() {
+        listOf("deliverToSam", "pickupForSam", "chipAdamS", "com.x:id/chip_Adam_S").forEach {
+            assertTrue(it, !SkeletonBuilder.isStaticId(it))
+        }
+        listOf("deliverButton", "pickupHeader", "option_a", "tab_b", "icon_x", "plan_b", "roadNameLayout").forEach {
+            assertTrue(it, SkeletonBuilder.isStaticId(it))
+        }
+    }
+
+    @Test
+    fun `PP6 - an EXACT id seeds its exact value, never runs`() {
+        fun frame(title: String, vararg others: String) = SkeletonBuilder.build(
+            UiNode(className = "android.widget.LinearLayout", viewIdResourceName = "com.x:id/row", children = listOf(
+                UiNode(className = "android.widget.TextView", viewIdResourceName = "com.x:id/tvTitle", text = title),
+            ) + others.map { UiNode(className = "android.widget.ImageView", contentDescription = it) }),
+            null, meta, platform, day,
+        )!!.root.children
+        val chat = frame("Adam", "Adam", "Adam's order")
+        assertEquals(TextSlot.WITHHELD, chat[0].text.getValue("text"))
+        assertEquals(TextSlot.WITHHELD, chat[1].text.getValue("desc"))
+        // No runs: an embedding is not withheld by an EXACT seed (a NAME id would do that).
+        assertEquals(words(2, "Adam's order"), chat[2].text.getValue("desc"))
+        val sheet = frame("Pick up order", "Pick up order", "Pick up")
+        assertEquals(TextSlot.WITHHELD, sheet[1].text.getValue("desc"))
+        assertEquals(words(2, "Pick up"), sheet[2].text.getValue("desc"))
+    }
+
+    @Test
+    fun `PP8 - a caller-supplied tree verdict is honoured, a failed scan is BUILD_FAILED`() {
+        val clean = tree("Continue")
+        assertEquals(
+            Outcome.Refused(Refusal.SENSITIVE_FRAME),
+            SkeletonBuilder.outcome(clean, null, meta, platform, day, SkeletonBuilder.SensitiveVerdict.Hit("shape:x")),
+        )
+        assertEquals(
+            Outcome.Refused(Refusal.BUILD_FAILED),
+            SkeletonBuilder.outcome(clean, null, meta, platform, day, SkeletonBuilder.SensitiveVerdict.ScanFailed),
+        )
+        assertTrue(SkeletonBuilder.outcome(clean, null, meta, platform, day, SkeletonBuilder.SensitiveVerdict.Clear) is Outcome.Built)
+        assertEquals(SkeletonBuilder.SensitiveVerdict.Clear, SkeletonBuilder.SensitiveVerdict.of(null))
+        // With no verdict, the builder scans the tree itself.
+        assertEquals(Outcome.Refused(Refusal.SENSITIVE_FRAME), SkeletonBuilder.outcome(tree("Transfer out"), null, meta, platform, day, null))
+    }
+
+    @Test
+    fun `PP5 - a supplementary-plane FORMAT char cannot split a marker`() {
+        assertEquals(TextSlot.WITHHELD, slot("Deli\uDB40\uDC20ver to Sam"))
     }
 }
