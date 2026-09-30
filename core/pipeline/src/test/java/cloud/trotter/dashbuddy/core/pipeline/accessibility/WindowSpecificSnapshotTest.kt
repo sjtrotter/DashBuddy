@@ -729,4 +729,18 @@ class WindowSpecificSnapshotTest {
         }
         assertEquals(3L, h.stats.foregroundSkipCount(ForegroundSkipReason.SCAN_BUDGET))
     }
+
+    @Test
+    fun `CC7 - the overlay's root is null (animating in) - no frame, then readable - the overlay`() {
+        val dd = node(ddPkg, "dd", windowId = 3)
+        val uber = node(uberPkg, "uber-offer")
+        val overlay = uberOverlay(9, 9, null)
+        val h = harness(activeRoot = dd, windows = listOf(window(3, 5, dd, active = true), overlay))
+
+        assertTrue("never the covered DoorDash under an unverifiable window", collect(h, Kind.STATE, windowId = 3).isEmpty())
+        h.skipped(ForegroundSkipReason.FRONT_UNREADABLE)
+
+        whenever(overlay.root).thenReturn(uber)
+        assertEquals(listOf("uber-offer"), collect(h, Kind.STATE, windowId = 3).map { it.tree.text })
+    }
 }

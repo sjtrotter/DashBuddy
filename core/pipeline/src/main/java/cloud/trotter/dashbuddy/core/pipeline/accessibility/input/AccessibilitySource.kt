@@ -374,9 +374,10 @@ class AccessibilitySource @Inject constructor(
      * active-root path decides). The scan is [frontAbove] (CC4): EVERY window type above the active
      * one, by layer, first decides — the overlay is returned only if it IS that front window. An
      * application window above it (not ours, not PiP) → null; BB6 — a DISABLED overlay platform's
-     * overlay is skipped; a LARGE system window whose owner cannot be read is a barrier → null: never
-     * reach past an unverifiable window to pick an overlay beneath it (the active root, the shipped
-     * ground truth, is read). An overlay that IS the active window is not above it (the active-root
+     * overlay is skipped; an unreadable window above the active one (a LARGE system window whose
+     * owner cannot be read, or an application window) REFUSES the frame, `FRONT_UNREADABLE` (review
+     * CC7 — identical to the bubble path, retried on the next frame); budget exhaustion refuses
+     * `SCAN_BUDGET` (CC5). An overlay that IS the active window is not above it (the active-root
      * path reads it). Null on any failure. One enumeration; memoized verdicts (BB7) make the scan
      * cheap; the package is re-verified on the root that is mapped.
      */
@@ -403,11 +404,15 @@ class AccessibilitySource @Inject constructor(
         if (flagged.size != 1 || flagged.single().id != active.id) return OverlayScan.None // unverifiable ordering
         // CC4: EVERY window type above the active one, by layer — an application window (not ours,
         // not PiP) above the overlay means the overlay is not frontmost (→ None: the ordinary
-        // active-root rule decides). CC5: a walk out of root fetches refuses the frame.
+        // active-root rule decides). CC5/CC7: a walk out of root fetches, or an unreadable window
+        // on top, refuses the frame.
         return when (val front = frontAbove(windows, active, isEnabled)) {
             is Foreground.Found -> if (front.located.isOverlay) OverlayScan.Overlay(front.located) else OverlayScan.None
             is Foreground.Refused -> when (front.reason) {
-                ForegroundSkipReason.SCAN_BUDGET -> OverlayScan.Refused(front.reason)
+                // CC7: an unreadable window above the active one refuses the frame — the same as
+                // the bubble path. Reading the active root beneath would interleave the covered
+                // window with the overlay across its animate-in / tear-down (root-null) frames.
+                ForegroundSkipReason.SCAN_BUDGET, ForegroundSkipReason.FRONT_UNREADABLE -> OverlayScan.Refused(front.reason)
                 else -> OverlayScan.None
             }
         }
