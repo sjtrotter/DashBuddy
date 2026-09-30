@@ -574,9 +574,11 @@ side-effect-free half.
   fail-closed to `withheld`, where `CensusHash.canonical` — a fixed point — is the value after the census glyph
   fold `TextFold.foldForCensus` (FORMAT strip by code point, then NFKC, then dash fold; `TextFold` also
   owns the sensitive scan's boundary-preserving form `foldGlyphsPreservingSupplementary`, byte-for-byte
-  the pre-#1160 normalizer; `SensitiveTextMarkers.findMarker` scans it AND the fully stripped
-  `foldForCensus` form — the second only when the text carries a supplementary FORMAT char — and drops on
-  either hit, #1160 reviews RR1/UU2/UU8), trimmed, with every
+  the pre-#1160 normalizer; `SensitiveTextMarkers.findMarker` scans it AND the STRIPPED form — that same
+  preserving output minus its supplementary-plane FORMAT code points (`TextFold.stripSupplementaryFormat`),
+  never `foldForCensus`, which is census-only (WW1) — the second only when the preserving OUTPUT carries a
+  supplementary FORMAT code point (judged on the emitted string, AG1), and drops on either hit, #1160
+  reviews RR1/UU2/UU8/WW1), trimmed, with every
   census-whitespace run collapsed to one ASCII space; the builder hashes the judged string via
   `CensusHash.ofCanonical`); `KindClassifier` (§1's two-stage grammar, code-point based);
   `CensusFingerprint` (§8: wrapper-to-forest over a synthetic root, every string LENGTH-PREFIXED so the
@@ -584,9 +586,9 @@ side-effect-free half.
   `ResourceIdGrammar.isStaticShape` / `ClassNameGrammar` (the DTO enforces `ResourceIdGrammar.isWireId` —
   a static shape or the reserved sentinel `~` — and `ClassNameGrammar` at construction and decode) — a
   dynamic id (a per-frame-UUID Compose test tag) or a non-static class is ABSENT (null) on the wire and in
-  the fingerprint; `IdPathJudgement.isStaticId` also makes absent an id whose name part trips a
-  frame-free customer-PII predicate (`row_Deliver_to_Sam`); and the frame-level containment rule EMITS
-  the sentinel `~` (`ResourceIdGrammar.FRAME_WITHHELD_ID`) in place of a static id carrying an identity
+  the fingerprint; an id `IdPathJudgement.isStaticId` rejects because its name part trips a
+  frame-free customer-PII predicate (`row_Deliver_to_Sam`) is emitted as the sentinel `~` (only a
+  grammar-dynamic id is null); and the frame-level containment rule likewise EMITS the sentinel `~` (`ResourceIdGrammar.FRAME_WITHHELD_ID`) in place of a static id carrying an identity
   run of the same frame (`chip_Adam` beside `customer_name` "Adam"), so the node keeps its place in the
   fingerprint's structure, and makes absent a non-wrapper class carrying a customer-name run. The golden vectors live with the
   contract's tests (never in the APK).

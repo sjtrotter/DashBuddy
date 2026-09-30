@@ -52,7 +52,8 @@ ABSENT for both the wire and the fingerprint, never rewritten; the §2 PII-id st
 id; amended in #1160. The SHAPE is the contract's (`ResourceIdGrammar.isStaticShape`) and is enforced by
 the DTO at construction and decode, and by the server; in addition the CLIENT judges the id's name part —
 separators read as spaces, every token start — through the frame-free customer-PII predicates (marker,
-lead-in, mask, name shape), and a hit makes the id absent: `row_Deliver_to_Sam` and `chip_Adam_S` do not
+lead-in, mask, name shape), and a hit replaces the id with the sentinel `~` (§8, review round 14 — a null
+would splice a wrapper-class node for one customer and keep it for the next): `row_Deliver_to_Sam` and `chip_Adam_S` do not
 travel; the id's camelCase segments count as words too (`deliverToSam`), and only the name shape with a
 CASE-SENSITIVE initial runs on the id path, so `option_a`/`tab_b` chrome ids travel (review round 7).
 Those predicates live in `:core:pipeline`, so that judgement is client-side only; a bare name
@@ -488,8 +489,8 @@ carries no identity semantics, so it is emitted ABSENT (null never enters the by
 stays injective) and counted (`Outcome.Built.malformedClass`) — one bad node must not blind a surface;
 a malformed VIEW ID refuses the frame (`INVALID_TREE`), because its identity classification cannot be
 verified (`customer_name` + U+0000 misses every suffix lookup and would ship the name it marks). The id is a static resource name
-OR the one reserved non-grammar value `~` (`ResourceIdGrammar.FRAME_WITHHELD_ID`): a static id the
-builder's FRAME rule withheld (§2) — it keeps the node a non-wrapper, so the tree STRUCTURE never
+OR the one reserved non-grammar value `~` (`ResourceIdGrammar.FRAME_WITHHELD_ID`): a static-shaped id the
+builder withheld — by the §2 FRAME rule or by the frame-free PII judgement of the id itself (§1) — it keeps the node a non-wrapper, so the tree STRUCTURE never
 depends on the customer on the frame; a grammar-rejected (dynamic) id stays null, since it is rejected
 identically on every frame. The server accepts `~`. Fingerprinting happens AFTER that frame-level
 withholding, so a colliding id (`mark_read_button` beside `customer_name` "Mark") still moves the
