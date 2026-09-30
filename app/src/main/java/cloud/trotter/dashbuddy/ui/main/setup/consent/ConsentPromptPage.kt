@@ -23,31 +23,23 @@ import cloud.trotter.dashbuddy.domain.state.Platform
 import cloud.trotter.dashbuddy.feature.settings.capabilityCopy
 
 /**
- * Prompted per-capability automation consent (#843). A modal sheet at the app's
- * front door listing every *undecided* automation as its own row — name,
- * plain-language behavioral disclosure, source, and an individual Allow /
- * Don't-allow choice. There is NO "allow all" button (Play policy: each
- * automation individually). "Not now" defers the whole sheet — undecided stays
- * undecided, re-prompt on the next real return to the foreground; a "Don't
- * allow" persists a durable denial that never re-prompts. Answers write THROUGH
- * the grant store the fail-closed engine gate reads (#417); this sheet is an
- * acquisition surface, never a second gate.
+ * Prompted per-capability automation consent (#843) — one page of the front door. Every
+ * *undecided* automation is its own row — name, plain-language behavioral disclosure, source, and an
+ * individual Allow / Don't-allow choice. There is NO "allow all" button (Play policy: each
+ * automation individually). Answers write THROUGH the grant store the fail-closed engine gate reads
+ * (#417); this page is an acquisition surface, never a second gate. "Not now" (the door's own
+ * button) defers the whole door for this foreground; a "Don't allow" persists a durable denial.
  *
- * Stateless since #1151 review LL1/LL3: it is rendered by [FrontDoorHost] (the
- * Dashboard's one front door, which also owns the deferral) on the shared
- * [FrontDoorSheet].
+ * Stateless since #1151 review LL1/MM6: [FrontDoorHost] renders it inside the one [FrontDoorSheet].
  */
 @Composable
-fun ConsentPromptSheet(
+fun ConsentPromptPage(
     rows: List<ConsentPromptRow>,
     onDecision: (key: String, allow: Boolean) -> Unit,
-    onDefer: () -> Unit,
 ) {
-    FrontDoorSheet(
+    FrontDoorPage(
         title = stringResource(R.string.consent_prompt_heading),
         body = stringResource(R.string.consent_prompt_body),
-        notNowLabel = stringResource(R.string.consent_prompt_not_now),
-        onDefer = onDefer,
     ) {
         rows.forEach { row ->
             HorizontalDivider()

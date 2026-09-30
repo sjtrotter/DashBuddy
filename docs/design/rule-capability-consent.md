@@ -146,7 +146,7 @@ skipped.
 publishes the enumeration; every capability — bundled OR downloaded — lands
 **undecided** until the user explicitly opts in. Per Google Play policy each
 automation is consented to individually. Consent is collected by the
-**prompt** (`ConsentPromptSheet`, the app's front door — same rhythm as the
+**prompt** (`ConsentPromptPage` in the one `FrontDoorSheet`, the app's front door — same rhythm as the
 a11y/notification permission prompts), and reviewed/revoked in the settings
 record. A one-shot schema migration clears any pre-#843 auto-granted keys on
 upgrade (denials preserved) so the prompt re-collects honest consent.
@@ -172,10 +172,12 @@ wide accessibility event receipt (#1151) today, the UNKNOWN-screen census
   the current foreground;
 - **prompted at the front door** and **recorded** on the Automation & Consent
   screen (a switch that writes through the same owner — never a second gate).
-  The Dashboard has ONE front door (`FrontDoorHost`, #1151 review LL1): the pure
-  `pickFrontDoorPrompt` shows at most one sheet — the capability prompt while it
-  has rows, the event-receipt prompt only when the capability prompt is not
-  showing. Both prompts render on the shared `FrontDoorSheet`; "Not now" is
+  The Dashboard has ONE front door (`FrontDoorHost`, #1151 review LL1/MM6): the
+  pure `pickFrontDoorPrompt` shows at most one prompt — the capability prompt
+  while it has rows, the event-receipt prompt once the capability prompt is
+  ANSWERED — as pages (`ConsentPromptPage`, `EventReceiptConsentPage`) of ONE
+  `FrontDoorSheet` modal whose content swaps (animated) on a decision, never a
+  second modal. "Not now" closes the WHOLE door for this foreground; it is
   anchored on a FOREGROUND GENERATION held by the activity-scoped
   `FrontDoorViewModel` (bumped by `MainActivity.onStop` unless changing
   configurations), so a deferral survives rotation, navigation and re-entry and

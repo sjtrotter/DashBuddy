@@ -14,21 +14,17 @@ import cloud.trotter.dashbuddy.feature.settings.R as SettingsR
 import cloud.trotter.dashbuddy.feature.settings.eventReceiptDisclosure
 
 /**
- * The wide-event-receipt consent prompt (#1151) on the shared [FrontDoorSheet]: Allow / Don't allow
- * write through [onDecision]; "Not now" (and scrim/back) call [onDefer] — the value stays UNDECIDED
- * and the host re-offers it on the next real return to the foreground. Stateless; whether it shows
- * is the [FrontDoorHost]'s call.
+ * The wide-event-receipt consent (#1151) — one page of the front door: Allow / Don't allow write
+ * through [onDecision]. "Not now" is the door's own button ([FrontDoorSheet]); it leaves the value
+ * UNDECIDED and closes the door for this foreground. Stateless; [FrontDoorHost] decides when it shows.
  */
 @Composable
-fun EventReceiptConsentSheet(
+fun EventReceiptConsentPage(
     onDecision: (allow: Boolean) -> Unit,
-    onDefer: () -> Unit,
 ) {
-    FrontDoorSheet(
+    FrontDoorPage(
         title = stringResource(SettingsR.string.event_receipt_title),
         body = eventReceiptDisclosure(),
-        notNowLabel = stringResource(SettingsR.string.event_receipt_not_now),
-        onDefer = onDefer,
     ) {
         Row(
             modifier = Modifier.fillMaxWidth(),
