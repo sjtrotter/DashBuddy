@@ -137,25 +137,28 @@ object CustomerTextMarkers {
      * label siblings (`user_name_label`, `customer_name_label`) are deliberately
      * absent, so a replayed UNKNOWN frame keeps its shape for triage.
      *
-     * The table carries, per suffix, whether the node's VALUE is PII by construction
-     * (#1160 review EE1). `valueIsPii = true` marks IDENTITY ids — a customer name or address line,
-     * nothing else ever rides them (`user_name` is excluded: it also carries merchant/dasher names). `false` marks CONTENT ids whose node can hold customer text but is
-     * also reused for app copy (the free-text instruction bodies; `description_text_view`, which this
-     * file documents as generic DoorDash chrome). The runtime backstop scrubs on EVERY suffix exactly
-     * as before; only the census's frame-wide duplicate rule reads the flag.
+     * The table carries, per suffix, the KIND of value the node holds (#1160 reviews EE1, LL1):
+     * `NAME` — a person's name (`customer_name`); `ADDRESS` — a place (the address lines,
+     * `arriving_at_title`, `address_subpremise_line`); `CONTENT` — a node that can hold customer text but
+     * is also reused for app copy or other people (`user_name`, which also carries the merchant's and the
+     * dasher's own name; the free-text instruction bodies; `description_text_view`, which this file
+     * documents as generic DoorDash chrome). The runtime backstop scrubs on EVERY suffix exactly as
+     * before; only the census's frame-wide duplicate rule reads the kind: a NAME seeds its exact value
+     * and its letter runs, an ADDRESS its exact value only (address vocabulary — "Road", "View", "San" —
+     * is common English), CONTENT seeds nothing.
      */
     val ID_MARKER_TABLE: List<IdMarker> = listOf(
         // DoorDash multi-order pickup rows / pickup arrival card -> customer name.
-        IdMarker("customer_name", valueIsPii = true),
+        IdMarker("customer_name", IdentityKind.NAME),
         // DoorDash drop-off + pickup contact blocks -> customer name (the node the
         // "Delivery for" label sibling names; #910 V5).
         // NOT an identity id for the census (#1160 review GG5): the class KDoc records it is REUSED for
         // the MERCHANT on pickup cards and for the dasher's own name — seeding it frame-wide would
         // withhold a store header (merchant names are not PII). Its own field is still scrubbed.
-        IdMarker("user_name", valueIsPii = false),
+        IdMarker("user_name", IdentityKind.CONTENT),
         // DoorDash address block -> street line and city/ST/ZIP line (#910 V1/V5).
-        IdMarker("address_line_1", valueIsPii = true),
-        IdMarker("address_line_2", valueIsPii = true),
+        IdMarker("address_line_1", IdentityKind.ADDRESS),
+        IdMarker("address_line_2", IdentityKind.ADDRESS),
         // DoorDash's OWN nav arrival banner title -> the destination, which on a dropoff leg is
         // the customer's full street address (#993, fielded 08-02: "<street>, Apt <n>, <City>,
         // <ST> <zip>, USA"). The rule-declared `redact` now covers it on every dropoff-phase rule
@@ -164,7 +167,7 @@ object CustomerTextMarkers {
         // MERCHANT, so an UNKNOWN pickup-nav frame loses a merchant line from its triage text —
         // fail toward privacy, and the RECOGNIZED path is untouched by this scan, so #886's
         // deliberate "pickup_navigation keeps its merchant address raw" decision still stands.
-        IdMarker("arriving_at_title", valueIsPii = true),
+        IdMarker("arriving_at_title", IdentityKind.ADDRESS),
         // #1058 (fielded 2026-08-28, four envelopes): the drop-off address block's SUBPREMISE
         // line — the customer's unit/apartment number, rendered fused with its label
         // ("Apt/Suite: <n>"). It is customer-locating PII by construction, `SnapshotRedactor`
@@ -172,7 +175,7 @@ object CustomerTextMarkers {
         // declares it — but the UNKNOWN path had nothing, so an unrecognized variant of the
         // arrival card (the alcohol render, which carries no customer lead-in for the prefix
         // scan) persisted it verbatim.
-        IdMarker("address_subpremise_line", valueIsPii = true),
+        IdMarker("address_subpremise_line", IdentityKind.ADDRESS),
         // #1058, same four envelopes: the customer's own free-text delivery instructions. The
         // node holds nothing else — the "Hand it to recipient" label is a separate
         // `instructions_title` sibling — and the fielded value carried a door code. This is the
@@ -182,8 +185,8 @@ object CustomerTextMarkers {
         // construction — the ruleset's own `redact` blocks have always declared the pair
         // together, and listing only the state that happened to field is the enumeration debt
         // #986 already paid for once.
-        IdMarker("dasher_instruction_content_collapsed", valueIsPii = false),
-        IdMarker("dasher_instruction_content_expanded", valueIsPii = false),
+        IdMarker("dasher_instruction_content_collapsed", IdentityKind.CONTENT),
+        IdMarker("dasher_instruction_content_expanded", IdentityKind.CONTENT),
         // #1107 (fielded 2026-09-13, three envelopes): DoorDash 8.97.8's "Drop off steps"
         // wrapper renders the customer's free-text delivery instruction in a
         // `description_text_view` node — the fielded value carried a gate code — and nothing
@@ -196,11 +199,23 @@ object CustomerTextMarkers {
         // on UNKNOWN screen/click envelopes ONLY, so the cost is a line of triage text on an
         // unrecognized frame — the same fail-toward-privacy trade `arriving_at_title` already
         // documents for a pickup-leg merchant line — and no recognized frame's kept text moves.
-        IdMarker("description_text_view", valueIsPii = false),
+        IdMarker("description_text_view", IdentityKind.CONTENT),
     )
 
     /** One [ID_MARKER_TABLE] row. */
-    data class IdMarker(val suffix: String, val valueIsPii: Boolean)
+    data class IdMarker(val suffix: String, val kind: IdentityKind)
+
+    /** What an [IdMarker]'s node value IS (#1160 review LL1). */
+    enum class IdentityKind {
+        /** A person's name. */
+        NAME,
+
+        /** A place (an address line, a destination, a unit). */
+        ADDRESS,
+
+        /** Customer-bearing content that is also reused for app copy or other people's names. */
+        CONTENT,
+    }
 
     /** The suffix list — DERIVED from [ID_MARKER_TABLE], unchanged in content and order (pinned). */
     val ID_MARKERS: List<String> = ID_MARKER_TABLE.map { it.suffix }

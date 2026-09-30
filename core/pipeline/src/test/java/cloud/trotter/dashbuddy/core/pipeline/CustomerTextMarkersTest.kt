@@ -380,8 +380,18 @@ class CustomerTextMarkersTest {
             CustomerTextMarkers.ID_MARKERS,
         )
         assertEquals(
-            setOf("customer_name", "address_line_1", "address_line_2", "arriving_at_title", "address_subpremise_line"),
-            CustomerTextMarkers.ID_MARKER_TABLE.filter { it.valueIsPii }.map { it.suffix }.toSet(),
+            mapOf(
+                "customer_name" to CustomerTextMarkers.IdentityKind.NAME,
+                "user_name" to CustomerTextMarkers.IdentityKind.CONTENT,
+                "address_line_1" to CustomerTextMarkers.IdentityKind.ADDRESS,
+                "address_line_2" to CustomerTextMarkers.IdentityKind.ADDRESS,
+                "arriving_at_title" to CustomerTextMarkers.IdentityKind.ADDRESS,
+                "address_subpremise_line" to CustomerTextMarkers.IdentityKind.ADDRESS,
+                "dasher_instruction_content_collapsed" to CustomerTextMarkers.IdentityKind.CONTENT,
+                "dasher_instruction_content_expanded" to CustomerTextMarkers.IdentityKind.CONTENT,
+                "description_text_view" to CustomerTextMarkers.IdentityKind.CONTENT,
+            ),
+            CustomerTextMarkers.ID_MARKER_TABLE.associate { it.suffix to it.kind },
         )
     }
 }
