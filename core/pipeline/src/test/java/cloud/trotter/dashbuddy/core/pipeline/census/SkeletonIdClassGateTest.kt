@@ -431,4 +431,25 @@ class SkeletonIdClassGateTest : SkeletonBuilderTestBase() {
         val invalid = FrameworkClasses.inventoryText(listOf("android.widget.TextView", "not a class!"))
         assertEquals(emptySet<String>(), FrameworkClasses.parseInventory(invalid.byteInputStream()))
     }
+
+    @Test
+    fun `AM1 - any loader failure, an Error included, degrades to an empty inventory`() {
+        val erroring = object : java.io.InputStream() {
+            override fun read(): Int = throw NoSuchMethodError("readNBytes")
+            override fun read(b: ByteArray, off: Int, len: Int): Int = throw NoSuchMethodError("readNBytes")
+        }
+        assertEquals(emptySet<String>(), FrameworkClasses.parseInventory(erroring))
+        // A stream delivered in small chunks still loads (the API-1 bounded read loop).
+        val good = FrameworkClasses.inventoryText(listOf("android.widget.GridLayout")).toByteArray()
+        val trickle = object : java.io.InputStream() {
+            var i = 0
+            override fun read(): Int = if (i < good.size) good[i++].toInt() and 0xFF else -1
+            override fun read(b: ByteArray, off: Int, len: Int): Int {
+                if (i >= good.size) return -1
+                b[off] = good[i++]
+                return 1
+            }
+        }
+        assertEquals(setOf("android.widget.GridLayout"), FrameworkClasses.parseInventory(trickle))
+    }
 }

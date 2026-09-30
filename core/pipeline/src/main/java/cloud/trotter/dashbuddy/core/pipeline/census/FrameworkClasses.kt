@@ -3,6 +3,7 @@ package cloud.trotter.dashbuddy.core.pipeline.census
 import cloud.trotter.dashbuddy.domain.census.contract.ClassNameGrammar
 import cloud.trotter.dashbuddy.domain.util.sha256OrNull
 import java.io.InputStream
+import kotlin.coroutines.cancellation.CancellationException
 import java.nio.ByteBuffer
 import java.nio.charset.CodingErrorAction
 
@@ -48,7 +49,7 @@ object FrameworkClasses {
         if (stream == null) {
             emptySet()
         } else {
-            val bytes = stream.use { it.readNBytes(MAX_INVENTORY_BYTES + 1) }
+            val bytes = stream.use { readBounded(it, MAX_INVENTORY_BYTES + 1) }
             if (bytes.size > MAX_INVENTORY_BYTES) {
                 emptySet()
             } else {
@@ -64,8 +65,29 @@ object FrameworkClasses {
                 if (intact && entries.all { ClassNameGrammar.isStatic(it) }) entries.toSet() else emptySet()
             }
         }
-    } catch (_: Exception) {
+    } catch (e: CancellationException) {
+        throw e
+    } catch (e: ThreadDeath) {
+        throw e
+    } catch (_: Throwable) {
+        // Review AM1: ANY loader failure — an Error included (a `NoSuchMethodError` on an older API level) —
+        // degrades to an empty inventory, so `KNOWN` falls back to `CORPUS` and never fails a frame.
         emptySet()
+    }
+
+    /**
+     * Up to [limit] bytes of [input] via the API-1 `read(byte[], off, len)` loop (review AM1: `readNBytes` is
+     * API 33 and minSdk is 30).
+     */
+    private fun readBounded(input: InputStream, limit: Int): ByteArray {
+        val buffer = ByteArray(limit)
+        var total = 0
+        while (total < limit) {
+            val n = input.read(buffer, total, limit - total)
+            if (n < 0) break
+            total += n
+        }
+        return buffer.copyOf(total)
     }
 
     /** The inventory's size bound (reviews AK5, AL2): far above the ~10 KB list. */
