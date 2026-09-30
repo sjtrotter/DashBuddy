@@ -127,4 +127,29 @@ class AccNodeUtilsOwnerTest {
         assertFalse(AccNodeUtils.clickNodeStrict(owner, pkg))
         verify(owner, never()).performAction(eq(AccessibilityNodeInfo.ACTION_CLICK))
     }
+
+    /**
+     * #1149 review N4 — the bind-time owner walk (NodeRef.bindHintsOf over a UiNode chain) and the live
+     * one (resolveActionOwner over a node chain) inspect the SAME nodes: self + (MAX_OWNER_WALK − 1)
+     * parents. Paired at 31, 32 and 33 hops.
+     */
+    @Test
+    fun `bind-time and live owner walks agree at 31, 32 and 33 hops`() {
+        for (hops in listOf(AccNodeUtils.MAX_OWNER_WALK - 1, AccNodeUtils.MAX_OWNER_WALK, AccNodeUtils.MAX_OWNER_WALK + 1)) {
+            val (leaf, top) = chain(hops)
+            val liveFound = AccNodeUtils.resolveActionOwner(leaf) === top
+
+            var ui = cloud.trotter.dashbuddy.domain.model.accessibility.UiNode(text = "This offer")
+            val uiLeaf = ui
+            repeat(hops - 1) { ui = cloud.trotter.dashbuddy.domain.model.accessibility.UiNode(children = listOf(ui)) }
+            val uiTop = cloud.trotter.dashbuddy.domain.model.accessibility.UiNode(
+                className = "Top", isClickable = true, children = listOf(ui),
+            ).restoreParents()
+            val bindFound = cloud.trotter.dashbuddy.domain.pipeline.NodeRef.bindHintsOf(uiLeaf).ownerClassHint == uiTop.className
+
+            assertTrue("hops=$hops: bind and live must agree", liveFound == bindFound)
+            assertTrue("hops=$hops: found iff within self + ${AccNodeUtils.MAX_OWNER_WALK - 1} parents",
+                liveFound == (hops <= AccNodeUtils.MAX_OWNER_WALK - 1))
+        }
+    }
 }

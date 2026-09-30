@@ -135,7 +135,7 @@ data class NodeRef(
         /** #1149 review I2 — the child fetches (bind time: child slots visited) one label scan may spend. */
         const val LABEL_SCAN_NODES = 24
 
-        /** #1149 — the most self → parent steps an action-owner walk takes (bind time and fire time). */
+        /** #1149 — the nodes an action-owner walk inspects: self + (MAX_OWNER_WALK − 1) parents, bind time and fire time (N4). */
         const val MAX_OWNER_WALK = 32
 
         /**
@@ -147,7 +147,8 @@ data class NodeRef(
         fun bindHintsOf(bound: cloud.trotter.dashbuddy.domain.model.accessibility.UiNode): BindHints {
             var owner: cloud.trotter.dashbuddy.domain.model.accessibility.UiNode? = bound
             var steps = 0
-            while (owner != null && !owner.takesClick && steps < MAX_OWNER_WALK) { owner = owner.parent; steps++ }
+            // N4: self + (MAX_OWNER_WALK - 1) parents — exactly what the live resolveActionOwner inspects.
+            while (owner != null && !owner.takesClick && steps < MAX_OWNER_WALK - 1) { owner = owner.parent; steps++ }
             val found = owner?.takeIf { it.takesClick }
             val scan = hintLabelsOf(found ?: bound)
             val hashes = scan.labels.asSequence().mapNotNull(::hintHash).distinct().take(MAX_LABEL_HINTS).toList()
