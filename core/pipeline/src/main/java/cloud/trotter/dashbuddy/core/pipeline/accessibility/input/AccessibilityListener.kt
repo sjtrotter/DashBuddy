@@ -165,6 +165,24 @@ class AccessibilityListener : AccessibilityService() {
 
         Timber.d("Accessibility service connected")
 
+        // #1151 review TT1 — ORDER: a debug build connecting with a known DECLINED consent turns
+        // itself off BEFORE anything registers: no consent scope, no `registerService` (a dying
+        // service must never become the live sensor), no #938 locale report (its notice is
+        // once-per-install). The collector's own disable branch covers a decline that arrives
+        // LATER, after registration, where tearing down the live service is legitimate.
+        if (ServiceInfoPolicy.shouldDisableSelf(
+                eventReceiptPreferences.consent.value ?: EventReceiptConsent.UNDECIDED,
+                BuildConfig.DEBUG,
+            )
+        ) {
+            disabledSelf = true
+            Timber.tag("Pipeline").i(
+                "event receipt declined on a debug build — disabling the accessibility service",
+            )
+            disableSelf()
+            return
+        }
+
         // #1151: the package subscription follows the dasher's event-receipt consent — applied
         // now (Main.immediate runs the StateFlow's current value synchronously, before the
         // source registers) and re-applied on every change (Allow / revoke in Settings). Until
