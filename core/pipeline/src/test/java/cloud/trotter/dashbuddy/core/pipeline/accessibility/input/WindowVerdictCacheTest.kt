@@ -98,7 +98,7 @@ class WindowVerdictCacheTest {
     }
 
     @Test
-    fun `BB7 - the same status bar across two frames - probed once, counted once`() {
+    fun `BB7 - the same status bar across two frames - decided once, counted once, no root fetch`() {
         val systemUi = node("com.android.systemui") // built up front: no mock inside a stubbing lambda
         val statusBar = withBounds(
             mock<AccessibilityWindowInfo> {
@@ -119,7 +119,6 @@ class WindowVerdictCacheTest {
 
         repeat(2) { src.overlayProbe(statusBar, display) }
 
-        verify(statusBar, times(1)).getBoundsInScreen(any())
         verify(statusBar, never()).root
         assertEquals(1L, stats.overlayRejectedCount(OverlayRejectReason.TOO_SMALL))
     }
@@ -136,15 +135,78 @@ class WindowVerdictCacheTest {
     @Test
     fun `bounded at CAPACITY, least-recently-used evicted, verdicts keep their package`() {
         val cache = WindowVerdictCache()
-        for (id in 0 until WindowVerdictCache.CAPACITY) cache.putPackage(id, "p$id")
+        val g = cache.generation
+        for (id in 0 until WindowVerdictCache.CAPACITY) cache.putPackage(id, "p$id", g)
         cache.get(0) // touch → most recent
-        cache.putPackage(WindowVerdictCache.CAPACITY, "new")
+        cache.putPackage(WindowVerdictCache.CAPACITY, "new", g)
         assertEquals(WindowVerdictCache.CAPACITY, cache.size)
         assertEquals("p0", cache.get(0)?.packageName)
         assertNull("the least-recently-used entry is evicted", cache.get(1))
-        cache.putVerdict(0, null, WindowVerdictCache.Verdict.NOT_OVERLAY_PLATFORM)
-        assertEquals(WindowVerdictCache.Entry("p0", WindowVerdictCache.Verdict.NOT_OVERLAY_PLATFORM), cache.get(0))
+        val b = WindowVerdictCache.Bounds(0, 0, 10, 10)
+        cache.putVerdict(0, null, WindowVerdictCache.Verdict.NOT_OVERLAY_PLATFORM, b, g)
+        assertEquals(WindowVerdictCache.Entry("p0", WindowVerdictCache.Verdict.NOT_OVERLAY_PLATFORM, b), cache.get(0))
         cache.clear()
         assertEquals(0, cache.size)
+    }
+
+    @Test
+    fun `CC1 - a write whose generation moved (a clear mid-probe) is discarded`() {
+        val cache = WindowVerdictCache()
+        val started = cache.generation
+        cache.clear() // topology changed while the probe was in its root fetch
+        cache.putVerdict(9, "com.ubercab.driver", WindowVerdictCache.Verdict.CANDIDATE, WindowVerdictCache.Bounds(0, 136, 1080, 2347), started)
+        cache.putPackage(9, "com.ubercab.driver", started)
+        assertNull(cache.get(9))
+    }
+
+    @Test
+    fun `CC1 - a WINDOWS_CHANGED during the probe's root fetch leaves no stale verdict`() {
+        val uber = node("com.ubercab.driver")
+        val overlay = window(9, uber, 9, AccessibilityWindowInfo.TYPE_SYSTEM)
+        val src = source(listOf(overlay))
+        // The clear lands exactly while the probe is inside the (binder) root fetch.
+        whenever(overlay.root).thenAnswer {
+            src.emit(event(AccessibilityEvent.TYPE_WINDOWS_CHANGED))
+            uber
+        }
+
+        assertTrue(src.isOverlayCandidate(overlay, display)) // this frame's own decision stands
+        src.isOverlayCandidate(overlay, display)
+        verify(overlay, times(2)).root // nothing was memoized across the clear → re-probed
+    }
+
+    @Test
+    fun `CC1 - a memoized CANDIDATE is re-probed when the window's bounds change`() {
+        val uber = node("com.ubercab.driver")
+        val w = withBounds(
+            mock<AccessibilityWindowInfo> {
+                on { this.id } doReturn 9
+                on { this.type } doReturn AccessibilityWindowInfo.TYPE_SYSTEM
+                on { this.root } doReturn uber
+            },
+            OverlayGeometry.UBER_OFFER,
+        )
+        val stats = PipelineStats()
+        val res = displayResources()
+        val service = mock<AccessibilityService> {
+            on { this.windows } doReturn listOf(w)
+            on { resources } doReturn res
+            on { packageName } doReturn ownPkg
+        }
+        val src = AccessibilitySource(stats).apply { registerService(service) }
+
+        assertTrue(src.isOverlayCandidate(w, display))
+        withBounds(w, OverlayGeometry.UBER_PUCK) // the same window id, now puck-sized
+        assertEquals(false, src.isOverlayCandidate(w, display))
+        assertEquals(1L, stats.overlayRejectedCount(OverlayRejectReason.TOO_SMALL))
+    }
+
+    @Test
+    fun `CC1 - a memoized CANDIDATE is not honoured without a display area`() {
+        val uber = node("com.ubercab.driver")
+        val w = window(9, uber, 9, AccessibilityWindowInfo.TYPE_SYSTEM)
+        val src = source(listOf(w))
+        assertTrue(src.isOverlayCandidate(w, display))
+        assertEquals(false, src.isOverlayCandidate(w, 0L))
     }
 }

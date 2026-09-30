@@ -264,6 +264,7 @@ class AccessibilitySource @Inject constructor(
             }
             .sortedByDescending { it.layer }
         var area: Long? = null // measured lazily — only when a system-layer window is inspected
+        val gen = packageCache.generation // CC1: read BEFORE any fetch; stale writes are discarded
         var verdict: Foreground = Foreground.Refused(ForegroundSkipReason.NO_CANDIDATE)
         for (w in ordered) {
             if (w.type == AccessibilityWindowInfo.TYPE_SYSTEM) {
@@ -296,7 +297,7 @@ class AccessibilitySource @Inject constructor(
                 break
             }
             val pkg = root.packageName?.toString()
-            pkg?.let { packageCache.putPackage(w.id, it) }
+            pkg?.let { packageCache.putPackage(w.id, it, gen) }
             if (ownPkg != null && pkg == ownPkg) continue // our own bubble is never "in front"
             verdict = if (isEnabled(pkg)) {
                 Foreground.Found(LocatedWindow(w, root, windows.size))
@@ -415,17 +416,23 @@ class AccessibilitySource @Inject constructor(
     /** [isOverlayCandidate] carrying the verified package (and the root, if fetched); counts every refusal. */
     internal fun overlayProbe(w: AccessibilityWindowInfo, displayArea: Long): OverlayProbe {
         if (w.type != AccessibilityWindowInfo.TYPE_SYSTEM || w.isInPictureInPictureMode) return OverlayProbe.NotCandidate
-        // BB7: a DECIDED verdict is memoized per window id — no bounds read, no root fetch, no count.
-        val entry = packageCache.get(w.id)
-        when (entry?.verdict) {
-            WindowVerdictCache.Verdict.TOO_SMALL, WindowVerdictCache.Verdict.NOT_OVERLAY_PLATFORM -> return OverlayProbe.NotCandidate
-            WindowVerdictCache.Verdict.CANDIDATE -> entry.packageName?.let { return OverlayProbe.Candidate(it, null) }
-            null -> Unit
-        }
-        // Not memoized: the display area can become known on a later frame.
+        // CC1: an unknown display area admits nothing — checked BEFORE the memo, so a cached
+        // CANDIDATE is never honoured without a measurable display. Not memoized (it can become known).
         if (displayArea <= 0L) return reject(OverlayRejectReason.NO_DISPLAY_AREA, OverlayProbe.NotCandidate)
-        if (areaOf(w).toDouble() < MIN_OVERLAY_AREA_FRACTION * displayArea) {
-            packageCache.putVerdict(w.id, null, WindowVerdictCache.Verdict.TOO_SMALL)
+        val gen = packageCache.generation // CC1: read BEFORE probing; a write after a clear is discarded
+        val bounds = boundsOf(w)
+        // BB7: a DECIDED verdict is memoized per window id — no root fetch, no count — but (CC1) only
+        // while the window's CURRENT bounds equal the bounds it was decided on.
+        val entry = packageCache.get(w.id)
+        if (entry?.verdict != null && entry.bounds == bounds) {
+            when (entry.verdict) {
+                WindowVerdictCache.Verdict.TOO_SMALL, WindowVerdictCache.Verdict.NOT_OVERLAY_PLATFORM -> return OverlayProbe.NotCandidate
+                WindowVerdictCache.Verdict.CANDIDATE -> entry.packageName?.let { return OverlayProbe.Candidate(it, null) }
+            }
+        }
+        val area = (bounds.right - bounds.left).coerceAtLeast(0).toLong() * (bounds.bottom - bounds.top).coerceAtLeast(0).toLong()
+        if (area.toDouble() < MIN_OVERLAY_AREA_FRACTION * displayArea) {
+            packageCache.putVerdict(w.id, null, WindowVerdictCache.Verdict.TOO_SMALL, bounds, gen)
             return reject(OverlayRejectReason.TOO_SMALL, OverlayProbe.NotCandidate)
         }
         var root: AccessibilityNodeInfo? = null
@@ -436,11 +443,18 @@ class AccessibilitySource @Inject constructor(
             fetched.packageName?.toString() ?: return reject(OverlayRejectReason.UNREADABLE, OverlayProbe.Unreadable)
         }
         if (pkg !in Platform.overlayPackages) {
-            packageCache.putVerdict(w.id, pkg, WindowVerdictCache.Verdict.NOT_OVERLAY_PLATFORM)
+            packageCache.putVerdict(w.id, pkg, WindowVerdictCache.Verdict.NOT_OVERLAY_PLATFORM, bounds, gen)
             return reject(OverlayRejectReason.NOT_OVERLAY_PLATFORM, OverlayProbe.NotCandidate)
         }
-        packageCache.putVerdict(w.id, pkg, WindowVerdictCache.Verdict.CANDIDATE)
+        packageCache.putVerdict(w.id, pkg, WindowVerdictCache.Verdict.CANDIDATE, bounds, gen)
         return OverlayProbe.Candidate(pkg, root)
+    }
+
+    /** [w]'s current screen bounds (parceled with the window — no binder call). */
+    private fun boundsOf(w: AccessibilityWindowInfo): WindowVerdictCache.Bounds {
+        val r = Rect()
+        w.getBoundsInScreen(r)
+        return WindowVerdictCache.Bounds(r.left, r.top, r.right, r.bottom)
     }
 
     /**
@@ -449,8 +463,9 @@ class AccessibilitySource @Inject constructor(
      */
     internal fun packageOf(w: AccessibilityWindowInfo): String? {
         packageCache.get(w.id)?.packageName?.let { return it }
+        val gen = packageCache.generation
         val pkg = w.root?.packageName?.toString() ?: return null
-        packageCache.putPackage(w.id, pkg)
+        packageCache.putPackage(w.id, pkg, gen)
         return pkg
     }
 
