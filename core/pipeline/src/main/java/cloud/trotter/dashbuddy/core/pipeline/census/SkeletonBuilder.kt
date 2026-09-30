@@ -11,6 +11,7 @@ import cloud.trotter.dashbuddy.domain.census.contract.SkeletonSchema
 import cloud.trotter.dashbuddy.domain.census.contract.TextSlot
 import cloud.trotter.dashbuddy.domain.census.contract.UiSkeletonDto
 import cloud.trotter.dashbuddy.domain.census.contract.UiSkeletonNodeDto
+import cloud.trotter.dashbuddy.domain.census.contract.WireStrings
 import cloud.trotter.dashbuddy.domain.model.accessibility.UiNode
 import cloud.trotter.dashbuddy.domain.privacy.PiiShapes
 import kotlin.coroutines.cancellation.CancellationException
@@ -259,6 +260,9 @@ object SkeletonBuilder {
 
     /** The skeleton of one node and its subtree: structure + flags + per-field slots, no bounds. */
     private fun skeletonOf(node: UiNode, caught: Set<String>): UiSkeletonNodeDto {
+        // Review BB2: validate the RAW id before the grammar gate — `staticOrNull` would otherwise drop
+        // a malformed id to null and the DTO's check would never see it. Refused as INVALID_TREE.
+        node.viewIdResourceName?.let { require(WireStrings.isWellFormed(it)) { "malformed view id" } }
         val text = LinkedHashMap<String, TextSlot>()
         for ((field, value) in node.scrubbableStrings()) {
             frameSlot(value, node.viewIdResourceName, caught)?.let { text[field.wire] = it }

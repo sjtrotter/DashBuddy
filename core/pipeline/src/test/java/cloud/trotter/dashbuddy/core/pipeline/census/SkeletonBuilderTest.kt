@@ -317,9 +317,18 @@ class SkeletonBuilderTest {
     }
 
     @Test
-    fun `AA2 - a NUL in a class or id refuses the tree`() {
-        val bad = UiNode(className = "android.widget.TextView\u0000N", text = "Accept")
-        assertEquals(Outcome.Refused(Refusal.INVALID_TREE), SkeletonBuilder.outcome(bad, null, meta, "doordash", "2026-09-30"))
+    fun `AA2 BB1 BB2 - a NUL or malformed UTF-16 in a class or id refuses the tree`() {
+        listOf(
+            UiNode(className = "android.widget.TextView\u0000N", text = "Accept"),
+            // Review BB2: a NUL-bearing ID must refuse too, not be dropped to null by the grammar gate.
+            UiNode(className = "android.widget.TextView", viewIdResourceName = "x:id/a\u0000", text = "Accept"),
+            // Review BB1: a lone surrogate (class or id) is malformed UTF-16.
+            UiNode(className = "\uD800", text = "Accept"),
+            UiNode(className = "android.widget.TextView", viewIdResourceName = "x:id/a\uDC00", text = "Accept"),
+        ).forEach { bad ->
+            val child = UiNode(className = "android.widget.FrameLayout", viewIdResourceName = "x:id/host", children = listOf(bad))
+            assertEquals(Outcome.Refused(Refusal.INVALID_TREE), SkeletonBuilder.outcome(child, null, meta, "doordash", "2026-09-30"))
+        }
     }
 
     @Test
