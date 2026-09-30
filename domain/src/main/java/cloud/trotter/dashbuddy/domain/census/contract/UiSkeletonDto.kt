@@ -82,6 +82,15 @@ data class UiSkeletonNodeDto(
         // forked or old client cannot post a UUID id or a free-text class the server would cluster on.
         require(className == null || ClassNameGrammar.isStatic(className)) { "a class name must be a static binary class name" }
         require(id == null || ResourceIdGrammar.isStaticShape(id)) { "a view id must have the static resource-name shape" }
+        // Review UU1: a text-map KEY is a field name, never free text. Pinned to the wire-key SHAPE (every
+        // `UiNodeTextField.wire` matches); an unknown key of that shape stays accepted, so a new enum entry
+        // is still not a schema bump (ADR-0011 §1).
+        require(text.keys.all { TEXT_KEY_SHAPE.matches(it) }) { "a text-map key must have the wire-key shape" }
+    }
+
+    companion object {
+        /** The wire-key shape of a text-map key (review UU1). */
+        private val TEXT_KEY_SHAPE = Regex("^[a-z][A-Za-z0-9]{0,15}$")
     }
 }
 

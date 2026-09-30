@@ -180,4 +180,20 @@ class UiSkeletonDtoTypeTest {
             root = root,
         )
     }
+
+    @Test
+    fun `a text-map key is a wire-key shape, never free text (review UU1)`() {
+        cloud.trotter.dashbuddy.domain.model.accessibility.UiNodeTextField.entries.forEach {
+            UiSkeletonNodeDto(text = mapOf(it.wire to TextSlot(kind = "mixed")))
+        }
+        UiSkeletonNodeDto(text = mapOf("futureField" to TextSlot(kind = "mixed"))) // a new enum entry stays accepted
+        assertThrows { UiSkeletonNodeDto(text = mapOf("Adam Smith 7610 Fletchers" to TextSlot(kind = "mixed"))) }
+        assertThrows { UiSkeletonNodeDto(text = mapOf("" to TextSlot(kind = "mixed"))) }
+        assertThrows {
+            SkeletonSchema.json.decodeFromString(
+                UiSkeletonNodeDto.serializer(),
+                "{\"text\":{\"Adam Smith 7610 Fletchers\":{\"kind\":\"mixed\"}}}",
+            )
+        }
+    }
 }
