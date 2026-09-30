@@ -425,17 +425,20 @@ class AccessibilitySource @Inject constructor(
      * overlay covers it (the dasher is looking at the overlay). It is on top by construction, so this
      * is never the hidden-activity shape F1 removed.
      *
-     * BB2 — the active identity is RECONCILED, never assumed: the active root's window must be in
-     * this enumeration AND be the one (and only) window flagged active; otherwise → null (the ordinary
-     * active-root path decides). The scan is [frontAbove] (CC4): EVERY window type above the active
-     * one, by layer, first decides — the overlay is returned only if it IS that front window. An
-     * application window above it (not ours, not PiP) → null; BB6 — a DISABLED overlay platform's
-     * overlay is skipped; an unreadable window above the active one (a LARGE system window whose
-     * owner cannot be read, or an application window) REFUSES the frame, `FRONT_UNREADABLE` (review
-     * CC7 — identical to the bubble path, retried on the next frame); budget exhaustion refuses
-     * `SCAN_BUDGET` (CC5). An overlay that IS the active window is not above it (the active-root
-     * path reads it). Null on any failure. One enumeration; memoized verdicts (BB7) make the scan
-     * cheap; the package is re-verified on the root that is mapped.
+     * Returns the sealed [OverlayScan] (PR #1155 review DD12):
+     * - [OverlayScan.Overlay] — an enabled overlay IS the front window above the active one: read it;
+     * - [OverlayScan.None] — no overlay in front: read the already-fetched active root. This covers the
+     *   active identity not reconciling (BB2: the active root's window must be in this enumeration and
+     *   be the one window flagged active), an application window in front of the overlay (CC4), a
+     *   DISABLED overlay platform's overlay (BB6, skipped), an unreadable APPLICATION window above
+     *   (DD6 — it cannot be an offer overlay), an unknown display area (DD8, inconclusive) and any
+     *   exception during the scan (DD7);
+     * - [OverlayScan.Refused] — skip the frame: an unreadable window that may BE an overlay (a LARGE
+     *   system window, or a selected overlay whose root vanished → `FRONT_UNREADABLE`, CC7/DD6), or the
+     *   walk ran out of root fetches (`SCAN_BUDGET`, CC5/DD4).
+     * An overlay that IS the active window is not above it (the active-root path reads it). One
+     * enumeration; memoized verdicts (BB7) make the scan cheap; the package is re-verified on the root
+     * that is mapped.
      */
     fun overlayAboveActive(activeWindowId: Int, isEnabled: (String?) -> Boolean): OverlayScan = try {
         stats.onOverlayScan() // CC9: the per-event enumeration this feature costs, sized in the field

@@ -346,13 +346,17 @@ then fired, and were answered with the window beneath). The shipped rules:
   fail on size WITHOUT a root fetch; then the root's package ∈ `overlayPackages` — the expanded shade
   passes on size and fails here. The outcome is sealed (review BB1/CC5): `Candidate` /
   `NotCandidate` / `Unreadable` (a LARGE system window whose root cannot be read — its owner is
-  unverifiable, and it may be an offer overlay) / `BudgetExhausted`. Refusals are counted once per
+  unverifiable, and it may be an offer overlay) / `BudgetExhausted` / `NoDisplayArea` (review DD8: an
+  unknown display is INCONCLUSIVE, never "not a candidate" — the bubble path refuses
+  `NO_DISPLAY_AREA` rather than walk past a possibly-full-screen overlay; the event path reads the
+  active root, the pre-#1152 behaviour, counted once per resolution). Refusals are counted once per
   DECISION, by first failed check,
   `overlayRejected{NO_DISPLAY_AREA,TOO_SMALL,UNREADABLE,NOT_OVERLAY_PLATFORM,PACKAGE_CHANGED}`. A
   candidate is READ only if its package is ENABLED, and the package is re-verified on the
   freshly-fetched root that is mapped; a memoized CANDIDATE whose fresh root names another package is
   CORRECTED in the memo and counted `PACKAGE_CHANGED` (review CC10) — never a `FRONT_NOT_ENABLED`
-  refusal. A **DISABLED** overlay platform's overlay is NOT a candidate (review BB6) — skipped on
+  refusal — and USED at once when the fresh package is itself an enabled overlay platform's (review
+  DD10: never read beneath a live overlay). A **DISABLED** overlay platform's overlay is NOT a candidate (review BB6) — skipped on
   every path, so an ignored platform's offer never blanks the enabled window beneath it.
 - **D3 — `WindowVerdictCache`** (review BB7/CC1; `windowId → (packageName?, verdict, bounds)`, LRU 64,
   package names, enums and four ints only — never a node): the package is filled on every root fetch
@@ -371,7 +375,15 @@ then fired, and were answered with the window beneath). The shipped rules:
   `NOT_OVERLAY_PLATFORM` against an owner change under a live id — window ids are allocated per
   accessibility connection and a connection belongs to ONE package, so `windowId → package` is
   stable by framework construction; only geometry moves under a live id, which the bounds check
-  covers.
+  covers. **Release note (review DD12):** in release the verdict cache NEVER clears (no
+  `TYPE_WINDOWS_CHANGED` reaches the service until #1151), so the refusal-without-fetch paths — a cached
+  own / non-enabled application window deciding without a root fetch, a memoized
+  `NOT_OVERLAY_PLATFORM` / `TOO_SMALL` — rely on that same id → package stability (a window id is
+  allocated per accessibility connection); geometry and display area are re-checked every frame, and
+  a probe writes under its WALK's generation (review DD9), so a probe on a window from an older list
+  after a mid-walk clear never writes under the new generation. Area has ONE definition,
+  `WindowVerdictCache.Bounds.area()`, used by the size rule and the `area%` log (review DD11); the
+  display is read at most once per resolution and passed down.
 - **D4 — the front window: ONE readable-top-or-refuse walk** (`frontOf`, behind `foregroundWindow` and
   `frontAbove`). Candidates are the application windows (as shipped, own and PiP skipped) ∪ ENABLED
   overlay candidates, over EVERY window type by `layer`; the first decides. A LARGE unreadable system
@@ -389,9 +401,13 @@ then fired, and were answered with the window beneath). The shipped rules:
   frontmost and the active root is read) — whichever window fired. While an enabled overlay is the
   front, EVERY content/state resolution reads it: the covered window's bursts and the overlay's can
   never alternate and flap R0 offer ↔ map (the #1148 F1 class); `FrameGate`'s identity dedup
-  collapses the repeats. An unreadable LARGE system window above the active one refuses the frame
-  `FRONT_UNREADABLE` (review CC7 — the same as the bubble path; otherwise the covered window would
-  interleave with the overlay across its animate-in / tear-down frames); budget exhaustion refuses
+  collapses the repeats. On THIS path only an unreadable window that may BE an overlay refuses the
+  frame `FRONT_UNREADABLE` — a LARGE system window, or a selected overlay whose root vanished (review
+  CC7 as narrowed by DD6; otherwise the covered window would interleave with the overlay across its
+  animate-in / tear-down frames). An unreadable APPLICATION window above (our bubble tearing down, a
+  platform popup, a foreign panel) cannot be an offer overlay and is no barrier here — the active
+  enabled root stays the ground truth (#1148); the bubble path keeps refusing on ANY unreadable window
+  on top. An exception during the scan means "no overlay" (review DD7). Budget exhaustion refuses
   `SCAN_BUDGET`. Safe by construction: the overlay is ON TOP, so this is never the hidden-activity
   shape F1 removed. The active identity is RECONCILED (review BB2): the active root's window must be
   in the enumeration and be the one window flagged active — else no overlay, the active root is read.
