@@ -4,7 +4,7 @@ import android.view.accessibility.AccessibilityEvent
 import cloud.trotter.dashbuddy.core.pipeline.BuildConfig
 import cloud.trotter.dashbuddy.core.pipeline.accessibility.TreeSnapshot
 import cloud.trotter.dashbuddy.core.pipeline.accessibility.event.coalesce.coalesceByKey
-import cloud.trotter.dashbuddy.core.pipeline.accessibility.event.type.window.snapshotForEventWindow
+import cloud.trotter.dashbuddy.core.pipeline.accessibility.event.type.window.snapshotForEvent
 import cloud.trotter.dashbuddy.core.pipeline.accessibility.input.AccEvent
 import cloud.trotter.dashbuddy.core.pipeline.accessibility.input.AccessibilitySource
 import cloud.trotter.dashbuddy.domain.model.accessibility.UiNode
@@ -82,9 +82,10 @@ class ContentChangedPipeline @Inject constructor(
             )
         }
         .mapNotNull { change ->
-            // #1148 D4: snapshot the EVENT's window (active-root fallback), package-gated
-            // before and after the map.
-            val snapshot = source.snapshotForEventWindow(change.windowId, change.packageName)
+            // #1148 D4 (review F1): the active watched window is the ground truth; with a
+            // non-watched window active (bubble, launcher) the topmost watched application
+            // window is snapshotted. Package-gated before and after the map.
+            val snapshot = source.snapshotForEvent(change.windowId, change.packageName)
                 ?: return@mapNotNull null
             if (BuildConfig.DEBUG) {
                 Timber.d("🌳 Tree snapshot: %d nodes, pkg=%s", countNodes(snapshot.tree), snapshot.packageName)

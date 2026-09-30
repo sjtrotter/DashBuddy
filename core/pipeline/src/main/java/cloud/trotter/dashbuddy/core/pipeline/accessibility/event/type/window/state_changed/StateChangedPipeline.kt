@@ -2,7 +2,7 @@ package cloud.trotter.dashbuddy.core.pipeline.accessibility.event.type.window.st
 
 import android.view.accessibility.AccessibilityEvent
 import cloud.trotter.dashbuddy.core.pipeline.accessibility.TreeSnapshot
-import cloud.trotter.dashbuddy.core.pipeline.accessibility.event.type.window.snapshotForEventWindow
+import cloud.trotter.dashbuddy.core.pipeline.accessibility.event.type.window.snapshotForEvent
 import cloud.trotter.dashbuddy.core.pipeline.accessibility.input.AccessibilitySource
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.filter
@@ -23,9 +23,9 @@ class StateChangedPipeline @Inject constructor(
             )
         }
         .mapNotNull { event ->
-            // Immediate (no coalescing). #1148 D4: snapshot the EVENT's window, active-root
-            // fallback; package-gated before and after the map (#435 item 3, #4).
-            val snapshot = source.snapshotForEventWindow(event.windowId, event.packageName)
+            // Immediate (no coalescing). #1148 D4 (review F1): active watched window, else the
+            // topmost watched application window; package-gated before and after the map.
+            val snapshot = source.snapshotForEvent(event.windowId, event.packageName)
                 ?: return@mapNotNull null
             TreeSnapshot(
                 tree = snapshot.tree,

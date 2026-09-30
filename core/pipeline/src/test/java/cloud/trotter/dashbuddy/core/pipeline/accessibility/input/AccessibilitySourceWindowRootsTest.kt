@@ -97,13 +97,14 @@ class AccessibilitySourceWindowRootsTest {
         node: AccessibilityNodeInfo?,
         active: Boolean,
         windowType: Int = AccessibilityWindowInfo.TYPE_APPLICATION,
+        windowLayer: Int = windowId,
     ): AccessibilityWindowInfo = mock {
         on { id } doReturn windowId
         on { root } doReturn node
         on { isActive } doReturn active
         on { isFocused } doReturn active
         on { type } doReturn windowType
-        on { layer } doReturn windowId
+        on { layer } doReturn windowLayer
     }
 
     private fun nodeOf(pkg: String): AccessibilityNodeInfo = mock { on { packageName } doReturn pkg }
@@ -129,34 +130,43 @@ class AccessibilitySourceWindowRootsTest {
     }
 
     @Test
-    fun `getWindowSnapshot reads the requested window, not the active one`() {
+    fun `topmostWindow picks the highest-layer watched application window`() {
         val bubbleRoot = nodeOf("cloud.trotter.dashbuddy")
-        val ddRoot = nodeOf("com.doordash.driverapp")
-        val windowList = listOf(windowInfo(1, bubbleRoot, active = true), windowInfo(42, ddRoot, active = false))
+        val activityRoot = nodeOf("com.doordash.driverapp")
+        val dialogRoot = nodeOf("com.doordash.driverapp")
+        val imeRoot = nodeOf("com.doordash.driverapp")
+        val windowList = listOf(
+            windowInfo(1, bubbleRoot, active = true, windowLayer = 10),
+            windowInfo(3, activityRoot, active = false, windowLayer = 2),
+            windowInfo(7, dialogRoot, active = false, windowLayer = 5),
+            windowInfo(9, imeRoot, active = false, windowType = AccessibilityWindowInfo.TYPE_INPUT_METHOD, windowLayer = 20),
+        )
         val service = mock<AccessibilityService> {
             on { rootInActiveWindow } doReturn bubbleRoot
             on { windows } doReturn windowList
         }
         val source = sourceFor(service)
 
-        assertEquals("com.doordash.driverapp", source.getWindowPackage(42))
-        val snapshot = requireNotNull(source.getWindowSnapshot(42))
+        val located = requireNotNull(source.topmostWindow { it == "com.doordash.driverapp" })
+
+        assertEquals("highest-layer watched APPLICATION window (the IME is not one)", 7, located.window.id)
+        assertSame(dialogRoot, located.root)
+        assertEquals(4, located.totalWindowCount)
+        val snapshot = requireNotNull(source.getWindowSnapshot(located.window, located.root, located.totalWindowCount))
         assertEquals("com.doordash.driverapp", snapshot.packageName)
-        assertEquals(42, snapshot.windowContext?.windowId)
-        assertEquals(false, snapshot.windowContext?.isActive)
+        assertEquals(7, snapshot.windowContext?.windowId)
+        assertEquals(4, snapshot.windowContext?.totalWindowCount)
     }
 
     @Test
-    fun `getWindowSnapshot returns null for an unknown window id`() {
-        val root = nodeOf("com.doordash.driverapp")
+    fun `topmostWindow is null when no application window is watched`() {
+        val root = nodeOf("com.android.launcher3")
         val windowList = listOf(windowInfo(1, root, active = true))
         val service = mock<AccessibilityService> {
             on { rootInActiveWindow } doReturn root
             on { windows } doReturn windowList
         }
-        val source = sourceFor(service)
 
-        assertNull(source.getWindowSnapshot(999))
-        assertNull(source.getWindowPackage(999))
+        assertNull(sourceFor(service).topmostWindow { it == "com.doordash.driverapp" })
     }
 }

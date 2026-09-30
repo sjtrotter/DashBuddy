@@ -138,27 +138,48 @@ class AccessibilitySource @Inject constructor() {
     }
 
     /**
-     * The package owning window [windowId]'s root, read WITHOUT mapping the subtree — the #435
-     * item-3 pre-map check, for the window-specific path (#1148 D4). Null when the window is gone
-     * or has no root.
+     * A window located by [topmostWindow], carried with its ALREADY-FETCHED root and the size of
+     * the enumeration it came from, so the caller maps it without a second `getWindows()` /
+     * `window.root` binder round-trip (#1148 review F1).
      */
-    fun getWindowPackage(windowId: Int): String? = try {
-        findWindow(getWindows(), windowId)?.root?.packageName?.toString()
+    data class LocatedWindow(
+        val window: AccessibilityWindowInfo,
+        val root: AccessibilityNodeInfo,
+        val totalWindowCount: Int,
+    )
+
+    /**
+     * The TOPMOST application window (highest `layer`) whose root package passes [isWatched] —
+     * enumerated ONCE, each candidate's root fetched once (#1148 review F1). Used when a NON-watched
+     * window (our bubble, the launcher, system UI) is active: the frame is taken from the watched
+     * window the dasher actually sees on top, never from whichever window fired the event (a hidden
+     * activity under a watched sheet keeps firing content changes). Null when no application window
+     * is watched.
+     *
+     * SAFE to call from background threads.
+     */
+    fun topmostWindow(isWatched: (String?) -> Boolean): LocatedWindow? = try {
+        val windows = getWindows()
+        windows.asSequence()
+            .filter { it.type == AccessibilityWindowInfo.TYPE_APPLICATION }
+            .sortedByDescending { it.layer }
+            .mapNotNull { w -> w.root?.let { root -> w to root } }
+            .firstOrNull { (_, root) -> isWatched(root.packageName?.toString()) }
+            ?.let { (w, root) -> LocatedWindow(w, root, windows.size) }
     } catch (_: Exception) {
         null
     }
 
     /**
-     * Snapshots the root of the window the triggering EVENT came from (#1148 D4), not the active
-     * window: when our bubble is the active window, a DoorDash content change used to be rejected
-     * pre-map even though the DoorDash window still existed. Attributed to the window root's real
-     * package (#4). Null when the window is gone, has no root, or fails to map — callers fall back
-     * to the active-root path.
+     * Maps an already-fetched [root] of [window] into a [RootSnapshot] attributed to the root's
+     * real package (#4), with the window's [TreeSnapshot.WindowContext] ([totalWindowCount] from
+     * the same enumeration). No binder call beyond the subtree map. Null when the map fails.
      */
-    fun getWindowSnapshot(windowId: Int): RootSnapshot? {
-        val windows = getWindows()
-        val window = findWindow(windows, windowId) ?: return null
-        val root = window.root ?: return null
+    fun getWindowSnapshot(
+        window: AccessibilityWindowInfo,
+        root: AccessibilityNodeInfo,
+        totalWindowCount: Int,
+    ): RootSnapshot? {
         val tree = try {
             root.toUiNode()
         } catch (_: Exception) {
@@ -167,12 +188,9 @@ class AccessibilitySource @Inject constructor() {
         return RootSnapshot(
             tree = tree,
             packageName = root.packageName?.toString(),
-            windowContext = contextOf(window, windows.size),
+            windowContext = contextOf(window, totalWindowCount),
         )
     }
-
-    private fun findWindow(windows: List<AccessibilityWindowInfo>, windowId: Int): AccessibilityWindowInfo? =
-        windows.firstOrNull { it.id == windowId }
 
     /**
      * Locates the active window's metadata: the window flagged `isActive`, else the window whose
