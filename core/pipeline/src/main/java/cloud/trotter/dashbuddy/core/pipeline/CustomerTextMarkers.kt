@@ -136,16 +136,23 @@ object CustomerTextMarkers {
      * address line, so scrubbing it can never take app vocabulary with it: the
      * label siblings (`user_name_label`, `customer_name_label`) are deliberately
      * absent, so a replayed UNKNOWN frame keeps its shape for triage.
+     *
+     * The table carries, per suffix, whether the node's VALUE is PII by construction
+     * (#1160 review EE1). `valueIsPii = true` marks IDENTITY ids — a customer name or address line,
+     * nothing else ever rides them. `false` marks CONTENT ids whose node can hold customer text but is
+     * also reused for app copy (the free-text instruction bodies; `description_text_view`, which this
+     * file documents as generic DoorDash chrome). The runtime backstop scrubs on EVERY suffix exactly
+     * as before; only the census's frame-wide duplicate rule reads the flag.
      */
-    val ID_MARKERS: List<String> = listOf(
+    val ID_MARKER_TABLE: List<IdMarker> = listOf(
         // DoorDash multi-order pickup rows / pickup arrival card -> customer name.
-        "customer_name",
+        IdMarker("customer_name", valueIsPii = true),
         // DoorDash drop-off + pickup contact blocks -> customer name (the node the
         // "Delivery for" label sibling names; #910 V5).
-        "user_name",
+        IdMarker("user_name", valueIsPii = true),
         // DoorDash address block -> street line and city/ST/ZIP line (#910 V1/V5).
-        "address_line_1",
-        "address_line_2",
+        IdMarker("address_line_1", valueIsPii = true),
+        IdMarker("address_line_2", valueIsPii = true),
         // DoorDash's OWN nav arrival banner title -> the destination, which on a dropoff leg is
         // the customer's full street address (#993, fielded 08-02: "<street>, Apt <n>, <City>,
         // <ST> <zip>, USA"). The rule-declared `redact` now covers it on every dropoff-phase rule
@@ -154,7 +161,7 @@ object CustomerTextMarkers {
         // MERCHANT, so an UNKNOWN pickup-nav frame loses a merchant line from its triage text —
         // fail toward privacy, and the RECOGNIZED path is untouched by this scan, so #886's
         // deliberate "pickup_navigation keeps its merchant address raw" decision still stands.
-        "arriving_at_title",
+        IdMarker("arriving_at_title", valueIsPii = true),
         // #1058 (fielded 2026-08-28, four envelopes): the drop-off address block's SUBPREMISE
         // line — the customer's unit/apartment number, rendered fused with its label
         // ("Apt/Suite: <n>"). It is customer-locating PII by construction, `SnapshotRedactor`
@@ -162,7 +169,7 @@ object CustomerTextMarkers {
         // declares it — but the UNKNOWN path had nothing, so an unrecognized variant of the
         // arrival card (the alcohol render, which carries no customer lead-in for the prefix
         // scan) persisted it verbatim.
-        "address_subpremise_line",
+        IdMarker("address_subpremise_line", valueIsPii = true),
         // #1058, same four envelopes: the customer's own free-text delivery instructions. The
         // node holds nothing else — the "Hand it to recipient" label is a separate
         // `instructions_title` sibling — and the fielded value carried a door code. This is the
@@ -172,8 +179,8 @@ object CustomerTextMarkers {
         // construction — the ruleset's own `redact` blocks have always declared the pair
         // together, and listing only the state that happened to field is the enumeration debt
         // #986 already paid for once.
-        "dasher_instruction_content_collapsed",
-        "dasher_instruction_content_expanded",
+        IdMarker("dasher_instruction_content_collapsed", valueIsPii = false),
+        IdMarker("dasher_instruction_content_expanded", valueIsPii = false),
         // #1107 (fielded 2026-09-13, three envelopes): DoorDash 8.97.8's "Drop off steps"
         // wrapper renders the customer's free-text delivery instruction in a
         // `description_text_view` node — the fielded value carried a gate code — and nothing
@@ -186,8 +193,14 @@ object CustomerTextMarkers {
         // on UNKNOWN screen/click envelopes ONLY, so the cost is a line of triage text on an
         // unrecognized frame — the same fail-toward-privacy trade `arriving_at_title` already
         // documents for a pickup-leg merchant line — and no recognized frame's kept text moves.
-        "description_text_view",
+        IdMarker("description_text_view", valueIsPii = false),
     )
+
+    /** One [ID_MARKER_TABLE] row. */
+    data class IdMarker(val suffix: String, val valueIsPii: Boolean)
+
+    /** The suffix list — DERIVED from [ID_MARKER_TABLE], unchanged in content and order (pinned). */
+    val ID_MARKERS: List<String> = ID_MARKER_TABLE.map { it.suffix }
 
     /** Substring that classifies a node's text as already-redacted (VET V1). */
     private const val REDACTED_MARK = "[redacted"
@@ -238,9 +251,12 @@ object CustomerTextMarkers {
      * the rules' `hasIdSuffix` semantics), or null. The ONE owner of that comparison (#1145): the
      * UNKNOWN-envelope scan below and the census filter (ADR-0011 §2 step 1) both call it.
      */
-    fun idMarkerSuffix(id: String?): String? {
+    fun idMarkerSuffix(id: String?): String? = idMarkerFor(id)?.suffix
+
+    /** The [ID_MARKER_TABLE] row [id] ends with (same suffix semantics as [idMarkerSuffix]), or null. */
+    fun idMarkerFor(id: String?): IdMarker? {
         if (id.isNullOrEmpty()) return null
-        return ID_MARKERS.firstOrNull { id.endsWith(it, ignoreCase = true) }
+        return ID_MARKER_TABLE.firstOrNull { id.endsWith(it.suffix, ignoreCase = true) }
     }
 
     /** True when [id] carries an [ID_MARKERS] suffix — [idMarkerSuffix] as a predicate. */

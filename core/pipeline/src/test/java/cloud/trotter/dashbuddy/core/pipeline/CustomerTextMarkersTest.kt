@@ -368,4 +368,20 @@ class CustomerTextMarkersTest {
         // DoorDash order_ready puts the customer name at the START (no lead-in).
         assertNull(CustomerTextMarkers.unredactedMarker("Adam's order is ready for pickup at 7-Eleven"))
     }
+
+    @Test
+    fun `ID_MARKERS is byte-for-byte the pre-#1160-EE1 suffix list (the runtime backstop is unchanged)`() {
+        assertEquals(
+            listOf(
+                "customer_name", "user_name", "address_line_1", "address_line_2", "arriving_at_title",
+                "address_subpremise_line", "dasher_instruction_content_collapsed",
+                "dasher_instruction_content_expanded", "description_text_view",
+            ),
+            CustomerTextMarkers.ID_MARKERS,
+        )
+        assertEquals(
+            setOf("customer_name", "user_name", "address_line_1", "address_line_2", "arriving_at_title", "address_subpremise_line"),
+            CustomerTextMarkers.ID_MARKER_TABLE.filter { it.valueIsPii }.map { it.suffix }.toSet(),
+        )
+    }
 }
