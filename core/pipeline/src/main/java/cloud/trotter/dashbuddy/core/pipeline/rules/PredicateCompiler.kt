@@ -44,8 +44,9 @@ internal object PredicateCompiler {
                 ;{ tree -> tree.findNode(nodePred) == null }
             }
             "allTextContains" -> {
-                val text = (value as? JsonPrimitive)?.content?.lowercase(Locale.ROOT)
-                    ?: throw RuleCompileException("allTextContains requires a string value")
+                // #1147 review Y1: through the shared string-only helper like every other string
+                // predicate — `null`/numbers/booleans used to coerce to "null"/"123"/"true".
+                val text = primOf(value, key).content.lowercase(Locale.ROOT)
                 ;{ tree -> tree.allTextLowerJoined.contains(text) }
             }
             "allTextContainsAll" -> {

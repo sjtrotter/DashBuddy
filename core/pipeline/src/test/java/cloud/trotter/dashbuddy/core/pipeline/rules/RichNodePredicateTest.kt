@@ -86,6 +86,29 @@ class RichNodePredicateTest {
         expectFails("""{ "isClickable": 1 }""", contains = "requires a boolean value")
     }
 
+    /** #1147 review Y1: the tree vocabulary gets the same strict string typing. */
+    @Test
+    fun `tree string predicates reject null, numbers and booleans`() {
+        for (key in listOf("allTextContains")) {
+            for (bad in listOf("null", "123", "true")) expectTreeFails("""{ "$key": $bad }""")
+        }
+        for (key in listOf("allTextContainsAll", "allTextContainsAny")) {
+            for (bad in listOf("null", "123", "true")) expectTreeFails("""{ "$key": [ "ok", $bad ] }""")
+        }
+        // and a real string still compiles and matches
+        val p = RuleCompiler.compileTreePred(Json.parseToJsonElement("""{ "allTextContains": "ACCEPT" }"""))
+        assertTrue(p(bare))
+    }
+
+    private fun expectTreeFails(json: String) {
+        try {
+            RuleCompiler.compileTreePred(Json.parseToJsonElement(json))
+            fail("expected RuleCompileException for $json")
+        } catch (e: RuleCompileException) {
+            assertTrue("'${e.message}'", e.message?.contains("requires a string scalar value") == true)
+        }
+    }
+
     @Test
     fun `the new fields stay out of the subtree allText predicates`() {
         // A rule must opt in through the dedicated predicate — widening the node model moves no
