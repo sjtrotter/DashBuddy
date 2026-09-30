@@ -1,8 +1,8 @@
 package cloud.trotter.dashbuddy.census
-
 import cloud.trotter.dashbuddy.core.pipeline.CustomerTextMarkers
 import cloud.trotter.dashbuddy.core.pipeline.SensitiveTextMarkers
 import cloud.trotter.dashbuddy.core.pipeline.census.SkeletonBuilder
+import cloud.trotter.dashbuddy.core.pipeline.census.diagnostics.DiagnosticSkeletonBuilder
 import cloud.trotter.dashbuddy.domain.capture.ReplayMetadata
 import cloud.trotter.dashbuddy.domain.capture.schema.UiNodeSchema
 import cloud.trotter.dashbuddy.domain.census.contract.CaseFold
@@ -48,138 +48,7 @@ import java.time.LocalDate
  * pseudonyms back INTO the mask slots, and (c) runs on the committed decoy fixtures, which carry raw
  * hand-written pseudonyms.
  */
-class SkeletonCorpusTest {
-
-    private companion object {
-        /** #878 pinned seed — pins PR CI. Bump deliberately to explore new samples. */
-        const val SEED = 0x1145_0001L
-
-        val DAY: LocalDate = LocalDate.of(2026, 9, 30)
-
-        val META = ReplayMetadata(
-            engineVersion = 1,
-            rulesetFormatVersion = 1,
-            rulesetReleaseTag = "corpus",
-            appVersion = "test",
-            deviceFingerprint = "google/panther/panther:16/NEVER_IN_A_SKELETON",
-            platformAppVersion = "0.0.0",
-        )
-
-        /** The §7(a) allowlist — per node, per slot, per envelope (ReplayMetadata names + census-own). */
-        val NODE_KEYS = setOf("class", "id", "isClickable", "isEnabled", "isChecked", "text", "children")
-        val NODE_STRING_KEYS = setOf("class", "id")
-        val SLOT_KEYS = setOf("h", "kind")
-        val ENVELOPE_REPLAY_METADATA = setOf(
-            "platformAppVersion", "appVersion", "rulesetReleaseTag", "engineVersion", "rulesetFormatVersion",
-        )
-        val ENVELOPE_CENSUS_OWN = setOf("schemaId", "fingerprint", "platform", "day", "filterRev", "hashDomain")
-        val ENVELOPE_KEYS = ENVELOPE_REPLAY_METADATA + ENVELOPE_CENSUS_OWN + setOf("windowTitle", "root")
-
-        /** CorpusDecoys entries that are retained CHROME labels, legitimately hashed (ADR §7e). */
-        val CHROME_DECOYS = setOf("Hand it to me: ")
-
-        val MASK_TOKEN = Regex("""\[(?:redacted(?::[0-9a-f]{4})?|address|email|phone|card|note|name)\]""")
-    }
-
-    private data class Fixture(val path: String, val tree: UiNode)
-
-    private val snapshotsDir = File("src/test/resources/snapshots")
-
-    /** Every committed corpus tree, loaded strictly (a committed file that fails to parse fails). */
-    private val corpus: List<Fixture> by lazy {
-        val dirs = snapshotsDir.walkTopDown()
-            .filter { it.isDirectory && it != snapshotsDir }
-            .filter { dir ->
-                val rel = dir.relativeTo(snapshotsDir).invariantSeparatorsPath
-                // Staging (never committed): all of INBOX/, and the flat UNKNOWN/ — but NOT the
-                // committed UNKNOWN/negative/ below it.
-                rel.substringBefore('/') != "INBOX" && rel != "UNKNOWN"
-            }
-            .toList()
-        dirs.flatMap { dir ->
-            dir.listFiles { f -> f.isFile && f.extension == "json" }.orEmpty().sorted().mapNotNull { file ->
-                val rel = file.relativeTo(snapshotsDir).invariantSeparatorsPath
-                loadTree(file)?.let { Fixture(rel, it) }
-            }
-        }
-    }
-
-    /**
-     * A screen envelope / bare tree / legacy wrapper decodes to its tree; a CLICK envelope to its
-     * clicked node (a tree too); a NOTIFICATION envelope has no tree and is skipped (the census
-     * never sees notifications in v1, ADR §8).
-     */
-    private fun loadTree(file: File): UiNode? {
-        val root = Json.parseToJsonElement(file.readText()).jsonObject
-        val payload = root["payload"] as? JsonObject
-        return when {
-            payload == null -> TestResourceLoader.loadNode(file)
-            payload.containsKey("node") -> TestResourceLoader.nodeFromElement(payload.getValue("node"))
-            payload.containsKey("packageName") || payload.containsKey("channelId") -> null
-            else -> TestResourceLoader.loadNode(file)
-        }
-    }
-
-    /**
-     * The platform wire from the capture-naming token `<timestamp>__<platformWire>__…` (#1160 review
-     * AA8), resolved through the `Platform` registry — never a literal. Legacy names carry no platform
-     * token (a single segment, or an UPPER-CASE screen label in that slot) and resolve to
-     * [Platform.Unknown]; a lowercase token that is not a registered wire FAILS LOUD.
-     */
-    private fun platformOf(path: String): Platform {
-        val segments = path.substringAfterLast('/').removeSuffix(".json").split("__")
-        val token = segments.getOrNull(1)?.takeIf { segments.size >= 3 && it.matches(Regex("[a-z0-9_]+")) }
-            ?: return Platform.Unknown
-        return Platform.fromWire(token) ?: error("$path: unknown platform wire '$token'")
-    }
-
-    private fun build(f: Fixture, tree: UiNode = f.tree): UiSkeletonDto? =
-        SkeletonBuilder.build(tree, null, META, platformOf(f.path), DAY)
-
-    /** ONE build per fixture (review EE5); [builtJson] reuses the JSON the builder already measured. */
-    private val outcomes: List<Pair<Fixture, SkeletonBuilder.Outcome>> by lazy {
-        corpus.map { it to SkeletonBuilder.outcome(it.tree, null, META, platformOf(it.path), DAY) }
-    }
-
-    private val built: List<Pair<Fixture, UiSkeletonDto?>> by lazy {
-        outcomes.map { (f, o) -> f to (o as? SkeletonBuilder.Outcome.Built)?.skeleton }
-    }
-
-    private val builtJson: Map<String, String> by lazy {
-        outcomes.mapNotNull { (f, o) -> (o as? SkeletonBuilder.Outcome.Built)?.let { f.path to it.json } }.toMap()
-    }
-
-    /** One value's slot through the whole builder (a one-node frame); null when the frame is refused. */
-    private fun slotOf(value: String): TextSlot? =
-        SkeletonBuilder.build(UiNode(className = "android.widget.TextView", text = value), null, META, Platform.DoorDash, DAY)
-            ?.root?.text?.get("text")
-
-    /**
-     * `CensusHash.canonical` (review SS8: nullable — no fixed point). A value with no canonical form is
-     * withheld by the builder, so for the mirrors it falls back to its trimmed form (never seeded).
-     */
-    private fun canon(value: String): String = CensusHash.canonical(value) ?: value.trim()
-
-    private fun walkNodes(node: UiNode, visit: (UiNode) -> Unit) {
-        visit(node)
-        node.children.forEach { walkNodes(it, visit) }
-    }
-
-    private fun walkSkeleton(node: UiSkeletonNodeDto, visit: (UiSkeletonNodeDto) -> Unit) {
-        visit(node)
-        node.children.forEach { walkSkeleton(it, visit) }
-    }
-
-    private fun allHashes(item: UiSkeletonDto): List<String> {
-        val out = mutableListOf<String>()
-        item.windowTitle?.h?.let(out::add)
-        walkSkeleton(item.root) { n -> n.text.values.mapNotNullTo(out) { it.h } }
-        return out
-    }
-
-    /** Rewrite every scrubbable string of every node (the #835 SSOT), keeping structure. */
-    private fun mapTree(node: UiNode, transform: (String?) -> String?): UiNode =
-        node.mapScrubbableStrings(transform).copy(children = node.children.map { mapTree(it, transform) })
+class SkeletonCorpusTest : SkeletonCorpusTestBase() {
 
     @Test
     fun `the corpus is non-trivial and includes the sensitive, negative and session folders`() {
@@ -190,8 +59,6 @@ class SkeletonCorpusTest {
         assertTrue(corpus.none { it.path.startsWith("INBOX/") })
         assertTrue(built.count { it.second != null } >= 700)
     }
-
-    // (a) ------------------------------------------------------------------------------------------
 
     @Test
     fun `(a) no string field outside the allowlist and no bounds on any node`() {
@@ -226,253 +93,6 @@ class SkeletonCorpusTest {
         assertTrue(problems.take(20).joinToString("\n"), problems.isEmpty())
     }
 
-    // The id grammar gate (ADR-0011 §1, #1160 review AA10) -----------------------------------------
-
-    @Test
-    fun `the id gate rejects exactly the dynamic ids in the corpus, and no rejected id is shipped`() {
-        val rejected = sortedSetOf<String>()
-        corpus.forEach { f ->
-            walkNodes(f.tree) { n -> n.viewIdResourceName?.let { if (!SkeletonBuilder.isStaticId(it)) rejected += it } }
-        }
-        // A static id that trips the gate is a red test here, never a silent drop (review CC7 admitted a
-        // single internal space, so `Artwork Image` is static now).
-        assertEquals(
-            sortedSetOf(
-                "PRIMARY_BUTTON_3f488d4a-0f0b-4fb9-9c86-c4e0253ba22a",
-                "PRIMARY_BUTTON_62132347-ff07-4f36-988d-db9d3cfa4dbd",
-                "PRIMARY_BUTTON_9db4e2af-5a58-4a43-ba63-295126ceddef",
-            ),
-            rejected,
-        )
-        built.mapNotNull { it.second }.forEach { item ->
-            walkSkeleton(item.root) { n -> n.id?.let { assertTrue(it, SkeletonBuilder.isStaticId(it)) } }
-        }
-        // Review JJ1: the frame-level containment rule nulls no committed chrome id — no identity seed
-        // collides with a static id anywhere in the corpus (every static raw id reaches the wire).
-        val frameDropped = sortedSetOf<String>()
-        for ((f, item) in built) {
-            item ?: continue
-            fun pair(n: UiNode, s: UiSkeletonNodeDto) {
-                val raw = n.viewIdResourceName
-                if (raw != null && SkeletonBuilder.isStaticId(raw) && s.id == null) frameDropped += "${f.path}: $raw"
-                n.children.zip(s.children).forEach { (a, b) -> pair(a, b) }
-            }
-            pair(f.tree, item.root)
-        }
-        assertEquals(sortedSetOf<String>(), frameDropped)
-    }
-
-    /**
-     * Reviews OO2 + QQ1: build [tree] with the frame-level rule ON and OFF (the diagnostic seam) and return
-     * (flips, unexplained). A flip is a text slot the frame rule alone turned `withheld`; it is explained
-     * only by the builder's EXACT seeding rule on this frame — its canonical value equals a seeded exact
-     * value (value-judged on the canonical form, or on the raw form within the cap; or an identity id's
-     * text/desc), or it contains a NAME run (from the NAME node's TEXT when non-blank, otherwise its DESC).
-     * Anything else is chrome the rule over-withholds (the GG5 / LL1 class). Never records frame text.
-     */
-    private fun frameFlips(path: String, platform: Platform, tree: UiNode): Pair<Int, List<String>> {
-        val on = (SkeletonBuilder.outcome(tree, null, META, platform, DAY) as? SkeletonBuilder.Outcome.Built)?.skeleton
-            ?: return 0 to emptyList()
-        val off = (SkeletonBuilder.outcomeWithoutFrameRule(tree, null, META, platform, DAY) as? SkeletonBuilder.Outcome.Built)
-            ?.skeleton ?: return 0 to emptyList()
-        val seededExact = HashSet<String>()
-        val nameRuns = HashSet<String>()
-        walkNodes(tree) { n ->
-            val kind = CustomerTextMarkers.idMarkerFor(n.viewIdResourceName)?.kind
-            n.scrubbableStrings().forEach { (field, v) ->
-                if (v.isNullOrBlank()) return@forEach
-                val c = canon(v)
-                if (PiiShapes.containsMask(c)) return@forEach
-                val raw = v.trim()
-                if (valueJudged(c) || (raw.length <= 40 && valueJudged(raw))) seededExact += c
-                val rendered = field == UiNodeTextField.TEXT || field == UiNodeTextField.CONTENT_DESCRIPTION
-                if (rendered && kind != null && kind != CustomerTextMarkers.IdentityKind.CONTENT) seededExact += c
-            }
-            if (kind == CustomerTextMarkers.IdentityKind.NAME) {
-                val source = if (!n.text.isNullOrBlank()) n.text else n.contentDescription?.takeIf { it.isNotBlank() }
-                source?.let { canon(it) }?.takeIf { !PiiShapes.containsMask(it) }
-                    ?.let { nameRuns += letterRuns(it, minLetters = 2) }
-            }
-        }
-        var flips = 0
-        val unexplained = mutableListOf<String>()
-        fun walk(n: UiNode, a: UiSkeletonNodeDto, b: UiSkeletonNodeDto) {
-            n.scrubbableStrings().forEach { (field, v) ->
-                if (v.isNullOrBlank()) return@forEach
-                if (a.text[field.wire] == TextSlot.WITHHELD && b.text[field.wire] != TextSlot.WITHHELD) {
-                    flips++
-                    val c = canon(v)
-                    if (c !in seededExact && letterRuns(c).none { it in nameRuns }) {
-                        unexplained += "$path: ${field.wire} flipped by the frame rule"
-                    }
-                }
-            }
-            n.children.indices.forEach { walk(n.children[it], a.children[it], b.children[it]) }
-        }
-        walk(tree, on.root, off.root)
-        return flips to unexplained
-    }
-
-    /** QQ1's third substitution family: a BARE first name in name masks (not caught per field). */
-    private fun barePseudonym(mask: String): String =
-        if (mask.startsWith("[redacted") || mask == "[name]") "Jordan" else pseudonym(mask, 0)
-
-    /**
-     * Hand-written guard inputs (QQ1): the frame-rule shapes, with RAW pseudonyms, so the guard fires even
-     * though the committed corpus (masked) and its pseudonym substitutions produce no frame-rule flips.
-     */
-    private val guardFixtures: List<Pair<String, UiNode>> = listOf(
-        // AA1: a raw pseudonym repeated beside a `customer_name` (exact + run containment).
-        "aa1" to UiNode(
-            className = "android.widget.LinearLayout",
-            viewIdResourceName = "com.doordash.driverapp:id/contact_row",
-            contentDescription = "Jordan",
-            children = listOf(
-                UiNode(className = "android.widget.TextView", viewIdResourceName = "com.doordash.driverapp:id/customer_name", text = "Jordan"),
-                UiNode(className = "android.widget.TextView", text = "Jordan's order"),
-                UiNode(className = "android.widget.TextView", text = "Call Jordan"),
-                UiNode(className = "android.widget.TextView", text = "Leave at door"),
-            ),
-        ),
-        // PP2: a NAME rendered only in its desc.
-        "desc-only-name" to UiNode(
-            className = "android.widget.LinearLayout",
-            viewIdResourceName = "com.doordash.driverapp:id/contact_row",
-            children = listOf(
-                UiNode(className = "android.widget.ImageView", viewIdResourceName = "com.doordash.driverapp:id/customer_name", contentDescription = "Morgan"),
-                UiNode(className = "android.widget.TextView", text = "Morgan, 2 items"),
-                UiNode(className = "android.widget.TextView", text = "Continue"),
-            ),
-        ),
-        // LL1 / PP6: an ADDRESS and an EXACT id seed their exact values only.
-        "exact-seeds" to UiNode(
-            className = "android.widget.LinearLayout",
-            viewIdResourceName = "com.doordash.driverapp:id/sheet",
-            children = listOf(
-                UiNode(className = "android.widget.TextView", viewIdResourceName = "com.doordash.driverapp:id/address_line_1", text = "Bay View Commons"),
-                UiNode(className = "android.widget.TextView", text = "Bay View Commons"),
-                UiNode(className = "android.widget.TextView", text = "View details"),
-                UiNode(className = "android.widget.TextView", viewIdResourceName = "com.doordash.driverapp:id/tvTitle", text = "Riley"),
-                UiNode(className = "android.widget.ImageView", contentDescription = "Riley"),
-            ),
-        ),
-    ).map { (name, tree) -> name to tree.restoreParents() }
-
-    @Test
-    fun `frame-level flips are explained by the seeding rule (reviews OO2, QQ1, SS5)`() {
-        val unexplained = mutableListOf<String>()
-        var committedFlips = 0
-        var substitutedFlips = 0
-        var bareFlips = 0
-        for ((f, _) in built) {
-            val (n, u) = frameFlips(f.path, platformOf(f.path), f.tree)
-            committedFlips += n
-            unexplained += u
-            // QQ1: substitute RAW identity values back into the mask slots, so seeding actually happens.
-            // (b)'s two families ("Jordan T" / "Morgan K" …) are caught per FIELD by the name shape, so
-            // they never exercise the frame rule; a third, BARE-first-name family ("Jordan" / "Morgan" in
-            // name masks — a realistic `user_name` render) is caught only by the frame rule's seeding.
-            if (corpusHasNoMask(f.tree)) continue
-            for (variant in 0..2) {
-                val substituted = mapTree(f.tree) { s ->
-                    s?.let { MASK_TOKEN.replace(it) { m -> if (variant == 2) barePseudonym(m.value) else pseudonym(m.value, variant) } }
-                }
-                val (sn, su) = frameFlips("${f.path}#v$variant", platformOf(f.path), substituted)
-                if (variant == 2) bareFlips += sn else substitutedFlips += sn
-                unexplained += su
-            }
-        }
-        var handFlips = 0
-        for ((name, tree) in guardFixtures) {
-            val (n, u) = frameFlips("handwritten:$name", Platform.DoorDash, tree)
-            handFlips += n
-            unexplained += u
-        }
-        println("frame-rule flips: committed=$committedFlips substitutedB=$substitutedFlips bareNames=$bareFlips handwritten=$handFlips")
-        assertTrue(unexplained.take(20).joinToString("\n"), unexplained.isEmpty())
-        // The guard must never go vacuous again: it has to see real seeding.
-        // The guard must never go vacuous again. The committed corpus is masked and its substitutions are
-        // caught per field (only one committed fixture has an id-less mask beside a masked NAME, and that
-        // one is marker-led), so the floor is pinned on the hand-written shapes: AA1 (3) + desc-only
-        // name (1) + the ADDRESS and EXACT exact duplicates (2).
-        assertEquals("hand-written frame-rule flips", 6, handFlips)
-    }
-
-    /**
-     * Review SS5: the flip guard proves SELF-CONSISTENCY (every flip matches the seeding rule), not chrome
-     * RECALL — a NAME run that over-withholds is "explained" by construction. So chrome recall is pinned
-     * explicitly: these slots, classes and ids must survive beside the identity values that once
-     * suppressed them (the LL1 address words, the SS1 merchant under `user_name`, the NN3 TalkBack desc).
-     */
-    @Test
-    fun `chrome recall - named chrome slots, classes and ids are not suppressed by identity seeding (review SS5)`() {
-        fun build(vararg nodes: UiNode): List<UiSkeletonNodeDto> = SkeletonBuilder.build(
-            UiNode(className = "android.widget.LinearLayout", viewIdResourceName = "com.doordash.driverapp:id/sheet", children = nodes.toList())
-                .restoreParents(),
-            null, META, Platform.DoorDash, DAY,
-        )!!.root.children
-        fun text(n: UiSkeletonNodeDto) = n.text.getValue("text")
-        fun hashed(value: String, slot: TextSlot) =
-            assertTrue("'$value' must hash (chrome recall)", slot.h != null && slot.kind.startsWith("words:"))
-
-        val address = build(
-            UiNode(className = "android.widget.TextView", viewIdResourceName = "com.doordash.driverapp:id/address_line_1", text = "Bay View Commons"),
-            UiNode(className = "android.widget.TextView", text = "View details"),
-            UiNode(className = "android.widget.ImageView", viewIdResourceName = "com.doordash.driverapp:id/roadNameLayout"),
-        )
-        hashed("View details", text(address[1]))
-        assertEquals("com.doordash.driverapp:id/roadNameLayout", address[2].id)
-        assertEquals("android.widget.ImageView", address[2].className)
-
-        val merchant = build(
-            UiNode(className = "android.widget.TextView", viewIdResourceName = "com.doordash.driverapp:id/user_name", text = "Jack in the Box"),
-            UiNode(className = "android.widget.TextView", text = "Head to the store"),
-            UiNode(className = "android.widget.TextView", text = "Sign in"),
-            UiNode(className = "android.widget.TextView", text = "Total"),
-        )
-        hashed("Head to the store", text(merchant[1]))
-        hashed("Sign in", text(merchant[2]))
-        hashed("Total", text(merchant[3]))
-        merchant.forEach { assertEquals("android.widget.TextView", it.className) }
-
-        val talkback = build(
-            UiNode(className = "android.widget.TextView", viewIdResourceName = "com.doordash.driverapp:id/customer_name", text = "Adam", contentDescription = "Customer name Adam"),
-            UiNode(className = "android.widget.TextView", text = "Customer"),
-            UiNode(className = "android.widget.TextView", text = "Name"),
-            UiNode(className = "android.widget.TextView", viewIdResourceName = "com.doordash.driverapp:id/customer_name_label", text = "Customer name"),
-        )
-        hashed("Customer", text(talkback[1]))
-        hashed("Name", text(talkback[2]))
-        assertEquals("com.doordash.driverapp:id/customer_name", talkback[0].id)
-        assertEquals("com.doordash.driverapp:id/customer_name_label", talkback[3].id)
-    }
-
-    @Test
-    fun `the class gate rejects no committed class, and no rejected class is shipped (review CC1)`() {
-        val rejected = sortedSetOf<String>()
-        corpus.forEach { f ->
-            walkNodes(f.tree) { n -> n.className?.let { if (!ClassNameGrammar.isStatic(it)) rejected += it } }
-        }
-        // Empty today: a new dynamic or text-like class in the corpus turns this red, never a silent drop.
-        assertEquals(sortedSetOf<String>(), rejected)
-        built.mapNotNull { it.second }.forEach { item ->
-            walkSkeleton(item.root) { n -> n.className?.let { assertTrue(it, ClassNameGrammar.isStatic(it)) } }
-        }
-    }
-
-    // (b) ------------------------------------------------------------------------------------------
-
-    /** Two shape-matched pseudonym families per mask kind. */
-    private fun pseudonym(mask: String, variant: Int): String = when {
-        mask.startsWith("[redacted") || mask == "[name]" -> if (variant == 0) "Jordan T" else "Morgan K"
-        mask == "[address]" -> if (variant == 0) "1425 Sample Ridge Dr" else "3310 Oak Hollow Ln"
-        mask == "[email]" -> if (variant == 0) "jt@example.com" else "mk@example.org"
-        mask == "[phone]" -> if (variant == 0) "210-555-0100" else "512-555-0199"
-        mask == "[card]" -> if (variant == 0) "Visa ••••6222" else "Visa ••••1934"
-        mask == "[note]" -> if (variant == 0) "leave it at the door" else "ring the bell twice"
-        else -> error(mask)
-    }
-
     @Test
     fun `(b) pseudonym invariance under two shape-matched substitutions into the mask slots`() {
         val problems = mutableListOf<String>()
@@ -490,120 +110,6 @@ class SkeletonCorpusTest {
         assertTrue("substituted fixtures $substitutedFixtures", substitutedFixtures >= 100)
         assertTrue(problems.take(20).joinToString("\n"), problems.isEmpty())
     }
-
-    private fun corpusHasNoMask(tree: UiNode): Boolean {
-        var found = false
-        walkNodes(tree) { n -> if (n.scrubbableStrings().any { (_, v) -> v != null && MASK_TOKEN.containsMatchIn(v) }) found = true }
-        return !found
-    }
-
-    private fun diff(a: UiSkeletonDto?, b: UiSkeletonDto?): String {
-        if (a == null || b == null) return " (a=${a != null}, b=${b != null})"
-        val out = mutableListOf<String>()
-        fun walk(x: UiSkeletonNodeDto, y: UiSkeletonNodeDto, p: String) {
-            if (x.text != y.text) out += "$p ${x.id}: ${x.text} vs ${y.text}"
-            x.children.zip(y.children).forEachIndexed { i, (cx, cy) -> walk(cx, cy, "$p/$i") }
-        }
-        walk(a.root, b.root, "")
-        return ": " + out.take(3).joinToString("; ")
-    }
-
-    // (c) ------------------------------------------------------------------------------------------
-
-    /**
-     * Redact the WHOLE tree the way the corpus intake does (`SnapshotRedactor.redact` over the serialized
-     * frame — its replacements are DOCUMENT-WIDE, #1160 review AA1), then walk original / redacted /
-     * skeleton in parallel and report every field the redaction changed that still carries an `h`.
-     * Returns (rewritten count, decoy-rewritten count, problems).
-     */
-    private fun parityProblems(path: String, tree: UiNode, item: UiSkeletonDto): Triple<Int, Int, List<String>> {
-        val redacted = UiNodeSchema.deserialize(SnapshotRedactor.redact(UiNodeSchema.serialize(tree)))
-        var rewritten = 0
-        var decoys = 0
-        var exempt = 0
-        val problems = mutableListOf<String>()
-        // Values the intake propagates document-wide (a `PII_ID_SUFFIXES` id carries them) but the census
-        // does NOT seed frame-wide, vs values the census DOES seed from an id (an identity id's rendered
-        // text/desc — reviews CC3, EE1). Canonical form, as the builder keys them (review EE2).
-        val propagatedNotSeeded = HashSet<String>()
-        val idSeeded = HashSet<String>()
-        val idRuns = HashSet<String>()
-        walkNodes(tree) { n ->
-            val id = n.viewIdResourceName
-            val kind = CustomerTextMarkers.idMarkerFor(id)?.kind
-            val identity = kind == CustomerTextMarkers.IdentityKind.NAME || kind == CustomerTextMarkers.IdentityKind.ADDRESS ||
-                kind == CustomerTextMarkers.IdentityKind.EXACT
-            n.scrubbableStrings().forEach { (field, v) ->
-                if (v.isNullOrBlank()) return@forEach
-                val canonical = canon(v)
-                val seeds = identity && !PiiShapes.containsMask(canonical) &&
-                    (field == UiNodeTextField.TEXT || field == UiNodeTextField.CONTENT_DESCRIPTION)
-                when {
-                    seeds -> idSeeded += canonical
-                    PiiShapes.hasPiiIdSuffix(id) -> propagatedNotSeeded += canonical
-                }
-            }
-            // Reviews GG1, LL1, NN3, PP2: only a NAME contributes letter runs (≥2 letters) — from its TEXT
-            // when the text is non-blank, otherwise from its CONTENT_DESCRIPTION.
-            if (kind == CustomerTextMarkers.IdentityKind.NAME) {
-                val source = if (!n.text.isNullOrBlank()) n.text else n.contentDescription?.takeIf { it.isNotBlank() }
-                source?.let { canon(it) }?.takeIf { !PiiShapes.containsMask(it) }
-                    ?.let { idRuns += letterRuns(it, minLetters = 2) }
-            }
-        }
-        // Review HH3: every canonical key a value predicate caught ANYWHERE in the frame — on the canonical
-        // form, or on the raw trimmed form when that is within the cap (the builder's bounded raw pass).
-        val judgedKeys = HashSet<String>()
-        walkNodes(tree) { n ->
-            n.scrubbableStrings().forEach { (_, v) ->
-                if (v.isNullOrBlank()) return@forEach
-                val raw = v.trim()
-                val canonical = canon(v)
-                if (valueJudged(canonical) || (raw.length <= 40 && valueJudged(raw))) judgedKeys += canonical
-            }
-        }
-        fun walk(o: UiNode, r: UiNode, s: UiSkeletonNodeDto) {
-            val redactedValues = r.scrubbableStrings().toMap()
-            for ((field, value) in o.scrubbableStrings()) {
-                if (value.isNullOrBlank() || redactedValues[field] == value) continue
-                rewritten++
-                if (CorpusDecoys.isDecoy(value)) decoys++
-                if (s.text[field.wire]?.h == null) continue
-                // ADR-0011 §2 frame-level rule (reviews CC3, EE1): a PII id that does not SEED the frame —
-                // an intake-only id, a content id, or a non-text field of an identity id — withholds its
-                // own field only, so a chrome value it shares with an id-less node may be rewritten
-                // document-wide by the intake yet hashed by the census. Exempt exactly that case: the
-                // value survives redaction in isolation, and such a field is its ONLY cause (review DD1:
-                // no seeding identity-id occurrence and no value-judging step anywhere in the frame).
-                val trimmed = canon(value)
-                if (redactedInIsolation(o.viewIdResourceName, field.wire, value) == value &&
-                    trimmed in propagatedNotSeeded && trimmed !in idSeeded && trimmed !in judgedKeys &&
-                    letterRuns(trimmed).none { it in idRuns }
-                ) {
-                    exempt++
-                    continue
-                }
-                problems += "$path: '${field.wire}' is rewritten by the redactor but hashed"
-            }
-            check(o.children.size == r.children.size && o.children.size == s.children.size) { "$path: shape drift" }
-            o.children.indices.forEach { walk(o.children[it], r.children[it], s.children[it]) }
-        }
-        walk(tree, redacted, item.root)
-        if (exempt > 0) println("$path: $exempt intake-only-id parity exemption(s) (ADR §2, review CC3)")
-        return Triple(rewritten, decoys, problems)
-    }
-
-    /**
-     * The §2 value-judging steps 3, 4, 5, 7, 8 through their PUBLIC owners (the builder's
-     * `withholdingStep` is internal to `:core:pipeline`) — used only to prove an exemption has no other
-     * cause, so a drift here can only make the guard STRICTER (it would refuse an exemption).
-     */
-    private fun valueJudged(trimmed: String): Boolean =
-        CustomerTextMarkers.unredactedMarker(trimmed) != null ||
-            PiiShapes.customerLeadIn(trimmed) != null ||
-            PiiShapes.containsMask(trimmed) ||
-            PiiShapes.hasNameShape(trimmed) ||
-            PiiShapes.VALUE_SHAPES.any { it.hits(trimmed) }
 
     @Test
     fun `(c) full-tree parity holds on the raw-only QUOTED_NOTE value (review FF1)`() {
@@ -655,26 +161,6 @@ class SkeletonCorpusTest {
         assertEquals(problems.toString(), 1, problems.size)
     }
 
-    /**
-     * Maximal Unicode-letter runs, case-folded — the test-side mirror of the builder's private token
-     * split (review GG1). Used only to REFUSE an exemption, so a drift can only make the guard stricter.
-     */
-    private fun letterRuns(value: String, minLetters: Int = 0): List<String> =
-        Regex("\\p{L}+").findAll(value)
-            .map { it.value }
-            .filter { it.codePointCount(0, it.length) >= minLetters } // HH2: letter code points
-            .map { CaseFold.fold(it) } // HH1: the one fold the builder uses
-            .toList()
-
-    private fun redactedInIsolation(id: String?, wire: String, value: String): String {
-        val json = Json.encodeToString(
-            JsonObject.serializer(),
-            JsonObject(listOfNotNull(id?.let { "id" to JsonPrimitive(it) }, wire to JsonPrimitive(value)).toMap()),
-        )
-        val out = SnapshotRedactor.redact(json)
-        return (Json.parseToJsonElement(out).jsonObject[wire] as JsonPrimitive).content
-    }
-
     @Test
     fun `(c) redactor parity - any value the FULL-TREE redaction rewrites has no h`() {
         val problems = mutableListOf<String>()
@@ -709,8 +195,6 @@ class SkeletonCorpusTest {
         assertTrue(problems.joinToString(), problems.isEmpty())
     }
 
-    // (d) ------------------------------------------------------------------------------------------
-
     @Test
     fun `(d) every SENSITIVE fixture the markers catch yields no skeleton`() {
         val sensitive = built.filter { it.first.path.startsWith("SENSITIVE/") }
@@ -718,8 +202,6 @@ class SkeletonCorpusTest {
         assertTrue("caught ${caught.size} of ${sensitive.size}", caught.size >= 10)
         caught.forEach { (f, item) -> assertNull("${f.path} must yield no skeleton", item) }
     }
-
-    // (e) ------------------------------------------------------------------------------------------
 
     @Test
     fun `(e) no h equals the census hash of a PII-valued decoy or of a mask token`() {
@@ -738,8 +220,6 @@ class SkeletonCorpusTest {
         // Sanity: the chrome decoy is legitimately hashable (it is a label, not PII).
         assertTrue(slotOf("Hand it to me: ")?.h != null)
     }
-
-    // (f) ------------------------------------------------------------------------------------------
 
     @Test
     fun `(f) determinism, canonical JSON and idempotence under the corpus intake`() {
@@ -761,27 +241,6 @@ class SkeletonCorpusTest {
             if (rebuilt != item) problems += "${f.path}: re-redaction changed the skeleton${diff(item, rebuilt)}"
         }
         assertTrue(problems.take(20).joinToString("\n"), problems.isEmpty())
-    }
-
-    // Seeded property (#878) -------------------------------------------------------------------------
-
-    private val piiFragments = listOf(
-        "Jordan T", "morgan k.", "José  R", "1425 Sample Ridge Dr", "3310 Oak Hollow Ln", "San Antonio, TX 78254",
-        "7610 Fletchers", "Apt 12", "Unit 4B", "Suite 200", "pin 4821", "PIN:0000", "210-555-0100",
-        "sam@example.com", "\"leave it at the door\"", "Visa ••••6222", "Gate code 1234",
-    )
-    private val chrome = listOf(
-        "Accept", "Decline", "Pickup", "Deliver by", "Hand it to me", "Confirm", "is waiting", "Order",
-        "Continue", "Arrived", "at the door", "Tap", "items", "\$7.50", "3.2 mi", "&", "→", "Next",
-    )
-
-    private val valueArb: Arb<String> = arbitrary { rs ->
-        val parts = mutableListOf<String>()
-        repeat(1 + rs.random.nextInt(4)) {
-            parts += if (rs.random.nextInt(3) == 0) piiFragments[rs.random.nextInt(piiFragments.size)]
-            else chrome[rs.random.nextInt(chrome.size)]
-        }
-        parts.shuffled(rs.random).joinToString(" ")
     }
 
     @Test
@@ -815,18 +274,6 @@ class SkeletonCorpusTest {
             }
         }
         assertTrue("the property must exercise PII-shaped inputs ($piiSeen)", piiSeen > 50)
-    }
-
-    /** Envelope/slot vocabulary an input token may legitimately coincide with. */
-    private val vocab = ("schemaId hashDomain filterRev fingerprint platform platformAppVersion appVersion " +
-        "rulesetReleaseTag engineVersion rulesetFormatVersion day windowTitle root isClickable isEnabled " +
-        "isChecked text children kind withheld digits mixed words uinode.skeleton.v1 doordash corpus test " +
-        "clickLabel 2026-09-30")
-
-    private fun stripClassAndId(e: JsonElement): JsonElement = when (e) {
-        is JsonObject -> JsonObject(e.filterKeys { it != "class" && it != "id" }.mapValues { stripClassAndId(it.value) })
-        is JsonArray -> JsonArray(e.map { stripClassAndId(it) })
-        else -> e
     }
 
     @Test
