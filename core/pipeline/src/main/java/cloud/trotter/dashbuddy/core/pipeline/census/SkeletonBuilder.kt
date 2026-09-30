@@ -182,12 +182,22 @@ object SkeletonBuilder {
         /** The scan itself failed (its fail-closed sentinel) — a build failure, not a sensitive frame. */
         data class ScanFailed(override val tree: UiNode) : SensitiveVerdict
 
+        /** The three outcomes of a marker scan. */
+        enum class Kind { CLEAR, HIT, SCAN_FAILED }
+
         companion object {
+            /** The ONE mapping of a `SensitiveTextMarkers.findMarker` result (review UU9). */
+            fun classify(marker: String?): Kind = when (marker) {
+                null -> Kind.CLEAR
+                SensitiveTextMarkers.NORMALIZE_FAILED -> Kind.SCAN_FAILED
+                else -> Kind.HIT
+            }
+
             /** Map a `SensitiveTextMarkers.findMarker(tree)` result to a verdict bound to [tree]. */
-            fun of(tree: UiNode, marker: String?): SensitiveVerdict = when (marker) {
-                null -> Clear(tree)
-                SensitiveTextMarkers.NORMALIZE_FAILED -> ScanFailed(tree)
-                else -> Hit(tree, marker)
+            fun of(tree: UiNode, marker: String?): SensitiveVerdict = when (classify(marker)) {
+                Kind.CLEAR -> Clear(tree)
+                Kind.HIT -> Hit(tree, marker!!)
+                Kind.SCAN_FAILED -> ScanFailed(tree)
             }
         }
     }
@@ -212,19 +222,6 @@ object SkeletonBuilder {
         // BUILD failure, never mis-reported as a bad third-party tree (review II5).
         Outcome.Refused(Refusal.BUILD_FAILED)
     }
-
-    /**
-     * DIAGNOSTIC SEAM — never call in production (review OO2): [outcome] with the FRAME-LEVEL duplicate /
-     * containment rule switched off (per-field filtering unchanged), so the corpus test can pin exactly
-     * which slots the frame-level rule flips to `withheld` and prove no chrome is suppressed by it.
-     */
-    fun outcomeWithoutFrameRule(
-        tree: UiNode,
-        windowTitle: String?,
-        meta: ReplayMetadata,
-        platform: Platform,
-        day: LocalDate,
-    ): Outcome = outcome(tree, windowTitle, meta, platform, day, FrameFilter(::withholdingStep, frameLevel = false))
 
     /** Thrown ONLY by the raw-tree validation in [FrameFilter.scan]: the input, not the builder, is bad. */
     internal class InvalidTree(message: String) : Exception(message)
@@ -286,10 +283,11 @@ object SkeletonBuilder {
 
     private val DAY_FORMAT: DateTimeFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd", Locale.ROOT)
 
-    private fun sensitivity(marker: String?, refusal: Refusal): Refusal? = when (marker) {
-        null -> null
-        SensitiveTextMarkers.NORMALIZE_FAILED -> Refusal.BUILD_FAILED
-        else -> refusal
+    /** The title path through the ONE marker → verdict mapping ([SensitiveVerdict.classify], review UU9). */
+    private fun sensitivity(marker: String?, refusal: Refusal): Refusal? = when (SensitiveVerdict.classify(marker)) {
+        SensitiveVerdict.Kind.CLEAR -> null
+        SensitiveVerdict.Kind.HIT -> refusal
+        SensitiveVerdict.Kind.SCAN_FAILED -> Refusal.BUILD_FAILED
     }
 
     /**
@@ -332,7 +330,8 @@ object SkeletonBuilder {
         return tokens.indices.none { i ->
             val tail = tokens.subList(i, tokens.size).joinToString(" ")
             val prefix = CustomerTextMarkers.unredactedMarker(tail) ?: PiiShapes.customerLeadIn(tail)
-            prefix != null && tail.length > prefix.length && tail[prefix.length].isUpperCase()
+            // UU5: judge the next CODE POINT (a supplementary-plane capital is a capital).
+            prefix != null && tail.length > prefix.length && Character.isUpperCase(tail.codePointAt(prefix.length))
         }
     }
 
@@ -395,7 +394,7 @@ object SkeletonBuilder {
     internal class FrameFilter(
         private val judge: (String) -> FilterStep?,
         private val unfiltered: (String) -> TextSlot = ::unfilteredSlot,
-        /** False ONLY for the diagnostic seam [outcomeWithoutFrameRule] (review OO2). */
+        /** False ONLY for `census.diagnostics.DiagnosticSkeletonBuilder` (reviews OO2, UU7). */
         private val frameLevel: Boolean = true,
     ) {
         /**
@@ -418,6 +417,14 @@ object SkeletonBuilder {
 
         /** Letter runs (≥ [MIN_IDENTITY_RUN] letters, folded) of NAME identity ids' text/desc (GG1, LL1). */
         private val identityRuns = HashSet<String>()
+
+        /**
+         * The WHOLE value of an EXACT / ADDRESS identity text/desc, case-folded with every non-letter removed,
+         * as ONE run — matched only against a node id / class (camel segments and their contiguous joins,
+         * review TT2): `user_name` "Riley" nulls `chipRiley`, "Jack in the Box" nulls `jackInTheBoxLogo`,
+         * while "10927 Culebra Road" never equals a segment join of `roadNameLayout`.
+         */
+        private val wholeValueRuns = HashSet<String>()
 
         /** Canonical form per raw trimmed value, memoized per frame (review SS7); null = no fixed point. */
         private val canonicals = HashMap<String, Canon>()
@@ -491,8 +498,16 @@ object SkeletonBuilder {
             val desc = descField?.takeIf { it.converged }?.canonical?.takeIf { !PiiShapes.containsMask(it) }
             text?.let { caught += it }
             desc?.let { caught += it }
+            if (idClass == IdClass.PII_EXACT || idClass == IdClass.PII_ADDRESS) {
+                listOfNotNull(text, desc).forEach { value ->
+                    val whole = CaseFold.fold(value.filter { it.isLetter() })
+                    if (whole.codePointCount(0, whole.length) >= MIN_IDENTITY_RUN) wholeValueRuns += whole
+                }
+            }
             if (idClass != IdClass.PII_NAME) return
-            val runSource = if (textField != null) text else desc
+            // UU6: the text is the run source only when it yielded a usable canonical (not a mask, converged);
+            // otherwise fall through to the desc — `[redacted:ab12]` + desc "Adam" still propagates.
+            val runSource = text ?: desc
             runSource?.let { identityRuns += runsOf(it, minLetters = MIN_IDENTITY_RUN) }
         }
 
@@ -532,8 +547,12 @@ object SkeletonBuilder {
          * name part and the class name of every node — an id built from the customer's name
          * (`chip_Adam` beside `customer_name` "Adam") is as identifying as a text slot.
          */
-        fun containsIdentityRun(candidate: String, splitCamel: Boolean = false): Boolean =
-            frameLevel && identityRuns.isNotEmpty() && runsOf(candidate, splitCamel = splitCamel).any { it in identityRuns }
+        fun containsIdentityRun(candidate: String, splitCamel: Boolean = false): Boolean {
+            if (!frameLevel || (identityRuns.isEmpty() && (!splitCamel || wholeValueRuns.isEmpty()))) return false
+            val runs = runsOf(candidate, splitCamel = splitCamel)
+            // Review TT2: ids/classes also match an EXACT/ADDRESS seed's whole value; text slots never do.
+            return runs.any { it in identityRuns || (splitCamel && it in wholeValueRuns) }
+        }
 
         fun emit(p: Pending): UiSkeletonNodeDto {
             val text = LinkedHashMap<String, TextSlot>()
