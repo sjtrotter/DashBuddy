@@ -220,7 +220,7 @@ class UiInteractionHandler @Inject constructor(
             // stale. Refreshing before the owner scan also means that scan reads the new text.
             val separateEvidence = target.evidence != target.owner
             if (separateEvidence && (
-                    !target.evidence.refresh() ||
+                    !target.evidenceFresh || // T5 refreshed it while choosing it — once, not twice
                         target.evidence.packageName?.toString() != expectedPackage ||
                         AccNodeUtils.resolveActionOwner(target.evidence, expectedPackage) != target.owner
                     )
@@ -430,6 +430,8 @@ class UiInteractionHandler @Inject constructor(
         val relaxed: Boolean,
         val semantic: Boolean,
         val ancestors: Set<Int>,
+        /** T5: [evidence] (when it is not the owner) was refreshed successfully while choosing it. */
+        val evidenceFresh: Boolean = true,
     )
 
     private class OwnerResolution(val targets: List<OwnedTarget>, val orphaned: Int, val stale: Int, val staleSemantic: Int)
@@ -503,6 +505,7 @@ class UiInteractionHandler @Inject constructor(
                 semantic = group.any { it.semantic },
                 ancestors = members[j].flatMap { candidates[it].ancestors }
                     .mapNotNull { ownerIndexOf[it] }.filter { it != j }.toSet(),
+                evidenceFresh = evidence in fresh,
             )
         }
         return OwnerResolution(targets, orphaned, stale, staleSemantic)
