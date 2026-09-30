@@ -289,7 +289,8 @@ recognized AND UNKNOWN screen/notification/click envelopes, plus `ID_MARKERS` (v
 VALUE is PII, `hasIdSuffix`, #910/#993/#1058) on UNKNOWN screen + click envelopes only — the census kind
 table `ID_MARKER_TABLE` is the one owner of "what kind of value an id carries", and `ID_MARKERS` is its
 ALWAYS runtime-scrub projection (#1160 adds `order_cx_name`, `tvTitle`, `tvLastMessage` — `tvTitle`
-fails closed on the id alone, so an UNKNOWN sheet title under it loses its triage line) (a recognized
+fails closed on the id alone, so an UNKNOWN sheet title under it loses its triage line — on EVERY
+platform, since the suffix is a generic Hungarian name an Uber `…:id/tvTitle` also matches) (a recognized
 frame keeps its rule's deliberate decisions). A click envelope inherits the SCREEN rule's redact
 (`Observation.Click.screenRuleId`, #910). Candidate text markers are vetted against the corpus
 (`CaptureBackstopCorpusTest`); chrome-ambiguous prefixes are rejected and the rule redact is the primary

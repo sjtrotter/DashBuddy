@@ -106,8 +106,9 @@ over-inference); the remaining accept losses are #1119 and the merged card is #1
      delivery's `customerNameHash` — and the `tvLastMessage` value as plain `[redacted]`. No customer
      name or message text anywhere in the envelope.
   2. An UNKNOWN capture of any other sheet whose title renders under `tvTitle` ("Pick up order" and the
-     like) shows ONLY that title line as `[redacted]`; the rest of the X-Ray triage text is intact. That
-     single lost line is the accepted cost (ADR-0011 residual 11); anything more masked is a finding.
+     like) shows ONLY that title NODE masked — all of its fields (text, description, …) as `[redacted]`;
+     the rest of the X-Ray triage text is intact. That single lost node is the accepted cost (ADR-0011
+     residual 11, on any platform whose id ends in `tvTitle`); anything more masked is a finding.
   - Confirmed: 0/2
 
 - **🆕 NEW — captures carry the richer node fields TalkBack reads (#1147).** Every captured node can

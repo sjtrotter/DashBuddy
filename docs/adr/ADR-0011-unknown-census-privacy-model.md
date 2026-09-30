@@ -699,6 +699,10 @@ must stay green.
     UNKNOWN sheet titled "Pick up order" loses that line in the debug X-Ray triage. The census skeleton
     is unaffected — it keeps the node's id and structure (its text slot was already withheld as an
     EXACT id). A recognized chat frame masks through its rule's `redact` (customer-name hash) instead.
+    The blast radius is CROSS-PLATFORM (review round 15): the scrub is keyed on generic Hungarian-notation
+    suffixes (`tvTitle`, `tvLastMessage`), so any platform's `…:id/tvTitle` node on an UNKNOWN capture — an
+    Uber sheet title included — is scrubbed too. Accepted, not scoped by a chat ancestor: the path is
+    debug-only (release binds `NoOpCaptureBus`) and the cost is triage text, never privacy.
 
 ## Open questions (dev decisions; the same items appear in #1157's plan §10 under its own numbering — this list is the ADR's reference)
 

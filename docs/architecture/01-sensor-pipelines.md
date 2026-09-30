@@ -646,7 +646,9 @@ side-effect-free half.
   classification cannot be verified, #1160 round 13). On the id path the PII judgement is stricter-to-trigger: a
   lead-in withholds only before a Capitalized token and the name shape needs an uppercase-led
   (Capitalized or all-caps) first token and an uppercase initial (`deliver_to_label`, `tabB` travel;
-  `chip_RILEY_S` and — the recall cost — `TAB_B` are absent). Each value is
+  `chip_RILEY_S` and — the recall cost — `TAB_B` are absent). A `uid` (test-tag) value is judged by the id path FIRST
+  (`IdPathJudgement.namePartCarriesPii` — `chip_Riley_S` is withheld), then as text; a value that
+  canonicalizes to nothing (FORMAT-only) is dropped, never a phantom slot (#1160 round 15). Each value is
   judged once per frame (memoized). `outcome()` never throws: every failure is `Refusal.BUILD_FAILED`
   (the #909 inertness rule); refusals are reasons, never text.
 - *Tests* — `SkeletonCorpusTest` asserts ADR §7 (a)–(f) over the whole committed corpus (full-tree
