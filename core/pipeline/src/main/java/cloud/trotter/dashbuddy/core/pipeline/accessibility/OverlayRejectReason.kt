@@ -18,4 +18,10 @@ enum class OverlayRejectReason {
 
     /** Large enough, but owned by a package no registry platform declares `offerOverlay` for (e.g. the notification shade). */
     NOT_OVERLAY_PLATFORM,
+
+    /**
+     * A memoized CANDIDATE whose freshly-fetched root names a different package (PR #1155 review
+     * CC10) — the memo is corrected from the fresh root and the window is walked past.
+     */
+    PACKAGE_CHANGED,
 }

@@ -728,4 +728,23 @@ class WindowSpecificSnapshotTest {
         whenever(overlay.root).thenReturn(uber)
         assertEquals(listOf("uber-offer"), collect(h, Kind.STATE, windowId = 3).map { it.tree.text })
     }
+
+    @Test
+    fun `CC10 - a stale memoized CANDIDATE is corrected, counted PACKAGE_CHANGED, never refused not-enabled`() {
+        val bubble = node(ownPkg, "bubble")
+        val dd = node(ddPkg, "dd")
+        val uber = node(uberPkg, "uber-offer")
+        val shade = node(systemUiPkg, "shade")
+        val overlay = uberOverlay(9, 9, uber)
+        val h = harness(activeRoot = bubble, windows = listOf(window(1, 10, bubble, active = true), overlay, window(3, 2, dd)))
+
+        assertEquals(listOf("uber-offer"), collect(h, Kind.STATE).map { it.tree.text }) // memo: CANDIDATE
+        whenever(overlay.root).thenReturn(shade) // same id + bounds, now owned by someone else
+        assertEquals(listOf("dd"), collect(h, Kind.STATE).map { it.tree.text })
+        assertEquals(1L, h.stats.overlayRejectedCount(OverlayRejectReason.PACKAGE_CHANGED))
+        assertEquals(0L, h.stats.foregroundSkipCount(ForegroundSkipReason.FRONT_NOT_ENABLED))
+
+        assertEquals(listOf("dd"), collect(h, Kind.STATE).map { it.tree.text })
+        verify(overlay, times(2)).root // corrected memo: the next frame does not re-fetch
+    }
 }

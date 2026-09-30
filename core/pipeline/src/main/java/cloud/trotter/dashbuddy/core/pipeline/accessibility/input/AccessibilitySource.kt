@@ -304,7 +304,9 @@ class AccessibilitySource @Inject constructor(
                         // PR #1155 review BB6: a DISABLED overlay platform's overlay is not a candidate
                         // — the dasher chose to ignore that platform; read what is beneath it.
                         if (!isEnabled(probe.packageName)) continue
-                        verdict = decideOverlay(w, probe, total)
+                        // CC10: null → the memo was stale (the fresh root names another package) —
+                        // corrected; this window is not an overlay after all, keep walking.
+                        verdict = decideOverlay(w, probe, total, gen) ?: continue
                     }
                 }
                 break // the first candidate (or an unverifiable one) decides
@@ -343,17 +345,32 @@ class AccessibilitySource @Inject constructor(
     /**
      * The verdict for an ENABLED overlay candidate that is the top candidate: its root (reused from
      * the probe, else fetched once) null → refuse unreadable; else found — with the package
-     * RE-VERIFIED on the root that will be mapped (a memoized verdict is never trusted for a read):
-     * a root that now names a different package cannot be verified → refuse.
+     * RE-VERIFIED on the root that will be mapped (a memoized verdict is never trusted for a read).
+     *
+     * PR #1155 review CC10: a fresh root naming a DIFFERENT package means the memoized verdict was
+     * stale — the memo is CORRECTED from the fresh root (so the next frame does not re-fetch and
+     * refuse again), the refusal is counted truthfully as `overlayRejected{PACKAGE_CHANGED}` (never
+     * `FRONT_NOT_ENABLED`), and null tells the walk "not an overlay after all — keep walking". A
+     * fresh root with no package cannot be verified → refuse unreadable.
      */
     private fun decideOverlay(
         w: AccessibilityWindowInfo,
         probe: OverlayProbe.Candidate,
         total: Int,
-    ): Foreground {
+        gen: Long,
+    ): Foreground? {
         val root = probe.root ?: w.root ?: return Foreground.Refused(ForegroundSkipReason.FRONT_UNREADABLE)
-        if (root.packageName?.toString() != probe.packageName) {
-            return Foreground.Refused(ForegroundSkipReason.FRONT_NOT_ENABLED)
+        val live = root.packageName?.toString()
+        if (live != probe.packageName) {
+            stats.onOverlayRejected(OverlayRejectReason.PACKAGE_CHANGED)
+            if (live == null) return Foreground.Refused(ForegroundSkipReason.FRONT_UNREADABLE)
+            val corrected = if (live in Platform.overlayPackages) {
+                WindowVerdictCache.Verdict.CANDIDATE
+            } else {
+                WindowVerdictCache.Verdict.NOT_OVERLAY_PLATFORM
+            }
+            packageCache.putVerdict(w.id, live, corrected, boundsOf(w), gen)
+            return null
         }
         return Foreground.Found(LocatedWindow(w, root, total, isOverlay = true))
     }
