@@ -264,8 +264,17 @@ class AccessibilitySource @Inject constructor(
     }
 
     /** [foregroundWindow] over an ALREADY-enumerated [windows] list (one enumeration per frame). */
-    fun foregroundWindow(windows: List<AccessibilityWindowInfo>, isEnabled: (String?) -> Boolean): Foreground =
-        frontOf(windows, isEnabled, windows.size)
+    fun foregroundWindow(
+        windows: List<AccessibilityWindowInfo>,
+        isEnabled: (String?) -> Boolean,
+        display: Lazy<Long> = lazyDisplayArea(),
+    ): Foreground = frontOf(windows, isEnabled, windows.size, display)
+
+    /**
+     * PR #1155 review DD11: the display area, read at most ONCE per resolution (on first use — a walk
+     * that meets no system window never reads it) and passed down to every check of that resolution.
+     */
+    internal fun lazyDisplayArea(): Lazy<Long> = lazy(LazyThreadSafetyMode.NONE) { displayArea() }
 
     /**
      * The single window in front among the windows ABOVE [active] (PR #1155 review CC3/CC4): the same
@@ -278,13 +287,15 @@ class AccessibilitySource @Inject constructor(
         windows: List<AccessibilityWindowInfo>,
         active: AccessibilityWindowInfo,
         isEnabled: (String?) -> Boolean,
-    ): Foreground = frontOf(windows.filter { it.id != active.id && it.layer > active.layer }, isEnabled, windows.size)
+        display: Lazy<Long> = lazyDisplayArea(),
+    ): Foreground = frontOf(windows.filter { it.id != active.id && it.layer > active.layer }, isEnabled, windows.size, display)
 
     /** The ONE readable-top-or-refuse walk behind [foregroundWindow] and [frontAbove]. */
     private fun frontOf(
         windows: List<AccessibilityWindowInfo>,
         isEnabled: (String?) -> Boolean,
         total: Int,
+        display: Lazy<Long>,
     ): Foreground = try {
         val ownPkg = ownPackage()
         val ordered = windows
@@ -293,14 +304,13 @@ class AccessibilitySource @Inject constructor(
                     (it.type == AccessibilityWindowInfo.TYPE_APPLICATION || it.type == AccessibilityWindowInfo.TYPE_SYSTEM)
             }
             .sortedByDescending { it.layer }
-        var area: Long? = null // measured lazily — only when a system-layer window is inspected
         val gen = packageCache.generation // CC1: read BEFORE any fetch; stale writes are discarded
         // CC5: at most MAX_SCAN_ROOT_FETCHES discovery root fetches per walk; exhaustion refuses.
         val budget = ScanBudget(MAX_SCAN_ROOT_FETCHES)
         var verdict: Foreground = Foreground.Refused(ForegroundSkipReason.NO_CANDIDATE)
         for (w in ordered) {
             if (w.type == AccessibilityWindowInfo.TYPE_SYSTEM) {
-                val displayArea = area ?: displayArea().also { area = it }
+                val displayArea = display.value // DD11: one read per resolution, on first use
                 when (val probe = overlayProbe(w, displayArea, budget, gen)) {
                     OverlayProbe.NotCandidate -> continue // small, or a verified non-overlay package
                     // PR #1155 review DD8: with no display area the overlay question cannot be
@@ -471,8 +481,9 @@ class AccessibilitySource @Inject constructor(
         windows: List<AccessibilityWindowInfo>,
         active: AccessibilityWindowInfo,
         isEnabled: (String?) -> Boolean,
+        display: Lazy<Long> = lazyDisplayArea(),
     ): OverlayScan = try {
-        overlayFrontUnguarded(windows, active, isEnabled)
+        overlayFrontUnguarded(windows, active, isEnabled, display)
     } catch (_: Exception) {
         // PR #1155 review DD7: an exception during the scan (a stale AccessibilityWindowInfo, a
         // throwing isEnabled) means "no overlay" — the already-fetched active root is read (the
@@ -485,8 +496,9 @@ class AccessibilitySource @Inject constructor(
         windows: List<AccessibilityWindowInfo>,
         active: AccessibilityWindowInfo,
         isEnabled: (String?) -> Boolean,
+        display: Lazy<Long>,
     ): OverlayScan {
-        return when (val front = frontAbove(windows, active, isEnabled)) {
+        return when (val front = frontAbove(windows, active, isEnabled, display)) {
             is Foreground.Found -> if (front.located.isOverlay) OverlayScan.Overlay(front.located) else OverlayScan.None
             is Foreground.Refused -> when {
                 front.reason == ForegroundSkipReason.SCAN_BUDGET -> OverlayScan.Refused(front.reason)
@@ -565,8 +577,7 @@ class AccessibilitySource @Inject constructor(
                 WindowVerdictCache.Verdict.CANDIDATE -> entry.packageName?.let { return OverlayProbe.Candidate(it, null) }
             }
         }
-        val area = (bounds.right - bounds.left).coerceAtLeast(0).toLong() * (bounds.bottom - bounds.top).coerceAtLeast(0).toLong()
-        if (area.toDouble() < MIN_OVERLAY_AREA_FRACTION * displayArea) {
+        if (bounds.area().toDouble() < MIN_OVERLAY_AREA_FRACTION * displayArea) { // DD11: the one area definition
             packageCache.putVerdict(w.id, null, WindowVerdictCache.Verdict.TOO_SMALL, bounds, displayArea, gen)
             return reject(OverlayRejectReason.TOO_SMALL, OverlayProbe.NotCandidate)
         }
@@ -632,11 +643,7 @@ class AccessibilitySource @Inject constructor(
     }
 
     /** A window's on-screen area in px² (bounds are parceled with the window — no binder call). */
-    internal fun areaOf(w: AccessibilityWindowInfo): Long {
-        val r = Rect()
-        w.getBoundsInScreen(r)
-        return r.width().coerceAtLeast(0).toLong() * r.height().coerceAtLeast(0).toLong()
-    }
+    internal fun areaOf(w: AccessibilityWindowInfo): Long = boundsOf(w).area() // DD11: one definition
 
     /**
      * Maps an already-fetched [root] of [window] into a [RootSnapshot] attributed to the root's

@@ -58,7 +58,9 @@ class WindowsChangedPipeline @Inject constructor(
         .transform { coalesced ->
             val windows = source.getWindows()
             // #1152 D2: measured once per burst, shared by the list log and the overlay checks.
-            val displayArea = source.displayArea()
+            // DD11: ONE display read per burst, passed down to every walk of this burst.
+            val display = source.lazyDisplayArea()
+            val displayArea = display.value
             Timber.tag("Pipeline").d("\uD83E\uDE9F Window list: %d windows", windows.size)
             windows.forEachIndexed { i, w ->
                 // The window TITLE is app-controlled text (#1148 review G1) — logged by LENGTH only,
@@ -98,7 +100,7 @@ class WindowsChangedPipeline @Inject constructor(
             if (activeIsOwn) {
                 // H6: our bubble's layer is no cutoff — emit the window in front of the dasher.
                 // Reuse THIS enumeration (round 4): no second getWindows() per topology burst.
-                when (val front = source.foregroundWindow(windows) { it in enabled }) {
+                when (val front = source.foregroundWindow(windows, { it in enabled }, display)) {
                     is AccessibilitySource.Foreground.Found ->
                         snapshotOf(front.located.window, front.located.root, front.located.isOverlay)?.let { emit(it) }
                     is AccessibilitySource.Foreground.Refused -> {
@@ -116,7 +118,7 @@ class WindowsChangedPipeline @Inject constructor(
             // - active window not enabled (and not ours) → `frontAbove`'s single winner.
             // Either way an unreadable window above is a BARRIER and a foreign app on top emits nothing.
             if (source.packageOf(active) in enabled) {
-                when (val scan = source.overlayFront(windows, active) { it in enabled }) {
+                when (val scan = source.overlayFront(windows, active, { it in enabled }, display)) {
                     is AccessibilitySource.OverlayScan.Overlay ->
                         snapshotOf(scan.located.window, scan.located.root, overlay = true)?.let { emit(it) }
                     is AccessibilitySource.OverlayScan.Refused -> {
@@ -128,7 +130,7 @@ class WindowsChangedPipeline @Inject constructor(
                 }
                 return@transform
             }
-            when (val front = source.frontAbove(windows, active) { it in enabled }) {
+            when (val front = source.frontAbove(windows, active, { it in enabled }, display)) {
                 is AccessibilitySource.Foreground.Found ->
                     snapshotOf(front.located.window, front.located.root, front.located.isOverlay)?.let { emit(it) }
                 is AccessibilitySource.Foreground.Refused -> {

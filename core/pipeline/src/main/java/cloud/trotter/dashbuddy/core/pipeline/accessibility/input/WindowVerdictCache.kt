@@ -37,7 +37,10 @@ internal class WindowVerdictCache(private val capacity: Int = CAPACITY) {
     enum class Verdict { CANDIDATE, TOO_SMALL, NOT_OVERLAY_PLATFORM }
 
     /** Immutable screen bounds a verdict was decided on (CC1). */
-    data class Bounds(val left: Int, val top: Int, val right: Int, val bottom: Int)
+    data class Bounds(val left: Int, val top: Int, val right: Int, val bottom: Int) {
+        /** Area in px² — the ONE definition, used by the overlay size rule and the `area%` log (DD11). */
+        fun area(): Long = (right - left).coerceAtLeast(0).toLong() * (bottom - top).coerceAtLeast(0).toLong()
+    }
 
     /** [displayArea]: the display area (px²) the verdict was decided against (PR #1155 review DD5). */
     data class Entry(
