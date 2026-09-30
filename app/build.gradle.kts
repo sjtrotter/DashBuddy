@@ -201,6 +201,12 @@ android {
         compose = true
         buildConfig = true
     }
+
+    // #1162: PR CI gates only `:app:lintVitalRelease`. With `checkDependencies` the one vital run also analyzes
+    // every library module, and the root `lint.xml` (the severity owner) promotes `NewApi` to fatal there too.
+    lint {
+        checkDependencies = true
+    }
 }
 
 dependencies {

@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  #1162 — repo-wide lint severity overrides. Lint discovers this file by walking up from each module, so it is
+  the ONE owner for every Android module (a `lint { fatal += … }` in :app's DSL reached only :app's own
+  analysis — the library modules' vital analysis kept NewApi at ERROR and the gate stayed silent).
+  PR CI gates only `:app:lintVitalRelease` (FATAL issues), so `NewApi` — a call above minSdk 30, the #1161
+  `AccessibilityNodeInfo#getChecked` API-36 crash class — is promoted to fatal here. Guard a new API call with
+  `Build.VERSION.SDK_INT >= …`; never suppress it.
+-->
+<lint>
+    <issue id="NewApi" severity="fatal" />
+</lint>
