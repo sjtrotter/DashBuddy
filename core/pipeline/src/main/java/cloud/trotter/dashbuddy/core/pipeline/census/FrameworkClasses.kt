@@ -2,6 +2,7 @@ package cloud.trotter.dashbuddy.core.pipeline.census
 
 import cloud.trotter.dashbuddy.domain.census.contract.ClassNameGrammar
 import cloud.trotter.dashbuddy.domain.util.sha256OrNull
+import java.io.IOException
 import java.io.InputStream
 import kotlin.coroutines.cancellation.CancellationException
 import java.nio.ByteBuffer
@@ -35,17 +36,22 @@ object FrameworkClasses {
     /** The header prefix; the hex is the sha256 of every byte after the header line (review AL2). */
     const val INVENTORY_HEADER = "#sha256="
 
-    private fun loadInventory(): Set<String> = parseInventory(FrameworkClasses::class.java.getResourceAsStream(INVENTORY_RESOURCE))
+    private fun loadInventory(): Set<String> = parseInventory { FrameworkClasses::class.java.getResourceAsStream(INVENTORY_RESOURCE) }
+
+    /** [parseInventory] over an already-open [stream] (the test seam). */
+    internal fun parseInventory(stream: InputStream?): Set<String> = parseInventory { stream }
 
     /**
-     * The inventory in [stream], or EMPTY when it is missing or corrupt — which only shrinks [KNOWN], so the
+     * The inventory opened by [open], or EMPTY when it is missing or corrupt — which only shrinks [KNOWN], so the
      * class check withholds MORE (fail closed). Reviews AK5, AL2: strict — the size is bounded
      * ([MAX_INVENTORY_BYTES]), the bytes decode as UTF-8 with `CodingErrorAction.REPORT` (a malformed byte is
      * corruption, never a U+FFFD entry), the header's sha256 must match the body (a TRUNCATED list fails it),
      * and EVERY entry must pass `ClassNameGrammar`; any failure — including a mid-stream exception —
-     * discards the whole resource. Internal so a test can feed corrupt streams.
+     * discards the whole resource. Internal so a test can feed corrupt streams. Review AN2 (Astra, round 17):
+     * the resource OPEN runs inside this same catch — an opener that throws must degrade like a reader that does.
      */
-    internal fun parseInventory(stream: InputStream?): Set<String> = try {
+    internal fun parseInventory(open: () -> InputStream?): Set<String> = try {
+        val stream = open()
         if (stream == null) {
             emptySet()
         } else {
@@ -85,6 +91,9 @@ object FrameworkClasses {
         while (total < limit) {
             val n = input.read(buffer, total, limit - total)
             if (n < 0) break
+            // Review AN1 (Astra, round 17): a zero-length read with `len > 0` violates the InputStream contract;
+            // treating it as EOF could accept a valid prefix, and looping would spin — so it is corruption.
+            if (n == 0) throw IOException("zero-length read from the inventory stream")
             total += n
         }
         return buffer.copyOf(total)

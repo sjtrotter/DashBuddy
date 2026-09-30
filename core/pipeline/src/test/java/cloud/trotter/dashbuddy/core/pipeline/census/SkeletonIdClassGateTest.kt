@@ -452,4 +452,28 @@ class SkeletonIdClassGateTest : SkeletonBuilderTestBase() {
         }
         assertEquals(setOf("android.widget.GridLayout"), FrameworkClasses.parseInventory(trickle))
     }
+
+    @Test
+    fun `AN1 - a contract-violating zero-length read is corruption, never a spin or a truncated accept`() {
+        val good = FrameworkClasses.inventoryText(listOf("android.widget.GridLayout")).toByteArray()
+        // Delivers the whole valid inventory, then returns 0 forever instead of -1.
+        val zeroTail = object : java.io.InputStream() {
+            var i = 0
+            override fun read(): Int = if (i < good.size) good[i++].toInt() and 0xFF else 0
+            override fun read(b: ByteArray, off: Int, len: Int): Int {
+                if (i >= good.size) return 0
+                val n = minOf(len, good.size - i)
+                System.arraycopy(good, i, b, off, n)
+                i += n
+                return n
+            }
+        }
+        assertEquals(emptySet<String>(), FrameworkClasses.parseInventory(zeroTail))
+    }
+
+    @Test
+    fun `AN2 - an opener that throws degrades to an empty inventory like a reader that throws`() {
+        assertEquals(emptySet<String>(), FrameworkClasses.parseInventory { throw NoSuchMethodError("getResourceAsStream") })
+        assertEquals(emptySet<String>(), FrameworkClasses.parseInventory { throw IllegalStateException("open") })
+    }
 }
