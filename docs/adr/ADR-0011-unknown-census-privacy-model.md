@@ -183,7 +183,8 @@ filter over every text field of the frame (tree + window title) and SEEDS:
 - from step 1, ONLY on an identity id's TEXT / CONTENT_DESCRIPTION (never its
   role/hint/tooltip/click-label/uid/pane), by the id's KIND in `CustomerTextMarkers.ID_MARKER_TABLE`:
   a **NAME** id (`customer_name`) seeds its exact value AND its maximal letter runs of at least 2 letters
-  (counted in code points, case-folded with the one `CaseFold`); an **ADDRESS** id (`address_line_1/2`,
+  (counted in code points, case-folded with the one `CaseFold`: `ẞ` → `ß`, then upper- and lower-case
+  ROOT, final sigma to medial); an **ADDRESS** id (`address_line_1/2`,
   `arriving_at_title`, `address_subpremise_line`) seeds its exact value ONLY — address vocabulary
   ("Road", "View", "San", "Lane", "Way") is common English, and seeding its runs would withhold "View
   details" or "Road closed" chrome, and camelCase ids like `roadNameLayout`, on every frame with an
@@ -199,7 +200,9 @@ wherever it sits, and — by TOKEN CONTAINMENT — for every field containing a 
 beside it still hashes. The containment rule applies to text slots AND to the id and class of every node
 on the frame; ids and classes are split into runs ALSO at camelCase boundaries (lower→Upper, and
 Upper→Upper+lower: `XMLAdam` → `XML` + `Adam`), because Compose test tags are usually camelCase, while
-text slots keep the plain letter-run split. A static id or class carrying a NAME run is ABSENT for the
+text slots keep the plain letter-run split; a seed is tested against every CONTIGUOUS concatenation of
+a token's camel segments (the singles, the joins, the whole token), so a name with internal capitals
+still matches — `chipMcKenna` → `Mc`+`Kenna` → `mckenna` (amended in #1160 review round 6). A static id or class carrying a NAME run is ABSENT for the
 wire and the fingerprint, exactly like a dynamic id — `chipAdam` / `chip_Adam` beside `customer_name`
 "Adam" does not travel, `chipGold` and `chipAdamant` (whole-run equality) do (one owner,
 `FrameFilter.containsIdentityRun`). A CONTENT id and a `PII_ID_SUFFIXES`-only id (the intake list, which
