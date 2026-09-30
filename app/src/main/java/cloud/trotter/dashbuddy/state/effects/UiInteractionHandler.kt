@@ -296,6 +296,16 @@ class UiInteractionHandler @Inject constructor(
         // window) keep them all. Genuine SAME-window ambiguity still fails closed
         // below.
         val activeWindowCandidates = labeledCandidates.filter { it.first.inActiveWindow }
+        if (activeWindowCandidates.isEmpty() && search.cutBoundsWindows > 0) {
+            // #1149 review T1 — S2 extended: with no verified active-window candidate the deciding set is
+            // every scoped window (#788 keep-all, e.g. our bubble is active), so ANY cut window could hold
+            // the intended control past its cut while another window's twin sits at the captured rect.
+            Timber.tag("Effects").w(
+                "%d bounds walk(s) for %s cut by the tree budget while every window decides — aborting to manual (#1149)",
+                search.cutBoundsWindows, description,
+            )
+            return false
+        }
         val scopedCandidates = if (activeWindowCandidates.isNotEmpty()) {
             val dropped = labeledCandidates.size - activeWindowCandidates.size
             if (dropped > 0) {
@@ -505,7 +515,13 @@ class UiInteractionHandler @Inject constructor(
      * active-window scoping (#788) prefers the active window's, if any.
      */
     /** [inconclusiveHits] > 0: 2b found that many hits in a deciding set that was incomplete — abort (#1149 L1). */
-    private class CandidateSearch(val candidates: List<Candidate>, val inconclusiveHits: Int = 0, val activeBoundsCut: Boolean = false)
+    private class CandidateSearch(
+        val candidates: List<Candidate>,
+        val inconclusiveHits: Int = 0,
+        val activeBoundsCut: Boolean = false,
+        /** T1: non-active windows whose strategy-3 walk was cut by the tree budget. */
+        val cutBoundsWindows: Int = 0,
+    )
 
     private fun warnInconclusive(description: String, hits: Int) {
         Timber.tag("Effects").w(
@@ -572,6 +588,7 @@ class UiInteractionHandler @Inject constructor(
         // walk is skipped and the tap fails closed to manual (#1093).
         val b = ref.boundsInScreen
         val degenerate = b.right <= b.left || b.bottom <= b.top
+        var cutBoundsWindows = 0
         if (candidates.isEmpty() && !degenerate) {
             for (root in roots) {
                 val found = mutableListOf<WalkHit>()
@@ -580,6 +597,7 @@ class UiInteractionHandler @Inject constructor(
                     // a background window's control must not become the sole survivor. Abort.
                     if (activeRoot != null && root == activeRoot) return CandidateSearch(emptyList(), activeBoundsCut = true)
                     Timber.tag("Effects").d("Bounds walk cut by the tree budget — no candidates from this window (#1149 R5)")
+                    cutBoundsWindows++
                     continue
                 }
                 val inActive = activeRoot != null && root == activeRoot
@@ -589,7 +607,7 @@ class UiInteractionHandler @Inject constructor(
                 )
             }
         }
-        return CandidateSearch(candidates)
+        return CandidateSearch(candidates, cutBoundsWindows = cutBoundsWindows)
     }
 
     /**

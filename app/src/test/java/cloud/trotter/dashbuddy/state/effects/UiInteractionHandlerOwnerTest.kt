@@ -1065,4 +1065,32 @@ class UiInteractionHandlerOwnerTest {
         assertFalse(expand(handler(listOf(active, background), active), legacy))
         bgRow.neverClicked()
     }
+
+    /**
+     * T1: bubble active (no platform window active), window A's bounds walk is CUT (the intended control
+     * past the cut), window B holds a twin at the captured rect → abort, B is NOT clicked.
+     */
+    @Test
+    fun `under the bubble any cut bounds walk aborts`() = runTest {
+        val legacy = expandRef.copy(labelHintHashes = emptyList(), labelHintsComplete = false)
+        val a = windowRoot()
+        whenever(a.childCount).thenReturn(Int.MAX_VALUE)
+        val twin = payRow()
+        val b = windowRoot(twin)
+        val bubble = mock<AccessibilityNodeInfo>()
+        assertFalse(expand(handler(listOf(a, b), bubble), legacy))
+        twin.neverClicked()
+    }
+
+    /** T1 control: with a verified ACTIVE-window candidate, a cut background window does not matter. */
+    @Test
+    fun `a cut background bounds walk does not matter when the active window has the target`() = runTest {
+        val legacy = expandRef.copy(labelHintHashes = emptyList(), labelHintsComplete = false)
+        val row = payRow()
+        val active = windowRoot(row)
+        val bg = windowRoot()
+        whenever(bg.childCount).thenReturn(Int.MAX_VALUE)
+        assertTrue(expand(handler(listOf(active, bg), active), legacy))
+        row.clicks(1)
+    }
 }
