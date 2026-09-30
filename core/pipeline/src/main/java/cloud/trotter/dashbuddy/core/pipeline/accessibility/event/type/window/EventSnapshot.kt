@@ -27,6 +27,10 @@ internal sealed interface EventSnapshot {
  * 3. Otherwise (our bubble, the launcher, system UI active) → [AccessibilitySource.foregroundWindow]:
  *    readable-top-or-refuse over application windows; a refusal carries its reason.
  * 4. A root that fails to map → `MAP_FAILED`.
+ * 5. A post-map check of the snapshot's package against [isEnabled]. Both builders derive
+ *    `packageName` from the SAME already-fetched root the gate read, so this cannot catch a
+ *    read-to-read swap — it only fires on a programming error. Kept as a belt-and-braces invariant
+ *    (review H5) guarding the #4 self-recognition rule.
  *
  * Every [EventSnapshot.Skipped] is counted by the caller (`PipelineStats.onForegroundSkip`).
  */
@@ -57,7 +61,7 @@ internal fun AccessibilitySource.snapshotForEvent(
         }
     } ?: return EventSnapshot.Skipped(ForegroundSkipReason.MAP_FAILED)
 
-    if (!isEnabled(snapshot.packageName)) {
+    if (!isEnabled(snapshot.packageName)) { // invariant — see step 5 (H5)
         Timber.v(
             "🚫 Skip window: non-target pkg=%s (event window=%d pkg=%s)",
             snapshot.packageName, windowId, eventPackage,

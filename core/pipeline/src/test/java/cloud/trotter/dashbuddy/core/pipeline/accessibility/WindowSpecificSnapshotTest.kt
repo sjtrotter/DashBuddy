@@ -304,7 +304,7 @@ class WindowSpecificSnapshotTest {
     }
 
     @Test
-    fun `post-map package re-check still drops a swapped root`() {
+    fun `post-map invariant drops a snapshot whose package is not enabled (belt-and-braces, H5)`() {
         val events = MutableSharedFlow<AccEvent>(extraBufferCapacity = 4)
         val bubble = node(ownPkg, "bubble")
         val located = AccessibilitySource.LocatedWindow(mock(), mock(), 2)
@@ -321,6 +321,6 @@ class WindowSpecificSnapshotTest {
             event(Kind.CONTENT.type, windowId = 3),
         )
 
-        assertTrue("a root that swapped to our own package must never be emitted", emitted.isEmpty())
+        assertTrue("a snapshot attributed to a non-enabled package must never be emitted", emitted.isEmpty())
     }
 }
