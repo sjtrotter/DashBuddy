@@ -15,6 +15,7 @@ import com.google.android.gms.location.LocationResult
 import com.google.android.gms.location.LocationServices
 import com.google.android.gms.location.Priority
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
@@ -119,6 +120,9 @@ class FusedLocationDataSource @Inject constructor(
                 stateName = address?.adminArea,
                 zipCode = address?.postalCode
             )
+        } catch (e: CancellationException) {
+            // #1163 review (Astra): a cancelled caller must see its cancellation, not raw coordinates.
+            throw e
         } catch (e: Exception) {
             Timber.e(e, "Geocoder enrichment failed. Returning raw coordinates.")
             // Still returns the userLocation containing latitude/longitude!

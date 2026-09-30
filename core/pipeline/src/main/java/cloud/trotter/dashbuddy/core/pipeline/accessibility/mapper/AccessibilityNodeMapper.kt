@@ -240,8 +240,8 @@ private fun AccessibilityNodeInfo.roleDescriptionOrNull(): String? =
 
 /**
  * #1161: `getChecked()` (the tri-state 0/1/2) is API 36 (`BAKLAVA`) while minSdk is 30. Below 36 only the
- * boolean `isChecked` exists, so the PARTIAL (2) state cannot be observed there and maps to 1 — the
- * documented pre-36 limitation. Unguarded, this read threw `NoSuchMethodError` on every node below 36.
+ * boolean `isChecked` exists, so the PARTIAL (2) state cannot be observed there — the value is whatever the
+ * platform reports as the boolean (the documented pre-36 limitation). Unguarded, this read threw `NoSuchMethodError` on every node below 36.
  * (`isChecked` is deprecated on 36 in favour of `getChecked` — it is the ONLY read that exists below 36.)
  */
 @Suppress("DEPRECATION")
