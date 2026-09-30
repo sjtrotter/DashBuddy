@@ -196,6 +196,11 @@ never coordinates, so frozen bounds never aimed a tap — they decided WHICH nod
   labels is provable (no size proxy); `NodeRef.hasExactFingerprint` (hints present and complete) is the one owner,
   required by `fingerprintMatches` and gating strategy 2b. An unprovable ref skips 2b for strategy 3's containment
   check.
+- **The click-action label is a label (#1147 review W3/Z2).** `LabelNode.ownLabels` is text, contentDescription
+  AND the `ACTION_CLICK` label on both sides (`UiLabelNode` reads `UiNode.clickActionLabel`; `ownLabelsOf` reads
+  the live node through `NodeClick.clickActionLabelOrNull` — no IPC, only when the bitmask advertises a click),
+  so a text-less Compose control bound by its action label has a provable fingerprint. A bind persisted before
+  #1147 may be unprovable until re-armed by a fresh frame (its hints lack the click label; fail closed).
 - **Labels before geometry (D2, strategy 2b).** Between the text strategy and the bounds walk: a ref with
   `labelHintHashes` is re-found by walking each root for nodes that take a click, match `ownerClassHint` (L2), and
   whose COMPLETE label region is the ref's **exact** fingerprint (`NodeRef.fingerprintMatches`). Bounds are not an
