@@ -70,6 +70,10 @@ object PiiShapes {
         // GoPuff (DoorDash Drive) batch screens (#501): the per-order customer name on the
         // bin-scan/pickup-steps screens.
         "order_cx_name",
+        // #1160 review UU3: the two instruction-body ids the runtime `ID_MARKER_TABLE` carries — the intake
+        // list holds EVERY table suffix (guard test), so an instruction body is masked on the commit path
+        // exactly as it is on the runtime UNKNOWN path.
+        "description_text_view", "dasher_instruction_content_expanded",
     )
 
     /**

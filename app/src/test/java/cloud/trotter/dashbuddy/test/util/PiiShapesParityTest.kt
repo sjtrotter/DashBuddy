@@ -70,6 +70,10 @@ class PiiShapesParityTest {
             "instruction_text",
             "dasher_instruction_content_collapsed",
             "order_cx_name",
+            // #1160 review UU3 — DELIBERATELY added after the promotion (the intake list must hold every
+            // runtime ID_MARKER_TABLE suffix): the two instruction-body ids.
+            "description_text_view",
+            "dasher_instruction_content_expanded",
         )
 
         val ORIGINAL_NAME_PREFIXES: List<String> = listOf(
@@ -124,7 +128,7 @@ class PiiShapesParityTest {
         }
         assertEquals(ORIGINAL_FIRST_LAST_INITIAL_PATTERN, PiiShapes.FIRST_LAST_INITIAL_PATTERN)
         assertEquals(setOf(RegexOption.IGNORE_CASE), PiiShapes.FIRST_LAST_INITIAL.options)
-        assertEquals(ORIGINAL_PII_ID_SUFFIXES, PiiShapes.PII_ID_SUFFIXES)
+        assertEquals(ORIGINAL_PII_ID_SUFFIXES, PiiShapes.PII_ID_SUFFIXES) // pre-#1145 + the UU3 additions
         assertEquals(ORIGINAL_NAME_PREFIXES, PiiShapes.NAME_PREFIXES)
         assertEquals(setOf("Return "), PiiShapes.GATED_NAME_PREFIXES.keys)
     }
