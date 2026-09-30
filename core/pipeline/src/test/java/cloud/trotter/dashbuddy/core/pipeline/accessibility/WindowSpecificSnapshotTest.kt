@@ -844,4 +844,27 @@ class WindowSpecificSnapshotTest {
         assertEquals(listOf("dd"), collect(h, kind, windowId = 3).map { it.tree.text })
         assertEquals(1L, h.stats.overlayRejectedCount(OverlayRejectReason.NO_DISPLAY_AREA))
     }
+
+    @Test
+    fun `DD9 - a clear between the walk's enumeration and a probe - the probe's verdict is not written`() {
+        val bubble = node(ownPkg, "bubble")
+        val shade = node(systemUiPkg, "shade")
+        val bubbleWindow = window(1, 50, null, active = true)
+        val shadeWindow = window(30, 30, shade, windowType = system, bounds = OverlayGeometry.FULL_SCREEN)
+        val h = harness(activeRoot = bubble, windows = listOf(bubbleWindow, shadeWindow, window(3, 2, node(ddPkg, "dd"))))
+        var first = true
+        // The walk reads its generation, then the topology changes while it fetches the bubble's root.
+        whenever(bubbleWindow.root).thenAnswer {
+            if (first) {
+                first = false
+                @Suppress("DEPRECATION")
+                h.source.emit(AccessibilityEvent.obtain(AccessibilityEvent.TYPE_WINDOWS_CHANGED))
+            }
+            bubble
+        }
+
+        assertEquals(listOf("dd"), collect(h, Kind.STATE).map { it.tree.text })
+        assertEquals(listOf("dd"), collect(h, Kind.STATE).map { it.tree.text })
+        verify(shadeWindow, times(2)).root // the first walk's NOT_OVERLAY_PLATFORM was stale → never memoized
+    }
 }

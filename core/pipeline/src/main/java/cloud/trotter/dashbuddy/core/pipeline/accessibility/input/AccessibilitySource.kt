@@ -301,7 +301,7 @@ class AccessibilitySource @Inject constructor(
         for (w in ordered) {
             if (w.type == AccessibilityWindowInfo.TYPE_SYSTEM) {
                 val displayArea = area ?: displayArea().also { area = it }
-                when (val probe = overlayProbe(w, displayArea, budget)) {
+                when (val probe = overlayProbe(w, displayArea, budget, gen)) {
                     OverlayProbe.NotCandidate -> continue // small, or a verified non-overlay package
                     // PR #1155 review DD8: with no display area the overlay question cannot be
                     // answered — never walk past a system window on an unknown display.
@@ -533,12 +533,18 @@ class AccessibilitySource @Inject constructor(
      * `isOverlayCandidate`, which lost the [OverlayProbe.Unreadable] distinction). A [budget], when
      * given, bounds the root fetches of the walk it belongs to (CC5). Counts every refusal.
      */
-    internal fun overlayProbe(w: AccessibilityWindowInfo, displayArea: Long, budget: ScanBudget? = null): OverlayProbe {
+    internal fun overlayProbe(
+        w: AccessibilityWindowInfo,
+        displayArea: Long,
+        budget: ScanBudget? = null,
+        // PR #1155 review DD9: the WALK's generation, read before its enumeration was used — a probe
+        // on a window from an older list after a mid-walk clear must not write under the new one.
+        gen: Long = packageCache.generation,
+    ): OverlayProbe {
         if (w.type != AccessibilityWindowInfo.TYPE_SYSTEM || w.isInPictureInPictureMode) return OverlayProbe.NotCandidate
         // CC1: an unknown display area admits nothing — checked BEFORE the memo, so a cached
         // CANDIDATE is never honoured without a measurable display. Not memoized (it can become known).
         if (displayArea <= 0L) return reject(OverlayRejectReason.NO_DISPLAY_AREA, OverlayProbe.NoDisplayArea)
-        val gen = packageCache.generation // CC1: read BEFORE probing; a write after a clear is discarded
         val bounds = boundsOf(w)
         // BB7: a DECIDED verdict is memoized per window id — no root fetch, no count — but (CC1) only
         // while the window's CURRENT bounds equal the bounds it was decided on.
