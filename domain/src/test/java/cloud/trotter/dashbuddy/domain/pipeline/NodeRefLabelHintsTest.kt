@@ -66,4 +66,40 @@ class NodeRefLabelHintsTest {
         assertFalse("a bind-time set at the cap may be truncated — equality unprovable",
             full.fingerprintMatches(listOf("a1", "b1", "c1", "d1", "e1", "f1")))
     }
+
+    private fun ui(text: String? = null, desc: String? = null, clickable: Boolean = false, vararg children: cloud.trotter.dashbuddy.domain.model.accessibility.UiNode) =
+        cloud.trotter.dashbuddy.domain.model.accessibility.UiNode(text = text, contentDescription = desc, isClickable = clickable, children = children.toList())
+
+    /**
+     * #1149 review I2 — one horizon on both sides: the bind-time hints stop at LABEL_SCAN_DEPTH and at
+     * every clickable descendant, exactly like the executor's live scan, so the fingerprint built at
+     * bind time is the one the live scan can reproduce.
+     */
+    @Test
+    fun `bind-time hint labels honour the shared depth horizon and clickable ownership`() {
+        val deep = ui(null, null, false, ui(null, null, false, ui(null, null, false, ui("Too deep"))))
+        val row = ui(null, null, true,
+            ui("This offer"),
+            ui(null, "Expand"),
+            ui("Breakdown", null, true), // a nested control: its label is its own
+            deep,
+        ).restoreParents()
+        val scan = NodeRef.hintLabelsOf(row)
+        assertEquals(listOf("This offer", "Expand"), scan.labels)
+        assertFalse("a node at the depth bound with children leaves the scan incomplete", scan.complete)
+
+        val hints = scan.labels.mapNotNull(NodeRef::hintHash).distinct()
+        val bound = ref("This offer", "Expand")
+        assertEquals(bound.labelHintHashes, hints)
+        // The fire-time scan over the same shape reads the same horizon, so the fingerprint matches.
+        assertTrue(bound.fingerprintMatches(listOf("This offer", "Expand")))
+    }
+
+    @Test
+    fun `bind-time hint labels stop at the shared fetch cap`() {
+        val many = ui(null, null, true, *Array(NodeRef.LABEL_SCAN_NODES + 5) { ui("Label $it") }).restoreParents()
+        val scan = NodeRef.hintLabelsOf(many)
+        assertEquals(NodeRef.LABEL_SCAN_NODES, scan.labels.size)
+        assertFalse(scan.complete)
+    }
 }

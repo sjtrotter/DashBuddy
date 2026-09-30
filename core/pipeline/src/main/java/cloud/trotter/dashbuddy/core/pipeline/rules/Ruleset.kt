@@ -396,7 +396,9 @@ class Ruleset<TInput>(rules: List<CompiledRule<TInput>>) {
             classNameHint = node.className,
             boundsInScreen = node.boundsInScreen,
             pathFingerprint = pathParts.joinToString("/"),
-            labelHintHashes = node.allText.asSequence()
+            // #1149 review I2: the SAME bounded, ownership-aware horizon the executor scans at fire
+            // time (NodeRef.hintLabelsOf / LABEL_SCAN_*), so a fingerprint can actually match.
+            labelHintHashes = NodeRef.hintLabelsOf(node).labels.asSequence()
                 .mapNotNull(NodeRef::hintHash)
                 .distinct()
                 .take(NodeRef.MAX_LABEL_HINTS)

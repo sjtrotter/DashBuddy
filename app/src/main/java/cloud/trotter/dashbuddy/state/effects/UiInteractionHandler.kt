@@ -81,11 +81,11 @@ class UiInteractionHandler @Inject constructor(
         /** #1093 — a clickable same-class node overlapping the ref this much is a bounds-walk candidate. */
         internal const val RELAXED_BOUNDS_IOU = 0.5
 
-        /** Max subtree depth scanned when collecting a candidate's labels. */
-        private const val LABEL_SCAN_DEPTH = 3
+        /** Max subtree depth scanned when collecting a candidate's labels — one owner: [NodeRef.LABEL_SCAN_DEPTH] (#1149 I2). */
+        private const val LABEL_SCAN_DEPTH = NodeRef.LABEL_SCAN_DEPTH
 
-        /** Max nodes visited per label scan — bounded ingestion of third-party UI. */
-        private const val LABEL_SCAN_NODES = 24
+        /** Max child fetches per label scan — bounded ingestion; one owner: [NodeRef.LABEL_SCAN_NODES] (#1149 I2). */
+        private const val LABEL_SCAN_NODES = NodeRef.LABEL_SCAN_NODES
 
         /** #1149 — max depth of the strategy-2b label walk, per window root. */
         internal const val SEMANTIC_SCAN_DEPTH = 40

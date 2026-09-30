@@ -87,6 +87,49 @@ data class NodeRef(
         const val MAX_LABEL_HINT_LENGTH = 40
 
         /**
+         * #1149 review I2 — THE label horizon, one owner for both sides: the bind-time hint
+         * collection ([hintLabelsOf], from `Ruleset.buildNodeRef`) and the fire-time live scan
+         * (`UiInteractionHandler.scanLabels`) read a node's own labels plus its subtree down to
+         * this depth, stopping at every clickable descendant (its labels are its own control's).
+         */
+        const val LABEL_SCAN_DEPTH = 3
+
+        /** #1149 review I2 — the child fetches (bind time: child slots visited) one label scan may spend. */
+        const val LABEL_SCAN_NODES = 24
+
+        /**
+         * #1149 review I2 — the bind-time mirror of the executor's live label scan over a mapped
+         * [UiNode]: own text/contentDescription, then children breadth-first-in-order down to
+         * [LABEL_SCAN_DEPTH], at most [LABEL_SCAN_NODES] child slots, never descending into an
+         * `isClickable` descendant. [UiLabelScan.complete] is false when either bound cut it.
+         *
+         * Residual (documented): fire time budgets FETCH attempts (a null child spends one), while a
+         * mapped [UiNode] has already dropped null children, so a live window with null slots can
+         * reach its cap sooner; and a `UiNode` carries no action list, so bind time's "clickable" is
+         * `isClickable` only where fire time also honours an advertised `ACTION_CLICK`.
+         */
+        fun hintLabelsOf(node: cloud.trotter.dashbuddy.domain.model.accessibility.UiNode): UiLabelScan {
+            val labels = mutableListOf<String>()
+            var fetched = 0
+            var complete = true
+            fun visit(n: cloud.trotter.dashbuddy.domain.model.accessibility.UiNode, depth: Int): Boolean {
+                n.text?.takeIf { it.isNotBlank() }?.let { labels.add(it) }
+                n.contentDescription?.takeIf { it.isNotBlank() }?.let { labels.add(it) }
+                if (n.children.isEmpty()) return true
+                if (depth >= LABEL_SCAN_DEPTH) { complete = false; return true }
+                for (child in n.children) {
+                    if (fetched >= LABEL_SCAN_NODES) { complete = false; return false }
+                    fetched++
+                    if (child.isClickable) continue
+                    if (!visit(child, depth + 1)) return false
+                }
+                return true
+            }
+            visit(node, 0)
+            return UiLabelScan(labels, complete)
+        }
+
+        /**
          * The ONE normalization both sides use: trimmed, clamped, lower-cased (ROOT); null for a
          * label with no letter at all (a bare amount, a count, a spacer) — those repeat across a
          * surface and would let a stranger "agree".
@@ -101,6 +144,9 @@ data class NodeRef(
             hintKeyOrNull(label)?.let { cloud.trotter.dashbuddy.domain.util.sha256OrNull(it) }
     }
 }
+/** #1149 review I2 — a bounded bind-time label scan ([NodeRef.hintLabelsOf]); [complete] = no bound cut it. */
+data class UiLabelScan(val labels: List<String>, val complete: Boolean)
+
 /**
  * Gate condition evaluated against parsed fields to decide whether
  * an effect should fire.
