@@ -575,10 +575,13 @@ side-effect-free half.
   run collapsed to one ASCII space); `KindClassifier` (§1's two-stage grammar, code-point based);
   `CensusFingerprint` (§8: wrapper-to-forest over a synthetic root, every string LENGTH-PREFIXED so the
   encoding is injective, digested through `sha256OrNull(ByteArray)`); and the static gates
-  `ResourceIdGrammar` / `ClassNameGrammar` — a dynamic id (a per-frame-UUID Compose test tag) or a
-  non-static class is ABSENT on the wire and in the fingerprint. The golden vectors live with the
+  `ResourceIdGrammar.isStaticShape` / `ClassNameGrammar` (enforced by the DTO at construction and decode)
+  — a dynamic id (a per-frame-UUID Compose test tag) or a non-static class is ABSENT on the wire and in
+  the fingerprint; the builder's `isStaticId` also refuses an id whose name part trips a frame-free
+  customer-PII predicate (`row_Deliver_to_Sam`). The golden vectors live with the
   contract's tests (never in the APK).
-- *Shared vocabulary* — the anonymous-wrapper predicate (`AnonymousWrappers`) is the one `UiNode.stableHash`
+- *Shared vocabulary* — the anonymous-wrapper predicate (`domain.model.accessibility.AnonymousWrappers`,
+  owned by the core model and imported by the contract) is the one `UiNode.stableHash`
   also uses (algorithm unchanged, pinned by `UiNodeStableHashPinTest`); the customer-PII shapes moved
   byte-for-byte from the test-only `SnapshotRedactor` to `domain.privacy.PiiShapes` (app licence;
   `SnapshotRedactor` delegates, `PiiShapesParityTest` pins it; `PiiShapesIcuGuardTest` applies the ICU
@@ -591,7 +594,7 @@ side-effect-free half.
   cap) and, when it differs and is itself within the cap, the RAW trimmed form — either hit withholds;
   only a `words:1..8` survivor hashes, on the canonical form. The FRAME-LEVEL duplicate rule then
   withholds (a) any field whose canonical value a value-judging step caught anywhere in the frame, and (b)
-  any field containing a letter run (≥ 3 letters, case-insensitive) of an IDENTITY id's rendered
+  any field containing a letter run (≥ 2 letters in code points, `CaseFold`-folded) of an IDENTITY id's rendered
   text/desc (`valueIsPii`: `customer_name`, the address lines, `arriving_at_title`,
   `address_subpremise_line` — not `user_name`, which also carries merchant/dasher names, and not content
   ids such as `description_text_view`), so "Adam's order" beside a `customer_name` "Adam" is withheld.

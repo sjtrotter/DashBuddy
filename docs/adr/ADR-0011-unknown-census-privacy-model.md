@@ -49,7 +49,13 @@ chrome by construction WHEN it matches the static resource-name grammar, `Resour
 internal space, ≤ 64 characters, no run of 8+ hex digits and no run of 4+ decimal digits; a dynamic id — a
 per-frame UUID in a Compose test tag, three committed frames `PRIMARY_BUTTON_<uuid>` — is treated as
 ABSENT for both the wire and the fingerprint, never rewritten; the §2 PII-id step still runs on the raw
-id; amended in #1160. `class` likewise travels only when it matches `ClassNameGrammar` — a Java binary
+id; amended in #1160. The SHAPE is the contract's (`ResourceIdGrammar.isStaticShape`) and is enforced by
+the DTO at construction and decode, and by the server; in addition the CLIENT judges the id's name part —
+separators read as spaces, every token start — through the frame-free customer-PII predicates (marker,
+lead-in, mask, name shape), and a hit makes the id absent: `row_Deliver_to_Sam` and `chip_Adam_S` do not
+travel. Those predicates live in `:core:pipeline`, so that judgement is client-side only; a bare name
+with no marker, lead-in or initial (`chip_Adam`, `Adam Smith`) is indistinguishable by shape from chrome
+(`chip_Gold`, `Artwork Image`) and travels in the clear — residual risk 10. `class` likewise travels only when it matches `ClassNameGrammar` — a Java binary
 class name, ≤ 128 characters, the same digit-run rule — else it is absent (null on the wire, `""` in the
 fingerprint), because Compose/Flutter/WebView/custom views can report any string as their class), the three flags (`isClickable`/`isEnabled` as booleans, `isChecked` as the
 `UiNode` tri-state `Int` 0/1/2 — wire types stated so the shared vectors cannot disagree), and
@@ -177,7 +183,8 @@ itself over-length) — or (b) step 1 ONLY when the id is an IDENTITY id — an 
 and the dasher's own name) — and ONLY from that node's TEXT / CONTENT_DESCRIPTION, never its
 role/hint/tooltip/click-label/uid/pane. Pass 2 emits the constant `withheld` for every field whose
 canonical value is in that set, wherever it sits; and, for the identity seeds only, by TOKEN CONTAINMENT:
-each identity value contributes its maximal letter runs of at least 3 letters (case-folded), and any
+each identity value contributes its maximal letter runs of at least 2 letters (counted in code points,
+case-folded with the one `CaseFold`), and any
 field containing one of those runs is withheld — so `customer_name` "Adam" withholds an id-less
 "Adam's order" or "Adam, 2 items" (which pass steps 3–8), while "Add a tip" beside it still hashes
 (amended in #1160 review round 4). A CONTENT id (an `ID_MARKER_TABLE` row without the
@@ -352,15 +359,23 @@ so trusted envelopes are swept manually and stored under the same retention the 
 For every fixture with a hand-pseudonymized twin, `skeleton(raw) == skeleton(pseudonymized)`: a PII
 token the filter catches can never change what leaves the phone — the guarantee is equality under
 **shape-preserving substitution in known PII slots** (those slots emit the constant `withheld`), and
-the residual for an uncaught value is stated in risk 6. `SkeletonCorpusTest` (#1145) walks the ENTIRE corpus
+the residual for an uncaught value is stated in risk 6. The equality holds for the PII slots
+THEMSELVES; a CHROME slot that shares a letter run with an identity value is withheld only while that
+value is present — identity-dependent chrome suppression, the cost of the §2 token-containment rule, and
+why a common first name such as "May", "June" or "Will" suppresses same-word chrome frame-wide
+("May need returns" is withheld beside `customer_name` "May" and hashes beside "Sam"; risk 9, amended in
+#1160 review round 5). The corpus substitutions of test (b) use pseudonyms that share no run with the
+chrome, so (b) asserts whole-skeleton equality there. `SkeletonCorpusTest` (#1145) walks the ENTIRE corpus
 including `SENSITIVE/` and `UNKNOWN/negative/` and asserts (a) no string field outside the §1 allowlist (per node `class`/`id`/`kind`/`h`; per envelope the
 enumerated metadata) and no bounds on any node; (b) invariance under two shape-matched pseudonym
 substitutions; (c) redactor parity — any value `SnapshotRedactor.redact` changes has no `h` (load-bearing only on
 the pseudonym and decoy fixtures: on an already-redacted committed fixture `redact` is idempotent); (d)
-every `SENSITIVE/` fixture the markers catch yields no skeleton; (e) no `h` equals `CensusHash.of(x)` (trimmed, as the builder hashes) for any PII-VALUED
+every `SENSITIVE/` fixture the markers catch yields no skeleton; (e) no `h` equals `CensusHash.of(x)` (canonical, as the builder hashes) for any PII-VALUED
 `CorpusDecoys` entry (pseudonym names, addresses, notes — not retained chrome labels such as
 `"Hand it to me: "`, which are legitimately hashed) or for any mask token; (f) determinism and idempotence. A seeded property (#878) adds:
-no string matching any `PiiShapes` pattern (substring mode, as step 7/8 run them) ever hashes, and
+no string ever hashes whose canonical form — or whose raw trimmed form, when that is within the
+40-character cap (the bounded raw pass, §2) — matches any `PiiShapes` pattern in substring mode (as steps
+7/8 run them; a raw match beyond the cap does not prevent hashing by design — amended in #1160), and
 no output contains an input token verbatim outside `class`/`id`.
 
 ### 8. Bounded, budgeted, deduplicated (D5)
@@ -382,12 +397,15 @@ id's byte length as ASCII decimal + `0x00` + the id UTF-8, or the single byte `"
 so a null id and an empty id differ) + the spliced child count as ASCII decimal + `0x00`, then the
 children in order. class/id must be well-formed UTF-16 with no U+0000 (`WireStrings.isWellFormed` — a
 lone surrogate would otherwise UTF-8-encode as `?` and collide); a violating class or id is refused at
-construction, on decode, and by the builder (checked on the RAW id, before the resource-name gate). Transparent wrappers are removed first (wrapper-to-forest
+construction, on decode, and by the builder (checked on the RAW id, before the resource-name gate).
+Wrapper transparency is judged on the WIRE id: a container whose only id was dynamic (or empty) arrives
+with a null id and IS spliced — a deliberate divergence from `stableHash`, which sees the raw id; the
+server can only recompute from the wire tree (amended in #1160). Transparent wrappers are removed first (wrapper-to-forest
 normalization): a wrapper's children are spliced into its parent, an EMPTY wrapper contributes
 nothing (the parent's count drops), and the normalized forest ALWAYS hangs under one synthetic root
 (class `""`, null id, the spliced count) — whether or not the original root was a wrapper — so
 `fingerprint(A) == fingerprint(W(A))` holds; that equality is a required vector. The contract's tests hold vectors
-for: null vs empty id, an empty wrapper, a multi-child wrapper, a wrapper root, and the two nesting
+for: null vs empty id (on the pure byte function — an empty id can no longer enter a DTO), an empty wrapper, a multi-child wrapper, a wrapper root, and the two nesting
 cases below. It keeps ONE
 structural rule of `stableHash` deliberately: an **anonymous wrapper** (no id AND a class in
 `{android.view.View, android.view.ViewGroup, android.widget.FrameLayout, android.widget.LinearLayout}`)
@@ -396,7 +414,8 @@ child sequence in order (`A(W(C1, C2)) == A(C1, C2)`; the parent's child count i
 because a Compose recomposition adds and removes such wrappers and the cluster must not split on
 them; every other boundary is preserved (`A(B(C)) ≠ A(B, C)`). This is the census's OWN rule — today's
 `computeStableHash` folds a wrapper's children as a nested group and never splices, so the two
-algorithms are deliberately different; only the wrapper CLASS SET is shared through one constant.
+algorithms are deliberately different; only the wrapper CLASS SET is shared, through one constant owned
+by the core model (`domain.model.accessibility.AnonymousWrappers`, which the contract imports).
 `stableHash` and `UnknownSuppressor` are untouched. (The corpus librarian's variant check is a TEXT fingerprint and
 `FrameGate`'s identity is `Observation.identity()`; neither is touched — a structural key would
 collapse the librarian's store-distinct variants.) The server RECOMPUTES the fingerprint from the
@@ -493,7 +512,9 @@ the dictionary-linkage residual on low-entropy hashes (risk 1). The endpoint is 
 - **M4:** unblinding tool, `skeleton.v2`, the working-vocabulary → shipped-allowlist promotion gate.
 - **Contract placement (open question 1) — the default until the dev decides otherwise:** an
   Apache-2.0-headed package `cloud.trotter.dashbuddy.domain.census.contract` inside `:domain`, with
-  no dependency on anything outside the JDK and `domain.util.sha256OrNull` (which STAYS where it is —
+  no dependency on anything outside the JDK, kotlinx-serialization, `domain.util.sha256OrNull` and
+  `domain.model.accessibility.AnonymousWrappers` (the four-class wrapper set, owned by the core model so
+  `UiNode` never imports the contract; amended in #1160); `sha256OrNull` STAYS where it is —
   it is the #362 recognition-side SSOT the parse transform and the redact masks share; on extraction
   the contract module carries its own ten-line copy or depends on `:domain`), so extraction to a
   `census-contract/` included build is a move, not a rewrite.
@@ -545,6 +566,19 @@ must stay green.
    device withholds a superset of what the corpus tests (JVM) prove hashed: the privacy direction is
    safe, but fixture-derived RECALL is optimistic. The JVM tests remain the oracle until the builder's
    vectors run instrumented on ART (a #1146 follow-up).
+9. **Identity-dependent chrome suppression** (#1160 review round 5). The §2 token-containment rule
+   withholds any field sharing a ≥2-letter run with an identity value (case-folded), so a customer whose
+   first name is also an English word ("May", "June", "Will", "Grace") suppresses same-word chrome on
+   that frame, and the skeleton's chrome slots depend on who the customer is: a withheld-vs-hashed
+   difference on a chrome slot reveals only that SOME identity value on the frame shares that word —
+   never the value — but it is a real one-bit channel and a recall cost, accepted in exchange for
+   withholding "Adam's order".
+10. **A bare name in a test-tag id** (#1160 review round 5). The static id gate cannot tell a Compose test
+    tag built from a customer's name with no marker, lead-in or initial (`chip_Adam`, `Adam Smith`) from
+    chrome of the same shape (`chip_Gold`, `Artwork Image`); such an id travels in the clear. The corpus
+    has none (the rejected-id pin lists only the three dynamic UUIDs). The control is the corpus pin and
+    the k-gated, human-reviewed promotion path; closing it needs a frame-aware id judgement (an id whose
+    name part repeats an identity value's run) — a candidate follow-up.
 
 ## Open questions (dev decisions; the same items appear in #1157's plan §10 under its own numbering — this list is the ADR's reference)
 
