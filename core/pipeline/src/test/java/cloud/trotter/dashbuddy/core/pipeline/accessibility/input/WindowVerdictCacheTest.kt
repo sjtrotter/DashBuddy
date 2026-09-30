@@ -99,11 +99,12 @@ class WindowVerdictCacheTest {
 
     @Test
     fun `BB7 - the same status bar across two frames - probed once, counted once`() {
+        val systemUi = node("com.android.systemui") // built up front: no mock inside a stubbing lambda
         val statusBar = withBounds(
             mock<AccessibilityWindowInfo> {
                 on { this.id } doReturn 20
                 on { this.type } doReturn AccessibilityWindowInfo.TYPE_SYSTEM
-                on { this.root } doReturn node("com.android.systemui")
+                on { this.root } doReturn systemUi
             },
             OverlayGeometry.STATUS_BAR,
         )
