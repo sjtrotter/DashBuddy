@@ -186,8 +186,9 @@ class UiInteractionHandler @Inject constructor(
         if (owned.targets.isEmpty()) return false
 
         // Label-verify once, on the OWNER's bounded subtree, and keep each surviving owner's labels
-        // alongside it — the ranker below wants them too (for WARN diagnostics), so this avoids
-        // walking each subtree twice (collectLabels is bounded but not free).
+        // alongside it — the ranker below wants them too (for WARN diagnostics). For a 2b hit this
+        // scan is a DELIBERATE second read (review J9): discovery read the pre-refresh tree, and
+        // verification must run on the REFRESHED owner (I1) — it is not a redundant fetch.
         var geometryRejected = 0
         var staleEvidence = 0
         var semanticUnprovable = 0
@@ -259,8 +260,6 @@ class UiInteractionHandler @Inject constructor(
             return false
         }
 
-        val controls = labeledCandidates
-
         // #788: scope to the active window. A verified twin in a lower window (the
         // offer popup's "Decline" behind the confirm sheet) would otherwise tie
         // with the real target and abort the tap. If the active window contributed
@@ -268,9 +267,9 @@ class UiInteractionHandler @Inject constructor(
         // (no active-window candidate — the target lives in a background platform
         // window) keep them all. Genuine SAME-window ambiguity still fails closed
         // below.
-        val activeWindowCandidates = controls.filter { it.first.inActiveWindow }
+        val activeWindowCandidates = labeledCandidates.filter { it.first.inActiveWindow }
         val scopedCandidates = if (activeWindowCandidates.isNotEmpty()) {
-            val dropped = controls.size - activeWindowCandidates.size
+            val dropped = labeledCandidates.size - activeWindowCandidates.size
             if (dropped > 0) {
                 Timber.tag("Effects").d(
                     "Dropped %d other-window candidate(s) for %s (active window has %d)",
@@ -279,7 +278,7 @@ class UiInteractionHandler @Inject constructor(
             }
             activeWindowCandidates
         } else {
-            controls
+            labeledCandidates
         }
 
         // #1093 (review rounds 3–4): a VERIFIED walk-derived candidate nested inside another
@@ -554,12 +553,11 @@ class UiInteractionHandler @Inject constructor(
      * [LABEL_SCAN_DEPTH] cut is the HORIZON, not incompleteness (vet decision on I2 × I4b): both
      * sides define the fingerprint as the owner's labels within that depth, excluding clickable
      * descendants, so deeper nodes leave it fully determined. Only a complete scan can prove a label
-     * fingerprint EXACT. Verification of a
-     * label EXPECTATION does not need completeness (review I4c): a found label suffices, and since
-     * I3 a collected label can never come from a nested control. [fetched] counts child fetch attempts, nulls included.
-     * [exhausted] = the fetch cap (not the depth) cut it.
+     * fingerprint EXACT. Verification of a label EXPECTATION does not need completeness (review
+     * I4c): a found label suffices, and since I3 a collected label can never come from a nested
+     * control.
      */
-    private class LabelScan(val labels: List<String>, val complete: Boolean, val exhausted: Boolean, val fetched: Int)
+    private class LabelScan(val labels: List<String>, val complete: Boolean)
 
     /**
      * Collect the node's own text/contentDescription plus its bounded subtree's — platform buttons
@@ -571,7 +569,7 @@ class UiInteractionHandler @Inject constructor(
      * read — an embedded foreign subtree must never lend a same-package container its labels
      * (#1102 review constraints 3 and 4, applied in discovery AND verification).
      */
-    private fun scanLabels(node: AccessibilityNodeInfo, expectedPackage: String, fetchCap: Int = LABEL_SCAN_NODES): LabelScan {
+    private fun scanLabels(node: AccessibilityNodeInfo, expectedPackage: String): LabelScan {
         val labels = mutableListOf<String>()
         var fetched = 0
         var complete = true
@@ -583,7 +581,7 @@ class UiInteractionHandler @Inject constructor(
             if (count <= 0) return
             if (depth >= LABEL_SCAN_DEPTH) return // the shared horizon, not a cut (I2 × I4b vet)
             for (i in 0 until count) {
-                if (fetched >= fetchCap) { complete = false; exhausted = true; return }
+                if (fetched >= LABEL_SCAN_NODES) { complete = false; exhausted = true; return }
                 fetched++
                 // #1149 review I4a: an advertised child that cannot be read is UNPROVEN — the scan is
                 // incomplete (it still spent a fetch, #1102 constraint 3).
@@ -598,11 +596,8 @@ class UiInteractionHandler @Inject constructor(
             }
         }
         visit(node, 0)
-        return LabelScan(labels, complete, exhausted, fetched)
+        return LabelScan(labels, complete)
     }
-
-    private fun collectLabels(node: AccessibilityNodeInfo, expectedPackage: String): List<String> =
-        scanLabels(node, expectedPackage).labels
 
     /** A walk hit: [ancestors] are the indices (into the SAME `out` list) of hits this one is inside. */
     private data class WalkHit(val node: AccessibilityNodeInfo, val relaxed: Boolean, val ancestors: List<Int>)

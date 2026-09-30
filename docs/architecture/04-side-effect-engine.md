@@ -152,7 +152,9 @@ never coordinates, so frozen bounds never aimed a tap — they decided WHICH nod
   state (a recycled row that rebinds Decline → Accept is verified as Accept); `clickNodeStrict(owner, pkg)` then
   clicks with NO second refresh — it only re-checks that the owner still takes a click in the scoped package.
   Labels are verified on the OWNER's bounded subtree plus the matched node's own text/description (review I8 — a
-  title more than 3 levels below its button still verifies). The #1093 nested abort, #788 window scoping, #600
+  title more than 3 levels below its button still verifies). That evidence is as fresh and scoped as the owner
+  (review J1): a matched node that is not the owner is refreshed first, must be in the scoped package and must
+  still resolve to the same owner, else the target is dropped as stale. The #1093 nested abort, #788 window scoping, #600
   ranking and #734 tie abort all operate on owners.
 - **A clickable descendant's labels are its own (review I3 — replaced the compound-owner rule).** Every label
   scan stops at a clickable descendant. A container therefore never borrows a nested button's "Decline" and
@@ -161,11 +163,19 @@ never coordinates, so frozen bounds never aimed a tap — they decided WHICH nod
   chevron and a link). Consequence: a label-less clickable wrapper around the row no longer inherits the row's
   fingerprint, so the ROW is found and clicked; the #1093 nested abort still fires when a wrapper carries its own
   copy of the labels.
-- **One label horizon (review I2).** `NodeRef.LABEL_SCAN_DEPTH` (3) / `LABEL_SCAN_NODES` (24) in `:domain`
-  are the single owner. The bind-time hints (`Ruleset.buildNodeRef` → `NodeRef.hintLabelsOf`) and the fire-time
-  live scan read the same horizon with the same ownership rule, so a fingerprint can match. Residuals: fire time
-  budgets FETCH attempts (a null child spends one) while a mapped `UiNode` has already dropped nulls; bind time's
-  "clickable" is `isClickable` only (a `UiNode` carries no action list).
+- **One label horizon (review I2) and one clickability predicate (review J2).** `NodeRef.LABEL_SCAN_DEPTH` (3) /
+  `LABEL_SCAN_NODES` (24) in `:domain` are the single owner. The bind-time hints (`Ruleset.buildNodeRef` →
+  `NodeRef.hintLabelsOf`) and the fire-time live scan read the same horizon with the same ownership rule, and
+  "takes a click" is ONE predicate on both sides: `UiNode.takesClick` (`isClickable || hasClickAction` — the
+  #1147 field brought forward; `clickAction` in the DTO, default false and omitted, so fixtures are unchanged; set
+  by the mapper from the action list; not in `allText` or any content hash) mirrors
+  `AccNodeUtils.isActionClickable`. Otherwise an action-only descendant was absorbed at bind time and excluded at
+  fire time, and a twin could become the sole survivor. Residual: fire time budgets FETCH attempts (a null child
+  spends one) while a mapped `UiNode` has already dropped nulls.
+- **Completeness rides the ref (review J3).** `NodeRef.labelHintsComplete` (default false — legacy
+  journal/snapshot refs load as unprovable) records that the bind-time scan was complete;
+  `NodeRef.hasExactFingerprint` (hints present, complete, below `MAX_LABEL_HINTS`) is the one owner, required by
+  `fingerprintMatches` and gating strategy 2b. An unprovable ref skips 2b for strategy 3's containment check.
 - **Labels before geometry (D2, strategy 2b).** Between the text strategy and the bounds walk: a ref with
   `labelHintHashes` is re-found by walking each root for nodes that take a click, match `classNameHint`, and
   whose COMPLETE label region is the ref's **exact** fingerprint (`NodeRef.fingerprintMatches`). Bounds are not an
@@ -173,13 +183,18 @@ never coordinates, so frozen bounds never aimed a tap — they decided WHICH nod
   containment — a clickable parent card holding the row plus other text is not a candidate, and a bind-time set
   that filled `MAX_LABEL_HINTS` is unprovable; (2) a search that cannot complete leaves no lone survivor;
   (3) every child fetch is budgeted before the binder call, nulls included — and the walk is ONE pass (review I7):
-  each node's label region is derived post-order from the children the walk already fetched, so the 600-fetch
+  each node's label region is derived post-order from the children the walk already fetched, so the fetch
   budget counts real IPC once; (4) label collection never reads an embedded foreign-package subtree, in discovery
   AND verification.
   - **Incompleteness fails closed where it is an identity claim (review I4).** A null child makes a scan
-    incomplete. A window's search is INCOMPLETE when a bound cut it (depth 40 / 600 fetches), a child read null,
-    or a candidate's OWN label region is incomplete (fetch-budget cut, null child) — never "a non-match that
-    lets its twin win". The `LABEL_SCAN_DEPTH` cut is the HORIZON, not incompleteness (vet decision on I2 × I4b):
+    incomplete. A window's search is INCOMPLETE when a bound cut the walk — the MAPPER's own tree budget
+    (`TreeLimits.MAX_TREE_DEPTH` 60 / `MAX_TREE_NODES` 4 000, review J5: "incomplete" means a tree the mapper
+    itself would have truncated) — or a child read null (an unread subtree can hide a whole twin), or a candidate's
+    OWN label region is cut by the slot cap AND its visible labels are still consistent with the fingerprint
+    (visible hint set ⊆ the ref's, review J4) — never "a non-match that lets its twin win". A region already
+    carrying a label outside the set cannot be an exact match whatever is unseen, so a big unrelated card does not
+    veto. A 2b hit whose POST-REFRESH verification scan is incomplete or no longer the fingerprint aborts the whole
+    tap (review J6) rather than handing its twin the tap. The `LABEL_SCAN_DEPTH` cut is the HORIZON, not incompleteness (vet decision on I2 × I4b):
     both sides define the fingerprint as the owner's labels within depth 3, excluding clickable descendants, so a
     control with deeper nodes still has a fully determined fingerprint and IS matched. Verifying a label
     EXPECTATION stays lenient: a found label suffices, and since I3 no collected label comes from a nested
@@ -187,6 +202,8 @@ never coordinates, so frozen bounds never aimed a tap — they decided WHICH nod
   - **Per window (review I6).** An incomplete window contributes no candidates; the tap aborts only when some
     window was incomplete AND the active window produced no complete survivor (then only active-window hits are
     kept). With no incomplete window and no hit, strategy 3 still runs — the fallback pre-#1149 taps relied on.
+  - **Strategy 3 shares the predicate (review J7):** the bounds walk uses `isActionClickable`, so an
+    action-only Compose control at the exact rect is found.
   - **Semantic twins abort (review I5).** ≥ 2 2b survivors after owner dedupe and #788 scoping abort to manual
     (WARN, counts) unless the ref's stored text matches exactly one survivor — the overlap tier would pick by
     the captured rect, the very evidence 2b distrusts.
