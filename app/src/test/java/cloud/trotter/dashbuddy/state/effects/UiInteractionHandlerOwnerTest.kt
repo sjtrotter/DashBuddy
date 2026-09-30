@@ -904,4 +904,15 @@ class UiInteractionHandlerOwnerTest {
         val rowUi = root.toUiNode()!!.findNodes { it.contentDescription == "Row" }.single()
         assertFalse(bindRefOf(rowUi).labelHintsComplete)
     }
+
+    /** P2: the live owner walk never crosses a foreign hop — title → foreign wrapper → same-package button: no owner. */
+    @Test
+    fun `the live owner walk never crosses a foreign wrapper`() = runTest {
+        val title = view(cls = "android.widget.TextView", text = "Decline offer")
+        val wrapper = view(packageName = "com.example.other", children = listOf(title))
+        val button = view(clickable = true, children = listOf(wrapper))
+        val root = windowRoot(button, byId = listOf(title))
+        assertFalse(confirmDecline(handler(root)))
+        button.neverClicked()
+    }
 }

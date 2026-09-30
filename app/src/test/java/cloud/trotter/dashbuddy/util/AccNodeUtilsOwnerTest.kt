@@ -31,6 +31,7 @@ class AccNodeUtilsOwnerTest {
             if (advertisesClick) listOf(AccessibilityNodeInfo.AccessibilityAction.ACTION_CLICK) else emptyList(),
         )
         whenever(n.parent).thenReturn(parent)
+        whenever(n.packageName).thenReturn(pkg)
         return n
     }
 
@@ -45,21 +46,21 @@ class AccNodeUtilsOwnerTest {
     @Test
     fun `a clickable node is its own owner`() {
         val n = node(clickable = true, parent = node(clickable = true))
-        assertSame(n, AccNodeUtils.resolveActionOwner(n))
+        assertSame(n, AccNodeUtils.resolveActionOwner(n, pkg))
     }
 
     @Test
     fun `a non-clickable child resolves to its clickable parent`() {
         val parent = node(clickable = true)
         val child = node(parent = parent)
-        assertSame(parent, AccNodeUtils.resolveActionOwner(child))
+        assertSame(parent, AccNodeUtils.resolveActionOwner(child, pkg))
     }
 
     @Test
     fun `a parent that only ADVERTISES ACTION_CLICK is the owner`() {
         val parent = node(clickable = false, advertisesClick = true)
         val child = node(parent = parent)
-        assertSame(parent, AccNodeUtils.resolveActionOwner(child))
+        assertSame(parent, AccNodeUtils.resolveActionOwner(child, pkg))
     }
 
     @Test
@@ -71,10 +72,12 @@ class AccNodeUtilsOwnerTest {
         whenever(a.actionList).thenReturn(emptyList())
         whenever(b.actionList).thenReturn(emptyList())
         whenever(a.parent).thenReturn(b)
+        whenever(a.packageName).thenReturn(pkg)
+        whenever(b.packageName).thenReturn(pkg)
         whenever(b.parent).thenReturn(a)
         val leaf = node(parent = a)
 
-        assertNull(AccNodeUtils.resolveActionOwner(leaf))
+        assertNull(AccNodeUtils.resolveActionOwner(leaf, pkg))
         // The cycle is detected on the revisit — not after burning the whole step budget.
         verify(a, atMost(1)).parent
         verify(b, atMost(1)).parent
@@ -83,16 +86,16 @@ class AccNodeUtilsOwnerTest {
     @Test
     fun `the owner walk is bounded at MAX_OWNER_WALK steps`() {
         val (reachableLeaf, reachableTop) = chain(AccNodeUtils.MAX_OWNER_WALK - 1)
-        assertSame("an owner 31 hops up is inside the bound", reachableTop, AccNodeUtils.resolveActionOwner(reachableLeaf))
+        assertSame("an owner 31 hops up is inside the bound", reachableTop, AccNodeUtils.resolveActionOwner(reachableLeaf, pkg))
 
         val (farLeaf, _) = chain(AccNodeUtils.MAX_OWNER_WALK)
-        assertNull("an owner 32 hops up is outside the bound — no owner (fail closed)", AccNodeUtils.resolveActionOwner(farLeaf))
+        assertNull("an owner 32 hops up is outside the bound — no owner (fail closed)", AccNodeUtils.resolveActionOwner(farLeaf, pkg))
     }
 
     @Test
     fun `no clickable ancestor at all yields no owner`() {
-        assertNull(AccNodeUtils.resolveActionOwner(node(parent = node())))
-        assertNull(AccNodeUtils.resolveActionOwner(null))
+        assertNull(AccNodeUtils.resolveActionOwner(node(parent = node()), pkg))
+        assertNull(AccNodeUtils.resolveActionOwner(null, pkg))
     }
 
     private val pkg = "com.doordash.driverapp"
@@ -138,7 +141,7 @@ class AccNodeUtilsOwnerTest {
     fun `bind-time and live owner walks agree at 31, 32 and 33 hops`() {
         for (hops in listOf(AccNodeUtils.MAX_OWNER_WALK - 1, AccNodeUtils.MAX_OWNER_WALK, AccNodeUtils.MAX_OWNER_WALK + 1)) {
             val (leaf, top) = chain(hops)
-            val liveFound = AccNodeUtils.resolveActionOwner(leaf) === top
+            val liveFound = AccNodeUtils.resolveActionOwner(leaf, pkg) === top
 
             var ui = cloud.trotter.dashbuddy.domain.model.accessibility.UiNode(text = "This offer")
             val uiLeaf = ui

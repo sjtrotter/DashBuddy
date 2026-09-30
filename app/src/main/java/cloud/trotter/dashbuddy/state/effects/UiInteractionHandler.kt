@@ -199,7 +199,7 @@ class UiInteractionHandler @Inject constructor(
             if (separateEvidence && (
                     !target.evidence.refresh() ||
                         target.evidence.packageName?.toString() != expectedPackage ||
-                        AccNodeUtils.resolveActionOwner(target.evidence) != target.owner
+                        AccNodeUtils.resolveActionOwner(target.evidence, expectedPackage) != target.owner
                     )
             ) { staleEvidence++; return@mapNotNull null }
             val scan = scanLabels(target.owner, expectedPackage)
@@ -417,8 +417,7 @@ class UiInteractionHandler @Inject constructor(
         candidates.forEachIndexed { i, c ->
             // The owner is what gets tapped, so it must itself belong to the scoped package — an
             // embedded foreign-package subtree never lends a tap target (#1149).
-            val owner = AccNodeUtils.resolveActionOwner(c.node)
-                ?.takeIf { it.packageName?.toString() == expectedPackage }
+            val owner = AccNodeUtils.resolveActionOwner(c.node, expectedPackage)
             if (owner == null || staleOwners.any { it == owner }) { orphaned++; return@forEachIndexed }
             val j = owners.indexOfFirst { it == owner }
             if (j >= 0) {

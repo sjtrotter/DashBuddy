@@ -35,12 +35,18 @@ object AccNodeUtils {
      * The owner is what a tap actually lands on, so it is what the caller dedupes candidates by,
      * label-verifies and dispatches to — verification never runs on one node and the click on
      * another.
+     *
+     * #1149 review P2: the walk never crosses a foreign hop — the first node (self included) whose
+     * package is not [expectedPackage] ends it with NO owner, exactly as the bind side refuses such a
+     * chain (`NodeRef.bindHintsOf`, N5). A same-package label inside a foreign wrapper therefore can
+     * never lend itself to a same-package owner above it.
      */
-    fun resolveActionOwner(node: AccessibilityNodeInfo?): AccessibilityNodeInfo? {
+    fun resolveActionOwner(node: AccessibilityNodeInfo?, expectedPackage: String): AccessibilityNodeInfo? {
         var current = node
         val visited = ArrayList<AccessibilityNodeInfo>(4)
         var steps = 0
         while (current != null && steps < MAX_OWNER_WALK) {
+            if (current.packageName?.toString() != expectedPackage) return null
             if (visited.any { it == current }) return null
             if (isActionClickable(current)) return current
             visited.add(current)
