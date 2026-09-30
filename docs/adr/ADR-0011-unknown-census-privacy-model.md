@@ -53,7 +53,9 @@ id; amended in #1160. The SHAPE is the contract's (`ResourceIdGrammar.isStaticSh
 the DTO at construction and decode, and by the server; in addition the CLIENT judges the id's name part —
 separators read as spaces, every token start — through the frame-free customer-PII predicates (marker,
 lead-in, mask, name shape), and a hit makes the id absent: `row_Deliver_to_Sam` and `chip_Adam_S` do not
-travel. Those predicates live in `:core:pipeline`, so that judgement is client-side only; a bare name
+travel; the id's camelCase segments count as words too (`deliverToSam`), and only the name shape with a
+CASE-SENSITIVE initial runs on the id path, so `option_a`/`tab_b` chrome ids travel (review round 7).
+Those predicates live in `:core:pipeline`, so that judgement is client-side only; a bare name
 with no marker, lead-in or initial (`chip_Adam`, `Adam Smith`) is indistinguishable by shape from chrome
 (`chip_Gold`, `Artwork Image`) — it is absent when an identity id on the same frame carries that name
 (§2 frame-level rule), and travels in the clear otherwise — residual risk 10. `class` likewise travels only when it matches `ClassNameGrammar` — a Java binary
@@ -187,17 +189,19 @@ filter over every text field of the frame (tree + window title) and SEEDS:
   recognition never anchors on a merchant name, #1160 review round 6) seeds its exact value AND its
   maximal letter runs of at least 2 letters
   (counted in code points, case-folded with the one `CaseFold`: `ẞ` → `ß`, then upper- and lower-case
-  ROOT, final sigma to medial); an **ADDRESS** id (`address_line_1/2`,
+  ROOT, final sigma to medial) — from its TEXT when the text is non-blank, otherwise from its
+  CONTENT_DESCRIPTION (review round 7); an **ADDRESS** id (`address_line_1/2`,
   `arriving_at_title`, `address_subpremise_line`) seeds its exact value ONLY — address vocabulary
   ("Road", "View", "San", "Lane", "Way") is common English, and seeding its runs would withhold "View
   details" or "Road closed" chrome, and camelCase ids like `roadNameLayout`, on every frame with an
   address, while a person's name rarely collides with chrome; a **CONTENT** id (the free-text
   instruction bodies; `description_text_view`, generic DoorDash chrome such as "Raise to 50%") seeds
-  nothing. A NAME's letter runs come from its TEXT; from its CONTENT_DESCRIPTION only the runs that
-  also appear in its text (a TalkBack-style desc "Customer name Adam" must not seed `customer`/`name`),
-  and a NAME whose text is blank seeds its desc's exact value only (#1160 review round 6). Every
-  customer-name id the intake knows is in this table as NAME, so `PII_ID_SUFFIXES` holds only
-  content/instruction ids plus the table's suffixes;
+  nothing; an **EXACT** id (`tvTitle`, `tvLastMessage` — the chat header is a customer's name and the
+  preview their text, but the same generic id titles other sheets, "Pick up order") seeds its exact value
+  only. A NAME seeds runs from its text, so a TalkBack-style desc "Customer name Adam" beside text "Adam"
+  seeds no `customer`/`name`, while a name rendered only in a desc still propagates. Every PII id the
+  intake knows is in this table, so `PII_ID_SUFFIXES` holds only instruction/content ids (message bodies,
+  maneuver/road text, instruction bodies) plus the table's suffixes (review rounds 6–7);
 - a MASK never seeds anything (`[redacted…]`, `[address]`, …): it is not identity, and its word would
   collide with chrome and with address-block ids.
 
@@ -231,11 +235,15 @@ corpus tests feed fixture trees that ARE masked captures; that is a superset con
 token is caught by step 5 and emits `withheld`), not the runtime shape.
 
 **Inputs and predicates, exactly.** Every step sees the CANONICAL value — glyph-folded, trimmed and
-whitespace-normalized (`CensusHash.canonical`: first the ONE glyph fold `TextFold.foldGlyphs` it shares
-with the sensitive-marker scan — NFKC, `Character.FORMAT` strip, Unicode-dash fold — so a zero-width
-space inside a marker or a fullwidth letter cannot defeat steps 3/4/7, and a fullwidth chrome word hashes
-equal to its plain twin (amended in #1160 review round 6); then every run of code points the classifier treats as whitespace,
-`Character.isWhitespace || isSpaceChar`, collapsed to one ASCII space; amended in #1160 because the JVM's
+whitespace-normalized (`CensusHash.canonical`: first the census glyph fold `TextFold.foldForCensus` —
+`Character.FORMAT` stripped by code point FIRST, then NFKC, then the Unicode-dash fold — so a zero-width
+or tag character inside a marker, or a fullwidth letter, cannot defeat steps 3/4/7, and a fullwidth
+chrome word hashes equal to its plain twin (amended in #1160 review rounds 6–7); then every run of code points the classifier treats as whitespace,
+`Character.isWhitespace || isSpaceChar`, collapsed to one ASCII space. The canonical form is a FIXED
+POINT — `canonical(canonical(x)) == canonical(x)`; stripping FORMAT before NFKC lets a combining mark
+hidden behind a zero-width joiner compose in the one pass, the pass is re-applied until stable (bounded at
+3), and a value that does not converge is withheld. The builder HASHES the canonical string it JUDGED
+(`CensusHash.ofCanonical`), never a re-canonicalized one (review round 7). Amended in #1160 because the JVM's
 regex `\s` excludes NBSP/thin space while ICU's includes `\p{Z}`, so the decision was engine-dependent) —
 the same bytes `CensusHash` hashes — so a leading space cannot slip a prefix past a `startsWith`. Every
 value-judging step (3, 4, 5, 7, 8) runs on the canonical form AND — when the raw trimmed value differs
