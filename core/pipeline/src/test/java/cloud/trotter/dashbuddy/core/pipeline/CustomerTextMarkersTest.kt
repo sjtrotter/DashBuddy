@@ -424,10 +424,15 @@ class CustomerTextMarkersTest {
         assertEquals("[redacted]", CustomerTextMarkers.scrubUnknown(name).text)
         val message = UiNode(viewIdResourceName = "com.x:id/tvLastMessage", text = "My gate code is 2468")
         assertEquals("[redacted]", CustomerTextMarkers.scrubUnknown(message).text)
-        listOf("Riley", "Riley S", "Riley S.", "O'Brien", "Mary-Jo K", "Mary Jo", "Mary Jo S").forEach {
+        // The RUNTIME gate (review YY1) also accepts all-caps names and initials — "RILEY S" is a header.
+        listOf("Riley", "Riley S", "Riley S.", "O'Brien", "Mary-Jo K", "Mary Jo", "Mary Jo S", "RILEY S", "RILEY").forEach {
             assertTrue(it, CustomerTextMarkers.isNameLike(it))
         }
-        listOf("Pick up order", "Order details", "riley", "Riley's order x", "R2", "", "TAB B", "RILEY").forEach {
+        // …while the SEEDING/id mode keeps the not-all-caps rule (review XX4).
+        listOf("RILEY S", "TAB B", "PRIMARY BUTTON A").forEach {
+            assertTrue(it, !PiiShapes.isPersonName(it, PiiShapes.NameMode.SEEDING_AND_IDS))
+        }
+        listOf("Pick up order", "Order details", "riley", "Riley's order x", "R2", "").forEach {
             assertTrue(it, !CustomerTextMarkers.isNameLike(it))
         }
     }

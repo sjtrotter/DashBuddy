@@ -262,23 +262,49 @@ object PiiShapes {
 
     private val WHITESPACE_RUN = Regex("\\s+")
 
+    /** How [isPersonName] judges a value (#1160 reviews XX4, YY1). */
+    enum class NameMode {
+        /**
+         * The RUNTIME scrub gate: privacy first, so all-caps tokens (`\p{Lu}{2,}`, "RILEY") and single-letter
+         * initials ("S", "S.") count too — an all-caps chrome title scrubbed in debug triage is the same
+         * accepted trade as title-case.
+         */
+        RUNTIME_SCRUB,
+
+        /**
+         * Census seeding and the id path: every token Capitalized-not-all-caps, so `TAB B` / `PRIMARY BUTTON A`
+         * constants never read as names (the recall reason of review XX4).
+         */
+        SEEDING_AND_IDS,
+    }
+
     /**
-     * The ONE "does this value read as a person's name?" predicate (#1160 reviews XX1, XX5): a whole-value
-     * match of [FIRST_LAST_INITIAL_CAPITALIZED] ("Riley S", "Riley S.", "Mary Jo S"), OR 1–3 whitespace
-     * tokens each Capitalized-not-all-caps — a leading uppercase letter, only letters / apostrophes /
-     * hyphens, and at least one lowercase letter ("Riley", "Mary Jo", "O'Brien"; not "TAB B", not "riley").
-     * Consumed by the runtime `WHEN_NAME_LIKE` scrub and the census whole-value seeding.
+     * The ONE "does this value read as a person's name?" predicate (#1160 reviews XX1, XX5, YY1): a
+     * whole-value match of [FIRST_LAST_INITIAL_CAPITALIZED] ("Riley S", "Riley S.", "Mary Jo S"), OR 1–3
+     * whitespace tokens, each made only of letters / apostrophes / hyphens (a trailing initial's period
+     * aside) and either Capitalized-not-all-caps ("Riley", "Mary Jo", "O'Brien") or — in
+     * [NameMode.RUNTIME_SCRUB] only — all-caps ("RILEY") or a single-letter initial ("S", "S."). Never
+     * lowercase ("riley"). The runtime `WHEN_NAME_LIKE` gate uses RUNTIME_SCRUB; the census whole-value
+     * seeding uses SEEDING_AND_IDS.
      */
-    fun isPersonName(value: String?): Boolean {
+    fun isPersonName(value: String?, mode: NameMode = NameMode.SEEDING_AND_IDS): Boolean {
         val trimmed = value?.trim()?.takeIf { it.isNotEmpty() } ?: return false
         if (FIRST_LAST_INITIAL_CAPITALIZED_REGEX.matches(trimmed)) return true
         val tokens = trimmed.split(WHITESPACE_RUN)
         if (tokens.size > 3) return false
-        return tokens.all { token ->
-            Character.isUpperCase(token.codePointAt(0)) &&
-                token.codePoints().allMatch { Character.isLetter(it) || it == '\''.code || it == 0x2019 || it == '-'.code } &&
-                token.codePoints().anyMatch { Character.isLowerCase(it) }
-        }
+        return tokens.all { token -> isNameToken(token, mode) }
+    }
+
+    private fun isNameToken(token: String, mode: NameMode): Boolean {
+        val letters = token.removeSuffix(".")
+        if (letters.isEmpty() || !Character.isUpperCase(letters.codePointAt(0))) return false
+        if (!letters.codePoints().allMatch { Character.isLetter(it) || it == '\''.code || it == 0x2019 || it == '-'.code }) return false
+        val capitalized = letters.codePoints().anyMatch { Character.isLowerCase(it) } && token == letters
+        if (capitalized) return true
+        if (mode != NameMode.RUNTIME_SCRUB) return false
+        val letterCount = letters.codePoints().filter { Character.isLetter(it) }.count()
+        val allCaps = letters.codePoints().filter { Character.isLetter(it) }.allMatch { Character.isUpperCase(it) }
+        return allCaps && (letterCount >= 2 && token == letters || letterCount == 1L)
     }
 
     /** [FIRST_LAST_INITIAL_EMBEDDED], compiled `IGNORE_CASE` (the initial stays case-sensitive). */

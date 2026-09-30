@@ -249,12 +249,12 @@ object CustomerTextMarkers {
     }
 
     /**
-     * Name-like for the runtime `WHEN_NAME_LIKE` scrub — the ONE predicate `PiiShapes.isPersonName` (#1160
-     * reviews TT1, WW2, XX1). Accepted residual (WW5): title-case two-word chrome ("Pick Up", "Order
+     * Name-like for the runtime `WHEN_NAME_LIKE` scrub — the ONE predicate `PiiShapes.isPersonName` in its
+     * RUNTIME_SCRUB mode, which also accepts all-caps names ("RILEY S") (#1160 reviews TT1, WW2, XX1, YY1). Accepted residual (WW5): title-case two-word chrome ("Pick Up", "Order
      * Details") also reads as a name and is scrubbed in debug triage — privacy first, so a full "Riley
      * Smith" header never persists.
      */
-    fun isNameLike(value: String?): Boolean = PiiShapes.isPersonName(value)
+    fun isNameLike(value: String?): Boolean = PiiShapes.isPersonName(value, PiiShapes.NameMode.RUNTIME_SCRUB)
 
     /** What an [IdMarker]'s node value IS (#1160 review LL1). */
     enum class IdentityKind {

@@ -648,7 +648,10 @@ must stay green.
     scrub masks `tvTitle` when its value reads as a person's name (`PiiShapes.isPersonName`), which a
     title-case two-word sheet title ("Pick Up", "Order Details") also satisfies — so such a header line is
     lost from the debug X-Ray triage. Accepted, privacy first: a full "Riley Smith" chat header must never
-    persist; sentence-case chrome ("Pick up order") is kept.
+    persist; sentence-case chrome ("Pick up order") is kept. The runtime gate uses `isPersonName`'s
+    RUNTIME_SCRUB mode, which also accepts all-caps names and initials ("RILEY S"), so all-caps chrome
+    ("TAB B") is scrubbed in triage too — the same trade; census seeding and the id path use the
+    not-all-caps SEEDING_AND_IDS mode (review round 11).
 
 ## Open questions (dev decisions; the same items appear in #1157's plan §10 under its own numbering — this list is the ADR's reference)
 

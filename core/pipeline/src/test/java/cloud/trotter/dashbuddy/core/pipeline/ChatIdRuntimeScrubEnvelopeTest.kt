@@ -102,7 +102,7 @@ class ChatIdRuntimeScrubEnvelopeTest {
 
     @Test
     fun `every person-name header shape is masked through captureScreen (review XX1)`() {
-        listOf("Riley", "Riley S.", "Mary Jo S", "Mary Jo").forEach { header ->
+        listOf("Riley", "Riley S.", "Mary Jo S", "Mary Jo", "RILEY S").forEach { header -> // YY1: all-caps too
             val envelope = capture(
                 UiNode(className = "android.widget.TextView", viewIdResourceName = "com.doordash.driverapp:id/tvTitle", text = header),
             )
