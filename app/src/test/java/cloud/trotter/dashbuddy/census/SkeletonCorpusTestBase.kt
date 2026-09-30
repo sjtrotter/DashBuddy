@@ -210,7 +210,7 @@ abstract class SkeletonCorpusTestBase {
                 if (rendered && kind?.seedsExactValue == true) seededExact += c
             }
             if (kind != null) {
-                nameRunSourceOf(n)?.takeIf { kind.seedsRunsFrom(it) }?.let { nameRuns += letterRuns(it, minLetters = 2) }
+                nameRunSourceOf(n)?.takeIf { kind.seedsRunsFrom(it) }?.let { nameRuns += letterRuns(it, minLetters = kind.minRunLetters) }
             }
         }
         var flips = 0
@@ -341,7 +341,7 @@ abstract class SkeletonCorpusTestBase {
             // Reviews GG1, LL1, NN3, PP2, AC4: only a NAME contributes letter runs (≥2 letters) — from its
             // usable TEXT, otherwise its usable CONTENT_DESCRIPTION (the builder's own rule).
             if (kind != null) {
-                nameRunSourceOf(n)?.takeIf { kind.seedsRunsFrom(it) }?.let { idRuns += letterRuns(it, minLetters = 2) }
+                nameRunSourceOf(n)?.takeIf { kind.seedsRunsFrom(it) }?.let { idRuns += letterRuns(it, minLetters = kind.minRunLetters) }
             }
         }
         // Review HH3: every canonical key a value predicate caught ANYWHERE in the frame — on the canonical

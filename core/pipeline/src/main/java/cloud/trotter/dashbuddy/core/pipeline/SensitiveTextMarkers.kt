@@ -223,6 +223,12 @@ object SensitiveTextMarkers {
      */
     internal fun normalizePreserving(s: String): String = spaceAndLower(TextFold.foldGlyphsPreservingSupplementary(s))
 
+    /** [normalizePreserving] plus the fold's own supplementary-FORMAT flag (review AF6). */
+    private fun normalizePreservingFlagged(s: String): TextFold.Folded {
+        val folded = TextFold.foldGlyphsPreservingSupplementaryFlagged(s)
+        return TextFold.Folded(spaceAndLower(folded.text), folded.hasSupplementaryFormat)
+    }
+
     /**
      * Every remaining whitespace char (incl. the U+001F unit separator used to join sibling text) becomes
      * one ASCII space, and `Locale.ROOT` lowercase gives locale-safe case-insensitivity in one place (so the
@@ -245,8 +251,10 @@ object SensitiveTextMarkers {
      * [normalize] is defined by — never re-normalized from the raw text.
      */
     private fun scanBothForms(text: String): String? {
-        val preserving = normalizePreserving(text)
-        return scan(preserving) ?: if (TextFold.hasSupplementaryFormat(preserving)) scan(TextFold.stripSupplementaryFormat(preserving)) else null
+        // AF6: the flag comes from the fold's own pass (lowercasing cannot add or remove a FORMAT code point).
+        val preserving = normalizePreservingFlagged(text)
+        return scan(preserving.text)
+            ?: if (preserving.hasSupplementaryFormat) scan(TextFold.stripSupplementaryFormat(preserving.text)) else null
     }
 
     /**

@@ -22,6 +22,23 @@ object IdPathJudgement {
      * frame-free predicate can tell from chrome (`chip_Gold`, `Artwork Image`) — ADR residual risk 10.
      */
     fun isStaticId(id: String): Boolean {
+        synchronized(cache) { cache[id] }?.let { return it }
+        val verdict = judge(id)
+        synchronized(cache) { cache[id] = verdict }
+        return verdict
+    }
+
+    /**
+     * Review AF4: the verdict is frame-FREE and never changes for a raw id, so it is memoized process-wide
+     * in a small bounded LRU ([CACHE_SIZE] entries, access order, evicting the eldest) under its own lock.
+     */
+    private const val CACHE_SIZE = 512
+
+    private val cache = object : LinkedHashMap<String, Boolean>(CACHE_SIZE, 0.75f, true) {
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, Boolean>?): Boolean = size > CACHE_SIZE
+    }
+
+    private fun judge(id: String): Boolean {
         if (!ResourceIdGrammar.isStaticShape(id)) return false
         // Review PP1: camelCase segments are words too (`deliverToSam` → "deliver To Sam"), by the same
         // rule the frame-level check uses. Review PP4: only the CASE-SENSITIVE-initial name shape runs on

@@ -456,18 +456,21 @@ class CustomerTextMarkersTest {
     fun `what a kind seeds is pinned on the kind table (review AB1)`() {
         assertEquals(
             mapOf(
-                CustomerTextMarkers.IdentityKind.NAME to Triple(true, Int.MAX_VALUE, true),
-                CustomerTextMarkers.IdentityKind.ADDRESS to Triple(true, 0, false),
-                CustomerTextMarkers.IdentityKind.CONTENT to Triple(false, 0, false),
-                CustomerTextMarkers.IdentityKind.EXACT to Triple(true, 0, false),
-                CustomerTextMarkers.IdentityKind.PERSON_OR_MERCHANT to Triple(true, 2, false),
+                CustomerTextMarkers.IdentityKind.NAME to listOf(true, Int.MAX_VALUE, 2, false, true),
+                CustomerTextMarkers.IdentityKind.ADDRESS to listOf(true, 0, 0, false, false),
+                CustomerTextMarkers.IdentityKind.CONTENT to listOf(false, 0, 0, false, false),
+                CustomerTextMarkers.IdentityKind.EXACT to listOf(true, 0, 0, false, false),
+                CustomerTextMarkers.IdentityKind.PERSON_OR_MERCHANT to listOf(true, 2, 3, true, false),
             ),
-            CustomerTextMarkers.IdentityKind.entries.associateWith { Triple(it.seedsExactValue, it.maxRunSeedTokens, it.runsGuardClasses) },
+            CustomerTextMarkers.IdentityKind.entries.associateWith {
+                listOf(it.seedsExactValue, it.maxRunSeedTokens, it.minRunLetters, it.personNameShapeOnly, it.runsGuardClasses)
+            },
         )
-        // Review AD2: a 1–2-token person-or-merchant value seeds runs; 3+ tokens seed exact only.
+        // Reviews AD2, AF1: a person-or-merchant value seeds runs only when it reads as a person's name.
         val pom = CustomerTextMarkers.IdentityKind.PERSON_OR_MERCHANT
-        assertTrue(pom.seedsRunsFrom("Riley") && pom.seedsRunsFrom("Riley S"))
-        assertTrue(!pom.seedsRunsFrom("The Home Depot") && !pom.seedsRunsFrom("Jack in the Box"))
+        listOf("Riley", "Mary Jo", "O'Brien", "Wing Stop").forEach { assertTrue(it, pom.seedsRunsFrom(it)) }
+        listOf("Riley S", "In-N-Out Burger", "Sonic Drive-In", "7-Eleven", "The Home Depot", "Jack in the Box", "riley")
+            .forEach { assertTrue(it, !pom.seedsRunsFrom(it)) }
         assertTrue(CustomerTextMarkers.IdentityKind.NAME.seedsRunsFrom("Mary Jo Anne Smith"))
         assertTrue(!CustomerTextMarkers.IdentityKind.EXACT.seedsRunsFrom("Riley"))
     }

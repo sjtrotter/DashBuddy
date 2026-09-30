@@ -353,4 +353,39 @@ class SkeletonFrameRuleTest : SkeletonBuilderTestBase() {
         assertEquals(listOf(TextSlot.WITHHELD, TextSlot.WITHHELD), frame("Riley", "Text Riley", "Riley's order"))
         assertEquals(listOf(words(4, "Head to the store")), frame("The Home Depot", "Head to the store"))
     }
+
+    @Test
+    fun `AF1 - a user_name seeds runs only when it reads as a person's name`() {
+        fun frame(user: String, vararg others: String) = SkeletonBuilder.build(
+            UiNode(className = "android.widget.LinearLayout", viewIdResourceName = "com.x:id/row", children = listOf(
+                UiNode(className = "android.widget.TextView", viewIdResourceName = "com.doordash.driverapp:id/user_name", text = user),
+            ) + others.map { UiNode(className = "android.widget.TextView", viewIdResourceName = "com.x:id/sign_in_button", text = it) }),
+            null, meta, platform, day,
+        )!!.root.children.drop(1)
+        listOf("In-N-Out Burger", "Sonic Drive-In", "7-Eleven").forEach { merchant ->
+            val out = frame(merchant, "Sign in", "Log out")
+            assertEquals(merchant, listOf(words(2, "Sign in"), words(2, "Log out")), out.map { it.text.getValue("text") })
+            assertEquals(merchant, "com.x:id/sign_in_button", out[0].id)
+        }
+        assertEquals(TextSlot.WITHHELD, frame("Riley", "Text Riley")[0].text.getValue("text"))
+        assertEquals(TextSlot.WITHHELD, frame("Mary Jo", "Mary's order")[0].text.getValue("text"))
+        // A name-shaped merchant seeds its runs — accepted (residual risk 9).
+        assertEquals(TextSlot.WITHHELD, frame("Wing Stop", "Stop here")[0].text.getValue("text"))
+    }
+
+    @Test
+    fun `AF3 - a label-only desc on the identity node does not seed the whole-value id run`() {
+        val out = SkeletonBuilder.build(
+            UiNode(className = "android.widget.LinearLayout", viewIdResourceName = "com.x:id/row", children = listOf(
+                UiNode(
+                    className = "android.widget.TextView",
+                    viewIdResourceName = "com.doordash.driverapp:id/customer_name",
+                    text = "Adam",
+                    contentDescription = "Customer name",
+                ),
+            )),
+            null, meta, platform, day,
+        )!!.root.children
+        assertEquals("com.doordash.driverapp:id/customer_name", out[0].id)
+    }
 }

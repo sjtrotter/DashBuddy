@@ -9,7 +9,6 @@ import cloud.trotter.dashbuddy.domain.census.contract.ResourceIdGrammar
 import cloud.trotter.dashbuddy.domain.census.contract.TextSlot
 import cloud.trotter.dashbuddy.domain.census.contract.UiSkeletonNodeDto
 import cloud.trotter.dashbuddy.domain.census.contract.WireStrings
-import cloud.trotter.dashbuddy.domain.model.accessibility.AnonymousWrappers
 import cloud.trotter.dashbuddy.domain.model.accessibility.UiNode
 import cloud.trotter.dashbuddy.domain.model.accessibility.UiNodeTextField
 import cloud.trotter.dashbuddy.domain.privacy.PiiShapes
@@ -71,7 +70,7 @@ internal class FrameFilter(
     /** Canonical values a VALUE-judging step caught anywhere in the frame (exact equality). */
     private val caught = HashSet<String>()
 
-    /** Letter runs (≥ [MIN_IDENTITY_RUN] letters, folded) of run-seeding identity ids' text/desc (GG1, LL1, AD2). */
+    /** Letter runs (≥ the kind's `minRunLetters`, folded) of run-seeding identity ids' text/desc (GG1, LL1, AD2, AF1). */
     private val identityRuns = HashSet<String>()
 
     /**
@@ -99,8 +98,6 @@ internal class FrameFilter(
 
     private fun canonicalOf(trimmed: String): String? = canonicals.getOrPut(trimmed) { Canon(canonicalize(trimmed)) }.canonical
 
-    /** [IdPathJudgement.isStaticId] per raw id, memoized per frame (review NN7: list surfaces repeat one id). */
-    private val staticIds = HashMap<String, Boolean>()
 
     /** The id/class join-search verdicts per candidate (reviews AD6). */
     private val idJoinHits = HashMap<String, Boolean>()
@@ -135,7 +132,7 @@ internal class FrameFilter(
         seedIdentity(textField, descField, marker)
         return Pending(
             className = node.className?.takeIf { classOk }?.let { ClassNameGrammar.staticOrNull(it) },
-            id = node.viewIdResourceName?.takeIf { raw -> staticIds.getOrPut(raw) { IdPathJudgement.isStaticId(raw) } },
+            id = node.viewIdResourceName?.takeIf { raw -> IdPathJudgement.isStaticId(raw) },
             node = node,
             fields = fields,
             children = node.children.map { scan(it) },
@@ -180,23 +177,23 @@ internal class FrameFilter(
     private fun seedIdentity(textField: Field?, descField: Field?, marker: CustomerTextMarkers.IdMarker?) {
         if (marker == null || !marker.kind.seedsExactValue) return
         // SS7: the already-built Fields' canonicals — never re-canonicalized.
-        val text = textField?.takeIf { it.converged }?.canonical?.takeIf { !PiiShapes.containsMask(it) }
-        val desc = descField?.takeIf { it.converged }?.canonical?.takeIf { !PiiShapes.containsMask(it) }
-        text?.let { caught += it }
-        desc?.let { caught += it }
+        val text = textField?.takeIf { it.converged }?.canonical
+        val desc = descField?.takeIf { it.converged }?.canonical
+        listOfNotNull(text, desc).filterNot { PiiShapes.containsMask(it) }.forEach { caught += it }
+        // UU6 / AC4 / AF8: the ONE source rule (usable text, else usable desc; it owns the mask rule) feeds
+        // BOTH the whole-value id seed (AF3 — a TalkBack label-only desc "Customer name" beside text "Adam"
+        // must not seed `customername` and turn the node's own id into `~`) and the letter runs.
+        val source = SkeletonBuilder.nameRunSource(text, desc) ?: return
         // Reviews VV1, XX3, ZZ3, AB2, AB4: an `idProtect` row adds its whole value's code-point letters as an
         // id run — a single token included, no name-shape gate (fail closed) — at ≥ MIN_WHOLE_VALUE_RUN
         // letters, so a short value never nulls chrome.
         if (marker.idProtect) {
-            listOfNotNull(text, desc).forEach { value ->
-                val letters = LetterRuns.plainLetterRuns(value).joinToString("")
-                if (letters.codePointCount(0, letters.length) >= MIN_WHOLE_VALUE_RUN) addIdSeed(CaseFold.fold(letters))
-            }
+            val letters = LetterRuns.plainLetterRuns(source).joinToString("")
+            if (letters.codePointCount(0, letters.length) >= MIN_WHOLE_VALUE_RUN) addIdSeed(CaseFold.fold(letters))
         }
-        // UU6 / AC4: the text is the run source only when it is usable; otherwise the desc.
-        val source = SkeletonBuilder.nameRunSource(text, desc) ?: return
         if (!marker.kind.seedsRunsFrom(source)) return
-        runsOf(source, minLetters = MIN_IDENTITY_RUN).forEach { run ->
+        // AF1: the kind's own run floor (NAME 2 — "Li"; PERSON_OR_MERCHANT 3).
+        runsOf(source, minLetters = marker.kind.minRunLetters).forEach { run ->
             identityRuns += run
             addIdSeed(run)
             if (marker.kind.runsGuardClasses && classSeeds.add(run)) classSeedLengths += run.length
@@ -233,7 +230,7 @@ internal class FrameFilter(
     /** Pass 2 for one field: the constant `withheld`, or the value's own (memoized) slot. */
     fun slot(field: Field): TextSlot {
         if (field.idWithholds || valueStep(field.trimmed, field.canonical) != null) return TextSlot.WITHHELD
-        if (frameLevel && (field.canonical in caught || containsIdentityRun(field.canonical))) return TextSlot.WITHHELD
+        if ((frameLevel && field.canonical in caught) || containsIdentityRun(field.canonical)) return TextSlot.WITHHELD
         return valueSlots.getOrPut(field.canonical) { unfiltered(field.canonical) }
     }
 
@@ -254,12 +251,14 @@ internal class FrameFilter(
     /**
      * The CLASS containment check (review AC2, narrowing ZZ3): a third-party-set class name is withheld
      * when a join carries a run of a class-guarding kind (NAME: `com.x.RileyButton` beside `customer_name`
-     * "Riley") — never a title or merchant word, so `SearchView` beside `tvTitle` "Search" stays. A wrapper
-     * class (`AnonymousWrappers.WRAPPER_CLASSES`, a fixed framework allowlist) is never checked, so wrapper
-     * eligibility — the fingerprint's structure — never depends on the customer.
+     * "Riley") — never a title or merchant word, so `SearchView` beside `tvTitle` "Search" stays. A
+     * FRAMEWORK class ([FRAMEWORK_PACKAGES], review AF2) is never checked: it cannot carry a customer's name,
+     * so "Chip" never nulls `com.google.android.material.chip.Chip` and forks the fingerprint per customer.
+     * This also covers every wrapper class (`AnonymousWrappers.WRAPPER_CLASSES` are all `android.*`), so
+     * wrapper eligibility — the fingerprint's structure — never depends on the customer.
      */
     fun classCarriesNameRun(className: String): Boolean {
-        if (!frameLevel || classSeeds.isEmpty() || className in AnonymousWrappers.WRAPPER_CLASSES) return false
+        if (!frameLevel || classSeeds.isEmpty() || FRAMEWORK_PACKAGES.any { className.startsWith(it) }) return false
         return classJoinHits.getOrPut(className) { LetterRuns.anyJoinIn(LetterRuns.foldedSegments(className), classSeeds, classSeedLengths) }
     }
 
@@ -285,18 +284,17 @@ internal class FrameFilter(
         )
     }
 
-    private companion object {
+    internal companion object {
         /**
-         * An identity value contributes only letter runs of at least this many letters (reviews GG1, II1):
-         * two, so a two-letter first name ("Li", "Jo") is covered; whole-run equality keeps it from matching
-         * inside another word, and a single-letter run (an initial) seeds nothing.
+         * Class-name prefixes never containment-checked (review AF2): framework classes, not app-defined.
+         * Every `AnonymousWrappers.WRAPPER_CLASSES` member is under one of them (pinned by a test).
          */
-        const val MIN_IDENTITY_RUN = 2
+        val FRAMEWORK_PACKAGES = listOf("android.", "androidx.", "com.google.android.material.")
 
         /**
          * A whole-value id seed needs at least this many letters (review AB4): three, so a short value
          * ("Ok", "No", "Hi") never nulls `ok_button` / `no_thanks_button` / `hi_res_image`. NAME word runs
-         * keep [MIN_IDENTITY_RUN] ("Li" still protects `chipLi` through its letter run).
+         * keep their kind's floor, 2 ("Li" still protects `chipLi` through its letter run).
          */
         const val MIN_WHOLE_VALUE_RUN = 3
     }

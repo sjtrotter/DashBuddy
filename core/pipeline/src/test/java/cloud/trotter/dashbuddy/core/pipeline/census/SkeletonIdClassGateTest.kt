@@ -7,6 +7,7 @@ import cloud.trotter.dashbuddy.domain.census.contract.CensusFingerprint
 import cloud.trotter.dashbuddy.domain.census.contract.CensusHash
 import cloud.trotter.dashbuddy.domain.census.contract.SkeletonSchema
 import cloud.trotter.dashbuddy.domain.census.contract.TextSlot
+import cloud.trotter.dashbuddy.domain.model.accessibility.AnonymousWrappers
 import cloud.trotter.dashbuddy.domain.model.accessibility.UiNode
 import cloud.trotter.dashbuddy.domain.model.accessibility.UiNodeTextField
 import cloud.trotter.dashbuddy.domain.state.Platform
@@ -315,5 +316,22 @@ class SkeletonIdClassGateTest : SkeletonBuilderTestBase() {
         val splicedTree = other.root.copy(children = listOf(other.root.children[0], other.root.children[1].copy(id = null)))
         assertEquals(CensusFingerprint.of(sentinelTree), chip.fingerprint)
         assertTrue(CensusFingerprint.of(splicedTree) != chip.fingerprint)
+    }
+
+    @Test
+    fun `AF2 - a framework class is never containment-checked, an app class is`() {
+        assertEquals(listOf<String?>("com.google.android.material.chip.Chip"), classesBeside("customer_name", "Chip", "com.google.android.material.chip.Chip"))
+        assertEquals(listOf<String?>("androidx.cardview.widget.CardView"), classesBeside("customer_name", "Card", "androidx.cardview.widget.CardView"))
+        assertEquals(listOf<String?>(null), classesBeside("customer_name", "Riley", "com.x.RileyButton"))
+        // Every wrapper class is framework, so wrapper eligibility can never depend on the customer.
+        AnonymousWrappers.WRAPPER_CLASSES.forEach { cls -> assertTrue(cls, FrameFilter.FRAMEWORK_PACKAGES.any { cls.startsWith(it) }) }
+    }
+
+    @Test
+    fun `AF4 - the process-wide isStaticId memo is stable past its bound`() {
+        val ids = (0 until 700).map { "com.x:id/tag_" + ('a' + it % 26) + ('a' + it / 26 % 26) + "_x" + it.toString(36) }
+        val first = ids.map { IdPathJudgement.isStaticId(it) }
+        assertEquals(first, ids.map { IdPathJudgement.isStaticId(it) })
+        assertEquals(listOf(true, false, false), listOf("chip_Gold", "chip_Adam_S", "row_Deliver_to_Sam").map { IdPathJudgement.isStaticId(it) })
     }
 }
