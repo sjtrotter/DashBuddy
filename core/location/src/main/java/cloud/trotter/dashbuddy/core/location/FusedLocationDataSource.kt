@@ -7,6 +7,7 @@ import android.location.Geocoder
 import android.location.Location
 import android.os.Build
 import android.os.Looper
+import cloud.trotter.dashbuddy.domain.di.IoDispatcher
 import cloud.trotter.dashbuddy.domain.model.location.Coordinates
 import cloud.trotter.dashbuddy.domain.model.location.UserLocation
 import com.google.android.gms.location.LocationCallback
@@ -16,7 +17,7 @@ import com.google.android.gms.location.LocationServices
 import com.google.android.gms.location.Priority
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
@@ -35,7 +36,9 @@ import kotlin.coroutines.resume
  */
 @Singleton
 class FusedLocationDataSource @Inject constructor(
-    @param:ApplicationContext private val context: Context
+    @param:ApplicationContext private val context: Context,
+    // #1163 review: the ONE owner of "which dispatcher runs blocking IO" (DispatchersModule), never a literal.
+    @param:IoDispatcher private val ioDispatcher: CoroutineDispatcher,
 ) : LocationDataSource {
 
     private val fusedClient = LocationServices.getFusedLocationProviderClient(context)
@@ -111,7 +114,7 @@ class FusedLocationDataSource @Inject constructor(
                 }
             } else {
                 @Suppress("DEPRECATION")
-                val legacy = withContext(Dispatchers.IO) { geocoder.getFromLocation(coords.latitude, coords.longitude, 1) }
+                val legacy = withContext(ioDispatcher) { geocoder.getFromLocation(coords.latitude, coords.longitude, 1) }
                 legacy?.firstOrNull()
             }
 

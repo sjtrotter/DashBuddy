@@ -1143,7 +1143,7 @@ issues only and `NewApi` is ERROR by default, so two real minSdk-30 crash classe
 `Geocoder.GeocodeListener`, API 33). The root `lint.xml` promotes `NewApi` to fatal (lint discovers
 it for every module — a DSL `fatal +=` in `:app` never reached the library modules' analysis) and
 `:app`'s `lint { checkDependencies = true }` folds the library modules into the ONE existing
-`lintVitalRelease` run. Guard a new API call with `Build.VERSION.SDK_INT >= …`; never suppress it.
+`lintVitalRelease` run — which also means a local `:app:build`/`assembleRelease` pays the multi-module vital pass (accepted). Only the `NewApi` id is promoted; `InlinedApi` is benign by construction. Guard a new API call with `Build.VERSION.SDK_INT >= …`; never suppress it.
 
 ## Session Orientation
 
