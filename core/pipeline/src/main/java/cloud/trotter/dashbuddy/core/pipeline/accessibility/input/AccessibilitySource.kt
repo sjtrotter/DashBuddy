@@ -417,9 +417,12 @@ class AccessibilitySource @Inject constructor(
             w.root
         } ?: return Foreground.Refused(ForegroundSkipReason.FRONT_UNREADABLE, possibleOverlay = true)
         val live = root.packageName?.toString()
+        if (live == null) { // FF4: a package-less fresh root is UNREADABLE, not a package change
+            stats.onOverlayRejected(OverlayRejectReason.UNREADABLE)
+            return Foreground.Refused(ForegroundSkipReason.FRONT_UNREADABLE, possibleOverlay = true)
+        }
         if (live != probe.packageName) {
             stats.onOverlayRejected(OverlayRejectReason.PACKAGE_CHANGED)
-            if (live == null) return Foreground.Refused(ForegroundSkipReason.FRONT_UNREADABLE, possibleOverlay = true)
             val corrected = if (live in Platform.overlayPackages) {
                 WindowVerdictCache.Verdict.CANDIDATE
             } else {

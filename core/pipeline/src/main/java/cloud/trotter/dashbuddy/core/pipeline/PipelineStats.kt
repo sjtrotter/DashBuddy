@@ -69,7 +69,6 @@ class PipelineStats @Inject constructor(
     private val notifListenerConnects = AtomicLong()
     private val notifListenerDisconnects = AtomicLong()
 
-    /** #1148 review H3: event-driven window-resolver skips, by reason (counts only). */
     /** #1152: frames read from a platform offer overlay (a11y `TYPE_SYSTEM`), on any window path. */
     private val overlaySnapshots = AtomicLong()
 
@@ -82,7 +81,17 @@ class PipelineStats @Inject constructor(
             OverlayRejectReason.entries.forEach { put(it, AtomicLong()) }
         }
 
+    /**
+     * #1148 review H3: EVENT-driven window-resolver skips, by reason (counts only) — its contract is
+     * content/state frame loss. The topology path has its own census, [topologySkips].
+     */
     private val foregroundSkips: Map<ForegroundSkipReason, AtomicLong> =
+        EnumMap<ForegroundSkipReason, AtomicLong>(ForegroundSkipReason::class.java).apply {
+            ForegroundSkipReason.entries.forEach { put(it, AtomicLong()) }
+        }
+
+    /** PR #1155 review FF4: TOPOLOGY-path bursts that emitted nothing, by reason (counts only). */
+    private val topologySkips: Map<ForegroundSkipReason, AtomicLong> =
         EnumMap<ForegroundSkipReason, AtomicLong>(ForegroundSkipReason::class.java).apply {
             ForegroundSkipReason.entries.forEach { put(it, AtomicLong()) }
         }
@@ -353,6 +362,13 @@ class PipelineStats @Inject constructor(
 
     fun foregroundSkipCount(reason: ForegroundSkipReason): Long = foregroundSkips.getValue(reason).get()
 
+    /** A topology burst emitted nothing (FF4) — `topologySkip{…}`, never mixed into `foregroundSkip{}`. */
+    fun onTopologySkip(reason: ForegroundSkipReason) {
+        topologySkips.getValue(reason).incrementAndGet()
+    }
+
+    fun topologySkipCount(reason: ForegroundSkipReason): Long = topologySkips.getValue(reason).get()
+
     /**
      * A frame was read from a platform offer overlay (#1152 D4–D6) — the event resolver's own
      * overlay branch, a foreground read that landed on an overlay, or a topology emission. Rendered
@@ -413,6 +429,7 @@ class PipelineStats @Inject constructor(
             bindUnprovableSuffix() +
             bindRefusedSuffix() +
             foregroundSkipSuffix() +
+            topologySkipSuffix() +
             overlayRejectedSuffix()
 
     /**
@@ -423,6 +440,13 @@ class PipelineStats @Inject constructor(
         val nonZero = foregroundSkips.entries.filter { it.value.get() > 0 }
         if (nonZero.isEmpty()) return ""
         return nonZero.joinToString(",", prefix = " foregroundSkip{", postfix = "}") { "${it.key.name}=${it.value.get()}" }
+    }
+
+    /** `" topologySkip{FRONT_NOT_ENABLED=3}"` (PR #1155 review FF4), non-zero reasons only; empty when none. */
+    private fun topologySkipSuffix(): String {
+        val nonZero = topologySkips.entries.filter { it.value.get() > 0 }
+        if (nonZero.isEmpty()) return ""
+        return nonZero.joinToString(",", prefix = " topologySkip{", postfix = "}") { "${it.key.name}=${it.value.get()}" }
     }
 
     /** `" overlayRejected{TOO_SMALL=40,NOT_OVERLAY_PLATFORM=2}"` (#1152), non-zero reasons only; empty when none. */

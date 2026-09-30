@@ -81,6 +81,7 @@ class WindowsChangedPipeline @Inject constructor(
             // rule the event path applies, so nothing is reconciled. None flagged → nothing.
             val active = source.activeFromEnumeration(windows)
             if (active == null) {
+                stats.onTopologySkip(ForegroundSkipReason.NO_ACTIVE_ROOT) // FF4
                 Timber.tag("Pipeline").v("🚫 Windows: no (single) active window — nothing emitted")
                 return@transform
             }
@@ -108,7 +109,7 @@ class WindowsChangedPipeline @Inject constructor(
                     is AccessibilitySource.Foreground.Found ->
                         snapshotOf(front.located.window, front.located.root, front.located.isOverlay)?.let { emit(it) }
                     is AccessibilitySource.Foreground.Refused -> {
-                        if (front.reason == ForegroundSkipReason.SCAN_BUDGET) stats.onForegroundSkip(front.reason) // CC5
+                        stats.onTopologySkip(front.reason) // FF4: the topology path's own census
                         Timber.tag("Pipeline").v("🚫 Windows: our window active, foreground refused %s", front.reason)
                     }
                 }
@@ -126,7 +127,7 @@ class WindowsChangedPipeline @Inject constructor(
                     is AccessibilitySource.OverlayScan.Overlay ->
                         snapshotOf(scan.located.window, scan.located.root, overlay = true)?.let { emit(it) }
                     is AccessibilitySource.OverlayScan.Refused -> {
-                        if (scan.reason == ForegroundSkipReason.SCAN_BUDGET) stats.onForegroundSkip(scan.reason) // CC5
+                        stats.onTopologySkip(scan.reason) // FF4
                         Timber.tag("Pipeline").v("🚫 Windows: overlay scan refused %s", scan.reason)
                     }
                     AccessibilitySource.OverlayScan.None ->
@@ -138,8 +139,7 @@ class WindowsChangedPipeline @Inject constructor(
                 is AccessibilitySource.Foreground.Found ->
                     snapshotOf(front.located.window, front.located.root, front.located.isOverlay)?.let { emit(it) }
                 is AccessibilitySource.Foreground.Refused -> {
-                    // CC5: a budget refusal is a gate decision worth sizing in the field pull.
-                    if (front.reason == ForegroundSkipReason.SCAN_BUDGET) stats.onForegroundSkip(front.reason)
+                    stats.onTopologySkip(front.reason) // FF4
                     Timber.tag("Pipeline").v("🚫 Windows: nothing emitted above the active window (%s)", front.reason)
                 }
             }

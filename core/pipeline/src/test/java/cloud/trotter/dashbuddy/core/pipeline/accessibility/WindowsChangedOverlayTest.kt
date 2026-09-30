@@ -187,6 +187,9 @@ class WindowsChangedOverlayTest {
             enabled = setOf(ddPkg),
         )
         assertTrue(out.isEmpty())
+        // FF4: the topology path's refusals have their OWN census, never foregroundSkip{} (event-path loss).
+        assertEquals(1L, stats.topologySkipCount(ForegroundSkipReason.FRONT_NOT_ENABLED))
+        assertEquals(0L, stats.foregroundSkipCount(ForegroundSkipReason.FRONT_NOT_ENABLED))
     }
 
     // --- #1152 D6 --------------------------------------------------------------------------------

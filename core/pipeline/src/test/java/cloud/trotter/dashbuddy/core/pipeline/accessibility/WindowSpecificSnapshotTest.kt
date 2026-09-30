@@ -935,4 +935,18 @@ class WindowSpecificSnapshotTest {
         repeat(2) { assertEquals(listOf("dd"), collect(h, Kind.STATE, windowId = 3).map { it.tree.text }) }
         verify(sheetWindow, times(1)).root // the second walk decides on the cached package
     }
+
+    @Test
+    fun `FF4 - a memoized overlay whose fresh root has NO package counts UNREADABLE, not PACKAGE_CHANGED`() {
+        val bubble = node(ownPkg, "bubble")
+        val overlay = uberOverlay(9, 9, node(uberPkg, "uber-offer"))
+        val h = harness(activeRoot = bubble, windows = listOf(window(1, 10, bubble, active = true), overlay, window(3, 2, node(ddPkg, "dd"))))
+        assertEquals(listOf("uber-offer"), collect(h, Kind.STATE).map { it.tree.text }) // memo: CANDIDATE
+
+        val pkgless = mock<AccessibilityNodeInfo>()
+        whenever(overlay.root).thenReturn(pkgless)
+        assertTrue(collect(h, Kind.STATE).isEmpty())
+        assertEquals(1L, h.stats.overlayRejectedCount(OverlayRejectReason.UNREADABLE))
+        assertEquals(0L, h.stats.overlayRejectedCount(OverlayRejectReason.PACKAGE_CHANGED))
+    }
 }
