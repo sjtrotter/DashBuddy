@@ -283,7 +283,7 @@ loop into the actual test corpus is migration work, not spike work.
 ## Amendment (2026-09-30, #1144): the authoring model — drafted and reviewed, not hand-authored
 
 This ADR and Epic #192 assumed that **community members hand-write JSON5 rules** and a zero-trust CI
-vets them (open question 7 — who reviews; Phase C — CONTRIBUTING + moderation). The UNKNOWN-screen
+vets them (#192's open question 7 — who reviews — and its Phase C — CONTRIBUTING + moderation). The UNKNOWN-screen
 census (#1138, ADR-0011) changes who does what while leaving every gate in place:
 
 - **Rules are drafted, not authored.** A cluster of unrecognized screen shapes crosses a threshold
@@ -298,7 +298,8 @@ census (#1138, ADR-0011) changes who does what while leaving every gate in place
   Phase C becomes a **review queue + classification UI** rather than a contributor guide.
 - **The CI gates are unchanged and are what makes a drafted rule safe**: `AllMatchersSuite` (golden
   guard, negative corpus, sensitive-screen invariant, redact parity, `ParseOutputGoldenTest`),
-  schema validation, canonicalization, signature (#641). A drafted rule that over-matches forges
+  schema validation, canonicalization, and — once #641 lands (planned, not yet built) — the
+  signature. A drafted rule that over-matches forges
   state; a drafted rule with a wrong redact ships PII to every phone; both are caught only here plus
   a reader, so **human approval before signing is structural** (ADR-0011 §9). A fully automatic push
   is out of scope by design; a canary ring keyed on the install id can widen a rollout later.

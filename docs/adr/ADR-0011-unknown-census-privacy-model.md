@@ -48,9 +48,21 @@ chrome by construction), `bounds`, the three flags (`isClickable`/`isEnabled`/`i
 hand-list, so a string field added later (#1147's `paneTitle`, `hintText`, `clickActionLabel`, …) is
 covered automatically — an object `{h?, kind}`: `kind` is a coarse shape class and `h` is present
 only when invariant 3 admits a hash. **The type has no plaintext slot**: a leak of a text value is a
-type error. The window title is a text field under the same rule. `deviceFingerprint` is dropped
-from skeleton metadata. Bounds stay (they help a human read a cluster) but nothing ever clusters or
-keys on them.
+type error. **The window title is the ONE explicit non-node text field** (it lives on
+`windowContext`, outside `UiNodeTextField`) and goes through the same `{h?, kind}` rule; it is the
+single named exception to "enumerate the enum", and `SkeletonCorpusTest` names it. `deviceFingerprint`
+is dropped from skeleton metadata.
+
+**Bounds are carried only by nodes with NO text-field value, quantized to a 16 × 32 grid of the
+window.** A `wrap_content` text node's width is a function of its rendered text — a withheld name
+would still leak its length class through its right edge, and raw pixels also encode screen size and
+density — so text-bearing nodes carry no bounds at all, and the layout a human needs to read a
+cluster comes from the container nodes' coarse cells. Nothing ever clusters or keys on bounds.
+
+The permitted string fields, at both levels, are the test allowlist (§7a): per node `class`, `id`,
+`kind`, `h`; per envelope `schemaId`, `fingerprint`, `platform`, `platformAppVersion`, `appVersion`,
+`rulesetVersion`, `engineVersion`, and a `day` bucket (an `hour` bucket in flight only). The install
+id is added by the M3 uploader at the transport layer, never inside the skeleton.
 
 `kind` grammar: `empty | digits | money | time | words:N (N ≤ 8) | mixed`. `mixed` (letters +
 digits) covers unit numbers, gate codes, order ids and licence plates in one class.
@@ -61,26 +73,38 @@ Hash-only is necessary, not sufficient: a hash of a low-entropy value (a first n
 dictionary-attackable. Before hashing, `SkeletonBuilder` runs every text field through the SAME
 SSOTs the redact side uses, in this order, and **any hit withholds the hash**:
 
-1. the node id is in `ID_MARKERS ∪ PII_ID_SUFFIXES` (a view id whose value is PII by construction);
-2. the value contains `[redacted` (already masked upstream — never re-hash a mask);
-3. `CustomerTextMarkers.unredactedMarker` hits;
-4. `SnapshotRedactor.customerLeadIn` hits (the intake prefix rule, promoted to `:domain`);
-5. length > 40 characters — **this cap runs before any regex**, so every promoted shape pattern
-   below runs on bounded input on the device (the #803 instruction-body class never hashes);
-6. three or more consecutive digits (gate codes, PINs, unit numbers, phone fragments);
-7. `kind` is not `words:N` — **only `words:N` tokens are ever hashed**; digits, money, time and
-   `mixed` emit `kind` only;
-8. `FIRST_LAST_INITIAL_PATTERN` (the id-less name shape, byte-SSOT with the redact side);
-9. any promoted `PiiShapes` pattern (street, city/state/ZIP, full address, bare street, apartment,
-   PIN, quoted note, phone, email, card).
+1. the node id is in `ID_MARKERS ∪ PII_ID_SUFFIXES` (a view id whose value is PII by construction;
+   the two sets are deliberately NOT the same set — the union is used);
+2. length > 40 characters — **this cap runs before any pattern in this list**, so every step below
+   runs on bounded input on the device (the #803 instruction-body class never hashes);
+3. the value contains `[redacted` (already masked upstream — never re-hash a mask);
+4. `CustomerTextMarkers.unredactedMarker` hits;
+5. `PiiShapes.customerLeadIn` hits (the intake prefix rule, incl. `GATED_NAME_PREFIXES`);
+6. `kind` is not `words:N` — **only `words:N` tokens are ever hashed**. The `kind` grammar is the
+   digit backstop: any token containing a digit classifies as `digits` or `mixed` and can never be
+   `words:N`, so gate codes, PINs, unit numbers and phone fragments emit `kind` only by construction
+   (a future grammar change that lets a digit into `words:N` must re-add an explicit digit rule);
+7. `PiiShapes.FIRST_LAST_INITIAL_PATTERN` (the id-less name shape, byte-SSOT with the redact side);
+8. any other promoted `PiiShapes` pattern (street, city/state/ZIP, full address, bare street,
+   apartment, PIN, quoted note, phone, email, card).
 
 A `SensitiveTextMarkers` hit anywhere on the frame → **no skeleton at all** (the dasher's banking
-surfaces are blocked, never described).
+surfaces are blocked, never described). That frame-level scan is the EXISTING runtime control on the
+capture path and runs as it does today; the bounded-input claim above is about the per-field census
+filter.
+
+**Module homes.** `SkeletonBuilder` lives in `:core:pipeline`, because steps 1, 4 and the frame drop
+need `ID_MARKERS`, `CustomerTextMarkers` and `SensitiveTextMarkers`, which live there and which
+`:domain` may not depend on. The wire contract — `UiSkeletonDto`, `SkeletonSchema`, `CensusHash`,
+the fingerprint — lives in `:domain` or the Apache-2.0 contract module (open question 1). The
+promotion to `:domain` (`privacy/PiiShapes.kt`) covers EVERY test-only pattern the filter uses:
+`FIRST_LAST_INITIAL_PATTERN`, the shape patterns, `NAME_PREFIXES`, `GATED_NAME_PREFIXES`,
+`PII_ID_SUFFIXES` and `customerLeadIn()`; `SnapshotRedactor` delegates to it with byte-SSOT pins.
 
 **A withheld field emits `kind` only — no length, no hash.** A length is a small leak on a name and
-would break invariant 7 (pseudonym invariance). The `PiiShapes` patterns are promoted from the test
-corpus tool `SnapshotRedactor` into `:domain` as the one owner (byte-SSOT pins on both sides), so
-the census filter and the corpus intake can never drift apart.
+would break invariant 7 (pseudonym invariance); the bounds rule in §1 closes the same leak through
+geometry. Because `PiiShapes` is the one owner on both sides, the census filter and the corpus intake
+can never drift apart.
 
 ### 3. Hashing: unsalted sha256 with a domain-separation prefix
 
@@ -93,15 +117,22 @@ hashes the stripped token with no prefix).
 ### 4. **k-anonymity on strings** is a read-time gate on the server (D3)
 
 A token that k = 10 distinct installs rendered is chrome by definition; a token one install rendered
-is somebody's customer. The server keeps per-hash distinct-install counts with a rolling TTL and
-**unblinds a hash only after k installs have shown it** — and unblinds it from a **trusted install's
-own envelope** (invariant 6) or the operator's local corpus, never by asking a contributor for
-plaintext. Sub-k hashes are counted for **30 days after their last sighting** and then deleted; they
-are **never listed, never exported, never logged in bulk**. k is a predicate evaluated on every read
-(dashboard, export, vocabulary promotion), never a stored flag, so a cohort that shrinks below k
-simply stops being served — a dip degrades availability, never privacy. Installs count toward k only
-after a 7-day quarantine, and trusted installs are excluded from the k that gates the SHIPPED
-vocabulary (open question 5 in #1157's plan, pending the dev's confirmation).
+is somebody's customer. There are TWO named predicates, and every read says which it uses:
+
+- **`k_unblind`** — a hash may be resolved to text only from a **trusted install's own envelope**
+  (invariant 6) or the operator's local corpus, never by asking a contributor. For a trusted install
+  this is k = 1: the operator's phone alone resolves every hash it has itself rendered, which is
+  what lets the whole loop run on one phone. The resolved text is visible to the operator only.
+- **`k_ship`** — a resolved token is promoted to the SHIPPED chrome vocabulary (the allowlist that
+  rides the signed bundle and permits clear-text sending in `skeleton.v2`) only once **≥ 10
+  distinct community installs, past a 7-day quarantine and excluding trusted installs** (open
+  question 2), have shown the same hash.
+
+The server keeps per-hash distinct-install counts with a rolling TTL. Sub-k hashes are counted for
+**30 days after their last sighting** and then deleted; they are **never listed, never exported,
+never logged in bulk**. Both predicates are evaluated on every read (dashboard, export, promotion),
+never stored as a flag, so a cohort that shrinks below k simply stops being served — a dip degrades
+availability, never privacy.
 
 The unblinded set is the **chrome vocabulary**; it ships DOWN inside the signed rule bundle (#641).
 From `uinode.skeleton.v2` on, a client may send an allowlisted token in the clear, enforced
@@ -136,8 +167,9 @@ so trusted envelopes are swept manually and stored under the same retention the 
 
 For every fixture with a hand-pseudonymized twin, `skeleton(raw) == skeleton(pseudonymized)`: a PII
 token can never change what leaves the phone. `SkeletonCorpusTest` (#1145) walks the ENTIRE corpus
-including `SENSITIVE/` and `UNKNOWN/negative/` and asserts (a) no string field but
-`class`/`id`/`kind`/`h`/`fingerprint`/`schemaId`; (b) invariance under two shape-matched pseudonym
+including `SENSITIVE/` and `UNKNOWN/negative/` and asserts (a) no string field outside the §1
+allowlist (per node `class`/`id`/`kind`/`h`; per envelope the enumerated metadata) and no bounds on
+any text-bearing node; (b) invariance under two shape-matched pseudonym
 substitutions; (c) redactor parity — any value `SnapshotRedactor.redact` changes has no `h`; (d)
 every `SENSITIVE/` fixture the markers catch yields no skeleton; (e) no `h` equals the hash of any
 `CorpusDecoys` value or mask token; (f) determinism and idempotence. A seeded property (#878) adds:
@@ -153,10 +185,13 @@ skeletons), a per-cluster cap, a bounded on-disk queue (drop-oldest), batch uplo
 (the click envelope is the #919 leak class; a notification body is free text).
 
 **Cluster fingerprint** = sha256 over the same pre-order `(class, id)` key sequence
-`UiNode.computeStableHash` hashes, refactored to expose the sequence (`stableKeySequence()`) so the
-librarian's variant check, `FrameGate`'s identity and the census cluster key share ONE owner. The
-server RECOMPUTES the fingerprint from the skeleton it received rather than trusting the client's
-(#1157), which is why the wire contract must be consumable by an AGPL server (see open question 1).
+`UiNode.computeStableHash` hashes, refactored to expose the sequence (`stableKeySequence()`) so
+`stableHash` — today's `UnknownSuppressor` identity and the capture `contentHash` — and the census
+cluster key share ONE owner. (The corpus librarian's variant check is a TEXT fingerprint and
+`FrameGate`'s identity is `Observation.identity()`; neither is touched — a structural key would
+collapse the librarian's store-distinct variants.) The server RECOMPUTES the fingerprint from the
+skeleton it received rather than trusting the client's (#1157), which is why the wire contract must
+be consumable by an AGPL server (open question 1).
 
 ### 9. Rules are **proposed**, never auto-pushed (D7)
 
@@ -213,14 +248,17 @@ must stay green.
    the controls.
 3. **Server operator trust.** Stated above; reduced, never removed, by AGPL source, a published digest,
    a user-selectable endpoint and the retention table.
-4. **Dictionary attack by the operator on sub-k hashes.** Sub-k hashes are never listed, but the
+4. **Container geometry.** Coarse-grid bounds on non-text containers can still hint at layout
+   variants (a taller list = more rows). Accepted: rows are not identities, and no text node carries
+   bounds.
+5. **Dictionary attack by the operator on sub-k hashes.** Sub-k hashes are never listed, but the
    operator holds the database. The control is the same as 3, plus the 30-day TTL.
 
-## Open questions (dev decisions, tracked in #1157's plan §10)
+## Open questions (dev decisions; the same items appear in #1157's plan §10 under its own numbering — this list is the ADR's reference)
 
 1. Wire-contract licence and location: an Apache-2.0 `census-contract/` included build, or an
    Apache-headed package inside `:domain` for now. Changes #1145's file placement.
-2. Whether trusted installs are excluded from the k that gates the shipped allowlist (this ADR assumes yes).
+2. Whether trusted installs are excluded from `k_ship` (this ADR assumes yes).
 3. Backup retention of 14 days.
 4. What "contributing" means for the #1137 promo (decides whether the server keeps a metro cell at all).
 
