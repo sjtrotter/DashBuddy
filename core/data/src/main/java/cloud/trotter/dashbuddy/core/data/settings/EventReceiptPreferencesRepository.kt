@@ -6,6 +6,7 @@ import cloud.trotter.dashbuddy.domain.settings.EventReceiptConsent
 import cloud.trotter.dashbuddy.domain.settings.EventReceiptPreferences
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -33,8 +34,13 @@ import javax.inject.Singleton
  * is retried with bounded backoff ([RETRY_BASE_MS] × attempt, at most [MAX_RETRIES] per failure
  * episode; a WARN per attempt, PP6); when the retries are exhausted it logs one ERROR and settles on
  * the value already known this process, else [EventReceiptConsent.UNDECIDED] — filtered but USABLE.
- * [set] publishes optimistically, then writes on the APPLICATION scope (a closing screen can never
- * cancel it half-way), so a read that fails after a write can only re-emit the written value.
+ *
+ * **The collector is the ONLY writer of [consent] (review SS1).** [set] only writes the store, on the
+ * APPLICATION scope (a closing screen can never cancel it half-way); DataStore's data flow emits
+ * after the edit, so a decision reaches every reader within milliseconds through the collector. No
+ * optimistic value and no rollback: a value-compared rollback let overlapping or failing writes leave
+ * [consent] disagreeing with the store (or restore `null` after a read). A successful write restarts
+ * a collector whose retries were exhausted, so the decision is still read back.
  */
 @Singleton
 class EventReceiptPreferencesRepository @Inject constructor(
@@ -45,7 +51,10 @@ class EventReceiptPreferencesRepository @Inject constructor(
     private val _consent = MutableStateFlow<EventReceiptConsent?>(null)
     override val consent: StateFlow<EventReceiptConsent?> = _consent.asStateFlow()
 
-    init {
+    @Volatile
+    private var reader: Job = startReader()
+
+    private fun startReader(): Job =
         scope.launch {
             var failuresInEpisode = 0
             dataSource.consent
@@ -72,29 +81,25 @@ class EventReceiptPreferencesRepository @Inject constructor(
                 }
                 .collect { _consent.value = it }
         }
-    }
 
     /**
-     * Persist a decision (review NN3/PP1): published optimistically, then written on the APPLICATION
-     * scope. Never throws a storage failure — it is logged (ERROR, tag `Data`), the optimistic value
-     * is rolled back (if nothing newer replaced it) and `false` is returned.
+     * Persist a decision (review NN3/SS1): written on the APPLICATION scope; the collector publishes
+     * it. Never throws a storage failure — it is logged (ERROR, tag `Data`) and `false` is returned,
+     * [consent] untouched.
      */
-    override suspend fun set(consent: EventReceiptConsent): Boolean {
-        val previous = _consent.value
-        _consent.value = consent
-        return scope.async {
+    override suspend fun set(consent: EventReceiptConsent): Boolean =
+        scope.async {
             try {
                 dataSource.setConsent(consent.name)
+                if (!reader.isActive) reader = startReader() // a collector that gave up re-reads
                 true
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
                 Timber.tag("Data").e(e, "event-receipt consent write failed — decision not saved")
-                _consent.compareAndSet(consent, previous)
                 false
             }
         }.await()
-    }
 
     companion object {
         internal const val MAX_RETRIES = 5

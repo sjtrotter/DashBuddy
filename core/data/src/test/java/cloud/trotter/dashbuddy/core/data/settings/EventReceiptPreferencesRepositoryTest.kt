@@ -4,16 +4,17 @@ import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.PreferenceDataStoreFactory
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.emptyPreferences
 import androidx.datastore.preferences.core.stringPreferencesKey
 import cloud.trotter.dashbuddy.core.datastore.settings.EventReceiptConsentDataSource
 import cloud.trotter.dashbuddy.domain.settings.EventReceiptConsent
-import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.emitAll
-import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestScope
@@ -94,46 +95,72 @@ class EventReceiptPreferencesRepositoryTest {
         assertEquals("a successful write is observed", EventReceiptConsent.ALLOWED, repo.consent.value)
     }
 
+    /** A store whose reads work and whose writes all fail. */
+    private fun writeFailing(real: DataStore<Preferences>) = object : DataStore<Preferences> {
+        override val data: Flow<Preferences> = real.data
+        override suspend fun updateData(transform: suspend (Preferences) -> Preferences): Preferences =
+            throw IOException("disk full")
+    }
+
     @Test
-    fun `a read that fails after a successful write never publishes over the written value`() = runTest {
+    fun `SS1 - a failed write leaves the previously READ value, never null after a read`() = runTest {
         val storeScope = CoroutineScope(StandardTestDispatcher(testScheduler) + Job())
         val real = PreferenceDataStoreFactory.create(
             scope = storeScope,
-            produceFile = { File(tmp.root, "g.preferences_pb") },
+            produceFile = { File(tmp.root, "ss1a.preferences_pb") },
         )
-        val gate = CompletableDeferred<Unit>()
-        var collections = 0
-        var readsBroken = false
-        val flaky = object : DataStore<Preferences> {
-            override val data: Flow<Preferences> = flow {
-                collections++
-                if (collections == 1) {
-                    // The in-flight read: emits, then fails once the gate opens (after the write).
-                    emit(real.data.first())
-                    gate.await()
-                    throw IOException("in-flight read failed")
-                }
-                if (readsBroken) throw IOException("store unreadable")
-                emitAll(real.data)
-            }
+        real.edit { it[stringPreferencesKey("event_receipt_consent")] = "ALLOWED" }
+        val repo = EventReceiptPreferencesRepository(EventReceiptConsentDataSource(writeFailing(real)), storeScope)
+        advanceUntilIdle()
+        assertEquals(EventReceiptConsent.ALLOWED, repo.consent.value)
+
+        assertFalse(repo.set(EventReceiptConsent.DECLINED))
+        advanceUntilIdle()
+        assertEquals(EventReceiptConsent.ALLOWED, repo.consent.value)
+    }
+
+    @Test
+    fun `SS1 - two overlapping failing writes leave the flow at the STORED value`() = runTest {
+        val storeScope = CoroutineScope(StandardTestDispatcher(testScheduler) + Job())
+        val real = PreferenceDataStoreFactory.create(
+            scope = storeScope,
+            produceFile = { File(tmp.root, "ss1b.preferences_pb") },
+        )
+        real.edit { it[stringPreferencesKey("event_receipt_consent")] = "DECLINED" }
+        val repo = EventReceiptPreferencesRepository(EventReceiptConsentDataSource(writeFailing(real)), storeScope)
+        advanceUntilIdle()
+
+        // ALLOWED then DECLINED, overlapping, both failing — the pre-SS1 value-compared rollback
+        // ended at ALLOWED here while the store said DECLINED.
+        val first = async { repo.set(EventReceiptConsent.ALLOWED) }
+        val second = async { repo.set(EventReceiptConsent.DECLINED) }
+        assertFalse(first.await())
+        assertFalse(second.await())
+        advanceUntilIdle()
+
+        assertEquals(EventReceiptConsent.DECLINED, repo.consent.value)
+    }
+
+    @Test
+    fun `SS1 - a successful write is observed through the collector only`() = runTest {
+        val storeScope = CoroutineScope(StandardTestDispatcher(testScheduler) + Job())
+        val real = PreferenceDataStoreFactory.create(
+            scope = storeScope,
+            produceFile = { File(tmp.root, "ss1c.preferences_pb") },
+        )
+        // Reads never reflect writes: whatever set() did, only the collector may move the value.
+        val frozenReads = object : DataStore<Preferences> {
+            override val data: Flow<Preferences> = flowOf(emptyPreferences())
             override suspend fun updateData(transform: suspend (Preferences) -> Preferences) =
                 real.updateData(transform)
         }
-        val repo = EventReceiptPreferencesRepository(EventReceiptConsentDataSource(flaky), storeScope)
-        runCurrent()
+        val repo = EventReceiptPreferencesRepository(EventReceiptConsentDataSource(frozenReads), storeScope)
+        advanceUntilIdle()
         assertEquals(EventReceiptConsent.UNDECIDED, repo.consent.value)
 
-        readsBroken = true
-        assertTrue(repo.set(EventReceiptConsent.DECLINED))
-        assertEquals(EventReceiptConsent.DECLINED, repo.consent.value)
-
-        gate.complete(Unit) // the in-flight read now fails …
-        advanceUntilIdle() // … and every later read fails until retries are exhausted
-        assertEquals(
-            "no reader may publish UNDECIDED over the value written after it started",
-            EventReceiptConsent.DECLINED,
-            repo.consent.value,
-        )
+        assertTrue(repo.set(EventReceiptConsent.ALLOWED))
+        advanceUntilIdle()
+        assertEquals("set() never publishes on its own", EventReceiptConsent.UNDECIDED, repo.consent.value)
     }
 
     @Test
