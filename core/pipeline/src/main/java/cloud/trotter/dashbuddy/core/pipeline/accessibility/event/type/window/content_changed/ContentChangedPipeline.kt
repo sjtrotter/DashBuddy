@@ -21,7 +21,10 @@ import javax.inject.Inject
 /**
  * One coalesced content-change burst (#1148 D3): the accumulator of [coalesceByKey], owning the OR
  * of the `contentChangeTypes` bits the old pipeline logged and discarded. There is ONE burst across
- * all windows (review G2), so [windowId] is the LAST event's window — for the DRIP log only.
+ * all windows (review G2), so [windowId] is the LAST event's window and [packageName] a package seen
+ * in the burst — LOG fields only: the resolver never reads which window fired (#1148 D4; since #1152
+ * review BB5 not even for platform offer overlays — PR #1155 review CC8 reverted a per-platform key
+ * that only mapped the same overlay twice per burst pair).
  */
 data class CoalescedChange(
     /** The last event's window (DRIP log only — the resolver ignores the event's window). */

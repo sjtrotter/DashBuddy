@@ -4,6 +4,7 @@ import cloud.trotter.dashbuddy.domain.pipeline.ParseShortfall
 import cloud.trotter.dashbuddy.domain.state.ParsedFields
 import timber.log.Timber
 import cloud.trotter.dashbuddy.core.pipeline.accessibility.ForegroundSkipReason
+import cloud.trotter.dashbuddy.core.pipeline.accessibility.OverlayRejectReason
 import java.util.EnumMap
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicLong
@@ -68,8 +69,29 @@ class PipelineStats @Inject constructor(
     private val notifListenerConnects = AtomicLong()
     private val notifListenerDisconnects = AtomicLong()
 
-    /** #1148 review H3: event-driven window-resolver skips, by reason (counts only). */
+    /** #1152: frames read from a platform offer overlay (a11y `TYPE_SYSTEM`), on any window path. */
+    private val overlaySnapshots = AtomicLong()
+
+    /** PR #1155 review CC9: event-path enumerations looking for an enabled overlay above the active window. */
+    private val overlayScans = AtomicLong()
+
+    /** #1152 D2: system-layer windows refused as overlay candidates, per first failed check. */
+    private val overlayRejections: Map<OverlayRejectReason, AtomicLong> =
+        EnumMap<OverlayRejectReason, AtomicLong>(OverlayRejectReason::class.java).apply {
+            OverlayRejectReason.entries.forEach { put(it, AtomicLong()) }
+        }
+
+    /**
+     * #1148 review H3: EVENT-driven window-resolver skips, by reason (counts only) — its contract is
+     * content/state frame loss. The topology path has its own census, [topologySkips].
+     */
     private val foregroundSkips: Map<ForegroundSkipReason, AtomicLong> =
+        EnumMap<ForegroundSkipReason, AtomicLong>(ForegroundSkipReason::class.java).apply {
+            ForegroundSkipReason.entries.forEach { put(it, AtomicLong()) }
+        }
+
+    /** PR #1155 review FF4: TOPOLOGY-path bursts that emitted nothing, by reason (counts only). */
+    private val topologySkips: Map<ForegroundSkipReason, AtomicLong> =
         EnumMap<ForegroundSkipReason, AtomicLong>(ForegroundSkipReason::class.java).apply {
             ForegroundSkipReason.entries.forEach { put(it, AtomicLong()) }
         }
@@ -340,6 +362,38 @@ class PipelineStats @Inject constructor(
 
     fun foregroundSkipCount(reason: ForegroundSkipReason): Long = foregroundSkips.getValue(reason).get()
 
+    /** A topology burst emitted nothing (FF4) — `topologySkip{…}`, never mixed into `foregroundSkip{}`. */
+    fun onTopologySkip(reason: ForegroundSkipReason) {
+        topologySkips.getValue(reason).incrementAndGet()
+    }
+
+    fun topologySkipCount(reason: ForegroundSkipReason): Long = topologySkips.getValue(reason).get()
+
+    /**
+     * A frame was read from a platform offer overlay (#1152 D4–D6), counted in ONE place — the shared
+     * `AccessibilitySource.getWindowSnapshot` builder (PR #1155 review FF6), on every window path. Rendered
+     * as `overlaySnapshots=n` so a field pull can see overlays being captured at all.
+     */
+    fun onOverlaySnapshot() {
+        overlaySnapshots.incrementAndGet()
+    }
+
+    fun overlaySnapshotCount(): Long = overlaySnapshots.get()
+
+    /** One event-path `getWindows()` spent looking for an overlay above the active window (CC9). */
+    fun onOverlayScan() {
+        overlayScans.incrementAndGet()
+    }
+
+    fun overlayScanCount(): Long = overlayScans.get()
+
+    /** A system-layer window was refused as an overlay candidate (#1152 D2) — `overlayRejected{…}`. */
+    fun onOverlayRejected(reason: OverlayRejectReason) {
+        overlayRejections.getValue(reason).incrementAndGet()
+    }
+
+    fun overlayRejectedCount(reason: OverlayRejectReason): Long = overlayRejections.getValue(reason).get()
+
     /** An observation was forwarded to the state machine. */
     fun onForwarded() {
         val n = forwarded.incrementAndGet()
@@ -367,12 +421,16 @@ class PipelineStats @Inject constructor(
             " notifListenerConnects=${notifListenerConnects.get()}" +
             " notifListenerDisconnects=${notifListenerDisconnects.get()}" +
             " restarts=${restarts.get()}" +
+            " overlaySnapshots=${overlaySnapshots.get()}" +
+            " overlayScans=${overlayScans.get()}" +
             platformAppVersionsSuffix() +
             parseShortfallSuffix() +
             bindShortfallSuffix() +
             bindUnprovableSuffix() +
             bindRefusedSuffix() +
-            foregroundSkipSuffix()
+            foregroundSkipSuffix() +
+            topologySkipSuffix() +
+            overlayRejectedSuffix()
 
     /**
      * `" foregroundSkip{NO_ACTIVE_ROOT=3,FRONT_NOT_ENABLED=12}"` (#1148 review H3), non-zero reasons
@@ -382,6 +440,20 @@ class PipelineStats @Inject constructor(
         val nonZero = foregroundSkips.entries.filter { it.value.get() > 0 }
         if (nonZero.isEmpty()) return ""
         return nonZero.joinToString(",", prefix = " foregroundSkip{", postfix = "}") { "${it.key.name}=${it.value.get()}" }
+    }
+
+    /** `" topologySkip{FRONT_NOT_ENABLED=3}"` (PR #1155 review FF4), non-zero reasons only; empty when none. */
+    private fun topologySkipSuffix(): String {
+        val nonZero = topologySkips.entries.filter { it.value.get() > 0 }
+        if (nonZero.isEmpty()) return ""
+        return nonZero.joinToString(",", prefix = " topologySkip{", postfix = "}") { "${it.key.name}=${it.value.get()}" }
+    }
+
+    /** `" overlayRejected{TOO_SMALL=40,NOT_OVERLAY_PLATFORM=2}"` (#1152), non-zero reasons only; empty when none. */
+    private fun overlayRejectedSuffix(): String {
+        val nonZero = overlayRejections.entries.filter { it.value.get() > 0 }
+        if (nonZero.isEmpty()) return ""
+        return nonZero.joinToString(",", prefix = " overlayRejected{", postfix = "}") { "${it.key.name}=${it.value.get()}" }
     }
 
     /**

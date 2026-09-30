@@ -5,9 +5,11 @@ import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
 import android.view.accessibility.AccessibilityWindowInfo
 import cloud.trotter.dashbuddy.domain.model.accessibility.UiNode
+import cloud.trotter.dashbuddy.core.pipeline.PipelineStats
 import cloud.trotter.dashbuddy.core.pipeline.accessibility.ForegroundSkipReason
 import cloud.trotter.dashbuddy.core.pipeline.accessibility.TreeSnapshot
 import cloud.trotter.dashbuddy.core.pipeline.accessibility.mapper.toUiNode
+import cloud.trotter.dashbuddy.domain.state.Platform
 import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -17,7 +19,32 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 @Singleton
-class AccessibilitySource @Inject constructor() {
+class AccessibilitySource @Inject constructor(
+    /** Counts the #1152 overlay-candidate decisions (`overlayRejected{…}`). */
+    private val stats: PipelineStats,
+) {
+
+    /**
+     * Stats-less construction for the unit tests that only exercise window/root plumbing. A
+     * secondary constructor, not a default argument — the PipelineStats (PR #1066) doctrine: an
+     * all-default primary would synthesize a second `@Inject`-annotated constructor Dagger rejects.
+     */
+    constructor() : this(PipelineStats())
+
+    /** #1152 D3/BB7: `windowId → (package, overlay verdict)`, cleared on every topology change ([emit]). */
+    private val packageCache = WindowVerdictCache()
+
+    /**
+     * PR #1155 review FF9/HH6: the front-window walk — decision logic this I/O seam delegates to.
+     * Internal consumers (the topology pipeline, the event resolver, tests) reach it DIRECTLY; the
+     * only public entry kept here is [foregroundWindow].
+     */
+    internal val walk = FrontWindowWalk(
+        ownPackage = { ownPackage() },
+        cache = packageCache,
+        stats = stats,
+        displayMetrics = { serviceRef?.get()?.resources?.displayMetrics },
+    )
 
     // --- 1. The Event Stream (Push) ---
     // #1148 D1: the flow carries the immutable [AccEvent] envelope, never the framework-owned
@@ -31,6 +58,9 @@ class AccessibilitySource @Inject constructor() {
 
     /** Copies [event]'s scalars into an [AccEvent] (the one construction site) and emits it. */
     fun emit(event: AccessibilityEvent) {
+        // #1152 D3: the window list changed — cached window ids may be stale (cleared BEFORE the
+        // event reaches any collector, so no collector reads the old topology's cache after it).
+        if (event.eventType == AccessibilityEvent.TYPE_WINDOWS_CHANGED) packageCache.clear()
         _events.tryEmit(AccEvent.from(event))
     }
 
@@ -71,12 +101,14 @@ class AccessibilitySource @Inject constructor() {
         val rootInActive = service.rootInActiveWindow
         val roots = mutableListOf<AccessibilityNodeInfo>()
         var unreadable = 0
-        var flaggedActive: AccessibilityWindowInfo? = null
         var flaggedActiveRoot: AccessibilityNodeInfo? = null
         val windows = service.windows ?: emptyList()
+        // PR #1155 review FF2: the ONE owner of "which window is active" ([activeFromEnumeration]).
+        val activeFlags = activeFromEnumeration(windows)
+        val flaggedActive = activeFlags.single
         for (window in windows) {
             val root = window.root
-            if (window.isActive) { flaggedActive = window; flaggedActiveRoot = root }
+            if (window === flaggedActive) flaggedActiveRoot = root
             if (root != null) { roots.add(root); continue }
             // R3: only an APPLICATION window that is not picture-in-picture can hide a platform twin (an
             // IME, SystemUI or our overlay cannot). Residual: its package is unknown, so a foreign app's
@@ -94,7 +126,12 @@ class AccessibilitySource @Inject constructor() {
         // name different windows (focus moved between the two reads), there is NO active root for this
         // attempt — keep-all scoping, whose unreadable/cut/twin rules fail closed.
         val flagged = flaggedActive
+        // PR #1155 review HH2 — keep #1149 U2's fail-closed rule: TWO or more windows flagged active
+        // (a transition in flight) is an AMBIGUOUS identity → NO active root (keep-all scoping), never
+        // a trusted rootInActiveWindow.
+        val ambiguous = activeFlags.ambiguous
         val active: AccessibilityNodeInfo? = when {
+            ambiguous -> null
             flagged == null -> rootInActive
             rootInActive != null && rootInActive.windowId != flagged.id -> null
             else -> flaggedActiveRoot ?: rootInActive?.takeIf { it.windowId == flagged.id }
@@ -107,11 +144,72 @@ class AccessibilitySource @Inject constructor() {
     }
 
     /**
+     * PR #1155 review FF2 — the ONE owner of "which window is active", for taps
+     * ([getLiveWindowRoots], #1149 U2) and frames ([cloud.trotter.dashbuddy.core.pipeline.accessibility.event.type.window.snapshotForEvent],
+     * the topology path) alike, in ONE `isActive` pass (review JJ5): the single flagged window (else
+     * null), and whether ≥ 2 were flagged (a transition in flight). On the FRAME path, with no single
+     * flagged window the native root's own window is located by id (review JJ2); on the TAP path ≥ 2
+     * flagged means NO active root (HH2, #1149 U2).
+     */
+    fun activeFromEnumeration(windows: List<AccessibilityWindowInfo>): ActiveFlags {
+        // JJ5: ONE isActive pass serves both the single window and the ambiguity check.
+        val flagged = windows.filter { it.isActive }
+        return ActiveFlags(single = flagged.singleOrNull(), ambiguous = flagged.size >= 2)
+    }
+
+    /** [activeFromEnumeration]'s one pass: the single flagged window (else null), and whether ≥ 2 were flagged. */
+    data class ActiveFlags(val single: AccessibilityWindowInfo?, val ambiguous: Boolean)
+
+    /**
+     * PR #1155 review HH1 — the ONE three-valued active resolution, shared by the event path
+     * (`snapshotForEvent`) and the topology path, so they can never disagree on one list:
+     * - [Enabled] / [NotEnabled] — the single flagged window ([activeFromEnumeration]) whose FRESH
+     *   root ([rootOf]) is readable with a non-null package, split by `isEnabled(package)`;
+     * - [Unknown] with a [Unknown.window] — flagged, but its root is unreadable or package-less (never
+     *   treated as "not enabled"); the overlay scan still runs off the window's LAYER;
+     * - [Unknown] with no window — none flagged, or ≥ 2 (a transition in flight, HH2).
+     */
+    sealed interface ActiveWindow {
+        data class Enabled(val window: AccessibilityWindowInfo, val root: AccessibilityNodeInfo) : ActiveWindow
+        data class NotEnabled(val window: AccessibilityWindowInfo, val root: AccessibilityNodeInfo?) : ActiveWindow
+        data class Unknown(val window: AccessibilityWindowInfo?) : ActiveWindow
+    }
+
+    /**
+     * [ActiveWindow] of an already-located active [window] — see its KDoc (HH1). PR #1155 review KK2:
+     * the paths call this only AFTER the overlay scan (which needs the window's layer, never its root)
+     * found nothing, so no root is fetched while an enabled overlay is up. [gen] is the generation the
+     * caller read before its enumeration (KK1).
+     */
+    fun resolveActive(window: AccessibilityWindowInfo, isEnabled: (String?) -> Boolean, gen: Long): ActiveWindow =
+        rootOf(window, gen)?.let { classify(window, it, isEnabled, gen) } ?: ActiveWindow.Unknown(window)
+
+    /**
+     * PR #1155 review KK3 — the ONE package → [ActiveWindow] classification of an already-fetched [root]
+     * of [window] (the enumerated root, or a `rootInActiveWindow` proven by id to be that window),
+     * recording the package in the verdict cache.
+     */
+    fun classify(
+        window: AccessibilityWindowInfo,
+        root: AccessibilityNodeInfo,
+        isEnabled: (String?) -> Boolean,
+        gen: Long,
+    ): ActiveWindow {
+        val pkg = root.packageName?.toString() ?: return ActiveWindow.Unknown(window)
+        packageCache.putPackage(window.id, pkg, gen)
+        return if (isEnabled(pkg)) ActiveWindow.Enabled(window, root) else ActiveWindow.NotEnabled(window, root)
+    }
+
+    /** The verdict-cache generation — read BEFORE an enumeration and passed down (PR #1155 review KK1). */
+    internal val generation: Long get() = packageCache.generation
+
+    /**
      * #1149 review N3 — one live window enumeration: the active root (any package) and all roots, active
      * first. [active] comes from the enumeration's own `isActive` flag (review U2; `rootInActiveWindow`
-     * only as a fallback, and a disagreement between the two means NO active root). [unreadableWindows]
-     * (review P3/R3/U1) counts enumerated non-PiP APPLICATION windows whose root came back null —
-     * including the active one unless `rootInActiveWindow` represents it; their package is unknown.
+     * only as a fallback, and a disagreement between the two — or ≥ 2 flagged windows, PR #1155 review
+     * HH2 — means NO active root). [unreadableWindows] (review P3/R3/U1) counts enumerated non-PiP
+     * APPLICATION windows whose root came back null — including the active one unless
+     * `rootInActiveWindow` represents it; their package is unknown.
      */
     data class LiveRoots(
         val active: AccessibilityNodeInfo?,
@@ -191,6 +289,8 @@ class AccessibilitySource @Inject constructor() {
         val window: AccessibilityWindowInfo,
         val root: AccessibilityNodeInfo,
         val totalWindowCount: Int,
+        /** The walk's own fact that this is an offer-overlay candidate (PR #1155 review KK4) — counted, never re-probed. */
+        val overlay: Boolean = false,
     )
 
     /** [foregroundWindow]'s verdict: the window in front, or why none is read (#1148 review H3). */
@@ -204,53 +304,116 @@ class AccessibilitySource @Inject constructor() {
      * launcher, system UI) is the active one (#1148 review G5). Enumerated ONCE; each inspected
      * window's root fetched once.
      *
-     * Candidates, by `layer` descending: `TYPE_APPLICATION` windows only, EXCEPT our own (this
-     * app's package — the bubble is never "another app in front") and picture-in-picture windows
-     * (review H2: a Google Maps PiP floats above the fullscreen activity with a foreign package, and
-     * would otherwise refuse every frame while the bubble is active). System-layer windows are never
-     * candidates and never have their root fetched (#1148 review H1: a platform's own transient
-     * system-layer toast would otherwise hijack frames, and every SystemUI window would cost a
-     * binder fetch per frame). Overlays that surface as accessibility `TYPE_SYSTEM` (Android's
-     * `TYPE_APPLICATION_OVERLAY`, e.g. Uber's offer overlay) are an open question: #1152.
+     * Candidates, by `layer` descending: `TYPE_APPLICATION` windows, EXCEPT our own (this app's
+     * package — the bubble is never "another app in front") and picture-in-picture windows (review
+     * H2: a Google Maps PiP floats above the fullscreen activity with a foreign package, and would
+     * otherwise refuse every frame while the bubble is active), PLUS platform offer overlays
+     * ([FrontWindowWalk.overlayProbe], #1152 D4: a `TYPE_SYSTEM` window of ≥ [MIN_OVERLAY_AREA_FRACTION] of the
+     * display owned by a [Platform.offerOverlay] package). Every other system-layer window is never
+     * a candidate (#1148 review H1: a platform's own transient toast would otherwise hijack frames) —
+     * a small one never has its root fetched at all (size is checked before package), and a large
+     * one's package is fetched once per window id ([WindowVerdictCache]).
      *
      * The FIRST candidate decides — readable-top-or-refuse: a null root → [Foreground.Refused]
      * `FRONT_UNREADABLE` (fail closed: we cannot verify what is on top, so never fall through to a
      * lower readable window); a package that fails [isEnabled] → `FRONT_NOT_ENABLED` (another app is
-     * in front); else [Foreground.Found]. No candidate at all → `NO_CANDIDATE`.
+     * in front); else [Foreground.Found]. A DISABLED overlay platform's overlay is NOT a candidate
+     * (PR #1155 review BB6 — skipped, the window beneath is read); a LARGE system window whose owner
+     * cannot be read refuses `FRONT_UNREADABLE` (BB1). No
+     * candidate at all → `NO_CANDIDATE`. A cached package lets an own/non-enabled application window
+     * decide without a root fetch; a window that is READ always has its package re-checked on the
+     * freshly-fetched root.
      *
      * SAFE to call from background threads.
      */
     fun foregroundWindow(isEnabled: (String?) -> Boolean): Foreground = try {
-        foregroundWindow(getWindows(), isEnabled)
+        val gen = generation // KK1: before the enumeration
+        foregroundWindow(getWindows(), isEnabled, gen = gen)
     } catch (_: Exception) {
         Foreground.Refused(ForegroundSkipReason.FRONT_UNREADABLE)
     }
 
     /** [foregroundWindow] over an ALREADY-enumerated [windows] list (one enumeration per frame). */
-    fun foregroundWindow(windows: List<AccessibilityWindowInfo>, isEnabled: (String?) -> Boolean): Foreground = try {
-        val ownPkg = ownPackage()
-        val ordered = windows
-            .filter { it.type == AccessibilityWindowInfo.TYPE_APPLICATION && !it.isInPictureInPictureMode }
-            .sortedByDescending { it.layer }
-        var verdict: Foreground = Foreground.Refused(ForegroundSkipReason.NO_CANDIDATE)
-        for (w in ordered) {
-            val root = w.root
-            if (root == null) { // unreadable application window on top → refuse
-                verdict = Foreground.Refused(ForegroundSkipReason.FRONT_UNREADABLE)
-                break
-            }
-            val pkg = root.packageName?.toString()
-            if (ownPkg != null && pkg == ownPkg) continue // our own bubble is never "in front"
-            verdict = if (isEnabled(pkg)) {
-                Foreground.Found(LocatedWindow(w, root, windows.size))
-            } else {
-                Foreground.Refused(ForegroundSkipReason.FRONT_NOT_ENABLED)
-            }
-            break // the first candidate decides
-        }
-        verdict
-    } catch (_: Exception) {
-        Foreground.Refused(ForegroundSkipReason.FRONT_UNREADABLE)
+    fun foregroundWindow(
+        windows: List<AccessibilityWindowInfo>,
+        isEnabled: (String?) -> Boolean,
+        display: Lazy<Long> = walk.lazyDisplayArea(),
+        gen: Long = generation,
+    ): Foreground = walk.foreground(windows, isEnabled, display, gen = gen)
+
+
+    /** The one overlay-frame counter increment ([mapWindow], PR #1155 review FF6/KK4). */
+    internal fun countOverlaySnapshot() = stats.onOverlaySnapshot()
+
+    /**
+     * KK4: is the ACTIVE window itself an offer overlay (a focused card)? The one place the active
+     * window — which no walk visits — is probed, and only when it is a system window being mapped.
+     */
+    internal fun activeIsOverlay(window: AccessibilityWindowInfo, gen: Long): Boolean =
+        window.type == AccessibilityWindowInfo.TYPE_SYSTEM &&
+            walk.overlayProbe(window, walk.displayArea(), gen = gen) is OverlayProbe.Candidate
+
+    /** CC9: one event-path overlay scan (the per-event enumeration this feature costs), sized in the field. */
+    internal fun onOverlayScan() = stats.onOverlayScan()
+
+    /**
+     * PR #1155 review FF1 — the active window's root, read from THAT enumerated window (never a second,
+     * unsynchronised `rootInActiveWindow` read), with its package recorded in the verdict cache under
+     * [gen] (read by the caller BEFORE its enumeration, KK1). Null when unreadable — [resolveActive]
+     * then reports [ActiveWindow.Unknown] with the window (HH1), never "not enabled".
+     */
+    internal fun rootOf(w: AccessibilityWindowInfo, gen: Long = generation): AccessibilityNodeInfo? {
+        val root = try {
+            w.root
+        } catch (_: Exception) {
+            null
+        } ?: return null
+        root.packageName?.toString()?.let { packageCache.putPackage(w.id, it, gen) }
+        return root
+    }
+
+    /**
+     * [FrontWindowWalk.overlayFront]'s verdict (#1152 D5 as reworked by PR #1155 reviews BB5 … FF1) — **an enabled
+     * platform offer overlay in front of an enabled active window is the frame**, whichever window
+     * fired, so the covered window never interleaves with it (the #1148 F1 class). It is on top by
+     * construction, so this is never the hidden-activity shape F1 removed.
+     * - [Overlay] — an enabled overlay IS the front window above the active one: read it;
+     * - [None] — no overlay in front: read the active root. Covers an application window in front of
+     *   the overlay (CC4), a DISABLED overlay platform's overlay (BB6, skipped), an unreadable
+     *   APPLICATION window above (DD6 — it cannot be an offer overlay), an unknown display area (DD8,
+     *   inconclusive) and any exception during the scan (DD7);
+     * - [Refused] — skip the frame: an unreadable window that may BE an overlay (a LARGE system window,
+     *   or a selected overlay whose root vanished → `FRONT_UNREADABLE`, CC7/DD6), or the walk ran out of
+     *   root fetches (`SCAN_BUDGET`, CC5/DD4).
+     * The active window and every decision come from ONE enumeration (FF1), so nothing is reconciled.
+     */
+    sealed interface OverlayScan {
+        data object None : OverlayScan
+        data class Overlay(val located: LocatedWindow) : OverlayScan
+        data class Refused(val reason: ForegroundSkipReason) : OverlayScan
+    }
+
+    /**
+     * [FrontWindowWalk.overlayProbe]'s three-valued outcome (PR #1155 review BB1): a verified candidate, a verified
+     * non-candidate (wrong type, too small, a non-overlay package, no display area), or a LARGE
+     * system window whose owner cannot be read — which a readable-top-or-refuse caller must treat as
+     * "something unverifiable is on top", never as "nothing here".
+     */
+    internal sealed interface OverlayProbe {
+        /** The verified owner, with the root when this probe had to fetch it. */
+        class Candidate(val packageName: String, val root: AccessibilityNodeInfo?) : OverlayProbe
+        data object NotCandidate : OverlayProbe
+        data object Unreadable : OverlayProbe
+
+        /**
+         * DD8: the display area is unknown, so size — and with it the overlay question — cannot be
+         * answered. INCONCLUSIVE, never "not a candidate": the event path reads the active root
+         * (pre-#1152 behaviour), the bubble path refuses `NO_DISPLAY_AREA`.
+         */
+        data object NoDisplayArea : OverlayProbe
+
+        /** CC5: the walk's root-fetch budget ran out before this window's owner could be read. */
+        data object BudgetExhausted : OverlayProbe
     }
 
     /**
@@ -286,6 +449,23 @@ class AccessibilitySource @Inject constructor() {
         return service.windows ?: emptyList()
     }
 
+    companion object {
+        /**
+         * #1152 D2: an overlay candidate covers at least this fraction of the display. The Uber offer
+         * overlay is ~85–92 %; the puck ~0.8 %, the status bar ~5 %, heads-up notifications and
+         * toasts ≤ 10 %.
+         */
+        const val MIN_OVERLAY_AREA_FRACTION = 0.25
+
+        /**
+         * PR #1155 review CC5: discovery root fetches (binder round-trips) allowed per front-window
+         * walk. A normal screen needs 1–4; a layout that needs more (e.g. dozens of large readable
+         * non-overlay system windows) is refused `SCAN_BUDGET` rather than fetched and thrashing the
+         * 64-entry verdict cache.
+         */
+        const val MAX_SCAN_ROOT_FETCHES = 8
+    }
+
     /** The ONE [TreeSnapshot.WindowContext] builder (#1148 D4), used by every snapshot path. */
     private fun contextOf(window: AccessibilityWindowInfo, total: Int): TreeSnapshot.WindowContext =
         TreeSnapshot.WindowContext(
@@ -298,3 +478,23 @@ class AccessibilitySource @Inject constructor() {
             totalWindowCount = total,
         )
 }
+
+/**
+ * PR #1155 review FF6/JJ3/KK4 — every window-path frame is mapped HERE ([getWindowSnapshot], the one
+ * builder) and overlay frames are counted in this ONE place, from the CALLER's fact
+ * ([countAsOverlay]: the walk's SYSTEM_CANDIDATE, or the active window's own probe verdict) —
+ * never by re-probing. An active system window that is not an offer overlay (a dragged puck) is
+ * still mapped (pre-#1152 behaviour) but not counted. Counted only when the map succeeds.
+ */
+internal fun AccessibilitySource.mapWindow(
+    window: AccessibilityWindowInfo,
+    root: AccessibilityNodeInfo,
+    totalWindowCount: Int,
+    countAsOverlay: Boolean,
+): AccessibilitySource.RootSnapshot? = getWindowSnapshot(window, root, totalWindowCount)?.also {
+    if (countAsOverlay) countOverlaySnapshot()
+}
+
+/** [mapWindow] of a [LocatedWindow] from the walk — counted when the walk said it is an overlay (KK4). */
+internal fun AccessibilitySource.mapWindow(located: AccessibilitySource.LocatedWindow): AccessibilitySource.RootSnapshot? =
+    mapWindow(located.window, located.root, located.totalWindowCount, located.overlay)

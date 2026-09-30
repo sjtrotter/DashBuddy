@@ -15,7 +15,7 @@ enum class ForegroundSkipReason {
     /** The window in front could not be read (null root) — fail closed. */
     FRONT_UNREADABLE,
 
-    /** A non-enabled window is active and no application window is a candidate. */
+    /** A non-enabled window is active and no window (application or platform offer overlay, #1152) is a candidate. */
     NO_CANDIDATE,
 
     /**
@@ -24,6 +24,19 @@ enum class ForegroundSkipReason {
      * invariant firing is visible in the census instead of hiding under [FRONT_NOT_ENABLED].
      */
     POST_MAP_MISMATCH,
+
+    /**
+     * The front-window walk ran out of its root-fetch budget (PR #1155 review CC5,
+     * `AccessibilitySource.MAX_SCAN_ROOT_FETCHES`) before it could verify what is on top — refused,
+     * never fallen through.
+     */
+    SCAN_BUDGET,
+
+    /**
+     * The display area is unknown, so no system-layer window on top can be verified as (not) an offer
+     * overlay (PR #1155 review DD8) — the bubble path refuses rather than walk past it.
+     */
+    NO_DISPLAY_AREA,
 
     /** The chosen root failed to map (the tree mapper threw or returned nothing). */
     MAP_FAILED,
