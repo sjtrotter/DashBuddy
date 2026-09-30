@@ -150,6 +150,35 @@ class UiNodeScrubbableFieldsTest {
         assertTrue("the scrub layers must see state", tree.allScrubbableText().contains("stateful"))
     }
 
+    /**
+     * #1147 review X1: the stream starts with the PRE-#1147 projection, unchanged, whatever the new
+     * fields carry — so a new field can never split an adjacency the sensitive scan relied on.
+     */
+    @Test
+    fun `allScrubbableText starts with the frozen legacy projection and appends the new fields after it`() {
+        val legacyOnly = UiNode(
+            text = "Transfer",
+            children = listOf(node(text = "A", desc = "B", state = "C"), node(text = "\$45.66")),
+        )
+        val widened = UiNode(
+            text = "Transfer",
+            roleDescription = "Button",
+            children = listOf(
+                fullNode().copy(text = "A", contentDescription = "B", stateDescription = "C"),
+                node(text = "\$45.66").copy(paneTitle = "Pane"),
+            ),
+        )
+        val legacyStream = legacyOnly.allScrubbableText()
+        assertEquals(listOf("Transfer", "A", "B", "C", "\$45.66"), legacyStream)
+        val stream = widened.allScrubbableText()
+        assertEquals("the legacy segment is byte-for-byte unchanged", legacyStream, stream.take(legacyStream.size))
+        assertEquals(listOf("Button", "P", "R", "H", "TT", "E", "C", "U", "Pane"), stream.drop(legacyStream.size))
+        assertEquals(
+            listOf(UiNodeTextField.TEXT, UiNodeTextField.CONTENT_DESCRIPTION, UiNodeTextField.STATE_DESCRIPTION),
+            UiNodeTextField.LEGACY_SCAN_ORDER,
+        )
+    }
+
     /** #1147: the same doctrine for every TalkBack-study string — scrub-visible, recognition-invisible. */
     @Test
     fun `allText excludes every new string field while allScrubbableText includes them all`() {

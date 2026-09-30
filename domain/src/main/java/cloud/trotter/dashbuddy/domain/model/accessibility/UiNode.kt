@@ -438,8 +438,15 @@ data class UiNode(
     )
 
     /**
-     * Every non-blank scrubbable string in this subtree, DFS (#835) — the
-     * privacy-side counterpart of [allText], which recognition owns.
+     * Every non-blank scrubbable string in this subtree (#835) — the privacy-side counterpart of
+     * [allText], which recognition owns.
+     *
+     * TWO segments (#1147 review X1): first the PRE-#1147 projection — the
+     * [UiNodeTextField.LEGACY_SCAN_ORDER] fields of every node, DFS, byte-for-byte what this returned
+     * before — then the newer fields of every node, DFS. `SensitiveTextMarkers` joins this list and
+     * relies on sibling ADJACENCY ("Transfer" | "$45.66"); interleaving a new field between two
+     * legacy values would silently break such a detection, and widening the scrub layer must never
+     * weaken one. A marker riding a new field is still in the stream (second segment).
      *
      * Deliberately NOT memoized: it is built once per capture envelope at the
      * tree root, whereas [allText] is read per node per rule, so a `by lazy`
@@ -448,15 +455,16 @@ data class UiNode(
      */
     fun allScrubbableText(): List<String> {
         val results = mutableListOf<String>()
-        collectScrubbableText(this, results)
+        collectScrubbableText(this, results, legacy = true)
+        collectScrubbableText(this, results, legacy = false)
         return results
     }
 
-    private fun collectScrubbableText(node: UiNode, list: MutableList<String>) {
-        for ((_, value) in node.scrubbableStrings()) {
-            if (!value.isNullOrBlank()) list.add(value)
+    private fun collectScrubbableText(node: UiNode, list: MutableList<String>, legacy: Boolean) {
+        for ((field, value) in node.scrubbableStrings()) {
+            if ((field in UiNodeTextField.LEGACY_SCAN_ORDER) == legacy && !value.isNullOrBlank()) list.add(value)
         }
-        node.children.forEach { collectScrubbableText(it, list) }
+        node.children.forEach { collectScrubbableText(it, list, legacy) }
     }
 
     // ========================================================================
@@ -593,6 +601,13 @@ enum class UiNodeTextField(val wire: String) {
     ;
 
     companion object {
+        /**
+         * #1147 review X1 — the fields (and their order) [UiNode.allScrubbableText] projected before
+         * #1147. FROZEN: its first segment is exactly this projection, so every adjacency the
+         * sensitive-marker scan relied on survives any later field addition.
+         */
+        val LEGACY_SCAN_ORDER: List<UiNodeTextField> = listOf(TEXT, CONTENT_DESCRIPTION, STATE_DESCRIPTION)
+
         fun fromWire(wire: String): UiNodeTextField? = entries.firstOrNull { it.wire == wire }
     }
 }

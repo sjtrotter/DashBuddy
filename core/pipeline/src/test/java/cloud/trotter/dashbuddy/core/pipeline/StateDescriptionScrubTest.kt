@@ -383,6 +383,47 @@ class StateDescriptionScrubTest {
         }
     }
 
+    // --- #1147 review X1: a new field never splits a legacy adjacency --------------
+
+    private fun transferTree() = UiNode(
+        isClickable = true,
+        children = listOf(UiNode(text = "Transfer", roleDescription = "Button"), UiNode(text = "\$45.66")),
+    )
+
+    @Test
+    fun `a role on the Transfer node does not split the Transfer-amount adjacency`() {
+        // The codex reproduction: pre-fix the stream read "Transfer Button $45.66" and the scan missed.
+        assertNotNull(SensitiveTextMarkers.findMarker(UiNode(children = listOf(UiNode(text = "Transfer"), UiNode(text = "\$45.66")))))
+        assertNotNull(SensitiveTextMarkers.findMarker(transferTree()))
+    }
+
+    @Test
+    fun `the Transfer-amount UNKNOWN screen with a role is still dropped`() {
+        writer().captureScreen(obs(null, UNKNOWN_TARGET), screenEvent(UiNode(children = listOf(transferTree()))))
+        verify(captureBus, never()).offer(any(), any(), anyOrNull(), any(), any(), anyOrNull())
+        assertEquals(1L, stats.scrubbedUnknownCaptureCount)
+    }
+
+    @Test
+    fun `the Transfer-amount UNKNOWN click with a role is still dropped`() {
+        writer().captureClick(
+            unknownClickObs(),
+            PipelineEvent.Click(timestamp = 1_000L, node = transferTree(), packageName = "com.doordash.driverapp"),
+            screenTarget = null,
+            screenRuleId = null,
+        )
+        verify(captureBus, never()).offer(any(), any(), anyOrNull(), any(), any(), anyOrNull())
+        assertEquals(1L, stats.scrubbedUnknownCaptureCount)
+    }
+
+    @Test
+    fun `a sensitive marker riding only a new field is still found`() {
+        for (field in UiNodeTextField.entries.filter { it !in UiNodeTextField.LEGACY_SCAN_ORDER }) {
+            val tree = UiNode(children = listOf(UiNode(text = "Continue"), nodeCarrying(field, "Routing Number")))
+            assertNotNull("a marker in $field must be found", SensitiveTextMarkers.findMarker(tree))
+        }
+    }
+
     private fun busAcceptsOffer() {
         whenever(captureBus.offer(any(), any(), anyOrNull(), any(), any(), anyOrNull()))
             .thenReturn("cap-1")
