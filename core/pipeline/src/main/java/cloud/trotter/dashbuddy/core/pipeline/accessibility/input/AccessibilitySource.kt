@@ -91,12 +91,13 @@ class AccessibilitySource @Inject constructor(
         val rootInActive = service.rootInActiveWindow
         val roots = mutableListOf<AccessibilityNodeInfo>()
         var unreadable = 0
-        var flaggedActive: AccessibilityWindowInfo? = null
         var flaggedActiveRoot: AccessibilityNodeInfo? = null
         val windows = service.windows ?: emptyList()
+        // PR #1155 review FF2: the ONE owner of "which window is active" ([activeFromEnumeration]).
+        val flaggedActive = activeFromEnumeration(windows)
         for (window in windows) {
             val root = window.root
-            if (window.isActive) { flaggedActive = window; flaggedActiveRoot = root }
+            if (window === flaggedActive) flaggedActiveRoot = root
             if (root != null) { roots.add(root); continue }
             // R3: only an APPLICATION window that is not picture-in-picture can hide a platform twin (an
             // IME, SystemUI or our overlay cannot). Residual: its package is unknown, so a foreign app's
@@ -133,6 +134,17 @@ class AccessibilitySource @Inject constructor(
      * (review P3/R3/U1) counts enumerated non-PiP APPLICATION windows whose root came back null —
      * including the active one unless `rootInActiveWindow` represents it; their package is unknown.
      */
+    /**
+     * PR #1155 review FF2 — the ONE owner of "which window is active", for taps
+     * ([getLiveWindowRoots], #1149 U2) and frames ([cloud.trotter.dashbuddy.core.pipeline.accessibility.event.type.window.snapshotForEvent],
+     * the topology path) alike: the single window of [windows] flagged `isActive`, else null (none, or
+     * more than one — a transition in flight). The one fallback, used only when this is null, is
+     * `rootInActiveWindow` (read the active root, with no overlay scan on the frame path) — the
+     * pre-#1152 behaviour, never a refusal.
+     */
+    fun activeFromEnumeration(windows: List<AccessibilityWindowInfo>): AccessibilityWindowInfo? =
+        windows.filter { it.isActive }.singleOrNull()
+
     data class LiveRoots(
         val active: AccessibilityNodeInfo?,
         val roots: List<AccessibilityNodeInfo>,
