@@ -419,10 +419,10 @@ object SkeletonBuilder {
         private val identityRuns = HashSet<String>()
 
         /**
-         * The WHOLE value of an EXACT / ADDRESS identity text/desc, case-folded with every non-letter removed,
-         * as ONE run — matched only against a node id / class (camel segments and their contiguous joins,
-         * review TT2): `user_name` "Riley" nulls `chipRiley`, "Jack in the Box" nulls `jackInTheBoxLogo`,
-         * while "10927 Culebra Road" never equals a segment join of `roadNameLayout`.
+         * The WHOLE value of an EXACT identity text/desc that reads as a person's name (review VV1), case-folded
+         * with every non-letter removed, as ONE run — matched only against a node id / class (camel segments
+         * and their contiguous joins, review TT2): `user_name` "Riley" nulls `chipRiley`, "Riley S" nulls
+         * `chipRileyS`; a merchant "Jack in the Box", a sheet title "Order Details" and any ADDRESS add none.
          */
         private val wholeValueRuns = HashSet<String>()
 
@@ -498,8 +498,12 @@ object SkeletonBuilder {
             val desc = descField?.takeIf { it.converged }?.canonical?.takeIf { !PiiShapes.containsMask(it) }
             text?.let { caught += it }
             desc?.let { caught += it }
-            if (idClass == IdClass.PII_EXACT || idClass == IdClass.PII_ADDRESS) {
-                listOfNotNull(text, desc).forEach { value ->
+            // Review VV1: only an EXACT value that reads as a PERSON's name — one Capitalized token ("Riley")
+            // or the capitalized name shape ("Riley S") — contributes its whole value to the id/class check;
+            // a chrome EXACT value ("Order Details" would null `orderDetailsHeader`) and every ADDRESS
+            // contribute none (an address never equals an id segment join in practice).
+            if (idClass == IdClass.PII_EXACT) {
+                listOfNotNull(text, desc).filter { isPersonNameValue(it) }.forEach { value ->
                     val whole = CaseFold.fold(value.filter { it.isLetter() })
                     if (whole.codePointCount(0, whole.length) >= MIN_IDENTITY_RUN) wholeValueRuns += whole
                 }
@@ -573,6 +577,16 @@ object SkeletonBuilder {
                 children = p.children.map { emit(it) },
             )
         }
+    }
+
+    /**
+     * A single Capitalized token of letters / apostrophes / hyphens ("Riley", "O'Brien"), or the capitalized
+     * first-name + last-initial shape ("Riley S") — review VV1's whole-value gate.
+     */
+    private fun isPersonNameValue(value: String): Boolean {
+        val single = value.isNotEmpty() && Character.isUpperCase(value.codePointAt(0)) &&
+            value.codePoints().allMatch { Character.isLetter(it) || it == '\''.code || it == '\u2019'.code || it == '-'.code }
+        return single || PiiShapes.FIRST_LAST_INITIAL_CAPITALIZED_REGEX.matches(value)
     }
 
     /**

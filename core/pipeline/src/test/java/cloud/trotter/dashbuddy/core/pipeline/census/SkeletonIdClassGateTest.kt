@@ -161,7 +161,8 @@ class SkeletonIdClassGateTest : SkeletonBuilderTestBase() {
             null, meta, platform, day,
         )!!.root.children.drop(1).map { it.id }
         assertEquals(listOf(null, "com.x:id/chipGold"), ids("user_name", "Riley", "chipRiley", "chipGold"))
-        assertEquals(listOf(null, "com.x:id/boxView"), ids("user_name", "Jack in the Box", "jackInTheBoxLogo", "boxView"))
+        // Review VV1: a merchant value is not a person's name — its logo id and every chrome id travel.
+        assertEquals(listOf("com.x:id/jackInTheBoxLogo", "com.x:id/boxView"), ids("user_name", "Jack in the Box", "jackInTheBoxLogo", "boxView"))
         assertEquals(listOf("com.x:id/roadNameLayout"), ids("address_line_1", "10927 Culebra Road", "roadNameLayout"))
         // A text slot is untouched by the whole-value rule: "Call Riley" beside user_name "Riley" hashes.
         assertEquals(listOf(words(2, "Call Riley")), beside2("user_name", "Riley", "Call Riley"))
@@ -171,5 +172,19 @@ class SkeletonIdClassGateTest : SkeletonBuilderTestBase() {
     fun `UU5 - a supplementary-plane capital after a lead-in is a capital`() {
         assertTrue(!SkeletonBuilder.isStaticId("deliver_to_\uD801\uDC08dam"))
         assertTrue(SkeletonBuilder.isStaticId("deliver_to_label"))
+    }
+
+    @Test
+    fun `VV1 - only a person-name EXACT value protects an id by its whole value`() {
+        fun ids(identityId: String, identity: String, vararg tags: String) = SkeletonBuilder.build(
+            UiNode(className = "android.widget.LinearLayout", viewIdResourceName = "com.x:id/row", children = listOf(
+                UiNode(className = "android.widget.TextView", viewIdResourceName = "com.doordash.driverapp:id/$identityId", text = identity),
+            ) + tags.map { UiNode(className = "android.widget.ImageView", viewIdResourceName = "com.x:id/$it") }),
+            null, meta, platform, day,
+        )!!.root.children.drop(1).map { it.id }
+        assertEquals(listOf("com.x:id/orderDetailsHeader"), ids("tvTitle", "Order Details", "orderDetailsHeader"))
+        assertEquals(listOf(null), ids("user_name", "Riley", "chipRiley"))
+        assertEquals(listOf(null), ids("user_name", "Riley S", "chipRileyS"))
+        assertEquals(listOf("com.x:id/mainStreetLabel"), ids("address_line_1", "Main St", "mainStreetLabel"))
     }
 }

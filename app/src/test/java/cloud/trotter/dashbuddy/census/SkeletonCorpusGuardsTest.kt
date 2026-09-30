@@ -151,7 +151,8 @@ class SkeletonCorpusGuardsTest : SkeletonCorpusTestBase() {
             UiNode(className = "android.widget.TextView", text = "Total"),
         )
         hashed("Head to the store", text(merchant[1]))
-        // Review TT2: the merchant's WHOLE value protects an id built from it, and no other id.
+        // Reviews TT2, VV1: a merchant value is not a person's name, so it protects no id by its whole
+        // value — its logo id, `boxView` and `roadNameLayout` all travel.
         val merchantIds = build(
             UiNode(className = "android.widget.TextView", viewIdResourceName = "com.doordash.driverapp:id/user_name", text = "Jack in the Box"),
             UiNode(className = "android.widget.ImageView", viewIdResourceName = "com.doordash.driverapp:id/jackInTheBoxLogo"),
@@ -159,7 +160,7 @@ class SkeletonCorpusGuardsTest : SkeletonCorpusTestBase() {
             UiNode(className = "android.widget.TextView", viewIdResourceName = "com.doordash.driverapp:id/address_line_1", text = "10927 Culebra Road"),
             UiNode(className = "android.widget.ImageView", viewIdResourceName = "com.doordash.driverapp:id/roadNameLayout"),
         )
-        assertEquals(null, merchantIds[1].id)
+        assertEquals("com.doordash.driverapp:id/jackInTheBoxLogo", merchantIds[1].id)
         assertEquals("com.doordash.driverapp:id/boxView", merchantIds[2].id)
         assertEquals("com.doordash.driverapp:id/roadNameLayout", merchantIds[4].id)
         hashed("Sign in", text(merchant[2]))
