@@ -62,10 +62,11 @@ class NodeRefLabelHintsTest {
         assertFalse("a parent card with more text is a superset", r.fingerprintMatches(listOf("This offer", "Expand", "Continue dashing")))
         assertFalse("a subset is not the control", r.fingerprintMatches(listOf("This offer")))
         assertFalse(ref().fingerprintMatches(emptyList()))
+        // P7: truncation is recorded at bind (labelHintsComplete), not guessed from the size — a
+        // complete 6-label set IS provable.
         val full = ref("a1", "b1", "c1", "d1", "e1", "f1")
         assertEquals(NodeRef.MAX_LABEL_HINTS, full.labelHintHashes.size)
-        assertFalse("a bind-time set at the cap may be truncated — equality unprovable",
-            full.fingerprintMatches(listOf("a1", "b1", "c1", "d1", "e1", "f1")))
+        assertTrue(full.fingerprintMatches(listOf("a1", "b1", "c1", "d1", "e1", "f1")))
     }
 
     private fun ui(text: String? = null, desc: String? = null, clickable: Boolean = false, vararg children: cloud.trotter.dashbuddy.domain.model.accessibility.UiNode) =
@@ -127,5 +128,20 @@ class NodeRefLabelHintsTest {
         assertFalse(r.visibleConsistentWith(listOf("a", "b", "c")))
         assertFalse("one key short", r.fingerprintMatches(listOf("This offer")))
         assertTrue("duplicates collapse", r.fingerprintMatches(listOf("This offer", "this offer ", "Expand")))
+    }
+
+    /** #1149 review P7: bindHintsOf records truncation — exactly 6 labels is complete, 7 is not. */
+    @Test
+    fun `bind-time truncation at MAX_LABEL_HINTS is recorded, not guessed`() {
+        fun owner(n: Int) = cloud.trotter.dashbuddy.domain.model.accessibility.UiNode(
+            className = "android.view.View", isClickable = true,
+            children = List(n) { cloud.trotter.dashbuddy.domain.model.accessibility.UiNode(text = "Label ${'a' + it}") },
+        ).restoreParents()
+        val six = NodeRef.bindHintsOf(owner(NodeRef.MAX_LABEL_HINTS))
+        assertTrue(six.complete)
+        assertEquals(NodeRef.MAX_LABEL_HINTS, six.labelHintHashes.size)
+        val seven = NodeRef.bindHintsOf(owner(NodeRef.MAX_LABEL_HINTS + 1))
+        assertFalse(seven.complete)
+        assertEquals(NodeRef.MAX_LABEL_HINTS, seven.labelHintHashes.size)
     }
 }

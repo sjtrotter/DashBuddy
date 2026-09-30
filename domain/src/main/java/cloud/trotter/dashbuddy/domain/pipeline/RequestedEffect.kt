@@ -82,12 +82,12 @@ data class NodeRef(
 
     /**
      * #1149 review J3 — the ONE owner of "this ref carries a provable exact fingerprint": hints
-     * present, the bind-time scan complete ([labelHintsComplete]), and the set below
-     * [MAX_LABEL_HINTS] (at the cap it may have been truncated). The executor gates strategy 2b on
+     * present and the bind-time set complete ([labelHintsComplete] — which since review P7 also
+     * records that the set was not truncated at [MAX_LABEL_HINTS]; no size proxy). The executor gates strategy 2b on
      * it; an unprovable ref skips 2b for the bounds walk's containment check (the pre-#1149 shape).
      */
     val hasExactFingerprint: Boolean
-        get() = labelHintHashes.isNotEmpty() && labelHintsComplete && labelHintHashes.size < MAX_LABEL_HINTS
+        get() = labelHintHashes.isNotEmpty() && labelHintsComplete
 
     /**
      * #1149 — the EXACT control fingerprint a label-only re-find (the executor's strategy 2b)
@@ -162,8 +162,14 @@ data class NodeRef(
             }
             val found = owner.takeIf { it.takesClick }
             val scan = hintLabelsOf(found ?: bound)
-            val hashes = scan.labels.asSequence().mapNotNull(::hintHash).distinct().take(MAX_LABEL_HINTS).toList()
-            return BindHints(hashes, complete = found != null && scan.complete, ownerClassHint = found?.className)
+            val distinct = scan.labels.asSequence().mapNotNull(::hintHash).distinct().toList()
+            // P7: truncation is RECORDED here, where it is known — a set cut at MAX_LABEL_HINTS is not
+            // complete; an owner with exactly MAX_LABEL_HINTS labels is.
+            return BindHints(
+                distinct.take(MAX_LABEL_HINTS),
+                complete = found != null && scan.complete && distinct.size <= MAX_LABEL_HINTS,
+                ownerClassHint = found?.className,
+            )
         }
 
         /**

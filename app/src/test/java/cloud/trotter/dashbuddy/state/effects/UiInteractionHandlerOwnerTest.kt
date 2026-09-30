@@ -619,21 +619,29 @@ class UiInteractionHandlerOwnerTest {
         atRect.clicks(1)
     }
 
-    /** A 6-hint ref may have been truncated at MAX_LABEL_HINTS: no 2b, strategy 3 still runs. */
+    /**
+     * P7: an owner with exactly MAX_LABEL_HINTS labels is PROVABLE (found by 2b after a slide); one with
+     * MAX_LABEL_HINTS + 1 was truncated at bind — no 2b, strategy 3 still runs at the captured rect.
+     */
     @Test
-    fun `a ref at MAX_LABEL_HINTS skips 2b — strategy 3 still runs`() = runTest {
-        val words = listOf("This offer", "Expand", "Base pay", "Tip", "Peak pay", "Details")
-        fun sixRow(top: Int) = view(clickable = true, bounds = Rect(36, top, 1044, top + 126),
-            children = words.map { view(cls = "android.widget.TextView", text = it) })
-        val ref = expandRef.copy(labelHintHashes = words.mapNotNull(NodeRef::hintHash))
-        assertEquals(NodeRef.MAX_LABEL_HINTS, ref.labelHintHashes.size)
-        assertFalse(ref.hasExactFingerprint)
+    fun `exactly MAX_LABEL_HINTS labels is provable; one more is truncated and skips 2b`() = runTest {
+        val words = listOf("This offer", "Expand", "Base pay", "Tip", "Peak pay", "Details", "Adjustments")
+        fun rowOf(n: Int, top: Int) = view(clickable = true, bounds = Rect(36, top, 1044, top + 126),
+            children = words.take(n).map { view(cls = "android.widget.TextView", text = it) })
 
-        val slid = sixRow(1774 - 400)
-        assertFalse(expand(handler(windowRoot(slid)), ref))
+        val six = rowOf(NodeRef.MAX_LABEL_HINTS, 1774 - 400)
+        val sixRef = bindRef(six)
+        assertTrue(sixRef.hasExactFingerprint)
+        assertTrue("found by 2b after a 400 px slide", expand(handler(windowRoot(six)), sixRef))
+        six.clicks(1)
+
+        val sevenRef = bindRef(rowOf(NodeRef.MAX_LABEL_HINTS + 1, 1774))
+        assertFalse(sevenRef.hasExactFingerprint)
+        val slid = rowOf(NodeRef.MAX_LABEL_HINTS + 1, 1774 - 400)
+        assertFalse(expand(handler(windowRoot(slid)), sevenRef))
         slid.neverClicked()
-        val atRect = sixRow(1774)
-        assertTrue(expand(handler(windowRoot(atRect)), ref))
+        val atRect = rowOf(NodeRef.MAX_LABEL_HINTS + 1, 1774)
+        assertTrue("strategy 3 (containment) still finds it at its rect", expand(handler(windowRoot(atRect)), sevenRef))
         atRect.clicks(1)
     }
 
