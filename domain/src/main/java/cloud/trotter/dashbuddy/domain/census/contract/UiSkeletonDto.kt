@@ -148,16 +148,10 @@ data class UiSkeletonDto(
          * `YYYY-MM-DD` naming a real calendar date (the day bucket at rest; no finer time ever rides the
          * item). Reviews EE3/GG7: a shape-only check admitted `2026-99-99` and `2026-02-31`.
          */
-        private fun isDay(s: String): Boolean {
-            if (s.length != 10 || s[4] != '-' || s[7] != '-') return false
-            if (!(0 until 10).filter { it != 4 && it != 7 }.all { s[it] in '0'..'9' }) return false
-            // Review GG7: a REAL calendar date (ISO_LOCAL_DATE resolves STRICT — `2026-02-31` is refused).
-            return try {
-                java.time.LocalDate.parse(s)
-                true
-            } catch (_: java.time.format.DateTimeParseException) {
-                false
-            }
-        }
+        /**
+         * Review GG7: a REAL calendar date in `YYYY-MM-DD` (ISO_LOCAL_DATE resolves STRICT — `2026-02-31` is
+         * refused); review AL6: the length pins the 4-digit year form, the parse does the rest.
+         */
+        private fun isDay(s: String): Boolean = s.length == 10 && runCatching { java.time.LocalDate.parse(s) }.isSuccess
     }
 }

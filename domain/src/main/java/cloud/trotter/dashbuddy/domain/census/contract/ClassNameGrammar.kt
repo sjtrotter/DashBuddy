@@ -27,7 +27,7 @@ package cloud.trotter.dashbuddy.domain.census.contract
  * [ResourceIdGrammar]. `className` is app-settable (Compose, Flutter, WebView and custom views can
  * report any string), so it is chrome only when it has the shape of a Java binary class name
  * (`[A-Za-z_$][A-Za-z0-9_$]*` segments joined by `.`), is ≤ [MAX_LENGTH] characters, and carries no run
- * of 8+ hex digits and no run of 4+ decimal digits. Anything else is treated as ABSENT — null on the
+ * of 8+ hex characters containing a digit and no run of 4+ decimal digits ([DynamicRuns]). Anything else is treated as ABSENT — null on the
  * wire, `""` in the fingerprint — never rewritten.
  */
 object ClassNameGrammar {

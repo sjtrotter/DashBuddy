@@ -62,4 +62,14 @@ class ResourceIdGrammarTest {
     fun `the id grammar rejects a mask bracket, so no mask can reach the id path (review AJ8)`() {
         listOf("[redacted]", "chip_[name]", "x:id/[redacted:ab12]", "tag[").forEach { assertFalse(it, ResourceIdGrammar.isStaticShape(it)) }
     }
+
+    @Test
+    fun `a letter-only hex run is a word, not a dynamic value (review AL1)`() {
+        listOf("android.view.HapticFeedbackConstants", "com.doordash.ui.AddedBadgeView", "androidx.core.provider.AsyncTypefaceCache")
+            .forEach { assertTrue(it, ClassNameGrammar.isStatic(it)) }
+        assertFalse(DynamicRuns.hasDynamicRun("DefaultHapticFeedback"))
+        listOf("3f488d4a", "a3f488d4a", "deadbeef1").forEach { assertTrue(it, DynamicRuns.hasDynamicRun(it)) }
+        assertFalse(ResourceIdGrammar.isStaticShape("PRIMARY_BUTTON_3f488d4a-0f0b-4fb9-9c86-c4e0253ba22a"))
+        assertTrue(ResourceIdGrammar.isStaticShape("com.x:id/added_badge_view"))
+    }
 }

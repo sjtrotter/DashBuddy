@@ -23,14 +23,32 @@
 package cloud.trotter.dashbuddy.domain.census.contract
 
 /**
- * The ONE dynamic-value rule both static grammars share (#1160 review AJ4): a run of 8+ hex digits or 4+
- * decimal digits marks a per-frame / per-install value (a UUID, a counter), so a class or id carrying one
- * is not static. [ClassNameGrammar] judges the whole class name, [ResourceIdGrammar] the id's name part.
+ * The ONE dynamic-value rule both static grammars share (#1160 reviews AJ4, AL1): a maximal run of 8+ hex
+ * characters that contains at least ONE decimal digit, or a run of 4+ decimal digits, marks a per-frame /
+ * per-install value (a UUID, a counter), so a class or id carrying one is not static. A letter-only hex run
+ * is a word, not a value (`HapticFeedbackConstants` → `cFeedbac`, `AddedBadgeView` → `AddedBad`).
+ * [ClassNameGrammar] judges the whole class name, [ResourceIdGrammar] the id's name part.
  */
 object DynamicRuns {
 
-    private val HEX_RUN = Regex("[0-9a-fA-F]{8}")
-    private val DECIMAL_RUN = Regex("[0-9]{4}")
-
-    fun hasDynamicRun(value: String): Boolean = HEX_RUN.containsMatchIn(value) || DECIMAL_RUN.containsMatchIn(value)
+    fun hasDynamicRun(value: String): Boolean {
+        var hexRun = 0
+        var hexDigits = 0
+        var decimalRun = 0
+        for (ch in value) {
+            val decimal = ch in '0'..'9'
+            val hex = decimal || ch in 'a'..'f' || ch in 'A'..'F'
+            decimalRun = if (decimal) decimalRun + 1 else 0
+            if (decimalRun >= 4) return true
+            if (hex) {
+                hexRun++
+                if (decimal) hexDigits++
+                if (hexRun >= 8 && hexDigits > 0) return true
+            } else {
+                hexRun = 0
+                hexDigits = 0
+            }
+        }
+        return false
+    }
 }
