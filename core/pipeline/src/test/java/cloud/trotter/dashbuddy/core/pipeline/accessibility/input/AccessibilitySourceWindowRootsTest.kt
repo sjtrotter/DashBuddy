@@ -221,14 +221,49 @@ class AccessibilitySourceWindowRootsTest {
         assertEquals(0, sourceFor(service).getLiveWindowRoots().unreadableWindows)
     }
 
-    /** T4: with rootInActiveWindow NULL, the active application window is still excluded by its own isActive flag. */
+    /**
+     * U1 (supersedes T4): with rootInActiveWindow NULL and the active application window's own root null,
+     * the active window is represented NOWHERE — it is counted unreadable, and there is no active root.
+     */
     @Test
-    fun `a null active root never makes the active window count as unreadable`() {
+    fun `an unreadable active application window is counted`() {
         val windowList = listOf(typedWindow(null, AccessibilityWindowInfo.TYPE_APPLICATION, id = 5, active = true))
         val service = mock<AccessibilityService> {
             on { rootInActiveWindow } doReturn null
             on { windows } doReturn windowList
         }
-        assertEquals(0, sourceFor(service).getLiveWindowRoots().unreadableWindows)
+        val live = sourceFor(service).getLiveWindowRoots()
+        assertEquals(1, live.unreadableWindows)
+        assertNull(live.active)
+    }
+
+    /** U2: "active" comes from the enumeration's isActive flag; if rootInActiveWindow names ANOTHER window → no active root. */
+    @Test
+    fun `a disagreement between rootInActiveWindow and the isActive flag yields no active root`() {
+        val a = mock<AccessibilityNodeInfo> { on { windowId } doReturn 1 }
+        val b = mock<AccessibilityNodeInfo> { on { windowId } doReturn 2 }
+        val windowList = listOf(
+            typedWindow(a, AccessibilityWindowInfo.TYPE_APPLICATION, id = 1, active = false),
+            typedWindow(b, AccessibilityWindowInfo.TYPE_APPLICATION, id = 2, active = true),
+        )
+        val service = mock<AccessibilityService> {
+            on { rootInActiveWindow } doReturn a
+            on { windows } doReturn windowList
+        }
+        val live = sourceFor(service).getLiveWindowRoots()
+        assertNull("focus moved between the two reads — no active root this attempt", live.active)
+        assertEquals(2, live.roots.size)
+    }
+
+    /** U2: when they agree, the enumeration's flagged root is the active one. */
+    @Test
+    fun `the enumeration's flagged active root is the active root`() {
+        val b = mock<AccessibilityNodeInfo> { on { windowId } doReturn 2 }
+        val windowList = listOf(typedWindow(b, AccessibilityWindowInfo.TYPE_APPLICATION, id = 2, active = true))
+        val service = mock<AccessibilityService> {
+            on { rootInActiveWindow } doReturn b
+            on { windows } doReturn windowList
+        }
+        assertSame(b, sourceFor(service).getLiveWindowRoots().active)
     }
 }
