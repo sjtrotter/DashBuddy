@@ -16,6 +16,11 @@ import java.util.Locale
  * the UI edge). No UI/Android types — this is pure copy + a phrase, derived
  * everywhere it's shown.
  *
+ * [offerOverlay] (#1152) declares that the platform draws its offer as a floating overlay above
+ * other apps (a `SYSTEM_ALERT_WINDOW`, reported to accessibility services as `TYPE_SYSTEM`) — the
+ * sensor layer then admits that platform's large system-layer windows as snapshot candidates (by
+ * size + package). Adding an overlay platform is flipping this one flag (principle 8).
+ *
  * [wire] values are assumed **non-empty and dot-free** — they are used as the
  * platform namespace prefix of rule ids (`<wire>.<section>.<name>`), so a wire
  * containing a `.` or an empty wire would break prefix-based resolution
@@ -27,9 +32,10 @@ enum class Platform(
     val displayName: String,
     val shortName: String,
     val sessionVerb: String?,
+    val offerOverlay: Boolean = false,
 ) {
     DoorDash("doordash", "com.doordash.driverapp", "DoorDash", "DD", "Dashing"),
-    Uber("uber", "com.ubercab.driver", "Uber Driver", "Uber", "Ubering"),
+    Uber("uber", "com.ubercab.driver", "Uber Driver", "Uber", "Ubering", offerOverlay = true),
     Instacart("instacart", "com.instacart.shopper", "Instacart Shopper", "IC", null),
     WalmartSpark("walmart_spark", "com.walmart.spark", "Walmart Spark", "Spark", null),
     Unknown("_unknown", null, "Unknown", "", null),
@@ -81,5 +87,12 @@ enum class Platform(
         /** All known package names for OS-level event subscription. */
         val watchedPackages: Set<String> =
             entries.mapNotNull { it.packageName }.toSet()
+
+        /**
+         * Packages of the platforms whose offers arrive as a system-layer overlay ([offerOverlay],
+         * #1152). Derived — never a hand-kept list.
+         */
+        val overlayPackages: Set<String> =
+            entries.filter { it.offerOverlay }.mapNotNull { it.packageName }.toSet()
     }
 }
