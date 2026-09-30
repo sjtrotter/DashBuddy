@@ -600,8 +600,12 @@ side-effect-free half.
   any shape — so an UNKNOWN sheet title under `tvTitle`, "Pick up order", loses its X-Ray line, ADR residual
   11); the recognized `doordash.screen.chat` / `chat_conversation` rules
   redact `tvTitle` (customer-name normalized) and `tvLastMessage` (plain); the corpus intake (`PII_ID_SUFFIXES`) holds every table suffix. The frame-rule
-  off-switch exists only as the test/diagnostic `census.diagnostics.DiagnosticSkeletonBuilder`.
-- *The filter* — `core.pipeline.census.SkeletonBuilder` (typed API: `Platform`, `LocalDate`). A
+  off-switch exists only as `census.diagnostics.DiagnosticSkeletonBuilder` in `:core:pipeline`'s TEST
+  FIXTURES (`src/testFixtures`, consumed by `:app` tests via `testFixtures(project(":core:pipeline"))`) —
+  never in `main`, guarded by `DiagnosticsNotInMainTest`.
+- *The filter* — `core.pipeline.census.SkeletonBuilder` (typed API: `Platform`, `LocalDate`; build/outcome/
+  refusals/envelope), with the per-frame state in `FrameFilter`, the run vocabulary in `LetterRuns` and the
+  frame-free id judgement in `IdPathJudgement` (split by #1160 review round 12). A
   `SensitiveTextMarkers` hit on the raw tree or title yields no skeleton (a caller may pass the verdict
   it already computed, bound to that exact tree instance; a mismatched one is ignored); a FAILED marker
   scan is `BUILD_FAILED`, not a sensitive frame. Per field: step 1 is the node's own RAW id
@@ -615,15 +619,19 @@ side-effect-free half.
   frame, or the text/desc of a NAME, ADDRESS or EXACT id — and (b) any field containing a letter run
   (≥ 2 letters in code points, `CaseFold`-folded) of a NAME id's text (else its desc). NAME run-seeding
   is reserved for ids whose value is ONLY ever a person's name (`customer_name`, `order_cx_name`); a
-  reused id that is a person or a merchant (`user_name`) is PERSON_OR_MERCHANT and a value that may be
-  chrome (`tvTitle`, `tvLastMessage`) is EXACT — both exact-seeded for text (what a kind seeds is the kind
-  table's `seedsExactValue` / `seedsRuns`); the `idProtect` rows (`customer_name`, `order_cx_name`,
+  reused id that is a person or a merchant (`user_name`) is PERSON_OR_MERCHANT — exact-seeded, plus letter
+  runs when its value has ≤ 2 tokens (a person's name; 3+ tokens is a merchant like "Jack in the Box") —
+  and a value that may be chrome (`tvTitle`, `tvLastMessage`) is EXACT — exact-seeded only (what a kind
+  seeds is the kind table's `seedsExactValue` / `maxRunSeedTokens` / `runsGuardClasses`); the `idProtect` rows (`customer_name`, `order_cx_name`,
   `user_name`, `tvTitle` — not `tvLastMessage`) also add their WHOLE value (≥ 3 code-point letters, a
   single token included, no name-shape gate) as an id-only run, matched across id separators; the address ids are ADDRESS (exact only — address vocabulary
   is common English); CONTENT ids (`description_text_view`, the instruction bodies) and masks seed
-  nothing. The same containment, split also at camelCase boundaries (contiguous segments), makes a
-  node's id absent (`chipAdam` beside `customer_name` "Adam", `search_bar` beside `tvTitle` "Search");
-  a class name is never containment-checked. On the id path the PII judgement is stricter-to-trigger: a
+  nothing. The same containment, over every contiguous join of camel segments ACROSS separators
+  (`row_mc_kenna`), replaces a node's static id with the reserved sentinel `~` (`chipAdam` beside
+  `customer_name` "Adam", `search_bar` beside `tvTitle` "Search") so the fingerprint's STRUCTURE never
+  depends on the customer; a non-wrapper class carrying a customer-NAME run is absent
+  (`com.x.RileyButton`). A malformed (NUL / lone-surrogate) class or id is emitted absent and counted
+  (`Outcome.Built.malformedIdOrClass`), never a whole-frame refusal. On the id path the PII judgement is stricter-to-trigger: a
   lead-in withholds only before a Capitalized token and the name shape needs an uppercase-led
   (Capitalized or all-caps) first token and an uppercase initial (`deliver_to_label`, `tabB` travel;
   `chip_RILEY_S` and — the recall cost — `TAB_B` are absent). Each value is

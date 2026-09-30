@@ -57,8 +57,8 @@ travel; the id's camelCase segments count as words too (`deliverToSam`), and onl
 CASE-SENSITIVE initial runs on the id path, so `option_a`/`tab_b` chrome ids travel (review round 7).
 Those predicates live in `:core:pipeline`, so that judgement is client-side only; a bare name
 with no marker, lead-in or initial (`chip_Adam`, `Adam Smith`) is indistinguishable by shape from chrome
-(`chip_Gold`, `Artwork Image`) — it is absent when an identity id on the same frame carries that name
-(§2 frame-level rule), and travels in the clear otherwise — residual risk 10. On the id path the PII
+(`chip_Gold`, `Artwork Image`) — it is replaced by the sentinel `~` when an identity id on the same
+frame carries that name (§2 frame-level rule, §8), and travels in the clear otherwise — residual risk 10. On the id path the PII
 judgement is deliberately harder to trigger than on text: a marker or lead-in withholds only when the
 token after it is Capitalized (`deliver_to_Sam` is absent, `deliver_to_label` travels), and the name shape
 needs an UPPERCASE-led first token — Capitalized or all-caps — and an uppercase initial (`chip_Adam_S` and
@@ -204,14 +204,19 @@ filter over every text field of the frame (tree + window title) and SEEDS:
   instruction bodies; `description_text_view`, generic DoorDash chrome such as "Raise to 50%") seeds
   nothing; an **EXACT** id — a value that may be chrome (`tvTitle`, `tvLastMessage`: the chat header is a
   customer's name and the preview their text, but the same generic id titles other sheets, "Pick up
-  order") — and a **PERSON_OR_MERCHANT** id — a REUSED id that is a person or a merchant but never chrome
-  (`user_name`, which also carries the merchant's and the dasher's own name: its runs would seed
-  "the"/"in"/"box" from "Jack in the Box" and suppress chrome and `TextView`-class wrappers per store) —
-  seed their exact value only, so a duplicated first name is still caught (review rounds 8, 10). A NAME seeds runs from its text, so a TalkBack-style desc "Customer name Adam" beside text "Adam"
+  order") — seeds its exact value only, so a duplicated first name is still caught (review rounds 8,
+  10); a **PERSON_OR_MERCHANT** id — a REUSED id that is a person or a merchant but never chrome
+  (`user_name`, which also carries the merchant's and the dasher's own name) — seeds its exact value, and
+  its letter runs only when the value has at most TWO whitespace tokens (a person's name: "Text Riley"
+  beside `user_name` "Riley" is withheld exactly as beside `customer_name`), never for three or more
+  ("Jack in the Box", "The Home Depot" would seed "the"/"in"/"box" and suppress chrome per store). A
+  1–2-token merchant ("Target", "Bay View") seeds runs too — accepted: a merchant word is never a
+  recognition anchor, and its collision with a chrome id is residual risk 9 (review round 12). A NAME seeds runs from its text, so a TalkBack-style desc "Customer name Adam" beside text "Adam"
   seeds no `customer`/`name`, while a name rendered only in a desc still propagates — and a NAME whose
   text is a mask or has no canonical form takes its runs from the desc. What a kind seeds is owned by
-  the kind table itself (`IdentityKind.seedsExactValue` / `seedsRuns`), which the builder and the test
-  mirrors both read (review round 11). For the ID check only, a WHOLE-value run (case-folded, code-point
+  the kind table itself (`IdentityKind.seedsExactValue` / `maxRunSeedTokens` / `runsGuardClasses`), and the
+  run-source rule (usable text, else usable desc) by `SkeletonBuilder.nameRunSource`, which the builder
+  and the test mirrors both call (review rounds 11, 12). For the ID check only, a WHOLE-value run (case-folded, code-point
   letters only, ≥ 3 letters) is matched against every contiguous join of the id's camel segments ACROSS
   separators (`row_mary_jo`, `chip-mary-jo`, `rowMaryJo` beside "Mary Jo"), contributed only by the
   `idProtect` rows — values a test tag can plausibly embed (review rounds 10, 11 — no name-shape gate:
@@ -224,9 +229,12 @@ filter over every text field of the frame (tree + window title) and SEEDS:
   | `tvTitle` (EXACT) | always: "Riley Smith" nulls `chipRileySmith`; a one-word chrome title "Search" nulls `search_bar` on its frame (recall cost) |
   | `tvLastMessage` (EXACT), every ADDRESS and CONTENT row | none — a chat reply "Ok" must not null `ok_button` or move the fingerprint per message; street vocabulary is common English |
 
-  Text slots never use the whole-value rule, and CLASS names are never containment-checked (review round
-  11): a class is a compiled type name, not frame data — a `SearchView` class beside `tvTitle` "Search"
-  stays.
+  Text slots never use the whole-value rule. A CLASS name is third-party-set (the mapper copies it and the
+  grammar checks only its syntax), so it is checked against customer-name runs ONLY — the runs of a
+  class-guarding kind (NAME: `com.x.RileyButton` beside `customer_name` "Riley" is absent) — never a
+  title or merchant word (a `SearchView` class beside `tvTitle` "Search" stays), and never a wrapper
+  class (`AnonymousWrappers.WRAPPER_CLASSES`), so wrapper eligibility cannot depend on the customer
+  (review rounds 11, 12).
   `PII_ID_SUFFIXES` holds EVERY suffix of this table (a guard test pins the subset) plus other
   instruction/content ids (message bodies, maneuver/road text) (review rounds 6–9);
 - a MASK never seeds anything (`[redacted…]`, `[address]`, …): it is not identity, and its word would
@@ -236,12 +244,13 @@ Pass 2 emits the constant `withheld` for every field whose canonical value is a 
 wherever it sits, and — by TOKEN CONTAINMENT — for every field containing a NAME run: `customer_name`
 "Adam" withholds an id-less "Adam's order" or "Adam, 2 items" (which pass steps 3–8), while "Add a tip"
 beside it still hashes. The containment rule applies to text slots AND to the id of every node on the
-frame (never the class — review round 11); ids are split into runs ALSO at camelCase boundaries (lower→Upper, and
+frame (and, for customer-name runs only, its class — see above); ids and classes are split into runs ALSO at camelCase boundaries (lower→Upper, and
 Upper→Upper+lower: `XMLAdam` → `XML` + `Adam`), because Compose test tags are usually camelCase, while
 text slots keep the plain letter-run split; a seed is tested against every CONTIGUOUS concatenation of
-a token's camel segments (the singles, the joins, the whole token), so a name with internal capitals
-still matches — `chipMcKenna` → `Mc`+`Kenna` → `mckenna` (amended in #1160 review round 6). A static id carrying a NAME run is ABSENT for the
-wire and the fingerprint, exactly like a dynamic id — `chipAdam` / `chip_Adam` beside `customer_name`
+the camel segments ACROSS separators (the singles, the joins, the whole name part), so a name with
+internal capitals or split by a separator still matches — `chipMcKenna`, `row_mc_kenna` → `mckenna`
+(amended in #1160 review rounds 6, 12). A static id carrying a seeded run is replaced by the reserved
+sentinel id `~` (`ResourceIdGrammar.FRAME_WITHHELD_ID`, §8) on the wire and in the fingerprint — `chipAdam` / `chip_Adam` beside `customer_name`
 "Adam" does not travel, `chipGold` and `chipAdamant` (whole-run equality) do (one owner,
 `FrameFilter.containsIdentityRun`). A CONTENT id and a `PII_ID_SUFFIXES`-only id (the intake list, which
 also covers instruction BODIES — `step_description`, `instruction_text`) withhold their OWN field but
@@ -466,7 +475,17 @@ id's byte length as ASCII decimal + `0x00` + the id UTF-8, or the single byte `"
 so a null id and an empty id differ) + the spliced child count as ASCII decimal + `0x00`, then the
 children in order. class/id must be well-formed UTF-16 with no U+0000 (`WireStrings.isWellFormed` — a
 lone surrogate would otherwise UTF-8-encode as `?` and collide); a violating class or id is refused at
-construction, on decode, and by the builder (checked on the RAW id, before the resource-name gate).
+construction and on decode, and the builder emits it ABSENT (null never enters the byte form, so the
+encoding stays injective) and counts it (`Outcome.Built.malformedIdOrClass`) rather than refusing the
+whole frame — one bad node must not blind a surface (review round 12). The id is a static resource name
+OR the one reserved non-grammar value `~` (`ResourceIdGrammar.FRAME_WITHHELD_ID`): a static id the
+builder's FRAME rule withheld (§2) — it keeps the node a non-wrapper, so the tree STRUCTURE never
+depends on the customer on the frame; a grammar-rejected (dynamic) id stays null, since it is rejected
+identically on every frame. The server accepts `~`. Fingerprinting happens AFTER that frame-level
+withholding, so a colliding id (`mark_read_button` beside `customer_name` "Mark") still moves the
+cluster key by that one id — fingerprinting the pre-withholding structure would break the server's
+recompute-from-the-wire rule; the sentinel keeps the structure stable, and the single-id difference is
+residual risk 9 (review round 12).
 Wrapper transparency is judged on the WIRE id: a container whose only id was dynamic (or empty) arrives
 with a null id and IS spliced — a deliberate divergence from `stableHash`, which sees the raw id; the
 server can only recompute from the wire tree (amended in #1160). Transparent wrappers are removed first (wrapper-to-forest
@@ -650,9 +669,10 @@ must stay green.
     still travels in the clear. The corpus has none (the rejected-id pin lists only the three dynamic
     UUIDs, and no identity seed collides with a committed chrome id); the controls are that pin and the
     k-gated, human-reviewed promotion path.
-   The same containment applies to ids (not classes, review round 11), so in the rarer case of a first name equal to an id
-   token (`Star` / `star_rating_bar`, `Page` / `page_indicator`, `Dash` / `dash_now_button`) the id is
-   nulled and the CLUSTER KEY itself moves: that surface lands in a singleton cluster for that install on
+   The same containment applies to ids (and, for customer-name runs, to non-wrapper classes — review
+   round 12), so in the rarer case of a first name equal to an id token (`Star` / `star_rating_bar`,
+   `Page` / `page_indicator`, `Dash` / `dash_now_button`) the id becomes the sentinel `~` (the class
+   becomes absent) and the CLUSTER KEY itself moves by that one value — never the tree structure (§8): that surface lands in a singleton cluster for that install on
    that frame. Fingerprinting the pre-containment structure would break the server's
    recompute-from-the-wire rule, so this is accepted: the drop costs availability (a cluster that does
    not reach k), never privacy (#1160 review round 6).
