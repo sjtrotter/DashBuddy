@@ -18,6 +18,7 @@ class MapperEnforcementTest {
             "contentHash",      // lazy property
             "stableHash",       // lazy property (identity-based dedup)
             "hasViewId",        // computed interpreter helper (not stored)
+            "takesClick",       // computed: isClickable || hasClickAction (#1149 review J2, not stored)
         )
         // Get all property names from the Domain model
         val domainProps =

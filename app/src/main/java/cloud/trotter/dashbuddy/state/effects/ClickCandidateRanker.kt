@@ -132,6 +132,23 @@ object ClickCandidateRanker {
     }
 
     /**
+     * #1149 review X1 — the indices tied at the TOP under [rank]'s own tiers (exact stored text, then max
+     * overlap with the captured rect), in input order; never empty. Used WITHIN one owner, where every
+     * tied-strongest member is interchangeable (same dispatch target) — ties between DISTINCT owners
+     * still go through [rank] and fail closed on UNRESOLVED.
+     */
+    fun strongest(ref: NodeRef, candidates: List<CandidateFacts>): List<Int> {
+        require(candidates.isNotEmpty()) { "ClickCandidateRanker.strongest called with no candidates" }
+        val refText = ref.text
+        val pool = if (!refText.isNullOrBlank()) {
+            candidates.indices.filter { candidates[it].text?.take(50) == refText }.ifEmpty { candidates.indices.toList() }
+        } else candidates.indices.toList()
+        val overlaps = pool.associateWith { boundsIoU(ref.boundsInScreen, candidates[it].bounds) }
+        val best = overlaps.values.maxOrNull() ?: 0.0
+        return if (best > 0.0) pool.filter { overlaps.getValue(it) == best } else pool
+    }
+
+    /**
      * Intersection-over-Union of two [BoundingBox]es; 0.0 when they don't overlap at all. The ONE
      * overlap definition — [UiInteractionHandler]'s bounds-walk candidate search (#1093) uses it
      * too, so "close enough to be the same control" is decided the same way at both stages.

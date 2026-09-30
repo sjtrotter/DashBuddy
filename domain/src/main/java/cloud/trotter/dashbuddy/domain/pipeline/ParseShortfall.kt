@@ -36,10 +36,27 @@ data class ParseShortfall(
     val nullRequiredFields: List<String> = emptyList(),
     /** Optional `bind` targets that resolved no node on this matched frame (#1093); sorted, by name. */
     val unresolvedOptionalBindings: List<String> = emptyList(),
+    /**
+     * #1149 review R7 — ACTION-target binds (`RuleAction.byTargetBindName`) that resolved a node whose
+     * bind-time fingerprint is UNPROVABLE (`NodeRef.labelHintsComplete == false`: unreadable children,
+     * more than `MAX_LABEL_HINTS` labels, or no letter-bearing label at all — S7). The tap still has strategies 1/2/3, but never 2b; counted so
+     * the loss is visible. Sorted, by name (ours).
+     */
+    val unprovableBindings: List<String> = emptyList(),
+    /** #1149 review S7 — why each [unprovableBindings] entry is unprovable (our wording, no node content). */
+    val unprovableReasons: Map<String, String> = emptyMap(),
+    /**
+     * #1149 review S4 — ACTION-target binds that resolved a node but were REFUSED (R1: a foreign bound
+     * node or owner walk, or no clickable owner at all): no reference was emitted, the target is
+     * withheld. Its own truth, NOT folded into [unresolvedOptionalBindings] (it did resolve a node, and
+     * may be mandatory). Sorted, by name (ours).
+     */
+    val refusedBindings: List<String> = emptyList(),
 ) {
     /** Either PARSE trigger fired (the #1036 pair) — the census/WARN keyed by rule id. */
     val hasParseTrigger: Boolean get() = allNullFieldCount > 0 || nullRequiredFields.isNotEmpty()
 
     /** True when no trigger fired — parse and binds are healthy and nothing should be reported. */
-    val isEmpty: Boolean get() = !hasParseTrigger && unresolvedOptionalBindings.isEmpty()
+    val isEmpty: Boolean get() = !hasParseTrigger && unresolvedOptionalBindings.isEmpty() &&
+        unprovableBindings.isEmpty() && refusedBindings.isEmpty()
 }

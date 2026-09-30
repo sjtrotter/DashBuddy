@@ -1,6 +1,7 @@
 package cloud.trotter.dashbuddy.util
 
 import android.view.accessibility.AccessibilityNodeInfo
+import cloud.trotter.dashbuddy.core.pipeline.accessibility.mapper.takesClick
 import timber.log.Timber
 
 /**
@@ -9,41 +10,63 @@ import timber.log.Timber
 object AccNodeUtils {
 
     /**
-     * STRICT CLICK (#425): self-or-ancestor only — no sibling fallback.
-     *
-     * Used for verified `RuleAction` taps, where label verification ran on
-     * *this* node's subtree: a clickable sibling can be the opposite control
-     * (Accept sits beside Decline in the offer footer), so falling laterally
-     * would tap something the verification never looked at.
+     * #1149 — the most self → parent steps [resolveActionOwner] takes. The accessibility tree is
+     * third-party input: a parent chain is bounded ingestion like everything else, and a cyclic or
+     * pathologically deep chain resolves to NO owner (fail closed), never a hang.
      */
-    fun clickNodeStrict(node: AccessibilityNodeInfo?): Boolean {
-        if (node == null) {
-            Timber.w("Cannot click: node is null.")
-            return false
+    const val MAX_OWNER_WALK = cloud.trotter.dashbuddy.domain.pipeline.NodeRef.MAX_OWNER_WALK // one owner, shared with bind time (#1149 L2)
+
+    /**
+     * #1149 — the ACTION OWNER of [node]: the first of self → parent → … that
+     * `takesClick()` (the mapper package's one live predicate, #1149 P6/T7), within [MAX_OWNER_WALK] steps, with a cycle guard (`==` on the visited
+     * nodes — [AccessibilityNodeInfo.equals] is window + source-node identity). Null when no owner
+     * is reachable inside the bound; the caller must not tap anything then.
+     *
+     * The owner is what a tap actually lands on, so it is what the caller dedupes candidates by,
+     * label-verifies and dispatches to — verification never runs on one node and the click on
+     * another.
+     *
+     * #1149 review P2: the walk never crosses a foreign hop — the first node (self included) whose
+     * package is not [expectedPackage] ends it with NO owner, exactly as the bind side refuses such a
+     * chain (`NodeRef.bindHintsOf`, N5). A same-package label inside a foreign wrapper therefore can
+     * never lend itself to a same-package owner above it.
+     */
+    fun resolveActionOwner(node: AccessibilityNodeInfo?, expectedPackage: String): AccessibilityNodeInfo? {
+        var current = node
+        val visited = ArrayList<AccessibilityNodeInfo>(4)
+        var steps = 0
+        while (current != null && steps < MAX_OWNER_WALK) {
+            if (current.packageName?.toString() != expectedPackage) return null
+            if (visited.any { it == current }) return null
+            if (current.takesClick()) return current
+            visited.add(current)
+            current = current.parent
+            steps++
         }
-        val clickable = findClickableCandidate(node)
-        if (clickable == null) {
-            Timber.w("Strict click: no clickable self/ancestor — refusing (no sibling fallback).")
-            return false
-        }
-        if (clickable != node) {
-            Timber.i("Strict click: delegating to clickable ancestor (Class: ${clickable.className})")
-        }
-        return clickable.performAction(AccessibilityNodeInfo.ACTION_CLICK)
+        return null
     }
 
     /**
-     * Traverses up from the given node to find the first ancestor (or the node itself)
-     * that is clickable.
+     * STRICT CLICK (#425, #1149): clicks [owner] itself — no sibling fallback, no ancestor climb.
+     *
+     * The caller resolved [owner] via [resolveActionOwner], `refresh()`ed it, and label-verified
+     * THAT refreshed state; a clickable sibling can be the opposite control (Accept sits beside
+     * Decline in the offer footer), so falling laterally — or climbing past the verified node —
+     * would tap something the verification never looked at.
+     *
+     * No second refresh here (#1149 review I1): a refresh between verification and dispatch could
+     * rebind the node (a recycled row turning Decline → Accept) and click what was never verified.
+     * The owner must still take a click and still belong to [expectedPackage].
      */
-    private fun findClickableCandidate(node: AccessibilityNodeInfo?): AccessibilityNodeInfo? {
-        var currentNode = node
-        while (currentNode != null) {
-            if (currentNode.isClickable) {
-                return currentNode
-            }
-            currentNode = currentNode.parent
+    fun clickNodeStrict(owner: AccessibilityNodeInfo?, expectedPackage: String): Boolean {
+        if (owner == null) {
+            Timber.tag("Effects").w("Cannot click: node is null.")
+            return false
         }
-        return null
+        if (!owner.takesClick() || owner.packageName?.toString() != expectedPackage) {
+            Timber.tag("Effects").w("Strict click: refusing — the target no longer takes a click in the scoped package (no sibling fallback).")
+            return false
+        }
+        return owner.performAction(AccessibilityNodeInfo.ACTION_CLICK)
     }
 }

@@ -59,18 +59,65 @@ class AccessibilitySource @Inject constructor() {
      * with that `equals`. Active-window-FIRST ordering is preserved for stability/diagnostics —
      * `rootInActiveWindow` is added first and kept, its later twin dropped. (Nothing consumes list
      * position anymore: `UiInteractionHandler`'s #788 scoping identifies the active window by `==`
-     * against a fresh [getLiveNativeRoot], not by index.) The list is a handful of windows, so the
-     * O(n²) scan is trivial.
+     * against [LiveRoots.active], not by index.) The list is a handful of windows, so the O(n²) scan
+     * is trivial.
+     *
+     * #1149 review N3: the active root and the roots come from ONE enumeration ([LiveRoots]) — a
+     * separate `getLiveNativeRoot()` read could see a platform window that became active in between
+     * and is absent from the list, wrongly reading as "no active platform window".
      */
-    fun getLiveWindowRoots(): List<AccessibilityNodeInfo> {
-        val service = serviceRef?.get() ?: return emptyList()
+    fun getLiveWindowRoots(): LiveRoots {
+        val service = serviceRef?.get() ?: return LiveRoots(null, emptyList())
+        val rootInActive = service.rootInActiveWindow
         val roots = mutableListOf<AccessibilityNodeInfo>()
-        service.rootInActiveWindow?.let { roots.add(it) }
-        (service.windows ?: emptyList()).forEach { window -> window.root?.let { roots.add(it) } }
+        var unreadable = 0
+        var flaggedActive: AccessibilityWindowInfo? = null
+        var flaggedActiveRoot: AccessibilityNodeInfo? = null
+        val windows = service.windows ?: emptyList()
+        for (window in windows) {
+            val root = window.root
+            if (window.isActive) { flaggedActive = window; flaggedActiveRoot = root }
+            if (root != null) { roots.add(root); continue }
+            // R3: only an APPLICATION window that is not picture-in-picture can hide a platform twin (an
+            // IME, SystemUI or our overlay cannot). Residual: its package is unknown, so a foreign app's
+            // unreadable window still counts.
+            if (window.type != AccessibilityWindowInfo.TYPE_APPLICATION || window.isInPictureInPictureMode) continue
+            // U1 (supersedes T4): the ACTIVE window is skipped only when its root IS represented — i.e.
+            // rootInActiveWindow read it (same window id). An active application window with no readable
+            // root is COUNTED: it is absent from `roots`, and a background twin must not become the sole
+            // candidate.
+            if (window.isActive && rootInActive != null && rootInActive.windowId == window.id) continue
+            unreadable++
+        }
+        // U2: ONE source for "active" — the enumeration's own isActive flag (the root fetched in this pass).
+        // rootInActiveWindow is used only when no enumerated window is flagged active; if both exist and
+        // name different windows (focus moved between the two reads), there is NO active root for this
+        // attempt — keep-all scoping, whose unreadable/cut/twin rules fail closed.
+        val flagged = flaggedActive
+        val active: AccessibilityNodeInfo? = when {
+            flagged == null -> rootInActive
+            rootInActive != null && rootInActive.windowId != flagged.id -> null
+            else -> flaggedActiveRoot ?: rootInActive?.takeIf { it.windowId == flagged.id }
+        }
+        rootInActive?.let { roots.add(0, it) }
+        active?.let { roots.add(0, it) }
         val deduped = mutableListOf<AccessibilityNodeInfo>()
         for (root in roots) if (deduped.none { it == root }) deduped.add(root)
-        return deduped
+        return LiveRoots(active, deduped, unreadable)
     }
+
+    /**
+     * #1149 review N3 — one live window enumeration: the active root (any package) and all roots, active
+     * first. [active] comes from the enumeration's own `isActive` flag (review U2; `rootInActiveWindow`
+     * only as a fallback, and a disagreement between the two means NO active root). [unreadableWindows]
+     * (review P3/R3/U1) counts enumerated non-PiP APPLICATION windows whose root came back null —
+     * including the active one unless `rootInActiveWindow` represents it; their package is unknown.
+     */
+    data class LiveRoots(
+        val active: AccessibilityNodeInfo?,
+        val roots: List<AccessibilityNodeInfo>,
+        val unreadableWindows: Int = 0,
+    )
 
     // --- 2. The Service Connection (Pull) ---
     // We use a WeakReference so we don't leak the Service if it restarts

@@ -313,7 +313,9 @@ the 8.95.6 `earnings_pill` carousel on `waiting_for_offer` — is listed in the 
 `expandButton` anchored on an id 8.93.7 removed, and because the bind was optional the
 `EXPAND_EARNINGS` tap was simply never emitted, for weeks, with no trace; it rides the same
 `ParseShortfall` (`unresolvedOptionalBindings`) into its OWN census (`bindShortfall{<rule>.<bind>=n}`, one
-WARN per rule+bind per process) and never moves the parse count. The #1063 first-frame offer card
+WARN per rule+bind per process) and never moves the parse count; two sibling censuses (#1149) cover action
+targets that DID resolve — `bindUnprovable{}` (a bind-time label fingerprint that cannot be proven) and
+`bindRefused{}` (no clickable owner in the package: target withheld) — same grain, tag `ParseHealth`. The #1063 first-frame offer card
 (Decline not yet rendered) is an expected, bounded tripper. The tap side of #1093: a bounds-derived
 click candidate must carry the bind's hashed subtree labels (`NodeRef.labelHintHashes`, all of them,
 letter-bearing only) — geometry is never identity for a label-free action; details in the reference. Notices share
@@ -508,7 +510,16 @@ Full reference: [`docs/architecture/04-side-effect-engine.md`](docs/architecture
 evaluation loopback, and owns the fail-closed action gates (#417): live `PermissionTierChecker` + the
 capability consent gate (`RuleCapabilityRepository`; **no auto-grant, #843**). Handlers:
 `OdometerEffectHandler`, `ScreenShotHandler`, `TipEffectHandler`, `TtsEffectHandler`,
-`UiInteractionHandler` (the only path that ever clicks a third-party app, #425), `OfferActionReceiver`.
+`UiInteractionHandler` (the only path that ever clicks a third-party app, #425; #1149: resolves the clickable
+OWNER first — `isClickable` OR advertised `ACTION_CLICK`, one predicate with bind time's `UiNode.takesClick`,
+bounded walk — refreshes owner AND matched evidence BEFORE verifying, never lets a container borrow a clickable
+descendant's labels (one bind/fire label-horizon rule, `LabelHorizon`, in `:domain`), and re-finds a bind whose ref carries a
+PROVABLE exact fingerprint (`NodeRef.hasExactFingerprint`; bind side = the bound node's action OWNER's region,
+package- and readability-aware) by those labels BEFORE geometry, bounded by the mapper's `TreeLimits`. One
+outcome rule (`decideSemanticOutcome`) over the deciding set — the active platform window when it has a hit,
+else every window (#788), roots and active root from ONE enumeration: no hit → strategy 3; hit(s) with an
+incomplete deciding window or an unprovable hit → abort; twins → abort; a refused bind (foreign / no owner)
+emits no reference at all), `OfferActionReceiver`.
 
 - **Every odometer fix is gated (#1057/#918).** The pure `:domain` `OdometerFixPolicy` judges each fix
   against the last ACCEPTED one (`MIN_DELTA_METERS` 5, `MAX_ACCURACY_METERS` 50, `MAX_SPEED_MPS` 67,
@@ -772,7 +783,7 @@ Every new feature or refactor holds to these — they are forefront design input
    `"Effects"`…), never the catch-all `App`. The tag rule is **enforced by a ratchet guard**
    (#764, `TimberTagGuardTest` in `:app` unit tests): any new bare `Timber.i/w/e/wtf(` (incl. the
    `Timber.Forest.*` form) in a main-type source set fails the build; the frozen allowlist
-   (`app/src/test/resources/timber-tag-guard-allowlist.txt`, 27 files as of #944) is the visible debt list —
+   (`app/src/test/resources/timber-tag-guard-allowlist.txt`, 26 files as of #1149) is the visible debt list —
    tag a file's sites, shrink its entry (counts dropping below the frozen number also fail, so the
    list only burns down). The INFO-must-be-PII-safe rule is **fail-closed and
    tested** (reuse `SensitiveTextMarkers`): a raw merchant/customer string in an INFO+ line is a

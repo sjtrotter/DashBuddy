@@ -8,6 +8,15 @@ import cloud.trotter.dashbuddy.domain.model.accessibility.UiNode
 import timber.log.Timber
 
 /**
+ * The mapper's tree limits, public so every other walk of the same live tree shares ONE owner
+ * (#1149 review J5: the executor's strategy-2b walk truncates exactly where the mapper would).
+ */
+object TreeLimits {
+    const val MAX_TREE_DEPTH = 60
+    const val MAX_TREE_NODES = 4_000
+}
+
+/**
  * Per-tree ingestion budget (#363). Third-party trees are untrusted input:
  * every `getChild(i)` is a binder IPC and the converted tree is serialized
  * into the capture envelope, so a pathological/redesigned target UI must not
@@ -56,8 +65,8 @@ internal class TreeBudget(
     }
 
     companion object {
-        const val MAX_TREE_DEPTH = 60
-        const val MAX_TREE_NODES = 4_000
+        const val MAX_TREE_DEPTH = TreeLimits.MAX_TREE_DEPTH
+        const val MAX_TREE_NODES = TreeLimits.MAX_TREE_NODES
 
         /**
          * Per-string ingestion cap (#590). Third-party text is untrusted: a node
@@ -71,7 +80,7 @@ internal class TreeBudget(
          * `endsWith` on short snippets, so the cap is behavior-free there while
          * closing the same balloon-capture threat for a hostile mocked value).
          */
-        const val MAX_TEXT_LENGTH = 4_096
+        const val MAX_TEXT_LENGTH = cloud.trotter.dashbuddy.domain.pipeline.UiTextBounds.MAX_TEXT_LENGTH // one owner (#1149 R2)
     }
 }
 
@@ -83,7 +92,7 @@ internal class TreeBudget(
 fun AccessibilityNodeInfo?.toUiNode(): UiNode? {
     if (this == null) return null
     val budget = TreeBudget()
-    val root = convert(this, depth = 0, budget = budget) ?: return null
+    val root = convert(this, depth = 0, budget = budget, rootPackage = packageName?.toString()) ?: return null
     budget.logIfTruncated(className)
     return root.restoreParents()
 }
@@ -94,13 +103,18 @@ fun AccessibilityNodeInfo?.toUiNode(): UiNode? {
  * cap, so every real screen string is untouched.
  */
 private fun String.capText(): String =
-    if (length <= TreeBudget.MAX_TEXT_LENGTH) this else take(TreeBudget.MAX_TEXT_LENGTH)
+    cloud.trotter.dashbuddy.domain.pipeline.UiTextBounds.cap(this) // #1149 R2: the shared cap
 
 private fun convert(
     node: AccessibilityNodeInfo,
     depth: Int,
     budget: TreeBudget,
+    rootPackage: String?,
+    parentForeign: Boolean = false,
 ): UiNode? {
+    // #1149 review V1: a foreign boundary is INHERITED — a same-package node beneath a foreign wrapper is
+    // foreign too, exactly as fire-time discovery never descends into the wrapper to reach it.
+    val foreign = parentForeign || node.packageName?.toString() != rootPackage
     if (!budget.admit(depth)) return null
 
     val childCount = node.childCount
@@ -122,7 +136,7 @@ private fun convert(
 
         val childAccNode = node.getChild(i)
         if (childAccNode != null) {
-            convert(childAccNode, depth + 1, budget)?.let(children::add)
+            convert(childAccNode, depth + 1, budget, rootPackage, foreign)?.let(children::add)
         } else {
             nullChildren++
         }
@@ -153,6 +167,15 @@ private fun convert(
         isClickable = node.isClickable,
         isEnabled = node.isEnabled,
         isChecked = node.checked,
+        // #1149 review J2: the advertised click action (the half of the live `takesClick()`).
+        hasClickAction = node.hasClickAction(), // P6: the one live definition (NodeClick.kt)
+        // #1149 review L3: an embedded node of ANOTHER package than the window root (bind-time parity with
+        // the executor's package-scoped label scan, which never reads such a subtree).
+        foreignPackage = foreign,
+        // #1149 review L4 + N6: every advertised child that did NOT materialize — a null getChild(), a
+        // depth refusal, node-budget exhaustion or the loop cap — so a bind over such a node cannot
+        // certify its label set complete.
+        unreadableChildren = (childCount - children.size).coerceAtLeast(0),
         boundsInScreen = bounds.toBoundingBox(),
         children = children,
     )

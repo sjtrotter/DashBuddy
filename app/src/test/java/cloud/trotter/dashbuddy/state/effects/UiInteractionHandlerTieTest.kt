@@ -50,6 +50,8 @@ class UiInteractionHandlerTieTest {
         whenever(node.parent).thenReturn(null)
         whenever(node.getBoundsInScreen(any())).thenAnswer { (it.arguments[0] as Rect).set(bounds) }
         whenever(node.performAction(eq(AccessibilityNodeInfo.ACTION_CLICK))).thenReturn(clickResult)
+        whenever(node.refresh()).thenReturn(true) // #1149: the owner is refreshed before dispatch
+        whenever(node.packageName).thenReturn(pkg) // #1149: owners and label scans are package-scoped
         return node
     }
 
@@ -61,13 +63,13 @@ class UiInteractionHandlerTieTest {
     }
 
     private fun handler(root: AccessibilityNodeInfo): UiInteractionHandler {
-        val source = mock<AccessibilitySource> { on { getLiveWindowRoots() } doReturn listOf(root) }
+        val source = mock<AccessibilitySource> { on { getLiveWindowRoots() } doReturn AccessibilitySource.LiveRoots(null, listOf(root)) }
         return UiInteractionHandler(source)
     }
 
     /**
      * Multi-window handler: [roots] is the (active-first) live window list and
-     * [activeRoot] is what `getLiveNativeRoot()` returns — the #788 active-window
+     * [activeRoot] is the enumeration's `LiveRoots.active` (#1149 N3) — the #788 active-window
      * scoping compares each candidate's source root against it.
      */
     private fun handler(
@@ -75,8 +77,7 @@ class UiInteractionHandlerTieTest {
         activeRoot: AccessibilityNodeInfo?,
     ): UiInteractionHandler {
         val source = mock<AccessibilitySource> {
-            on { getLiveWindowRoots() } doReturn roots
-            on { getLiveNativeRoot() } doReturn activeRoot
+            on { getLiveWindowRoots() } doReturn AccessibilitySource.LiveRoots(activeRoot, roots)
         }
         return UiInteractionHandler(source)
     }
@@ -230,6 +231,8 @@ class UiInteractionHandlerTieTest {
         whenever(node.parent).thenReturn(null)
         whenever(node.getBoundsInScreen(any())).thenAnswer { (it.arguments[0] as Rect).set(bounds) }
         whenever(node.performAction(eq(AccessibilityNodeInfo.ACTION_CLICK))).thenReturn(true)
+        whenever(node.refresh()).thenReturn(true) // #1149: the owner is refreshed before dispatch
+        whenever(node.packageName).thenReturn(pkg) // #1149: owners and label scans are package-scoped
         return node
     }
 
@@ -254,6 +257,8 @@ class UiInteractionHandlerTieTest {
         viewIdSuffix = null, text = null, classNameHint = "android.view.View",
         boundsInScreen = BoundingBox(36, 1774, 1044, 1900), pathFingerprint = "",
         labelHintHashes = listOfNotNull(NodeRef.hintHash("This offer"), NodeRef.hintHash("Expand")),
+        labelHintsComplete = true,
+        ownerClassHint = "android.view.View", // the id-less row binds itself: bound node = owner (#1149 L2)
     )
 
     private suspend fun expand(handler: UiInteractionHandler) = handler.performVerifiedClick(
@@ -269,15 +274,19 @@ class UiInteractionHandlerTieTest {
         verify(row, times(1)).performAction(eq(AccessibilityNodeInfo.ACTION_CLICK))
     }
 
-    /** Round-3 finding 1: a clickable wrapper at the captured rect with the row inside — undecidable, abort. */
+    /**
+     * Round-3 finding 1, revisited by #1149 review I3: a clickable wrapper at the captured rect with
+     * the row inside. The wrapper no longer inherits the row's labels (they belong to the clickable
+     * row), so it is no candidate — the row, re-found by its labels, is the one clicked.
+     */
     @Test
-    fun `nested verified candidates in the active window abort with no click`() = runTest {
+    fun `a label-less clickable wrapper at the captured rect does not shadow the row inside it`() = runTest {
         val inner = payRow(top = 1784)
         val wrapper = view(clickable = true, bounds = rowRect, children = listOf(inner))
         val active = windowRoot(wrapper)
-        assertFalse(expand(handler(listOf(active), active)))
+        assertTrue(expand(handler(listOf(active), active)))
         verify(wrapper, never()).performAction(eq(AccessibilityNodeInfo.ACTION_CLICK))
-        verify(inner, never()).performAction(eq(AccessibilityNodeInfo.ACTION_CLICK))
+        verify(inner, times(1)).performAction(eq(AccessibilityNodeInfo.ACTION_CLICK))
     }
 
     /**

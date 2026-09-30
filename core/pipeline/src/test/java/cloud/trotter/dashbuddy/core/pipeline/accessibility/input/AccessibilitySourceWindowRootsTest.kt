@@ -54,7 +54,9 @@ class AccessibilitySourceWindowRootsTest {
             on { windows } doReturn windowList
         }
 
-        val roots = sourceFor(service).getLiveWindowRoots()
+        val live = sourceFor(service).getLiveWindowRoots()
+        val roots = live.roots
+        assertSame("#1149 N3: the active root comes from the SAME enumeration", activeRoot, live.active)
 
         assertEquals("the active-window twin must be deduped to one", 2, roots.size)
         assertSame("active-window root stays first (load-bearing ordering)", activeRoot, roots[0])
@@ -72,7 +74,7 @@ class AccessibilitySourceWindowRootsTest {
             on { windows } doReturn windowList
         }
 
-        val roots = sourceFor(service).getLiveWindowRoots()
+        val roots = sourceFor(service).getLiveWindowRoots().roots
 
         assertEquals("distinct roots must all survive dedup", 3, roots.size)
         assertSame(activeRoot, roots[0])
@@ -87,10 +89,41 @@ class AccessibilitySourceWindowRootsTest {
             on { windows } doReturn windowList
         }
 
-        val roots = sourceFor(service).getLiveWindowRoots()
+        val live = sourceFor(service).getLiveWindowRoots()
+        val roots = live.roots
 
         assertEquals(1, roots.size)
         assertSame(w1, roots[0])
+        assertNull("no active window → no active root", live.active)
+    }
+
+    private fun typedWindow(node: AccessibilityNodeInfo?, type: Int, id: Int, pip: Boolean = false, active: Boolean = false): AccessibilityWindowInfo =
+        mock {
+            on { root } doReturn node; on { this.type } doReturn type; on { this.id } doReturn id
+            on { isInPictureInPictureMode } doReturn pip; on { isActive } doReturn active
+        }
+
+    /**
+     * #1149 review P3/R3: an unreadable APPLICATION window is counted — not an IME/SystemUI window, not a
+     * picture-in-picture one, and never the active window itself.
+     */
+    @Test
+    fun `an enumerated window with a null root is counted as unreadable`() {
+        val w1 = mock<AccessibilityNodeInfo>()
+        val windowList = listOf(
+            window(w1),
+            typedWindow(null, AccessibilityWindowInfo.TYPE_APPLICATION, id = 7),
+            typedWindow(null, AccessibilityWindowInfo.TYPE_INPUT_METHOD, id = 8),
+            typedWindow(null, AccessibilityWindowInfo.TYPE_SYSTEM, id = 9),
+            typedWindow(null, AccessibilityWindowInfo.TYPE_APPLICATION, id = 10, pip = true),
+        )
+        val service = mock<AccessibilityService> {
+            on { rootInActiveWindow } doReturn null
+            on { windows } doReturn windowList
+        }
+        val live = sourceFor(service).getLiveWindowRoots()
+        assertEquals(1, live.roots.size)
+        assertEquals(1, live.unreadableWindows)
     }
 
     // ── #1148 D4: WindowContext on every snapshot + window-specific snapshots ──
@@ -174,5 +207,63 @@ class AccessibilitySourceWindowRootsTest {
             AccessibilitySource.Foreground.Refused(ForegroundSkipReason.FRONT_NOT_ENABLED),
             sourceFor(service).foregroundWindow { it == "com.doordash.driverapp" },
         )
+    }
+
+    /** R3: the active window's own (null-root) enumeration is never double-counted. */
+    @Test
+    fun `the active window is never counted as unreadable`() {
+        val active = mock<AccessibilityNodeInfo> { on { windowId } doReturn 5 }
+        val windowList = listOf(typedWindow(null, AccessibilityWindowInfo.TYPE_APPLICATION, id = 5, active = true))
+        val service = mock<AccessibilityService> {
+            on { rootInActiveWindow } doReturn active
+            on { windows } doReturn windowList
+        }
+        assertEquals(0, sourceFor(service).getLiveWindowRoots().unreadableWindows)
+    }
+
+    /**
+     * U1 (supersedes T4): with rootInActiveWindow NULL and the active application window's own root null,
+     * the active window is represented NOWHERE — it is counted unreadable, and there is no active root.
+     */
+    @Test
+    fun `an unreadable active application window is counted`() {
+        val windowList = listOf(typedWindow(null, AccessibilityWindowInfo.TYPE_APPLICATION, id = 5, active = true))
+        val service = mock<AccessibilityService> {
+            on { rootInActiveWindow } doReturn null
+            on { windows } doReturn windowList
+        }
+        val live = sourceFor(service).getLiveWindowRoots()
+        assertEquals(1, live.unreadableWindows)
+        assertNull(live.active)
+    }
+
+    /** U2: "active" comes from the enumeration's isActive flag; if rootInActiveWindow names ANOTHER window → no active root. */
+    @Test
+    fun `a disagreement between rootInActiveWindow and the isActive flag yields no active root`() {
+        val a = mock<AccessibilityNodeInfo> { on { windowId } doReturn 1 }
+        val b = mock<AccessibilityNodeInfo> { on { windowId } doReturn 2 }
+        val windowList = listOf(
+            typedWindow(a, AccessibilityWindowInfo.TYPE_APPLICATION, id = 1, active = false),
+            typedWindow(b, AccessibilityWindowInfo.TYPE_APPLICATION, id = 2, active = true),
+        )
+        val service = mock<AccessibilityService> {
+            on { rootInActiveWindow } doReturn a
+            on { windows } doReturn windowList
+        }
+        val live = sourceFor(service).getLiveWindowRoots()
+        assertNull("focus moved between the two reads — no active root this attempt", live.active)
+        assertEquals(2, live.roots.size)
+    }
+
+    /** U2: when they agree, the enumeration's flagged root is the active one. */
+    @Test
+    fun `the enumeration's flagged active root is the active root`() {
+        val b = mock<AccessibilityNodeInfo> { on { windowId } doReturn 2 }
+        val windowList = listOf(typedWindow(b, AccessibilityWindowInfo.TYPE_APPLICATION, id = 2, active = true))
+        val service = mock<AccessibilityService> {
+            on { rootInActiveWindow } doReturn b
+            on { windows } doReturn windowList
+        }
+        assertSame(b, sourceFor(service).getLiveWindowRoots().active)
     }
 }

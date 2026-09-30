@@ -4,8 +4,13 @@ import android.graphics.Rect
 import android.view.accessibility.AccessibilityNodeInfo
 import cloud.trotter.dashbuddy.domain.action.TargetExpectation
 import cloud.trotter.dashbuddy.domain.model.accessibility.BoundingBox
+import cloud.trotter.dashbuddy.domain.pipeline.LabelHorizon
+import cloud.trotter.dashbuddy.domain.pipeline.LabelNode
+import cloud.trotter.dashbuddy.domain.pipeline.LabelScan
 import cloud.trotter.dashbuddy.domain.pipeline.NodeRef
+import cloud.trotter.dashbuddy.domain.pipeline.UiTextBounds
 import cloud.trotter.dashbuddy.core.pipeline.accessibility.input.AccessibilitySource
+import cloud.trotter.dashbuddy.core.pipeline.accessibility.mapper.TreeLimits
 import cloud.trotter.dashbuddy.core.pipeline.accessibility.mapper.toBoundingBox
 import cloud.trotter.dashbuddy.util.AccNodeUtils
 import kotlinx.coroutines.delay
@@ -31,7 +36,7 @@ import javax.inject.Singleton
  *    node sharing the same view id can survive underneath it in a *lower*
  *    window (the offer popup's bare "Decline" behind the confirm sheet's
  *    "Decline offer"). Each candidate's source root is compared (`==`) against
- *    [AccessibilitySource.getLiveNativeRoot]; when any label-verified candidate
+ *    [AccessibilitySource.LiveRoots.active] (one enumeration, #1149 N3); when any label-verified candidate
  *    is in the active window we drop the other-window candidates before
  *    disambiguation — the
  *    implicit "click the first (active-window) candidate" that worked in the
@@ -47,9 +52,24 @@ import javax.inject.Singleton
  *    **aborted to manual** (#734) — clicking the first-in-tree candidate is
  *    luck, not verification. The abort is reserved for genuine SAME-window
  *    ambiguity: two distinct verified candidates within the active window.
- * 5. **Strict click** — self-or-ancestor only. The old clickable-*sibling*
+ * 5. **Strict click** — the verified OWNER only (#1149). The old clickable-*sibling*
  *    fallback is deliberately absent here: the verified node's sibling can be
  *    the opposite button (Accept sits beside Decline in the offer footer).
+ *
+ * **Owner first (#1149).** Every candidate is mapped to its action owner
+ * ([AccNodeUtils.resolveActionOwner]: `isClickable` OR an advertised `ACTION_CLICK`,
+ * a bounded, cycle-safe self → parent walk) BEFORE any check above: owner-less
+ * candidates are dropped, candidates sharing an owner are one control (not a #734
+ * tie), labels are verified on the owner's subtree — which stops at every clickable
+ * descendant, whose labels are its own (review I3) — and the owner is
+ * `refresh()`ed BEFORE it is verified (review I1), then clicked with no further refresh — a
+ * stale node is dropped, and nothing un-verified reaches dispatch. A hinted,
+ * id-less bind is re-found by its EXACT subtree-label fingerprint (strategy 2b) BEFORE
+ * the bounds walk: labels are identity, geometry is ranking evidence. Strategy 2b
+ * honours the four constraints the withdrawn #1102 re-find left on record: exact
+ * fingerprint (no superset), a depth/fetch-budget cut aborts the whole resolution,
+ * every child fetch is budgeted before the call (nulls count), and label collection
+ * never reads another package's embedded subtree (discovery and verification).
  *
  * Any check failing skips the tap and logs — the user acts manually instead.
  * The one exception is a transient **no-live-windows** read (#602): a
@@ -66,11 +86,9 @@ class UiInteractionHandler @Inject constructor(
         /** #1093 — a clickable same-class node overlapping the ref this much is a bounds-walk candidate. */
         internal const val RELAXED_BOUNDS_IOU = 0.5
 
-        /** Max subtree depth scanned when collecting a candidate's labels. */
-        private const val LABEL_SCAN_DEPTH = 3
-
-        /** Max nodes visited per label scan — bounded ingestion of third-party UI. */
-        private const val LABEL_SCAN_NODES = 24
+        // #1149 review J5: the strategy-2b walk's depth / fetch bounds are the MAPPER's own tree
+        // budget (TreeLimits — one owner): "incomplete" means a tree the mapper itself would have
+        // truncated, never an arbitrary lower cut.
     }
 
     /**
@@ -107,62 +125,183 @@ class UiInteractionHandler @Inject constructor(
         // recognition milliseconds earlier — an empty enumeration there means the
         // window genuinely left; retrying could resolve against whatever screen
         // returns (#618 review F2). Single fail-closed read for AUTOMATION.
+        // #1149 review N3: the roots AND the active root come from ONE enumeration; each read records
+        // the active root of the very enumeration its roots came from.
+        var activeRoot: AccessibilityNodeInfo? = null
+        var unreadableWindows = 0
         val rootsSource = {
-            accessibilitySource.getLiveWindowRoots()
-                .filter { it.packageName?.toString() == expectedPackage }
+            val live = accessibilitySource.getLiveWindowRoots()
+            activeRoot = live.active
+            unreadableWindows = live.unreadableWindows
+            live.roots.filter { it.packageName?.toString() == expectedPackage }
         }
         val roots = if (allowRetry) awaitLiveRoots(expectedPackage, source = rootsSource) else rootsSource()
         if (roots.isEmpty()) {
-            Timber.tag("Effects").w(
-                "No live windows for package %s after %d retries over %dms — cannot click (%s)",
-                expectedPackage, RETRY_DELAYS_MS.size, RETRY_DELAYS_MS.sum(), description,
-            )
+            // R10: AUTOMATION makes ONE read — only a user tap retried (#602).
+            if (allowRetry) {
+                Timber.tag("Effects").w(
+                    "No live windows for package %s after %d retries over %dms — cannot click (%s)",
+                    expectedPackage, RETRY_DELAYS_MS.size, RETRY_DELAYS_MS.sum(), description,
+                )
+            } else {
+                Timber.tag("Effects").w("No live windows for package %s (single read) — cannot click (%s)", expectedPackage, description)
+            }
             return false
         }
 
-        // #788: the active (topmost) window's root, used to scope candidates below.
-        // `getLiveNativeRoot()` returns `rootInActiveWindow` — the same node
-        // `getLiveWindowRoots()` puts first — so a root in `roots` that `==` this
-        // (AccessibilityNodeInfo.equals = windowId+sourceNodeId) IS the active
-        // window. When the active window belongs to another package (e.g. the
-        // dasher's bubble holds focus), this is non-null but owned by that other
-        // package — it was package-filtered out of `roots`, so it matches nothing
-        // and scoping no-ops (we fall through to all windows, as before).
-        val activeRoot = accessibilitySource.getLiveNativeRoot()
-        val candidates = findCandidates(roots, activeRoot, ref)
+        // #788: the active (topmost) window's root, used to scope candidates below — from the SAME
+        // enumeration as `roots` (N3), so a root in `roots` that `==` it (AccessibilityNodeInfo.equals
+        // = windowId+sourceNodeId) IS the active window. When the active window belongs to another
+        // package (e.g. the dasher's bubble holds focus), it was package-filtered out of `roots`, so it
+        // matches nothing and scoping no-ops (we fall through to all windows, as before).
+        val search = findCandidates(roots, activeRoot, ref, expectedPackage, unreadableWindows)
+        if (search.oversizedQuery > 0) {
+            Timber.tag("Effects").w(
+                "An id/text query for %s returned %d matches (cap %d) — refusing to click (fail closed, #1149)",
+                description, search.oversizedQuery, NodeRef.MAX_QUERY_CANDIDATES,
+            )
+            return false
+        }
+        if (search.activeBoundsCut) {
+            Timber.tag("Effects").w(
+                "Bounds walk of the active window for %s was cut by the tree budget — aborting to manual (#1149)", description,
+            )
+            return false
+        }
+        if (search.inconclusiveHits > 0) {
+            // #1149 review L1 (decideSemanticOutcome): 2b found hit(s) but a window of the deciding set
+            // could not be read completely — a hidden twin is possible, and the bounds walk must not
+            // guess past it (#1102 review constraint 2).
+            warnInconclusive(description, search.inconclusiveHits)
+            return false
+        }
+        val candidates = search.candidates
         if (candidates.isEmpty()) {
+            // Principle 7: `ref.text` is third-party UI text — DEBUG only, never the exportable WARN slice.
             Timber.tag("Effects").w(
-                "Could not find any live node for: %s (id=%s, text=%s, bounds=%s)",
-                description, ref.viewIdSuffix, ref.text, ref.boundsInScreen,
+                "Could not find any live node for: %s (id=%s, bounds=%s, hints=%d)",
+                description, ref.viewIdSuffix, ref.boundsInScreen, ref.labelHintHashes.size,
             )
+            Timber.tag("Effects").d("Unfound ref text for %s: %s", description, ref.text)
             return false
         }
 
-        // Label-verify once and keep each surviving node's labels alongside it —
-        // the ranker below wants them too (for WARN diagnostics), so this avoids
-        // walking each candidate's subtree twice (collectLabels is bounded but
-        // not free).
+        // #1149: resolve each candidate's ACTION OWNER first — the node a tap actually lands on —
+        // and dedupe candidates that lead to the same owner (a button's title TextView and the
+        // button are ONE control, not a #734 tie). Everything below verifies, scopes, ranks and
+        // clicks OWNERS; verification never runs on one node and the click on another.
+        val owned = resolveOwners(candidates, ref, expectedPackage)
+        if (owned.orphaned > 0) {
+            Timber.tag("Effects").w(
+                "%d of %d candidate(s) for %s have no clickable, fresh owner in the package within %d steps (%d stale) — dropped (#1149)",
+                owned.orphaned, candidates.size, description, AccNodeUtils.MAX_OWNER_WALK, owned.stale,
+            )
+        }
+        if (owned.staleSemantic > 0) {
+            warnInconclusive(description, candidates.count { it.semantic })
+            return false
+        }
+        if (owned.stale > 0 && owned.targets.size + owned.stale >= 2) {
+            // #1149 review R6: a stale owner among several targets is not "absent" — dropping it would
+            // also un-scope #788 and hand the tap to another window's twin. Abort.
+            Timber.tag("Effects").w(
+                "%d stale owner(s) among %d target(s) for %s — aborting to manual (#1149)",
+                owned.stale, owned.targets.size + owned.stale, description,
+            )
+            return false
+        }
+        if (owned.targets.isEmpty()) return false
+
+        // Label-verify once, on the OWNER's bounded subtree, and keep each surviving owner's labels
+        // alongside it — the ranker below wants them too (for WARN diagnostics). For a 2b hit this
+        // scan is a DELIBERATE second read (review J9): discovery read the pre-refresh tree, and
+        // verification must run on the REFRESHED owner (I1) — it is not a redundant fetch.
         var geometryRejected = 0
-        val labeledCandidates = candidates.mapNotNull { candidate ->
-            val labels = collectLabels(candidate.node)
+        var staleEvidence = 0
+        var semanticUnprovable = 0
+        val labeledCandidates = owned.targets.mapNotNull { target ->
+            // #1149 review J1: evidence labels must be as fresh and as scoped as the owner's. When the
+            // matched node is not the owner, it is refreshed FIRST (a title rebinding Decline → Accept
+            // between the id query and now is read as Accept), must belong to the scoped package, and
+            // must still resolve to THIS owner (bounded walk, `==`) — else the target is dropped as
+            // stale. Refreshing before the owner scan also means that scan reads the new text.
+            val separateEvidence = target.evidence != target.owner
+            if (separateEvidence && (
+                    !target.evidenceFresh || // T5 refreshed it while choosing it — once, not twice
+                        target.evidence.packageName?.toString() != expectedPackage ||
+                        AccNodeUtils.resolveActionOwner(target.evidence, expectedPackage) != target.owner
+                    )
+            ) { staleEvidence++; return@mapNotNull null }
+            // #1149 review U3: a bounds-derived target's geometric credit was earned BEFORE the owner's
+            // refresh. Re-check it on the refreshed owner — same class, and the captured rect exactly
+            // (hint-less / exact hit) or the same IoU tier (relaxed hit); a refresh that rebound the node
+            // to another control drops it as stale (the R6/S1 multi-target abort then applies).
+            if (target.boundsDerived && !stillAtCapturedGeometry(target, ref)) { staleEvidence++; return@mapNotNull null }
+            val scan = scanLabels(target.owner, expectedPackage)
+            // #1149 review I8: the MATCHED node's own (refreshed, in-package — J1) text/contentDescription
+            // always count — the owner may sit more than NodeRef.LABEL_SCAN_DEPTH levels (or NodeRef.LABEL_SCAN_NODES
+            // fetches) above it, and a viewId/text match that verified pre-#1149 must not fail for that.
+            // Consistent with I3: the evidence node is inside the owner and not itself clickable (else it
+            // would BE the owner). Only the lenient expectation/ranking set grows; the semantic
+            // fingerprint below reads the owner scan alone (for a 2b hit, evidence IS the owner).
+            // S3/T6/Y1: the matched node contributes its bounded SUBTREE through the ONE horizon rule
+            // (LabelHorizon — same depth/slot horizon, package and nested-clickable boundaries, capped): a
+            // bound container whose "Accept" sits on its own child, deeper than the owner scan reaches, still
+            // verifies. Expectation verification only — the semantic fingerprint stays OWNER-scoped.
+            // Z1: the union over EVERY fresh member (each bounded by the shared horizon; a group is a handful
+            // of nodes), so evidence selection affects only the ranker's text/bounds facts, never verification.
+            val evidenceLabels = target.freshMembers.flatMap { scanLabels(it, expectedPackage).labels }.distinct()
+            val labels = scan.labels + evidenceLabels.filterNot { it in scan.labels }
             // #1093: a bounds-derived candidate — exact rect or overlap — needs the bind's own
             // subtree labels among its live ones; that, not geometry, separates the slid receipt
             // row from whatever control now sits where the row was captured. A hint-less ref
-            // (pre-#1093 snapshot) keeps the legacy exact-only behaviour.
-            if (candidate.boundsDerived) {
-                val identified = if (ref.labelHintHashes.isEmpty()) !candidate.relaxed else ref.agreesWithLabels(labels)
-                if (!identified) { geometryRejected++; return@mapNotNull null }
+            // (pre-#1093 snapshot) keeps the legacy exact-only behaviour. #1149: a semantic (2b)
+            // candidate was FOUND by its exact label fingerprint; re-checked here on the owner.
+            if (target.boundsDerived || target.semantic) {
+                val identified = when {
+                    target.semantic -> scan.complete && ref.fingerprintMatches(scan.labels)
+                    ref.labelHintHashes.isEmpty() -> !target.relaxed
+                    else -> ref.agreesWithLabels(labels)
+                }
+                if (!identified) {
+                    // #1149 review J6: a 2b hit whose post-refresh scan is incomplete or no longer the
+                    // fingerprint is UNPROVABLE, not merely absent — dropping it would hand its twin
+                    // the tap as the sole survivor. Counted here; the whole tap aborts below.
+                    if (target.semantic) semanticUnprovable++ else geometryRejected++
+                    return@mapNotNull null
+                }
             }
             if (!expectation.matchesLabels(labels)) return@mapNotNull null
-            candidate to labels
+            target to labels
+        }
+        if (semanticUnprovable > 0) {
+            // J6 under L1: an unprovable 2b hit in the deciding set is |H| >= 1 ∧ I.
+            warnInconclusive(description, owned.targets.count { it.semantic })
+            return false
+        }
+        if (staleEvidence > 0 && owned.targets.size >= 2) {
+            // #1149 review R6: the id/text arms too — the active sheet's stale title must not hand the
+            // tap to the lower window's twin (#788). A lone stale target simply isn't clicked (below).
+            Timber.tag("Effects").w(
+                "%d stale matched node(s) among %d target(s) for %s — aborting to manual (#1149)",
+                staleEvidence, owned.targets.size, description,
+            )
+            return false
+        }
+        if (staleEvidence > 0) {
+            Timber.tag("Effects").w(
+                "%d candidate(s) for %s dropped: the matched node went stale, left the package or no longer resolves to its owner (#1149)",
+                staleEvidence, description,
+            )
         }
         if (labeledCandidates.isEmpty()) {
             Timber.tag("Effects").w(
                 "%d candidate(s) for %s but NONE passed verification (label %s; %d bounds-derived candidate(s) did not carry the bind's labels) — refusing to click",
-                candidates.size, description, expectation.labelPattern, geometryRejected,
+                owned.targets.size, description, expectation.labelPattern, geometryRejected,
             )
             return false
         }
+
         // #788: scope to the active window. A verified twin in a lower window (the
         // offer popup's "Decline" behind the confirm sheet) would otherwise tie
         // with the real target and abort the tap. If the active window contributed
@@ -171,6 +310,16 @@ class UiInteractionHandler @Inject constructor(
         // window) keep them all. Genuine SAME-window ambiguity still fails closed
         // below.
         val activeWindowCandidates = labeledCandidates.filter { it.first.inActiveWindow }
+        if (activeWindowCandidates.isEmpty() && search.cutBoundsWindows > 0) {
+            // #1149 review T1 — S2 extended: with no verified active-window candidate the deciding set is
+            // every scoped window (#788 keep-all, e.g. our bubble is active), so ANY cut window could hold
+            // the intended control past its cut while another window's twin sits at the captured rect.
+            Timber.tag("Effects").w(
+                "%d bounds walk(s) for %s cut by the tree budget while every window decides — aborting to manual (#1149)",
+                search.cutBoundsWindows, description,
+            )
+            return false
+        }
         val scopedCandidates = if (activeWindowCandidates.isNotEmpty()) {
             val dropped = labeledCandidates.size - activeWindowCandidates.size
             if (dropped > 0) {
@@ -184,20 +333,34 @@ class UiInteractionHandler @Inject constructor(
             labeledCandidates
         }
 
-        // #1093 (review rounds 3–4): a VERIFIED bounds-derived candidate nested inside another
+        // #1093 (review rounds 3–4): a VERIFIED walk-derived candidate nested inside another
         // VERIFIED one — a clickable wrapper at the captured rect with the row inside it — is
         // undecidable: the wrapper inherits the row's labels, and whichever overlaps more is not
         // evidence of which one is the control. Abort to manual rather than guess. An UNVERIFIED
         // descendant says nothing about its parent (a stray clickable child that carries only
         // one of the labels must not evict the row it sits in). Checked AFTER the #788 window
         // scoping, among the RETAINED candidates only: a nested pair in a background window must
-        // not abort an unambiguous tap in the active one (round 4).
-        val retainedIndices = scopedCandidates.map { candidates.indexOf(it.first) }.toHashSet()
-        val nested = scopedCandidates.firstOrNull { (c, _) -> c.ancestors.any { it in retainedIndices } }
+        // not abort an unambiguous tap in the active one (round 4). #1149: the same rule covers
+        // the semantic (2b) walk, whose hits record their nesting the same way.
+        val retainedIndices = scopedCandidates.map { it.first.index }.toHashSet()
+        val nested = scopedCandidates.firstOrNull { (t, _) -> t.ancestors.any { it in retainedIndices } }
         if (nested != null) {
             Timber.tag("Effects").w(
-                "Nested verified candidates for %s (a bounds-derived control inside another that also carries the bind's labels) — aborting to manual (#1093)",
+                "Nested verified candidates for %s (a control inside another that also carries the bind's labels) — aborting to manual (#1093)",
                 description,
+            )
+            return false
+        }
+
+        // #1149 review I5 (R8): semantic TWINS abort, unconditionally. Two or more 2b survivors left after
+        // owner dedupe and #788 scoping carry the same exact fingerprint; the ranker's overlap tier would
+        // pick between them by the captured rect — the very evidence 2b exists to distrust — and no
+        // stored-text tie-break exists (the round-5 one was removed: the bound text is part of what makes
+        // them twins). Survivors from different background windows abort the same way.
+        if (scopedCandidates.size > 1 && scopedCandidates.any { it.first.semantic }) {
+            Timber.tag("Effects").w(
+                "%d semantic twins for %s share the bind's fingerprint — aborting to manual (#1149)",
+                scopedCandidates.size, description,
             )
             return false
         }
@@ -205,13 +368,14 @@ class UiInteractionHandler @Inject constructor(
         // Disambiguate (#600): rank the label-verified survivors by evidence —
         // exact stored text, then max bounds overlap — instead of exact-bounds
         // `==`, which dies to the temporal drift of an animating sheet (see
-        // ClickCandidateRanker's KDoc for the full grounding).
-        val verified = scopedCandidates.map { it.first.node }
-        val facts = scopedCandidates.map { (candidate, labels) ->
+        // ClickCandidateRanker's KDoc for the full grounding). The text/bounds are
+        // the MATCHED node's (#1149 `evidence`); the labels are the owner's.
+        val verified = scopedCandidates.map { it.first }
+        val facts = scopedCandidates.map { (target, labels) ->
             val liveBounds = Rect()
-            candidate.node.getBoundsInScreen(liveBounds)
+            target.evidence.getBoundsInScreen(liveBounds)
             ClickCandidateRanker.CandidateFacts(
-                text = candidate.node.text?.toString(),
+                text = target.evidence.text?.toString(),
                 labels = labels,
                 bounds = liveBounds.toBoundingBox(),
             )
@@ -242,28 +406,138 @@ class UiInteractionHandler @Inject constructor(
                 description, ranked.tier, verified.size,
             )
         }
-        return AccNodeUtils.clickNodeStrict(target)
+        return AccNodeUtils.clickNodeStrict(target.owner, expectedPackage)
     }
 
     /**
-     * A live candidate node plus whether it came from the active (topmost)
-     * window's root — the flag the active-window scoping in [performVerifiedClick]
-     * (#788) reads.
-     */
-    /**
+     * A live candidate node plus whether it came from the active (topmost) window's root — the
+     * flag the active-window scoping in [performVerifiedClick] (#788) reads.
+     *
      * [boundsDerived]: found by the bounds walk (strategy 3), exact rect or not — geometry is not
      * identity, so such a candidate must carry EVERY one of the ref's [NodeRef.labelHintHashes]
      * among its live labels to survive verification (#1093). [relaxed]: the overlap-only flavour
      * of that walk; a ref with NO hints (a pre-#1093 snapshot) admits an exact match only.
+     * [semantic]: found by strategy 2b (#1149) — by those label hints, with no geometric entrance
+     * test.
      */
-    private data class Candidate(
+    internal data class Candidate(
         val node: AccessibilityNodeInfo,
         val inActiveWindow: Boolean,
         val boundsDerived: Boolean = false,
         val relaxed: Boolean = false,
-        /** Indices (into the candidate list) of bounds-derived candidates this one sits INSIDE. */
+        val semantic: Boolean = false,
+        /** Indices (into the candidate list) of walk-derived candidates this one sits INSIDE. */
         val ancestors: List<Int> = emptyList(),
     )
+
+    /**
+     * #1149 — one candidate per distinct action OWNER. [owner] is what is verified and clicked;
+     * [evidence] is the matched node whose own text/bounds feed [ClickCandidateRanker] (a
+     * button's title TextView carries the exact stored text, the button does not). Provenance
+     * is the strongest of the merged candidates: exact beats relaxed. [ancestors] are indices
+     * (into the OWNER list, [index] being this one's) of owners this one is nested inside.
+     */
+    private data class OwnedTarget(
+        val index: Int,
+        val owner: AccessibilityNodeInfo,
+        val evidence: AccessibilityNodeInfo,
+        val inActiveWindow: Boolean,
+        val boundsDerived: Boolean,
+        val relaxed: Boolean,
+        val semantic: Boolean,
+        val ancestors: Set<Int>,
+        /** T5: [evidence] (when it is not the owner) was refreshed successfully while choosing it. */
+        val evidenceFresh: Boolean = true,
+        /** Z1: every FRESH matched member of this owner's group other than the owner itself. */
+        val freshMembers: List<AccessibilityNodeInfo> = emptyList(),
+    )
+
+    private class OwnerResolution(val targets: List<OwnedTarget>, val orphaned: Int, val stale: Int, val staleSemantic: Int)
+
+    /**
+     * #1149 — map each candidate to its action owner ([AccNodeUtils.resolveActionOwner]), DROP
+     * the owner-less and the foreign-package owners (nothing a scoped tap could land on), and DEDUPE candidates whose owners are `==`
+     * (keeping the first, with the strongest provenance). Candidate nesting is re-expressed
+     * between owners, so the #1093 nested-abort still sees a wrapper around a row.
+     */
+    private fun resolveOwners(candidates: List<Candidate>, ref: NodeRef, expectedPackage: String): OwnerResolution {
+        val owners = ArrayList<AccessibilityNodeInfo>()
+        val members = ArrayList<MutableList<Int>>()
+        val ownerIndexOf = arrayOfNulls<Int>(candidates.size)
+        var orphaned = 0
+        var stale = 0
+        var staleSemantic = 0
+        val staleOwners = ArrayList<AccessibilityNodeInfo>()
+        candidates.forEachIndexed { i, c ->
+            // The owner is what gets tapped, so it must itself belong to the scoped package — an
+            // embedded foreign-package subtree never lends a tap target (#1149).
+            val owner = AccNodeUtils.resolveActionOwner(c.node, expectedPackage)
+            if (owner == null) {
+                // #1149 review S1: a node FOUND by id/text whose owner walk failed because the node itself
+                // is gone (its refresh fails too — the parent chain came back null mid-walk) is STALE,
+                // not an orphan: with other targets present the tap aborts (R6) instead of handing it to
+                // a lower window's twin.
+                if (!c.semantic && !c.boundsDerived && !c.node.refresh()) stale++
+                orphaned++
+                return@forEachIndexed
+            }
+            if (staleOwners.any { it == owner }) { orphaned++; return@forEachIndexed }
+            val j = owners.indexOfFirst { it == owner }
+            if (j >= 0) {
+                members[j].add(i); ownerIndexOf[i] = j
+            } else {
+                // #1149 review I1: refresh each distinct owner ONCE, up front, so every scan and
+                // verification below reads its CURRENT state — a recycled row that rebinds
+                // (Decline → Accept) is verified as what it now is. A failed refresh means the view
+                // is gone: the owner is dropped with the orphans. The click follows verification
+                // with no second refresh, so nothing un-verified can reach dispatch.
+                if (!owner.refresh()) {
+                    staleOwners.add(owner); orphaned++; stale++
+                    // #1149 review L5: a 2b hit that cannot be refreshed is UNPROVABLE, not absent —
+                    // dropping it would hand its twin the tap. Every semantic candidate here is from the
+                    // deciding set (decideSemanticOutcome), so the caller aborts.
+                    if (c.semantic) staleSemantic++
+                    return@forEachIndexed
+                }
+                owners.add(owner); members.add(mutableListOf(i)); ownerIndexOf[i] = owners.size - 1
+            }
+        }
+        val targets = owners.mapIndexed { j, owner ->
+            val group = members[j].map { candidates[it] }
+            // #1149 review T5: the evidence slot is chosen AFTER a refresh — a stale matched node must not
+            // win it (on its cached stored text) over a sibling that currently carries that text. If none
+            // refreshes, the first member stands in and fails its own J1 refresh (stale).
+            val fresh = group.filter { it.node == owner || it.node.refresh() }
+            // #1149 review W1: the owner's evidence is its STRONGEST fresh member under the SAME ranking the
+            // cross-owner ranker applies (exact stored text, then max overlap with the captured rect), so
+            // owners compete strongest-vs-strongest — never "whichever member came first in tree order".
+            val evidence = if (fresh.isEmpty()) group.first() else {
+                val facts = fresh.map { m ->
+                    val r = Rect()
+                    m.node.getBoundsInScreen(r)
+                    ClickCandidateRanker.CandidateFacts(text = m.node.text?.toString(), labels = emptyList(), bounds = r.toBoundingBox())
+                }
+                // X1: an intra-owner tie keeps a TIED-STRONGEST member (all interchangeable — same owner),
+                // never the first member overall, which may be the weakest.
+                val top = ClickCandidateRanker.strongest(ref, facts).map { fresh[it] }
+                top.firstOrNull { it.boundsDerived && !it.relaxed } ?: top.first()
+            }
+            OwnedTarget(
+                index = j,
+                owner = owner,
+                evidence = evidence.node,
+                inActiveWindow = group.first().inActiveWindow,
+                boundsDerived = group.any { it.boundsDerived },
+                relaxed = group.all { it.relaxed },
+                semantic = group.any { it.semantic },
+                ancestors = members[j].flatMap { candidates[it].ancestors }
+                    .mapNotNull { ownerIndexOf[it] }.filter { it != j }.toSet(),
+                evidenceFresh = evidence in fresh,
+                freshMembers = fresh.map { it.node }.filter { it != owner },
+            )
+        }
+        return OwnerResolution(targets, orphaned, stale, staleSemantic)
+    }
 
     /**
      * Search the scoped roots, strongest strategy first (so a weak bounds
@@ -274,35 +548,118 @@ class UiInteractionHandler @Inject constructor(
      * so candidates from every scoped root are collected; the caller's
      * active-window scoping (#788) prefers the active window's, if any.
      */
+    /** [inconclusiveHits] > 0: 2b found that many hits in a deciding set that was incomplete — abort (#1149 L1). */
+    private class CandidateSearch(
+        val candidates: List<Candidate>,
+        val inconclusiveHits: Int = 0,
+        val activeBoundsCut: Boolean = false,
+        /** T1: non-active windows whose strategy-3 walk was cut by the tree budget. */
+        val cutBoundsWindows: Int = 0,
+        /** AA1: an id/text query returned this many matches (> MAX_QUERY_CANDIDATES) — refuse. */
+        val oversizedQuery: Int = 0,
+    )
+
+    private fun stillAtCapturedGeometry(target: OwnedTarget, ref: NodeRef): Boolean {
+        val owner = target.owner
+        if (ref.classNameHint != null && liveClassName(owner) != ref.classNameHint) return false // V2
+        val liveRect = Rect()
+        owner.getBoundsInScreen(liveRect)
+        val live = liveRect.toBoundingBox()
+        val exact = live == ref.boundsInScreen
+        return when {
+            ref.labelHintHashes.isEmpty() || !target.relaxed -> exact
+            else -> exact || ClickCandidateRanker.boundsIoU(live, ref.boundsInScreen) >= RELAXED_BOUNDS_IOU
+        }
+    }
+
+    private fun warnInconclusive(description: String, hits: Int) {
+        Timber.tag("Effects").w(
+            "Semantic re-find for %s inconclusive (%d hit(s), incomplete) — aborting to manual (#1149)",
+            description, hits,
+        )
+    }
+
     private fun findCandidates(
         roots: List<AccessibilityNodeInfo>,
         activeRoot: AccessibilityNodeInfo?,
         ref: NodeRef,
-    ): List<Candidate> {
+        expectedPackage: String,
+        unreadableWindows: Int = 0,
+    ): CandidateSearch {
         val candidates = mutableListOf<Candidate>()
         fun addFrom(root: AccessibilityNodeInfo, nodes: List<AccessibilityNodeInfo>) {
             val inActive = activeRoot != null && root == activeRoot
             for (node in nodes) candidates.add(Candidate(node, inActive))
         }
-        // Strategy 1: find by view ID
+        // Strategy 1: find by view ID. #1149 review AA1: an over-sized result REFUSES the tap (no truncation).
         val targetId = ref.viewIdSuffix
         if (!targetId.isNullOrEmpty()) {
-            for (root in roots) addFrom(root, root.findAccessibilityNodeInfosByViewId(targetId))
+            for (root in roots) {
+                val found = root.findAccessibilityNodeInfosByViewId(targetId)
+                if (found.size > NodeRef.MAX_QUERY_CANDIDATES) return CandidateSearch(emptyList(), oversizedQuery = found.size)
+                addFrom(root, found)
+            }
         }
-        // Strategy 2: find by text
+        // Strategy 2: find by text (same AA1 bound)
         val targetText = ref.text
         if (candidates.isEmpty() && !targetText.isNullOrEmpty()) {
-            for (root in roots) addFrom(root, root.findAccessibilityNodeInfosByText(targetText))
+            for (root in roots) {
+                val found = root.findAccessibilityNodeInfosByText(targetText)
+                if (found.size > NodeRef.MAX_QUERY_CANDIDATES) return CandidateSearch(emptyList(), oversizedQuery = found.size)
+                addFrom(root, found)
+            }
+        }
+        // Strategy 2b (#1149): labels are identity, geometry is evidence. A hinted bind is
+        // re-found by its EXACT subtree-label fingerprint on the CURRENT screen BEFORE the bounds
+        // walk, so a sheet that slid after the bind was captured (#1102) no longer lets frozen
+        // bounds decide which node resolves. Bounds stay ranking evidence (ClickCandidateRanker's
+        // overlap tier). A walk cut by its depth/fetch bound aborts the whole resolution.
+        // #1149 review J3: only a ref with a PROVABLE exact fingerprint enters 2b (NodeRef.hasExactFingerprint);
+        // an unprovable one goes straight to strategy 3's containment check, the pre-#1149 shape.
+        if (candidates.isEmpty() && ref.hasExactFingerprint) {
+            // N2: walk the active platform root FIRST; the other roots only when it produced no hit (N1's
+            // fallback to every window). Under our bubble (active root not in `roots`) walk them all.
+            val activeIdx = if (activeRoot == null) -1 else roots.indexOfFirst { it == activeRoot }
+            val activeWindow = if (activeIdx < 0) null else
+                SemanticWindow(findNodeBySemantics(roots[activeIdx], ref, expectedPackage), inActive = true)
+            val deciding = if (activeWindow != null && activeWindow.result.hits.isNotEmpty()) {
+                listOf(activeWindow)
+            } else {
+                listOfNotNull(activeWindow) + roots.filterIndexed { i, _ -> i != activeIdx }
+                    .map { SemanticWindow(findNodeBySemantics(it, ref, expectedPackage), inActive = false) } +
+                    // P3: an enumerated window whose root was unreadable could hold a twin — when the
+                    // deciding set is every window, it counts as one more INCOMPLETE window.
+                    List(if (unreadableWindows > 0) 1 else 0) { SemanticWindow(SemanticSearch(emptyList(), incomplete = true), inActive = false) }
+            }
+            when (val outcome = decideSemanticOutcome(deciding)) {
+                is SemanticOutcome.Use -> candidates.addAll(outcome.candidates)
+                is SemanticOutcome.Inconclusive -> return CandidateSearch(emptyList(), inconclusiveHits = outcome.hits)
+                is SemanticOutcome.FallThrough -> Timber.tag("Effects").d(
+                    "Semantic re-find found nothing (%d incomplete window(s) in the deciding set) — strategy 3",
+                    outcome.incompleteWindows,
+                )
+            }
         }
         // Strategy 3: walk each tree matching by bounds + className. A zero-area ref rect (a
         // row captured mid-inflation at zero height) carries no bounds evidence at all, so the
         // walk is skipped and the tap fails closed to manual (#1093).
         val b = ref.boundsInScreen
         val degenerate = b.right <= b.left || b.bottom <= b.top
+        var cutBoundsWindows = 0
         if (candidates.isEmpty() && !degenerate) {
+            // #1149 review T3: an unreadable application window is a cut window for strategy 3 — under
+            // keep-all scoping it could hold the intended control while a twin sits at the rect elsewhere.
+            cutBoundsWindows += unreadableWindows
             for (root in roots) {
-                val found = mutableListOf<BoundsHit>()
-                findNodeByBounds(root, ref.boundsInScreen, ref.classNameHint, found, ArrayList())
+                val found = mutableListOf<WalkHit>()
+                if (!findNodeByBounds(root, ref.boundsInScreen, ref.classNameHint, found)) {
+                    // S2 — the mirror of L1 for strategy 3: when the ACTIVE platform window's walk was cut,
+                    // a background window's control must not become the sole survivor. Abort.
+                    if (activeRoot != null && root == activeRoot) return CandidateSearch(emptyList(), activeBoundsCut = true)
+                    Timber.tag("Effects").d("Bounds walk cut by the tree budget — no candidates from this window (#1149 R5)")
+                    cutBoundsWindows++
+                    continue
+                }
                 val inActive = activeRoot != null && root == activeRoot
                 val base = candidates.size
                 for (hit in found) candidates.add(
@@ -310,78 +667,21 @@ class UiInteractionHandler @Inject constructor(
                 )
             }
         }
-        return candidates
+        return CandidateSearch(candidates, cutBoundsWindows = cutBoundsWindows)
     }
 
     /**
-     * Collect the candidate's own text/contentDescription plus its bounded
-     * subtree's — platform buttons typically carry their label on a child
-     * TextView (e.g. DoorDash's `textView_prism_button_title`).
+     * #1149 review N8 — the POST-REFRESH verification scan: the one [LabelHorizon] rule over the live
+     * owner. Every child fetch is a binder IPC, so [LiveLabelNode] fetches on `get(i)` and the horizon
+     * budgets each slot BEFORE touching it (a null child still spends one); another package's child is
+     * never read (#1102 review constraints 3 and 4). For a 2b hit this is a DELIBERATE second read
+     * (review J9): discovery read the pre-refresh tree, verification must read the refreshed owner (I1).
+     * Verification of a label EXPECTATION does not need [LabelScan.complete] (I4c): a found label
+     * suffices, and since I3 a collected label can never come from a nested control.
      */
-    private fun collectLabels(node: AccessibilityNodeInfo): List<String> {
-        val labels = mutableListOf<String>()
-        var visited = 0
-        fun visit(n: AccessibilityNodeInfo, depth: Int) {
-            if (depth > LABEL_SCAN_DEPTH || visited >= LABEL_SCAN_NODES) return
-            visited++
-            n.text?.toString()?.takeIf { it.isNotBlank() }?.let { labels.add(it) }
-            n.contentDescription?.toString()?.takeIf { it.isNotBlank() }?.let { labels.add(it) }
-            for (i in 0 until n.childCount) {
-                val child = n.getChild(i) ?: continue
-                visit(child, depth + 1)
-            }
-        }
-        visit(node, 0)
-        return labels
-    }
+    private fun scanLabels(node: AccessibilityNodeInfo, expectedPackage: String): LabelScan =
+        LabelHorizon.scan(LiveLabelNode(node, expectedPackage))
 
-    /**
-     * Walk the accessibility tree looking for a node at the given bounds,
-     * optionally matching className. Used when the node has no ID or text.
-     */
-    /** A bounds-walk hit: [ancestors] are the indices (into the SAME `out` list) of hits this one is inside. */
-    private data class BoundsHit(val node: AccessibilityNodeInfo, val relaxed: Boolean, val ancestors: List<Int>)
-
-    /**
-     * Strategy 3 (#1093 shape — review rounds 2 and 3). Every hit is bounds-derived and must still
-     * carry the bind's label hints; the walk itself decides NOTHING about identity:
-     *  - an EXACT class+rect match that is CLICKABLE is a hit, and the walk STILL descends — a
-     *    clickable wrapper at the captured rect with the real row inside it must expose both, so
-     *    the verification stage can see the nesting and abort (pruning here handed the tap to
-     *    the wrapper);
-     *  - an exact match that is NOT clickable is skipped and descended — `clickNodeStrict` climbs
-     *    from its target to the nearest clickable ANCESTOR, so ranking a shell above its clickable
-     *    child would tap something outside the row;
-     *  - a clickable same-class node overlapping the rect by >= [RELAXED_BOUNDS_IOU] is a RELAXED
-     *    hit, descended into. Nothing is dropped here: a descendant hit that later FAILS
-     *    verification must not evict the row it sits in, and one that PASSES makes the pair
-     *    undecidable — both are the verification stage's call, which is why each hit records the
-     *    hits it is nested inside.
-     */
-    private fun findNodeByBounds(
-        node: AccessibilityNodeInfo,
-        targetBounds: BoundingBox,
-        className: String?,
-        out: MutableList<BoundsHit>,
-        path: ArrayList<Int>,
-    ) {
-        val liveBounds = Rect()
-        node.getBoundsInScreen(liveBounds)
-        val live = liveBounds.toBoundingBox()
-        val classOk = className == null || node.className?.toString() == className
-        val hit = classOk && node.isClickable && (
-            live == targetBounds || ClickCandidateRanker.boundsIoU(live, targetBounds) >= RELAXED_BOUNDS_IOU
-        )
-        if (hit) {
-            out.add(BoundsHit(node, relaxed = live != targetBounds, ancestors = path.toList()))
-            path.add(out.size - 1)
-        }
-        for (i in 0 until node.childCount) {
-            val child = node.getChild(i) ?: continue
-            findNodeByBounds(child, targetBounds, className, out, path)
-        }
-        if (hit) path.removeAt(path.size - 1)
-    }
 }
 
 /**

@@ -99,6 +99,21 @@ _(The 2026-09-26 entry below **validated and retired** the **#1118** transition-
 clean runs (10/10 + 5/5 accepts inferred from the task surface, 44/44 + 12/12 declines from the confirm sheet, zero
 over-inference); the remaining accept losses are #1119 and the merged card is #1069.)_
 
+- **🆕 NEW — the receipt's auto-expand tap re-finds the row by its labels, and every tap lands on the
+  control that OWNS the click (#1149).** Taps now resolve the clickable owner first (verified, then
+  `refresh()`ed right before the click), and an id-less bind is re-found by its exact label
+  fingerprint BEFORE its captured bounds — so a receipt sheet still sliding when it was bound no longer
+  makes the first tap miss. **No dash needed on the expand path** (any completed delivery's receipt).
+  **How to tell it works:**
+  1. The settled receipt's `EXPAND_EARNINGS` tap lands on the FIRST admitted settled frame:
+     `Performing expand_earnings` → `Single verified candidate` with no `Could not find any live node`
+     before it (the #1102 retry should no longer be needed).
+  2. No new `Strict click: refusing`, `(N stale)`, `semantic twins` or `semantic re-find inconclusive`
+     WARNs on known-good surfaces (the receipt, the heads-up Accept/Decline buttons).
+  3. The `bindShortfall{…}` census in `PipelineStats` is unchanged from the previous pull.
+  Confirm-decline automation stays DENIED by the dev's choice — it is not a validation target here.
+  - Issue: #1149. Confirmed: 0/2
+
 - **🆕 NEW — frames keep flowing while the bubble is the active window (#1148).** Content and state
   changes still read the active window when it is an ENABLED platform's (a DoorDash sheet included);
   when a NON-enabled window is active (our bubble, the launcher) the readable enabled APPLICATION

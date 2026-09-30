@@ -1,5 +1,6 @@
 package cloud.trotter.dashbuddy.core.pipeline.rules
 
+import cloud.trotter.dashbuddy.domain.action.RuleAction
 import cloud.trotter.dashbuddy.domain.model.accessibility.UiNode
 import cloud.trotter.dashbuddy.domain.pipeline.NodeRef
 import cloud.trotter.dashbuddy.domain.pipeline.ParseShortfall
@@ -207,11 +208,38 @@ class Ruleset<TInput>(rules: List<CompiledRule<TInput>>) {
 
                 // Expose resolved bindings as named targets (#425) —
                 // recognition-layer data for the app-owned action registry.
+                // #1149 review S5: references are built for the RETURNED branch only, after validation,
+                // and only for ACTION-target binds (RuleAction.byTargetBindName) — the owner walk, label
+                // scan and sha256 run once per classification, never for a Skip-discarded branch or a
+                // parse-scope bind. A REFUSED bind (R1: foreign / no owner) emits NO reference; its
+                // refusal and any unprovable fingerprint (R7/S7) are reported from this same branch.
+                val refused = mutableListOf<String>()
+                val unprovable = mutableListOf<Pair<String, String>>()
                 val targets = buildMap {
                     for ((name, node) in allBindings) {
-                        if (node != null) put(name, buildNodeRef(node))
+                        if (node == null || name !in RuleAction.byTargetBindName) continue
+                        val ref = buildNodeRef(node)
+                        if (ref == null) { refused += name; continue }
+                        put(name, ref)
+                        when {
+                            // T9: an action DESIGNED label-free (a null label expectation, e.g. EXPAND_EARNINGS:
+                            // "the control carries no text") is not unprovable for lacking a label — 2b cannot
+                            // apply and that is known; counting it would WARN on every collapsed receipt.
+                            ref.labelHintHashes.isEmpty() -> if (RuleAction.byTargetBindName.getValue(name).verification.labelPattern != null) {
+                                unprovable += name to "no letter-bearing label"
+                            }
+                            !ref.labelHintsComplete -> unprovable += name to "incomplete bind-time label scan"
+                        }
                     }
                 }
+                if (refused.isNotEmpty() || unprovable.isNotEmpty()) onParseShortfall?.invoke(
+                    ParseShortfall(
+                        ruleId = rule.id,
+                        refusedBindings = refused.sorted(),
+                        unprovableBindings = unprovable.map { it.first }.sorted(),
+                        unprovableReasons = unprovable.toMap(),
+                    ),
+                )
 
                 return RuleMatchResult(
                     ruleId = rule.id,
@@ -379,7 +407,8 @@ class Ruleset<TInput>(rules: List<CompiledRule<TInput>>) {
             .take(MAX_TEMPLATE_VALUE_LENGTH)
     }
 
-    private fun buildNodeRef(node: UiNode): NodeRef {
+    /** #1149 review R1: null when the bind is REFUSED (foreign / no owner) — no reference, nothing tappable. */
+    private fun buildNodeRef(node: UiNode): NodeRef? {
         val pathParts = mutableListOf<String>()
         var current: UiNode? = node
         var depth = 0
@@ -390,17 +419,19 @@ class Ruleset<TInput>(rules: List<CompiledRule<TInput>>) {
             current = current.parent
             depth++
         }
+        // #1149 review L2: the fingerprint is the bound node's ACTION OWNER's (as at fire time), over the
+        // shared label horizon (I2), with completeness (J3) and the owner's class (the 2b filter).
+        val hints = NodeRef.bindHintsOf(node)
+        if (hints.refused) return null
         return NodeRef(
             viewIdSuffix = node.viewIdResourceName,
             text = node.text?.take(50),
             classNameHint = node.className,
             boundsInScreen = node.boundsInScreen,
             pathFingerprint = pathParts.joinToString("/"),
-            labelHintHashes = node.allText.asSequence()
-                .mapNotNull(NodeRef::hintHash)
-                .distinct()
-                .take(NodeRef.MAX_LABEL_HINTS)
-                .toList(),
+            labelHintHashes = hints.labelHintHashes,
+            labelHintsComplete = hints.complete,
+            ownerClassHint = hints.ownerClassHint,
         )
     }
 }
