@@ -20,6 +20,12 @@ package cloud.trotter.dashbuddy.core.pipeline.accessibility.input
  *   write, and a write whose generation moved is DISCARDED — a collector paused in a root fetch
  *   across a topology change can never publish a verdict decided on the old topology.
  *
+ * Window identity is stable by framework construction (PR #1155 review DD2, declined as a code
+ * change): window ids are allocated monotonically, and an id is allocated per accessibility
+ * connection — a connection belongs to ONE package — so `windowId → package` never changes while the
+ * id lives. A memoized `NOT_OVERLAY_PLATFORM` therefore cannot go stale by an owner change; only
+ * GEOMETRY can move under a live id, which the bounds check covers.
+ *
  * Bounded LRU ([CAPACITY] entries). Only package names, verdict enums and four ints — never a node,
  * never third-party text; every snapshot still maps a freshly-fetched root and re-verifies its
  * package on it. Thread-safe (the accessibility thread clears it; the pipeline collectors read and
