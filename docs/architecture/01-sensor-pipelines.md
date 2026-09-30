@@ -623,17 +623,20 @@ side-effect-free half.
   (≥ 2 letters in code points, `CaseFold`-folded) of a NAME id's text (else its desc). NAME run-seeding
   is reserved for ids whose value is ONLY ever a person's name (`customer_name`, `order_cx_name`); a
   reused id that is a person or a merchant (`user_name`) is PERSON_OR_MERCHANT — exact-seeded, plus letter
-  runs when its value has ≤ 2 tokens (a person's name; 3+ tokens is a merchant like "Jack in the Box") —
+  runs (≥ 3 letters) only when its value reads as a person's name (≤ 2 letter-only Capitalized tokens —
+  never "In-N-Out Burger", "7-Eleven" or "Jack in the Box") —
   and a value that may be chrome (`tvTitle`, `tvLastMessage`) is EXACT — exact-seeded only (what a kind
-  seeds is the kind table's `seedsExactValue` / `maxRunSeedTokens` / `runsGuardClasses`); the `idProtect` rows (`customer_name`, `order_cx_name`,
+  seeds is the kind table's `seedsExactValue` / `maxRunSeedTokens` / `minRunLetters` /
+  `personNameShapeOnly` / `runsGuardClasses`; its source is `nameRunSource` — usable text, else desc); the `idProtect` rows (`customer_name`, `order_cx_name`,
   `user_name`, `tvTitle` — not `tvLastMessage`) also add their WHOLE value (≥ 3 code-point letters, a
   single token included, no name-shape gate) as an id-only run, matched across id separators; the address ids are ADDRESS (exact only — address vocabulary
   is common English); CONTENT ids (`description_text_view`, the instruction bodies) and masks seed
   nothing. The same containment, over every contiguous join of camel segments ACROSS separators
   (`row_mc_kenna`), replaces a node's static id with the reserved sentinel `~` (`chipAdam` beside
   `customer_name` "Adam", `search_bar` beside `tvTitle` "Search") so the fingerprint's STRUCTURE never
-  depends on the customer; a non-wrapper class carrying a customer-NAME run is absent
-  (`com.x.RileyButton`). A malformed (NUL / lone-surrogate) CLASS is emitted absent and counted
+  depends on the customer; an app (non-framework — not `android.`/`androidx.`/`com.google.android.material.`)
+  class carrying a customer-NAME run is absent (`com.x.RileyButton`). `IdPathJudgement.isStaticId` is
+  memoized process-wide in a bounded LRU (512). A malformed (NUL / lone-surrogate) CLASS is emitted absent and counted
   (`Outcome.Built.malformedClass`); a malformed VIEW ID refuses the frame (`INVALID_TREE` — its identity
   classification cannot be verified, #1160 round 13). On the id path the PII judgement is stricter-to-trigger: a
   lead-in withholds only before a Capitalized token and the name shape needs an uppercase-led

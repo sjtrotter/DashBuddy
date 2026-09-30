@@ -207,16 +207,20 @@ filter over every text field of the frame (tree + window title) and SEEDS:
   order") — seeds its exact value only, so a duplicated first name is still caught (review rounds 8,
   10); a **PERSON_OR_MERCHANT** id — a REUSED id that is a person or a merchant but never chrome
   (`user_name`, which also carries the merchant's and the dasher's own name) — seeds its exact value, and
-  its letter runs only when the value has at most TWO whitespace tokens (a person's name: "Text Riley"
-  beside `user_name` "Riley" is withheld exactly as beside `customer_name`), never for three or more
-  ("Jack in the Box", "The Home Depot" would seed "the"/"in"/"box" and suppress chrome per store). A
-  1–2-token merchant ("Target", "Bay View") seeds runs too — accepted: a merchant word is never a
-  recognition anchor, and its collision with a chrome id is residual risk 9 (review round 12). A NAME seeds runs from its text, so a TalkBack-style desc "Customer name Adam" beside text "Adam"
+  its letter runs (≥ 3 letters) only when the value READS AS A PERSON'S NAME: at most TWO tokens, each a
+  letter-only Capitalized word of ≥ 2 letters (an apostrophe allowed; no hyphen, digit or single-letter
+  initial). "Text Riley" beside `user_name` "Riley" is withheld exactly as beside `customer_name`, while
+  "In-N-Out Burger", "Sonic Drive-In", "7-Eleven", "Jack in the Box" and "The Home Depot" seed their
+  exact value only (never `in`/`out`/`the`, which would withhold "Sign in" and turn `sign_in_button`
+  into `~` per merchant). A name-shaped merchant ("Wing Stop") seeds runs too — accepted: a merchant word
+  is never a recognition anchor, and its collision with chrome is residual risk 9 (review rounds 12, 13). A NAME seeds runs from its text, so a TalkBack-style desc "Customer name Adam" beside text "Adam"
   seeds no `customer`/`name`, while a name rendered only in a desc still propagates — and a NAME whose
   text is a mask or has no canonical form takes its runs from the desc. What a kind seeds is owned by
-  the kind table itself (`IdentityKind.seedsExactValue` / `maxRunSeedTokens` / `runsGuardClasses`), and the
-  run-source rule (usable text, else usable desc) by `SkeletonBuilder.nameRunSource`, which the builder
-  and the test mirrors both call (review rounds 11, 12). For the ID check only, a WHOLE-value run (case-folded, code-point
+  the kind table itself (`IdentityKind.seedsExactValue` / `maxRunSeedTokens` / `minRunLetters` /
+  `personNameShapeOnly` / `runsGuardClasses`), and the source rule (usable text, else usable desc) by
+  `SkeletonBuilder.nameRunSource`, which the builder and the test mirrors both call — it feeds BOTH the
+  letter runs and the whole-value id seed, so a TalkBack label-only desc ("Customer name") beside text
+  "Adam" never seeds `customername` (review rounds 11–13). For the ID check only, a WHOLE-value run (case-folded, code-point
   letters only, ≥ 3 letters) is matched against every contiguous join of the id's camel segments ACROSS
   separators (`row_mary_jo`, `chip-mary-jo`, `rowMaryJo` beside "Mary Jo"), contributed only by the
   `idProtect` rows — values a test tag can plausibly embed (review rounds 10, 11 — no name-shape gate:
@@ -232,9 +236,11 @@ filter over every text field of the frame (tree + window title) and SEEDS:
   Text slots never use the whole-value rule. A CLASS name is third-party-set (the mapper copies it and the
   grammar checks only its syntax), so it is checked against customer-name runs ONLY — the runs of a
   class-guarding kind (NAME: `com.x.RileyButton` beside `customer_name` "Riley" is absent) — never a
-  title or merchant word (a `SearchView` class beside `tvTitle` "Search" stays), and never a wrapper
-  class (`AnonymousWrappers.WRAPPER_CLASSES`), so wrapper eligibility cannot depend on the customer
-  (review rounds 11, 12).
+  title or merchant word (a `SearchView` class beside `tvTitle` "Search" stays), and never a FRAMEWORK
+  class — a binary name under `android.`, `androidx.` or `com.google.android.material.` cannot carry a
+  customer's name, so "Chip" never nulls `…material.chip.Chip` and forks the fingerprint per customer;
+  every wrapper class is framework, so wrapper eligibility cannot depend on the customer (review rounds
+  11–13).
   `PII_ID_SUFFIXES` holds EVERY suffix of this table (a guard test pins the subset) plus other
   instruction/content ids (message bodies, maneuver/road text) (review rounds 6–9);
 - a MASK never seeds anything (`[redacted…]`, `[address]`, …): it is not identity, and its word would
