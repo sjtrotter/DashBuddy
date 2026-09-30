@@ -33,7 +33,9 @@ class RecognizedClickCustomerScrubTest {
     private val stats = PipelineStats()
     private val writer = CaptureWriter(bus, stats, NoRedaction)
 
-    private fun recognizedClick(node: UiNode): String {
+    private fun recognizedClick(node: UiNode): String = recognizedClickOrNull(node)!!
+
+    private fun recognizedClickOrNull(node: UiNode): String? {
         offered.clear()
         writer.captureClick(
             Observation.Click(
@@ -45,7 +47,7 @@ class RecognizedClickCustomerScrubTest {
             screenTarget = "offer_popup",
             screenRuleId = "doordash.screen.offer_popup",
         )
-        return offered.single()
+        return offered.singleOrNull()
     }
 
     private fun payloadNode(json: String): UiNode {
@@ -85,6 +87,26 @@ class RecognizedClickCustomerScrubTest {
         val json = recognizedClick(node)
         assertEquals(node, payloadNode(json))
         assertEquals(0L, stats.redactBackstopScrubCount)
+        assertEquals("no banking marker, no drop", 0L, stats.scrubbedUnknownCaptureCount)
         assertEquals(0L, stats.unknownCustomerScrubCount)
+    }
+
+    /**
+     * #1147 review Z1: the dasher-BANKING drop runs on every click too. A click rule can classify a
+     * tap on a DasherDirect sheet during the #1104 stale-screen window, and a Compose button's action
+     * label / hint / tooltip is arbitrary app text — so a banking marker there must suppress the
+     * envelope (the observation still flows; envelope-only).
+     */
+    @Test
+    fun `a recognized click whose only banking marker sits in a new field produces no envelope`() {
+        val base = UiNode(viewIdResourceName = "com.doordash.driverapp:id/continue", text = "Continue", isClickable = true)
+        for ((i, node) in listOf(
+            base.copy(clickActionLabel = "Transfer \$45.66 to bank"),
+            base.copy(hintText = "Routing Number"),
+            base.copy(tooltipText = "Available Balance"),
+        ).withIndex()) {
+            assertEquals("no envelope for $node", null, recognizedClickOrNull(node))
+            assertEquals((i + 1).toLong(), stats.scrubbedUnknownCaptureCount)
+        }
     }
 }

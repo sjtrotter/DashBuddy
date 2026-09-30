@@ -52,17 +52,9 @@ class CaptureWriter @Inject constructor(
         // — scan its text and drop the capture on any sensitive marker. The
         // observation still flows (it dies at the UNKNOWN gate downstream);
         // only the disk write is suppressed.
-        if (obs.target == UNKNOWN_TARGET) {
-            val marker = SensitiveTextMarkers.findMarker(event.tree)
-            if (marker != null) {
-                stats.onScrubbedUnknownCapture()
-                // #862: the marker is named by its log-safe id, NOT verbatim — a verbatim
-                // marker makes this WARN self-scrubbing at the shareable-log sink.
-                Timber.tag("Pipeline")
-                    .w("Capture scrubbed: UNKNOWN screen hit sensitive marker id '%s'", MarkerLogId.of(marker))
-                return obs
-            }
-        }
+        if (obs.target == UNKNOWN_TARGET &&
+            droppedOnSensitiveMarker(SensitiveTextMarkers.findMarker(event.tree), "UNKNOWN screen", ruleId = null)
+        ) return obs
         // #1148 (review rounds 1-2): the window TITLE is app-controlled text (`Activity.setTitle` /
         // `Dialog.setTitle` → `AccessibilityWindowInfo.title`) that sits OUTSIDE the tree, so no
         // tree scrub or rule `redact` selector ever sees it, and a customer name or street line
@@ -72,17 +64,13 @@ class CaptureWriter @Inject constructor(
         // carries a sensitive marker (a title-only banking dialog) is dropped like a tree hit. A
         // RECOGNIZED frame is not dropped on its title — the rule vetted the tree, and dropping
         // every frame of a surface on a constant title would erase it from the corpus.
-        if (obs.target == UNKNOWN_TARGET) {
-            val titleMarker = event.snapshot.windowContext?.windowTitle?.let(SensitiveTextMarkers::findMarker)
-            if (titleMarker != null) {
-                stats.onScrubbedUnknownCapture()
-                Timber.tag("Pipeline").w(
-                    "Capture scrubbed: UNKNOWN screen's window title hit sensitive marker id '%s'",
-                    MarkerLogId.of(titleMarker),
-                )
-                return obs
-            }
-        }
+        if (obs.target == UNKNOWN_TARGET &&
+            droppedOnSensitiveMarker(
+                event.snapshot.windowContext?.windowTitle?.let(SensitiveTextMarkers::findMarker),
+                "UNKNOWN screen's window title",
+                ruleId = null,
+            )
+        ) return obs
         val platform = Platform.fromPackage(event.packageName).wire
         val winCtx = event.snapshot.windowContext?.let { wc ->
             WindowContextDto(
@@ -121,24 +109,7 @@ class CaptureWriter @Inject constructor(
         // The VET V1 already-redacted skip keeps a rule's OWN redact output from
         // re-tripping. FrameGate's UNKNOWN suppressor already dedups UNKNOWN frames
         // upstream, so the WARN below is at most one per admitted frame — no storm.
-        val payloadTree = run {
-            val marker = CustomerTextMarkers.firstUnredactedMarker(redactedTree)
-            when {
-                obs.target == UNKNOWN_TARGET -> scrubUnknownTree(redactedTree, marker)
-                marker == null -> redactedTree
-                else -> {
-                    stats.onRedactBackstopScrub()
-                    // Principle 7: log the MARKER ID + rule id only (#862) — NEVER the leaked
-                    // value, and never the marker verbatim (that self-scrubs at the sink).
-                    Timber.tag("Pipeline").w(
-                        "Capture backstop: recognized frame carried un-redacted customer marker " +
-                            "id '%s' (ruleId=%s) — scrubbing node from envelope",
-                        MarkerLogId.of(marker), obs.ruleId,
-                    )
-                    CustomerTextMarkers.scrub(redactedTree)
-                }
-            }
-        }
+        val payloadTree = scrubCustomerPii(redactedTree, obs.target, obs.ruleId, kind = "screen")
         val capture = EnvelopeBuilder.build(
             pipelineId = AccessibilityPipeline.SCREEN_PIPELINE_ID,
             schema = UiNodeSchema,
@@ -181,22 +152,16 @@ class CaptureWriter @Inject constructor(
     ): Observation.Click {
         // #435 item 5: skip the envelope build for a disabled bus (see captureScreen).
         if (!captureBus.isEnabled) return obs
-        // Same fail-closed backstop as captureScreen (#432), added with #597:
-        // an UNKNOWN click envelope carries the raw tapped node, and a tap on
-        // an unruled sensitive surface must not persist its text. (A rule-matched
-        // click was recognized as an app button, so the DASHER-banking drop stays
-        // UNKNOWN-only; the customer-PII scrub below no longer assumes its labels
-        // are clean — #1147 review X2.)
-        if (obs.target == UNKNOWN_TARGET) {
-            val marker = SensitiveTextMarkers.findMarker(event.node)
-            if (marker != null) {
-                stats.onScrubbedUnknownCapture()
-                // #862: marker named by log-safe id, not verbatim (see captureScreen).
-                Timber.tag("Pipeline")
-                    .w("Capture scrubbed: UNKNOWN click hit sensitive marker id '%s'", MarkerLogId.of(marker))
-                return obs
-            }
-        }
+        // Same fail-closed backstop as captureScreen (#432), added with #597, and since #1147
+        // review Z1 on EVERY click (recognized included): a click envelope carries the raw tapped
+        // node, and the old premise "a rule-matched click is an app button whose labels carry no
+        // PII" no longer holds — a Compose button's click-action label / hint / tooltip is arbitrary
+        // app text, and a click can be classified during the #1104 stale-screen window on a
+        // DasherDirect sheet ("Transfer $45.66 to bank" in the action label). Envelope-only: the
+        // observation still flows; only the disk write is suppressed. (A recognized SCREEN is still
+        // not dropped on this scan — its rule vetted the whole tree; a click rule vets one label.)
+        val clickKind = if (obs.target == UNKNOWN_TARGET) "UNKNOWN click" else "recognized click"
+        if (droppedOnSensitiveMarker(SensitiveTextMarkers.findMarker(event.node), clickKind, obs.ruleId)) return obs
         // #910: the click envelope INHERITS the redact of the rule that recognized the
         // screen the tap landed on. A tapped node is serialized in ISOLATION — the
         // fielded leak was a `customer_name` row on a recognized `pickup_post_arrival_multi`
@@ -214,30 +179,12 @@ class CaptureWriter @Inject constructor(
         val screenRedact = screenRuleId?.let { redactionSource.redactFor(it) }
         val redactedNode = screenRedact?.apply(event.node) ?: event.node
         // #806 customer-PII backstop for the click node, on EVERY click (#1147 review X2),
-        // mirroring the screen path: a tap on a "Deliver to <name>" row on an unrecognized
-        // screen would otherwise persist the raw customer text. The old premise — "a
-        // rule-matched click is an app-vocabulary button whose labels carry no PII" — held
-        // for text/desc but not for the #1147 fields: a Compose button's click-action label,
-        // hint or tooltip is arbitrary app text (fielded shape: `accept_button` text "Accept"
-        // with a customer name in its action label). So a RECOGNIZED click runs the TEXT-marker
-        // scrub too — byte-identical unless a marker hits; the `ID_MARKERS` node-id scan stays
-        // UNKNOWN-only (a recognized frame keeps its rule's id decisions, #910). Fail toward
-        // privacy. The dedup hash below is still on the ORIGINAL node (envelope-only).
-        val clickMarker = CustomerTextMarkers.firstUnredactedMarker(redactedNode)
-        val payloadNode = when {
-            obs.target == UNKNOWN_TARGET -> scrubUnknownTree(redactedNode, clickMarker, kind = "click node")
-            clickMarker == null -> redactedNode
-            else -> {
-                stats.onRedactBackstopScrub()
-                // Principle 7: marker id + rule id only (#862) — never the value or the marker verbatim.
-                Timber.tag("Pipeline").w(
-                    "Capture backstop: recognized click carried un-redacted customer marker " +
-                        "id '%s' (ruleId=%s) — scrubbing node from envelope",
-                    MarkerLogId.of(clickMarker), obs.ruleId,
-                )
-                CustomerTextMarkers.scrub(redactedNode)
-            }
-        }
+        // mirroring the screen path: a Compose button's click-action label, hint or tooltip is
+        // arbitrary app text (fielded shape: `accept_button` text "Accept" with a customer name in
+        // its action label), so a RECOGNIZED click runs the TEXT-marker scrub too — byte-identical
+        // unless a marker hits; the `ID_MARKERS` node-id scan stays UNKNOWN-only (#910). The dedup
+        // hash below is still on the ORIGINAL node (envelope-only).
+        val payloadNode = scrubCustomerPii(redactedNode, obs.target, obs.ruleId, kind = "click node")
         val platform = Platform.fromPackage(event.packageName).wire
         val capture = EnvelopeBuilder.build(
             pipelineId = AccessibilityPipeline.CLICK_PIPELINE_ID,
@@ -287,6 +234,49 @@ class CaptureWriter @Inject constructor(
      * Returns [tree] unchanged when both scans are clean, so a benign UNKNOWN frame
      * is never rebuilt. Counts ONE scrub per envelope either way.
      */
+    /**
+     * #1147 review Z1/Z3 — THE dasher-sensitive drop decision shared by the screen tree, the screen's
+     * window title and every click: on a [marker] hit, count it, WARN (tag `Pipeline`, the marker's
+     * log-safe id + the rule id only — #862, never the value or the marker verbatim) and return true
+     * so the caller suppresses the envelope. The observation itself always flows.
+     */
+    private fun droppedOnSensitiveMarker(marker: String?, what: String, ruleId: String?): Boolean {
+        if (marker == null) return false
+        stats.onScrubbedUnknownCapture()
+        Timber.tag("Pipeline").w(
+            "Capture scrubbed: %s hit sensitive marker id '%s' (ruleId=%s)",
+            what, MarkerLogId.of(marker), ruleId ?: "-",
+        )
+        return true
+    }
+
+    /**
+     * #1147 review Z3 — THE customer-PII text-marker backstop over an envelope-bound tree, shared by
+     * the screen and click paths (one marker SSOT, cross-platform DATA — principle 8):
+     *  - UNKNOWN → [scrubUnknownTree] (text marker AND the #910 node-id scan);
+     *  - recognized, no marker → returned unchanged (byte-identical envelope);
+     *  - recognized, marker hit (#624 defense-in-depth: a rule that ships raw customer text with
+     *    no redact, or — since #1147 — a click label / hint / tooltip) → count, WARN (tag
+     *    `Pipeline`, marker log-safe id + rule id only, #862) and scrub the offending field.
+     * The VET V1 already-redacted skip keeps a rule's OWN redact output from re-tripping.
+     */
+    private fun scrubCustomerPii(tree: UiNode, target: String?, ruleId: String?, kind: String): UiNode {
+        val marker = CustomerTextMarkers.firstUnredactedMarker(tree)
+        return when {
+            target == UNKNOWN_TARGET -> scrubUnknownTree(tree, marker, kind)
+            marker == null -> tree
+            else -> {
+                stats.onRedactBackstopScrub()
+                Timber.tag("Pipeline").w(
+                    "Capture backstop: recognized %s carried un-redacted customer marker " +
+                        "id '%s' (ruleId=%s) — scrubbing node from envelope",
+                    kind, MarkerLogId.of(marker), ruleId,
+                )
+                CustomerTextMarkers.scrub(tree)
+            }
+        }
+    }
+
     private fun scrubUnknownTree(
         tree: UiNode,
         textMarker: String?,

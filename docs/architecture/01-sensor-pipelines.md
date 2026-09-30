@@ -216,7 +216,12 @@ capture. **Recognized clicks are text-marker scrubbed too (review X2):** the old
 rule-matched click is an app-vocabulary button whose labels carry no PII" held for text/desc, not for
 a Compose button's click-action label / hint / tooltip, so `CaptureWriter.captureClick` now runs the
 `CustomerTextMarkers` text scrub on EVERY click envelope (byte-identical unless a marker hits;
-`ID_MARKERS` stays UNKNOWN-only). **The click label is a bind label (review W3):** `UiLabelNode` and
+`ID_MARKERS` stays UNKNOWN-only), and — review Z1 — the `SensitiveTextMarkers` dasher-banking DROP
+too: both backstops now run on every click, recognized included (a click can be classified during
+the #1104 stale-screen window on a DasherDirect sheet whose Compose button reads "Transfer $… to
+bank" in its action label). A recognized SCREEN is still not dropped on that scan. Both decisions
+have one owner each in `CaptureWriter` (`droppedOnSensitiveMarker`, `scrubCustomerPii`, review Z3);
+their WARNs (tag `Pipeline`) carry the marker's `MarkerLogId` + the rule id only. **The click label is a bind label (review W3):** `UiLabelNode` and
 the fire-time `ownLabelsOf` both add it (one live read, `NodeClick.clickActionLabelOrNull`, no IPC).
 The corpus-wide additive claim is pinned by `CorpusNodeFieldsAdditiveTest` (X4). The TalkBack receipt the fields rest on: **no hidden Compose identifier
 exists** — TalkBack has no `AndroidComposeView`/`testTag` handling; the best anchors for an id-less
