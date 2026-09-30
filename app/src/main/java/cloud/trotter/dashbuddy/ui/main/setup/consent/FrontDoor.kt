@@ -37,15 +37,21 @@ data class FrontDoorDeferrals(
 }
 
 /**
- * The one front-door choice (pure): nothing while the door is deferred; else the capability prompt
- * while it has rows; else the event-receipt prompt while it is pending. Never two — the second
- * prompt appears only once the first is ANSWERED (a decision), never because it was deferred.
+ * The one front-door choice (pure): nothing until BOTH sources are ready (review OO2 — the
+ * capabilities published by a rule load, the event-receipt consent read), so an early empty
+ * enumeration can never let the event-receipt prompt go first and then be swapped out; nothing
+ * while the door is deferred; else the capability prompt while it has rows; else the event-receipt
+ * prompt while it is pending. Never two — the second prompt appears only once the first is ANSWERED
+ * (a decision), never because it was deferred.
  */
 fun pickFrontDoorPrompt(
+    capabilitiesReady: Boolean,
     capabilityRowsPending: Boolean,
+    eventReceiptReady: Boolean,
     eventReceiptPending: Boolean,
     deferrals: FrontDoorDeferrals,
 ): FrontDoorPrompt? = when {
+    !capabilitiesReady || !eventReceiptReady -> null
     deferrals.isDeferred -> null
     capabilityRowsPending -> FrontDoorPrompt.CAPABILITIES
     eventReceiptPending -> FrontDoorPrompt.EVENT_RECEIPT

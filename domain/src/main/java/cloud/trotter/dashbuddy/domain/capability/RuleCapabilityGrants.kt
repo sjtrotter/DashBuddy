@@ -51,6 +51,14 @@ interface RuleCapabilityGrants {
     val capabilities: StateFlow<List<RuleCapability>>
 
     /**
+     * #1151 review OO2 — readiness: true once a rule load has published its enumeration through
+     * [reconcile] (even an EMPTY one). Before that, an empty [capabilities] means "not loaded yet",
+     * not "none pending" — the front door waits on this so it never shows another prompt first
+     * and then swaps to the capability prompt when the rows arrive.
+     */
+    val loaded: StateFlow<Boolean>
+
+    /**
      * Grant ([granted] = true) or revoke/deny ([granted] = false) one
      * capability [key] — the consent decision, written from the prompt (#843)
      * or the settings record (#422 PR 3). This is the ONLY way a grant comes

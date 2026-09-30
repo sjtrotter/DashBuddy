@@ -45,6 +45,9 @@ class RuleCapabilityRepository @Inject constructor(
 
     override val capabilities: StateFlow<List<RuleCapability>> = enumerated
 
+    private val _loaded = MutableStateFlow(false)
+    override val loaded: StateFlow<Boolean> = _loaded
+
     override val grantedKeys: StateFlow<Set<String>> = dataSource.granted
         .stateIn(scope, SharingStarted.Eagerly, emptySet())
 
@@ -58,6 +61,7 @@ class RuleCapabilityRepository @Inject constructor(
         // fire-time gate stays fail-closed for anything not in the granted set,
         // so leaving the persisted store untouched here is the whole point.
         enumerated.value = capabilities
+        _loaded.value = true // OO2: published — an empty enumeration now means "none pending"
         Timber.tag(TAG).i(
             "reconciled %d capabilit(ies) from rule load (none granted — awaiting consent)",
             capabilities.size,

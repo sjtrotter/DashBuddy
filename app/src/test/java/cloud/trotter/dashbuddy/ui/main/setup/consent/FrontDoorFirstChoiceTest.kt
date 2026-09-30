@@ -14,6 +14,7 @@ import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.setMain
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Before
 import org.junit.Test
 
@@ -31,9 +32,10 @@ class FrontDoorFirstChoiceTest {
     @Before fun setUp() = Dispatchers.setMain(StandardTestDispatcher())
     @After fun tearDown() = Dispatchers.resetMain()
 
-    private class OneUndecidedGrants : RuleCapabilityGrants {
+    private class OneUndecidedGrants(published: Boolean = true) : RuleCapabilityGrants {
+        override val loaded: StateFlow<Boolean> = MutableStateFlow(published)
         override val capabilities: StateFlow<List<RuleCapability>> = MutableStateFlow(
-            listOf(
+            if (!published) emptyList() else listOf(
                 RuleCapability(
                     ruleId = "doordash.screen.offer_popup",
                     action = RuleAction.ACCEPT_OFFER,
@@ -62,11 +64,29 @@ class FrontDoorFirstChoiceTest {
         val receipt = EventReceiptConsentViewModel(UndecidedReceipt(), isDebugBuild = false)
 
         val first = pickFrontDoorPrompt(
+            capabilitiesReady = capabilities.uiState.value.ready,
             capabilityRowsPending = capabilities.uiState.value.rows.isNotEmpty(),
+            eventReceiptReady = receipt.uiState.value.ready,
             eventReceiptPending = receipt.uiState.value.showPrompt,
             deferrals = FrontDoorDeferrals(),
         )
 
         assertEquals(FrontDoorPrompt.CAPABILITIES, first)
+    }
+
+    @Test
+    fun `before the rule load publishes, the door shows nothing - not the event receipt`() {
+        val capabilities = ConsentPromptViewModel(OneUndecidedGrants(published = false))
+        val receipt = EventReceiptConsentViewModel(UndecidedReceipt(), isDebugBuild = false)
+
+        val first = pickFrontDoorPrompt(
+            capabilitiesReady = capabilities.uiState.value.ready,
+            capabilityRowsPending = capabilities.uiState.value.rows.isNotEmpty(),
+            eventReceiptReady = receipt.uiState.value.ready,
+            eventReceiptPending = receipt.uiState.value.showPrompt,
+            deferrals = FrontDoorDeferrals(),
+        )
+
+        assertNull("an empty, unpublished enumeration must not hand the door to the receipt", first)
     }
 }

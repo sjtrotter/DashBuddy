@@ -64,6 +64,16 @@ class RuleCapabilityRepositoryTest {
     // =========================================================================
 
     @Test
+    fun `loaded turns true on the first publication, even an empty one (#1151 OO2)`() = runTest {
+        val (repo, _) = newRepo(this, "loaded.preferences_pb")
+        assertFalse("nothing published yet", repo.loaded.value)
+
+        repo.reconcile(emptyList())
+        advanceUntilIdle()
+        assertTrue("an EMPTY enumeration is still a publication", repo.loaded.value)
+    }
+
+    @Test
     fun `reconcile grants nothing - even asset-prefixed sources`() = runTest {
         val (repo, _) = newRepo(this, "recon1.preferences_pb")
 

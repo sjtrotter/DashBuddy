@@ -35,8 +35,9 @@ class ConsentPromptViewModel @Inject constructor(
             grants.capabilities,
             grants.grantedKeys,
             grants.deniedKeys,
-        ) { capabilities, granted, denied ->
-            buildConsentPromptState(capabilities, granted, denied)
+            grants.loaded,
+        ) { capabilities, granted, denied, loaded ->
+            buildConsentPromptState(capabilities, granted, denied).copy(ready = loaded)
         }.stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5_000),
@@ -47,7 +48,7 @@ class ConsentPromptViewModel @Inject constructor(
                 grants.capabilities.value,
                 grants.grantedKeys.value,
                 grants.deniedKeys.value,
-            ),
+            ).copy(ready = grants.loaded.value),
         )
 
     /**
@@ -65,6 +66,11 @@ class ConsentPromptViewModel @Inject constructor(
 /** Immutable per-screen state (UDF). Empty [rows] ⇒ nothing to ask, sheet stays closed. */
 data class ConsentPromptUiState(
     val rows: List<ConsentPromptRow> = emptyList(),
+    /**
+     * #1151 review OO2 — a rule load has published its enumeration, so empty [rows] means "none
+     * pending" rather than "not loaded yet". The front door waits for it.
+     */
+    val ready: Boolean = false,
 )
 
 /** One undecided capability the user must Allow or Don't-allow. */

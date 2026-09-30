@@ -144,7 +144,7 @@ class EventReceiptConsentViewModelTest {
 
             prefs.consentFlow.value = EventReceiptConsent.DECLINED
             val declined = vm.uiState.first { !it.showPrompt }
-            assertEquals("debug=$debug", EventReceiptConsentUiState(blocked = debug), declined)
+            assertEquals("debug=$debug", EventReceiptConsentUiState(blocked = debug, ready = true), declined)
         }
     }
 

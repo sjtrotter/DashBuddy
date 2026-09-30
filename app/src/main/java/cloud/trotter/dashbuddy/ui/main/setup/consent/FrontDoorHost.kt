@@ -28,7 +28,9 @@ fun FrontDoorHost(
     val deferrals by frontDoor.deferrals.collectAsStateWithLifecycle()
 
     val prompt = pickFrontDoorPrompt(
+        capabilitiesReady = capability.ready,
         capabilityRowsPending = capability.rows.isNotEmpty(),
+        eventReceiptReady = eventReceipt.ready,
         eventReceiptPending = eventReceipt.showPrompt,
         deferrals = deferrals,
     ) ?: return
