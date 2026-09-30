@@ -1,7 +1,7 @@
 package cloud.trotter.dashbuddy.core.pipeline
 
+import cloud.trotter.dashbuddy.domain.census.contract.TextFold
 import cloud.trotter.dashbuddy.domain.model.accessibility.UiNode
-import java.text.Normalizer
 import java.util.Locale
 
 /**
@@ -213,15 +213,13 @@ object SensitiveTextMarkers {
      * Single allocation pass over the NFKC output; NFKC itself is O(n).
      */
     internal fun normalize(s: String): String {
-        val nfkc = Normalizer.normalize(s, Normalizer.Form.NFKC)
-        val sb = StringBuilder(nfkc.length)
-        for (ch in nfkc) {
-            when {
-                Character.getType(ch) == Character.FORMAT.toInt() -> {} // strip zero-width / format
-                ch in '‐'..'―' || ch == '−' -> sb.append('-') // unicode dashes → hyphen
-                ch == '' || ch.isWhitespace() -> sb.append(' ') // canonicalize whitespace
-                else -> sb.append(ch)
-            }
+        // #1160 review NN5: NFKC + FORMAT strip + dash fold have ONE owner, shared with the census
+        // canonical form; this scan adds its own per-char whitespace → space and the ROOT lowercase.
+        // Byte-for-byte the pre-#1160 behaviour (SensitiveTextMarkersNormalizePinTest).
+        val folded = TextFold.foldGlyphs(s)
+        val sb = StringBuilder(folded.length)
+        for (ch in folded) {
+            if (ch == '\u001F' || ch.isWhitespace()) sb.append(' ') else sb.append(ch)
         }
         return sb.toString().lowercase(Locale.ROOT)
     }

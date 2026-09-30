@@ -49,18 +49,23 @@ object CensusHash {
     const val HEX_LENGTH: Int = 16
 
     /**
-     * The CANONICAL value (ADR-0011 §2 "Inputs and predicates", §3; #1160 review EE2): every run of code
+     * The CANONICAL value (ADR-0011 §2 "Inputs and predicates", §3; #1160 reviews EE2, NN5): the shared
+     * [TextFold.foldGlyphs] (NFKC, FORMAT strip, dash fold), then every run of code
      * points the classifier treats as whitespace (`Character.isWhitespace || isSpaceChar` — NBSP, thin
      * space, tab, newline…) collapsed to ONE ASCII space, then trimmed. Every filter step, the grammar
      * and the hash run on this, so the JVM (whose regex `\s` excludes NBSP) and ART/ICU (whose `\s`
      * includes `\p{Z}`) take the same decision and produce the same hash. Idempotent.
      */
     fun canonical(text: String): String {
-        val sb = StringBuilder(text.length)
+        // Review NN5: the shared glyph fold first (NFKC, FORMAT strip, dash fold), so a zero-width space
+        // inside a marker or a fullwidth letter cannot defeat the filter and a fullwidth chrome word
+        // hashes equal to its plain twin.
+        val folded = TextFold.foldGlyphs(text)
+        val sb = StringBuilder(folded.length)
         var pendingSpace = false
         var i = 0
-        while (i < text.length) {
-            val cp = text.codePointAt(i)
+        while (i < folded.length) {
+            val cp = folded.codePointAt(i)
             if (KindClassifier.isWhitespace(cp)) {
                 pendingSpace = true
             } else {
