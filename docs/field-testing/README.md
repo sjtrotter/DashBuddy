@@ -113,7 +113,7 @@ over-inference); the remaining accept losses are #1119 and the merged card is #1
      (grep the pull the way the playbook greps `text`).
   4. Capture files are not noticeably larger than the previous pull's, and no new WARN/ERROR tagged
      `Mapper` or `Pipeline` appears.
-  - PR: #1147 (this PR). Confirmed: 0/2
+  - Issue: #1147, PR #1158. Confirmed: 0/2
 
 - **🆕 NEW — wide event receipt is an opt-in consent, asked BEFORE the accessibility grant (#1151).**
   The accessibility service receives window-change notices from other apps (what the #1148/#1152
