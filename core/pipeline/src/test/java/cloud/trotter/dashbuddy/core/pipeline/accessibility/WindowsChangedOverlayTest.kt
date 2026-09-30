@@ -429,13 +429,16 @@ class WindowsChangedOverlayTest : WindowResolverTestBase() {
     }
 
     @Test
-    fun `II1 - matching native root of a NOT-enabled package - refused`() {
+    fun `JJ1 - a matching native root of a NOT-enabled package (our bubble) takes the front-window read`() {
         Kind.entries.forEach { kind ->
-            val launcher = node("com.android.launcher3", "home", windowId = 3)
-            val h = harness(activeRoot = launcher, windows = listOf(window(3, 5, null, active = true)))
+            val bubble = node(ownPkg, "bubble", windowId = 3)
+            val activeWindow = window(3, 10, null, active = true)
+            // The enumerated root is null on the resolution's fetch (bubble touched mid-transition),
+            // readable again by the time the front-window walk looks.
+            whenever(activeWindow.root).thenReturn(null, bubble)
+            val h = harness(activeRoot = bubble, windows = listOf(activeWindow, window(4, 2, node(ddPkg, "dd"))))
 
-            assertTrue(collect(h, kind, windowId = 3).isEmpty())
-            h.skipped(ForegroundSkipReason.FRONT_UNREADABLE)
+            assertEquals(listOf("dd"), collect(h, kind, windowId = 3).map { it.tree.text })
         }
     }
 }

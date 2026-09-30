@@ -45,14 +45,23 @@ import org.robolectric.annotation.Config
 class ActiveResolutionTest : WindowResolverTestBase() {
 
     @Test
-    fun `FF1 - no flagged active window - the fallback reads rootInActiveWindow with no overlay scan`() = bothKinds { kind ->
+    fun `FF1, JJ2 - no flagged active window - the native root's window, found by id, still gets the overlay scan`() = bothKinds { kind ->
         val dd = node(ddPkg, "dd", windowId = 3)
         val uber = node(uberPkg, "uber-offer")
         val h = harness(activeRoot = dd, windows = listOf(window(3, 5, dd), uberOverlay(9, 9, uber)))
 
-        assertEquals(listOf("dd"), collect(h, kind, windowId = 9, pkg = uberPkg).map { it.tree.text })
-        assertEquals(0L, h.stats.overlayScanCount())
-        assertEquals(0L, h.stats.overlaySnapshotCount())
+        assertEquals(listOf("uber-offer"), collect(h, kind, windowId = 9, pkg = uberPkg).map { it.tree.text })
+        assertEquals(1L, h.stats.overlayScanCount())
+    }
+
+    @Test
+    fun `FF1, JJ2 - no flagged active window, no overlay above the native root's window - that window is read`() = bothKinds { kind ->
+        val dd = node(ddPkg, "dd", windowId = 3)
+        val h = harness(activeRoot = dd, windows = listOf(window(3, 5, dd)))
+
+        val frames = collect(h, kind, windowId = 3)
+        assertEquals(listOf("dd"), frames.map { it.tree.text })
+        assertEquals(3, frames.single().windowContext?.windowId) // mapped through the window builder
     }
 
     @Test
@@ -94,5 +103,33 @@ class ActiveResolutionTest : WindowResolverTestBase() {
         assertTrue(collect(h, Kind.STATE).isEmpty())
         h.skipped(ForegroundSkipReason.FRONT_UNREADABLE)
         assertEquals(0L, h.stats.foregroundSkipCount(ForegroundSkipReason.NO_CANDIDATE))
+    }
+
+    @Test
+    fun `JJ2 - two flagged windows, an enabled overlay above the native root's window - the overlay`() = bothKinds { kind ->
+        val dd = node(ddPkg, "dd", windowId = 3)
+        val h = harness(
+            activeRoot = dd,
+            windows = listOf(
+                window(3, 5, dd, active = true),
+                window(4, 6, node(ddPkg, "dd-2"), active = true), // an overlay/sheet taking focus mid-touch
+                uberOverlay(9, 9, node(uberPkg, "uber-offer")),
+            ),
+        )
+
+        assertEquals(listOf("uber-offer"), collect(h, kind, windowId = 3).map { it.tree.text })
+        assertEquals(1L, h.stats.overlayScanCount())
+    }
+
+    @Test
+    fun `JJ2 - two flagged windows, native root not in the list - the pre-#1152 read`() = bothKinds { kind ->
+        val stray = node(ddPkg, "dd-stray", windowId = 42)
+        val h = harness(
+            activeRoot = stray,
+            windows = listOf(window(3, 5, node(ddPkg, "a"), active = true), window(4, 6, node(ddPkg, "b"), active = true), uberOverlay(9, 9, node(uberPkg, "uber-offer"))),
+        )
+
+        assertEquals(listOf("dd-stray"), collect(h, kind, windowId = 3).map { it.tree.text })
+        assertEquals(0L, h.stats.overlayScanCount())
     }
 }
