@@ -380,7 +380,7 @@ class CustomerTextMarkersTest {
             CustomerTextMarkers.ID_MARKERS,
         )
         assertEquals(
-            setOf("customer_name", "user_name", "address_line_1", "address_line_2", "arriving_at_title", "address_subpremise_line"),
+            setOf("customer_name", "address_line_1", "address_line_2", "arriving_at_title", "address_subpremise_line"),
             CustomerTextMarkers.ID_MARKER_TABLE.filter { it.valueIsPii }.map { it.suffix }.toSet(),
         )
     }

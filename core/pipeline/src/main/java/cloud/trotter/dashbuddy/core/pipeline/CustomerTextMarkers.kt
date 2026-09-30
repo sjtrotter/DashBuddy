@@ -139,7 +139,7 @@ object CustomerTextMarkers {
      *
      * The table carries, per suffix, whether the node's VALUE is PII by construction
      * (#1160 review EE1). `valueIsPii = true` marks IDENTITY ids — a customer name or address line,
-     * nothing else ever rides them. `false` marks CONTENT ids whose node can hold customer text but is
+     * nothing else ever rides them (`user_name` is excluded: it also carries merchant/dasher names). `false` marks CONTENT ids whose node can hold customer text but is
      * also reused for app copy (the free-text instruction bodies; `description_text_view`, which this
      * file documents as generic DoorDash chrome). The runtime backstop scrubs on EVERY suffix exactly
      * as before; only the census's frame-wide duplicate rule reads the flag.
@@ -149,7 +149,10 @@ object CustomerTextMarkers {
         IdMarker("customer_name", valueIsPii = true),
         // DoorDash drop-off + pickup contact blocks -> customer name (the node the
         // "Delivery for" label sibling names; #910 V5).
-        IdMarker("user_name", valueIsPii = true),
+        // NOT an identity id for the census (#1160 review GG5): the class KDoc records it is REUSED for
+        // the MERCHANT on pickup cards and for the dasher's own name — seeding it frame-wide would
+        // withhold a store header (merchant names are not PII). Its own field is still scrubbed.
+        IdMarker("user_name", valueIsPii = false),
         // DoorDash address block -> street line and city/ST/ZIP line (#910 V1/V5).
         IdMarker("address_line_1", valueIsPii = true),
         IdMarker("address_line_2", valueIsPii = true),
