@@ -1488,6 +1488,54 @@
           "properties": { "isLeaf": { "type": "boolean", "description": "Node has no children iff this value." } }
         },
         {
+          "required": ["hasPaneTitle"],
+          "properties": { "hasPaneTitle": { "type": "string", "description": "Exact paneTitle match (case-insensitive) — the named scope an id-less sheet/dialog carries (#1147). Not in allText." } }
+        },
+        {
+          "required": ["hasPaneTitleContaining"],
+          "properties": { "hasPaneTitleContaining": { "type": "string", "description": "paneTitle contains substring (case-insensitive) (#1147)." } }
+        },
+        {
+          "required": ["hasRoleDescription"],
+          "properties": { "hasRoleDescription": { "type": "string", "description": "Exact roleDescription match (case-insensitive), e.g. \"Button\" (#1147)." } }
+        },
+        {
+          "required": ["hasClickActionLabel"],
+          "properties": { "hasClickActionLabel": { "type": "string", "description": "Exact label of the node's ACTION_CLICK action (case-insensitive) (#1147). Not in allText." } }
+        },
+        {
+          "required": ["hasClickActionLabelContaining"],
+          "properties": { "hasClickActionLabelContaining": { "type": "string", "description": "ACTION_CLICK label contains substring (case-insensitive) (#1147)." } }
+        },
+        {
+          "required": ["hasHintText"],
+          "properties": { "hasHintText": { "type": "string", "description": "Exact hintText match (case-insensitive) (#1147)." } }
+        },
+        {
+          "required": ["hasHintTextContaining"],
+          "properties": { "hasHintTextContaining": { "type": "string", "description": "hintText contains substring (case-insensitive) (#1147)." } }
+        },
+        {
+          "required": ["isVisibleToUser"],
+          "properties": { "isVisibleToUser": { "type": "boolean", "description": "Node's isVisibleToUser equals this value (#1147)." } }
+        },
+        {
+          "required": ["isSelected"],
+          "properties": { "isSelected": { "type": "boolean", "description": "Node's selected state equals this value (#1147)." } }
+        },
+        {
+          "required": ["isCheckable"],
+          "properties": { "isCheckable": { "type": "boolean", "description": "Node's checkable state equals this value (#1147)." } }
+        },
+        {
+          "required": ["isHeading"],
+          "properties": { "isHeading": { "type": "boolean", "description": "Node's heading flag equals this value (#1147)." } }
+        },
+        {
+          "required": ["hasClickAction"],
+          "properties": { "hasClickAction": { "type": "boolean", "description": "Node advertises ACTION_CLICK in its action list iff this value (#1147; Compose controls often do without isClickable)." } }
+        },
+        {
           "required": ["all"],
           "properties": {
             "all": {

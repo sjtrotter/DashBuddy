@@ -235,6 +235,47 @@ internal object PredicateCompiler {
             "hasChildren" -> { val want = boolFlag(value, key); { node -> node.children.isNotEmpty() == want } }
             "isLeaf" -> { val want = boolFlag(value, key); { node -> node.children.isEmpty() == want } }
 
+            // #1147 (TalkBack study win 3): the richer node semantics — the named scope an id-less
+            // sheet carries (pane title), the ACTION_CLICK label, the published role, the input hint,
+            // and visibility/selection/heading/click-action flags. Exact forms are case-insensitive
+            // like `hasText`; no regex forms (the RE2J surface is unchanged). These fields are NOT in
+            // `allText`, so the subtree `hasAnyText*` predicates never see them — a rule opts in here.
+            // Deliberately NO predicate for uniqueId, tooltip, error, live region or collection
+            // indices (weak or unverified identity).
+            "hasPaneTitle" -> {
+                val s = primOf(value, key).content
+                ;{ node -> node.paneTitle?.equals(s, ignoreCase = true) == true }
+            }
+            "hasPaneTitleContaining" -> {
+                val s = primOf(value, key).content
+                ;{ node -> node.paneTitle?.contains(s, ignoreCase = true) == true }
+            }
+            "hasRoleDescription" -> {
+                val s = primOf(value, key).content
+                ;{ node -> node.roleDescription?.equals(s, ignoreCase = true) == true }
+            }
+            "hasClickActionLabel" -> {
+                val s = primOf(value, key).content
+                ;{ node -> node.clickActionLabel?.equals(s, ignoreCase = true) == true }
+            }
+            "hasClickActionLabelContaining" -> {
+                val s = primOf(value, key).content
+                ;{ node -> node.clickActionLabel?.contains(s, ignoreCase = true) == true }
+            }
+            "hasHintText" -> {
+                val s = primOf(value, key).content
+                ;{ node -> node.hintText?.equals(s, ignoreCase = true) == true }
+            }
+            "hasHintTextContaining" -> {
+                val s = primOf(value, key).content
+                ;{ node -> node.hintText?.contains(s, ignoreCase = true) == true }
+            }
+            "isVisibleToUser" -> { val want = boolFlag(value, key); { node -> node.isVisibleToUser == want } }
+            "isSelected" -> { val want = boolFlag(value, key); { node -> node.isSelected == want } }
+            "isCheckable" -> { val want = boolFlag(value, key); { node -> node.isCheckable == want } }
+            "isHeading" -> { val want = boolFlag(value, key); { node -> node.isHeading == want } }
+            "hasClickAction" -> { val want = boolFlag(value, key); { node -> node.hasClickAction == want } }
+
             "all" -> {
                 val preds = (value as? JsonArray)
                     ?.map { compileNodePred(it, depth + 1) }
