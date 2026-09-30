@@ -1,6 +1,6 @@
 package cloud.trotter.dashbuddy.core.pipeline.rules
 
-import android.content.AssetManager
+import android.content.res.AssetManager
 import android.content.Context
 import cloud.trotter.dashbuddy.domain.capability.RuleCapabilityGrants
 import kotlinx.coroutines.test.runTest
