@@ -515,9 +515,12 @@ class UiInteractionHandler @Inject constructor(
     }
 
     /**
-     * A bounded, package-scoped label scan (#1149). [complete] = nothing was cut or unreadable (no
-     * node past [LABEL_SCAN_DEPTH] with children, no fetch refused by the cap, no null child —
-     * review I4a) — only a complete scan can prove a label fingerprint EXACT. Verification of a
+     * A bounded, package-scoped label scan (#1149). [complete] = no in-horizon label went unseen: no
+     * fetch refused by the [LABEL_SCAN_NODES] cap and no null child (review I4a). The
+     * [LABEL_SCAN_DEPTH] cut is the HORIZON, not incompleteness (vet decision on I2 × I4b): both
+     * sides define the fingerprint as the owner's labels within that depth, excluding clickable
+     * descendants, so deeper nodes leave it fully determined. Only a complete scan can prove a label
+     * fingerprint EXACT. Verification of a
      * label EXPECTATION does not need completeness (review I4c): a found label suffices, and since
      * I3 a collected label can never come from a nested control. [fetched] counts child fetch attempts, nulls included.
      * [exhausted] = the fetch cap (not the depth) cut it.
@@ -544,7 +547,7 @@ class UiInteractionHandler @Inject constructor(
             n.contentDescription?.toString()?.takeIf { it.isNotBlank() }?.let { labels.add(it) }
             val count = n.childCount
             if (count <= 0) return
-            if (depth >= LABEL_SCAN_DEPTH) { complete = false; return }
+            if (depth >= LABEL_SCAN_DEPTH) return // the shared horizon, not a cut (I2 × I4b vet)
             for (i in 0 until count) {
                 if (fetched >= fetchCap) { complete = false; exhausted = true; return }
                 fetched++
@@ -585,8 +588,12 @@ class UiInteractionHandler @Inject constructor(
             for (d in 0 until LABEL_SCAN_DEPTH) slots[d + 1] += child.slots[d]
         }
 
-        /** What [scanLabels] would call complete: <= LABEL_SCAN_NODES fetches and no child below the depth bound. */
-        fun complete(): Boolean = slots.take(LABEL_SCAN_DEPTH).sum() <= LABEL_SCAN_NODES && slots[LABEL_SCAN_DEPTH] == 0
+        /**
+         * What [scanLabels] would call complete: <= LABEL_SCAN_NODES in-horizon fetches. Nodes below
+         * LABEL_SCAN_DEPTH are outside the fingerprint on BOTH sides (the horizon), so they never
+         * make it incomplete; a null child already aborted the walk (I4).
+         */
+        fun complete(): Boolean = slots.take(LABEL_SCAN_DEPTH).sum() <= LABEL_SCAN_NODES
     }
 
     private class SemanticHit(val node: AccessibilityNodeInfo, val pre: Int, val lastPre: Int)
@@ -633,9 +640,8 @@ class UiInteractionHandler @Inject constructor(
             }
             val classOk = ref.classNameHint == null || node.className?.toString() == ref.classNameHint
             if (classOk && AccNodeUtils.isActionClickable(node)) {
-                // I4b: an incomplete candidate is unproven — never "a non-match that lets its twin win".
-                // TODO(vet): I2 makes labels past LABEL_SCAN_DEPTH part of NEITHER side's fingerprint,
-                // yet a depth cut still counts as unproven here, so such a control can only fail closed.
+                // I4b: an incomplete candidate (fetch-budget cut; a null child aborted above) is unproven —
+                // never "a non-match that lets its twin win". A depth cut is the horizon, not incomplete.
                 if (!region.complete()) { truncated = true; return null }
                 if (ref.fingerprintMatches(region.labels.map { it.second })) hits.add(SemanticHit(node, pre, preCounter - 1))
             }

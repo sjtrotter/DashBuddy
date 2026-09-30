@@ -178,10 +178,12 @@ never coordinates, so frozen bounds never aimed a tap — they decided WHICH nod
   AND verification.
   - **Incompleteness fails closed where it is an identity claim (review I4).** A null child makes a scan
     incomplete. A window's search is INCOMPLETE when a bound cut it (depth 40 / 600 fetches), a child read null,
-    or a candidate's OWN label region is incomplete (depth cut, fetch cut, null child) — never "a non-match that
-    lets its twin win". Verifying a label EXPECTATION stays lenient: a found label suffices, and since I3 no
-    collected label comes from a nested control. Open `TODO(vet)`: with I2's shared horizon a label past depth 3
-    is part of neither fingerprint, yet a depth cut still counts as unproven, so such a control only fails closed.
+    or a candidate's OWN label region is incomplete (fetch-budget cut, null child) — never "a non-match that
+    lets its twin win". The `LABEL_SCAN_DEPTH` cut is the HORIZON, not incompleteness (vet decision on I2 × I4b):
+    both sides define the fingerprint as the owner's labels within depth 3, excluding clickable descendants, so a
+    control with deeper nodes still has a fully determined fingerprint and IS matched. Verifying a label
+    EXPECTATION stays lenient: a found label suffices, and since I3 no collected label comes from a nested
+    control.
   - **Per window (review I6).** An incomplete window contributes no candidates; the tap aborts only when some
     window was incomplete AND the active window produced no complete survivor (then only active-window hits are
     kept). With no incomplete window and no hit, strategy 3 still runs — the fallback pre-#1149 taps relied on.

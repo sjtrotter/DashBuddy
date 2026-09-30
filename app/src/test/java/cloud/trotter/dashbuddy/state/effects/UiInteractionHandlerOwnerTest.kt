@@ -428,16 +428,31 @@ class UiInteractionHandlerOwnerTest {
         bigRow.neverClicked(); twin.neverClicked()
     }
 
-    /**
-     * I2 + I4b: a label past LABEL_SCAN_DEPTH is outside the fingerprint on BOTH sides, but the live
-     * scan of that row is cut by the depth bound, so 2b cannot prove it and the tap fails closed.
-     */
-    @Test
-    fun `a row whose subtree runs past the label depth is unproven and not clicked`() = runTest {
-        val deep = view(children = listOf(view(children = listOf(view(children = listOf(view(text = "Too deep")))))))
+    /** A row whose own title sits at depth 4 — past the shared horizon on BOTH sides. */
+    private fun deepTitledRow(nullChild: Boolean): AccessibilityNodeInfo {
+        val deep = view(children = listOf(view(children = listOf(view(children = listOf(view(text = "Full breakdown")))))))
         val row = view(clickable = true, bounds = Rect(36, 1374, 1044, 1500), children = listOf(
             view(cls = "android.widget.TextView", text = "This offer"), view(desc = "Expand"), deep,
         ))
+        if (nullChild) whenever(row.childCount).thenReturn(4) // slot 3 (depth 1) advertises a child that reads null
+        return row
+    }
+
+    /**
+     * Vet decision on I2 × I4b: the depth cut is the HORIZON. The depth-4 title is outside the
+     * fingerprint on both sides, so {this offer, expand} fully determines it — 2b finds and clicks it.
+     */
+    @Test
+    fun `a row whose title sits past the label depth is found by its in-horizon fingerprint and clicked`() = runTest {
+        val row = deepTitledRow(nullChild = false)
+        assertTrue(expand(handler(windowRoot(row))))
+        row.clicks(1)
+    }
+
+    /** ...but an unreadable child INSIDE the horizon leaves in-horizon labels unseen — fail closed. */
+    @Test
+    fun `the same row with a null child inside the horizon is not clicked`() = runTest {
+        val row = deepTitledRow(nullChild = true)
         assertFalse(expand(handler(windowRoot(row))))
         row.neverClicked()
     }

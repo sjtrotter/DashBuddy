@@ -101,7 +101,8 @@ data class NodeRef(
          * #1149 review I2 — the bind-time mirror of the executor's live label scan over a mapped
          * [UiNode]: own text/contentDescription, then children breadth-first-in-order down to
          * [LABEL_SCAN_DEPTH], at most [LABEL_SCAN_NODES] child slots, never descending into an
-         * `isClickable` descendant. [UiLabelScan.complete] is false when either bound cut it.
+         * `isClickable` descendant. [UiLabelScan.complete] is false only when the slot cap cut it — the
+         * depth bound is the shared HORIZON (labels below it belong to neither side's fingerprint).
          *
          * Residual (documented): fire time budgets FETCH attempts (a null child spends one), while a
          * mapped [UiNode] has already dropped null children, so a live window with null slots can
@@ -116,7 +117,7 @@ data class NodeRef(
                 n.text?.takeIf { it.isNotBlank() }?.let { labels.add(it) }
                 n.contentDescription?.takeIf { it.isNotBlank() }?.let { labels.add(it) }
                 if (n.children.isEmpty()) return true
-                if (depth >= LABEL_SCAN_DEPTH) { complete = false; return true }
+                if (depth >= LABEL_SCAN_DEPTH) return true // the horizon, not a cut
                 for (child in n.children) {
                     if (fetched >= LABEL_SCAN_NODES) { complete = false; return false }
                     fetched++
@@ -144,7 +145,7 @@ data class NodeRef(
             hintKeyOrNull(label)?.let { cloud.trotter.dashbuddy.domain.util.sha256OrNull(it) }
     }
 }
-/** #1149 review I2 — a bounded bind-time label scan ([NodeRef.hintLabelsOf]); [complete] = no bound cut it. */
+/** #1149 review I2 — a bounded bind-time label scan ([NodeRef.hintLabelsOf]); [complete] = the slot cap did not cut it. */
 data class UiLabelScan(val labels: List<String>, val complete: Boolean)
 
 /**

@@ -86,7 +86,7 @@ class NodeRefLabelHintsTest {
         ).restoreParents()
         val scan = NodeRef.hintLabelsOf(row)
         assertEquals(listOf("This offer", "Expand"), scan.labels)
-        assertFalse("a node at the depth bound with children leaves the scan incomplete", scan.complete)
+        assertTrue("the depth bound is the shared horizon, not incompleteness", scan.complete)
 
         val hints = scan.labels.mapNotNull(NodeRef::hintHash).distinct()
         val bound = ref("This offer", "Expand")
