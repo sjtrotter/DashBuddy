@@ -51,10 +51,16 @@ fun FrontDoorHost(
     FrontDoorSheet(
         onDefer = frontDoor::defer,
     ) {
-        AnimatedContent(targetState = prompt, label = "frontDoorPage") { page ->
-            when (page) {
+        // PP5: the rows ride in the target state (keyed by prompt), so the exiting capability page
+        // keeps the rows it last showed while it slides out.
+        AnimatedContent(
+            targetState = FrontDoorPageState(prompt, capability.rows),
+            contentKey = { it.prompt },
+            label = "frontDoorPage",
+        ) { page ->
+            when (page.prompt) {
                 FrontDoorPrompt.CAPABILITIES -> ConsentPromptPage(
-                    rows = capability.rows,
+                    rows = page.rows,
                     onDecision = capabilityViewModel::onDecision,
                 )
                 FrontDoorPrompt.EVENT_RECEIPT -> EventReceiptConsentPage(

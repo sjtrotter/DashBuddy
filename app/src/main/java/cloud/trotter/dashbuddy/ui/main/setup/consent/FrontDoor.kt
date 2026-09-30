@@ -36,6 +36,16 @@ data class FrontDoorDeferrals(
     fun onBackgrounded(): FrontDoorDeferrals = copy(foregroundGeneration = foregroundGeneration + 1)
 }
 
+/**
+ * #1151 review PP5 — what one front-door page renders, carried IN the `AnimatedContent` target
+ * state (keyed by [prompt]) so an exiting capability page keeps the rows it was showing instead of
+ * recomposing against the now-empty live list and blanking mid-slide.
+ */
+data class FrontDoorPageState(
+    val prompt: FrontDoorPrompt,
+    val rows: List<ConsentPromptRow> = emptyList(),
+)
+
 /** #1151 review PP2 — the longest the door waits for a capability load attempt. */
 const val CAPABILITY_WAIT_MS = 5_000L
 
