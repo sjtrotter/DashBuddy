@@ -59,8 +59,6 @@ object ResourceIdGrammar {
     fun isWireId(id: String): Boolean = id == FRAME_WITHHELD_ID || isStaticShape(id)
 
     private val SHAPE = Regex("^(?:([A-Za-z][A-Za-z0-9_.]*):id/)?([A-Za-z_][A-Za-z0-9_.-]*(?: [A-Za-z0-9_.-]+)?)$")
-    private val HEX_RUN = Regex("[0-9a-fA-F]{8}")
-    private val DECIMAL_RUN = Regex("[0-9]{4}")
 
     /**
      * True when [id] has the STATIC resource-name SHAPE. Necessary, not sufficient (#1160 review II3):
@@ -76,7 +74,7 @@ object ResourceIdGrammar {
         val pkg = m.groupValues[1]
         val name = m.groupValues[2]
         if (pkg.length > MAX_PACKAGE_LENGTH || name.length > MAX_NAME_LENGTH) return false
-        return !HEX_RUN.containsMatchIn(name) && !DECIMAL_RUN.containsMatchIn(name)
+        return !DynamicRuns.hasDynamicRun(name)
     }
 
     /** The resource NAME part of [id] (after `:id/`, or the whole id when it has no prefix). */

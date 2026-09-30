@@ -35,12 +35,9 @@ object ClassNameGrammar {
     const val MAX_LENGTH: Int = 128
 
     private val SHAPE = Regex("^[A-Za-z_$][A-Za-z0-9_$]*(?:\\.[A-Za-z_$][A-Za-z0-9_$]*)*$")
-    private val HEX_RUN = Regex("[0-9a-fA-F]{8}")
-    private val DECIMAL_RUN = Regex("[0-9]{4}")
-
     fun isStatic(className: String): Boolean =
         className.length <= MAX_LENGTH && SHAPE.matches(className) &&
-            !HEX_RUN.containsMatchIn(className) && !DECIMAL_RUN.containsMatchIn(className)
+            !DynamicRuns.hasDynamicRun(className)
 
     /** [className] when it is static, else null (absent). */
     fun staticOrNull(className: String?): String? = className?.takeIf { isStatic(it) }

@@ -41,4 +41,25 @@ class ResourceIdGrammarTest {
         )))
         assertTrue(sentinel != spliced)
     }
+
+    @Test
+    fun `both static grammars share one dynamic-run rule (review AJ4)`() {
+        val dynamic = listOf("a3f488d4a", "Tag1234", "x0f0b4fb9c", "row_2024")
+        val static = listOf("a3f488d", "Tag123", "bc25_fab", "a11y")
+        dynamic.forEach {
+            assertTrue(it, DynamicRuns.hasDynamicRun(it))
+            assertFalse(it, ClassNameGrammar.isStatic("com.x.$it"))
+            assertFalse(it, ResourceIdGrammar.isStaticShape("com.x:id/$it"))
+        }
+        static.forEach {
+            assertFalse(it, DynamicRuns.hasDynamicRun(it))
+            assertTrue(it, ClassNameGrammar.isStatic("com.x.$it"))
+            assertTrue(it, ResourceIdGrammar.isStaticShape("com.x:id/$it"))
+        }
+    }
+
+    @Test
+    fun `the id grammar rejects a mask bracket, so no mask can reach the id path (review AJ8)`() {
+        listOf("[redacted]", "chip_[name]", "x:id/[redacted:ab12]", "tag[").forEach { assertFalse(it, ResourceIdGrammar.isStaticShape(it)) }
+    }
 }
