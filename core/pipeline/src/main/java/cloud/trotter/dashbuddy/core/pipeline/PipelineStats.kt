@@ -431,11 +431,11 @@ class PipelineStats @Inject constructor(
     private fun bindShortfallSuffix(): String =
         shortfallSuffix("bindShortfall", bindShortfallByKey) { (rule, bind) -> "${escapeKey(rule)}#${escapeKey(bind)}" }
 
-    /** `" bindUnprovable{<rule>#<bind>=n,…}"` (#1149 review R7) — same bound, clamp and ordering. */
     /** `" bindRefused{<rule>#<bind>=n,…}"` (#1149 review S4) — same bound, clamp and ordering. */
     private fun bindRefusedSuffix(): String =
         shortfallSuffix("bindRefused", bindRefusedByKey) { (rule, bind) -> "${escapeKey(rule)}#${escapeKey(bind)}" }
 
+    /** `" bindUnprovable{<rule>#<bind>=n,…}"` (#1149 review R7) — same bound, clamp and ordering. */
     private fun bindUnprovableSuffix(): String =
         shortfallSuffix("bindUnprovable", bindUnprovableByKey) { (rule, bind) -> "${escapeKey(rule)}#${escapeKey(bind)}" }
 
