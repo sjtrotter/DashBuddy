@@ -1,6 +1,8 @@
 package cloud.trotter.dashbuddy.core.pipeline.accessibility.event.coalesce
 
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.channels.ProducerScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
@@ -9,6 +11,8 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.selects.onTimeout
+import kotlinx.coroutines.selects.select
 import timber.log.Timber
 
 /** Default bound on concurrently-open bursts (keys are window ids — a handful in practice). */
@@ -48,10 +52,11 @@ internal const val COALESCE_MAX_KEYS = 64
  * Backpressure (#1148 review F2): a timer must take one of [maxKeys] EMISSION PERMITS before it
  * closes its burst, and holds it until its `send` returns. With a stalled consumer the permits run
  * out, so a due burst stays OPEN and keeps MERGING (its timers wait on a permit) instead of being
- * removed and replaced by a fresh burst with fresh timers — live coroutines stay ≤ 3 × [maxKeys]
- * (a sender blocked in `send` + the open burst's two timers, per key; plus, with [leadingEdge],
- * at most one short-lived cooldown job per key) and no event is lost: when the consumer resumes,
- * the merged burst carries every event that arrived meanwhile.
+ * removed and replaced by a fresh burst with fresh timers — live coroutines stay ≤ 4 × [maxKeys]
+ * (a sender blocked in `send` + the open burst's max timer, its ONE quiet job (H8) and that job's
+ * pending timed wait, per key; plus, with [leadingEdge], at most one short-lived cooldown job per
+ * key) and no event is lost: when the consumer resumes, the merged burst carries every event that
+ * arrived meanwhile.
  */
 fun <T, K, A : Any> Flow<T>.coalesceByKey(
     quietMs: Long = 150L,
@@ -82,8 +87,11 @@ private class KeyedCoalescer<T, K, A : Any>(
      * (G4) — closing it then emits nothing.
      */
     private inner class Burst(var acc: A?) {
-        /** Bumped per event; a quiet timer only fires if no event arrived after it was armed. */
-        var quietGen = 0L
+        /** Bumped per event; the quiet timer only flushes if no event arrived since it last woke. */
+        @Volatile var quietGen = 0L
+
+        /** Conflated "an event arrived" signal to the burst's ONE quiet job (H8). */
+        val pokes = Channel<Unit>(Channel.CONFLATED)
         var quietJob: Job? = null
         var maxJob: Job? = null
     }
@@ -124,11 +132,13 @@ private class KeyedCoalescer<T, K, A : Any>(
                     delay(maxWaitMs)
                     flush(key, opened, quietGen = null)
                 }
-                armQuietLocked(key, opened)
+                startQuietLocked(key, opened)
             } else {
                 burst.acc = merge(burst.acc, value)
-                burst.quietJob?.cancel()
-                armQuietLocked(key, burst)
+                // H8: no cancel/relaunch per raw event — bump the generation and poke the one
+                // long-lived quiet job, which restarts its quiet window.
+                burst.quietGen++
+                burst.pokes.trySend(Unit)
             }
         }
         // An eviction that found no free permit is sent here, on the collector (backpressure — it
@@ -152,32 +162,51 @@ private class KeyedCoalescer<T, K, A : Any>(
         return true
     }
 
-    private fun armQuietLocked(key: K, burst: Burst) {
-        val gen = ++burst.quietGen
+    /**
+     * The burst's ONE quiet job (#1148 review H8 — a map pan is hundreds of raw events a second, and
+     * cancelling + relaunching a coroutine per event was the old cost). It waits up to [quietMs] for
+     * a poke; a poke restarts the window, a timeout flushes — so the emission still lands exactly
+     * [quietMs] after the burst's last event. A flush that finds a newer generation (an event raced
+     * the timeout) keeps looping; one that finds the burst closed ends the job.
+     */
+    @OptIn(ExperimentalCoroutinesApi::class) // select.onTimeout
+    private fun startQuietLocked(key: K, burst: Burst) {
         burst.quietJob = scope.launch {
-            delay(quietMs)
-            flush(key, burst, quietGen = gen)
+            while (true) {
+                val gen = burst.quietGen
+                // Wait for a poke (restart the window) or the quiet timeout. The wait costs one
+                // short-lived child of this job while it is pending (measured under
+                // kotlinx-coroutines 1.10) — per burst, never per raw event.
+                val poked = select<Boolean> {
+                    burst.pokes.onReceive { true }
+                    onTimeout(quietMs) { false }
+                }
+                if (poked) continue
+                if (flush(key, burst, quietGen = gen)) return@launch
+            }
         }
     }
 
     /**
-     * Closes [burst] if it is still the open burst for [key] (and, for a quiet timer, no event
-     * arrived since it was armed), emitting its value unless the leading emission already covered
+     * Closes [burst] if it is still the open burst for [key] (and, for the quiet timer, no event
+     * arrived since it last woke), emitting its value unless the leading emission already covered
      * it. The emission permit is taken BEFORE the burst is removed, so under a stalled consumer
      * the burst stays open and merging (F2). Only the OTHER timer is cancelled — the caller is one
-     * of them and must not cancel itself before `send`.
+     * of them and must not cancel itself before `send`. Returns false only for a stale quiet wake
+     * (keep waiting); true once the burst is no longer open.
      */
-    private suspend fun flush(key: K, burst: Burst, quietGen: Long?) {
+    private suspend fun flush(key: K, burst: Burst, quietGen: Long?): Boolean {
         permits.acquire()
         try {
             val value = lock.withLock {
-                if (bursts[key] !== burst) return
-                if (quietGen != null && burst.quietGen != quietGen) return
+                if (bursts[key] !== burst) return true // already closed — the caller is done
+                if (quietGen != null && burst.quietGen != quietGen) return false // stale: keep waiting
                 bursts.remove(key)
                 if (quietGen == null) burst.quietJob?.cancel() else burst.maxJob?.cancel()
                 burst.acc?.also { markEmittedLocked(key) } // a silent close starts no cooldown (G3)
-            } ?: return
+            } ?: return true
             scope.send(value)
+            return true
         } finally {
             permits.release()
         }

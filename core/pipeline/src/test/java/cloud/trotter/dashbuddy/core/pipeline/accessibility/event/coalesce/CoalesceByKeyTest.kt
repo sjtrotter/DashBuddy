@@ -200,7 +200,9 @@ class CoalesceByKeyTest {
             peak = maxOf(peak, job.activeDescendants() - baseline)
         }
 
-        assertTrue("live coroutines beyond the operator's own must stay <= 3 x maxKeys, was $peak", peak <= 3)
+        // H8: sender + max timer + the one quiet job + its pending timed wait (per burst, not per
+        // event — the old per-event cancel/relaunch kept this at 3 but churned a coroutine per event).
+        assertTrue("live coroutines beyond the operator's own must stay <= 4 x maxKeys, was $peak", peak <= 4)
 
         gate.complete(Unit)
         advanceUntilIdle()
@@ -284,7 +286,7 @@ class CoalesceByKeyTest {
             peak = maxOf(peak, job.activeDescendants() - baseline)
         }
 
-        assertTrue("live coroutines stay bounded, was $peak", peak <= 4)
+        assertTrue("live coroutines stay bounded (H8 bound + the lead cooldown), was $peak", peak <= 5)
 
         gate.complete(Unit)
         advanceUntilIdle()
