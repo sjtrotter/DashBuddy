@@ -480,4 +480,18 @@ class SkeletonBuilderTest {
         assertEquals(words(2, "Pickup & delivery"), slot("Pickup\u00A0&\u00A0delivery"))
         assertEquals(words(2, "Pickup & delivery"), slot("  Pickup \t &\n delivery "))
     }
+
+    // ---- #1160 review round 4 ----------------------------------------------------------------------
+
+    @Test
+    fun `FF1 - the value steps judge BOTH the raw trimmed and the canonical form`() {
+        // Raw-only hit: QUOTED_NOTE needs 6+ characters between the quotes; canonicalization shrinks
+        // "ab  cd" to "ab cd". Pre-FF1 this hashed as words:2.
+        assertEquals(TextSlot.WITHHELD, slot("\"ab  cd\""))
+        // Canonical-only hit: an NBSP-split name — the JVM regex's \s excludes NBSP, so only the
+        // canonical form carries the name shape.
+        assertEquals(TextSlot.WITHHELD, slot("Brandon\u00A0C"))
+        // Neither: chrome still hashes on its canonical form.
+        assertEquals(words(2, "Pickup & delivery"), slot("Pickup  &  delivery"))
+    }
 }

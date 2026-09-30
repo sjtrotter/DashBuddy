@@ -246,8 +246,11 @@ object SkeletonBuilder {
      */
     private val SEED_FIELDS = setOf(UiNodeTextField.TEXT, UiNodeTextField.CONTENT_DESCRIPTION)
 
-    /** One non-blank field after pass 1: its canonical value, and whether its own id withholds it. */
-    internal class Field(val canonical: String, val idWithholds: Boolean)
+    /**
+     * One non-blank field after pass 1: its RAW trimmed value (the verdict memo key), its canonical value
+     * (the hash/grammar input and the frame-wide key), and whether its own id withholds it.
+     */
+    internal class Field(val trimmed: String, val canonical: String, val idWithholds: Boolean)
 
     /** A node after pass 1: its validated class/id, flags, and fields by wire key. */
     internal class Pending(
@@ -294,13 +297,14 @@ object SkeletonBuilder {
         }
 
         /**
-         * Pass 1 for one field: canonicalize (review EE2), filter, and seed [caught] per the frame-level
+         * Pass 1 for one field: canonicalize (review EE2), filter both forms (FF1), and seed [caught] per the frame-level
          * rule. [seedsFromId] is true only for the TEXT / CONTENT_DESCRIPTION fields (review EE1).
          */
         fun field(value: String?, idClass: IdClass, seedsFromId: Boolean = true): Field? {
             if (value.isNullOrBlank()) return null
+            val trimmed = value.trim()
             val canonical = CensusHash.canonical(value)
-            val step = valueStep(canonical)
+            val step = valueStep(trimmed, canonical)
             // Seeds: the value-judging steps 3, 4, 5, 7, 8 on any field — and step 1 ONLY for an IDENTITY
             // id (`valueIsPii`, review EE1) on its rendered text/desc. Not the length cap (a duplicate is
             // itself over-length), not a content id (`description_text_view` renders app copy), not an
@@ -308,23 +312,31 @@ object SkeletonBuilder {
             val valueSeed = step != null && step != FilterStep.LENGTH_CAP
             val idSeed = idClass == IdClass.PII_VALUE && seedsFromId
             if (valueSeed || idSeed) caught += canonical
-            return Field(canonical, idWithholds = idClass != IdClass.NONE)
+            return Field(trimmed, canonical, idWithholds = idClass != IdClass.NONE)
         }
 
         /** Steps 2–8 of [withholdingStep], memoized; a filter failure withholds (fail closed). */
-        private fun valueStep(canonical: String): FilterStep? = valueSteps.getOrPut(canonical) {
-            Judged(
-                try {
-                    judge(canonical)
-                } catch (_: Exception) {
-                    FilterStep.PII_SHAPE
-                },
-            )
-        }.step
+        /**
+         * Review FF1: the value-judging steps run on BOTH the raw trimmed value AND the canonical form —
+         * either hit withholds. Canonicalization alone can shrink a value below a pattern's minimum
+         * (`"ab  cd"` matches QUOTED_NOTE raw, `"ab cd"` does not); the raw form alone is engine-dependent
+         * (an NBSP-split name, review EE2). Memoized by the raw trimmed string, from which the canonical
+         * form is derived, so one memo covers both; the second evaluation is skipped when they are equal.
+         */
+        private fun valueStep(trimmed: String, canonical: String = CensusHash.canonical(trimmed)): FilterStep? =
+            valueSteps.getOrPut(trimmed) {
+                Judged(
+                    try {
+                        judge(trimmed) ?: if (canonical != trimmed) judge(canonical) else null
+                    } catch (_: Exception) {
+                        FilterStep.PII_SHAPE
+                    },
+                )
+            }.step
 
         /** Pass 2 for one field: the constant `withheld`, or the value's own (memoized) slot. */
         fun slot(field: Field): TextSlot {
-            if (field.idWithholds || field.canonical in caught || valueStep(field.canonical) != null) return TextSlot.WITHHELD
+            if (field.idWithholds || field.canonical in caught || valueStep(field.trimmed, field.canonical) != null) return TextSlot.WITHHELD
             return valueSlots.getOrPut(field.canonical) { unfilteredSlot(field.canonical) }
         }
 
