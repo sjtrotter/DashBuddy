@@ -35,6 +35,7 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.io.File
+import java.time.LocalDate
 
 /**
  * ADR-0011 §7 — the census skeleton over the ENTIRE committed corpus (every category folder, incl.
@@ -53,7 +54,7 @@ class SkeletonCorpusTest {
         /** #878 pinned seed — pins PR CI. Bump deliberately to explore new samples. */
         const val SEED = 0x1145_0001L
 
-        const val DAY = "2026-09-30"
+        val DAY: LocalDate = LocalDate.of(2026, 9, 30)
 
         val META = ReplayMetadata(
             engineVersion = 1,
@@ -125,11 +126,11 @@ class SkeletonCorpusTest {
      * token (a single segment, or an UPPER-CASE screen label in that slot) and resolve to
      * [Platform.Unknown]; a lowercase token that is not a registered wire FAILS LOUD.
      */
-    private fun platformOf(path: String): String {
+    private fun platformOf(path: String): Platform {
         val segments = path.substringAfterLast('/').removeSuffix(".json").split("__")
         val token = segments.getOrNull(1)?.takeIf { segments.size >= 3 && it.matches(Regex("[a-z0-9_]+")) }
-            ?: return Platform.Unknown.wire
-        return (Platform.fromWire(token) ?: error("$path: unknown platform wire '$token'")).wire
+            ?: return Platform.Unknown
+        return Platform.fromWire(token) ?: error("$path: unknown platform wire '$token'")
     }
 
     private fun build(f: Fixture, tree: UiNode = f.tree): UiSkeletonDto? =
@@ -150,7 +151,7 @@ class SkeletonCorpusTest {
 
     /** One value's slot through the whole builder (a one-node frame); null when the frame is refused. */
     private fun slotOf(value: String): TextSlot? =
-        SkeletonBuilder.build(UiNode(className = "android.widget.TextView", text = value), null, META, "doordash", DAY)
+        SkeletonBuilder.build(UiNode(className = "android.widget.TextView", text = value), null, META, Platform.DoorDash, DAY)
             ?.root?.text?.get("text")
 
     private fun walkNodes(node: UiNode, visit: (UiNode) -> Unit) {
@@ -334,6 +335,8 @@ class SkeletonCorpusTest {
                 }
             }
         }
+        // Review GG1: an identity value also withholds any field CONTAINING one of its ≥3-letter runs.
+        val idRuns = idSeeded.flatMap { letterRuns(it) }.filter { it.length >= 3 }.toSet()
         fun walk(o: UiNode, r: UiNode, s: UiSkeletonNodeDto) {
             val redactedValues = r.scrubbableStrings().toMap()
             for ((field, value) in o.scrubbableStrings()) {
@@ -349,7 +352,8 @@ class SkeletonCorpusTest {
                 // no seeding identity-id occurrence and no value-judging step anywhere in the frame).
                 val trimmed = CensusHash.canonical(value)
                 if (redactedInIsolation(o.viewIdResourceName, field.wire, value) == value &&
-                    trimmed in propagatedNotSeeded && trimmed !in idSeeded && !valueJudged(trimmed) && !valueJudged(value.trim())
+                    trimmed in propagatedNotSeeded && trimmed !in idSeeded && !valueJudged(trimmed) &&
+                    !valueJudged(value.trim()) && letterRuns(trimmed).none { it in idRuns }
                 ) {
                     exempt++
                     continue
@@ -382,7 +386,7 @@ class SkeletonCorpusTest {
             className = "android.widget.LinearLayout",
             children = listOf(UiNode(className = "android.widget.TextView", text = "\"ab  cd\"")),
         ).restoreParents()
-        val item = SkeletonBuilder.build(frame, null, META, "doordash", DAY)!!
+        val item = SkeletonBuilder.build(frame, null, META, Platform.DoorDash, DAY)!!
         assertEquals(TextSlot.WITHHELD, item.root.children.single().text.getValue("text"))
         val (rewritten, _, problems) = parityProblems("ff1", frame, item)
         assertEquals(1, rewritten)
@@ -399,7 +403,7 @@ class SkeletonCorpusTest {
                 UiNode(className = "android.widget.TextView", viewIdResourceName = "com.doordash.driverapp:id/step_description", text = "Sam"),
             ),
         ).restoreParents()
-        val good = SkeletonBuilder.build(frame, null, META, "doordash", DAY)!!
+        val good = SkeletonBuilder.build(frame, null, META, Platform.DoorDash, DAY)!!
         assertEquals(TextSlot.WITHHELD, good.root.text.getValue("desc"))
         assertTrue(parityProblems("good", frame, good).third.isEmpty())
         // An INCORRECTLY hashed root slot: the intake-only occurrence must not exempt it.
@@ -407,6 +411,13 @@ class SkeletonCorpusTest {
         val (_, _, problems) = parityProblems("bad", frame, bad)
         assertEquals(problems.toString(), 1, problems.size)
     }
+
+    /**
+     * Maximal Unicode-letter runs, case-folded — the test-side mirror of the builder's private token
+     * split (review GG1). Used only to REFUSE an exemption, so a drift can only make the guard stricter.
+     */
+    private fun letterRuns(value: String): List<String> =
+        Regex("\\p{L}+").findAll(value).map { it.value.lowercase(java.util.Locale.ROOT) }.toList()
 
     private fun redactedInIsolation(id: String?, wire: String, value: String): String {
         val json = Json.encodeToString(
@@ -445,7 +456,7 @@ class SkeletonCorpusTest {
                 UiNode(className = "android.widget.TextView", viewIdResourceName = "com.doordash.driverapp:id/customer_name", text = "Sam"),
             ),
         ).restoreParents()
-        val item = SkeletonBuilder.build(frame, null, META, "doordash", DAY)!!
+        val item = SkeletonBuilder.build(frame, null, META, Platform.DoorDash, DAY)!!
         val (rewritten, _, problems) = parityProblems("synthetic", frame, item)
         assertEquals(2, rewritten)
         assertTrue(problems.joinToString(), problems.isEmpty())
@@ -546,7 +557,7 @@ class SkeletonCorpusTest {
             // and look for every token of the input (tokens that are schema vocabulary are skipped).
             val item = SkeletonBuilder.build(
                 UiNode(className = "android.widget.TextView", text = value, contentDescription = value, hintText = value),
-                value, META, "doordash", DAY,
+                value, META, Platform.DoorDash, DAY,
             ) ?: return@checkAll
             val stripped = stripClassAndId(Json.parseToJsonElement(SkeletonSchema.serialize(item))).toString()
             val vocabulary = stripped.replace(Regex("\"h\":\"[0-9a-f]{16}\""), "")
@@ -562,7 +573,7 @@ class SkeletonCorpusTest {
     private val vocab = ("schemaId hashDomain filterRev fingerprint platform platformAppVersion appVersion " +
         "rulesetReleaseTag engineVersion rulesetFormatVersion day windowTitle root isClickable isEnabled " +
         "isChecked text children kind withheld digits mixed words uinode.skeleton.v1 doordash corpus test " +
-        "clickLabel " + DAY)
+        "clickLabel 2026-09-30")
 
     private fun stripClassAndId(e: JsonElement): JsonElement = when (e) {
         is JsonObject -> JsonObject(e.filterKeys { it != "class" && it != "id" }.mapValues { stripClassAndId(it.value) })
