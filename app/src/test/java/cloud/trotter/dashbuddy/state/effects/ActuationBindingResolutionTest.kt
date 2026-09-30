@@ -170,11 +170,31 @@ class ActuationBindingResolutionTest {
      */
     private fun modernSnapshots(dir: String): List<Triple<String, UiNode, List<String>>> {
         val all = TestResourceLoader.loadSnapshots(dir)
-        val modern = all.filterNot { (name, _, _) ->
-            java.io.File("src/test/resources/$dir/$name").readText().contains("\"clickable\"")
-        }
+        val modern = all.filterNot { (name, _, _) -> hasLegacyClickableKey(java.io.File("src/test/resources/$dir/$name").readText()) }
         println("ActuationBindingResolutionTest: $dir — skipped ${all.size - modern.size} of ${all.size} legacy-'clickable' fixtures (#1154)")
+        // Review J8: an emptied (or wholly-skipped) corpus must FAIL, not pass vacuously.
+        val floor = MODERN_FLOOR.getValue(dir)
+        assertTrue("$dir: only ${modern.size} modern fixtures survive the #1154 skip (floor $floor)", modern.size >= floor)
         return modern
+    }
+
+    /** Review J8: the legacy key is detected on a NODE object (one carrying `bounds`), never as a substring of text. */
+    private fun hasLegacyClickableKey(json: String): Boolean {
+        fun walk(e: kotlinx.serialization.json.JsonElement): Boolean = when (e) {
+            is kotlinx.serialization.json.JsonObject ->
+                ("clickable" in e && "bounds" in e) || e.values.any(::walk)
+            is kotlinx.serialization.json.JsonArray -> e.any(::walk)
+            else -> false
+        }
+        return walk(kotlinx.serialization.json.Json.parseToJsonElement(json))
+    }
+
+    private companion object {
+        /** Modern (non-#1154) fixtures each corpus folder must keep — today 13 and 5. */
+        val MODERN_FLOOR = mapOf(
+            "snapshots/offer_popup_confirm_decline" to 13,
+            "snapshots/delivery_summary_collapsed" to 5,
+        )
     }
 
     /**
