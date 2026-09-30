@@ -113,7 +113,8 @@ data class NodeRef(
 
         /**
          * #1149 review I2 — the bind-time mirror of the executor's live label scan over a mapped
-         * [UiNode]: own text/contentDescription, then children breadth-first-in-order down to
+         * [UiNode]: own text/contentDescription, then children depth-first in pre-order (the same order as the
+         * executor's `scanLabels`) down to
          * [LABEL_SCAN_DEPTH], at most [LABEL_SCAN_NODES] child slots, never descending into a
          * descendant that [UiNode.takesClick] (review J2 — the live `isActionClickable`'s mirror). [UiLabelScan.complete] is false only when the slot cap cut it — the
          * depth bound is the shared HORIZON (labels below it belong to neither side's fingerprint).

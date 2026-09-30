@@ -82,12 +82,6 @@ class UiInteractionHandler @Inject constructor(
         /** #1093 — a clickable same-class node overlapping the ref this much is a bounds-walk candidate. */
         internal const val RELAXED_BOUNDS_IOU = 0.5
 
-        /** Max subtree depth scanned when collecting a candidate's labels — one owner: [NodeRef.LABEL_SCAN_DEPTH] (#1149 I2). */
-        private const val LABEL_SCAN_DEPTH = NodeRef.LABEL_SCAN_DEPTH
-
-        /** Max child fetches per label scan — bounded ingestion; one owner: [NodeRef.LABEL_SCAN_NODES] (#1149 I2). */
-        private const val LABEL_SCAN_NODES = NodeRef.LABEL_SCAN_NODES
-
         // #1149 review J5: the strategy-2b walk's depth / fetch bounds are the MAPPER's own tree
         // budget (TreeLimits — one owner): "incomplete" means a tree the mapper itself would have
         // truncated, never an arbitrary lower cut.
@@ -207,7 +201,7 @@ class UiInteractionHandler @Inject constructor(
             ) { staleEvidence++; return@mapNotNull null }
             val scan = scanLabels(target.owner, expectedPackage)
             // #1149 review I8: the MATCHED node's own (refreshed, in-package — J1) text/contentDescription
-            // always count — the owner may sit more than LABEL_SCAN_DEPTH levels (or LABEL_SCAN_NODES
+            // always count — the owner may sit more than NodeRef.LABEL_SCAN_DEPTH levels (or NodeRef.LABEL_SCAN_NODES
             // fetches) above it, and a viewId/text match that verified pre-#1149 must not fail for that.
             // Consistent with I3: the evidence node is inside the owner and not itself clickable (else it
             // would BE the owner). Only the lenient expectation/ranking set grows; the semantic
@@ -549,8 +543,8 @@ class UiInteractionHandler @Inject constructor(
 
     /**
      * A bounded, package-scoped label scan (#1149). [complete] = no in-horizon label went unseen: no
-     * fetch refused by the [LABEL_SCAN_NODES] cap and no null child (review I4a). The
-     * [LABEL_SCAN_DEPTH] cut is the HORIZON, not incompleteness (vet decision on I2 × I4b): both
+     * fetch refused by the [NodeRef.LABEL_SCAN_NODES] cap and no null child (review I4a). The
+     * [NodeRef.LABEL_SCAN_DEPTH] cut is the HORIZON, not incompleteness (vet decision on I2 × I4b): both
      * sides define the fingerprint as the owner's labels within that depth, excluding clickable
      * descendants, so deeper nodes leave it fully determined. Only a complete scan can prove a label
      * fingerprint EXACT. Verification of a label EXPECTATION does not need completeness (review
@@ -579,9 +573,9 @@ class UiInteractionHandler @Inject constructor(
             n.contentDescription?.toString()?.takeIf { it.isNotBlank() }?.let { labels.add(it) }
             val count = n.childCount
             if (count <= 0) return
-            if (depth >= LABEL_SCAN_DEPTH) return // the shared horizon, not a cut (I2 × I4b vet)
+            if (depth >= NodeRef.LABEL_SCAN_DEPTH) return // the shared horizon, not a cut (I2 × I4b vet)
             for (i in 0 until count) {
-                if (fetched >= LABEL_SCAN_NODES) { complete = false; exhausted = true; return }
+                if (fetched >= NodeRef.LABEL_SCAN_NODES) { complete = false; exhausted = true; return }
                 fetched++
                 // #1149 review I4a: an advertised child that cannot be read is UNPROVEN — the scan is
                 // incomplete (it still spent a fetch, #1102 constraint 3).
@@ -604,25 +598,25 @@ class UiInteractionHandler @Inject constructor(
 
     /**
      * The part of a node's subtree its OWN label scan would read, relative to the node: labels at
-     * relative depth <= [LABEL_SCAN_DEPTH], and `slots[d]` = child slots of region nodes at relative
+     * relative depth <= [NodeRef.LABEL_SCAN_DEPTH], and `slots[d]` = child slots of region nodes at relative
      * depth d (each one fetch in [scanLabels]). Clickable and foreign-package children spend a slot
      * but contribute nothing (#1149 review I3 / constraint 4).
      */
     private class LabelRegion {
         val labels = ArrayList<Pair<Int, String>>()
-        val slots = IntArray(LABEL_SCAN_DEPTH + 1)
+        val slots = IntArray(NodeRef.LABEL_SCAN_DEPTH + 1)
 
         fun absorb(child: LabelRegion) {
-            for ((d, label) in child.labels) if (d + 1 <= LABEL_SCAN_DEPTH) labels.add(d + 1 to label)
-            for (d in 0 until LABEL_SCAN_DEPTH) slots[d + 1] += child.slots[d]
+            for ((d, label) in child.labels) if (d + 1 <= NodeRef.LABEL_SCAN_DEPTH) labels.add(d + 1 to label)
+            for (d in 0 until NodeRef.LABEL_SCAN_DEPTH) slots[d + 1] += child.slots[d]
         }
 
         /**
-         * What [scanLabels] would call complete: <= LABEL_SCAN_NODES in-horizon fetches. Nodes below
-         * LABEL_SCAN_DEPTH are outside the fingerprint on BOTH sides (the horizon), so they never
+         * What [scanLabels] would call complete: <= NodeRef.LABEL_SCAN_NODES in-horizon fetches. Nodes below
+         * NodeRef.LABEL_SCAN_DEPTH are outside the fingerprint on BOTH sides (the horizon), so they never
          * make it incomplete; a null child already aborted the walk (I4).
          */
-        fun complete(): Boolean = slots.take(LABEL_SCAN_DEPTH).sum() <= LABEL_SCAN_NODES
+        fun complete(): Boolean = slots.take(NodeRef.LABEL_SCAN_DEPTH).sum() <= NodeRef.LABEL_SCAN_NODES
     }
 
     private class SemanticHit(val node: AccessibilityNodeInfo, val pre: Int, val lastPre: Int)
