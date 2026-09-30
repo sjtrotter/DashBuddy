@@ -664,4 +664,15 @@ class UiInteractionHandlerOwnerTest {
         assertFalse(expand(handler(windowRoot(a, b))))
         a.neverClicked(); b.neverClicked()
     }
+
+    // ---------------------------------------------------------------- review J7: strategy 3's predicate
+
+    /** A hint-less ref and an action-only (Compose) control at the exact rect: found by the bounds walk and clicked. */
+    @Test
+    fun `the bounds walk finds an action-only control at the exact rect`() = runTest {
+        val legacy = expandRef.copy(labelHintHashes = emptyList(), labelHintsComplete = false)
+        val row = payRow(clickable = false, advertisesClick = true)
+        assertTrue(expand(handler(windowRoot(row)), legacy))
+        row.clicks(1)
+    }
 }

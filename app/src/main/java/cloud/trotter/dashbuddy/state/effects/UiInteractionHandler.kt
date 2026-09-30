@@ -728,7 +728,9 @@ class UiInteractionHandler @Inject constructor(
         node.getBoundsInScreen(liveBounds)
         val live = liveBounds.toBoundingBox()
         val classOk = className == null || node.className?.toString() == className
-        val hit = classOk && node.isClickable && (
+        // #1149 review J7: the same clickability predicate as everywhere else — a Compose control that
+        // only ADVERTISES ACTION_CLICK at the exact rect is otherwise invisible to the bounds walk.
+        val hit = classOk && AccNodeUtils.isActionClickable(node) && (
             live == targetBounds || ClickCandidateRanker.boundsIoU(live, targetBounds) >= RELAXED_BOUNDS_IOU
         )
         if (hit) {
