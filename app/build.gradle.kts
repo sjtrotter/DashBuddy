@@ -243,6 +243,8 @@ dependencies {
     implementation(project(":core:location"))
     implementation(project(":core:network"))
     implementation(project(":core:pipeline"))
+    // #1160 review AD4: the census corpus tests' frame-rule-off diagnostic (test fixtures only).
+    testImplementation(testFixtures(project(":core:pipeline")))
     implementation(project(":core:state"))
     implementation(project(":domain"))
     implementation(project(":feature:settings"))

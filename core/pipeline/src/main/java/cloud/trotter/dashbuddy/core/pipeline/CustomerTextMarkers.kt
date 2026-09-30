@@ -251,31 +251,40 @@ object CustomerTextMarkers {
     /**
      * What an [IdMarker]'s node value IS (#1160 review LL1), and — the ONE owner the census builder and its
      * test-side mirrors both read (review AB1) — what it seeds on the frame: [seedsExactValue] (its rendered
-     * text/desc canonical value) and [seedsRuns] (its letter runs).
+     * text/desc canonical value), its letter runs when the value has at most [maxRunSeedTokens] whitespace
+     * tokens ([seedsRunsFrom], review AD2), and whether those runs also guard CLASS names ([runsGuardClasses],
+     * review AC2 — a customer's first name as a class segment is the leak vector; a merchant word is not).
      */
-    enum class IdentityKind(val seedsExactValue: Boolean, val seedsRuns: Boolean) {
-        /** A person's name. */
-        NAME(seedsExactValue = true, seedsRuns = true),
+    enum class IdentityKind(val seedsExactValue: Boolean, val maxRunSeedTokens: Int, val runsGuardClasses: Boolean) {
+        /** A person's name: runs from any value. */
+        NAME(seedsExactValue = true, maxRunSeedTokens = Int.MAX_VALUE, runsGuardClasses = true),
 
-        /** A place (an address line, a destination, a unit). */
-        ADDRESS(seedsExactValue = true, seedsRuns = false),
+        /** A place (an address line, a destination, a unit): exact only (address vocabulary is common English). */
+        ADDRESS(seedsExactValue = true, maxRunSeedTokens = 0, runsGuardClasses = false),
 
-        /** Customer-bearing content that is also reused for app copy. */
-        CONTENT(seedsExactValue = false, seedsRuns = false),
+        /** Customer-bearing content that is also reused for app copy: seeds nothing. */
+        CONTENT(seedsExactValue = false, maxRunSeedTokens = 0, runsGuardClasses = false),
 
         /**
          * A value that may be PII or chrome (a chat header is a name, a sheet title is "Pick up order"):
          * withheld on its own field and seeding its EXACT value only — no letter runs (#1160 review PP6). For
-         * the id check it adds its whole value as one run (ZZ3 — "Search" nulls `search_bar` on its frame).
+         * the id check an `idProtect` row adds its whole value as one run (ZZ3).
          */
-        EXACT(seedsExactValue = true, seedsRuns = false),
+        EXACT(seedsExactValue = true, maxRunSeedTokens = 0, runsGuardClasses = false),
 
         /**
-         * A value that is a person OR a merchant, never chrome (`user_name`, #1160 reviews XX3, ZZ3):
-         * EXACT-seeded for text, and for the id check its whole value as one run (a single token included —
-         * "Riley" protects `chipRiley`).
+         * A value that is a person OR a merchant, never chrome (`user_name`, #1160 reviews XX3, ZZ3, AD2): a
+         * value of at most two tokens is a person's name ("Riley", "Riley S") and seeds letter runs, so "Text
+         * Riley" beside it is withheld; three or more ("Jack in the Box", "The Home Depot") seed exact only
+         * (the SS1 case). A 1–2-token merchant ("Target", "Bay View") seeds runs too — accepted: a merchant
+         * word is never a recognition anchor, and its collision with a chrome id is residual risk 9.
          */
-        PERSON_OR_MERCHANT(seedsExactValue = true, seedsRuns = false),
+        PERSON_OR_MERCHANT(seedsExactValue = true, maxRunSeedTokens = 2, runsGuardClasses = false),
+        ;
+
+        /** Does a canonical [value] of this kind seed letter runs (review AD2)? Canonical = single spaces. */
+        fun seedsRunsFrom(value: String): Boolean =
+            maxRunSeedTokens > 0 && (maxRunSeedTokens == Int.MAX_VALUE || value.split(' ').size <= maxRunSeedTokens)
     }
 
     /**

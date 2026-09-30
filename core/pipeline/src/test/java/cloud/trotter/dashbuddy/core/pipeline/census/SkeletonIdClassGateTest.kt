@@ -55,9 +55,9 @@ class SkeletonIdClassGateTest : SkeletonBuilderTestBase() {
     @Test
     fun `II3 - a name-bearing test-tag id is absent, chrome ids travel`() {
         listOf("row_Deliver_to_Sam", "com.x:id/chip_Adam_S", "Pickup_for_Sam")
-            .forEach { assertTrue(it, !SkeletonBuilder.isStaticId(it)) }
+            .forEach { assertTrue(it, !IdPathJudgement.isStaticId(it)) }
         listOf("bc25_fab", "a11y_clock", "Artwork Image", "com.doordash.driverapp:id/customer_name", "Tooltip-0")
-            .forEach { assertTrue(it, SkeletonBuilder.isStaticId(it)) }
+            .forEach { assertTrue(it, IdPathJudgement.isStaticId(it)) }
         val item = SkeletonBuilder.build(
             UiNode(className = "android.widget.Button", viewIdResourceName = "row_Deliver_to_Sam", text = "Go"),
             null, meta, platform, day,
@@ -76,11 +76,18 @@ class SkeletonIdClassGateTest : SkeletonBuilderTestBase() {
             ),
         )
         val adam = SkeletonBuilder.build(frame("com.x:id/chip_Adam"), null, meta, platform, day)!!
-        assertNull(adam.root.children[1].id)
+        assertEquals("~", adam.root.children[1].id)
         val gold = SkeletonBuilder.build(frame("com.x:id/chip_Gold"), null, meta, platform, day)!!
         assertEquals("com.x:id/chip_Gold", gold.root.children[1].id)
-        val none = SkeletonBuilder.build(frame(null), null, meta, platform, day)!!
-        assertEquals(none.fingerprint, adam.fingerprint)
+        // AC3: the sentinel is customer-independent — two customers' colliding tags fingerprint alike.
+        val beth = SkeletonBuilder.build(
+            frame("com.x:id/chip_Beth").let { f ->
+                f.copy(children = listOf(f.children[0].copy(text = "Beth"), f.children[1]))
+            },
+            null, meta, platform, day,
+        )!!
+        assertEquals("~", beth.root.children[1].id)
+        assertEquals(beth.fingerprint, adam.fingerprint)
         // Without an identity id on the frame, the same tag travels (ADR residual risk 10).
         val alone = SkeletonBuilder.build(
             UiNode(className = "android.widget.Button", viewIdResourceName = "com.x:id/chip_Adam", text = "Continue"),
@@ -98,9 +105,9 @@ class SkeletonIdClassGateTest : SkeletonBuilderTestBase() {
             )),
             null, meta, platform, day,
         )!!.root.children[1].id
-        assertNull(tagOf("chipAdam"))
-        assertNull(tagOf("XMLAdamRow"))
-        assertNull(tagOf("chip_adam"))
+        assertEquals("~", tagOf("chipAdam"))
+        assertEquals("~", tagOf("XMLAdamRow"))
+        assertEquals("~", tagOf("chip_adam"))
         assertEquals("com.x:id/chipAdamant", tagOf("chipAdamant"))
         assertEquals("com.x:id/chipGold", tagOf("chipGold"))
         // A text slot keeps the plain letter-run split: "chipAdam" is one run, not the identity run.
@@ -122,35 +129,35 @@ class SkeletonIdClassGateTest : SkeletonBuilderTestBase() {
             )),
             null, meta, platform, day,
         )!!.root.children
-        assertNull(out[1].id)
-        assertNull(out[2].id)
-        // Review ZZ3: a class name is never containment-checked — a compiled type name is not frame data.
-        assertEquals("com.x.McKennaButton", out[3].className)
+        assertEquals("~", out[1].id)
+        assertEquals("~", out[2].id)
+        // Review AC2 (narrowing ZZ3): a third-party class carrying a NAME run is absent.
+        assertNull(out[3].className)
         assertEquals("com.x:id/chipMcGold", out[4].id)
         assertEquals(TextSlot.WITHHELD, out[5].text.getValue("text"))
     }
 
     @Test
     fun `NN6 - an over-long id is refused before the shape regex`() {
-        assertTrue(!SkeletonBuilder.isStaticId("com.x:id/" + "a".repeat(10_000)))
+        assertTrue(!IdPathJudgement.isStaticId("com.x:id/" + "a".repeat(10_000)))
     }
 
     @Test
     fun `PP1 PP4 - camelCase ids are judged, single-letter chrome ids are not names`() {
         listOf("deliverToSam", "pickupForSam", "chipAdamS", "com.x:id/chip_Adam_S").forEach {
-            assertTrue(it, !SkeletonBuilder.isStaticId(it))
+            assertTrue(it, !IdPathJudgement.isStaticId(it))
         }
         listOf("deliverButton", "pickupHeader", "option_a", "tab_b", "icon_x", "plan_b", "roadNameLayout").forEach {
-            assertTrue(it, SkeletonBuilder.isStaticId(it))
+            assertTrue(it, IdPathJudgement.isStaticId(it))
         }
     }
 
     @Test
     fun `SS3 - the id path withholds only name-like lead-in tails and capitalized name shapes`() {
         listOf("deliver_to_Sam", "deliverToSam", "pickupForSam", "chip_Adam_S", "chipAdamS", "com.x:id/row_Deliver_to_Sam")
-            .forEach { assertTrue(it, !SkeletonBuilder.isStaticId(it)) }
+            .forEach { assertTrue(it, !IdPathJudgement.isStaticId(it)) }
         listOf("deliver_to_label", "order_for_header", "pickup_for_title", "tabB", "optionA", "tab_B", "option_a", "icon_x")
-            .forEach { assertTrue(it, SkeletonBuilder.isStaticId(it)) }
+            .forEach { assertTrue(it, IdPathJudgement.isStaticId(it)) }
     }
 
     @Test
@@ -161,23 +168,23 @@ class SkeletonIdClassGateTest : SkeletonBuilderTestBase() {
             ) + tags.map { UiNode(className = "android.widget.ImageView", viewIdResourceName = "com.x:id/$it") }),
             null, meta, platform, day,
         )!!.root.children.drop(1).map { it.id }
-        assertEquals(listOf(null, "com.x:id/chipGold"), ids("user_name", "Riley", "chipRiley", "chipGold"))
+        assertEquals(listOf("~", "com.x:id/chipGold"), ids("user_name", "Riley", "chipRiley", "chipGold"))
         // Review ZZ3: a PERSON_OR_MERCHANT whole value is never shape-gated — a merchant's logo id carrying
         // its whole name is absent (the accepted recall cost); a chrome id sharing one word travels.
-        assertEquals(listOf(null, "com.x:id/boxView"), ids("user_name", "Jack in the Box", "jackInTheBoxLogo", "boxView"))
+        assertEquals(listOf("~", "com.x:id/boxView"), ids("user_name", "Jack in the Box", "jackInTheBoxLogo", "boxView"))
         assertEquals(listOf("com.x:id/roadNameLayout"), ids("address_line_1", "10927 Culebra Road", "roadNameLayout"))
         // A text slot is untouched by the whole-value rule: "Call Riley" beside user_name "Riley" hashes.
-        assertEquals(listOf(words(2, "Call Riley")), beside2("user_name", "Riley", "Call Riley"))
+        assertEquals(listOf(words(2, "Call Riley")), beside2("tvTitle", "Riley", "Call Riley"))
     }
 
     @Test
     fun `UU5 WW6 - the capital predicate is code-point based, and a non-ASCII id fails the grammar first`() {
         // The predicate itself (review WW6: the id grammar is ASCII, so it must be tested directly).
-        assertTrue(SkeletonBuilder.isCapitalAt("to \uD801\uDC08dam", 3))
-        assertTrue(!SkeletonBuilder.isCapitalAt("to adam", 3))
+        assertTrue(IdPathJudgement.isCapitalAt("to \uD801\uDC08dam", 3))
+        assertTrue(!IdPathJudgement.isCapitalAt("to adam", 3))
         // Relabelled grammar case: a supplementary-plane letter is not in the static id grammar at all.
-        assertTrue(!SkeletonBuilder.isStaticId("deliver_to_\uD801\uDC08dam"))
-        assertTrue(SkeletonBuilder.isStaticId("deliver_to_label"))
+        assertTrue(!IdPathJudgement.isStaticId("deliver_to_\uD801\uDC08dam"))
+        assertTrue(IdPathJudgement.isStaticId("deliver_to_label"))
     }
 
     @Test
@@ -189,8 +196,9 @@ class SkeletonIdClassGateTest : SkeletonBuilderTestBase() {
             null, meta, platform, day,
         )!!.root.children.drop(1).map { it.id }
         // ZZ3: fail closed — a chrome title under `tvTitle` nulls an id built from it on its frame.
-        assertEquals(listOf(null), ids("tvTitle", "Order Details", "orderDetailsHeader"))
-        assertEquals(listOf(null), ids("user_name", "Riley", "chipRiley"))
+        assertEquals(listOf("~"), ids("tvTitle", "Order Details", "orderDetailsHeader"))
+        assertEquals(listOf("~"), ids("user_name", "Riley", "chipRiley"))
+        // `chipRileyS` carries the id-path name shape: grammar-absent (null), not frame-withheld.
         assertEquals(listOf(null), ids("user_name", "Riley S", "chipRileyS"))
         assertEquals(listOf("com.x:id/mainStreetLabel"), ids("address_line_1", "Main St", "mainStreetLabel"))
     }
@@ -206,16 +214,16 @@ class SkeletonIdClassGateTest : SkeletonBuilderTestBase() {
         fun ids(identityId: String, identity: String, vararg tags: String) = nodes(identityId, identity, *tags).map { it.id }
         // EXACT: a one-word chrome title nulls an id built from it; the class never moves.
         val search = nodes("tvTitle", "Search", "search_bar")
-        assertEquals(listOf<String?>(null), search.map { it.id })
+        assertEquals(listOf<String?>("~"), search.map { it.id })
         assertEquals(listOf<String?>("android.widget.SearchView"), search.map { it.className })
-        assertEquals(listOf(null), ids("tvTitle", "Riley", "chipRiley"))
-        assertEquals(listOf(null), ids("tvTitle", "Riley Smith", "chipRileySmith"))
+        assertEquals(listOf("~"), ids("tvTitle", "Riley", "chipRiley"))
+        assertEquals(listOf("~"), ids("tvTitle", "Riley Smith", "chipRileySmith"))
         assertEquals(listOf(null), ids("tvTitle", "Riley S", "chipRileyS"))
         // PERSON_OR_MERCHANT: a single token included; a merchant's whole name too.
-        assertEquals(listOf(null), ids("user_name", "Riley", "chipRiley"))
-        assertEquals(listOf(null), ids("user_name", "Jack in the Box", "jackInTheBoxLogo"))
+        assertEquals(listOf("~"), ids("user_name", "Riley", "chipRiley"))
+        assertEquals(listOf("~"), ids("user_name", "Jack in the Box", "jackInTheBoxLogo"))
         // NAME: the whole value joins across tokens ("Mary Jo" → `chipMaryJo`).
-        assertEquals(listOf(null), ids("customer_name", "Mary Jo", "chipMaryJo"))
+        assertEquals(listOf("~"), ids("customer_name", "Mary Jo", "chipMaryJo"))
         // ADDRESS never adds a whole-value run.
         assertEquals(listOf("com.x:id/mainStreetLabel"), ids("address_line_1", "Main Street", "mainStreetLabel"))
     }
@@ -223,10 +231,10 @@ class SkeletonIdClassGateTest : SkeletonBuilderTestBase() {
     @Test
     fun `ZZ4 - an all-caps tag ending in one letter reads as a name - the accepted recall cost`() {
         listOf("TAB_B", "SECTION_C", "PRIMARY_BUTTON_A", "chip_RILEY_S", "com.x:id/chip_RILEY_S")
-            .forEach { assertTrue(it, !SkeletonBuilder.isStaticId(it)) }
-        assertTrue(!SkeletonBuilder.isStaticId("chip_Adam_S"))
+            .forEach { assertTrue(it, !IdPathJudgement.isStaticId(it)) }
+        assertTrue(!IdPathJudgement.isStaticId("chip_Adam_S"))
         // A lowercase-led tag stays chrome.
-        listOf("tab_B", "option_a", "tabB").forEach { assertTrue(it, SkeletonBuilder.isStaticId(it)) }
+        listOf("tab_B", "option_a", "tabB").forEach { assertTrue(it, IdPathJudgement.isStaticId(it)) }
     }
 
     private fun idsBeside(identityId: String, identity: String, vararg tags: String) = SkeletonBuilder.build(
@@ -241,16 +249,16 @@ class SkeletonIdClassGateTest : SkeletonBuilderTestBase() {
         // Osage (U+104B0..): a Capitalized supplementary-plane name; the static id grammar is ASCII, so the
         // tag side is exercised through the containment predicate the id path uses.
         val name = "\uD801\uDCB0\uD801\uDCD8\uD801\uDCD8"
-        val filter = SkeletonBuilder.FrameFilter(judge = SkeletonBuilder::withholdingStep)
+        val filter = FrameFilter(judge = SkeletonBuilder::withholdingStep)
         filter.scan(UiNode(className = "android.widget.TextView", viewIdResourceName = "com.x:id/tvTitle", text = name))
-        assertTrue(filter.containsIdentityRun("chip" + name, splitCamel = true))
-        assertTrue(!filter.containsIdentityRun("chipGold", splitCamel = true))
+        assertTrue(filter.containsIdentityRun("chip" + name, idForm = true))
+        assertTrue(!filter.containsIdentityRun("chipGold", idForm = true))
     }
 
     @Test
     fun `AB3 - a multi-token whole value matches across id separators`() {
-        assertEquals(listOf(null, null, null, "com.x:id/row_mary_label"), idsBeside("tvTitle", "Mary Jo", "row_mary_jo", "chip-mary-jo", "rowMaryJo", "row_mary_label"))
-        assertEquals(listOf(null), idsBeside("customer_name", "Mary Jo", "row_mary_jo"))
+        assertEquals(listOf("~", "~", "~", "com.x:id/row_mary_label"), idsBeside("tvTitle", "Mary Jo", "row_mary_jo", "chip-mary-jo", "rowMaryJo", "row_mary_label"))
+        assertEquals(listOf("~"), idsBeside("customer_name", "Mary Jo", "row_mary_jo"))
     }
 
     @Test
@@ -258,9 +266,54 @@ class SkeletonIdClassGateTest : SkeletonBuilderTestBase() {
         assertEquals(listOf("com.x:id/ok_button"), idsBeside("tvLastMessage", "Ok", "ok_button"))
         assertEquals(listOf("com.x:id/thanks_button"), idsBeside("tvLastMessage", "Thanks", "thanks_button"))
         assertEquals(listOf("com.x:id/ok_button"), idsBeside("tvTitle", "Ok", "ok_button"))
-        assertEquals(listOf(null), idsBeside("tvTitle", "Riley", "chipRiley"))
+        assertEquals(listOf("~"), idsBeside("tvTitle", "Riley", "chipRiley"))
         assertEquals(listOf("com.x:id/mainStreetLabel"), idsBeside("address_line_1", "Main Street", "mainStreetLabel"))
         // A NAME's 2-letter word run still protects (its letter runs, not the whole-value rule).
-        assertEquals(listOf(null), idsBeside("customer_name", "Li", "chipLi"))
+        assertEquals(listOf("~"), idsBeside("customer_name", "Li", "chipLi"))
+    }
+
+    @Test
+    fun `AC1 - NAME runs match across id separator joins`() {
+        assertEquals(listOf("~", "~", "~", "com.x:id/row_mc_gold"),
+            idsBeside("customer_name", "McKenna Smith", "row_mc_kenna", "row-mc-kenna", "rowMcKenna", "row_mc_gold"))
+    }
+
+    private fun classesBeside(identityId: String, identity: String, vararg classes: String) = SkeletonBuilder.build(
+        UiNode(className = "android.widget.LinearLayout", viewIdResourceName = "com.x:id/row", children = listOf(
+            UiNode(className = "android.widget.TextView", viewIdResourceName = "com.doordash.driverapp:id/$identityId", text = identity),
+        ) + classes.map { UiNode(className = it, viewIdResourceName = "com.x:id/cell") }),
+        null, meta, platform, day,
+    )!!.root.children.drop(1).map { it.className }
+
+    @Test
+    fun `AC2 - a class carrying a NAME run is absent, a title or merchant word never forks a class`() {
+        assertEquals(listOf<String?>(null, "com.x.GoldButton"), classesBeside("customer_name", "Riley", "com.x.RileyButton", "com.x.GoldButton"))
+        assertEquals(listOf<String?>("android.widget.TextView"), classesBeside("tvTitle", "Text", "android.widget.TextView"))
+        assertEquals(listOf<String?>("androidx.appcompat.widget.SearchView"), classesBeside("tvTitle", "Search", "androidx.appcompat.widget.SearchView"))
+        assertEquals(listOf<String?>("com.x.RileyButton"), classesBeside("user_name", "Jack in the Box", "com.x.RileyButton"))
+        // A wrapper class is never checked — wrapper eligibility cannot depend on the customer.
+        assertEquals(listOf<String?>("android.widget.LinearLayout"), classesBeside("customer_name", "Linear", "android.widget.LinearLayout"))
+    }
+
+    @Test
+    fun `AC3 - a frame-withheld id keeps its node in the fingerprint as the sentinel`() {
+        fun frame(title: String) = UiNode(
+            className = "android.widget.FrameLayout", viewIdResourceName = "com.x:id/host", children = listOf(
+                UiNode(className = "android.widget.TextView", viewIdResourceName = "com.doordash.driverapp:id/tvTitle", text = title),
+                UiNode(className = "android.widget.LinearLayout", viewIdResourceName = "com.x:id/chip_container", children = listOf(
+                    UiNode(className = "android.widget.TextView", text = "Continue"),
+                )),
+            ),
+        )
+        val chip = SkeletonBuilder.build(frame("Chip"), null, meta, platform, day)!!
+        val other = SkeletonBuilder.build(frame("Other"), null, meta, platform, day)!!
+        assertEquals("~", chip.root.children[1].id)
+        assertEquals("com.x:id/chip_container", other.root.children[1].id)
+        // The container is NOT spliced as a wrapper: the frame-withheld tree equals the same tree with the
+        // sentinel id, and differs from the spliced (null-id) tree.
+        val sentinelTree = other.root.copy(children = listOf(other.root.children[0], other.root.children[1].copy(id = "~")))
+        val splicedTree = other.root.copy(children = listOf(other.root.children[0], other.root.children[1].copy(id = null)))
+        assertEquals(CensusFingerprint.of(sentinelTree), chip.fingerprint)
+        assertTrue(CensusFingerprint.of(splicedTree) != chip.fingerprint)
     }
 }

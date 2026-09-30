@@ -154,6 +154,14 @@ abstract class SkeletonCorpusTestBase {
      */
     protected fun canon(value: String): String = CensusHash.canonical(value) ?: value.trim()
 
+    /**
+     * Review AC4: a NAME node's run source through the builder's OWN rule (`SkeletonBuilder.nameRunSource`)
+     * over the builder's canonical forms — a non-convergent or blank value is unusable, never the trimmed
+     * fallback [canon] uses for keys.
+     */
+    protected fun nameRunSourceOf(n: UiNode): String? =
+        SkeletonBuilder.nameRunSource(SkeletonBuilder.seedCanonicalOf(n.text), SkeletonBuilder.seedCanonicalOf(n.contentDescription))
+
     protected fun walkNodes(node: UiNode, visit: (UiNode) -> Unit) {
         visit(node)
         node.children.forEach { walkNodes(it, visit) }
@@ -201,10 +209,8 @@ abstract class SkeletonCorpusTestBase {
                 val rendered = field == UiNodeTextField.TEXT || field == UiNodeTextField.CONTENT_DESCRIPTION
                 if (rendered && kind?.seedsExactValue == true) seededExact += c
             }
-            if (kind?.seedsRuns == true) {
-                val source = if (!n.text.isNullOrBlank()) n.text else n.contentDescription?.takeIf { it.isNotBlank() }
-                source?.let { canon(it) }?.takeIf { !PiiShapes.containsMask(it) }
-                    ?.let { nameRuns += letterRuns(it, minLetters = 2) }
+            if (kind != null) {
+                nameRunSourceOf(n)?.takeIf { kind.seedsRunsFrom(it) }?.let { nameRuns += letterRuns(it, minLetters = 2) }
             }
         }
         var flips = 0
@@ -332,12 +338,10 @@ abstract class SkeletonCorpusTestBase {
                     PiiShapes.hasPiiIdSuffix(id) -> propagatedNotSeeded += canonical
                 }
             }
-            // Reviews GG1, LL1, NN3, PP2: only a NAME contributes letter runs (≥2 letters) — from its TEXT
-            // when the text is non-blank, otherwise from its CONTENT_DESCRIPTION.
-            if (kind?.seedsRuns == true) {
-                val source = if (!n.text.isNullOrBlank()) n.text else n.contentDescription?.takeIf { it.isNotBlank() }
-                source?.let { canon(it) }?.takeIf { !PiiShapes.containsMask(it) }
-                    ?.let { idRuns += letterRuns(it, minLetters = 2) }
+            // Reviews GG1, LL1, NN3, PP2, AC4: only a NAME contributes letter runs (≥2 letters) — from its
+            // usable TEXT, otherwise its usable CONTENT_DESCRIPTION (the builder's own rule).
+            if (kind != null) {
+                nameRunSourceOf(n)?.takeIf { kind.seedsRunsFrom(it) }?.let { idRuns += letterRuns(it, minLetters = 2) }
             }
         }
         // Review HH3: every canonical key a value predicate caught ANYWHERE in the frame — on the canonical

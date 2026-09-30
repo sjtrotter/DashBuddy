@@ -3,20 +3,15 @@ package cloud.trotter.dashbuddy.core.pipeline.census
 import cloud.trotter.dashbuddy.core.pipeline.CustomerTextMarkers
 import cloud.trotter.dashbuddy.core.pipeline.SensitiveTextMarkers
 import cloud.trotter.dashbuddy.domain.capture.ReplayMetadata
-import cloud.trotter.dashbuddy.domain.census.contract.CaseFold
 import cloud.trotter.dashbuddy.domain.census.contract.CensusFingerprint
-import cloud.trotter.dashbuddy.domain.census.contract.ClassNameGrammar
 import cloud.trotter.dashbuddy.domain.census.contract.CensusHash
 import cloud.trotter.dashbuddy.domain.census.contract.KindClassifier
-import cloud.trotter.dashbuddy.domain.census.contract.ResourceIdGrammar
 import cloud.trotter.dashbuddy.domain.census.contract.SkeletonSchema
 import cloud.trotter.dashbuddy.domain.census.contract.TextFold
 import cloud.trotter.dashbuddy.domain.census.contract.TextSlot
 import cloud.trotter.dashbuddy.domain.census.contract.UiSkeletonDto
-import cloud.trotter.dashbuddy.domain.census.contract.UiSkeletonNodeDto
 import cloud.trotter.dashbuddy.domain.census.contract.WireStrings
 import cloud.trotter.dashbuddy.domain.model.accessibility.UiNode
-import cloud.trotter.dashbuddy.domain.model.accessibility.UiNodeTextField
 import cloud.trotter.dashbuddy.domain.privacy.PiiShapes
 import cloud.trotter.dashbuddy.domain.state.Platform
 import java.time.LocalDate
@@ -81,7 +76,11 @@ object SkeletonBuilder {
          */
         INVALID_ENVELOPE,
 
-        /** A node failed the contract's validation (e.g. a class/id carrying U+0000, ADR §8). */
+        /**
+         * A node failed the raw-tree validation (an `isChecked` outside the tri-state). A malformed class
+         * or view id no longer refuses the frame: it is emitted ABSENT and counted in
+         * [Outcome.Built.malformedIdOrClass] (review AD5).
+         */
         INVALID_TREE,
 
         /**
@@ -94,14 +93,18 @@ object SkeletonBuilder {
 
     /** The builder's result: a skeleton, or the reason there is none. */
     sealed interface Outcome {
-        /** [json] is the canonical serialization [itemBytes] measured — the caller never re-serializes. */
-        data class Built(val skeleton: UiSkeletonDto, val json: String, val itemBytes: Int) : Outcome
+        /**
+         * [json] is the canonical serialization [itemBytes] measured — the caller never re-serializes.
+         * [malformedIdOrClass] counts nodes whose class or view id was malformed and emitted absent (AD5) —
+         * a counter #1146's publisher can read; never text.
+         */
+        data class Built(val skeleton: UiSkeletonDto, val json: String, val itemBytes: Int, val malformedIdOrClass: Int = 0) : Outcome
         data class Refused(val reason: Refusal) : Outcome
     }
 
     /**
      * The VALUE-judging §2 steps that WITHHOLD (emit the constant `withheld`), in ADR order. Step 1 (the
-     * node's own PII id) is not a value judgement and lives only in [IdClass] (review GG4); step 6 (only
+     * node's own PII id) is not a value judgement and lives only in `IdClass` (review GG4); step 6 (only
      * `words:N` may be hashed) refuses the HASH and continues, it does not withhold.
      */
     enum class FilterStep(val adrStep: Int) {
@@ -224,7 +227,7 @@ object SkeletonBuilder {
         Outcome.Refused(Refusal.BUILD_FAILED)
     }
 
-    /** Thrown ONLY by the raw-tree validation in [FrameFilter.scan]: the input, not the builder, is bad. */
+    /** Thrown ONLY by the raw-tree validation in `FrameFilter.scan`: the input, not the builder, is bad. */
     internal class InvalidTree(message: String) : Exception(message)
 
     private fun buildOutcome(
@@ -279,7 +282,7 @@ object SkeletonBuilder {
         }
         val measured = SkeletonSchema.measure(item)
         if (measured.bytes > SkeletonSchema.MAX_ITEM_BYTES) return Outcome.Refused(Refusal.OVERSIZE)
-        return Outcome.Built(item, measured.json, measured.bytes)
+        return Outcome.Built(item, measured.json, measured.bytes, frame.malformedIdOrClass)
     }
 
     private val DAY_FORMAT: DateTimeFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd", Locale.ROOT)
@@ -306,326 +309,22 @@ object SkeletonBuilder {
     }
 
     /**
-     * May [id] travel in the clear and key the fingerprint (ADR-0011 §1)? The contract's static SHAPE
-     * ([ResourceIdGrammar.isStaticShape], which the DTO and the server also enforce) AND — client-side,
-     * because the predicates live in this module (review II3) — no customer-PII value predicate fires on
-     * the id's NAME part with its separators (`_`, `.`, `-`, `:`) read as spaces, judged at EVERY token
-     * start (so `row_Deliver_to_Sam` is caught by the "Deliver to " marker, `chip_Adam_S` by the name
-     * shape). A bare name with no marker, lead-in or initial (`chip_Adam`, `Adam Smith`) has no shape a
-     * frame-free predicate can tell from chrome (`chip_Gold`, `Artwork Image`) — ADR residual risk 10.
+     * The NAME-run source rule's ONE owner (reviews NN3, PP2, UU6, AC4): the usable canonical TEXT, else the
+     * usable canonical DESC — "usable" = present (a canonical form exists, the value was not blank) and not a
+     * mask. Public so the corpus test mirrors call the same rule rather than re-deriving it.
      */
-    fun isStaticId(id: String): Boolean {
-        if (!ResourceIdGrammar.isStaticShape(id)) return false
-        // Review PP1: camelCase segments are words too (`deliverToSam` → "deliver To Sam"), by the same
-        // rule the frame-level check uses. Review PP4: only the CASE-SENSITIVE-initial name shape runs on
-        // the id path — the IGNORE_CASE anchored variant nulled every `option_a` / `tab_b` chrome id.
-        // Review SS3 (id path only): the name shape is FULLY case-sensitive (an uppercase-led first token —
-        // Capitalized or, since ZZ4, all-caps — and an uppercase initial; `tab B` / `option A` are chrome), and a marker / lead-in withholds only when the
-        // token AFTER it is Capitalized (a name): `deliver_to_Sam` is absent, `deliver_to_label` travels.
-        // SS8: an id with no canonical form is not static.
-        val spoken = CensusHash.canonical(
-            ResourceIdGrammar.namePart(id).split(ID_SEPARATORS).joinToString(" ") { camelSegments(it).joinToString(" ") },
-        ) ?: return false
-        if (PiiShapes.containsMask(spoken) || PiiShapes.FIRST_LAST_INITIAL_ID_PATH_REGEX.containsMatchIn(spoken)) return false
-        val tokens = spoken.split(' ')
-        return tokens.indices.none { i ->
-            val tail = tokens.subList(i, tokens.size).joinToString(" ")
-            val prefix = CustomerTextMarkers.unredactedMarker(tail) ?: PiiShapes.customerLeadIn(tail)
-            prefix != null && tail.length > prefix.length && isCapitalAt(tail, prefix.length)
-        }
-    }
-
-    private val ID_SEPARATORS = Regex("[_.:-]")
-
-    /** UU5/WW6: the CODE POINT at [index] is an uppercase letter (a supplementary-plane capital counts). */
-    internal fun isCapitalAt(value: String, index: Int): Boolean = Character.isUpperCase(value.codePointAt(index))
-
-    /** How the §2 step-1 id check classified a node's RAW id (reviews CC3, EE1, LL1). */
-    internal enum class IdClass {
-        /** An `ID_MARKER_TABLE` NAME row — a person's name: seeds its exact value AND its letter runs. */
-        PII_NAME,
-
-        /** An `ID_MARKER_TABLE` ADDRESS row — a place: seeds its exact value only (no runs, review LL1). */
-        PII_ADDRESS,
-
-        /** An `ID_MARKER_TABLE` CONTENT row — also reused for app copy: seeds nothing. */
-        PII_CONTENT,
-
-        /** An `ID_MARKER_TABLE` EXACT row — may be PII or chrome: exact seed; whole-value id run (PP6, ZZ3). */
-        PII_EXACT,
-
-        /** An `ID_MARKER_TABLE` PERSON_OR_MERCHANT row (`user_name`): exact seed; whole-value id run (XX3, ZZ3). */
-        PII_PERSON_OR_MERCHANT,
-
-        /** In `PII_ID_SUFFIXES` only (the intake list; it also covers instruction BODIES). */
-        INTAKE_ONLY,
-
-        NONE,
-    }
-
-    private fun idClassOf(id: String?): IdClass {
-        val marker = CustomerTextMarkers.idMarkerFor(id)
-        return when {
-            marker != null -> when (marker.kind) {
-                CustomerTextMarkers.IdentityKind.NAME -> IdClass.PII_NAME
-                CustomerTextMarkers.IdentityKind.ADDRESS -> IdClass.PII_ADDRESS
-                CustomerTextMarkers.IdentityKind.CONTENT -> IdClass.PII_CONTENT
-                CustomerTextMarkers.IdentityKind.EXACT -> IdClass.PII_EXACT
-                CustomerTextMarkers.IdentityKind.PERSON_OR_MERCHANT -> IdClass.PII_PERSON_OR_MERCHANT
-            }
-            PiiShapes.hasPiiIdSuffix(id) -> IdClass.INTAKE_ONLY
-            else -> IdClass.NONE
-        }
-    }
+    fun nameRunSource(textCanonical: String?, descCanonical: String?): String? =
+        textCanonical?.takeIf { !PiiShapes.containsMask(it) } ?: descCanonical?.takeIf { !PiiShapes.containsMask(it) }
 
     /**
-     * One non-blank field after pass 1: its RAW trimmed value (the verdict memo key), its canonical value
-     * (the hash/grammar input and the frame-wide key), and whether its own id withholds it.
+     * The canonical form a RAW rendered value contributes to [nameRunSource], exactly as pass 1 derives it
+     * (review AC4): null when blank, provably over the cap (AB8 — seeds nothing), or with no fixed point.
      */
-    internal class Field(val trimmed: String, val canonical: String, val idWithholds: Boolean, val converged: Boolean = true)
-
-    /** A node after pass 1: its validated class/id, flags, and fields by wire key. */
-    internal class Pending(
-        val className: String?,
-        val id: String?,
-        val node: UiNode,
-        val fields: List<Pair<String, Field>>,
-        val children: List<Pending>,
-    )
-
-    /**
-     * The per-frame filter state (review CC5): the value-only steps (2–8) and the value's own slot are
-     * computed once per distinct canonical value; step 1 once per node. [caught] is the frame-level set.
-     * [judge] is the value-only filter (steps 2–8); internal so a test can count its evaluations.
-     */
-    internal class FrameFilter(
-        private val judge: (String) -> FilterStep?,
-        private val unfiltered: (String) -> TextSlot = ::unfilteredSlot,
-        /** False ONLY for `census.diagnostics.DiagnosticSkeletonBuilder` (reviews OO2, UU7). */
-        private val frameLevel: Boolean = true,
-        /** The canonical fold; a seam so a test can count folds (review AB8). */
-        private val canonicalize: (String) -> String? = CensusHash::canonical,
-    ) {
-        /**
-         * A cached verdict. Wrapped (review DD2): a bare `FilterStep?` map stores the common "passed"
-         * result as `null`, which `getOrPut` reads as ABSENT and recomputes on every lookup.
-         */
-        private class Judged(val step: FilterStep?)
-
-        private val valueSteps = HashMap<String, Judged>()
-        private val valueSlots = HashMap<String, TextSlot>()
-
-        /** Letter runs per (canonical value, threshold), computed once per frame (review II10). */
-        private val runCache = HashMap<Triple<String, Int, Boolean>, List<String>>()
-
-        private fun runsOf(canonical: String, minLetters: Int = 0, splitCamel: Boolean = false): List<String> =
-            runCache.getOrPut(Triple(canonical, minLetters, splitCamel)) { letterRuns(canonical, minLetters, splitCamel) }
-
-        /** Canonical values a VALUE-judging step caught anywhere in the frame (exact equality). */
-        private val caught = HashSet<String>()
-
-        /** Letter runs (≥ [MIN_IDENTITY_RUN] letters, folded) of NAME identity ids' text/desc (GG1, LL1). */
-        private val identityRuns = HashSet<String>()
-
-        /**
-         * The WHOLE value of a NAME, PERSON_OR_MERCHANT or EXACT id's text/desc (reviews VV1, XX3, ZZ3 — a single
-         * token included, no name-shape gate), case-folded with every non-letter removed, as ONE run — matched
-         * only against a node id's name part (camel segments and contiguous joins, review TT2): `user_name`
-         * "Riley" nulls `chipRiley`, `tvTitle` "Riley Smith" nulls `chipRileySmith`, `tvTitle` "Search" nulls
-         * `search_bar` (the accepted recall cost). An ADDRESS adds none.
-         */
-        private val wholeValueRuns = HashSet<String>()
-
-        /** Canonical form per raw trimmed value, memoized per frame (review SS7); null = no fixed point. */
-        private val canonicals = HashMap<String, Canon>()
-
-        /** A memoized canonical form, wrapped so a stored null ("no fixed point") is not read as absent. */
-        private class Canon(val canonical: String?)
-
-        private fun canonicalOf(trimmed: String): String? = canonicals.getOrPut(trimmed) { Canon(canonicalize(trimmed)) }.canonical
-
-        fun scan(node: UiNode): Pending {
-            // Reviews BB1/BB2/CC1/II6: validate the RAW input BEFORE the grammar gates, which would
-            // otherwise drop a malformed value to null unseen. The ONLY source of INVALID_TREE (II5).
-            node.className?.let { if (!WireStrings.isWellFormed(it)) throw InvalidTree("malformed class name") }
-            node.viewIdResourceName?.let { if (!WireStrings.isWellFormed(it)) throw InvalidTree("malformed view id") }
-            if (node.isChecked !in 0..2) throw InvalidTree("isChecked outside the 0/1/2 tri-state")
-            val idClass = idClassOf(node.viewIdResourceName)
-            val fields = ArrayList<Pair<String, Field>>()
-            var textField: Field? = null
-            var descField: Field? = null
-            for ((field, value) in node.scrubbableStrings()) {
-                val f = field(value, idClass) ?: continue
-                fields += field.wire to f
-                if (field == UiNodeTextField.TEXT) textField = f
-                if (field == UiNodeTextField.CONTENT_DESCRIPTION) descField = f
-            }
-            seedIdentity(textField, descField, CustomerTextMarkers.idMarkerFor(node.viewIdResourceName))
-            return Pending(
-                className = ClassNameGrammar.staticOrNull(node.className),
-                id = node.viewIdResourceName?.takeIf { raw -> staticIds.getOrPut(raw) { isStaticId(raw) } },
-                node = node,
-                fields = fields,
-                children = node.children.map { scan(it) },
-            )
-        }
-
-        /** [isStaticId] per raw id, memoized per frame (review NN7: list surfaces repeat one id). */
-        private val staticIds = HashMap<String, Boolean>()
-
-        /**
-         * Pass 1 for one field: canonicalize (reviews EE2, NN5), filter both forms (FF1), and seed [caught]
-         * with the field's exact canonical value when a VALUE-judging step (3, 4, 7, 8) caught it. A mask
-         * NEVER seeds (review LL1). Not the length cap (a duplicate is itself over-length). The id-based
-         * seeds are [seedIdentity]'s.
-         */
-        fun field(value: String?, idClass: IdClass): Field? {
-            if (value.isNullOrBlank()) return null
-            val trimmed = value.trim()
-            // Review AB8: a value PROVABLY over the cap is withheld without folding the whole raw value —
-            // LENGTH_CAP, seeding nothing (a duplicate of it is itself over-length).
-            if (provablyOverCap(trimmed)) {
-                valueSteps[trimmed] = Judged(FilterStep.LENGTH_CAP)
-                return Field(trimmed, trimmed, idWithholds = idClass != IdClass.NONE, converged = false)
-            }
-            // Review OO1: a value whose canonical form does not reach a fixed point is withheld outright
-            // (never judged on one form and hashed on another) and seeds nothing; SS7: its placeholder
-            // canonical is the trimmed value (nothing reads it).
-            val canonical = canonicalOf(trimmed)
-                ?: return Field(trimmed, trimmed, idWithholds = true, converged = false)
-            val step = valueStep(trimmed, canonical)
-            if (step != null && step != FilterStep.LENGTH_CAP && !PiiShapes.containsMask(canonical)) caught += canonical
-            return Field(trimmed, canonical, idWithholds = idClass != IdClass.NONE)
-        }
-
-        /**
-         * Step-1 seeds of an identity id (reviews EE1, LL1, NN3, PP2, PP6), from its rendered value only
-         * (TEXT / CONTENT_DESCRIPTION — never role/hint/tooltip/click-label/uid/pane); a mask never seeds.
-         * - NAME, ADDRESS, EXACT: the EXACT canonical value of the text and of the desc.
-         * - NAME only: letter runs from its TEXT when the text is non-blank, otherwise from its
-         *   CONTENT_DESCRIPTION — so a name rendered only in a desc still propagates ("Adam's order"),
-         *   while a TalkBack desc "Customer name Adam" beside text "Adam" seeds no `customer`/`name`.
-         * - NAME, PERSON_OR_MERCHANT, EXACT: the whole value as ONE id-only run ([wholeValueRuns], ZZ3).
-         * ADDRESS and EXACT never seed letter runs (address vocabulary and sheet titles are common English).
-         */
-        private fun seedIdentity(textField: Field?, descField: Field?, marker: CustomerTextMarkers.IdMarker?) {
-            // AB1: what a kind seeds is the kind table's (`IdentityKind.seedsExactValue` / `seedsRuns`).
-            if (marker == null || !marker.kind.seedsExactValue) return
-            // SS7: the already-built Fields' canonicals — never re-canonicalized.
-            val text = textField?.takeIf { it.converged }?.canonical?.takeIf { !PiiShapes.containsMask(it) }
-            val desc = descField?.takeIf { it.converged }?.canonical?.takeIf { !PiiShapes.containsMask(it) }
-            text?.let { caught += it }
-            desc?.let { caught += it }
-            // Reviews VV1, XX3, ZZ3, AB4: every `idProtect` row (a value that can be a name a test tag embeds —
-            // `customer_name`, `order_cx_name`, `user_name`, `tvTitle`) adds its whole value's letters as an
-            // id run — a single token included, with no name-shape gate (fail closed: `tvTitle` "Search" nulls
-            // a `search_bar` id on its frame). ≥ [MIN_WHOLE_VALUE_RUN] letters, so a short value never nulls
-            // chrome. ADDRESS, CONTENT and `tvLastMessage` never do.
-            if (marker.idProtect) {
-                listOfNotNull(text, desc).forEach { value ->
-                    // AB2: code-point letters (the candidate side is code-point based too).
-                    val letters = plainLetterRuns(value).joinToString("")
-                    if (letters.codePointCount(0, letters.length) >= MIN_WHOLE_VALUE_RUN) wholeValueRuns += CaseFold.fold(letters)
-                }
-            }
-            if (!marker.kind.seedsRuns) return
-            // UU6: the text is the run source only when it yielded a usable canonical (not a mask, converged);
-            // otherwise fall through to the desc — `[redacted:ab12]` + desc "Adam" still propagates.
-            val runSource = text ?: desc
-            runSource?.let { identityRuns += runsOf(it, minLetters = MIN_IDENTITY_RUN) }
-        }
-
-        /**
-         * Steps 2–8, memoized by the raw trimmed string (the canonical form derives from it); a filter
-         * failure withholds (fail closed).
-         *
-         * Reviews FF1 + GG2: the CANONICAL form is judged first and alone decides the length cap (ADR
-         * step 2), so wide-spaced chrome is not capped on its raw padding and a padded "Deliver  to  Sam"
-         * is still caught and seeded. The RAW form is judged too — only when it differs AND is itself
-         * within the cap, so every pattern still sees bounded input — because canonicalization can
-         * shrink a value below a pattern's minimum (`"ab  cd"` is a quoted note raw, `"ab cd"` is not).
-         * Either hit withholds.
-         */
-        private fun valueStep(trimmed: String, canonical: String): FilterStep? =
-            valueSteps.getOrPut(trimmed) {
-                Judged(
-                    try {
-                        judge(canonical)
-                            ?: if (trimmed != canonical && trimmed.length <= MAX_TOKEN_LENGTH) judge(trimmed) else null
-                    } catch (_: Exception) {
-                        FilterStep.PII_SHAPE
-                    },
-                )
-            }.step
-
-        /** Pass 2 for one field: the constant `withheld`, or the value's own (memoized) slot. */
-        fun slot(field: Field): TextSlot {
-            if (field.idWithholds || valueStep(field.trimmed, field.canonical) != null) return TextSlot.WITHHELD
-            if (frameLevel && (field.canonical in caught || containsIdentityRun(field.canonical))) return TextSlot.WITHHELD
-            return valueSlots.getOrPut(field.canonical) { unfiltered(field.canonical) }
-        }
-
-        /**
-         * The frame-level containment rule's ONE owner (reviews GG1, JJ1, ZZ3): does [candidate] carry a letter
-         * run equal to any identity seed's run on this frame? Applied to every text slot AND to the id's
-         * name part of every node — an id built from the customer's name (`chip_Adam` beside
-         * `customer_name` "Adam") is as identifying as a text slot. Class names are never checked (ZZ3):
-         * a class is a compiled type name, never built from one frame's customer.
-         */
-        fun containsIdentityRun(candidate: String, splitCamel: Boolean = false): Boolean {
-            if (!frameLevel || (identityRuns.isEmpty() && (!splitCamel || wholeValueRuns.isEmpty()))) return false
-            val runs = runsOf(candidate, splitCamel = splitCamel)
-            if (runs.any { it in identityRuns }) return true
-            // Reviews TT2, AB3: an id also matches a whole-value seed — text slots never do — against every
-            // CONTIGUOUS concatenation of its camel segments ACROSS separators (`row_mary_jo`, `chip-mary-jo`,
-            // `rowMaryJo` beside "Mary Jo"). Bounded: an id name part is ≤ 64 chars, so ≤ 64 segments.
-            return splitCamel && wholeValueRuns.isNotEmpty() && crossRuns(candidate).any { it in wholeValueRuns }
-        }
-
-        /** Every contiguous join of [candidate]'s camel segments across letter runs, folded (review AB3). */
-        private fun crossRuns(candidate: String): List<String> = crossRunCache.getOrPut(candidate) {
-            val segments = plainLetterRuns(candidate).flatMap { camelSegments(it) }
-            val out = ArrayList<String>()
-            for (from in segments.indices) {
-                val sb = StringBuilder()
-                for (to in from until segments.size) {
-                    sb.append(segments[to])
-                    out += CaseFold.fold(sb.toString())
-                }
-            }
-            out
-        }
-
-        private val crossRunCache = HashMap<String, List<String>>()
-
-        fun emit(p: Pending): UiSkeletonNodeDto {
-            val text = LinkedHashMap<String, TextSlot>()
-            for ((wire, field) in p.fields) text[wire] = slot(field)
-            return UiSkeletonNodeDto(
-                // ADR §1 / reviews AA10, CC1: only a STATIC class / resource name travels (and keys the
-                // fingerprint); anything else is absent. The §2 PII-id step used the RAW id.
-                // JJ1: a static id that carries an identity run of THIS frame is absent too — for the wire
-                // and (since the fingerprint is computed from this tree) the fingerprint. ZZ3: the class
-                // name is never containment-checked (a compiled type name is not frame data).
-                // KK1: ids split at camelCase boundaries (Compose test tags are usually camelCase —
-                // `chipAdam`); text slots keep the plain letter-run split.
-                className = p.className,
-                id = p.id?.takeIf { !containsIdentityRun(ResourceIdGrammar.namePart(it), splitCamel = true) },
-                isClickable = p.node.isClickable,
-                isEnabled = p.node.isEnabled,
-                isChecked = p.node.isChecked,
-                text = text,
-                children = p.children.map { emit(it) },
-            )
-        }
+    fun seedCanonicalOf(raw: String?): String? {
+        if (raw.isNullOrBlank()) return null
+        val trimmed = raw.trim()
+        return if (provablyOverCap(trimmed)) null else CensusHash.canonical(trimmed)
     }
-
-    /**
-     * An identity value contributes only letter runs of at least this many letters (reviews GG1, II1):
-     * two, so a two-letter first name ("Li", "Jo") is covered; whole-run equality keeps it from matching
-     * inside another word, and a single-letter run (an initial) seeds nothing.
-     */
-    private const val MIN_IDENTITY_RUN = 2
 
     /**
      * The most input code points one canonical code point can absorb (review AB8): the canonical fold
@@ -655,98 +354,10 @@ object SkeletonBuilder {
     }
 
     /**
-     * A whole-value id seed needs at least this many letters (review AB4): three, so a short value ("Ok",
-     * "No", "Hi") never nulls `ok_button` / `no_thanks_button` / `hi_res_image`. NAME word runs keep
-     * [MIN_IDENTITY_RUN] ("Li" still protects `chipLi` through its letter run).
-     */
-    private const val MIN_WHOLE_VALUE_RUN = 3
-
-    /**
-     * The value's maximal runs of Unicode letters (with [splitCamel], also split at camelCase boundaries —
-     * the id/class form, review KK1), case-FOLDED with the one [CaseFold] (review HH1) —
-     * so "Adam's order" yields `adam`, `s`, `order` and "Adam, 2 items" yields `adam`, `items` (review
-     * GG1). [minLetters] counts letter CODE POINTS of the original run before folding (review HH2:
-     * UTF-16 units over-count a supplementary-plane letter, and a fold can change the length).
-     */
-    private fun letterRuns(value: String, minLetters: Int = 0, splitCamel: Boolean = false): List<String> {
-        val runs = ArrayList<String>()
-        fun emit(run: String) {
-            if (run.codePointCount(0, run.length) >= minLetters) runs += CaseFold.fold(run)
-        }
-        for (token in plainLetterRuns(value)) {
-            if (!splitCamel) {
-                emit(token)
-                continue
-            }
-            // KK1 + MM1 (ids/classes only): every CONTIGUOUS concatenation of the token's camel segments
-            // — the singles (`chip`, `Adam`), the whole token (`chipAdam`), and the joins in between
-            // (`Mc`+`Kenna` → `McKenna`), so a name with internal capitals still matches. Bounded by the
-            // token (an id name part is ≤ 64 chars).
-            val segments = camelSegments(token)
-            for (from in segments.indices) {
-                val sb = StringBuilder()
-                for (to in from until segments.size) {
-                    sb.append(segments[to])
-                    emit(sb.toString())
-                }
-            }
-        }
-        return runs
-    }
-
-    /** Maximal runs of Unicode letters (code-point based), unfolded. */
-    private fun plainLetterRuns(value: String): List<String> {
-        val runs = ArrayList<String>()
-        val sb = StringBuilder()
-        var i = 0
-        while (i < value.length) {
-            val cp = value.codePointAt(i)
-            if (Character.isLetter(cp)) {
-                sb.appendCodePoint(cp)
-            } else if (sb.isNotEmpty()) {
-                runs += sb.toString()
-                sb.setLength(0)
-            }
-            i += Character.charCount(cp)
-        }
-        if (sb.isNotEmpty()) runs += sb.toString()
-        return runs
-    }
-
-    /**
-     * A letter run split at camelCase boundaries (review KK1): lower→Upper (`chip|Adam`), and
-     * Upper→Upper+lower (`XML|Adam`: before the upper that starts a lowercase word).
-     */
-    private fun camelSegments(token: String): List<String> {
-        val segments = ArrayList<String>()
-        val sb = StringBuilder()
-        var prev = -1
-        var i = 0
-        while (i < token.length) {
-            val cp = token.codePointAt(i)
-            val next = i + Character.charCount(cp)
-            if (sb.isNotEmpty() && Character.isUpperCase(cp)) {
-                val nextCp = if (next < token.length) token.codePointAt(next) else -1
-                if (Character.isLowerCase(prev) ||
-                    (Character.isUpperCase(prev) && nextCp >= 0 && Character.isLowerCase(nextCp))
-                ) {
-                    segments += sb.toString()
-                    sb.setLength(0)
-                }
-            }
-            sb.appendCodePoint(cp)
-            prev = cp
-            i = next
-        }
-        if (sb.isNotEmpty()) segments += sb.toString()
-        return segments
-    }
-
-    /**
      * Step 6 and the hash, for a value no withholding step caught: only `words:1..8` hash; a digest
      * failure withholds. PRIVATE (review CC5): every caller goes through the frame-level rule.
      */
-    private fun unfilteredSlot(canonical: String): TextSlot = try {
+    internal fun unfilteredSlot(canonical: String): TextSlot = try {
         val shape = KindClassifier.shapeKind(canonical)
         if (!shape.hashable) {
             TextSlot(kind = shape.wire)
@@ -761,7 +372,7 @@ object SkeletonBuilder {
     /**
      * The FIRST value-judging §2 step (2–8) that fires on [value], or null when none does. ADR order; the
      * length cap (step 2) precedes every text predicate, so steps 3–8 only ever see ≤
-     * [MAX_TOKEN_LENGTH] characters. Step 1 is [IdClass] (review GG4). Internal for the tests.
+     * [MAX_TOKEN_LENGTH] characters. Step 1 is `IdClass` (review GG4). Internal for the tests.
      */
     internal fun withholdingStep(value: String): FilterStep? = when {
         value.length > MAX_TOKEN_LENGTH -> FilterStep.LENGTH_CAP

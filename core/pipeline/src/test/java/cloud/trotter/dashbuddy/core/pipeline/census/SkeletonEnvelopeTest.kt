@@ -17,7 +17,7 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
-/** ADR-0011 §1/§8 — the envelope and the refusals: sensitive frame/title, oversize, INVALID_TREE vs BUILD_FAILED, the tree-bound sensitive verdict, stamps, and the built item. Split from `SkeletonBuilderTest` (#1160 review UU10). */
+/** ADR-0011 §1/§8 — the envelope and the refusals: sensitive frame/title, oversize, INVALID_TREE (a corrupt tri-state) vs BUILD_FAILED, the tree-bound sensitive verdict, stamps, and the built item. Split from `SkeletonBuilderTest` (#1160 review UU10). */
 class SkeletonEnvelopeTest : SkeletonBuilderTestBase() {
 
     @Test
@@ -109,7 +109,7 @@ class SkeletonEnvelopeTest : SkeletonBuilderTestBase() {
     }
 
     @Test
-    fun `AA2 BB1 BB2 - a NUL or malformed UTF-16 in a class or id refuses the tree`() {
+    fun `AA2 BB1 BB2 AD5 - a NUL or malformed UTF-16 class or id is emitted absent and counted`() {
         listOf(
             UiNode(className = "android.widget.TextView\u0000N", text = "Accept"),
             // Review BB2: a NUL-bearing ID must refuse too, not be dropped to null by the grammar gate.
@@ -119,8 +119,15 @@ class SkeletonEnvelopeTest : SkeletonBuilderTestBase() {
             UiNode(className = "android.widget.TextView", viewIdResourceName = "x:id/a\uDC00", text = "Accept"),
         ).forEach { bad ->
             val child = UiNode(className = "android.widget.FrameLayout", viewIdResourceName = "x:id/host", children = listOf(bad))
-            assertEquals(Outcome.Refused(Refusal.INVALID_TREE), SkeletonBuilder.outcome(child, null, meta, platform, day))
+            val out = SkeletonBuilder.outcome(child, null, meta, platform, day) as Outcome.Built
+            assertEquals(1, out.malformedIdOrClass)
+            val node = out.skeleton.root.children.single()
+            if (bad.className != "android.widget.TextView") assertNull(node.className) else assertEquals(bad.className, node.className)
+            assertNull(node.id)
+            assertEquals(words(1, "Accept"), node.text.getValue("text"))
         }
+        // A clean frame counts nothing.
+        assertEquals(0, (SkeletonBuilder.outcome(tree("Continue"), null, meta, platform, day) as Outcome.Built).malformedIdOrClass)
     }
 
     @Test
@@ -145,7 +152,7 @@ class SkeletonEnvelopeTest : SkeletonBuilderTestBase() {
 
     @Test
     fun `II5 - a builder defect is BUILD_FAILED, never INVALID_TREE`() {
-        val defect = SkeletonBuilder.FrameFilter(
+        val defect = FrameFilter(
             judge = { SkeletonBuilder.withholdingStep(it) },
             unfiltered = { throw IllegalArgumentException("a bad TextSlot") },
         )

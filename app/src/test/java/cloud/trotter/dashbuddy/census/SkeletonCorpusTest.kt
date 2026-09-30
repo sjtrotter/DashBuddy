@@ -182,6 +182,35 @@ class SkeletonCorpusTest : SkeletonCorpusTestBase() {
     }
 
     @Test
+    fun `(c) negative control - a NAME whose text is a mask seeds runs from its desc in the mirror (review AC4)`() {
+        val frame = UiNode(
+            className = "android.widget.LinearLayout",
+            children = listOf(
+                UiNode(
+                    className = "android.widget.TextView",
+                    viewIdResourceName = "com.doordash.driverapp:id/customer_name",
+                    text = "[redacted:ab12]",
+                    contentDescription = "Adam Smith",
+                ),
+                UiNode(className = "android.widget.TextView", viewIdResourceName = "com.doordash.driverapp:id/step_description", text = "Adam"),
+                UiNode(className = "android.widget.TextView", text = "Adam"),
+            ),
+        ).restoreParents()
+        val good = SkeletonBuilder.build(frame, null, META, Platform.DoorDash, DAY)!!
+        assertEquals(TextSlot.WITHHELD, good.root.children[2].text.getValue("text"))
+        assertTrue(parityProblems("good", frame, good).third.isEmpty())
+        // The flip is EXPLAINED by the desc runs (the old mirror took the masked text and reported it).
+        val (flips, unexplained) = frameFlips("flip", Platform.DoorDash, frame)
+        assertTrue(flips >= 1)
+        assertEquals(emptyList<String>(), unexplained)
+        // With the frame rule off the id-less "Adam" hashes: the mirror must REPORT it, never exempt it.
+        val bad = (DiagnosticSkeletonBuilder.outcomeWithoutFrameRule(frame, null, META, Platform.DoorDash, DAY)
+            as SkeletonBuilder.Outcome.Built).skeleton
+        val (_, _, problems) = parityProblems("bad", frame, bad)
+        assertEquals(problems.toString(), 1, problems.size)
+    }
+
+    @Test
     fun `(c) redactor parity - any value the FULL-TREE redaction rewrites has no h`() {
         val problems = mutableListOf<String>()
         var rewritten = 0

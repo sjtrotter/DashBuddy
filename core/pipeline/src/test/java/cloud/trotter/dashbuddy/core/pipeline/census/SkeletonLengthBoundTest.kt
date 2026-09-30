@@ -47,7 +47,7 @@ class SkeletonLengthBoundTest : SkeletonBuilderTestBase() {
     @Test
     fun `a 5 KB body is LENGTH_CAP without a single fold`() {
         val folds = HashMap<String, Int>()
-        val filter = SkeletonBuilder.FrameFilter(
+        val filter = FrameFilter(
             judge = SkeletonBuilder::withholdingStep,
             canonicalize = { v -> folds.merge(v, 1, Int::plus); CensusHash.canonical(v) },
         )

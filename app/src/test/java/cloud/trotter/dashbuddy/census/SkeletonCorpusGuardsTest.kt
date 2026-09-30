@@ -1,6 +1,7 @@
 package cloud.trotter.dashbuddy.census
 import cloud.trotter.dashbuddy.core.pipeline.CustomerTextMarkers
 import cloud.trotter.dashbuddy.core.pipeline.SensitiveTextMarkers
+import cloud.trotter.dashbuddy.core.pipeline.census.IdPathJudgement
 import cloud.trotter.dashbuddy.core.pipeline.census.SkeletonBuilder
 import cloud.trotter.dashbuddy.core.pipeline.census.diagnostics.DiagnosticSkeletonBuilder
 import cloud.trotter.dashbuddy.domain.capture.ReplayMetadata
@@ -8,6 +9,7 @@ import cloud.trotter.dashbuddy.domain.capture.schema.UiNodeSchema
 import cloud.trotter.dashbuddy.domain.census.contract.CaseFold
 import cloud.trotter.dashbuddy.domain.census.contract.CensusHash
 import cloud.trotter.dashbuddy.domain.census.contract.ClassNameGrammar
+import cloud.trotter.dashbuddy.domain.census.contract.ResourceIdGrammar
 import cloud.trotter.dashbuddy.domain.census.contract.SkeletonSchema
 import cloud.trotter.dashbuddy.domain.census.contract.TextSlot
 import cloud.trotter.dashbuddy.domain.census.contract.UiSkeletonDto
@@ -48,11 +50,11 @@ class SkeletonCorpusGuardsTest : SkeletonCorpusTestBase() {
     fun `the id gate rejects exactly the dynamic ids in the corpus, and no rejected id is shipped`() {
         val rejected = sortedSetOf<String>()
         corpus.forEach { f ->
-            walkNodes(f.tree) { n -> n.viewIdResourceName?.let { if (!SkeletonBuilder.isStaticId(it)) rejected += it } }
+            walkNodes(f.tree) { n -> n.viewIdResourceName?.let { if (!IdPathJudgement.isStaticId(it)) rejected += it } }
         }
         // Review ZZ4 (reverses XX4): an all-caps tag ending in a one-letter segment reads as a name
         // (`chip_RILEY_S`), so these constants are withheld too — the accepted recall cost.
-        listOf("PRIMARY_BUTTON_A", "TAB_B", "SECTION_C").forEach { assertTrue(it, !SkeletonBuilder.isStaticId(it)) }
+        listOf("PRIMARY_BUTTON_A", "TAB_B", "SECTION_C").forEach { assertTrue(it, !IdPathJudgement.isStaticId(it)) }
         // A static id that trips the gate is a red test here, never a silent drop (review CC7 admitted a
         // single internal space, so `Artwork Image` is static now).
         assertEquals(
@@ -64,7 +66,9 @@ class SkeletonCorpusGuardsTest : SkeletonCorpusTestBase() {
             rejected,
         )
         built.mapNotNull { it.second }.forEach { item ->
-            walkSkeleton(item.root) { n -> n.id?.let { assertTrue(it, SkeletonBuilder.isStaticId(it)) } }
+            walkSkeleton(item.root) { n ->
+                n.id?.takeIf { it != ResourceIdGrammar.FRAME_WITHHELD_ID }?.let { assertTrue(it, IdPathJudgement.isStaticId(it)) }
+            }
         }
         // Review JJ1: the frame-level containment rule nulls no committed chrome id — no identity seed
         // collides with a static id anywhere in the corpus (every static raw id reaches the wire).
@@ -73,7 +77,11 @@ class SkeletonCorpusGuardsTest : SkeletonCorpusTestBase() {
             item ?: continue
             fun pair(n: UiNode, s: UiSkeletonNodeDto) {
                 val raw = n.viewIdResourceName
-                if (raw != null && SkeletonBuilder.isStaticId(raw) && s.id == null) frameDropped += "${f.path}: $raw"
+                if (raw != null && IdPathJudgement.isStaticId(raw) && (s.id == null || s.id == ResourceIdGrammar.FRAME_WITHHELD_ID)) {
+                    frameDropped += "${f.path}: $raw"
+                }
+                // AC2: nor does the class check null a committed static class.
+                if (ClassNameGrammar.staticOrNull(n.className) != null && s.className == null) frameDropped += "${f.path}: class"
                 n.children.zip(s.children).forEach { (a, b) -> pair(a, b) }
             }
             pair(f.tree, item.root)
@@ -163,7 +171,7 @@ class SkeletonCorpusGuardsTest : SkeletonCorpusTestBase() {
             UiNode(className = "android.widget.TextView", viewIdResourceName = "com.doordash.driverapp:id/address_line_1", text = "10927 Culebra Road"),
             UiNode(className = "android.widget.ImageView", viewIdResourceName = "com.doordash.driverapp:id/roadNameLayout"),
         )
-        assertNull(merchantIds[1].id)
+        assertEquals("~", merchantIds[1].id)
         assertEquals("com.doordash.driverapp:id/boxView", merchantIds[2].id)
         assertEquals("com.doordash.driverapp:id/roadNameLayout", merchantIds[4].id)
         hashed("Sign in", text(merchant[2]))

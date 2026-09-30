@@ -456,13 +456,19 @@ class CustomerTextMarkersTest {
     fun `what a kind seeds is pinned on the kind table (review AB1)`() {
         assertEquals(
             mapOf(
-                CustomerTextMarkers.IdentityKind.NAME to (true to true),
-                CustomerTextMarkers.IdentityKind.ADDRESS to (true to false),
-                CustomerTextMarkers.IdentityKind.CONTENT to (false to false),
-                CustomerTextMarkers.IdentityKind.EXACT to (true to false),
-                CustomerTextMarkers.IdentityKind.PERSON_OR_MERCHANT to (true to false),
+                CustomerTextMarkers.IdentityKind.NAME to Triple(true, Int.MAX_VALUE, true),
+                CustomerTextMarkers.IdentityKind.ADDRESS to Triple(true, 0, false),
+                CustomerTextMarkers.IdentityKind.CONTENT to Triple(false, 0, false),
+                CustomerTextMarkers.IdentityKind.EXACT to Triple(true, 0, false),
+                CustomerTextMarkers.IdentityKind.PERSON_OR_MERCHANT to Triple(true, 2, false),
             ),
-            CustomerTextMarkers.IdentityKind.entries.associateWith { it.seedsExactValue to it.seedsRuns },
+            CustomerTextMarkers.IdentityKind.entries.associateWith { Triple(it.seedsExactValue, it.maxRunSeedTokens, it.runsGuardClasses) },
         )
+        // Review AD2: a 1–2-token person-or-merchant value seeds runs; 3+ tokens seed exact only.
+        val pom = CustomerTextMarkers.IdentityKind.PERSON_OR_MERCHANT
+        assertTrue(pom.seedsRunsFrom("Riley") && pom.seedsRunsFrom("Riley S"))
+        assertTrue(!pom.seedsRunsFrom("The Home Depot") && !pom.seedsRunsFrom("Jack in the Box"))
+        assertTrue(CustomerTextMarkers.IdentityKind.NAME.seedsRunsFrom("Mary Jo Anne Smith"))
+        assertTrue(!CustomerTextMarkers.IdentityKind.EXACT.seedsRunsFrom("Riley"))
     }
 }

@@ -68,7 +68,7 @@ class SkeletonFrameRuleTest : SkeletonBuilderTestBase() {
     @Test
     fun `DD2 - the value filter runs ONCE per distinct trimmed value across both passes`() {
         val counts = HashMap<String, Int>()
-        val filter = SkeletonBuilder.FrameFilter(judge = { v ->
+        val filter = FrameFilter(judge = { v ->
             counts.merge(v, 1, Int::plus)
             SkeletonBuilder.withholdingStep(v)
         })
@@ -81,7 +81,7 @@ class SkeletonFrameRuleTest : SkeletonBuilderTestBase() {
             ),
         )
         val pending = filter.scan(tree)
-        val title = filter.field("Accept", SkeletonBuilder.IdClass.NONE)!!
+        val title = filter.field("Accept", IdClass.NONE)!!
         val root = filter.emit(pending)
         filter.slot(title)
         assertEquals(words(1, "Accept"), root.children[0].text.getValue("text"))
@@ -252,10 +252,11 @@ class SkeletonFrameRuleTest : SkeletonBuilderTestBase() {
         val cx = SkeletonBuilder.build(frame("order_cx_name"), null, meta, platform, day)!!.root.children
         assertEquals(TextSlot.WITHHELD, cx[1].text.getValue("text"))
         assertEquals(TextSlot.WITHHELD, cx[2].text.getValue("text"))
-        // SS1: user_name is EXACT — its exact duplicate is withheld, its words never seed.
+        // AD2 (refines SS1): a 1–2-token user_name is a person's name — its runs seed, so "Call Riley" is
+        // withheld exactly as beside customer_name.
         val user = SkeletonBuilder.build(frame("user_name"), null, meta, platform, day)!!.root.children
         assertEquals(TextSlot.WITHHELD, user[1].text.getValue("text"))
-        assertEquals(words(2, "Call Riley"), user[2].text.getValue("text"))
+        assertEquals(TextSlot.WITHHELD, user[2].text.getValue("text"))
     }
 
     @Test
@@ -339,5 +340,17 @@ class SkeletonFrameRuleTest : SkeletonBuilderTestBase() {
             null, meta, platform, day,
         )!!.root.children
         assertEquals(TextSlot.WITHHELD, out[1].text.getValue("text"))
+    }
+
+    @Test
+    fun `AD2 - a person-shaped user_name seeds runs, a 3-token merchant seeds exact only`() {
+        fun frame(user: String, vararg others: String) = SkeletonBuilder.build(
+            UiNode(className = "android.widget.LinearLayout", viewIdResourceName = "com.x:id/row", children = listOf(
+                UiNode(className = "android.widget.TextView", viewIdResourceName = "com.doordash.driverapp:id/user_name", text = user),
+            ) + others.map { UiNode(className = "android.widget.TextView", text = it) }),
+            null, meta, platform, day,
+        )!!.root.children.drop(1).map { it.text.getValue("text") }
+        assertEquals(listOf(TextSlot.WITHHELD, TextSlot.WITHHELD), frame("Riley", "Text Riley", "Riley's order"))
+        assertEquals(listOf(words(4, "Head to the store")), frame("The Home Depot", "Head to the store"))
     }
 }
