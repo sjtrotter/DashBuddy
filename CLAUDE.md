@@ -511,12 +511,12 @@ capability consent gate (`RuleCapabilityRepository`; **no auto-grant, #843**). H
 `UiInteractionHandler` (the only path that ever clicks a third-party app, #425; #1149: resolves the clickable
 OWNER first — `isClickable` OR advertised `ACTION_CLICK`, one predicate with bind time's `UiNode.takesClick`,
 bounded walk — refreshes owner AND matched evidence BEFORE verifying, never lets a container borrow a clickable
-descendant's labels (one bind/fire label horizon owned by `NodeRef`), and re-finds a bind whose ref carries a
+descendant's labels (one bind/fire label-horizon rule, `LabelHorizon`, in `:domain`), and re-finds a bind whose ref carries a
 PROVABLE exact fingerprint (`NodeRef.hasExactFingerprint`; bind side = the bound node's action OWNER's region,
 package- and readability-aware) by those labels BEFORE geometry, bounded by the mapper's `TreeLimits`. One
-outcome rule (`decideSemanticOutcome`): no 2b hit → strategy 3; hit(s) in an incomplete deciding window (the
-active one, or all when our bubble is active) or an unprovable hit → abort; twins → abort unless stored text
-decides), `OfferActionReceiver`.
+outcome rule (`decideSemanticOutcome`) over the deciding set — the active platform window when it has a hit,
+else every window (#788), roots and active root from ONE enumeration: no hit → strategy 3; hit(s) with an
+incomplete deciding window or an unprovable hit → abort; twins → abort unless stored text decides), `OfferActionReceiver`.
 
 - **Every odometer fix is gated (#1057/#918).** The pure `:domain` `OdometerFixPolicy` judges each fix
   against the last ACCEPTED one (`MIN_DELTA_METERS` 5, `MAX_ACCURACY_METERS` 50, `MAX_SPEED_MPS` 67,

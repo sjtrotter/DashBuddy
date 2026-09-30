@@ -164,8 +164,13 @@ never coordinates, so frozen bounds never aimed a tap — they decided WHICH nod
   fingerprint, so the ROW is found and clicked; the #1093 nested abort still fires when a wrapper carries its own
   copy of the labels.
 - **One label horizon (review I2) and one clickability predicate (review J2).** `NodeRef.LABEL_SCAN_DEPTH` (3) /
-  `LABEL_SCAN_NODES` (24) in `:domain` are the single owner. The bind-time hints (`Ruleset.buildNodeRef` →
-  `NodeRef.hintLabelsOf`) and the fire-time live scan read the same horizon with the same ownership rule, and
+  `LABEL_SCAN_NODES` (24) in `:domain` are the single owner, and so is the RULE (review N8): `LabelHorizon.scan`
+  over a tiny `LabelNode` adapter (`ownLabels`, `takesClick`, `foreign`, `unreadableChildren`, `children()` with
+  null = an unreadable slot) is the one implementation — bind time wraps a mapped `UiNode` (`UiLabelNode`, via
+  `Ruleset.buildNodeRef` → `NodeRef.hintLabelsOf`), fire time wraps a live node (`LiveLabelNode`, fetching lazily,
+  each slot budgeted before it is touched) for the post-refresh verification scan and the 2b walk's
+  already-fetched nodes (`WalkNode`, no second fetch) for each candidate's horizon. Both sides therefore read the
+  same horizon with the same ownership rule, and
   "takes a click" is ONE predicate on both sides: `UiNode.takesClick` (`isClickable || hasClickAction` — the
   #1147 field brought forward; `clickAction` in the DTO, default false and omitted, so fixtures are unchanged; set
   by the mapper from the action list; not in `allText` or any content hash) mirrors
@@ -193,11 +198,14 @@ never coordinates, so frozen bounds never aimed a tap — they decided WHICH nod
   each node's label region is derived post-order from the children the walk already fetched, so the fetch
   budget counts real IPC once; (4) label collection never reads an embedded foreign-package subtree, in discovery
   AND verification.
-  - **The outcome rule (review L1, `decideSemanticOutcome` — one owner).** The DECIDING set is the active
-    window's search when a platform window is active, else every scoped window's (a user tap from our bubble);
-    H = its 2b hits, I = any of its windows incomplete: **|H| = 0 → fall through to strategy 3 (whether or not
-    I); |H| ≥ 1 ∧ I → abort ("semantic re-find inconclusive"); else use H (≥ 2 are twins).** Background
-    incompleteness never matters while a platform window is active. Why: `👻 NULL CHILDREN` appears in ~5 % of
+  - **The outcome rule (review L1/N1, `decideSemanticOutcome` — one owner).** **The DECIDING set is the active
+    platform window's search when it produced ≥ 1 hit, otherwise every scoped window's search (with all their
+    incompleteness) — the #788 "active contributes none → keep them all" rule** (a small same-package dialog
+    active over the still-sliding receipt sheet must not hand the tap to frozen bounds). The active root is walked
+    FIRST and the others only when it has no hit (N2); under our bubble all are walked. The roots and the active
+    root come from ONE enumeration (`AccessibilitySource.getLiveWindowRoots()` → `LiveRoots(active, roots)`, N3).
+    H = the deciding set's 2b hits, I = any of its windows incomplete: **|H| = 0 → fall through to strategy 3
+    (whether or not I); |H| ≥ 1 ∧ I → abort ("semantic re-find inconclusive"); else use H (≥ 2 are twins).** Why: `👻 NULL CHILDREN` appears in ~5 % of
     fielded frames (23 957 lines across 143 pulled files; `recycler_view` 3 219×), and the round-2 "any null
     child aborts, no fallback" veto would have refused the expand tap on that share of receipts. A 2b hit that
     becomes unprovable at verification — a failed owner refresh (L5), an incomplete post-refresh scan or a
@@ -227,7 +235,10 @@ never coordinates, so frozen bounds never aimed a tap — they decided WHICH nod
   `Observation.identity()` is the dedup SSOT and does not change; with 2b a slid control is re-found by labels,
   so the frozen-bounds problem is fixed where it bites. #1102's throttle semantics and the capability gates
   (#417/#425) are unchanged — this changes HOW a target is re-found, never WHAT may be tapped.
-- **Residuals.** (1) **The accessibility rebind race — ACCEPTED (review L9).** After an owner `refresh()`, the
+- **Residuals.** (0) **A null child in the deciding window makes a lone hit inconclusive for THAT frame —
+  ACCEPTED (review N9).** The tap aborts and is retried on the next admitted frame (the #1102 throttle restore);
+  the field item watches the `semantic re-find inconclusive` WARN rate. (1) **The accessibility rebind race —
+  ACCEPTED (review L9).** After an owner `refresh()`, the
   accessibility client's subtree cache can still serve a pre-rebind copy of a CHILD to `getChild`; every
   accessibility consumer lives with this, and DashBuddy refreshes the owner and the matched evidence node (I1/J1)
   but cannot force-refresh a whole subtree cheaply. (2) **A label-less cut region forces strategy 3:** a clickable
