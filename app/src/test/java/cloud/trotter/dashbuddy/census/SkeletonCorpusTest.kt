@@ -5,6 +5,7 @@ import cloud.trotter.dashbuddy.core.pipeline.census.SkeletonBuilder
 import cloud.trotter.dashbuddy.domain.capture.ReplayMetadata
 import cloud.trotter.dashbuddy.domain.capture.schema.UiNodeSchema
 import cloud.trotter.dashbuddy.domain.census.contract.CensusHash
+import cloud.trotter.dashbuddy.domain.census.contract.ResourceIdGrammar
 import cloud.trotter.dashbuddy.domain.census.contract.SkeletonSchema
 import cloud.trotter.dashbuddy.domain.census.contract.TextSlot
 import cloud.trotter.dashbuddy.domain.census.contract.UiSkeletonDto
@@ -12,6 +13,7 @@ import cloud.trotter.dashbuddy.domain.census.contract.UiSkeletonNodeDto
 import cloud.trotter.dashbuddy.domain.model.accessibility.UiNode
 import cloud.trotter.dashbuddy.domain.model.accessibility.UiNodeTextField
 import cloud.trotter.dashbuddy.domain.privacy.PiiShapes
+import cloud.trotter.dashbuddy.domain.state.Platform
 import cloud.trotter.dashbuddy.test.util.CorpusDecoys
 import cloud.trotter.dashbuddy.test.util.PropSeeds
 import cloud.trotter.dashbuddy.test.util.SnapshotRedactor
@@ -25,9 +27,7 @@ import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
-import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.jsonObject
-import kotlinx.serialization.json.put
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -117,7 +117,18 @@ class SkeletonCorpusTest {
         }
     }
 
-    private fun platformOf(path: String) = if (path.contains("__uber__")) "uber" else "doordash"
+    /**
+     * The platform wire from the capture-naming token `<timestamp>__<platformWire>__…` (#1160 review
+     * AA8), resolved through the `Platform` registry — never a literal. Legacy names carry no platform
+     * token (a single segment, or an UPPER-CASE screen label in that slot) and resolve to
+     * [Platform.Unknown]; a lowercase token that is not a registered wire FAILS LOUD.
+     */
+    private fun platformOf(path: String): String {
+        val segments = path.substringAfterLast('/').removeSuffix(".json").split("__")
+        val token = segments.getOrNull(1)?.takeIf { segments.size >= 3 && it.matches(Regex("[a-z0-9_]+")) }
+            ?: return Platform.Unknown.wire
+        return (Platform.fromWire(token) ?: error("$path: unknown platform wire '$token'")).wire
+    }
 
     private fun build(f: Fixture, tree: UiNode = f.tree): UiSkeletonDto? =
         SkeletonBuilder.build(tree, null, META, platformOf(f.path), DAY)
@@ -189,6 +200,30 @@ class SkeletonCorpusTest {
         assertTrue(problems.take(20).joinToString("\n"), problems.isEmpty())
     }
 
+    // The id grammar gate (ADR-0011 §1, #1160 review AA10) -----------------------------------------
+
+    @Test
+    fun `the id gate rejects exactly the dynamic ids in the corpus, and no rejected id is shipped`() {
+        val rejected = sortedSetOf<String>()
+        corpus.forEach { f ->
+            walkNodes(f.tree) { n -> n.viewIdResourceName?.let { if (!ResourceIdGrammar.isStatic(it)) rejected += it } }
+        }
+        // A static id that trips the gate is a red test here, never a silent drop. `Artwork Image`
+        // carries a SPACE — it reads as text, so it is treated as absent by design.
+        assertEquals(
+            sortedSetOf(
+                "Artwork Image",
+                "PRIMARY_BUTTON_3f488d4a-0f0b-4fb9-9c86-c4e0253ba22a",
+                "PRIMARY_BUTTON_62132347-ff07-4f36-988d-db9d3cfa4dbd",
+                "PRIMARY_BUTTON_9db4e2af-5a58-4a43-ba63-295126ceddef",
+            ),
+            rejected,
+        )
+        built.mapNotNull { it.second }.forEach { item ->
+            walkSkeleton(item.root) { n -> n.id?.let { assertTrue(it, ResourceIdGrammar.isStatic(it)) } }
+        }
+    }
+
     // (b) ------------------------------------------------------------------------------------------
 
     /** Two shape-matched pseudonym families per mask kind. */
@@ -239,37 +274,64 @@ class SkeletonCorpusTest {
 
     // (c) ------------------------------------------------------------------------------------------
 
+    /**
+     * Redact the WHOLE tree the way the corpus intake does (`SnapshotRedactor.redact` over the serialized
+     * frame — its replacements are DOCUMENT-WIDE, #1160 review AA1), then walk original / redacted /
+     * skeleton in parallel and report every field the redaction changed that still carries an `h`.
+     * Returns (rewritten count, decoy-rewritten count, problems).
+     */
+    private fun parityProblems(path: String, tree: UiNode, item: UiSkeletonDto): Triple<Int, Int, List<String>> {
+        val redacted = UiNodeSchema.deserialize(SnapshotRedactor.redact(UiNodeSchema.serialize(tree)))
+        var rewritten = 0
+        var decoys = 0
+        val problems = mutableListOf<String>()
+        fun walk(o: UiNode, r: UiNode, s: UiSkeletonNodeDto) {
+            val redactedValues = r.scrubbableStrings().toMap()
+            for ((field, value) in o.scrubbableStrings()) {
+                if (value.isNullOrBlank() || redactedValues[field] == value) continue
+                rewritten++
+                if (CorpusDecoys.isDecoy(value)) decoys++
+                if (s.text[field.wire]?.h != null) problems += "$path: '${field.wire}' is rewritten by the redactor but hashed"
+            }
+            check(o.children.size == r.children.size && o.children.size == s.children.size) { "$path: shape drift" }
+            o.children.indices.forEach { walk(o.children[it], r.children[it], s.children[it]) }
+        }
+        walk(tree, redacted, item.root)
+        return Triple(rewritten, decoys, problems)
+    }
+
     @Test
-    fun `(c) redactor parity - any value SnapshotRedactor rewrites has no h`() {
+    fun `(c) redactor parity - any value the FULL-TREE redaction rewrites has no h`() {
         val problems = mutableListOf<String>()
         var rewritten = 0
         var decoyRewritten = 0
         for ((f, item) in built) {
             item ?: continue
-            val pairs = mutableListOf<Pair<UiNode, UiSkeletonNodeDto>>()
-            fun pair(n: UiNode, s: UiSkeletonNodeDto) {
-                pairs += n to s
-                n.children.zip(s.children).forEach { (a, b) -> pair(a, b) }
-            }
-            pair(f.tree, item.root)
-            for ((node, skel) in pairs) {
-                for ((field, value) in node.scrubbableStrings()) {
-                    if (value.isNullOrBlank()) continue
-                    val json = buildJsonObject {
-                        node.viewIdResourceName?.let { put("id", it) }
-                        put(field.wire, value)
-                    }.toString()
-                    if (SnapshotRedactor.redact(json) == json) continue
-                    rewritten++
-                    if (CorpusDecoys.isDecoy(value)) decoyRewritten++
-                    val h = skel.text[field.wire]?.h
-                    if (h != null) problems += "${f.path}: '${field.wire}' is rewritten by the redactor but hashed"
-                }
-            }
+            val (r, d, p) = parityProblems(f.path, f.tree, item)
+            rewritten += r
+            decoyRewritten += d
+            problems += p
         }
         assertTrue("rewritten $rewritten", rewritten > 0)
         assertTrue("load-bearing on the decoy fixtures: $decoyRewritten", decoyRewritten > 0)
         assertTrue(problems.take(20).joinToString("\n"), problems.isEmpty())
+    }
+
+    @Test
+    fun `(c) full-tree parity holds on the duplicate-value fixture (review AA1)`() {
+        // The parent repeats the child's customer name; only the child's id marks it. The redactor masks
+        // BOTH (document-wide), so the census must withhold both.
+        val frame = UiNode(
+            className = "android.widget.LinearLayout",
+            contentDescription = "Sam",
+            children = listOf(
+                UiNode(className = "android.widget.TextView", viewIdResourceName = "com.doordash.driverapp:id/customer_name", text = "Sam"),
+            ),
+        ).restoreParents()
+        val item = SkeletonBuilder.build(frame, null, META, "doordash", DAY)!!
+        val (rewritten, _, problems) = parityProblems("synthetic", frame, item)
+        assertEquals(2, rewritten)
+        assertTrue(problems.joinToString(), problems.isEmpty())
     }
 
     // (d) ------------------------------------------------------------------------------------------
@@ -347,6 +409,8 @@ class SkeletonCorpusTest {
 
     @Test
     fun `property - no PiiShapes match ever hashes, and no input token leaves verbatim`() = runTest {
+        // Substring mode throughout, as steps 7/8 run them (the anchored name pattern's containsMatchIn
+        // on a trimmed value IS its whole-value match — exactly `PiiShapes.hasNameShape`'s first arm).
         val shapes: List<Regex> = PiiShapes.VALUE_SHAPES.map { it.regex } +
             PiiShapes.FIRST_LAST_INITIAL + PiiShapes.FIRST_LAST_INITIAL_EMBEDDED_REGEX
         var piiSeen = 0
