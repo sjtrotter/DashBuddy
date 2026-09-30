@@ -56,7 +56,7 @@ class WindowsChangedPipeline @Inject constructor(
         .transform { coalesced ->
             val windows = source.getWindows()
             // #1152 D2: measured once per burst, shared by the list log and the overlay checks.
-            val displayArea = source.displayArea(windows)
+            val displayArea = source.displayArea()
             Timber.tag("Pipeline").d("\uD83E\uDE9F Window list: %d windows", windows.size)
             windows.forEachIndexed { i, w ->
                 // The window TITLE is app-controlled text (#1148 review G1) — logged by LENGTH only,

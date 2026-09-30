@@ -135,7 +135,7 @@ class OverlayCandidateTest {
     fun `an unknown display area admits nothing and fetches nothing (fail closed)`() {
         val w = window(15, node(uberPkg), OverlayGeometry.UBER_OFFER)
         val src = source(windows = listOf(w), res = null)
-        val area = src.displayArea(listOf(w)) // no metrics, no application window to measure
+        val area = src.displayArea()
         assertEquals(0L, area)
         assertFalse(src.isOverlayCandidate(w, area))
         verify(w, never()).root
@@ -143,10 +143,20 @@ class OverlayCandidateTest {
     }
 
     @Test
-    fun `display area - service metrics, else the largest application window`() {
-        val app = window(3, node(ddPkg), Rect(0, 0, 1000, 2000), type = AccessibilityWindowInfo.TYPE_APPLICATION)
-        val big = window(4, node(uberPkg), OverlayGeometry.FULL_SCREEN) // system windows are not the fallback
-        assertEquals(display, source().displayArea(listOf(app, big)))
-        assertEquals(2_000_000L, source(res = null).displayArea(listOf(app, big)))
+    fun `BB4 - no metrics - no window-bounds fallback - a puck beside a small PiP is refused NO_DISPLAY_AREA`() {
+        // The removed fallback measured the largest APPLICATION window: a 200×200 PiP would make the
+        // 142×142 puck ~50 % of "the display" and admit it.
+        val pip = window(3, node("com.google.android.apps.maps"), Rect(0, 0, 200, 200), type = AccessibilityWindowInfo.TYPE_APPLICATION, pip = true)
+        val puck = window(10, node(uberPkg), OverlayGeometry.UBER_PUCK)
+        val src = source(windows = listOf(pip, puck), res = null)
+        assertEquals(0L, src.displayArea())
+        assertFalse(src.isOverlayCandidate(puck, src.displayArea()))
+        verify(puck, never()).root
+        assertEquals(1L, stats.overlayRejectedCount(OverlayRejectReason.NO_DISPLAY_AREA))
+    }
+
+    @Test
+    fun `display area is the service's display metrics`() {
+        assertEquals(display, source().displayArea())
     }
 }

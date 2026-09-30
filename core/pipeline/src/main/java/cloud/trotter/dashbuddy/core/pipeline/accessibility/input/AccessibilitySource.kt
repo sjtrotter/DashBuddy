@@ -265,7 +265,7 @@ class AccessibilitySource @Inject constructor(
         var verdict: Foreground = Foreground.Refused(ForegroundSkipReason.NO_CANDIDATE)
         for (w in ordered) {
             if (w.type == AccessibilityWindowInfo.TYPE_SYSTEM) {
-                val displayArea = area ?: displayArea(windows).also { area = it }
+                val displayArea = area ?: displayArea().also { area = it }
                 when (val probe = overlayProbe(w, displayArea)) {
                     OverlayProbe.NotCandidate -> continue // small, or a verified non-overlay package
                     // PR #1155 review BB1: a LARGE system window whose owner cannot be read may be an
@@ -344,7 +344,7 @@ class AccessibilitySource @Inject constructor(
             val windows = getWindows()
             val w = windows.firstOrNull { it.id == windowId } ?: return null
             if (w.type != AccessibilityWindowInfo.TYPE_SYSTEM) return null // cheap: skip the metrics read
-            val probe = overlayProbe(w, displayArea(windows)) as? OverlayProbe.Candidate ?: return null
+            val probe = overlayProbe(w, displayArea()) as? OverlayProbe.Candidate ?: return null
             if (!isEnabled(probe.packageName)) return null
             val active = windows.firstOrNull { it.id == activeWindowId } ?: return null
             val flagged = windows.filter { it.isActive }
@@ -413,11 +413,12 @@ class AccessibilitySource @Inject constructor(
     }
 
     /**
-     * The display area in px² (#1152 D2): the service's display metrics; when the service handle is
-     * gone or reports nothing, the largest `TYPE_APPLICATION` window's bounds; else 0 (no overlay
-     * is admitted — fail closed).
+     * The display area in px² (#1152 D2): the service's display metrics, else 0 — no overlay is
+     * admitted (`NO_DISPLAY_AREA`, fail closed). PR #1155 review BB4: there is deliberately NO
+     * window-bounds fallback — the largest application window can be a small PiP, which would make
+     * the 142×142 puck "half the display" and a candidate.
      */
-    internal fun displayArea(windows: List<AccessibilityWindowInfo>): Long {
+    internal fun displayArea(): Long {
         val metrics = try {
             serviceRef?.get()?.resources?.displayMetrics
         } catch (_: Exception) {
@@ -426,9 +427,7 @@ class AccessibilitySource @Inject constructor(
         if (metrics != null && metrics.widthPixels > 0 && metrics.heightPixels > 0) {
             return metrics.widthPixels.toLong() * metrics.heightPixels.toLong()
         }
-        return windows
-            .filter { it.type == AccessibilityWindowInfo.TYPE_APPLICATION }
-            .maxOfOrNull { areaOf(it) } ?: 0L
+        return 0L
     }
 
     /** A window's on-screen area in px² (bounds are parceled with the window — no binder call). */
