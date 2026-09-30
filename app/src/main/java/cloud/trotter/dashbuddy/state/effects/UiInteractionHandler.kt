@@ -396,7 +396,7 @@ class UiInteractionHandler @Inject constructor(
      * [semantic]: found by strategy 2b (#1149) — by those label hints, with no geometric entrance
      * test.
      */
-    private data class Candidate(
+    internal data class Candidate(
         val node: AccessibilityNodeInfo,
         val inActiveWindow: Boolean,
         val boundsDerived: Boolean = false,
@@ -507,40 +507,6 @@ class UiInteractionHandler @Inject constructor(
     /** [inconclusiveHits] > 0: 2b found that many hits in a deciding set that was incomplete — abort (#1149 L1). */
     private class CandidateSearch(val candidates: List<Candidate>, val inconclusiveHits: Int = 0, val activeBoundsCut: Boolean = false)
 
-    private class SemanticWindow(val result: SemanticSearch, val inActive: Boolean)
-
-    private sealed interface SemanticOutcome {
-        data class Use(val candidates: List<Candidate>) : SemanticOutcome
-        data class Inconclusive(val hits: Int) : SemanticOutcome
-        data class FallThrough(val incompleteWindows: Int) : SemanticOutcome
-    }
-
-    /**
-     * #1149 review L1/N1 — THE 2b outcome rule, one owner, over the DECIDING set: the active platform
-     * window's search when it produced ≥ 1 hit; otherwise EVERY scoped window's search (with all their
-     * incompleteness) — the #788 rule "active contributes none → keep them all" (a small same-package
-     * dialog active over the still-sliding receipt sheet must not hand the tap to frozen bounds).
-     * With H = the deciding set's hits and I = "a window in it was incomplete" (walk cut, unreadable
-     * child, or a vetoing region):
-     *  - |H| = 0 → FALL THROUGH to strategy 3, whether or not I: nothing was found, so nothing can be
-     *    wrong, and strategy 3 keeps its own gates (containment, nested abort, ranker, #788);
-     *  - |H| ≥ 1 ∧ I → INCONCLUSIVE, abort: a hidden twin is possible;
-     *  - otherwise USE H (≥ 2 of them are twins: stored-text tie-break or abort, downstream).
-     */
-    private fun decideSemanticOutcome(deciding: List<SemanticWindow>): SemanticOutcome {
-        val hits = deciding.sumOf { it.result.hits.size }
-        if (hits == 0) return SemanticOutcome.FallThrough(deciding.count { it.result.incomplete })
-        if (deciding.any { it.result.incomplete }) return SemanticOutcome.Inconclusive(hits)
-        val out = mutableListOf<Candidate>()
-        for (w in deciding) {
-            val base = out.size
-            for (hit in w.result.hits) out.add(
-                Candidate(hit.node, w.inActive, semantic = true, ancestors = hit.ancestors.map { it + base }),
-            )
-        }
-        return SemanticOutcome.Use(out)
-    }
-
     private fun warnInconclusive(description: String, hits: Int) {
         Timber.tag("Effects").w(
             "Semantic re-find for %s inconclusive (%d hit(s), incomplete) — aborting to manual (#1149)",
@@ -626,9 +592,6 @@ class UiInteractionHandler @Inject constructor(
         return CandidateSearch(candidates)
     }
 
-    /** A walk hit: [ancestors] are the indices (into the SAME `out` list) of hits this one is inside. */
-    private data class WalkHit(val node: AccessibilityNodeInfo, val relaxed: Boolean, val ancestors: List<Int>)
-
     /**
      * #1149 review N8 — the POST-REFRESH verification scan: the one [LabelHorizon] rule over the live
      * owner. Every child fetch is a binder IPC, so [LiveLabelNode] fetches on `get(i)` and the horizon
@@ -641,194 +604,6 @@ class UiInteractionHandler @Inject constructor(
     private fun scanLabels(node: AccessibilityNodeInfo, expectedPackage: String): LabelScan =
         LabelHorizon.scan(LiveLabelNode(node, expectedPackage))
 
-    /** A live node as a [LabelNode]: children are fetched lazily, one `getChild` per slot the horizon touches. */
-    private class LiveLabelNode(private val node: AccessibilityNodeInfo, private val expectedPackage: String) : LabelNode {
-        override val foreign: Boolean by lazy { node.packageName?.toString() != expectedPackage }
-        // P4: a foreign node's text/description is never touched.
-        override val ownLabels: List<String> by lazy { if (foreign) emptyList() else ownLabelsOf(node) }
-        override val takesClick: Boolean get() = AccNodeUtils.isActionClickable(node)
-        override val unreadableChildren: Int get() = 0
-        override fun children(): List<LabelNode?> = object : AbstractList<LabelNode?>() {
-            override val size: Int = node.childCount.coerceAtLeast(0)
-            override fun get(index: Int): LabelNode? = node.getChild(index)?.let { LiveLabelNode(it, expectedPackage) }
-        }
-    }
-
-    /**
-     * A node the 2b walk already fetched, as a [LabelNode] (review I7 + N8): its [slots] hold the children
-     * the walk read; a slot the walk did not (or could not) read is null — unreadable to the horizon, so
-     * scanning a candidate never issues a second fetch.
-     */
-    private class WalkNode(
-        private val node: AccessibilityNodeInfo,
-        override val foreign: Boolean,
-        override val takesClick: Boolean,
-        val slots: Array<WalkNode?>,
-        /** P1: advertised children beyond the (budget-capped) [slots] — never allocated, never read. */
-        override val unreadableChildren: Int = 0,
-    ) : LabelNode {
-        // P4: lazy, and a foreign node's text/description is never touched.
-        override val ownLabels: List<String> by lazy { if (foreign) emptyList() else ownLabelsOf(node) }
-        override fun children(): List<LabelNode?> = slots.asList()
-    }
-
-    /** One window's 2b result: its hits, and whether anything in it could not be read completely (#1149 L1). */
-    private class SemanticSearch(val hits: List<WalkHit>, val incomplete: Boolean)
-
-    private class SemanticHit(val node: AccessibilityNodeInfo, val pre: Int, val lastPre: Int)
-
-    /**
-     * Strategy 2b (#1149): every same-package node of [root] that takes a click
-     * ([AccNodeUtils.isActionClickable]), matches the bind's owner class (when it has one) and whose
-     * COMPLETE label horizon is the ref's EXACT fingerprint ([NodeRef.fingerprintMatches] — no
-     * superset, #1102 review constraint 1). No geometric entrance test. Hits record their nesting
-     * (pre-order intervals), so a wrapper carrying its own copy of the labels around the row stays
-     * visible to the caller's nested-abort rule.
-     *
-     * ONE pass (review I7): every child is fetched once, into a [WalkNode]; each candidate's horizon is
-     * then [LabelHorizon.scan] over those already-fetched nodes (N8 — the same rule as bind time and
-     * verification), so the budget counts real IPC once.
-     *
-     * Bounded (#1102 review constraints 2 + 3): at most [TreeLimits.MAX_TREE_DEPTH] deep and
-     * [TreeLimits.MAX_TREE_NODES] child fetches per root, budgeted before the call, nulls included.
-     * Returns the hits found AND whether the window is INCOMPLETE — a bound cut the walk, a child read
-     * null, or a candidate's own horizon is incomplete with its visible labels still consistent
-     * (I4b/J4). What that means for the tap is [decideSemanticOutcome]'s call (L1/N1).
-     */
-    private fun findNodeBySemantics(root: AccessibilityNodeInfo, ref: NodeRef, expectedPackage: String): SemanticSearch {
-        var fetched = 0
-        var preCounter = 0
-        var incomplete = false
-        var stopped = false
-        val hits = ArrayList<SemanticHit>()
-        // L2/N7: 2b filters on the bind's OWNER class (its fingerprint is the owner's). A null
-        // ownerClassHint on a ref that reached 2b (hasExactFingerprint) means the owner HAD no class —
-        // no filter; legacy refs never reach 2b (they are never complete), so there is no fallback.
-        val ownerClass = ref.ownerClassHint
-        fun visit(node: AccessibilityNodeInfo, depth: Int): WalkNode {
-            val pre = preCounter++
-            val count = node.childCount.coerceAtLeast(0)
-            // P1: allocate at most what the remaining fetch budget could ever fill — a hostile childCount
-            // (Int.MAX_VALUE) must not become an allocation in the side-effect worker. The remainder is
-            // unreadable (and the window incomplete).
-            val capacity = minOf(count, (TreeLimits.MAX_TREE_NODES - fetched).coerceAtLeast(0))
-            val self = WalkNode(
-                node, foreign = false, takesClick = AccNodeUtils.isActionClickable(node),
-                slots = arrayOfNulls(capacity), unreadableChildren = count - capacity,
-            )
-            if (count > capacity) incomplete = true
-            if (count > 0 && depth >= TreeLimits.MAX_TREE_DEPTH) {
-                incomplete = true // a tree the mapper itself would have cut; the slots stay unreadable
-            } else {
-                for (i in 0 until capacity) {
-                    if (stopped || fetched >= TreeLimits.MAX_TREE_NODES) { incomplete = true; stopped = true; break }
-                    fetched++
-                    // An unreadable child may hide the real control (or its twin): incomplete (I4 → L1).
-                    val child = node.getChild(i) ?: run { incomplete = true; null } ?: continue
-                    if (child.packageName?.toString() != expectedPackage) {
-                        self.slots[i] = WalkNode(child, foreign = true, takesClick = false, slots = emptyArray())
-                        continue
-                    }
-                    self.slots[i] = visit(child, depth + 1)
-                }
-            }
-            val classOk = ownerClass == null || node.className?.toString() == ownerClass
-            if (classOk && self.takesClick) {
-                val scan = LabelHorizon.scan(self)
-                if (!scan.complete) {
-                    // I4b, refined by J4: an incomplete candidate marks the window incomplete ONLY if what
-                    // IS visible is still consistent with the fingerprint (visible hint set ⊆ the ref's) —
-                    // the unseen part could complete it into the control or its twin. A region already
-                    // carrying a label OUTSIDE the set can never be an exact match, so it does not count.
-                    if (ref.visibleConsistentWith(scan.labels)) incomplete = true
-                } else if (ref.fingerprintMatches(scan.labels)) {
-                    hits.add(SemanticHit(node, pre, preCounter - 1))
-                }
-            }
-            return self
-        }
-        visit(root, 0)
-        hits.sortBy { it.pre }
-        return SemanticSearch(hits.mapIndexed { i, h ->
-            WalkHit(h.node, relaxed = false, ancestors = hits.indices.filter { j ->
-                j != i && hits[j].pre < h.pre && h.pre <= hits[j].lastPre
-            })
-        }, incomplete)
-    }
-
-    /**
-     * Strategy 3 (#1093 shape — review rounds 2 and 3). Every hit is bounds-derived and must still
-     * carry the bind's label hints; the walk itself decides NOTHING about identity:
-     *  - an EXACT class+rect match that is CLICKABLE is a hit, and the walk STILL descends — a
-     *    clickable wrapper at the captured rect with the real row inside it must expose both, so
-     *    the verification stage can see the nesting and abort (pruning here handed the tap to
-     *    the wrapper);
-     *  - an exact match that is NOT clickable is skipped and descended — the caller resolves its
-     *    action owner (#1149), the nearest clickable ANCESTOR, so ranking a shell above its
-     *    clickable child would tap something outside the row;
-     *  - a clickable same-class node overlapping the rect by >= [RELAXED_BOUNDS_IOU] is a RELAXED
-     *    hit, descended into. Nothing is dropped here: a descendant hit that later FAILS
-     *    verification must not evict the row it sits in, and one that PASSES makes the pair
-     *    undecidable — both are the verification stage's call, which is why each hit records the
-     *    hits it is nested inside.
-     * Runs only when strategy 2b found nothing (#1149).
-     *
-     * Bounded (#1149 review R5): the mapper's [TreeLimits] depth and fetch budget, each fetch counted
-     * before the call (nulls included). Returns false when a bound CUT the walk — the caller then takes
-     * no candidates from this root (fail closed to manual): a partial geometric walk could leave one
-     * wrong survivor exactly like a partial label walk.
-     */
-    private fun findNodeByBounds(
-        root: AccessibilityNodeInfo,
-        targetBounds: BoundingBox,
-        className: String?,
-        out: MutableList<WalkHit>,
-    ): Boolean {
-        var fetched = 0
-        var cut = false
-        val path = ArrayList<Int>()
-        fun visit(node: AccessibilityNodeInfo, depth: Int) {
-            if (cut) return
-            visitBounds(node, targetBounds, className, out, path) {
-                val count = node.childCount.coerceAtLeast(0)
-                if (count > 0 && depth >= TreeLimits.MAX_TREE_DEPTH) { cut = true; return@visitBounds }
-                for (i in 0 until count) {
-                    if (fetched >= TreeLimits.MAX_TREE_NODES) { cut = true; return@visitBounds }
-                    fetched++
-                    val child = node.getChild(i) ?: continue
-                    visit(child, depth + 1)
-                    if (cut) return@visitBounds
-                }
-            }
-        }
-        visit(root, 0)
-        return !cut
-    }
-
-    private inline fun visitBounds(
-        node: AccessibilityNodeInfo,
-        targetBounds: BoundingBox,
-        className: String?,
-        out: MutableList<WalkHit>,
-        path: ArrayList<Int>,
-        descend: () -> Unit,
-    ) {
-        val liveBounds = Rect()
-        node.getBoundsInScreen(liveBounds)
-        val live = liveBounds.toBoundingBox()
-        val classOk = className == null || node.className?.toString() == className
-        // #1149 review J7: the same clickability predicate as everywhere else — a Compose control that
-        // only ADVERTISES ACTION_CLICK at the exact rect is otherwise invisible to the bounds walk.
-        val hit = classOk && AccNodeUtils.isActionClickable(node) && (
-            live == targetBounds || ClickCandidateRanker.boundsIoU(live, targetBounds) >= RELAXED_BOUNDS_IOU
-        )
-        if (hit) {
-            out.add(WalkHit(node, relaxed = live != targetBounds, ancestors = path.toList()))
-            path.add(out.size - 1)
-        }
-        descend()
-        if (hit) path.removeAt(path.size - 1)
-    }
 }
 
 /**
@@ -876,9 +651,3 @@ internal suspend fun awaitLiveRoots(
     }
     return emptyList()
 }
-
-/** A live node's own non-blank text and contentDescription — the [LabelNode.ownLabels] of both fire-time adapters. */
-private fun ownLabelsOf(node: AccessibilityNodeInfo): List<String> = listOfNotNull(
-    node.text?.toString(),
-    node.contentDescription?.toString(),
-) // raw: LabelHorizon caps then blank-filters (#1149 R2)
