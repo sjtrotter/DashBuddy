@@ -134,4 +134,30 @@ class WindowsChangedOverlayTest {
         assertTrue(out.isEmpty())
         verify(uberSystem, never()).root
     }
+
+    @Test
+    fun `our bubble active - the window in front is emitted, the one beneath it is not (H6)`() {
+        val out = emitted(
+            listOf(
+                window(1, 10, node("cloud.trotter.dashbuddy", "bubble"), active = true),
+                window(3, 2, node(ddPkg, "dd")),
+                window(5, 5, node(uberPkg, "uber-app")),
+            ),
+            enabled = setOf(ddPkg, uberPkg),
+        )
+        assertEquals(listOf("uber-app"), out.map { it.tree.text })
+    }
+
+    @Test
+    fun `our bubble active and the foreground refused - nothing emitted (H6)`() {
+        val out = emitted(
+            listOf(
+                window(1, 10, node("cloud.trotter.dashbuddy", "bubble"), active = true),
+                window(4, 6, node("com.android.launcher3", "home")),
+                window(3, 2, node(ddPkg, "dd")),
+            ),
+            enabled = setOf(ddPkg),
+        )
+        assertTrue(out.isEmpty())
+    }
 }

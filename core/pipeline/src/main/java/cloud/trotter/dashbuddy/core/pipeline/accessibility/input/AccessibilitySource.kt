@@ -87,6 +87,9 @@ class AccessibilitySource @Inject constructor() {
      */
     fun getService(): AccessibilityService? = serviceRef?.get()
 
+    /** This app's own package (the service's), or null when unbound — our bubble's windows. */
+    fun ownPackage(): String? = serviceRef?.get()?.packageName
+
     /**
      * A window's root snapshot: the converted [UiNode] tree + the **real package** owning it, plus
      * the window's metadata on the paths that already hold the window object (the foreground and
@@ -171,7 +174,7 @@ class AccessibilitySource @Inject constructor() {
      * SAFE to call from background threads.
      */
     fun foregroundWindow(isEnabled: (String?) -> Boolean): Foreground = try {
-        val ownPkg = serviceRef?.get()?.packageName
+        val ownPkg = ownPackage()
         val windows = getWindows()
         val ordered = windows
             .filter { it.type == AccessibilityWindowInfo.TYPE_APPLICATION && !it.isInPictureInPictureMode }

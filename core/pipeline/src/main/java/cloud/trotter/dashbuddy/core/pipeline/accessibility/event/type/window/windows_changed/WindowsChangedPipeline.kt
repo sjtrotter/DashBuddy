@@ -1,6 +1,7 @@
 package cloud.trotter.dashbuddy.core.pipeline.accessibility.event.type.window.windows_changed
 
 import android.view.accessibility.AccessibilityEvent
+import android.view.accessibility.AccessibilityNodeInfo
 import android.view.accessibility.AccessibilityWindowInfo
 import cloud.trotter.dashbuddy.core.pipeline.accessibility.TreeSnapshot
 import cloud.trotter.dashbuddy.core.pipeline.accessibility.input.AccessibilitySource
@@ -19,11 +20,17 @@ import javax.inject.Inject
  *
  * Unlike ContentChanged/StateChanged, which snapshot ONE window per frame (the active enabled
  * window, else the readable enabled window in front — #1148), this pipeline enumerates the window
- * list and snapshots TRUE OVERLAYS only (#1148 review G6): ENABLED-package application windows
- * whose layer is ABOVE the active window's. A window BENEATH the active one (the activity under a DoorDash
- * sheet) is never emitted — that would re-open the interleaving the resolver removed. Candidates
- * match [AccessibilitySource.foregroundWindow]: `TYPE_APPLICATION` windows only (review H1; overlays
- * that surface as accessibility `TYPE_SYSTEM` are #1152). No active window → nothing.
+ * list and snapshots TRUE OVERLAYS only (#1148 review G6/H6): ENABLED-package application windows
+ * above a cutoff, never one beneath it — that would re-open the interleaving the resolver removed
+ * (the activity under an active DoorDash sheet). The cutoff:
+ * - the ACTIVE window's layer, when the active window is not our own;
+ * - when OUR bubble is active (its layer would suppress everything beneath it), the window
+ *   [AccessibilitySource.foregroundWindow] reads — the topmost non-own enabled application window
+ *   — is emitted itself (nothing non-own sits above it by construction); if the foreground is
+ *   refused, nothing is emitted.
+ * Candidates match [AccessibilitySource.foregroundWindow]: `TYPE_APPLICATION` windows only (review
+ * H1; overlays that surface as accessibility `TYPE_SYSTEM` are #1152), never picture-in-picture
+ * (H2). No active window → nothing (accepted: the event-driven pipelines still cover that case).
  */
 class WindowsChangedPipeline @Inject constructor(
     private val source: AccessibilitySource,
@@ -61,6 +68,30 @@ class WindowsChangedPipeline @Inject constructor(
                 return@transform
             }
             val enabled = platformPreferences.enabledPackages.value
+            fun trigger() = TreeSnapshot.Trigger(
+                reason = TreeSnapshot.Trigger.Reason.WINDOWS,
+                changeTypes = 0,
+                coalescedEvents = coalesced,
+                spanMs = 0L,
+            )
+            fun snapshotOf(w: AccessibilityWindowInfo, root: AccessibilityNodeInfo): TreeSnapshot? =
+                // #1148 review F6: the shared snapshot builder (one WindowContext, one map path).
+                source.getWindowSnapshot(w, root, totalCount)?.let {
+                    TreeSnapshot(it.tree, it.packageName, it.windowContext, trigger())
+                }
+
+            val ownPkg = source.ownPackage()
+            val activeIsOwn = ownPkg != null && active.root?.packageName?.toString() == ownPkg
+            if (activeIsOwn) {
+                // H6: our bubble's layer is no cutoff — emit the window in front of the dasher.
+                when (val front = source.foregroundWindow { it in enabled }) {
+                    is AccessibilitySource.Foreground.Found ->
+                        snapshotOf(front.located.window, front.located.root)?.let { emit(it) }
+                    is AccessibilitySource.Foreground.Refused ->
+                        Timber.v("🚫 Windows: our window active, foreground refused %s", front.reason)
+                }
+                return@transform
+            }
             for (w in windows) {
                 if (w.isActive || w.layer <= active.layer) continue // never beneath the active window
                 if (w.type != AccessibilityWindowInfo.TYPE_APPLICATION) continue // H1, #1152
@@ -69,21 +100,7 @@ class WindowsChangedPipeline @Inject constructor(
                 // never our own bubble or other apps (#4).
                 val nativeRoot = w.root ?: continue
                 if (nativeRoot.packageName?.toString() !in enabled) continue
-                // #1148 review F6: the shared snapshot builder (one WindowContext, one map path).
-                val snapshot = source.getWindowSnapshot(w, nativeRoot, totalCount) ?: continue
-                emit(
-                    TreeSnapshot(
-                        tree = snapshot.tree,
-                        packageName = snapshot.packageName,
-                        windowContext = snapshot.windowContext,
-                        trigger = TreeSnapshot.Trigger(
-                            reason = TreeSnapshot.Trigger.Reason.WINDOWS,
-                            changeTypes = 0,
-                            coalescedEvents = coalesced,
-                            spanMs = 0L,
-                        ),
-                    )
-                )
+                snapshotOf(w, nativeRoot)?.let { emit(it) }
             }
         }
 }
