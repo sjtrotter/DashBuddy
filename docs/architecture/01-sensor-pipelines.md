@@ -371,8 +371,12 @@ then fired, and were answered with the window beneath). The shipped rules:
   topology generation, and every write carries the generation its caller read BEFORE probing — a
   collector paused in a root fetch (or iterating an older window list) across a clear has its write
   DISCARDED. `foregroundWindow` reads it before fetching a root (a cached own/non-enabled application
-  window decides without a fetch), and the topology path's "is the active window ours" reads through
-  it (`packageOf`, review BB10). Declined (review DD2): revalidating a memoized
+  window decides without a fetch), and both paths classify the active window through ONE owner —
+  `AccessibilitySource.resolveActive` (a fresh `rootOf` the enumerated window) and `classify` (which
+  records the package; review KK3) — never through a memoized package (reviews GG1/HH1). Every caller
+  reads the generation BEFORE its enumeration and passes it to every walk, probe and fetch, so a clear
+  landing between `getWindows()` and the walk discards the verdicts decided on the old list (review
+  KK1). Declined (review DD2): revalidating a memoized
   `NOT_OVERLAY_PLATFORM` against an owner change under a live id — window ids are allocated per
   accessibility connection and a connection belongs to ONE package, so `windowId → package` is
   stable by framework construction; only geometry moves under a live id, which the bounds check

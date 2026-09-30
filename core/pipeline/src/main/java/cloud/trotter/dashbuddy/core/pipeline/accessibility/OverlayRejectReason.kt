@@ -7,7 +7,7 @@ package cloud.trotter.dashbuddy.core.pipeline.accessibility
  * first (size, then package), so each rejection names the FIRST failed check.
  */
 enum class OverlayRejectReason {
-    /** The display area is unknown (no metrics, no application window to measure) — fail closed. */
+    /** The display area is unknown — no display metrics (there is deliberately no window-bounds fallback, BB4) — fail closed. */
     NO_DISPLAY_AREA,
 
     /** Smaller than [cloud.trotter.dashbuddy.core.pipeline.accessibility.input.AccessibilitySource.MIN_OVERLAY_AREA_FRACTION] of the display (status bar, puck, heads-up, toast). */
