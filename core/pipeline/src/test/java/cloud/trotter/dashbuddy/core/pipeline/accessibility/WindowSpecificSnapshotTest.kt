@@ -454,7 +454,7 @@ class WindowSpecificSnapshotTest {
     }
 
     @Test
-    fun `the overlay with focus is read through the active-root path, not the overlay branch`() = bothKinds { kind ->
+    fun `HH5 - the overlay with focus (the card IS the active window) - counted and carries its WindowContext`() = bothKinds { kind ->
         val uber = node(uberPkg, "uber-offer", windowId = 9)
         val dd = node(ddPkg, "dd", windowId = 3)
         val h = harness(activeRoot = uber, windows = listOf(uberOverlay(9, 9, uber, active = true), window(3, 5, dd)))
@@ -462,8 +462,8 @@ class WindowSpecificSnapshotTest {
         val emitted = collect(h, kind, windowId = 9, pkg = uberPkg)
 
         assertEquals(listOf("uber-offer"), emitted.map { it.tree.text })
-        assertEquals("active-root path carries no WindowContext (H4)", null, emitted.single().windowContext)
-        assertEquals(0L, h.stats.overlaySnapshotCount())
+        assertEquals(9, emitted.single().windowContext?.windowId)
+        assertEquals(1L, h.stats.overlaySnapshotCount())
     }
 
     @Test

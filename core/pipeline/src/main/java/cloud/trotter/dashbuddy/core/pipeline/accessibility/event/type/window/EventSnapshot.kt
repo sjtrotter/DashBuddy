@@ -90,7 +90,10 @@ internal fun AccessibilitySource.snapshotForEvent(
                 is AccessibilitySource.OverlayScan.Overlay ->
                     getWindowSnapshot(scan.located.window, scan.located.root, scan.located.totalWindowCount)
                 AccessibilitySource.OverlayScan.None -> when (resolution) {
-                    is AccessibilitySource.ActiveWindow.Enabled -> getCurrentRootSnapshot(resolution.root)
+                    // HH5: the window object is in hand — map through the ONE window builder, so a
+                    // focused overlay (the card IS the active window) is counted and carries its
+                    // WindowContext like every other overlay frame.
+                    is AccessibilitySource.ActiveWindow.Enabled -> getWindowSnapshot(resolution.window, resolution.root, list.size)
                     else -> {
                         // HH1: the flagged active window's root is unreadable and no overlay is in
                         // front — skip (the topology path emits nothing for the same case).
