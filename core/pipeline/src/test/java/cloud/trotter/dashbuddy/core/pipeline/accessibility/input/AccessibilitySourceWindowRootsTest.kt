@@ -12,6 +12,8 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.mockito.kotlin.doReturn
 import org.mockito.kotlin.mock
+import org.mockito.kotlin.never
+import org.mockito.kotlin.verify
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 
@@ -114,23 +116,19 @@ class AccessibilitySourceWindowRootsTest {
     }
 
     @Test
-    fun `getCurrentRootSnapshot fills windowContext from the active window`() {
+    fun `getCurrentRootSnapshot carries no windowContext and never enumerates windows (H4)`() {
         val activeRoot = nodeOf("com.doordash.driverapp", rootWindowId = 9)
-        val other = nodeOf("cloud.trotter.dashbuddy")
-        val windowList = listOf(windowInfo(7, other, active = false), windowInfo(9, activeRoot, active = true))
+        val windowList = listOf(windowInfo(9, activeRoot, active = true))
         val service = mock<AccessibilityService> {
             on { rootInActiveWindow } doReturn activeRoot
             on { windows } doReturn windowList
         }
 
-        val snapshot = sourceFor(service).getCurrentRootSnapshot()
+        val snapshot = requireNotNull(sourceFor(service).getCurrentRootSnapshot())
 
-        assertNotNull(snapshot)
-        val ctx = requireNotNull(snapshot!!.windowContext) { "active-root snapshot must carry its WindowContext" }
-        assertEquals(9, ctx.windowId)
-        assertEquals(true, ctx.isActive)
-        assertEquals(2, ctx.totalWindowCount)
         assertEquals("com.doordash.driverapp", snapshot.packageName)
+        assertNull(snapshot.windowContext)
+        verify(service, never()).windows
     }
 
     @Test
@@ -176,36 +174,5 @@ class AccessibilitySourceWindowRootsTest {
             AccessibilitySource.Foreground.Refused(ForegroundSkipReason.FRONT_NOT_ENABLED),
             sourceFor(service).foregroundWindow { it == "com.doordash.driverapp" },
         )
-    }
-
-    @Test
-    fun `active-root context is matched by the root's own windowId, not by isActive (F4)`() {
-        // Focus moved during the map: window 9 is now flagged active, but the tree came from 5.
-        val capturedRoot = nodeOf("com.doordash.driverapp", rootWindowId = 5)
-        val other = nodeOf("com.doordash.driverapp")
-        val windowList = listOf(windowInfo(9, other, active = true), windowInfo(5, capturedRoot, active = false))
-        val service = mock<AccessibilityService> {
-            on { rootInActiveWindow } doReturn capturedRoot
-            on { windows } doReturn windowList
-        }
-
-        val ctx = requireNotNull(sourceFor(service).getCurrentRootSnapshot()?.windowContext)
-
-        assertEquals(5, ctx.windowId)
-        assertEquals(false, ctx.isActive)
-    }
-
-    @Test
-    fun `active-root context is null when no window carries the root's windowId`() {
-        val capturedRoot = nodeOf("com.doordash.driverapp", rootWindowId = 5)
-        val windowList = listOf(windowInfo(9, nodeOf("com.doordash.driverapp"), active = true))
-        val service = mock<AccessibilityService> {
-            on { rootInActiveWindow } doReturn capturedRoot
-            on { windows } doReturn windowList
-        }
-
-        val snapshot = requireNotNull(sourceFor(service).getCurrentRootSnapshot())
-
-        assertNull(snapshot.windowContext)
     }
 }

@@ -89,8 +89,8 @@ class AccessibilitySource @Inject constructor() {
 
     /**
      * A window's root snapshot: the converted [UiNode] tree + the **real package** owning it, plus
-     * the window's metadata when the platform can supply it (#1148 D4 — every snapshot path fills
-     * it; null only when the window could not be located in `service.windows`).
+     * the window's metadata on the paths that already hold the window object (the foreground and
+     * windows-changed paths, #1148 D4); null on the active-root path (review H4).
      */
     data class RootSnapshot(
         val tree: UiNode,
@@ -126,7 +126,9 @@ class AccessibilitySource @Inject constructor() {
         return RootSnapshot(
             tree = tree,
             packageName = root.packageName?.toString(),
-            windowContext = activeWindowContext(root),
+            // #1148 review H4: no WindowContext on the active-root path — locating it cost a
+            // `service.windows` enumeration per frame for metadata nothing persists.
+            windowContext = null,
         )
     }
 
@@ -215,21 +217,6 @@ class AccessibilitySource @Inject constructor() {
             packageName = root.packageName?.toString(),
             windowContext = contextOf(window, totalWindowCount),
         )
-    }
-
-    /**
-     * Locates the metadata of the window the captured [activeRoot] belongs to, matched by the
-     * root's OWN `windowId` (a local getter, no IPC) — never by `isActive`, which may already name
-     * a different window if focus moved while the tree was being mapped (#1148 review F4). Null when
-     * no window carries that id — fail-open, the context is diagnostic metadata and must never cost
-     * a frame.
-     */
-    private fun activeWindowContext(activeRoot: AccessibilityNodeInfo): TreeSnapshot.WindowContext? = try {
-        val rootWindowId = activeRoot.windowId
-        val windows = getWindows()
-        windows.firstOrNull { it.id == rootWindowId }?.let { contextOf(it, windows.size) }
-    } catch (_: Exception) {
-        null
     }
 
     // --- 3. Multi-Window Support ---

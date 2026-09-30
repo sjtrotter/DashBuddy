@@ -186,6 +186,8 @@ class WindowSpecificSnapshotTest {
         assertEquals(listOf("dd-sheet"), emitted.map { it.tree.text })
         verify(h.source, never()).foregroundWindow(any())
         verify(h.source, never()).getWindowSnapshot(any(), any(), any())
+        verify(h.service, never()).windows // H4: no enumeration on the active-root path
+        assertEquals(null, emitted.single().windowContext)
         val trigger = requireNotNull(emitted.single().trigger)
         assertEquals(
             if (kind == Kind.CONTENT) TreeSnapshot.Trigger.Reason.CONTENT else TreeSnapshot.Trigger.Reason.STATE,
