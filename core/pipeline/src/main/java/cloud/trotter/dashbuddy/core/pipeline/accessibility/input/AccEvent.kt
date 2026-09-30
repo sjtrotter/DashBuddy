@@ -1,7 +1,9 @@
 package cloud.trotter.dashbuddy.core.pipeline.accessibility.input
 
+import android.os.Build
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
+import timber.log.Timber
 
 /**
  * Immutable envelope for one accessibility callback (#1148 D1).
@@ -11,8 +13,11 @@ import android.view.accessibility.AccessibilityNodeInfo
  * BUFFERED and read later by the sub-pipelines, so the scalars they need are copied here, at the
  * callback, in ONE place ([from]) — the TalkBack pattern (copy before queuing).
  *
- * [source] is resolved ONLY for `TYPE_VIEW_CLICKED` (the click pipeline maps the clicked node);
- * every other type carries `null`, so no live node handle rides the flow needlessly.
+ * [source] is carried ONLY for `TYPE_VIEW_CLICKED` (the click pipeline maps the clicked node);
+ * every other type carries `null`. It holds an OWNED COPY of the event, not the resolved node:
+ * `event.source` is a binder call (up to seconds against an unresponsive target) and must not run
+ * on the accessibility callback thread (#1148 review F3) — the click pipeline resolves it on its
+ * collector.
  */
 data class AccEvent(
     val type: Int,
@@ -37,18 +42,43 @@ data class AccEvent(
                 windowChanges = event.windowChanges,
                 eventTimeMs = event.eventTime,
                 source = if (type == AccessibilityEvent.TYPE_VIEW_CLICKED) {
-                    event.source?.let(::SourceNodeRef)
+                    SourceNodeRef(copyOf(event))
                 } else {
                     null
                 },
             )
         }
+
+        /** An owned copy of a framework event (local copy of its fields — no binder call). */
+        @Suppress("DEPRECATION")
+        private fun copyOf(event: AccessibilityEvent): AccessibilityEvent =
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                AccessibilityEvent(event)
+            } else {
+                AccessibilityEvent.obtain(event)
+            }
     }
 }
 
 /**
- * Thin holder for the clicked node, fetched at emit time. The click pipeline maps it with
- * `toUiNode()` exactly as it mapped `event.source` before (#1148 D1). Deliberately NOT a data
- * class: node identity is not part of the envelope's value equality.
+ * Deferred handle on a click's source node (#1148 review F3): an OWNED copy of the click event,
+ * taken on the callback thread without touching the binder. [resolve] performs the `getSource()`
+ * binder fetch on the CALLER's (collector's) thread; [release] returns the copy to the pool below
+ * API 33 and must be called once the click has been mapped. Deliberately NOT a data class: node
+ * identity is not part of the envelope's value equality.
  */
-class SourceNodeRef(val node: AccessibilityNodeInfo)
+class SourceNodeRef(private val eventCopy: AccessibilityEvent) {
+    /** The clicked node, fetched now (binder). Null when the node is gone. */
+    fun resolve(): AccessibilityNodeInfo? = eventCopy.source
+
+    /** Recycles the owned copy below API 33 (a no-op above). Never throws. */
+    fun release() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) return
+        try {
+            @Suppress("DEPRECATION")
+            eventCopy.recycle()
+        } catch (e: Exception) {
+            Timber.tag("Pipeline").v(e, "Click event copy already recycled")
+        }
+    }
+}

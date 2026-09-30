@@ -76,9 +76,11 @@ class AccessibilityPipeline @Inject constructor(
     private fun clickEvents(): Flow<PipelineEvent.Click> = source.events
         .filter { it.type == AccessibilityEvent.TYPE_VIEW_CLICKED }
         .mapNotNull { event ->
+            // #1148 review F3: the envelope carries an owned event copy; the binder fetch of the
+            // clicked node happens HERE on the collector, never on the a11y callback thread.
+            val ref = event.source ?: return@mapNotNull null
             try {
-                // #1148 D1: the clicked node was resolved at emit time into the envelope.
-                val sourceNode = event.source?.node ?: return@mapNotNull null
+                val sourceNode = ref.resolve() ?: return@mapNotNull null
                 val node = sourceNode.toUiNode() ?: return@mapNotNull null
                 PipelineEvent.Click(
                     timestamp = System.currentTimeMillis(),
@@ -92,6 +94,8 @@ class AccessibilityPipeline @Inject constructor(
                 stats.onMappingFailure()
                 Timber.w(e, "Click mapping failed — dropping click event")
                 null
+            } finally {
+                ref.release()
             }
         }
 
