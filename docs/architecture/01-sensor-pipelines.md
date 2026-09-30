@@ -293,9 +293,8 @@ frames the pipeline ever sees*:
   decides: a null root → `FRONT_UNREADABLE` (never fall through to a lower readable window); a
   non-enabled package → `FRONT_NOT_ENABLED`; else that window is mapped with
   `getWindowSnapshot(window, root, total)` (one enumeration, one root fetch per inspected window);
-  no candidate → `NO_CANDIDATE`; a map failure → `MAP_FAILED`. Overlays that surface as
-  accessibility `TYPE_SYSTEM` (Android's `TYPE_APPLICATION_OVERLAY`, e.g. Uber's offer overlay) are
-  NOT read — that question is **#1152**. (4) A post-map check of the snapshot's package against the
+  no candidate → `NO_CANDIDATE`; a map failure → `MAP_FAILED`. Platform offer overlays that surface
+  as accessibility `TYPE_SYSTEM` are candidates too since **#1152** (next paragraph). (4) A post-map check of the snapshot's package against the
   enabled set stays as a belt-and-braces INVARIANT (H5): both builders derive the package from the
   same already-fetched root, so it cannot catch a read-to-read swap and only fires on a programming
   error — which is why it has its OWN reason, `POST_MAP_MISMATCH`, plus a `Pipeline` WARN (review
@@ -324,6 +323,68 @@ frames the pipeline ever sees*:
   review G1: a name- or address-shaped title passes every marker scan); the hashed form arrives
   with #1145. The one kept control: an UNKNOWN frame whose title carries a sensitive marker is
   dropped (`WindowTitleScrubTest`).
+
+**Platform offer overlays (#1152) — the one system-layer window that is read.** Ground truth (the
+#248 record, verified on-device 2026-05-15): the Uber offer "popup" is a `SYSTEM_ALERT_WINDOW` from
+`com.ubercab.driver`, reported to accessibility services as `AccessibilityWindowInfo.TYPE_SYSTEM` —
+the same type as the status bar, nav bar, notification shade, heads-up notifications and custom
+toasts. It covers ~full screen below the status bar (`Rect(0,136 – 1080,2347)` on the Pixel 7); the
+same package keeps a persistent 142×142 `TYPE_SYSTEM` puck. The overlay can have focus (the six
+committed `offer/*__uber__*` fixtures came through the ACTIVE-ROOT path) or not (its content events
+then fired, and were answered with the window beneath). The shipped rules:
+- **D1 — registry data, not a `when`.** `Platform.offerOverlay` (Uber `true`, every other entry
+  `false`) and the derived `Platform.overlayPackages`. `:core:pipeline` names no platform; adding an
+  overlay platform is flipping one flag (principle 8).
+- **D2 — candidacy is TYPE → SIZE → PACKAGE, cheapest first** (`AccessibilitySource.isOverlayCandidate`
+  / `overlayProbe`): `TYPE_SYSTEM` and not PiP; bounds ≥ `MIN_OVERLAY_AREA_FRACTION` (0.25) of the
+  display area (the service's display metrics, else the largest `TYPE_APPLICATION` window; an unknown
+  area admits NOTHING) — the puck (~0.8 %), status bar (~5 %), heads-up notifications and toasts
+  fail here WITHOUT a root fetch; then the root's package ∈ `overlayPackages` — the expanded shade
+  passes on size and fails here, and an unreadable root cannot prove its package and is refused.
+  Every refusal is counted by first failed check, `overlayRejected{NO_DISPLAY_AREA,TOO_SMALL,UNREADABLE,NOT_OVERLAY_PLATFORM}`.
+  A candidate is READ only if its package is ENABLED, exactly like application windows, and the
+  package is re-verified on the freshly-fetched root that is mapped.
+- **D3 — `WindowPackageCache`** (`windowId → packageName`, LRU 64, package names only — never a
+  node): filled on every root fetch that resolves a package (application AND system windows), read by
+  the package check and by `foregroundWindow` before it fetches a root (a cached own/non-enabled
+  application window decides without a fetch), CLEARED by `AccessibilitySource.emit` on every
+  `TYPE_WINDOWS_CHANGED` before the event reaches a collector. Window ids are allocated monotonically,
+  so an entry written by a collector that read the old list only describes a window that no longer
+  exists. The bubble-active path stays at one enumeration and ≤ one root fetch per NEW window.
+- **D4 — foreground.** `foregroundWindow`'s candidates are the application windows (as shipped) ∪
+  overlay candidates, by `layer`; the first decides exactly as before (readable-top-or-refuse; a
+  DISABLED overlay platform's overlay on top is another app in front → `FRONT_NOT_ENABLED`; an
+  overlay whose root vanished after its package was cached → `FRONT_UNREADABLE`).
+  `LocatedWindow.isOverlay` marks the result. A DoorDash toast is never a candidate (DoorDash has no
+  `offerOverlay`); an Uber toast/puck fails size.
+- **D5 — the ONE legitimate "event's own window" read.** In `snapshotForEvent`, when the ACTIVE root
+  is an enabled package, BEFORE mapping it: an event from an ENABLED `overlayPackages` package whose
+  window (by the event's id; not the active root's own window) is an overlay candidate drawn ABOVE the
+  active window (`layer` greater, or no window flagged active, or the flagged-active window is our
+  own) is mapped instead (`AccessibilitySource.overlayAboveActive`, one enumeration). Why it is safe:
+  the overlay is on top by construction — this is never the hidden-activity shape #1148 F1 removed
+  (an activity beneath a sheet is an application window, never above the active window). An overlay
+  that IS the active window is left to the active-root path; an Uber event from the Uber APP window
+  beneath an active DoorDash still yields the DoorDash root; a DoorDash event never takes the branch
+  (DoorDash is not an overlay platform — the overlay arrives through its own events or the topology
+  path). When the active window is NOT enabled (our bubble, the launcher), the overlay is reached by
+  step 3's `foregroundWindow` (D4) instead, under readable-top-or-refuse — stricter than reading the
+  event's window directly, since a foreign window above the overlay refuses the frame. Every overlay
+  frame is counted, `PipelineStats.onOverlaySnapshot()` → `overlaySnapshots=n` on the summary
+  (`EventSnapshot.Resolved.viaOverlay`, counted by both callers). No new skip reason; the post-map
+  check and `TreeSnapshot.Trigger` are unchanged. Accepted residual: the content coalescer keys a
+  burst on the LAST event's window, so a burst that mixes overlay and DoorDash events and ends on a
+  DoorDash one reads the DoorDash root — the overlay's state changes (uncoalesced) and the topology
+  path still carry it.
+- **D6 — topology.** `WindowsChangedPipeline`'s above-the-active-window loop admits `TYPE_APPLICATION`
+  (as shipped) OR overlay candidates, enabled only; the bubble-active branch already emits the
+  `foregroundWindow` result, which may now be an overlay. Emitted overlays are counted the same way.
+  The DEBUG window-list line adds `area%=<int>` (the window's share of the display — what D2 reads;
+  `-1` when unknown) beside `titleLen` — no text.
+- **Not in #1152:** release `packageNames` consent (#1151 — the topology path stays debug-only until it
+  lands; D5 works in release because the overlay's own package is on the framework list);
+  state-machine acceptance of a background-platform offer (#251/#826); any rule change. Nothing new
+  is persisted — the window title stays unpersisted.
 
 Not in #1148: `notificationTimeout` (stays 100 ms), TalkBack's subtree-only / focus-gated filters
 (they discard observer evidence), `TYPE_ANNOUNCEMENT`/text events, and any change to `FrameGate`,

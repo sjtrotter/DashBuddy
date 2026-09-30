@@ -99,6 +99,20 @@ _(The 2026-09-26 entry below **validated and retired** the **#1118** transition-
 clean runs (10/10 + 5/5 accepts inferred from the task surface, 44/44 + 12/12 declines from the confirm sheet, zero
 over-inference); the remaining accept losses are #1119 and the merged card is #1069.)_
 
+- **🆕 NEW — Uber offers drawn as an overlay are captured, whatever has focus (#1152).** Uber draws its
+  offer as a floating system overlay above other apps; it used to be read only when it had focus.
+  Now a large system-layer window from an ENABLED overlay platform is a candidate (size ≥ ¼ of the
+  screen, package verified). **Needs Uber enabled and an Uber offer arriving while DoorDash (or
+  another app) is on screen.** **How to tell it works:**
+  1. An `uber.screen.offer` frame is recognized whether or not the bubble is active and whether or
+     not the overlay has focus — look for `overlaySnapshots=` RISING in the `PipelineStats` summary
+     (it stays 0 when the overlay had focus: that frame comes through the active-root path).
+  2. The small Uber puck is NEVER the frame — `overlayRejected{TOO_SMALL=…}` counts it, and no
+     UNKNOWN capture shows the puck's tree.
+  3. No DoorDash toast is ever the frame (no DoorDash `TYPE_SYSTEM` capture);
+     `overlayRejected{NOT_OVERLAY_PLATFORM=…}` may rise when the notification shade is pulled down.
+  - Issue: #1152. Confirmed: 0/2
+
 - **🆕 NEW — the receipt's auto-expand tap re-finds the row by its labels, and every tap lands on the
   control that OWNS the click (#1149).** Taps now resolve the clickable owner first (verified, then
   `refresh()`ed right before the click), and an id-less bind is re-found by its exact label

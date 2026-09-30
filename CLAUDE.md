@@ -228,7 +228,7 @@ Full reference: [`docs/architecture/01-sensor-pipelines.md`](docs/architecture/0
 
 `AccessibilityListener`/`AccessibilitySource` capture `AccessibilityEvent`s; `AccessibilityNodeMapper`
 normalizes a window into an immutable `UiNode` tree (`:domain`). Per-event-type sub-pipelines
-(`ContentChangedPipeline` coalesced as one burst, `StateChangedPipeline`, `WindowsChangedPipeline`, clicks — #1148: 150/300 ms quiet/max with a leading edge; the active enabled window is the ground truth, else the readable enabled application window in front (own bubble and PiP skipped; system overlays are #1152) or the frame is refused and counted, and the windows pipeline emits only enabled windows above the active one) and the
+(`ContentChangedPipeline` coalesced as one burst, `StateChangedPipeline`, `WindowsChangedPipeline`, clicks — #1148: 150/300 ms quiet/max with a leading edge; the active enabled window is the ground truth, else the readable enabled application window in front (own bubble and PiP skipped; platform offer overlays (a11y `TYPE_SYSTEM`, `Platform.offerOverlay`) are candidates by size + package, #1152) or the frame is refused and counted, and the windows pipeline emits only enabled windows above the active one; an enabled overlay platform's event whose window is an overlay ABOVE the active window is the one "event's own window" read, counted `overlaySnapshots`) and the
 parallel `NotificationPipeline` emit `PipelineEvent`s. `AccessibilityPipeline.output()` gates in order:
 **rulesets-not-loaded** (fail-closed, #432) → **sensitive/noise** (#399) → **disabled platform** →
 **UNKNOWN** (captured to disk for triage, never forwarded to the state machine). Snapshots are attributed

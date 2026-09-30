@@ -27,6 +27,9 @@ still ONE file per platform. There are **no committed** `assets/rules/*.json`, s
 value flows straight into recognition tests with no publish step. The corpus↔rules SHA version pin
 is deferred to N5/#638. The canonical files are compiled by `RuleCompiler` and matched by
 `ObservationClassifier`.
+Which WINDOW a frame is read from is the sensor layer's decision (§1), never a rule's: platform
+offer overlays (a11y `TYPE_SYSTEM`, `Platform.offerOverlay`) are candidates by size + package
+(#1152) — the recognized `uber.screen.offer` rule is unchanged whichever path delivered the frame.
 Rules carry a `priority` and an `overrideable` flag. `matchFirst` evaluates the **non-overrideable
 partition first** (priority-ordered), then the overrideable partition (priority-ordered), so an
 `overrideable: false` classification can never be pre-empted by a lower-priority-number rule from
