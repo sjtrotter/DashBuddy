@@ -7,6 +7,7 @@ import android.view.accessibility.AccessibilityWindowInfo
 import cloud.trotter.dashbuddy.domain.model.accessibility.UiNode
 import cloud.trotter.dashbuddy.core.pipeline.accessibility.TreeSnapshot
 import cloud.trotter.dashbuddy.core.pipeline.accessibility.mapper.toUiNode
+import cloud.trotter.dashbuddy.domain.state.Platform
 import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -87,23 +88,6 @@ class AccessibilitySource @Inject constructor() {
     fun getService(): AccessibilityService? = serviceRef?.get()
 
     /**
-     * The package owning the active window, read from the native root WITHOUT mapping
-     * the tree (#435 item 3). A full [getCurrentRootSnapshot] converts every node with
-     * one binder IPC apiece; the active-window pipelines drop non-target windows (our
-     * own bubble overlay, the launcher, …) by package, so reading just the package
-     * first lets them skip that whole mapping pass for a window they'll discard anyway.
-     * Cheap: `rootInActiveWindow` fetches only the root node, not the subtree.
-     *
-     * This mirrors [WindowsChangedPipeline], which already reads `nativeRoot.packageName`
-     * before converting. [getCurrentRootSnapshot] re-reads the active root and re-derives
-     * the package, so a rare root swap between the two calls is still caught by the
-     * caller's post-map package re-check — the #4 overlay-drop guarantee is unchanged.
-     *
-     * SAFE to call from background threads.
-     */
-    fun getActiveWindowPackage(): String? = getLiveNativeRoot()?.packageName?.toString()
-
-    /**
      * A window's root snapshot: the converted [UiNode] tree + the **real package** owning it, plus
      * the window's metadata when the platform can supply it (#1148 D4 — every snapshot path fills
      * it; null only when the window could not be located in `service.windows`).
@@ -125,6 +109,15 @@ class AccessibilitySource @Inject constructor() {
      */
     fun getCurrentRootSnapshot(): RootSnapshot? {
         val root = getLiveNativeRoot() ?: return null
+        return getCurrentRootSnapshot(root)
+    }
+
+    /**
+     * [getCurrentRootSnapshot] over an ALREADY-FETCHED active [root] (#1148 review G5) — the
+     * resolver reads the active root once for its package gate and maps that same node, saving a
+     * binder call per frame and removing the read-to-read swap window.
+     */
+    fun getCurrentRootSnapshot(root: AccessibilityNodeInfo): RootSnapshot? {
         val tree = try {
             root.toUiNode()
         } catch (_: Exception) {
@@ -138,7 +131,7 @@ class AccessibilitySource @Inject constructor() {
     }
 
     /**
-     * A window located by [topmostWindow], carried with its ALREADY-FETCHED root and the size of
+     * A window located by [foregroundWindow], carried with its ALREADY-FETCHED root and the size of
      * the enumeration it came from, so the caller maps it without a second `getWindows()` /
      * `window.root` binder round-trip (#1148 review F1).
      */
@@ -149,23 +142,49 @@ class AccessibilitySource @Inject constructor() {
     )
 
     /**
-     * The TOPMOST application window (highest `layer`) whose root package passes [isWatched] —
-     * enumerated ONCE, each candidate's root fetched once (#1148 review F1). Used when a NON-watched
-     * window (our bubble, the launcher, system UI) is active: the frame is taken from the watched
-     * window the dasher actually sees on top, never from whichever window fired the event (a hidden
-     * activity under a watched sheet keeps firing content changes). Null when no application window
-     * is watched.
+     * The window the dasher actually sees in FRONT, when a non-enabled window (our bubble, the
+     * launcher, system UI) is the active one (#1148 review G5). Enumerated ONCE; each inspected
+     * window's root fetched once.
+     *
+     * Candidates, by `layer` descending:
+     * - every `TYPE_APPLICATION` window, EXCEPT our own (this app's package — the bubble is never
+     *   "another app in front");
+     * - a `TYPE_SYSTEM` window only when its root is readable AND its package is a KNOWN platform
+     *   ([isKnownPlatform], the `Platform.watchedPackages` registry) — Android maps
+     *   `TYPE_APPLICATION_OVERLAY` (Uber's offer overlays) to accessibility `TYPE_SYSTEM`; the status
+     *   bar and other unreadable / foreign system windows are never candidates.
+     *
+     * The FIRST candidate decides — readable-top-or-refuse: an application window with a null root
+     * → null (fail closed: we cannot verify what is on top, so never fall through to a lower
+     * readable window); a package that fails [isEnabled] → null (another app, or a DISABLED
+     * platform's overlay, is in front); else that window. Null when there is no candidate.
      *
      * SAFE to call from background threads.
      */
-    fun topmostWindow(isWatched: (String?) -> Boolean): LocatedWindow? = try {
+    fun foregroundWindow(
+        isEnabled: (String?) -> Boolean,
+        isKnownPlatform: (String?) -> Boolean = { it in Platform.watchedPackages },
+    ): LocatedWindow? = try {
+        val ownPkg = serviceRef?.get()?.packageName
         val windows = getWindows()
-        windows.asSequence()
-            .filter { it.type == AccessibilityWindowInfo.TYPE_APPLICATION }
+        val ordered = windows
+            .filter { it.type == AccessibilityWindowInfo.TYPE_APPLICATION || it.type == AccessibilityWindowInfo.TYPE_SYSTEM }
             .sortedByDescending { it.layer }
-            .mapNotNull { w -> w.root?.let { root -> w to root } }
-            .firstOrNull { (_, root) -> isWatched(root.packageName?.toString()) }
-            ?.let { (w, root) -> LocatedWindow(w, root, windows.size) }
+        var located: LocatedWindow? = null
+        for (w in ordered) {
+            val root = w.root
+            val pkg = root?.packageName?.toString()
+            if (w.type == AccessibilityWindowInfo.TYPE_SYSTEM) {
+                if (root == null || !isKnownPlatform(pkg)) continue // not a candidate
+                if (isEnabled(pkg)) located = LocatedWindow(w, root, windows.size)
+                break // the first candidate decides
+            }
+            if (root == null) break // unreadable application window on top → refuse
+            if (ownPkg != null && pkg == ownPkg) continue // our own bubble is never "in front"
+            if (isEnabled(pkg)) located = LocatedWindow(w, root, windows.size)
+            break // the first candidate decides
+        }
+        located
     } catch (_: Exception) {
         null
     }

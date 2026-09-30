@@ -133,7 +133,7 @@ class AccessibilitySourceWindowRootsTest {
     }
 
     @Test
-    fun `topmostWindow picks the highest-layer watched application window`() {
+    fun `foregroundWindow skips our own bubble and non-application windows, picks the top enabled one`() {
         val bubbleRoot = nodeOf("cloud.trotter.dashbuddy")
         val activityRoot = nodeOf("com.doordash.driverapp")
         val dialogRoot = nodeOf("com.doordash.driverapp")
@@ -147,12 +147,13 @@ class AccessibilitySourceWindowRootsTest {
         val service = mock<AccessibilityService> {
             on { rootInActiveWindow } doReturn bubbleRoot
             on { windows } doReturn windowList
+            on { packageName } doReturn "cloud.trotter.dashbuddy"
         }
         val source = sourceFor(service)
 
-        val located = requireNotNull(source.topmostWindow { it == "com.doordash.driverapp" })
+        val located = requireNotNull(source.foregroundWindow({ it == "com.doordash.driverapp" }))
 
-        assertEquals("highest-layer watched APPLICATION window (the IME is not one)", 7, located.window.id)
+        assertEquals("highest-layer enabled window below our bubble (the IME is no candidate)", 7, located.window.id)
         assertSame(dialogRoot, located.root)
         assertEquals(4, located.totalWindowCount)
         val snapshot = requireNotNull(source.getWindowSnapshot(located.window, located.root, located.totalWindowCount))
@@ -162,7 +163,7 @@ class AccessibilitySourceWindowRootsTest {
     }
 
     @Test
-    fun `topmostWindow is null when no application window is watched`() {
+    fun `foregroundWindow is null when the window in front is not enabled`() {
         val root = nodeOf("com.android.launcher3")
         val windowList = listOf(windowInfo(1, root, active = true))
         val service = mock<AccessibilityService> {
@@ -170,7 +171,7 @@ class AccessibilitySourceWindowRootsTest {
             on { windows } doReturn windowList
         }
 
-        assertNull(sourceFor(service).topmostWindow { it == "com.doordash.driverapp" })
+        assertNull(sourceFor(service).foregroundWindow({ it == "com.doordash.driverapp" }))
     }
 
     @Test

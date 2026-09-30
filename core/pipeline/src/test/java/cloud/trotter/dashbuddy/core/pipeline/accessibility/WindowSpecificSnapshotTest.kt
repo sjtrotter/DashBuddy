@@ -34,25 +34,30 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 
 /**
- * #1148 D4 as reworked by review F1 — which window a content/state frame is read from.
+ * #1148 D4 as reworked by review F1 + G5 — which window a content/state frame is read from.
  *
- * The active WATCHED window is the ground truth (a DoorDash sheet over the DoorDash activity
- * included — the hidden activity keeps firing content changes with ITS window id, and must never be
- * snapshotted: that interleaves obscured frames and flaps R0). Only when a NON-watched window is
- * active (our bubble, the launcher) is the TOPMOST watched application window read instead — never
- * the event's own window. The event is a trigger only.
+ * The event is a TRIGGER only. One active-root read: null → nothing; an ENABLED package → that
+ * root (a sheet over its activity included — the hidden activity is never read); otherwise the
+ * readable window IN FRONT: application windows (never our own bubble) ∪ readable known-platform
+ * system windows (Uber's `TYPE_APPLICATION_OVERLAY` is accessibility `TYPE_SYSTEM`), by layer, the
+ * first candidate deciding — an unreadable or non-enabled one refuses the frame.
  *
- * Real [AccessibilitySource] over a mocked service (spied, so the resolution path is observable);
- * sdk 36 because the node mapper reads the API-36 `getChecked()`.
+ * Real [AccessibilitySource] over a mocked service (spied, so the path is observable); sdk 36
+ * because the node mapper reads the API-36 `getChecked()`.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [36])
 class WindowSpecificSnapshotTest {
 
-    private val overlayPkg = "cloud.trotter.dashbuddy"
+    private val ownPkg = "cloud.trotter.dashbuddy"
     private val launcherPkg = "com.android.launcher3"
-    private val ddPkg = "com.doordash.driverapp" // Platform.watchedPackages member
+    private val systemUiPkg = "com.android.systemui"
+    private val ddPkg = "com.doordash.driverapp"
+    private val uberPkg = "com.ubercab.driver"
+
+    private val app = AccessibilityWindowInfo.TYPE_APPLICATION
+    private val system = AccessibilityWindowInfo.TYPE_SYSTEM
 
     private fun node(pkg: String, label: String): AccessibilityNodeInfo = mock {
         on { packageName } doReturn pkg
@@ -63,8 +68,8 @@ class WindowSpecificSnapshotTest {
         windowId: Int,
         windowLayer: Int,
         root: AccessibilityNodeInfo?,
+        windowType: Int = app,
         active: Boolean = false,
-        windowType: Int = AccessibilityWindowInfo.TYPE_APPLICATION,
     ): AccessibilityWindowInfo = mock {
         on { id } doReturn windowId
         on { layer } doReturn windowLayer
@@ -77,17 +82,23 @@ class WindowSpecificSnapshotTest {
         val service: AccessibilityService,
         val source: AccessibilitySource,
         val events: MutableSharedFlow<AccEvent>,
+        val prefs: FakePlatformPreferences,
     )
 
-    private fun harness(activeRoot: AccessibilityNodeInfo?, windows: List<AccessibilityWindowInfo>): Harness {
+    private fun harness(
+        activeRoot: AccessibilityNodeInfo?,
+        windows: List<AccessibilityWindowInfo>,
+        enabled: Set<String> = setOf(ddPkg, uberPkg),
+    ): Harness {
         val service = mock<AccessibilityService> {
             on { rootInActiveWindow } doReturn activeRoot
             on { this.windows } doReturn windows
+            on { packageName } doReturn ownPkg
         }
         val events = MutableSharedFlow<AccEvent>(extraBufferCapacity = 4)
         val source = spy(AccessibilitySource().apply { registerService(service) })
         doReturn(events).whenever(source).events
-        return Harness(service, source, events)
+        return Harness(service, source, events, FakePlatformPreferences(enabled))
     }
 
     private fun event(type: Int, windowId: Int) = AccEvent(
@@ -104,13 +115,14 @@ class WindowSpecificSnapshotTest {
         STATE(AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED),
     }
 
-    private fun output(kind: Kind, source: AccessibilitySource): Flow<TreeSnapshot> = when (kind) {
-        Kind.CONTENT -> ContentChangedPipeline(source).output()
-        Kind.STATE -> StateChangedPipeline(source).output()
-    }
+    private fun output(kind: Kind, source: AccessibilitySource, prefs: FakePlatformPreferences): Flow<TreeSnapshot> =
+        when (kind) {
+            Kind.CONTENT -> ContentChangedPipeline(source, prefs).output()
+            Kind.STATE -> StateChangedPipeline(source, prefs).output()
+        }
 
-    private fun collect(h: Harness, kind: Kind, windowId: Int): List<TreeSnapshot> =
-        collectWith(h.events, output(kind, h.source), event(kind.type, windowId))
+    private fun collect(h: Harness, kind: Kind, windowId: Int = 3): List<TreeSnapshot> =
+        collectWith(h.events, output(kind, h.source, h.prefs), event(kind.type, windowId))
 
     private fun collectWith(
         events: MutableSharedFlow<AccEvent>,
@@ -133,132 +145,163 @@ class WindowSpecificSnapshotTest {
         return emitted
     }
 
-    // (a) overlay active, one DoorDash window → the frame is read from it
-    private fun overlayActiveReadsTheWatchedWindow(kind: Kind) {
-        val overlayRoot = node(overlayPkg, "bubble")
-        val ddRoot = node(ddPkg, "dd-activity")
-        val h = harness(
-            activeRoot = overlayRoot,
-            windows = listOf(window(1, 10, overlayRoot, active = true), window(3, 2, ddRoot)),
-        )
+    private fun bothKinds(block: (Kind) -> Unit) = Kind.entries.forEach(block)
 
-        val emitted = collect(h, kind, windowId = 3)
+    private fun Harness.nothingMapped() {
+        verify(source, never()).getCurrentRootSnapshot(any<AccessibilityNodeInfo>())
+        verify(source, never()).getWindowSnapshot(any(), any(), any())
+    }
 
-        verify(h.source, never()).getCurrentRootSnapshot()
-        verify(h.source, times(1)).getWindowSnapshot(any(), any(), any())
-        assertEquals("the watched window must produce a frame while the bubble is active", 1, emitted.size)
-        val snap = emitted.single()
-        assertEquals(ddPkg, snap.packageName)
-        assertEquals("dd-activity", snap.tree.text)
-        assertEquals("WindowContext rides every snapshot", 3, snap.windowContext?.windowId)
-        val trigger = requireNotNull(snap.trigger)
+    @Test
+    fun `null active root - nothing mapped, nothing enumerated`() = bothKinds { kind ->
+        val dd = node(ddPkg, "dd")
+        val h = harness(activeRoot = null, windows = listOf(window(3, 2, dd)))
+
+        assertTrue(collect(h, kind).isEmpty())
+        h.nothingMapped()
+        verify(h.service, never()).windows
+    }
+
+    @Test
+    fun `watched sheet active over its activity - the active root only`() = bothKinds { kind ->
+        val sheet = node(ddPkg, "dd-sheet")
+        val activity = node(ddPkg, "dd-activity")
+        val h = harness(activeRoot = sheet, windows = listOf(window(7, 5, sheet, active = true), window(3, 2, activity)))
+
+        val emitted = collect(h, kind, windowId = 3) // fired by the hidden activity
+
+        assertEquals(listOf("dd-sheet"), emitted.map { it.tree.text })
+        verify(h.source, never()).foregroundWindow(any(), any())
+        verify(h.source, never()).getWindowSnapshot(any(), any(), any())
+        val trigger = requireNotNull(emitted.single().trigger)
         assertEquals(
             if (kind == Kind.CONTENT) TreeSnapshot.Trigger.Reason.CONTENT else TreeSnapshot.Trigger.Reason.STATE,
             trigger.reason,
         )
-        assertEquals(1, trigger.coalescedEvents)
     }
 
-    @Test fun `content - overlay active, the watched window is snapshotted`() = overlayActiveReadsTheWatchedWindow(Kind.CONTENT)
-    @Test fun `state - overlay active, the watched window is snapshotted`() = overlayActiveReadsTheWatchedWindow(Kind.STATE)
+    @Test
+    fun `our bubble active over DoorDash - DoorDash is read`() = bothKinds { kind ->
+        val bubble = node(ownPkg, "bubble")
+        val dd = node(ddPkg, "dd")
+        val h = harness(activeRoot = bubble, windows = listOf(window(1, 10, bubble, active = true), window(3, 2, dd)))
 
-    // (b) DoorDash dialog D active, event from the OBSCURED activity A → the active root, never A
-    private fun obscuredActivityIsNeverSnapshotted(kind: Kind) {
-        val dialogRoot = node(ddPkg, "dd-dialog")
-        val activityRoot = node(ddPkg, "dd-activity")
+        val emitted = collect(h, kind)
+
+        assertEquals(listOf("dd"), emitted.map { it.tree.text })
+        assertEquals(3, emitted.single().windowContext?.windowId)
+        verify(h.source, never()).getCurrentRootSnapshot(any<AccessibilityNodeInfo>())
+    }
+
+    @Test
+    fun `bubble active, enabled Uber overlay (a11y TYPE_SYSTEM) above DoorDash - Uber is read`() = bothKinds { kind ->
+        val bubble = node(ownPkg, "bubble")
+        val dd = node(ddPkg, "dd")
+        val uber = node(uberPkg, "uber-offer")
         val h = harness(
-            activeRoot = dialogRoot,
-            windows = listOf(window(7, 5, dialogRoot, active = true), window(3, 2, activityRoot)),
+            activeRoot = bubble,
+            windows = listOf(window(1, 10, bubble, active = true), window(3, 2, dd), window(9, 9, uber, windowType = system)),
         )
 
-        val emitted = collect(h, kind, windowId = 3) // the hidden activity's window id
+        val emitted = collect(h, kind)
 
-        verify(h.source, times(1)).getCurrentRootSnapshot()
-        verify(h.source, never()).topmostWindow(any())
-        verify(h.source, never()).getWindowSnapshot(any(), any(), any())
-        assertEquals(1, emitted.size)
-        assertEquals("the active watched sheet is the ground truth", "dd-dialog", emitted.single().tree.text)
+        assertEquals(listOf("uber-offer"), emitted.map { it.tree.text })
+        assertEquals(uberPkg, emitted.single().packageName)
     }
 
-    @Test fun `content - obscured activity under an active watched sheet is never snapshotted`() =
-        obscuredActivityIsNeverSnapshotted(Kind.CONTENT)
-    @Test fun `state - obscured activity under an active watched sheet is never snapshotted`() =
-        obscuredActivityIsNeverSnapshotted(Kind.STATE)
-
-    // (c) overlay active, two watched windows → the TOPMOST (highest layer), whatever fired
-    private fun overlayActivePicksTheTopmostWatchedWindow(kind: Kind) {
-        val overlayRoot = node(overlayPkg, "bubble")
-        val dialogRoot = node(ddPkg, "dd-dialog")
-        val activityRoot = node(ddPkg, "dd-activity")
+    @Test
+    fun `bubble active, DISABLED Uber overlay above DoorDash - refused, nothing mapped`() = bothKinds { kind ->
+        val bubble = node(ownPkg, "bubble")
+        val dd = node(ddPkg, "dd")
+        val uber = node(uberPkg, "uber-offer")
         val h = harness(
-            activeRoot = overlayRoot,
+            activeRoot = bubble,
+            windows = listOf(window(1, 10, bubble, active = true), window(3, 2, dd), window(9, 9, uber, windowType = system)),
+            enabled = setOf(ddPkg),
+        )
+
+        assertTrue("the obscured DoorDash window must not be read", collect(h, kind).isEmpty())
+        h.nothingMapped()
+    }
+
+    @Test
+    fun `bubble active, unreadable application window above DoorDash - refused`() = bothKinds { kind ->
+        val bubble = node(ownPkg, "bubble")
+        val dd = node(ddPkg, "dd")
+        val h = harness(
+            activeRoot = bubble,
+            windows = listOf(window(1, 10, bubble, active = true), window(5, 6, null), window(3, 2, dd)),
+        )
+
+        assertTrue("never fall through below an unreadable top window", collect(h, kind).isEmpty())
+        h.nothingMapped()
+    }
+
+    @Test
+    fun `bubble active, launcher above DoorDash - refused`() = bothKinds { kind ->
+        val bubble = node(ownPkg, "bubble")
+        val launcher = node(launcherPkg, "home")
+        val dd = node(ddPkg, "dd")
+        val h = harness(
+            activeRoot = bubble,
+            windows = listOf(window(1, 10, bubble, active = true), window(4, 6, launcher), window(3, 2, dd)),
+        )
+
+        assertTrue(collect(h, kind).isEmpty())
+        h.nothingMapped()
+    }
+
+    @Test
+    fun `the status bar (system, systemui or unreadable) is never a candidate`() = bothKinds { kind ->
+        val bubble = node(ownPkg, "bubble")
+        val statusBar = node(systemUiPkg, "status")
+        val dd = node(ddPkg, "dd")
+        val h = harness(
+            activeRoot = bubble,
             windows = listOf(
-                window(1, 10, overlayRoot, active = true),
-                window(3, 2, activityRoot),
-                window(7, 5, dialogRoot),
+                window(20, 30, statusBar, windowType = system),
+                window(21, 29, null, windowType = system),
+                window(1, 10, bubble, active = true),
+                window(3, 2, dd),
             ),
         )
 
-        val emitted = collect(h, kind, windowId = 3) // fired by the lower activity
-
-        assertEquals(1, emitted.size)
-        assertEquals("dd-dialog", emitted.single().tree.text)
-        assertEquals(7, emitted.single().windowContext?.windowId)
+        assertEquals(listOf("dd"), collect(h, kind).map { it.tree.text })
     }
 
-    @Test fun `content - overlay active, topmost watched window wins`() = overlayActivePicksTheTopmostWatchedWindow(Kind.CONTENT)
-    @Test fun `state - overlay active, topmost watched window wins`() = overlayActivePicksTheTopmostWatchedWindow(Kind.STATE)
-
-    // (d) launcher active, no watched window → nothing mapped, nothing emitted
-    private fun noWatchedWindowEmitsNothing(kind: Kind) {
-        val launcherRoot = node(launcherPkg, "home")
-        val h = harness(activeRoot = launcherRoot, windows = listOf(window(1, 1, launcherRoot, active = true)))
-
-        val emitted = collect(h, kind, windowId = 1)
-
-        verify(h.source, never()).getCurrentRootSnapshot()
-        verify(h.source, never()).getWindowSnapshot(any(), any(), any())
-        assertTrue(emitted.isEmpty())
-    }
-
-    @Test fun `content - no watched window emits nothing`() = noWatchedWindowEmitsNothing(Kind.CONTENT)
-    @Test fun `state - no watched window emits nothing`() = noWatchedWindowEmitsNothing(Kind.STATE)
-
-    // (e) post-map re-check: the located root swapped to our own package → dropped (#4)
     @Test
-    fun `content - post-map package re-check still drops a swapped root`() {
+    fun `the foreground path enumerates windows and fetches each root once per frame`() {
+        val bubble = node(ownPkg, "bubble")
+        val dd = node(ddPkg, "dd")
+        val bubbleWindow = window(1, 10, bubble, active = true)
+        val ddWindow = window(3, 2, dd)
+        val h = harness(activeRoot = bubble, windows = listOf(bubbleWindow, ddWindow))
+
+        assertEquals(1, collect(h, Kind.STATE).size)
+        verify(h.service, times(1)).windows
+        verify(h.service, times(1)).rootInActiveWindow
+        verify(ddWindow, times(1)).root
+        verify(bubbleWindow, times(1)).root
+    }
+
+    @Test
+    fun `post-map package re-check still drops a swapped root`() {
         val events = MutableSharedFlow<AccEvent>(extraBufferCapacity = 4)
+        val bubble = node(ownPkg, "bubble")
         val located = AccessibilitySource.LocatedWindow(mock(), mock(), 2)
         val source = mock<AccessibilitySource> {
             on { this.events } doReturn events
-            on { getActiveWindowPackage() } doReturn overlayPkg
-            on { topmostWindow(any()) } doReturn located
+            on { getLiveNativeRoot() } doReturn bubble
+            on { foregroundWindow(any(), any()) } doReturn located
             on { getWindowSnapshot(any(), any(), any()) } doReturn
-                AccessibilitySource.RootSnapshot(tree = UiNode(text = "bubble"), packageName = overlayPkg)
+                AccessibilitySource.RootSnapshot(tree = UiNode(text = "bubble"), packageName = ownPkg)
         }
 
         val emitted = collectWith(
-            events, ContentChangedPipeline(source).output(),
+            events, ContentChangedPipeline(source, FakePlatformPreferences(setOf(ddPkg))).output(),
             event(Kind.CONTENT.type, windowId = 3),
         )
 
         assertTrue("a root that swapped to our own package must never be emitted", emitted.isEmpty())
-    }
-
-    // (f) the topmost path enumerates windows ONCE and fetches each root ONCE per frame
-    @Test
-    fun `state - topmost path enumerates windows and fetches roots once per frame`() {
-        val overlayRoot = node(overlayPkg, "bubble")
-        val ddRoot = node(ddPkg, "dd-activity")
-        val overlayWindow = window(1, 10, overlayRoot, active = true)
-        val ddWindow = window(3, 2, ddRoot)
-        val h = harness(activeRoot = overlayRoot, windows = listOf(overlayWindow, ddWindow))
-
-        val emitted = collect(h, Kind.STATE, windowId = 3)
-
-        assertEquals(1, emitted.size)
-        verify(h.service, times(1)).windows
-        verify(ddWindow, times(1)).root
-        verify(overlayWindow, times(1)).root
     }
 }

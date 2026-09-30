@@ -8,6 +8,7 @@ import cloud.trotter.dashbuddy.core.pipeline.accessibility.event.type.window.sna
 import cloud.trotter.dashbuddy.core.pipeline.accessibility.input.AccEvent
 import cloud.trotter.dashbuddy.core.pipeline.accessibility.input.AccessibilitySource
 import cloud.trotter.dashbuddy.domain.model.accessibility.UiNode
+import cloud.trotter.dashbuddy.domain.settings.PlatformPreferences
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.mapNotNull
@@ -56,7 +57,8 @@ data class CoalescedChange(
 }
 
 class ContentChangedPipeline @Inject constructor(
-    private val source: AccessibilitySource
+    private val source: AccessibilitySource,
+    private val platformPreferences: PlatformPreferences,
 ) {
     fun output(): Flow<TreeSnapshot> = source.events
         .filter { it.type == AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED }
@@ -86,10 +88,12 @@ class ContentChangedPipeline @Inject constructor(
             )
         }
         .mapNotNull { change ->
-            // #1148 D4 (review F1): the active watched window is the ground truth; with a
-            // non-watched window active (bubble, launcher) the topmost watched application
-            // window is snapshotted. Package-gated before and after the map.
-            val snapshot = source.snapshotForEvent(change.windowId, change.packageName)
+            // #1148 D4 (review F1/G5): the active ENABLED window is the ground truth; with a
+            // non-enabled window active (bubble, launcher) the readable window in front is read,
+            // or the frame is refused. Package-gated before and after the map.
+            val snapshot = source.snapshotForEvent(change.windowId, change.packageName) {
+                it in platformPreferences.enabledPackages.value
+            }
                 ?: return@mapNotNull null
             if (BuildConfig.DEBUG) {
                 Timber.d("🌳 Tree snapshot: %d nodes, pkg=%s", countNodes(snapshot.tree), snapshot.packageName)
