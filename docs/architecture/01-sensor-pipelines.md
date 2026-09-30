@@ -561,6 +561,30 @@ Not in #1148: `notificationTimeout` (stays 100 ms), TalkBack's subtree-only / fo
 (they discard observer evidence), `TYPE_ANNOUNCEMENT`/text events, and any change to `FrameGate`,
 `Observation.identity()`, the classifier or the capture envelope schema.
 
+**Census skeleton (M1a, #1145) — pure, not yet wired.** The UNKNOWN-screen census (Epic #1138) is
+specified by ADR-0011; this layer holds its first, side-effect-free half. The wire contract lives in
+the Apache-2.0-headed package `domain.census.contract`: `UiSkeletonDto` / `UiSkeletonNodeDto` /
+`TextSlot` + `SkeletonSchema` (`uinode.skeleton.v1`, ADR §1 — no plaintext slot, no bounds; a per-node
+`text` map keyed by `UiNodeTextField.wire`, each value `{h?, kind}`, `h` present iff `kind` is
+`words:1..8`; invariants checked at construction AND on decode; 64 KB item cap), `CensusHash` (§3,
+`sha256("census.v1:" + trimmed)` → 16 hex, fail-closed to `withheld`), `KindClassifier` (§1's two-stage
+grammar, code-point based) and `CensusFingerprint` (§8, wrapper-to-forest over a synthetic root, 64 hex),
+each with shared golden vectors (`KindClassifierVectors`, `CensusFingerprintVectors` — the latter
+computed by an independent implementation). The anonymous-wrapper class set is now ONE constant
+(`AnonymousWrappers.WRAPPER_CLASSES`) that `UiNode.stableHash` also reads; `stableHash`'s algorithm and
+type are unchanged. The customer-PII shape vocabulary moved from the test-only `SnapshotRedactor` to
+`domain.privacy.PiiShapes` (app licence) byte-for-byte — `SnapshotRedactor` delegates, pinned by
+`PiiShapesParityTest` — adding the boundary-delimited `FIRST_LAST_INITIAL_EMBEDDED` variant (derived from
+the same `FIRST_LAST_INITIAL_BODY` as the unchanged anchored pattern), `VALUE_SHAPES` with their match
+modes, `containsMask` and `hasPiiIdSuffix`. `core.pipeline.census.SkeletonBuilder` runs the §2 filter
+in ADR order per text field (PII id — `CustomerTextMarkers.hasIdMarkerSuffix`, now the one owner of the
+`ID_MARKERS` suffix comparison, ∪ `PII_ID_SUFFIXES` — then the 40-char cap, customer marker, lead-in,
+mask, the step-6 hash refusal, the embedded name shape, the value shapes); a `SensitiveTextMarkers` hit
+on the raw tree or window title yields no skeleton, and so does an oversize item; refusals are reasons
+(`SkeletonBuilder.Refusal`), never text. `SkeletonCorpusTest` asserts ADR §7 (a)–(f) over the whole
+committed corpus plus a seeded property. Nothing calls the builder at runtime yet: the publisher stage,
+`CensusSink` and `PipelineStats` counters are #1146 (M1b); upload is M3.
+
 **The whole recognition + text-scrub layer assumes an ENGLISH device (#938).** Rule anchors and
 BOTH text-marker SSOTs (`SensitiveTextMarkers.KEYWORDS`, `CustomerTextMarkers.MARKERS`) are literal
 English strings, so on a non-`en` device recognition drops toward zero (survivable — everything
