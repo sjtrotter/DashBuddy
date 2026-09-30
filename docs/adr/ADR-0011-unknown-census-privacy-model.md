@@ -47,7 +47,7 @@ chrome by construction), `bounds`, the three flags (`isClickable`/`isEnabled`/`i
 `children`. Per text field — enumerated from **`UiNodeTextField`**, the #835 scrub contract, never a
 hand-list, so a string field added later (#1147's `paneTitle`, `hintText`, `clickActionLabel`, …) is
 covered automatically — an object `{h?, kind}`: `kind` is a coarse shape class and `h` is present
-only when invariant 3 admits a hash. **The type has no plaintext slot**: a leak of a text value is a
+only when the §2 filter admits a hash (§3 only defines how the admitted token is hashed). **The type has no plaintext slot**: a leak of a text value is a
 type error. **The window title is the ONE explicit non-node text field** (it lives on
 `windowContext`, outside `UiNodeTextField`) and goes through the same `{h?, kind}` rule; it is the
 single named exception to "enumerate the enum", and `SkeletonCorpusTest` names it. `deviceFingerprint`
@@ -59,27 +59,30 @@ would still leak its length class through its right edge, and raw pixels also en
 density — so text-bearing nodes carry no bounds at all, and the layout a human needs to read a
 cluster comes from the container nodes' coarse cells. Nothing ever clusters or keys on bounds.
 
-The permitted string fields, at both levels, are the test allowlist (§7a): per node `class`, `id`,
-`kind`, `h`; per envelope `schemaId`, `fingerprint`, `platform`, `platformAppVersion`, `appVersion`,
-`rulesetVersion`, `engineVersion`, and a `day` bucket (an `hour` bucket in flight only). The install
-id is added by the M3 uploader at the transport layer, never inside the skeleton.
+The permitted fields, at both levels, are the test allowlist (§7a): per node `class`, `id`, `kind`,
+`h` (strings) plus the coarse `bounds` cell and the three flags; per envelope the strings `schemaId`,
+`fingerprint`, `platform`, `platformAppVersion`, `appVersion`, `rulesetReleaseTag`, `day` (an `hour`
+bucket in flight only) and the integers `filterRev`, `engineVersion`, `rulesetFormatVersion` — the
+names are `ReplayMetadata`'s own. The install id is added by the M3 uploader at the transport layer,
+never inside the skeleton.
 
 `kind` is a NORMATIVE classifier, evaluated on the trimmed canonical value (the same bytes that would
 be hashed), first match wins:
 
 | Precedence | `kind` | Rule |
 |---|---|---|
-| 1 | `withheld` | any filter step in §2 withheld the field (steps 1, 2, 3, 4, 5, 7, 8) — a CONSTANT, so a caught PII slot reveals nothing, not even its word count |
-| 2 | `empty` | blank after trim (null and blank are the same: the field is omitted, never emitted as `empty` with a hash) |
-| 3 | `money` | full-matches `CurrencyShape` (the #1029 owner) |
-| 4 | `time` | full-matches a clock/duration shape (`\d{1,2}:\d{2}`, `N min`, `N hr`) |
-| 5 | `digits` | every non-space character is a Unicode decimal digit |
-| 6 | `mixed` | contains at least one Unicode decimal digit and at least one letter (unit numbers, gate codes, order ids, plates) |
-| 7 | `words:N` | N whitespace-separated runs after stripping punctuation, every run letters-only (Unicode letters, apostrophes and hyphens allowed inside a run); N > 8 emits `words:8+` |
-| 8 | `mixed` | anything else (symbols, emoji-only, a lone `&`) |
+| 1 | `withheld` | any filter step in §2 withheld the field — a CONSTANT, so a caught PII slot reveals nothing, not even its word count |
+| 2 | `digits` | every non-whitespace character is a Unicode decimal digit (`Character.isDigit`) |
+| 3 | `words:N` | split on whitespace runs; strip LEADING and TRAILING punctuation from each run (interior apostrophes and hyphens are kept, so `O'Brien` and `Drop-off` are one run each); every run must contain at least one Unicode letter and no digit; N = the run count, `words:8+` when N > 8 |
+| 4 | `mixed` | everything else — money (`$45.66`), clock times, unit numbers, gate codes, order ids, plates, symbols, emoji |
 
-Shared client/server golden vectors for this table live in the contract module; the server
-re-classifies and rejects an item whose `kind` disagrees. A skeleton item is capped at **65 536
+A null or blank field is OMITTED from the skeleton, never emitted. Money and time are deliberately
+NOT classes of their own: `CurrencyShape` lives in `:core:pipeline` and the contract module may not
+depend on it, and a second currency regex would be exactly the SSOT drift `CurrencyShapePinTest`
+exists to prevent; a money or time slot is anchored by its id/class and siblings when a rule is
+drafted. Shared client/server golden vectors for this table live in the contract module; the server
+verifies `kind` where it has text — on trusted envelopes (paired plaintext) and on the vectors — and
+cannot re-classify a community skeleton, which carries no text. A skeleton item is capped at **65 536
 uncompressed UTF-8 bytes of its serialized JSON** (the whole item, metadata included); over the cap
 → no skeleton, counted.
 
@@ -93,17 +96,25 @@ SSOTs the redact side uses, in this order, and **any hit withholds the hash**:
    the two sets are deliberately NOT the same set — the union is used);
 2. length > 40 characters — **this cap runs before any pattern in this list**, so every step below
    runs on bounded input on the device (the #803 instruction-body class never hashes);
-3. the value contains `[redacted` (already masked upstream — never re-hash a mask);
-4. `CustomerTextMarkers.unredactedMarker` hits;
-5. `PiiShapes.customerLeadIn` hits (the intake prefix rule, incl. `GATED_NAME_PREFIXES`);
+3. `CustomerTextMarkers.unredactedMarker` hits;
+4. `PiiShapes.customerLeadIn` hits (the intake prefix rule, incl. `GATED_NAME_PREFIXES`);
+5. (reserved — the former "contains `[redacted`" step is dropped: the builder consumes the RAW
+   admitted tree, on which no mask exists; a mask token in a corpus fixture classifies as `mixed`
+   and never hashes anyway);
 6. `kind` is not `words:N` — **only `words:N` tokens are ever hashed**. The `kind` grammar is the
-   digit backstop: any token containing a digit classifies as `digits` or `mixed` and can never be
-   `words:N`, so gate codes, PINs, unit numbers and phone fragments emit `kind` only by construction
+   digit backstop: any run containing a digit makes the token `digits` or `mixed`, never `words:N`, so gate codes, PINs, unit numbers and phone fragments emit `kind` only by construction
    (a future grammar change that lets a digit into `words:N` must re-add an explicit digit rule);
 7. `PiiShapes.FIRST_LAST_INITIAL_PATTERN` (the id-less name shape, byte-SSOT with the redact side —
    the existing match mode, `matches` with `IGNORE_CASE`, is preserved);
 8. any other promoted `PiiShapes` pattern (street, city/state/ZIP, full address, bare street,
    apartment, PIN, quoted note, phone, email, card).
+
+**What the builder consumes.** `SkeletonBuilder` takes the RAW admitted `UiNode` tree at the
+post-admission stage (#1146's publisher, after the rulesets-loaded / sensitive / disabled-platform /
+UNKNOWN gates and `UnknownSuppressor`), never the capture DTO — the release build binds
+`NoOpCaptureBus` and produces no DTO, and the census must work in the only build that uploads. The
+corpus tests feed fixture trees that ARE masked captures; that is a superset condition (a `[redacted…]`
+token is `mixed`), not the runtime shape.
 
 **Inputs and predicates, exactly.** Every step sees the TRIMMED canonical value — the same bytes
 `CensusHash` would hash — so a leading space cannot slip a prefix past a `startsWith`. Step 1 uses the
@@ -203,7 +214,8 @@ against their own server). It is enrolled explicitly — a per-install key marke
 and a dev-settings switch on the client that is never reachable from the consent screen. A trusted
 install uploads the **existing redacted capture envelope** for UNKNOWN frames (today's
 `captureScreen` order: sensitive drop → rule redact → customer text + id scrub) beside the skeleton
-so the two can be paired (the envelope's `contentHash` IS `stableHash`, so the pairing key is free);
+so the two can be paired (the trusted transport stamps the envelope with the same census
+`fingerprint` it computed for the skeleton);
 a trusted envelope or a trusted capture the operator already holds locally are the only sources from
 which a hash is ever resolved to text. For a trusted install k = 1 by definition, so the whole loop
 runs on one phone with zero community contributors — the fleet adds speed and coverage, never a
@@ -245,13 +257,18 @@ skeletons), a per-cluster cap, a bounded on-disk queue (drop-oldest), batch uplo
 64 KB size cap per skeleton (over → no skeleton, counted). Clicks and notifications are OUT of v1
 (the click envelope is the #919 leak class; a notification body is free text).
 
-**Cluster fingerprint** = the SAME recursive structural digest as today's `stableHash` (the
-file-private recursion beside `UiNode` that combines each node's `(class, id)` with its children's
-digests — tree boundaries are preserved, so `A(B(C))` ≠ `A(B, C)`; a flat pre-order key list would
-not do), exposed through ONE function in the contract module with a published canonical form (UTF-8;
-`class`, `id`, child count and children in order; null represented distinctly from empty; full
-32-hex sha256) and shared client/server test vectors. `stableHash` — today's `UnknownSuppressor`
-identity and the capture `contentHash` — and the census cluster key therefore share ONE owner. (The corpus librarian's variant check is a TEXT fingerprint and
+**Cluster fingerprint** (`CensusFingerprint`) is a NEW function in the contract module, not
+today's `stableHash`: `stableHash` is a 32-bit `Int` (`31 * h + child`, collidable, and the type of
+`FrameGate.admit(contentHash)` and of every fixture's `contentHash`), which the server cannot
+recompute safely and which must not change type. The fingerprint is a full sha256 (**64 hex**) over a
+published canonical form — UTF-8; per node `class`, `id`, child count, then the children in order;
+null represented distinctly from empty — with shared client/server test vectors. It keeps ONE
+structural rule of `stableHash` deliberately: an **anonymous wrapper** (no id AND a class in
+`{android.view.View, android.view.ViewGroup, android.widget.FrameLayout, android.widget.LinearLayout}`)
+is TRANSPARENT (`A(Wrapper(C)) == A(C)`), because a Compose recomposition adds and removes such
+wrappers and the cluster must not split on them; every other boundary is preserved
+(`A(B(C)) ≠ A(B, C)`). `stableHash` and `UnknownSuppressor` are untouched; the wrapper class set is
+shared with `computeStableHash` through one constant so the two rules cannot drift. (The corpus librarian's variant check is a TEXT fingerprint and
 `FrameGate`'s identity is `Observation.identity()`; neither is touched — a structural key would
 collapse the librarian's store-distinct variants.) The server RECOMPUTES the fingerprint from the
 skeleton it received rather than trusting the client's (#1157), which is why the wire contract must
@@ -307,9 +324,9 @@ see what a dasher typed, whom they delivered to, or what they earned. The endpoi
 
 ## Ownership by milestone (the seams the builders keep)
 
-- **#1145 (M1a, pure):** the wire contract (`UiSkeletonDto`, `SkeletonSchema`, `CensusHash`, the
-  fingerprint function + vectors, the `kind` classifier + vectors) and `SkeletonBuilder` with the §2
-  filter; the `PiiShapes` promotion. No wiring, no I/O.
+- **#1145 (M1a, pure):** the wire contract (`UiSkeletonDto`, `SkeletonSchema`, `CensusHash`,
+  `CensusFingerprint` + vectors, the `kind` classifier + vectors, the shared anonymous-wrapper class
+  constant) and `SkeletonBuilder` with the §2 filter; the `PiiShapes` promotion. No wiring, no I/O.
 - **#1146 (M1b, inert):** the `CensusSink` interface in `:domain`, a `NoOp` binding, the
   post-admission publisher stage in `:core:pipeline`, `PipelineStats` counters. Nothing leaves the
   device.
@@ -334,9 +351,10 @@ and the server.
 
 **Negative / tradeoffs.** Chrome that is rare (a screen only one market sees) never crosses k from
 community installs alone — the trusted install must see it. The filter over-withholds by design
-(`mixed` never hashes, so "Order #1234" contributes only a kind). Two hash domains (census vs parse)
-are deliberately unjoinable, so a census cluster can never be correlated with a customer hash — that
-is the point, and it also means the census cannot help attribute a delivery. Promoting `PiiShapes`
+(`mixed` never hashes, so "Order #1234" contributes only a kind). The two hash domains (census vs parse)
+never produce equal digests, so nothing in the system joins a census cluster to a customer hash by
+key — and the census cannot help attribute a delivery; the operator-side dictionary linkage residual
+(§3, risk 1) is the honest limit of that statement and the M3 disclosure must not overclaim it. Promoting `PiiShapes`
 to `:domain` moves test-only regexes into a shipped module; `IcuRegexGuardTest` and the byte-SSOT pins
 must stay green.
 
