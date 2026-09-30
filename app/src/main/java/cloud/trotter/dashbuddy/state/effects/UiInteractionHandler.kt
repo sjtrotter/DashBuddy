@@ -232,11 +232,9 @@ class UiInteractionHandler @Inject constructor(
             // Consistent with I3: the evidence node is inside the owner and not itself clickable (else it
             // would BE the owner). Only the lenient expectation/ranking set grows; the semantic
             // fingerprint below reads the owner scan alone (for a 2b hit, evidence IS the owner).
-            // S3: through the SAME cap-then-blank-filter as every other label (UiTextBounds, R2).
-            val evidenceLabels = if (!separateEvidence) emptyList() else listOfNotNull(
-                target.evidence.text?.toString(),
-                target.evidence.contentDescription?.toString(),
-            ).map(UiTextBounds::cap).filter { it.isNotBlank() }
+            // S3/T6: the ONE own-label read (ownLabelsOf) and the ONE normalization (LabelHorizon).
+            val evidenceLabels = if (!separateEvidence) emptyList() else
+                LabelHorizon.normalizeOwnLabels(ownLabelsOf(target.evidence))
             val labels = scan.labels + evidenceLabels.filterNot { it in scan.labels }
             // #1093: a bounds-derived candidate — exact rect or overlap — needs the bind's own
             // subtree labels among its live ones; that, not geometry, separates the slid receipt

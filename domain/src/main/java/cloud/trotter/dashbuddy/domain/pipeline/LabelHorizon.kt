@@ -53,13 +53,21 @@ data class LabelScan(val labels: List<String>, val complete: Boolean)
  * I2 × I4b vet decision): labels below it belong to neither side's fingerprint.
  */
 object LabelHorizon {
+    /**
+     * #1149 review R2/T6 — THE own-label normalization: cap ([UiTextBounds.cap]), then drop blanks
+     * (`hintKeyOrNull` trims later) — the mapper's exact order. Used by [scan] and by the executor's
+     * matched-node evidence labels, so there is no second copy.
+     */
+    fun normalizeOwnLabels(raw: List<String>): List<String> =
+        raw.map(UiTextBounds::cap).filter { it.isNotBlank() }
+
     fun scan(node: LabelNode): LabelScan {
         val labels = mutableListOf<String>()
         var fetched = 0
         var complete = true
         fun visit(n: LabelNode, depth: Int): Boolean {
             // R2: cap, THEN blank-filter (hintKeyOrNull trims later) — the mapper's exact order.
-            for (raw in n.ownLabels) UiTextBounds.cap(raw).takeIf { it.isNotBlank() }?.let(labels::add)
+            labels.addAll(normalizeOwnLabels(n.ownLabels))
             if (depth >= NodeRef.LABEL_SCAN_DEPTH) return true // the horizon, not a cut
             if (n.unreadableChildren > 0) complete = false
             val kids = n.children()
