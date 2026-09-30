@@ -258,4 +258,45 @@ class UiInteractionHandlerWindowOutcomeTest : UiInteractionHandlerTapTestKit() {
         assertFalse(expand(handler(listOf(readable), bubble, unreadableWindows = 1), legacy))
         twin.neverClicked()
     }
+
+    // ---------------------------------------------------------------- review U1/U2: the REAL AccessibilitySource
+
+    private fun appWindow(root: AccessibilityNodeInfo?, id: Int, active: Boolean): android.view.accessibility.AccessibilityWindowInfo =
+        mock {
+            on { this.root } doReturn root; on { this.id } doReturn id; on { isActive } doReturn active
+            on { type } doReturn android.view.accessibility.AccessibilityWindowInfo.TYPE_APPLICATION
+            on { isInPictureInPictureMode } doReturn false
+        }
+
+    private fun realHandler(rootInActive: AccessibilityNodeInfo?, windows: List<android.view.accessibility.AccessibilityWindowInfo>): UiInteractionHandler {
+        val service = mock<android.accessibilityservice.AccessibilityService> {
+            on { rootInActiveWindow } doReturn rootInActive
+            on { this.windows } doReturn windows
+        }
+        return UiInteractionHandler(AccessibilitySource().apply { registerService(service) })
+    }
+
+    /** U1: an UNREADABLE active window + a readable background twin → no click, under both 2b and strategy 3. */
+    @Test
+    fun `an unreadable active window never hands the tap to a background twin`() = runTest {
+        val twin = payRow()
+        val bg = windowRoot(twin)
+        val windows = listOf(appWindow(null, id = 1, active = true), appWindow(bg, id = 2, active = false))
+        assertFalse("2b", expand(realHandler(null, windows)))
+        val legacy = expandRef.copy(labelHintHashes = emptyList(), labelHintsComplete = false)
+        assertFalse("strategy 3", expand(realHandler(null, windows), legacy))
+        twin.neverClicked()
+    }
+
+    /** U2: rootInActiveWindow names A while the enumeration flags B active — no active root; the twins abort. */
+    @Test
+    fun `a focus change between the two active reads fails closed`() = runTest {
+        val rowA = payRow(top = 1774 - 400)
+        val rootA = windowRoot(rowA).also { whenever(it.windowId).thenReturn(1) }
+        val rowB = payRow(top = 1774 - 200)
+        val rootB = windowRoot(rowB).also { whenever(it.windowId).thenReturn(2) }
+        val windows = listOf(appWindow(rootA, id = 1, active = false), appWindow(rootB, id = 2, active = true))
+        assertFalse(expand(realHandler(rootA, windows)))
+        rowA.neverClicked(); rowB.neverClicked()
+    }
 }
