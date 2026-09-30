@@ -989,4 +989,15 @@ class WindowSpecificSnapshotTest {
         assertTrue(topologyFrames(h).isEmpty())
         assertEquals(1L, h.stats.topologySkipCount(ForegroundSkipReason.FRONT_UNREADABLE))
     }
+
+    @Test
+    fun `HH4 - a throwing enumeration is not an empty list - bubble active - refused FRONT_UNREADABLE, not NO_CANDIDATE`() {
+        val bubble = node(ownPkg, "bubble")
+        val h = harness(activeRoot = bubble, windows = listOf(window(1, 10, bubble, active = true)))
+        whenever(h.service.windows).thenThrow(IllegalStateException("binder died"))
+
+        assertTrue(collect(h, Kind.STATE).isEmpty())
+        h.skipped(ForegroundSkipReason.FRONT_UNREADABLE)
+        assertEquals(0L, h.stats.foregroundSkipCount(ForegroundSkipReason.NO_CANDIDATE))
+    }
 }

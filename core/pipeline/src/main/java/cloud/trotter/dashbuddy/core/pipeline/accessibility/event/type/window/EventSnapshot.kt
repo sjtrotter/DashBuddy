@@ -58,7 +58,10 @@ internal fun AccessibilitySource.snapshotForEvent(
         try {
             getWindows()
         } catch (_: Exception) {
-            emptyList()
+            // PR #1155 review HH4: a THROWING enumeration is not an empty list — no enumeration to
+            // reuse; the not-enabled branch re-enumerates inside foregroundWindow and reports
+            // FRONT_UNREADABLE on failure, as #1148 did.
+            null
         }
     } else {
         null
