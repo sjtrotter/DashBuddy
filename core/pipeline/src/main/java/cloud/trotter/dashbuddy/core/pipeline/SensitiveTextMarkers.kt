@@ -215,7 +215,8 @@ object SensitiveTextMarkers {
     internal fun normalize(s: String): String {
         // #1160 review NN5: NFKC + FORMAT strip + dash fold have ONE owner, shared with the census
         // canonical form; this scan adds its own per-char whitespace → space and the ROOT lowercase.
-        // Byte-for-byte the pre-#1160 behaviour (SensitiveTextMarkersNormalizePinTest).
+        // Pinned (SensitiveTextMarkersNormalizePinTest): the pre-#1160 behaviour, widened only toward
+        // privacy by review PP5 (supplementary-plane FORMAT chars are stripped too).
         val folded = TextFold.foldGlyphs(s)
         val sb = StringBuilder(folded.length)
         for (ch in folded) {
