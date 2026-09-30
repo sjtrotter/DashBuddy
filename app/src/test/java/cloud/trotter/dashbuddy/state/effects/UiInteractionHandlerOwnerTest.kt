@@ -934,4 +934,26 @@ class UiInteractionHandlerOwnerTest {
         assertTrue(expand(handler(listOf(active), active, unreadableWindows = 1)))
         row.clicks(1)
     }
+
+    /** P1: a hostile childCount (Int.MAX_VALUE) is never an allocation — bounded, incomplete, no click. */
+    @Test
+    fun `a hostile child count is bounded, not allocated`() = runTest {
+        val root = windowRoot()
+        whenever(root.childCount).thenReturn(Int.MAX_VALUE)
+        assertFalse(expand(handler(root), expandRef.copy(boundsInScreen = BoundingBox(0, 0, 0, 0))))
+        verify(root, org.mockito.kotlin.atMost(TreeLimits.MAX_TREE_NODES)).getChild(any())
+    }
+
+    /** P4: a foreign child's text and description are never read — not by the walk, not by verification. */
+    @Test
+    fun `a foreign child's labels are never read`() = runTest {
+        val foreignLabel = view(cls = "android.widget.TextView", text = "Sponsored", packageName = "com.example.other")
+        val row = view(clickable = true, bounds = Rect(36, 1374, 1044, 1500), children = listOf(
+            view(cls = "android.widget.TextView", text = "This offer"), view(desc = "Expand"), foreignLabel,
+        ))
+        assertTrue(expand(handler(windowRoot(row))))
+        row.clicks(1)
+        verify(foreignLabel, never()).text
+        verify(foreignLabel, never()).contentDescription
+    }
 }

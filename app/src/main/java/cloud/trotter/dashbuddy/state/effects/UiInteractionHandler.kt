@@ -604,9 +604,10 @@ class UiInteractionHandler @Inject constructor(
 
     /** A live node as a [LabelNode]: children are fetched lazily, one `getChild` per slot the horizon touches. */
     private class LiveLabelNode(private val node: AccessibilityNodeInfo, private val expectedPackage: String) : LabelNode {
-        override val ownLabels: List<String> = ownLabelsOf(node)
+        override val foreign: Boolean by lazy { node.packageName?.toString() != expectedPackage }
+        // P4: a foreign node's text/description is never touched.
+        override val ownLabels: List<String> by lazy { if (foreign) emptyList() else ownLabelsOf(node) }
         override val takesClick: Boolean get() = AccNodeUtils.isActionClickable(node)
-        override val foreign: Boolean get() = node.packageName?.toString() != expectedPackage
         override val unreadableChildren: Int get() = 0
         override fun children(): List<LabelNode?> = object : AbstractList<LabelNode?>() {
             override val size: Int = node.childCount.coerceAtLeast(0)
@@ -620,13 +621,15 @@ class UiInteractionHandler @Inject constructor(
      * scanning a candidate never issues a second fetch.
      */
     private class WalkNode(
-        node: AccessibilityNodeInfo,
+        private val node: AccessibilityNodeInfo,
         override val foreign: Boolean,
         override val takesClick: Boolean,
         val slots: Array<WalkNode?>,
+        /** P1: advertised children beyond the (budget-capped) [slots] — never allocated, never read. */
+        override val unreadableChildren: Int = 0,
     ) : LabelNode {
-        override val ownLabels: List<String> = ownLabelsOf(node)
-        override val unreadableChildren: Int get() = 0
+        // P4: lazy, and a foreign node's text/description is never touched.
+        override val ownLabels: List<String> by lazy { if (foreign) emptyList() else ownLabelsOf(node) }
         override fun children(): List<LabelNode?> = slots.asList()
     }
 
@@ -666,11 +669,19 @@ class UiInteractionHandler @Inject constructor(
         fun visit(node: AccessibilityNodeInfo, depth: Int): WalkNode {
             val pre = preCounter++
             val count = node.childCount.coerceAtLeast(0)
-            val self = WalkNode(node, foreign = false, takesClick = AccNodeUtils.isActionClickable(node), slots = arrayOfNulls(count))
+            // P1: allocate at most what the remaining fetch budget could ever fill — a hostile childCount
+            // (Int.MAX_VALUE) must not become an allocation in the side-effect worker. The remainder is
+            // unreadable (and the window incomplete).
+            val capacity = minOf(count, (TreeLimits.MAX_TREE_NODES - fetched).coerceAtLeast(0))
+            val self = WalkNode(
+                node, foreign = false, takesClick = AccNodeUtils.isActionClickable(node),
+                slots = arrayOfNulls(capacity), unreadableChildren = count - capacity,
+            )
+            if (count > capacity) incomplete = true
             if (count > 0 && depth >= TreeLimits.MAX_TREE_DEPTH) {
                 incomplete = true // a tree the mapper itself would have cut; the slots stay unreadable
             } else {
-                for (i in 0 until count) {
+                for (i in 0 until capacity) {
                     if (stopped || fetched >= TreeLimits.MAX_TREE_NODES) { incomplete = true; stopped = true; break }
                     fetched++
                     // An unreadable child may hide the real control (or its twin): incomplete (I4 → L1).
