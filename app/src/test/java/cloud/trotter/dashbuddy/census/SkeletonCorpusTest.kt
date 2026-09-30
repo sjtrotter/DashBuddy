@@ -1,10 +1,12 @@
 package cloud.trotter.dashbuddy.census
 
+import cloud.trotter.dashbuddy.core.pipeline.CustomerTextMarkers
 import cloud.trotter.dashbuddy.core.pipeline.SensitiveTextMarkers
 import cloud.trotter.dashbuddy.core.pipeline.census.SkeletonBuilder
 import cloud.trotter.dashbuddy.domain.capture.ReplayMetadata
 import cloud.trotter.dashbuddy.domain.capture.schema.UiNodeSchema
 import cloud.trotter.dashbuddy.domain.census.contract.CensusHash
+import cloud.trotter.dashbuddy.domain.census.contract.ClassNameGrammar
 import cloud.trotter.dashbuddy.domain.census.contract.ResourceIdGrammar
 import cloud.trotter.dashbuddy.domain.census.contract.SkeletonSchema
 import cloud.trotter.dashbuddy.domain.census.contract.TextSlot
@@ -135,6 +137,11 @@ class SkeletonCorpusTest {
 
     private val built: List<Pair<Fixture, UiSkeletonDto?>> by lazy { corpus.map { it to build(it) } }
 
+    /** One value's slot through the whole builder (a one-node frame); null when the frame is refused. */
+    private fun slotOf(value: String): TextSlot? =
+        SkeletonBuilder.build(UiNode(className = "android.widget.TextView", text = value), null, META, "doordash", DAY)
+            ?.root?.text?.get("text")
+
     private fun walkNodes(node: UiNode, visit: (UiNode) -> Unit) {
         visit(node)
         node.children.forEach { walkNodes(it, visit) }
@@ -208,11 +215,10 @@ class SkeletonCorpusTest {
         corpus.forEach { f ->
             walkNodes(f.tree) { n -> n.viewIdResourceName?.let { if (!ResourceIdGrammar.isStatic(it)) rejected += it } }
         }
-        // A static id that trips the gate is a red test here, never a silent drop. `Artwork Image`
-        // carries a SPACE — it reads as text, so it is treated as absent by design.
+        // A static id that trips the gate is a red test here, never a silent drop (review CC7 admitted a
+        // single internal space, so `Artwork Image` is static now).
         assertEquals(
             sortedSetOf(
-                "Artwork Image",
                 "PRIMARY_BUTTON_3f488d4a-0f0b-4fb9-9c86-c4e0253ba22a",
                 "PRIMARY_BUTTON_62132347-ff07-4f36-988d-db9d3cfa4dbd",
                 "PRIMARY_BUTTON_9db4e2af-5a58-4a43-ba63-295126ceddef",
@@ -221,6 +227,19 @@ class SkeletonCorpusTest {
         )
         built.mapNotNull { it.second }.forEach { item ->
             walkSkeleton(item.root) { n -> n.id?.let { assertTrue(it, ResourceIdGrammar.isStatic(it)) } }
+        }
+    }
+
+    @Test
+    fun `the class gate rejects no committed class, and no rejected class is shipped (review CC1)`() {
+        val rejected = sortedSetOf<String>()
+        corpus.forEach { f ->
+            walkNodes(f.tree) { n -> n.className?.let { if (!ClassNameGrammar.isStatic(it)) rejected += it } }
+        }
+        // Empty today: a new dynamic or text-like class in the corpus turns this red, never a silent drop.
+        assertEquals(sortedSetOf<String>(), rejected)
+        built.mapNotNull { it.second }.forEach { item ->
+            walkSkeleton(item.root) { n -> n.className?.let { assertTrue(it, ClassNameGrammar.isStatic(it)) } }
         }
     }
 
@@ -284,20 +303,50 @@ class SkeletonCorpusTest {
         val redacted = UiNodeSchema.deserialize(SnapshotRedactor.redact(UiNodeSchema.serialize(tree)))
         var rewritten = 0
         var decoys = 0
+        var exempt = 0
         val problems = mutableListOf<String>()
+        val intakeOnlyValues = HashSet<String>()
+        walkNodes(tree) { n ->
+            val id = n.viewIdResourceName
+            if (PiiShapes.hasPiiIdSuffix(id) && !CustomerTextMarkers.hasIdMarkerSuffix(id)) {
+                n.scrubbableStrings().forEach { (_, v) -> if (!v.isNullOrBlank()) intakeOnlyValues += v.trim() }
+            }
+        }
         fun walk(o: UiNode, r: UiNode, s: UiSkeletonNodeDto) {
             val redactedValues = r.scrubbableStrings().toMap()
             for ((field, value) in o.scrubbableStrings()) {
                 if (value.isNullOrBlank() || redactedValues[field] == value) continue
                 rewritten++
                 if (CorpusDecoys.isDecoy(value)) decoys++
-                if (s.text[field.wire]?.h != null) problems += "$path: '${field.wire}' is rewritten by the redactor but hashed"
+                if (s.text[field.wire]?.h == null) continue
+                // ADR-0011 §2 frame-level rule (review CC3): an INTAKE-ONLY PII id (`PII_ID_SUFFIXES`,
+                // not `ID_MARKERS`) withholds its own field but does not seed the frame, so a chrome value
+                // it shares with an id-less node may be rewritten document-wide by the intake yet hashed
+                // by the census. Exempt exactly that case: the value survives redaction in isolation, and
+                // its only document-wide cause is an intake-only id.
+                if (redactedInIsolation(o.viewIdResourceName, field.wire, value) == value &&
+                    value.trim() in intakeOnlyValues
+                ) {
+                    exempt++
+                    continue
+                }
+                problems += "$path: '${field.wire}' is rewritten by the redactor but hashed"
             }
             check(o.children.size == r.children.size && o.children.size == s.children.size) { "$path: shape drift" }
             o.children.indices.forEach { walk(o.children[it], r.children[it], s.children[it]) }
         }
         walk(tree, redacted, item.root)
+        if (exempt > 0) println("$path: $exempt intake-only-id parity exemption(s) (ADR §2, review CC3)")
         return Triple(rewritten, decoys, problems)
+    }
+
+    private fun redactedInIsolation(id: String?, wire: String, value: String): String {
+        val json = Json.encodeToString(
+            JsonObject.serializer(),
+            JsonObject(listOfNotNull(id?.let { "id" to JsonPrimitive(it) }, wire to JsonPrimitive(value)).toMap()),
+        )
+        val out = SnapshotRedactor.redact(json)
+        return (Json.parseToJsonElement(out).jsonObject[wire] as JsonPrimitive).content
     }
 
     @Test
@@ -361,7 +410,7 @@ class SkeletonCorpusTest {
         val hits = forbidden.filter { CensusHash.of(it) in hashes }
         assertTrue("hashed PII decoy / mask token(s): $hits", hits.isEmpty())
         // Sanity: the chrome decoy is legitimately hashable (it is a label, not PII).
-        assertTrue(SkeletonBuilder.slotFor("Hand it to me: ", null)?.h != null)
+        assertTrue(slotOf("Hand it to me: ")?.h != null)
     }
 
     // (f) ------------------------------------------------------------------------------------------
@@ -416,7 +465,8 @@ class SkeletonCorpusTest {
         var piiSeen = 0
         checkAll(PropSeeds.samples(500), PropSeeds.config(SEED), valueArb) { value ->
             val trimmed = value.trim()
-            val slot = SkeletonBuilder.slotFor(value, null)!!
+            // A sensitive fragment ("Visa ••••…") refuses the whole one-node frame — nothing to check.
+            val slot = slotOf(value) ?: return@checkAll
             if (shapes.any { it.containsMatchIn(trimmed) }) {
                 piiSeen++
                 assertNull("'$value' matches a PiiShapes pattern but hashed", slot.h)
